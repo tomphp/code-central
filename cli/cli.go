@@ -78,9 +78,9 @@ func init() {
 		"init":          {usage: "init [--key <key>]  set this repository up as a Project", run: runInit},
 		"serve":         {usage: "serve [--store <dir>]  run the service in the foreground", run: runServe},
 		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->]", run: runCreateSpec},
-		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--description <md> | --file <path|->]", run: runCreateTicket},
+		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--description <md> | --file <path|->]", run: runCreateTicket},
 		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id>", run: runGetTicket},
-		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--spec <id>]", run: runFindTickets},
+		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--spec <id>] [--claimable[=false]]", run: runFindTickets},
 
 		"edit-spec":     {op: "edit_spec", usage: "edit-spec <id> [--title <t>] [--body <md> | --file <path|->]", run: runEditSpec},
 		"edit-ticket":   {op: "edit_ticket", usage: "edit-ticket <id> [--title <t>] [--description <md> | --file <path|->]", run: runEditTicket},
@@ -274,8 +274,9 @@ func runCreateTicket(ctx context.Context, e Env, args []string) error {
 	state := fs.String("state", "", "")
 	desc := fs.String("description", "", "")
 	file := fs.String("file", "", "")
-	var labels strs
+	var labels, blockedBy strs
 	fs.Var(&labels, "label", "")
+	fs.Var(&blockedBy, "blocked-by", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -291,9 +292,13 @@ func runCreateTicket(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.CreateTicket(ctx, sc.project, core.CreateTicketInput{
+	in := core.CreateTicketInput{
 		Spec: core.Ref(*spec), Title: *title, Description: text, State: store.State(*state), Labels: labels,
-	})
+	}
+	for _, b := range blockedBy {
+		in.BlockedBy = append(in.BlockedBy, core.Ref(b))
+	}
+	v, err := sc.client.CreateTicket(ctx, sc.project, in)
 	if err != nil {
 		return err
 	}
@@ -326,9 +331,11 @@ func runFindTickets(ctx context.Context, e Env, args []string) error {
 	project := addScope(fs)
 	title := fs.String("title", "", "")
 	spec := fs.String("spec", "", "")
-	var states, labels strs
+	claimable := fs.Bool("claimable", false, "")
+	var states, labels, tags strs
 	fs.Var(&states, "state", "")
 	fs.Var(&labels, "label", "")
+	fs.Var(&tags, "tag", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -343,6 +350,12 @@ func runFindTickets(ctx context.Context, e Env, args []string) error {
 	in := core.FindTicketsInput{Title: *title, Labels: labels, Spec: core.Ref(*spec)}
 	for _, s := range states {
 		in.State = append(in.State, store.State(s))
+	}
+	if in.Tags, err = tagFlags(tags); err != nil {
+		return err
+	}
+	if isSet(fs, "claimable") {
+		in.Claimable = claimable
 	}
 	v, err := sc.client.FindTickets(ctx, sc.project, in)
 	if err != nil {

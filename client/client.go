@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/tomoram/code-central/core"
@@ -78,6 +79,10 @@ func (c *Client) FindTickets(ctx context.Context, key string, in core.FindTicket
 	}
 	if in.Spec != "" {
 		q.Set("spec", string(in.Spec))
+	}
+	addTags(q, in.Tags)
+	if in.Claimable != nil {
+		q.Set("claimable", strconv.FormatBool(*in.Claimable))
 	}
 	path := scoped(key, "tickets")
 	if len(q) > 0 {

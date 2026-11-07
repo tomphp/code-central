@@ -223,6 +223,8 @@ func Run(t *testing.T, f Factory) {
 			t.Fatal("write to an unknown project succeeded")
 		}
 	})
+
+	runReplacements(t, f)
 }
 
 func seedProject(t *testing.T, s store.Store) {

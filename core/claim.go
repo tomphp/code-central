@@ -60,6 +60,9 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		if err != nil || !found {
 			return err
 		}
+		if t.State == store.Ready && blocked(w, key, t) {
+			return blockedError(w, key, t, ActorOf(ctx))
+		}
 		now := c.now()
 		t.Claims = append(t.Claims, store.Claim{Number: len(t.Claims) + 1, SessionID: in.SessionID, Started: now})
 		if err := transition(ctx, &t, key, "claim", "", now); err != nil {
