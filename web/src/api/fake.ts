@@ -120,6 +120,12 @@ export class FakeApi implements Api {
     }));
   }
 
+  // dropNeedsMe takes a Ticket out of Needs Me, for an action's fake
+  // behaviour that resolves what the human was needed for (ticket 35).
+  dropNeedsMe(id: string) {
+    for (const g of this.groups) g.tickets = g.tickets.filter((r) => r.id !== id);
+  }
+
   // ---- the live feed ----
 
   emit(e: ChangeEvent) {

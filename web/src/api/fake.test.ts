@@ -35,6 +35,14 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       });
       fake.setNeedsMe([group, ...needs.filter((g) => g !== group)]);
     },
+    // ticket 35
+    claim: async (_key, id, session_id) => {
+      fake.updateTicket(id, {
+        state: "In Progress",
+        claims: [{ number: 1, session_id, started: fake.now.toISOString(), last_activity: fake.now.toISOString() }],
+        moves: [{ from: "Ready", to: "In Progress", actor: "agent", time: fake.now.toISOString(), claim: 1 }],
+      });
+    },
     close: async () => {},
   };
 });
