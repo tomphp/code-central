@@ -118,7 +118,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 	if err != nil {
 		return FinishResult{}, err
 	}
-	return FinishResult{Ticket: v, NextStep: stopWorking}, nil
+	return FinishResult{Ticket: v, NextStep: nextStep("finish")}, nil
 }
 
 // Accept is the human's accept(ticket): In Review to Done.

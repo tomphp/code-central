@@ -43,6 +43,9 @@ var Operations = []Op{
 	{Name: "finish", Audience: AgentAndHuman, Write: true},
 	{Name: "accept", Audience: HumanOnly, Write: true},
 	{Name: "reject", Audience: HumanOnly, Write: true},
+
+	// The published workflow (ticket 26).
+	{Name: "get_workflow", Audience: AgentAndHuman},
 }
 
 // Operation looks an operation up by name.
