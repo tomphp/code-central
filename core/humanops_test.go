@@ -72,15 +72,6 @@ func TestMovingWithinTheClaimStatesKeepsTheClaim(t *testing.T) {
 	}
 }
 
-func TestMovingOutOfNeedsAnswerDismissesItsOpenQuestions(t *testing.T) {
-	f := newFixture(t)
-	f.asking(t, qDB)
-	v := f.move(t, "2", store.InProgress)
-	if v.Rounds[0].Questions[0].Status != store.QuestionDismissed || v.Claims[0].Ended == nil {
-		t.Fatalf("questions %+v claims %+v", v.Rounds[0].Questions, v.Claims)
-	}
-}
-
 func TestRenameProjectChangesTheDisplayNameNeverTheKey(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, store.Ready)

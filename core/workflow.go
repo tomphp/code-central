@@ -200,15 +200,15 @@ func transitionTo(ctx context.Context, t *store.Ticket, key, name, claimID strin
 		to = a.To
 	}
 	// Leaving Needs Answer other than by the last answer is a move by
-	// hand: its open Questions become dismissed and the Claim ends.
-	byHand := from == store.NeedsAnswer && name != automaticAnswered
-	if byHand {
+	// hand: its open Questions become dismissed. The Claim ends only when
+	// the Ticket leaves the Claim States.
+	if from == store.NeedsAnswer && name != automaticAnswered {
 		dismissOpen(t, now)
 	}
 	m := store.Move{From: from, To: to, Actor: string(actor), Time: now}
 	if c, ok := liveClaim(*t); ok {
 		m.Claim = c.Number
-		if byHand || slices.Contains(claimStates, from) && !slices.Contains(claimStates, to) {
+		if slices.Contains(claimStates, from) && !slices.Contains(claimStates, to) {
 			c.Ended, c.EndedBy = now, name
 		}
 	}
