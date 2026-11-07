@@ -29,6 +29,8 @@ type Env struct {
 	Stdin          io.Reader
 	Stdout, Stderr io.Writer
 	Getenv         func(string) string
+	// Dir is the working directory; "" means the process's.
+	Dir string
 
 	// ServeAddrs overrides the addresses serve listens on (default
 	// 127.0.0.1:7733 and [::1]:7733). Tests use "127.0.0.1:0".
@@ -73,6 +75,7 @@ var commands map[string]command
 
 func init() {
 	commands = map[string]command{
+		"init":          {usage: "init [--key <key>]  set this repository up as a Project", run: runInit},
 		"serve":         {usage: "serve [--store <dir>]  run the service in the foreground", run: runServe},
 		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->]", run: runCreateSpec},
 		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--description <md> | --file <path|->]", run: runCreateTicket},
@@ -85,6 +88,11 @@ func init() {
 func Run(ctx context.Context, args []string, e Env) int {
 	if e.Getenv == nil {
 		e.Getenv = os.Getenv
+	}
+	if e.Dir == "" {
+		if wd, err := os.Getwd(); err == nil {
+			e.Dir = wd
+		}
 	}
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		w, code := e.Stdout, exitOK
@@ -126,7 +134,8 @@ func printUsage(w io.Writer) {
 	}
 	sort.Strings(names)
 	fmt.Fprintln(w, "usage: code-central <command> [flags]")
-	fmt.Fprintln(w, "\nOperation commands take --project <key> (or CODE_CENTRAL_PROJECT) and talk to")
+	fmt.Fprintln(w, "\nOperation commands take --project <key> (else CODE_CENTRAL_PROJECT, else the key")
+	fmt.Fprintln(w, "in the nearest .mcp.json) and talk to")
 	fmt.Fprintln(w, "the service at CODE_CENTRAL_URL (default "+client.DefaultURL+").\n\nCommands:")
 	for _, n := range names {
 		fmt.Fprintf(w, "  %s\n", commands[n].usage)
@@ -179,13 +188,16 @@ func resolveScope(e Env, projectFlag string) (scope, error) {
 		project = e.Getenv("CODE_CENTRAL_PROJECT")
 	}
 	if project == "" {
-		return scope{}, usagef("no Project: pass --project <key> or set CODE_CENTRAL_PROJECT")
+		k, err := nearestKey(e.Dir)
+		if err != nil {
+			return scope{}, err
+		}
+		project = k
 	}
-	url := e.Getenv("CODE_CENTRAL_URL")
-	if url == "" {
-		url = client.DefaultURL
+	if project == "" {
+		return scope{}, usagef("no Project: pass --project <key>, set CODE_CENTRAL_PROJECT, or run `code-central init` in the repository")
 	}
-	return scope{project: project, client: client.New(url)}, nil
+	return scope{project: project, client: client.New(serviceURL(e))}, nil
 }
 
 func printJSON(e Env, v any) error {

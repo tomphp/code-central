@@ -4,13 +4,13 @@
 
 **Blocked by:** 22
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `init` proposes a key from the only remote, else `origin`, else the folder name: the repository name alone, lowercased; the human accepts or overrides it
-- [ ] A key the store already has is refused with a request for an override, unless the human confirms joining that existing Project
-- [ ] If the store doesn't know the key, `init` asks before creating the Project through `create_project`
-- [ ] `init` merges a `code-central` server entry at `${CODE_CENTRAL_URL:-http://localhost:7733}/p/<key>/mcp` into any existing `.mcp.json`, and never commits
-- [ ] If `.mcp.json` already holds a key the store knows, `init` leaves it alone
-- [ ] `init` works outside git
-- [ ] Shell commands find the Project from `--project`, then `CODE_CENTRAL_PROJECT`, then the key in the nearest `.mcp.json` above the current directory
-- [ ] How `init` derives the key is tested once in the CLI package against `codecentraltest`
+- [x] `init` proposes a key from the only remote, else `origin`, else the folder name: the repository name alone, lowercased; the human accepts or overrides it
+- [x] A key the store already has is refused with a request for an override, unless the human confirms joining that existing Project
+- [x] If the store doesn't know the key, `init` asks before creating the Project through `create_project`
+- [x] `init` merges a `code-central` server entry at `${CODE_CENTRAL_URL:-http://localhost:7733}/p/<key>/mcp` into any existing `.mcp.json`, and never commits
+- [x] If `.mcp.json` already holds a key the store knows, `init` leaves it alone
+- [x] `init` works outside git
+- [x] Shell commands find the Project from `--project`, then `CODE_CENTRAL_PROJECT`, then the key in the nearest `.mcp.json` above the current directory
+- [x] How `init` derives the key is tested once in the CLI package against `codecentraltest`
