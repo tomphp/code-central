@@ -18,6 +18,7 @@ import (
 
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/notify"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -41,6 +42,9 @@ type Env struct {
 	// After, when set, replaces time.After for ping's time limit and
 	// wait's back-off, so tests never wait on real time.
 	After func(time.Duration) <-chan time.Time
+	// Notifier shows serve's OS Notifications. nil sends none, so tests
+	// never show a real one; main passes notify.OS().
+	Notifier notify.Sender
 }
 
 // Exit codes.
@@ -80,7 +84,7 @@ var commands map[string]command
 func init() {
 	commands = map[string]command{
 		"init":          {usage: "init [--key <key>]  set this repository up as a Project", run: runInit},
-		"serve":         {usage: "serve [--store <dir>]  run the service in the foreground", run: runServe},
+		"serve":         {usage: "serve [--store <dir>] [--no-notify]  run the service in the foreground", run: runServe},
 		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->]", run: runCreateSpec},
 		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--description <md> | --file <path|->]", run: runCreateTicket},
 		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id>", run: runGetTicket},

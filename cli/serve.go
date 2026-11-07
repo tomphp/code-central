@@ -15,6 +15,7 @@ import (
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/ids"
+	"github.com/tomoram/code-central/notify"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/web"
 )
@@ -31,12 +32,17 @@ var DefaultAddrs = []string{fmt.Sprintf("127.0.0.1:%d", Port), fmt.Sprintf("[::1
 func runServe(ctx context.Context, e Env, args []string) error {
 	fs := flagSet("serve")
 	storeFlag := fs.String("store", "", "store directory")
+	noNotify := fs.Bool("no-notify", false, "send no OS Notifications this run")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) > 0 {
 		return usagef("unexpected argument %q", pos[0])
+	}
+	local, err := loadSettings(e.Getenv)
+	if err != nil {
+		return err
 	}
 	dir, err := store.Dir(*storeFlag, e.Getenv)
 	if err != nil {
@@ -61,7 +67,8 @@ func runServe(ctx context.Context, e Env, args []string) error {
 		return err
 	}
 
-	c := core.New(st, clock.System{}, ids.Random{})
+	clk := clock.System{}
+	c := core.New(st, clk, ids.Random{})
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	go c.WatchSilent(ctx, ticker.C, func(project, ticketID string) {
@@ -79,6 +86,10 @@ func runServe(ctx context.Context, e Env, args []string) error {
 		bound = append(bound, l.Addr().String())
 		go func() { errs <- srv.Serve(l) }()
 	}
+	if e.Notifier != nil && local.Notifications == "on" && !*noNotify {
+		// Before OnListening, so the startup summary has been sent by then.
+		notify.Start(ctx, notify.Config{Source: c, Clock: clk, Sender: e.Notifier, BaseURL: uiURL(bound[0]), Log: e.Stderr})
+	}
 	fmt.Fprintf(e.Stdout, "Code Central %s listening on %v (store: %s)\n", Version, bound, dir)
 	if e.OnListening != nil {
 		e.OnListening(bound)
@@ -95,6 +106,16 @@ func runServe(ctx context.Context, e Env, args []string) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// uiURL is the address a Notification click opens: localhost on the
+// bound port, as .mcp.json names it.
+func uiURL(bound string) string {
+	_, port, err := net.SplitHostPort(bound)
+	if err != nil {
+		port = fmt.Sprint(Port)
+	}
+	return "http://localhost:" + port
 }
 
 // listen binds every address, refusing to start if any is taken. An
