@@ -290,3 +290,19 @@ func TestLookupsByLinkFindDetachedLinksToo(t *testing.T) {
 	_, err = f.core.FindLinked(integration, "acme", core.FindLinkedInput{})
 	wantCode(t, err, core.Invalid, "integration")
 }
+
+func TestTheLinkOperationsAreHTTPOnly(t *testing.T) {
+	for name, aud := range map[string]core.Audience{
+		"create_linked_spec":   core.IntegrationOnly,
+		"create_linked_ticket": core.IntegrationOnly,
+		"update_linked_spec":   core.IntegrationOnly,
+		"update_linked_ticket": core.IntegrationOnly,
+		"set_external_state":   core.IntegrationOnly,
+		"find_linked":          core.IntegrationOnly,
+		"unlink":               core.HumanOnly,
+	} {
+		if op, ok := core.Operation(name); !ok || op.Audience != aud {
+			t.Errorf("operation %s: %+v, %v", name, op, ok)
+		}
+	}
+}

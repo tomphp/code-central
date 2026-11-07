@@ -624,8 +624,13 @@ func httpDo(t *testing.T, srv *codecentraltest.Server, c httpCall) (int, []byte)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The suite calls the HTTP API as the UI does, as the human.
-	req.Header.Set(httpapi.ActorHeader, string(core.Human))
+	// The suite calls the HTTP API as the UI does, as the human, except
+	// for an Integration's operations (ticket 42).
+	actor := core.Human
+	if strings.Contains(c.path, "/integration/") {
+		actor = core.Integration
+	}
+	req.Header.Set(httpapi.ActorHeader, string(actor))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
