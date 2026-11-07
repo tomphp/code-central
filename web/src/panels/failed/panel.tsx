@@ -10,7 +10,7 @@ import type { FailureReportView } from "../../api/types";
 import { ago } from "../../format";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { ResumeCommand } from "../resume/ResumeCommand";
-import { useAct } from "../useAct";
+import { useAct } from "../../ticket/useAct";
 import "./failed.css";
 
 export function FailedPanel({ api, project, ticket: t, now }: PanelProps) {

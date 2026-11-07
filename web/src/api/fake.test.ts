@@ -77,6 +77,15 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       });
       await addNeedsMe(fake, "in_review", { id, summary: summary.split("\n")[0] });
     },
+    addBlocker: async (_key, id, blocker) => {
+      const b = await fake.getTicket(_key, blocker);
+      const t = await fake.getTicket(_key, id);
+      fake.updateTicket(id, {
+        blocked_by: [...t.blocked_by, blocker],
+        blockers: [...t.blockers, { id: blocker, title: b.title, state: b.state }],
+        blocked: true,
+      });
+    },
     // ticket 35
     claim: async (_key, id, session_id) => {
       fake.updateTicket(id, {

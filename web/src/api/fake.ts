@@ -120,8 +120,15 @@ export class FakeApi implements Api {
     }));
   }
 
-  // dropNeedsMe takes a Ticket out of Needs Me, for an action's fake
-  // behaviour that resolves what the human was needed for (ticket 35).
+  // ---- for actions' fake behaviour (src/api/actions/) ----
+
+  // ticketsIn is every Ticket in a Project, as views.
+  ticketsIn(project: string): TicketView[] {
+    return [...this.tickets.values()].filter((t) => this.projectOf(t.id) === project).map((t) => this.view(t));
+  }
+
+  // dropNeedsMe takes a Ticket out of Needs Me, as an action that resolves
+  // its reason would. It sends no notice (the action's update does).
   dropNeedsMe(id: string) {
     for (const g of this.groups) g.tickets = g.tickets.filter((r) => r.id !== id);
   }

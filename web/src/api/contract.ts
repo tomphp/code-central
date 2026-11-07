@@ -25,6 +25,8 @@ export interface Driver {
   // finish claims a Ready Ticket as an agent and finishes it with the
   // summary, moving it to In Review.
   finish(key: string, id: string, summary: string): Promise<void>;
+  // addBlocker makes id wait on blocker, as an agent's add_blocker.
+  addBlocker(key: string, id: string, blocker: string): Promise<void>;
   // claim claims a Ready Ticket as an agent with a session ID, moving it
   // to In Progress (ticket 35).
   claim(key: string, id: string, sessionId: string): Promise<void>;
@@ -269,6 +271,47 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(a).toMatchObject({ status: 409, code: "action_not_allowed" });
       const r = await d.api.act("acme", id, "reject", { comment: "no" }).catch((e) => e);
       expect(r).toMatchObject({ status: 409, code: "action_not_allowed" });
+    });
+
+    // ---- Blockers, move and cancel (ticket 37) ----
+
+    it("removes a Blocker, and rejects one that isn't there", async () => {
+      await d.createProject("acme", "Acme");
+      const a = await d.createTicket("acme", "A", "Ready");
+      const b = await d.createTicket("acme", "B", "Ready");
+      await d.addBlocker("acme", b, a);
+      expect(await d.api.getTicket("acme", b)).toMatchObject({ blocked_by: [a], blocked: true });
+
+      const t = await d.api.act("acme", b, "remove_blocker", { blocker: a });
+      expect(t).toMatchObject({ id: b, blocked_by: [], blockers: [], blocked: false });
+
+      const again = await d.api.act("acme", b, "remove_blocker", { blocker: a }).catch((e) => e);
+      expect(again).toMatchObject({ status: 422, code: "invalid", field: "blocker" });
+    });
+
+    it("cancels as the human with no Replacement, leaving its dependant blocked by a Cancelled Ticket", async () => {
+      await d.createProject("acme", "Acme");
+      const a = await d.createTicket("acme", "A", "Ready");
+      const b = await d.createTicket("acme", "B", "Ready");
+      await d.addBlocker("acme", b, a);
+
+      const t = await d.api.act("acme", a, "cancel", {});
+      expect(t).toMatchObject({ id: a, state: "Cancelled", replacements: [] });
+      expect(t.moves.at(-1)).toMatchObject({ from: "Ready", to: "Cancelled", actor: "human" });
+      const dep = await d.api.getTicket("acme", b);
+      expect(dep).toMatchObject({ blocked: true, blockers: [{ id: a, title: "A", state: "Cancelled" }] });
+    });
+
+    it("moves to any State but Needs Answer and Failed", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "A", "Ready");
+      for (const to of ["Failed", "Needs Answer"] as State[]) {
+        const err = await d.api.act("acme", id, "move", { to_state: to }).catch((e) => e);
+        expect(err).toMatchObject({ status: 422, code: "invalid", field: "to_state" });
+      }
+      const t = await d.api.act("acme", id, "move", { to_state: "Done" });
+      expect(t.state).toBe("Done");
+      expect(t.moves.at(-1)).toMatchObject({ from: "Ready", to: "Done", actor: "human" });
     });
 
     // ---- release (ticket 35) ----

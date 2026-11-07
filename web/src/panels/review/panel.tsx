@@ -5,7 +5,7 @@ import "../../api/actions/accept";
 import "../../api/actions/reject";
 import type { CommentView, TicketView } from "../../api/types";
 import type { PanelDef, PanelProps } from "../ActionPanel";
-import { useAct } from "../useAct";
+import { useAct } from "../../ticket/useAct";
 import "./review.css";
 
 export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
