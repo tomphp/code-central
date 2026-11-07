@@ -123,6 +123,12 @@ export class FakeApi implements Api {
 
   // ---- for actions' fake behaviour (src/api/actions/) ----
 
+  // needsMeGroups is what setNeedsMe last set, as full rows, for fake
+  // actions that change Needs Me (read it, change it, set it back).
+  get needsMeGroups(): { reason: NeedsMeReason; tickets: NeedsMeRow[] }[] {
+    return structuredClone(this.groups);
+  }
+
   // ticketsIn is every Ticket in a Project, as views.
   ticketsIn(project: string): TicketView[] {
     return [...this.tickets.values()].filter((t) => this.projectOf(t.id) === project).map((t) => this.view(t));
