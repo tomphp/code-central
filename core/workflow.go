@@ -20,7 +20,7 @@ const (
 	// AgentActor is "Agent". The human can do everything agents can, so
 	// any Actor may take these.
 	AgentActor Who = "agent"
-	// Holder is "Agent (holder)": the caller must send the live Claim ID.
+	// Holder is "Agent (holder)": the agent must send the live Claim ID.
 	Holder Who = "agent (holder)"
 	// HumanActor is "Human": only the human Actor.
 	HumanActor Who = "human"
@@ -34,7 +34,7 @@ const (
 type Action struct {
 	Name string
 	From []store.State
-	// To is the State the action moves to; "" means the caller chooses
+	// To is the State the action moves to; "" means the Actor chooses
 	// (move), among every State outside Except.
 	To     store.State
 	Except []store.State
@@ -175,8 +175,8 @@ func transition(ctx context.Context, t *store.Ticket, key, name, claimID string,
 }
 
 // transitionTo is transition for an action whose row leaves the target
-// to the caller (move): to is used when the row's To is "". The caller
-// has already checked to against the row's Except.
+// to the Actor (move): to is used when the row's To is "". Move has
+// already checked to against the row's Except.
 func transitionTo(ctx context.Context, t *store.Ticket, key, name, claimID string, to store.State, now time.Time) error {
 	actor := ActorOf(ctx)
 	id := DisplayID(key, t.Number)

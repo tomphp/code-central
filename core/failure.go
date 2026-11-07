@@ -72,7 +72,7 @@ func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureIn
 		if err := transition(ctx, t, key, "report_failure", in.ClaimID, now); err != nil {
 			return false, err
 		}
-		// transition checked live is the caller's Claim.
+		// transition checked live is the holder's Claim.
 		t.FailureReports = append(t.FailureReports, store.FailureReport{
 			Number: len(t.FailureReports) + 1, Claim: live.Number, SessionID: live.SessionID,
 			Actor: string(ActorOf(ctx)), Time: now,

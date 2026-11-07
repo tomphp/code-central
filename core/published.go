@@ -61,7 +61,7 @@ type StateView struct {
 	Meaning string      `json:"meaning"`
 }
 
-// ActionView is one row of the action table. To is empty when the caller
+// ActionView is one row of the action table. To is empty when the Actor
 // chooses it (move), among every State outside Except. ClaimID says the
 // action must send the live Claim ID.
 type ActionView struct {

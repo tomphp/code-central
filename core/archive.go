@@ -15,7 +15,7 @@ import (
 // until the human unarchives it. Reads keep working.
 //
 // Two layers enforce it. Every write operation checks writable before
-// anything else, so the refusal is the first thing a caller hears. And
+// anything else, so the refusal is the first thing an Actor hears. And
 // archiveGuard wraps the store so a Put on an Archived Project fails
 // whatever the operation, which keeps "every write" true for operations
 // added later.
