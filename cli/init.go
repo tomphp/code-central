@@ -40,7 +40,7 @@ func runInit(ctx context.Context, e Env, args []string) error {
 		return usagef("unexpected argument %q", pos[0])
 	}
 	root, inGit := repoRoot(e.Dir)
-	c := client.New(serviceURL(e))
+	c := newClient(e)
 	in := bufio.NewReader(e.Stdin)
 	ask := func(prompt string) (string, error) {
 		fmt.Fprint(e.Stdout, prompt)

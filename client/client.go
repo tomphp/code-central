@@ -28,7 +28,13 @@ type Client struct {
 	// Actor is sent with every request; empty means agent, which is how
 	// every code-central command writes.
 	Actor core.Actor
+	// OnVersion, when set, is called with the service's version header
+	// on every response that carries one.
+	OnVersion func(serviceVersion string)
 }
+
+// VersionHeader is the response header carrying the service's version.
+const VersionHeader = "X-Code-Central-Version"
 
 // New returns a Client for the service at baseURL.
 func New(baseURL string) *Client {
@@ -237,6 +243,9 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 		}
 	}
 	defer resp.Body.Close()
+	if v := resp.Header.Get(VersionHeader); v != "" && c.OnVersion != nil {
+		c.OnVersion(v)
+	}
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err

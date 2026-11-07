@@ -21,9 +21,6 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Version is stamped by `make build`.
-var Version = "dev"
-
 // Env is everything a command touches outside itself, so tests can run
 // commands in-process.
 type Env struct {
@@ -41,6 +38,17 @@ type Env struct {
 	// After, when set, replaces time.After for ping's time limit and
 	// wait's back-off, so tests never wait on real time.
 	After func(time.Duration) <-chan time.Time
+	// Version, when set, replaces the stamped Version (tests).
+	Version string
+
+	// Program is the binary as invoked (os.Args[0]); service install
+	// records it. "" means os.Executable.
+	Program string
+	// GOOS picks launchd or systemd for `service`; "" means runtime.GOOS.
+	GOOS string
+	// RunService runs launchctl or systemctl for `service`; nil runs the
+	// real command. Tests always inject it.
+	RunService func(ctx context.Context, name string, args ...string) error
 }
 
 // Exit codes.
@@ -80,7 +88,6 @@ var commands map[string]command
 func init() {
 	commands = map[string]command{
 		"init":          {usage: "init [--key <key>]  set this repository up as a Project", run: runInit},
-		"serve":         {usage: "serve [--store <dir>]  run the service in the foreground", run: runServe},
 		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->]", run: runCreateSpec},
 		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--description <md> | --file <path|->]", run: runCreateTicket},
 		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id>", run: runGetTicket},
@@ -131,6 +138,10 @@ func Run(ctx context.Context, args []string, e Env) int {
 		}
 		printUsage(w)
 		return code
+	}
+	if args[0] == "--version" || args[0] == "version" {
+		fmt.Fprintf(e.Stdout, "code-central %s\n", e.version())
+		return exitOK
 	}
 	cmd, ok := commands[args[0]]
 	if !ok {
@@ -230,7 +241,7 @@ func resolveScope(e Env, projectFlag string) (scope, error) {
 	if project == "" {
 		return scope{}, usagef("no Project: pass --project <key>, set CODE_CENTRAL_PROJECT, or run `code-central init` in the repository")
 	}
-	return scope{project: project, client: client.New(serviceURL(e))}, nil
+	return scope{project: project, client: newClient(e)}, nil
 }
 
 func printJSON(e Env, v any) error {

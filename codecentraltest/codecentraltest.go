@@ -31,13 +31,29 @@ type Server struct {
 	Store  store.Store
 }
 
+// Version is the service version a test server reports unless
+// WithVersion says otherwise; it matches an unstamped CLI's.
+const Version = "dev"
+
+// Option configures NewServer.
+type Option func(*options)
+
+type options struct{ version string }
+
+// WithVersion makes the server report version in its version header.
+func WithVersion(version string) Option { return func(o *options) { o.version = version } }
+
 // NewServer starts a test service, stopped when t ends.
-func NewServer(t testing.TB) *Server {
+func NewServer(t testing.TB, opts ...Option) *Server {
 	t.Helper()
+	o := options{version: Version}
+	for _, opt := range opts {
+		opt(&o)
+	}
 	s := store.NewMemory()
 	clk := clock.NewFake(Start)
 	c := core.New(s, clk, &ids.Sequence{})
-	hs := httptest.NewServer(frontdoor.Handler(c, web.Handler()))
+	hs := httptest.NewServer(frontdoor.Versioned(frontdoor.Handler(c, web.Handler()), o.version))
 	t.Cleanup(hs.Close)
 	return &Server{URL: hs.URL, Client: client.New(hs.URL), Clock: clk, Core: c, Store: s}
 }
