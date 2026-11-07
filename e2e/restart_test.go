@@ -25,7 +25,7 @@ type process struct {
 // startServe runs serve on store, listening on listen (never 7733).
 func startServe(t *testing.T, store, listen string) (*process, string) {
 	t.Helper()
-	cmd := exec.Command(bin, "serve", "--store", store)
+	cmd := exec.Command(bin, "serve", "--store", store, "--no-notify")
 	cmd.Env = append(os.Environ(), "CODE_CENTRAL_LISTEN="+listen)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

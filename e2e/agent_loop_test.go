@@ -56,7 +56,7 @@ var listening = regexp.MustCompile(`listening on \[([^\] ]+)`)
 func serve(t *testing.T) *service {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, bin, "serve", "--store", t.TempDir())
+	cmd := exec.CommandContext(ctx, bin, "serve", "--store", t.TempDir(), "--no-notify") // tests never show a real OS Notification
 	cmd.Env = append(os.Environ(), "CODE_CENTRAL_LISTEN=127.0.0.1:0")
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	stdout, err := cmd.StdoutPipe()

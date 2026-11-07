@@ -16,6 +16,7 @@ import (
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/ids"
+	"github.com/tomoram/code-central/notify"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/web"
 )
@@ -35,7 +36,7 @@ func loopback(port int) []string {
 
 func init() {
 	commands["serve"] = command{
-		usage: "serve [--store <dir>] [--bind <ip>]  run the service in the foreground; --bind adds one address " +
+		usage: "serve [--store <dir>] [--bind <ip>] [--no-notify]  run the service in the foreground; --bind adds one address " +
 			"(such as the Docker bridge IP), never a LAN address",
 		run: runServe,
 	}
@@ -48,6 +49,8 @@ type serveOptions struct {
 	// bind is --bind: one extra address, "" for none.
 	bind    string
 	bindSet bool
+	// noNotify is --no-notify: no OS Notifications this run.
+	noNotify bool
 }
 
 func parseServe(args []string) (serveOptions, error) {
@@ -55,6 +58,7 @@ func parseServe(args []string) (serveOptions, error) {
 	var o serveOptions
 	fs.StringVar(&o.store, "store", "", "store directory")
 	fs.StringVar(&o.bind, "bind", "", "one extra address to listen on")
+	fs.BoolVar(&o.noNotify, "no-notify", false, "send no OS Notifications this run")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return o, err
@@ -74,13 +78,13 @@ func runServe(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	settings, err := loadSettings(e.Getenv)
+	local, err := loadSettings(e.Getenv)
 	if err != nil {
 		return err
 	}
 	var bindAddr, bindHost string
 	if o.bindSet {
-		if bindAddr, bindHost, err = parseBind(o.bind, settings.Port); err != nil {
+		if bindAddr, bindHost, err = parseBind(o.bind, local.Port); err != nil {
 			return err
 		}
 	}
@@ -100,7 +104,7 @@ func runServe(ctx context.Context, e Env, args []string) error {
 		addrs = strings.Split(l, ",")
 	}
 	if addrs == nil {
-		addrs = loopback(settings.Port)
+		addrs = loopback(local.Port)
 	}
 	listeners, err := listen(addrs)
 	if err != nil {
@@ -119,7 +123,8 @@ func runServe(ctx context.Context, e Env, args []string) error {
 			"as the human, so use a Docker bridge address, never a LAN address\n", l.Addr())
 	}
 
-	c := core.New(st, clock.System{}, ids.Random{})
+	clk := clock.System{}
+	c := core.New(st, clk, ids.Random{})
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	go c.WatchSilent(ctx, ticker.C, func(project, ticketID string) {
@@ -132,6 +137,10 @@ func runServe(ctx context.Context, e Env, args []string) error {
 		bound = append(bound, l.Addr().String())
 	}
 	return serveOn(ctx, listeners, handler, func() {
+		if e.Notifier != nil && local.Notifications == "on" && !o.noNotify {
+			// Before OnListening, so the startup summary has been sent by then.
+			notify.Start(ctx, notify.Config{Source: c, Clock: clk, Sender: e.Notifier, BaseURL: uiURL(bound[0]), Log: e.Stderr})
+		}
 		fmt.Fprintf(e.Stdout, "Code Central %s listening on %v (store: %s)\n", e.version(), bound, dir)
 		if e.OnListening != nil {
 			e.OnListening(bound)
@@ -187,6 +196,16 @@ func parseBind(v string, port int) (addr, host string, err error) {
 		return "", "", usagef("--bind never takes %s: it would expose the service to the network; name one specific address", host)
 	}
 	return net.JoinHostPort(host, p), host, nil
+}
+
+// uiURL is the address a Notification click opens: localhost on the
+// bound port, as .mcp.json names it.
+func uiURL(bound string) string {
+	_, port, err := net.SplitHostPort(bound)
+	if err != nil {
+		port = fmt.Sprint(Port)
+	}
+	return "http://localhost:" + port
 }
 
 // listen binds every address, refusing to start if any is taken. An

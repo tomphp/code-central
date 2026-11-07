@@ -58,7 +58,7 @@ func freePort(t *testing.T) int {
 	return l.Addr().(*net.TCPAddr).Port
 }
 
-func writeSettings(t *testing.T, home, text string) {
+func writeHomeSettings(t *testing.T, home, text string) {
 	t.Helper()
 	dir := filepath.Join(home, ".config", "code-central")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -72,7 +72,7 @@ func writeSettings(t *testing.T, home, text string) {
 func TestTheLocalPortSettingMovesTheService(t *testing.T) {
 	home := t.TempDir()
 	port := freePort(t)
-	writeSettings(t, home, fmt.Sprintf("port: %d\n", port))
+	writeHomeSettings(t, home, fmt.Sprintf("port: %d\n", port))
 	bound, _, failed := serveWith(t, map[string]string{"HOME": home}, nil)
 	if failed != nil {
 		t.Fatalf("serve: %+v", *failed)
@@ -99,7 +99,7 @@ func TestXDGConfigHomeHoldsTheSettings(t *testing.T) {
 
 func TestABadPortSettingRefusesToStart(t *testing.T) {
 	home := t.TempDir()
-	writeSettings(t, home, "port: 70000\n")
+	writeHomeSettings(t, home, "port: 70000\n")
 	_, _, failed := serveWith(t, map[string]string{"HOME": home}, nil)
 	if failed == nil || failed.code != 1 || !strings.Contains(failed.stderr, "port") {
 		t.Fatalf("serve accepted port 70000: %+v", failed)

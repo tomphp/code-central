@@ -18,6 +18,7 @@ import (
 
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/notify"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -49,6 +50,9 @@ type Env struct {
 	// RunService runs launchctl or systemctl for `service`; nil runs the
 	// real command. Tests always inject it.
 	RunService func(ctx context.Context, name string, args ...string) error
+	// Notifier shows serve's OS Notifications. nil sends none, so tests
+	// never show a real one; main passes notify.OS().
+	Notifier notify.Sender
 }
 
 // Exit codes.
