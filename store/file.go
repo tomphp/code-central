@@ -166,19 +166,19 @@ type specFront struct {
 }
 
 type ticketFile struct {
-	Title        string            `yaml:"title"`
-	State        string            `yaml:"state"`
-	Spec         int               `yaml:"spec"`
-	Labels       []string          `yaml:"labels"`
-	Tags         map[string]string `yaml:"tags"`
-	BlockedBy    []int             `yaml:"blocked_by"`
-	Replacements []int             `yaml:"replacements"`
-	Link         string            `yaml:"link,omitempty"`
-	Created      string            `yaml:"created"`
-	Updated      string            `yaml:"updated"`
-	Description  string            `yaml:"description"`
-	Claims       []claimFile       `yaml:"claims"`
-	// rounds (ticket 29) go here, before failure_reports.
+	Title          string              `yaml:"title"`
+	State          string              `yaml:"state"`
+	Spec           int                 `yaml:"spec"`
+	Labels         []string            `yaml:"labels"`
+	Tags           map[string]string   `yaml:"tags"`
+	BlockedBy      []int               `yaml:"blocked_by"`
+	Replacements   []int               `yaml:"replacements"`
+	Link           string              `yaml:"link,omitempty"`
+	Created        string              `yaml:"created"`
+	Updated        string              `yaml:"updated"`
+	Description    string              `yaml:"description"`
+	Claims         []claimFile         `yaml:"claims"`
+	Rounds         []roundFile         `yaml:"rounds"`
 	FailureReports []failureReportFile `yaml:"failure_reports"`
 	Comments       []commentFile       `yaml:"comments"`
 	Moves          []moveFile          `yaml:"moves"`
@@ -199,6 +199,24 @@ type claimFile struct {
 	Started   string `yaml:"started"`
 	Ended     string `yaml:"ended,omitempty"`
 	EndedBy   string `yaml:"ended_by,omitempty"`
+}
+
+type roundFile struct {
+	Number    int            `yaml:"number"`
+	Claim     int            `yaml:"claim"`
+	SessionID string         `yaml:"session_id,omitempty"`
+	Posted    string         `yaml:"posted"`
+	Questions []questionFile `yaml:"questions"`
+}
+
+type questionFile struct {
+	Number      int    `yaml:"number"`
+	Title       string `yaml:"title"`
+	Body        string `yaml:"body"`
+	Recommended string `yaml:"recommended,omitempty"`
+	Status      string `yaml:"status"`
+	Answer      string `yaml:"answer,omitempty"`
+	Closed      string `yaml:"closed,omitempty"`
 }
 
 type failureReportFile struct {
@@ -365,6 +383,9 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		}
 		t.Claims = append(t.Claims, cl)
 	}
+	if t.Rounds, err = decodeRounds(f.Rounds); err != nil {
+		return Ticket{}, err.(*LoadError)
+	}
 	for i, r := range f.FailureReports {
 		fr := FailureReport{
 			Number: r.Number, Claim: r.Claim, SessionID: r.SessionID, Actor: r.Actor,
@@ -400,6 +421,35 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		return Ticket{}, err.(*LoadError)
 	}
 	return t, nil
+}
+
+func decodeRounds(rs []roundFile) ([]Round, error) {
+	var out []Round
+	for i, r := range rs {
+		field := fmt.Sprintf("rounds[%d]", i)
+		rd := Round{Number: r.Number, Claim: r.Claim, SessionID: r.SessionID}
+		var err error
+		if rd.Posted, err = parseTime(r.Posted); err != nil {
+			return nil, &LoadError{Field: field + ".posted", Msg: err.Error()}
+		}
+		for j, q := range r.Questions {
+			qf := fmt.Sprintf("%s.questions[%d]", field, j)
+			qu := Question{Number: q.Number, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: QuestionStatus(q.Status), Answer: q.Answer}
+			switch qu.Status {
+			case QuestionOpen, QuestionAnswered, QuestionDismissed:
+			default:
+				return nil, &LoadError{Field: qf + ".status", Msg: fmt.Sprintf("unknown status %q (open, answered or dismissed)", q.Status)}
+			}
+			if q.Closed != "" {
+				if qu.Closed, err = parseTime(q.Closed); err != nil {
+					return nil, &LoadError{Field: qf + ".closed", Msg: err.Error()}
+				}
+			}
+			rd.Questions = append(rd.Questions, qu)
+		}
+		out = append(out, rd)
+	}
+	return out, nil
 }
 
 // decodeEdits checks an edits list, whose previous values may name only
@@ -449,7 +499,8 @@ func (s *FileStore) write(record any, project string) error {
 			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
 			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: r.Link,
 			Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
-			Claims: []claimFile{}, FailureReports: []failureReportFile{}, Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
+			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},
+			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
 		}
 		for _, c := range r.Claims {
 			cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, Started: formatTime(c.Started), EndedBy: c.EndedBy}
@@ -457,6 +508,17 @@ func (s *FileStore) write(record any, project string) error {
 				cf.Ended = formatTime(c.Ended)
 			}
 			f.Claims = append(f.Claims, cf)
+		}
+		for _, rd := range r.Rounds {
+			rf := roundFile{Number: rd.Number, Claim: rd.Claim, SessionID: rd.SessionID, Posted: formatTime(rd.Posted), Questions: []questionFile{}}
+			for _, q := range rd.Questions {
+				qf := questionFile{Number: q.Number, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: string(q.Status), Answer: q.Answer}
+				if !q.Closed.IsZero() {
+					qf.Closed = formatTime(q.Closed)
+				}
+				rf.Questions = append(rf.Questions, qf)
+			}
+			f.Rounds = append(f.Rounds, rf)
 		}
 		for _, fr := range r.FailureReports {
 			f.FailureReports = append(f.FailureReports, failureReportFile{

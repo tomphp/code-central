@@ -143,6 +143,11 @@ func lastActivity(t store.Ticket, cl store.Claim) time.Time {
 			see(m.Time)
 		}
 	}
+	for _, r := range t.Rounds {
+		if r.Claim == cl.Number {
+			see(r.Posted)
+		}
+	}
 	for _, r := range t.FailureReports {
 		if r.Claim == cl.Number {
 			see(r.Time)

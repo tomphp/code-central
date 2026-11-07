@@ -38,8 +38,8 @@ type Env struct {
 	ServeAddrs []string
 	// OnListening, when set, is called with serve's bound addresses.
 	OnListening func(addrs []string)
-	// After, when set, replaces time.After for ping's time limit, so tests
-	// never wait on real time.
+	// After, when set, replaces time.After for ping's time limit and
+	// wait's back-off, so tests never wait on real time.
 	After func(time.Duration) <-chan time.Time
 }
 
@@ -104,6 +104,10 @@ func init() {
 		// Failure Reports and giving up (ticket 30).
 		"report-failure": {op: "report_failure", usage: "report-failure <id> --claim <claim-id> --what-broke <md> --why <md> --what-to-fix <md> --where-work-stands <md> | --file <json-path|->", run: runReportFailure},
 		"give-up":        {op: "give_up", usage: "give-up <id> --claim <claim-id> [--note <md> | --file <path|->]", run: runGiveUp},
+		// Rounds and wait (ticket 29).
+		"post-round":      {op: "post_round", usage: "post-round <id> --claim <claim-id> [--session <id>] [--questions <json> | --file <path|->]  Questions as a JSON array of {title, body, recommended?}, on stdin by default", run: runPostRound},
+		"pick-up-answers": {op: "pick_up_answers", usage: "pick-up-answers <id> --claim <claim-id>", run: runPickUpAnswers},
+		"wait":            {usage: "wait <id>  wait for the Ticket to leave Needs Answer: exit 0 when Answered, 3 when it left for another State", run: runWait},
 	}
 }
 
@@ -111,6 +115,9 @@ func init() {
 func Run(ctx context.Context, args []string, e Env) int {
 	if e.Getenv == nil {
 		e.Getenv = os.Getenv
+	}
+	if e.After == nil {
+		e.After = time.After
 	}
 	if e.Dir == "" {
 		if wd, err := os.Getwd(); err == nil {
@@ -137,9 +144,12 @@ func Run(ctx context.Context, args []string, e Env) int {
 	err := cmd.run(ctx, e, args[1:])
 	var ue usageError
 	var ce *core.Error
+	var ec exitCode
 	switch {
 	case err == nil:
 		return exitOK
+	case errors.As(err, &ec):
+		return int(ec)
 	case errors.As(err, &ue):
 		fmt.Fprintf(e.Stderr, "code-central %s: %s\nusage: code-central %s\n", args[0], ue.msg, cmd.usage)
 		return exitUsage

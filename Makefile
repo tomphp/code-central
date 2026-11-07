@@ -3,7 +3,7 @@ LDFLAGS := -X github.com/tomoram/code-central/cli.Version=$(VERSION)
 # The fast suite's wall-clock budget, in seconds.
 TEST_BUDGET := 10
 
-.PHONY: test build clean
+.PHONY: test e2e build clean
 
 # Runs the fast suite against the committed placeholder page (no Node
 # needed) and fails if it takes more than $(TEST_BUDGET) seconds.
@@ -22,6 +22,11 @@ test:
 # here once the UI exists.
 build:
 	go build -ldflags "$(LDFLAGS)" -o bin/code-central ./cmd/code-central
+
+# Builds the binary, then runs the end-to-end tier (real binary, real
+# store in a temporary folder, never port 7733) against it.
+e2e: build
+	CODE_CENTRAL_BIN=$(CURDIR)/bin/code-central go test -tags e2e -count=1 ./e2e/
 
 clean:
 	rm -rf bin

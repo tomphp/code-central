@@ -15,23 +15,27 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/clock"
+	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
 )
 
 // Core is the domain. Build one with New.
 type Core struct {
-	store store.Store
-	clock clock.Clock
-	ids   ids.Source
+	store  store.Store
+	clock  clock.Clock
+	ids    ids.Source
+	events *events.Bus
 	// activity is the in-memory last-activity record behind Silent Claims.
 	activity *activity
 }
 
 // New returns a Core persisting through s, telling time with clk and
-// issuing Claim IDs from idSource.
+// issuing Claim IDs from idSource. Every write sends a change notice on
+// Events.
 func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
-	c := &Core{store: s, clock: clk, ids: idSource}
+	bus := events.New()
+	c := &Core{store: notifying{Store: s, bus: bus}, clock: clk, ids: idSource, events: bus}
 	c.activity = newActivity(c.now())
 	return c
 }
@@ -89,20 +93,20 @@ type ClaimView struct {
 
 // TicketView is the full view of one Ticket, the same through every door.
 type TicketView struct {
-	ID           string            `json:"id"`
-	Title        string            `json:"title"`
-	State        store.State       `json:"state"`
-	Spec         SpecRef           `json:"spec"`
-	Labels       []string          `json:"labels"`
-	Tags         map[string]string `json:"tags"`
-	BlockedBy    []string          `json:"blocked_by"`
-	Blockers     []BlockerView     `json:"blockers"`
-	Replacements []string          `json:"replacements"`
-	Created      time.Time         `json:"created"`
-	Updated      time.Time         `json:"updated"`
-	Description  string            `json:"description"`
-	Claims       []ClaimView       `json:"claims"`
-	// rounds (ticket 29) go here, before failure_reports.
+	ID             string              `json:"id"`
+	Title          string              `json:"title"`
+	State          store.State         `json:"state"`
+	Spec           SpecRef             `json:"spec"`
+	Labels         []string            `json:"labels"`
+	Tags           map[string]string   `json:"tags"`
+	BlockedBy      []string            `json:"blocked_by"`
+	Blockers       []BlockerView       `json:"blockers"`
+	Replacements   []string            `json:"replacements"`
+	Created        time.Time           `json:"created"`
+	Updated        time.Time           `json:"updated"`
+	Description    string              `json:"description"`
+	Claims         []ClaimView         `json:"claims"`
+	Rounds         []RoundView         `json:"rounds"`
 	FailureReports []FailureReportView `json:"failure_reports"`
 	Comments       []CommentView       `json:"comments"`
 	Moves          []MoveView          `json:"moves"`
@@ -410,7 +414,8 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Blockers: blockerViews(r, key, t),
 		Created:  t.Created, Updated: t.Updated, Description: t.Description,
-		Claims: []ClaimView{}, FailureReports: failureReportViews(t.FailureReports), Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
+		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), FailureReports: failureReportViews(t.FailureReports),
+		Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: blocked(r, key, t),
 	}
 	for _, cl := range t.Claims {
