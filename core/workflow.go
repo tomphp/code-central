@@ -147,21 +147,47 @@ func transition(ctx context.Context, t *store.Ticket, key, name, claimID string,
 			return err
 		}
 	}
-	a, err := check(name, t.State, actor, id)
+	var a Action
+	var err error
+	if name == automaticAnswered {
+		a, err = automatic(name, t.State)
+	} else {
+		a, err = check(name, t.State, actor, id)
+	}
 	if err != nil {
 		return err
 	}
 	from, to := t.State, a.To
+	// Leaving Needs Answer other than by the last answer is a move by
+	// hand: its open Questions become dismissed and the Claim ends.
+	byHand := from == store.NeedsAnswer && name != automaticAnswered
+	if byHand {
+		dismissOpen(t, now)
+	}
 	m := store.Move{From: from, To: to, Actor: string(actor), Time: now}
 	if c, ok := liveClaim(*t); ok {
 		m.Claim = c.Number
-		if slices.Contains(claimStates, from) && !slices.Contains(claimStates, to) {
+		if byHand || slices.Contains(claimStates, from) && !slices.Contains(claimStates, to) {
 			c.Ended, c.EndedBy = now, name
 		}
 	}
 	t.State, t.Updated = to, now
 	t.Moves = append(t.Moves, m)
 	return nil
+}
+
+// automaticAnswered is the automatic move made when a Round's last open
+// Question is answered or dismissed. Only core makes it.
+const automaticAnswered = "answered"
+
+// automatic finds the Automatic row name from state.
+func automatic(name string, state store.State) (Action, error) {
+	for _, a := range Workflow {
+		if a.Name == name && a.Who == Automatic && slices.Contains(a.From, state) {
+			return a, nil
+		}
+	}
+	return Action{}, fmt.Errorf("core: no automatic move %s from %s", name, state)
 }
 
 func isHolderAction(name string) bool {

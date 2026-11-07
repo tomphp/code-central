@@ -104,7 +104,10 @@ func TestFilesAreWrittenInFixedFieldOrder(t *testing.T) {
 		return w.PutTicket("acme", store.Ticket{
 			Number: 2, Title: "Form", State: store.Ready, Spec: 1, Labels: []string{"ui"},
 			Created: t0, Updated: t0.Add(90 * time.Second), Description: "Build it.\nWell.\n",
-			Claims:   []store.Claim{{Number: 1, ID: "ABC", SessionID: "s1", Started: t0, Ended: t0.Add(time.Minute), EndedBy: "finish"}},
+			Claims: []store.Claim{{Number: 1, ID: "ABC", SessionID: "s1", Started: t0, Ended: t0.Add(time.Minute), EndedBy: "finish"}},
+			Rounds: []store.Round{{Number: 1, Claim: 1, SessionID: "s1", Posted: t0, Questions: []store.Question{
+				{Number: 1, Title: "Which DB?", Body: "Postgres\nor SQLite?\n", Recommended: "SQLite", Status: store.QuestionAnswered, Answer: "SQLite\nfor now.\n", Closed: t0.Add(30 * time.Second)},
+			}}},
 			Comments: []store.Comment{{Number: 1, Actor: "agent", Time: t0.Add(time.Minute), Claim: 1, Body: "Done.\nCheck it.\n"}},
 			Edits:    []store.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"description": "Old.\n"}}},
 		})
@@ -158,6 +161,24 @@ claims:
     started: 2026-11-07T09:30:00Z
     ended: 2026-11-07T09:31:00Z
     ended_by: finish
+rounds:
+  - number: 1
+    claim: 1
+    session_id: s1
+    posted: 2026-11-07T09:30:00Z
+    questions:
+      - number: 1
+        title: Which DB?
+        body: |
+          Postgres
+          or SQLite?
+        recommended: |-
+          SQLite
+        status: answered
+        answer: |
+          SQLite
+          for now.
+        closed: 2026-11-07T09:30:30Z
 comments:
   - number: 1
     actor: agent
@@ -240,6 +261,7 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 		{"spec id mismatch", "projects/acme/specs/3.md", "---\nid: 4\ntitle: S\nlabels: []\ntags: {}\ncreated: 2026-11-07T09:30:00Z\nupdated: 2026-11-07T09:30:00Z\n---\nbody\n", "id"},
 		{"unknown previous field", "projects/acme/tickets/2.yaml", ticket + "edits:\n  - number: 1\n    actor: agent\n    time: 2026-11-07T09:30:00Z\n    previous:\n      colour: red\n", "edits[0].previous.colour"},
 		{"bad comment time", "projects/acme/tickets/2.yaml", ticket + "comments:\n  - number: 1\n    actor: agent\n    time: soon\n    body: hi\n", "comments[0].time"},
+		{"bad question status", "projects/acme/tickets/2.yaml", ticket + "rounds:\n  - number: 1\n    claim: 1\n    posted: 2026-11-07T09:30:00Z\n    questions:\n      - number: 1\n        title: Q\n        body: B\n        status: maybe\n", "rounds[0].questions[0].status"},
 		{"badly named ticket file", "projects/acme/tickets/two.yaml", ticket, "file name"},
 	}
 	for _, c := range cases {

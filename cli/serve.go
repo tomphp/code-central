@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"syscall"
 	"time"
 
@@ -47,6 +48,10 @@ func runServe(ctx context.Context, e Env, args []string) error {
 	defer st.Close()
 
 	addrs := e.ServeAddrs
+	if l := e.Getenv("CODE_CENTRAL_LISTEN"); addrs == nil && l != "" {
+		// For the end-to-end tier, which must never bind the real port.
+		addrs = strings.Split(l, ",")
+	}
 	if addrs == nil {
 		addrs = DefaultAddrs
 	}
@@ -56,7 +61,12 @@ func runServe(ctx context.Context, e Env, args []string) error {
 	}
 
 	c := core.New(st, clock.System{}, ids.Random{})
-	srv := &http.Server{Handler: frontdoor.Handler(c, web.Handler()), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{
+		Handler: frontdoor.Handler(c, web.Handler()), ReadHeaderTimeout: 10 * time.Second,
+		// Requests share serve's context, so stopping ends held long-polls
+		// (each returns its State and `wait` retries until serve is back).
+		BaseContext: func(net.Listener) context.Context { return ctx },
+	}
 	errs := make(chan error, len(listeners))
 	bound := make([]string, 0, len(listeners))
 	for _, l := range listeners {

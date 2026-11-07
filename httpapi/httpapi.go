@@ -204,8 +204,11 @@ func withActor(r *http.Request) (*http.Request, error) {
 
 // Register adds the HTTP API under /api/ to the service's one mux.
 func Register(mux *http.ServeMux, c *core.Core) {
+	all := map[string]handlerFunc{WaitPath: wait}
 	for name, pattern := range Routes {
-		h := handlers[name]
+		all[pattern] = handlers[name]
+	}
+	for pattern, h := range all {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			r, err := withActor(r)
 			if err != nil {

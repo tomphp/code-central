@@ -11,10 +11,10 @@ import (
 )
 
 // literalKeys are Markdown fields, written as literal block scalars.
-var literalKeys = map[string]bool{"description": true, "body": true}
+var literalKeys = map[string]bool{"description": true, "body": true, "recommended": true, "answer": true}
 
 // timeKeys hold RFC 3339 timestamps, written unquoted.
-var timeKeys = map[string]bool{"created": true, "updated": true, "time": true, "started": true, "ended": true}
+var timeKeys = map[string]bool{"created": true, "updated": true, "time": true, "started": true, "ended": true, "posted": true, "closed": true}
 
 // encodeYAML writes v (a struct) in its field order with two-space
 // indentation, Markdown fields as literal block scalars.

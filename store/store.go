@@ -101,6 +101,37 @@ type Claim struct {
 // Live reports whether the Claim has not ended.
 func (c Claim) Live() bool { return c.Ended.IsZero() }
 
+// QuestionStatus is where one Question stands.
+type QuestionStatus string
+
+// The three Question statuses.
+const (
+	QuestionOpen      QuestionStatus = "open"
+	QuestionAnswered  QuestionStatus = "answered"
+	QuestionDismissed QuestionStatus = "dismissed"
+)
+
+// Question is one query in a Round. Questions are numbered across the
+// Ticket, so a number names one Question on its Ticket.
+type Question struct {
+	Number      int
+	Title       string
+	Body        string
+	Recommended string
+	Status      QuestionStatus
+	Answer      string
+	Closed      time.Time // when last answered or dismissed; zero while open
+}
+
+// Round is the Questions an agent posted together, in one write.
+type Round struct {
+	Number    int
+	Claim     int // the Claim number it was posted under
+	SessionID string
+	Posted    time.Time
+	Questions []Question
+}
+
 // Ticket is a unit of work within a Spec.
 type Ticket struct {
 	Number       int
@@ -116,6 +147,7 @@ type Ticket struct {
 	Updated      time.Time
 	Description  string
 	Claims       []Claim
+	Rounds       []Round
 	Comments     []Comment
 	Moves        []Move
 	Edits        []Edit
@@ -174,6 +206,10 @@ func (t Ticket) clone() Ticket {
 	t.BlockedBy = slices.Clone(t.BlockedBy)
 	t.Replacements = slices.Clone(t.Replacements)
 	t.Claims = slices.Clone(t.Claims)
+	t.Rounds = slices.Clone(t.Rounds)
+	for i := range t.Rounds {
+		t.Rounds[i].Questions = slices.Clone(t.Rounds[i].Questions)
+	}
 	t.Comments = slices.Clone(t.Comments)
 	t.Moves = slices.Clone(t.Moves)
 	t.Edits = cloneEdits(t.Edits)

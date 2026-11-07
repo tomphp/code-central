@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/tomoram/code-central/client"
+	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
 )
@@ -37,6 +38,8 @@ type Env struct {
 	ServeAddrs []string
 	// OnListening, when set, is called with serve's bound addresses.
 	OnListening func(addrs []string)
+	// Clock times retries (wait's back-off); nil means the real clock.
+	Clock clock.Clock
 }
 
 // Exit codes.
@@ -93,6 +96,11 @@ func init() {
 		"defer":         {op: "defer", usage: "defer <id> [--reason <text> | --file <path|->]", run: runDefer},
 		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>]", run: runClaim},
 		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->]", run: runFinish},
+
+		// Rounds and wait (ticket 29).
+		"post-round":      {op: "post_round", usage: "post-round <id> --claim <claim-id> [--session <id>] [--questions <json> | --file <path|->]  Questions as a JSON array of {title, body, recommended?}, on stdin by default", run: runPostRound},
+		"pick-up-answers": {op: "pick_up_answers", usage: "pick-up-answers <id> --claim <claim-id>", run: runPickUpAnswers},
+		"wait":            {usage: "wait <id>  wait for the Ticket to leave Needs Answer: exit 0 when Answered, 3 when it left for another State", run: runWait},
 	}
 }
 
@@ -100,6 +108,9 @@ func init() {
 func Run(ctx context.Context, args []string, e Env) int {
 	if e.Getenv == nil {
 		e.Getenv = os.Getenv
+	}
+	if e.Clock == nil {
+		e.Clock = clock.System{}
 	}
 	if e.Dir == "" {
 		if wd, err := os.Getwd(); err == nil {
@@ -123,9 +134,12 @@ func Run(ctx context.Context, args []string, e Env) int {
 	err := cmd.run(ctx, e, args[1:])
 	var ue usageError
 	var ce *core.Error
+	var ec exitCode
 	switch {
 	case err == nil:
 		return exitOK
+	case errors.As(err, &ec):
+		return int(ec)
 	case errors.As(err, &ue):
 		fmt.Fprintf(e.Stderr, "code-central %s: %s\nusage: code-central %s\n", args[0], ue.msg, cmd.usage)
 		return exitUsage

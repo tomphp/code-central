@@ -15,21 +15,25 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/clock"
+	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
 )
 
 // Core is the domain. Build one with New.
 type Core struct {
-	store store.Store
-	clock clock.Clock
-	ids   ids.Source
+	store  store.Store
+	clock  clock.Clock
+	ids    ids.Source
+	events *events.Bus
 }
 
 // New returns a Core persisting through s, telling time with clk and
-// issuing Claim IDs from idSource.
+// issuing Claim IDs from idSource. Every write sends a change notice on
+// Events.
 func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
-	return &Core{store: s, clock: clk, ids: idSource}
+	bus := events.New()
+	return &Core{store: notifying{Store: s, bus: bus}, clock: clk, ids: idSource, events: bus}
 }
 
 // now is the current time as stored: UTC, whole seconds.
@@ -94,6 +98,7 @@ type TicketView struct {
 	Updated      time.Time         `json:"updated"`
 	Description  string            `json:"description"`
 	Claims       []ClaimView       `json:"claims"`
+	Rounds       []RoundView       `json:"rounds"`
 	Comments     []CommentView     `json:"comments"`
 	Moves        []MoveView        `json:"moves"`
 	Edits        []EditView        `json:"edits"`
@@ -355,7 +360,7 @@ func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 		Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags),
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Created: t.Created, Updated: t.Updated, Description: t.Description,
-		Claims: []ClaimView{}, Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
+		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: blocked(r, key, t),
 	}
 	for _, c := range t.Claims {
