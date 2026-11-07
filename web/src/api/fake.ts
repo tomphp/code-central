@@ -120,6 +120,12 @@ export class FakeApi implements Api {
     }));
   }
 
+  // needsMeGroups is what setNeedsMe last set, as full rows, for fake
+  // actions that change Needs Me (read it, change it, set it back).
+  get needsMeGroups(): { reason: NeedsMeReason; tickets: NeedsMeRow[] }[] {
+    return structuredClone(this.groups);
+  }
+
   // ---- the live feed ----
 
   emit(e: ChangeEvent) {

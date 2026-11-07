@@ -1,0 +1,14 @@
+/* The Round panel (ticket 34). */
+.round-panel { border-left: 3px solid var(--r-answer); }
+.round-head { display: flex; gap: 10px; align-items: center; margin-bottom: 4px; }
+.round-head .btn { margin-left: auto; }
+.question { position: relative; border: 0; border-top: 1px solid var(--border); margin: 10px 0 0; padding: 10px 0 0; display: flex; flex-direction: column; gap: 6px; }
+.question legend { font-weight: 600; padding: 0; float: left; padding-right: 6rem; }
+.qstatus { position: absolute; right: 0; top: 10px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; background: var(--surface-2); color: var(--muted); }
+.qstatus-answered { color: var(--r-review); }
+.question-body { white-space: pre-wrap; clear: both; }
+.question textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+.question-dismissed .question-body, .question-dismissed textarea { opacity: .6; }
+.draft-note { font-size: 12px; color: var(--r-answer); }
+.question-actions { display: flex; gap: 8px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
 import type { ChangeEvent, State } from "./types";
 import { ApiError } from "./types";
+import { roundContract } from "./contract.rounds";
 
 export interface Driver {
   api: Api;
@@ -31,6 +32,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     afterEach(async () => {
       await d.close();
     });
+
+    roundContract(() => d);
 
     it("lists every Project with its Needs Me count", async () => {
       await d.createProject("beta", "Beta");
