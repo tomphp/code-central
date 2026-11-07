@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"fmt"
 	"errors"
 	"io/fs"
 	"os"
@@ -56,14 +57,14 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-func TestNewStoreGetsFormatOne(t *testing.T) {
+func TestNewStoreGetsFormatTwo(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "fresh")
 	openFile(t, dir)
 	got, err := os.ReadFile(filepath.Join(dir, "store.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != "format: 1\n" {
+	if string(got) != "format: 2\n" {
 		t.Fatalf("store.yaml = %q", got)
 	}
 }
@@ -273,6 +274,7 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 		{"bad state", "projects/acme/tickets/2.yaml", strings.Replace(ticket, "state: Draft", "state: Doing", 1), "state"},
 		{"bad timestamp", "projects/acme/tickets/2.yaml", strings.Replace(ticket, "updated: 2026-11-07T09:30:00Z", "updated: yesterday", 1), "updated"},
 		{"missing title", "projects/acme/tickets/2.yaml", strings.Replace(ticket, "title: T\n", "", 1), "title"},
+		{"bad archived time", "projects/acme/project.yaml", project + "archived: true\n", "archived"},
 		{"unknown project field", "projects/acme/project.yaml", project + "path: /src\n", "path"},
 		{"spec without frontmatter", "projects/acme/specs/3.md", "# just markdown\n", "frontmatter"},
 		{"spec id mismatch", "projects/acme/specs/3.md", "---\nid: 4\ntitle: S\nlabels: []\ntags: {}\ncreated: 2026-11-07T09:30:00Z\nupdated: 2026-11-07T09:30:00Z\n---\nbody\n", "id"},
@@ -284,7 +286,7 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			dir := t.TempDir()
-			writeFile(t, filepath.Join(dir, "store.yaml"), "format: 1\n")
+			writeFile(t, filepath.Join(dir, "store.yaml"), fmt.Sprintf("format: %d\n", store.Format))
 			writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"), project)
 			writeFile(t, filepath.Join(dir, c.file), c.content)
 			_, err := store.Open(dir)

@@ -13,14 +13,25 @@ import (
 )
 
 // These tests play a build whose format is 2 (or 3), with test-only
-// steps, against a store written by the real format-1 code.
+// steps, against a store written as format 1. They test the migration
+// machinery, whatever the real chain holds.
+
+// seedAcmeFormat1 opens a new format-1 store at dir holding Project acme.
+func seedAcmeFormat1(t *testing.T, dir string) *store.FileStore {
+	t.Helper()
+	s := openFormat(t, dir, 1)
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed"})
+	})
+	return s
+}
 
 // seedFormat1 writes a format-1 store with a Project, a Spec and a
 // Ticket, and closes it.
 func seedFormat1(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "code-central")
-	s := seedAcme(t, dir)
+	s := seedAcmeFormat1(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
 		return w.PutSpec("acme", store.Spec{Number: 1, Title: "Login", Created: t0, Updated: t0, Body: "# Login\n"})
 	})
@@ -209,7 +220,7 @@ func TestAFailedStepLeavesTheStoreUntouched(t *testing.T) {
 		t.Fatalf("a failed migration left %v", got)
 	}
 	// The lock was released and the old build still opens it.
-	openFile(t, dir).Close()
+	openFormat(t, dir, 1).Close()
 }
 
 func TestAMissingStepRefusesToStart(t *testing.T) {
@@ -277,7 +288,7 @@ func TestAMigrationStoppedBetweenTheRenamesFinishesAtStartup(t *testing.T) {
 
 func TestAPendingImportIsRolledForwardBeforeTheMigration(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	s := seedAcme(t, dir)
+	s := seedAcmeFormat1(t, dir)
 	store.StopImportAfter(s, len(importedFiles)+1) // the manifest is written, nothing renamed
 	if err := s.Update(func(w store.Writer) error { return w.PutImport("acme", storetest.ImportBatch()) }); !errors.Is(err, store.ErrImportStopped) {
 		t.Fatal(err)
@@ -294,4 +305,33 @@ func TestAPendingImportIsRolledForwardBeforeTheMigration(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(filepath.Dir(dir), "code-central.format-1.bak", "projects/acme/tickets/3.yaml")); err != nil {
 		t.Fatalf("the backup lacks the rolled-forward import: %v", err)
 	}
+}
+
+// The real step from format 1 (ticket 39): archived was a flag nothing
+// could set but a hand edit; it becomes the time the Project was archived.
+func TestFormatOnesArchivedFlagBecomesATime(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "code-central")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 1\n")
+	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
+		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\narchived: true\n")
+	plain := "key: web\ndisplay_name: web\ncreated: 2026-01-02T03:04:05Z\nmode: local\n"
+	writeFile(t, filepath.Join(dir, "projects/web/project.yaml"), plain)
+
+	s := openFile(t, dir)
+	if got := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")); got !=
+		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\narchived: 2026-01-02T03:04:05Z\n" {
+		t.Fatalf("acme after migrating:\n%s", got)
+	}
+	if got := readFile(t, filepath.Join(dir, "projects/web/project.yaml")); got != plain {
+		t.Fatalf("an unarchived Project changed:\n%s", got)
+	}
+	s.View(func(r store.Reader) error {
+		if p, _ := r.Project("acme"); p.Archived.IsZero() {
+			t.Fatal("acme lost its archived mark")
+		}
+		if p, _ := r.Project("web"); !p.Archived.IsZero() {
+			t.Fatal("web became archived")
+		}
+		return nil
+	})
 }

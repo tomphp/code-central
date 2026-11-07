@@ -38,7 +38,34 @@ type MigrationStep struct {
 // migrations is the real chain: one step from each older format. To bump
 // Format, raise currentFormat in format.go and add the step from the old
 // number here.
-var migrations = []MigrationStep{}
+var migrations = []MigrationStep{
+	{From: 1, Name: "archived becomes a time", File: archivedBecomesATime},
+}
+
+// archivedBecomesATime is format 1 to 2 (ticket 39): project.yaml's
+// archived flag becomes the time the Project was archived. Format 1 had
+// no way to archive, so a true flag is a hand edit with no time; it
+// takes the Project's created time.
+func archivedBecomesATime(rel string, data []byte) ([]byte, error) {
+	if !strings.HasPrefix(rel, "projects/") || !strings.HasSuffix(rel, "/project.yaml") {
+		return data, nil
+	}
+	var old struct {
+		Key         string `yaml:"key"`
+		DisplayName string `yaml:"display_name"`
+		Created     string `yaml:"created"`
+		Mode        string `yaml:"mode"`
+		Archived    bool   `yaml:"archived,omitempty"`
+	}
+	if field, err := decodeStrict(data, &old); err != nil {
+		return nil, fmt.Errorf("%s: %w", field, err)
+	}
+	pf := projectFile{Key: old.Key, DisplayName: old.DisplayName, Created: old.Created, Mode: old.Mode}
+	if old.Archived {
+		pf.Archived = old.Created
+	}
+	return encodeYAML(pf)
+}
 
 var (
 	errMigrationStopped         = errors.New("store: migration stopped by test hook")

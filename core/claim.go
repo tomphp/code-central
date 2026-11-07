@@ -53,8 +53,8 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 	}
 	var res ClaimResult
 	err := c.store.Update(func(w store.Writer) error {
-		if _, ok := w.Project(key); !ok {
-			return unknownProject(key)
+		if err := writable(w, key); err != nil {
+			return err
 		}
 		t, found, err := claimTarget(w, key, in)
 		if err != nil || !found {

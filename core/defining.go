@@ -62,8 +62,8 @@ func (c *Core) EditSpec(ctx context.Context, key string, in EditSpecInput) (Spec
 	}
 	var v SpecView
 	err := c.store.Update(func(w store.Writer) error {
-		if _, ok := w.Project(key); !ok {
-			return unknownProject(key)
+		if err := writable(w, key); err != nil {
+			return err
 		}
 		n, err := in.Spec.number(key, "spec")
 		if err != nil {
@@ -273,8 +273,8 @@ func (c *Core) RemoveTags(_ context.Context, key string, in RemoveTagsInput) (Ta
 func (c *Core) updateTarget(key string, ref Ref, fn func(labels *[]string, tags map[string]string)) (TargetView, error) {
 	var v TargetView
 	err := c.store.Update(func(w store.Writer) error {
-		if _, ok := w.Project(key); !ok {
-			return unknownProject(key)
+		if err := writable(w, key); err != nil {
+			return err
 		}
 		n, err := ref.number(key, "target")
 		if err != nil {

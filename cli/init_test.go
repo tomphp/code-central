@@ -286,3 +286,37 @@ func TestInitReportsAnUnreachableService(t *testing.T) {
 	dir := gitRepo(t, "api")
 	wantError(t, runIn(t, dir, map[string]string{"CODE_CENTRAL_URL": "http://" + freeAddr(t)}, "\ny\n", "init"), core.ServiceUnavailable)
 }
+
+// An archived Project stays put away: init says so and writes nothing,
+// whether .mcp.json already names it or the human types its key.
+func TestInitSaysWhenAProjectIsArchived(t *testing.T) {
+	srv := codecentraltest.NewServer(t)
+	srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
+	if _, err := srv.Core.ArchiveProject(core.WithActor(context.Background(), core.Human), "acme"); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{"CODE_CENTRAL_URL": srv.URL}
+	wantArchived := func(t *testing.T, r result) {
+		t.Helper()
+		if r.code != 1 || !strings.Contains(r.stderr, "Project acme is archived") || !strings.Contains(r.stderr, "Unarchive") {
+			t.Fatalf("exit %d\nstdout: %s\nstderr: %s", r.code, r.stdout, r.stderr)
+		}
+	}
+
+	known := gitRepo(t, "api")
+	content := `{"mcpServers":{"code-central":{"type":"http","url":"${CODE_CENTRAL_URL:-http://localhost:7733}/p/acme/mcp"}}}`
+	os.WriteFile(filepath.Join(known, ".mcp.json"), []byte(content), 0o644)
+	wantArchived(t, runIn(t, known, env, "", "init"))
+	if out := git(t, known, "status", "--porcelain"); strings.TrimSpace(out) != "?? .mcp.json" {
+		t.Fatalf("init wrote files for an archived Project: %q", out)
+	}
+
+	typed := gitRepo(t, "acme")
+	wantArchived(t, runIn(t, typed, env, "\n", "init"))
+	if _, err := os.Stat(filepath.Join(typed, ".mcp.json")); err == nil {
+		t.Fatal(".mcp.json written for an archived Project")
+	}
+	if p, _ := srv.Core.GetProject(context.Background(), "acme"); !p.Archived {
+		t.Fatal("init brought the Project back")
+	}
+}

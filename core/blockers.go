@@ -233,8 +233,8 @@ func ticketRefs(r store.Reader, key string, refs []Ref, field string) ([]int, er
 func (c *Core) updateTicketIn(key string, ref Ref, fn func(r store.Reader, t *store.Ticket) (bool, error)) (TicketView, error) {
 	var v TicketView
 	err := c.store.Update(func(w store.Writer) error {
-		if _, ok := w.Project(key); !ok {
-			return unknownProject(key)
+		if err := writable(w, key); err != nil {
+			return err
 		}
 		t, err := ticket(w, key, ref)
 		if err != nil {

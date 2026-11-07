@@ -73,7 +73,9 @@ func runInit(ctx context.Context, e Env, args []string) error {
 		switch p, err := c.GetProject(ctx, k); {
 		case err == nil:
 			// A known key: leave .mcp.json alone and refresh the rest.
-			// (Ticket 39 says here when p is archived.)
+			if p.Archived {
+				return archivedProject(k)
+			}
 			fmt.Fprintf(e.Stdout, "%s already points at Project %s; refreshing the files init writes.\n", path, k)
 			return setUp(ctx, e, ask, c, setup{root: root, inGit: inGit, key: k, project: p, wantMode: wantMode})
 		case !isCode(err, core.UnknownProject):
@@ -100,6 +102,9 @@ func runInit(ctx context.Context, e Env, args []string) error {
 	for {
 		p, err := c.GetProject(ctx, key)
 		if err == nil {
+			if p.Archived {
+				return archivedProject(key)
+			}
 			project = p
 			answer, err := ask(fmt.Sprintf("Project %s already exists. Join it? Only if this repository is that Project. [y/N]: ", key))
 			if err != nil {
@@ -301,4 +306,11 @@ func writeMCP(path string, doc map[string]any, key string) error {
 		return err
 	}
 	return os.WriteFile(path, append(b, '\n'), 0o644)
+}
+
+// archivedProject is init's answer for an Archived Project: it stays put
+// away, and init writes nothing rather than quietly bringing it back.
+func archivedProject(key string) error {
+	return usagef("Project %s is archived, so init leaves it put away and writes nothing. "+
+		"To work on it again, choose Unarchive in its row's menu in the Code Central UI, then run init again.", key)
 }

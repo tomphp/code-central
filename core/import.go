@@ -119,8 +119,8 @@ func (c *Core) Import(_ context.Context, key string, in ImportInput) (ImportResu
 	}
 	var res ImportResult
 	plan := func(r store.Reader) (store.Import, error) {
-		if _, ok := r.Project(key); !ok {
-			return store.Import{}, unknownProject(key)
+		if err := writable(r, key); err != nil {
+			return store.Import{}, err
 		}
 		if err := alreadyImported(r, key, p); err != nil {
 			return store.Import{}, err

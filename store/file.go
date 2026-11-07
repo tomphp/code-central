@@ -164,7 +164,7 @@ type projectFile struct {
 	DisplayName string `yaml:"display_name"`
 	Created     string `yaml:"created"`
 	Mode        string `yaml:"mode"`
-	Archived    bool   `yaml:"archived,omitempty"`
+	Archived    string `yaml:"archived,omitempty"`
 }
 
 type specFront struct {
@@ -282,9 +282,14 @@ func (s *FileStore) loadProject(key string) error {
 	if pf.Key != key {
 		return &LoadError{File: rel, Field: "key", Msg: fmt.Sprintf("key %q does not match its folder %q", pf.Key, key)}
 	}
-	p := Project{Key: pf.Key, DisplayName: pf.DisplayName, Mode: pf.Mode, Archived: pf.Archived}
+	p := Project{Key: pf.Key, DisplayName: pf.DisplayName, Mode: pf.Mode}
 	if p.Created, err = parseTime(pf.Created); err != nil {
 		return &LoadError{File: rel, Field: "created", Msg: err.Error()}
+	}
+	if pf.Archived != "" {
+		if p.Archived, err = parseTime(pf.Archived); err != nil {
+			return &LoadError{File: rel, Field: "archived", Msg: err.Error()}
+		}
 	}
 	s.setProject(p)
 
@@ -553,7 +558,7 @@ func encode(record any, project string) (string, []byte, error) {
 	switch r := record.(type) {
 	case Project:
 		rel = filepath.Join("projects", r.Key, "project.yaml")
-		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: r.Mode, Archived: r.Archived})
+		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: r.Mode, Archived: formatOptionalTime(r.Archived)})
 	case Spec:
 		rel = filepath.Join("projects", project, "specs", strconv.Itoa(r.Number)+".md")
 		var front []byte
@@ -655,6 +660,14 @@ func splitFrontmatter(data []byte) (front, body []byte, ok bool) {
 }
 
 func formatTime(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
+
+// formatOptionalTime leaves a zero time out of the file.
+func formatOptionalTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return formatTime(t)
+}
 
 func parseTime(s string) (time.Time, error) {
 	if s == "" {

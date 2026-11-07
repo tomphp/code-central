@@ -18,7 +18,7 @@ var literalKeys = map[string]bool{
 }
 
 // timeKeys hold RFC 3339 timestamps, written unquoted.
-var timeKeys = map[string]bool{"created": true, "updated": true, "time": true, "started": true, "ended": true, "posted": true, "closed": true}
+var timeKeys = map[string]bool{"created": true, "updated": true, "time": true, "started": true, "ended": true, "posted": true, "closed": true, "archived": true}
 
 // encodeYAML writes v (a struct) in its field order with two-space
 // indentation, Markdown fields as literal block scalars.

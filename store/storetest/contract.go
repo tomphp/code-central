@@ -45,6 +45,34 @@ func Run(t *testing.T, f Factory) {
 		})
 	})
 
+	t.Run("an archived project keeps its archived time", func(t *testing.T) {
+		s := f.New(t)
+		at := t0.Add(time.Hour)
+		put(t, s, func(w store.Writer) error {
+			return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: "committed", Archived: at})
+		})
+		check := func(s store.Store) {
+			read(t, s, func(r store.Reader) {
+				if p, _ := r.Project("acme"); !p.Archived.Equal(at) {
+					t.Fatalf("archived = %v, want %v", p.Archived, at)
+				}
+			})
+		}
+		check(s)
+		if f.Reopen != nil {
+			s = f.Reopen(t, s)
+			check(s)
+		}
+		put(t, s, func(w store.Writer) error {
+			return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: "committed"})
+		})
+		read(t, s, func(r store.Reader) {
+			if p, _ := r.Project("acme"); !p.Archived.IsZero() {
+				t.Fatalf("archived = %v after unarchiving", p.Archived)
+			}
+		})
+	})
+
 	t.Run("specs and tickets read back after they are written", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)

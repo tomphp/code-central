@@ -82,6 +82,10 @@ var Operations = []Op{
 	// Scratch Import (ticket 40).
 	{Name: "get_import_guide", Audience: AgentAndHuman},
 	{Name: "import", Audience: AgentAndHuman, Write: true},
+
+	// Finished work and Archived Projects (ticket 39).
+	{Name: "archive_project", Audience: HumanOnly, Write: true},
+	{Name: "unarchive_project", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

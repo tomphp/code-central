@@ -35,7 +35,7 @@ type Core struct {
 // Events.
 func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	bus := events.New()
-	c := &Core{store: notifying{Store: s, bus: bus}, clock: clk, ids: idSource, events: bus}
+	c := &Core{store: notifying{Store: archiveGuard{s}, bus: bus}, clock: clk, ids: idSource, events: bus}
 	c.activity = newActivity(c.now())
 	return c
 }
@@ -50,6 +50,8 @@ type ProjectView struct {
 	Created     time.Time `json:"created"`
 	Mode        string    `json:"mode"`
 	Archived    bool      `json:"archived"`
+	// ArchivedAt is when the human archived the Project, while it is.
+	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 }
 
 // SpecView is a Spec as every read returns it.
@@ -221,8 +223,8 @@ func (c *Core) CreateSpec(_ context.Context, key string, in CreateSpecInput) (Sp
 	}
 	var v SpecView
 	err := c.store.Update(func(w store.Writer) error {
-		if _, ok := w.Project(key); !ok {
-			return unknownProject(key)
+		if err := writable(w, key); err != nil {
+			return err
 		}
 		now := c.now()
 		s := store.Spec{Number: w.NextNumber(key), Title: in.Title, Created: now, Updated: now, Body: in.Body}
@@ -252,8 +254,8 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 	}
 	var v TicketView
 	err := c.store.Update(func(w store.Writer) error {
-		if _, ok := w.Project(key); !ok {
-			return unknownProject(key)
+		if err := writable(w, key); err != nil {
+			return err
 		}
 		specN, err := in.Spec.number(key, "spec")
 		if err != nil {
@@ -397,7 +399,12 @@ func claimOrder(a, b store.Ticket) int {
 func finished(s store.State) bool { return s == store.Done || s == store.Cancelled }
 
 func projectView(p store.Project) ProjectView {
-	return ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode, Archived: p.Archived}
+	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode}
+	if !p.Archived.IsZero() {
+		at := p.Archived
+		v.Archived, v.ArchivedAt = true, &at
+	}
+	return v
 }
 
 func specView(key string, s store.Spec) SpecView {

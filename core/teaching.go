@@ -33,10 +33,10 @@ func (c *Core) SetProjectMode(_ context.Context, key string, in SetProjectModeIn
 	}
 	var v ProjectView
 	err := c.store.Update(func(w store.Writer) error {
-		p, ok := w.Project(key)
-		if !ok {
-			return unknownProject(key)
+		if err := writable(w, key); err != nil {
+			return err
 		}
+		p, _ := w.Project(key)
 		unchanged := p.Mode == in.Mode
 		p.Mode = in.Mode
 		v = projectView(p)

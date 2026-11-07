@@ -55,10 +55,10 @@ func (c *Core) RenameProject(ctx context.Context, key string, in RenameProjectIn
 	}
 	var v ProjectView
 	err := c.store.Update(func(w store.Writer) error {
-		p, ok := w.Project(key)
-		if !ok {
-			return unknownProject(key)
+		if err := writable(w, key); err != nil {
+			return err
 		}
+		p, _ := w.Project(key)
 		if p.DisplayName == name {
 			v = projectView(p)
 			return nil
@@ -75,6 +75,9 @@ func (c *Core) RenameProject(ctx context.Context, key string, in RenameProjectIn
 type ProjectRow struct {
 	ProjectView
 	NeedsMe int `json:"needs_me"`
+	// Unfinished counts the Tickets not yet Done or Cancelled; archiving
+	// waits for it to reach zero.
+	Unfinished int `json:"unfinished"`
 }
 
 // ListProjects is list_projects: every Project, archived ones too, by key.
@@ -86,6 +89,9 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 			for _, t := range r.Tickets(p.Key) {
 				if reason, _ := c.reasonOf(r, p.Key, t); reason != "" {
 					row.NeedsMe++
+				}
+				if !finished(t.State) {
+					row.Unfinished++
 				}
 			}
 			out = append(out, row)

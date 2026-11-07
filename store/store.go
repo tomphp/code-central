@@ -42,7 +42,8 @@ type Project struct {
 	DisplayName string
 	Created     time.Time
 	Mode        string
-	Archived    bool
+	// Archived is when the human archived the Project; zero while it isn't.
+	Archived time.Time
 }
 
 // Spec is a description of work, stored as Markdown with YAML frontmatter.
