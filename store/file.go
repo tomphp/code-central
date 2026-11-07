@@ -172,7 +172,7 @@ type specFront struct {
 	Title   string            `yaml:"title"`
 	Labels  []string          `yaml:"labels"`
 	Tags    map[string]string `yaml:"tags"`
-	Link    string            `yaml:"link,omitempty"`
+	Link    *linkFile         `yaml:"link,omitempty"`
 	Created string            `yaml:"created"`
 	Updated string            `yaml:"updated"`
 	Edits   []editFile        `yaml:"edits"`
@@ -186,7 +186,7 @@ type ticketFile struct {
 	Tags           map[string]string   `yaml:"tags"`
 	BlockedBy      []int               `yaml:"blocked_by"`
 	Replacements   []int               `yaml:"replacements"`
-	Link           string              `yaml:"link,omitempty"`
+	Link           *linkFile           `yaml:"link,omitempty"`
 	Created        string              `yaml:"created"`
 	Updated        string              `yaml:"updated"`
 	Description    string              `yaml:"description"`
@@ -263,8 +263,10 @@ type moveFile struct {
 
 // The fields an edit's previous values may name.
 var (
-	specEditFields   = []string{"title", "body"}
-	ticketEditFields = []string{"title", "description"}
+	// external_state and detached record a Link's changes; spec is a
+	// linked Ticket's parent, which only its Integration changes.
+	specEditFields   = []string{"title", "body", "external_state", "detached"}
+	ticketEditFields = []string{"title", "description", "spec", "external_state", "detached"}
 )
 
 var numbered = regexp.MustCompile(`^[1-9][0-9]*$`)
@@ -386,7 +388,11 @@ func decodeSpec(data []byte, n int) (Spec, *LoadError) {
 	if f.Title == "" {
 		return Spec{}, &LoadError{Field: "title", Msg: "required"}
 	}
-	sp := Spec{Number: n, Title: f.Title, Labels: f.Labels, Tags: f.Tags, Link: f.Link, Body: string(body)}
+	sp := Spec{Number: n, Title: f.Title, Labels: f.Labels, Tags: f.Tags, Body: string(body)}
+	var lerr *LoadError
+	if sp.Link, lerr = decodeLink(f.Link); lerr != nil {
+		return Spec{}, lerr
+	}
 	var err error
 	if sp.Created, err = parseTime(f.Created); err != nil {
 		return Spec{}, &LoadError{Field: "created", Msg: err.Error()}
@@ -407,7 +413,7 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	}
 	t := Ticket{
 		Number: n, Title: f.Title, State: State(f.State), Spec: f.Spec, Labels: f.Labels, Tags: f.Tags,
-		BlockedBy: f.BlockedBy, Replacements: f.Replacements, Link: f.Link, Description: f.Description,
+		BlockedBy: f.BlockedBy, Replacements: f.Replacements, Description: f.Description,
 	}
 	if t.Title == "" {
 		return Ticket{}, &LoadError{Field: "title", Msg: "required"}
@@ -417,6 +423,10 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	}
 	if t.Spec < 1 {
 		return Ticket{}, &LoadError{Field: "spec", Msg: "required"}
+	}
+	var lerr *LoadError
+	if t.Link, lerr = decodeLink(f.Link); lerr != nil {
+		return Ticket{}, lerr
 	}
 	var err error
 	if t.Created, err = parseTime(f.Created); err != nil {
@@ -562,13 +572,13 @@ func encode(record any, project string) (string, []byte, error) {
 	case Spec:
 		rel = filepath.Join("projects", project, "specs", strconv.Itoa(r.Number)+".md")
 		var front []byte
-		front, err = encodeYAML(specFront{ID: r.Number, Title: r.Title, Labels: r.Labels, Tags: r.Tags, Link: r.Link, Created: formatTime(r.Created), Updated: formatTime(r.Updated), Edits: encodeEdits(r.Edits)})
+		front, err = encodeYAML(specFront{ID: r.Number, Title: r.Title, Labels: r.Labels, Tags: r.Tags, Link: encodeLink(r.Link), Created: formatTime(r.Created), Updated: formatTime(r.Updated), Edits: encodeEdits(r.Edits)})
 		data = append(append(append([]byte("---\n"), front...), "---\n"...), r.Body...)
 	case Ticket:
 		rel = filepath.Join("projects", project, "tickets", strconv.Itoa(r.Number)+".yaml")
 		f := ticketFile{
 			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
-			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: r.Link,
+			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: encodeLink(r.Link),
 			Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
 			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},
 			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),

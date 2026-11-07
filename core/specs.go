@@ -32,6 +32,7 @@ type SpecRow struct {
 	StateSummary StateSummary      `json:"state_summary"`
 	Finished     bool              `json:"finished"`
 	Updated      time.Time         `json:"updated"`
+	Link         *LinkView         `json:"link,omitempty"`
 }
 
 // FindSpecsInput is find_specs' filters; every filter given must match.
@@ -93,7 +94,7 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 			}
 			rows = append(rows, SpecRow{
 				ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
-				StateSummary: summary, Finished: done, Updated: s.Updated,
+				StateSummary: summary, Finished: done, Updated: s.Updated, Link: linkView(s.Link),
 			})
 		}
 		return nil

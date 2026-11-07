@@ -57,14 +57,14 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-func TestNewStoreGetsFormatTwo(t *testing.T) {
+func TestNewStoreGetsTheCurrentFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "fresh")
 	openFile(t, dir)
 	got, err := os.ReadFile(filepath.Join(dir, "store.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != "format: 2\n" {
+	if string(got) != fmt.Sprintf("format: %d\n", store.Format) {
 		t.Fatalf("store.yaml = %q", got)
 	}
 }
@@ -281,6 +281,8 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 		{"unknown previous field", "projects/acme/tickets/2.yaml", ticket + "edits:\n  - number: 1\n    actor: agent\n    time: 2026-11-07T09:30:00Z\n    previous:\n      colour: red\n", "edits[0].previous.colour"},
 		{"bad comment time", "projects/acme/tickets/2.yaml", ticket + "comments:\n  - number: 1\n    actor: agent\n    time: soon\n    body: hi\n", "comments[0].time"},
 		{"bad question status", "projects/acme/tickets/2.yaml", ticket + "rounds:\n  - number: 1\n    claim: 1\n    posted: 2026-11-07T09:30:00Z\n    questions:\n      - number: 1\n        title: Q\n        body: B\n        status: maybe\n", "rounds[0].questions[0].status"},
+		{"bad external state", "projects/acme/tickets/2.yaml", ticket + "link:\n  integration: github\n  id: \"12\"\n  external_state: gone\n", "link.external_state"},
+		{"link without id", "projects/acme/tickets/2.yaml", ticket + "link:\n  integration: github\n  external_state: open\n", "link.id"},
 		{"badly named ticket file", "projects/acme/tickets/two.yaml", ticket, "file name"},
 	}
 	for _, c := range cases {

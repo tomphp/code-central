@@ -25,7 +25,8 @@ const (
 	ReasonFailed             NeedsMeReason = "failed"
 	ReasonInReview           NeedsMeReason = "in_review"
 	ReasonBlockedByCancelled NeedsMeReason = "blocked_by_cancelled"
-	// ReasonClosedExternally is computed once Integrations exist (ticket 42).
+	// ReasonClosedExternally is a linked Ticket whose external item isn't
+	// open, whose Link isn't detached and that isn't finished (ticket 42).
 	ReasonClosedExternally NeedsMeReason = "closed_externally"
 )
 
@@ -38,7 +39,7 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonFailed, "Failed: a Failure Report waits for the human"},
 	{ReasonInReview, "In Review: finished work waits to be accepted or rejected"},
 	{ReasonBlockedByCancelled, "Blocked by a Cancelled Ticket with no Replacements"},
-	{ReasonClosedExternally, "Closed externally: its linked item was closed in another system"},
+	{ReasonClosedExternally, "Closed externally: its linked item was closed, deleted or left its Integration's query; cancel it, mark it Done or unlink it"},
 }
 
 // groupIndex is a reason's place in the group order.
@@ -80,6 +81,9 @@ type NeedsMeRow struct {
 	Summary string `json:"summary,omitempty"`
 	// Blocker is the Cancelled Blocker (blocked by a Cancelled Ticket).
 	Blocker *BlockerView `json:"blocker,omitempty"`
+	// Link is the Ticket's Link, whatever the reason: the row's badge, and
+	// the external item when closed externally.
+	Link *LinkView `json:"link,omitempty"`
 }
 
 // RoundSummary is a Round's number and how many of its Questions are open.
@@ -138,7 +142,7 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 	if reason == "" {
 		return NeedsMeRow{}, false
 	}
-	row := NeedsMeRow{Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since}
+	row := NeedsMeRow{Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link)}
 	switch reason {
 	case ReasonNeedsAnswer:
 		if n := len(t.Rounds); n > 0 {
@@ -199,6 +203,9 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 	}
 	if b, ok := cancelledBlocker(r, key, t); ok {
 		return ReasonBlockedByCancelled, cancelledAt(r, key, b)
+	}
+	if since, ok := closedExternally(t); ok {
+		return ReasonClosedExternally, since
 	}
 	return "", time.Time{}
 }

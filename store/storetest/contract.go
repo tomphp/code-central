@@ -296,6 +296,7 @@ func Run(t *testing.T, f Factory) {
 
 	runReplacements(t, f)
 	runImport(t, f)
+	runLinks(t, f)
 }
 
 func seedProject(t *testing.T, s store.Store) {

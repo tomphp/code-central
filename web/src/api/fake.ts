@@ -20,6 +20,7 @@ import {
   FINISHED,
   type ChangeEvent,
   type FindTicketsFilter,
+  type LinkedRow,
   type NeedsMeReason,
   type NeedsMeRow,
   type NeedsMeView,
@@ -193,7 +194,16 @@ export class FakeApi implements Api {
     return [...this.tickets.values()]
       .filter((t) => this.projectOf(t.id) === project)
       .filter((t) => (filter.state?.length ? filter.state.includes(t.state) : !FINISHED.includes(t.state)))
-      .map((t) => ({ id: t.id, title: t.title, state: t.state, spec: t.spec.id, labels: [...t.labels], blocked: t.blocked, updated: t.updated }));
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        state: t.state,
+        spec: t.spec.id,
+        labels: [...t.labels],
+        blocked: t.blocked,
+        updated: t.updated,
+        ...(t.link && { link: { ...t.link } }),
+      }));
   }
 
   async getTicket(project: string, id: string): Promise<TicketView> {
@@ -236,6 +246,18 @@ export class FakeApi implements Api {
       this.emit({ type: "project.changed", project: key });
     }
     return this.projectView(p);
+  }
+
+  // unlink detaches a seeded Ticket's Link, taking it out of Needs Me if it
+  // was there as closed externally (the only reason a Link gives).
+  async unlink(project: string, target: string): Promise<LinkedRow> {
+    this.calls.push("unlink");
+    const t = this.ticket(project, target);
+    this.writable(project);
+    if (!t.link) throw new ApiError(422, "invalid", `${t.id} is not linked`, "target");
+    if (this.rows().find((r) => r.id === t.id)?.reason === "closed_externally") this.dropNeedsMe(t.id);
+    const v = this.updateTicket(t.id, { link: { ...t.link, detached: true } });
+    return { kind: "ticket", id: v.id, title: v.title, state: v.state, link: v.link! };
   }
 
   // ---- internals ----

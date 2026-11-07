@@ -8,6 +8,8 @@ const (
 	AgentAndHuman Audience = iota
 	// HumanOnly operations are exposed over HTTP only.
 	HumanOnly
+	// IntegrationOnly operations are an Integration's, over HTTP only.
+	IntegrationOnly
 )
 
 // Op describes one named operation.
@@ -78,6 +80,15 @@ var Operations = []Op{
 	{Name: "list_projects", Audience: HumanOnly},
 	{Name: "move", Audience: HumanOnly, Write: true},
 	{Name: "rename_project", Audience: HumanOnly, Write: true},
+
+	// The Integration contract (ticket 42).
+	{Name: "create_linked_spec", Audience: IntegrationOnly, Write: true},
+	{Name: "create_linked_ticket", Audience: IntegrationOnly, Write: true},
+	{Name: "update_linked_spec", Audience: IntegrationOnly, Write: true},
+	{Name: "update_linked_ticket", Audience: IntegrationOnly, Write: true},
+	{Name: "set_external_state", Audience: IntegrationOnly, Write: true},
+	{Name: "find_linked", Audience: IntegrationOnly},
+	{Name: "unlink", Audience: HumanOnly, Write: true},
 
 	// Scratch Import (ticket 40).
 	{Name: "get_import_guide", Audience: AgentAndHuman},

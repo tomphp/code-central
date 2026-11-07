@@ -244,6 +244,33 @@ var writesOnAcme = map[string]func(f fixture) error{
 		}})
 		return err
 	},
+	// The Integration contract (ticket 42).
+	"create_linked_spec": func(f fixture) error {
+		_, err := f.core.CreateLinkedSpec(integration, "acme", core.CreateLinkedSpecInput{Title: "Ext", Link: core.LinkInput{Integration: "gh", ID: "1"}})
+		return err
+	},
+	"create_linked_ticket": func(f fixture) error {
+		_, err := f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "1", Title: "Ext", Link: core.LinkInput{Integration: "gh", ID: "2"}})
+		return err
+	},
+	"update_linked_spec": func(f fixture) error {
+		title := "New"
+		_, err := f.core.UpdateLinkedSpec(integration, "acme", core.UpdateLinkedSpecInput{Spec: "1", Title: &title})
+		return err
+	},
+	"update_linked_ticket": func(f fixture) error {
+		title := "New"
+		_, err := f.core.UpdateLinkedTicket(integration, "acme", core.UpdateLinkedTicketInput{Ticket: "2", Title: &title})
+		return err
+	},
+	"set_external_state": func(f fixture) error {
+		_, err := f.core.SetExternalState(integration, "acme", core.SetExternalStateInput{Target: "2", ExternalState: "closed"})
+		return err
+	},
+	"unlink": func(f fixture) error {
+		_, err := f.core.Unlink(human, "acme", core.UnlinkInput{Target: "2"})
+		return err
+	},
 	"import (dry run)": func(f fixture) error {
 		_, err := f.core.Import(ctx, "acme", core.ImportInput{DryRun: true, Payload: core.ImportPayload{
 			Specs:   []core.ImportSpec{{Source: "feat", Title: "Feat"}},

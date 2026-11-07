@@ -39,11 +39,12 @@ type MigrationStep struct {
 // Format, raise currentFormat in format.go and add the step from the old
 // number here.
 var migrations = []MigrationStep{
-	{From: 1, Name: "archived becomes a time", File: archivedBecomesATime},
+	{From: 1, Name: "add the typed link on Specs and Tickets, and its edit history keys"},
+	{From: 2, Name: "archived becomes a time", File: archivedBecomesATime},
 }
 
-// archivedBecomesATime is format 1 to 2 (ticket 39): project.yaml's
-// archived flag becomes the time the Project was archived. Format 1 had
+// archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's
+// archived flag becomes the time the Project was archived. Formats 1 and 2 had
 // no way to archive, so a true flag is a hand edit with no time; it
 // takes the Project's created time.
 func archivedBecomesATime(rel string, data []byte) ([]byte, error) {

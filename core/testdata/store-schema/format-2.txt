@@ -6,14 +6,19 @@ projects/<key>/project.yaml
   display_name: string
   created: string
   mode: string
-  archived: string (optional)
+  archived: bool (optional)
 
 projects/<key>/specs/<n>.md: YAML frontmatter between --- lines, then the Markdown body
   id: int
   title: string
   labels: []string
   tags: map[string]string
-  link: string (optional)
+  link: mapping (optional)
+      integration: string
+      id: string
+      url: string (optional)
+      external_state: string
+      detached: bool (optional)
   created: string
   updated: string
   edits: list of mappings
@@ -30,7 +35,12 @@ projects/<key>/tickets/<n>.yaml
   tags: map[string]string
   blocked_by: []int
   replacements: []int
-  link: string (optional)
+  link: mapping (optional)
+      integration: string
+      id: string
+      url: string (optional)
+      external_state: string
+      detached: bool (optional)
   created: string
   updated: string
   description: string
@@ -86,5 +96,6 @@ projects/<key>/tickets/<n>.yaml
 values
   ticket state, moves[].from, moves[].to: Draft, Ready, In Progress, Needs Answer, Answered, Failed, In Review, Done, Cancelled
   rounds[].questions[].status: open, answered, dismissed
-  spec edits[].previous keys: title, body
-  ticket edits[].previous keys: title, description
+  link.external_state: open, closed, deleted, out_of_scope
+  spec edits[].previous keys: title, body, external_state, detached
+  ticket edits[].previous keys: title, description, spec, external_state, detached

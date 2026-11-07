@@ -37,7 +37,21 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
     case "blocked_by_cancelled":
       return r.blocker ? `Blocked by ${r.blocker.id} ${r.blocker.title}, Cancelled with no Replacement` : "Blocked by a Cancelled Ticket";
     case "closed_externally":
-      return `Closed externally · ${r.state}`;
+      return `${externalDetail(r)} · still ${r.state}`;
+  }
+}
+
+// externalDetail says what happened to a closed-externally row's external item.
+function externalDetail(r: NeedsMeRow): string {
+  const l = r.link;
+  if (!l) return "Closed externally";
+  switch (l.external_state) {
+    case "deleted":
+      return `Deleted in ${l.integration} ${l.id}`;
+    case "out_of_scope":
+      return `Left ${l.integration}'s query (${l.id})`;
+    default:
+      return `Closed in ${l.integration} ${l.id}`;
   }
 }
 

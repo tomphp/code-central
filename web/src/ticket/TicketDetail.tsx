@@ -5,6 +5,7 @@ import type { Api } from "../api/api";
 import { STATES, type EditView, type State, type TicketView } from "../api/types";
 import { ago, REASON_LABEL } from "../format";
 import { ActionPanel } from "../panels/ActionPanel";
+import { LinkBadge } from "./LinkBadge";
 import { useAct } from "./useAct";
 
 export interface TicketPaneProps {
@@ -53,7 +54,9 @@ export function TicketDetail({ api, project, ticket: t, now }: TicketDetailProps
             {l}
           </span>
         ))}
+        {t.link && <LinkBadge link={t.link} />}
       </div>
+      {t.link && !t.link.detached && <LinkedNote key={t.id} api={api} project={project} ticket={t} />}
       {t.description ? <div className="description">{t.description}</div> : <p className="muted">No description.</p>}
       {t.blockers.length > 0 && (
         <p className="muted small">
@@ -85,6 +88,25 @@ export function TicketDetail({ api, project, ticket: t, now }: TicketDetailProps
       <MoveControl key={`${t.id} ${t.state}`} api={api} project={project} ticket={t} />
       <History ticket={t} now={now} />
     </article>
+  );
+}
+
+// LinkedNote says a linked Ticket's definition belongs to its Integration
+// (ticket 42) and offers Unlink, which hands it back to Code Central.
+function LinkedNote({ api, project, ticket: t }: { api: Api; project: string; ticket: TicketView }) {
+  const { busy, error, run } = useAct();
+  return (
+    <div className="linked-note muted small">
+      The title and description are read-only while linked: change them in {t.link!.integration}.{" "}
+      <button type="button" className="btn" disabled={busy} onClick={() => run(() => api.unlink(project, t.id))}>
+        Unlink
+      </button>
+      {error && (
+        <p role="alert" className="warning">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -6,6 +6,7 @@ import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import { FINISHED, STATES, type NeedsMeRow, type State, type TicketView } from "../api/types";
 import { duration, REASON_LABEL, rowDetail } from "../format";
+import { LinkBadge } from "../ticket/LinkBadge";
 import type { InboxData, ProjectTicket } from "../live";
 import { TicketPane } from "../ticket/TicketDetail";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
@@ -85,6 +86,7 @@ export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: In
                   <span className="row-top">
                     <span className="tid">{t.id}</span>
                     <span className="row-title">{t.title}</span>
+                    {t.link && <LinkBadge link={t.link} plain />}
                     {waiting.has(t.id) && <span className="dot needs-you" role="img" aria-label="Needs you" />}
                   </span>
                 </a>
@@ -154,6 +156,7 @@ function NeedsMeLink({ row, now, link }: { row: NeedsMeRow; now: Date; link: Row
       <span className="row-top">
         <span className="tid">{row.id}</span>
         <span className="row-title">{row.title}</span>
+        {row.link && <LinkBadge link={row.link} plain />}
         <span className="muted small">{duration(now, row.since)}</span>
       </span>
       <span className="row-detail">{rowDetail(now, row)}</span>

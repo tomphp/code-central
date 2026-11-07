@@ -52,7 +52,7 @@ type Spec struct {
 	Title   string
 	Labels  []string
 	Tags    map[string]string
-	Link    string
+	Link    Link
 	Created time.Time
 	Updated time.Time
 	Body    string
@@ -157,7 +157,7 @@ type Ticket struct {
 	Tags         map[string]string
 	BlockedBy    []int
 	Replacements []int
-	Link         string
+	Link         Link
 	Created      time.Time
 	Updated      time.Time
 	Description  string

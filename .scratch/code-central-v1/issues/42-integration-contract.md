@@ -4,13 +4,13 @@
 
 **Blocked by:** 27, 32, 33
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Specs and Tickets gain an optional `link`: `{integration, id, url, external_state: open|closed|deleted|out_of_scope, detached}`, at most one per item
-- [ ] HTTP-only operations for the `integration` Actor create linked items in `Draft` or `Ready`, update their title, description and parent, set `external_state`, and look up by link (including detached links); keep their signatures minimal, as the first real Integration will settle them
-- [ ] Only the `integration` Actor can write definitions on a linked item that isn't detached; the human and agents get `action_not_allowed`; the `integration` Actor can't move State; its definition updates go through edit history with Actor `integration`
-- [ ] A linked Ticket whose `external_state` isn't `open`, whose link isn't detached and that isn't finished gets the computed `needs_me_reason` "closed externally", last in the Needs Me order; reopening clears it
-- [ ] Human `unlink` marks the link `detached`, making the definition editable and stopping it counting for Needs Me
-- [ ] The UI shows a Link badge (Integration and external ID, linking to the URL) on rows and in the detail, a note that the title and description are read-only while linked, and Unlink in the detail
-- [ ] A closed-externally panel links to the external item and offers Cancel, Mark Done (the human's `move` to `Done`) and Unlink
-- [ ] The Actor rules, "closed externally" and `unlink` are tested in `core`; the badge and panel have component tests against the fake API
+- [x] Specs and Tickets gain an optional `link`: `{integration, id, url, external_state: open|closed|deleted|out_of_scope, detached}`, at most one per item
+- [x] HTTP-only operations for the `integration` Actor create linked items in `Draft` or `Ready`, update their title, description and parent, set `external_state`, and look up by link (including detached links); keep their signatures minimal, as the first real Integration will settle them
+- [x] Only the `integration` Actor can write definitions on a linked item that isn't detached; the human and agents get `action_not_allowed`; the `integration` Actor can't move State; its definition updates go through edit history with Actor `integration`
+- [x] A linked Ticket whose `external_state` isn't `open`, whose link isn't detached and that isn't finished gets the computed `needs_me_reason` "closed externally", last in the Needs Me order; reopening clears it
+- [x] Human `unlink` marks the link `detached`, making the definition editable and stopping it counting for Needs Me
+- [x] The UI shows a Link badge (Integration and external ID, linking to the URL) on rows and in the detail, a note that the title and description are read-only while linked, and Unlink in the detail
+- [x] A closed-externally panel links to the external item and offers Cancel, Mark Done (the human's `move` to `Done`) and Unlink
+- [x] The Actor rules, "closed externally" and `unlink` are tested in `core`; the badge and panel have component tests against the fake API
