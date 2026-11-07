@@ -14,6 +14,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/core"
@@ -37,6 +38,9 @@ type Env struct {
 	ServeAddrs []string
 	// OnListening, when set, is called with serve's bound addresses.
 	OnListening func(addrs []string)
+	// After, when set, replaces time.After for ping's time limit and
+	// wait's back-off, so tests never wait on real time.
+	After func(time.Duration) <-chan time.Time
 }
 
 // Exit codes.
@@ -75,7 +79,7 @@ var commands map[string]command
 
 func init() {
 	commands = map[string]command{
-		"init":          {usage: "init [--key <key>]  set this repository up as a Project", run: runInit},
+		"init":          {usage: "init [--key <key>] [--local | --committed]  set this repository up as a Project (--local keeps init's files out of git)", run: runInit},
 		"serve":         {usage: "serve [--store <dir>]  run the service in the foreground", run: runServe},
 		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->]", run: runCreateSpec},
 		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--description <md> | --file <path|->]", run: runCreateTicket},
@@ -94,9 +98,16 @@ func init() {
 		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>]", run: runClaim},
 		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->]", run: runFinish},
 
+		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>]  (default $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
+		"ping":        {usage: "ping [--session <id>]  mark this session active (reads hook JSON on stdin); always exits 0", run: runPing},
+		"hook":        {usage: "hook session-id  PreToolUse hook: add session_id to the tool input", run: runHook},
 		// Failure Reports and giving up (ticket 30).
 		"report-failure": {op: "report_failure", usage: "report-failure <id> --claim <claim-id> --what-broke <md> --why <md> --what-to-fix <md> --where-work-stands <md> | --file <json-path|->", run: runReportFailure},
 		"give-up":        {op: "give_up", usage: "give-up <id> --claim <claim-id> [--note <md> | --file <path|->]", run: runGiveUp},
+		// Rounds and wait (ticket 29).
+		"post-round":      {op: "post_round", usage: "post-round <id> --claim <claim-id> [--session <id>] [--questions <json> | --file <path|->]  Questions as a JSON array of {title, body, recommended?}, on stdin by default", run: runPostRound},
+		"pick-up-answers": {op: "pick_up_answers", usage: "pick-up-answers <id> --claim <claim-id>", run: runPickUpAnswers},
+		"wait":            {usage: "wait <id>  wait for the Ticket to leave Needs Answer: exit 0 when Answered, 3 when it left for another State", run: runWait},
 	}
 }
 
@@ -105,10 +116,16 @@ func Run(ctx context.Context, args []string, e Env) int {
 	if e.Getenv == nil {
 		e.Getenv = os.Getenv
 	}
+	if e.After == nil {
+		e.After = time.After
+	}
 	if e.Dir == "" {
 		if wd, err := os.Getwd(); err == nil {
 			e.Dir = wd
 		}
+	}
+	if len(args) > 1 && args[0] == "help" {
+		return runHelpTopic(e, args[1])
 	}
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		w, code := e.Stdout, exitOK
@@ -127,9 +144,12 @@ func Run(ctx context.Context, args []string, e Env) int {
 	err := cmd.run(ctx, e, args[1:])
 	var ue usageError
 	var ce *core.Error
+	var ec exitCode
 	switch {
 	case err == nil:
 		return exitOK
+	case errors.As(err, &ec):
+		return int(ec)
 	case errors.As(err, &ue):
 		fmt.Fprintf(e.Stderr, "code-central %s: %s\nusage: code-central %s\n", args[0], ue.msg, cmd.usage)
 		return exitUsage
@@ -156,6 +176,7 @@ func printUsage(w io.Writer) {
 	for _, n := range names {
 		fmt.Fprintf(w, "  %s\n", commands[n].usage)
 	}
+	fmt.Fprintln(w, "\nHelp topics: code-central help sandboxes")
 }
 
 // flagSet is a FlagSet that reports errors instead of printing them.
@@ -385,7 +406,7 @@ func runClaim(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Claim(ctx, sc.project, core.ClaimInput{Spec: core.Ref(*spec), Ticket: core.Ref(*ticket), SessionID: *session})
+	v, err := sc.client.Claim(ctx, sc.project, core.ClaimInput{Spec: core.Ref(*spec), Ticket: core.Ref(*ticket), SessionID: sessionID(e, *session)})
 	if err != nil {
 		return err
 	}

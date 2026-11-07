@@ -15,21 +15,29 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/clock"
+	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
 )
 
 // Core is the domain. Build one with New.
 type Core struct {
-	store store.Store
-	clock clock.Clock
-	ids   ids.Source
+	store  store.Store
+	clock  clock.Clock
+	ids    ids.Source
+	events *events.Bus
+	// activity is the in-memory last-activity record behind Silent Claims.
+	activity *activity
 }
 
 // New returns a Core persisting through s, telling time with clk and
-// issuing Claim IDs from idSource.
+// issuing Claim IDs from idSource. Every write sends a change notice on
+// Events.
 func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
-	return &Core{store: s, clock: clk, ids: idSource}
+	bus := events.New()
+	c := &Core{store: notifying{Store: s, bus: bus}, clock: clk, ids: idSource, events: bus}
+	c.activity = newActivity(c.now())
+	return c
 }
 
 // now is the current time as stored: UTC, whole seconds.
@@ -40,6 +48,7 @@ type ProjectView struct {
 	Key         string    `json:"key"`
 	DisplayName string    `json:"display_name"`
 	Created     time.Time `json:"created"`
+	Mode        string    `json:"mode"`
 	Archived    bool      `json:"archived"`
 }
 
@@ -84,26 +93,30 @@ type ClaimView struct {
 
 // TicketView is the full view of one Ticket, the same through every door.
 type TicketView struct {
-	ID           string            `json:"id"`
-	Title        string            `json:"title"`
-	State        store.State       `json:"state"`
-	Spec         SpecRef           `json:"spec"`
-	Labels       []string          `json:"labels"`
-	Tags         map[string]string `json:"tags"`
-	BlockedBy    []string          `json:"blocked_by"`
-	Blockers     []BlockerView     `json:"blockers"`
-	Replacements []string          `json:"replacements"`
-	Created      time.Time         `json:"created"`
-	Updated      time.Time         `json:"updated"`
-	Description  string            `json:"description"`
-	Claims       []ClaimView       `json:"claims"`
-	// rounds (ticket 29) go here, before failure_reports.
+	ID             string              `json:"id"`
+	Title          string              `json:"title"`
+	State          store.State         `json:"state"`
+	Spec           SpecRef             `json:"spec"`
+	Labels         []string            `json:"labels"`
+	Tags           map[string]string   `json:"tags"`
+	BlockedBy      []string            `json:"blocked_by"`
+	Blockers       []BlockerView       `json:"blockers"`
+	Replacements   []string            `json:"replacements"`
+	Created        time.Time           `json:"created"`
+	Updated        time.Time           `json:"updated"`
+	Description    string              `json:"description"`
+	Claims         []ClaimView         `json:"claims"`
+	Rounds         []RoundView         `json:"rounds"`
 	FailureReports []FailureReportView `json:"failure_reports"`
 	Comments       []CommentView       `json:"comments"`
 	Moves          []MoveView          `json:"moves"`
 	Edits          []EditView          `json:"edits"`
 	Blocked        bool                `json:"blocked"`
 	Claimable      bool                `json:"claimable"`
+	// SilentSince is set while the Ticket is a Silent Claim: In Progress
+	// with no activity for 30 minutes. It is the time of the last
+	// activity, so the quiet time is now minus it. Computed, never stored.
+	SilentSince *time.Time `json:"silent_since,omitempty"`
 }
 
 // TicketRow is one find_tickets result.
@@ -121,6 +134,8 @@ type TicketRow struct {
 type CreateProjectInput struct {
 	Key         string `json:"key"`
 	DisplayName string `json:"display_name,omitempty"`
+	// Mode is committed (the default) or local.
+	Mode string `json:"mode,omitempty"`
 }
 
 // CreateSpecInput is create_spec's input.
@@ -163,7 +178,14 @@ func (c *Core) CreateProject(_ context.Context, in CreateProjectInput) (ProjectV
 	if name == "" {
 		name = in.Key
 	}
-	p := store.Project{Key: in.Key, DisplayName: name, Created: c.now(), Mode: "committed"}
+	mode := in.Mode
+	if mode == "" {
+		mode = ModeCommitted
+	}
+	if !validMode(mode) {
+		return ProjectView{}, invalidMode(mode)
+	}
+	p := store.Project{Key: in.Key, DisplayName: name, Created: c.now(), Mode: mode}
 	err := c.store.Update(func(w store.Writer) error {
 		if _, ok := w.Project(in.Key); ok {
 			return invalid("key", "a Project with key %q already exists", in.Key)
@@ -251,7 +273,7 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}
-		v = ticketView(w, key, t)
+		v = c.ticketView(w, key, t)
 		return nil
 	})
 	return v, err
@@ -272,7 +294,7 @@ func (c *Core) GetTicket(_ context.Context, key string, ref Ref) (TicketView, er
 		if !ok {
 			return notFound("there is no Ticket %s", DisplayID(key, n))
 		}
-		v = ticketView(r, key, t)
+		v = c.ticketView(r, key, t)
 		return nil
 	})
 	return v, err
@@ -373,7 +395,7 @@ func claimOrder(a, b store.Ticket) int {
 func finished(s store.State) bool { return s == store.Done || s == store.Cancelled }
 
 func projectView(p store.Project) ProjectView {
-	return ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Archived: p.Archived}
+	return ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode, Archived: p.Archived}
 }
 
 func specView(key string, s store.Spec) SpecView {
@@ -383,7 +405,7 @@ func specView(key string, s store.Spec) SpecView {
 	}
 }
 
-func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
+func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 	sp, _ := r.Spec(key, t.Spec)
 	v := TicketView{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State,
@@ -392,13 +414,14 @@ func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Blockers: blockerViews(r, key, t),
 		Created:  t.Created, Updated: t.Updated, Description: t.Description,
-		Claims: []ClaimView{}, FailureReports: failureReportViews(t.FailureReports), Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
+		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), FailureReports: failureReportViews(t.FailureReports),
+		Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: blocked(r, key, t),
 	}
-	for _, c := range t.Claims {
-		cv := ClaimView{Number: c.Number, SessionID: c.SessionID, Started: c.Started, LastActivity: lastActivity(t, c), EndedBy: c.EndedBy}
-		if !c.Live() {
-			ended := c.Ended
+	for _, cl := range t.Claims {
+		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy}
+		if !cl.Live() {
+			ended := cl.Ended
 			cv.Ended = &ended
 		}
 		v.Claims = append(v.Claims, cv)
@@ -407,6 +430,7 @@ func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via})
 	}
 	v.Claimable = t.State == store.Ready && !v.Blocked
+	v.SilentSince = c.silentSince(t)
 	return v
 }
 

@@ -4,6 +4,7 @@
 package storetest
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -104,6 +105,42 @@ func Run(t *testing.T, f Factory) {
 				}
 				if len(got.Moves) != 1 || got.Moves[0] != tk.Moves[0] {
 					t.Fatalf("moves: got %+v", got.Moves)
+				}
+			})
+		}
+		check(s)
+		if f.Reopen != nil {
+			check(f.Reopen(t, s))
+		}
+	})
+
+	t.Run("a ticket's rounds read back after they are written, and reads are copies", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		tk := store.Ticket{
+			Number: 1, Title: "T", State: store.NeedsAnswer, Spec: 1, Created: t0, Updated: t0,
+			Rounds: []store.Round{{Number: 1, Claim: 1, SessionID: "sess-1", Posted: t0, Questions: []store.Question{
+				{Number: 1, Title: "Which DB?", Body: "Postgres or SQLite?\n", Recommended: "SQLite\n", Status: store.QuestionAnswered, Answer: "SQLite\n", Closed: t0.Add(time.Minute)},
+				{Number: 2, Title: "Name?", Body: "What name?", Status: store.QuestionOpen},
+				{Number: 3, Title: "Skip?", Body: "Skip it?", Status: store.QuestionDismissed, Closed: t0.Add(time.Hour)},
+			}}},
+		}
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk) })
+		check := func(s store.Store) {
+			read(t, s, func(r store.Reader) {
+				got, _ := r.Ticket("acme", 1)
+				if len(got.Rounds) != 1 {
+					t.Fatalf("rounds: got %+v", got.Rounds)
+				}
+				g, w := got.Rounds[0], tk.Rounds[0]
+				if g.Number != w.Number || g.Claim != w.Claim || g.SessionID != w.SessionID || !g.Posted.Equal(w.Posted) || !slices.Equal(g.Questions, w.Questions) {
+					t.Fatalf("round: got %+v, want %+v", g, w)
+				}
+				got.Rounds[0].Questions[1].Status = store.QuestionAnswered
+			})
+			read(t, s, func(r store.Reader) {
+				if again, _ := r.Ticket("acme", 1); again.Rounds[0].Questions[1].Status != store.QuestionOpen {
+					t.Fatal("changing a read Ticket's Questions changed the store")
 				}
 			})
 		}

@@ -44,6 +44,9 @@ var Operations = []Op{
 	{Name: "accept", Audience: HumanOnly, Write: true},
 	{Name: "reject", Audience: HumanOnly, Write: true},
 
+	// Silent Claims and sessions (ticket 31).
+	{Name: "set_session", Audience: AgentAndHuman, Write: true},
+	{Name: "release", Audience: HumanOnly, Write: true},
 	// Blockers, Replacements and finding work (ticket 28).
 	{Name: "add_blocker", Audience: AgentAndHuman, Write: true},
 	{Name: "remove_blocker", Audience: AgentAndHuman, Write: true},
@@ -57,8 +60,18 @@ var Operations = []Op{
 	{Name: "send_back", Audience: HumanOnly, Write: true},
 	{Name: "to_draft", Audience: HumanOnly, Write: true},
 
+	// init's teaching files and modes (ticket 41).
+	{Name: "set_project_mode", Audience: HumanOnly, Write: true},
+
 	// The published workflow (ticket 26).
 	{Name: "get_workflow", Audience: AgentAndHuman},
+
+	// Rounds and Questions (ticket 29).
+	{Name: "post_round", Audience: AgentAndHuman, Write: true},
+	{Name: "pick_up_answers", Audience: AgentAndHuman, Write: true},
+	{Name: "answer", Audience: HumanOnly, Write: true},
+	{Name: "accept_recommended", Audience: HumanOnly, Write: true},
+	{Name: "dismiss_question", Audience: HumanOnly, Write: true},
 
 	// Scratch Import (ticket 40).
 	{Name: "get_import_guide", Audience: AgentAndHuman},

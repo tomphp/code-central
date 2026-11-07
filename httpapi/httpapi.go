@@ -41,6 +41,8 @@ var Routes = map[string]string{
 	"accept": "POST /api/p/{key}/tickets/{n}/accept",
 	"reject": "POST /api/p/{key}/tickets/{n}/reject",
 
+	"set_session":  "POST /api/p/{key}/tickets/{n}/set_session",
+	"release":      "POST /api/p/{key}/tickets/{n}/release",
 	"get_workflow": "GET /api/workflow",
 }
 
@@ -193,6 +195,22 @@ var handlers = map[string]handlerFunc{
 		return c.Reject(r.Context(), r.PathValue("key"), in)
 	},
 
+	"set_session": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.SetSessionInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.SetSession(r.Context(), r.PathValue("key"), in)
+	},
+	"release": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.ReleaseInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.Release(r.Context(), r.PathValue("key"), in)
+	},
 	"get_workflow": func(c *core.Core, r *http.Request) (any, error) {
 		if err := onlyParams(r.URL.Query()); err != nil {
 			return nil, err
@@ -220,8 +238,11 @@ func withActor(r *http.Request) (*http.Request, error) {
 
 // Register adds the HTTP API under /api/ to the service's one mux.
 func Register(mux *http.ServeMux, c *core.Core) {
+	all := map[string]handlerFunc{WaitPath: wait}
 	for name, pattern := range Routes {
-		h := handlers[name]
+		all[pattern] = handlers[name]
+	}
+	for pattern, h := range all {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			r, err := withActor(r)
 			if err != nil {
@@ -236,6 +257,7 @@ func Register(mux *http.ServeMux, c *core.Core) {
 			writeJSON(w, http.StatusOK, v)
 		})
 	}
+	mux.HandleFunc("POST /api/ping", ping(c))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {
 			// There is no PUT, PATCH or DELETE: writes are named POST actions.
@@ -244,6 +266,21 @@ func Register(mux *http.ServeMux, c *core.Core) {
 		}
 		writeError(w, &core.Error{Code: core.NotFound, Message: fmt.Sprintf("no API resource at %s %s", r.Method, r.URL.Path)})
 	})
+}
+
+// ping is POST /api/ping {session_id}. It is not one of core's
+// operations: it updates memory only, and always answers 204, even for an
+// unknown session or a body it can't read, so a hook never fails on it.
+func ping(c *core.Core) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			SessionID string `json:"session_id"`
+		}
+		if decodeBody(r, &in) == nil {
+			c.Ping(r.Context(), in.SessionID)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 // Status maps an error code to its HTTP status.

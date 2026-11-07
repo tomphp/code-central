@@ -73,7 +73,7 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}
-		v := ticketView(w, key, t)
+		v := c.ticketView(w, key, t)
 		res = ClaimResult{ClaimID: claim.ID, Ticket: &v}
 		return nil
 	})

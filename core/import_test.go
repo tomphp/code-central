@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -125,6 +126,32 @@ func TestAnImportWritesEverySpecAndTicket(t *testing.T) {
 	}
 	if spec := f.spec(t, "acme", "After"); spec.ID != "acme-9" {
 		t.Fatalf("the counter after an import gave %s", spec.ID)
+	}
+}
+
+func TestAnImportSendsOneProjectChangeNotice(t *testing.T) {
+	f := newFixture(t)
+	f.importFixture(t)
+	notices, stop := f.core.Events().Subscribe()
+	defer stop()
+	if _, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: scratch(), DryRun: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: scratch()}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case e := <-notices:
+		if e != (events.Event{Type: events.ProjectChanged, Project: "acme"}) {
+			t.Fatalf("notice %+v", e)
+		}
+	default:
+		t.Fatal("no notice after the import")
+	}
+	select {
+	case e := <-notices:
+		t.Fatalf("a second notice %+v", e)
+	default:
 	}
 }
 

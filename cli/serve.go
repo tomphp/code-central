@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
@@ -47,6 +49,10 @@ func runServe(ctx context.Context, e Env, args []string) error {
 	defer st.Close()
 
 	addrs := e.ServeAddrs
+	if l := e.Getenv("CODE_CENTRAL_LISTEN"); addrs == nil && l != "" {
+		// For the end-to-end tier, which must never bind the real port.
+		addrs = strings.Split(l, ",")
+	}
 	if addrs == nil {
 		addrs = DefaultAddrs
 	}
@@ -56,7 +62,17 @@ func runServe(ctx context.Context, e Env, args []string) error {
 	}
 
 	c := core.New(st, clock.System{}, ids.Random{})
-	srv := &http.Server{Handler: frontdoor.Handler(c, web.Handler()), ReadHeaderTimeout: 10 * time.Second}
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	go c.WatchSilent(ctx, ticker.C, func(project, ticketID string) {
+		c.Events().Publish(events.Event{Type: events.TicketChanged, Project: project, ID: ticketID})
+	})
+	srv := &http.Server{
+		Handler: frontdoor.Handler(c, web.Handler()), ReadHeaderTimeout: 10 * time.Second,
+		// Requests share serve's context, so stopping ends held long-polls
+		// (each returns its State and `wait` retries until serve is back).
+		BaseContext: func(net.Listener) context.Context { return ctx },
+	}
 	errs := make(chan error, len(listeners))
 	bound := make([]string, 0, len(listeners))
 	for _, l := range listeners {

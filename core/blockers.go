@@ -250,7 +250,7 @@ func (c *Core) updateTicketIn(key string, ref Ref, fn func(r store.Reader, t *st
 				return err
 			}
 		}
-		v = ticketView(w, key, t)
+		v = c.ticketView(w, key, t)
 		return nil
 	})
 	return v, err
