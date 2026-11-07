@@ -67,6 +67,10 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
     addBlocker: async (key, id, blocker) => {
       await agent(`/api/p/${key}/tickets/${id.split("-").pop()}/add_blocker`, { blocker });
     },
+    // ticket 35
+    claim: async (key, id, session_id) => {
+      await agent(`/api/p/${key}/claim`, { ticket: id, session_id });
+    },
     close: svc.stop,
   };
 });

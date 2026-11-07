@@ -21,6 +21,9 @@ export interface Driver {
   postRound(key: string, id: string, questions: { title: string; body: string; recommended?: string }[]): Promise<void>;
   // addBlocker makes id wait on blocker, as an agent's add_blocker.
   addBlocker(key: string, id: string, blocker: string): Promise<void>;
+  // claim claims a Ready Ticket as an agent with a session ID, moving it
+  // to In Progress (ticket 35).
+  claim(key: string, id: string, sessionId: string): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -164,6 +167,34 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const t = await d.api.act("acme", id, "move", { to_state: "Done" });
       expect(t.state).toBe("Done");
       expect(t.moves.at(-1)).toMatchObject({ from: "Ready", to: "Done", actor: "human" });
+    });
+
+    // ---- release (ticket 35) ----
+    it("releases a Claim back to Ready, ending it, with the note as a comment", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "A", "Ready");
+      await d.claim("acme", id, "sess-1");
+
+      const t = await d.api.act("acme", id, "release", { note: "Session died" });
+      expect(t).toMatchObject({ id, state: "Ready" });
+      expect(t.claims).toHaveLength(1);
+      expect(t.claims[0]).toMatchObject({ session_id: "sess-1", ended_by: "release" });
+      expect(t.claims[0].ended).toBeTruthy();
+      expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Session died" });
+      expect((await d.api.getTicket("acme", id)).state).toBe("Ready");
+
+      const again = await d.api.act("acme", id, "release", {}).catch((e) => e);
+      expect(again).toMatchObject({ status: 409, code: "action_not_allowed" });
+    });
+
+    it("releases without a note, adding no comment", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "A", "Ready");
+      await d.claim("acme", id, "sess-1");
+
+      const t = await d.api.act("acme", id, "release", {});
+      expect(t.state).toBe("Ready");
+      expect(t.comments).toEqual([]);
     });
 
     it("delivers a change notice for each write over the live feed", async () => {
