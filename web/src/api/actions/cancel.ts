@@ -2,7 +2,7 @@
 // none; the optional reason is stored as a comment. (Ticket 36's Failed
 // panel and ticket 37's Blocked panel both use it.)
 import { registerFakeAction } from "../fakeActions";
-import { ApiError, type TicketView } from "../types";
+import { ApiError, FINISHED, type TicketView } from "../types";
 
 declare module "../api" {
   interface TicketActions {
@@ -11,7 +11,7 @@ declare module "../api" {
 }
 
 registerFakeAction("cancel", (fake, t, { replacements = [], reason }) => {
-  if (t.state === "Done" || t.state === "Cancelled") {
+  if (FINISHED.includes(t.state)) {
     throw new ApiError(409, "action_not_allowed", `${t.id} is ${t.state}; cancel needs an unfinished Ticket`);
   }
   const at = fake.now.toISOString();

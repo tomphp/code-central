@@ -2,15 +2,13 @@
 // shown only as a Cancelled Ticket's Replacement (its view has `via`) is
 // removed by naming that Cancelled Ticket.
 import { registerFakeAction } from "../fakeActions";
-import { ApiError, type TicketView } from "../types";
+import { ApiError, FINISHED, type TicketView } from "../types";
 
 declare module "../api" {
   interface TicketActions {
     remove_blocker: { body: { blocker: string }; result: TicketView };
   }
 }
-
-const finished = ["Done", "Cancelled"];
 
 registerFakeAction("remove_blocker", (fake, t, { blocker }) => {
   const project = t.id.slice(0, t.id.lastIndexOf("-"));
@@ -25,6 +23,6 @@ registerFakeAction("remove_blocker", (fake, t, { blocker }) => {
   return fake.updateTicket(t.id, {
     blocked_by: t.blocked_by.filter((b) => b !== id),
     blockers,
-    blocked: !finished.includes(t.state) && blockers.some((b) => b.state !== "Done"),
+    blocked: !FINISHED.includes(t.state) && blockers.some((b) => b.state !== "Done"),
   });
 });
