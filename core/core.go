@@ -62,6 +62,8 @@ type SpecView struct {
 	Updated time.Time         `json:"updated"`
 	Body    string            `json:"body"`
 	Edits   []EditView        `json:"edits"`
+	// Link is set on a linked Spec (ticket 42).
+	Link *LinkView `json:"link,omitempty"`
 }
 
 // SpecRef names a Ticket's Spec.
@@ -119,6 +121,8 @@ type TicketView struct {
 	SilentSince *time.Time `json:"silent_since,omitempty"`
 	// NeedsMeReason says why the Ticket waits on the human, if it does.
 	NeedsMeReason NeedsMeReason `json:"needs_me_reason,omitempty"`
+	// Link is set on a linked Ticket (ticket 42).
+	Link *LinkView `json:"link,omitempty"`
 }
 
 // TicketRow is one find_tickets result.
@@ -130,6 +134,7 @@ type TicketRow struct {
 	Labels  []string    `json:"labels"`
 	Blocked bool        `json:"blocked"`
 	Updated time.Time   `json:"updated"`
+	Link    *LinkView   `json:"link,omitempty"`
 }
 
 // CreateProjectInput is create_project's input.
@@ -383,7 +388,7 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 func ticketRow(r store.Reader, key string, t store.Ticket) TicketRow {
 	return TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
-		Labels: orEmpty(t.Labels), Blocked: blocked(r, key, t), Updated: t.Updated,
+		Labels: orEmpty(t.Labels), Blocked: blocked(r, key, t), Updated: t.Updated, Link: linkView(t.Link),
 	}
 }
 
@@ -403,7 +408,7 @@ func projectView(p store.Project) ProjectView {
 func specView(key string, s store.Spec) SpecView {
 	return SpecView{
 		ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
-		Created: s.Created, Updated: s.Updated, Body: s.Body, Edits: editViews(s.Edits),
+		Created: s.Created, Updated: s.Updated, Body: s.Body, Edits: editViews(s.Edits), Link: linkView(s.Link),
 	}
 }
 
@@ -418,7 +423,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		Created:  t.Created, Updated: t.Updated, Description: t.Description,
 		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), FailureReports: failureReportViews(t.FailureReports),
 		Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
-		Blocked: blocked(r, key, t),
+		Blocked: blocked(r, key, t), Link: linkView(t.Link),
 	}
 	for _, cl := range t.Claims {
 		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy}

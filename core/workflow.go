@@ -98,6 +98,10 @@ var claimStates = []store.State{store.InProgress, store.NeedsAnswer, store.Answe
 // may reports whether actor may take an action with this Who. Holder
 // actions also need the live Claim ID, which liveClaim checks.
 func (w Who) may(actor Actor) bool {
+	if actor == Integration {
+		// An Integration never moves State (ADR 0004).
+		return false
+	}
 	switch w {
 	case AnyActor, AgentActor, Holder:
 		return true

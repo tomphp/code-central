@@ -35,6 +35,9 @@ func (c *Core) EditTicket(ctx context.Context, key string, in EditTicketInput) (
 		return TicketView{}, invalid("title", "a Ticket needs a title")
 	}
 	return c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
+		if err := definitionOwned(ctx, DisplayID(key, t.Number), t.Link); err != nil {
+			return false, err
+		}
 		prev := map[string]string{}
 		change(prev, "title", &t.Title, in.Title)
 		change(prev, "description", &t.Description, in.Description)
@@ -72,6 +75,9 @@ func (c *Core) EditSpec(ctx context.Context, key string, in EditSpecInput) (Spec
 		s, ok := w.Spec(key, n)
 		if !ok {
 			return notFound("there is no Spec %s", DisplayID(key, n))
+		}
+		if err := definitionOwned(ctx, DisplayID(key, n), s.Link); err != nil {
+			return err
 		}
 		prev := map[string]string{}
 		change(prev, "title", &s.Title, in.Title)
