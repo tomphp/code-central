@@ -73,6 +73,12 @@ var Operations = []Op{
 	{Name: "accept_recommended", Audience: HumanOnly, Write: true},
 	{Name: "dismiss_question", Audience: HumanOnly, Write: true},
 
+	// Needs Me, moving by hand and Projects (ticket 32).
+	{Name: "needs_me", Audience: HumanOnly},
+	{Name: "list_projects", Audience: HumanOnly},
+	{Name: "move", Audience: HumanOnly, Write: true},
+	{Name: "rename_project", Audience: HumanOnly, Write: true},
+
 	// Scratch Import (ticket 40).
 	{Name: "get_import_guide", Audience: AgentAndHuman},
 	{Name: "import", Audience: AgentAndHuman, Write: true},

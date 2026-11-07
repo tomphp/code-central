@@ -47,8 +47,8 @@ func TestTheWorkflowsActionsAreTheTableCoreEnforces(t *testing.T) {
 	if a := action(t, w, "approve", "human or agent"); a.ClaimID || a.Requires != "" {
 		t.Fatalf("approve needs no content and no Claim ID: %+v", a)
 	}
-	if move := action(t, w, "move", "human"); move.To != "" || !slices.Equal(move.Except, []store.State{store.Failed}) {
-		t.Fatalf("move goes anywhere except Failed: %+v", move)
+	if move := action(t, w, "move", "human"); move.To != "" || !slices.Equal(move.Except, []store.State{store.NeedsAnswer, store.Failed}) {
+		t.Fatalf("move goes anywhere except Needs Answer and Failed (entered only by a Round or a Failure Report): %+v", move)
 	}
 	// The agent's cancel and the human's are two rows.
 	action(t, w, "cancel", "agent")
@@ -57,8 +57,17 @@ func TestTheWorkflowsActionsAreTheTableCoreEnforces(t *testing.T) {
 
 func TestTheWorkflowSaysWhatCountsAsNeedsMe(t *testing.T) {
 	w := workflow(t)
-	if len(w.NeedsMe) != 7 {
-		t.Fatalf("Needs Me reasons %v, want the spec's seven", w.NeedsMe)
+	want := []core.NeedsMeReason{
+		core.ReasonNeedsAnswer, core.ReasonAnswered, core.ReasonSilentClaim, core.ReasonFailed,
+		core.ReasonInReview, core.ReasonBlockedByCancelled, core.ReasonClosedExternally,
+	}
+	if len(w.NeedsMe) != len(want) {
+		t.Fatalf("Needs Me reasons %v, want the spec's seven in group order", w.NeedsMe)
+	}
+	for i, r := range w.NeedsMe {
+		if r.Reason != want[i] || r.Meaning == "" {
+			t.Fatalf("needs_me[%d] = %+v, want %s with its meaning", i, r, want[i])
+		}
 	}
 }
 

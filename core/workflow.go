@@ -86,8 +86,10 @@ var Workflow = []Action{
 		Requires: "replacements (required), reason (optional)"},
 	{Name: "cancel", From: unfinished, To: store.Cancelled, Who: HumanActor,
 		Requires: "replacements (optional)"},
-	{Name: "move", From: store.States, Except: []store.State{store.Failed}, Who: HumanActor,
-		Requires: "to_state"},
+	// Needs Answer and Failed are entered only by posting a Round or a
+	// Failure Report, so move can't reach either.
+	{Name: "move", From: store.States, Except: []store.State{store.NeedsAnswer, store.Failed}, Who: HumanActor,
+		Requires: "to_state: any State but the current one and those in except"},
 }
 
 // claimStates are the States a Claim spans. Any move out of them ends it.
@@ -165,6 +167,13 @@ func holder(t *store.Ticket, key, claimID string) (*store.Claim, error) {
 // and the live Claim's number, and ends the Claim when the Ticket leaves
 // the States a Claim spans. Holder actions must pass the live Claim ID.
 func transition(ctx context.Context, t *store.Ticket, key, name, claimID string, now time.Time) error {
+	return transitionTo(ctx, t, key, name, claimID, "", now)
+}
+
+// transitionTo is transition for an action whose row leaves the target
+// to the caller (move): to is used when the row's To is "". The caller
+// has already checked to against the row's Except.
+func transitionTo(ctx context.Context, t *store.Ticket, key, name, claimID string, to store.State, now time.Time) error {
 	actor := ActorOf(ctx)
 	id := DisplayID(key, t.Number)
 	if isHolderAction(name) {
@@ -182,7 +191,10 @@ func transition(ctx context.Context, t *store.Ticket, key, name, claimID string,
 	if err != nil {
 		return err
 	}
-	from, to := t.State, a.To
+	from := t.State
+	if a.To != "" {
+		to = a.To
+	}
 	// Leaving Needs Answer other than by the last answer is a move by
 	// hand: its open Questions become dismissed and the Claim ends.
 	byHand := from == store.NeedsAnswer && name != automaticAnswered

@@ -117,6 +117,8 @@ type TicketView struct {
 	// with no activity for 30 minutes. It is the time of the last
 	// activity, so the quiet time is now minus it. Computed, never stored.
 	SilentSince *time.Time `json:"silent_since,omitempty"`
+	// NeedsMeReason says why the Ticket waits on the human, if it does.
+	NeedsMeReason NeedsMeReason `json:"needs_me_reason,omitempty"`
 }
 
 // TicketRow is one find_tickets result.
@@ -431,6 +433,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	}
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
+	v.NeedsMeReason, _ = c.reasonOf(r, key, t)
 	return v
 }
 
