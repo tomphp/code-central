@@ -285,6 +285,11 @@ func TestOperationList(t *testing.T) {
 		"finish":         core.AgentAndHuman,
 		"accept":         core.HumanOnly,
 		"reject":         core.HumanOnly,
+		"add_blocker":    core.AgentAndHuman,
+		"remove_blocker": core.AgentAndHuman,
+		"cancel":         core.AgentAndHuman,
+		"get_spec":       core.AgentAndHuman,
+		"find_specs":     core.AgentAndHuman,
 	}
 	for name, aud := range want {
 		op, ok := core.Operation(name)

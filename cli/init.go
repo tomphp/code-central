@@ -126,7 +126,11 @@ func runInit(ctx context.Context, e Env, args []string) error {
 	if err := writeMCP(path, doc, key); err != nil {
 		return err
 	}
-	fmt.Fprintf(e.Stdout, "Wrote %s; nothing was committed.\n", path)
+	hooks, err := writeHooks(root)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(e.Stdout, "Wrote %s and %s; nothing was committed.\n", path, hooks)
 	return nil
 }
 

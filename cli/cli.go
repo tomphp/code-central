@@ -14,9 +14,9 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/tomoram/code-central/client"
-	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
 )
@@ -38,8 +38,9 @@ type Env struct {
 	ServeAddrs []string
 	// OnListening, when set, is called with serve's bound addresses.
 	OnListening func(addrs []string)
-	// Clock times retries (wait's back-off); nil means the real clock.
-	Clock clock.Clock
+	// After, when set, replaces time.After for ping's time limit and
+	// wait's back-off, so tests never wait on real time.
+	After func(time.Duration) <-chan time.Time
 }
 
 // Exit codes.
@@ -81,9 +82,9 @@ func init() {
 		"init":          {usage: "init [--key <key>]  set this repository up as a Project", run: runInit},
 		"serve":         {usage: "serve [--store <dir>]  run the service in the foreground", run: runServe},
 		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->]", run: runCreateSpec},
-		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--description <md> | --file <path|->]", run: runCreateTicket},
+		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--description <md> | --file <path|->]", run: runCreateTicket},
 		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id>", run: runGetTicket},
-		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--spec <id>]", run: runFindTickets},
+		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--spec <id>] [--claimable[=false]]", run: runFindTickets},
 
 		"edit-spec":     {op: "edit_spec", usage: "edit-spec <id> [--title <t>] [--body <md> | --file <path|->]", run: runEditSpec},
 		"edit-ticket":   {op: "edit_ticket", usage: "edit-ticket <id> [--title <t>] [--description <md> | --file <path|->]", run: runEditTicket},
@@ -97,6 +98,12 @@ func init() {
 		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>]", run: runClaim},
 		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->]", run: runFinish},
 
+		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>]  (default $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
+		"ping":        {usage: "ping [--session <id>]  mark this session active (reads hook JSON on stdin); always exits 0", run: runPing},
+		"hook":        {usage: "hook session-id  PreToolUse hook: add session_id to the tool input", run: runHook},
+		// Failure Reports and giving up (ticket 30).
+		"report-failure": {op: "report_failure", usage: "report-failure <id> --claim <claim-id> --what-broke <md> --why <md> --what-to-fix <md> --where-work-stands <md> | --file <json-path|->", run: runReportFailure},
+		"give-up":        {op: "give_up", usage: "give-up <id> --claim <claim-id> [--note <md> | --file <path|->]", run: runGiveUp},
 		// Rounds and wait (ticket 29).
 		"post-round":      {op: "post_round", usage: "post-round <id> --claim <claim-id> [--session <id>] [--questions <json> | --file <path|->]  Questions as a JSON array of {title, body, recommended?}, on stdin by default", run: runPostRound},
 		"pick-up-answers": {op: "pick_up_answers", usage: "pick-up-answers <id> --claim <claim-id>", run: runPickUpAnswers},
@@ -109,8 +116,8 @@ func Run(ctx context.Context, args []string, e Env) int {
 	if e.Getenv == nil {
 		e.Getenv = os.Getenv
 	}
-	if e.Clock == nil {
-		e.Clock = clock.System{}
+	if e.After == nil {
+		e.After = time.After
 	}
 	if e.Dir == "" {
 		if wd, err := os.Getwd(); err == nil {
@@ -288,8 +295,9 @@ func runCreateTicket(ctx context.Context, e Env, args []string) error {
 	state := fs.String("state", "", "")
 	desc := fs.String("description", "", "")
 	file := fs.String("file", "", "")
-	var labels strs
+	var labels, blockedBy strs
 	fs.Var(&labels, "label", "")
+	fs.Var(&blockedBy, "blocked-by", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -305,9 +313,13 @@ func runCreateTicket(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.CreateTicket(ctx, sc.project, core.CreateTicketInput{
+	in := core.CreateTicketInput{
 		Spec: core.Ref(*spec), Title: *title, Description: text, State: store.State(*state), Labels: labels,
-	})
+	}
+	for _, b := range blockedBy {
+		in.BlockedBy = append(in.BlockedBy, core.Ref(b))
+	}
+	v, err := sc.client.CreateTicket(ctx, sc.project, in)
 	if err != nil {
 		return err
 	}
@@ -340,9 +352,11 @@ func runFindTickets(ctx context.Context, e Env, args []string) error {
 	project := addScope(fs)
 	title := fs.String("title", "", "")
 	spec := fs.String("spec", "", "")
-	var states, labels strs
+	claimable := fs.Bool("claimable", false, "")
+	var states, labels, tags strs
 	fs.Var(&states, "state", "")
 	fs.Var(&labels, "label", "")
+	fs.Var(&tags, "tag", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -357,6 +371,12 @@ func runFindTickets(ctx context.Context, e Env, args []string) error {
 	in := core.FindTicketsInput{Title: *title, Labels: labels, Spec: core.Ref(*spec)}
 	for _, s := range states {
 		in.State = append(in.State, store.State(s))
+	}
+	if in.Tags, err = tagFlags(tags); err != nil {
+		return err
+	}
+	if isSet(fs, "claimable") {
+		in.Claimable = claimable
 	}
 	v, err := sc.client.FindTickets(ctx, sc.project, in)
 	if err != nil {
@@ -382,7 +402,7 @@ func runClaim(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Claim(ctx, sc.project, core.ClaimInput{Spec: core.Ref(*spec), Ticket: core.Ref(*ticket), SessionID: *session})
+	v, err := sc.client.Claim(ctx, sc.project, core.ClaimInput{Spec: core.Ref(*spec), Ticket: core.Ref(*ticket), SessionID: sessionID(e, *session)})
 	if err != nil {
 		return err
 	}

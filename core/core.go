@@ -26,6 +26,8 @@ type Core struct {
 	clock  clock.Clock
 	ids    ids.Source
 	events *events.Bus
+	// activity is the in-memory last-activity record behind Silent Claims.
+	activity *activity
 }
 
 // New returns a Core persisting through s, telling time with clk and
@@ -33,7 +35,9 @@ type Core struct {
 // Events.
 func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	bus := events.New()
-	return &Core{store: notifying{Store: s, bus: bus}, clock: clk, ids: idSource, events: bus}
+	c := &Core{store: notifying{Store: s, bus: bus}, clock: clk, ids: idSource, events: bus}
+	c.activity = newActivity(c.now())
+	return c
 }
 
 // now is the current time as stored: UTC, whole seconds.
@@ -77,33 +81,41 @@ type MoveView struct {
 
 // ClaimView is one Claim as reads show it: never with its Claim ID.
 type ClaimView struct {
-	Number    int        `json:"number"`
-	SessionID string     `json:"session_id,omitempty"`
-	Started   time.Time  `json:"started"`
-	Ended     *time.Time `json:"ended,omitempty"`
-	EndedBy   string     `json:"ended_by,omitempty"`
+	Number    int       `json:"number"`
+	SessionID string    `json:"session_id,omitempty"`
+	Started   time.Time `json:"started"`
+	// LastActivity is the latest write the Claim's agent made on the Ticket.
+	LastActivity time.Time  `json:"last_activity"`
+	Ended        *time.Time `json:"ended,omitempty"`
+	EndedBy      string     `json:"ended_by,omitempty"`
 }
 
 // TicketView is the full view of one Ticket, the same through every door.
 type TicketView struct {
-	ID           string            `json:"id"`
-	Title        string            `json:"title"`
-	State        store.State       `json:"state"`
-	Spec         SpecRef           `json:"spec"`
-	Labels       []string          `json:"labels"`
-	Tags         map[string]string `json:"tags"`
-	BlockedBy    []string          `json:"blocked_by"`
-	Replacements []string          `json:"replacements"`
-	Created      time.Time         `json:"created"`
-	Updated      time.Time         `json:"updated"`
-	Description  string            `json:"description"`
-	Claims       []ClaimView       `json:"claims"`
-	Rounds       []RoundView       `json:"rounds"`
-	Comments     []CommentView     `json:"comments"`
-	Moves        []MoveView        `json:"moves"`
-	Edits        []EditView        `json:"edits"`
-	Blocked      bool              `json:"blocked"`
-	Claimable    bool              `json:"claimable"`
+	ID             string              `json:"id"`
+	Title          string              `json:"title"`
+	State          store.State         `json:"state"`
+	Spec           SpecRef             `json:"spec"`
+	Labels         []string            `json:"labels"`
+	Tags           map[string]string   `json:"tags"`
+	BlockedBy      []string            `json:"blocked_by"`
+	Blockers       []BlockerView       `json:"blockers"`
+	Replacements   []string            `json:"replacements"`
+	Created        time.Time           `json:"created"`
+	Updated        time.Time           `json:"updated"`
+	Description    string              `json:"description"`
+	Claims         []ClaimView         `json:"claims"`
+	Rounds         []RoundView         `json:"rounds"`
+	FailureReports []FailureReportView `json:"failure_reports"`
+	Comments       []CommentView       `json:"comments"`
+	Moves          []MoveView          `json:"moves"`
+	Edits          []EditView          `json:"edits"`
+	Blocked        bool                `json:"blocked"`
+	Claimable      bool                `json:"claimable"`
+	// SilentSince is set while the Ticket is a Silent Claim: In Progress
+	// with no activity for 30 minutes. It is the time of the last
+	// activity, so the quiet time is now minus it. Computed, never stored.
+	SilentSince *time.Time `json:"silent_since,omitempty"`
 }
 
 // TicketRow is one find_tickets result.
@@ -136,6 +148,7 @@ type CreateTicketInput struct {
 	Description string      `json:"description,omitempty"`
 	State       store.State `json:"state,omitempty"`
 	Labels      []string    `json:"labels,omitempty"`
+	BlockedBy   []Ref       `json:"blocked_by,omitempty"`
 }
 
 // FindTicketsInput is find_tickets' filters; every filter given must match.
@@ -143,7 +156,11 @@ type FindTicketsInput struct {
 	State  []store.State `json:"state,omitempty"`
 	Title  string        `json:"title,omitempty"`
 	Labels []string      `json:"labels,omitempty"`
-	Spec   Ref           `json:"spec,omitempty"`
+	// Tags must all be present with exactly these values.
+	Tags map[string]string `json:"tags,omitempty"`
+	Spec Ref               `json:"spec,omitempty"`
+	// Claimable, when given, keeps only Tickets that are (or aren't) claimable.
+	Claimable *bool `json:"claimable,omitempty"`
 }
 
 var keyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
@@ -233,15 +250,20 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 		if _, ok := w.Spec(key, specN); !ok {
 			return invalid("spec", "there is no Spec %s", DisplayID(key, specN))
 		}
+		// A new Ticket has no dependants yet, so its Blockers can't form a cycle.
+		blockedBy, err := ticketRefs(w, key, in.BlockedBy, "blocked_by")
+		if err != nil {
+			return err
+		}
 		now := c.now()
 		t := store.Ticket{
 			Number: w.NextNumber(key), Title: in.Title, State: state, Spec: specN,
-			Labels: in.Labels, Created: now, Updated: now, Description: in.Description,
+			Labels: in.Labels, BlockedBy: blockedBy, Created: now, Updated: now, Description: in.Description,
 		}
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}
-		v = ticketView(w, key, t)
+		v = c.ticketView(w, key, t)
 		return nil
 	})
 	return v, err
@@ -262,13 +284,13 @@ func (c *Core) GetTicket(_ context.Context, key string, ref Ref) (TicketView, er
 		if !ok {
 			return notFound("there is no Ticket %s", DisplayID(key, n))
 		}
-		v = ticketView(r, key, t)
+		v = c.ticketView(r, key, t)
 		return nil
 	})
 	return v, err
 }
 
-// FindTickets is find_tickets(state?, title?, labels?, spec?). Done and
+// FindTickets is find_tickets(state?, title?, labels?, tags?, spec?, claimable?). Done and
 // Cancelled Tickets are left out unless the State filter names them.
 // Rows are in claim order: created, then number.
 func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) ([]TicketRow, error) {
@@ -276,6 +298,9 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 		if !s.Valid() {
 			return nil, invalid("state", "unknown State %q", s)
 		}
+	}
+	if err := checkTagFilter(in.Tags); err != nil {
+		return nil, err
 	}
 	rows := []TicketRow{}
 	err := c.store.View(func(r store.Reader) error {
@@ -296,10 +321,11 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 			if !matches(t, in, specN) {
 				continue
 			}
-			rows = append(rows, TicketRow{
-				ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
-				Labels: orEmpty(t.Labels), Blocked: blocked(r, key, t), Updated: t.Updated,
-			})
+			row := ticketRow(r, key, t)
+			if in.Claimable != nil && *in.Claimable != (t.State == store.Ready && !row.Blocked) {
+				continue
+			}
+			rows = append(rows, row)
 		}
 		return nil
 	})
@@ -320,12 +346,33 @@ func matches(t store.Ticket, in FindTicketsInput, specN int) bool {
 	if in.Title != "" && !strings.Contains(strings.ToLower(t.Title), strings.ToLower(in.Title)) {
 		return false
 	}
-	for _, l := range in.Labels {
-		if !slices.Contains(t.Labels, l) {
+	if !hasAll(t.Labels, t.Tags, in.Labels, in.Tags) {
+		return false
+	}
+	return specN == 0 || t.Spec == specN
+}
+
+// hasAll reports whether every wanted Label is present and every wanted
+// Tag pair matches exactly.
+func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTags map[string]string) bool {
+	for _, l := range wantLabels {
+		if !slices.Contains(labels, l) {
 			return false
 		}
 	}
-	return specN == 0 || t.Spec == specN
+	for k, v := range wantTags {
+		if got, ok := tags[k]; !ok || got != v {
+			return false
+		}
+	}
+	return true
+}
+
+func ticketRow(r store.Reader, key string, t store.Ticket) TicketRow {
+	return TicketRow{
+		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
+		Labels: orEmpty(t.Labels), Blocked: blocked(r, key, t), Updated: t.Updated,
+	}
 }
 
 func claimOrder(a, b store.Ticket) int {
@@ -336,10 +383,6 @@ func claimOrder(a, b store.Ticket) int {
 }
 
 func finished(s store.State) bool { return s == store.Done || s == store.Cancelled }
-
-// blocked is computed. Blockers arrive with a later ticket; for now a
-// Ticket is never blocked.
-func blocked(store.Reader, string, store.Ticket) bool { return false }
 
 func projectView(p store.Project) ProjectView {
 	return ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Archived: p.Archived}
@@ -352,21 +395,23 @@ func specView(key string, s store.Spec) SpecView {
 	}
 }
 
-func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
+func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 	sp, _ := r.Spec(key, t.Spec)
 	v := TicketView{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State,
 		Spec:   SpecRef{ID: DisplayID(key, t.Spec), Title: sp.Title},
 		Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags),
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
-		Created: t.Created, Updated: t.Updated, Description: t.Description,
-		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
+		Blockers: blockerViews(r, key, t),
+		Created:  t.Created, Updated: t.Updated, Description: t.Description,
+		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), FailureReports: failureReportViews(t.FailureReports),
+		Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: blocked(r, key, t),
 	}
-	for _, c := range t.Claims {
-		cv := ClaimView{Number: c.Number, SessionID: c.SessionID, Started: c.Started, EndedBy: c.EndedBy}
-		if !c.Live() {
-			ended := c.Ended
+	for _, cl := range t.Claims {
+		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy}
+		if !cl.Live() {
+			ended := cl.Ended
 			cv.Ended = &ended
 		}
 		v.Claims = append(v.Claims, cv)
@@ -375,6 +420,7 @@ func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via})
 	}
 	v.Claimable = t.State == store.Ready && !v.Blocked
+	v.SilentSince = c.silentSince(t)
 	return v
 }
 

@@ -108,6 +108,8 @@ func TestFilesAreWrittenInFixedFieldOrder(t *testing.T) {
 			Rounds: []store.Round{{Number: 1, Claim: 1, SessionID: "s1", Posted: t0, Questions: []store.Question{
 				{Number: 1, Title: "Which DB?", Body: "Postgres\nor SQLite?\n", Recommended: "SQLite", Status: store.QuestionAnswered, Answer: "SQLite\nfor now.\n", Closed: t0.Add(30 * time.Second)},
 			}}},
+			FailureReports: []store.FailureReport{{Number: 1, Claim: 1, SessionID: "s1", Actor: "agent", Time: t0,
+				WhatBroke: "It broke.\nBadly.\n", Why: "Because.", WhatToFix: "Fix it.", WhereWorkStands: "Pushed."}},
 			Comments: []store.Comment{{Number: 1, Actor: "agent", Time: t0.Add(time.Minute), Claim: 1, Body: "Done.\nCheck it.\n"}},
 			Edits:    []store.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"description": "Old.\n"}}},
 		})
@@ -179,6 +181,21 @@ rounds:
           SQLite
           for now.
         closed: 2026-11-07T09:30:30Z
+failure_reports:
+  - number: 1
+    claim: 1
+    session_id: s1
+    actor: agent
+    time: 2026-11-07T09:30:00Z
+    what_broke: |
+      It broke.
+      Badly.
+    why: |-
+      Because.
+    what_to_fix: |-
+      Fix it.
+    where_work_stands: |-
+      Pushed.
 comments:
   - number: 1
     actor: agent

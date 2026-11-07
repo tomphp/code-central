@@ -84,7 +84,8 @@ type QuestionView struct {
 	Closed      *time.Time           `json:"closed,omitempty"`
 }
 
-// postRoundNextStep is post_round's next step; <id> becomes the Ticket ID.
+// postRoundNextStep is post_round's next step (its row in Workflow);
+// <id> becomes the Ticket ID.
 const postRoundNextStep = "End your turn now, after running `code-central wait <id>` in the background if you can run background commands."
 
 // PostRound is post_round(ticket, claim_id, session_id?, questions): the
@@ -122,7 +123,7 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 			r.Questions = append(r.Questions, store.Question{Number: n, Title: q.Title, Body: q.Body, Recommended: q.Recommended, Status: store.QuestionOpen})
 		}
 		t.Rounds = append(t.Rounds, r)
-		res = PostRoundResult{Round: r.Number, NextStep: strings.ReplaceAll(postRoundNextStep, "<id>", DisplayID(key, t.Number))}
+		res = PostRoundResult{Round: r.Number, NextStep: strings.ReplaceAll(nextStep("post_round"), "<id>", DisplayID(key, t.Number))}
 		return true, nil
 	})
 	return res, err

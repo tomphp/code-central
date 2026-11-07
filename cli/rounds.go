@@ -41,7 +41,7 @@ func runPostRound(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.PostRoundInput{Ticket: ref, ClaimID: *claim, SessionID: *session}
+	in := core.PostRoundInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session)}
 	if err := core.Decode([]byte(text), &in.Questions); err != nil {
 		var ce *core.Error
 		if errors.As(err, &ce) {
@@ -98,7 +98,7 @@ func runWait(ctx context.Context, e Env, args []string) error {
 		var ce *core.Error
 		if errors.As(err, &ce) && ce.Code == core.ServiceUnavailable {
 			select {
-			case <-e.Clock.After(waitRetry):
+			case <-e.After(waitRetry):
 				continue
 			case <-ctx.Done():
 				return ctx.Err()

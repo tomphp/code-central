@@ -28,15 +28,6 @@ var (
 	qName = core.QuestionInput{Title: "Name?", Body: "What is it called?"}
 )
 
-func (f fixture) get(t *testing.T, ref core.Ref) core.TicketView {
-	t.Helper()
-	v, err := f.core.GetTicket(ctx, "acme", ref)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return v
-}
-
 func TestPostRoundStoresANumberedRoundAndMovesToNeedsAnswer(t *testing.T) {
 	f := newFixture(t)
 	res := f.asking(t, qDB, qName)

@@ -166,22 +166,23 @@ type specFront struct {
 }
 
 type ticketFile struct {
-	Title        string            `yaml:"title"`
-	State        string            `yaml:"state"`
-	Spec         int               `yaml:"spec"`
-	Labels       []string          `yaml:"labels"`
-	Tags         map[string]string `yaml:"tags"`
-	BlockedBy    []int             `yaml:"blocked_by"`
-	Replacements []int             `yaml:"replacements"`
-	Link         string            `yaml:"link,omitempty"`
-	Created      string            `yaml:"created"`
-	Updated      string            `yaml:"updated"`
-	Description  string            `yaml:"description"`
-	Claims       []claimFile       `yaml:"claims"`
-	Rounds       []roundFile       `yaml:"rounds"`
-	Comments     []commentFile     `yaml:"comments"`
-	Moves        []moveFile        `yaml:"moves"`
-	Edits        []editFile        `yaml:"edits"`
+	Title          string              `yaml:"title"`
+	State          string              `yaml:"state"`
+	Spec           int                 `yaml:"spec"`
+	Labels         []string            `yaml:"labels"`
+	Tags           map[string]string   `yaml:"tags"`
+	BlockedBy      []int               `yaml:"blocked_by"`
+	Replacements   []int               `yaml:"replacements"`
+	Link           string              `yaml:"link,omitempty"`
+	Created        string              `yaml:"created"`
+	Updated        string              `yaml:"updated"`
+	Description    string              `yaml:"description"`
+	Claims         []claimFile         `yaml:"claims"`
+	Rounds         []roundFile         `yaml:"rounds"`
+	FailureReports []failureReportFile `yaml:"failure_reports"`
+	Comments       []commentFile       `yaml:"comments"`
+	Moves          []moveFile          `yaml:"moves"`
+	Edits          []editFile          `yaml:"edits"`
 }
 
 type editFile struct {
@@ -216,6 +217,18 @@ type questionFile struct {
 	Status      string `yaml:"status"`
 	Answer      string `yaml:"answer,omitempty"`
 	Closed      string `yaml:"closed,omitempty"`
+}
+
+type failureReportFile struct {
+	Number          int    `yaml:"number"`
+	Claim           int    `yaml:"claim"`
+	SessionID       string `yaml:"session_id,omitempty"`
+	Actor           string `yaml:"actor"`
+	Time            string `yaml:"time"`
+	WhatBroke       string `yaml:"what_broke"`
+	Why             string `yaml:"why"`
+	WhatToFix       string `yaml:"what_to_fix"`
+	WhereWorkStands string `yaml:"where_work_stands"`
 }
 
 type commentFile struct {
@@ -373,6 +386,16 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	if t.Rounds, err = decodeRounds(f.Rounds); err != nil {
 		return Ticket{}, err.(*LoadError)
 	}
+	for i, r := range f.FailureReports {
+		fr := FailureReport{
+			Number: r.Number, Claim: r.Claim, SessionID: r.SessionID, Actor: r.Actor,
+			WhatBroke: r.WhatBroke, Why: r.Why, WhatToFix: r.WhatToFix, WhereWorkStands: r.WhereWorkStands,
+		}
+		if fr.Time, err = parseTime(r.Time); err != nil {
+			return Ticket{}, &LoadError{Field: fmt.Sprintf("failure_reports[%d].time", i), Msg: err.Error()}
+		}
+		t.FailureReports = append(t.FailureReports, fr)
+	}
 	for i, c := range f.Comments {
 		cm := Comment{Number: c.Number, Actor: c.Actor, Claim: c.Claim, Body: c.Body}
 		if cm.Time, err = parseTime(c.Time); err != nil {
@@ -476,7 +499,8 @@ func (s *FileStore) write(record any, project string) error {
 			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
 			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: r.Link,
 			Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
-			Claims: []claimFile{}, Rounds: []roundFile{}, Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
+			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},
+			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
 		}
 		for _, c := range r.Claims {
 			cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, Started: formatTime(c.Started), EndedBy: c.EndedBy}
@@ -495,6 +519,12 @@ func (s *FileStore) write(record any, project string) error {
 				rf.Questions = append(rf.Questions, qf)
 			}
 			f.Rounds = append(f.Rounds, rf)
+		}
+		for _, fr := range r.FailureReports {
+			f.FailureReports = append(f.FailureReports, failureReportFile{
+				Number: fr.Number, Claim: fr.Claim, SessionID: fr.SessionID, Actor: fr.Actor, Time: formatTime(fr.Time),
+				WhatBroke: fr.WhatBroke, Why: fr.Why, WhatToFix: fr.WhatToFix, WhereWorkStands: fr.WhereWorkStands,
+			})
 		}
 		for _, c := range r.Comments {
 			f.Comments = append(f.Comments, commentFile{Number: c.Number, Actor: c.Actor, Time: formatTime(c.Time), Claim: c.Claim, Body: c.Body})

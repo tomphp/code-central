@@ -53,15 +53,15 @@ func answer(t *testing.T, srv *codecentraltest.Server) {
 }
 
 // startWait runs `code-central wait <args>` in the background against
-// url, with clk as the CLI's clock for retries.
-func startWait(url string, clk clock.Clock, args ...string) <-chan result {
+// url, with clk timing the CLI's retries.
+func startWait(url string, clk *clock.Fake, args ...string) <-chan result {
 	out := make(chan result, 1)
 	go func() {
 		var stdout, stderr bytes.Buffer
 		env := map[string]string{"CODE_CENTRAL_URL": url, "CODE_CENTRAL_PROJECT": "acme"}
 		code := cli.Run(context.Background(), append([]string{"wait"}, args...), cli.Env{
 			Stdin: strings.NewReader(""), Stdout: &stdout, Stderr: &stderr,
-			Getenv: func(k string) string { return env[k] }, Clock: clk,
+			Getenv: func(k string) string { return env[k] }, After: clk.After,
 		})
 		out <- result{code, stdout.String(), stderr.String()}
 	}()

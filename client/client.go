@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/tomoram/code-central/core"
@@ -79,6 +80,10 @@ func (c *Client) FindTickets(ctx context.Context, key string, in core.FindTicket
 	if in.Spec != "" {
 		q.Set("spec", string(in.Spec))
 	}
+	addTags(q, in.Tags)
+	if in.Claimable != nil {
+		q.Set("claimable", strconv.FormatBool(*in.Claimable))
+	}
 	path := scoped(key, "tickets")
 	if len(q) > 0 {
 		path += "?" + q.Encode()
@@ -109,6 +114,24 @@ func (c *Client) Accept(ctx context.Context, key string, in core.TicketInput) (c
 func (c *Client) Reject(ctx context.Context, key string, in core.RejectInput) (core.TicketView, error) {
 	var out core.TicketView
 	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "reject"), in, &out)
+}
+
+// SetSession is set_session.
+func (c *Client) SetSession(ctx context.Context, key string, in core.SetSessionInput) (core.TicketView, error) {
+	var out core.TicketView
+	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "set_session"), in, &out)
+}
+
+// Release is the human's release; set Actor to human.
+func (c *Client) Release(ctx context.Context, key string, in core.ReleaseInput) (core.TicketView, error) {
+	var out core.TicketView
+	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "release"), in, &out)
+}
+
+// Ping is POST /api/ping: it marks activity on every live Claim with this
+// session ID. The service always answers 204.
+func (c *Client) Ping(ctx context.Context, sessionID string) error {
+	return c.do(ctx, "POST", "/api/ping", map[string]string{"session_id": sessionID}, nil)
 }
 
 // EditSpec is edit_spec.
@@ -163,6 +186,12 @@ func (c *Client) Approve(ctx context.Context, key string, in core.TicketInput) (
 func (c *Client) Defer(ctx context.Context, key string, in core.DeferInput) (core.TicketView, error) {
 	var out core.TicketView
 	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "defer"), in, &out)
+}
+
+// GetWorkflow is get_workflow.
+func (c *Client) GetWorkflow(ctx context.Context) (core.WorkflowView, error) {
+	var out core.WorkflowView
+	return out, c.do(ctx, "GET", "/api/workflow", nil, &out)
 }
 
 // item is the path of an action on one Spec or Ticket. The path names

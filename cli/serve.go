@@ -12,6 +12,7 @@ import (
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
@@ -61,6 +62,11 @@ func runServe(ctx context.Context, e Env, args []string) error {
 	}
 
 	c := core.New(st, clock.System{}, ids.Random{})
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	go c.WatchSilent(ctx, ticker.C, func(project, ticketID string) {
+		c.Events().Publish(events.Event{Type: events.TicketChanged, Project: project, ID: ticketID})
+	})
 	srv := &http.Server{
 		Handler: frontdoor.Handler(c, web.Handler()), ReadHeaderTimeout: 10 * time.Second,
 		// Requests share serve's context, so stopping ends held long-polls

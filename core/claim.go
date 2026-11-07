@@ -60,6 +60,9 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		if err != nil || !found {
 			return err
 		}
+		if t.State == store.Ready && blocked(w, key, t) {
+			return blockedError(w, key, t, ActorOf(ctx))
+		}
 		now := c.now()
 		t.Claims = append(t.Claims, store.Claim{Number: len(t.Claims) + 1, SessionID: in.SessionID, Started: now})
 		if err := transition(ctx, &t, key, "claim", "", now); err != nil {
@@ -70,7 +73,7 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}
-		v := ticketView(w, key, t)
+		v := c.ticketView(w, key, t)
 		res = ClaimResult{ClaimID: claim.ID, Ticket: &v}
 		return nil
 	})
@@ -118,7 +121,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 	if err != nil {
 		return FinishResult{}, err
 	}
-	return FinishResult{Ticket: v, NextStep: stopWorking}, nil
+	return FinishResult{Ticket: v, NextStep: nextStep("finish")}, nil
 }
 
 // Accept is the human's accept(ticket): In Review to Done.
