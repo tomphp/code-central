@@ -96,19 +96,17 @@ var handlers = map[string]handlerFunc{
 	},
 
 	"edit_spec": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.EditSpecInput
-		if err := decodeBody(r, &in); err != nil {
+		in, err := pathBody(r, func(in *core.EditSpecInput) *core.Ref { return &in.Spec })
+		if err != nil {
 			return nil, err
 		}
-		in.Spec = core.Ref(r.PathValue("n"))
 		return c.EditSpec(r.Context(), r.PathValue("key"), in)
 	},
 	"edit_ticket": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.EditTicketInput
-		if err := decodeBody(r, &in); err != nil {
+		in, err := pathBody(r, func(in *core.EditTicketInput) *core.Ref { return &in.Ticket })
+		if err != nil {
 			return nil, err
 		}
-		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.EditTicket(r.Context(), r.PathValue("key"), in)
 	},
 	"add_labels": func(c *core.Core, r *http.Request) (any, error) {
@@ -140,27 +138,24 @@ var handlers = map[string]handlerFunc{
 		return c.RemoveTags(r.Context(), r.PathValue("key"), in)
 	},
 	"comment": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.CommentInput
-		if err := decodeBody(r, &in); err != nil {
+		in, err := pathBody(r, func(in *core.CommentInput) *core.Ref { return &in.Ticket })
+		if err != nil {
 			return nil, err
 		}
-		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.Comment(r.Context(), r.PathValue("key"), in)
 	},
 	"approve": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.TicketInput
-		if err := decodeBody(r, &in); err != nil {
+		in, err := pathBody(r, func(in *core.TicketInput) *core.Ref { return &in.Ticket })
+		if err != nil {
 			return nil, err
 		}
-		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.Approve(r.Context(), r.PathValue("key"), in)
 	},
 	"defer": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.DeferInput
-		if err := decodeBody(r, &in); err != nil {
+		in, err := pathBody(r, func(in *core.DeferInput) *core.Ref { return &in.Ticket })
+		if err != nil {
 			return nil, err
 		}
-		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.Defer(r.Context(), r.PathValue("key"), in)
 	},
 	"claim": func(c *core.Core, r *http.Request) (any, error) {
@@ -171,44 +166,39 @@ var handlers = map[string]handlerFunc{
 		return c.Claim(r.Context(), r.PathValue("key"), in)
 	},
 	"finish": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.FinishInput
-		if err := decodeBody(r, &in); err != nil {
+		in, err := pathBody(r, func(in *core.FinishInput) *core.Ref { return &in.Ticket })
+		if err != nil {
 			return nil, err
 		}
-		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.Finish(r.Context(), r.PathValue("key"), in)
 	},
 	"accept": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.TicketInput
-		if err := decodeBody(r, &in); err != nil {
+		in, err := pathBody(r, func(in *core.TicketInput) *core.Ref { return &in.Ticket })
+		if err != nil {
 			return nil, err
 		}
-		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.Accept(r.Context(), r.PathValue("key"), in)
 	},
 	"reject": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.RejectInput
-		if err := decodeBody(r, &in); err != nil {
+		in, err := pathBody(r, func(in *core.RejectInput) *core.Ref { return &in.Ticket })
+		if err != nil {
 			return nil, err
 		}
-		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.Reject(r.Context(), r.PathValue("key"), in)
 	},
 
 	"set_session": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.SetSessionInput
-		if err := decodeBody(r, &in); err != nil {
+		in, err := pathBody(r, func(in *core.SetSessionInput) *core.Ref { return &in.Ticket })
+		if err != nil {
 			return nil, err
 		}
-		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.SetSession(r.Context(), r.PathValue("key"), in)
 	},
 	"release": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.ReleaseInput
-		if err := decodeBody(r, &in); err != nil {
+		in, err := pathBody(r, func(in *core.ReleaseInput) *core.Ref { return &in.Ticket })
+		if err != nil {
 			return nil, err
 		}
-		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.Release(r.Context(), r.PathValue("key"), in)
 	},
 	"get_workflow": func(c *core.Core, r *http.Request) (any, error) {
@@ -292,6 +282,18 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
+}
+
+// pathBody decodes a per-item action's body strictly, then sets the
+// item's ref (its Ticket or Spec) from the path's {n}, which wins over
+// any ref in the body. Every per-item route binds its path this way.
+func pathBody[In any](r *http.Request, item func(*In) *core.Ref) (In, error) {
+	var in In
+	if err := decodeBody(r, &in); err != nil {
+		return in, err
+	}
+	*item(&in) = core.Ref(r.PathValue("n"))
+	return in, nil
 }
 
 // decodeBody decodes a JSON body strictly: unknown fields are invalid.

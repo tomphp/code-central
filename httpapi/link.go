@@ -33,15 +33,14 @@ func init() {
 		return c.CreateLinkedTicket(r.Context(), r.PathValue("key"), in)
 	}
 	handlers["update_linked_spec"] = func(c *core.Core, r *http.Request) (any, error) {
-		var in core.UpdateLinkedSpecInput
-		if err := decodeBody(r, &in); err != nil {
+		in, err := pathBody(r, func(in *core.UpdateLinkedSpecInput) *core.Ref { return &in.Spec })
+		if err != nil {
 			return nil, err
 		}
-		in.Spec = core.Ref(r.PathValue("n"))
 		return c.UpdateLinkedSpec(r.Context(), r.PathValue("key"), in)
 	}
 	handlers["update_linked_ticket"] = func(c *core.Core, r *http.Request) (any, error) {
-		in, err := ticketBody(r, func(in *core.UpdateLinkedTicketInput) *core.Ref { return &in.Ticket })
+		in, err := pathBody(r, func(in *core.UpdateLinkedTicketInput) *core.Ref { return &in.Ticket })
 		if err != nil {
 			return nil, err
 		}

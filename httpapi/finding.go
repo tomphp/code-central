@@ -17,21 +17,21 @@ func init() {
 		h       handlerFunc
 	}{
 		"add_blocker": {"POST /api/p/{key}/tickets/{n}/add_blocker", func(c *core.Core, r *http.Request) (any, error) {
-			in, err := ticketBody(r, func(in *core.BlockerInput) *core.Ref { return &in.Ticket })
+			in, err := pathBody(r, func(in *core.BlockerInput) *core.Ref { return &in.Ticket })
 			if err != nil {
 				return nil, err
 			}
 			return c.AddBlocker(r.Context(), r.PathValue("key"), in)
 		}},
 		"remove_blocker": {"POST /api/p/{key}/tickets/{n}/remove_blocker", func(c *core.Core, r *http.Request) (any, error) {
-			in, err := ticketBody(r, func(in *core.BlockerInput) *core.Ref { return &in.Ticket })
+			in, err := pathBody(r, func(in *core.BlockerInput) *core.Ref { return &in.Ticket })
 			if err != nil {
 				return nil, err
 			}
 			return c.RemoveBlocker(r.Context(), r.PathValue("key"), in)
 		}},
 		"cancel": {"POST /api/p/{key}/tickets/{n}/cancel", func(c *core.Core, r *http.Request) (any, error) {
-			in, err := ticketBody(r, func(in *core.CancelInput) *core.Ref { return &in.Ticket })
+			in, err := pathBody(r, func(in *core.CancelInput) *core.Ref { return &in.Ticket })
 			if err != nil {
 				return nil, err
 			}
@@ -61,17 +61,6 @@ func init() {
 		Routes[name] = route.pattern
 		handlers[name] = route.h
 	}
-}
-
-// ticketBody decodes an action's body strictly, then sets its Ticket from
-// the path, which wins over any ref in the body.
-func ticketBody[In any](r *http.Request, ticket func(*In) *core.Ref) (In, error) {
-	var in In
-	if err := decodeBody(r, &in); err != nil {
-		return in, err
-	}
-	*ticket(&in) = core.Ref(r.PathValue("n"))
-	return in, nil
 }
 
 // tagParams reads repeated tag=<key>=<value> query parameters.

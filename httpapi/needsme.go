@@ -26,7 +26,7 @@ func init() {
 		return c.ListProjects(r.Context())
 	}
 	handlers["move"] = func(c *core.Core, r *http.Request) (any, error) {
-		in, err := ticketBody(r, func(in *core.MoveInput) *core.Ref { return &in.Ticket })
+		in, err := pathBody(r, func(in *core.MoveInput) *core.Ref { return &in.Ticket })
 		if err != nil {
 			return nil, err
 		}

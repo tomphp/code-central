@@ -15,43 +15,38 @@ func init() {
 		h       handlerFunc
 	}{
 		"post_round": {"POST /api/p/{key}/tickets/{n}/post_round", func(c *core.Core, r *http.Request) (any, error) {
-			var in core.PostRoundInput
-			if err := decodeBody(r, &in); err != nil {
+			in, err := pathBody(r, func(in *core.PostRoundInput) *core.Ref { return &in.Ticket })
+			if err != nil {
 				return nil, err
 			}
-			in.Ticket = core.Ref(r.PathValue("n"))
 			return c.PostRound(r.Context(), r.PathValue("key"), in)
 		}},
 		"pick_up_answers": {"POST /api/p/{key}/tickets/{n}/pick_up_answers", func(c *core.Core, r *http.Request) (any, error) {
-			var in core.PickUpAnswersInput
-			if err := decodeBody(r, &in); err != nil {
+			in, err := pathBody(r, func(in *core.PickUpAnswersInput) *core.Ref { return &in.Ticket })
+			if err != nil {
 				return nil, err
 			}
-			in.Ticket = core.Ref(r.PathValue("n"))
 			return c.PickUpAnswers(r.Context(), r.PathValue("key"), in)
 		}},
 		"answer": {"POST /api/p/{key}/tickets/{n}/answer", func(c *core.Core, r *http.Request) (any, error) {
-			var in core.AnswerInput
-			if err := decodeBody(r, &in); err != nil {
+			in, err := pathBody(r, func(in *core.AnswerInput) *core.Ref { return &in.Ticket })
+			if err != nil {
 				return nil, err
 			}
-			in.Ticket = core.Ref(r.PathValue("n"))
 			return c.Answer(r.Context(), r.PathValue("key"), in)
 		}},
 		"accept_recommended": {"POST /api/p/{key}/tickets/{n}/accept_recommended", func(c *core.Core, r *http.Request) (any, error) {
-			var in core.AcceptRecommendedInput
-			if err := decodeBody(r, &in); err != nil {
+			in, err := pathBody(r, func(in *core.AcceptRecommendedInput) *core.Ref { return &in.Ticket })
+			if err != nil {
 				return nil, err
 			}
-			in.Ticket = core.Ref(r.PathValue("n"))
 			return c.AcceptRecommended(r.Context(), r.PathValue("key"), in)
 		}},
 		"dismiss_question": {"POST /api/p/{key}/tickets/{n}/dismiss_question", func(c *core.Core, r *http.Request) (any, error) {
-			var in core.DismissQuestionInput
-			if err := decodeBody(r, &in); err != nil {
+			in, err := pathBody(r, func(in *core.DismissQuestionInput) *core.Ref { return &in.Ticket })
+			if err != nil {
 				return nil, err
 			}
-			in.Ticket = core.Ref(r.PathValue("n"))
 			return c.DismissQuestion(r.Context(), r.PathValue("key"), in)
 		}},
 		"get_spec_questions": {"GET /api/p/{key}/specs/{n}/questions", func(c *core.Core, r *http.Request) (any, error) {
