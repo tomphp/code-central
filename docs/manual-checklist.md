@@ -14,6 +14,11 @@ Run this by hand once v1 is built (`make build`). These paths can't be automated
 - [ ] Occupy 7733 with another program: the service refuses to start and names the address.
 - [ ] A CLI built from another tag warns once on stderr and still works.
 
+## Upgrading and downgrading
+
+- [ ] Once a release bumps the store `format`: upgrade a real store (`make build`, copy onto `PATH`, `code-central service restart`). The log says `migrated the store from format <n> to <m>`, `code-central.format-<n>.bak` sits next to the store, and agents keep working through the restart.
+- [ ] Downgrade by the steps in `docs/running-as-a-service.md`: the old version starts on the `.bak` store, and the old binary refuses the upgraded store with `unknown format`.
+
 ## Docker Desktop for Mac
 
 - [ ] From a container, `curl http://host.docker.internal:7733/api/workflow` reaches a service bound only to loopback (unverified assumption in the design).

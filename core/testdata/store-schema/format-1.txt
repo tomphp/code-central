@@ -1,0 +1,90 @@
+store.yaml
+  format: int
+
+projects/<key>/project.yaml
+  key: string
+  display_name: string
+  created: string
+  mode: string
+  archived: bool (optional)
+
+projects/<key>/specs/<n>.md: YAML frontmatter between --- lines, then the Markdown body
+  id: int
+  title: string
+  labels: []string
+  tags: map[string]string
+  link: string (optional)
+  created: string
+  updated: string
+  edits: list of mappings
+      number: int
+      actor: string
+      time: string
+      previous: map[string]string
+
+projects/<key>/tickets/<n>.yaml
+  title: string
+  state: string
+  spec: int
+  labels: []string
+  tags: map[string]string
+  blocked_by: []int
+  replacements: []int
+  link: string (optional)
+  created: string
+  updated: string
+  description: string
+  claims: list of mappings
+      number: int
+      id: string
+      session_id: string (optional)
+      started: string
+      ended: string (optional)
+      ended_by: string (optional)
+  rounds: list of mappings
+      number: int
+      claim: int
+      session_id: string (optional)
+      posted: string
+      questions: list of mappings
+          number: int
+          title: string
+          body: string
+          recommended: string (optional)
+          status: string
+          answer: string (optional)
+          closed: string (optional)
+  failure_reports: list of mappings
+      number: int
+      claim: int
+      session_id: string (optional)
+      actor: string
+      time: string
+      what_broke: string
+      why: string
+      what_to_fix: string
+      where_work_stands: string
+  comments: list of mappings
+      number: int
+      actor: string
+      time: string
+      claim: int (optional)
+      body: string
+  moves: list of mappings
+      from: string (optional)
+      to: string
+      actor: string
+      time: string
+      claim: int (optional)
+      via: string (optional)
+  edits: list of mappings
+      number: int
+      actor: string
+      time: string
+      previous: map[string]string
+
+values
+  ticket state, moves[].from, moves[].to: Draft, Ready, In Progress, Needs Answer, Answered, Failed, In Review, Done, Cancelled
+  rounds[].questions[].status: open, answered, dismissed
+  spec edits[].previous keys: title, body
+  ticket edits[].previous keys: title, description

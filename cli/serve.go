@@ -70,7 +70,8 @@ func parseServe(args []string) (serveOptions, error) {
 	return o, nil
 }
 
-// runServe is the service: read the settings, lock and load the store,
+// runServe is the service: read the settings, lock the store (rolling
+// forward an Import, migrating an older format, loading every file),
 // then bind, then serve until ctx ends. Startup failures exit 1 with a
 // message on stderr.
 func runServe(ctx context.Context, e Env, args []string) error {
@@ -97,6 +98,10 @@ func runServe(ctx context.Context, e Env, args []string) error {
 		return fmt.Errorf("cannot open the store: %w", err)
 	}
 	defer st.Close()
+	if m := st.Migrated(); m != nil {
+		fmt.Fprintf(e.Stderr, "code-central serve: migrated the store from format %d to %d; the old store is kept at %s\n",
+			m.From, m.To, m.Backup)
+	}
 
 	addrs := e.ServeAddrs
 	if l := e.Getenv("CODE_CENTRAL_LISTEN"); addrs == nil && l != "" {
