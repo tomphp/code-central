@@ -2,7 +2,7 @@
 // live feed go through an Api. createHttpApi (http.ts) is the real one;
 // FakeApi (fake.ts) is the in-memory fake the component and layout tests
 // use. contract.ts runs one suite against both.
-import type { ChangeEvent, FindTicketsFilter, NeedsMeView, ProjectRow, TicketRow, TicketView } from "./types";
+import type { ChangeEvent, FindTicketsFilter, LinkedRow, NeedsMeView, ProjectRow, TicketRow, TicketView } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
 // and result. Every one is `POST /api/p/{key}/tickets/{n}/{action}` with
@@ -36,6 +36,9 @@ export interface Api {
     action: A,
     body: TicketActions[A]["body"],
   ): Promise<TicketActions[A]["result"]>;
+  // unlink detaches a Spec's or Ticket's Link (ticket 42). It isn't a
+  // TicketAction: its target, a Spec or a Ticket, goes in the body.
+  unlink(project: string, target: string): Promise<LinkedRow>;
   // subscribe opens the live feed and returns a function that closes it.
   subscribe(handlers: EventHandlers): () => void;
 }

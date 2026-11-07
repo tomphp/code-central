@@ -48,6 +48,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     getTicket: (project, id) => call("GET", `${p(project)}/tickets/${encodeURIComponent(numberOf(id))}`),
     act: <A extends TicketAction>(project: string, id: string, action: A, body: TicketActions[A]["body"]) =>
       call<TicketActions[A]["result"]>("POST", `${p(project)}/tickets/${encodeURIComponent(numberOf(id))}/${action}`, body),
+    unlink: (project, target) => call("POST", `${p(project)}/unlink`, { target }),
     subscribe: (h) => subscribe(doFetch, base + "/api/events", retryMs, h),
   };
 }

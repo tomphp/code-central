@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, State } from "./types";
+import type { ChangeEvent, ExternalState, State } from "./types";
 import { ApiError } from "./types";
 
 export interface Driver {
@@ -24,6 +24,9 @@ export interface Driver {
   // claim claims a Ready Ticket as an agent with a session ID, moving it
   // to In Progress (ticket 35).
   claim(key: string, id: string, sessionId: string): Promise<void>;
+  // linkTicket creates a Draft Ticket linked to an external item as an
+  // Integration would, and records its external state (ticket 42).
+  linkTicket(key: string, title: string, link: { integration: string; id: string; url: string }, external: ExternalState): Promise<string>;
   close(): Promise<void>;
 }
 
@@ -195,6 +198,31 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const t = await d.api.act("acme", id, "release", {});
       expect(t.state).toBe("Ready");
       expect(t.comments).toEqual([]);
+    });
+
+    // ---- the Integration contract (ticket 42) ----
+    it("reads a linked Ticket closed externally, and unlinks it", async () => {
+      await d.createProject("acme", "Acme");
+      const gh = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7" };
+      const id = await d.linkTicket("acme", "Issue", gh, "closed");
+      const link = { ...gh, external_state: "closed", detached: false };
+
+      expect(await d.api.getTicket("acme", id)).toMatchObject({ link, needs_me_reason: "closed_externally" });
+      const nm = await d.api.needsMe();
+      expect(nm.groups.map((g) => g.reason)).toEqual(["closed_externally"]);
+      expect(nm.groups[0].tickets[0]).toMatchObject({ id, reason: "closed_externally", link });
+      expect((await d.api.findTickets("acme")).find((r) => r.id === id)?.link).toEqual(link);
+
+      const row = await d.api.unlink("acme", id);
+      expect(row).toMatchObject({ kind: "ticket", id, link: { ...link, detached: true } });
+      const t = await d.api.getTicket("acme", id);
+      expect(t.link?.detached).toBe(true);
+      expect(t.needs_me_reason).toBeUndefined();
+      expect((await d.api.needsMe()).count).toBe(0);
+
+      const plain = await d.createTicket("acme", "Local", "Draft");
+      const err = await d.api.unlink("acme", plain).catch((e) => e);
+      expect(err).toMatchObject({ status: 422, code: "invalid", field: "target" });
     });
 
     it("delivers a change notice for each write over the live feed", async () => {

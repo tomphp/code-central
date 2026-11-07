@@ -32,6 +32,28 @@ export interface ProjectRow {
   needs_me: number;
 }
 
+export type ExternalState = "open" | "closed" | "deleted" | "out_of_scope";
+
+// A linked Spec's or Ticket's Link (ticket 42): the external item its
+// Integration mirrors. While it isn't detached, the title and description
+// belong to the external system.
+export interface LinkView {
+  integration: string;
+  id: string;
+  url?: string;
+  external_state: ExternalState;
+  detached: boolean;
+}
+
+// unlink's result: the Spec or Ticket with its now detached Link.
+export interface LinkedRow {
+  kind: "spec" | "ticket";
+  id: string;
+  title: string;
+  state?: State;
+  link: LinkView;
+}
+
 export interface BlockerView {
   id: string;
   title: string;
@@ -50,6 +72,7 @@ export interface NeedsMeRow {
   failure?: { headline: string; reports: number };
   summary?: string;
   blocker?: BlockerView;
+  link?: LinkView;
 }
 
 export interface NeedsMeGroup {
@@ -70,6 +93,7 @@ export interface TicketRow {
   labels: string[];
   blocked: boolean;
   updated: string;
+  link?: LinkView;
 }
 
 export interface FindTicketsFilter {
@@ -162,6 +186,7 @@ export interface TicketView {
   claimable: boolean;
   silent_since?: string;
   needs_me_reason?: NeedsMeReason;
+  link?: LinkView;
 }
 
 // The one error shape every door uses, plus the HTTP status.

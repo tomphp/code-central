@@ -52,6 +52,15 @@ apiContract("FakeApi", async (): Promise<Driver> => {
         moves: [{ from: "Ready", to: "In Progress", actor: "agent", time: fake.now.toISOString(), claim: 1 }],
       });
     },
+    // ticket 42
+    linkTicket: async (key, title, link, external_state) => {
+      const t = fake.addTicket(key, { title, link: { ...link, external_state, detached: false } });
+      if (external_state !== "open") {
+        const needs = (await fake.needsMe()).groups;
+        fake.setNeedsMe([...needs, { reason: "closed_externally", tickets: [{ id: t.id, link: t.link }] }]);
+      }
+      return t.id;
+    },
     close: async () => {},
   };
 });
