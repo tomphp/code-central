@@ -178,9 +178,11 @@ type ticketFile struct {
 	Updated      string            `yaml:"updated"`
 	Description  string            `yaml:"description"`
 	Claims       []claimFile       `yaml:"claims"`
-	Comments     []commentFile     `yaml:"comments"`
-	Moves        []moveFile        `yaml:"moves"`
-	Edits        []editFile        `yaml:"edits"`
+	// rounds (ticket 29) go here, before failure_reports.
+	FailureReports []failureReportFile `yaml:"failure_reports"`
+	Comments       []commentFile       `yaml:"comments"`
+	Moves          []moveFile          `yaml:"moves"`
+	Edits          []editFile          `yaml:"edits"`
 }
 
 type editFile struct {
@@ -197,6 +199,18 @@ type claimFile struct {
 	Started   string `yaml:"started"`
 	Ended     string `yaml:"ended,omitempty"`
 	EndedBy   string `yaml:"ended_by,omitempty"`
+}
+
+type failureReportFile struct {
+	Number          int    `yaml:"number"`
+	Claim           int    `yaml:"claim"`
+	SessionID       string `yaml:"session_id,omitempty"`
+	Actor           string `yaml:"actor"`
+	Time            string `yaml:"time"`
+	WhatBroke       string `yaml:"what_broke"`
+	Why             string `yaml:"why"`
+	WhatToFix       string `yaml:"what_to_fix"`
+	WhereWorkStands string `yaml:"where_work_stands"`
 }
 
 type commentFile struct {
@@ -351,6 +365,16 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		}
 		t.Claims = append(t.Claims, cl)
 	}
+	for i, r := range f.FailureReports {
+		fr := FailureReport{
+			Number: r.Number, Claim: r.Claim, SessionID: r.SessionID, Actor: r.Actor,
+			WhatBroke: r.WhatBroke, Why: r.Why, WhatToFix: r.WhatToFix, WhereWorkStands: r.WhereWorkStands,
+		}
+		if fr.Time, err = parseTime(r.Time); err != nil {
+			return Ticket{}, &LoadError{Field: fmt.Sprintf("failure_reports[%d].time", i), Msg: err.Error()}
+		}
+		t.FailureReports = append(t.FailureReports, fr)
+	}
 	for i, c := range f.Comments {
 		cm := Comment{Number: c.Number, Actor: c.Actor, Claim: c.Claim, Body: c.Body}
 		if cm.Time, err = parseTime(c.Time); err != nil {
@@ -425,7 +449,7 @@ func (s *FileStore) write(record any, project string) error {
 			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
 			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: r.Link,
 			Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
-			Claims: []claimFile{}, Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
+			Claims: []claimFile{}, FailureReports: []failureReportFile{}, Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
 		}
 		for _, c := range r.Claims {
 			cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, Started: formatTime(c.Started), EndedBy: c.EndedBy}
@@ -433,6 +457,12 @@ func (s *FileStore) write(record any, project string) error {
 				cf.Ended = formatTime(c.Ended)
 			}
 			f.Claims = append(f.Claims, cf)
+		}
+		for _, fr := range r.FailureReports {
+			f.FailureReports = append(f.FailureReports, failureReportFile{
+				Number: fr.Number, Claim: fr.Claim, SessionID: fr.SessionID, Actor: fr.Actor, Time: formatTime(fr.Time),
+				WhatBroke: fr.WhatBroke, Why: fr.Why, WhatToFix: fr.WhatToFix, WhereWorkStands: fr.WhereWorkStands,
+			})
 		}
 		for _, c := range r.Comments {
 			f.Comments = append(f.Comments, commentFile{Number: c.Number, Actor: c.Actor, Time: formatTime(c.Time), Claim: c.Claim, Body: c.Body})

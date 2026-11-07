@@ -43,6 +43,12 @@ var Operations = []Op{
 	{Name: "finish", Audience: AgentAndHuman, Write: true},
 	{Name: "accept", Audience: HumanOnly, Write: true},
 	{Name: "reject", Audience: HumanOnly, Write: true},
+
+	// Failure Reports and giving up (ticket 30).
+	{Name: "report_failure", Audience: AgentAndHuman, Write: true},
+	{Name: "give_up", Audience: AgentAndHuman, Write: true},
+	{Name: "send_back", Audience: HumanOnly, Write: true},
+	{Name: "to_draft", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.
