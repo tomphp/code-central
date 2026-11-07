@@ -68,7 +68,11 @@ func TestAPingClearsSilentAndIsThrottledToOncePerMinutePerSession(t *testing.T) 
 	f.clock.Advance(40 * time.Minute)
 	pinged := f.clock.Now()
 	f.core.Ping(ctx, "s1")
-	wantSilentSince(t, f.get(t, "acme-2"), time.Time{})
+	v := f.get(t, "acme-2")
+	wantSilentSince(t, v, time.Time{})
+	if !v.Claims[0].LastActivity.Equal(pinged) {
+		t.Fatalf("live Claim's last_activity %v, want the ping at %v", v.Claims[0].LastActivity, pinged)
+	}
 
 	f.clock.Advance(59 * time.Second)
 	f.core.Ping(ctx, "s1") // within 60 seconds of the last one: ignored

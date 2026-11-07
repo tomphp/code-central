@@ -183,6 +183,12 @@ func (c *Client) Defer(ctx context.Context, key string, in core.DeferInput) (cor
 	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "defer"), in, &out)
 }
 
+// GetWorkflow is get_workflow.
+func (c *Client) GetWorkflow(ctx context.Context) (core.WorkflowView, error) {
+	var out core.WorkflowView
+	return out, c.do(ctx, "GET", "/api/workflow", nil, &out)
+}
+
 // item is the path of an action on one Spec or Ticket. The path names
 // it, so the service ignores the ref in the body.
 func item(key, kind string, ref core.Ref, action string) string {

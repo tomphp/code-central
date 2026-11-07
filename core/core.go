@@ -77,11 +77,13 @@ type MoveView struct {
 
 // ClaimView is one Claim as reads show it: never with its Claim ID.
 type ClaimView struct {
-	Number    int        `json:"number"`
-	SessionID string     `json:"session_id,omitempty"`
-	Started   time.Time  `json:"started"`
-	Ended     *time.Time `json:"ended,omitempty"`
-	EndedBy   string     `json:"ended_by,omitempty"`
+	Number    int       `json:"number"`
+	SessionID string    `json:"session_id,omitempty"`
+	Started   time.Time `json:"started"`
+	// LastActivity is the latest write the Claim's agent made on the Ticket.
+	LastActivity time.Time  `json:"last_activity"`
+	Ended        *time.Time `json:"ended,omitempty"`
+	EndedBy      string     `json:"ended_by,omitempty"`
 }
 
 // TicketView is the full view of one Ticket, the same through every door.
@@ -98,11 +100,13 @@ type TicketView struct {
 	Updated      time.Time         `json:"updated"`
 	Description  string            `json:"description"`
 	Claims       []ClaimView       `json:"claims"`
-	Comments     []CommentView     `json:"comments"`
-	Moves        []MoveView        `json:"moves"`
-	Edits        []EditView        `json:"edits"`
-	Blocked      bool              `json:"blocked"`
-	Claimable    bool              `json:"claimable"`
+	// rounds (ticket 29) go here, before failure_reports.
+	FailureReports []FailureReportView `json:"failure_reports"`
+	Comments       []CommentView       `json:"comments"`
+	Moves          []MoveView          `json:"moves"`
+	Edits          []EditView          `json:"edits"`
+	Blocked        bool                `json:"blocked"`
+	Claimable      bool                `json:"claimable"`
 	// SilentSince is set while the Ticket is a Silent Claim: In Progress
 	// with no activity for 30 minutes. It is the time of the last
 	// activity, so the quiet time is now minus it. Computed, never stored.
@@ -363,11 +367,11 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags),
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Created: t.Created, Updated: t.Updated, Description: t.Description,
-		Claims: []ClaimView{}, Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
+		Claims: []ClaimView{}, FailureReports: failureReportViews(t.FailureReports), Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: blocked(r, key, t),
 	}
 	for _, cl := range t.Claims {
-		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, Started: cl.Started, EndedBy: cl.EndedBy}
+		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy}
 		if !cl.Live() {
 			ended := cl.Ended
 			cv.Ended = &ended

@@ -41,8 +41,9 @@ var Routes = map[string]string{
 	"accept": "POST /api/p/{key}/tickets/{n}/accept",
 	"reject": "POST /api/p/{key}/tickets/{n}/reject",
 
-	"set_session": "POST /api/p/{key}/tickets/{n}/set_session",
-	"release":     "POST /api/p/{key}/tickets/{n}/release",
+	"set_session":  "POST /api/p/{key}/tickets/{n}/set_session",
+	"release":      "POST /api/p/{key}/tickets/{n}/release",
+	"get_workflow": "GET /api/workflow",
 }
 
 type handlerFunc func(c *core.Core, r *http.Request) (any, error)
@@ -202,6 +203,12 @@ var handlers = map[string]handlerFunc{
 		}
 		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.Release(r.Context(), r.PathValue("key"), in)
+	},
+	"get_workflow": func(c *core.Core, r *http.Request) (any, error) {
+		if err := onlyParams(r.URL.Query()); err != nil {
+			return nil, err
+		}
+		return c.GetWorkflow(r.Context())
 	},
 }
 

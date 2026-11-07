@@ -43,6 +43,9 @@ type opCase struct {
 	check func(t *testing.T, out map[string]any)
 	bad   call
 	code  core.Code
+	// cliUsage says the CLI's rejected call is a usage error (exit 1):
+	// the operation takes no input the service could reject.
+	cliUsage bool
 }
 
 // Every case runs against a fresh server holding Project acme with Spec
@@ -354,6 +357,45 @@ func init() {
 	}
 }
 
+// The published workflow (ticket 26).
+func init() {
+	cases["get_workflow"] = opCase{
+		ok: call{
+			mcp:  map[string]any{},
+			http: httpCall{"GET", "/api/workflow", ""},
+			cli:  []string{},
+		},
+		check: func(t *testing.T, out map[string]any) {
+			states, _ := out["states"].([]any)
+			actions, _ := out["actions"].([]any)
+			if len(states) != 9 || len(actions) != len(core.Workflow) || out["prose"] == "" {
+				t.Fatalf("workflow %v", out)
+			}
+		},
+		bad: call{
+			mcp:  map[string]any{"ticket": 2},
+			http: httpCall{"GET", "/api/workflow?ticket=2", ""},
+			cli:  []string{"2"},
+		},
+		code:     core.Invalid,
+		cliUsage: true,
+	}
+}
+
+func TestMCPSendsTheInstructions(t *testing.T) {
+	if got := connect(t, newServer(t), "acme").InitializeResult().Instructions; got != core.Instructions {
+		t.Fatalf("instructions %q, want core.Instructions", got)
+	}
+}
+
+func TestTheWorkflowCommandIsGetWorkflow(t *testing.T) {
+	srv := newServer(t)
+	a, b := cliOK(t, srv, []string{"workflow"}), cliOK(t, srv, []string{"get-workflow"})
+	if a["prose"] == nil || a["prose"] != b["prose"] {
+		t.Fatal("code-central workflow should print get_workflow")
+	}
+}
+
 // labels checks a result's Labels are exactly want.
 func labels(want ...string) func(*testing.T, map[string]any) {
 	return func(t *testing.T, out map[string]any) {
@@ -514,6 +556,12 @@ func TestEveryDoorTranslatesEveryOperation(t *testing.T) {
 			srv := newServer(t, c.setup)
 			command := strings.ReplaceAll(op.Name, "_", "-")
 			c.check(t, cliOK(t, srv, append([]string{command}, c.ok.cli...)))
+			if c.cliUsage {
+				if exit, _, _ := cliRun(t, srv, append([]string{command}, c.bad.cli...)); exit != 1 {
+					t.Fatalf("%v: exit %d, want the usage error 1", c.bad.cli, exit)
+				}
+				return
+			}
 			cliRejected(t, srv, append([]string{command}, c.bad.cli...), c.code)
 		})
 	}

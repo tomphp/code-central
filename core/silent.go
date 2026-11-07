@@ -61,21 +61,30 @@ func (c *Core) Ping(_ context.Context, sessionID string) {
 	a.pings[sessionID] = now
 }
 
-// lastActivity is the latest of: service start, the Ticket's last write,
-// the Claim's start and its session's last counted ping.
-func (c *Core) lastActivity(t store.Ticket, cl store.Claim) time.Time {
-	last := c.activity.started
-	for _, at := range []time.Time{t.Updated, cl.Started} {
-		if at.After(last) {
-			last = at
-		}
-	}
-	if cl.SessionID != "" {
+// claimActivity is a Claim's last activity as reads show it: the latest
+// stored write its agent made (lastActivity, ticket 30), or, while the
+// Claim is live, its session's last counted ping if that is later.
+func (c *Core) claimActivity(t store.Ticket, cl store.Claim) time.Time {
+	last := lastActivity(t, cl)
+	if cl.Live() && cl.SessionID != "" {
 		c.activity.mu.Lock()
 		ping := c.activity.pings[cl.SessionID]
 		c.activity.mu.Unlock()
 		if ping.After(last) {
 			last = ping
+		}
+	}
+	return last
+}
+
+// quietSince is when the Ticket last saw any activity on its live Claim:
+// the latest of service start (pings are not kept across a restart), any
+// write to the Ticket by anyone, and the Claim's own activity.
+func (c *Core) quietSince(t store.Ticket, cl store.Claim) time.Time {
+	last := c.activity.started
+	for _, at := range []time.Time{t.Updated, c.claimActivity(t, cl)} {
+		if at.After(last) {
+			last = at
 		}
 	}
 	return last
@@ -92,7 +101,7 @@ func (c *Core) silentSince(t store.Ticket) *time.Time {
 	if !ok {
 		return nil
 	}
-	last := c.lastActivity(t, *cl)
+	last := c.quietSince(t, *cl)
 	if c.now().Sub(last) < SilentAfter {
 		return nil
 	}
