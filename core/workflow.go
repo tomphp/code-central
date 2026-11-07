@@ -39,6 +39,13 @@ type Action struct {
 	To     store.State
 	Except []store.State
 	Who    Who
+	// Requires names the content the action takes, for the published
+	// workflow; "" means none beyond the Ticket (and the Claim ID for
+	// Holder actions).
+	Requires string
+	// NextStep is the one sentence a write returns to tell the agent
+	// what to do now; "" means the action returns none.
+	NextStep string
 }
 
 // unfinished is every State except Done and Cancelled.
@@ -47,22 +54,38 @@ var unfinished = []store.State{store.Draft, store.Ready, store.InProgress, store
 // Workflow is the one action table, in the spec's order.
 var Workflow = []Action{
 	{Name: "approve", From: []store.State{store.Draft}, To: store.Ready, Who: AnyActor},
-	{Name: "defer", From: []store.State{store.Ready}, To: store.Draft, Who: AnyActor},
-	{Name: "claim", From: []store.State{store.Ready}, To: store.InProgress, Who: AgentActor},
-	{Name: "give_up", From: []store.State{store.InProgress}, To: store.Ready, Who: Holder},
-	{Name: "release", From: []store.State{store.InProgress, store.Answered}, To: store.Ready, Who: HumanActor},
-	{Name: "post_round", From: []store.State{store.InProgress}, To: store.NeedsAnswer, Who: Holder},
-	{Name: "answered", From: []store.State{store.NeedsAnswer}, To: store.Answered, Who: Automatic},
+	{Name: "defer", From: []store.State{store.Ready}, To: store.Draft, Who: AnyActor,
+		Requires: "reason (required), stored as a comment"},
+	{Name: "claim", From: []store.State{store.Ready}, To: store.InProgress, Who: AgentActor,
+		Requires: "spec or ticket to narrow it (optional), session_id (optional); returns the Claim ID"},
+	{Name: "give_up", From: []store.State{store.InProgress}, To: store.Ready, Who: Holder,
+		Requires: "note on where the work stands (required)",
+		NextStep: stopWorking},
+	{Name: "release", From: []store.State{store.InProgress, store.Answered}, To: store.Ready, Who: HumanActor,
+		Requires: "note (optional)"},
+	{Name: "post_round", From: []store.State{store.InProgress}, To: store.NeedsAnswer, Who: Holder,
+		Requires: "Questions, each with a title, a body and an optional recommended answer"},
+	{Name: "answered", From: []store.State{store.NeedsAnswer}, To: store.Answered, Who: Automatic,
+		Requires: "made when the last open Question is answered or dismissed"},
 	{Name: "pick_up_answers", From: []store.State{store.Answered}, To: store.InProgress, Who: Holder},
-	{Name: "report_failure", From: []store.State{store.InProgress}, To: store.Failed, Who: Holder},
-	{Name: "send_back", From: []store.State{store.Failed}, To: store.Ready, Who: HumanActor},
+	{Name: "report_failure", From: []store.State{store.InProgress}, To: store.Failed, Who: Holder,
+		Requires: "what_broke, why, what_to_fix and where_work_stands (all required)",
+		NextStep: stopWorking},
+	{Name: "send_back", From: []store.State{store.Failed}, To: store.Ready, Who: HumanActor,
+		Requires: "note (optional)"},
 	{Name: "to_draft", From: []store.State{store.Failed}, To: store.Draft, Who: HumanActor},
-	{Name: "finish", From: []store.State{store.InProgress}, To: store.InReview, Who: Holder},
+	{Name: "finish", From: []store.State{store.InProgress}, To: store.InReview, Who: Holder,
+		Requires: "summary (required): what was done, where (branch or commit), what to check",
+		NextStep: stopWorking},
 	{Name: "accept", From: []store.State{store.InReview}, To: store.Done, Who: HumanActor},
-	{Name: "reject", From: []store.State{store.InReview}, To: store.Ready, Who: HumanActor},
-	{Name: "cancel", From: []store.State{store.Draft, store.Ready}, To: store.Cancelled, Who: AgentActor},
-	{Name: "cancel", From: unfinished, To: store.Cancelled, Who: HumanActor},
-	{Name: "move", From: store.States, Except: []store.State{store.Failed}, Who: HumanActor},
+	{Name: "reject", From: []store.State{store.InReview}, To: store.Ready, Who: HumanActor,
+		Requires: "comment (required)"},
+	{Name: "cancel", From: []store.State{store.Draft, store.Ready}, To: store.Cancelled, Who: AgentActor,
+		Requires: "replacements (required), reason (optional)"},
+	{Name: "cancel", From: unfinished, To: store.Cancelled, Who: HumanActor,
+		Requires: "replacements (optional)"},
+	{Name: "move", From: store.States, Except: []store.State{store.Failed}, Who: HumanActor,
+		Requires: "to_state"},
 }
 
 // claimStates are the States a Claim spans. Any move out of them ends it.

@@ -11,7 +11,10 @@ import (
 )
 
 // literalKeys are Markdown fields, written as literal block scalars.
-var literalKeys = map[string]bool{"description": true, "body": true}
+var literalKeys = map[string]bool{
+	"description": true, "body": true,
+	"what_broke": true, "why": true, "what_to_fix": true, "where_work_stands": true,
+}
 
 // timeKeys hold RFC 3339 timestamps, written unquoted.
 var timeKeys = map[string]bool{"created": true, "updated": true, "time": true, "started": true, "ended": true}

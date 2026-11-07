@@ -73,11 +73,13 @@ type MoveView struct {
 
 // ClaimView is one Claim as reads show it: never with its Claim ID.
 type ClaimView struct {
-	Number    int        `json:"number"`
-	SessionID string     `json:"session_id,omitempty"`
-	Started   time.Time  `json:"started"`
-	Ended     *time.Time `json:"ended,omitempty"`
-	EndedBy   string     `json:"ended_by,omitempty"`
+	Number    int       `json:"number"`
+	SessionID string    `json:"session_id,omitempty"`
+	Started   time.Time `json:"started"`
+	// LastActivity is the latest write the Claim's agent made on the Ticket.
+	LastActivity time.Time  `json:"last_activity"`
+	Ended        *time.Time `json:"ended,omitempty"`
+	EndedBy      string     `json:"ended_by,omitempty"`
 }
 
 // TicketView is the full view of one Ticket, the same through every door.
@@ -95,11 +97,13 @@ type TicketView struct {
 	Updated      time.Time         `json:"updated"`
 	Description  string            `json:"description"`
 	Claims       []ClaimView       `json:"claims"`
-	Comments     []CommentView     `json:"comments"`
-	Moves        []MoveView        `json:"moves"`
-	Edits        []EditView        `json:"edits"`
-	Blocked      bool              `json:"blocked"`
-	Claimable    bool              `json:"claimable"`
+	// rounds (ticket 29) go here, before failure_reports.
+	FailureReports []FailureReportView `json:"failure_reports"`
+	Comments       []CommentView       `json:"comments"`
+	Moves          []MoveView          `json:"moves"`
+	Edits          []EditView          `json:"edits"`
+	Blocked        bool                `json:"blocked"`
+	Claimable      bool                `json:"claimable"`
 }
 
 // TicketRow is one find_tickets result.
@@ -388,11 +392,11 @@ func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Blockers: blockerViews(r, key, t),
 		Created:  t.Created, Updated: t.Updated, Description: t.Description,
-		Claims: []ClaimView{}, Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
+		Claims: []ClaimView{}, FailureReports: failureReportViews(t.FailureReports), Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: blocked(r, key, t),
 	}
 	for _, c := range t.Claims {
-		cv := ClaimView{Number: c.Number, SessionID: c.SessionID, Started: c.Started, EndedBy: c.EndedBy}
+		cv := ClaimView{Number: c.Number, SessionID: c.SessionID, Started: c.Started, LastActivity: lastActivity(t, c), EndedBy: c.EndedBy}
 		if !c.Live() {
 			ended := c.Ended
 			cv.Ended = &ended

@@ -4,11 +4,11 @@
 
 **Blocked by:** 25
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `get_workflow` is an MCP tool, `GET /api/workflow` and `code-central workflow`, returning structured data plus prose
-- [ ] The structured part is generated from `core`'s action table: States, meanings, actions, who can take each, required content and what counts as Needs Me, so it can't drift from what is enforced
-- [ ] The prose covers the three exits on trouble, that a send-back with no note means nothing has changed, the branch rule (a branch named after the Ticket ID, committed and pushed often), and the limits of holding several Claims
-- [ ] The MCP `instructions` say what Code Central is, to call `get_workflow` before working a Ticket, and the Round rule: while a Claim is held, every question for the human is a Round posted with `post_round`, never printed in the terminal, including each numbered grilling question as one Question with its recommendation
-- [ ] Writes return their one-sentence next step; `finish` returns "stop working this Ticket" (the other actions' next steps arrive with their tickets)
-- [ ] A `core` test fails if the MCP `instructions` exceed about 150 words, any tool description exceeds one line, the `get_workflow` prose exceeds about 1,500 tokens, or a next step exceeds one sentence
+- [x] `get_workflow` is an MCP tool, `GET /api/workflow` and `code-central workflow`, returning structured data plus prose
+- [x] The structured part is generated from `core`'s action table: States, meanings, actions, who can take each, required content and what counts as Needs Me, so it can't drift from what is enforced
+- [x] The prose covers the three exits on trouble, that a send-back with no note means nothing has changed, the branch rule (a branch named after the Ticket ID, committed and pushed often), and the limits of holding several Claims
+- [x] The MCP `instructions` say what Code Central is, to call `get_workflow` before working a Ticket, and the Round rule: while a Claim is held, every question for the human is a Round posted with `post_round`, never printed in the terminal, including each numbered grilling question as one Question with its recommendation
+- [x] Writes return their one-sentence next step; `finish` returns "stop working this Ticket" (the other actions' next steps arrive with their tickets)
+- [x] A `core` test fails if the MCP `instructions` exceed about 150 words, any tool description exceeds one line, the `get_workflow` prose exceeds about 1,500 tokens, or a next step exceeds one sentence

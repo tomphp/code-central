@@ -252,7 +252,7 @@ func Register(mux *http.ServeMux, c *core.Core) {
 }
 
 func newServer(c *core.Core, key string) *sdk.Server {
-	s := sdk.NewServer(&sdk.Implementation{Name: "code-central", Version: "v1"}, nil)
+	s := sdk.NewServer(&sdk.Implementation{Name: "code-central", Version: "v1"}, &sdk.ServerOptions{Instructions: core.Instructions})
 	for _, op := range core.Operations {
 		t, ok := tools[op.Name]
 		if !ok || op.Audience != core.AgentAndHuman {

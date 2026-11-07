@@ -98,6 +98,20 @@ type Claim struct {
 	EndedBy   string    // the action that ended it
 }
 
+// FailureReport is one numbered, permanent report of why an agent with
+// no way forward stopped. Posting one ends the Claim it was made on.
+type FailureReport struct {
+	Number          int
+	Claim           int
+	SessionID       string // the Claim's session ID when the report was posted
+	Actor           string
+	Time            time.Time
+	WhatBroke       string
+	Why             string
+	WhatToFix       string
+	WhereWorkStands string
+}
+
 // Live reports whether the Claim has not ended.
 func (c Claim) Live() bool { return c.Ended.IsZero() }
 
@@ -116,9 +130,11 @@ type Ticket struct {
 	Updated      time.Time
 	Description  string
 	Claims       []Claim
-	Comments     []Comment
-	Moves        []Move
-	Edits        []Edit
+	// FailureReports are numbered and never edited.
+	FailureReports []FailureReport
+	Comments       []Comment
+	Moves          []Move
+	Edits          []Edit
 }
 
 // Reader reads from memory. Records returned are copies.
@@ -174,6 +190,7 @@ func (t Ticket) clone() Ticket {
 	t.BlockedBy = slices.Clone(t.BlockedBy)
 	t.Replacements = slices.Clone(t.Replacements)
 	t.Claims = slices.Clone(t.Claims)
+	t.FailureReports = slices.Clone(t.FailureReports)
 	t.Comments = slices.Clone(t.Comments)
 	t.Moves = slices.Clone(t.Moves)
 	t.Edits = cloneEdits(t.Edits)

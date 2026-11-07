@@ -104,7 +104,9 @@ func TestFilesAreWrittenInFixedFieldOrder(t *testing.T) {
 		return w.PutTicket("acme", store.Ticket{
 			Number: 2, Title: "Form", State: store.Ready, Spec: 1, Labels: []string{"ui"},
 			Created: t0, Updated: t0.Add(90 * time.Second), Description: "Build it.\nWell.\n",
-			Claims:   []store.Claim{{Number: 1, ID: "ABC", SessionID: "s1", Started: t0, Ended: t0.Add(time.Minute), EndedBy: "finish"}},
+			Claims: []store.Claim{{Number: 1, ID: "ABC", SessionID: "s1", Started: t0, Ended: t0.Add(time.Minute), EndedBy: "finish"}},
+			FailureReports: []store.FailureReport{{Number: 1, Claim: 1, SessionID: "s1", Actor: "agent", Time: t0,
+				WhatBroke: "It broke.\nBadly.\n", Why: "Because.", WhatToFix: "Fix it.", WhereWorkStands: "Pushed."}},
 			Comments: []store.Comment{{Number: 1, Actor: "agent", Time: t0.Add(time.Minute), Claim: 1, Body: "Done.\nCheck it.\n"}},
 			Edits:    []store.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"description": "Old.\n"}}},
 		})
@@ -158,6 +160,21 @@ claims:
     started: 2026-11-07T09:30:00Z
     ended: 2026-11-07T09:31:00Z
     ended_by: finish
+failure_reports:
+  - number: 1
+    claim: 1
+    session_id: s1
+    actor: agent
+    time: 2026-11-07T09:30:00Z
+    what_broke: |
+      It broke.
+      Badly.
+    why: |-
+      Because.
+    what_to_fix: |-
+      Fix it.
+    where_work_stands: |-
+      Pushed.
 comments:
   - number: 1
     actor: agent
