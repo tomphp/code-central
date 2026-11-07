@@ -63,22 +63,10 @@ func (c *Core) attention(r store.Reader, key string, t store.Ticket) AttentionTi
 		Project: key, ID: DisplayID(key, t.Number), Title: t.Title,
 		Rounds: len(t.Rounds), FailureReports: len(t.FailureReports),
 	}
-	silent := c.silentSince(t) != nil
-	if cl, ok := liveClaim(t); ok && silent {
+	reason, _ := c.reasonOf(r, key, t)
+	if cl, ok := liveClaim(t); ok && reason == ReasonSilentClaim {
 		a.SilentClaim = cl.Number
 	}
-	a.NeedsMe = needsMe(r, key, t, silent)
+	a.NeedsMe = reason != ""
 	return a
-}
-
-// needsMe is a stand-in for ticket 32's needs_me_reason, which the
-// merger should use here instead (NeedsMe = reason != ""). It covers
-// every reason but "blocked by a Cancelled Ticket with no Replacements"
-// and "closed externally".
-func needsMe(_ store.Reader, _ string, t store.Ticket, silent bool) bool {
-	switch t.State {
-	case store.NeedsAnswer, store.Answered, store.Failed, store.InReview:
-		return true
-	}
-	return silent
 }
