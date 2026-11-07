@@ -22,17 +22,11 @@ type result struct {
 	stdout, stderr string
 }
 
-// run runs one command in-process with only the given environment.
+// run runs one command in-process with only the given environment, from
+// an empty temporary folder so no real .mcp.json is found.
 func run(t *testing.T, env map[string]string, stdin string, args ...string) result {
 	t.Helper()
-	var out, errOut bytes.Buffer
-	code := cli.Run(context.Background(), args, cli.Env{
-		Stdin:  strings.NewReader(stdin),
-		Stdout: &out,
-		Stderr: &errOut,
-		Getenv: func(k string) string { return env[k] },
-	})
-	return result{code, out.String(), errOut.String()}
+	return runIn(t, t.TempDir(), env, stdin, args...)
 }
 
 func decode[T any](t *testing.T, r result) T {
