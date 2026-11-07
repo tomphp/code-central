@@ -61,9 +61,9 @@ type SpecRef struct {
 	Title string `json:"title"`
 }
 
-// MoveView is one State move.
+// MoveView is one State move. An imported Ticket's one move has no From.
 type MoveView struct {
-	From  store.State `json:"from"`
+	From  store.State `json:"from,omitempty"`
 	To    store.State `json:"to"`
 	Actor string      `json:"actor"`
 	Time  time.Time   `json:"time"`

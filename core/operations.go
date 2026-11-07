@@ -59,6 +59,10 @@ var Operations = []Op{
 
 	// The published workflow (ticket 26).
 	{Name: "get_workflow", Audience: AgentAndHuman},
+
+	// Scratch Import (ticket 40).
+	{Name: "get_import_guide", Audience: AgentAndHuman},
+	{Name: "import", Audience: AgentAndHuman, Write: true},
 }
 
 // Operation looks an operation up by name.

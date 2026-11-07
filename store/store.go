@@ -157,6 +157,27 @@ type Writer interface {
 	PutProject(Project) error
 	PutSpec(project string, s Spec) error
 	PutTicket(project string, t Ticket) error
+	// PutImport is the one bulk write: every Spec and Ticket in im is new,
+	// and they all land together or none does. It counts as the update's
+	// one write.
+	PutImport(project string, im Import) error
+}
+
+// Import is a batch of new Specs and Tickets written all or nothing.
+type Import struct {
+	Specs   []Spec
+	Tickets []Ticket
+}
+
+func (im Import) clone() Import {
+	out := Import{}
+	for _, s := range im.Specs {
+		out.Specs = append(out.Specs, s.clone())
+	}
+	for _, t := range im.Tickets {
+		out.Tickets = append(out.Tickets, t.clone())
+	}
+	return out
 }
 
 // Store is the persistence interface. View and Update share one
@@ -175,6 +196,8 @@ var (
 	// ErrUnknownProject means a Spec or Ticket was written to a project
 	// that does not exist.
 	ErrUnknownProject = errors.New("store: unknown project")
+	// ErrExists means an Import named a Spec or Ticket number already in use.
+	ErrExists = errors.New("store: an import may only add new records")
 )
 
 func (s Spec) clone() Spec {
