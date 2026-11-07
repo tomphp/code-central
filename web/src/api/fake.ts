@@ -263,6 +263,18 @@ export class FakeApi implements Api {
     return this.projectView(p);
   }
 
+  async renameProject(key: string, displayName: string): Promise<ProjectView> {
+    this.calls.push("renameProject");
+    const name = displayName.trim();
+    if (!name) throw new ApiError(422, "invalid", "a Project needs a display name", "display_name");
+    const p = this.writable(key);
+    if (p.display_name !== name) {
+      p.display_name = name;
+      this.emit({ type: "project.changed", project: key });
+    }
+    return this.projectView(p);
+  }
+
   // unlink detaches a seeded Ticket's Link, taking it out of Needs Me if it
   // was there as closed externally (the only reason a Link gives).
   async unlink(project: string, target: string): Promise<LinkedRow> {

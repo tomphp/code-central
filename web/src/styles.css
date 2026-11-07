@@ -84,6 +84,8 @@ textarea { width: 100%; resize: vertical; }
 .menu [role="menuitem"]:disabled { color: var(--muted); cursor: default; }
 .menu-note { margin: 0; padding: 0 8px 5px; font-size: 12px; color: var(--muted); }
 .project-error { flex-basis: 100%; margin: 2px 0 4px; }
+.project-rename { flex-basis: 100%; display: flex; gap: 4px; margin: 2px 0 4px; }
+.project-rename input { flex: 1; min-width: 0; font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 .archived-group { margin-top: auto; padding-top: 16px; }
 .archived-group > summary { cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 4px 8px; }
 .archived-group .filter { opacity: .7; }

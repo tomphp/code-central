@@ -1,7 +1,7 @@
 // The left pane's Projects: active ones as filters, each with a menu that
-// archives it, and Archived ones in a collapsed group at the bottom, each
-// with a menu that unarchives it (ticket 39).
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+// renames (story 92) or archives it, and Archived ones in a collapsed
+// group at the bottom, each with a menu that unarchives it (ticket 39).
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { Api } from "../api/api";
 import type { ApiError, ProjectRow } from "../api/types";
 
@@ -16,6 +16,8 @@ export interface ProjectFilterProps {
 export function ProjectFilter({ api, project: p, on, onSelect }: ProjectFilterProps) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
+  // name is the rename box's text while the human is renaming.
+  const [name, setName] = useState<string>();
   const ref = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const reasonId = useId();
@@ -39,6 +41,14 @@ export function ProjectFilter({ api, project: p, on, onSelect }: ProjectFilterPr
     setOpen(false);
     setError(undefined);
     action().catch((e: ApiError) => setError(e.message));
+  };
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    setError(undefined);
+    api.renameProject(p.key, name ?? "").then(
+      () => setName(undefined),
+      (e: ApiError) => setError(e.message),
+    );
   };
   const blocked = p.unfinished > 0 ? `${p.unfinished} unfinished Ticket${p.unfinished === 1 ? "" : "s"}: finish or cancel them first` : "";
 
@@ -71,6 +81,16 @@ export function ProjectFilter({ api, project: p, on, onSelect }: ProjectFilterPr
             <>
               <button
                 role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  setError(undefined);
+                  setName(p.display_name);
+                }}
+              >
+                Rename
+              </button>
+              <button
+                role="menuitem"
                 disabled={!!blocked}
                 aria-describedby={blocked ? reasonId : undefined}
                 onClick={() => run(() => api.archiveProject(p.key))}
@@ -85,6 +105,20 @@ export function ProjectFilter({ api, project: p, on, onSelect }: ProjectFilterPr
             </>
           )}
         </div>
+      )}
+      {name !== undefined && (
+        <form className="project-rename" onSubmit={save}>
+          <input aria-label={`Display name for ${p.display_name}`} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <button type="submit" className="btn primary">
+            Save
+          </button>
+          <button type="button" className="btn" onClick={() => {
+              setName(undefined);
+              setError(undefined);
+            }}>
+            Cancel
+          </button>
+        </form>
       )}
       {error && (
         <p className="warning project-error" role="alert">

@@ -153,6 +153,18 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.act("acme", a, "move", { to_state: "Ready" })).state).toBe("Ready");
     });
 
+    it("renames a Project's display name, never its key, and refuses a blank one", async () => {
+      await d.createProject("acme", "Acme");
+      const v = await d.api.renameProject("acme", "  Acme Web ");
+      expect(v).toMatchObject({ key: "acme", display_name: "Acme Web" });
+      expect((await d.api.listProjects())[0]).toMatchObject({ key: "acme", display_name: "Acme Web" });
+
+      const blank = await d.api.renameProject("acme", " ").catch((e) => e);
+      expect(blank).toMatchObject({ status: 422, code: "invalid", field: "display_name" });
+      const unknown = await d.api.renameProject("nope", "X").catch((e) => e);
+      expect(unknown).toMatchObject({ status: 404, code: "unknown_project" });
+    });
+
     it("gets one Ticket in full, with its Needs Me reason", async () => {
       await d.createProject("acme", "Acme");
       const id = await d.createTicket("acme", "Pick a colour", "Ready");

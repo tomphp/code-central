@@ -43,6 +43,8 @@ export interface Api {
   // an Archived Project refuses every write until unarchiveProject.
   archiveProject(project: string): Promise<ProjectView>;
   unarchiveProject(project: string): Promise<ProjectView>;
+  // renameProject changes a Project's display name, never its key.
+  renameProject(project: string, displayName: string): Promise<ProjectView>;
   // unlink detaches a Spec's or Ticket's Link (ticket 42). It isn't a
   // TicketAction: its target, a Spec or a Ticket, goes in the body.
   unlink(project: string, target: string): Promise<LinkedRow>;
