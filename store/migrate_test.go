@@ -20,7 +20,7 @@ import (
 func seedFormat1(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "code-central")
-	s := seedAcme(t, dir)
+	s := seedAcmeFormat1(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
 		return w.PutSpec("acme", store.Spec{Number: 1, Title: "Login", Created: t0, Updated: t0, Body: "# Login\n"})
 	})
@@ -32,6 +32,17 @@ func seedFormat1(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return dir
+}
+
+// seedAcmeFormat1 opens dir as a format-1 build would (whatever Format
+// this build is at) and writes Project acme.
+func seedAcmeFormat1(t *testing.T, dir string) *store.FileStore {
+	t.Helper()
+	s := openFormat(t, dir, 1)
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed"})
+	})
+	return s
 }
 
 // snapshot is every file under dir (the lock aside) and its contents.
@@ -277,7 +288,7 @@ func TestAMigrationStoppedBetweenTheRenamesFinishesAtStartup(t *testing.T) {
 
 func TestAPendingImportIsRolledForwardBeforeTheMigration(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	s := seedAcme(t, dir)
+	s := seedAcmeFormat1(t, dir)
 	store.StopImportAfter(s, len(importedFiles)+1) // the manifest is written, nothing renamed
 	if err := s.Update(func(w store.Writer) error { return w.PutImport("acme", storetest.ImportBatch()) }); !errors.Is(err, store.ErrImportStopped) {
 		t.Fatal(err)

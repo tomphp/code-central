@@ -34,6 +34,11 @@ func Schema() string {
 	}
 	values("  ticket state, moves[].from, moves[].to", states)
 	values("  rounds[].questions[].status", []string{string(QuestionOpen), string(QuestionAnswered), string(QuestionDismissed)})
+	var external []string
+	for _, x := range ExternalStates {
+		external = append(external, string(x))
+	}
+	values("  link.external_state", external)
 	values("  spec edits[].previous keys", specEditFields)
 	values("  ticket edits[].previous keys", ticketEditFields)
 	return b.String()
@@ -49,6 +54,11 @@ func describe(b *strings.Builder, t reflect.Type, indent string) {
 		}
 		if f.Type.Kind() == reflect.Slice && f.Type.Elem().Kind() == reflect.Struct {
 			fmt.Fprintf(b, "%s%s: list of mappings%s\n", indent, name, optional)
+			describe(b, f.Type.Elem(), indent+"    ")
+			continue
+		}
+		if f.Type.Kind() == reflect.Pointer && f.Type.Elem().Kind() == reflect.Struct {
+			fmt.Fprintf(b, "%s%s: mapping%s\n", indent, name, optional)
 			describe(b, f.Type.Elem(), indent+"    ")
 			continue
 		}

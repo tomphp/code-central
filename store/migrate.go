@@ -38,7 +38,9 @@ type MigrationStep struct {
 // migrations is the real chain: one step from each older format. To bump
 // Format, raise currentFormat in format.go and add the step from the old
 // number here.
-var migrations = []MigrationStep{}
+var migrations = []MigrationStep{
+	{From: 1, Name: "add the typed link on Specs and Tickets, and its edit history keys"},
+}
 
 var (
 	errMigrationStopped         = errors.New("store: migration stopped by test hook")
