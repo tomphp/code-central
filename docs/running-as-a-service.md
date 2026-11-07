@@ -24,7 +24,44 @@ make build && cp bin/code-central ~/bin/
 code-central service restart
 ```
 
-`service restart` restarts the installed service. The service migrates the store itself at startup. A restart loses nothing: Claims, Rounds and all other state live in the store, the service finishes in-flight writes before it stops, and `code-central wait` retries until the service is back. Keep restarts short, because Claude Code marks an MCP server failed after about 31 seconds.
+`service restart` restarts the installed service. The service never watches for its binary being replaced, so the restart is what picks up the new version. A restart loses nothing: Claims, Rounds and all other state live in the store, the service finishes in-flight writes before it stops, and `code-central wait` retries until the service is back. Keep restarts short, because Claude Code marks an MCP server failed after about 31 seconds.
+
+### The store is migrated at startup
+
+`store.yaml` records the store's `format`. When a new binary finds an older one, `serve` migrates the store before it binds the port. There is no separate `migrate` command, so a login item never crash-loops after an upgrade. Startup runs in this order:
+
+1. Roll forward any Import that was interrupted.
+2. Migrate the format: every file is run through the chained steps (1→2→3…) into a staging folder next to the store (`.code-central.migrating`). Only once the whole staged store is on disk is the old store renamed to `code-central.format-<n>.bak`, where `<n>` is the format it had, and the staging folder renamed into place. Serve prints `migrated the store from format <n> to <m>` with the backup's path on stderr (the service log).
+3. Load and strictly validate every file.
+4. Bind the port.
+
+If a step fails, the original store is untouched, the staging folder is deleted, and the service refuses to start, naming the step and the file. A store with a newer `format` than the binary knows is refused by name (`unknown format`), so an older binary never misreads it. A 10,000-Ticket store migrates and loads in well under the 10 seconds the end-to-end suite allows.
+
+The service keeps one backup per format it has migrated from and never deletes them. If a backup for that format already exists (say you downgraded and upgraded again), the migration stops and names it: move it aside and restart. Delete old backups yourself once you're happy with the new version.
+
+### Downgrading
+
+Downgrading is manual and loses every write made since the upgrade:
+
+```sh
+launchctl bootout gui/$(id -u)/com.github.tomoram.code-central   # macOS; Linux: systemctl --user stop code-central
+cd ~/.local/share                      # or wherever your store lives (CODE_CENTRAL_STORE, --store)
+mv code-central code-central.upgraded  # keep it until you're sure
+mv code-central.format-<n>.bak code-central
+cp <old build>/code-central ~/bin/     # the binary that understands format <n>
+code-central service install           # rewrites the unit and starts the old version
+```
+
+The old binary refuses the upgraded store (`unknown format`), so you can't run it against the wrong one by mistake.
+
+### When to run `init` again
+
+Files written by an older `init` keep working: the `.mcp.json` URL, the port, the MCP server name and the hook commands (`code-central hook session-id`, `code-central ping`) never change within v1, and the generated `docs/agents/` files name operations only, which v1 changes additively. Nothing detects stale files, so run `code-central init` again in a repository when:
+
+- the release notes mention new or changed teaching files, hooks or `docs/agents/` content, or
+- you want the generated files' header comment to record the current version.
+
+Running it again rewrites the files it generated without asking, and asks before replacing any file you've changed.
 
 ## Versions
 

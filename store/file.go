@@ -8,15 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
-
-// Format is the store format this build reads and writes.
-const Format = 1
 
 // ErrLocked means another process already holds the store's lock.
 var ErrLocked = errors.New("store is locked by another code-central serve")
@@ -60,6 +59,12 @@ type FileStore struct {
 	*index
 	dir  string
 	lock *os.File
+	// format is the store format this build reads and writes, and steps
+	// the migrations up to it: Format and migrations, except in tests.
+	format int
+	steps  []MigrationStep
+	// migrated is the migration this Open ran, if any.
+	migrated *Migration
 	// stopImportAfter, set only by tests, stops an Import dead after a
 	// step, as a crash would.
 	stopImportAfter func(step int) bool
@@ -79,26 +84,30 @@ func (s *FileStore) Close() error {
 	return err
 }
 
-// Open locks the store at dir, creating it if needed, checks its format,
-// and loads and strictly validates every file. A file that fails
-// validation stops the open with a *LoadError.
-func Open(dir string) (*FileStore, error) {
+// Open locks the store at dir, creating it if needed, then runs startup
+// in order: roll forward any Import manifest, migrate an older format,
+// and load and strictly validate every file. A file that fails
+// validation stops the open with a *LoadError, and a failed migration
+// with a *MigrationError.
+func Open(dir string) (*FileStore, error) { return open(dir, Format, migrations) }
+
+func open(dir string, format int, steps []MigrationStep) (*FileStore, error) {
+	if err := finishMigration(dir); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	lock, err := os.OpenFile(filepath.Join(dir, "lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	lock, err := lockFile(dir)
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		lock.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, fmt.Errorf("%s: %w", dir, ErrLocked)
-		}
+	s := &FileStore{index: newIndex(), dir: dir, lock: lock, format: format, steps: steps}
+	if err := s.recoverImports(); err != nil {
+		s.Close()
 		return nil, err
 	}
-	s := &FileStore{index: newIndex(), dir: dir, lock: lock}
-	if err := s.recoverImports(); err != nil {
+	if err := s.migrate(); err != nil {
 		s.Close()
 		return nil, err
 	}
@@ -133,24 +142,21 @@ func (s *FileStore) load() error {
 }
 
 func (s *FileStore) checkFormat() error {
-	path := filepath.Join(s.dir, "store.yaml")
-	data, err := os.ReadFile(path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return atomicWrite(path, []byte(fmt.Sprintf("format: %d\n", Format)))
-	}
+	f, ok, err := s.readFormat()
 	if err != nil {
 		return err
 	}
-	var f struct {
-		Format int `yaml:"format"`
+	if !ok {
+		return atomicWrite(filepath.Join(s.dir, "store.yaml"), fmt.Appendf(nil, "format: %d\n", s.format))
 	}
-	if field, err := decodeStrict(data, &f); err != nil {
-		return &LoadError{File: "store.yaml", Field: field, Msg: err.Error()}
-	}
-	if f.Format != Format {
-		return fmt.Errorf("store.yaml: unknown format %d (this code-central understands format %d)", f.Format, Format)
+	if f != s.format {
+		return fmt.Errorf("store.yaml: unknown format %d (this code-central understands format %d)", f, s.format)
 	}
 	return nil
+}
+
+type storeFile struct {
+	Format int `yaml:"format"`
 }
 
 type projectFile struct {
@@ -255,6 +261,12 @@ type moveFile struct {
 	Via   string `yaml:"via,omitempty"`
 }
 
+// The fields an edit's previous values may name.
+var (
+	specEditFields   = []string{"title", "body"}
+	ticketEditFields = []string{"title", "description"}
+)
+
 var numbered = regexp.MustCompile(`^[1-9][0-9]*$`)
 
 func (s *FileStore) loadProject(key string) error {
@@ -285,6 +297,7 @@ func (s *FileStore) loadProject(key string) error {
 		if err != nil {
 			return err
 		}
+		var files []loadedFile
 		for _, e := range entries {
 			name := e.Name()
 			if strings.HasPrefix(name, ".") { // leftover temp files
@@ -296,28 +309,61 @@ func (s *FileStore) loadProject(key string) error {
 				return &LoadError{File: rel, Field: "file name", Msg: "must be <number>" + ext}
 			}
 			n, _ := strconv.Atoi(base)
-			data, err := os.ReadFile(filepath.Join(s.dir, rel))
+			files = append(files, loadedFile{rel: rel, n: n})
+		}
+		// Decoding is the bulk of startup, and files are independent, so
+		// they're decoded in parallel; the first failure in directory
+		// order is reported.
+		parallel(len(files), func(i int) {
+			f := &files[i]
+			data, err := os.ReadFile(filepath.Join(s.dir, f.rel))
 			if err != nil {
-				return &LoadError{File: rel, Field: "file", Msg: err.Error()}
+				f.err = &LoadError{Field: "file", Msg: err.Error()}
+			} else if kind == "specs" {
+				f.spec, f.err = decodeSpec(data, f.n)
+			} else {
+				f.ticket, f.err = decodeTicket(data, f.n)
+			}
+		})
+		for _, f := range files {
+			if f.err != nil {
+				f.err.File = f.rel
+				return f.err
 			}
 			if kind == "specs" {
-				sp, lerr := decodeSpec(data, n)
-				if lerr != nil {
-					lerr.File = rel
-					return lerr
-				}
-				s.projects[key].specs[n] = sp
+				s.projects[key].specs[f.n] = f.spec
 			} else {
-				tk, lerr := decodeTicket(data, n)
-				if lerr != nil {
-					lerr.File = rel
-					return lerr
-				}
-				s.projects[key].tickets[n] = tk
+				s.projects[key].tickets[f.n] = f.ticket
 			}
 		}
 	}
 	return nil
+}
+
+type loadedFile struct {
+	rel    string
+	n      int
+	spec   Spec
+	ticket Ticket
+	err    *LoadError
+}
+
+// parallel runs fn(0) … fn(n-1) on a pool of goroutines and waits.
+func parallel(n int, fn func(i int)) {
+	work := make(chan int)
+	var wg sync.WaitGroup
+	for range min(n, max(4, 2*runtime.NumCPU())) {
+		wg.Go(func() {
+			for i := range work {
+				fn(i)
+			}
+		})
+	}
+	for i := range n {
+		work <- i
+	}
+	close(work)
+	wg.Wait()
 }
 
 func decodeSpec(data []byte, n int) (Spec, *LoadError) {
@@ -343,7 +389,7 @@ func decodeSpec(data []byte, n int) (Spec, *LoadError) {
 	if sp.Updated, err = parseTime(f.Updated); err != nil {
 		return Spec{}, &LoadError{Field: "updated", Msg: err.Error()}
 	}
-	if sp.Edits, err = decodeEdits(f.Edits, "title", "body"); err != nil {
+	if sp.Edits, err = decodeEdits(f.Edits, specEditFields...); err != nil {
 		return Spec{}, err.(*LoadError)
 	}
 	return sp, nil
@@ -424,7 +470,7 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		}
 		t.Moves = append(t.Moves, mv)
 	}
-	if t.Edits, err = decodeEdits(f.Edits, "title", "description"); err != nil {
+	if t.Edits, err = decodeEdits(f.Edits, ticketEditFields...); err != nil {
 		return Ticket{}, err.(*LoadError)
 	}
 	return t, nil
