@@ -2,8 +2,6 @@ package cli
 
 import (
 	"context"
-
-	"github.com/tomoram/code-central/client"
 )
 
 // The published workflow (ticket 26). `workflow` is the spec's name for
@@ -24,7 +22,7 @@ func runWorkflow(ctx context.Context, e Env, args []string) error {
 	if len(pos) > 0 {
 		return usagef("unexpected argument %q", pos[0])
 	}
-	w, err := client.New(serviceURL(e)).GetWorkflow(ctx)
+	w, err := newClient(e).GetWorkflow(ctx)
 	if err != nil {
 		return err
 	}
