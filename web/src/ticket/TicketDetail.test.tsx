@@ -60,6 +60,22 @@ describe("the Ticket detail", () => {
     expect(rows[1]).toHaveTextContent("ended by release 4h ago");
   });
 
+  it("renders the description as Markdown", () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    const t = fake.addTicket("acme", { title: "Fix login", state: "Ready", description: "## Steps\n\n- [x] repro" });
+    const d = renderDetail(fake, t);
+    expect(within(d).getByRole("heading", { level: 2, name: "Steps" })).toBeInTheDocument();
+    expect(within(d).getByRole("checkbox")).toBeChecked();
+  });
+
+  it("says there is no description when it is empty", () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    const t = fake.addTicket("acme", { title: "Empty", state: "Ready", description: "" });
+    expect(renderDetail(fake, t)).toHaveTextContent("No description.");
+  });
+
   it("keeps a collapsed history of moves, comments and edits, newest first", () => {
     const { fake, t } = seeded();
     const d = renderDetail(fake, t);
@@ -95,6 +111,22 @@ describe("the Ticket detail", () => {
     await userEvent.click(within(both).getByRole("button", { name: "show previous" }));
     expect(both).toHaveTextContent("Title: Login bug");
     expect(both).toHaveTextContent("Description: Login fails.");
+  });
+
+  it("renders an edit's previous description as Markdown and its previous title as text", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    const t = fake.addTicket("acme", {
+      title: "Fix login",
+      state: "Ready",
+      edits: [{ number: 1, actor: "agent", time: at(fake, 5), previous: { title: "# Login", description: "**Login** is broken." } }],
+    });
+    const d = renderDetail(fake, t);
+    await userEvent.click(within(d).getByText(/^History/));
+    await userEvent.click(within(d).getByRole("button", { name: "show previous" }));
+    expect(within(d).getByText("Login").tagName).toBe("STRONG");
+    expect(within(d).queryByRole("heading")).toBeNull();
+    expect(d).toHaveTextContent("Title: # Login");
   });
 
   it("offers move to every State but the current one, Needs Answer and Failed", async () => {

@@ -5,6 +5,7 @@ import type { Api } from "../api/api";
 import { moveTargets } from "../api/actions/move";
 import type { EditView, State, TicketView } from "../api/types";
 import { ago, REASON_LABEL } from "../format";
+import { Markdown } from "../Markdown";
 import { ActionPanel } from "../panels/ActionPanel";
 import { LinkBadge } from "./LinkBadge";
 import { useAct } from "./useAct";
@@ -58,7 +59,7 @@ export function TicketDetail({ api, project, ticket: t, now }: TicketDetailProps
         {t.link && <LinkBadge link={t.link} />}
       </div>
       {t.link && !t.link.detached && <LinkedNote key={t.id} api={api} project={project} ticket={t} />}
-      {t.description ? <div className="description">{t.description}</div> : <p className="muted">No description.</p>}
+      {t.description ? <Markdown>{t.description}</Markdown> : <p className="muted">No description.</p>}
       {t.blockers.length > 0 && (
         <p className="muted small">
           Blocked by{" "}
@@ -181,6 +182,7 @@ function History({ ticket: t, now }: { ticket: TicketView; now: Date }) {
 }
 
 const EDIT_FIELD_ORDER = ["title", "description", "body"];
+const MARKDOWN_FIELDS = new Set(["description", "body"]);
 
 // Edit reads "description edited by agent" and shows the text it replaced
 // on demand. Undoing an edit is done by hand: there is no restore.
@@ -198,9 +200,9 @@ function Edit({ edit }: { edit: EditView }) {
       {open && (
         <div className="previous">
           {fields.map((f) => (
-            <div key={f} className="description">
+            <div key={f}>
               {fields.length > 1 && <strong>{f[0].toUpperCase() + f.slice(1)}: </strong>}
-              {edit.previous[f]}
+              {MARKDOWN_FIELDS.has(f) ? <Markdown>{edit.previous[f]}</Markdown> : edit.previous[f]}
             </div>
           ))}
         </div>
