@@ -1,8 +1,11 @@
 // Package notify sends OS Notifications when an agent is stopped and
 // waiting on the human: a new Round, a new Failure Report, or a Claim
-// turning Silent. It listens to core's change notices and, because Silent
-// Claims are computed and produce no notice, also looks at every Ticket on
-// a timer. Events are gathered over Window into one Notification or one
+// turning Silent. It listens to core's change notices and also looks at
+// every Ticket on its own timer, as the spec has it: serve's
+// core.WatchSilent does publish a notice when a Claim turns Silent, but
+// the events bus drops notices for a slow subscriber, and the timer is
+// what still catches a crossing (or a Round) whose notice was dropped,
+// and works wherever WatchSilent isn't running. Events are gathered over Window into one Notification or one
 // summary. At startup it sends one summary if Needs Me is not empty.
 package notify
 
@@ -23,8 +26,8 @@ import (
 // Window is how long notify gathers events into one Notification.
 const Window = 15 * time.Second
 
-// Tick is how often notify looks at every Ticket for a Claim turning
-// Silent (and for anything a dropped change notice hid).
+// Tick is how often notify looks at every Ticket: for a Claim turning
+// Silent and for anything a dropped change notice hid.
 const Tick = time.Minute
 
 // Notification is one OS Notification. URL is opened on a click where the
@@ -66,6 +69,14 @@ const (
 	newFailure
 	silentClaim
 )
+
+// reasons is each reason's wording: the one-event title (%s is the
+// Ticket ID) and how a summary counts it.
+var reasons = [...]struct{ title, one, many string }{
+	newRound:    {"%s has a new Round", "new Round", "new Rounds"},
+	newFailure:  {"%s has a new Failure Report", "failure", "failures"},
+	silentClaim: {"%s has a Silent Claim", "Silent Claim", "Silent Claims"},
+}
 
 type event struct {
 	reason reason
@@ -181,30 +192,23 @@ func (w *watcher) send(n Notification) {
 }
 
 func (w *watcher) single(e event) Notification {
-	title := map[reason]string{
-		newRound:    "%s has a new Round",
-		newFailure:  "%s has a new Failure Report",
-		silentClaim: "%s has a Silent Claim",
-	}[e.reason]
 	return Notification{
-		Title: fmt.Sprintf(title, e.ticket.ID), Body: e.ticket.Title,
+		Title: fmt.Sprintf(reasons[e.reason].title, e.ticket.ID), Body: e.ticket.Title,
 		URL: w.cfg.BaseURL + "/?view=inbox&ticket=" + url.QueryEscape(e.ticket.ID),
 	}
 }
 
 func (w *watcher) summary(es []event) Notification {
-	var counts [3]int
+	var counts [len(reasons)]int
 	var projects []string
 	for _, e := range es {
 		counts[e.reason]++
 		projects = append(projects, e.ticket.Project)
 	}
 	var parts []string
-	for r, words := range [3][2]string{
-		{"new Round", "new Rounds"}, {"failure", "failures"}, {"Silent Claim", "Silent Claims"},
-	} {
+	for r, words := range reasons {
 		if n := counts[r]; n > 0 {
-			parts = append(parts, plural(n, words[0], words[1]))
+			parts = append(parts, plural(n, words.one, words.many))
 		}
 	}
 	return w.needsMe(strings.Join(parts, ", ") + where(projects))
