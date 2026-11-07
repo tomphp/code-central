@@ -1,0 +1,417 @@
+package store
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+)
+
+// Format is the store format this build reads and writes.
+const Format = 1
+
+// ErrLocked means another process already holds the store's lock.
+var ErrLocked = errors.New("store is locked by another code-central serve")
+
+// LoadError is a file that failed strict validation at startup. File is
+// relative to the store directory.
+type LoadError struct {
+	File  string
+	Field string
+	Msg   string
+}
+
+func (e *LoadError) Error() string {
+	return fmt.Sprintf("%s: field %s: %s", e.File, e.Field, e.Msg)
+}
+
+// Dir resolves the store directory: the --store flag, then
+// CODE_CENTRAL_STORE, then $XDG_DATA_HOME/code-central, then
+// ~/.local/share/code-central.
+func Dir(flag string, getenv func(string) string) (string, error) {
+	if flag != "" {
+		return flag, nil
+	}
+	if d := getenv("CODE_CENTRAL_STORE"); d != "" {
+		return d, nil
+	}
+	if d := getenv("XDG_DATA_HOME"); d != "" {
+		return filepath.Join(d, "code-central"), nil
+	}
+	home := getenv("HOME")
+	if home == "" {
+		return "", errors.New("cannot find the store: set HOME, XDG_DATA_HOME or CODE_CENTRAL_STORE")
+	}
+	return filepath.Join(home, ".local", "share", "code-central"), nil
+}
+
+// FileStore is the file-backed Store: YAML files under one directory,
+// loaded whole into memory by Open and held under an exclusive lock until
+// Close.
+type FileStore struct {
+	*index
+	dir  string
+	lock *os.File
+}
+
+// Dir is the store's directory.
+func (s *FileStore) Dir() string { return s.dir }
+
+// Close releases the store's lock.
+func (s *FileStore) Close() error {
+	if s.lock == nil {
+		return nil
+	}
+	syscall.Flock(int(s.lock.Fd()), syscall.LOCK_UN)
+	err := s.lock.Close()
+	s.lock = nil
+	return err
+}
+
+// Open locks the store at dir, creating it if needed, checks its format,
+// and loads and strictly validates every file. A file that fails
+// validation stops the open with a *LoadError.
+func Open(dir string) (*FileStore, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	lock, err := os.OpenFile(filepath.Join(dir, "lock"), os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		lock.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, fmt.Errorf("%s: %w", dir, ErrLocked)
+		}
+		return nil, err
+	}
+	s := &FileStore{index: newIndex(), dir: dir, lock: lock}
+	if err := s.load(); err != nil {
+		s.Close()
+		return nil, err
+	}
+	s.persist = s.write
+	return s, nil
+}
+
+func (s *FileStore) load() error {
+	if err := s.checkFormat(); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(filepath.Join(s.dir, "projects"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		if err := s.loadProject(e.Name()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *FileStore) checkFormat() error {
+	path := filepath.Join(s.dir, "store.yaml")
+	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return atomicWrite(path, []byte(fmt.Sprintf("format: %d\n", Format)))
+	}
+	if err != nil {
+		return err
+	}
+	var f struct {
+		Format int `yaml:"format"`
+	}
+	if field, err := decodeStrict(data, &f); err != nil {
+		return &LoadError{File: "store.yaml", Field: field, Msg: err.Error()}
+	}
+	if f.Format != Format {
+		return fmt.Errorf("store.yaml: unknown format %d (this code-central understands format %d)", f.Format, Format)
+	}
+	return nil
+}
+
+type projectFile struct {
+	Key         string `yaml:"key"`
+	DisplayName string `yaml:"display_name"`
+	Created     string `yaml:"created"`
+	Mode        string `yaml:"mode"`
+	Archived    bool   `yaml:"archived,omitempty"`
+}
+
+type specFront struct {
+	ID      int               `yaml:"id"`
+	Title   string            `yaml:"title"`
+	Labels  []string          `yaml:"labels"`
+	Tags    map[string]string `yaml:"tags"`
+	Link    string            `yaml:"link,omitempty"`
+	Created string            `yaml:"created"`
+	Updated string            `yaml:"updated"`
+}
+
+type ticketFile struct {
+	Title        string            `yaml:"title"`
+	State        string            `yaml:"state"`
+	Spec         int               `yaml:"spec"`
+	Labels       []string          `yaml:"labels"`
+	Tags         map[string]string `yaml:"tags"`
+	BlockedBy    []int             `yaml:"blocked_by"`
+	Replacements []int             `yaml:"replacements"`
+	Link         string            `yaml:"link,omitempty"`
+	Created      string            `yaml:"created"`
+	Updated      string            `yaml:"updated"`
+	Description  string            `yaml:"description"`
+	Moves        []moveFile        `yaml:"moves"`
+}
+
+type moveFile struct {
+	From  string `yaml:"from"`
+	To    string `yaml:"to"`
+	Actor string `yaml:"actor"`
+	Time  string `yaml:"time"`
+	Claim int    `yaml:"claim,omitempty"`
+	Via   string `yaml:"via,omitempty"`
+}
+
+var numbered = regexp.MustCompile(`^[1-9][0-9]*$`)
+
+func (s *FileStore) loadProject(key string) error {
+	rel := filepath.ToSlash(filepath.Join("projects", key, "project.yaml"))
+	data, err := os.ReadFile(filepath.Join(s.dir, rel))
+	if err != nil {
+		return &LoadError{File: rel, Field: "file", Msg: err.Error()}
+	}
+	var pf projectFile
+	if field, err := decodeStrict(data, &pf); err != nil {
+		return &LoadError{File: rel, Field: field, Msg: err.Error()}
+	}
+	if pf.Key != key {
+		return &LoadError{File: rel, Field: "key", Msg: fmt.Sprintf("key %q does not match its folder %q", pf.Key, key)}
+	}
+	p := Project{Key: pf.Key, DisplayName: pf.DisplayName, Mode: pf.Mode, Archived: pf.Archived}
+	if p.Created, err = parseTime(pf.Created); err != nil {
+		return &LoadError{File: rel, Field: "created", Msg: err.Error()}
+	}
+	s.setProject(p)
+
+	for _, kind := range []string{"specs", "tickets"} {
+		ext := map[string]string{"specs": ".md", "tickets": ".yaml"}[kind]
+		entries, err := os.ReadDir(filepath.Join(s.dir, "projects", key, kind))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			name := e.Name()
+			if strings.HasPrefix(name, ".") { // leftover temp files
+				continue
+			}
+			rel := "projects/" + key + "/" + kind + "/" + name
+			base, found := strings.CutSuffix(name, ext)
+			if e.IsDir() || !found || !numbered.MatchString(base) {
+				return &LoadError{File: rel, Field: "file name", Msg: "must be <number>" + ext}
+			}
+			n, _ := strconv.Atoi(base)
+			data, err := os.ReadFile(filepath.Join(s.dir, rel))
+			if err != nil {
+				return &LoadError{File: rel, Field: "file", Msg: err.Error()}
+			}
+			if kind == "specs" {
+				sp, lerr := decodeSpec(data, n)
+				if lerr != nil {
+					lerr.File = rel
+					return lerr
+				}
+				s.projects[key].specs[n] = sp
+			} else {
+				tk, lerr := decodeTicket(data, n)
+				if lerr != nil {
+					lerr.File = rel
+					return lerr
+				}
+				s.projects[key].tickets[n] = tk
+			}
+		}
+	}
+	return nil
+}
+
+func decodeSpec(data []byte, n int) (Spec, *LoadError) {
+	front, body, ok := splitFrontmatter(data)
+	if !ok {
+		return Spec{}, &LoadError{Field: "frontmatter", Msg: "a Spec must start with YAML frontmatter between --- lines"}
+	}
+	var f specFront
+	if field, err := decodeStrict(front, &f); err != nil {
+		return Spec{}, &LoadError{Field: field, Msg: err.Error()}
+	}
+	if f.ID != n {
+		return Spec{}, &LoadError{Field: "id", Msg: fmt.Sprintf("id %d does not match the file name", f.ID)}
+	}
+	if f.Title == "" {
+		return Spec{}, &LoadError{Field: "title", Msg: "required"}
+	}
+	sp := Spec{Number: n, Title: f.Title, Labels: f.Labels, Tags: f.Tags, Link: f.Link, Body: string(body)}
+	var err error
+	if sp.Created, err = parseTime(f.Created); err != nil {
+		return Spec{}, &LoadError{Field: "created", Msg: err.Error()}
+	}
+	if sp.Updated, err = parseTime(f.Updated); err != nil {
+		return Spec{}, &LoadError{Field: "updated", Msg: err.Error()}
+	}
+	return sp, nil
+}
+
+func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
+	var f ticketFile
+	if field, err := decodeStrict(data, &f); err != nil {
+		return Ticket{}, &LoadError{Field: field, Msg: err.Error()}
+	}
+	t := Ticket{
+		Number: n, Title: f.Title, State: State(f.State), Spec: f.Spec, Labels: f.Labels, Tags: f.Tags,
+		BlockedBy: f.BlockedBy, Replacements: f.Replacements, Link: f.Link, Description: f.Description,
+	}
+	if t.Title == "" {
+		return Ticket{}, &LoadError{Field: "title", Msg: "required"}
+	}
+	if !t.State.Valid() {
+		return Ticket{}, &LoadError{Field: "state", Msg: fmt.Sprintf("unknown State %q", f.State)}
+	}
+	if t.Spec < 1 {
+		return Ticket{}, &LoadError{Field: "spec", Msg: "required"}
+	}
+	var err error
+	if t.Created, err = parseTime(f.Created); err != nil {
+		return Ticket{}, &LoadError{Field: "created", Msg: err.Error()}
+	}
+	if t.Updated, err = parseTime(f.Updated); err != nil {
+		return Ticket{}, &LoadError{Field: "updated", Msg: err.Error()}
+	}
+	for i, m := range f.Moves {
+		mv := Move{From: State(m.From), To: State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via}
+		field := fmt.Sprintf("moves[%d]", i)
+		if !mv.From.Valid() {
+			return Ticket{}, &LoadError{Field: field + ".from", Msg: fmt.Sprintf("unknown State %q", m.From)}
+		}
+		if !mv.To.Valid() {
+			return Ticket{}, &LoadError{Field: field + ".to", Msg: fmt.Sprintf("unknown State %q", m.To)}
+		}
+		if mv.Time, err = parseTime(m.Time); err != nil {
+			return Ticket{}, &LoadError{Field: field + ".time", Msg: err.Error()}
+		}
+		t.Moves = append(t.Moves, mv)
+	}
+	return t, nil
+}
+
+func (s *FileStore) write(record any, project string) error {
+	var rel string
+	var data []byte
+	var err error
+	switch r := record.(type) {
+	case Project:
+		rel = filepath.Join("projects", r.Key, "project.yaml")
+		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: r.Mode, Archived: r.Archived})
+	case Spec:
+		rel = filepath.Join("projects", project, "specs", strconv.Itoa(r.Number)+".md")
+		var front []byte
+		front, err = encodeYAML(specFront{ID: r.Number, Title: r.Title, Labels: r.Labels, Tags: r.Tags, Link: r.Link, Created: formatTime(r.Created), Updated: formatTime(r.Updated)})
+		data = append(append(append([]byte("---\n"), front...), "---\n"...), r.Body...)
+	case Ticket:
+		rel = filepath.Join("projects", project, "tickets", strconv.Itoa(r.Number)+".yaml")
+		f := ticketFile{
+			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
+			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: r.Link,
+			Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
+			Moves: []moveFile{},
+		}
+		for _, m := range r.Moves {
+			f.Moves = append(f.Moves, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via})
+		}
+		data, err = encodeYAML(f)
+	default:
+		return fmt.Errorf("store: cannot write %T", record)
+	}
+	if err != nil {
+		return err
+	}
+	return atomicWrite(filepath.Join(s.dir, rel), data)
+}
+
+// atomicWrite writes a temp file beside path, fsyncs it, renames it into
+// place and fsyncs the directory.
+func atomicWrite(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name()) // no-op after a successful rename
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
+}
+
+func splitFrontmatter(data []byte) (front, body []byte, ok bool) {
+	rest, found := bytes.CutPrefix(data, []byte("---\n"))
+	if !found {
+		return nil, nil, false
+	}
+	if bytes.HasPrefix(rest, []byte("---\n")) {
+		return nil, rest[4:], true
+	}
+	i := bytes.Index(rest, []byte("\n---\n"))
+	if i < 0 {
+		return nil, nil, false
+	}
+	return rest[:i+1], rest[i+5:], true
+}
+
+func formatTime(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
+
+func parseTime(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, errors.New("required")
+	}
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("not an RFC 3339 timestamp: %q", s)
+	}
+	return t.UTC(), nil
+}

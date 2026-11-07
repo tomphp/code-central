@@ -1,0 +1,40 @@
+package core
+
+// Audience says which front doors may expose an operation.
+type Audience int
+
+const (
+	// AgentAndHuman operations are exposed by MCP, the CLI and HTTP.
+	AgentAndHuman Audience = iota
+	// HumanOnly operations are exposed over HTTP only.
+	HumanOnly
+)
+
+// Op describes one named operation.
+type Op struct {
+	Name     string
+	Audience Audience
+	Write    bool
+}
+
+// Operations is the one list of named operations. Every front door builds
+// its routes, tools or commands from it, and the cross-door suite checks
+// each door against it. Add a new operation here first.
+var Operations = []Op{
+	{Name: "create_project", Audience: HumanOnly, Write: true},
+	{Name: "get_project", Audience: HumanOnly},
+	{Name: "create_spec", Audience: AgentAndHuman, Write: true},
+	{Name: "create_ticket", Audience: AgentAndHuman, Write: true},
+	{Name: "get_ticket", Audience: AgentAndHuman},
+	{Name: "find_tickets", Audience: AgentAndHuman},
+}
+
+// Operation looks an operation up by name.
+func Operation(name string) (Op, bool) {
+	for _, op := range Operations {
+		if op.Name == name {
+			return op, true
+		}
+	}
+	return Op{}, false
+}

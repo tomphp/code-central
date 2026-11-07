@@ -1,0 +1,181 @@
+// Package storetest holds the contract suite every store.Store
+// implementation must pass. Run it from each implementation's tests with
+// a factory that returns a fresh, empty store.
+package storetest
+
+import (
+	"testing"
+	"time"
+
+	"github.com/tomoram/code-central/store"
+)
+
+// Factory returns a fresh, empty store. Reopen, when non-nil, closes the
+// given store and opens it again from wherever it persists, so the suite
+// can check that writes survive a restart.
+type Factory struct {
+	New    func(t *testing.T) store.Store
+	Reopen func(t *testing.T, s store.Store) store.Store
+}
+
+var t0 = time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC)
+
+// Run runs the contract suite.
+func Run(t *testing.T, f Factory) {
+	t.Run("a project reads back after it is written", func(t *testing.T) {
+		s := f.New(t)
+		put(t, s, func(w store.Writer) error {
+			return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: "committed"})
+		})
+		read(t, s, func(r store.Reader) {
+			p, ok := r.Project("acme")
+			if !ok {
+				t.Fatal("project not found")
+			}
+			if p.DisplayName != "Acme" || !p.Created.Equal(t0) || p.Mode != "committed" {
+				t.Fatalf("got %+v", p)
+			}
+			if _, ok := r.Project("other"); ok {
+				t.Fatal("unknown project found")
+			}
+			if got := len(r.Projects()); got != 1 {
+				t.Fatalf("Projects() has %d entries, want 1", got)
+			}
+		})
+	})
+
+	t.Run("specs and tickets read back after they are written", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		spec := store.Spec{Number: 1, Title: "Login", Labels: []string{"auth"}, Tags: map[string]string{"area": "web"}, Created: t0, Updated: t0, Body: "# Login\n\nUsers log in.\n"}
+		ticket := store.Ticket{Number: 2, Title: "Form", State: store.Ready, Spec: 1, Labels: []string{"ui"}, Created: t0, Updated: t0.Add(time.Minute), Description: "Build the form.\n"}
+		put(t, s, func(w store.Writer) error { return w.PutSpec("acme", spec) })
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", ticket) })
+		check := func(s store.Store) {
+			read(t, s, func(r store.Reader) {
+				gs, ok := r.Spec("acme", 1)
+				if !ok || gs.Title != "Login" || gs.Body != spec.Body || gs.Labels[0] != "auth" || gs.Tags["area"] != "web" || !gs.Created.Equal(t0) {
+					t.Fatalf("spec: got %+v", gs)
+				}
+				gt, ok := r.Ticket("acme", 2)
+				if !ok || gt.Title != "Form" || gt.State != store.Ready || gt.Spec != 1 || gt.Description != ticket.Description || !gt.Updated.Equal(ticket.Updated) || gt.Labels[0] != "ui" {
+					t.Fatalf("ticket: got %+v", gt)
+				}
+				if len(r.Specs("acme")) != 1 || len(r.Tickets("acme")) != 1 {
+					t.Fatal("wrong list lengths")
+				}
+				if _, ok := r.Ticket("acme", 1); ok {
+					t.Fatal("spec number found as a ticket")
+				}
+			})
+		}
+		check(s)
+		if f.Reopen != nil {
+			check(f.Reopen(t, s))
+		}
+	})
+
+	t.Run("a ticket write replaces the previous version", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		tk := store.Ticket{Number: 1, Title: "One", State: store.Draft, Spec: 1, Created: t0, Updated: t0}
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk) })
+		tk.Title = "Two"
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk) })
+		read(t, s, func(r store.Reader) {
+			if got, _ := r.Ticket("acme", 1); got.Title != "Two" {
+				t.Fatalf("title %q", got.Title)
+			}
+		})
+	})
+
+	t.Run("records read back are copies", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		put(t, s, func(w store.Writer) error {
+			return w.PutTicket("acme", store.Ticket{Number: 1, Title: "T", State: store.Draft, Spec: 1, Labels: []string{"a"}, Created: t0, Updated: t0})
+		})
+		read(t, s, func(r store.Reader) {
+			got, _ := r.Ticket("acme", 1)
+			got.Labels[0] = "changed"
+		})
+		read(t, s, func(r store.Reader) {
+			if got, _ := r.Ticket("acme", 1); got.Labels[0] != "a" {
+				t.Fatal("mutating a read changed the store")
+			}
+		})
+	})
+
+	t.Run("the ID counter is the highest number in the project plus one", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		read(t, s, func(r store.Reader) {
+			if n := r.NextNumber("acme"); n != 1 {
+				t.Fatalf("empty project: NextNumber = %d, want 1", n)
+			}
+		})
+		put(t, s, func(w store.Writer) error {
+			return w.PutSpec("acme", store.Spec{Number: 4, Title: "S", Created: t0, Updated: t0})
+		})
+		put(t, s, func(w store.Writer) error {
+			return w.PutTicket("acme", store.Ticket{Number: 2, Title: "T", State: store.Draft, Spec: 4, Created: t0, Updated: t0})
+		})
+		check := func(s store.Store) {
+			read(t, s, func(r store.Reader) {
+				if n := r.NextNumber("acme"); n != 5 {
+					t.Fatalf("NextNumber = %d, want 5", n)
+				}
+			})
+		}
+		check(s)
+		if f.Reopen != nil {
+			check(f.Reopen(t, s))
+		}
+	})
+
+	t.Run("an update writes at most one record", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		err := s.Update(func(w store.Writer) error {
+			if err := w.PutSpec("acme", store.Spec{Number: 1, Title: "S", Created: t0, Updated: t0}); err != nil {
+				return err
+			}
+			return w.PutSpec("acme", store.Spec{Number: 2, Title: "S", Created: t0, Updated: t0})
+		})
+		if err == nil {
+			t.Fatal("second write in one update was allowed")
+		}
+	})
+
+	t.Run("a failed update changes nothing", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		err := s.Update(func(w store.Writer) error {
+			return w.PutTicket("nope", store.Ticket{Number: 1, Title: "T", State: store.Draft, Spec: 1, Created: t0, Updated: t0})
+		})
+		if err == nil {
+			t.Fatal("write to an unknown project succeeded")
+		}
+	})
+}
+
+func seedProject(t *testing.T, s store.Store) {
+	t.Helper()
+	put(t, s, func(w store.Writer) error {
+		return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed"})
+	})
+}
+
+func put(t *testing.T, s store.Store, fn func(store.Writer) error) {
+	t.Helper()
+	if err := s.Update(fn); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+}
+
+func read(t *testing.T, s store.Store, fn func(store.Reader)) {
+	t.Helper()
+	if err := s.View(func(r store.Reader) error { fn(r); return nil }); err != nil {
+		t.Fatalf("view: %v", err)
+	}
+}
