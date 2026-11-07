@@ -24,12 +24,16 @@ type Core struct {
 	store store.Store
 	clock clock.Clock
 	ids   ids.Source
+	// activity is the in-memory last-activity record behind Silent Claims.
+	activity *activity
 }
 
 // New returns a Core persisting through s, telling time with clk and
 // issuing Claim IDs from idSource.
 func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
-	return &Core{store: s, clock: clk, ids: idSource}
+	c := &Core{store: s, clock: clk, ids: idSource}
+	c.activity = newActivity(c.now())
+	return c
 }
 
 // now is the current time as stored: UTC, whole seconds.
@@ -99,6 +103,10 @@ type TicketView struct {
 	Edits        []EditView        `json:"edits"`
 	Blocked      bool              `json:"blocked"`
 	Claimable    bool              `json:"claimable"`
+	// SilentSince is set while the Ticket is a Silent Claim: In Progress
+	// with no activity for 30 minutes. It is the time of the last
+	// activity, so the quiet time is now minus it. Computed, never stored.
+	SilentSince *time.Time `json:"silent_since,omitempty"`
 }
 
 // TicketRow is one find_tickets result.
@@ -236,7 +244,7 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}
-		v = ticketView(w, key, t)
+		v = c.ticketView(w, key, t)
 		return nil
 	})
 	return v, err
@@ -257,7 +265,7 @@ func (c *Core) GetTicket(_ context.Context, key string, ref Ref) (TicketView, er
 		if !ok {
 			return notFound("there is no Ticket %s", DisplayID(key, n))
 		}
-		v = ticketView(r, key, t)
+		v = c.ticketView(r, key, t)
 		return nil
 	})
 	return v, err
@@ -347,7 +355,7 @@ func specView(key string, s store.Spec) SpecView {
 	}
 }
 
-func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
+func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 	sp, _ := r.Spec(key, t.Spec)
 	v := TicketView{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State,
@@ -358,10 +366,10 @@ func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 		Claims: []ClaimView{}, Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: blocked(r, key, t),
 	}
-	for _, c := range t.Claims {
-		cv := ClaimView{Number: c.Number, SessionID: c.SessionID, Started: c.Started, EndedBy: c.EndedBy}
-		if !c.Live() {
-			ended := c.Ended
+	for _, cl := range t.Claims {
+		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, Started: cl.Started, EndedBy: cl.EndedBy}
+		if !cl.Live() {
+			ended := cl.Ended
 			cv.Ended = &ended
 		}
 		v.Claims = append(v.Claims, cv)
@@ -370,6 +378,7 @@ func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via})
 	}
 	v.Claimable = t.State == store.Ready && !v.Blocked
+	v.SilentSince = c.silentSince(t)
 	return v
 }
 

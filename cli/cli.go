@@ -14,6 +14,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/core"
@@ -37,6 +38,9 @@ type Env struct {
 	ServeAddrs []string
 	// OnListening, when set, is called with serve's bound addresses.
 	OnListening func(addrs []string)
+	// After, when set, replaces time.After for ping's time limit, so tests
+	// never wait on real time.
+	After func(time.Duration) <-chan time.Time
 }
 
 // Exit codes.
@@ -93,6 +97,10 @@ func init() {
 		"defer":         {op: "defer", usage: "defer <id> [--reason <text> | --file <path|->]", run: runDefer},
 		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>]", run: runClaim},
 		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->]", run: runFinish},
+
+		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>]  (default $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
+		"ping":        {usage: "ping [--session <id>]  mark this session active (reads hook JSON on stdin); always exits 0", run: runPing},
+		"hook":        {usage: "hook session-id  PreToolUse hook: add session_id to the tool input", run: runHook},
 	}
 }
 
@@ -368,7 +376,7 @@ func runClaim(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Claim(ctx, sc.project, core.ClaimInput{Spec: core.Ref(*spec), Ticket: core.Ref(*ticket), SessionID: *session})
+	v, err := sc.client.Claim(ctx, sc.project, core.ClaimInput{Spec: core.Ref(*spec), Ticket: core.Ref(*ticket), SessionID: sessionID(e, *session)})
 	if err != nil {
 		return err
 	}

@@ -43,6 +43,10 @@ var Operations = []Op{
 	{Name: "finish", Audience: AgentAndHuman, Write: true},
 	{Name: "accept", Audience: HumanOnly, Write: true},
 	{Name: "reject", Audience: HumanOnly, Write: true},
+
+	// Silent Claims and sessions (ticket 31).
+	{Name: "set_session", Audience: AgentAndHuman, Write: true},
+	{Name: "release", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

@@ -56,6 +56,10 @@ func runServe(ctx context.Context, e Env, args []string) error {
 	}
 
 	c := core.New(st, clock.System{}, ids.Random{})
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	// TODO(ticket 29): publish ticket.changed on the events package.
+	go c.WatchSilent(ctx, ticker.C, func(project, ticketID string) {})
 	srv := &http.Server{Handler: frontdoor.Handler(c, web.Handler()), ReadHeaderTimeout: 10 * time.Second}
 	errs := make(chan error, len(listeners))
 	bound := make([]string, 0, len(listeners))

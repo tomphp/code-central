@@ -125,6 +125,28 @@ func init() {
 	for name, t := range definingTools {
 		tools[name] = t
 	}
+	for name, t := range sessionTools {
+		tools[name] = t
+	}
+}
+
+// sessionTools keep a Claim's session ID current (ticket 31).
+var sessionTools = map[string]tool{
+	"set_session": {
+		description: "Record the session now working your Claim, so the human can resume it. A hook usually fills session_id in for you.",
+		schema: object(map[string]any{
+			"ticket":     ref("The Ticket."),
+			"claim_id":   text("The Claim ID claim returned."),
+			"session_id": text("Your session ID."),
+		}, "ticket", "claim_id", "session_id"),
+		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
+			var in core.SetSessionInput
+			if err := core.Decode(args, &in); err != nil {
+				return nil, err
+			}
+			return c.SetSession(ctx, key, in)
+		},
+	},
 }
 
 // definingTools shape work after it is created (ticket 27).

@@ -111,6 +111,24 @@ func (c *Client) Reject(ctx context.Context, key string, in core.RejectInput) (c
 	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "reject"), in, &out)
 }
 
+// SetSession is set_session.
+func (c *Client) SetSession(ctx context.Context, key string, in core.SetSessionInput) (core.TicketView, error) {
+	var out core.TicketView
+	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "set_session"), in, &out)
+}
+
+// Release is the human's release; set Actor to human.
+func (c *Client) Release(ctx context.Context, key string, in core.ReleaseInput) (core.TicketView, error) {
+	var out core.TicketView
+	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "release"), in, &out)
+}
+
+// Ping is POST /api/ping: it marks activity on every live Claim with this
+// session ID. The service always answers 204.
+func (c *Client) Ping(ctx context.Context, sessionID string) error {
+	return c.do(ctx, "POST", "/api/ping", map[string]string{"session_id": sessionID}, nil)
+}
+
 // EditSpec is edit_spec.
 func (c *Client) EditSpec(ctx context.Context, key string, in core.EditSpecInput) (core.SpecView, error) {
 	var out core.SpecView
