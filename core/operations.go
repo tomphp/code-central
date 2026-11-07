@@ -69,6 +69,12 @@ var Operations = []Op{
 	{Name: "answer", Audience: HumanOnly, Write: true},
 	{Name: "accept_recommended", Audience: HumanOnly, Write: true},
 	{Name: "dismiss_question", Audience: HumanOnly, Write: true},
+
+	// Needs Me, moving by hand and Projects (ticket 32).
+	{Name: "needs_me", Audience: HumanOnly},
+	{Name: "list_projects", Audience: HumanOnly},
+	{Name: "move", Audience: HumanOnly, Write: true},
+	{Name: "rename_project", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.
