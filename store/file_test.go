@@ -1,8 +1,8 @@
 package store_test
 
 import (
-	"fmt"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"

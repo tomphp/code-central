@@ -14,6 +14,9 @@ export const STATES = [
 ] as const;
 export type State = (typeof STATES)[number];
 
+// A finished Ticket is Done or Cancelled.
+export const FINISHED: readonly State[] = ["Done", "Cancelled"];
+
 export type NeedsMeReason =
   | "needs_answer"
   | "answered"
@@ -23,13 +26,20 @@ export type NeedsMeReason =
   | "blocked_by_cancelled"
   | "closed_externally";
 
-export interface ProjectRow {
+export interface ProjectView {
   key: string;
   display_name: string;
   created: string;
   mode: string;
   archived: boolean;
+  // archived_at is when the human archived the Project, while it is.
+  archived_at?: string;
+}
+
+export interface ProjectRow extends ProjectView {
   needs_me: number;
+  // unfinished counts the Tickets not Done or Cancelled; Archive waits for 0.
+  unfinished: number;
 }
 
 export interface BlockerView {

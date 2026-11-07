@@ -72,7 +72,21 @@ textarea { width: 100%; resize: vertical; }
 .filter { display: flex; justify-content: space-between; text-align: left; border: 0; background: transparent; color: var(--text); font: inherit; padding: 5px 8px; border-radius: 6px; cursor: pointer; }
 .filter.sub { font-size: 12.5px; padding: 3px 8px 3px 16px; }
 .filter.on { background: var(--surface-2); font-weight: 600; }
-.filter.quiet { opacity: .6; }
+/* Project rows and their menus; the Archived group (ticket 39). */
+.project-row { position: relative; display: flex; align-items: center; flex-wrap: wrap; }
+.project-row > .filter { flex: 1; }
+.menu-toggle { border: 0; background: transparent; color: var(--muted); font: inherit; padding: 2px 6px; border-radius: 6px; cursor: pointer; opacity: .5; }
+.project-row:hover .menu-toggle, .menu-toggle[aria-expanded="true"], .menu-toggle:focus-visible { opacity: 1; }
+.menu-toggle:hover { background: var(--surface-2); }
+.menu { position: absolute; right: 0; top: 100%; z-index: 10; min-width: 12rem; max-width: 16rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px; box-shadow: 0 4px 16px rgb(0 0 0 / .12); }
+.menu [role="menuitem"] { display: block; width: 100%; text-align: left; border: 0; background: transparent; color: var(--text); font: inherit; padding: 5px 8px; border-radius: 5px; cursor: pointer; }
+.menu [role="menuitem"]:hover:not(:disabled) { background: var(--surface-2); }
+.menu [role="menuitem"]:disabled { color: var(--muted); cursor: default; }
+.menu-note { margin: 0; padding: 0 8px 5px; font-size: 12px; color: var(--muted); }
+.project-error { flex-basis: 100%; margin: 2px 0 4px; }
+.archived-group { margin-top: auto; padding-top: 16px; }
+.archived-group > summary { cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 4px 8px; }
+.archived-group .filter { opacity: .7; }
 .filter .count { color: var(--muted); }
 .filter .count.loud { color: var(--r-answer); font-weight: 700; }
 .inbox-list { border-right: 1px solid var(--border); overflow: auto; padding-bottom: 80px; }

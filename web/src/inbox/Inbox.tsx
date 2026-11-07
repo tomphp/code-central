@@ -4,10 +4,11 @@
 import type { MouseEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
-import { STATES, type NeedsMeRow, type TicketView } from "../api/types";
+import { FINISHED, STATES, type NeedsMeRow, type State, type TicketView } from "../api/types";
 import { duration, REASON_LABEL, rowDetail } from "../format";
 import type { InboxData, ProjectTicket } from "../live";
 import { TicketPane } from "../ticket/TicketDetail";
+import { ArchivedProjects, ProjectFilter } from "./Projects";
 import { hrefFor, type UiLocation } from "../url";
 
 export interface InboxProps {
@@ -23,6 +24,7 @@ export interface InboxProps {
 export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: InboxProps) {
   const inProject = (key: string) => !loc.project || key === loc.project;
   const projects = data?.projects ?? [];
+  const archived = projects.filter((p) => p.archived);
   const groups = (data?.needsMe.groups ?? [])
     .map((g) => ({ ...g, tickets: g.tickets.filter((r) => inProject(r.project)) }))
     .filter((g) => g.tickets.length > 0);
@@ -49,17 +51,11 @@ export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: In
       <nav aria-label="Filters" className="inbox-nav">
         <h1>Code Central</h1>
         <FilterButton on={!loc.project} label="All Projects" count={totalCount} loud onClick={() => navigate({ project: undefined })} />
-        {projects.map((p) => (
-          <FilterButton
-            key={p.key}
-            on={loc.project === p.key}
-            label={p.display_name}
-            count={p.needs_me}
-            loud
-            quiet={p.archived}
-            onClick={() => navigate({ project: p.key })}
-          />
-        ))}
+        {projects
+          .filter((p) => !p.archived)
+          .map((p) => (
+            <ProjectFilter key={p.key} api={api} project={p} on={loc.project === p.key} onSelect={() => navigate({ project: p.key })} />
+          ))}
         <h2>View</h2>
         <FilterButton on={!loc.state} label="Needs Me" count={needsMeCount} loud onClick={() => navigate({ state: undefined })} />
         {STATES.map((s) => (
@@ -72,6 +68,11 @@ export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: In
             onClick={() => navigate({ state: s })}
           />
         ))}
+        <ArchivedProjects count={archived.length}>
+          {archived.map((p) => (
+            <ProjectFilter key={p.key} api={api} project={p} on={loc.project === p.key} onSelect={() => navigate({ project: p.key })} />
+          ))}
+        </ArchivedProjects>
       </nav>
 
       <main aria-label="Tickets" className="inbox-list">
@@ -79,9 +80,7 @@ export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: In
           <p className="empty">Loading…</p>
         ) : loc.state ? (
           <>
-            {tickets
-              .filter((t) => t.state === loc.state)
-              .map((t) => (
+            {stateList(tickets, loc.state).map((t) => (
                 <a key={t.id} className="row" {...rowLink(t.id)}>
                   <span className="row-top">
                     <span className="tid">{t.id}</span>
@@ -122,10 +121,17 @@ export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: In
   );
 }
 
-function FilterButton(p: { on: boolean; label: string; count: number; loud?: boolean; quiet?: boolean; sub?: boolean; onClick(): void }) {
+// stateList is one State's Tickets: in claim order, as found, except the
+// finished States, which read newest first.
+function stateList(tickets: ProjectTicket[], state: State): ProjectTicket[] {
+  const rows = tickets.filter((t) => t.state === state);
+  return FINISHED.includes(state) ? rows.sort((a, b) => b.updated.localeCompare(a.updated)) : rows;
+}
+
+function FilterButton(p: { on: boolean; label: string; count: number; loud?: boolean; sub?: boolean; onClick(): void }) {
   return (
     <button
-      className={["filter", p.on && "on", p.sub && "sub", p.quiet && "quiet"].filter(Boolean).join(" ")}
+      className={["filter", p.on && "on", p.sub && "sub"].filter(Boolean).join(" ")}
       aria-pressed={p.on}
       onClick={p.onClick}
     >

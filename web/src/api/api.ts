@@ -2,7 +2,7 @@
 // live feed go through an Api. createHttpApi (http.ts) is the real one;
 // FakeApi (fake.ts) is the in-memory fake the component and layout tests
 // use. contract.ts runs one suite against both.
-import type { ChangeEvent, FindTicketsFilter, NeedsMeView, ProjectRow, TicketRow, TicketView } from "./types";
+import type { ChangeEvent, FindTicketsFilter, NeedsMeView, ProjectRow, ProjectView, TicketRow, TicketView } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
 // and result. Every one is `POST /api/p/{key}/tickets/{n}/{action}` with
@@ -28,6 +28,7 @@ export interface EventHandlers {
 export interface Api {
   listProjects(): Promise<ProjectRow[]>;
   needsMe(): Promise<NeedsMeView>;
+  // findTickets leaves out Done and Cancelled Tickets unless the filter names them.
   findTickets(project: string, filter?: FindTicketsFilter): Promise<TicketRow[]>;
   getTicket(project: string, id: string): Promise<TicketView>;
   act<A extends TicketAction>(
@@ -36,6 +37,10 @@ export interface Api {
     action: A,
     body: TicketActions[A]["body"],
   ): Promise<TicketActions[A]["result"]>;
+  // archiveProject puts away a Project whose Tickets are all finished;
+  // an Archived Project refuses every write until unarchiveProject.
+  archiveProject(project: string): Promise<ProjectView>;
+  unarchiveProject(project: string): Promise<ProjectView>;
   // subscribe opens the live feed and returns a function that closes it.
   subscribe(handlers: EventHandlers): () => void;
 }

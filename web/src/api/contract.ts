@@ -86,6 +86,42 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(either).toHaveLength(2);
     });
 
+    it("leaves finished Tickets out of findTickets unless the filter names them", async () => {
+      await d.createProject("acme", "Acme");
+      const a = await d.createTicket("acme", "A", "Ready");
+      const b = await d.createTicket("acme", "B", "Ready");
+      await d.api.act("acme", b, "move", { to_state: "Done" });
+
+      expect((await d.api.findTickets("acme")).map((r) => r.id)).toEqual([a]);
+      expect((await d.api.findTickets("acme", { state: ["Done", "Cancelled"] })).map((r) => [r.id, r.state])).toEqual([[b, "Done"]]);
+    });
+
+    it("archives a Project only once its work is finished, and unarchives it", async () => {
+      await d.createProject("acme", "Acme");
+      const a = await d.createTicket("acme", "A", "Ready");
+      expect((await d.api.listProjects())[0]).toMatchObject({ key: "acme", unfinished: 1, archived: false });
+
+      const early = await d.api.archiveProject("acme").catch((e) => e);
+      expect(early).toMatchObject({ status: 409, code: "action_not_allowed" });
+      expect(early.message).toContain(a);
+
+      await d.api.act("acme", a, "move", { to_state: "Done" });
+      const archived = await d.api.archiveProject("acme");
+      expect(archived).toMatchObject({ key: "acme", archived: true });
+      expect(Number.isNaN(Date.parse(archived.archived_at!))).toBe(false);
+      expect((await d.api.listProjects())[0]).toMatchObject({ key: "acme", unfinished: 0, archived: true });
+
+      // Every write is refused, listing unarchive_project; reads keep working.
+      const refused = await d.api.act("acme", a, "move", { to_state: "Ready" }).catch((e) => e);
+      expect(refused).toMatchObject({ status: 409, code: "action_not_allowed", allowed_actions: ["unarchive_project"] });
+      expect((await d.api.getTicket("acme", a)).state).toBe("Done");
+
+      const back = await d.api.unarchiveProject("acme");
+      expect(back.archived).toBe(false);
+      expect(back.archived_at).toBeUndefined();
+      expect((await d.api.act("acme", a, "move", { to_state: "Ready" })).state).toBe("Ready");
+    });
+
     it("gets one Ticket in full, with its Needs Me reason", async () => {
       await d.createProject("acme", "Acme");
       const id = await d.createTicket("acme", "Pick a colour", "Ready");

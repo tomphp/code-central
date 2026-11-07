@@ -3,7 +3,7 @@
 // since notices may have been missed while the feed was down.
 import { useEffect, useState } from "react";
 import type { Api } from "./api/api";
-import type { ApiError, NeedsMeView, ProjectRow, TicketRow, TicketView } from "./api/types";
+import { STATES, type ApiError, type NeedsMeView, type ProjectRow, type TicketRow, type TicketView } from "./api/types";
 
 export function useLiveVersion(api: Api): number {
   const [version, setVersion] = useState(0);
@@ -46,15 +46,15 @@ export interface ProjectTicket extends TicketRow {
 export interface InboxData {
   projects: ProjectRow[];
   needsMe: NeedsMeView;
-  // tickets is every Project's Tickets, for the State views, the counts
-  // and Drafts.
+  // tickets is every Project's Tickets, finished ones too, for the State
+  // views, the counts and Drafts.
   tickets: ProjectTicket[];
 }
 
 export async function loadInbox(api: Api): Promise<InboxData> {
   const [projects, needsMe] = await Promise.all([api.listProjects(), api.needsMe()]);
   const perProject = await Promise.all(
-    projects.map(async (p) => (await api.findTickets(p.key)).map((t) => ({ ...t, project: p.key }))),
+    projects.map(async (p) => (await api.findTickets(p.key, { state: [...STATES] })).map((t) => ({ ...t, project: p.key }))),
   );
   return { projects, needsMe, tickets: perProject.flat() };
 }

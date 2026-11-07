@@ -8,16 +8,23 @@
 // Mutators send the notice the service would (addProject:
 // project.changed, addTicket and updateTicket: ticket.changed);
 // setNeedsMe sends none, so a test that changes it calls emit itself.
+//
+// A few rules are the contract's and so the fake's too: findTickets
+// leaves finished Tickets out unless asked, and an Archived Project
+// (archiveProject, refused while any Ticket is unfinished) refuses every
+// action until unarchiveProject.
 import type { Api, EventHandlers, TicketAction, TicketActions } from "./api";
 import { fakeActions } from "./fakeActions";
 import {
   ApiError,
+  FINISHED,
   type ChangeEvent,
   type FindTicketsFilter,
   type NeedsMeReason,
   type NeedsMeRow,
   type NeedsMeView,
   type ProjectRow,
+  type ProjectView,
   type TicketRow,
   type TicketView,
 } from "./types";
@@ -31,6 +38,7 @@ interface FakeProject {
   created: string;
   mode: string;
   archived: boolean;
+  archived_at?: string;
   next: number;
 }
 
@@ -55,6 +63,7 @@ export class FakeApi implements Api {
       created: this.now.toISOString(),
       mode: "committed",
       archived: opts.archived ?? false,
+      ...(opts.archived ? { archived_at: this.now.toISOString() } : {}),
       next: 1,
     });
     this.emit({ type: "project.changed", project: key });
@@ -147,7 +156,11 @@ export class FakeApi implements Api {
     this.calls.push("listProjects");
     return [...this.projects.values()]
       .sort((a, b) => a.key.localeCompare(b.key))
-      .map(({ next: _, ...p }) => ({ ...p, needs_me: this.rows().filter((r) => r.project === p.key).length }));
+      .map(({ next: _, ...p }) => ({
+        ...p,
+        needs_me: this.rows().filter((r) => r.project === p.key).length,
+        unfinished: this.unfinished(p.key).length,
+      }));
   }
 
   async needsMe(): Promise<NeedsMeView> {
@@ -159,7 +172,8 @@ export class FakeApi implements Api {
     this.calls.push("findTickets");
     this.project(project);
     return [...this.tickets.values()]
-      .filter((t) => this.projectOf(t.id) === project && (!filter.state?.length || filter.state.includes(t.state)))
+      .filter((t) => this.projectOf(t.id) === project)
+      .filter((t) => (filter.state?.length ? filter.state.includes(t.state) : !FINISHED.includes(t.state)))
       .map((t) => ({ id: t.id, title: t.title, state: t.state, spec: t.spec.id, labels: [...t.labels], blocked: t.blocked, updated: t.updated }));
   }
 
@@ -176,12 +190,52 @@ export class FakeApi implements Api {
   ): Promise<TicketActions[A]["result"]> {
     this.calls.push(action);
     const t = this.view(this.ticket(project, id));
+    this.writable(project);
     const handler = fakeActions[action];
     if (!handler) throw new Error(`FakeApi: no fake behaviour for ${action}: add one under src/api/actions/`);
     return structuredClone(handler(this, t, body));
   }
 
+  async archiveProject(key: string): Promise<ProjectView> {
+    this.calls.push("archiveProject");
+    const p = this.writable(key);
+    const open = this.unfinished(key);
+    if (open.length) {
+      throw new ApiError(409, "action_not_allowed", `Project ${key} still has unfinished work: ${open.map((t) => `${t.id} (${t.state})`).join(", ")}`);
+    }
+    Object.assign(p, { archived: true, archived_at: this.now.toISOString() });
+    this.emit({ type: "project.changed", project: key });
+    return this.projectView(p);
+  }
+
+  async unarchiveProject(key: string): Promise<ProjectView> {
+    this.calls.push("unarchiveProject");
+    const p = this.project(key);
+    if (p.archived) {
+      p.archived = false;
+      delete p.archived_at;
+      this.emit({ type: "project.changed", project: key });
+    }
+    return this.projectView(p);
+  }
+
   // ---- internals ----
+
+  private unfinished(key: string) {
+    return [...this.tickets.values()].filter((t) => this.projectOf(t.id) === key && !FINISHED.includes(t.state));
+  }
+
+  private writable(key: string) {
+    const p = this.project(key);
+    if (p.archived) {
+      throw new ApiError(409, "action_not_allowed", `Project ${key} is archived, so it takes no writes`, undefined, ["unarchive_project"]);
+    }
+    return p;
+  }
+
+  private projectView({ next: _, ...p }: FakeProject): ProjectView {
+    return structuredClone(p);
+  }
 
   private rows() {
     return this.groups.flatMap((g) => g.tickets);
