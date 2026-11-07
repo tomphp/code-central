@@ -44,6 +44,7 @@ type ProjectView struct {
 	Key         string    `json:"key"`
 	DisplayName string    `json:"display_name"`
 	Created     time.Time `json:"created"`
+	Mode        string    `json:"mode"`
 	Archived    bool      `json:"archived"`
 }
 
@@ -129,6 +130,8 @@ type TicketRow struct {
 type CreateProjectInput struct {
 	Key         string `json:"key"`
 	DisplayName string `json:"display_name,omitempty"`
+	// Mode is committed (the default) or local.
+	Mode string `json:"mode,omitempty"`
 }
 
 // CreateSpecInput is create_spec's input.
@@ -171,7 +174,14 @@ func (c *Core) CreateProject(_ context.Context, in CreateProjectInput) (ProjectV
 	if name == "" {
 		name = in.Key
 	}
-	p := store.Project{Key: in.Key, DisplayName: name, Created: c.now(), Mode: "committed"}
+	mode := in.Mode
+	if mode == "" {
+		mode = ModeCommitted
+	}
+	if !validMode(mode) {
+		return ProjectView{}, invalidMode(mode)
+	}
+	p := store.Project{Key: in.Key, DisplayName: name, Created: c.now(), Mode: mode}
 	err := c.store.Update(func(w store.Writer) error {
 		if _, ok := w.Project(in.Key); ok {
 			return invalid("key", "a Project with key %q already exists", in.Key)
@@ -381,7 +391,7 @@ func claimOrder(a, b store.Ticket) int {
 func finished(s store.State) bool { return s == store.Done || s == store.Cancelled }
 
 func projectView(p store.Project) ProjectView {
-	return ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Archived: p.Archived}
+	return ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode, Archived: p.Archived}
 }
 
 func specView(key string, s store.Spec) SpecView {

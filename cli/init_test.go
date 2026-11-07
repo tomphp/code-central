@@ -210,7 +210,7 @@ func TestInitMergesIntoAnExistingMCPFileAndNeverCommits(t *testing.T) {
 	if doc.MCPServers["other"]["command"] != "other-server" || !doc.Extra {
 		t.Fatalf("lost existing content: %s", b)
 	}
-	if out := git(t, dir, "status", "--porcelain"); strings.TrimSpace(out) != "?? .claude/\n?? .mcp.json" {
+	if out := git(t, dir, "status", "--porcelain"); strings.TrimSpace(out) != "?? .claude/\n?? .mcp.json\n?? CLAUDE.md\n?? docs/" {
 		t.Fatalf("git status: %q", out)
 	}
 	if cmd := exec.Command("git", "rev-parse", "HEAD"); func() error { cmd.Dir = dir; return cmd.Run() }() == nil {
