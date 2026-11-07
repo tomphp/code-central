@@ -2,6 +2,7 @@ package frontdoor_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -59,6 +60,43 @@ func TestGuardAllowsOnlyLocalHostsAndOrigins(t *testing.T) {
 				t.Fatalf("status %d, want 403", rec.Code)
 			}
 		})
+	}
+}
+
+// The Guard reads the Actor header into the request's context, defaulting
+// to agent; an unknown Actor is refused before any door sees it.
+func TestGuardReadsTheActorHeaderDefaultingToAgent(t *testing.T) {
+	var got core.Actor
+	reached := false
+	h := frontdoor.Guard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached, got = true, core.ActorOf(r.Context())
+	}))
+	for header, want := range map[string]core.Actor{"": core.Agent, "agent": core.Agent, "human": core.Human, "integration": core.Integration} {
+		t.Run("header "+header, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/api/p/acme/create_spec", strings.NewReader(`{}`))
+			req.Host = "localhost:7733"
+			if header != "" {
+				req.Header.Set(frontdoor.ActorHeader, header)
+			}
+			h.ServeHTTP(httptest.NewRecorder(), req)
+			if got != want {
+				t.Fatalf("Actor %q, want %q", got, want)
+			}
+		})
+	}
+
+	reached = false
+	req := httptest.NewRequest("POST", "/api/p/acme/create_spec", strings.NewReader(`{}`))
+	req.Host = "localhost:7733"
+	req.Header.Set(frontdoor.ActorHeader, "robot")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if reached || rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown Actor: reached %v, status %d", reached, rec.Code)
+	}
+	var e core.Error
+	if err := json.Unmarshal(rec.Body.Bytes(), &e); err != nil || e.Code != core.Invalid || e.Field != frontdoor.ActorHeader {
+		t.Fatalf("unknown Actor: %s", rec.Body)
 	}
 }
 

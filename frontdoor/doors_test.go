@@ -21,6 +21,7 @@ import (
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -630,7 +631,7 @@ func httpDo(t *testing.T, srv *codecentraltest.Server, c httpCall) (int, []byte)
 	if strings.Contains(c.path, "/integration/") {
 		actor = core.Integration
 	}
-	req.Header.Set(httpapi.ActorHeader, string(actor))
+	req.Header.Set(frontdoor.ActorHeader, string(actor))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

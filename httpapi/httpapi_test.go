@@ -84,31 +84,6 @@ func TestFindTicketsQueryParameters(t *testing.T) {
 	}
 }
 
-func TestTheActorHeaderIsRecordedDefaultingToAgent(t *testing.T) {
-	h := newHandler(t)
-	do(h, "POST", "/api/projects/create_project", `{"key":"acme"}`)
-	do(h, "POST", "/api/p/acme/create_spec", `{"title":"S"}`)
-	do(h, "POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"A"}`)
-
-	req := httptest.NewRequest("POST", "/api/p/acme/tickets/2/comment", strings.NewReader(`{"body":"From the UI."}`))
-	req.Header.Set("X-Code-Central-Actor", "human")
-	h.ServeHTTP(httptest.NewRecorder(), req)
-	rec := do(h, "POST", "/api/p/acme/tickets/2/comment", `{"body":"No header."}`)
-	var v core.TicketView
-	json.Unmarshal(rec.Body.Bytes(), &v)
-	if len(v.Comments) != 2 || v.Comments[0].Actor != "human" || v.Comments[1].Actor != "agent" {
-		t.Fatalf("comments %+v", v.Comments)
-	}
-
-	req = httptest.NewRequest("POST", "/api/p/acme/tickets/2/comment", strings.NewReader(`{"body":"x"}`))
-	req.Header.Set("X-Code-Central-Actor", "robot")
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "X-Code-Central-Actor") {
-		t.Fatalf("unknown Actor: %d %s", rec.Code, rec.Body)
-	}
-}
-
 func TestWritesAreOnlyPOSTs(t *testing.T) {
 	h := newHandler(t)
 	if rec := do(h, "GET", "/api/projects/create_project", ""); rec.Code == 200 {
@@ -116,46 +91,5 @@ func TestWritesAreOnlyPOSTs(t *testing.T) {
 	}
 	if rec := do(h, "PUT", "/api/p/acme/create_spec", `{"title":"S"}`); rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("PUT: %d", rec.Code)
-	}
-}
-
-func doAs(h http.Handler, actor, method, path, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, path, strings.NewReader(body))
-	if actor != "" {
-		req.Header.Set(httpapi.ActorHeader, actor)
-	}
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	return rec
-}
-
-func TestTheActorComesFromAHeaderDefaultingToAgent(t *testing.T) {
-	h := newHandler(t)
-	do(h, "POST", "/api/projects/create_project", `{"key":"acme"}`)
-	do(h, "POST", "/api/p/acme/create_spec", `{"title":"S"}`)
-	do(h, "POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"T","state":"Ready"}`)
-
-	if rec := do(h, "POST", "/api/p/acme/claim", `{}`); rec.Code != 200 {
-		t.Fatalf("claim: %d %s", rec.Code, rec.Body)
-	}
-	do(h, "POST", "/api/p/acme/tickets/2/finish", `{"claim_id":"claim-1","summary":"S"}`)
-	if rec := do(h, "POST", "/api/p/acme/tickets/2/accept", `{}`); rec.Code != http.StatusConflict {
-		t.Fatalf("accept with no Actor header: %d %s, want 409 (an agent may not accept)", rec.Code, rec.Body)
-	}
-	if rec := doAs(h, "robot", "POST", "/api/p/acme/tickets/2/accept", `{}`); rec.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("unknown Actor: %d %s, want 422", rec.Code, rec.Body)
-	}
-	rec := doAs(h, "human", "POST", "/api/p/acme/tickets/2/accept", `{}`)
-	if rec.Code != 200 {
-		t.Fatalf("accept as human: %d %s", rec.Code, rec.Body)
-	}
-	var v core.TicketView
-	json.Unmarshal(rec.Body.Bytes(), &v)
-	var actors []string
-	for _, m := range v.Moves {
-		actors = append(actors, m.Actor)
-	}
-	if strings.Join(actors, ",") != "agent,agent,human" {
-		t.Fatalf("move Actors %v, want agent (claim), agent (finish), human (accept)", actors)
 	}
 }

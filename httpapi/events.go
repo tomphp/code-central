@@ -20,7 +20,7 @@ func events(c *core.Core) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
-			writeError(w, fmt.Errorf("the response can't stream"))
+			WriteError(w, fmt.Errorf("the response can't stream"))
 			return
 		}
 		notices, stop := c.Events().Subscribe()

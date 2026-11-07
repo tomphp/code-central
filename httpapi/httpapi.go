@@ -219,24 +219,9 @@ var handlers = map[string]handlerFunc{
 	},
 }
 
-// ActorHeader names the Actor making an HTTP request: human, agent or
-// integration, defaulting to agent. Only the UI sends human.
-const ActorHeader = "X-Code-Central-Actor"
-
-// withActor puts the request's Actor into its context.
-func withActor(r *http.Request) (*http.Request, error) {
-	a := core.Actor(r.Header.Get(ActorHeader))
-	switch a {
-	case "":
-		a = core.Agent
-	case core.Human, core.Agent, core.Integration:
-	default:
-		return nil, &core.Error{Code: core.Invalid, Field: ActorHeader, Message: fmt.Sprintf("unknown Actor %q: use human, agent or integration", a)}
-	}
-	return r.WithContext(core.WithActor(r.Context(), a)), nil
-}
-
-// Register adds the HTTP API under /api/ to the service's one mux.
+// Register adds the HTTP API under /api/ to the service's one mux. The
+// request's Actor is already in its context (frontdoor.Guard reads the
+// Actor header); without one it is agent.
 func Register(mux *http.ServeMux, c *core.Core) {
 	all := map[string]handlerFunc{WaitPath: wait}
 	for name, pattern := range Routes {
@@ -244,14 +229,9 @@ func Register(mux *http.ServeMux, c *core.Core) {
 	}
 	for pattern, h := range all {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
-			r, err := withActor(r)
-			if err != nil {
-				writeError(w, err)
-				return
-			}
 			v, err := h(c, r)
 			if err != nil {
-				writeError(w, err)
+				WriteError(w, err)
 				return
 			}
 			writeJSON(w, http.StatusOK, v)
@@ -265,7 +245,7 @@ func Register(mux *http.ServeMux, c *core.Core) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		writeError(w, &core.Error{Code: core.NotFound, Message: fmt.Sprintf("no API resource at %s %s", r.Method, r.URL.Path)})
+		WriteError(w, &core.Error{Code: core.NotFound, Message: fmt.Sprintf("no API resource at %s %s", r.Method, r.URL.Path)})
 	})
 }
 
@@ -297,7 +277,9 @@ func Status(code core.Code) int {
 	return http.StatusInternalServerError
 }
 
-func writeError(w http.ResponseWriter, err error) {
+// WriteError writes err as the API's JSON error with its status; an error
+// that is not a *core.Error is internal.
+func WriteError(w http.ResponseWriter, err error) {
 	var e *core.Error
 	if !errors.As(err, &e) {
 		// Not a domain error: something broke inside the service.
