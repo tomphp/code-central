@@ -26,6 +26,7 @@ import {
   type NeedsMeView,
   type ProjectRow,
   type ProjectView,
+  type SpecQuestions,
   type TicketRow,
   type TicketView,
 } from "./types";
@@ -209,6 +210,20 @@ export class FakeApi implements Api {
   async getTicket(project: string, id: string): Promise<TicketView> {
     this.calls.push("getTicket");
     return this.view(this.ticket(project, id));
+  }
+
+  // specQuestions reads a Spec from its seeded Tickets' spec, so a Spec
+  // no Ticket names is not found.
+  async specQuestions(project: string, spec: string): Promise<SpecQuestions> {
+    this.calls.push("specQuestions");
+    this.project(project);
+    const id = `${project}-${spec.slice(spec.lastIndexOf("-") + 1)}`;
+    const of = [...this.tickets.values()].filter((t) => t.spec.id === id);
+    if (!of.length) throw new ApiError(404, "not_found", `there is no Spec ${id}`);
+    return structuredClone({
+      spec: id,
+      tickets: of.filter((t) => t.rounds.length).map(({ id, title, state, rounds }) => ({ id, title, state, rounds })),
+    });
   }
 
   async act<A extends TicketAction>(

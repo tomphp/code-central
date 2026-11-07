@@ -46,6 +46,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       return call("GET", `${p(project)}/tickets${qs ? `?${qs}` : ""}`);
     },
     getTicket: (project, id) => call("GET", `${p(project)}/tickets/${encodeURIComponent(numberOf(id))}`),
+    specQuestions: (project, spec) => call("GET", `${p(project)}/specs/${encodeURIComponent(numberOf(spec))}/questions`),
     act: <A extends TicketAction>(project: string, id: string, action: A, body: TicketActions[A]["body"]) =>
       call<TicketActions[A]["result"]>("POST", `${p(project)}/tickets/${encodeURIComponent(numberOf(id))}/${action}`, body),
     archiveProject: (project) => call("POST", `${p(project)}/archive_project`, {}),

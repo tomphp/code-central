@@ -74,6 +74,8 @@ var Operations = []Op{
 	{Name: "answer", Audience: HumanOnly, Write: true},
 	{Name: "accept_recommended", Audience: HumanOnly, Write: true},
 	{Name: "dismiss_question", Audience: HumanOnly, Write: true},
+	// The roll-up of a Spec's Questions is HTTP-only, for the UI.
+	{Name: "get_spec_questions", Audience: HumanOnly},
 
 	// Needs Me, moving by hand and Projects (ticket 32).
 	{Name: "needs_me", Audience: HumanOnly},

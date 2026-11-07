@@ -2,7 +2,7 @@
 // live feed go through an Api. createHttpApi (http.ts) is the real one;
 // FakeApi (fake.ts) is the in-memory fake the component and layout tests
 // use. contract.ts runs one suite against both.
-import type { ChangeEvent, FindTicketsFilter, LinkedRow, NeedsMeView, ProjectRow, ProjectView, TicketRow, TicketView } from "./types";
+import type { ChangeEvent, FindTicketsFilter, LinkedRow, NeedsMeView, ProjectRow, ProjectView, SpecQuestions, TicketRow, TicketView } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
 // and result. Every one is `POST /api/p/{key}/tickets/{n}/{action}` with
@@ -31,6 +31,8 @@ export interface Api {
   // findTickets leaves out Done and Cancelled Tickets unless the filter names them.
   findTickets(project: string, filter?: FindTicketsFilter): Promise<TicketRow[]>;
   getTicket(project: string, id: string): Promise<TicketView>;
+  // specQuestions rolls up a Spec's Questions: its Tickets' Rounds.
+  specQuestions(project: string, spec: string): Promise<SpecQuestions>;
   act<A extends TicketAction>(
     project: string,
     id: string,

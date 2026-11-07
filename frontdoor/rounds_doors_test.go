@@ -94,6 +94,20 @@ func init() {
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/3/dismiss_question", `{"question":9}`}},
 			code:  core.NotFound,
 		},
+		"get_spec_questions": {
+			setup: askingTicket,
+			ok:    call{http: httpCall{"GET", "/api/p/acme/specs/1/questions", ""}},
+			check: func(t *testing.T, out map[string]any) {
+				field("spec", "acme-1")(t, out)
+				tickets, _ := out["tickets"].([]any)
+				if len(tickets) != 1 {
+					t.Fatalf("tickets %v", out["tickets"])
+				}
+				field("id", "acme-3")(t, tickets[0].(map[string]any))
+			},
+			bad:  call{http: httpCall{"GET", "/api/p/acme/specs/9/questions", ""}},
+			code: core.NotFound,
+		},
 	} {
 		cases[name] = c
 	}

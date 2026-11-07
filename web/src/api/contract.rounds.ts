@@ -72,5 +72,22 @@ export function roundContract(driver: () => Driver) {
       t = await d.api.act("acme", id, "answer", { question: 2, text: "S" });
       expect(t.state).toBe("Answered");
     });
+
+    it("rolls up a Spec's Questions: each of its Tickets that has Rounds", async () => {
+      const { d, id } = await posted();
+      await d.createTicket("acme", "No questions", "Ready");
+      const spec = (await d.api.getTicket("acme", id)).spec.id;
+
+      const v = await d.api.specQuestions("acme", spec);
+      expect(v.spec).toBe(spec);
+      expect(v.tickets.map((t) => [t.id, t.title, t.state])).toEqual([[id, "Pick a colour", "Needs Answer"]]);
+      expect(v.tickets[0].rounds[0].questions.map((q) => [q.number, q.title, q.status])).toEqual([
+        [1, "Which colour?", "open"],
+        [2, "Which size?", "open"],
+      ]);
+
+      const notSpec = await d.api.specQuestions("acme", id).catch((e) => e);
+      expect(notSpec).toMatchObject({ status: 404, code: "not_found" });
+    });
   });
 }

@@ -54,6 +54,12 @@ func init() {
 			in.Ticket = core.Ref(r.PathValue("n"))
 			return c.DismissQuestion(r.Context(), r.PathValue("key"), in)
 		}},
+		"get_spec_questions": {"GET /api/p/{key}/specs/{n}/questions", func(c *core.Core, r *http.Request) (any, error) {
+			if err := onlyParams(r.URL.Query()); err != nil {
+				return nil, err
+			}
+			return c.GetSpecQuestions(r.Context(), r.PathValue("key"), core.Ref(r.PathValue("n")))
+		}},
 	} {
 		Routes[name], handlers[name] = r.pattern, r.h
 	}

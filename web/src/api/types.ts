@@ -128,6 +128,13 @@ export interface RoundView {
   questions: QuestionView[];
 }
 
+// The roll-up of a Spec's Questions (get_spec_questions): each of its
+// Tickets that has Rounds, in claim order.
+export interface SpecQuestions {
+  spec: string;
+  tickets: { id: string; title: string; state: State; rounds: RoundView[] }[];
+}
+
 export interface ClaimView {
   number: number;
   session_id?: string;
