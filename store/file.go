@@ -60,6 +60,9 @@ type FileStore struct {
 	*index
 	dir  string
 	lock *os.File
+	// stopImportAfter, set only by tests, stops an Import dead after a
+	// step, as a crash would.
+	stopImportAfter func(step int) bool
 }
 
 // Dir is the store's directory.
@@ -95,6 +98,10 @@ func Open(dir string) (*FileStore, error) {
 		return nil, err
 	}
 	s := &FileStore{index: newIndex(), dir: dir, lock: lock}
+	if err := s.recoverImports(); err != nil {
+		s.Close()
+		return nil, err
+	}
 	if err := s.load(); err != nil {
 		s.Close()
 		return nil, err
@@ -240,7 +247,7 @@ type commentFile struct {
 }
 
 type moveFile struct {
-	From  string `yaml:"from"`
+	From  string `yaml:"from,omitempty"` // empty only on an imported Ticket's one move
 	To    string `yaml:"to"`
 	Actor string `yaml:"actor"`
 	Time  string `yaml:"time"`
@@ -406,7 +413,7 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	for i, m := range f.Moves {
 		mv := Move{From: State(m.From), To: State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via}
 		field := fmt.Sprintf("moves[%d]", i)
-		if !mv.From.Valid() {
+		if m.From != "" && !mv.From.Valid() {
 			return Ticket{}, &LoadError{Field: field + ".from", Msg: fmt.Sprintf("unknown State %q", m.From)}
 		}
 		if !mv.To.Valid() {
@@ -481,6 +488,19 @@ func encodeEdits(es []Edit) []editFile {
 }
 
 func (s *FileStore) write(record any, project string) error {
+	if im, ok := record.(Import); ok {
+		return s.writeImport(project, im)
+	}
+	rel, data, err := encode(record, project)
+	if err != nil {
+		return err
+	}
+	return atomicWrite(filepath.Join(s.dir, rel), data)
+}
+
+// encode turns one record into its file: a path relative to the store
+// directory, and the file's contents.
+func encode(record any, project string) (string, []byte, error) {
 	var rel string
 	var data []byte
 	var err error
@@ -534,12 +554,9 @@ func (s *FileStore) write(record any, project string) error {
 		}
 		data, err = encodeYAML(f)
 	default:
-		return fmt.Errorf("store: cannot write %T", record)
+		return "", nil, fmt.Errorf("store: cannot write %T", record)
 	}
-	if err != nil {
-		return err
-	}
-	return atomicWrite(filepath.Join(s.dir, rel), data)
+	return rel, data, err
 }
 
 // atomicWrite writes a temp file beside path, fsyncs it, renames it into
