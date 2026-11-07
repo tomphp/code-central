@@ -25,6 +25,11 @@ var Routes = map[string]string{
 	"create_ticket":  "POST /api/p/{key}/create_ticket",
 	"get_ticket":     "GET /api/p/{key}/tickets/{n}",
 	"find_tickets":   "GET /api/p/{key}/tickets",
+
+	"claim":  "POST /api/p/{key}/claim",
+	"finish": "POST /api/p/{key}/tickets/{n}/finish",
+	"accept": "POST /api/p/{key}/tickets/{n}/accept",
+	"reject": "POST /api/p/{key}/tickets/{n}/reject",
 }
 
 type handlerFunc func(c *core.Core, r *http.Request) (any, error)
@@ -68,6 +73,52 @@ var handlers = map[string]handlerFunc{
 		}
 		return c.FindTickets(r.Context(), r.PathValue("key"), in)
 	},
+
+	"claim": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.ClaimInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.Claim(r.Context(), r.PathValue("key"), in)
+	},
+	"finish": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.FinishInput
+		if err := decodeTicketBody(r, &in, &in.Ticket); err != nil {
+			return nil, err
+		}
+		return c.Finish(r.Context(), r.PathValue("key"), in)
+	},
+	"accept": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.AcceptInput
+		if err := decodeTicketBody(r, &in, &in.Ticket); err != nil {
+			return nil, err
+		}
+		return c.Accept(r.Context(), r.PathValue("key"), in)
+	},
+	"reject": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.RejectInput
+		if err := decodeTicketBody(r, &in, &in.Ticket); err != nil {
+			return nil, err
+		}
+		return c.Reject(r.Context(), r.PathValue("key"), in)
+	},
+}
+
+// ActorHeader names the Actor making a request: human, agent or
+// integration. It defaults to agent; only the UI sends human.
+const ActorHeader = "X-Code-Central-Actor"
+
+// withActor puts the request's Actor into its context.
+func withActor(r *http.Request) (*http.Request, error) {
+	a := core.Actor(r.Header.Get(ActorHeader))
+	switch a {
+	case "":
+		a = core.Agent
+	case core.Human, core.Agent, core.Integration:
+	default:
+		return nil, &core.Error{Code: core.Invalid, Message: fmt.Sprintf("unknown Actor %q in %s: use human, agent or integration", a, ActorHeader)}
+	}
+	return r.WithContext(core.WithActor(r.Context(), a)), nil
 }
 
 // Register adds the HTTP API under /api/ to the service's one mux.
@@ -75,6 +126,11 @@ func Register(mux *http.ServeMux, c *core.Core) {
 	for name, pattern := range Routes {
 		h := handlers[name]
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			r, err := withActor(r)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
 			v, err := h(c, r)
 			if err != nil {
 				writeError(w, err)
@@ -128,6 +184,19 @@ func decodeBody(r *http.Request, v any) error {
 		return &core.Error{Code: core.Invalid, Message: "cannot read the request body"}
 	}
 	return core.Decode(body, v)
+}
+
+// decodeTicketBody decodes a body for an action on the Ticket in the path:
+// the path names the Ticket, so the body may not.
+func decodeTicketBody(r *http.Request, v any, ticket *core.Ref) error {
+	if err := decodeBody(r, v); err != nil {
+		return err
+	}
+	if *ticket != "" {
+		return &core.Error{Code: core.Invalid, Field: "ticket", Message: "the path names the Ticket; leave ticket out of the body"}
+	}
+	*ticket = core.Ref(r.PathValue("n"))
+	return nil
 }
 
 func onlyParams(q url.Values, allowed ...string) error {

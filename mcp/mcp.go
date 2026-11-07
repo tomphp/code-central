@@ -89,6 +89,36 @@ var tools = map[string]tool{
 			return c.FindTickets(ctx, key, in)
 		},
 	},
+	"claim": {
+		description: "Claim the next Ready Ticket (or the one named, or the next in a Spec); returns a Claim ID and the Ticket, or ticket null when none.",
+		schema: object(map[string]any{
+			"spec":       ref("Claim the next Ticket in this Spec."),
+			"ticket":     ref("Claim this Ticket."),
+			"session_id": text("Your session ID, shown to the human for resuming you."),
+		}),
+		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
+			var in core.ClaimInput
+			if err := core.Decode(args, &in); err != nil {
+				return nil, err
+			}
+			return c.Claim(ctx, key, in)
+		},
+	},
+	"finish": {
+		description: "Finish a claimed Ticket into In Review with a summary: what was done, where (branch or commit), and what to check.",
+		schema: object(map[string]any{
+			"ticket":   ref("The Ticket."),
+			"claim_id": text("The Claim ID claim returned."),
+			"summary":  text("What was done, where, and what the reviewer should check, in Markdown."),
+		}, "ticket", "claim_id", "summary"),
+		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
+			var in core.FinishInput
+			if err := core.Decode(args, &in); err != nil {
+				return nil, err
+			}
+			return c.Finish(ctx, key, in)
+		},
+	},
 }
 
 func object(props map[string]any, required ...string) map[string]any {

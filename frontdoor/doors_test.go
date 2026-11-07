@@ -35,8 +35,10 @@ type call struct {
 type httpCall struct{ method, path, body string }
 
 // An opCase is an operation's two calls. check inspects a successful
-// result's JSON; code is the rejected call's error code.
+// result's JSON; code is the rejected call's error code. setup, when set,
+// prepares the fixture first.
 type opCase struct {
+	setup func(t *testing.T, srv *codecentraltest.Server)
 	ok    call
 	check func(t *testing.T, out map[string]any)
 	bad   call
@@ -119,6 +121,83 @@ var cases = map[string]opCase{
 		},
 		code: core.Invalid,
 	},
+
+	"claim": {
+		setup: readyTicket,
+		ok: call{
+			mcp:  map[string]any{"session_id": "s1"},
+			http: httpCall{"POST", "/api/p/acme/claim", `{"session_id":"s1"}`},
+			cli:  []string{"--session", "s1"},
+		},
+		check: func(t *testing.T, out map[string]any) {
+			field("claim_id", "claim-1")(t, out)
+			field("id", "acme-3")(t, out["ticket"].(map[string]any))
+		},
+		bad: call{
+			mcp:  map[string]any{"spec": 1, "ticket": 3},
+			http: httpCall{"POST", "/api/p/acme/claim", `{"spec":1,"ticket":3}`},
+			cli:  []string{"--spec", "1", "--ticket", "3"},
+		},
+		code: core.Invalid,
+	},
+	"finish": {
+		setup: claimedTicket,
+		ok: call{
+			mcp:  map[string]any{"ticket": "acme-3", "claim_id": "claim-1", "summary": "Done."},
+			http: httpCall{"POST", "/api/p/acme/tickets/3/finish", `{"claim_id":"claim-1","summary":"Done."}`},
+			cli:  []string{"acme-3", "--claim", "claim-1", "--summary", "Done."},
+		},
+		check: func(t *testing.T, out map[string]any) {
+			field("next_step", "stop working this Ticket")(t, out)
+			field("state", "In Review")(t, out["ticket"].(map[string]any))
+		},
+		bad: call{
+			mcp:  map[string]any{"ticket": "acme-3", "claim_id": "claim-9", "summary": "Done."},
+			http: httpCall{"POST", "/api/p/acme/tickets/3/finish", `{"claim_id":"claim-9","summary":"Done."}`},
+			cli:  []string{"acme-3", "--claim", "claim-9", "--summary", "Done."},
+		},
+		code: core.StaleClaim,
+	},
+	"accept": {
+		setup: ticketInReview,
+		ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/3/accept", `{}`}},
+		check: field("state", "Done"),
+		bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/3/accept", `{}`}},
+		code:  core.ActionNotAllowed,
+	},
+	"reject": {
+		setup: ticketInReview,
+		ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/3/reject", `{"comment":"Not yet."}`}},
+		check: field("state", "Ready"),
+		bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/3/reject", `{"comment":""}`}},
+		code:  core.Invalid,
+	},
+}
+
+// readyTicket adds Ticket acme-3, Ready.
+func readyTicket(t *testing.T, srv *codecentraltest.Server) {
+	t.Helper()
+	must(t, func() error {
+		_, err := srv.Core.CreateTicket(context.Background(), "acme", core.CreateTicketInput{Spec: "1", Title: "Logout", State: "Ready"})
+		return err
+	})
+}
+
+// claimedTicket adds acme-3 and claims it as claim-1.
+func claimedTicket(t *testing.T, srv *codecentraltest.Server) {
+	t.Helper()
+	readyTicket(t, srv)
+	must(t, func() error { _, err := srv.Core.Claim(context.Background(), "acme", core.ClaimInput{}); return err })
+}
+
+// ticketInReview adds acme-3, claims it and finishes it.
+func ticketInReview(t *testing.T, srv *codecentraltest.Server) {
+	t.Helper()
+	claimedTicket(t, srv)
+	must(t, func() error {
+		_, err := srv.Core.Finish(context.Background(), "acme", core.FinishInput{Ticket: "3", ClaimID: "claim-1", Summary: "Done."})
+		return err
+	})
 }
 
 func field(name, want string) func(*testing.T, map[string]any) {
@@ -130,7 +209,8 @@ func field(name, want string) func(*testing.T, map[string]any) {
 	}
 }
 
-func newServer(t *testing.T) *codecentraltest.Server {
+// newServer starts the fixture, then runs each setup given.
+func newServer(t *testing.T, setups ...func(*testing.T, *codecentraltest.Server)) *codecentraltest.Server {
 	t.Helper()
 	srv := codecentraltest.NewServer(t)
 	ctx := context.Background()
@@ -144,6 +224,11 @@ func newServer(t *testing.T) *codecentraltest.Server {
 		_, err := srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form"})
 		return err
 	})
+	for _, setup := range setups {
+		if setup != nil {
+			setup(t, srv)
+		}
+	}
 	return srv
 }
 
@@ -238,7 +323,7 @@ func TestEveryDoorTranslatesEveryOperation(t *testing.T) {
 	for _, op := range core.Operations {
 		c := cases[op.Name]
 		t.Run(op.Name+"/http", func(t *testing.T) {
-			srv := newServer(t)
+			srv := newServer(t, c.setup)
 			c.check(t, httpOK(t, srv, c.ok.http))
 			httpRejected(t, srv, c.bad.http, c.code)
 		})
@@ -246,13 +331,13 @@ func TestEveryDoorTranslatesEveryOperation(t *testing.T) {
 			continue
 		}
 		t.Run(op.Name+"/mcp", func(t *testing.T) {
-			srv := newServer(t)
+			srv := newServer(t, c.setup)
 			s := connect(t, srv, "acme")
 			c.check(t, mcpOK(t, s, op.Name, c.ok.mcp))
 			mcpRejected(t, s, op.Name, c.bad.mcp, c.code)
 		})
 		t.Run(op.Name+"/cli", func(t *testing.T) {
-			srv := newServer(t)
+			srv := newServer(t, c.setup)
 			command := strings.ReplaceAll(op.Name, "_", "-")
 			c.check(t, cliOK(t, srv, append([]string{command}, c.ok.cli...)))
 			cliRejected(t, srv, append([]string{command}, c.bad.cli...), c.code)
@@ -297,6 +382,18 @@ func TestMCPRejectsUnknownArguments(t *testing.T) {
 	}
 }
 
+func TestMCPAndTheCLIAlwaysWriteAsTheAgent(t *testing.T) {
+	srv := newServer(t, readyTicket, readyTicket) // acme-3 and acme-4
+	viaMCP := mcpOK(t, connect(t, srv, "acme"), "claim", map[string]any{})
+	viaCLI := cliOK(t, srv, []string{"claim"})
+	for door, out := range map[string]map[string]any{"mcp": viaMCP, "cli": viaCLI} {
+		moves := out["ticket"].(map[string]any)["moves"].([]any)
+		if a := moves[0].(map[string]any)["actor"]; a != "agent" {
+			t.Errorf("%s: the claim was made as %v, want agent", door, a)
+		}
+	}
+}
+
 // --- HTTP ---
 
 func httpDo(t *testing.T, srv *codecentraltest.Server, c httpCall) (int, []byte) {
@@ -305,6 +402,8 @@ func httpDo(t *testing.T, srv *codecentraltest.Server, c httpCall) (int, []byte)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The suite calls the HTTP API as the UI does, as the human.
+	req.Header.Set(httpapi.ActorHeader, string(core.Human))
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

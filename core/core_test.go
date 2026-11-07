@@ -272,6 +272,10 @@ func TestOperationList(t *testing.T) {
 		"create_ticket":  core.AgentAndHuman,
 		"get_ticket":     core.AgentAndHuman,
 		"find_tickets":   core.AgentAndHuman,
+		"claim":          core.AgentAndHuman,
+		"finish":         core.AgentAndHuman,
+		"accept":         core.HumanOnly,
+		"reject":         core.HumanOnly,
 	}
 	for name, aud := range want {
 		op, ok := core.Operation(name)

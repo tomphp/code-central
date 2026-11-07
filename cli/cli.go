@@ -81,6 +81,8 @@ func init() {
 		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--description <md> | --file <path|->]", run: runCreateTicket},
 		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id>", run: runGetTicket},
 		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--spec <id>]", run: runFindTickets},
+		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>]", run: runClaim},
+		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->]", run: runFinish},
 	}
 }
 
@@ -333,6 +335,58 @@ func runFindTickets(ctx context.Context, e Env, args []string) error {
 		in.State = append(in.State, store.State(s))
 	}
 	v, err := sc.client.FindTickets(ctx, sc.project, in)
+	if err != nil {
+		return err
+	}
+	return printJSON(e, v)
+}
+
+func runClaim(ctx context.Context, e Env, args []string) error {
+	fs := flagSet("claim")
+	project := addScope(fs)
+	spec := fs.String("spec", "", "")
+	ticket := fs.String("ticket", "", "")
+	session := fs.String("session", "", "")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) > 0 {
+		return usagef("unexpected argument %q", pos[0])
+	}
+	sc, err := resolveScope(e, *project)
+	if err != nil {
+		return err
+	}
+	v, err := sc.client.Claim(ctx, sc.project, core.ClaimInput{Spec: core.Ref(*spec), Ticket: core.Ref(*ticket), SessionID: *session})
+	if err != nil {
+		return err
+	}
+	return printJSON(e, v)
+}
+
+func runFinish(ctx context.Context, e Env, args []string) error {
+	fs := flagSet("finish")
+	project := addScope(fs)
+	claim := fs.String("claim", "", "")
+	summary := fs.String("summary", "", "")
+	file := fs.String("file", "", "")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) != 1 {
+		return usagef("expected one Ticket ID")
+	}
+	sc, err := resolveScope(e, *project)
+	if err != nil {
+		return err
+	}
+	text, err := longInput(e, *summary, *file)
+	if err != nil {
+		return err
+	}
+	v, err := sc.client.Finish(ctx, sc.project, core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text})
 	if err != nil {
 		return err
 	}

@@ -103,6 +103,8 @@ func TestFilesAreWrittenInFixedFieldOrder(t *testing.T) {
 		return w.PutTicket("acme", store.Ticket{
 			Number: 2, Title: "Form", State: store.Ready, Spec: 1, Labels: []string{"ui"},
 			Created: t0, Updated: t0.Add(90 * time.Second), Description: "Build it.\nWell.\n",
+			Claims:   []store.Claim{{Number: 1, ID: "ABC", SessionID: "s1", Started: t0, Ended: t0.Add(time.Minute), EndedBy: "finish"}},
+			Comments: []store.Comment{{Number: 1, Actor: "agent", Time: t0.Add(time.Minute), Claim: 1, Body: "Done.\nCheck it.\n"}},
 		})
 	})
 
@@ -138,6 +140,21 @@ updated: 2026-11-07T09:31:30Z
 description: |
   Build it.
   Well.
+claims:
+  - number: 1
+    id: ABC
+    session_id: s1
+    started: 2026-11-07T09:30:00Z
+    ended: 2026-11-07T09:31:00Z
+    ended_by: finish
+comments:
+  - number: 1
+    actor: agent
+    time: 2026-11-07T09:31:00Z
+    claim: 1
+    body: |
+      Done.
+      Check it.
 moves: []
 `,
 	}

@@ -4,15 +4,15 @@
 
 **Blocked by:** 23
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `core` holds the nine States and the action table from the spec, and every action is validated against it; a rejected action returns `action_not_allowed` with the allowed actions by name
-- [ ] The HTTP API reads the Actor from a request header, defaulting to `agent`; MCP and the CLI always write as `agent`; every move is recorded in `moves` with from, to, Actor, time and the Claim number
-- [ ] `claim(spec?, ticket?, session_id?)` takes the next `Ready` Ticket in claim order (`created`, then number) as one atomic step under the write lock; passing both `spec` and `ticket` is an error; a named Ticket that can't be claimed is rejected with its State as the reason
-- [ ] When nothing can be claimed, `claim` returns `{ticket: null}` rather than an error
-- [ ] `claim` returns a Claim ID (128 random bits, base32) with the full Ticket view; the Claim ID is stored in the Ticket file and left out of every read
-- [ ] `finish(ticket, claim_id, summary)` moves `In Progress` to `In Review`, with the summary required and stored as a comment
-- [ ] A write with a Claim ID that doesn't match the live Claim returns `stale_claim`
-- [ ] Human `accept` moves `In Review` to `Done`; human `reject(comment)` moves it to `Ready` with the comment required, and the Ticket keeps its place near the front of the claim order
-- [ ] Any move out of `In Progress`, `Needs Answer` or `Answered` ends the Claim permanently; a rejected Ticket needs a fresh Claim
-- [ ] A test in `core` shows two concurrent claims never take the same Ticket
+- [x] `core` holds the nine States and the action table from the spec, and every action is validated against it; a rejected action returns `action_not_allowed` with the allowed actions by name
+- [x] The HTTP API reads the Actor from a request header, defaulting to `agent`; MCP and the CLI always write as `agent`; every move is recorded in `moves` with from, to, Actor, time and the Claim number
+- [x] `claim(spec?, ticket?, session_id?)` takes the next `Ready` Ticket in claim order (`created`, then number) as one atomic step under the write lock; passing both `spec` and `ticket` is an error; a named Ticket that can't be claimed is rejected with its State as the reason
+- [x] When nothing can be claimed, `claim` returns `{ticket: null}` rather than an error
+- [x] `claim` returns a Claim ID (128 random bits, base32) with the full Ticket view; the Claim ID is stored in the Ticket file and left out of every read
+- [x] `finish(ticket, claim_id, summary)` moves `In Progress` to `In Review`, with the summary required and stored as a comment
+- [x] A write with a Claim ID that doesn't match the live Claim returns `stale_claim`
+- [x] Human `accept` moves `In Review` to `Done`; human `reject(comment)` moves it to `Ready` with the comment required, and the Ticket keeps its place near the front of the claim order
+- [x] Any move out of `In Progress`, `Needs Answer` or `Answered` ends the Claim permanently; a rejected Ticket needs a fresh Claim
+- [x] A test in `core` shows two concurrent claims never take the same Ticket

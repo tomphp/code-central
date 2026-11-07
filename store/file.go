@@ -175,7 +175,26 @@ type ticketFile struct {
 	Created      string            `yaml:"created"`
 	Updated      string            `yaml:"updated"`
 	Description  string            `yaml:"description"`
+	Claims       []claimFile       `yaml:"claims"`
+	Comments     []commentFile     `yaml:"comments"`
 	Moves        []moveFile        `yaml:"moves"`
+}
+
+type claimFile struct {
+	Number    int    `yaml:"number"`
+	ID        string `yaml:"id"`
+	SessionID string `yaml:"session_id,omitempty"`
+	Started   string `yaml:"started"`
+	Ended     string `yaml:"ended,omitempty"`
+	EndedBy   string `yaml:"ended_by,omitempty"`
+}
+
+type commentFile struct {
+	Number int    `yaml:"number"`
+	Actor  string `yaml:"actor"`
+	Time   string `yaml:"time"`
+	Claim  int    `yaml:"claim,omitempty"`
+	Body   string `yaml:"body"`
 }
 
 type moveFile struct {
@@ -303,6 +322,29 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	if t.Updated, err = parseTime(f.Updated); err != nil {
 		return Ticket{}, &LoadError{Field: "updated", Msg: err.Error()}
 	}
+	for i, c := range f.Claims {
+		cl := Claim{Number: c.Number, ID: c.ID, SessionID: c.SessionID, EndedBy: c.EndedBy}
+		field := fmt.Sprintf("claims[%d]", i)
+		if cl.ID == "" {
+			return Ticket{}, &LoadError{Field: field + ".id", Msg: "required"}
+		}
+		if cl.Started, err = parseTime(c.Started); err != nil {
+			return Ticket{}, &LoadError{Field: field + ".started", Msg: err.Error()}
+		}
+		if c.Ended != "" {
+			if cl.Ended, err = parseTime(c.Ended); err != nil {
+				return Ticket{}, &LoadError{Field: field + ".ended", Msg: err.Error()}
+			}
+		}
+		t.Claims = append(t.Claims, cl)
+	}
+	for i, c := range f.Comments {
+		cm := Comment{Number: c.Number, Actor: c.Actor, Claim: c.Claim, Body: c.Body}
+		if cm.Time, err = parseTime(c.Time); err != nil {
+			return Ticket{}, &LoadError{Field: fmt.Sprintf("comments[%d].time", i), Msg: err.Error()}
+		}
+		t.Comments = append(t.Comments, cm)
+	}
 	for i, m := range f.Moves {
 		mv := Move{From: State(m.From), To: State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via}
 		field := fmt.Sprintf("moves[%d]", i)
@@ -339,7 +381,17 @@ func (s *FileStore) write(record any, project string) error {
 			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
 			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: r.Link,
 			Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
-			Moves: []moveFile{},
+			Claims: []claimFile{}, Comments: []commentFile{}, Moves: []moveFile{},
+		}
+		for _, c := range r.Claims {
+			cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, Started: formatTime(c.Started), EndedBy: c.EndedBy}
+			if !c.Ended.IsZero() {
+				cf.Ended = formatTime(c.Ended)
+			}
+			f.Claims = append(f.Claims, cf)
+		}
+		for _, c := range r.Comments {
+			f.Comments = append(f.Comments, commentFile{Number: c.Number, Actor: c.Actor, Time: formatTime(c.Time), Claim: c.Claim, Body: c.Body})
 		}
 		for _, m := range r.Moves {
 			f.Moves = append(f.Moves, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via})

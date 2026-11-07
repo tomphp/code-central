@@ -67,6 +67,30 @@ type Move struct {
 	Via   string
 }
 
+// Claim is one agent's hold on a Ticket, from the claim until a move out
+// of In Progress, Needs Answer or Answered ends it for good.
+type Claim struct {
+	Number    int
+	ID        string // the Claim ID; never returned by a read
+	SessionID string
+	Started   time.Time
+	Ended     time.Time // zero while the Claim is live
+	EndedBy   string    // the action that ended it
+}
+
+// Live reports whether the Claim has not ended.
+func (c Claim) Live() bool { return c.Ended.IsZero() }
+
+// Comment is a note on a Ticket. Required notes on actions (a finish
+// summary, a reject comment...) are stored as comments too.
+type Comment struct {
+	Number int
+	Actor  string
+	Time   time.Time
+	Claim  int // Claim number, 0 when none
+	Body   string
+}
+
 // Ticket is a unit of work within a Spec.
 type Ticket struct {
 	Number       int
@@ -81,6 +105,8 @@ type Ticket struct {
 	Created      time.Time
 	Updated      time.Time
 	Description  string
+	Claims       []Claim
+	Comments     []Comment
 	Moves        []Move
 }
 
@@ -135,6 +161,8 @@ func (t Ticket) clone() Ticket {
 	t.Tags = maps.Clone(t.Tags)
 	t.BlockedBy = slices.Clone(t.BlockedBy)
 	t.Replacements = slices.Clone(t.Replacements)
+	t.Claims = slices.Clone(t.Claims)
+	t.Comments = slices.Clone(t.Comments)
 	t.Moves = slices.Clone(t.Moves)
 	return t
 }

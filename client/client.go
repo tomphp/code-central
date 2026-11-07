@@ -24,6 +24,9 @@ const DefaultURL = "http://localhost:7733"
 type Client struct {
 	BaseURL string
 	HTTP    *http.Client
+	// Actor is sent with every request; empty means agent, which is how
+	// every code-central command writes.
+	Actor core.Actor
 }
 
 // New returns a Client for the service at baseURL.
@@ -84,6 +87,38 @@ func (c *Client) FindTickets(ctx context.Context, key string, in core.FindTicket
 	return out, c.do(ctx, "GET", path, nil, &out)
 }
 
+// Claim is claim.
+func (c *Client) Claim(ctx context.Context, key string, in core.ClaimInput) (core.ClaimResult, error) {
+	var out core.ClaimResult
+	return out, c.do(ctx, "POST", scoped(key, "claim"), in, &out)
+}
+
+// Finish is finish.
+func (c *Client) Finish(ctx context.Context, key string, in core.FinishInput) (core.FinishResult, error) {
+	var out core.FinishResult
+	return out, c.do(ctx, "POST", ticketAction(key, &in.Ticket, "finish"), in, &out)
+}
+
+// Accept is the human's accept; set Actor to human.
+func (c *Client) Accept(ctx context.Context, key string, in core.AcceptInput) (core.TicketView, error) {
+	var out core.TicketView
+	return out, c.do(ctx, "POST", ticketAction(key, &in.Ticket, "accept"), in, &out)
+}
+
+// Reject is the human's reject; set Actor to human.
+func (c *Client) Reject(ctx context.Context, key string, in core.RejectInput) (core.TicketView, error) {
+	var out core.TicketView
+	return out, c.do(ctx, "POST", ticketAction(key, &in.Ticket, "reject"), in, &out)
+}
+
+// ticketAction is the path of an action on a Ticket. The path names the
+// Ticket, so it is cleared from the body.
+func ticketAction(key string, ticket *core.Ref, action string) string {
+	path := scoped(key, "tickets/"+url.PathEscape(string(*ticket))+"/"+action)
+	*ticket = ""
+	return path
+}
+
 func scoped(key, rest string) string { return "/api/p/" + url.PathEscape(key) + "/" + rest }
 
 // do sends one request. API errors come back as *core.Error; a service
@@ -104,6 +139,11 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	actor := c.Actor
+	if actor == "" {
+		actor = core.Agent
+	}
+	req.Header.Set("X-Code-Central-Actor", string(actor))
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {

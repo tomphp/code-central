@@ -75,6 +75,39 @@ func Run(t *testing.T, f Factory) {
 		}
 	})
 
+	t.Run("a ticket's claims, comments and moves read back after they are written", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		tk := store.Ticket{
+			Number: 1, Title: "T", State: store.InReview, Spec: 1, Created: t0, Updated: t0,
+			Claims: []store.Claim{
+				{Number: 1, ID: "ABC", SessionID: "sess-1", Started: t0, Ended: t0.Add(time.Hour), EndedBy: "finish"},
+				{Number: 2, ID: "DEF", Started: t0.Add(2 * time.Hour)},
+			},
+			Comments: []store.Comment{{Number: 1, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1, Body: "Did it.\n"}},
+			Moves:    []store.Move{{From: store.Ready, To: store.InProgress, Actor: "agent", Time: t0, Claim: 1}},
+		}
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", tk) })
+		check := func(s store.Store) {
+			read(t, s, func(r store.Reader) {
+				got, _ := r.Ticket("acme", 1)
+				if len(got.Claims) != 2 || got.Claims[0] != tk.Claims[0] || got.Claims[1] != tk.Claims[1] {
+					t.Fatalf("claims: got %+v", got.Claims)
+				}
+				if len(got.Comments) != 1 || got.Comments[0] != tk.Comments[0] {
+					t.Fatalf("comments: got %+v", got.Comments)
+				}
+				if len(got.Moves) != 1 || got.Moves[0] != tk.Moves[0] {
+					t.Fatalf("moves: got %+v", got.Moves)
+				}
+			})
+		}
+		check(s)
+		if f.Reopen != nil {
+			check(f.Reopen(t, s))
+		}
+	})
+
 	t.Run("a ticket write replaces the previous version", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)

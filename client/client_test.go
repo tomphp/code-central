@@ -57,6 +57,43 @@ func TestProjectSpecAndTicketRoundTrip(t *testing.T) {
 	}
 }
 
+func TestTheDeliveryLoopRoundTrip(t *testing.T) {
+	srv := codecentraltest.NewServer(t)
+	agent := srv.Client
+	agent.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})
+	agent.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})
+	agent.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "A", State: store.Ready})
+	agent.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "B", State: store.Ready})
+
+	c, err := agent.Claim(ctx, "acme", core.ClaimInput{Ticket: "acme-3"})
+	if err != nil || c.ClaimID == "" || c.Ticket.ID != "acme-3" {
+		t.Fatalf("claim: %+v, %v", c, err)
+	}
+	f, err := agent.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-3", ClaimID: c.ClaimID, Summary: "Done."})
+	if err != nil || f.Ticket.State != store.InReview {
+		t.Fatalf("finish: %+v, %v", f, err)
+	}
+	_, err = agent.Accept(ctx, "acme", core.AcceptInput{Ticket: "acme-3"})
+	wantCode(t, err, core.ActionNotAllowed, "")
+
+	human := client.New(srv.URL)
+	human.Actor = core.Human
+	if v, err := human.Reject(ctx, "acme", core.RejectInput{Ticket: "3", Comment: "Again."}); err != nil || v.State != store.Ready {
+		t.Fatalf("reject: %+v, %v", v, err)
+	}
+	c, _ = agent.Claim(ctx, "acme", core.ClaimInput{Ticket: "3"})
+	agent.Finish(ctx, "acme", core.FinishInput{Ticket: "3", ClaimID: c.ClaimID, Summary: "Fixed."})
+	if v, err := human.Accept(ctx, "acme", core.AcceptInput{Ticket: "3"}); err != nil || v.State != store.Done {
+		t.Fatalf("accept: %+v, %v", v, err)
+	}
+	if none, err := agent.Claim(ctx, "acme", core.ClaimInput{Spec: "1"}); err != nil || none.Ticket == nil || none.Ticket.ID != "acme-2" {
+		t.Fatalf("claim: %+v, %v; want acme-2 left", none, err)
+	}
+	if none, err := agent.Claim(ctx, "acme", core.ClaimInput{}); err != nil || none.Ticket != nil {
+		t.Fatalf("claim: %+v, %v; want ticket null", none, err)
+	}
+}
+
 func TestErrorsArriveInTheOneShape(t *testing.T) {
 	srv := codecentraltest.NewServer(t)
 	c := srv.Client

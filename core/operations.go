@@ -27,6 +27,12 @@ var Operations = []Op{
 	{Name: "create_ticket", Audience: AgentAndHuman, Write: true},
 	{Name: "get_ticket", Audience: AgentAndHuman},
 	{Name: "find_tickets", Audience: AgentAndHuman},
+
+	// The delivery loop (ticket 25).
+	{Name: "claim", Audience: AgentAndHuman, Write: true},
+	{Name: "finish", Audience: AgentAndHuman, Write: true},
+	{Name: "accept", Audience: HumanOnly, Write: true},
+	{Name: "reject", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

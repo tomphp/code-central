@@ -93,3 +93,44 @@ func TestWritesAreOnlyPOSTs(t *testing.T) {
 		t.Fatalf("PUT: %d", rec.Code)
 	}
 }
+
+func doAs(h http.Handler, actor, method, path, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	if actor != "" {
+		req.Header.Set(httpapi.ActorHeader, actor)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestTheActorComesFromAHeaderDefaultingToAgent(t *testing.T) {
+	h := newHandler(t)
+	do(h, "POST", "/api/projects/create_project", `{"key":"acme"}`)
+	do(h, "POST", "/api/p/acme/create_spec", `{"title":"S"}`)
+	do(h, "POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"T","state":"Ready"}`)
+
+	if rec := do(h, "POST", "/api/p/acme/claim", `{}`); rec.Code != 200 {
+		t.Fatalf("claim: %d %s", rec.Code, rec.Body)
+	}
+	do(h, "POST", "/api/p/acme/tickets/2/finish", `{"claim_id":"claim-1","summary":"S"}`)
+	if rec := do(h, "POST", "/api/p/acme/tickets/2/accept", `{}`); rec.Code != http.StatusConflict {
+		t.Fatalf("accept with no Actor header: %d %s, want 409 (an agent may not accept)", rec.Code, rec.Body)
+	}
+	if rec := doAs(h, "robot", "POST", "/api/p/acme/tickets/2/accept", `{}`); rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("unknown Actor: %d %s, want 422", rec.Code, rec.Body)
+	}
+	rec := doAs(h, "human", "POST", "/api/p/acme/tickets/2/accept", `{}`)
+	if rec.Code != 200 {
+		t.Fatalf("accept as human: %d %s", rec.Code, rec.Body)
+	}
+	var v core.TicketView
+	json.Unmarshal(rec.Body.Bytes(), &v)
+	var actors []string
+	for _, m := range v.Moves {
+		actors = append(actors, m.Actor)
+	}
+	if strings.Join(actors, ",") != "agent,agent,human" {
+		t.Fatalf("move Actors %v, want agent (claim), agent (finish), human (accept)", actors)
+	}
+}
