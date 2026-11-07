@@ -97,12 +97,15 @@ func TestFilesAreWrittenInFixedFieldOrder(t *testing.T) {
 		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme Co", Created: t0, Mode: "committed"})
 	})
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutSpec("acme", store.Spec{Number: 1, Title: "Login", Labels: []string{"auth"}, Created: t0, Updated: t0, Body: "# Login\n\nText.\n"})
+		return w.PutSpec("acme", store.Spec{Number: 1, Title: "Login", Labels: []string{"auth"}, Created: t0, Updated: t0, Body: "# Login\n\nText.\n",
+			Edits: []store.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"title": "Sign in", "body": "Old.\nText.\n"}}}})
 	})
 	mustUpdate(t, s, func(w store.Writer) error {
 		return w.PutTicket("acme", store.Ticket{
 			Number: 2, Title: "Form", State: store.Ready, Spec: 1, Labels: []string{"ui"},
 			Created: t0, Updated: t0.Add(90 * time.Second), Description: "Build it.\nWell.\n",
+			Comments: []store.Comment{{Number: 1, Actor: "human", Time: t0, Body: "Nice.\n"}},
+			Edits:    []store.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"description": "Old.\n"}}},
 		})
 	})
 
@@ -120,6 +123,15 @@ labels:
 tags: {}
 created: 2026-11-07T09:30:00Z
 updated: 2026-11-07T09:30:00Z
+edits:
+  - number: 1
+    actor: agent
+    time: 2026-11-07T09:30:00Z
+    previous:
+      body: |
+        Old.
+        Text.
+      title: Sign in
 ---
 # Login
 
@@ -138,7 +150,20 @@ updated: 2026-11-07T09:31:30Z
 description: |
   Build it.
   Well.
+comments:
+  - number: 1
+    actor: human
+    time: 2026-11-07T09:30:00Z
+    body: |
+      Nice.
 moves: []
+edits:
+  - number: 1
+    actor: agent
+    time: 2026-11-07T09:30:00Z
+    previous:
+      description: |
+        Old.
 `,
 	}
 	for rel, w := range want {
@@ -203,6 +228,8 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 		{"unknown project field", "projects/acme/project.yaml", project + "path: /src\n", "path"},
 		{"spec without frontmatter", "projects/acme/specs/3.md", "# just markdown\n", "frontmatter"},
 		{"spec id mismatch", "projects/acme/specs/3.md", "---\nid: 4\ntitle: S\nlabels: []\ntags: {}\ncreated: 2026-11-07T09:30:00Z\nupdated: 2026-11-07T09:30:00Z\n---\nbody\n", "id"},
+		{"unknown previous field", "projects/acme/tickets/2.yaml", ticket + "edits:\n  - number: 1\n    actor: agent\n    time: 2026-11-07T09:30:00Z\n    previous:\n      colour: red\n", "edits[0].previous.colour"},
+		{"bad comment time", "projects/acme/tickets/2.yaml", ticket + "comments:\n  - number: 1\n    actor: agent\n    time: soon\n    body: hi\n", "comments[0].time"},
 		{"badly named ticket file", "projects/acme/tickets/two.yaml", ticket, "file name"},
 	}
 	for _, c := range cases {

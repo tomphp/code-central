@@ -27,6 +27,16 @@ var Operations = []Op{
 	{Name: "create_ticket", Audience: AgentAndHuman, Write: true},
 	{Name: "get_ticket", Audience: AgentAndHuman},
 	{Name: "find_tickets", Audience: AgentAndHuman},
+	// Defining work.
+	{Name: "edit_spec", Audience: AgentAndHuman, Write: true},
+	{Name: "edit_ticket", Audience: AgentAndHuman, Write: true},
+	{Name: "add_labels", Audience: AgentAndHuman, Write: true},
+	{Name: "remove_labels", Audience: AgentAndHuman, Write: true},
+	{Name: "set_tags", Audience: AgentAndHuman, Write: true},
+	{Name: "remove_tags", Audience: AgentAndHuman, Write: true},
+	{Name: "comment", Audience: AgentAndHuman, Write: true},
+	{Name: "approve", Audience: AgentAndHuman, Write: true},
+	{Name: "defer", Audience: AgentAndHuman, Write: true},
 }
 
 // Operation looks an operation up by name.

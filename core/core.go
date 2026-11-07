@@ -52,6 +52,7 @@ type SpecView struct {
 	Created time.Time         `json:"created"`
 	Updated time.Time         `json:"updated"`
 	Body    string            `json:"body"`
+	Edits   []EditView        `json:"edits"`
 }
 
 // SpecRef names a Ticket's Spec.
@@ -83,7 +84,9 @@ type TicketView struct {
 	Created      time.Time         `json:"created"`
 	Updated      time.Time         `json:"updated"`
 	Description  string            `json:"description"`
+	Comments     []CommentView     `json:"comments"`
 	Moves        []MoveView        `json:"moves"`
+	Edits        []EditView        `json:"edits"`
 	Blocked      bool              `json:"blocked"`
 	Claimable    bool              `json:"claimable"`
 }
@@ -330,7 +333,7 @@ func projectView(p store.Project) ProjectView {
 func specView(key string, s store.Spec) SpecView {
 	return SpecView{
 		ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
-		Created: s.Created, Updated: s.Updated, Body: s.Body,
+		Created: s.Created, Updated: s.Updated, Body: s.Body, Edits: editViews(s.Edits),
 	}
 }
 
@@ -342,7 +345,7 @@ func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 		Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags),
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Created: t.Created, Updated: t.Updated, Description: t.Description,
-		Moves:   []MoveView{},
+		Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: blocked(r, key, t),
 	}
 	for _, m := range t.Moves {

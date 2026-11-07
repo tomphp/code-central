@@ -55,6 +55,24 @@ type Spec struct {
 	Created time.Time
 	Updated time.Time
 	Body    string
+	Edits   []Edit
+}
+
+// Comment is one numbered comment on a Ticket.
+type Comment struct {
+	Number int
+	Actor  string
+	Time   time.Time
+	Body   string
+}
+
+// Edit records one edit that changed a Spec's or Ticket's text. Previous
+// maps each changed field (title, body, description) to its old value.
+type Edit struct {
+	Number   int
+	Actor    string
+	Time     time.Time
+	Previous map[string]string
 }
 
 // Move records one State change on a Ticket.
@@ -81,7 +99,9 @@ type Ticket struct {
 	Created      time.Time
 	Updated      time.Time
 	Description  string
+	Comments     []Comment
 	Moves        []Move
+	Edits        []Edit
 }
 
 // Reader reads from memory. Records returned are copies.
@@ -127,6 +147,7 @@ var (
 func (s Spec) clone() Spec {
 	s.Labels = slices.Clone(s.Labels)
 	s.Tags = maps.Clone(s.Tags)
+	s.Edits = cloneEdits(s.Edits)
 	return s
 }
 
@@ -135,6 +156,16 @@ func (t Ticket) clone() Ticket {
 	t.Tags = maps.Clone(t.Tags)
 	t.BlockedBy = slices.Clone(t.BlockedBy)
 	t.Replacements = slices.Clone(t.Replacements)
+	t.Comments = slices.Clone(t.Comments)
 	t.Moves = slices.Clone(t.Moves)
+	t.Edits = cloneEdits(t.Edits)
 	return t
+}
+
+func cloneEdits(es []Edit) []Edit {
+	es = slices.Clone(es)
+	for i := range es {
+		es[i].Previous = maps.Clone(es[i].Previous)
+	}
+	return es
 }

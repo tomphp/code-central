@@ -91,6 +91,101 @@ var tools = map[string]tool{
 	},
 }
 
+func init() {
+	for name, t := range definingTools {
+		tools[name] = t
+	}
+}
+
+// definingTools shape work after it is created (ticket 27).
+var definingTools = map[string]tool{
+	"edit_spec": {
+		description: "Edit a Spec's title or body; a body given replaces the old one whole, and the old text is kept in its edit history.",
+		schema: object(map[string]any{
+			"spec":  ref("The Spec."),
+			"title": text("The new title."),
+			"body":  text("The new body in Markdown, replacing the old one whole."),
+		}, "spec"),
+		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.EditSpecInput) (any, error) {
+			return c.EditSpec(ctx, key, in)
+		}),
+	},
+	"edit_ticket": {
+		description: "Edit a Ticket's title or description; the old text is kept in its edit history.",
+		schema: object(map[string]any{
+			"ticket":      ref("The Ticket."),
+			"title":       text("The new title."),
+			"description": text("The new description in Markdown, replacing the old one whole."),
+		}, "ticket"),
+		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.EditTicketInput) (any, error) {
+			return c.EditTicket(ctx, key, in)
+		}),
+	},
+	"add_labels": {
+		description: "Add Labels to a Spec or Ticket, leaving its other Labels alone.",
+		schema:      object(map[string]any{"target": ref("The Spec or Ticket."), "labels": list("Labels to add.")}, "target", "labels"),
+		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.LabelsInput) (any, error) {
+			return c.AddLabels(ctx, key, in)
+		}),
+	},
+	"remove_labels": {
+		description: "Remove Labels from a Spec or Ticket, leaving its other Labels alone.",
+		schema:      object(map[string]any{"target": ref("The Spec or Ticket."), "labels": list("Labels to remove.")}, "target", "labels"),
+		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.LabelsInput) (any, error) {
+			return c.RemoveLabels(ctx, key, in)
+		}),
+	},
+	"set_tags": {
+		description: "Set Tags on a Spec or Ticket, overwriting only the keys named; keys are lowercase [a-z0-9._-], values one non-empty line.",
+		schema: object(map[string]any{
+			"target": ref("The Spec or Ticket."),
+			"tags":   map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "Tags to set, as {key: value}."},
+		}, "target", "tags"),
+		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.SetTagsInput) (any, error) {
+			return c.SetTags(ctx, key, in)
+		}),
+	},
+	"remove_tags": {
+		description: "Remove Tags from a Spec or Ticket by key.",
+		schema:      object(map[string]any{"target": ref("The Spec or Ticket."), "keys": list("Tag keys to remove.")}, "target", "keys"),
+		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.RemoveTagsInput) (any, error) {
+			return c.RemoveTags(ctx, key, in)
+		}),
+	},
+	"comment": {
+		description: "Comment on any Ticket, even one another agent holds; no Claim ID is needed.",
+		schema:      object(map[string]any{"ticket": ref("The Ticket."), "body": text("The comment in Markdown.")}, "ticket", "body"),
+		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.CommentInput) (any, error) {
+			return c.Comment(ctx, key, in)
+		}),
+	},
+	"approve": {
+		description: "Approve a Draft Ticket you have finished defining, moving it to Ready so it can be claimed.",
+		schema:      object(map[string]any{"ticket": ref("The Ticket.")}, "ticket"),
+		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.TicketInput) (any, error) {
+			return c.Approve(ctx, key, in)
+		}),
+	},
+	"defer": {
+		description: "Defer a Ready Ticket that isn't ready back to Draft, with the reason stored as a comment.",
+		schema:      object(map[string]any{"ticket": ref("The Ticket."), "reason": text("Why it isn't ready.")}, "ticket", "reason"),
+		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.DeferInput) (any, error) {
+			return c.Defer(ctx, key, in)
+		}),
+	},
+}
+
+// decoded makes a tool call that decodes its arguments strictly into In.
+func decoded[In any](f func(ctx context.Context, c *core.Core, key string, in In) (any, error)) func(context.Context, *core.Core, string, []byte) (any, error) {
+	return func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
+		var in In
+		if err := core.Decode(args, &in); err != nil {
+			return nil, err
+		}
+		return f(ctx, c, key, in)
+	}
+}
+
 func object(props map[string]any, required ...string) map[string]any {
 	s := map[string]any{"type": "object", "properties": props, "additionalProperties": false}
 	if len(required) > 0 {

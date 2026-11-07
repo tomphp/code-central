@@ -25,6 +25,16 @@ var Routes = map[string]string{
 	"create_ticket":  "POST /api/p/{key}/create_ticket",
 	"get_ticket":     "GET /api/p/{key}/tickets/{n}",
 	"find_tickets":   "GET /api/p/{key}/tickets",
+
+	"edit_spec":     "POST /api/p/{key}/specs/{n}/edit_spec",
+	"edit_ticket":   "POST /api/p/{key}/tickets/{n}/edit_ticket",
+	"add_labels":    "POST /api/p/{key}/add_labels",
+	"remove_labels": "POST /api/p/{key}/remove_labels",
+	"set_tags":      "POST /api/p/{key}/set_tags",
+	"remove_tags":   "POST /api/p/{key}/remove_tags",
+	"comment":       "POST /api/p/{key}/tickets/{n}/comment",
+	"approve":       "POST /api/p/{key}/tickets/{n}/approve",
+	"defer":         "POST /api/p/{key}/tickets/{n}/defer",
 }
 
 type handlerFunc func(c *core.Core, r *http.Request) (any, error)
@@ -68,6 +78,92 @@ var handlers = map[string]handlerFunc{
 		}
 		return c.FindTickets(r.Context(), r.PathValue("key"), in)
 	},
+
+	"edit_spec": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.EditSpecInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Spec = core.Ref(r.PathValue("n"))
+		return c.EditSpec(r.Context(), r.PathValue("key"), in)
+	},
+	"edit_ticket": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.EditTicketInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.EditTicket(r.Context(), r.PathValue("key"), in)
+	},
+	"add_labels": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.LabelsInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.AddLabels(r.Context(), r.PathValue("key"), in)
+	},
+	"remove_labels": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.LabelsInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.RemoveLabels(r.Context(), r.PathValue("key"), in)
+	},
+	"set_tags": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.SetTagsInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.SetTags(r.Context(), r.PathValue("key"), in)
+	},
+	"remove_tags": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.RemoveTagsInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.RemoveTags(r.Context(), r.PathValue("key"), in)
+	},
+	"comment": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.CommentInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.Comment(r.Context(), r.PathValue("key"), in)
+	},
+	"approve": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.TicketInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.Approve(r.Context(), r.PathValue("key"), in)
+	},
+	"defer": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.DeferInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.Defer(r.Context(), r.PathValue("key"), in)
+	},
+}
+
+// ActorHeader names the Actor making an HTTP request: human, agent or
+// integration, defaulting to agent. Only the UI sends human.
+const ActorHeader = "X-Code-Central-Actor"
+
+// withActor puts the request's Actor into its context.
+func withActor(r *http.Request) (*http.Request, error) {
+	a := core.Actor(r.Header.Get(ActorHeader))
+	switch a {
+	case "":
+		a = core.Agent
+	case core.Human, core.Agent, core.Integration:
+	default:
+		return nil, &core.Error{Code: core.Invalid, Field: ActorHeader, Message: fmt.Sprintf("unknown Actor %q: use human, agent or integration", a)}
+	}
+	return r.WithContext(core.WithActor(r.Context(), a)), nil
 }
 
 // Register adds the HTTP API under /api/ to the service's one mux.
@@ -75,6 +171,11 @@ func Register(mux *http.ServeMux, c *core.Core) {
 	for name, pattern := range Routes {
 		h := handlers[name]
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+			r, err := withActor(r)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
 			v, err := h(c, r)
 			if err != nil {
 				writeError(w, err)

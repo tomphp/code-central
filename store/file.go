@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -161,6 +162,7 @@ type specFront struct {
 	Link    string            `yaml:"link,omitempty"`
 	Created string            `yaml:"created"`
 	Updated string            `yaml:"updated"`
+	Edits   []editFile        `yaml:"edits"`
 }
 
 type ticketFile struct {
@@ -175,7 +177,23 @@ type ticketFile struct {
 	Created      string            `yaml:"created"`
 	Updated      string            `yaml:"updated"`
 	Description  string            `yaml:"description"`
+	Comments     []commentFile     `yaml:"comments"`
 	Moves        []moveFile        `yaml:"moves"`
+	Edits        []editFile        `yaml:"edits"`
+}
+
+type commentFile struct {
+	Number int    `yaml:"number"`
+	Actor  string `yaml:"actor"`
+	Time   string `yaml:"time"`
+	Body   string `yaml:"body"`
+}
+
+type editFile struct {
+	Number   int               `yaml:"number"`
+	Actor    string            `yaml:"actor"`
+	Time     string            `yaml:"time"`
+	Previous map[string]string `yaml:"previous"`
 }
 
 type moveFile struct {
@@ -275,6 +293,9 @@ func decodeSpec(data []byte, n int) (Spec, *LoadError) {
 	if sp.Updated, err = parseTime(f.Updated); err != nil {
 		return Spec{}, &LoadError{Field: "updated", Msg: err.Error()}
 	}
+	if sp.Edits, err = decodeEdits(f.Edits, "title", "body"); err != nil {
+		return Spec{}, err.(*LoadError)
+	}
 	return sp, nil
 }
 
@@ -317,7 +338,45 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		}
 		t.Moves = append(t.Moves, mv)
 	}
+	for i, c := range f.Comments {
+		cm := Comment{Number: c.Number, Actor: c.Actor, Body: c.Body}
+		if cm.Time, err = parseTime(c.Time); err != nil {
+			return Ticket{}, &LoadError{Field: fmt.Sprintf("comments[%d].time", i), Msg: err.Error()}
+		}
+		t.Comments = append(t.Comments, cm)
+	}
+	if t.Edits, err = decodeEdits(f.Edits, "title", "description"); err != nil {
+		return Ticket{}, err.(*LoadError)
+	}
 	return t, nil
+}
+
+// decodeEdits checks an edits list, whose previous values may name only
+// the given fields.
+func decodeEdits(fs []editFile, fields ...string) ([]Edit, error) {
+	var out []Edit
+	for i, e := range fs {
+		ed := Edit{Number: e.Number, Actor: e.Actor, Previous: e.Previous}
+		var err error
+		if ed.Time, err = parseTime(e.Time); err != nil {
+			return nil, &LoadError{Field: fmt.Sprintf("edits[%d].time", i), Msg: err.Error()}
+		}
+		for k := range e.Previous {
+			if !slices.Contains(fields, k) {
+				return nil, &LoadError{Field: fmt.Sprintf("edits[%d].previous.%s", i, k), Msg: "unknown field"}
+			}
+		}
+		out = append(out, ed)
+	}
+	return out, nil
+}
+
+func encodeEdits(es []Edit) []editFile {
+	out := []editFile{}
+	for _, e := range es {
+		out = append(out, editFile{Number: e.Number, Actor: e.Actor, Time: formatTime(e.Time), Previous: e.Previous})
+	}
+	return out
 }
 
 func (s *FileStore) write(record any, project string) error {
@@ -331,7 +390,7 @@ func (s *FileStore) write(record any, project string) error {
 	case Spec:
 		rel = filepath.Join("projects", project, "specs", strconv.Itoa(r.Number)+".md")
 		var front []byte
-		front, err = encodeYAML(specFront{ID: r.Number, Title: r.Title, Labels: r.Labels, Tags: r.Tags, Link: r.Link, Created: formatTime(r.Created), Updated: formatTime(r.Updated)})
+		front, err = encodeYAML(specFront{ID: r.Number, Title: r.Title, Labels: r.Labels, Tags: r.Tags, Link: r.Link, Created: formatTime(r.Created), Updated: formatTime(r.Updated), Edits: encodeEdits(r.Edits)})
 		data = append(append(append([]byte("---\n"), front...), "---\n"...), r.Body...)
 	case Ticket:
 		rel = filepath.Join("projects", project, "tickets", strconv.Itoa(r.Number)+".yaml")
@@ -339,7 +398,10 @@ func (s *FileStore) write(record any, project string) error {
 			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
 			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: r.Link,
 			Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
-			Moves: []moveFile{},
+			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
+		}
+		for _, c := range r.Comments {
+			f.Comments = append(f.Comments, commentFile{Number: c.Number, Actor: c.Actor, Time: formatTime(c.Time), Body: c.Body})
 		}
 		for _, m := range r.Moves {
 			f.Moves = append(f.Moves, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via})
