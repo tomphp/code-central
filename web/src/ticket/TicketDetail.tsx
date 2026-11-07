@@ -2,7 +2,8 @@
 // slot first, then the Ticket itself.
 import { useState } from "react";
 import type { Api } from "../api/api";
-import { STATES, type EditView, type State, type TicketView } from "../api/types";
+import { moveTargets } from "../api/actions/move";
+import type { EditView, State, TicketView } from "../api/types";
 import { ago, REASON_LABEL } from "../format";
 import { ActionPanel } from "../panels/ActionPanel";
 import { LinkBadge } from "./LinkBadge";
@@ -110,12 +111,8 @@ function LinkedNote({ api, project, ticket: t }: { api: Api; project: string; ti
   );
 }
 
-// The human moves a Ticket to any State but its own and the two entered
-// only by posting a Round (Needs Answer) or a Failure Report (Failed).
-const NOT_MOVABLE: readonly State[] = ["Needs Answer", "Failed"];
-
 function MoveControl({ api, project, ticket: t }: { api: Api; project: string; ticket: TicketView }) {
-  const targets = STATES.filter((s) => s !== t.state && !NOT_MOVABLE.includes(s));
+  const targets = moveTargets(t.state);
   const [to, setTo] = useState<State>(targets[0]);
   const { busy, error, run } = useAct();
   return (

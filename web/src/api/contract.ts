@@ -12,6 +12,7 @@ import type { Api } from "./api";
 import type { ChangeEvent, ExternalState, State } from "./types";
 import { ApiError } from "./types";
 import { roundContract } from "./contract.rounds";
+import { MOVE_EXCEPT } from "./actions/move";
 
 export interface Driver {
   api: Api;
@@ -359,7 +360,9 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     it("moves to any State but Needs Answer and Failed", async () => {
       await d.createProject("acme", "Acme");
       const id = await d.createTicket("acme", "A", "Ready");
-      for (const to of ["Failed", "Needs Answer"] as State[]) {
+      // MOVE_EXCEPT is what the UI leaves out of its Move to list.
+      expect(MOVE_EXCEPT).toHaveLength(2);
+      for (const to of MOVE_EXCEPT) {
         const err = await d.api.act("acme", id, "move", { to_state: to }).catch((e) => e);
         expect(err).toMatchObject({ status: 422, code: "invalid", field: "to_state" });
       }
