@@ -8,6 +8,10 @@ A local coordination point for AI agent-driven software delivery across many rep
 A single repository whose work is tracked here, however many clones or worktrees of it exist.
 _Avoid_: Repo (in domain language), workspace
 
+**Archived Project**:
+A Project put away by the human once all its work is finished, which takes no new work until it is brought back.
+_Avoid_: Deleted, closed, inactive
+
 **Project Key**:
 The short, permanent name that identifies a Project to anything connecting to Code Central.
 _Avoid_: Slug, Project ID
@@ -27,6 +31,10 @@ _Avoid_: Issue, task, card
 **State**:
 The single position a Ticket occupies in the delivery workflow.
 _Avoid_: Status
+
+**Finished**:
+A Ticket that is Done or Cancelled, or a Spec that has Tickets and all of them are finished.
+_Avoid_: Closed, archived, complete
 
 **Blocker**:
 A Ticket in the same Project that must reach Done before another Ticket can be claimed.
@@ -55,6 +63,10 @@ _Avoid_: User, caller
 **Needs Me**:
 The Tickets waiting on the human before they can move.
 _Avoid_: Inbox, blocked
+
+**Notification**:
+An interruption sent to the human when an agent is stopped and waiting on them, as distinct from the Needs Me count.
+_Avoid_: Alert, ping
 
 **Question**:
 A query an agent puts to the human on a Ticket, which stops the work on that Ticket until it is answered.

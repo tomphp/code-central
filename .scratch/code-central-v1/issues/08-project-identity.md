@@ -10,6 +10,10 @@ How is a Project added to Code Central, and what identifies it? Given an agent i
 
 ## Answer
 
+Amended by [How finished work is kept and hidden](20-finished-work.md), which added Archived Projects: `archive_project` and `unarchive_project`, refused while any Ticket is unfinished, and `init` saying a Project is archived.
+
+Amended by [How agent sessions are taught to use Code Central](17-teaching-agent-sessions.md): with the human's confirmation, `init` can join a key that already exists, and `init --local` sets a Project up without committing `.mcp.json`.
+
 A Project is identified by a Project Key: a short, unique, permanent name committed to the repository. An agent identifies itself as the Project by connecting with that key, so nothing is worked out from where the agent happens to be running.
 
 **The key is derived once, at setup.** Running `code-central init` proposes a key, and the human accepts or overrides it. The proposal comes from the only remote if there is one, otherwise from `origin`, otherwise from the folder name. It is the repository name alone, lowercased. If the key is taken, `init` refuses and asks for an override. The key can't be changed afterwards, but the Project's display name can.

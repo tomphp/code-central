@@ -10,6 +10,8 @@ How does the service run (daemon, login item, or started by hand) given that age
 
 ## Answer
 
+Amended by [How Code Central is upgraded](21-upgrades.md), which added `service restart` and made `service install` idempotent, recording the binary path as invoked.
+
 Amended by [The Integration plugin contract](14-integration-contract.md): an Integration is a separate HTTP client, so there is no `integration` package.
 
 The service is one long-running process that is the only writer to the store, serving MCP, the HTTP API and the UI on one fixed port that only loopback can reach.

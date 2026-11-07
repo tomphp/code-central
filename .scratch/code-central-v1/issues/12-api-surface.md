@@ -14,6 +14,10 @@ How do they carry what [How agents claim work](09-claiming-work.md) decided: cla
 
 ## Answer
 
+Amended by [How Code Central is upgraded](21-upgrades.md), which made the API additive-only within v1, made the `client` tolerate unknown response fields, and made the version warning name the older side when it can.
+
+Amended by [How finished work is kept and hidden](20-finished-work.md), which added `archive_project`, `unarchive_project` and `find_specs(finished?)`, and made every write to an Archived Project refused.
+
 Amended by [How the Scratch Import behaves](13-scratch-import.md), which added `import` and `get_import_guide`, Labels on Specs, `set_tags`, `remove_tags`, and `tags` filters on `find_tickets` and `find_specs`.
 
 Amended by [The Integration plugin contract](14-integration-contract.md), which added the `integration` Actor, a `link` field on Specs and Tickets, writes only an Integration can make (create linked items, update their definition, set `external_state`), lookup by link, the human-only `unlink` action, and the "closed externally" `needs_me_reason`. Exact signatures wait for the first Integration.

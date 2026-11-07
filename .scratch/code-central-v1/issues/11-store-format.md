@@ -14,6 +14,10 @@ What is the on-disk layout of the central store: TOML or YAML, file structure an
 
 ## Answer
 
+Amended by [How Code Central is upgraded](21-upgrades.md), which settled migrations: `serve` migrates automatically through a staging folder with a backup, and every schema change bumps `format`.
+
+Amended by [How finished work is kept and hidden](20-finished-work.md), which added `archived` to `project.yaml` and an `edits` list with previous values to Tickets and to Spec frontmatter, and kept every file loaded for good.
+
 Amended by [How the Scratch Import behaves](13-scratch-import.md), which gave Specs and Tickets `labels` and `tags` and made Import write through a staging folder and a roll-forward manifest.
 
 The store is a readable record of plain files that the service loads whole into memory at startup. See [ADR 0003](../../../docs/adr/0003-the-store-is-yaml-files-loaded-into-memory.md).
