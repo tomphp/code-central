@@ -64,6 +64,14 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
       const { claim_id } = await agent(`/api/p/${key}/claim`, { ticket: id, session_id: "contract-session" });
       await agent(`/api/p/${key}/tickets/${id.split("-").pop()}/post_round`, { claim_id, questions });
     },
+    reportFailure: async (key, id, report) => {
+      const { claim_id } = await agent(`/api/p/${key}/claim`, { ticket: id, session_id: "contract-session" });
+      await agent(`/api/p/${key}/tickets/${id.split("-").pop()}/report_failure`, { claim_id, ...report });
+    },
+    finish: async (key, id, summary) => {
+      const { claim_id } = await agent(`/api/p/${key}/claim`, { ticket: id, session_id: "contract-session" });
+      await agent(`/api/p/${key}/tickets/${id.split("-").pop()}/finish`, { claim_id, summary });
+    },
     close: svc.stop,
   };
 });
