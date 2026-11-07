@@ -47,6 +47,13 @@ var Operations = []Op{
 	// Silent Claims and sessions (ticket 31).
 	{Name: "set_session", Audience: AgentAndHuman, Write: true},
 	{Name: "release", Audience: HumanOnly, Write: true},
+	// Blockers, Replacements and finding work (ticket 28).
+	{Name: "add_blocker", Audience: AgentAndHuman, Write: true},
+	{Name: "remove_blocker", Audience: AgentAndHuman, Write: true},
+	{Name: "cancel", Audience: AgentAndHuman, Write: true},
+	{Name: "get_spec", Audience: AgentAndHuman},
+	{Name: "find_specs", Audience: AgentAndHuman},
+
 	// Failure Reports and giving up (ticket 30).
 	{Name: "report_failure", Audience: AgentAndHuman, Write: true},
 	{Name: "give_up", Audience: AgentAndHuman, Write: true},

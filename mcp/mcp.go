@@ -51,6 +51,7 @@ var tools = map[string]tool{
 			"description": text("What to build, in Markdown."),
 			"state":       map[string]any{"type": "string", "enum": []string{"Draft", "Ready"}, "description": "Draft (the default) or Ready."},
 			"labels":      list("Labels to add."),
+			"blocked_by":  map[string]any{"type": "array", "items": map[string]any{"type": []string{"string", "integer"}}, "description": "Tickets it waits on until they are Done. IDs: <key>-<n> or <n>."},
 		}, "spec", "title"),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.CreateTicketInput
@@ -76,10 +77,12 @@ var tools = map[string]tool{
 	"find_tickets": {
 		description: "Find this Project's Tickets in claim order; every filter given must match.",
 		schema: object(map[string]any{
-			"state":  list("Only Tickets in one of these States."),
-			"title":  text("Only Tickets whose title contains this text."),
-			"labels": list("Only Tickets with all of these Labels."),
-			"spec":   ref("Only Tickets in this Spec."),
+			"state":     list("Only Tickets in one of these States."),
+			"title":     text("Only Tickets whose title contains this text."),
+			"labels":    list("Only Tickets with all of these Labels."),
+			"tags":      tagFilter("Only Tickets with all of these Tags, as {key: value}."),
+			"spec":      ref("Only Tickets in this Spec."),
+			"claimable": flag("Only Tickets that are (true) or aren't (false) claimable."),
 		}),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.FindTicketsInput

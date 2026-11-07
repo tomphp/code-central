@@ -159,29 +159,7 @@ func addComment(t *store.Ticket, a Actor, at time.Time, claim int, body string) 
 // updateTicket loads one Ticket under the write lock and applies fn. When
 // fn reports a change, the Ticket's updated time is set and it is written.
 func (c *Core) updateTicket(key string, ref Ref, fn func(t *store.Ticket) (bool, error)) (TicketView, error) {
-	var v TicketView
-	err := c.store.Update(func(w store.Writer) error {
-		if _, ok := w.Project(key); !ok {
-			return unknownProject(key)
-		}
-		t, err := ticket(w, key, ref)
-		if err != nil {
-			return err
-		}
-		changed, err := fn(&t)
-		if err != nil {
-			return err
-		}
-		if changed {
-			t.Updated = c.now()
-			if err := w.PutTicket(key, t); err != nil {
-				return err
-			}
-		}
-		v = c.ticketView(w, key, t)
-		return nil
-	})
-	return v, err
+	return c.updateTicketIn(key, ref, func(_ store.Reader, t *store.Ticket) (bool, error) { return fn(t) })
 }
 
 // TargetView is a Spec's or Ticket's Labels and Tags, as the Label and

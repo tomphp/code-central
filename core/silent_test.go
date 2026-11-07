@@ -10,15 +10,6 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-func (f fixture) get(t *testing.T, id string) core.TicketView {
-	t.Helper()
-	v, err := f.core.GetTicket(ctx, "acme", core.Ref(id))
-	if err != nil {
-		t.Fatalf("get_ticket %s: %v", id, err)
-	}
-	return v
-}
-
 func wantSilentSince(t *testing.T, v core.TicketView, want time.Time) {
 	t.Helper()
 	if want.IsZero() {

@@ -78,12 +78,19 @@ var handlers = map[string]handlerFunc{
 	},
 	"find_tickets": func(c *core.Core, r *http.Request) (any, error) {
 		q := r.URL.Query()
-		if err := onlyParams(q, "state", "title", "label", "spec"); err != nil {
+		if err := onlyParams(q, "state", "title", "label", "tag", "spec", "claimable"); err != nil {
 			return nil, err
 		}
 		in := core.FindTicketsInput{Title: q.Get("title"), Labels: q["label"], Spec: core.Ref(q.Get("spec"))}
 		for _, s := range q["state"] {
 			in.State = append(in.State, store.State(s))
+		}
+		var err error
+		if in.Tags, err = tagParams(q); err != nil {
+			return nil, err
+		}
+		if in.Claimable, err = boolParam(q, "claimable"); err != nil {
+			return nil, err
 		}
 		return c.FindTickets(r.Context(), r.PathValue("key"), in)
 	},
