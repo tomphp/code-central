@@ -35,11 +35,6 @@ type FinishResult struct {
 	NextStep string     `json:"next_step"`
 }
 
-// AcceptInput is accept's input.
-type AcceptInput struct {
-	Ticket Ref `json:"ticket"`
-}
-
 // RejectInput is reject's input.
 type RejectInput struct {
 	Ticket  Ref    `json:"ticket"`
@@ -127,7 +122,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 }
 
 // Accept is the human's accept(ticket): In Review to Done.
-func (c *Core) Accept(ctx context.Context, key string, in AcceptInput) (TicketView, error) {
+func (c *Core) Accept(ctx context.Context, key string, in TicketInput) (TicketView, error) {
 	return c.act(ctx, key, in.Ticket, "accept", "", "")
 }
 
@@ -145,33 +140,20 @@ func (c *Core) Reject(ctx context.Context, key string, in RejectInput) (TicketVi
 // the transition, then the action's note (if any) as a comment under the
 // Claim it was made on.
 func (c *Core) act(ctx context.Context, key string, ref Ref, name, claimID, note string) (TicketView, error) {
-	var v TicketView
-	err := c.store.Update(func(w store.Writer) error {
-		if _, ok := w.Project(key); !ok {
-			return unknownProject(key)
-		}
-		t, err := ticket(w, key, ref)
-		if err != nil {
-			return err
-		}
+	return c.updateTicket(key, ref, func(t *store.Ticket) (bool, error) {
 		claim := 0
-		if live, ok := liveClaim(t); ok {
+		if live, ok := liveClaim(*t); ok {
 			claim = live.Number
 		}
 		now := c.now()
-		if err := transition(ctx, &t, key, name, claimID, now); err != nil {
-			return err
+		if err := transition(ctx, t, key, name, claimID, now); err != nil {
+			return false, err
 		}
 		if note != "" {
-			addComment(ctx, &t, note, claim, now)
+			addComment(t, ActorOf(ctx), now, claim, note)
 		}
-		if err := w.PutTicket(key, t); err != nil {
-			return err
-		}
-		v = ticketView(w, key, t)
-		return nil
+		return true, nil
 	})
-	return v, err
 }
 
 // ticket reads the Ticket ref names, or returns not_found.

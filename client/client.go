@@ -96,27 +96,79 @@ func (c *Client) Claim(ctx context.Context, key string, in core.ClaimInput) (cor
 // Finish is finish.
 func (c *Client) Finish(ctx context.Context, key string, in core.FinishInput) (core.FinishResult, error) {
 	var out core.FinishResult
-	return out, c.do(ctx, "POST", ticketAction(key, &in.Ticket, "finish"), in, &out)
+	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "finish"), in, &out)
 }
 
 // Accept is the human's accept; set Actor to human.
-func (c *Client) Accept(ctx context.Context, key string, in core.AcceptInput) (core.TicketView, error) {
+func (c *Client) Accept(ctx context.Context, key string, in core.TicketInput) (core.TicketView, error) {
 	var out core.TicketView
-	return out, c.do(ctx, "POST", ticketAction(key, &in.Ticket, "accept"), in, &out)
+	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "accept"), in, &out)
 }
 
 // Reject is the human's reject; set Actor to human.
 func (c *Client) Reject(ctx context.Context, key string, in core.RejectInput) (core.TicketView, error) {
 	var out core.TicketView
-	return out, c.do(ctx, "POST", ticketAction(key, &in.Ticket, "reject"), in, &out)
+	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "reject"), in, &out)
 }
 
-// ticketAction is the path of an action on a Ticket. The path names the
-// Ticket, so it is cleared from the body.
-func ticketAction(key string, ticket *core.Ref, action string) string {
-	path := scoped(key, "tickets/"+url.PathEscape(string(*ticket))+"/"+action)
-	*ticket = ""
-	return path
+// EditSpec is edit_spec.
+func (c *Client) EditSpec(ctx context.Context, key string, in core.EditSpecInput) (core.SpecView, error) {
+	var out core.SpecView
+	return out, c.do(ctx, "POST", item(key, "specs", in.Spec, "edit_spec"), in, &out)
+}
+
+// EditTicket is edit_ticket.
+func (c *Client) EditTicket(ctx context.Context, key string, in core.EditTicketInput) (core.TicketView, error) {
+	var out core.TicketView
+	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "edit_ticket"), in, &out)
+}
+
+// AddLabels is add_labels.
+func (c *Client) AddLabels(ctx context.Context, key string, in core.LabelsInput) (core.TargetView, error) {
+	var out core.TargetView
+	return out, c.do(ctx, "POST", scoped(key, "add_labels"), in, &out)
+}
+
+// RemoveLabels is remove_labels.
+func (c *Client) RemoveLabels(ctx context.Context, key string, in core.LabelsInput) (core.TargetView, error) {
+	var out core.TargetView
+	return out, c.do(ctx, "POST", scoped(key, "remove_labels"), in, &out)
+}
+
+// SetTags is set_tags.
+func (c *Client) SetTags(ctx context.Context, key string, in core.SetTagsInput) (core.TargetView, error) {
+	var out core.TargetView
+	return out, c.do(ctx, "POST", scoped(key, "set_tags"), in, &out)
+}
+
+// RemoveTags is remove_tags.
+func (c *Client) RemoveTags(ctx context.Context, key string, in core.RemoveTagsInput) (core.TargetView, error) {
+	var out core.TargetView
+	return out, c.do(ctx, "POST", scoped(key, "remove_tags"), in, &out)
+}
+
+// Comment is comment.
+func (c *Client) Comment(ctx context.Context, key string, in core.CommentInput) (core.TicketView, error) {
+	var out core.TicketView
+	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "comment"), in, &out)
+}
+
+// Approve is approve.
+func (c *Client) Approve(ctx context.Context, key string, in core.TicketInput) (core.TicketView, error) {
+	var out core.TicketView
+	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "approve"), in, &out)
+}
+
+// Defer is defer.
+func (c *Client) Defer(ctx context.Context, key string, in core.DeferInput) (core.TicketView, error) {
+	var out core.TicketView
+	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "defer"), in, &out)
+}
+
+// item is the path of an action on one Spec or Ticket. The path names
+// it, so the service ignores the ref in the body.
+func item(key, kind string, ref core.Ref, action string) string {
+	return scoped(key, kind+"/"+url.PathEscape(string(ref))+"/"+action)
 }
 
 func scoped(key, rest string) string { return "/api/p/" + url.PathEscape(key) + "/" + rest }

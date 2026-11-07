@@ -108,6 +108,39 @@ func Run(t *testing.T, f Factory) {
 		}
 	})
 
+	t.Run("comments and edits read back after they are written", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		spec := store.Spec{Number: 1, Title: "Login v2", Created: t0, Updated: t0, Body: "New body.\n",
+			Edits: []store.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"title": "Login", "body": "# Old\n\nOld body.\n"}}}}
+		ticket := store.Ticket{Number: 2, Title: "Form", State: store.Draft, Spec: 1, Created: t0, Updated: t0,
+			Comments: []store.Comment{{Number: 1, Actor: "human", Time: t0, Body: "Looks good.\nShip it.\n"}},
+			Edits:    []store.Edit{{Number: 1, Actor: "agent", Time: t0, Previous: map[string]string{"description": ""}}}}
+		put(t, s, func(w store.Writer) error { return w.PutSpec("acme", spec) })
+		put(t, s, func(w store.Writer) error { return w.PutTicket("acme", ticket) })
+		check := func(s store.Store) {
+			read(t, s, func(r store.Reader) {
+				gs, _ := r.Spec("acme", 1)
+				if gs.Body != spec.Body || len(gs.Edits) != 1 || gs.Edits[0].Previous["body"] != "# Old\n\nOld body.\n" ||
+					gs.Edits[0].Previous["title"] != "Login" || gs.Edits[0].Actor != "agent" || !gs.Edits[0].Time.Equal(t0) {
+					t.Fatalf("spec: got %+v", gs)
+				}
+				gt, _ := r.Ticket("acme", 2)
+				if len(gt.Comments) != 1 || gt.Comments[0] != ticket.Comments[0] {
+					t.Fatalf("comments: got %+v", gt.Comments)
+				}
+				prev, ok := gt.Edits[0].Previous["description"]
+				if len(gt.Edits) != 1 || gt.Edits[0].Number != 1 || !ok || prev != "" {
+					t.Fatalf("edits: got %+v", gt.Edits)
+				}
+			})
+		}
+		check(s)
+		if f.Reopen != nil {
+			check(f.Reopen(t, s))
+		}
+	})
+
 	t.Run("a ticket write replaces the previous version", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)

@@ -81,6 +81,16 @@ func init() {
 		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--description <md> | --file <path|->]", run: runCreateTicket},
 		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id>", run: runGetTicket},
 		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--spec <id>]", run: runFindTickets},
+
+		"edit-spec":     {op: "edit_spec", usage: "edit-spec <id> [--title <t>] [--body <md> | --file <path|->]", run: runEditSpec},
+		"edit-ticket":   {op: "edit_ticket", usage: "edit-ticket <id> [--title <t>] [--description <md> | --file <path|->]", run: runEditTicket},
+		"add-labels":    {op: "add_labels", usage: "add-labels <id> <label>...", run: runAddLabels},
+		"remove-labels": {op: "remove_labels", usage: "remove-labels <id> <label>...", run: runRemoveLabels},
+		"set-tags":      {op: "set_tags", usage: "set-tags <id> <key>=<value>...", run: runSetTags},
+		"remove-tags":   {op: "remove_tags", usage: "remove-tags <id> <key>...", run: runRemoveTags},
+		"comment":       {op: "comment", usage: "comment <id> [--body <md> | --file <path|->]", run: runComment},
+		"approve":       {op: "approve", usage: "approve <id>", run: runApprove},
+		"defer":         {op: "defer", usage: "defer <id> [--reason <text> | --file <path|->]", run: runDefer},
 		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>]", run: runClaim},
 		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->]", run: runFinish},
 	}

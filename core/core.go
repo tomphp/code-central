@@ -52,6 +52,7 @@ type SpecView struct {
 	Created time.Time         `json:"created"`
 	Updated time.Time         `json:"updated"`
 	Body    string            `json:"body"`
+	Edits   []EditView        `json:"edits"`
 }
 
 // SpecRef names a Ticket's Spec.
@@ -79,15 +80,6 @@ type ClaimView struct {
 	EndedBy   string     `json:"ended_by,omitempty"`
 }
 
-// CommentView is one comment on a Ticket.
-type CommentView struct {
-	Number int       `json:"number"`
-	Actor  string    `json:"actor"`
-	Time   time.Time `json:"time"`
-	Claim  int       `json:"claim,omitempty"`
-	Body   string    `json:"body"`
-}
-
 // TicketView is the full view of one Ticket, the same through every door.
 type TicketView struct {
 	ID           string            `json:"id"`
@@ -104,6 +96,7 @@ type TicketView struct {
 	Claims       []ClaimView       `json:"claims"`
 	Comments     []CommentView     `json:"comments"`
 	Moves        []MoveView        `json:"moves"`
+	Edits        []EditView        `json:"edits"`
 	Blocked      bool              `json:"blocked"`
 	Claimable    bool              `json:"claimable"`
 }
@@ -350,7 +343,7 @@ func projectView(p store.Project) ProjectView {
 func specView(key string, s store.Spec) SpecView {
 	return SpecView{
 		ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
-		Created: s.Created, Updated: s.Updated, Body: s.Body,
+		Created: s.Created, Updated: s.Updated, Body: s.Body, Edits: editViews(s.Edits),
 	}
 }
 
@@ -362,7 +355,7 @@ func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 		Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags),
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Created: t.Created, Updated: t.Updated, Description: t.Description,
-		Claims: []ClaimView{}, Comments: []CommentView{}, Moves: []MoveView{},
+		Claims: []ClaimView{}, Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: blocked(r, key, t),
 	}
 	for _, c := range t.Claims {
@@ -372,9 +365,6 @@ func ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 			cv.Ended = &ended
 		}
 		v.Claims = append(v.Claims, cv)
-	}
-	for _, c := range t.Comments {
-		v.Comments = append(v.Comments, CommentView{Number: c.Number, Actor: c.Actor, Time: c.Time, Claim: c.Claim, Body: c.Body})
 	}
 	for _, m := range t.Moves {
 		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via})

@@ -55,6 +55,26 @@ type Spec struct {
 	Created time.Time
 	Updated time.Time
 	Body    string
+	Edits   []Edit
+}
+
+// Comment is one numbered comment on a Ticket. Required notes on actions
+// (a finish summary, a reject comment...) are stored as comments too.
+type Comment struct {
+	Number int
+	Actor  string
+	Time   time.Time
+	Claim  int // Claim number the note was made under, 0 when none
+	Body   string
+}
+
+// Edit records one edit that changed a Spec's or Ticket's text. Previous
+// maps each changed field (title, body, description) to its old value.
+type Edit struct {
+	Number   int
+	Actor    string
+	Time     time.Time
+	Previous map[string]string
 }
 
 // Move records one State change on a Ticket.
@@ -81,16 +101,6 @@ type Claim struct {
 // Live reports whether the Claim has not ended.
 func (c Claim) Live() bool { return c.Ended.IsZero() }
 
-// Comment is a note on a Ticket. Required notes on actions (a finish
-// summary, a reject comment...) are stored as comments too.
-type Comment struct {
-	Number int
-	Actor  string
-	Time   time.Time
-	Claim  int // Claim number, 0 when none
-	Body   string
-}
-
 // Ticket is a unit of work within a Spec.
 type Ticket struct {
 	Number       int
@@ -108,6 +118,7 @@ type Ticket struct {
 	Claims       []Claim
 	Comments     []Comment
 	Moves        []Move
+	Edits        []Edit
 }
 
 // Reader reads from memory. Records returned are copies.
@@ -153,6 +164,7 @@ var (
 func (s Spec) clone() Spec {
 	s.Labels = slices.Clone(s.Labels)
 	s.Tags = maps.Clone(s.Tags)
+	s.Edits = cloneEdits(s.Edits)
 	return s
 }
 
@@ -164,5 +176,14 @@ func (t Ticket) clone() Ticket {
 	t.Claims = slices.Clone(t.Claims)
 	t.Comments = slices.Clone(t.Comments)
 	t.Moves = slices.Clone(t.Moves)
+	t.Edits = cloneEdits(t.Edits)
 	return t
+}
+
+func cloneEdits(es []Edit) []Edit {
+	es = slices.Clone(es)
+	for i := range es {
+		es[i].Previous = maps.Clone(es[i].Previous)
+	}
+	return es
 }

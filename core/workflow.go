@@ -172,11 +172,3 @@ func isHolderAction(name string) bool {
 	}
 	return false
 }
-
-// addComment stores a note on t, as a required note on an action is,
-// under Claim number claim (0 for none).
-func addComment(ctx context.Context, t *store.Ticket, body string, claim int, now time.Time) {
-	t.Comments = append(t.Comments, store.Comment{
-		Number: len(t.Comments) + 1, Actor: string(ActorOf(ctx)), Time: now, Claim: claim, Body: body,
-	})
-}

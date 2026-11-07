@@ -73,7 +73,7 @@ func TestTheDeliveryLoopRoundTrip(t *testing.T) {
 	if err != nil || f.Ticket.State != store.InReview {
 		t.Fatalf("finish: %+v, %v", f, err)
 	}
-	_, err = agent.Accept(ctx, "acme", core.AcceptInput{Ticket: "acme-3"})
+	_, err = agent.Accept(ctx, "acme", core.TicketInput{Ticket: "acme-3"})
 	wantCode(t, err, core.ActionNotAllowed, "")
 
 	human := client.New(srv.URL)
@@ -83,7 +83,7 @@ func TestTheDeliveryLoopRoundTrip(t *testing.T) {
 	}
 	c, _ = agent.Claim(ctx, "acme", core.ClaimInput{Ticket: "3"})
 	agent.Finish(ctx, "acme", core.FinishInput{Ticket: "3", ClaimID: c.ClaimID, Summary: "Fixed."})
-	if v, err := human.Accept(ctx, "acme", core.AcceptInput{Ticket: "3"}); err != nil || v.State != store.Done {
+	if v, err := human.Accept(ctx, "acme", core.TicketInput{Ticket: "3"}); err != nil || v.State != store.Done {
 		t.Fatalf("accept: %+v, %v", v, err)
 	}
 	if none, err := agent.Claim(ctx, "acme", core.ClaimInput{Spec: "1"}); err != nil || none.Ticket == nil || none.Ticket.ID != "acme-2" {

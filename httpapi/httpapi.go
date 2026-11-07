@@ -26,6 +26,16 @@ var Routes = map[string]string{
 	"get_ticket":     "GET /api/p/{key}/tickets/{n}",
 	"find_tickets":   "GET /api/p/{key}/tickets",
 
+	"edit_spec":     "POST /api/p/{key}/specs/{n}/edit_spec",
+	"edit_ticket":   "POST /api/p/{key}/tickets/{n}/edit_ticket",
+	"add_labels":    "POST /api/p/{key}/add_labels",
+	"remove_labels": "POST /api/p/{key}/remove_labels",
+	"set_tags":      "POST /api/p/{key}/set_tags",
+	"remove_tags":   "POST /api/p/{key}/remove_tags",
+	"comment":       "POST /api/p/{key}/tickets/{n}/comment",
+	"approve":       "POST /api/p/{key}/tickets/{n}/approve",
+	"defer":         "POST /api/p/{key}/tickets/{n}/defer",
+
 	"claim":  "POST /api/p/{key}/claim",
 	"finish": "POST /api/p/{key}/tickets/{n}/finish",
 	"accept": "POST /api/p/{key}/tickets/{n}/accept",
@@ -74,6 +84,74 @@ var handlers = map[string]handlerFunc{
 		return c.FindTickets(r.Context(), r.PathValue("key"), in)
 	},
 
+	"edit_spec": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.EditSpecInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Spec = core.Ref(r.PathValue("n"))
+		return c.EditSpec(r.Context(), r.PathValue("key"), in)
+	},
+	"edit_ticket": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.EditTicketInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.EditTicket(r.Context(), r.PathValue("key"), in)
+	},
+	"add_labels": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.LabelsInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.AddLabels(r.Context(), r.PathValue("key"), in)
+	},
+	"remove_labels": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.LabelsInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.RemoveLabels(r.Context(), r.PathValue("key"), in)
+	},
+	"set_tags": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.SetTagsInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.SetTags(r.Context(), r.PathValue("key"), in)
+	},
+	"remove_tags": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.RemoveTagsInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.RemoveTags(r.Context(), r.PathValue("key"), in)
+	},
+	"comment": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.CommentInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.Comment(r.Context(), r.PathValue("key"), in)
+	},
+	"approve": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.TicketInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.Approve(r.Context(), r.PathValue("key"), in)
+	},
+	"defer": func(c *core.Core, r *http.Request) (any, error) {
+		var in core.DeferInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.Defer(r.Context(), r.PathValue("key"), in)
+	},
 	"claim": func(c *core.Core, r *http.Request) (any, error) {
 		var in core.ClaimInput
 		if err := decodeBody(r, &in); err != nil {
@@ -83,29 +161,32 @@ var handlers = map[string]handlerFunc{
 	},
 	"finish": func(c *core.Core, r *http.Request) (any, error) {
 		var in core.FinishInput
-		if err := decodeTicketBody(r, &in, &in.Ticket); err != nil {
+		if err := decodeBody(r, &in); err != nil {
 			return nil, err
 		}
+		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.Finish(r.Context(), r.PathValue("key"), in)
 	},
 	"accept": func(c *core.Core, r *http.Request) (any, error) {
-		var in core.AcceptInput
-		if err := decodeTicketBody(r, &in, &in.Ticket); err != nil {
+		var in core.TicketInput
+		if err := decodeBody(r, &in); err != nil {
 			return nil, err
 		}
+		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.Accept(r.Context(), r.PathValue("key"), in)
 	},
 	"reject": func(c *core.Core, r *http.Request) (any, error) {
 		var in core.RejectInput
-		if err := decodeTicketBody(r, &in, &in.Ticket); err != nil {
+		if err := decodeBody(r, &in); err != nil {
 			return nil, err
 		}
+		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.Reject(r.Context(), r.PathValue("key"), in)
 	},
 }
 
-// ActorHeader names the Actor making a request: human, agent or
-// integration. It defaults to agent; only the UI sends human.
+// ActorHeader names the Actor making an HTTP request: human, agent or
+// integration, defaulting to agent. Only the UI sends human.
 const ActorHeader = "X-Code-Central-Actor"
 
 // withActor puts the request's Actor into its context.
@@ -116,7 +197,7 @@ func withActor(r *http.Request) (*http.Request, error) {
 		a = core.Agent
 	case core.Human, core.Agent, core.Integration:
 	default:
-		return nil, &core.Error{Code: core.Invalid, Message: fmt.Sprintf("unknown Actor %q in %s: use human, agent or integration", a, ActorHeader)}
+		return nil, &core.Error{Code: core.Invalid, Field: ActorHeader, Message: fmt.Sprintf("unknown Actor %q: use human, agent or integration", a)}
 	}
 	return r.WithContext(core.WithActor(r.Context(), a)), nil
 }
@@ -184,19 +265,6 @@ func decodeBody(r *http.Request, v any) error {
 		return &core.Error{Code: core.Invalid, Message: "cannot read the request body"}
 	}
 	return core.Decode(body, v)
-}
-
-// decodeTicketBody decodes a body for an action on the Ticket in the path:
-// the path names the Ticket, so the body may not.
-func decodeTicketBody(r *http.Request, v any, ticket *core.Ref) error {
-	if err := decodeBody(r, v); err != nil {
-		return err
-	}
-	if *ticket != "" {
-		return &core.Error{Code: core.Invalid, Field: "ticket", Message: "the path names the Ticket; leave ticket out of the body"}
-	}
-	*ticket = core.Ref(r.PathValue("n"))
-	return nil
 }
 
 func onlyParams(q url.Values, allowed ...string) error {

@@ -46,7 +46,7 @@ type opCase struct {
 }
 
 // Every case runs against a fresh server holding Project acme with Spec
-// acme-1 and Ticket acme-2, and Project other.
+// acme-1, Draft Ticket acme-2 and Ready Ticket acme-3, and Project other.
 var cases = map[string]opCase{
 	"create_project": {
 		ok:    call{http: httpCall{"POST", "/api/projects/create_project", `{"key":"new","display_name":"New"}`}},
@@ -66,7 +66,7 @@ var cases = map[string]opCase{
 			http: httpCall{"POST", "/api/p/acme/create_spec", `{"title":"Search","body":"Find things."}`},
 			cli:  []string{"--title", "Search", "--body", "Find things."},
 		},
-		check: field("id", "acme-3"),
+		check: field("id", "acme-4"),
 		bad: call{
 			mcp:  map[string]any{"title": ""},
 			http: httpCall{"POST", "/api/p/acme/create_spec", `{"title":""}`},
@@ -80,7 +80,7 @@ var cases = map[string]opCase{
 			http: httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"Form","state":"Ready","labels":["ui"],"description":"Build it."}`},
 			cli:  []string{"--spec", "1", "--title", "Form", "--state", "Ready", "--label", "ui", "--description", "Build it."},
 		},
-		check: field("id", "acme-3"),
+		check: field("id", "acme-4"),
 		bad: call{
 			mcp:  map[string]any{"spec": "acme-9", "title": "Form"},
 			http: httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":"acme-9","title":"Form"}`},
@@ -123,7 +123,6 @@ var cases = map[string]opCase{
 	},
 
 	"claim": {
-		setup: readyTicket,
 		ok: call{
 			mcp:  map[string]any{"session_id": "s1"},
 			http: httpCall{"POST", "/api/p/acme/claim", `{"session_id":"s1"}`},
@@ -174,7 +173,7 @@ var cases = map[string]opCase{
 	},
 }
 
-// readyTicket adds Ticket acme-3, Ready.
+// readyTicket adds Ticket acme-4, Ready.
 func readyTicket(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
@@ -183,14 +182,13 @@ func readyTicket(t *testing.T, srv *codecentraltest.Server) {
 	})
 }
 
-// claimedTicket adds acme-3 and claims it as claim-1.
+// claimedTicket claims acme-3 as claim-1.
 func claimedTicket(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
-	readyTicket(t, srv)
 	must(t, func() error { _, err := srv.Core.Claim(context.Background(), "acme", core.ClaimInput{}); return err })
 }
 
-// ticketInReview adds acme-3, claims it and finishes it.
+// ticketInReview claims acme-3 and finishes it.
 func ticketInReview(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	claimedTicket(t, srv)
@@ -198,6 +196,178 @@ func ticketInReview(t *testing.T, srv *codecentraltest.Server) {
 		_, err := srv.Core.Finish(context.Background(), "acme", core.FinishInput{Ticket: "3", ClaimID: "claim-1", Summary: "Done."})
 		return err
 	})
+}
+
+// Defining work (ticket 27).
+func init() {
+	for name, c := range map[string]opCase{
+		"edit_spec": {
+			ok: call{
+				mcp:  map[string]any{"spec": "acme-1", "title": "Sign in", "body": "New."},
+				http: httpCall{"POST", "/api/p/acme/specs/1/edit_spec", `{"title":"Sign in","body":"New."}`},
+				cli:  []string{"acme-1", "--title", "Sign in", "--body", "New."},
+			},
+			check: func(t *testing.T, out map[string]any) {
+				field("title", "Sign in")(t, out)
+				field("body", "New.")(t, out)
+				if edits, _ := out["edits"].([]any); len(edits) != 1 {
+					t.Fatalf("edits %v", out["edits"])
+				}
+			},
+			bad: call{
+				mcp:  map[string]any{"spec": 2, "title": "X"},
+				http: httpCall{"POST", "/api/p/acme/specs/2/edit_spec", `{"title":"X"}`},
+				cli:  []string{"2", "--title", "X"},
+			},
+			code: core.NotFound,
+		},
+		"edit_ticket": {
+			ok: call{
+				mcp:  map[string]any{"ticket": 2, "title": "Form", "description": "Build it."},
+				http: httpCall{"POST", "/api/p/acme/tickets/2/edit_ticket", `{"title":"Form","description":"Build it."}`},
+				cli:  []string{"2", "--title", "Form", "--description", "Build it."},
+			},
+			check: func(t *testing.T, out map[string]any) {
+				field("title", "Form")(t, out)
+				field("description", "Build it.")(t, out)
+			},
+			bad: call{
+				mcp:  map[string]any{"ticket": 2, "title": ""},
+				http: httpCall{"POST", "/api/p/acme/tickets/2/edit_ticket", `{"title":""}`},
+				cli:  []string{"2", "--title", ""},
+			},
+			code: core.Invalid,
+		},
+		"add_labels": {
+			ok: call{
+				mcp:  map[string]any{"target": "acme-2", "labels": []string{"ui"}},
+				http: httpCall{"POST", "/api/p/acme/add_labels", `{"target":"acme-2","labels":["ui"]}`},
+				cli:  []string{"acme-2", "ui"},
+			},
+			check: labels("ui"),
+			bad: call{
+				mcp:  map[string]any{"target": 9, "labels": []string{"ui"}},
+				http: httpCall{"POST", "/api/p/acme/add_labels", `{"target":9,"labels":["ui"]}`},
+				cli:  []string{"9", "ui"},
+			},
+			code: core.NotFound,
+		},
+		"remove_labels": {
+			ok: call{
+				mcp:  map[string]any{"target": 1, "labels": []string{"ui"}},
+				http: httpCall{"POST", "/api/p/acme/remove_labels", `{"target":1,"labels":["ui"]}`},
+				cli:  []string{"1", "ui"},
+			},
+			check: func(t *testing.T, out map[string]any) {
+				field("id", "acme-1")(t, out)
+				field("kind", "spec")(t, out)
+				labels()(t, out)
+			},
+			bad: call{
+				mcp:  map[string]any{"target": 1, "labels": []string{""}},
+				http: httpCall{"POST", "/api/p/acme/remove_labels", `{"target":1,"labels":[""]}`},
+				cli:  []string{"1", ""},
+			},
+			code: core.Invalid,
+		},
+		"set_tags": {
+			ok: call{
+				mcp:  map[string]any{"target": 2, "tags": map[string]string{"area": "web"}},
+				http: httpCall{"POST", "/api/p/acme/set_tags", `{"target":2,"tags":{"area":"web"}}`},
+				cli:  []string{"2", "area=web"},
+			},
+			check: func(t *testing.T, out map[string]any) {
+				if tags, _ := out["tags"].(map[string]any); tags["area"] != "web" {
+					t.Fatalf("tags %v", out["tags"])
+				}
+			},
+			bad: call{
+				mcp:  map[string]any{"target": 2, "tags": map[string]string{"Area": "web"}},
+				http: httpCall{"POST", "/api/p/acme/set_tags", `{"target":2,"tags":{"Area":"web"}}`},
+				cli:  []string{"2", "Area=web"},
+			},
+			code: core.Invalid,
+		},
+		"remove_tags": {
+			ok: call{
+				mcp:  map[string]any{"target": 2, "keys": []string{"area"}},
+				http: httpCall{"POST", "/api/p/acme/remove_tags", `{"target":2,"keys":["area"]}`},
+				cli:  []string{"2", "area"},
+			},
+			check: field("id", "acme-2"),
+			bad: call{
+				mcp:  map[string]any{"target": 2, "keys": []string{"Area"}},
+				http: httpCall{"POST", "/api/p/acme/remove_tags", `{"target":2,"keys":["Area"]}`},
+				cli:  []string{"2", "Area"},
+			},
+			code: core.Invalid,
+		},
+		"comment": {
+			ok: call{
+				mcp:  map[string]any{"ticket": 3, "body": "Looks fine."},
+				http: httpCall{"POST", "/api/p/acme/tickets/3/comment", `{"body":"Looks fine."}`},
+				cli:  []string{"3", "--body", "Looks fine."},
+			},
+			check: func(t *testing.T, out map[string]any) {
+				cs, _ := out["comments"].([]any)
+				if len(cs) != 1 || cs[0].(map[string]any)["body"] != "Looks fine." {
+					t.Fatalf("comments %v", out["comments"])
+				}
+			},
+			bad: call{
+				mcp:  map[string]any{"ticket": 3, "body": ""},
+				http: httpCall{"POST", "/api/p/acme/tickets/3/comment", `{"body":""}`},
+				cli:  []string{"3", "--body", ""},
+			},
+			code: core.Invalid,
+		},
+		"approve": {
+			ok: call{
+				mcp:  map[string]any{"ticket": "acme-2"},
+				http: httpCall{"POST", "/api/p/acme/tickets/2/approve", `{}`},
+				cli:  []string{"acme-2"},
+			},
+			check: field("state", "Ready"),
+			bad: call{
+				mcp:  map[string]any{"ticket": 3},
+				http: httpCall{"POST", "/api/p/acme/tickets/3/approve", ``},
+				cli:  []string{"3"},
+			},
+			code: core.ActionNotAllowed,
+		},
+		"defer": {
+			ok: call{
+				mcp:  map[string]any{"ticket": 3, "reason": "Not yet."},
+				http: httpCall{"POST", "/api/p/acme/tickets/3/defer", `{"reason":"Not yet."}`},
+				cli:  []string{"3", "--reason", "Not yet."},
+			},
+			check: field("state", "Draft"),
+			bad: call{
+				mcp:  map[string]any{"ticket": 3},
+				http: httpCall{"POST", "/api/p/acme/tickets/3/defer", `{}`},
+				cli:  []string{"3"},
+			},
+			code: core.Invalid,
+		},
+	} {
+		cases[name] = c
+	}
+}
+
+// labels checks a result's Labels are exactly want.
+func labels(want ...string) func(*testing.T, map[string]any) {
+	return func(t *testing.T, out map[string]any) {
+		t.Helper()
+		got, _ := out["labels"].([]any)
+		if len(got) != len(want) {
+			t.Fatalf("labels %v, want %v", out["labels"], want)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("labels %v, want %v", out["labels"], want)
+			}
+		}
+	}
 }
 
 func field(name, want string) func(*testing.T, map[string]any) {
@@ -222,6 +392,10 @@ func newServer(t *testing.T, setups ...func(*testing.T, *codecentraltest.Server)
 	})
 	must(t, func() error {
 		_, err := srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form"})
+		return err
+	})
+	must(t, func() error {
+		_, err := srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login API", State: "Ready"})
 		return err
 	})
 	for _, setup := range setups {
@@ -383,7 +557,7 @@ func TestMCPRejectsUnknownArguments(t *testing.T) {
 }
 
 func TestMCPAndTheCLIAlwaysWriteAsTheAgent(t *testing.T) {
-	srv := newServer(t, readyTicket, readyTicket) // acme-3 and acme-4
+	srv := newServer(t, readyTicket) // acme-3 and acme-4 are Ready
 	viaMCP := mcpOK(t, connect(t, srv, "acme"), "claim", map[string]any{})
 	viaCLI := cliOK(t, srv, []string{"claim"})
 	for door, out := range map[string]map[string]any{"mcp": viaMCP, "cli": viaCLI} {

@@ -77,7 +77,7 @@ func TestAcceptMovesInReviewToDoneAsTheHuman(t *testing.T) {
 	f.inReview(t)
 	f.clock.Set(t0.Add(2 * time.Hour))
 
-	v, err := f.core.Accept(human, "acme", core.AcceptInput{Ticket: "2"})
+	v, err := f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,14 +86,14 @@ func TestAcceptMovesInReviewToDoneAsTheHuman(t *testing.T) {
 		t.Fatalf("state %s, moves %+v; want last move %+v", v.State, v.Moves, want)
 	}
 
-	_, err = f.core.Accept(human, "acme", core.AcceptInput{Ticket: "2"})
+	_, err = f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"})
 	wantCode(t, err, core.ActionNotAllowed, "")
 }
 
 func TestAcceptAndRejectAreHumanActions(t *testing.T) {
 	f := newFixture(t)
 	f.inReview(t)
-	_, err := f.core.Accept(ctx, "acme", core.AcceptInput{Ticket: "2"})
+	_, err := f.core.Accept(ctx, "acme", core.TicketInput{Ticket: "2"})
 	wantCode(t, err, core.ActionNotAllowed, "")
 	_, err = f.core.Reject(core.WithActor(ctx, core.Integration), "acme", core.RejectInput{Ticket: "2", Comment: "No."})
 	wantCode(t, err, core.ActionNotAllowed, "")
@@ -157,15 +157,22 @@ func TestEveryActionIsCheckedAgainstTheOneTable(t *testing.T) {
 	f.inReview(t)
 	_, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "S"})
 	wantCode(t, err, core.StaleClaim, "")
-	_, err = f.core.Accept(ctx, "acme", core.AcceptInput{Ticket: "2"})
+	_, err = f.core.Accept(ctx, "acme", core.TicketInput{Ticket: "2"})
 	e := err.(*core.Error)
 	if len(e.AllowedActions) != 0 {
 		t.Fatalf("an agent may do nothing from In Review, got %v", e.AllowedActions)
 	}
-	f.core.Accept(human, "acme", core.AcceptInput{Ticket: "2"})
+	f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"})
 	_, err = f.core.Reject(human, "acme", core.RejectInput{Ticket: "2", Comment: "late"})
 	e = err.(*core.Error)
 	if !slices.Equal(e.AllowedActions, []string{"move"}) {
 		t.Fatalf("allowed from Done for the human: %v, want [move]", e.AllowedActions)
+	}
+	// approve and defer share the table, so their rejections are complete too.
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "R", State: store.Ready}) // acme-3
+	_, err = f.core.Approve(ctx, "acme", core.TicketInput{Ticket: "3"})
+	e = err.(*core.Error)
+	if !slices.Equal(e.AllowedActions, []string{"defer", "claim", "cancel"}) {
+		t.Fatalf("allowed from Ready for an agent: %v, want [defer claim cancel]", e.AllowedActions)
 	}
 }
