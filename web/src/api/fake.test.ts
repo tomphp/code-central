@@ -35,6 +35,15 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       });
       fake.setNeedsMe([group, ...needs.filter((g) => g !== group)]);
     },
+    addBlocker: async (_key, id, blocker) => {
+      const b = await fake.getTicket(_key, blocker);
+      const t = await fake.getTicket(_key, id);
+      fake.updateTicket(id, {
+        blocked_by: [...t.blocked_by, blocker],
+        blockers: [...t.blockers, { id: blocker, title: b.title, state: b.state }],
+        blocked: true,
+      });
+    },
     close: async () => {},
   };
 });
