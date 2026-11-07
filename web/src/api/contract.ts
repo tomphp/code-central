@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
 import type { ChangeEvent, State } from "./types";
 import { ApiError } from "./types";
+import { roundContract } from "./contract.rounds";
 
 export interface Driver {
   api: Api;
@@ -19,8 +20,33 @@ export interface Driver {
   // postRound claims a Ready Ticket as an agent and posts a Round of
   // Questions, moving it to Needs Answer.
   postRound(key: string, id: string, questions: { title: string; body: string; recommended?: string }[]): Promise<void>;
+  // reportFailure claims a Ready Ticket as an agent (session
+  // "contract-session") and posts a Failure Report, moving it to Failed.
+  reportFailure(key: string, id: string, report: FailureReportBody): Promise<void>;
+  // finish claims a Ready Ticket as an agent and finishes it with the
+  // summary, moving it to In Review.
+  finish(key: string, id: string, summary: string): Promise<void>;
+  // addBlocker makes id wait on blocker, as an agent's add_blocker.
+  addBlocker(key: string, id: string, blocker: string): Promise<void>;
+  // claim claims a Ready Ticket as an agent with a session ID, moving it
+  // to In Progress (ticket 35).
+  claim(key: string, id: string, sessionId: string): Promise<void>;
   close(): Promise<void>;
 }
+
+export interface FailureReportBody {
+  what_broke: string;
+  why: string;
+  what_to_fix: string;
+  where_work_stands: string;
+}
+
+export const sampleReport: FailureReportBody = {
+  what_broke: "Tests fail on CI\nlogin_test.go times out",
+  why: "The fixture server never starts",
+  what_to_fix: "Start the fixture in TestMain",
+  where_work_stands: "Branch impl/7, two commits, tests red",
+};
 
 export function apiContract(name: string, newDriver: () => Promise<Driver>) {
   describe(`API contract: ${name}`, () => {
@@ -31,6 +57,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     afterEach(async () => {
       await d.close();
     });
+
+    roundContract(() => d);
 
     it("lists every Project with its Needs Me count", async () => {
       await d.createProject("beta", "Beta");
@@ -157,6 +185,200 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const t = await d.api.act("acme", id, "move", { to_state: "Ready" });
       expect(t).toMatchObject({ id, state: "Ready" });
       expect((await d.api.getTicket("acme", id)).state).toBe("Ready");
+    });
+
+    // ---- Failed and In Review (ticket 36) ----
+
+    it("shows a Failed Ticket's Failure Reports and lists it in Needs Me", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Fix login", "Ready");
+      await d.reportFailure("acme", id, sampleReport);
+
+      const t = await d.api.getTicket("acme", id);
+      expect(t).toMatchObject({ state: "Failed", needs_me_reason: "failed" });
+      expect(t.failure_reports).toHaveLength(1);
+      expect(t.failure_reports[0]).toMatchObject({ number: 1, claim: 1, session_id: "contract-session", ...sampleReport });
+      const v = await d.api.needsMe();
+      expect(v.groups[0]).toMatchObject({ reason: "failed", tickets: [{ id, failure: { headline: "Tests fail on CI", reports: 1 } }] });
+    });
+
+    it("sends a Failed Ticket back to Ready, with the note as a human comment", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Fix login", "Ready");
+      await d.reportFailure("acme", id, sampleReport);
+
+      const t = await d.api.act("acme", id, "send_back", { note: "Fixture fixed on main" });
+      expect(t).toMatchObject({ id, state: "Ready" });
+      expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Fixture fixed on main" });
+      expect(t.moves.at(-1)).toMatchObject({ from: "Failed", to: "Ready", actor: "human" });
+      expect((await d.api.needsMe()).count).toBe(0);
+    });
+
+    it("sends a Failed Ticket back with no note and adds no comment", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Fix login", "Ready");
+      await d.reportFailure("acme", id, sampleReport);
+      const before = (await d.api.getTicket("acme", id)).comments.length;
+
+      const t = await d.api.act("acme", id, "send_back", {});
+      expect(t.state).toBe("Ready");
+      expect(t.comments).toHaveLength(before);
+    });
+
+    it("moves a Failed Ticket to Draft", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Fix login", "Ready");
+      await d.reportFailure("acme", id, sampleReport);
+
+      expect(await d.api.act("acme", id, "to_draft", {})).toMatchObject({ id, state: "Draft" });
+      expect((await d.api.needsMe()).count).toBe(0);
+    });
+
+    it("cancels a Failed Ticket", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Fix login", "Ready");
+      await d.reportFailure("acme", id, sampleReport);
+
+      const t = await d.api.act("acme", id, "cancel", {});
+      expect(t).toMatchObject({ id, state: "Cancelled", replacements: [] });
+      expect((await d.api.needsMe()).count).toBe(0);
+    });
+
+    it("refuses send_back and to_draft on a Ticket that isn't Failed", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "A", "Ready");
+
+      for (const action of ["send_back", "to_draft"] as const) {
+        const e = await d.api.act("acme", id, action, {}).catch((e) => e);
+        expect(e).toBeInstanceOf(ApiError);
+        expect(e).toMatchObject({ status: 409, code: "action_not_allowed" });
+      }
+    });
+
+    it("shows an In Review Ticket with its finish summary", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page\nBranch impl/7; check the redirect");
+
+      const t = await d.api.getTicket("acme", id);
+      expect(t).toMatchObject({ state: "In Review", needs_me_reason: "in_review" });
+      const entered = t.moves.at(-1)!;
+      expect(entered).toMatchObject({ from: "In Progress", to: "In Review", actor: "agent" });
+      expect(t.comments.at(-1)).toMatchObject({
+        actor: "agent",
+        time: entered.time,
+        body: "Added the login page\nBranch impl/7; check the redirect",
+      });
+      expect((await d.api.needsMe()).groups[0]).toMatchObject({
+        reason: "in_review",
+        tickets: [{ id, summary: "Added the login page" }],
+      });
+    });
+
+    it("accepts an In Review Ticket into Done", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page");
+
+      const t = await d.api.act("acme", id, "accept", {});
+      expect(t).toMatchObject({ id, state: "Done" });
+      expect(t.moves.at(-1)).toMatchObject({ from: "In Review", to: "Done", actor: "human" });
+      expect((await d.api.needsMe()).count).toBe(0);
+    });
+
+    it("rejects an In Review Ticket back to Ready only with a comment", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page");
+
+      const blank = await d.api.act("acme", id, "reject", { comment: "  " }).catch((e) => e);
+      expect(blank).toBeInstanceOf(ApiError);
+      expect(blank).toMatchObject({ status: 422, code: "invalid", field: "comment" });
+      expect((await d.api.getTicket("acme", id)).state).toBe("In Review");
+
+      const t = await d.api.act("acme", id, "reject", { comment: "The redirect loops" });
+      expect(t).toMatchObject({ id, state: "Ready" });
+      expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "The redirect loops" });
+      expect((await d.api.needsMe()).count).toBe(0);
+    });
+
+    it("refuses accept and reject on a Ticket that isn't In Review", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "A", "Ready");
+
+      const a = await d.api.act("acme", id, "accept", {}).catch((e) => e);
+      expect(a).toMatchObject({ status: 409, code: "action_not_allowed" });
+      const r = await d.api.act("acme", id, "reject", { comment: "no" }).catch((e) => e);
+      expect(r).toMatchObject({ status: 409, code: "action_not_allowed" });
+    });
+
+    // ---- Blockers, move and cancel (ticket 37) ----
+
+    it("removes a Blocker, and rejects one that isn't there", async () => {
+      await d.createProject("acme", "Acme");
+      const a = await d.createTicket("acme", "A", "Ready");
+      const b = await d.createTicket("acme", "B", "Ready");
+      await d.addBlocker("acme", b, a);
+      expect(await d.api.getTicket("acme", b)).toMatchObject({ blocked_by: [a], blocked: true });
+
+      const t = await d.api.act("acme", b, "remove_blocker", { blocker: a });
+      expect(t).toMatchObject({ id: b, blocked_by: [], blockers: [], blocked: false });
+
+      const again = await d.api.act("acme", b, "remove_blocker", { blocker: a }).catch((e) => e);
+      expect(again).toMatchObject({ status: 422, code: "invalid", field: "blocker" });
+    });
+
+    it("cancels as the human with no Replacement, leaving its dependant blocked by a Cancelled Ticket", async () => {
+      await d.createProject("acme", "Acme");
+      const a = await d.createTicket("acme", "A", "Ready");
+      const b = await d.createTicket("acme", "B", "Ready");
+      await d.addBlocker("acme", b, a);
+
+      const t = await d.api.act("acme", a, "cancel", {});
+      expect(t).toMatchObject({ id: a, state: "Cancelled", replacements: [] });
+      expect(t.moves.at(-1)).toMatchObject({ from: "Ready", to: "Cancelled", actor: "human" });
+      const dep = await d.api.getTicket("acme", b);
+      expect(dep).toMatchObject({ blocked: true, blockers: [{ id: a, title: "A", state: "Cancelled" }] });
+    });
+
+    it("moves to any State but Needs Answer and Failed", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "A", "Ready");
+      for (const to of ["Failed", "Needs Answer"] as State[]) {
+        const err = await d.api.act("acme", id, "move", { to_state: to }).catch((e) => e);
+        expect(err).toMatchObject({ status: 422, code: "invalid", field: "to_state" });
+      }
+      const t = await d.api.act("acme", id, "move", { to_state: "Done" });
+      expect(t.state).toBe("Done");
+      expect(t.moves.at(-1)).toMatchObject({ from: "Ready", to: "Done", actor: "human" });
+    });
+
+    // ---- release (ticket 35) ----
+    it("releases a Claim back to Ready, ending it, with the note as a comment", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "A", "Ready");
+      await d.claim("acme", id, "sess-1");
+
+      const t = await d.api.act("acme", id, "release", { note: "Session died" });
+      expect(t).toMatchObject({ id, state: "Ready" });
+      expect(t.claims).toHaveLength(1);
+      expect(t.claims[0]).toMatchObject({ session_id: "sess-1", ended_by: "release" });
+      expect(t.claims[0].ended).toBeTruthy();
+      expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Session died" });
+      expect((await d.api.getTicket("acme", id)).state).toBe("Ready");
+
+      const again = await d.api.act("acme", id, "release", {}).catch((e) => e);
+      expect(again).toMatchObject({ status: 409, code: "action_not_allowed" });
+    });
+
+    it("releases without a note, adding no comment", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "A", "Ready");
+      await d.claim("acme", id, "sess-1");
+
+      const t = await d.api.act("acme", id, "release", {});
+      expect(t.state).toBe("Ready");
+      expect(t.comments).toEqual([]);
     });
 
     it("delivers a change notice for each write over the live feed", async () => {

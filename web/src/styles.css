@@ -109,6 +109,15 @@ textarea { width: 100%; resize: vertical; }
 .history { list-style: none; padding: 0; font-size: 12.5px; }
 .ticket-body details > summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin: 8px 0; }
 
+/* Ticket detail and the Blocked panel (ticket 37). */
+button.link { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; color: var(--accent); cursor: pointer; }
+.ticket-body .claims { list-style: none; padding: 0; margin: 8px 0; }
+.ticket-body .move { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ticket-body .move .warning { flex-basis: 100%; margin: 4px 0 0; }
+.history .previous { margin: 4px 0 8px 12px; padding: 6px 10px; border-left: 2px solid var(--border); color: var(--muted); }
+.panel .blocker p { margin: 0 0 8px; }
+.panel .actions { margin: 12px 0 0; }
+
 @media (max-width: 900px) {
   .inbox { grid-template-columns: 1fr; height: auto; }
   .inbox-nav { flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--border); }
