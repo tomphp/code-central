@@ -7,28 +7,26 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// A Project's mode says where init puts its files: committed to the
-// repository, or kept local to one checkout (`init --local`).
+// A Project's mode (store.Mode) says where init puts its files: committed
+// to the repository, or kept local to one checkout (`init --local`).
 const (
-	ModeCommitted = "committed"
-	ModeLocal     = "local"
+	ModeCommitted = store.ModeCommitted
+	ModeLocal     = store.ModeLocal
 )
 
-func validMode(m string) bool { return m == ModeCommitted || m == ModeLocal }
-
-func invalidMode(m string) *Error {
+func invalidMode(m store.Mode) *Error {
 	return invalid("mode", "mode %q is neither %q nor %q", m, ModeCommitted, ModeLocal)
 }
 
 // SetProjectModeInput is set_project_mode's input.
 type SetProjectModeInput struct {
-	Mode string `json:"mode"`
+	Mode store.Mode `json:"mode"`
 }
 
 // SetProjectMode is set_project_mode(key, mode): init calls it when the
 // human agrees to switch a Project between committed and local.
 func (c *Core) SetProjectMode(_ context.Context, key string, in SetProjectModeInput) (ProjectView, error) {
-	if !validMode(in.Mode) {
+	if !in.Mode.Valid() {
 		return ProjectView{}, invalidMode(in.Mode)
 	}
 	var v ProjectView

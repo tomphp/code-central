@@ -36,12 +36,25 @@ var States = []State{Draft, Ready, InProgress, NeedsAnswer, Answered, Failed, In
 // Valid reports whether s is one of the nine States.
 func (s State) Valid() bool { return slices.Contains(States, s) }
 
+// Mode is a Project's mode: where init puts its files, committed to the
+// repository or kept local to one checkout (`init --local`).
+type Mode string
+
+// The two modes.
+const (
+	ModeCommitted Mode = "committed"
+	ModeLocal     Mode = "local"
+)
+
+// Valid reports whether m is one of the two modes.
+func (m Mode) Valid() bool { return m == ModeCommitted || m == ModeLocal }
+
 // Project is one tracked repository.
 type Project struct {
 	Key         string
 	DisplayName string
 	Created     time.Time
-	Mode        string
+	Mode        Mode
 	// Archived is when the human archived the Project; zero while it isn't.
 	Archived time.Time
 }

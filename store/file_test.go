@@ -275,6 +275,7 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 		{"bad timestamp", "projects/acme/tickets/2.yaml", strings.Replace(ticket, "updated: 2026-11-07T09:30:00Z", "updated: yesterday", 1), "updated"},
 		{"missing title", "projects/acme/tickets/2.yaml", strings.Replace(ticket, "title: T\n", "", 1), "title"},
 		{"bad archived time", "projects/acme/project.yaml", project + "archived: true\n", "archived"},
+		{"bad mode", "projects/acme/project.yaml", strings.Replace(project, "mode: committed", "mode: shared", 1), "mode"},
 		{"unknown project field", "projects/acme/project.yaml", project + "path: /src\n", "path"},
 		{"spec without frontmatter", "projects/acme/specs/3.md", "# just markdown\n", "frontmatter"},
 		{"spec id mismatch", "projects/acme/specs/3.md", "---\nid: 4\ntitle: S\nlabels: []\ntags: {}\ncreated: 2026-11-07T09:30:00Z\nupdated: 2026-11-07T09:30:00Z\n---\nbody\n", "id"},

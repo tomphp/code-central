@@ -21,6 +21,7 @@ import {
   type ChangeEvent,
   type FindTicketsFilter,
   type LinkedRow,
+  type Mode,
   type NeedsMeReason,
   type NeedsMeRow,
   type NeedsMeView,
@@ -38,7 +39,7 @@ interface FakeProject {
   key: string;
   display_name: string;
   created: string;
-  mode: string;
+  mode: Mode;
   archived: boolean;
   archived_at?: string;
   next: number;

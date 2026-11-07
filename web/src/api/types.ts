@@ -26,11 +26,14 @@ export type NeedsMeReason =
   | "blocked_by_cancelled"
   | "closed_externally";
 
+// A Project's mode: where init puts its files.
+export type Mode = "committed" | "local";
+
 export interface ProjectView {
   key: string;
   display_name: string;
   created: string;
-  mode: string;
+  mode: Mode;
   archived: boolean;
   // archived_at is when the human archived the Project, while it is.
   archived_at?: string;

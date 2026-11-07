@@ -13,6 +13,7 @@ import (
 
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/store"
 )
 
 // mcpFile is the file init writes and shell commands read the key from.
@@ -41,7 +42,7 @@ func runInit(ctx context.Context, e Env, args []string) error {
 	if len(pos) > 0 {
 		return usagef("unexpected argument %q", pos[0])
 	}
-	wantMode := "" // no flag: follow the stored mode
+	var wantMode store.Mode // no flag: follow the stored mode
 	switch {
 	case *localFlag && *committedFlag:
 		return usagef("--local and --committed can't both be given")

@@ -45,11 +45,11 @@ func (c *Core) now() time.Time { return c.clock.Now().UTC().Truncate(time.Second
 
 // ProjectView is a Project as every read returns it.
 type ProjectView struct {
-	Key         string    `json:"key"`
-	DisplayName string    `json:"display_name"`
-	Created     time.Time `json:"created"`
-	Mode        string    `json:"mode"`
-	Archived    bool      `json:"archived"`
+	Key         string     `json:"key"`
+	DisplayName string     `json:"display_name"`
+	Created     time.Time  `json:"created"`
+	Mode        store.Mode `json:"mode"`
+	Archived    bool       `json:"archived"`
 	// ArchivedAt is when the human archived the Project, while it is.
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 }
@@ -144,7 +144,7 @@ type CreateProjectInput struct {
 	Key         string `json:"key"`
 	DisplayName string `json:"display_name,omitempty"`
 	// Mode is committed (the default) or local.
-	Mode string `json:"mode,omitempty"`
+	Mode store.Mode `json:"mode,omitempty"`
 }
 
 // CreateSpecInput is create_spec's input.
@@ -191,7 +191,7 @@ func (c *Core) CreateProject(_ context.Context, in CreateProjectInput) (ProjectV
 	if mode == "" {
 		mode = ModeCommitted
 	}
-	if !validMode(mode) {
+	if !mode.Valid() {
 		return ProjectView{}, invalidMode(mode)
 	}
 	p := store.Project{Key: in.Key, DisplayName: name, Created: c.now(), Mode: mode}

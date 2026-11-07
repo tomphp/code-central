@@ -284,7 +284,10 @@ func (s *FileStore) loadProject(key string) error {
 	if pf.Key != key {
 		return &LoadError{File: rel, Field: "key", Msg: fmt.Sprintf("key %q does not match its folder %q", pf.Key, key)}
 	}
-	p := Project{Key: pf.Key, DisplayName: pf.DisplayName, Mode: pf.Mode}
+	p := Project{Key: pf.Key, DisplayName: pf.DisplayName, Mode: Mode(pf.Mode)}
+	if !p.Mode.Valid() {
+		return &LoadError{File: rel, Field: "mode", Msg: fmt.Sprintf("unknown mode %q (committed or local)", pf.Mode)}
+	}
 	if p.Created, err = parseTime(pf.Created); err != nil {
 		return &LoadError{File: rel, Field: "created", Msg: err.Error()}
 	}
@@ -568,7 +571,7 @@ func encode(record any, project string) (string, []byte, error) {
 	switch r := record.(type) {
 	case Project:
 		rel = filepath.Join("projects", r.Key, "project.yaml")
-		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: r.Mode, Archived: formatOptionalTime(r.Archived)})
+		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived)})
 	case Spec:
 		rel = filepath.Join("projects", project, "specs", strconv.Itoa(r.Number)+".md")
 		var front []byte
