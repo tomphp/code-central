@@ -88,6 +88,7 @@ describe("the In Review panel", () => {
     window.history.replaceState(null, "", "/?view=inbox&ticket=acme-1");
     const fake = world();
     render(<App api={fake} now={() => fake.now} />);
-    expect(await screen.findByRole("region", { name: "In Review" })).toHaveTextContent("Added the login page");
+    const pane = screen.getByRole("complementary", { name: "Ticket" });
+    expect(await within(pane).findByRole("region", { name: "In Review" })).toHaveTextContent("Added the login page");
   });
 });

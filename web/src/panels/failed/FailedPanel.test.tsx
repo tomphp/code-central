@@ -72,7 +72,7 @@ describe("the Failed panel", () => {
   it("says when the latest report has no session to resume", async () => {
     const panel = await renderPanel(world([report(1), report(2, { session_id: undefined })]));
     expect(within(panel).queryByText(/claude --resume/)).toBeNull();
-    expect(panel).toHaveTextContent("No session ID was recorded");
+    expect(panel).toHaveTextContent("No session ID is recorded");
   });
 
   it("sends back with the note", async () => {
@@ -127,6 +127,7 @@ describe("the Failed panel", () => {
     window.history.replaceState(null, "", "/?view=inbox&ticket=acme-1");
     const fake = world();
     render(<App api={fake} now={() => fake.now} />);
-    expect(await screen.findByRole("region", { name: "Failed" })).toHaveTextContent("Failed 2 times");
+    const pane = screen.getByRole("complementary", { name: "Ticket" });
+    expect(await within(pane).findByRole("region", { name: "Failed" })).toHaveTextContent("Failed 2 times");
   });
 });
