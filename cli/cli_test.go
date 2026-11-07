@@ -15,6 +15,7 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/store"
 )
 
 type result struct {
@@ -260,30 +261,21 @@ func TestServeRefusesATakenPort(t *testing.T) {
 	}
 }
 
-func TestSecondServeOnTheSameStoreRefuses(t *testing.T) {
+// serve opens the store before it binds: a store it can't open (here,
+// one already open elsewhere) stops it with exit 1 before it listens.
+// Why a store can't be opened is the store's to test.
+func TestServeStopsBeforeListeningWhenItCannotOpenTheStore(t *testing.T) {
 	dir := t.TempDir()
-	if _, failed := startServe(t, dir); failed != nil {
-		t.Fatalf("first serve: %+v", *failed)
+	held, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
+	defer held.Close()
 	_, failed := startServe(t, dir)
 	if failed == nil {
-		t.Fatal("second serve started")
+		t.Fatal("serve listened on a store it could not open")
 	}
-	if failed.code != 1 || !strings.Contains(failed.stderr, "locked") {
-		t.Fatalf("exit %d, stderr %q", failed.code, failed.stderr)
-	}
-}
-
-func TestServeRefusesAnInvalidStoreNamingFileAndField(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "store.yaml"), []byte("format: 1\n"), 0o644)
-	os.MkdirAll(filepath.Join(dir, "projects", "acme"), 0o755)
-	os.WriteFile(filepath.Join(dir, "projects", "acme", "project.yaml"), []byte("key: acme\ncolour: red\n"), 0o644)
-	_, failed := startServe(t, dir)
-	if failed == nil {
-		t.Fatal("serve started on an invalid store")
-	}
-	if failed.code != 1 || !strings.Contains(failed.stderr, "projects/acme/project.yaml") || !strings.Contains(failed.stderr, "colour") {
+	if failed.code != 1 || !strings.Contains(failed.stderr, "cannot open the store") {
 		t.Fatalf("exit %d, stderr %q", failed.code, failed.stderr)
 	}
 }
