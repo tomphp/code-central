@@ -11,7 +11,7 @@ import (
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/httpapi"
+	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/web"
@@ -56,7 +56,7 @@ func runServe(ctx context.Context, e Env, args []string) error {
 	}
 
 	c := core.New(st, clock.System{}, ids.Random{})
-	srv := &http.Server{Handler: httpapi.NewHandler(c, web.Handler()), ReadHeaderTimeout: 10 * time.Second}
+	srv := &http.Server{Handler: frontdoor.Handler(c, web.Handler()), ReadHeaderTimeout: 10 * time.Second}
 	errs := make(chan error, len(listeners))
 	bound := make([]string, 0, len(listeners))
 	for _, l := range listeners {

@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/tomoram/code-central/core"
@@ -71,10 +70,8 @@ var handlers = map[string]handlerFunc{
 	},
 }
 
-// NewHandler returns the service's one handler: the HTTP API under /api/
-// and, when ui is non-nil, the embedded UI at /.
-func NewHandler(c *core.Core, ui http.Handler) http.Handler {
-	mux := http.NewServeMux()
+// Register adds the HTTP API under /api/ to the service's one mux.
+func Register(mux *http.ServeMux, c *core.Core) {
 	for name, pattern := range Routes {
 		h := handlers[name]
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
@@ -94,16 +91,6 @@ func NewHandler(c *core.Core, ui http.Handler) http.Handler {
 		}
 		writeError(w, &core.Error{Code: core.NotFound, Message: fmt.Sprintf("no API resource at %s %s", r.Method, r.URL.Path)})
 	})
-	if ui != nil {
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet && r.Method != http.MethodHead {
-				w.WriteHeader(http.StatusMethodNotAllowed)
-				return
-			}
-			ui.ServeHTTP(w, r)
-		})
-	}
-	return mux
 }
 
 // Status maps an error code to its HTTP status.
@@ -134,34 +121,13 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-var unknownField = regexp.MustCompile(`unknown field "([^"]+)"`)
-
 // decodeBody decodes a JSON body strictly: unknown fields are invalid.
 func decodeBody(r *http.Request, v any) error {
 	body, err := io.ReadAll(io.LimitReader(r.Body, 8<<20))
 	if err != nil {
 		return &core.Error{Code: core.Invalid, Message: "cannot read the request body"}
 	}
-	if len(strings.TrimSpace(string(body))) == 0 {
-		body = []byte("{}")
-	}
-	dec := json.NewDecoder(strings.NewReader(string(body)))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		e := &core.Error{Code: core.Invalid, Message: "invalid JSON body: " + err.Error()}
-		if m := unknownField.FindStringSubmatch(err.Error()); m != nil {
-			e.Field = m[1]
-		}
-		var te *json.UnmarshalTypeError
-		if errors.As(err, &te) {
-			e.Field = te.Field
-		}
-		return e
-	}
-	if dec.More() {
-		return &core.Error{Code: core.Invalid, Message: "invalid JSON body: trailing data"}
-	}
-	return nil
+	return core.Decode(body, v)
 }
 
 func onlyParams(q url.Values, allowed ...string) error {

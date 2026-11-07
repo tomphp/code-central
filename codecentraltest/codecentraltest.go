@@ -1,5 +1,6 @@
 // Package codecentraltest starts a real Code Central for tests: the real
-// core, the in-memory store and a fake clock behind the real httpapi, on
+// core, the in-memory store and a fake clock behind the real front doors
+// (HTTP API and MCP, behind the shared middleware), on
 // an httptest port. Go clients of the HTTP API test against it rather
 // than a hand-written fake.
 package codecentraltest
@@ -12,7 +13,7 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/httpapi"
+	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/web"
@@ -36,7 +37,7 @@ func NewServer(t testing.TB) *Server {
 	s := store.NewMemory()
 	clk := clock.NewFake(Start)
 	c := core.New(s, clk, &ids.Sequence{})
-	hs := httptest.NewServer(httpapi.NewHandler(c, web.Handler()))
+	hs := httptest.NewServer(frontdoor.Handler(c, web.Handler()))
 	t.Cleanup(hs.Close)
 	return &Server{URL: hs.URL, Client: client.New(hs.URL), Clock: clk, Core: c, Store: s}
 }

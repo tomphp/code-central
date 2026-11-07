@@ -4,14 +4,19 @@
 
 **Blocked by:** 22
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] MCP is served statelessly over Streamable HTTP at `/p/<key>/mcp`, sharing one `ServeMux` and port with the HTTP API
-- [ ] Agent operations appear as snake_case MCP tools with one-line descriptions and no Project argument; every MCP write is made as `agent`
-- [ ] For an unknown Project Key the MCP connection is accepted and every tool call returns `unknown_project`, naming the key and telling the agent to ask the human to run `code-central init`
-- [ ] MCP and the CLI accept both `<key>-<n>` and a bare `<n>`; an ID with another Project's key is rejected with an error naming the connection's Project
-- [ ] MCP errors are a tool result with `isError` set and the error JSON as text
-- [ ] One middleware in front of MCP and the HTTP API allows only `Host` values `localhost`, `127.0.0.1`, `[::1]` and `host.docker.internal` (plus any `--bind` address later); a missing `Origin` is allowed and a present one must be from those hosts; no CORS headers are sent; the MCP library's own checks are off
-- [ ] The middleware has its own unit tests, run once: the allowlist, no CORS headers, and `GET` never writing
-- [ ] One table-driven suite, built from `core`'s operation list, runs each operation through MCP (the Go MCP client over Streamable HTTP), the HTTP API and the CLI (in-process, `client` pointed at a test server), with one successful and one rejected call each, checking each door's error shape
-- [ ] The suite fails if a door is missing an operation it should expose, or if MCP or the CLI exposes a human-only operation; it tests translation only, never rules
+- [x] MCP is served statelessly over Streamable HTTP at `/p/<key>/mcp`, sharing one `ServeMux` and port with the HTTP API
+- [x] Agent operations appear as snake_case MCP tools with one-line descriptions and no Project argument; every MCP write is made as `agent`
+- [x] For an unknown Project Key the MCP connection is accepted and every tool call returns `unknown_project`, naming the key and telling the agent to ask the human to run `code-central init`
+- [x] MCP and the CLI accept both `<key>-<n>` and a bare `<n>`; an ID with another Project's key is rejected with an error naming the connection's Project
+- [x] MCP errors are a tool result with `isError` set and the error JSON as text
+- [x] One middleware in front of MCP and the HTTP API allows only `Host` values `localhost`, `127.0.0.1`, `[::1]` and `host.docker.internal` (plus any `--bind` address later); a missing `Origin` is allowed and a present one must be from those hosts; no CORS headers are sent; the MCP library's own checks are off
+- [x] The middleware has its own unit tests, run once: the allowlist, no CORS headers, and `GET` never writing
+- [x] One table-driven suite, built from `core`'s operation list, runs each operation through MCP (the Go MCP client over Streamable HTTP), the HTTP API and the CLI (in-process, `client` pointed at a test server), with one successful and one rejected call each, checking each door's error shape
+- [x] The suite fails if a door is missing an operation it should expose, or if MCP or the CLI exposes a human-only operation; it tests translation only, never rules
+
+## Notes
+
+- Packages: `mcp/` (the door; SDK `modelcontextprotocol/go-sdk` v1.8.0 imported as `sdk`), `frontdoor/` (`Handler` = one mux with `httpapi.Register` + `mcp.Register` + UI, wrapped in `Guard`; the cross-door suite is `frontdoor/doors_test.go`).
+- "Every MCP write is made as `agent`": the MCP door puts `core.Agent` in the context (`core.WithActor`/`core.ActorOf`, default `agent`). Nothing in core records an Actor yet, so ticket 25 must make it observable and test it (MCP ignores any Actor header).

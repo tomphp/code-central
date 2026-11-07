@@ -18,7 +18,9 @@ import (
 func newHandler(t *testing.T) http.Handler {
 	t.Helper()
 	c := core.New(store.NewMemory(), clock.NewFake(time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)), &ids.Sequence{})
-	return httpapi.NewHandler(c, nil)
+	mux := http.NewServeMux()
+	httpapi.Register(mux, c)
+	return mux
 }
 
 func do(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
@@ -26,19 +28,6 @@ func do(h http.Handler, method, path, body string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return rec
-}
-
-func TestEveryOperationHasARoute(t *testing.T) {
-	for _, op := range core.Operations {
-		if _, ok := httpapi.Routes[op.Name]; !ok {
-			t.Errorf("operation %s has no HTTP route", op.Name)
-		}
-	}
-	for name := range httpapi.Routes {
-		if _, ok := core.Operation(name); !ok {
-			t.Errorf("route %s is not a core operation", name)
-		}
-	}
 }
 
 func TestErrorStatusAndShape(t *testing.T) {
