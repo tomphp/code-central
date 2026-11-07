@@ -239,7 +239,8 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 		return &core.Error{
 			Code: core.ServiceUnavailable,
 			Message: fmt.Sprintf("cannot reach Code Central at %s: start it with `code-central serve`, "+
-				"or run it as a login item with `code-central service install`", c.BaseURL),
+				"or run it as a login item with `code-central service install`; "+
+				"from a sandbox or container, see `code-central help sandboxes`", c.BaseURL),
 		}
 	}
 	defer resp.Body.Close()

@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	_ "embed"
+	"maps"
 
 	"github.com/tomoram/code-central/store"
 )
@@ -19,7 +20,8 @@ const Instructions = "Code Central holds this Project's work: Specs, and the Tic
 	"The Round rule: while you hold a Claim, every question for the human is a Round posted with post_round, " +
 	"never printed in the terminal, even when the human is at the terminal. " +
 	"When a skill grills, each numbered question becomes one Question, with its recommendation as the recommended answer. " +
-	"Every write tells you its next step; follow it."
+	"Every write tells you its next step; follow it. " +
+	"To import a `.scratch/` folder, call `get_import_guide`."
 
 //go:embed workflow.md
 var workflowProse string
@@ -37,24 +39,20 @@ var stateMeanings = map[store.State]string{
 	store.Cancelled:   "Abandoned",
 }
 
-// NeedsMe lists what puts a Ticket in front of the human, in group order.
-var NeedsMe = []string{
-	"Needs Answer: a Round waits for the human's answers",
-	"Answered: the answers wait for the asking session to pick them up",
-	"Silent Claim: In Progress with no activity for 30 minutes",
-	"Failed: a Failure Report waits for the human",
-	"In Review: finished work waits to be accepted or rejected",
-	"Blocked by a Cancelled Ticket with no Replacements",
-	"Closed externally: its linked item was closed in another system",
-}
-
 // WorkflowView is get_workflow's result: the table core enforces, as
 // data, plus the prose that explains how to work within it.
 type WorkflowView struct {
-	States  []StateView  `json:"states"`
-	Actions []ActionView `json:"actions"`
-	NeedsMe []string     `json:"needs_me"`
-	Prose   string       `json:"prose"`
+	States  []StateView         `json:"states"`
+	Actions []ActionView        `json:"actions"`
+	NeedsMe []NeedsMeReasonView `json:"needs_me"`
+	Prose   string              `json:"prose"`
+}
+
+// NeedsMeReasonView is one Needs Me reason code, in group order, and
+// what it means.
+type NeedsMeReasonView struct {
+	Reason  NeedsMeReason `json:"reason"`
+	Meaning string        `json:"meaning"`
 }
 
 // StateView is one State and what it means.
@@ -80,7 +78,7 @@ type ActionView struct {
 // GetWorkflow is get_workflow: the whole workflow, generated from the
 // same table every move is checked against, so the two can't drift.
 func (c *Core) GetWorkflow(context.Context) (WorkflowView, error) {
-	w := WorkflowView{NeedsMe: NeedsMe, Prose: workflowProse}
+	w := WorkflowView{NeedsMe: needsMeReasons, Prose: workflowProse}
 	for _, s := range store.States {
 		w.States = append(w.States, StateView{Name: s, Meaning: stateMeanings[s]})
 	}
@@ -94,9 +92,9 @@ func (c *Core) GetWorkflow(context.Context) (WorkflowView, error) {
 }
 
 // NextSteps lists every action's next step, by action name, for the
-// context budget test.
+// context budget test. Import's two are included.
 func NextSteps() map[string]string {
-	out := map[string]string{}
+	out := maps.Clone(importNextSteps)
 	for _, a := range Workflow {
 		if a.NextStep != "" {
 			out[a.Name] = a.NextStep

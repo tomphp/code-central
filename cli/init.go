@@ -32,12 +32,23 @@ func mcpURL(key string) string {
 func runInit(ctx context.Context, e Env, args []string) error {
 	fs := flagSet("init")
 	keyFlag := fs.String("key", "", "")
+	localFlag := fs.Bool("local", false, "")
+	committedFlag := fs.Bool("committed", false, "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) > 0 {
 		return usagef("unexpected argument %q", pos[0])
+	}
+	wantMode := "" // no flag: follow the stored mode
+	switch {
+	case *localFlag && *committedFlag:
+		return usagef("--local and --committed can't both be given")
+	case *localFlag:
+		wantMode = core.ModeLocal
+	case *committedFlag:
+		wantMode = core.ModeCommitted
 	}
 	root, inGit := repoRoot(e.Dir)
 	c := newClient(e)
@@ -59,10 +70,12 @@ func runInit(ctx context.Context, e Env, args []string) error {
 	}
 	proposed := ""
 	if k, ok := keyIn(doc); ok {
-		switch _, err := c.GetProject(ctx, k); {
+		switch p, err := c.GetProject(ctx, k); {
 		case err == nil:
-			fmt.Fprintf(e.Stdout, "%s already points at Project %s; nothing to do.\n", path, k)
-			return nil
+			// A known key: leave .mcp.json alone and refresh the rest.
+			// (Ticket 39 says here when p is archived.)
+			fmt.Fprintf(e.Stdout, "%s already points at Project %s; refreshing the files init writes.\n", path, k)
+			return setUp(ctx, e, ask, c, setup{root: root, inGit: inGit, key: k, project: p, wantMode: wantMode})
 		case !isCode(err, core.UnknownProject):
 			return err
 		}
@@ -83,9 +96,11 @@ func runInit(ctx context.Context, e Env, args []string) error {
 			key = proposed
 		}
 	}
+	var project core.ProjectView
 	for {
-		_, err := c.GetProject(ctx, key)
+		p, err := c.GetProject(ctx, key)
 		if err == nil {
+			project = p
 			answer, err := ask(fmt.Sprintf("Project %s already exists. Join it? Only if this repository is that Project. [y/N]: ", key))
 			if err != nil {
 				return err
@@ -108,7 +123,8 @@ func runInit(ctx context.Context, e Env, args []string) error {
 		if !yes(answer, true) {
 			return usagef("init cancelled; nothing was written")
 		}
-		if _, err := c.CreateProject(ctx, core.CreateProjectInput{Key: key}); err != nil {
+		created, err := c.CreateProject(ctx, core.CreateProjectInput{Key: key, Mode: wantMode})
+		if err != nil {
 			var ce *core.Error
 			if errors.As(err, &ce) && ce.Code == core.Invalid {
 				fmt.Fprintln(e.Stdout, ce.Message)
@@ -119,6 +135,7 @@ func runInit(ctx context.Context, e Env, args []string) error {
 			}
 			return err
 		}
+		project = created
 		fmt.Fprintf(e.Stdout, "Created Project %s.\n", key)
 		break
 	}
@@ -126,12 +143,7 @@ func runInit(ctx context.Context, e Env, args []string) error {
 	if err := writeMCP(path, doc, key); err != nil {
 		return err
 	}
-	hooks, err := writeHooks(root)
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(e.Stdout, "Wrote %s and %s; nothing was committed.\n", path, hooks)
-	return nil
+	return setUp(ctx, e, ask, c, setup{root: root, inGit: inGit, key: key, project: project, wantMode: wantMode, wroteMCP: true})
 }
 
 // yes reads a y/n answer, with def for an empty one.

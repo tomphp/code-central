@@ -109,6 +109,12 @@ func (w *noticeWriter) PutTicket(key string, t store.Ticket) error {
 	return w.put(w.Writer.PutTicket(key, t), events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, t.Number)})
 }
 
+// PutImport sends one project.changed notice for the whole Import, so a
+// large one can't overrun a listener's buffer; listeners refetch.
+func (w *noticeWriter) PutImport(key string, im store.Import) error {
+	return w.put(w.Writer.PutImport(key, im), events.Event{Type: events.ProjectChanged, Project: key})
+}
+
 func (w *noticeWriter) put(err error, e events.Event) error {
 	if err == nil {
 		w.notice = &e
