@@ -19,12 +19,18 @@ export interface Driver {
   // postRound claims a Ready Ticket as an agent and posts a Round of
   // Questions, moving it to Needs Answer.
   postRound(key: string, id: string, questions: { title: string; body: string; recommended?: string }[]): Promise<void>;
+<<<<<<< HEAD
   // reportFailure claims a Ready Ticket as an agent (session
   // "contract-session") and posts a Failure Report, moving it to Failed.
   reportFailure(key: string, id: string, report: FailureReportBody): Promise<void>;
   // finish claims a Ready Ticket as an agent and finishes it with the
   // summary, moving it to In Review.
   finish(key: string, id: string, summary: string): Promise<void>;
+=======
+  // claim claims a Ready Ticket as an agent with a session ID, moving it
+  // to In Progress (ticket 35).
+  claim(key: string, id: string, sessionId: string): Promise<void>;
+>>>>>>> impl/35
   close(): Promise<void>;
 }
 
@@ -143,6 +149,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.getTicket("acme", id)).state).toBe("Ready");
     });
 
+<<<<<<< HEAD
     // ---- Failed and In Review (ticket 36) ----
 
     it("shows a Failed Ticket's Failure Reports and lists it in Needs Me", async () => {
@@ -266,6 +273,34 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(a).toMatchObject({ status: 409, code: "action_not_allowed" });
       const r = await d.api.act("acme", id, "reject", { comment: "no" }).catch((e) => e);
       expect(r).toMatchObject({ status: 409, code: "action_not_allowed" });
+=======
+    // ---- release (ticket 35) ----
+    it("releases a Claim back to Ready, ending it, with the note as a comment", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "A", "Ready");
+      await d.claim("acme", id, "sess-1");
+
+      const t = await d.api.act("acme", id, "release", { note: "Session died" });
+      expect(t).toMatchObject({ id, state: "Ready" });
+      expect(t.claims).toHaveLength(1);
+      expect(t.claims[0]).toMatchObject({ session_id: "sess-1", ended_by: "release" });
+      expect(t.claims[0].ended).toBeTruthy();
+      expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Session died" });
+      expect((await d.api.getTicket("acme", id)).state).toBe("Ready");
+
+      const again = await d.api.act("acme", id, "release", {}).catch((e) => e);
+      expect(again).toMatchObject({ status: 409, code: "action_not_allowed" });
+    });
+
+    it("releases without a note, adding no comment", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "A", "Ready");
+      await d.claim("acme", id, "sess-1");
+
+      const t = await d.api.act("acme", id, "release", {});
+      expect(t.state).toBe("Ready");
+      expect(t.comments).toEqual([]);
+>>>>>>> impl/35
     });
 
     it("delivers a change notice for each write over the live feed", async () => {
