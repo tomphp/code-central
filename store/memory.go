@@ -2,6 +2,7 @@ package store
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
 	"sync"
 )
@@ -162,6 +163,41 @@ func (w *writer) PutTicket(project string, t Ticket) error {
 		return err
 	}
 	w.x.projects[project].tickets[t.Number] = t
+	return nil
+}
+
+func (w *writer) PutImport(project string, im Import) error {
+	im = im.clone()
+	if p, ok := w.x.projects[project]; ok {
+		seen := map[int]bool{}
+		taken := func(n int) bool {
+			_, s := p.specs[n]
+			_, t := p.tickets[n]
+			dup := seen[n]
+			seen[n] = true
+			return s || t || dup
+		}
+		for _, s := range im.Specs {
+			if taken(s.Number) {
+				return fmt.Errorf("%w: %s-%d", ErrExists, project, s.Number)
+			}
+		}
+		for _, t := range im.Tickets {
+			if taken(t.Number) {
+				return fmt.Errorf("%w: %s-%d", ErrExists, project, t.Number)
+			}
+		}
+	}
+	if err := w.begin(im, project); err != nil {
+		return err
+	}
+	p := w.x.projects[project]
+	for _, s := range im.Specs {
+		p.specs[s.Number] = s
+	}
+	for _, t := range im.Tickets {
+		p.tickets[t.Number] = t
+	}
 	return nil
 }
 

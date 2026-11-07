@@ -1,0 +1,2 @@
+{"specs": [{"source": ".scratch/search/spec.md", "title": "Search"}],
+ "tickets": [{"source": ".scratch/search/issues/01-index.md", "spec": ".scratch/nope/", "title": "Index"}]}

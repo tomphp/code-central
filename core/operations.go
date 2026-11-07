@@ -60,6 +60,9 @@ var Operations = []Op{
 	{Name: "send_back", Audience: HumanOnly, Write: true},
 	{Name: "to_draft", Audience: HumanOnly, Write: true},
 
+	// init's teaching files and modes (ticket 41).
+	{Name: "set_project_mode", Audience: HumanOnly, Write: true},
+
 	// The published workflow (ticket 26).
 	{Name: "get_workflow", Audience: AgentAndHuman},
 
@@ -75,6 +78,10 @@ var Operations = []Op{
 	{Name: "list_projects", Audience: HumanOnly},
 	{Name: "move", Audience: HumanOnly, Write: true},
 	{Name: "rename_project", Audience: HumanOnly, Write: true},
+
+	// Scratch Import (ticket 40).
+	{Name: "get_import_guide", Audience: AgentAndHuman},
+	{Name: "import", Audience: AgentAndHuman, Write: true},
 }
 
 // Operation looks an operation up by name.

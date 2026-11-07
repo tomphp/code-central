@@ -79,7 +79,7 @@ var commands map[string]command
 
 func init() {
 	commands = map[string]command{
-		"init":          {usage: "init [--key <key>]  set this repository up as a Project", run: runInit},
+		"init":          {usage: "init [--key <key>] [--local | --committed]  set this repository up as a Project (--local keeps init's files out of git)", run: runInit},
 		"serve":         {usage: "serve [--store <dir>]  run the service in the foreground", run: runServe},
 		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->]", run: runCreateSpec},
 		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--description <md> | --file <path|->]", run: runCreateTicket},
@@ -123,6 +123,9 @@ func Run(ctx context.Context, args []string, e Env) int {
 		if wd, err := os.Getwd(); err == nil {
 			e.Dir = wd
 		}
+	}
+	if len(args) > 1 && args[0] == "help" {
+		return runHelpTopic(e, args[1])
 	}
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		w, code := e.Stdout, exitOK
@@ -173,6 +176,7 @@ func printUsage(w io.Writer) {
 	for _, n := range names {
 		fmt.Fprintf(w, "  %s\n", commands[n].usage)
 	}
+	fmt.Fprintln(w, "\nHelp topics: code-central help sandboxes")
 }
 
 // flagSet is a FlagSet that reports errors instead of printing them.

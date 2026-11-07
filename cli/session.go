@@ -125,9 +125,10 @@ func runHook(_ context.Context, e Env, args []string) error {
 // The hooks init writes into .claude/settings.json. The commands are
 // stable across versions; the matchers name the MCP server init writes.
 const (
-	settingsFile   = ".claude/settings.json"
-	sessionHookCmd = "code-central hook session-id"
-	pingHookCmd    = "code-central ping"
+	settingsFile      = ".claude/settings.json"
+	localSettingsFile = ".claude/settings.local.json"
+	sessionHookCmd    = "code-central hook session-id"
+	pingHookCmd       = "code-central ping"
 )
 
 var ourHooks = []struct{ event, matcher, command string }{
@@ -135,20 +136,24 @@ var ourHooks = []struct{ event, matcher, command string }{
 	{"PostToolUse", "*", pingHookCmd},
 }
 
-// writeHooks merges Code Central's hooks into root/.claude/settings.json,
+// writeHooks merges Code Central's hooks into the settings file at path
+// (.claude/settings.json, or settings.local.json for a local Project),
 // keeping every other setting and hook, and replacing any earlier copy of
-// ours so re-running init never duplicates them.
-func writeHooks(root string) (string, error) {
-	path := filepath.Join(root, filepath.FromSlash(settingsFile))
+// ours so re-running init never duplicates them. With add false it only
+// removes ours, and leaves a missing file missing.
+func writeHooks(path string, add bool) error {
 	doc := map[string]any{}
 	b, err := os.ReadFile(path)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
+		if !add {
+			return nil
+		}
 	case err != nil:
-		return path, err
+		return err
 	default:
 		if err := json.Unmarshal(b, &doc); err != nil {
-			return path, fmt.Errorf("%s isn't valid JSON (%v); fix it and run init again", path, err)
+			return fmt.Errorf("%s isn't valid JSON (%v); fix it and run init again", path, err)
 		}
 	}
 	hooks, ok := doc["hooks"].(map[string]any)
@@ -164,19 +169,29 @@ func writeHooks(root string) (string, error) {
 				kept = append(kept, g)
 			}
 		}
-		hooks[h.event] = append(kept, map[string]any{
-			"matcher": h.matcher,
-			"hooks":   []any{map[string]any{"type": "command", "command": h.command}},
-		})
+		if add {
+			kept = append(kept, map[string]any{
+				"matcher": h.matcher,
+				"hooks":   []any{map[string]any{"type": "command", "command": h.command}},
+			})
+		}
+		if len(kept) == 0 {
+			delete(hooks, h.event)
+		} else {
+			hooks[h.event] = kept
+		}
+	}
+	if len(hooks) == 0 {
+		delete(doc, "hooks")
 	}
 	out, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
-		return path, err
+		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return path, err
+		return err
 	}
-	return path, os.WriteFile(path, append(out, '\n'), 0o644)
+	return os.WriteFile(path, append(out, '\n'), 0o644)
 }
 
 // isOurs reports whether a hook group runs only Code Central's commands.
