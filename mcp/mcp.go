@@ -94,7 +94,7 @@ var tools = map[string]tool{
 		},
 	},
 	"claim": {
-		description: "Claim the next Ready Ticket (or the one named, or the next in a Spec); returns a Claim ID and the Ticket, or ticket null when none.",
+		description: "Claim the next Ready Ticket (or the one named, or the next in a Spec); returns a Claim ID and the Ticket, or ticket null when none. Claiming a Ticket this session already holds, with its session_id, returns the same Claim.",
 		schema: object(map[string]any{
 			"spec":           ref("Claim the next Ticket in this Spec."),
 			"ticket":         ref("Claim this Ticket."),

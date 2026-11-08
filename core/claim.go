@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -57,7 +58,9 @@ const stopWorking = "stop working this Ticket"
 
 // Claim is claim(spec?, ticket?, session_id?, working_dir?, resume_command?): the next claimable Ticket
 // in claim order (or the named one) moves to In Progress under a new
-// Claim, in one atomic step under the store's write lock.
+// Claim, in one atomic step under the store's write lock. A named Ticket
+// whose live Claim has the caller's non-empty session ID returns that
+// Claim instead, writing nothing.
 func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResult, error) {
 	if in.Spec != "" && in.Ticket != "" {
 		return ClaimResult{}, invalid("ticket", "pass spec or ticket, not both")
@@ -70,6 +73,17 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		t, found, err := claimTarget(w, key, in)
 		if err != nil || !found {
 			return err
+		}
+		if live, ok := liveClaim(t); ok && in.Ticket != "" {
+			if in.SessionID == "" || live.SessionID != in.SessionID {
+				return heldError(key, t, live, in.SessionID, ActorOf(ctx))
+			}
+			// The holding session claims again: its Claim, nothing written
+			// (ADR 0010).
+			v := c.ticketView(w, key, t)
+			g := stageGuide(GuideStage(t.Labels))
+			res = ClaimResult{ClaimID: live.ID, Ticket: &v, StageGuide: &g}
+			return nil
 		}
 		if t.State == store.Ready && blocked(w, key, t) {
 			return blockedError(w, key, t, ActorOf(ctx))
@@ -92,6 +106,17 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		return nil
 	})
 	return res, err
+}
+
+// heldError is claim's action_not_allowed on a named Ticket whose live
+// Claim isn't the caller's, saying who holds it and what to do.
+func heldError(key string, t store.Ticket, live *store.Claim, sessionID string, actor Actor) error {
+	msg := fmt.Sprintf("%s is held by Claim %d of another session; claim another Ticket, or ask the human to release it",
+		DisplayID(key, t.Number), live.Number)
+	if sessionID == "" {
+		msg += "; if this session holds it, call claim again with your session_id"
+	}
+	return &Error{Code: ActionNotAllowed, Message: msg, AllowedActions: allowedActions(t.State, actor)}
 }
 
 // claimTarget is the named Ticket, or the first claimable one (in the
