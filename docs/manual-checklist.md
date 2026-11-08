@@ -2,6 +2,10 @@
 
 Run this by hand once v1 is built (`make build`). These paths can't be automated in the test suites. Record the date, the version (`code-central --version`) and the result of each step.
 
+## Guides
+
+- [ ] Follow every guide listed in `README.md` on a fresh repository, made as the guide makes it, before a release: the commands, prompts and output still match what the guide shows. Fix the guide in the release if they don't.
+
 ## `service install`
 
 - [ ] macOS: `code-central service install`; `launchctl print gui/$(id -u)/com.github.tomoram.code-central` shows it running; `curl -sI http://localhost:7733/api/workflow` shows `X-Code-Central-Version`.
