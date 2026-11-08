@@ -59,7 +59,7 @@ func (c *Core) waitResult(key string, ref Ref) (WaitResult, error) {
 		if _, ok := r.Project(key); !ok {
 			return unknownProject(key)
 		}
-		t, err := ticket(r, key, ref)
+		t, err := resolveTicket(r, key, "wait", "ticket", ref)
 		if err != nil {
 			return err
 		}

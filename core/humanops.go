@@ -22,7 +22,7 @@ type MoveInput struct {
 // own, Needs Answer and Failed. Leaving a Claim State ends the Claim;
 // leaving Needs Answer also dismisses its open Questions.
 func (c *Core) Move(ctx context.Context, key string, in MoveInput) (TicketView, error) {
-	return c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "move", in.Ticket, func(t *store.Ticket) (bool, error) {
 		to := in.ToState
 		row := Workflow[slices.IndexFunc(Workflow, func(a Action) bool { return a.Name == "move" })]
 		switch {

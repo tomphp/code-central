@@ -598,6 +598,29 @@ func TestIDsFromAnotherProjectAreRejectedNamingTheConnectionsProject(t *testing.
 	field("id", "acme-2")(t, cliOK(t, srv, []string{"get-ticket", "2"}))
 }
 
+func TestIDsOfTheWrongKindAreRejectedNamingTheOperationToUse(t *testing.T) {
+	srv := newServer(t) // acme-1 is a Spec, acme-2 a Ticket of it
+	s := connect(t, srv, "acme")
+	for want, errs := range map[string][]core.Error{
+		"acme-1 is a Spec; use get_spec": {
+			mcpRejected(t, s, "get_ticket", map[string]any{"ticket": "acme-1"}, core.NotFound),
+			httpRejected(t, srv, httpCall{"GET", "/api/p/acme/tickets/1", ""}, core.NotFound),
+			cliRejected(t, srv, []string{"get-ticket", "acme-1"}, core.NotFound),
+		},
+		"acme-2 is a Ticket of Spec acme-1; use get_ticket": {
+			mcpRejected(t, s, "get_spec", map[string]any{"spec": "acme-2"}, core.NotFound),
+			httpRejected(t, srv, httpCall{"GET", "/api/p/acme/specs/2", ""}, core.NotFound),
+			cliRejected(t, srv, []string{"get-spec", "acme-2"}, core.NotFound),
+		},
+	} {
+		for i, e := range errs {
+			if e.Message != want {
+				t.Errorf("%s: message %q, want %q", []string{"mcp", "http", "cli"}[i], e.Message, want)
+			}
+		}
+	}
+}
+
 func TestMCPRejectsUnknownArguments(t *testing.T) {
 	srv := newServer(t)
 	e := mcpRejected(t, connect(t, srv, "acme"), "create_spec", map[string]any{"title": "S", "project": "other"}, core.Invalid)
@@ -651,13 +674,14 @@ func httpOK(t *testing.T, srv *codecentraltest.Server, c httpCall) map[string]an
 	return object(t, b)
 }
 
-func httpRejected(t *testing.T, srv *codecentraltest.Server, c httpCall, code core.Code) {
+func httpRejected(t *testing.T, srv *codecentraltest.Server, c httpCall, code core.Code) core.Error {
 	t.Helper()
 	status, b := httpDo(t, srv, c)
 	e := errorJSON(t, b, code)
 	if status != httpapi.Status(code) {
 		t.Fatalf("status %d, want %d for %s", status, httpapi.Status(code), e.Code)
 	}
+	return e
 }
 
 // --- MCP ---

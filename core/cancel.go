@@ -21,7 +21,7 @@ type CancelInput struct {
 // Replacements when read, so only this Ticket's file is written.
 func (c *Core) Cancel(ctx context.Context, key string, in CancelInput) (TicketView, error) {
 	actor := ActorOf(ctx)
-	return c.updateTicketIn(key, in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, "cancel", in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
 		claim := 0
 		if live, ok := liveClaim(*t); ok {
 			claim = live.Number

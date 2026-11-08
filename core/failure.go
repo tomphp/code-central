@@ -69,7 +69,7 @@ func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureIn
 			return StopResult{}, invalid(f.name, "a Failure Report needs %s: %s", f.name, f.hint)
 		}
 	}
-	v, err := c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
+	v, err := c.updateTicket(key, "report_failure", in.Ticket, func(t *store.Ticket) (bool, error) {
 		now := c.now()
 		live, _ := liveClaim(*t)
 		if err := transition(ctx, t, key, "report_failure", in.ClaimID, now); err != nil {

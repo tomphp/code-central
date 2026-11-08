@@ -239,14 +239,11 @@ func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in UpdateLinked
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		n, err := in.Spec.number(key, "spec")
+		s, err := resolveSpec(w, key, "update_linked_spec", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
-		s, ok := w.Spec(key, n)
-		if !ok {
-			return notFound("there is no Spec %s", DisplayID(key, n))
-		}
+		n := s.Number
 		if err := ownedByLink(DisplayID(key, n), s.Link); err != nil {
 			return err
 		}
@@ -286,7 +283,7 @@ func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in UpdateLink
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
 		return TicketView{}, invalid("title", "a Ticket needs a title")
 	}
-	return c.updateTicketIn(key, in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, "update_linked_ticket", in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
 		if err := ownedByLink(DisplayID(key, t.Number), t.Link); err != nil {
 			return false, err
 		}

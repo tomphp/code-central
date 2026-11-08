@@ -29,13 +29,11 @@ func (c *Core) GetSpecQuestions(_ context.Context, key string, ref Ref) (SpecQue
 		if _, ok := r.Project(key); !ok {
 			return unknownProject(key)
 		}
-		n, err := ref.number(key, "spec")
+		s, err := resolveSpec(r, key, "get_spec_questions", "spec", ref)
 		if err != nil {
 			return err
 		}
-		if _, ok := r.Spec(key, n); !ok {
-			return notFound("there is no Spec %s", DisplayID(key, n))
-		}
+		n := s.Number
 		v = SpecQuestions{Spec: DisplayID(key, n), Tickets: []TicketQuestions{}}
 		for _, t := range specTickets(r, key, n) {
 			if len(t.Rounds) > 0 {

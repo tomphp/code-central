@@ -324,13 +324,9 @@ func (c *Core) GetTicket(_ context.Context, key string, ref Ref) (TicketView, er
 		if _, ok := r.Project(key); !ok {
 			return unknownProject(key)
 		}
-		n, err := ref.number(key, "ticket")
+		t, err := resolveTicket(r, key, "get_ticket", "ticket", ref)
 		if err != nil {
 			return err
-		}
-		t, ok := r.Ticket(key, n)
-		if !ok {
-			return notFound("there is no Ticket %s", DisplayID(key, n))
 		}
 		v = c.ticketView(r, key, t)
 		return nil

@@ -95,14 +95,11 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 		if _, ok := r.Project(key); !ok {
 			return unknownProject(key)
 		}
-		n, err := in.Spec.number(key, "spec")
+		s, err := resolveSpec(r, key, "get_spec", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
-		s, ok := r.Spec(key, n)
-		if !ok {
-			return notFound("there is no Spec %s", DisplayID(key, n))
-		}
+		n := s.Number
 		tickets := specTickets(r, key, n)
 		sv := specView(key, s)
 		v = SpecDetail{

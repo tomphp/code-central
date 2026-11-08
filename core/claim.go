@@ -98,7 +98,7 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 // Spec, if given) in claim order. found is false when nothing is claimable.
 func claimTarget(r store.Reader, key string, in ClaimInput) (t store.Ticket, found bool, err error) {
 	if in.Ticket != "" {
-		t, err := ticket(r, key, in.Ticket)
+		t, err := resolveTicket(r, key, "claim", "ticket", in.Ticket)
 		if err != nil {
 			return t, false, err
 		}
@@ -150,7 +150,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 // work's finish named a branch, so it waits to land (ADR 0006), and to
 // Done otherwise.
 func (c *Core) Accept(ctx context.Context, key string, in TicketInput) (TicketView, error) {
-	return c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "accept", in.Ticket, func(t *store.Ticket) (bool, error) {
 		to := store.Done
 		if t.Branch != "" {
 			to = store.Accepted
@@ -200,7 +200,7 @@ func (c *Core) act(ctx context.Context, key string, ref Ref, name, claimID, note
 // actThen is act with then applied to the Ticket after the transition,
 // in the same write. An error from then abandons the write.
 func (c *Core) actThen(ctx context.Context, key string, ref Ref, name, claimID, note string, then func(*store.Ticket) error) (TicketView, error) {
-	return c.updateTicket(key, ref, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, name, ref, func(t *store.Ticket) (bool, error) {
 		claim := 0
 		if live, ok := liveClaim(*t); ok {
 			claim = live.Number
@@ -219,17 +219,4 @@ func (c *Core) actThen(ctx context.Context, key string, ref Ref, name, claimID, 
 		}
 		return true, nil
 	})
-}
-
-// ticket reads the Ticket ref names, or returns not_found.
-func ticket(r store.Reader, key string, ref Ref) (store.Ticket, error) {
-	n, err := ref.number(key, "ticket")
-	if err != nil {
-		return store.Ticket{}, err
-	}
-	t, ok := r.Ticket(key, n)
-	if !ok {
-		return store.Ticket{}, notFound("there is no Ticket %s", DisplayID(key, n))
-	}
-	return t, nil
 }

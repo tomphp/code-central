@@ -159,7 +159,7 @@ func cutText(text string, truncated bool) (string, bool) {
 // Project, Ticket or Claim is not_found; a Claim with none held has an
 // empty Transcript.
 func (c *Core) Transcript(_ context.Context, key string, ticket Ref, claim int) (TranscriptView, error) {
-	k, err := c.claimKey(key, ticket, claim)
+	k, err := c.claimKey(key, "transcript", ticket, claim)
 	if err != nil {
 		return TranscriptView{}, err
 	}
@@ -176,7 +176,7 @@ func (c *Core) Transcript(_ context.Context, key string, ticket Ref, claim int) 
 
 // claimKey is Claim number claim of a Ticket, as a Transcript's key. An
 // unknown Project, Ticket or Claim is not_found.
-func (c *Core) claimKey(key string, ticket Ref, claim int) (markKey, error) {
+func (c *Core) claimKey(key, op string, ticket Ref, claim int) (markKey, error) {
 	var k markKey
 	err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
@@ -186,9 +186,9 @@ func (c *Core) claimKey(key string, ticket Ref, claim int) (markKey, error) {
 		if err != nil {
 			return notFound("there is no Ticket %s", ticket)
 		}
-		t, ok := r.Ticket(key, n)
-		if !ok {
-			return notFound("there is no Ticket %s", DisplayID(key, n))
+		t, err := ticketNumbered(r, key, op, "ticket", n)
+		if err != nil {
+			return err
 		}
 		for _, cl := range t.Claims {
 			if cl.Number == claim {
@@ -219,7 +219,7 @@ type TranscriptFeed struct {
 // after the Claim ends, because a late Factory line still arrives. An
 // unknown Project, Ticket or Claim is not_found. Stop ends it.
 func (c *Core) FollowTranscript(_ context.Context, key string, ticket Ref, claim, after int) (*TranscriptFeed, error) {
-	k, err := c.claimKey(key, ticket, claim)
+	k, err := c.claimKey(key, "follow_transcript", ticket, claim)
 	if err != nil {
 		return nil, err
 	}
