@@ -55,6 +55,46 @@ func TestEachSessionStartsItsStagesSkillWithItsStageGuide(t *testing.T) {
 	}
 }
 
+func TestEachPromptSaysTheTicketIsAlreadyClaimedAndNotToCallClaim(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	ids := map[string]string{ // stage -> Ticket
+		"spec":                   h.StageTicket("spec", "Spec: Add a button"),
+		core.ImplementationStage: h.ReadyTicket("Add a button"),
+	}
+
+	h.Start()
+	for _, id := range ids {
+		h.WaitForState(id, store.InReview)
+	}
+
+	calls := map[string]factorytest.Call{}
+	for _, c := range h.Calls() {
+		calls[c.Ticket] = c
+	}
+	for stage, id := range ids {
+		c := calls[id]
+		want := "The Factory has already claimed this Ticket for you: Claim " + c.Claim + " is yours, so don't call claim, and pass " + c.Claim + " as claim_id on every write that needs it."
+		if !strings.Contains(c.Prompt, want) {
+			t.Errorf("%s: prompt %q doesn't say %q", stage, c.Prompt, want)
+		}
+	}
+	impl := calls[ids[core.ImplementationStage]]
+	if want := "in this Ticket's own worktree on branch " + impl.Ticket + ". The Factory has already claimed"; !strings.Contains(impl.Prompt, want) {
+		t.Errorf("implementation prompt %q doesn't say %q", impl.Prompt, want)
+	}
+	if want := "as claim_id on every write that needs it. Commit on this branch only, with no push and no PR, and finish the Ticket when it is done."; !strings.Contains(impl.Prompt, want) {
+		t.Errorf("implementation prompt %q doesn't say %q", impl.Prompt, want)
+	}
+	spec := calls[ids["spec"]].Prompt
+	if strings.Contains(spec, "Stage under Claim") {
+		t.Errorf("Stage prompt %q still says to work the Stage under Claim", spec)
+	}
+	if want := "Finish the Ticket when it is done. A Stage writes nothing to the repository: no files, no commits and no branches."; !strings.Contains(spec, want) {
+		t.Errorf("Stage prompt %q doesn't say %q", spec, want)
+	}
+}
+
 func TestAStageWorksInADetachedWorktreeAtTheBasesTip(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
