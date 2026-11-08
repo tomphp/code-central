@@ -21,7 +21,7 @@ func TestReportFailureTakesTheFieldsAsJSONOnStdinWithFlagsOverriding(t *testing.
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "acme"}
 	stdin := `{"what_broke":"Login 500s","why":"No table","what_to_fix":"Migrate","where_work_stands":"Pushed"}`
 
-	res := decode[core.StopResult](t, run(t, env, stdin, "report-failure", "acme-2", "--claim", "claim-1", "--file", "-", "--why", "Migration 12 never ran"))
+	res := decode[core.StopResult](t, run(t, env, stdin, "report-failure", "acme-2", "--claim", "claim-1", "--file", "-", "--why", "Migration 12 never ran", "--full"))
 	r := res.Ticket.FailureReports
 	if res.Ticket.State != store.Failed || len(r) != 1 || r[0].WhatBroke != "Login 500s" || r[0].Why != "Migration 12 never ran" {
 		t.Fatalf("result %+v", res)

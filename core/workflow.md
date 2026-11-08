@@ -11,7 +11,7 @@ The `states` and `actions` above are the rules Code Central enforces; anything t
 
 Accepting a Ticket whose finish named a `branch` moves it to Accepted: the human has accepted the work and it waits to land in the base. Any other Ticket goes straight to Done. Whoever merges the branch into the base then calls `land` with the commit that put the work there, which moves the Ticket to Done; `land` also works from In Review, for work merged before it was accepted. Only Done clears a Blocker, so a Ticket blocked by Accepted work waits until it lands. If the merge conflicts, `send_back` the Ticket to Ready with a note naming the base commit and the conflicting files, for another agent to resolve. A Ticket Accepted for more than 10 minutes shows the human `accepted_not_landed`.
 
-Every write's response may carry a `next_step`. Do what it says, when it says.
+A write returns an acknowledgement (`id`, `updated`, `changed`, …), not the record; `full: true` returns the record. Every write's response may carry a `next_step`. Do what it says, when it says.
 
 If a write returns `stale_claim`, your Claim has ended (the human released or moved the Ticket, or another session holds it now). Stop working that Ticket at once and don't write to it again with that Claim ID. If you lose your Claim ID, for example after context compaction, `claim` the Ticket again with your `session_id` to get it back; without your session ID, stop the same way and tell the human, who can release the Ticket.
 

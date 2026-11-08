@@ -17,6 +17,13 @@ func report(ticket, claimID string) core.ReportFailureInput {
 	}
 }
 
+// fullReport is report asking for the Ticket back.
+func fullReport(ticket, claimID string) core.ReportFailureInput {
+	in := report(ticket, claimID)
+	in.Full = true
+	return in
+}
+
 // failed is acme-2 claimed (claim-1, session s1) and failed at t0+1h.
 func (f fixture) failed(t *testing.T) {
 	t.Helper()
@@ -34,7 +41,7 @@ func TestReportFailureMovesToFailedEndsTheClaimAndSaysStop(t *testing.T) {
 	f.claim(t, core.ClaimInput{SessionID: "s1"})
 	f.clock.Set(t0.Add(time.Hour))
 
-	res, err := f.core.ReportFailure(ctx, "acme", report("acme-2", "claim-1"))
+	res, err := f.core.ReportFailure(ctx, "acme", fullReport("acme-2", "claim-1"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +105,7 @@ func TestFailureReportsAreNumberedAndKeptAcrossClaims(t *testing.T) {
 	}
 	f.claim(t, core.ClaimInput{SessionID: "s2"})
 	f.clock.Set(t0.Add(2 * time.Hour))
-	res, err := f.core.ReportFailure(ctx, "acme", report("2", "claim-2"))
+	res, err := f.core.ReportFailure(ctx, "acme", fullReport("2", "claim-2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +204,7 @@ func TestGiveUpMovesInProgressToReadyWithTheNote(t *testing.T) {
 	f.claim(t, core.ClaimInput{})
 	f.clock.Set(t0.Add(time.Hour))
 
-	res, err := f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-1", Note: "Out of context; nothing is wrong."})
+	res, err := f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-1", Note: "Out of context; nothing is wrong.", Full: true})
 	if err != nil {
 		t.Fatal(err)
 	}

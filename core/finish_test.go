@@ -26,7 +26,7 @@ func TestFinishMovesToInReviewWithTheSummaryAsAComment(t *testing.T) {
 	f.claim(t, core.ClaimInput{})
 	f.clock.Set(t0.Add(time.Hour))
 
-	res, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-2", ClaimID: "claim-1", Summary: "Built on branch acme-2."})
+	res, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-2", ClaimID: "claim-1", Summary: "Built on branch acme-2.", Full: true})
 	if err != nil {
 		t.Fatal(err)
 	}

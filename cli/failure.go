@@ -21,6 +21,7 @@ func runReportFailure(ctx context.Context, e Env, args []string) error {
 	whatToFix := fs.String("what-to-fix", "", "")
 	whereWorkStands := fs.String("where-work-stands", "", "")
 	file := fs.String("file", "", "")
+	full := fs.Bool("full", false, "")
 	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
@@ -47,7 +48,7 @@ func runReportFailure(ctx context.Context, e Env, args []string) error {
 			*p.dst = *p.src
 		}
 	}
-	in.Ticket, in.ClaimID = ref, *claim
+	in.Ticket, in.ClaimID, in.Full = ref, *claim, in.Full || *full
 	v, err := sc.client.ReportFailure(ctx, sc.project, in)
 	if err != nil {
 		return err
@@ -60,6 +61,7 @@ func runGiveUp(ctx context.Context, e Env, args []string) error {
 	claim := fs.String("claim", "", "")
 	note := fs.String("note", "", "")
 	file := fs.String("file", "", "")
+	full := fs.Bool("full", false, "")
 	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
@@ -68,7 +70,7 @@ func runGiveUp(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.GiveUp(ctx, sc.project, core.GiveUpInput{Ticket: ref, ClaimID: *claim, Note: text})
+	v, err := sc.client.GiveUp(ctx, sc.project, core.GiveUpInput{Ticket: ref, ClaimID: *claim, Note: text, Full: *full})
 	if err != nil {
 		return err
 	}
