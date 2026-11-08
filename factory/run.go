@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,6 +39,7 @@ func (f *factory) loop(ctx context.Context) {
 // resumes first, then new claims.
 func (f *factory) poll(ctx context.Context) {
 	answered := f.reconcile(ctx)
+	f.sweep(ctx)
 	for _, c := range answered {
 		if ctx.Err() != nil || f.running() >= f.o.parallel {
 			return
@@ -271,26 +271,6 @@ func (f *factory) sessionHolder(session string) (int, bool) {
 		}
 	}
 	return 0, false
-}
-
-func (f *factory) worktree(ticket string) string { return filepath.Join(f.worktrees, ticket) }
-
-// implementationWorktree gives implementation Ticket id its worktree at
-// wt on branch id: reused when it is there, else added on the existing
-// branch, else on a new branch from the base's tip.
-func (f *factory) implementationWorktree(id, wt string) error {
-	if _, err := os.Stat(wt); err == nil {
-		if b, err := f.gitOut(wt, "symbolic-ref", "--short", "-q", "HEAD"); err == nil && b == id {
-			return nil
-		}
-		return fmt.Errorf("%s is there but isn't a worktree on branch %s", wt, id)
-	}
-	if _, err := f.gitOut(f.repo, "rev-parse", "--verify", "-q", "refs/heads/"+id); err == nil {
-		_, err := f.gitOut(f.repo, "worktree", "add", "-q", wt, id)
-		return err
-	}
-	_, err := f.gitOut(f.repo, "worktree", "add", "-q", "-b", id, wt, f.base)
-	return err
 }
 
 // answeredPrompt resumes a session whose Round the human has answered.

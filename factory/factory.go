@@ -119,6 +119,7 @@ func Run(ctx context.Context, args []string, e Env) int {
 	if o.bypass {
 		f.printf("warning: --bypass-permissions: every session runs in bypassPermissions mode, with no permission checks")
 	}
+	f.prune()
 	f.loop(ctx)
 	return exitOK
 }
@@ -148,12 +149,13 @@ type factory struct {
 	mu        sync.Mutex       // guards turns and ended
 	turns     map[string]*turn // running turns by Claim ID
 	ended     map[string]bool  // Claim IDs never to be written with again
+	warned    map[string]bool  // dirty finished worktrees already warned of; the poll's own
 	turnsDone sync.WaitGroup
 }
 
 // start makes every start-up check, refusing with the reason.
 func start(e Env, o options) (*factory, error) {
-	f := &factory{e: e, o: o, turns: map[string]*turn{}, ended: map[string]bool{}}
+	f := &factory{e: e, o: o, turns: map[string]*turn{}, ended: map[string]bool{}, warned: map[string]bool{}}
 	git, ok := e.lookPath("git")
 	if !ok {
 		return nil, errors.New("git isn't on PATH")
