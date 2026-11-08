@@ -27,7 +27,7 @@ func acknowledgement(id string, changed ...string) func(*testing.T, map[string]a
 		if !slices.Equal(got, changed) || out["updated"] == nil {
 			t.Fatalf("acknowledgement %v, want changed %v and updated", out, changed)
 		}
-		for _, k := range []string{"body", "description", "edits", "comments", "moves"} {
+		for _, k := range []string{"body", "description", "edits", "comments", "moves", "claims", "rounds"} {
 			if _, ok := out[k]; ok {
 				t.Fatalf("acknowledgement %v holds the record's %s", out, k)
 			}
@@ -35,25 +35,27 @@ func acknowledgement(id string, changed ...string) func(*testing.T, map[string]a
 	}
 }
 
-// specWrites are the Spec writes that acknowledge, with the check each
-// one's call with full makes on the record.
-var specWrites = map[string]func(*testing.T, map[string]any){
-	"create_spec": func(t *testing.T, out map[string]any) {
-		field("id", "acme-4")(t, out)
-		field("body", "Find things.")(t, out)
-	},
-	"edit_spec": func(t *testing.T, out map[string]any) {
-		field("title", "Sign in")(t, out)
-		field("body", "New.")(t, out)
-		if edits, _ := out["edits"].([]any); len(edits) != 1 {
-			t.Fatalf("edits %v", out["edits"])
+// ticketAcknowledgement is acknowledgement for a Ticket write, which
+// also gives the Ticket's State after it.
+func ticketAcknowledgement(id, state string, changed ...string) func(*testing.T, map[string]any) {
+	return func(t *testing.T, out map[string]any) {
+		t.Helper()
+		acknowledgement(id, changed...)(t, out)
+		field("state", state)(t, out)
+	}
+}
+
+// writes are the operations that acknowledge: the cases with a check on
+// their call with full.
+func writes() []string {
+	var out []string
+	for op, c := range cases {
+		if c.full != nil {
+			out = append(out, op)
 		}
-	},
-	"create_linked_spec": func(t *testing.T, out map[string]any) {
-		field("id", "acme-4")(t, out)
-		field("external_state", "open")(t, out["link"].(map[string]any))
-	},
-	"update_linked_spec": field("title", "Epic 2"),
+	}
+	slices.Sort(out)
+	return out
 }
 
 // withFull is c asking for the record: full on MCP, "full": true in the
@@ -87,8 +89,8 @@ func onEveryDoor(t *testing.T, op string, setup func(*testing.T, *codecentraltes
 	return out
 }
 
-func TestSpecWritesAcknowledgeTheSameOnEveryDoor(t *testing.T) {
-	for op := range specWrites {
+func TestWritesAcknowledgeTheSameOnEveryDoor(t *testing.T) {
+	for _, op := range writes() {
 		t.Run(op, func(t *testing.T) {
 			c := cases[op]
 			results := onEveryDoor(t, op, c.setup, c.ok)
@@ -102,24 +104,24 @@ func TestSpecWritesAcknowledgeTheSameOnEveryDoor(t *testing.T) {
 	}
 }
 
-func TestSpecWritesWithFullReturnTheSpecOnEveryDoor(t *testing.T) {
-	for op, check := range specWrites {
+func TestWritesWithFullReturnTheRecordOnEveryDoor(t *testing.T) {
+	for _, op := range writes() {
 		t.Run(op, func(t *testing.T) {
 			c := cases[op]
 			for door, out := range onEveryDoor(t, op, c.setup, withFull(t, c.ok)) {
-				t.Run(door, func(t *testing.T) { check(t, out) })
+				t.Run(door, func(t *testing.T) { c.full(t, out) })
 			}
 		})
 	}
 }
 
-func TestTheSpecWriteToolsOfferFull(t *testing.T) {
+func TestTheWriteToolsOfferFull(t *testing.T) {
 	s := connect(t, newServer(t), "acme")
 	for tool, err := range s.Tools(t.Context(), nil) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := specWrites[tool.Name]; !ok {
+		if !slices.Contains(writes(), tool.Name) {
 			continue
 		}
 		schema, _ := json.Marshal(tool.InputSchema)

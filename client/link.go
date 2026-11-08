@@ -16,9 +16,8 @@ func (c *Client) CreateLinkedSpec(ctx context.Context, key string, in core.Creat
 }
 
 // CreateLinkedTicket is the integration's create_linked_ticket.
-func (c *Client) CreateLinkedTicket(ctx context.Context, key string, in core.CreateLinkedTicketInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", scoped(key, "integration/create_linked_ticket"), in, &out)
+func (c *Client) CreateLinkedTicket(ctx context.Context, key string, in core.CreateLinkedTicketInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, scoped(key, "integration/create_linked_ticket"), in, in.Full)
 }
 
 // UpdateLinkedSpec is the integration's update_linked_spec.
@@ -27,9 +26,8 @@ func (c *Client) UpdateLinkedSpec(ctx context.Context, key string, in core.Updat
 }
 
 // UpdateLinkedTicket is the integration's update_linked_ticket.
-func (c *Client) UpdateLinkedTicket(ctx context.Context, key string, in core.UpdateLinkedTicketInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "integration/tickets", in.Ticket, "update_linked_ticket"), in, &out)
+func (c *Client) UpdateLinkedTicket(ctx context.Context, key string, in core.UpdateLinkedTicketInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "integration/tickets", in.Ticket, "update_linked_ticket"), in, in.Full)
 }
 
 // SetExternalState is the integration's set_external_state.

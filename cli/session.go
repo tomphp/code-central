@@ -56,12 +56,13 @@ func runSetSession(ctx context.Context, e Env, args []string) error {
 	fs := flagSet("set-session")
 	claim := fs.String("claim", "", "")
 	session := fs.String("session", "", "")
+	full := fs.Bool("full", false, "")
 	resume := addResumeFlags(fs)
 	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
 	}
-	in := core.SetSessionInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session)}
+	in := core.SetSessionInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session), Full: *full}
 	in.WorkingDir, in.ResumeCommand = resume.values()
 	v, err := sc.client.SetSession(ctx, sc.project, in)
 	if err != nil {

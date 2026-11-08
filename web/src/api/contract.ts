@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, ExternalState, HeldSessionEvent, SessionEvent, State } from "./types";
+import type { ChangeEvent, ExternalState, HeldSessionEvent, SessionEvent, State, TicketAcknowledgement } from "./types";
 import { ApiError } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -50,6 +50,17 @@ export interface FailureReportBody {
   why: string;
   what_to_fix: string;
   where_work_stands: string;
+}
+
+// wantAcknowledgement checks a human action's result is its Ticket's
+// acknowledgement (ADR 0009): the ID, updated time, the names of the
+// fields it changed (changed among them) and the State, and no record.
+export function wantAcknowledgement(ack: TicketAcknowledgement, id: string, state: State, changed: string[] = []) {
+  expect(Object.keys(ack).filter((k) => k !== "edit").sort()).toEqual(["changed", "id", "state", "updated"]);
+  expect(ack).toMatchObject({ id, state });
+  expect(Number.isNaN(Date.parse(ack.updated))).toBe(false);
+  expect(ack.changed).toEqual(expect.arrayContaining(changed));
+  expect(ack.changed).not.toContain("updated");
 }
 
 export const sampleReport: FailureReportBody = {
@@ -158,7 +169,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const back = await d.api.unarchiveProject("acme");
       expect(back.archived).toBe(false);
       expect(back.archived_at).toBeUndefined();
-      expect((await d.api.act("acme", a, "move", { to_state: "Ready" })).state).toBe("Ready");
+      wantAcknowledgement(await d.api.act("acme", a, "move", { to_state: "Ready" }), a, "Ready", ["state", "moves"]);
     });
 
     it("renames a Project's display name, never its key, and refuses a blank one", async () => {
@@ -201,13 +212,20 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(same).toMatchObject({ status: 422, code: "invalid", field: "to_state" });
     });
 
-    it("runs a human action on a Ticket", async () => {
+    it("runs a human action on a Ticket, acknowledging it with the fields it changed and the new State", async () => {
       await d.createProject("acme", "Acme");
       const id = await d.createTicket("acme", "A", "Draft");
+      const before = await d.api.getTicket("acme", id);
 
-      const t = await d.api.act("acme", id, "move", { to_state: "Ready" });
-      expect(t).toMatchObject({ id, state: "Ready" });
-      expect((await d.api.getTicket("acme", id)).state).toBe("Ready");
+      const ack = await d.api.act("acme", id, "move", { to_state: "Ready" });
+      wantAcknowledgement(ack, id, "Ready", ["state", "moves"]);
+      const t = await d.api.getTicket("acme", id);
+      expect(t.state).toBe("Ready");
+      expect(ack.updated).toBe(t.updated);
+      for (const f of ["title", "description", "comments", "labels"] as const) {
+        expect(JSON.stringify(t[f])).toBe(JSON.stringify(before[f]));
+        expect(ack.changed).not.toContain(f);
+      }
     });
 
     // ---- Failed and In Review (ticket 36) ----
@@ -230,8 +248,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const id = await d.createTicket("acme", "Fix login", "Ready");
       await d.reportFailure("acme", id, sampleReport);
 
-      const t = await d.api.act("acme", id, "send_back", { note: "Fixture fixed on main" });
-      expect(t).toMatchObject({ id, state: "Ready" });
+      wantAcknowledgement(await d.api.act("acme", id, "send_back", { note: "Fixture fixed on main" }), id, "Ready", ["state", "comments", "moves"]);
+      const t = await d.api.getTicket("acme", id);
       expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Fixture fixed on main" });
       expect(t.moves.at(-1)).toMatchObject({ from: "Failed", to: "Ready", actor: "human" });
       expect((await d.api.needsMe()).count).toBe(0);
@@ -243,9 +261,10 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.reportFailure("acme", id, sampleReport);
       const before = (await d.api.getTicket("acme", id)).comments.length;
 
-      const t = await d.api.act("acme", id, "send_back", {});
-      expect(t.state).toBe("Ready");
-      expect(t.comments).toHaveLength(before);
+      const ack = await d.api.act("acme", id, "send_back", {});
+      wantAcknowledgement(ack, id, "Ready", ["state", "moves"]);
+      expect(ack.changed).not.toContain("comments");
+      expect((await d.api.getTicket("acme", id)).comments).toHaveLength(before);
     });
 
     it("moves a Failed Ticket to Draft", async () => {
@@ -253,7 +272,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const id = await d.createTicket("acme", "Fix login", "Ready");
       await d.reportFailure("acme", id, sampleReport);
 
-      expect(await d.api.act("acme", id, "to_draft", {})).toMatchObject({ id, state: "Draft" });
+      wantAcknowledgement(await d.api.act("acme", id, "to_draft", {}), id, "Draft", ["state", "moves"]);
       expect((await d.api.needsMe()).count).toBe(0);
     });
 
@@ -262,8 +281,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const id = await d.createTicket("acme", "Fix login", "Ready");
       await d.reportFailure("acme", id, sampleReport);
 
-      const t = await d.api.act("acme", id, "cancel", {});
-      expect(t).toMatchObject({ id, state: "Cancelled", replacements: [] });
+      wantAcknowledgement(await d.api.act("acme", id, "cancel", {}), id, "Cancelled", ["state", "moves"]);
+      expect(await d.api.getTicket("acme", id)).toMatchObject({ state: "Cancelled", replacements: [] });
       expect((await d.api.needsMe()).count).toBe(0);
     });
 
@@ -303,8 +322,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const id = await d.createTicket("acme", "Login page", "Ready");
       await d.finish("acme", id, "Added the login page");
 
-      const t = await d.api.act("acme", id, "accept", {});
-      expect(t).toMatchObject({ id, state: "Done" });
+      wantAcknowledgement(await d.api.act("acme", id, "accept", {}), id, "Done", ["state", "moves"]);
+      const t = await d.api.getTicket("acme", id);
       expect(t.moves.at(-1)).toMatchObject({ from: "In Review", to: "Done", actor: "human" });
       expect((await d.api.needsMe()).count).toBe(0);
     });
@@ -316,15 +335,16 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const id = await d.createTicket("acme", "Login page", "Ready");
       await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
 
-      const a = await d.api.act("acme", id, "accept", {});
-      expect(a).toMatchObject({ id, state: "Accepted", branch: "impl-7", commit: "abc123" });
+      wantAcknowledgement(await d.api.act("acme", id, "accept", {}), id, "Accepted", ["state", "moves"]);
+      const a = await d.api.getTicket("acme", id);
+      expect(a).toMatchObject({ state: "Accepted", branch: "impl-7", commit: "abc123" });
       expect(a.moves.at(-1)).toMatchObject({ from: "In Review", to: "Accepted", actor: "human" });
 
       const blank = await d.api.act("acme", id, "land", { commit: " " }).catch((e) => e);
       expect(blank).toMatchObject({ status: 422, code: "invalid", field: "commit" });
 
-      const t = await d.api.act("acme", id, "land", { commit: "def456" });
-      expect(t).toMatchObject({ id, state: "Done" });
+      wantAcknowledgement(await d.api.act("acme", id, "land", { commit: "def456" }), id, "Done", ["state", "moves"]);
+      const t = await d.api.getTicket("acme", id);
       expect(t.moves.at(-1)).toMatchObject({ from: "Accepted", to: "Done", actor: "human", via: "merge", commit: "def456" });
     });
 
@@ -334,7 +354,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
       await d.api.act("acme", id, "accept", {});
 
-      expect(await d.api.act("acme", id, "cancel", {})).toMatchObject({ id, state: "Cancelled" });
+      wantAcknowledgement(await d.api.act("acme", id, "cancel", {}), id, "Cancelled", ["state", "moves"]);
     });
 
     it("rejects an In Review Ticket back to Ready only with a comment", async () => {
@@ -347,8 +367,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(blank).toMatchObject({ status: 422, code: "invalid", field: "comment" });
       expect((await d.api.getTicket("acme", id)).state).toBe("In Review");
 
-      const t = await d.api.act("acme", id, "reject", { comment: "The redirect loops" });
-      expect(t).toMatchObject({ id, state: "Ready" });
+      wantAcknowledgement(await d.api.act("acme", id, "reject", { comment: "The redirect loops" }), id, "Ready", ["state", "comments", "moves"]);
+      const t = await d.api.getTicket("acme", id);
       expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "The redirect loops" });
       expect((await d.api.needsMe()).count).toBe(0);
     });
@@ -372,8 +392,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.addBlocker("acme", b, a);
       expect(await d.api.getTicket("acme", b)).toMatchObject({ blocked_by: [a], blocked: true });
 
-      const t = await d.api.act("acme", b, "remove_blocker", { blocker: a });
-      expect(t).toMatchObject({ id: b, blocked_by: [], blockers: [], blocked: false });
+      wantAcknowledgement(await d.api.act("acme", b, "remove_blocker", { blocker: a }), b, "Ready", ["blocked_by", "blockers", "blocked"]);
+      expect(await d.api.getTicket("acme", b)).toMatchObject({ blocked_by: [], blockers: [], blocked: false });
 
       const again = await d.api.act("acme", b, "remove_blocker", { blocker: a }).catch((e) => e);
       expect(again).toMatchObject({ status: 422, code: "invalid", field: "blocker" });
@@ -385,8 +405,9 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const b = await d.createTicket("acme", "B", "Ready");
       await d.addBlocker("acme", b, a);
 
-      const t = await d.api.act("acme", a, "cancel", {});
-      expect(t).toMatchObject({ id: a, state: "Cancelled", replacements: [] });
+      wantAcknowledgement(await d.api.act("acme", a, "cancel", {}), a, "Cancelled", ["state", "moves"]);
+      const t = await d.api.getTicket("acme", a);
+      expect(t).toMatchObject({ state: "Cancelled", replacements: [] });
       expect(t.moves.at(-1)).toMatchObject({ from: "Ready", to: "Cancelled", actor: "human" });
       const dep = await d.api.getTicket("acme", b);
       expect(dep).toMatchObject({ blocked: true, blockers: [{ id: a, title: "A", state: "Cancelled" }] });
@@ -401,8 +422,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         const err = await d.api.act("acme", id, "move", { to_state: to }).catch((e) => e);
         expect(err).toMatchObject({ status: 422, code: "invalid", field: "to_state" });
       }
-      const t = await d.api.act("acme", id, "move", { to_state: "Done" });
-      expect(t.state).toBe("Done");
+      wantAcknowledgement(await d.api.act("acme", id, "move", { to_state: "Done" }), id, "Done", ["state", "moves"]);
+      const t = await d.api.getTicket("acme", id);
       expect(t.moves.at(-1)).toMatchObject({ from: "Ready", to: "Done", actor: "human" });
     });
 
@@ -412,13 +433,12 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const id = await d.createTicket("acme", "A", "Ready");
       await d.claim("acme", id, "sess-1");
 
-      const t = await d.api.act("acme", id, "release", { note: "Session died" });
-      expect(t).toMatchObject({ id, state: "Ready" });
+      wantAcknowledgement(await d.api.act("acme", id, "release", { note: "Session died" }), id, "Ready", ["state", "claims", "comments", "moves"]);
+      const t = await d.api.getTicket("acme", id);
       expect(t.claims).toHaveLength(1);
       expect(t.claims[0]).toMatchObject({ session_id: "sess-1", ended_by: "release" });
       expect(t.claims[0].ended).toBeTruthy();
       expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Session died" });
-      expect((await d.api.getTicket("acme", id)).state).toBe("Ready");
 
       const again = await d.api.act("acme", id, "release", {}).catch((e) => e);
       expect(again).toMatchObject({ status: 409, code: "action_not_allowed" });
@@ -429,9 +449,10 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const id = await d.createTicket("acme", "A", "Ready");
       await d.claim("acme", id, "sess-1");
 
-      const t = await d.api.act("acme", id, "release", {});
-      expect(t.state).toBe("Ready");
-      expect(t.comments).toEqual([]);
+      const ack = await d.api.act("acme", id, "release", {});
+      wantAcknowledgement(ack, id, "Ready", ["state", "claims", "moves"]);
+      expect(ack.changed).not.toContain("comments");
+      expect((await d.api.getTicket("acme", id)).comments).toEqual([]);
     });
 
     // ---- Requirements (ticket 74) ----

@@ -65,9 +65,8 @@ func (c *Client) CreateSpec(ctx context.Context, key string, in core.CreateSpecI
 }
 
 // CreateTicket is create_ticket.
-func (c *Client) CreateTicket(ctx context.Context, key string, in core.CreateTicketInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", scoped(key, "create_ticket"), in, &out)
+func (c *Client) CreateTicket(ctx context.Context, key string, in core.CreateTicketInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, scoped(key, "create_ticket"), in, in.Full)
 }
 
 // GetTicket is get_ticket.
@@ -116,27 +115,23 @@ func (c *Client) Finish(ctx context.Context, key string, in core.FinishInput) (c
 }
 
 // Accept is the human's accept; set Actor to human.
-func (c *Client) Accept(ctx context.Context, key string, in core.TicketInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "accept"), in, &out)
+func (c *Client) Accept(ctx context.Context, key string, in core.TicketInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "accept"), in, in.Full)
 }
 
 // Reject is the human's reject; set Actor to human.
-func (c *Client) Reject(ctx context.Context, key string, in core.RejectInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "reject"), in, &out)
+func (c *Client) Reject(ctx context.Context, key string, in core.RejectInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "reject"), in, in.Full)
 }
 
 // SetSession is set_session.
-func (c *Client) SetSession(ctx context.Context, key string, in core.SetSessionInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "set_session"), in, &out)
+func (c *Client) SetSession(ctx context.Context, key string, in core.SetSessionInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "set_session"), in, in.Full)
 }
 
 // Release is the human's release; set Actor to human.
-func (c *Client) Release(ctx context.Context, key string, in core.ReleaseInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "release"), in, &out)
+func (c *Client) Release(ctx context.Context, key string, in core.ReleaseInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "release"), in, in.Full)
 }
 
 // Ping is POST /api/ping: it marks activity on every live Claim with this
@@ -181,9 +176,8 @@ func write[V any](ctx context.Context, c *Client, path string, in any, full bool
 }
 
 // EditTicket is edit_ticket.
-func (c *Client) EditTicket(ctx context.Context, key string, in core.EditTicketInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "edit_ticket"), in, &out)
+func (c *Client) EditTicket(ctx context.Context, key string, in core.EditTicketInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "edit_ticket"), in, in.Full)
 }
 
 // AddLabels is add_labels.
@@ -211,21 +205,18 @@ func (c *Client) RemoveTags(ctx context.Context, key string, in core.RemoveTagsI
 }
 
 // Comment is comment.
-func (c *Client) Comment(ctx context.Context, key string, in core.CommentInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "comment"), in, &out)
+func (c *Client) Comment(ctx context.Context, key string, in core.CommentInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "comment"), in, in.Full)
 }
 
 // Approve is approve.
-func (c *Client) Approve(ctx context.Context, key string, in core.TicketInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "approve"), in, &out)
+func (c *Client) Approve(ctx context.Context, key string, in core.TicketInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "approve"), in, in.Full)
 }
 
 // Defer is defer.
-func (c *Client) Defer(ctx context.Context, key string, in core.DeferInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "defer"), in, &out)
+func (c *Client) Defer(ctx context.Context, key string, in core.DeferInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "defer"), in, in.Full)
 }
 
 // GetWorkflow is get_workflow.

@@ -12,7 +12,7 @@ func TestAnsweringPartOfARoundMovesNothingAndAnswersStayEditable(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB, qName)
 	f.clock.Set(t0.Add(2 * time.Hour))
-	v, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "Postgres"})
+	v, err := record(f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "Postgres", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func TestAnsweringPartOfARoundMovesNothingAndAnswersStayEditable(t *testing.T) {
 		t.Fatalf("answering part of a Round moved the Ticket to %s", v.State)
 	}
 	f.clock.Set(t0.Add(3 * time.Hour))
-	v, err = f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite after all"})
+	v, err = record(f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite after all", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestTheLastAnswerMovesToAnsweredKeepingTheClaim(t *testing.T) {
 	if _, err := f.core.DismissQuestion(human, "acme", core.DismissQuestionInput{Ticket: "2", Question: 2}); err != nil {
 		t.Fatal(err)
 	}
-	v, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"})
+	v, err := record(f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestTheLastAnswerMovesToAnsweredKeepingTheClaim(t *testing.T) {
 func TestDismissingTheOnlyOpenQuestionMovesToAnswered(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qName)
-	v, err := f.core.DismissQuestion(human, "acme", core.DismissQuestionInput{Ticket: "2", Question: 1})
+	v, err := record(f.core.DismissQuestion(human, "acme", core.DismissQuestionInput{Ticket: "2", Question: 1, Full: true}))
 	if err != nil || v.State != store.Answered {
 		t.Fatalf("got %s, %v", v.State, err)
 	}
@@ -78,7 +78,7 @@ func TestAcceptRecommendedAnswersEveryOpenQuestionWithItsRecommendation(t *testi
 	if _, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 3, Text: "Yes"}); err != nil {
 		t.Fatal(err)
 	}
-	v, err := f.core.AcceptRecommended(human, "acme", core.AcceptRecommendedInput{Ticket: "2", Round: 1})
+	v, err := record(f.core.AcceptRecommended(human, "acme", core.AcceptRecommendedInput{Ticket: "2", Round: 1, Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestAcceptRecommendedAnswersEveryOpenQuestionWithItsRecommendation(t *testi
 
 	f2 := newFixture(t)
 	f2.asking(t, qDB)
-	if v, err := f2.core.AcceptRecommended(human, "acme", core.AcceptRecommendedInput{Ticket: "2", Round: 1}); err != nil || v.State != store.Answered {
+	if v, err := record(f2.core.AcceptRecommended(human, "acme", core.AcceptRecommendedInput{Ticket: "2", Round: 1, Full: true})); err != nil || v.State != store.Answered {
 		t.Fatalf("got %s, %v", v.State, err)
 	}
 	_, err = f2.core.AcceptRecommended(human, "acme", core.AcceptRecommendedInput{Ticket: "2", Round: 1})

@@ -10,7 +10,7 @@ import (
 
 func (f fixture) move(t *testing.T, ref core.Ref, to store.State) core.TicketView {
 	t.Helper()
-	v, err := f.core.Move(human, "acme", core.MoveInput{Ticket: ref, ToState: to})
+	v, err := record(f.core.Move(human, "acme", core.MoveInput{Ticket: ref, ToState: to, Full: true}))
 	if err != nil {
 		t.Fatalf("move %s to %s: %v", ref, to, err)
 	}

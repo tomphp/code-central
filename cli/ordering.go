@@ -11,9 +11,9 @@ import (
 // file sorts after cli.go, so commands is already built.
 func init() {
 	for name, c := range map[string]command{
-		"add-blocker":    {op: "add_blocker", usage: "add-blocker <id> <blocker-id>  make <id> wait on <blocker-id> until it is Done", run: runAddBlocker},
-		"remove-blocker": {op: "remove_blocker", usage: "remove-blocker <id> <blocker-id>", run: runRemoveBlocker},
-		"cancel":         {op: "cancel", usage: "cancel <id> <replacement-id>... [--reason <text> | --file <path|->]", run: runCancel},
+		"add-blocker":    {op: "add_blocker", usage: "add-blocker <id> <blocker-id> [--full]  make <id> wait on <blocker-id> until it is Done", run: runAddBlocker},
+		"remove-blocker": {op: "remove_blocker", usage: "remove-blocker <id> <blocker-id> [--full]", run: runRemoveBlocker},
+		"cancel":         {op: "cancel", usage: "cancel <id> <replacement-id>... [--reason <text> | --file <path|->] [--full]", run: runCancel},
 		"get-spec":       {op: "get_spec", usage: "get-spec <id> [--part body|tickets|edits]... [--section <heading>]...", run: runGetSpec},
 		"find-specs":     {op: "find_specs", usage: "find-specs [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--finished] [--requirements]", run: runFindSpecs},
 	} {
@@ -37,12 +37,14 @@ func tagFlags(pairs []string) (map[string]string, error) {
 	return tags, nil
 }
 
-func blockerCommand(e Env, name string, args []string, op func(scope, core.BlockerInput) (core.TicketView, error)) error {
-	sc, ref, rest, err := itemCommand(e, flagSet(name), args, 1, 1)
+func blockerCommand(e Env, name string, args []string, op func(scope, core.BlockerInput) (core.Written[core.TicketView], error)) error {
+	fs := flagSet(name)
+	full := fs.Bool("full", false, "")
+	sc, ref, rest, err := itemCommand(e, fs, args, 1, 1)
 	if err != nil {
 		return err
 	}
-	v, err := op(sc, core.BlockerInput{Ticket: ref, Blocker: core.Ref(rest[0])})
+	v, err := op(sc, core.BlockerInput{Ticket: ref, Blocker: core.Ref(rest[0]), Full: *full})
 	if err != nil {
 		return err
 	}
@@ -50,13 +52,13 @@ func blockerCommand(e Env, name string, args []string, op func(scope, core.Block
 }
 
 func runAddBlocker(ctx context.Context, e Env, args []string) error {
-	return blockerCommand(e, "add-blocker", args, func(sc scope, in core.BlockerInput) (core.TicketView, error) {
+	return blockerCommand(e, "add-blocker", args, func(sc scope, in core.BlockerInput) (core.Written[core.TicketView], error) {
 		return sc.client.AddBlocker(ctx, sc.project, in)
 	})
 }
 
 func runRemoveBlocker(ctx context.Context, e Env, args []string) error {
-	return blockerCommand(e, "remove-blocker", args, func(sc scope, in core.BlockerInput) (core.TicketView, error) {
+	return blockerCommand(e, "remove-blocker", args, func(sc scope, in core.BlockerInput) (core.Written[core.TicketView], error) {
 		return sc.client.RemoveBlocker(ctx, sc.project, in)
 	})
 }
@@ -65,6 +67,7 @@ func runCancel(ctx context.Context, e Env, args []string) error {
 	fs := flagSet("cancel")
 	reason := fs.String("reason", "", "")
 	file := fs.String("file", "", "")
+	full := fs.Bool("full", false, "")
 	sc, ref, reps, err := itemCommand(e, fs, args, 0, -1)
 	if err != nil {
 		return err
@@ -73,7 +76,7 @@ func runCancel(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.CancelInput{Ticket: ref, Reason: text}
+	in := core.CancelInput{Ticket: ref, Reason: text, Full: *full}
 	for _, r := range reps {
 		in.Replacements = append(in.Replacements, core.Ref(r))
 	}

@@ -79,7 +79,8 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/send_back", `{"note":"Conflicts with main at 9f8e7d in core/claim.go."}`},
 				cli:  []string{"acme-3", "--note", "Conflicts with main at 9f8e7d in core/claim.go."},
 			},
-			check: func(t *testing.T, out map[string]any) {
+			check: ticketAcknowledgement("acme-3", "Ready", "state", "comments", "moves", "claimable"),
+			full: func(t *testing.T, out map[string]any) {
 				field("state", "Ready")(t, out)
 				cs, _ := out["comments"].([]any)
 				if len(cs) != 2 || cs[1].(map[string]any)["body"] != "Conflicts with main at 9f8e7d in core/claim.go." {
@@ -97,7 +98,8 @@ func init() {
 		"to_draft": {
 			setup: failedTicket,
 			ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/3/to_draft", `{}`}},
-			check: field("state", "Draft"),
+			check: ticketAcknowledgement("acme-3", "Draft", "state", "moves", "needs_me_reason"),
+			full:  field("state", "Draft"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/2/to_draft", `{}`}},
 			code:  core.ActionNotAllowed,
 		},

@@ -345,6 +345,25 @@ export interface TicketView {
   link?: LinkView;
 }
 
+// TICKET_FIELDS are TicketView's fields in the service's order, the order
+// a TicketAcknowledgement's changed lists them in.
+export const TICKET_FIELDS = [
+  "id", "title", "state", "spec", "labels", "tags", "blocked_by", "blockers", "replacements",
+  "created", "updated", "description", "branch", "commit", "claims", "rounds", "failure_reports",
+  "comments", "moves", "edits", "blocked", "claimable", "silent_since", "needs_me_reason", "link",
+] as const satisfies readonly (keyof TicketView)[];
+
+// TicketAcknowledgement is what a Ticket write returns (ADR 0009): the
+// names of the fields it changed, never their values, and the Ticket's
+// State after it. edit is set when the write recorded an edit.
+export interface TicketAcknowledgement {
+  id: string;
+  updated: string;
+  changed: (typeof TICKET_FIELDS)[number][];
+  edit?: number;
+  state: State;
+}
+
 // The one error shape every door uses, plus the HTTP status.
 export class ApiError extends Error {
   constructor(

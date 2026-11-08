@@ -25,7 +25,7 @@ func (f fixture) linked(t *testing.T) (core.SpecView, core.TicketView) {
 	if err != nil {
 		t.Fatalf("create_linked_spec: %v", err)
 	}
-	tk, err := f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "1", Title: "Form", Description: "Build it.\n", Link: ghLink("11")})
+	tk, err := record(f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "1", Title: "Form", Description: "Build it.\n", Link: ghLink("11"), Full: true}))
 	if err != nil {
 		t.Fatalf("create_linked_ticket: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestAnIntegrationCreatesLinkedSpecsAndTicketsInDraftOrReady(t *testing.T) {
 	if got := f.get(t, "2"); got.Link == nil || got.Link.ID != "11" {
 		t.Fatalf("get_ticket link %+v", got.Link)
 	}
-	ready, err := f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "1", Title: "API", State: store.Ready, Link: ghLink("12")})
+	ready, err := record(f.core.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: "1", Title: "API", State: store.Ready, Link: ghLink("12"), Full: true}))
 	if err != nil || ready.State != store.Ready {
 		t.Fatalf("ready: %+v, %v", ready, err)
 	}
@@ -123,7 +123,7 @@ func TestTheIntegrationsDefinitionUpdatesGoThroughEditHistory(t *testing.T) {
 	other, _ := f.core.CreateLinkedSpec(integration, "acme", core.CreateLinkedSpecInput{Title: "Accounts", Link: ghLink("20")})
 	f.clock.Advance(time.Minute)
 	title, desc, parent := "Login form", "Build the form.\n", core.Ref(other.ID)
-	v, err := f.core.UpdateLinkedTicket(integration, "acme", core.UpdateLinkedTicketInput{Ticket: "2", Title: &title, Description: &desc, Spec: &parent})
+	v, err := record(f.core.UpdateLinkedTicket(integration, "acme", core.UpdateLinkedTicketInput{Ticket: "2", Title: &title, Description: &desc, Spec: &parent, Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestTheIntegrationsDefinitionUpdatesGoThroughEditHistory(t *testing.T) {
 	}
 	// edit_ticket as the integration is a definition write too.
 	again := "Login form v2"
-	if v, err := f.core.EditTicket(integration, "acme", core.EditTicketInput{Ticket: "2", Title: &again}); err != nil || v.Title != again {
+	if v, err := record(f.core.EditTicket(integration, "acme", core.EditTicketInput{Ticket: "2", Title: &again, Full: true})); err != nil || v.Title != again {
 		t.Fatalf("edit_ticket as integration: %+v, %v", v, err)
 	}
 
@@ -252,7 +252,7 @@ func TestUnlinkDetachesTheLinkMakingTheDefinitionEditable(t *testing.T) {
 		t.Fatalf("edits %+v", v.Edits)
 	}
 	title := "Mine now"
-	if v, err := f.core.EditTicket(ctx, "acme", core.EditTicketInput{Ticket: "2", Title: &title}); err != nil || v.Title != title {
+	if v, err := record(f.core.EditTicket(ctx, "acme", core.EditTicketInput{Ticket: "2", Title: &title, Full: true})); err != nil || v.Title != title {
 		t.Fatalf("edit after unlink: %+v, %v", v, err)
 	}
 	_, err = f.core.UpdateLinkedTicket(integration, "acme", core.UpdateLinkedTicketInput{Ticket: "2", Title: &title})

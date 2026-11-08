@@ -33,6 +33,8 @@ type GiveUpInput struct {
 type SendBackInput struct {
 	Ticket Ref    `json:"ticket"`
 	Note   string `json:"note,omitempty"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // StopResult is the result of an action that ends the agent's work: the
@@ -69,7 +71,8 @@ func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureIn
 			return StopResult{}, invalid(f.name, "a Failure Report needs %s: %s", f.name, f.hint)
 		}
 	}
-	v, err := c.updateTicket(key, "report_failure", in.Ticket, func(t *store.Ticket) (bool, error) {
+	// With full: report_failure's result still holds the whole Ticket.
+	v, err := c.updateTicket(key, "report_failure", in.Ticket, true, func(t *store.Ticket) (bool, error) {
 		now := c.now()
 		live, _ := liveClaim(*t)
 		if err := transition(ctx, t, key, "report_failure", in.ClaimID, now); err != nil {
@@ -87,7 +90,7 @@ func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureIn
 	if err != nil {
 		return StopResult{}, err
 	}
-	return StopResult{Ticket: v, NextStep: nextStep("report_failure")}, nil
+	return StopResult{Ticket: *v.Record, NextStep: nextStep("report_failure")}, nil
 }
 
 // GiveUp is give_up(ticket, claim_id, note): the holder, finding nothing
@@ -97,11 +100,12 @@ func (c *Core) GiveUp(ctx context.Context, key string, in GiveUpInput) (StopResu
 	if strings.TrimSpace(in.Note) == "" {
 		return StopResult{}, invalid("note", "give_up needs a note saying how far you got and why you are stopping")
 	}
-	v, err := c.act(ctx, key, in.Ticket, "give_up", in.ClaimID, in.Note)
+	// With full: give_up's result still holds the whole Ticket.
+	v, err := c.act(ctx, key, in.Ticket, true, "give_up", in.ClaimID, in.Note)
 	if err != nil {
 		return StopResult{}, err
 	}
-	return StopResult{Ticket: v, NextStep: nextStep("give_up")}, nil
+	return StopResult{Ticket: *v.Record, NextStep: nextStep("give_up")}, nil
 }
 
 // SendBack is send_back(ticket, note): the human's from Failed to Ready,
@@ -109,8 +113,8 @@ func (c *Core) GiveUp(ctx context.Context, key string, in GiveUpInput) (StopResu
 // that can't land, such as a merge conflict), with the note required.
 // The note is stored as a comment. The Ticket keeps its created time, so
 // it keeps its place near the front of the claim order.
-func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (TicketView, error) {
-	return c.actThen(ctx, key, in.Ticket, "send_back", "", in.Note, func(t *store.Ticket) error {
+func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Written[TicketView], error) {
+	return c.actThen(ctx, key, in.Ticket, in.Full, "send_back", "", in.Note, func(t *store.Ticket) error {
 		if from := t.Moves[len(t.Moves)-1].From; from == store.Accepted && strings.TrimSpace(in.Note) == "" {
 			return invalid("note", "sending back Accepted work needs a note saying why it can't land, such as the base commit and the conflicting files")
 		}
@@ -119,8 +123,8 @@ func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Tick
 }
 
 // ToDraft is the human's to_draft(ticket): Failed to Draft.
-func (c *Core) ToDraft(ctx context.Context, key string, in TicketInput) (TicketView, error) {
-	return c.act(ctx, key, in.Ticket, "to_draft", "", "")
+func (c *Core) ToDraft(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
+	return c.act(ctx, key, in.Ticket, in.Full, "to_draft", "", "")
 }
 
 func failureReportViews(rs []store.FailureReport) []FailureReportView {

@@ -70,7 +70,7 @@ func TestCreateAndReadSpecsAndTickets(t *testing.T) {
 	}
 
 	tk := decode[core.TicketView](t, run(t, env, "", "create-ticket", "--spec", "acme-1", "--title", "Form",
-		"--state", "Ready", "--label", "ui", "--label", "auth", "--description", "Build it."))
+		"--state", "Ready", "--label", "ui", "--label", "auth", "--description", "Build it.", "--full"))
 	if tk.ID != "acme-2" || tk.State != "Ready" || len(tk.Labels) != 2 || tk.Description != "Build it." {
 		t.Fatalf("ticket: %+v", tk)
 	}

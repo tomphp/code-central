@@ -39,7 +39,7 @@ func TestAcceptingWorkOnABranchMovesItToAcceptedNotDone(t *testing.T) {
 	f := newFixture(t)
 	f.inReviewOnBranch(t)
 	f.clock.Set(t0.Add(2 * time.Hour))
-	v, err := f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"})
+	v, err := record(f.core.Accept(human, "acme", core.TicketInput{Ticket: "2", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestAcceptingWorkWithNoBranchStillGoesStraightToDone(t *testing.T) {
 	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "S", Commit: "abc123"}); err != nil {
 		t.Fatal(err)
 	}
-	v, err := f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"})
+	v, err := record(f.core.Accept(human, "acme", core.TicketInput{Ticket: "2", Full: true}))
 	if err != nil || v.State != store.Done {
 		t.Fatalf("state %s, err %v; want Done", v.State, err)
 	}
@@ -77,7 +77,7 @@ func TestLandMovesAcceptedWorkToDoneRecordingTheMergeCommit(t *testing.T) {
 	f := newFixture(t)
 	f.accepted(t)
 	f.clock.Set(t0.Add(3 * time.Hour))
-	v, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "def456"})
+	v, err := record(f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "def456", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestLandMovesAcceptedWorkToDoneRecordingTheMergeCommit(t *testing.T) {
 func TestTheHumanCanLandWorkStillInReview(t *testing.T) {
 	f := newFixture(t)
 	f.inReviewOnBranch(t)
-	v, err := f.core.Land(human, "acme", core.LandInput{Ticket: "2", Commit: "abc123"})
+	v, err := record(f.core.Land(human, "acme", core.LandInput{Ticket: "2", Commit: "abc123", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}

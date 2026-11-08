@@ -2,7 +2,7 @@
 // dismiss_question and accept_recommended. apiContract (contract.ts) runs
 // them with the same Driver as every other case.
 import { describe, expect, it } from "vitest";
-import type { Driver } from "./contract";
+import { wantAcknowledgement, type Driver } from "./contract";
 import "./actions/rounds";
 
 export function roundContract(driver: () => Driver) {
@@ -22,20 +22,22 @@ export function roundContract(driver: () => Driver) {
     it("saves answers one by one, editable until the Round is complete, then the Ticket is Answered", async () => {
       const { d, id } = await posted();
 
-      let t = await d.api.act("acme", id, "answer", { question: 1, text: "Red" });
-      expect(t.state).toBe("Needs Answer");
+      const ack = await d.api.act("acme", id, "answer", { question: 1, text: "Red" });
+      wantAcknowledgement(ack, id, "Needs Answer", ["rounds"]);
+      expect(ack.changed).not.toContain("state");
+      let t = await d.api.getTicket("acme", id);
       expect(t.rounds[0].questions.map((q) => [q.status, q.answer])).toEqual([
         ["answered", "Red"],
         ["open", undefined],
       ]);
       expect((await d.api.needsMe()).groups[0].tickets[0].round).toEqual({ number: 1, open: 1, questions: 2 });
 
-      t = await d.api.act("acme", id, "answer", { question: 1, text: "Green" });
+      wantAcknowledgement(await d.api.act("acme", id, "answer", { question: 1, text: "Green" }), id, "Needs Answer", ["rounds"]);
+      t = await d.api.getTicket("acme", id);
       expect(t.rounds[0].questions[0]).toMatchObject({ status: "answered", answer: "Green" });
 
-      t = await d.api.act("acme", id, "answer", { question: 2, text: "M" });
-      expect(t.state).toBe("Answered");
-      expect(t.needs_me_reason).toBe("answered");
+      wantAcknowledgement(await d.api.act("acme", id, "answer", { question: 2, text: "M" }), id, "Answered", ["state", "rounds", "moves", "needs_me_reason"]);
+      expect((await d.api.getTicket("acme", id)).needs_me_reason).toBe("answered");
       expect((await d.api.needsMe()).groups.map((g) => g.reason)).toEqual(["answered"]);
 
       const late = await d.api.act("acme", id, "answer", { question: 1, text: "Blue" }).catch((e) => e);
@@ -52,25 +54,22 @@ export function roundContract(driver: () => Driver) {
 
     it("dismisses one Question without moving the Ticket, unless it was the last open one", async () => {
       const { d, id } = await posted();
-      let t = await d.api.act("acme", id, "dismiss_question", { question: 2 });
-      expect(t.state).toBe("Needs Answer");
-      expect(t.rounds[0].questions[1].status).toBe("dismissed");
+      wantAcknowledgement(await d.api.act("acme", id, "dismiss_question", { question: 2 }), id, "Needs Answer", ["rounds"]);
+      expect((await d.api.getTicket("acme", id)).rounds[0].questions[1].status).toBe("dismissed");
 
-      t = await d.api.act("acme", id, "dismiss_question", { question: 1 });
-      expect(t.state).toBe("Answered");
+      wantAcknowledgement(await d.api.act("acme", id, "dismiss_question", { question: 1 }), id, "Answered", ["state", "rounds", "moves"]);
     });
 
     it("accepts every recommended answer at once, leaving Questions without one open", async () => {
       const { d, id } = await posted();
-      let t = await d.api.act("acme", id, "accept_recommended", { round: 1 });
-      expect(t.state).toBe("Needs Answer");
+      wantAcknowledgement(await d.api.act("acme", id, "accept_recommended", { round: 1 }), id, "Needs Answer", ["rounds"]);
+      const t = await d.api.getTicket("acme", id);
       expect(t.rounds[0].questions.map((q) => [q.status, q.answer])).toEqual([
         ["answered", "Blue"],
         ["open", undefined],
       ]);
 
-      t = await d.api.act("acme", id, "answer", { question: 2, text: "S" });
-      expect(t.state).toBe("Answered");
+      wantAcknowledgement(await d.api.act("acme", id, "answer", { question: 2, text: "S" }), id, "Answered", ["state", "rounds", "moves"]);
     });
 
     it("rolls up a Spec's Questions: each of its Tickets that has Rounds", async () => {
