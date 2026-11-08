@@ -2,7 +2,7 @@
 // title, submitted time), the clickable Stage strip, what it waits for,
 // and under Build its implementation Tickets with their States.
 import type { NeedsMeReason, SpecDetail } from "../api/types";
-import { ago } from "../format";
+import { ago, latestLine } from "../format";
 import { progress, waitingNote } from "./progress";
 import { Strip } from "./Strip";
 
@@ -41,6 +41,7 @@ export function RequirementPane({ spec, reasons, now, ticket, select }: Requirem
                   <span className="tid">{t.id}</span> {t.title}
                 </button>{" "}
                 <span className={["state", reason && `reason-${reason} loud-state`].filter(Boolean).join(" ")}>{t.state}</span>
+                {t.state === "In Progress" && t.latest_event && <span className="latest-event">{latestLine(now, t.latest_event)}</span>}
               </li>
             );
           })}

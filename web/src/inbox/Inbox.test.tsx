@@ -304,3 +304,43 @@ describe("Stage Tickets in State views", () => {
     expect(within(list()).getByRole("link", { name: /acme-16/ })).toBeVisible();
   });
 });
+
+// inProgress is two In Progress Tickets with live Claims, and a Needs
+// Answer one whose live Claim has a latest event too.
+function inProgress() {
+  const fake = new FakeApi();
+  fake.addProject("acme", "Acme");
+  const claim = (session_id: string) => [{ number: 1, session_id, started: minutesAgo(fake, 30), last_activity: minutesAgo(fake, 1) }];
+  fake.addTicket("acme", { title: "Busy work", state: "In Progress", claims: claim("s-busy") }); // acme-1
+  fake.addTicket("acme", { title: "Quiet work", state: "In Progress", claims: claim("s-quiet") }); // acme-2
+  fake.addTicket("acme", { title: "Asking work", state: "Needs Answer", claims: claim("s-asking") }); // acme-3
+  fake.postSessionEvents("s-busy", [{ time: minutesAgo(fake, 2), kind: "tool_call", tool: "Read", text: "Read: core/core.go" }]);
+  fake.postSessionEvents("s-asking", [{ time: minutesAgo(fake, 2), kind: "factory", text: "acme-3 posted a Round" }]);
+  return fake;
+}
+
+describe("the latest Session Event in the In Progress list", () => {
+  it("shows each row's latest event faintly under its title, and nothing on a row with none", async () => {
+    renderApp(inProgress(), "/?view=inbox&state=In%20Progress");
+    const busy = await within(list()).findByRole("link", { name: /acme-1/ });
+    const line = within(busy).getByText("Read: core/core.go · 2m ago");
+    expect(line).toHaveClass("row-detail", "latest-event");
+    const quiet = within(list()).getByRole("link", { name: /acme-2/ });
+    expect(quiet.textContent).toBe("acme-2Quiet work");
+  });
+
+  it("updates on the live feed without a reload", async () => {
+    const fake = inProgress();
+    renderApp(fake, "/?view=inbox&state=In%20Progress");
+    await within(list()).findByText("Read: core/core.go · 2m ago");
+    act(() => fake.postSessionEvents("s-quiet", [{ time: fake.now.toISOString(), kind: "text", text: "Writing the test first." }]));
+    const quiet = within(list()).getByRole("link", { name: /acme-2/ });
+    expect(await within(quiet).findByText("Writing the test first. · just now")).toBeInTheDocument();
+  });
+
+  it("leaves it off rows in other States", async () => {
+    renderApp(inProgress(), "/?view=inbox&state=Needs%20Answer");
+    const asking = await within(list()).findByRole("link", { name: /acme-3/ });
+    expect(asking).not.toHaveTextContent("posted a Round");
+  });
+});

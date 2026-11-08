@@ -1,4 +1,4 @@
-import type { NeedsMeReason, NeedsMeRow } from "./api/types";
+import type { LatestEvent, NeedsMeReason, NeedsMeRow } from "./api/types";
 
 export const REASON_LABEL: Record<NeedsMeReason, string> = {
   needs_answer: "Questions",
@@ -64,4 +64,9 @@ function externalDetail(r: NeedsMeRow): string {
 export function ago(now: Date, at: string): string {
   const d = duration(now, at);
   return d === "just now" ? d : `${d} ago`;
+}
+
+// latestLine is a latest Session Event as one line: "<text> · <ago>".
+export function latestLine(now: Date, e: LatestEvent): string {
+  return `${e.text} · ${ago(now, e.time)}`;
 }

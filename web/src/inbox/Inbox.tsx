@@ -5,7 +5,7 @@ import type { MouseEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import { FINISHED, STATES, type NeedsMeReason, type NeedsMeRow, type SpecDetail, type State, type TicketView } from "../api/types";
-import { duration, REASON_LABEL, rowDetail } from "../format";
+import { duration, latestLine, REASON_LABEL, rowDetail } from "../format";
 import { LinkBadge } from "../ticket/LinkBadge";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { NewRequirement } from "../requirement/NewRequirement";
@@ -125,7 +125,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
             ))}
           </>
         ) : loc.state ? (
-          <StateList tickets={stateList(tickets, loc.state)} reasons={reasons} link={rowLink} />
+          <StateList tickets={stateList(tickets, loc.state)} reasons={reasons} now={now} link={rowLink} />
         ) : (
           <>
             {shownCount === 0 && <p className="empty">Nothing needs you.</p>}
@@ -234,8 +234,10 @@ function NeedsMeLink({ row, now, link }: { row: NeedsMeRow; now: Date; link: Row
 }
 
 // StateList is one State's Tickets, flat, with its Stage Tickets folded
-// into a collapsed group after them: a Factory runs those.
-function StateList({ tickets, reasons, link }: { tickets: ProjectTicket[]; reasons: Map<string, NeedsMeReason>; link: InboxRowLinkFactory }) {
+// into a collapsed group after them: a Factory runs those. An In Progress
+// row shows its latest Session Event under its title.
+function StateList(p: { tickets: ProjectTicket[]; reasons: Map<string, NeedsMeReason>; now: Date; link: InboxRowLinkFactory }) {
+  const { tickets, reasons, now, link } = p;
   const stages = tickets.filter(isStage);
   const row = (t: ProjectTicket) => (
     <a key={t.id} className="row" {...link(t.id)}>
@@ -245,6 +247,7 @@ function StateList({ tickets, reasons, link }: { tickets: ProjectTicket[]; reaso
         {t.link && <LinkBadge link={t.link} plain />}
         {reasons.has(t.id) && <span className="dot needs-you" role="img" aria-label="Needs you" />}
       </span>
+      {t.state === "In Progress" && t.latest_event && <span className="row-detail latest-event">{latestLine(now, t.latest_event)}</span>}
     </a>
   );
   return (

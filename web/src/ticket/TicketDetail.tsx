@@ -76,6 +76,12 @@ export function TicketDetail({ api, project, ticket: t, now }: TicketDetailProps
           {claims.map((c) => (
             <li key={c.number}>
               Claim {c.number} · started {ago(now, c.started)} · last activity {ago(now, c.last_activity)}
+              {c.latest_event && (
+                <>
+                  {" "}
+                  · <span className="latest-event">{c.latest_event.text}</span> · {ago(now, c.latest_event.time)}
+                </>
+              )}
               {c.ended && (
                 <>
                   {" "}
