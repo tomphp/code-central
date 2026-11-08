@@ -171,10 +171,10 @@ a.link-badge:hover { text-decoration: underline; }
 .seg > button, .seg > span { width: 100%; border: 0; border-top: 4px solid var(--border); background: transparent; color: var(--muted); font: 11px system-ui; padding: 3px 2px 0; text-align: left; display: flex; justify-content: space-between; white-space: nowrap; }
 .seg > button { cursor: pointer; }
 .seg > button:disabled { cursor: default; }
-.seg.step-done > * { border-top-color: var(--r-review); color: var(--text); }
-.seg.step-running > * { border-top-color: var(--accent); color: var(--text); }
-.seg.step-queued > * { border-top-style: dashed; border-top-color: var(--accent); }
-.seg.step-needs > * { border-top-color: var(--rc); color: var(--rc); font-weight: 700; }
+.seg.progress-done > * { border-top-color: var(--r-review); color: var(--text); }
+.seg.progress-running > * { border-top-color: var(--accent); color: var(--text); }
+.seg.progress-queued > * { border-top-style: dashed; border-top-color: var(--accent); }
+.seg.progress-needs > * { border-top-color: var(--rc); color: var(--rc); font-weight: 700; }
 .seg[aria-current="step"] > * { background: var(--surface-2); }
 .seg-n { font-variant-numeric: tabular-nums; }
 .req-head { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }

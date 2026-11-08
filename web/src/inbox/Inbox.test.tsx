@@ -219,7 +219,7 @@ describe("Requirements in Needs Me", () => {
 
   it("keeps Requirements not waiting on the human in a collapsed in-flight group", async () => {
     const fake = await requirements();
-    const done = await fake.submitRequirement("acme", "Delivered work"); // acme-16
+    const done = await fake.submitRequirement("acme", "Finished work"); // acme-16
     for (const t of done.stages) fake.updateTicket(t.id, { state: "Done" });
     renderApp(fake);
     const summary = await within(list()).findByText("Requirements in flight (1): not waiting on you");
@@ -228,7 +228,7 @@ describe("Requirements in Needs Me", () => {
     const row = within(group).getByRole("link", { name: /acme-11/, hidden: true });
     expect(row).not.toBeVisible();
     expect(row).toHaveTextContent("Grilling: waiting for a Factory");
-    // Neither the Requirement in Build, whose Tickets show as rows, nor the delivered one.
+    // Neither the Requirement in Build, whose Tickets show as rows, nor the finished one.
     expect([...group.querySelectorAll<HTMLElement>("a[data-id]")].map((a) => a.dataset.id)).toEqual(["acme-11"]);
   });
 

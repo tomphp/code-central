@@ -188,7 +188,7 @@ function stateList(tickets: ProjectTicket[], state: State): ProjectTicket[] {
 }
 
 // requirementList is the Requirements view's order: unfinished ones, then
-// delivered ones, newest first in each.
+// finished ones, newest first in each.
 function requirementList(specs: ProjectSpec[]): ProjectSpec[] {
   const newest = [...specs].reverse();
   return [...newest.filter((s) => !s.finished), ...newest.filter((s) => s.finished)];

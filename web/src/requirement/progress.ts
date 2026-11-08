@@ -1,4 +1,4 @@
-// A Requirement's progress as the UI shows it: one step per Stage and one
+// A Requirement's progress as the UI shows it: one segment per Stage and one
 // for Build, worked out from the service's requirement block, the
 // Requirement's implementation Tickets and what Needs Me says needs the human.
 import { FINISHED, type NeedsMeReason, type NeedsMeView, type RequirementView, type StageName, type TicketRow } from "../api/types";
@@ -12,13 +12,13 @@ export const STAGE_TITLE: Record<StageName | "build", string> = {
 
 // done: finished; needs: waiting on the human; queued: claimable, waiting
 // for a Factory (drawn dashed); running: a Factory is on it; waiting: not
-// started, behind an earlier step.
-export type Step = "done" | "needs" | "queued" | "running" | "waiting";
+// started, behind an earlier segment.
+export type SegmentProgress = "done" | "needs" | "queued" | "running" | "waiting";
 
 export interface Segment {
   stage: StageName | "build";
   name: string;
-  step: Step;
+  progress: SegmentProgress;
   // ticket is the Stage Ticket; Build has none of its own.
   ticket?: string;
   reason?: NeedsMeReason;
@@ -58,7 +58,7 @@ export function progress(req: RequirementView, tickets: TicketRow[], reasons: Ma
   const firstOpen = req.stages.findIndex((s) => s.state !== "Done");
   const segments: Segment[] = req.stages.map((s, i) => {
     const reason = s.needs_me_reason ?? reasons.get(s.ticket);
-    const step: Step =
+    const segProgress: SegmentProgress =
       s.state === "Done"
         ? "done"
         : reason
@@ -68,11 +68,11 @@ export function progress(req: RequirementView, tickets: TicketRow[], reasons: Ma
             : s.state === "Ready" || s.state === "Draft"
               ? "waiting"
               : "running";
-    return { stage: s.name, name: STAGE_TITLE[s.name], step, ticket: s.ticket, ...(reason && { reason }) };
+    return { stage: s.name, name: STAGE_TITLE[s.name], progress: segProgress, ticket: s.ticket, ...(reason && { reason }) };
   });
   const buildNeeds = build.filter((t) => reasons.has(t.id));
   const inBuild = firstOpen < 0;
-  const buildStep: Step =
+  const buildProgress: SegmentProgress =
     req.build.total > 0 && req.build.done === req.build.total && !buildNeeds.length
       ? "done"
       : buildNeeds.length
@@ -82,7 +82,7 @@ export function progress(req: RequirementView, tickets: TicketRow[], reasons: Ma
           : inBuild && req.build.total > 0
             ? "running"
             : "waiting";
-  const buildSeg: Segment = { stage: "build", name: STAGE_TITLE.build, step: buildStep, ...(buildNeeds[0] && { reason: reasons.get(buildNeeds[0].id) }) };
+  const buildSeg: Segment = { stage: "build", name: STAGE_TITLE.build, progress: buildProgress, ...(buildNeeds[0] && { reason: reasons.get(buildNeeds[0].id) }) };
   segments.push(buildSeg);
   const needs = [
     ...segments.filter((s) => s.ticket && s.reason).map((s) => ({ ticket: s.ticket!, reason: s.reason!, stage: s.stage as StageName })),
@@ -90,7 +90,7 @@ export function progress(req: RequirementView, tickets: TicketRow[], reasons: Ma
   ];
   return {
     segments,
-    current: segments.find((s) => s.step !== "done") ?? buildSeg,
+    current: segments.find((s) => s.progress !== "done") ?? buildSeg,
     build,
     done: req.build.done,
     total: req.build.total,
