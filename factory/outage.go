@@ -12,6 +12,15 @@ import (
 // or the account's limits, not the Ticket's: usage and rate limits,
 // overload, server and network errors. A turn cut off by one is resumed
 // later, never failed.
+//
+// Source: docs/research/agent-sdk-host.md (ticket 50, on branch
+// research/agent-sdk-host), section 5, names the stream-json
+// `system/api_retry` event's `error` values `rate_limit`,
+// `authentication_failed` and `billing_error` (the usage limit), from the
+// headless docs. The other codes here (overload, server, network and
+// timeout, and the `_error` spellings) are unverified: neither that note
+// nor docs/research/claude-code-session-host.md lists them, nor the
+// result's `terminal_reason` values.
 var outageErrors = map[string]bool{
 	"rate_limit":       true,
 	"rate_limit_error": true,
