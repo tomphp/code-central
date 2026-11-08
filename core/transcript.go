@@ -80,6 +80,12 @@ func (c *Core) PostSessionEvents(ctx context.Context, sessionID string, events [
 	if !ok {
 		return
 	}
+	c.hold(k, started, events)
+	c.latestEventChanged(k.project, k.ticket)
+}
+
+// hold adds events to Claim k's Transcript, starting it if need be.
+func (c *Core) hold(k markKey, started time.Time, events []SessionEvent) {
 	ts := c.transcripts
 	ts.mu.Lock()
 	defer ts.mu.Unlock()

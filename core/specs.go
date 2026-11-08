@@ -69,7 +69,7 @@ func (c *Core) GetSpec(_ context.Context, key string, ref Ref) (SpecDetail, erro
 		v = SpecDetail{SpecView: specView(key, s), Tickets: []TicketRow{}}
 		v.StateSummary, v.Finished = summarise(tickets)
 		for _, t := range tickets {
-			v.Tickets = append(v.Tickets, ticketRow(r, key, t))
+			v.Tickets = append(v.Tickets, c.ticketRow(r, key, t))
 		}
 		v.Requirement = c.requirementView(r, key, tickets)
 		return nil
