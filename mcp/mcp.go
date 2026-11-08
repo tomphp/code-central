@@ -115,6 +115,8 @@ var tools = map[string]tool{
 			"ticket":   ref("The Ticket."),
 			"claim_id": text("The Claim ID claim returned."),
 			"summary":  text("What was done, where, and what the reviewer should check, in Markdown."),
+			"branch":   text("The branch the work is on, if any. Accepting work on a branch moves it to Accepted, to land once merged."),
+			"commit":   text("The branch's head commit, if any."),
 		}, "ticket", "claim_id", "summary"),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.FinishInput

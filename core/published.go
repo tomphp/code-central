@@ -26,7 +26,7 @@ const Instructions = "Code Central holds this Project's work: Specs, and the Tic
 //go:embed workflow.md
 var workflowProse string
 
-// stateMeanings are the nine States' meanings, in workflow order.
+// stateMeanings are the ten States' meanings, in workflow order.
 var stateMeanings = map[store.State]string{
 	store.Draft:       "Still being defined, so no agent should pick it up",
 	store.Ready:       "An agent can claim it",
@@ -35,6 +35,7 @@ var stateMeanings = map[store.State]string{
 	store.Answered:    "Every Question is answered and the asking session has not yet picked the work up",
 	store.Failed:      "The agent stopped because something broke",
 	store.InReview:    "The work is finished and waiting for the human to accept it",
+	store.Accepted:    "The human has accepted the work and it is waiting to land in the base",
 	store.Done:        "Finished",
 	store.Cancelled:   "Abandoned",
 }

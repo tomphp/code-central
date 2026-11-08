@@ -25,8 +25,9 @@ export interface Driver {
   // "contract-session") and posts a Failure Report, moving it to Failed.
   reportFailure(key: string, id: string, report: FailureReportBody): Promise<void>;
   // finish claims a Ready Ticket as an agent and finishes it with the
-  // summary, moving it to In Review.
-  finish(key: string, id: string, summary: string): Promise<void>;
+  // summary, moving it to In Review. on names the work's branch and head
+  // commit (ticket 71).
+  finish(key: string, id: string, summary: string, on?: { branch: string; commit: string }): Promise<void>;
   // addBlocker makes id wait on blocker, as an agent's add_blocker.
   addBlocker(key: string, id: string, blocker: string): Promise<void>;
   // claim claims a Ready Ticket as an agent with a session ID, moving it
@@ -300,6 +301,34 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(t).toMatchObject({ id, state: "Done" });
       expect(t.moves.at(-1)).toMatchObject({ from: "In Review", to: "Done", actor: "human" });
       expect((await d.api.needsMe()).count).toBe(0);
+    });
+
+    // ---- Accepted and land (ticket 71) ----
+
+    it("accepts work on a branch into Accepted, then lands it into Done with the commit", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
+
+      const a = await d.api.act("acme", id, "accept", {});
+      expect(a).toMatchObject({ id, state: "Accepted", branch: "impl-7", commit: "abc123" });
+      expect(a.moves.at(-1)).toMatchObject({ from: "In Review", to: "Accepted", actor: "human" });
+
+      const blank = await d.api.act("acme", id, "land", { commit: " " }).catch((e) => e);
+      expect(blank).toMatchObject({ status: 422, code: "invalid", field: "commit" });
+
+      const t = await d.api.act("acme", id, "land", { commit: "def456" });
+      expect(t).toMatchObject({ id, state: "Done" });
+      expect(t.moves.at(-1)).toMatchObject({ from: "Accepted", to: "Done", actor: "human", via: "merge", commit: "def456" });
+    });
+
+    it("cancels an Accepted Ticket", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
+      await d.api.act("acme", id, "accept", {});
+
+      expect(await d.api.act("acme", id, "cancel", {})).toMatchObject({ id, state: "Cancelled" });
     });
 
     it("rejects an In Review Ticket back to Ready only with a comment", async () => {

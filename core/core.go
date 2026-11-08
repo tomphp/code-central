@@ -82,6 +82,8 @@ type MoveView struct {
 	Time  time.Time   `json:"time"`
 	Claim int         `json:"claim,omitempty"`
 	Via   string      `json:"via,omitempty"`
+	// Commit is the commit that put the work into the base, on a land.
+	Commit string `json:"commit,omitempty"`
 }
 
 // ClaimView is one Claim as reads show it: never with its Claim ID.
@@ -101,18 +103,22 @@ type ClaimView struct {
 
 // TicketView is the full view of one Ticket, the same through every door.
 type TicketView struct {
-	ID             string              `json:"id"`
-	Title          string              `json:"title"`
-	State          store.State         `json:"state"`
-	Spec           SpecRef             `json:"spec"`
-	Labels         []string            `json:"labels"`
-	Tags           map[string]string   `json:"tags"`
-	BlockedBy      []string            `json:"blocked_by"`
-	Blockers       []BlockerView       `json:"blockers"`
-	Replacements   []string            `json:"replacements"`
-	Created        time.Time           `json:"created"`
-	Updated        time.Time           `json:"updated"`
-	Description    string              `json:"description"`
+	ID           string            `json:"id"`
+	Title        string            `json:"title"`
+	State        store.State       `json:"state"`
+	Spec         SpecRef           `json:"spec"`
+	Labels       []string          `json:"labels"`
+	Tags         map[string]string `json:"tags"`
+	BlockedBy    []string          `json:"blocked_by"`
+	Blockers     []BlockerView     `json:"blockers"`
+	Replacements []string          `json:"replacements"`
+	Created      time.Time         `json:"created"`
+	Updated      time.Time         `json:"updated"`
+	Description  string            `json:"description"`
+	// Branch and Commit are the work's branch and head commit, as the
+	// last finish naming them gave them.
+	Branch         string              `json:"branch,omitempty"`
+	Commit         string              `json:"commit,omitempty"`
 	Claims         []ClaimView         `json:"claims"`
 	Rounds         []RoundView         `json:"rounds"`
 	FailureReports []FailureReportView `json:"failure_reports"`
@@ -435,6 +441,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Blockers: blockerViews(r, key, t),
 		Created:  t.Created, Updated: t.Updated, Description: t.Description,
+		Branch: t.Branch, Commit: t.Commit,
 		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), FailureReports: failureReportViews(t.FailureReports),
 		Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: blocked(r, key, t), Link: linkView(t.Link),
@@ -448,7 +455,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		v.Claims = append(v.Claims, cv)
 	}
 	for _, m := range t.Moves {
-		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via})
+		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit})
 	}
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)

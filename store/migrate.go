@@ -42,6 +42,7 @@ var migrations = []MigrationStep{
 	{From: 1, Name: "add the typed link on Specs and Tickets, and its edit history keys"},
 	{From: 2, Name: "archived becomes a time", File: archivedBecomesATime},
 	{From: 3, Name: "add a Claim's working_dir and resume_command, and their copies on Failure Reports"},
+	{From: 4, Name: "add the Accepted State, a finish's branch and commit, and a land's commit on its Move"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

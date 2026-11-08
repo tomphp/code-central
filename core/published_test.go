@@ -22,7 +22,7 @@ func TestTheWorkflowListsEveryStateWithItsMeaning(t *testing.T) {
 		}
 	}
 	if !slices.Equal(names, store.States) {
-		t.Fatalf("States %v, want the nine in workflow order", names)
+		t.Fatalf("States %v, want the ten in workflow order", names)
 	}
 	if w.States[3].Meaning != "The agent is stopped on an unanswered Question" {
 		t.Fatalf("Needs Answer means %q", w.States[3].Meaning)
@@ -53,6 +53,10 @@ func TestTheWorkflowsActionsAreTheTableCoreEnforces(t *testing.T) {
 	// The agent's cancel and the human's are two rows.
 	action(t, w, "cancel", "agent")
 	action(t, w, "cancel", "human")
+	// land is the way from Accepted to Done, for either Actor (ADR 0006).
+	if land := action(t, w, "land", "human or agent"); !slices.Equal(land.From, []store.State{store.Accepted, store.InReview}) || land.To != store.Done || land.Requires == "" {
+		t.Fatalf("land %+v", land)
+	}
 }
 
 func TestTheWorkflowSaysWhatCountsAsNeedsMe(t *testing.T) {

@@ -241,6 +241,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: "Dark mode"})
 		return err
 	},
+	"land": func(f fixture) error {
+		_, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "abc123"})
+		return err
+	},
 	"import": func(f fixture) error {
 		_, err := f.core.Import(ctx, "acme", core.ImportInput{Payload: core.ImportPayload{
 			Specs:   []core.ImportSpec{{Source: "feat", Title: "Feat"}},
