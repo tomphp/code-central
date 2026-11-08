@@ -88,6 +88,14 @@ _Avoid_: User, caller
 The Tickets waiting on the human before they can move.
 _Avoid_: Inbox, blocked
 
+**Focus Mode**:
+A view showing the human one Focus Item at a time from Needs Me, moving to the next as each is dealt with or skipped.
+_Avoid_: Zen mode, queue view
+
+**Focus Item**:
+One thing in Needs Me the human can decide alone: one open Question, or one waiting Ticket.
+_Avoid_: Action, card, task
+
 **Notification**:
 An interruption sent to the human when an agent is stopped and waiting on them, as distinct from the Needs Me count.
 _Avoid_: Alert, ping
