@@ -19,11 +19,13 @@ type ClaimInput struct {
 	ResumeCommand *string `json:"resume_command,omitempty"`
 }
 
-// ClaimResult is claim's result: the Claim ID with the full Ticket view,
+// ClaimResult is claim's result: the Claim ID with the full Ticket view
+// and the Stage Guide for its Stage (implementation when it has none),
 // or {ticket: null} when nothing can be claimed.
 type ClaimResult struct {
-	ClaimID string      `json:"claim_id,omitempty"`
-	Ticket  *TicketView `json:"ticket"`
+	ClaimID    string          `json:"claim_id,omitempty"`
+	Ticket     *TicketView     `json:"ticket"`
+	StageGuide *StageGuideView `json:"stage_guide,omitempty"`
 }
 
 // FinishInput is finish's input.
@@ -85,7 +87,8 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 			return err
 		}
 		v := c.ticketView(w, key, t)
-		res = ClaimResult{ClaimID: claim.ID, Ticket: &v}
+		g := stageGuide(guideStage(t))
+		res = ClaimResult{ClaimID: claim.ID, Ticket: &v, StageGuide: &g}
 		return nil
 	})
 	return res, err
