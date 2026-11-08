@@ -140,6 +140,17 @@ func (c *Client) Ping(ctx context.Context, sessionID string) error {
 	return c.do(ctx, "POST", "/api/ping", map[string]string{"session_id": sessionID}, nil)
 }
 
+// PostSessionEvents is POST /api/session-events: it adds a batch of
+// Session Events to the newest Claim with this session ID. The service
+// always answers 204.
+func (c *Client) PostSessionEvents(ctx context.Context, sessionID string, events []core.SessionEvent) error {
+	in := struct {
+		SessionID string              `json:"session_id"`
+		Events    []core.SessionEvent `json:"events"`
+	}{sessionID, events}
+	return c.do(ctx, "POST", "/api/session-events", in, nil)
+}
+
 // EditSpec is edit_spec.
 func (c *Client) EditSpec(ctx context.Context, key string, in core.EditSpecInput) (core.SpecView, error) {
 	var out core.SpecView

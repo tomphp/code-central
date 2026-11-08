@@ -17,9 +17,13 @@ import (
 
 func newHandler(t *testing.T) http.Handler {
 	t.Helper()
-	c := core.New(store.NewMemory(), clock.NewFake(time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)), &ids.Sequence{})
+	return serve(store.NewMemory(), clock.NewFake(time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)))
+}
+
+// serve is the HTTP API over a fresh Core on s and clk.
+func serve(s store.Store, clk clock.Clock) http.Handler {
 	mux := http.NewServeMux()
-	httpapi.Register(mux, c)
+	httpapi.Register(mux, core.New(s, clk, &ids.Sequence{}))
 	return mux
 }
 

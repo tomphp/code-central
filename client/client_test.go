@@ -123,3 +123,26 @@ func TestUnreachableServiceIsServiceUnavailable(t *testing.T) {
 		}
 	}
 }
+
+func TestPostSessionEventsReachesTheClaimsTranscript(t *testing.T) {
+	srv := codecentraltest.NewServer(t)
+	c := srv.Client
+	c.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})
+	c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})
+	c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "A", State: store.Ready})
+	if _, err := c.Claim(ctx, "acme", core.ClaimInput{SessionID: "s1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	sent := []core.SessionEvent{{Time: srv.Clock.Now(), Kind: "tool_call", Text: "Bash: make", Tool: "Bash", ToolUseID: "tu1"}}
+	if err := c.PostSessionEvents(ctx, "s1", sent); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	if err := c.PostSessionEvents(ctx, "unknown", sent); err != nil {
+		t.Fatalf("post for an unknown session: %v", err)
+	}
+	tr, err := srv.Core.Transcript(ctx, "acme", "2", 1)
+	if err != nil || len(tr.Events) != 1 || tr.Events[0].Seq != 1 || tr.Events[0].SessionEvent != sent[0] {
+		t.Fatalf("Transcript %+v, %v; want the one event sent", tr, err)
+	}
+}
