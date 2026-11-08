@@ -19,7 +19,7 @@
             "type": "command"
           }
         ],
-        "matcher": "mcp__code-central__claim|mcp__code-central__post_round"
+        "matcher": "mcp__code-central__claim|mcp__code-central__set_session|mcp__code-central__post_round"
       }
     ]
   }
