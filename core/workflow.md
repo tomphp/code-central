@@ -4,7 +4,7 @@ The `states` and `actions` above are the rules Code Central enforces; anything t
 
 1. `claim` takes the next claimable Ticket (Ready, no open Blockers, oldest first), or the one or the Spec you name. It returns a Claim ID, the full Ticket and its `stage_guide`: what the Ticket must produce, where it lands and how to finish it. Follow the guide; `get_stage_guide` serves it again. `{"ticket": null}` means nothing can be claimed: stop.
 2. Read the whole Ticket before starting: its description, its Spec, past Claims and how each ended, every Failure Report, comments and send-back notes. A Ticket that failed before failed for a reason; don't repeat the attempt that failed.
-3. Work on a branch named after the Ticket ID (for example `acme-12`), and commit and push often, so the next session can pick the work up if yours ends. Code Central never checks this; it is the convention everyone relies on.
+3. Work on a branch named after the Ticket ID (for example `acme-12`), and commit often, so the next session can pick the work up if yours ends. Don't push or open a pull request. Code Central never checks this; it is the convention everyone relies on.
 4. `finish` with a summary: what was done, where (the branch or commit), and what the reviewer should check. When the work is on a branch, also pass `branch` and its head `commit`. Then stop working this Ticket: the human accepts it or rejects it to Ready.
 
 ## Accepted work lands
