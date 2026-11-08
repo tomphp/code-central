@@ -207,4 +207,32 @@ describe("the Live section", () => {
     await post(fake, "s-new", [{ time: at(fake, 1), kind: "text", text: "Hello." }]);
     expect(within(log).queryByText("This Claim has no Transcript.")).not.toBeInTheDocument();
   });
+
+  it("picks up after a dropped connection with no event lost or repeated", async () => {
+    const { fake, t } = seeded();
+    fake.postSessionEvents("s-new", [{ time: at(fake, 3), kind: "text", text: "one" }]);
+    const log = await transcript((await renderDetail(fake, t.id))[0]);
+    await within(log).findByText("one");
+
+    await act(async () => fake.dropTranscriptStreams());
+    await post(fake, "s-new", [{ time: at(fake, 2), kind: "text", text: "two" }]);
+    await post(fake, "s-new", [{ time: at(fake, 1), kind: "text", text: "three" }]);
+    expect([...log.querySelectorAll(".transcript-row")].map((r) => r.querySelector(".markdown")?.textContent)).toEqual([
+      "one",
+      "two",
+      "three",
+    ]);
+  });
+
+  it("opens when its Ticket goes back to In Progress with the Claim still live", async () => {
+    const { fake, t } = seeded("Needs Answer");
+    const view = await fake.getTicket("acme", t.id);
+    const { rerender } = render(<TicketDetail api={fake} project="acme" ticket={view} now={fake.now} />);
+    const row = () => within(screen.getByRole("list", { name: "Claims" })).getAllByRole("listitem")[0];
+    expect(live(row())).not.toHaveAttribute("open");
+
+    rerender(<TicketDetail api={fake} project="acme" ticket={{ ...view, state: "In Progress" }} now={fake.now} />);
+    expect(live(row())).toHaveAttribute("open");
+    expect(await transcript(row())).toBeInTheDocument();
+  });
 });

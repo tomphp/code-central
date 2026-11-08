@@ -100,7 +100,7 @@ export function TicketDetail({ api, project, ticket: t, now }: TicketDetailProps
                 project={project}
                 id={t.id}
                 claim={c.number}
-                open={!c.ended && t.state === "In Progress"}
+                defaultOpen={!c.ended && t.state === "In Progress"}
               />
             </li>
           ))}

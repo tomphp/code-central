@@ -117,10 +117,10 @@ textarea { width: 100%; resize: vertical; }
 /* Ticket detail and the Blocked panel (ticket 37). */
 button.link { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; color: var(--accent); cursor: pointer; }
 .ticket-body .claims { list-style: none; padding: 0; margin: 8px 0; }
+.ticket-body .claims > li { margin-bottom: 4px; }
 /* The latest Session Event, shown short and faintly. */
 .latest-event { color: var(--muted); }
 /* A Claim's Live section: its Transcript, following the newest event (ticket 111). */
-.ticket-body .claims > li { margin-bottom: 4px; }
 .ticket-body .live > summary { margin: 4px 0; }
 .transcript { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 13px; }
 .transcript-note { margin: 0; padding: 6px 10px; border-bottom: 1px solid var(--border); }

@@ -16,13 +16,17 @@ export interface LiveProps {
   project: string;
   id: string;
   claim: number;
-  // open is whether it starts open: while the Claim is live and the Ticket
-  // In Progress.
-  open: boolean;
+  // defaultOpen is whether it should be open: while the Claim is live and
+  // the Ticket In Progress. It opens whenever this turns true, and is
+  // otherwise left as the human set it.
+  defaultOpen: boolean;
 }
 
-export function Live({ api, project, id, claim, open: openAtFirst }: LiveProps) {
-  const [open, setOpen] = useState(openAtFirst);
+export function Live({ api, project, id, claim, defaultOpen }: LiveProps) {
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
   return (
     <details aria-label="Live" className="live" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>Live</summary>
@@ -32,23 +36,31 @@ export function Live({ api, project, id, claim, open: openAtFirst }: LiveProps) 
 }
 
 // TranscriptLog subscribes to the Claim's Transcript for as long as it is
-// mounted.
-function TranscriptLog({ api, project, id, claim }: Omit<LiveProps, "open">) {
+// mounted. The Transcript read says whether there is none, since the
+// stream can't say that nothing more is on its way.
+function TranscriptLog({ api, project, id, claim }: Omit<LiveProps, "defaultOpen">) {
   const [events, setEvents] = useState<HeldSessionEvent[]>([]);
   const [tail, setTail] = useState(false);
-  const [connected, setConnected] = useState(false);
+  const [noneHeld, setNoneHeld] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const following = useRef(true);
 
-  useEffect(
-    () =>
-      api.subscribeTranscript(project, id, claim, {
-        onEvent: (e) => setEvents((es) => [...es, e]),
-        onTail: () => setTail(true),
-        onOpen: () => setConnected(true),
-      }),
-    [api, project, id, claim],
-  );
+  useEffect(() => {
+    let current = true;
+    api.transcript(project, id, claim).then(
+      (tr) => current && setNoneHeld(tr.events.length === 0),
+      () => {},
+    );
+    const stop = api.subscribeTranscript(project, id, claim, {
+      // The stream never repeats one; this keeps a repeat from showing twice if it did.
+      onEvent: (e) => setEvents((es) => (es.length && es[es.length - 1].seq >= e.seq ? es : [...es, e])),
+      onTail: () => setTail(true),
+    });
+    return () => {
+      current = false;
+      stop();
+    };
+  }, [api, project, id, claim]);
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -74,7 +86,7 @@ function TranscriptLog({ api, project, id, claim }: Omit<LiveProps, "open">) {
           Earlier events aren't held (Code Central keeps the last 2,000 and none from before its last restart)
         </p>
       )}
-      {connected && events.length === 0 && <p className="muted small transcript-note">This Claim has no Transcript.</p>}
+      {noneHeld && events.length === 0 && <p className="muted small transcript-note">This Claim has no Transcript.</p>}
       {events.map((e) => {
         // A result shows under its call; one whose call wasn't held shows on its own.
         if (e.kind === "tool_result" && e.tool_use_id && calls.has(e.tool_use_id)) return null;
@@ -84,6 +96,7 @@ function TranscriptLog({ api, project, id, claim }: Omit<LiveProps, "open">) {
   );
 }
 
+// Row is one Session Event; a tool call carries its result, if held.
 function Row({ event: e, result }: { event: HeldSessionEvent; result?: HeldSessionEvent }) {
   switch (e.kind) {
     case "text":
@@ -95,7 +108,7 @@ function Row({ event: e, result }: { event: HeldSessionEvent; result?: HeldSessi
       );
     case "tool_call":
       return (
-        <div className="transcript-row transcript-tool">
+        <div className="transcript-row">
           <Time at={e.time} />
           <code className="transcript-call">{e.text}</code>
           {result && <ToolResult event={result} />}
@@ -103,7 +116,7 @@ function Row({ event: e, result }: { event: HeldSessionEvent; result?: HeldSessi
       );
     case "tool_result":
       return (
-        <div className="transcript-row transcript-tool">
+        <div className="transcript-row">
           <Time at={e.time} />
           <ToolResult event={e} />
         </div>
@@ -133,6 +146,7 @@ function ToolResult({ event: e }: { event: HeldSessionEvent }) {
   );
 }
 
+// Time is a row's time of day; its dateTime is the full time.
 function Time({ at }: { at: string }) {
   return (
     <time dateTime={at} className="muted small">
