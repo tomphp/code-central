@@ -115,6 +115,7 @@ func init() {
 		// Failure Reports and giving up (ticket 30).
 		"report-failure": {op: "report_failure", usage: "report-failure <id> --claim <claim-id> --what-broke <md> --why <md> --what-to-fix <md> --where-work-stands <md> | --file <json-path|->", run: runReportFailure},
 		"give-up":        {op: "give_up", usage: "give-up <id> --claim <claim-id> [--note <md> | --file <path|->]", run: runGiveUp},
+		"send-back":      {op: "send_back", usage: "send-back <id> [--note <md> | --file <path|->]  Accepted work that can't land (a merge conflict) back to Ready; the note is required", run: runSendBack},
 		// Rounds and wait (ticket 29).
 		"post-round":      {op: "post_round", usage: "post-round <id> --claim <claim-id> [--session <id>] [--questions <json> | --file <path|->]  Questions as a JSON array of {title, body, recommended?}, on stdin by default", run: runPostRound},
 		"pick-up-answers": {op: "pick_up_answers", usage: "pick-up-answers <id> --claim <claim-id>", run: runPickUpAnswers},

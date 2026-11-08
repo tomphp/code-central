@@ -75,6 +75,10 @@ var Workflow = []Action{
 		NextStep: stopWorking},
 	{Name: "send_back", From: []store.State{store.Failed}, To: store.Ready, Who: HumanActor,
 		Requires: "note (optional)"},
+	// An agent that can't land Accepted work (a merge conflict) sends it
+	// back for another agent to resolve (ticket 72).
+	{Name: "send_back", From: []store.State{store.Accepted}, To: store.Ready, Who: AgentActor,
+		Requires: "note (required), stored as a comment: why it can't land, such as the base commit and the conflicting files"},
 	{Name: "to_draft", From: []store.State{store.Failed}, To: store.Draft, Who: HumanActor},
 	{Name: "finish", From: []store.State{store.InProgress}, To: store.InReview, Who: Holder,
 		Requires: "summary (required): what was done, where (branch or commit), what to check",
