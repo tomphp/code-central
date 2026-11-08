@@ -49,11 +49,11 @@ build: web
 	go build -tags webdist -ldflags "$(LDFLAGS)" -o bin/code-central ./cmd/code-central
 	go build -o bin/code-central-factory ./cmd/code-central-factory
 
-# Builds the binary, then runs the end-to-end tier against it (real
-# binary, real store in a temporary folder, never port 7733): the Go
+# Builds the binaries, then runs the end-to-end tier against them (real
+# binaries, real store in a temporary folder, never port 7733): the Go
 # end-to-end tests and the real half of the UI's API contract suite.
 e2e: build
-	CODE_CENTRAL_BIN=$(CURDIR)/bin/code-central go test -tags e2e -count=1 ./e2e/
+	CODE_CENTRAL_BIN=$(CURDIR)/bin/code-central CODE_CENTRAL_FACTORY_BIN=$(CURDIR)/bin/code-central-factory go test -tags e2e -count=1 ./e2e/
 	cd web && CODE_CENTRAL_BIN=$(CURDIR)/bin/code-central npm run test:e2e
 
 clean:
