@@ -20,6 +20,29 @@ type claim struct {
 	ClaimID      string   `json:"claim_id"`
 	SessionID    string   `json:"session_id"`
 	AllowedTools []string `json:"allowed_tools"`
+	// Denials is the Round the Factory posted for the calls its last turn
+	// had denied, while it waits for answers; nil otherwise.
+	Denials *denialRound `json:"denials,omitempty"`
+}
+
+// denialRound is a Round of the Factory's own: one Question per distinct
+// denied call, in order, each with the pattern a bare "allow" allows.
+type denialRound struct {
+	Round    int      `json:"round"`
+	Patterns []string `json:"patterns"`
+}
+
+// updateClaim applies change to the held Claim claimID and saves.
+func (f *factory) updateClaim(claimID string, change func(*claim)) error {
+	s := f.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.claims {
+		if s.claims[i].ClaimID == claimID {
+			change(&s.claims[i])
+		}
+	}
+	return s.write()
 }
 
 // stateFile is ~/.local/state/code-central-factory/<project-key>.json,

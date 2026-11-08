@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -40,6 +41,14 @@ func (f *factory) loop(ctx context.Context) {
 // resumes first, then new claims.
 func (f *factory) poll(ctx context.Context) {
 	answered := f.reconcile(ctx)
+	if f.paused() {
+		for _, c := range f.duePausedResumes(f.o.parallel - f.running()) {
+			if !f.resumeCutOff(ctx, c) && f.live(c.ClaimID) {
+				f.requeueCutOff(c)
+			}
+		}
+		return
+	}
 	for _, c := range answered {
 		if ctx.Err() != nil || f.running() >= f.o.parallel {
 			return
@@ -55,9 +64,14 @@ func (f *factory) poll(ctx context.Context) {
 
 // turn is one running `claude -p` process, for one Claim.
 type turn struct {
-	claim claim
-	proc  *os.Process
-	done  chan struct{} // closed once the turn has ended and been read
+	claim   claim
+	dir     string
+	started time.Time
+	proc    *os.Process
+	done    chan struct{} // closed once the turn has ended and been read
+	// stopped is set when the Factory stops the turn, so its end is the
+	// Factory's doing, not an outcome to act on.
+	stopped atomic.Bool
 }
 
 // running is the number of turns running: the --parallel slots in use.
@@ -121,6 +135,7 @@ func (f *factory) endClaim(c claim, by string) {
 	f.mu.Lock()
 	f.ended[c.ClaimID] = true
 	f.mu.Unlock()
+	f.dropCutOff(c.ClaimID)
 	if t := f.turnFor(c.ClaimID); t != nil && !endsItsOwnTurn[by] {
 		f.printf("%s: Claim %s ended (%s): stopping its turn", c.Ticket, c.ClaimID, by)
 		f.stopTurn(t)
@@ -149,6 +164,7 @@ func (f *factory) killGrace() time.Duration {
 // stopTurn sends t SIGINT, then SIGTERM if it lingers, and waits for it
 // to end. A turn that outlives SIGTERM too is killed.
 func (f *factory) stopTurn(t *turn) {
+	t.stopped.Store(true)
 	for _, sig := range []os.Signal{syscall.SIGINT, syscall.SIGTERM, os.Kill} {
 		_ = t.proc.Signal(sig)
 		select {
@@ -209,7 +225,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		f.printf("%s: can't set up the worktree: %v", id, err)
 		return true
 	}
-	f.startTurn(c, wt, append(f.startArgs(c), implementPrompt(c)))
+	f.startTurn(ctx, c, wt, append(f.startArgs(c), implementPrompt(c)))
 	return true
 }
 
@@ -232,7 +248,12 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 		return
 	}
 	f.printf("%s: resuming with the answers to Round %d", c.Ticket, res.Round.Number)
-	f.startTurn(c, f.worktree(c.Ticket), append(f.resumeArgs(c), answeredPrompt(c, res)))
+	c, decided := f.takeDenialAnswers(c, res)
+	prompt := answeredPrompt(c, res)
+	if decided != "" {
+		prompt += "\n" + decided + "\n"
+	}
+	f.startTurn(ctx, c, f.worktree(c.Ticket), append(f.resumeArgs(c), prompt))
 }
 
 // sessionHolder looks through the process list for a process other than
@@ -319,18 +340,22 @@ Claim: %s
 
 // result is the stream-json result message that ends a turn.
 type result struct {
-	Subtype           string            `json:"subtype"`
-	IsError           bool              `json:"is_error"`
-	TerminalReason    string            `json:"terminal_reason"`
-	PermissionDenials []json.RawMessage `json:"permission_denials"`
-	Result            string            `json:"result"`
+	Subtype           string   `json:"subtype"`
+	IsError           bool     `json:"is_error"`
+	TerminalReason    string   `json:"terminal_reason"`
+	PermissionDenials []denial `json:"permission_denials"`
+	Result            string   `json:"result"`
 }
 
-// turnEnd is how a turn ended: its exit code and its result message, if
-// it printed one.
+// turnEnd is how a turn ended: its exit code, its result message if it
+// printed one, and the agent's last text.
 type turnEnd struct {
 	ExitCode int
 	Result   *result
+	LastText string
+	// APIError is the API error the turn ended on, such as "rate_limit"
+	// or "authentication_failed"; empty when there was none.
+	APIError string
 }
 
 func (t turnEnd) String() string {
@@ -376,7 +401,7 @@ func (f *factory) turnFlags(c claim) []string {
 
 // startTurn runs `claude args...` in dir for c, taking a slot until it
 // ends.
-func (f *factory) startTurn(c claim, dir string, args []string) {
+func (f *factory) startTurn(ctx context.Context, c claim, dir string, args []string) {
 	cmd := exec.Command(f.claude, args...)
 	cmd.Dir = dir
 	cmd.Env = f.e.Environ
@@ -389,7 +414,7 @@ func (f *factory) startTurn(c claim, dir string, args []string) {
 		f.printf("%s: can't start claude: %v", c.Ticket, err)
 		return
 	}
-	t := &turn{claim: c, proc: cmd.Process, done: make(chan struct{})}
+	t := &turn{claim: c, dir: dir, proc: cmd.Process, started: time.Now(), done: make(chan struct{})}
 	f.mu.Lock()
 	f.turns[c.ClaimID] = t
 	f.mu.Unlock()
@@ -397,10 +422,13 @@ func (f *factory) startTurn(c claim, dir string, args []string) {
 	go func() {
 		defer f.turnsDone.Done()
 		end := readTurn(cmd, stdout)
-		f.printf("%s: turn ended: %s", c.Ticket, end)
+		// The turn keeps its slot until its outcome is acted on, and
+		// "turn ended" is printed once the slot is free.
+		f.afterTurn(ctx, t, end)
 		f.mu.Lock()
 		delete(f.turns, c.ClaimID)
 		f.mu.Unlock()
+		f.printf("%s: turn ended: %s", c.Ticket, end)
 		close(t.done)
 	}()
 }
@@ -409,19 +437,53 @@ func (f *factory) startTurn(c claim, dir string, args []string) {
 // it, giving how it ended.
 func readTurn(cmd *exec.Cmd, stdout io.Reader) turnEnd {
 	var end turnEnd
+	var retryErr string
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for sc.Scan() {
 		var msg struct {
-			Type string `json:"type"`
+			Type    string `json:"type"`
+			Subtype string `json:"subtype"`
+			// Error is an assistant message's API error, or an api_retry's.
+			Error   string `json:"error"`
+			Message struct {
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
+			} `json:"message"`
 		}
-		if json.Unmarshal(sc.Bytes(), &msg) != nil || msg.Type != "result" {
+		if json.Unmarshal(sc.Bytes(), &msg) != nil {
 			continue
 		}
-		var r result
-		if json.Unmarshal(sc.Bytes(), &r) == nil {
-			end.Result = &r
+		switch msg.Type {
+		case "system":
+			if msg.Subtype == "api_retry" && msg.Error != "" {
+				retryErr = msg.Error
+			}
+		case "assistant":
+			if msg.Error != "" {
+				end.APIError = msg.Error
+			}
+			for _, c := range msg.Message.Content {
+				if c.Type == "text" && strings.TrimSpace(c.Text) != "" {
+					end.LastText = c.Text
+				}
+			}
+		case "result":
+			var r result
+			if json.Unmarshal(sc.Bytes(), &r) == nil {
+				end.Result = &r
+			}
 		}
+	}
+	if end.LastText == "" && end.Result != nil {
+		end.LastText = end.Result.Result
+	}
+	// A retry that later succeeded is no error; one the turn never got
+	// past is.
+	if end.APIError == "" && (end.Result == nil || end.Result.IsError) {
+		end.APIError = retryErr
 	}
 	err := cmd.Wait()
 	var exit *exec.ExitError

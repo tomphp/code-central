@@ -34,6 +34,9 @@ type Env struct {
 	// KillGrace is how long a turn being stopped has between SIGINT and
 	// SIGTERM; zero means ten seconds.
 	KillGrace time.Duration
+	// Backoff is the first wait before resuming turns an outage cut off,
+	// doubling with each outage in a row; zero means a minute.
+	Backoff time.Duration
 }
 
 func (e Env) getenv(key string) string {
@@ -60,6 +63,8 @@ func (e Env) lookPath(name string) (string, bool) {
 const (
 	exitOK      = 0
 	exitRefused = 1
+	// exitStopped is a Factory that stopped itself, as on an expired login.
+	exitStopped = 2
 )
 
 // options are the Factory's flags. There is no config file.
@@ -119,8 +124,32 @@ func Run(ctx context.Context, args []string, e Env) int {
 	if o.bypass {
 		f.printf("warning: --bypass-permissions: every session runs in bypassPermissions mode, with no permission checks")
 	}
+	ctx, f.stop = context.WithCancel(ctx)
+	defer f.stop()
 	f.loop(ctx)
+	if reason := f.stoppedFor(); reason != "" {
+		fmt.Fprintln(e.Stderr, "code-central-factory: stopped:", reason)
+		return exitStopped
+	}
 	return exitOK
+}
+
+// stopFor stops the Factory for a reason only the human can fix: the
+// loop ends and running turns are stopped. Claims are kept.
+func (f *factory) stopFor(reason string) {
+	f.stopMu.Lock()
+	if f.stopReason == "" {
+		f.stopReason = reason
+		f.printf("stopping: %s", reason)
+	}
+	f.stopMu.Unlock()
+	f.stop()
+}
+
+func (f *factory) stoppedFor() string {
+	f.stopMu.Lock()
+	defer f.stopMu.Unlock()
+	return f.stopReason
 }
 
 // printf prints one line to stdout; turns print from their own goroutines.
@@ -149,6 +178,15 @@ type factory struct {
 	turns     map[string]*turn // running turns by Claim ID
 	ended     map[string]bool  // Claim IDs never to be written with again
 	turnsDone sync.WaitGroup
+
+	pauseMu sync.Mutex
+	pause   *pause // set during an outage
+
+	// stop ends the loop early; stopReason says why, for a Factory that
+	// stops itself.
+	stop       context.CancelFunc
+	stopMu     sync.Mutex
+	stopReason string
 }
 
 // start makes every start-up check, refusing with the reason.

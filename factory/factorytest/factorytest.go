@@ -70,10 +70,13 @@ type Harness struct {
 	// Home is the Factory's HOME, so its state file is under it.
 	Home string
 	// Bin is the folder on PATH holding the fake claude (and FakeGit's git).
-	Bin  string
-	data string // scripts/ and calls/
-	env  map[string]string
-	spec string
+	Bin string
+	// Backoff is the Factory's first wait before resuming turns an outage
+	// cut off; set it before Start. New makes it a millisecond.
+	Backoff time.Duration
+	data    string // scripts/ and calls/
+	env     map[string]string
+	spec    string
 }
 
 // New starts a Code Central with Project "acme" and a git repo on branch
@@ -91,6 +94,7 @@ func New(t testing.TB) *Harness {
 		Home:    filepath.Join(root, "home"),
 		Bin:     filepath.Join(root, "bin"),
 		data:    filepath.Join(root, "data"),
+		Backoff: time.Millisecond,
 	}
 	for _, d := range []string{h.Repo, h.Home, h.Bin, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
 		must(t, os.MkdirAll(d, 0o755))
@@ -287,6 +291,7 @@ func (h *Harness) StartIn(dir string, args ...string) *Running {
 			return r.ticks
 		},
 		KillGrace: KillGrace,
+		Backoff:   h.Backoff,
 	}
 	go func() {
 		defer close(r.done)
@@ -363,6 +368,18 @@ func (r *Running) Stop() int {
 	case <-r.done:
 	case <-time.After(Timeout):
 		r.h.t.Fatal("the Factory didn't stop")
+	}
+	return r.code
+}
+
+// Exited waits for the Factory to exit on its own and returns its exit
+// code.
+func (r *Running) Exited() int {
+	r.h.t.Helper()
+	select {
+	case <-r.done:
+	case <-time.After(Timeout):
+		r.h.t.Fatalf("the Factory didn't exit; stdout:\n%s", r.stdout)
 	}
 	return r.code
 }
@@ -470,6 +487,49 @@ func Finish(summary string) Step {
 // Result prints the stream-json result message with this subtype.
 func Result(subtype string) Step {
 	return Step{Stdout: `{"type":"result","subtype":"` + subtype + `","is_error":` + fmt.Sprint(subtype != "success") + `,"session_id":"{{session}}","result":"Turn over."}`}
+}
+
+// Denial is one call auto mode denied, as a result's permission_denials
+// lists it.
+type Denial struct {
+	Tool  string         `json:"tool_name"`
+	ID    string         `json:"tool_use_id"`
+	Input map[string]any `json:"tool_input"`
+}
+
+// Denied is a denied Bash call running command.
+func Denied(command string) Denial {
+	return Denial{Tool: "Bash", ID: "toolu_" + fmt.Sprint(len(command)), Input: map[string]any{"command": command}}
+}
+
+// ResultDenied prints a success result listing these denied calls.
+func ResultDenied(denials ...Denial) Step {
+	b, _ := json.Marshal(map[string]any{
+		"type": "result", "subtype": "success", "is_error": false, "session_id": "{{session}}",
+		"result": "I couldn't do that.", "permission_denials": denials,
+	})
+	return Step{Stdout: string(b)}
+}
+
+// APIError prints the stream-json assistant message claude prints when an
+// API call fails for good, with this error code ("rate_limit",
+// "authentication_failed", ...).
+func APIError(code string) Step {
+	b, _ := json.Marshal(map[string]any{
+		"type":    "assistant",
+		"message": map[string]any{"role": "assistant", "content": []map[string]string{{"type": "text", "text": "API Error: " + code}}},
+		"error":   code,
+	})
+	return Step{Stdout: string(b)}
+}
+
+// Say prints a stream-json assistant message with this text.
+func Say(text string) Step {
+	b, _ := json.Marshal(map[string]any{
+		"type":    "assistant",
+		"message": map[string]any{"role": "assistant", "content": []map[string]string{{"type": "text", "text": text}}},
+	})
+	return Step{Stdout: string(b)}
 }
 
 // Exit exits with code.

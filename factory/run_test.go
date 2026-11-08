@@ -81,6 +81,16 @@ func TestEverySessionRunsInAutoModeWithNoPermissionPrompts(t *testing.T) {
 	}
 }
 
+func TestATurnHasNoTimeTurnOrBudgetLimit(t *testing.T) {
+	t.Parallel()
+	c, _ := onlyCall(t)
+	for _, limit := range []string{"--max-turns", "--max-budget-usd", "--timeout"} {
+		if c.Has(limit) {
+			t.Errorf("args %q: want no %s", c.Args, limit)
+		}
+	}
+}
+
 func TestBypassPermissionsRunsEverySessionInBypassModeAndWarns(t *testing.T) {
 	t.Parallel()
 	c, r := onlyCall(t, "--bypass-permissions")
@@ -103,17 +113,5 @@ func TestModelIsPassedToTheSession(t *testing.T) {
 	}
 	if c.Has("--bare") {
 		t.Errorf("args %q: never --bare", c.Args)
-	}
-}
-
-func TestATurnsEndIsReadFromItsExitCodeAndResult(t *testing.T) {
-	t.Parallel()
-	h := factorytest.New(t)
-	id := h.ReadyTicket("Too big")
-	h.Script(id, factorytest.Step{Stdout: `{"type":"result","subtype":"error_max_turns","is_error":true,"terminal_reason":"max_turns"}`}, factorytest.Exit(3))
-	r := h.Start()
-	r.WaitForOutput(id + ": turn ended: exit 3, error_max_turns (max_turns)")
-	if s := h.Ticket(id).State; s != store.InProgress {
-		t.Errorf("state %s; the Claim stays held", s)
 	}
 }
