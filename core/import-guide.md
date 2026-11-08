@@ -29,7 +29,7 @@ Nothing comes in as In Progress, Needs Answer, Answered, Failed or In Review, an
 
 ## Labels and Tags
 
-- `Label:` and `Labels:` header values become `labels`, split on commas. A map's `Label: wayfinder:map` becomes a Label on its Spec.
+- `Label:` and `Labels:` header values become `labels`, split on commas. A map's `Label: wayfinder:map` becomes a Label on its Spec. `stage:` is reserved: only `stage:grilling`, `stage:spec` and `stage:tickets` are allowed, so list any other `stage:*` value as a doubt and drop it.
 - Every other `Key: value` header line becomes a Tag with its key lowercased, such as `type: grilling`.
 - Keep the original State line as the Tag `scratch.status`, such as `scratch.status: Superseded by 115`.
 - Don't give a `source` Tag: the service sets it from `source`.

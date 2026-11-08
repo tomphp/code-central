@@ -9,7 +9,8 @@ import (
 	"strconv"
 )
 
-// Import is the one bulk write (ADR 0003). Under the write lock, every
+// Import is the one bulk write (ADR 0003), used by an Import and by a
+// submitted Requirement. Under the write lock, every
 // new file is written and fsynced into staging/<import-id>/; then a
 // manifest naming each file's final path is written and fsynced; then
 // each file is renamed into place; then the staging folder, manifest and
