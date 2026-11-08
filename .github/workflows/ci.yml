@@ -1,0 +1,93 @@
+# Builds and tests everything on each OS in the matrix: the same steps
+# `make test` and `make e2e` run, called directly rather than through
+# make (its recipes need POSIX sh, perl and mktemp, and its 10-second
+# budget would trip on a cold runner). Every step runs under bash, so the
+# commands are identical on every OS and a red run on one OS is a real
+# platform difference.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One run per workflow and ref. A newer push to a pull request cancels the
+# older run; runs on main are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: npm ci
+        working-directory: web
+        run: npm ci
+
+      # Against the committed placeholder page, so no Vite build is needed.
+      - name: go test
+        run: go test ./...
+
+      - name: vitest
+        working-directory: web
+        run: npx vitest run
+
+      - name: tsc
+        working-directory: web
+        run: npx tsc --noEmit
+
+      - name: Vite build
+        working-directory: web
+        run: npm run build
+
+      # As `make build`, with the OS's executable suffix (.exe on Windows,
+      # empty elsewhere). The absolute paths go to the e2e steps.
+      - name: Build binaries
+        run: |
+          exe=$(go env GOEXE)
+          version=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+          go build -tags webdist -ldflags "-X github.com/tomoram/code-central/cli.Version=$version" -o "bin/code-central$exe" ./cmd/code-central
+          go build -o "bin/code-central-factory$exe" ./cmd/code-central-factory
+          echo "CODE_CENTRAL_BIN=$GITHUB_WORKSPACE/bin/code-central$exe" >> "$GITHUB_ENV"
+          echo "CODE_CENTRAL_FACTORY_BIN=$GITHUB_WORKSPACE/bin/code-central-factory$exe" >> "$GITHUB_ENV"
+
+      - name: Install Chromium
+        working-directory: web
+        run: npx playwright-core install chromium
+
+      - name: Go e2e
+        run: go test -tags e2e -count=1 ./e2e/
+
+      # PLAYWRIGHT_CHANNEL set but empty: the Chromium installed above, not
+      # the system Chrome the suite defaults to.
+      - name: UI e2e
+        working-directory: web
+        run: PLAYWRIGHT_CHANNEL= npm run test:e2e

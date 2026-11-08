@@ -38,7 +38,11 @@ func init() {
 			return c.Cancel(r.Context(), r.PathValue("key"), in)
 		}},
 		"get_spec": {"GET /api/p/{key}/specs/{n}", func(c *core.Core, r *http.Request) (any, error) {
-			return c.GetSpec(r.Context(), r.PathValue("key"), core.Ref(r.PathValue("n")))
+			q := r.URL.Query()
+			if err := onlyParams(q, "part", "section"); err != nil {
+				return nil, err
+			}
+			return c.GetSpec(r.Context(), r.PathValue("key"), core.GetSpecInput{Spec: core.Ref(r.PathValue("n")), Parts: q["part"], Sections: q["section"]})
 		}},
 		"find_specs": {"GET /api/p/{key}/specs", func(c *core.Core, r *http.Request) (any, error) {
 			q := r.URL.Query()

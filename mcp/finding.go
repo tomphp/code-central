@@ -47,12 +47,14 @@ var findingTools = map[string]tool{
 		}),
 	},
 	"get_spec": {
-		description: "Get a Spec with its body, a count of its Tickets per State, and its Tickets as find_tickets rows.",
-		schema:      object(map[string]any{"spec": ref("The Spec.")}, "spec"),
-		call: decoded(func(ctx context.Context, c *core.Core, key string, in struct {
-			Spec core.Ref `json:"spec"`
-		}) (any, error) {
-			return c.GetSpec(ctx, key, in.Spec)
+		description: "Get a Spec with its body, a count of its Tickets per State, and its Tickets as find_tickets rows; parts (body, tickets, edits) and sections (heading texts) read less and add the body's outline.",
+		schema: object(map[string]any{
+			"spec":     ref("The Spec."),
+			"parts":    list("Only these parts, any of body, tickets and edits; all three when left out."),
+			"sections": list("Only the body's Sections under these headings, matched case-insensitively at any level."),
+		}, "spec"),
+		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.GetSpecInput) (any, error) {
+			return c.GetSpec(ctx, key, in)
 		}),
 	},
 	"find_specs": {

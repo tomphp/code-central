@@ -158,7 +158,7 @@ func specOps(f fixture) map[string]func(core.Ref) error {
 	c := f.core
 	title := "S"
 	return map[string]func(core.Ref) error{
-		"get_spec": func(r core.Ref) error { _, err := c.GetSpec(ctx, "acme", r); return err },
+		"get_spec": func(r core.Ref) error { _, err := c.GetSpec(ctx, "acme", core.GetSpecInput{Spec: r}); return err },
 		"edit_spec": func(r core.Ref) error {
 			_, err := c.EditSpec(ctx, "acme", core.EditSpecInput{Spec: r, Title: &title})
 			return err

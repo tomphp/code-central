@@ -24,6 +24,10 @@ _Avoid_: Controller, runner, orchestrator
 The description of a piece of work, such as a feature or user story, delivered through one or more Tickets.
 _Avoid_: Epic, feature, PRD
 
+**Section**:
+A part of a Spec's body that starts at a heading and runs to the next heading at the same level or higher.
+_Avoid_: Chapter, part, block
+
 **Requirement**:
 A Spec started from the human's free text and defined through Stages before it is built. Its free text is the Requirement's text.
 _Avoid_: Prompt, feature request, idea

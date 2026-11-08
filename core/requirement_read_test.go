@@ -24,7 +24,7 @@ func (f fixture) requirement(t *testing.T) {
 
 func (f fixture) requirementOf(t *testing.T, spec core.Ref) *core.RequirementView {
 	t.Helper()
-	sp, err := f.core.GetSpec(ctx, "acme", spec)
+	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: spec})
 	if err != nil {
 		t.Fatalf("get_spec %s: %v", spec, err)
 	}

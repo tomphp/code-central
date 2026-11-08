@@ -19,11 +19,11 @@ func TestSubmittingARequirementCreatesItsSpecAndThreeChainedStages(t *testing.T)
 	if err != nil {
 		t.Fatalf("submit_requirement: %v", err)
 	}
-	sp, err := f.core.GetSpec(ctx, "acme", "acme-2")
+	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-2"})
 	if err != nil {
 		t.Fatalf("get_spec: %v", err)
 	}
-	if res.Spec.ID != "acme-2" || sp.Title != "Add a dark mode" || sp.Body != darkMode {
+	if res.Spec.ID != "acme-2" || sp.Title != "Add a dark mode" || *sp.Body != darkMode {
 		t.Fatalf("spec: %+v (result %+v)", sp, res.Spec)
 	}
 	want := []struct {

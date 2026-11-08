@@ -14,7 +14,7 @@ func init() {
 		"add-blocker":    {op: "add_blocker", usage: "add-blocker <id> <blocker-id>  make <id> wait on <blocker-id> until it is Done", run: runAddBlocker},
 		"remove-blocker": {op: "remove_blocker", usage: "remove-blocker <id> <blocker-id>", run: runRemoveBlocker},
 		"cancel":         {op: "cancel", usage: "cancel <id> <replacement-id>... [--reason <text> | --file <path|->]", run: runCancel},
-		"get-spec":       {op: "get_spec", usage: "get-spec <id>", run: runGetSpec},
+		"get-spec":       {op: "get_spec", usage: "get-spec <id> [--part body|tickets|edits]... [--section <heading>]...", run: runGetSpec},
 		"find-specs":     {op: "find_specs", usage: "find-specs [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--finished] [--requirements]", run: runFindSpecs},
 	} {
 		commands[name] = c
@@ -85,11 +85,15 @@ func runCancel(ctx context.Context, e Env, args []string) error {
 }
 
 func runGetSpec(ctx context.Context, e Env, args []string) error {
-	sc, ref, _, err := itemCommand(e, flagSet("get-spec"), args, 0, 0)
+	fs := flagSet("get-spec")
+	var parts, sections strs
+	fs.Var(&parts, "part", "")
+	fs.Var(&sections, "section", "")
+	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.GetSpec(ctx, sc.project, ref)
+	v, err := sc.client.GetSpec(ctx, sc.project, core.GetSpecInput{Spec: ref, Parts: parts, Sections: sections})
 	if err != nil {
 		return err
 	}
