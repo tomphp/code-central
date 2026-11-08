@@ -69,7 +69,7 @@ An agent's exclusive hold on one Ticket, from taking it until the work leaves it
 _Avoid_: Lock, assignment
 
 **Claim ID**:
-The identifier Code Central issues with a Claim, which proves the holder on every write that needs one.
+The identifier Code Central issues with a Claim, which proves the holder on every write that needs one, and which `claim` returns again to the session that holds it.
 _Avoid_: Token, holder ID
 
 **Resume Command**:
