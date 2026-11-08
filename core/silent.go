@@ -30,26 +30,26 @@ const NotLandedAfter = 10 * time.Minute
 const PingThrottle = time.Minute
 
 // activity is the in-memory side of last activity: when the service
-// started, each session's last counted ping, and which Claims the
-// background watch last saw Silent or Long.
+// started, each session's last counted ping, and the timed reason the
+// background watch last saw on each Claim and Accepted Ticket.
 type activity struct {
 	started time.Time
 
 	mu    sync.Mutex
-	pings map[string]time.Time       // session ID -> last counted ping
-	marks map[claimKey]NeedsMeReason // Silent, Long or Accepted but not landed
+	pings map[string]time.Time      // session ID -> last counted ping
+	marks map[markKey]NeedsMeReason // Silent, Long or Accepted but not landed
 }
 
-// claimKey names one Claim across Projects; claim 0 names an Accepted
-// Ticket, which has no live Claim.
-type claimKey struct {
+// markKey names what a timed reason is on, across Projects: one Claim, or,
+// with claim 0, an Accepted Ticket, which has no live Claim.
+type markKey struct {
 	project string
 	ticket  int
 	claim   int
 }
 
 func newActivity(started time.Time) *activity {
-	return &activity{started: started, pings: map[string]time.Time{}, marks: map[claimKey]NeedsMeReason{}}
+	return &activity{started: started, pings: map[string]time.Time{}, marks: map[markKey]NeedsMeReason{}}
 }
 
 // Ping is POST /api/ping {session_id}: it marks activity on every live
@@ -117,11 +117,12 @@ func (c *Core) silentSince(t store.Ticket) *time.Time {
 	return &last
 }
 
-// longSince is the Claim's last move when it is a Long Claim, else nil:
-// In Progress, not Silent (Silent takes precedence), and more than
-// LongAfter since it last moved into In Progress.
+// longSince is the Claim's last move when it has run long, else nil: In
+// Progress with a live Claim, and more than LongAfter since it last moved
+// into In Progress. Whether that makes it a Long Claim is timedReason's
+// call: Silent takes precedence.
 func (c *Core) longSince(t store.Ticket) *time.Time {
-	if t.State != store.InProgress || c.silentSince(t) != nil {
+	if t.State != store.InProgress {
 		return nil
 	}
 	if _, ok := liveClaim(t); !ok {
@@ -148,47 +149,59 @@ func (c *Core) notLandedSince(t store.Ticket) *time.Time {
 	return &accepted
 }
 
-// WatchSilent is the background ticker behind Silent and Long Claims and
-// Accepted but not landed. On each tick it reads every Project and calls
-// changed(project, ticket ID) once for each Claim (or Accepted Ticket)
-// whose mark (Silent, Long, not landed or neither) has changed
+// timedReason is the Needs Me reason time passing gives t, and since
+// when, or "": Silent Claim, else Long Claim, while In Progress, and
+// Accepted but not landed. Silent takes precedence over Long here, for
+// reads and for the watch alike.
+func (c *Core) timedReason(t store.Ticket) (NeedsMeReason, time.Time) {
+	if s := c.silentSince(t); s != nil {
+		return ReasonSilentClaim, *s
+	}
+	if s := c.longSince(t); s != nil {
+		return ReasonLongClaim, *s
+	}
+	if s := c.notLandedSince(t); s != nil {
+		return ReasonAcceptedNotLanded, *s
+	}
+	return "", time.Time{}
+}
+
+// WatchTimedReasons is the background ticker behind the timed reasons:
+// Silent and Long Claims, and Accepted but not landed. On each tick it
+// reads every Project and calls changed(project, ticket ID) once for each
+// Claim (or Accepted Ticket) whose timed reason (or none) has changed
 // since the last tick without a write (time passing, or a ping), so live
 // views refetch. The time comes from the injected clock, not the tick; serve
 // ticks every minute. It returns when ctx ends.
-func (c *Core) WatchSilent(ctx context.Context, ticks <-chan time.Time, changed func(project, ticketID string)) {
+func (c *Core) WatchTimedReasons(ctx context.Context, ticks <-chan time.Time, changed func(project, ticketID string)) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticks:
-			for _, k := range c.silentCrossings() {
+			for _, k := range c.timedReasonChanges() {
 				changed(k.project, DisplayID(k.project, k.ticket))
 			}
 		}
 	}
 }
 
-// silentCrossings returns the Claims and Accepted Tickets whose mark changed
-// since the last call, and remembers the new marks.
-func (c *Core) silentCrossings() []claimKey {
-	now := map[claimKey]NeedsMeReason{}
+// timedReasonChanges returns the Claims and Accepted Tickets whose timed
+// reason changed since the last call, and remembers the new ones.
+func (c *Core) timedReasonChanges() []markKey {
+	now := map[markKey]NeedsMeReason{}
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			for _, t := range r.Tickets(p.Key) {
-				if c.notLandedSince(t) != nil {
-					now[claimKey{p.Key, t.Number, 0}] = ReasonAcceptedNotLanded
+				reason, _ := c.timedReason(t)
+				if reason == "" {
 					continue
 				}
-				cl, ok := liveClaim(t)
-				if !ok {
-					continue
+				k := markKey{p.Key, t.Number, 0}
+				if cl, ok := liveClaim(t); ok && reason != ReasonAcceptedNotLanded {
+					k.claim = cl.Number
 				}
-				k := claimKey{p.Key, t.Number, cl.Number}
-				if c.silentSince(t) != nil {
-					now[k] = ReasonSilentClaim
-				} else if c.longSince(t) != nil {
-					now[k] = ReasonLongClaim
-				}
+				now[k] = reason
 			}
 		}
 		return nil
@@ -196,7 +209,7 @@ func (c *Core) silentCrossings() []claimKey {
 	a := c.activity
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	var out []claimKey
+	var out []markKey
 	for k, m := range now {
 		if a.marks[k] != m {
 			out = append(out, k)
