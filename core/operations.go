@@ -99,6 +99,9 @@ var Operations = []Op{
 	// Finished work and Archived Projects (ticket 39).
 	{Name: "archive_project", Audience: HumanOnly, Write: true},
 	{Name: "unarchive_project", Audience: HumanOnly, Write: true},
+
+	// Requirements and the local Factory (Spec code-central-66).
+	{Name: "submit_requirement", Audience: AgentAndHuman, Write: true},
 }
 
 // Operation looks an operation up by name.

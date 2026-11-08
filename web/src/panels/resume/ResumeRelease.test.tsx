@@ -10,17 +10,17 @@ import { ApiError, type ClaimView } from "../../api/types";
 
 const minutesAgo = (fake: FakeApi, m: number) => new Date(fake.now.getTime() - m * 60_000).toISOString();
 
-function claim(fake: FakeApi, session_id?: string): ClaimView {
-  return { number: 1, session_id, started: minutesAgo(fake, 120), last_activity: minutesAgo(fake, 45) };
+function claim(fake: FakeApi, session_id?: string, over: Partial<ClaimView> = {}): ClaimView {
+  return { number: 1, session_id, started: minutesAgo(fake, 120), last_activity: minutesAgo(fake, 45), ...over };
 }
 
-function silentWorld(session_id?: string) {
+function silentWorld(session_id?: string, over: Partial<ClaimView> = {}) {
   const fake = new FakeApi();
   fake.addProject("acme", "Acme");
   fake.addTicket("acme", {
     title: "Wire the API",
     state: "In Progress",
-    claims: [claim(fake, session_id)],
+    claims: [claim(fake, session_id, over)],
     silent_since: minutesAgo(fake, 45),
   });
   fake.setNeedsMe([{ reason: "silent_claim", tickets: [{ id: "acme-1", since: minutesAgo(fake, 45) }] }]);
@@ -94,6 +94,32 @@ describe("the Resume-then-Release panel", () => {
     expect(p).toHaveTextContent("No session ID is recorded");
     expect(within(p).queryByText(/claude --resume/)).toBeNull();
     expect(within(p).queryByRole("button", { name: "Copy" })).toBeNull();
+  });
+
+  it("shows the Claim's Resume Command from its working directory", async () => {
+    const user = userEvent.setup();
+    renderApp(silentWorld("sess-42", { working_dir: "/work/acme-1", resume_command: "codex resume sess-42" }));
+    const p = await panel();
+    expect(within(p).getByText("cd /work/acme-1 && codex resume sess-42")).toBeInTheDocument();
+    await user.click(within(p).getByRole("button", { name: "Copy" }));
+    expect(await navigator.clipboard.readText()).toBe("cd /work/acme-1 && codex resume sess-42");
+  });
+
+  it("leaves out the cd when no working directory is recorded", async () => {
+    renderApp(silentWorld(undefined, { resume_command: "codex resume x" }));
+    const p = await panel();
+    expect(within(p).getByText("codex resume x")).toBeInTheDocument();
+    expect(p).not.toHaveTextContent("No session ID is recorded");
+  });
+
+  it("falls back to claude --resume from the working directory when no command is set", async () => {
+    renderApp(silentWorld("sess-42", { working_dir: "/work/acme-1" }));
+    expect(within(await panel()).getByText("cd /work/acme-1 && claude --resume sess-42")).toBeInTheDocument();
+  });
+
+  it("quotes a working directory the shell would split", async () => {
+    renderApp(silentWorld("sess-42", { working_dir: "/work/my repo", resume_command: "agent resume" }));
+    expect(within(await panel()).getByText("cd '/work/my repo' && agent resume")).toBeInTheDocument();
   });
 
   it("on an Answered Ticket shows how long it has waited and the Round's answers, collapsed", async () => {

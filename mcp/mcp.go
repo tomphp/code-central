@@ -95,9 +95,11 @@ var tools = map[string]tool{
 	"claim": {
 		description: "Claim the next Ready Ticket (or the one named, or the next in a Spec); returns a Claim ID and the Ticket, or ticket null when none.",
 		schema: object(map[string]any{
-			"spec":       ref("Claim the next Ticket in this Spec."),
-			"ticket":     ref("Claim this Ticket."),
-			"session_id": text("Your session ID, shown to the human for resuming you."),
+			"spec":           ref("Claim the next Ticket in this Spec."),
+			"ticket":         ref("Claim this Ticket."),
+			"session_id":     text("Your session ID, shown to the human for resuming you."),
+			"working_dir":    text("The directory you work in, where the human runs the resume command. A hook usually fills it in for you."),
+			"resume_command": text("The command that resumes your session from working_dir, shown to the human as is. Without one the human is shown claude --resume <session_id>."),
 		}),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.ClaimInput
@@ -136,11 +138,13 @@ func init() {
 // sessionTools keep a Claim's session ID current (ticket 31).
 var sessionTools = map[string]tool{
 	"set_session": {
-		description: "Record the session now working your Claim, so the human can resume it. A hook usually fills session_id in for you.",
+		description: "Record the session now working your Claim, and how to get back into it, so the human can resume it. A hook usually fills session_id in for you.",
 		schema: object(map[string]any{
-			"ticket":     ref("The Ticket."),
-			"claim_id":   text("The Claim ID claim returned."),
-			"session_id": text("Your session ID."),
+			"ticket":         ref("The Ticket."),
+			"claim_id":       text("The Claim ID claim returned."),
+			"session_id":     text("Your session ID."),
+			"working_dir":    text("The directory you work in now. Left out, the recorded one stays."),
+			"resume_command": text("The command that resumes your session from working_dir. Left out, the recorded one stays."),
 		}, "ticket", "claim_id", "session_id"),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.SetSessionInput

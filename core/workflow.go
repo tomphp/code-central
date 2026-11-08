@@ -57,7 +57,7 @@ var Workflow = []Action{
 	{Name: "defer", From: []store.State{store.Ready}, To: store.Draft, Who: AnyActor,
 		Requires: "reason (required), stored as a comment"},
 	{Name: "claim", From: []store.State{store.Ready}, To: store.InProgress, Who: AgentActor,
-		Requires: "spec or ticket to narrow it (optional), session_id (optional); returns the Claim ID"},
+		Requires: "spec or ticket to narrow it (optional), session_id, working_dir and resume_command (optional); returns the Claim ID"},
 	{Name: "give_up", From: []store.State{store.InProgress}, To: store.Ready, Who: Holder,
 		Requires: "note on where the work stands (required)",
 		NextStep: stopWorking},
