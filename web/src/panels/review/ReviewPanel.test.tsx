@@ -9,7 +9,8 @@ import { ReviewPanel } from "./panel";
 
 const finished = "2026-11-07T08:00:00Z";
 
-function world() {
+// world has acme-1 In Review, its finish summary body among other comments.
+function world(body = "Added the login page\nBranch impl/7; check the redirect") {
   const fake = new FakeApi();
   fake.addProject("acme", "Acme");
   fake.addTicket("acme", {
@@ -17,7 +18,7 @@ function world() {
     state: "In Review",
     comments: [
       { number: 1, actor: "agent", time: "2026-11-07T07:00:00Z", claim: 1, body: "Starting on the form" },
-      { number: 2, actor: "agent", time: finished, claim: 1, body: "Added the login page\nBranch impl/7; check the redirect" },
+      { number: 2, actor: "agent", time: finished, claim: 1, body },
       { number: 3, actor: "human", time: "2026-11-07T08:30:00Z", body: "Looking now" },
     ],
     moves: [
@@ -33,6 +34,17 @@ async function renderPanel(fake: FakeApi) {
   const ticket = await fake.getTicket("acme", "acme-1");
   render(<ReviewPanel api={fake} project="acme" ticket={ticket} now={fake.now} />);
   return screen.getByRole("region", { name: "In Review" });
+}
+
+// renderSummaryInApp opens acme-1 from world(body) in the inbox, through the
+// whole app, and returns its Summary region.
+async function renderSummaryInApp(body: string) {
+  window.history.replaceState(null, "", "/?view=inbox&ticket=acme-1");
+  const fake = world(body);
+  render(<App api={fake} now={() => fake.now} />);
+  const pane = screen.getByRole("complementary", { name: "Ticket" });
+  const panel = await within(pane).findByRole("region", { name: "In Review" });
+  return within(panel).getByLabelText("Summary");
 }
 
 describe("the In Review panel", () => {
@@ -82,6 +94,19 @@ describe("the In Review panel", () => {
     const ticket = await fake.getTicket("acme", "acme-1");
     render(<ReviewPanel api={fake} project="acme" ticket={ticket} now={fake.now} />);
     expect(screen.getByRole("region", { name: "In Review" })).toHaveTextContent("No finish summary");
+  });
+
+  it("renders the finish summary as Markdown", async () => {
+    const summary = await renderSummaryInApp("Added **the login page**\n\n- form\n- redirect\n\nRun `make test`.");
+    expect(within(summary).getByRole("strong")).toHaveTextContent("the login page");
+    expect(within(summary).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["form", "redirect"]);
+    expect(within(summary).getByRole("code")).toHaveTextContent("make test");
+  });
+
+  it("shows raw HTML in the finish summary as text", async () => {
+    const summary = await renderSummaryInApp('Done <img src=x onerror="alert(1)"> here');
+    expect(within(summary).queryByRole("img")).toBeNull();
+    expect(summary).toHaveTextContent('Done <img src=x onerror="alert(1)"> here');
   });
 
   it("is the action panel for an In Review Ticket in the inbox", async () => {

@@ -4,6 +4,7 @@ import { useState } from "react";
 import "../../api/actions/accept";
 import "../../api/actions/reject";
 import type { CommentView, TicketView } from "../../api/types";
+import { Markdown } from "../../Markdown";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { useAct } from "../../ticket/useAct";
 import "./review.css";
@@ -19,7 +20,7 @@ export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
       <h3>Review the finished work</h3>
       {summary ? (
         <div aria-label="Summary" className="summary">
-          {summary.body}
+          <Markdown>{summary.body}</Markdown>
         </div>
       ) : (
         <p className="muted">No finish summary is recorded.</p>
