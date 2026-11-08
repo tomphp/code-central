@@ -69,10 +69,13 @@ type transcript struct {
 // ID, live or ended, and counts as a ping. With no such Claim they are
 // dropped.
 func (c *Core) PostSessionEvents(ctx context.Context, sessionID string, events []SessionEvent) {
-	if sessionID == "" || len(events) == 0 {
+	if sessionID == "" {
 		return
 	}
 	c.Ping(ctx, sessionID)
+	if len(events) == 0 {
+		return
+	}
 	k, started, ok := c.newestClaim(sessionID)
 	if !ok {
 		return

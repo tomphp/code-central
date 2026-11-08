@@ -10,8 +10,6 @@ import (
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/httpapi"
-	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -33,12 +31,6 @@ func newTranscriptFixture(t *testing.T) transcriptFixture {
 	f.ok(t, "POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"A","state":"Ready"}`)
 	f.ok(t, "POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"B","state":"Ready"}`)
 	return f
-}
-
-func serve(s store.Store, clk clock.Clock) http.Handler {
-	mux := http.NewServeMux()
-	httpapi.Register(mux, core.New(s, clk, &ids.Sequence{}))
-	return mux
 }
 
 func (f transcriptFixture) ok(t *testing.T, method, path, body string) []byte {
@@ -209,6 +201,12 @@ func TestSessionEventsCountAsActivityOnlyOnLiveClaims(t *testing.T) {
 	f.events(t, "s1", "working")
 	if got := f.lastActivity(t, 2, 1); !got.Equal(posted) {
 		t.Fatalf("live Claim's last_activity %v, want the post at %v", got, posted)
+	}
+	f.clock.Advance(5 * time.Minute)
+	posted = f.clock.Now()
+	f.post(t, `{"session_id":"s1","events":[]}`) // an empty batch is still a ping
+	if got := f.lastActivity(t, 2, 1); !got.Equal(posted) {
+		t.Fatalf("live Claim's last_activity %v, want the empty post at %v", got, posted)
 	}
 
 	// Finishing ends the Claim; a later post still lands on it, but marks

@@ -213,7 +213,7 @@ var handlers = map[string]handlerFunc{
 // request's Actor is already in its context (frontdoor.Guard reads the
 // Actor header); without one it is agent.
 func Register(mux *http.ServeMux, c *core.Core) {
-	all := map[string]handlerFunc{WaitPath: wait}
+	all := map[string]handlerFunc{WaitPath: wait, TranscriptPath: transcript}
 	for name, pattern := range Routes {
 		all[pattern] = handlers[name]
 	}
@@ -229,14 +229,6 @@ func Register(mux *http.ServeMux, c *core.Core) {
 	}
 	mux.HandleFunc("POST /api/ping", ping(c))
 	mux.HandleFunc(SessionEventsPath, sessionEvents(c))
-	mux.HandleFunc(TranscriptPath, func(w http.ResponseWriter, r *http.Request) {
-		v, err := transcript(c, r)
-		if err != nil {
-			WriteError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, v)
-	})
 	mux.HandleFunc(EventsPath, events(c))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {
