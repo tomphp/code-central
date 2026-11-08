@@ -34,7 +34,7 @@ func (c *Core) Cancel(ctx context.Context, key string, in CancelInput) (TicketVi
 		if actor != Human && len(in.Replacements) == 0 {
 			return false, invalid("replacements", "an agent cancels a Ticket only by naming at least one Replacement that takes over its work")
 		}
-		reps, err := ticketRefs(r, key, in.Replacements, "replacements")
+		reps, err := ticketRefs(r, key, "cancel", "replacements", in.Replacements)
 		if err != nil {
 			return false, err
 		}

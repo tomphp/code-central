@@ -147,7 +147,7 @@ func TestLabelsAreAddedAndRemovedByNameOnSpecsAndTickets(t *testing.T) {
 	if err != nil || v.ID != "acme-1" || v.Kind != "spec" || !slices.Equal(v.Labels, []string{"auth"}) {
 		t.Fatalf("add to a Spec: %+v, %v", v, err)
 	}
-	sp, _ := f.core.GetSpec(ctx, "acme", "1")
+	sp, _ := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "1"})
 	if !slices.Equal(sp.Labels, []string{"auth"}) || len(sp.Edits) != 0 {
 		t.Fatalf("spec after: %+v", sp)
 	}

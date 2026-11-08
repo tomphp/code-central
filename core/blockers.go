@@ -35,10 +35,11 @@ type BlockerView struct {
 // writes nothing; one that would form a cycle is rejected with cycle.
 func (c *Core) AddBlocker(_ context.Context, key string, in BlockerInput) (TicketView, error) {
 	return c.updateTicketIn(key, "add_blocker", in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
-		b, err := ticketRef(r, key, in.Blocker, "blocker")
+		blocker, err := resolveTicket(r, key, "add_blocker", "blocker", in.Blocker)
 		if err != nil {
 			return false, err
 		}
+		b := blocker.Number
 		if b == t.Number {
 			return false, &Error{Code: Cycle, Message: fmt.Sprintf("%s can't block itself", DisplayID(key, b))}
 		}
@@ -63,6 +64,9 @@ func (c *Core) RemoveBlocker(_ context.Context, key string, in BlockerInput) (Ti
 	return c.updateTicketIn(key, "remove_blocker", in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
 		b, err := in.Blocker.number(key, "blocker")
 		if err != nil {
+			return false, err
+		}
+		if err := specNotTicket(r, key, "remove_blocker", "blocker", b); err != nil {
 			return false, err
 		}
 		if slices.Contains(t.BlockedBy, b) {
@@ -201,26 +205,16 @@ func (o overlay) Ticket(project string, n int) (store.Ticket, bool) {
 	return o.Reader.Ticket(project, n)
 }
 
-// ticketRef resolves ref to an existing Ticket's number.
-func ticketRef(r store.Reader, key string, ref Ref, field string) (int, error) {
-	n, err := ref.number(key, field)
-	if err != nil {
-		return 0, err
-	}
-	if _, ok := r.Ticket(key, n); !ok {
-		return 0, invalid(field, "there is no Ticket %s", DisplayID(key, n))
-	}
-	return n, nil
-}
-
-// ticketRefs resolves refs to existing Tickets' numbers, each once.
-func ticketRefs(r store.Reader, key string, refs []Ref, field string) ([]int, error) {
+// ticketRefs resolves refs, op's field, to existing Tickets' numbers,
+// each once.
+func ticketRefs(r store.Reader, key, op, field string, refs []Ref) ([]int, error) {
 	var out []int
 	for _, ref := range refs {
-		n, err := ticketRef(r, key, ref, field)
+		t, err := resolveTicket(r, key, op, field, ref)
 		if err != nil {
 			return nil, err
 		}
+		n := t.Number
 		if !slices.Contains(out, n) {
 			out = append(out, n)
 		}
