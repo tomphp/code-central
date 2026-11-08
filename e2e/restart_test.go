@@ -31,6 +31,7 @@ func startServe(t *testing.T, store, listen string) (*process, string) {
 // startServeBin is startServe with another binary, such as a migrationtest build.
 func startServeBin(t *testing.T, binary, store, listen string) (*process, string) {
 	t.Helper()
+	unixOnly(t, "os.Interrupt to stop serve")
 	cmd := exec.Command(binary, "serve", "--store", store, "--no-notify")
 	cmd.Env = append(os.Environ(), "CODE_CENTRAL_LISTEN="+listen)
 	var stderr bytes.Buffer

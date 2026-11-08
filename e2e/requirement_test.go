@@ -24,6 +24,7 @@ const fakeClaudeEnv = "E2E_FAKE_CLAUDE_CODE_CENTRAL"
 // 3. A Requirement to Done: the real service and the real Factory, with a
 // fake claude working every Stage and the one implementation Ticket.
 func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.T) {
+	unixOnly(t, "/bin/sh for the fake claude and /usr/bin:/bin on PATH")
 	svc := serve(t)
 	// git reports real paths, so resolve macOS's /var -> /private/var.
 	root, err := filepath.EvalSymlinks(t.TempDir())

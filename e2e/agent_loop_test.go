@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +64,14 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// unixOnly skips t on Windows, which lacks the Unix tool it needs.
+func unixOnly(t *testing.T, needs string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skipf("needs %s; code-central-124 ports this", needs)
+	}
+}
+
 // service is a running `code-central serve` on a free loopback port.
 type service struct {
 	url string
@@ -73,6 +82,7 @@ var listening = regexp.MustCompile(`listening on \[([^\] ]+)`)
 
 func serve(t *testing.T) *service {
 	t.Helper()
+	unixOnly(t, "os.Interrupt to stop serve")
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, "serve", "--store", t.TempDir(), "--no-notify") // tests never show a real OS Notification
 	cmd.Env = append(os.Environ(), "CODE_CENTRAL_LISTEN=127.0.0.1:0")

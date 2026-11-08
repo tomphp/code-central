@@ -331,8 +331,8 @@ func TestDefaultDir(t *testing.T) {
 	}{
 		{"flag wins", "/flag", map[string]string{"CODE_CENTRAL_STORE": "/env", "XDG_DATA_HOME": "/xdg", "HOME": "/home/me"}, "/flag"},
 		{"env override", "", map[string]string{"CODE_CENTRAL_STORE": "/env", "XDG_DATA_HOME": "/xdg", "HOME": "/home/me"}, "/env"},
-		{"xdg", "", map[string]string{"XDG_DATA_HOME": "/xdg", "HOME": "/home/me"}, "/xdg/code-central"},
-		{"home fallback", "", map[string]string{"HOME": "/home/me"}, "/home/me/.local/share/code-central"},
+		{"xdg", "", map[string]string{"XDG_DATA_HOME": "/xdg", "HOME": "/home/me"}, filepath.Join("/xdg", "code-central")},
+		{"home fallback", "", map[string]string{"HOME": "/home/me"}, filepath.Join("/home/me", ".local", "share", "code-central")},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
