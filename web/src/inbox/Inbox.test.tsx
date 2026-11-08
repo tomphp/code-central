@@ -254,6 +254,28 @@ describe("Requirements in Needs Me", () => {
     // acme-1's row, acme-9, acme-10 and acme-15.
     await waitFor(() => expect(within(nav()).getByRole("button", { name: "Needs Me 4" })).toBeInTheDocument());
   });
+
+  it("counts Requirement rows, not Stage Tickets, in the tab title and All Projects too", async () => {
+    const fake = await requirements();
+    // A second Stage Ticket of acme-1 needing the human is still one row.
+    fake.updateTicket("acme-2", { state: "Failed" });
+    fake.setNeedsMe([
+      { reason: "needs_answer", tickets: [{ id: "acme-3", round: { number: 1, open: 1, questions: 1 } }] },
+      {
+        reason: "failed",
+        tickets: [
+          { id: "acme-2", failure: { headline: "Lost", reports: 1 } },
+          { id: "acme-10", failure: { headline: "Tests fail", reports: 1 } },
+          { id: "acme-15", failure: { headline: "Lint", reports: 1 } },
+        ],
+      },
+      { reason: "in_review", tickets: [{ id: "acme-9", summary: "Menu item added" }] },
+    ]);
+    renderApp(fake);
+    await waitFor(() => expect(within(nav()).getByRole("button", { name: "Needs Me 4" })).toBeInTheDocument());
+    expect(within(nav()).getByRole("button", { name: "All Projects 4" })).toBeInTheDocument();
+    await waitFor(() => expect(document.title).toBe("(4) Code Central"));
+  });
 });
 
 describe("Stage Tickets in State views", () => {

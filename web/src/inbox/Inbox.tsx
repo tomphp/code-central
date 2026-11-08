@@ -9,7 +9,7 @@ import { duration, REASON_LABEL, rowDetail } from "../format";
 import { LinkBadge } from "../ticket/LinkBadge";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { NewRequirement } from "../requirement/NewRequirement";
-import { isStage, progress, reasonsOf } from "../requirement/progress";
+import { isStage, needsMeCount, progress, reasonsOf } from "../requirement/progress";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { RequirementRow } from "../requirement/RequirementRow";
 import { TicketPane } from "../ticket/TicketDetail";
@@ -47,8 +47,8 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
   // In flight: unfinished, and nothing of it waits on the human.
   const inFlight = requirements.filter((s) => !s.finished && !progressOf(s).needs.length);
   const drafts = tickets.filter((t) => t.state === "Draft");
-  const needsMeCount = needingReqs.length + groups.reduce((n, g) => n + g.tickets.length, 0);
-  const totalCount = data?.needsMe.count ?? 0;
+  const shownCount = needsMeCount(data?.needsMe, inProject);
+  const totalCount = needsMeCount(data?.needsMe);
 
   // Selecting a row: a Ticket row leaves any Requirement; a Requirement
   // row opens on its default Ticket.
@@ -87,7 +87,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
             <ProjectFilter key={p.key} api={api} project={p} on={loc.project === p.key} onSelect={() => navigate({ project: p.key })} />
           ))}
         <h2>View</h2>
-        <FilterButton on={!loc.state && !loc.list} label="Needs Me" count={needsMeCount} loud onClick={() => navigate({ state: undefined, list: undefined })} />
+        <FilterButton on={!loc.state && !loc.list} label="Needs Me" count={shownCount} loud onClick={() => navigate({ state: undefined, list: undefined })} />
         <FilterButton
           on={loc.list === "requirements"}
           label="Requirements"
@@ -125,7 +125,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
           <StateList tickets={stateList(tickets, loc.state)} reasons={reasons} link={rowLink} />
         ) : (
           <>
-            {needsMeCount === 0 && <p className="empty">Nothing needs you.</p>}
+            {shownCount === 0 && <p className="empty">Nothing needs you.</p>}
             {needingReqs.length > 0 && (
               <section aria-label="Requirements" className="reason-requirements">
                 <h3 className="group-head">

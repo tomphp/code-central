@@ -42,6 +42,15 @@ export function reasonsOf(needsMe?: NeedsMeView): Map<string, NeedsMeReason> {
   return new Map((needsMe?.groups ?? []).flatMap((g) => g.tickets.map((r) => [r.id, g.reason] as const)));
 }
 
+// needsMeCount is the Needs Me count as the UI shows it, over the rows
+// inProject keeps: each Ticket row, with a Requirement's Stage Tickets
+// counted once, as its Requirement's row, never as themselves.
+export function needsMeCount(needsMe: NeedsMeView | undefined, inProject: (project: string) => boolean = () => true): number {
+  const rows = (needsMe?.groups ?? []).flatMap((g) => g.tickets).filter((r) => inProject(r.project));
+  const requirements = new Set(rows.flatMap((r) => (r.requirement?.stage ? [r.requirement.spec] : [])));
+  return requirements.size + rows.filter((r) => !r.requirement?.stage).length;
+}
+
 export const isStage =(t: { labels: string[] }) => t.labels.some((l) => l.startsWith("stage:"));
 
 export function progress(req: RequirementView, tickets: TicketRow[], reasons: Map<string, NeedsMeReason>): Progress {
