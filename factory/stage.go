@@ -57,13 +57,14 @@ var stageSkills = map[string]string{
 func firstPrompt(c claim, stage string, g core.StageGuideView) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "/%s %s\n\nTicket: %s\nClaim: %s\n\n", stageSkills[stage], c.Ticket, c.Ticket, c.ClaimID)
+	claimed := fmt.Sprintf("The Factory has already claimed this Ticket for you: Claim %s is yours, so don't call claim, and pass %s as claim_id on every write that needs it.", c.ClaimID, c.ClaimID)
 	if stage == core.ImplementationStage {
-		fmt.Fprintf(&b, "You are running under code-central-factory, in this Ticket's own worktree on branch %s. Work the Ticket under Claim %s: commit on this branch only, with no push and no PR, and finish the Ticket when it is done.", c.Ticket, c.ClaimID)
+		fmt.Fprintf(&b, "You are running under code-central-factory, in this Ticket's own worktree on branch %s. %s Commit on this branch only, with no push and no PR, and finish the Ticket when it is done.", c.Ticket, claimed)
 	} else {
 		if stage == "grilling" {
 			b.WriteString("Run /domain-modeling alongside /grilling, to sharpen the Requirement's terms as you grill.\n\n")
 		}
-		fmt.Fprintf(&b, "You are running under code-central-factory, in a detached, read-only worktree at the base's tip. Work this %s Stage under Claim %s and finish the Ticket when it is done. A Stage writes nothing to the repository: no files, no commits and no branches.", stage, c.ClaimID)
+		fmt.Fprintf(&b, "You are running under code-central-factory, in a detached, read-only worktree at the base's tip, for the %s Stage. %s Finish the Ticket when it is done. A Stage writes nothing to the repository: no files, no commits and no branches.", stage, claimed)
 	}
 	fmt.Fprintf(&b, "\n\nThe Stage Guide for %s follows: what this Ticket must produce and how to finish it. If you lose it, after compaction say, read it again with get_stage_guide, stage %q.\n\n%s", g.Stage, g.Stage, g.Guide)
 	return b.String()
