@@ -59,7 +59,8 @@ var Operations = []Op{
 	// Failure Reports and giving up (ticket 30).
 	{Name: "report_failure", Audience: AgentAndHuman, Write: true},
 	{Name: "give_up", Audience: AgentAndHuman, Write: true},
-	{Name: "send_back", Audience: HumanOnly, Write: true},
+	// The agent sends Accepted work back on a conflict (ticket 72).
+	{Name: "send_back", Audience: AgentAndHuman, Write: true},
 	{Name: "to_draft", Audience: HumanOnly, Write: true},
 
 	// init's teaching files and modes (ticket 41).

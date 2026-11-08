@@ -25,6 +25,7 @@ export type NeedsMeReason =
   | "long_claim"
   | "failed"
   | "in_review"
+  | "accepted_not_landed"
   | "blocked_by_cancelled"
   | "closed_externally";
 

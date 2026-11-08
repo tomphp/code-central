@@ -201,6 +201,22 @@ func TestInReviewAndAnsweredNeverNotify(t *testing.T) {
 	f.want(notify.Notification{Title: "acme-4 has a new Round", Body: "Task C", URL: base + "/?view=inbox&ticket=acme-4"})
 }
 
+func TestAcceptedButNotLandedNeverNotifies(t *testing.T) {
+	f := newFixture(t)
+	f.project("acme", 2)
+	f.start()
+	claim := f.claim("acme", "2")
+	must(t)(f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: claim, Summary: "done", Branch: "acme-2", Commit: "abc"}))
+	must(t)(f.core.Accept(core.WithActor(ctx, core.Human), "acme", core.TicketInput{Ticket: "2"}))
+	f.clock.BlockUntil(1)
+	f.clock.Advance(core.NotLandedAfter + notify.Tick)
+	f.clock.BlockUntil(1)
+	f.clock.Advance(notify.Tick)
+	f.round("acme", "3")
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme-3 has a new Round", Body: "Task B", URL: base + "/?view=inbox&ticket=acme-3"})
+}
+
 func TestAClaimTurningSilentNotifiesOncePerCrossing(t *testing.T) {
 	f := newFixture(t)
 	f.project("acme", 2)

@@ -21,6 +21,10 @@ const SilentAfter = 30 * time.Minute
 // pick_up_answers) before it is Long, if it isn't Silent.
 const LongAfter = 60 * time.Minute
 
+// NotLandedAfter is how long a Ticket may stay Accepted before it is
+// Accepted but not landed (ticket 72).
+const NotLandedAfter = 10 * time.Minute
+
 // PingThrottle is the shortest gap between two counted pings from one
 // session.
 const PingThrottle = time.Minute
@@ -33,10 +37,11 @@ type activity struct {
 
 	mu    sync.Mutex
 	pings map[string]time.Time       // session ID -> last counted ping
-	marks map[claimKey]NeedsMeReason // Silent or Long
+	marks map[claimKey]NeedsMeReason // Silent, Long or Accepted but not landed
 }
 
-// claimKey names one Claim across Projects.
+// claimKey names one Claim across Projects; claim 0 names an Accepted
+// Ticket, which has no live Claim.
 type claimKey struct {
 	project string
 	ticket  int
@@ -129,9 +134,24 @@ func (c *Core) longSince(t store.Ticket) *time.Time {
 	return &moved
 }
 
-// WatchSilent is the background ticker behind Silent and Long Claims. On
-// each tick it reads every Project and calls changed(project, ticket ID)
-// once for each Claim whose mark (Silent, Long or neither) has changed
+// notLandedSince is when t moved to Accepted, when it has been Accepted
+// for more than NotLandedAfter, else nil. It needs no Claim or Factory:
+// only the time since the accept counts.
+func (c *Core) notLandedSince(t store.Ticket) *time.Time {
+	if t.State != store.Accepted {
+		return nil
+	}
+	accepted := entered(t)
+	if c.now().Sub(accepted) <= NotLandedAfter {
+		return nil
+	}
+	return &accepted
+}
+
+// WatchSilent is the background ticker behind Silent and Long Claims and
+// Accepted but not landed. On each tick it reads every Project and calls
+// changed(project, ticket ID) once for each Claim (or Accepted Ticket)
+// whose mark (Silent, Long, not landed or neither) has changed
 // since the last tick without a write (time passing, or a ping), so live
 // views refetch. The time comes from the injected clock, not the tick; serve
 // ticks every minute. It returns when ctx ends.
@@ -148,13 +168,17 @@ func (c *Core) WatchSilent(ctx context.Context, ticks <-chan time.Time, changed 
 	}
 }
 
-// silentCrossings returns the Claims whose Silent or Long mark changed
+// silentCrossings returns the Claims and Accepted Tickets whose mark changed
 // since the last call, and remembers the new marks.
 func (c *Core) silentCrossings() []claimKey {
 	now := map[claimKey]NeedsMeReason{}
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			for _, t := range r.Tickets(p.Key) {
+				if c.notLandedSince(t) != nil {
+					now[claimKey{p.Key, t.Number, 0}] = ReasonAcceptedNotLanded
+					continue
+				}
 				cl, ok := liveClaim(t)
 				if !ok {
 					continue

@@ -57,16 +57,24 @@ func TestTheWorkflowsActionsAreTheTableCoreEnforces(t *testing.T) {
 	if land := action(t, w, "land", "human or agent"); !slices.Equal(land.From, []store.State{store.Accepted, store.InReview}) || land.To != store.Done || land.Requires == "" {
 		t.Fatalf("land %+v", land)
 	}
+	// send_back has the human's row from Failed and the agent's from
+	// Accepted, whose note is required (ticket 72).
+	if sb := action(t, w, "send_back", "human"); !slices.Equal(sb.From, []store.State{store.Failed}) || sb.To != store.Ready {
+		t.Fatalf("human send_back %+v", sb)
+	}
+	if sb := action(t, w, "send_back", "agent"); !slices.Equal(sb.From, []store.State{store.Accepted}) || sb.To != store.Ready || !strings.Contains(sb.Requires, "required") {
+		t.Fatalf("agent send_back %+v", sb)
+	}
 }
 
 func TestTheWorkflowSaysWhatCountsAsNeedsMe(t *testing.T) {
 	w := workflow(t)
 	want := []core.NeedsMeReason{
 		core.ReasonNeedsAnswer, core.ReasonAnswered, core.ReasonSilentClaim, core.ReasonLongClaim, core.ReasonFailed,
-		core.ReasonInReview, core.ReasonBlockedByCancelled, core.ReasonClosedExternally,
+		core.ReasonInReview, core.ReasonAcceptedNotLanded, core.ReasonBlockedByCancelled, core.ReasonClosedExternally,
 	}
 	if len(w.NeedsMe) != len(want) {
-		t.Fatalf("Needs Me reasons %v, want the eight in group order", w.NeedsMe)
+		t.Fatalf("Needs Me reasons %v, want the nine in group order", w.NeedsMe)
 	}
 	for i, r := range w.NeedsMe {
 		if r.Reason != want[i] || r.Meaning == "" {

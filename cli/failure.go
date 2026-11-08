@@ -74,3 +74,24 @@ func runGiveUp(ctx context.Context, e Env, args []string) error {
 	}
 	return printJSON(e, v)
 }
+
+// runSendBack sends an Accepted Ticket back to Ready, as the agent
+// (ticket 72).
+func runSendBack(ctx context.Context, e Env, args []string) error {
+	fs := flagSet("send-back")
+	note := fs.String("note", "", "")
+	file := fs.String("file", "", "")
+	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
+	if err != nil {
+		return err
+	}
+	text, err := longInput(e, *note, *file)
+	if err != nil {
+		return err
+	}
+	v, err := sc.client.SendBack(ctx, sc.project, core.SendBackInput{Ticket: ref, Note: text})
+	if err != nil {
+		return err
+	}
+	return printJSON(e, v)
+}

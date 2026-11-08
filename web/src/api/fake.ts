@@ -157,11 +157,13 @@ export class FakeApi implements Api {
       reason: g.reason,
       tickets: g.tickets.map((r) => {
         const t = this.tickets.get(r.id);
+        const requirement = t && this.requirementOf(t);
         return {
           project: this.projectOf(r.id),
           title: t?.title ?? r.id,
           state: t?.state ?? "In Progress",
           since: this.now.toISOString(),
+          ...(requirement && { requirement }),
           ...r,
           reason: g.reason,
         };
@@ -402,6 +404,14 @@ export class FakeApi implements Api {
       updated: t.updated,
       ...(t.link && { link: { ...t.link } }),
     }));
+  }
+
+  // requirementOf is a Needs Me row's requirement field: set when the
+  // Ticket's Spec is a Requirement, with stage only on a Stage Ticket.
+  private requirementOf(t: TicketView): NeedsMeRow["requirement"] {
+    if (!this.ticketsOf(t.spec.id).some((s) => stageOf(s))) return undefined;
+    const stage = stageOf(t);
+    return { spec: t.spec.id, title: this.specs.get(t.spec.id)?.title ?? t.spec.title, ...(stage && { stage }) };
   }
 
   // derive is what a Spec read works out from the Spec's Tickets.

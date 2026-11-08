@@ -18,15 +18,19 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/tomoram/code-central/cli"
+	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory"
@@ -48,6 +52,10 @@ func Main(m *testing.M) {
 
 // Timeout bounds every wait in the harness.
 const Timeout = 10 * time.Second
+
+// KillGrace is how long the Factory under test gives a turn between
+// SIGINT and SIGTERM.
+const KillGrace = 100 * time.Millisecond
 
 // Harness is one Factory's world. Its fields are for assertions; change
 // the Factory's environment with Setenv.
@@ -84,7 +92,7 @@ func New(t testing.TB) *Harness {
 		Bin:     filepath.Join(root, "bin"),
 		data:    filepath.Join(root, "data"),
 	}
-	for _, d := range []string{h.Repo, h.Home, h.Bin, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls")} {
+	for _, d := range []string{h.Repo, h.Home, h.Bin, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
 		must(t, os.MkdirAll(d, 0o755))
 	}
 	gitPath, err := exec.LookPath("git")
@@ -216,6 +224,26 @@ func (h *Harness) Ticket(id string) core.TicketView {
 	return tk
 }
 
+// Human is a client of the harness's Code Central acting as the human.
+func (h *Harness) Human() *client.Client {
+	c := client.New(h.Server.URL)
+	c.Actor = core.Human
+	return c
+}
+
+// Answer answers every open Question on ticket with text, as the human.
+func (h *Harness) Answer(ticket, text string) {
+	h.t.Helper()
+	for _, r := range h.Ticket(ticket).Rounds {
+		for _, q := range r.Questions {
+			if q.Status == store.QuestionOpen {
+				_, err := h.Human().Answer(context.Background(), h.Project, core.AnswerInput{Ticket: core.Ref(ticket), Question: q.Number, Text: text})
+				must(h.t, err)
+			}
+		}
+	}
+}
+
 // WaitFor polls cond until it holds, failing the test after Timeout.
 func (h *Harness) WaitFor(what string, cond func() bool) {
 	h.t.Helper()
@@ -247,6 +275,8 @@ type Running struct {
 	code           int
 	stdout, stderr *buffer
 	ticks          chan time.Time
+	waits          atomic.Int64 // times the Factory has waited for a poll
+	polls          int64        // ticks sent by Poll
 }
 
 // Start runs the Factory in the repo with args until Stop or the end of
@@ -264,7 +294,11 @@ func (h *Harness) StartIn(dir string, args ...string) *Running {
 		Environ: h.Environ(),
 		Stdout:  r.stdout,
 		Stderr:  r.stderr,
-		After:   func(time.Duration) <-chan time.Time { return r.ticks },
+		After: func(time.Duration) <-chan time.Time {
+			r.waits.Add(1)
+			return r.ticks
+		},
+		KillGrace: KillGrace,
 	}
 	go func() {
 		defer close(r.done)
@@ -301,6 +335,29 @@ func (r *Running) Tick() {
 	case <-time.After(Timeout):
 		r.h.t.Fatal("the Factory didn't wait for its next poll")
 	}
+}
+
+// Poll waits for the Factory's current poll to finish, lets it make its
+// next one and waits for that to finish too. Turns the poll started may
+// still be running.
+func (r *Running) Poll() {
+	r.h.t.Helper()
+	r.waitForPolls(r.polls + 1)
+	r.Tick()
+	r.polls++
+	r.waitForPolls(r.polls + 1)
+}
+
+func (r *Running) waitForPolls(n int64) {
+	r.h.t.Helper()
+	r.h.WaitFor(fmt.Sprintf("poll %d to finish (stdout %q)", n, r.stdout), func() bool {
+		select {
+		case <-r.done:
+			return true
+		default:
+		}
+		return r.waits.Load() >= n
+	})
 }
 
 // WaitForOutput waits for s on the Factory's stdout.
@@ -357,6 +414,58 @@ type Step struct {
 	Stdout string `json:"stdout,omitempty"`
 	// Exit exits with this code, skipping the rest.
 	Exit *int `json:"exit,omitempty"`
+	// Wait blocks until the test calls Continue for the run's Ticket. It
+	// notes each SIGINT and SIGTERM it gets (see Signals), ignores SIGINT
+	// and exits 143 on SIGTERM.
+	Wait bool `json:"wait,omitempty"`
+}
+
+// Wait blocks the run until Continue, so the turn stays running.
+func Wait() Step { return Step{Wait: true} }
+
+// PostRound posts a Round of one Question under the run's Claim.
+func PostRound(title string) Step {
+	q, _ := json.Marshal([]core.QuestionInput{{Title: title, Body: title}})
+	return CLI("post-round", "{{ticket}}", "--claim", "{{claim}}", "--session", "{{session}}", "--questions", string(q))
+}
+
+// Continue lets the run of ticket now in a Wait step carry on.
+func (h *Harness) Continue(ticket string) {
+	h.t.Helper()
+	must(h.t, os.WriteFile(filepath.Join(h.data, "continue", ticket), nil, 0o644))
+	h.WaitFor(ticket+"'s run to carry on", func() bool {
+		_, err := os.Stat(filepath.Join(h.data, "continue", ticket))
+		return os.IsNotExist(err)
+	})
+}
+
+// HoldSession starts a process, outside the Factory, whose command line
+// names session, as another claude driving that session would. It runs
+// until the returned func or the end of the test.
+func (h *Harness) HoldSession(session string) (release func()) {
+	h.t.Helper()
+	cmd := exec.Command("/bin/sh", "-c", "sleep 60; :", "claude", "--resume", session)
+	must(h.t, cmd.Start())
+	var once sync.Once
+	release = func() {
+		once.Do(func() {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		})
+	}
+	h.t.Cleanup(release)
+	return release
+}
+
+// Signals is the signals runs of ticket got while in a Wait step, in
+// order: "INT" and "TERM".
+func (h *Harness) Signals(ticket string) []string {
+	b, err := os.ReadFile(filepath.Join(h.data, "signals", ticket))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	must(h.t, err)
+	return strings.Fields(string(b))
 }
 
 // CLI calls the code-central CLI.
@@ -461,7 +570,13 @@ func runFake(data string, args []string) int {
 	}
 	b, _ := json.Marshal(c)
 	name := fmt.Sprintf("%020d-%d.json", time.Now().UnixNano(), os.Getpid())
-	if err := os.WriteFile(filepath.Join(data, "calls", name), b, 0o644); err != nil {
+	// Write beside calls/ and rename in, so Calls never reads half a file.
+	tmp := filepath.Join(data, name)
+	err := os.WriteFile(tmp, b, 0o644)
+	if err == nil {
+		err = os.Rename(tmp, filepath.Join(data, "calls", name))
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "fake claude:", err)
 		return 70
 	}
@@ -480,6 +595,10 @@ func runFake(data string, args []string) int {
 		switch {
 		case s.Exit != nil:
 			return *s.Exit
+		case s.Wait:
+			if code, stop := wait(data, c.Ticket); stop {
+				return code
+			}
 		case s.Stdout != "":
 			fmt.Println(fill(s.Stdout))
 		case s.Shell != "":
@@ -502,4 +621,34 @@ func runFake(data string, args []string) int {
 		}
 	}
 	return 0
+}
+
+// wait is the fake's Wait step: it returns when the test continues the
+// run, or with stop set when SIGTERM ends it.
+func wait(data, ticket string) (code int, stop bool) {
+	sigs := make(chan os.Signal, 2)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigs)
+	note := func(s string) {
+		f, err := os.OpenFile(filepath.Join(data, "signals", ticket), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err == nil {
+			fmt.Fprintln(f, s)
+			f.Close()
+		}
+	}
+	cont := filepath.Join(data, "continue", ticket)
+	for {
+		select {
+		case s := <-sigs:
+			if s == syscall.SIGTERM {
+				note("TERM")
+				return 143, true
+			}
+			note("INT")
+		case <-time.After(5 * time.Millisecond):
+			if os.Remove(cont) == nil {
+				return 0, false
+			}
+		}
+	}
 }
