@@ -256,7 +256,7 @@ func TestTheAgentLoop(t *testing.T) {
 		t.Fatalf("pick_up_answers: %v", picked)
 	}
 	finished := tool(t, agent, "finish", map[string]any{"ticket": "acme-2", "claim_id": claimID, "summary": "Built on branch acme-2."})
-	if finished["ticket"].(map[string]any)["state"] != "In Review" {
+	if finished["state"] != "In Review" {
 		t.Fatalf("finish: %v", finished)
 	}
 	if done := svc.human(t, "/api/p/acme/tickets/2/accept", `{}`); done["state"] != "Done" {
