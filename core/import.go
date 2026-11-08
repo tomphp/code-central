@@ -227,8 +227,12 @@ func checkImport(p ImportPayload) error {
 
 func checkImportLabelsTags(at string, labels []string, tags map[string]string) error {
 	for j, l := range labels {
+		field := fmt.Sprintf("%s.labels[%d]", at, j)
 		if !singleLine(l) {
-			return invalid(fmt.Sprintf("%s.labels[%d]", at, j), "a Label is non-empty and single-line, not %q", l)
+			return invalid(field, "a Label is non-empty and single-line, not %q", l)
+		}
+		if err := checkStageLabels(field, []string{l}); err != nil {
+			return err
 		}
 	}
 	keys := make([]string, 0, len(tags))
