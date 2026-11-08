@@ -57,7 +57,8 @@ describe("the Round panel", () => {
 
     expect(within(panel).queryByText("Old question")).toBeNull();
     const colour = question(panel, "Which colour?");
-    expect(colour).toHaveTextContent("Red or **blue**, for the login button.");
+    expect(colour).toHaveTextContent("Red or blue, for the login button.");
+    expect(colour).not.toHaveTextContent("**");
     expect(box(colour)).toHaveValue("Blue");
     expect(within(colour).getByText(/Recommended answer, a draft: nothing is saved until you answer/)).toBeInTheDocument();
 
@@ -69,6 +70,22 @@ describe("the Round panel", () => {
 
     expect(within(panel).getByText("2 of 2 open")).toBeInTheDocument();
     expect(actions(fake)).toEqual([]);
+  });
+
+  it("renders a Question's body as Markdown, keeping its title plain and its recommendation raw in the box", async () => {
+    const fake = world([{ title: "Pick **one**", body: "- `left`\n- [docs](https://example.com)\n\n<b>loud</b>", recommended: "**left**" }]);
+    const panel = await renderPanel(fake);
+
+    const colour = question(panel, "Which colour?");
+    expect(within(colour).getByText("blue").tagName).toBe("STRONG");
+
+    const extra = question(panel, "Pick \\*\\*one\\*\\*");
+    expect(within(extra).getByText("Pick **one**")).toBeInTheDocument();
+    expect(within(extra).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(extra).getByText("left").tagName).toBe("CODE");
+    expect(within(extra).getByRole("link", { name: "docs" })).toHaveAttribute("target", "_blank");
+    expect(within(extra).getByText("<b>loud</b>")).toBeInTheDocument();
+    expect(box(extra)).toHaveValue("**left**");
   });
 
   it("answers one Question with the text in its box, and keeps it editable until the Round is complete", async () => {

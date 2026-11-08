@@ -6,7 +6,9 @@
 .question legend { font-weight: 600; padding: 0; float: left; padding-right: 6rem; }
 .qstatus { position: absolute; right: 0; top: 10px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; background: var(--surface-2); color: var(--muted); }
 .qstatus-answered { color: var(--r-review); }
-.question-body { white-space: pre-wrap; clear: both; }
+.question-body { clear: both; }
+.question-body .markdown p, .question-body .markdown ul, .question-body .markdown ol, .question-body .markdown pre, .question-body .markdown table, .question-body .markdown blockquote { margin-bottom: 6px; }
+.question-body .markdown h1, .question-body .markdown h2, .question-body .markdown h3, .question-body .markdown h4, .question-body .markdown h5, .question-body .markdown h6 { margin: 8px 0 4px; }
 .question textarea { width: 100%; box-sizing: border-box; resize: vertical; }
 .question-dismissed .question-body, .question-dismissed textarea { opacity: .6; }
 .draft-note { font-size: 12px; color: var(--r-answer); }
