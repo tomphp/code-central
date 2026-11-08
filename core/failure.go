@@ -94,7 +94,7 @@ func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureIn
 	if err != nil {
 		return StopResult{}, err
 	}
-	return stopped(v, "report_failure"), nil
+	return stopResult(v, "report_failure"), nil
 }
 
 // GiveUp is give_up(ticket, claim_id, note): the holder, finding nothing
@@ -108,7 +108,7 @@ func (c *Core) GiveUp(ctx context.Context, key string, in GiveUpInput) (StopResu
 	if err != nil {
 		return StopResult{}, err
 	}
-	return stopped(v, "give_up"), nil
+	return stopResult(v, "give_up"), nil
 }
 
 // SendBack is send_back(ticket, note): the human's from Failed to Ready,

@@ -51,13 +51,13 @@ type FinishResult struct {
 	NextStep string      `json:"next_step"`
 }
 
-// stopped is the result of an action that ends the agent's work, from the
-// write's result v and the action's next step.
-func stopped(v Written[TicketView], name string) FinishResult {
+// stopResult is the StopResult of action name, which ends the agent's
+// work, from the write's result v.
+func stopResult(v Written[TicketView], name string) StopResult {
 	if v.Record != nil {
-		return FinishResult{Ticket: v.Record, NextStep: nextStep(name)}
+		return StopResult{Ticket: v.Record, NextStep: nextStep(name)}
 	}
-	return FinishResult{Acknowledgement: &v.Acknowledgement, NextStep: nextStep(name)}
+	return StopResult{Acknowledgement: &v.Acknowledgement, NextStep: nextStep(name)}
 }
 
 // RejectInput is reject's input.
@@ -185,7 +185,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 	if err != nil {
 		return FinishResult{}, err
 	}
-	return stopped(v, "finish"), nil
+	return stopResult(v, "finish"), nil
 }
 
 // Accept is the human's accept(ticket): In Review to Accepted when the

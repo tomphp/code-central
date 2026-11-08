@@ -43,6 +43,8 @@ func init() {
 				cli:  []string{"acme-3", "--claim", "claim-1", "--questions", `[{"title":"DB?","body":"Which one?","recommended":"SQLite"}]`},
 			},
 			check: func(t *testing.T, out map[string]any) {
+				// No claims: the fixture's clock stands still, so the Claim's
+				// last_activity doesn't change.
 				ticketAcknowledgement("acme-3", "Needs Answer", "state", "rounds", "moves", "needs_me_reason")(t, out)
 				if out["round"] != 1.0 {
 					t.Fatalf("round %v in %v", out["round"], out)

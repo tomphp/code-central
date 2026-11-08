@@ -22,8 +22,8 @@ type PostRoundInput struct {
 	ClaimID   string          `json:"claim_id"`
 	SessionID string          `json:"session_id,omitempty"`
 	Questions []QuestionInput `json:"questions"`
-	// Full asks for only the Round number and the next step, without the
-	// Acknowledgement, as post_round returned before it acknowledged.
+	// Full asks for the Round number and the next step without the
+	// Acknowledgement: post_round's record is its Round, not the Ticket.
 	Full bool `json:"full,omitempty"`
 }
 
@@ -140,7 +140,7 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 	if err != nil {
 		return PostRoundResult{}, err
 	}
-	if !in.Full {
+	if v.Record == nil {
 		res.Acknowledgement = &v.Acknowledgement
 	}
 	return res, nil

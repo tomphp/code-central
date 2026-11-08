@@ -434,7 +434,7 @@ func TestPostRoundAcknowledgesWithTheRoundAndTheNextStep(t *testing.T) {
 	}
 }
 
-func TestClaimEndingActionsAndPostRoundWithFullReturnTodaysResult(t *testing.T) {
+func TestClaimEndingActionsAndPostRoundWithFullReturnTheirFormerResult(t *testing.T) {
 	for _, c := range []struct {
 		name  string
 		write func(fixture) (any, error)
