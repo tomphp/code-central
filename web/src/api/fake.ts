@@ -13,12 +13,19 @@
 // leaves finished Tickets out unless asked, and an Archived Project
 // (archiveProject, refused while any Ticket is unfinished) refuses every
 // action until unarchiveProject.
-import type { Api, EventHandlers, TicketAction, TicketActions } from "./api";
+//
+// Specs are seeded with addSpec, or exist because a Ticket names them.
+// A Spec read derives what the service derives from its Tickets: the
+// State summary, finished, and a Requirement's requirement block
+// (a Stage's Needs Me reason is Needs Me's, as set by setNeedsMe).
+// submitRequirement writes a Spec and its three Stage Tickets.
+import { numberOf, type Api, type EventHandlers, type TicketAction, type TicketActions } from "./api";
 import { fakeActions } from "./fakeActions";
 import {
   ApiError,
   FINISHED,
   type ChangeEvent,
+  type FindSpecsFilter,
   type FindTicketsFilter,
   type LinkedRow,
   type Mode,
@@ -27,7 +34,14 @@ import {
   type NeedsMeView,
   type ProjectRow,
   type ProjectView,
+  type RequirementView,
+  type SpecDetail,
   type SpecQuestions,
+  type SpecRow,
+  type SpecView,
+  type StageName,
+  type StateSummary,
+  type SubmitRequirementResult,
   type TicketRow,
   type TicketView,
 } from "./types";
@@ -46,6 +60,15 @@ interface FakeProject {
 }
 
 export type SeedTicket = Partial<TicketView> & { title: string };
+export type SeedSpec = Partial<SpecView> & { title: string };
+
+// The Stages in order, with the title each Stage Ticket's starts with.
+const STAGES: { name: StageName; title: string }[] = [
+  { name: "grilling", title: "Grilling" },
+  { name: "spec", title: "Spec" },
+  { name: "tickets", title: "Tickets" },
+];
+const stageOf = (t: { labels: string[] }) => STAGES.find((s) => t.labels.includes(`stage:${s.name}`))?.name;
 export type SeedRow = Partial<NeedsMeRow> & { id: string };
 
 export class FakeApi implements Api {
@@ -54,6 +77,7 @@ export class FakeApi implements Api {
   calls: string[] = [];
   private projects = new Map<string, FakeProject>();
   private tickets = new Map<string, TicketView>();
+  private specs = new Map<string, SpecView>();
   private groups: { reason: NeedsMeReason; tickets: NeedsMeRow[] }[] = [];
   private subs = new Set<EventHandlers>();
 
@@ -102,6 +126,19 @@ export class FakeApi implements Api {
     this.tickets.set(t.id, t);
     this.emit({ type: "ticket.changed", project, id: t.id });
     return structuredClone(t);
+  }
+
+  // addSpec seeds a Spec; its ID comes from the Project's one counter,
+  // shared with Tickets, as the service's does.
+  addSpec(project: string, seed: SeedSpec): SpecView {
+    const p = this.projects.get(project);
+    if (!p) throw new Error(`FakeApi: no Project ${project}`);
+    const at = this.now.toISOString();
+    const s: SpecView = { id: `${project}-${p.next++}`, labels: [], tags: {}, created: at, updated: at, body: "", edits: [], ...seed };
+    if (seed.id) p.next = Math.max(p.next, Number(seed.id.slice(project.length + 1)) + 1);
+    this.specs.set(s.id, s);
+    this.emit({ type: "spec.changed", project, id: s.id });
+    return structuredClone(s);
   }
 
   updateTicket(id: string, patch: Partial<TicketView>): TicketView {
@@ -193,24 +230,73 @@ export class FakeApi implements Api {
   async findTickets(project: string, filter: FindTicketsFilter = {}): Promise<TicketRow[]> {
     this.calls.push("findTickets");
     this.project(project);
-    return [...this.tickets.values()]
+    const rows = [...this.tickets.values()]
       .filter((t) => this.projectOf(t.id) === project)
-      .filter((t) => (filter.state?.length ? filter.state.includes(t.state) : !FINISHED.includes(t.state)))
-      .map((t) => ({
-        id: t.id,
-        title: t.title,
-        state: t.state,
-        spec: t.spec.id,
-        labels: [...t.labels],
-        blocked: t.blocked,
-        updated: t.updated,
-        ...(t.link && { link: { ...t.link } }),
-      }));
+      .filter((t) => (filter.state?.length ? filter.state.includes(t.state) : !FINISHED.includes(t.state)));
+    return this.rowsOf(rows);
   }
 
   async getTicket(project: string, id: string): Promise<TicketView> {
     this.calls.push("getTicket");
     return this.view(this.ticket(project, id));
+  }
+
+  async getSpec(project: string, spec: string): Promise<SpecDetail> {
+    this.calls.push("getSpec");
+    this.project(project);
+    const id = `${project}-${spec.slice(spec.lastIndexOf("-") + 1)}`;
+    const s = this.allSpecs(project).find((s) => s.id === id);
+    if (!s) throw new ApiError(404, "not_found", `there is no Spec ${id}`);
+    const { state_summary, finished, requirement } = this.derive(id);
+    return structuredClone({ ...s, state_summary, finished, tickets: this.rowsOf(this.ticketsOf(id)), ...(requirement && { requirement }) });
+  }
+
+  async findSpecs(project: string, filter: FindSpecsFilter = {}): Promise<SpecRow[]> {
+    this.calls.push("findSpecs");
+    this.project(project);
+    return structuredClone(
+      this.allSpecs(project)
+        .map((s) => ({ s, ...this.derive(s.id) }))
+        .filter((r) => (filter.finished || !r.finished) && (!filter.requirements || r.requirement))
+        .map(({ s, state_summary, finished, requirement }) => ({
+          id: s.id,
+          title: s.title,
+          labels: s.labels,
+          tags: s.tags,
+          state_summary,
+          finished,
+          updated: s.updated,
+          ...(s.link && { link: s.link }),
+          ...(requirement && { requirement }),
+        })),
+    );
+  }
+
+  async submitRequirement(project: string, text: string): Promise<SubmitRequirementResult> {
+    this.calls.push("submitRequirement");
+    this.writable(project);
+    const title = text.trim().split("\n")[0].trim();
+    if (!title) throw new ApiError(422, "invalid", "a Requirement needs text; its first line becomes the Spec's title", "text");
+    const spec = this.addSpec(project, { title, body: text });
+    const stages: TicketView[] = [];
+    for (const s of STAGES) {
+      const prev = stages.at(-1);
+      stages.push(
+        this.addTicket(project, {
+          title: `${s.title}: ${title}`,
+          state: "Ready",
+          spec: { id: spec.id, title },
+          labels: [`stage:${s.name}`],
+          description: `The ${s.title} Stage of [${spec.id}](${spec.id}).\n`,
+          blocked_by: prev ? [prev.id] : [],
+          blockers: prev ? [{ id: prev.id, title: prev.title, state: prev.state }] : [],
+          blocked: !!prev,
+          claimable: !prev,
+          moves: [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_requirement" }],
+        }),
+      );
+    }
+    return { spec, stages };
   }
 
   // specQuestions reads a Spec from its seeded Tickets' spec, so a Spec
@@ -289,6 +375,60 @@ export class FakeApi implements Api {
   }
 
   // ---- internals ----
+
+  // allSpecs is a Project's seeded Specs, then any Spec only a Ticket
+  // names, in ID order.
+  private allSpecs(project: string): SpecView[] {
+    const out = new Map([...this.specs].filter(([id]) => this.projectOf(id) === project));
+    for (const t of this.tickets.values()) {
+      if (this.projectOf(t.id) !== project || !t.spec.id || out.has(t.spec.id)) continue;
+      out.set(t.spec.id, { id: t.spec.id, title: t.spec.title, labels: [], tags: {}, created: t.created, updated: t.updated, body: "", edits: [] });
+    }
+    return [...out.values()].sort((a, b) => Number(numberOf(a.id)) - Number(numberOf(b.id)));
+  }
+
+  private ticketsOf(spec: string): TicketView[] {
+    return [...this.tickets.values()].filter((t) => t.spec.id === spec).sort((a, b) => Number(numberOf(a.id)) - Number(numberOf(b.id)));
+  }
+
+  private rowsOf(tickets: TicketView[]): TicketRow[] {
+    return tickets.map((t) => ({
+      id: t.id,
+      title: t.title,
+      state: t.state,
+      spec: t.spec.id,
+      labels: [...t.labels],
+      blocked: t.blocked,
+      updated: t.updated,
+      ...(t.link && { link: { ...t.link } }),
+    }));
+  }
+
+  // derive is what a Spec read works out from the Spec's Tickets.
+  private derive(spec: string): { state_summary: StateSummary; finished: boolean; requirement?: RequirementView } {
+    const tickets = this.ticketsOf(spec);
+    const state_summary: StateSummary = {};
+    for (const t of tickets) state_summary[t.state] = (state_summary[t.state] ?? 0) + 1;
+    const finished = tickets.length > 0 && tickets.every((t) => FINISHED.includes(t.state));
+    const stages = STAGES.map((s) => tickets.find((t) => stageOf(t) === s.name)).filter((t) => !!t);
+    if (!stages.length) return { state_summary, finished };
+    const reason = (t: TicketView) => this.rows().find((r) => r.id === t.id)?.reason;
+    // A Ticket a Factory could claim now; one waiting on the human doesn't count.
+    const claimable = (t: TicketView) =>
+      t.state === "Ready" && !reason(t) && t.blocked_by.every((b) => this.tickets.get(b)?.state === "Done");
+    const build = tickets.filter((t) => !stageOf(t) && t.state !== "Cancelled");
+    const current = stages.find((t) => t.state !== "Done");
+    const held = tickets.some((t) => t.claims.some((c) => !c.ended));
+    return {
+      state_summary,
+      finished,
+      requirement: {
+        stages: stages.map((t) => ({ name: stageOf(t)!, ticket: t.id, state: t.state, ...(reason(t) && { needs_me_reason: reason(t) }) })),
+        build: { done: build.filter((t) => t.state === "Done").length, total: build.length },
+        waiting_for_factory: current ? claimable(current) : build.some(claimable) && !held,
+      },
+    };
+  }
 
   private unfinished(key: string) {
     return [...this.tickets.values()].filter((t) => this.projectOf(t.id) === key && !FINISHED.includes(t.state));

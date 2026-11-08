@@ -1,7 +1,8 @@
 import type { Api } from "./api/api";
 import { projectOf } from "./api/api";
 import { Inbox } from "./inbox/Inbox";
-import { useInboxData, useLiveVersion, useTicket } from "./live";
+import { useInboxData, useLiveVersion, useSpec, useTicket } from "./live";
+import { defaultTicket, progress, reasonsOf } from "./requirement/progress";
 import { useNeedsMeTitle } from "./title";
 import { useUiLocation } from "./url";
 
@@ -15,7 +16,13 @@ export function App({ api, now = () => new Date() }: AppProps) {
   const [loc, navigate] = useUiLocation();
   const version = useLiveVersion(api);
   const inbox = useInboxData(api, version);
-  const ticket = useTicket(api, loc.ticket && projectOf(loc.ticket), loc.ticket, version);
+  const spec = useSpec(api, loc.requirement && projectOf(loc.requirement), loc.requirement, version);
+  const requirement = spec.data?.id === loc.requirement && spec.data?.requirement ? { ...spec.data, requirement: spec.data.requirement } : undefined;
+  const reasons = reasonsOf(inbox.data?.needsMe);
+  // Within a Requirement with no Ticket chosen, the pane opens on its default one.
+  const selected =
+    loc.ticket ?? (requirement ? defaultTicket(progress(requirement.requirement, requirement.tickets, reasons)) : undefined);
+  const ticket = useTicket(api, selected && projectOf(selected), selected, version);
   useNeedsMeTitle(inbox.data?.needsMe.count);
 
   // One layout in v1. A later view (focus queue, board) is another case
@@ -29,10 +36,12 @@ export function App({ api, now = () => new Date() }: AppProps) {
             api={api}
             now={now()}
             data={inbox.data}
-            loc={loc}
+            loc={{ ...loc, ticket: selected }}
             navigate={navigate}
+            requirement={requirement}
+            requirementError={spec.error && spec.data?.id !== loc.requirement ? spec.error.message : undefined}
             ticket={ticket.data}
-            ticketError={ticket.error && ticket.data?.id !== loc.ticket ?ticket.error.message : undefined}
+            ticketError={ticket.error && ticket.data?.id !== selected ? ticket.error.message : undefined}
           />
         </>
       );

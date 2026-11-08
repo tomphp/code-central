@@ -399,6 +399,62 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(t.comments).toEqual([]);
     });
 
+    // ---- Requirements (code-central-74) ----
+    it("submits a Requirement as its Spec and three chained Stage Tickets, waiting for a Factory", async () => {
+      await d.createProject("acme", "Acme");
+      const r = await d.api.submitRequirement("acme", "Export a Spec as Markdown\nOne file, Tickets included.");
+      expect(r.spec).toMatchObject({ title: "Export a Spec as Markdown", body: "Export a Spec as Markdown\nOne file, Tickets included." });
+      expect(r.stages.map((t) => [t.labels, t.state])).toEqual([
+        [["stage:grilling"], "Ready"],
+        [["stage:spec"], "Ready"],
+        [["stage:tickets"], "Ready"],
+      ]);
+      expect(r.stages[1].blocked_by).toEqual([r.stages[0].id]);
+      expect(r.stages[2].blocked_by).toEqual([r.stages[1].id]);
+
+      const s = await d.api.getSpec("acme", r.spec.id);
+      expect(s).toMatchObject({ id: r.spec.id, title: "Export a Spec as Markdown", finished: false });
+      expect(Number.isNaN(Date.parse(s.created))).toBe(false);
+      expect(s.tickets.map((t) => t.id)).toEqual(r.stages.map((t) => t.id));
+      expect(s.requirement).toEqual({
+        stages: [
+          { name: "grilling", ticket: r.stages[0].id, state: "Ready" },
+          { name: "spec", ticket: r.stages[1].id, state: "Ready" },
+          { name: "tickets", ticket: r.stages[2].id, state: "Ready" },
+        ],
+        build: { done: 0, total: 0 },
+        waiting_for_factory: true,
+      });
+    });
+
+    it("refuses a Requirement with no text", async () => {
+      await d.createProject("acme", "Acme");
+      const e = await d.api.submitRequirement("acme", "  \n ").catch((e) => e);
+      expect(e).toBeInstanceOf(ApiError);
+      expect(e).toMatchObject({ status: 422, code: "invalid", field: "text" });
+    });
+
+    it("finds only Requirements with requirements: true, finished ones included when asked", async () => {
+      await d.createProject("acme", "Acme");
+      await d.createTicket("acme", "Not a Requirement", "Ready");
+      const r = await d.api.submitRequirement("acme", "Export a Spec");
+
+      const all = await d.api.findSpecs("acme");
+      expect(all.length).toBeGreaterThan(1);
+      expect(all.find((s) => s.id === r.spec.id)?.requirement?.waiting_for_factory).toBe(true);
+      expect(all.filter((s) => s.id !== r.spec.id).every((s) => s.requirement === undefined)).toBe(true);
+
+      const reqs = await d.api.findSpecs("acme", { requirements: true });
+      expect(reqs.map((s) => [s.id, s.title, s.finished])).toEqual([[r.spec.id, "Export a Spec", false]]);
+
+      for (const t of r.stages) await d.api.act("acme", t.id, "move", { to_state: "Done" });
+      expect(await d.api.findSpecs("acme", { requirements: true })).toEqual([]);
+      const delivered = await d.api.findSpecs("acme", { requirements: true, finished: true });
+      expect(delivered.map((s) => [s.id, s.finished])).toEqual([[r.spec.id, true]]);
+      expect(delivered[0].requirement).toMatchObject({ build: { done: 0, total: 0 }, waiting_for_factory: false });
+      expect(delivered[0].requirement!.stages.map((s) => s.state)).toEqual(["Done", "Done", "Done"]);
+    });
+
     // ---- the Integration contract (ticket 42) ----
     it("reads a linked Ticket closed externally, and unlinks it", async () => {
       await d.createProject("acme", "Acme");

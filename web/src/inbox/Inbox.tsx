@@ -1,13 +1,17 @@
-// The triage inbox: Projects and Views on the left, the list in the
-// middle, the selected Ticket on the right. A layout only: the data comes
+// The triage inbox: "New requirement", Projects and Views on the left,
+// the list in the middle, the selected Requirement and Ticket on the right. A layout only: the data comes
 // from live.ts and the Ticket pane is shared with any later view.
 import type { MouseEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
-import { FINISHED, STATES, type NeedsMeRow, type State, type TicketView } from "../api/types";
+import { FINISHED, STATES, type NeedsMeReason, type NeedsMeRow, type SpecDetail, type State, type TicketView } from "../api/types";
 import { duration, REASON_LABEL, rowDetail } from "../format";
 import { LinkBadge } from "../ticket/LinkBadge";
-import type { InboxData, ProjectTicket } from "../live";
+import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
+import { NewRequirement } from "../requirement/NewRequirement";
+import { progress, reasonsOf } from "../requirement/progress";
+import { RequirementPane } from "../requirement/RequirementPane";
+import { RequirementRow } from "../requirement/RequirementRow";
 import { TicketPane } from "../ticket/TicketDetail";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
 import { hrefFor, type UiLocation } from "../url";
@@ -18,39 +22,57 @@ export interface InboxProps {
   data?: InboxData;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
+  // requirement is the selected Requirement, once read.
+  requirement?: SpecDetail & { requirement: NonNullable<SpecDetail["requirement"]> };
+  requirementError?: string;
   ticket?: TicketView;
   ticketError?: string;
 }
 
-export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: InboxProps) {
+export function Inbox({ api, now, data, loc, navigate, requirement, requirementError, ticket, ticketError }: InboxProps) {
   const inProject = (key: string) => !loc.project || key === loc.project;
   const projects = data?.projects ?? [];
   const archived = projects.filter((p) => p.archived);
   const groups = (data?.needsMe.groups ?? [])
     .map((g) => ({ ...g, tickets: g.tickets.filter((r) => inProject(r.project)) }))
     .filter((g) => g.tickets.length > 0);
-  const waiting = new Set((data?.needsMe.groups ?? []).flatMap((g) => g.tickets.map((r) => r.id)));
+  const reasons = reasonsOf(data?.needsMe);
   const tickets = (data?.tickets ?? []).filter((t) => inProject(t.project));
+  const requirements = requirementList((data?.requirements ?? []).filter((s) => inProject(s.project)));
   const drafts = tickets.filter((t) => t.state === "Draft");
   const needsMeCount = groups.reduce((n, g) => n + g.tickets.length, 0);
   const totalCount = data?.needsMe.count ?? 0;
 
-  const select = (id: string) => (e: MouseEvent) => {
+  // Selecting a row: a Ticket row leaves any Requirement; a Requirement
+  // row opens on its default Ticket.
+  const go = (patch: Partial<UiLocation>) => (e: MouseEvent) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // let the browser open a tab
     e.preventDefault();
-    navigate({ ticket: id });
+    navigate(patch);
   };
   const rowLink = (id: string) => ({
-    href: hrefFor({ ...loc, ticket: id }),
-    onClick: select(id),
+    href: hrefFor({ ...loc, requirement: undefined, ticket: id }),
+    onClick: go({ requirement: undefined, ticket: id }),
     "data-id": id,
-    "aria-current": loc.ticket === id ? ("true" as const) : undefined,
+    "aria-current": !loc.requirement && loc.ticket === id ? ("true" as const) : undefined,
+  });
+  const requirementLink = (id: string) => ({
+    href: hrefFor({ ...loc, requirement: id, ticket: undefined }),
+    onClick: go({ requirement: id, ticket: undefined }),
+    "data-id": id,
+    "aria-current": loc.requirement === id ? ("true" as const) : undefined,
   });
 
   return (
     <div className="inbox">
       <nav aria-label="Filters" className="inbox-nav">
         <h1>Code Central</h1>
+        <NewRequirement
+          api={api}
+          projects={projects.filter((p) => !p.archived)}
+          project={loc.project}
+          onSubmitted={(r) => navigate({ list: "requirements", state: undefined, requirement: r.spec.id, ticket: undefined })}
+        />
         <FilterButton on={!loc.project} label="All Projects" count={totalCount} loud onClick={() => navigate({ project: undefined })} />
         {projects
           .filter((p) => !p.archived)
@@ -58,7 +80,13 @@ export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: In
             <ProjectFilter key={p.key} api={api} project={p} on={loc.project === p.key} onSelect={() => navigate({ project: p.key })} />
           ))}
         <h2>View</h2>
-        <FilterButton on={!loc.state} label="Needs Me" count={needsMeCount} loud onClick={() => navigate({ state: undefined })} />
+        <FilterButton on={!loc.state && !loc.list} label="Needs Me" count={needsMeCount} loud onClick={() => navigate({ state: undefined, list: undefined })} />
+        <FilterButton
+          on={loc.list === "requirements"}
+          label="Requirements"
+          count={requirements.filter((s) => !s.finished).length}
+          onClick={() => navigate({ list: "requirements", state: undefined })}
+        />
         {STATES.map((s) => (
           <FilterButton
             key={s}
@@ -66,7 +94,7 @@ export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: In
             on={loc.state === s}
             label={s}
             count={tickets.filter((t) => t.state === s).length}
-            onClick={() => navigate({ state: s })}
+            onClick={() => navigate({ state: s, list: undefined })}
           />
         ))}
         <ArchivedProjects count={archived.length}>
@@ -79,6 +107,18 @@ export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: In
       <main aria-label="Tickets" className="inbox-list">
         {!data ? (
           <p className="empty">Loading…</p>
+        ) : loc.list === "requirements" ? (
+          <>
+            {requirements.length === 0 && <p className="empty">No Requirements yet.</p>}
+            {requirements.map((s) => (
+              <RequirementRow
+                key={s.id}
+                spec={s}
+                p={progress(s.requirement!, (data.tickets ?? []).filter((t) => t.spec === s.id), reasons)}
+                link={requirementLink(s.id)}
+              />
+            ))}
+          </>
         ) : loc.state ? (
           <>
             {stateList(tickets, loc.state).map((t) => (
@@ -87,7 +127,7 @@ export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: In
                     <span className="tid">{t.id}</span>
                     <span className="row-title">{t.title}</span>
                     {t.link && <LinkBadge link={t.link} plain />}
-                    {waiting.has(t.id) && <span className="dot needs-you" role="img" aria-label="Needs you" />}
+                    {reasons.has(t.id) && <span className="dot needs-you" role="img" aria-label="Needs you" />}
                   </span>
                 </a>
               ))}
@@ -111,12 +151,20 @@ export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: In
       </main>
 
       <aside aria-label="Ticket" className="inbox-detail">
+        {loc.requirement &&
+          (requirementError ? (
+            <p className="empty">{requirementError}</p>
+          ) : requirement ? (
+            <RequirementPane spec={requirement} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
+          ) : (
+            <p className="empty">Loading…</p>
+          ))}
         {ticketError ? (
           <p className="empty">{ticketError}</p>
         ) : ticket && loc.ticket && ticket.id === loc.ticket ? (
           <TicketPane api={api} project={projectOf(ticket.id)} ticket={ticket} now={now} />
         ) : (
-          <p className="empty">{loc.ticket ? "Loading…" : "Select a Ticket."}</p>
+          !loc.requirement && <p className="empty">{loc.ticket ? "Loading…" : "Select a Ticket."}</p>
         )}
       </aside>
     </div>
@@ -128,6 +176,13 @@ export function Inbox({ api, now, data, loc, navigate, ticket, ticketError }: In
 function stateList(tickets: ProjectTicket[], state: State): ProjectTicket[] {
   const rows = tickets.filter((t) => t.state === state);
   return FINISHED.includes(state) ? rows.sort((a, b) => b.updated.localeCompare(a.updated)) : rows;
+}
+
+// requirementList is the Requirements view's order: unfinished ones, then
+// delivered ones, newest first in each.
+function requirementList(specs: ProjectSpec[]): ProjectSpec[] {
+  const newest = [...specs].reverse();
+  return [...newest.filter((s) => !s.finished), ...newest.filter((s) => s.finished)];
 }
 
 function FilterButton(p: { on: boolean; label: string; count: number; loud?: boolean; sub?: boolean; onClick(): void }) {
