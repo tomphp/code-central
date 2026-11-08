@@ -22,10 +22,12 @@ func (e Env) version() string {
 }
 
 // newClient is the client every command that talks to the service uses
-// (except the hook commands, which stay silent). It warns once on stderr,
-// without failing, when the service's version differs from this CLI's.
+// (except the hook commands, which stay silent). It sends this CLI's
+// version on every request, and warns once on stderr, without failing,
+// when the service's version differs from it.
 func newClient(e Env) *client.Client {
 	c := client.New(serviceURL(e))
+	c.Version = e.version()
 	var once sync.Once
 	c.OnVersion = func(service string) {
 		if service == e.version() {

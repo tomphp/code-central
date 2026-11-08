@@ -304,7 +304,7 @@ func decodeBody(r *http.Request, v any) error {
 	if err != nil {
 		return &core.Error{Code: core.Invalid, Message: "cannot read the request body"}
 	}
-	return core.Decode(body, v)
+	return core.Decode(r.Context(), body, v)
 }
 
 func onlyParams(q url.Values, allowed ...string) error {

@@ -42,7 +42,7 @@ func runPostRound(ctx context.Context, e Env, args []string) error {
 		return err
 	}
 	in := core.PostRoundInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session)}
-	if err := core.Decode([]byte(text), &in.Questions); err != nil {
+	if err := core.Decode(ctx, []byte(text), &in.Questions); err != nil {
 		var ce *core.Error
 		if errors.As(err, &ce) {
 			ce.Field = "questions" + dotted(ce.Field)
