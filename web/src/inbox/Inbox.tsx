@@ -9,7 +9,7 @@ import { duration, REASON_LABEL, rowDetail } from "../format";
 import { LinkBadge } from "../ticket/LinkBadge";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { NewRequirement } from "../requirement/NewRequirement";
-import { progress, reasonsOf } from "../requirement/progress";
+import { isStage, progress, reasonsOf } from "../requirement/progress";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { RequirementRow } from "../requirement/RequirementRow";
 import { TicketPane } from "../ticket/TicketDetail";
@@ -33,14 +33,21 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
   const inProject = (key: string) => !loc.project || key === loc.project;
   const projects = data?.projects ?? [];
   const archived = projects.filter((p) => p.archived);
-  const groups = (data?.needsMe.groups ?? [])
-    .map((g) => ({ ...g, tickets: g.tickets.filter((r) => inProject(r.project)) }))
+  const shown = (data?.needsMe.groups ?? []).map((g) => ({ ...g, tickets: g.tickets.filter((r) => inProject(r.project)) }));
+  // Stage Tickets are never Needs Me rows: their Requirement's row stands in.
+  const stageNeeds = new Set(shown.flatMap((g) => g.tickets).flatMap((r) => (r.requirement?.stage ? [r.requirement.spec] : [])));
+  const groups = shown
+    .map((g) => ({ ...g, tickets: g.tickets.filter((r) => !r.requirement?.stage) }))
     .filter((g) => g.tickets.length > 0);
   const reasons = reasonsOf(data?.needsMe);
   const tickets = (data?.tickets ?? []).filter((t) => inProject(t.project));
   const requirements = requirementList((data?.requirements ?? []).filter((s) => inProject(s.project)));
+  const progressOf = (s: ProjectSpec) => progress(s.requirement!, (data?.tickets ?? []).filter((t) => t.spec === s.id), reasons);
+  const needingReqs = requirements.filter((s) => stageNeeds.has(s.id));
+  // In flight: unfinished, and nothing of it waits on the human.
+  const inFlight = requirements.filter((s) => !s.finished && !progressOf(s).needs.length);
   const drafts = tickets.filter((t) => t.state === "Draft");
-  const needsMeCount = groups.reduce((n, g) => n + g.tickets.length, 0);
+  const needsMeCount = needingReqs.length + groups.reduce((n, g) => n + g.tickets.length, 0);
   const totalCount = data?.needsMe.count ?? 0;
 
   // Selecting a row: a Ticket row leaves any Requirement; a Requirement
@@ -93,7 +100,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
             sub
             on={loc.state === s}
             label={s}
-            count={tickets.filter((t) => t.state === s).length}
+            count={tickets.filter((t) => t.state === s && !isStage(t)).length}
             onClick={() => navigate({ state: s, list: undefined })}
           />
         ))}
@@ -111,30 +118,24 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
           <>
             {requirements.length === 0 && <p className="empty">No Requirements yet.</p>}
             {requirements.map((s) => (
-              <RequirementRow
-                key={s.id}
-                spec={s}
-                p={progress(s.requirement!, (data.tickets ?? []).filter((t) => t.spec === s.id), reasons)}
-                link={requirementLink(s.id)}
-              />
+              <RequirementRow key={s.id} spec={s} p={progressOf(s)} link={requirementLink(s.id)} />
             ))}
           </>
         ) : loc.state ? (
-          <>
-            {stateList(tickets, loc.state).map((t) => (
-                <a key={t.id} className="row" {...rowLink(t.id)}>
-                  <span className="row-top">
-                    <span className="tid">{t.id}</span>
-                    <span className="row-title">{t.title}</span>
-                    {t.link && <LinkBadge link={t.link} plain />}
-                    {reasons.has(t.id) && <span className="dot needs-you" role="img" aria-label="Needs you" />}
-                  </span>
-                </a>
-              ))}
-          </>
+          <StateList tickets={stateList(tickets, loc.state)} reasons={reasons} link={rowLink} />
         ) : (
           <>
-            {groups.length === 0 && <p className="empty">Nothing needs you.</p>}
+            {needsMeCount === 0 && <p className="empty">Nothing needs you.</p>}
+            {needingReqs.length > 0 && (
+              <section aria-label="Requirements" className="reason-requirements">
+                <h3 className="group-head">
+                  Requirements <span>{needingReqs.length}</span>
+                </h3>
+                {needingReqs.map((s) => (
+                  <RequirementRow key={s.id} spec={s} p={progressOf(s)} link={requirementLink(s.id)} />
+                ))}
+              </section>
+            )}
             {groups.map((g) => (
               <section key={g.reason} aria-label={REASON_LABEL[g.reason]} className={`reason-${g.reason}`}>
                 <h3 className="group-head" data-reason={g.reason}>
@@ -145,6 +146,14 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
                 ))}
               </section>
             ))}
+            {inFlight.length > 0 && (
+              <details className="quiet-group">
+                <summary>Requirements in flight ({inFlight.length}): not waiting on you</summary>
+                {inFlight.map((s) => (
+                  <RequirementRow key={s.id} spec={s} p={progressOf(s)} link={requirementLink(s.id)} />
+                ))}
+              </details>
+            )}
             {drafts.length > 0 && <Drafts drafts={drafts} link={rowLink} />}
           </>
         )}
@@ -214,8 +223,37 @@ function NeedsMeLink({ row, now, link }: { row: NeedsMeRow; now: Date; link: Row
         {row.link && <LinkBadge link={row.link} plain />}
         <span className="muted small">{duration(now, row.since)}</span>
       </span>
-      <span className="row-detail">{rowDetail(now, row)}</span>
+      <span className="row-detail">
+        {row.requirement && <span className="req-chip">↳ {row.requirement.title}</span>} {rowDetail(now, row)}
+      </span>
     </a>
+  );
+}
+
+// StateList is one State's Tickets, flat, with its Stage Tickets folded
+// into a collapsed group after them: a Factory runs those.
+function StateList({ tickets, reasons, link }: { tickets: ProjectTicket[]; reasons: Map<string, NeedsMeReason>; link: InboxRowLinkFactory }) {
+  const stages = tickets.filter(isStage);
+  const row = (t: ProjectTicket) => (
+    <a key={t.id} className="row" {...link(t.id)}>
+      <span className="row-top">
+        <span className="tid">{t.id}</span>
+        <span className="row-title">{t.title}</span>
+        {t.link && <LinkBadge link={t.link} plain />}
+        {reasons.has(t.id) && <span className="dot needs-you" role="img" aria-label="Needs you" />}
+      </span>
+    </a>
+  );
+  return (
+    <>
+      {tickets.filter((t) => !isStage(t)).map(row)}
+      {stages.length > 0 && (
+        <details className="quiet-group">
+          <summary>Stage Tickets ({stages.length}): run by a Factory</summary>
+          {stages.map(row)}
+        </details>
+      )}
+    </>
   );
 }
 

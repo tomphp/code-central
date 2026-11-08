@@ -171,3 +171,114 @@ describe("the triage inbox", () => {
     expect(decodeURIComponent(icon().href)).not.toMatch(/>\d+</);
   });
 });
+
+// requirements is a Project with three Requirements and a plain Ticket:
+// acme-1 at Spec, which needs an answer; acme-5 in Build, with two
+// implementation Tickets needing the human; acme-11 waiting for a Factory
+// to claim Grilling.
+async function requirements() {
+  const fake = new FakeApi();
+  fake.addProject("acme", "Acme");
+  await fake.submitRequirement("acme", "Export a Spec as Markdown"); // acme-1, stages acme-2..4
+  fake.updateTicket("acme-2", { state: "Done" });
+  fake.updateTicket("acme-3", { state: "Needs Answer" });
+  const building = await fake.submitRequirement("acme", "Archive finished Projects"); // acme-5, stages acme-6..8
+  for (const t of building.stages) fake.updateTicket(t.id, { state: "Done" });
+  const spec = { id: building.spec.id, title: building.spec.title };
+  fake.addTicket("acme", { title: "Archive in the Project menu", state: "In Review", spec }); // acme-9
+  fake.addTicket("acme", { title: "CLI: archive-project", state: "Failed", spec }); // acme-10
+  await fake.submitRequirement("acme", "Render Markdown"); // acme-11, stages acme-12..14
+  fake.addTicket("acme", { title: "Plain work", state: "Failed" }); // acme-15
+  fake.setNeedsMe([
+    { reason: "needs_answer", tickets: [{ id: "acme-3", round: { number: 1, open: 1, questions: 1 } }] },
+    {
+      reason: "failed",
+      tickets: [
+        { id: "acme-10", failure: { headline: "Tests fail", reports: 1 } },
+        { id: "acme-15", failure: { headline: "Lint", reports: 1 } },
+      ],
+    },
+    { reason: "in_review", tickets: [{ id: "acme-9", summary: "Menu item added" }] },
+  ]);
+  return fake;
+}
+
+const groupHeads = () => within(list()).queryAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+
+describe("Requirements in Needs Me", () => {
+  it("shows a Requirement whose Stage needs the human as one row in a Requirements group at the top, never the Stage Ticket", async () => {
+    renderApp(await requirements());
+    await waitFor(() => expect(groupHeads()).toEqual(["Requirements 1", "Failed 2", "In Review 1"]));
+    expect(rowIds()).not.toContain("acme-3");
+    const group = within(list()).getByRole("region", { name: "Requirements" });
+    const row = within(group).getByRole("link", { name: /acme-1/ });
+    expect(row).toHaveTextContent("Export a Spec as Markdown");
+    expect(within(row).getByRole("list", { name: "Stages" })).toBeInTheDocument();
+    expect(row).toHaveTextContent("Spec: Questions");
+  });
+
+  it("keeps Requirements not waiting on the human in a collapsed in-flight group", async () => {
+    const fake = await requirements();
+    const done = await fake.submitRequirement("acme", "Delivered work"); // acme-16
+    for (const t of done.stages) fake.updateTicket(t.id, { state: "Done" });
+    renderApp(fake);
+    const summary = await within(list()).findByText("Requirements in flight (1): not waiting on you");
+    const group = summary.closest("details")!;
+    expect(group).not.toHaveAttribute("open");
+    const row = within(group).getByRole("link", { name: /acme-11/, hidden: true });
+    expect(row).not.toBeVisible();
+    expect(row).toHaveTextContent("Grilling: waiting for a Factory");
+    // Neither the Requirement in Build, whose Tickets show as rows, nor the delivered one.
+    expect([...group.querySelectorAll<HTMLElement>("a[data-id]")].map((a) => a.dataset.id)).toEqual(["acme-11"]);
+  });
+
+  it("opens a Requirement row on the Stage that needs the human", async () => {
+    renderApp(await requirements());
+    await userEvent.click(await within(list()).findByRole("link", { name: /Export a Spec as Markdown/ }));
+    expect(params().get("requirement")).toBe("acme-1");
+    expect(within(detail()).getByRole("region", { name: "Requirement" })).toBeInTheDocument();
+    expect(await within(detail()).findByRole("heading", { name: "Spec: Export a Spec as Markdown" })).toBeInTheDocument();
+  });
+
+  it("keeps implementation Tickets as ordinary rows naming their Requirement, several at once", async () => {
+    renderApp(await requirements());
+    const failed = await within(list()).findByRole("region", { name: "Failed" });
+    expect(within(failed).getByRole("link", { name: /acme-10/ })).toHaveTextContent("↳ Archive finished Projects");
+    expect(within(failed).getByRole("link", { name: /acme-15/ })).not.toHaveTextContent("↳");
+    const review = within(list()).getByRole("region", { name: "In Review" });
+    expect(within(review).getByRole("link", { name: /acme-9/ })).toHaveTextContent("↳ Archive finished Projects");
+  });
+
+  it("counts a Requirement row once in Needs Me, in place of its Stage Ticket", async () => {
+    renderApp(await requirements());
+    // acme-1's row, acme-9, acme-10 and acme-15.
+    await waitFor(() => expect(within(nav()).getByRole("button", { name: "Needs Me 4" })).toBeInTheDocument());
+  });
+});
+
+describe("Stage Tickets in State views", () => {
+  it("folds them into a collapsed group and leaves them out of the State counts", async () => {
+    renderApp(await requirements());
+    // Ready: acme-4 and acme-12 are Stage Tickets; nothing else is Ready.
+    await userEvent.click(await within(nav()).findByRole("button", { name: "Ready 0" }));
+    expect(within(nav()).getByRole("button", { name: "Done 0" })).toBeInTheDocument();
+    expect(within(nav()).getByRole("button", { name: "Failed 2" })).toBeInTheDocument();
+    const summary = within(list()).getByText("Stage Tickets (4): run by a Factory");
+    const group = summary.closest("details")!;
+    expect(group).not.toHaveAttribute("open");
+    expect(within(group).getByRole("link", { name: /acme-4/, hidden: true })).not.toBeVisible();
+    expect(rowIds()).toEqual(["acme-4", "acme-12", "acme-13", "acme-14"]);
+  });
+
+  it("lists other Tickets as before, the fold after them", async () => {
+    const fake = await requirements();
+    fake.addTicket("acme", { title: "Shipped", state: "Done" }); // acme-16
+    renderApp(fake, "/?view=inbox&state=Done");
+    // Besides acme-16, acme-2 and the three Stages of acme-5 are Done.
+    await waitFor(() => expect(within(list()).getByText("Stage Tickets (4): run by a Factory")).toBeInTheDocument());
+    expect(within(nav()).getByRole("button", { name: "Done 1" })).toBeInTheDocument();
+    expect(rowIds()[0]).toBe("acme-16");
+    expect(rowIds()).toHaveLength(5);
+    expect(within(list()).getByRole("link", { name: /acme-16/ })).toBeVisible();
+  });
+});
