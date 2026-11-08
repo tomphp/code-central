@@ -18,6 +18,17 @@
 .focus-requirement { margin: 0 0 8px; font-size: 20px; color: var(--muted); }
 .focus-why { margin: 0 0 24px; font-size: 20px; }
 .focus-open { margin: 24px 0 0; }
+/* A Question Focus Item: the Question reads largest, its Ticket's title
+   steps down to make room. The shared answer form's own rules are sized
+   for the Round panel, so its box and note are set here. */
+.focus-item-question h2 { font-size: 22px; }
+.focus-question { border-left: 3px solid var(--r-answer); padding-left: 20px; display: flex; flex-direction: column; gap: 10px; }
+.focus-question-of { margin: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.focus-question h3 { font-size: 32px; line-height: 1.25; font-weight: 600; margin: 0; }
+.focus-question-body { line-height: 1.5; }
+.focus-question textarea { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; min-height: 6em; padding: 10px; }
+.focus-question .draft-note { font-size: 15px; }
+.focus-question .btn { font-size: 17px; padding: 8px 18px; }
 /* The panels keep their own stylesheets, sized for the Inbox's side pane;
    inside Focus Mode they are scaled up whole, so their type, spacing and
    buttons all read larger together. */
