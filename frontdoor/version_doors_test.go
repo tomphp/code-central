@@ -61,7 +61,7 @@ func TestMCPUnknownFieldsNameTheVersionsSentAsClientVersion(t *testing.T) {
 	}
 	// client_version alone is accepted on every tool, and isn't advertised.
 	out := mcpOK(t, s, "create_spec", map[string]any{"title": "S", "client_version": "v1.9"})
-	field("title", "S")(t, out)
+	field("id", "acme-1")(t, out)
 	tools, err := s.ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
