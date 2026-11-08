@@ -64,7 +64,7 @@ func TestCreateAndReadSpecsAndTickets(t *testing.T) {
 	}
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "acme"}
 
-	spec := decode[core.SpecView](t, run(t, env, "# Login\n\nUsers log in.\n", "create-spec", "--title", "Login", "--file", "-"))
+	spec := decode[core.SpecView](t, run(t, env, "# Login\n\nUsers log in.\n", "create-spec", "--title", "Login", "--file", "-", "--full"))
 	if spec.ID != "acme-1" || spec.Body != "# Login\n\nUsers log in.\n" {
 		t.Fatalf("spec: %+v", spec)
 	}

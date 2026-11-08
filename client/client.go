@@ -54,9 +54,8 @@ func (c *Client) GetProject(ctx context.Context, key string) (core.ProjectView, 
 }
 
 // CreateSpec is create_spec.
-func (c *Client) CreateSpec(ctx context.Context, key string, in core.CreateSpecInput) (core.SpecView, error) {
-	var out core.SpecView
-	return out, c.do(ctx, "POST", scoped(key, "create_spec"), in, &out)
+func (c *Client) CreateSpec(ctx context.Context, key string, in core.CreateSpecInput) (core.Written[core.SpecView], error) {
+	return write[core.SpecView](ctx, c, scoped(key, "create_spec"), in, in.Full)
 }
 
 // CreateTicket is create_ticket.
@@ -160,9 +159,19 @@ func (c *Client) Transcript(ctx context.Context, key string, ticket core.Ref, cl
 }
 
 // EditSpec is edit_spec.
-func (c *Client) EditSpec(ctx context.Context, key string, in core.EditSpecInput) (core.SpecView, error) {
-	var out core.SpecView
-	return out, c.do(ctx, "POST", item(key, "specs", in.Spec, "edit_spec"), in, &out)
+func (c *Client) EditSpec(ctx context.Context, key string, in core.EditSpecInput) (core.Written[core.SpecView], error) {
+	return write[core.SpecView](ctx, c, item(key, "specs", in.Spec, "edit_spec"), in, in.Full)
+}
+
+// write POSTs an acknowledging write, decoding its result into the
+// Record when full was asked for, else into the Acknowledgement.
+func write[V any](ctx context.Context, c *Client, path string, in any, full bool) (core.Written[V], error) {
+	var out core.Written[V]
+	if full {
+		out.Record = new(V)
+		return out, c.do(ctx, "POST", path, in, out.Record)
+	}
+	return out, c.do(ctx, "POST", path, in, &out.Acknowledgement)
 }
 
 // EditTicket is edit_ticket.

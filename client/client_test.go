@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"slices"
 	"strings"
 	"testing"
 
@@ -37,8 +38,11 @@ func TestProjectSpecAndTicketRoundTrip(t *testing.T) {
 	}
 
 	s, err := c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login", Body: "# Login\n"})
-	if err != nil || s.ID != "acme-1" || s.Body != "# Login\n" {
+	if err != nil || s.ID != "acme-1" || !slices.Equal(s.Changed, []string{"title", "body"}) || s.Record != nil {
 		t.Fatalf("create_spec: %+v, %v", s, err)
+	}
+	if s, err := c.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Full: true}); err != nil || s.Record == nil || s.Record.Body != "# Login\n" {
+		t.Fatalf("edit_spec with full: %+v, %v", s, err)
 	}
 	tk, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Form", State: store.Ready, Labels: []string{"ui"}})
 	if err != nil || tk.ID != "acme-2" || tk.State != store.Ready || tk.Spec.Title != "Login" {

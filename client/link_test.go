@@ -19,16 +19,16 @@ func TestAnIntegrationRoundTrip(t *testing.T) {
 	gh := client.New(srv.URL)
 	gh.Actor = core.Integration
 
-	sp, err := gh.CreateLinkedSpec(ctx, "acme", core.CreateLinkedSpecInput{Title: "Epic", Link: core.LinkInput{Integration: "github", ID: "1"}})
-	if err != nil || sp.Link == nil {
+	sp, err := gh.CreateLinkedSpec(ctx, "acme", core.CreateLinkedSpecInput{Title: "Epic", Link: core.LinkInput{Integration: "github", ID: "1"}, Full: true})
+	if err != nil || sp.Record.Link == nil {
 		t.Fatalf("create_linked_spec: %+v, %v", sp, err)
 	}
-	tk, err := gh.CreateLinkedTicket(ctx, "acme", core.CreateLinkedTicketInput{Spec: core.Ref(sp.ID), Title: "Issue", Link: core.LinkInput{Integration: "github", ID: "2"}})
+	tk, err := gh.CreateLinkedTicket(ctx, "acme", core.CreateLinkedTicketInput{Spec: core.Ref(sp.Record.ID), Title: "Issue", Link: core.LinkInput{Integration: "github", ID: "2"}})
 	if err != nil || tk.State != store.Draft {
 		t.Fatalf("create_linked_ticket: %+v, %v", tk, err)
 	}
 	title := "Epic, renamed"
-	if s, err := gh.UpdateLinkedSpec(ctx, "acme", core.UpdateLinkedSpecInput{Spec: core.Ref(sp.ID), Title: &title}); err != nil || s.Title != title {
+	if s, err := gh.UpdateLinkedSpec(ctx, "acme", core.UpdateLinkedSpecInput{Spec: core.Ref(sp.Record.ID), Title: &title}); err != nil || s.Edit != 1 || s.Record != nil {
 		t.Fatalf("update_linked_spec: %+v, %v", s, err)
 	}
 	if v, err := gh.UpdateLinkedTicket(ctx, "acme", core.UpdateLinkedTicketInput{Ticket: core.Ref(tk.ID), Title: &title}); err != nil || v.Edits[0].Actor != "integration" {
@@ -46,6 +46,6 @@ func TestAnIntegrationRoundTrip(t *testing.T) {
 	if err != nil || len(rows) != 1 || rows[0].ID != tk.ID || !rows[0].Link.Detached {
 		t.Fatalf("find_linked: %+v, %v", rows, err)
 	}
-	_, err = srv.Client.UpdateLinkedSpec(ctx, "acme", core.UpdateLinkedSpecInput{Spec: core.Ref(sp.ID), Title: &title})
+	_, err = srv.Client.UpdateLinkedSpec(ctx, "acme", core.UpdateLinkedSpecInput{Spec: core.Ref(sp.Record.ID), Title: &title})
 	wantCode(t, err, core.ActionNotAllowed, "")
 }

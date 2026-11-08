@@ -110,21 +110,24 @@ type CreateLinkedSpecInput struct {
 	Title string    `json:"title"`
 	Body  string    `json:"body,omitempty"`
 	Link  LinkInput `json:"link"`
+	// Full asks for the Spec in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
-// CreateLinkedSpec is the integration's create_linked_spec(title, body, link).
-func (c *Core) CreateLinkedSpec(ctx context.Context, key string, in CreateLinkedSpecInput) (SpecView, error) {
+// CreateLinkedSpec is the integration's create_linked_spec(title, body,
+// link, full?).
+func (c *Core) CreateLinkedSpec(ctx context.Context, key string, in CreateLinkedSpecInput) (Written[SpecView], error) {
 	if err := requireActor(ctx, "create_linked_spec", Integration); err != nil {
-		return SpecView{}, err
+		return Written[SpecView]{}, err
 	}
 	if strings.TrimSpace(in.Title) == "" {
-		return SpecView{}, invalid("title", "a Spec needs a title")
+		return Written[SpecView]{}, invalid("title", "a Spec needs a title")
 	}
 	l, err := in.Link.link()
 	if err != nil {
-		return SpecView{}, err
+		return Written[SpecView]{}, err
 	}
-	var v SpecView
+	var v Written[SpecView]
 	err = c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -137,8 +140,8 @@ func (c *Core) CreateLinkedSpec(ctx context.Context, key string, in CreateLinked
 		if err := w.PutSpec(key, s); err != nil {
 			return err
 		}
-		v = specView(key, s)
-		return nil
+		v, err = acknowledgeCreate(specView(key, store.Spec{}), specView(key, s), in.Full)
+		return err
 	})
 	return v, err
 }
@@ -217,18 +220,21 @@ type UpdateLinkedSpecInput struct {
 	Spec  Ref     `json:"spec"`
 	Title *string `json:"title,omitempty"`
 	Body  *string `json:"body,omitempty"`
+	// Full asks for the Spec in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // UpdateLinkedSpec is the integration's update_linked_spec(spec, title?,
-// body?) on a Spec whose Link isn't detached, recorded in its edits.
-func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in UpdateLinkedSpecInput) (SpecView, error) {
+// body?, full?) on a Spec whose Link isn't detached, recorded in its
+// edits.
+func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in UpdateLinkedSpecInput) (Written[SpecView], error) {
 	if err := requireActor(ctx, "update_linked_spec", Integration); err != nil {
-		return SpecView{}, err
+		return Written[SpecView]{}, err
 	}
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
-		return SpecView{}, invalid("title", "a Spec needs a title")
+		return Written[SpecView]{}, invalid("title", "a Spec needs a title")
 	}
-	var v SpecView
+	var v Written[SpecView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -244,6 +250,7 @@ func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in UpdateLinked
 		if err := ownedByLink(DisplayID(key, n), s.Link); err != nil {
 			return err
 		}
+		before := specView(key, s)
 		prev := map[string]string{}
 		change(prev, "title", &s.Title, in.Title)
 		change(prev, "body", &s.Body, in.Body)
@@ -253,8 +260,8 @@ func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in UpdateLinked
 				return err
 			}
 		}
-		v = specView(key, s)
-		return nil
+		v, err = acknowledge(before, specView(key, s), in.Full)
+		return err
 	})
 	return v, err
 }

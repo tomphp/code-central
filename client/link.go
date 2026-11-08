@@ -11,9 +11,8 @@ import (
 // integration; Unlink is the human's.
 
 // CreateLinkedSpec is the integration's create_linked_spec.
-func (c *Client) CreateLinkedSpec(ctx context.Context, key string, in core.CreateLinkedSpecInput) (core.SpecView, error) {
-	var out core.SpecView
-	return out, c.do(ctx, "POST", scoped(key, "integration/create_linked_spec"), in, &out)
+func (c *Client) CreateLinkedSpec(ctx context.Context, key string, in core.CreateLinkedSpecInput) (core.Written[core.SpecView], error) {
+	return write[core.SpecView](ctx, c, scoped(key, "integration/create_linked_spec"), in, in.Full)
 }
 
 // CreateLinkedTicket is the integration's create_linked_ticket.
@@ -23,9 +22,8 @@ func (c *Client) CreateLinkedTicket(ctx context.Context, key string, in core.Cre
 }
 
 // UpdateLinkedSpec is the integration's update_linked_spec.
-func (c *Client) UpdateLinkedSpec(ctx context.Context, key string, in core.UpdateLinkedSpecInput) (core.SpecView, error) {
-	var out core.SpecView
-	return out, c.do(ctx, "POST", item(key, "integration/specs", in.Spec, "update_linked_spec"), in, &out)
+func (c *Client) UpdateLinkedSpec(ctx context.Context, key string, in core.UpdateLinkedSpecInput) (core.Written[core.SpecView], error) {
+	return write[core.SpecView](ctx, c, item(key, "integration/specs", in.Spec, "update_linked_spec"), in, in.Full)
 }
 
 // UpdateLinkedTicket is the integration's update_linked_ticket.

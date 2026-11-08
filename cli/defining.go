@@ -55,11 +55,12 @@ func runEditSpec(ctx context.Context, e Env, args []string) error {
 	title := fs.String("title", "", "")
 	body := fs.String("body", "", "")
 	file := fs.String("file", "", "")
+	full := fs.Bool("full", false, "")
 	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
 	}
-	in := core.EditSpecInput{Spec: ref}
+	in := core.EditSpecInput{Spec: ref, Full: *full}
 	if isSet(fs, "title") {
 		in.Title = title
 	}

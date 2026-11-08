@@ -31,13 +31,10 @@ func linkedItems(t *testing.T, srv *codecentraltest.Server) {
 func init() {
 	for name, c := range map[string]opCase{
 		"create_linked_spec": {
-			ok: call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_spec", `{"title":"Epic","link":{"integration":"github","id":"1","url":"https://github.com/acme/web/issues/1"}}`}},
-			check: func(t *testing.T, out map[string]any) {
-				field("id", "acme-4")(t, out)
-				field("external_state", "open")(t, out["link"].(map[string]any))
-			},
-			bad:  call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_spec", `{"title":"Epic","link":{"integration":"github"}}`}},
-			code: core.Invalid,
+			ok:    call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_spec", `{"title":"Epic","link":{"integration":"github","id":"1","url":"https://github.com/acme/web/issues/1"}}`}},
+			check: acknowledgement("acme-4", "title", "link"),
+			bad:   call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_spec", `{"title":"Epic","link":{"integration":"github"}}`}},
+			code:  core.Invalid,
 		},
 		"create_linked_ticket": {
 			ok: call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_ticket", `{"spec":"1","title":"Issue","state":"Ready","link":{"integration":"github","id":"2"}}`}},
@@ -51,7 +48,7 @@ func init() {
 		"update_linked_spec": {
 			setup: linkedItems,
 			ok:    call{http: httpCall{"POST", "/api/p/acme/integration/specs/4/update_linked_spec", `{"title":"Epic 2"}`}},
-			check: field("title", "Epic 2"),
+			check: acknowledgement("acme-4", "title", "edits"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/integration/specs/1/update_linked_spec", `{"title":"Not linked"}`}},
 			code:  core.ActionNotAllowed,
 		},
