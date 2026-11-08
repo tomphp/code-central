@@ -12,6 +12,7 @@ code-central service install          # [--store <dir>] [--bind <ip>]
 
 - **macOS:** writes the launchd agent `~/Library/LaunchAgents/com.github.tomoram.code-central.plist` and loads it. Logs go to `~/Library/Logs/code-central.log`.
 - **Linux:** writes the systemd user unit `~/.config/systemd/user/code-central.service` (or under `$XDG_CONFIG_HOME`), enables it and starts it. Logs: `journalctl --user -u code-central`.
+- **Windows:** writes the scheduled task `~\.local\state\code-central\code-central-task.xml`, registers it for your account as the task `Code Central` (no admin rights needed) and starts it. Logs go to `~\.local\state\code-central\code-central.log`. See [ADR 0011](adr/0011-service-install-on-windows-is-a-per-user-scheduled-task-not-a-windows-service.md) for why it isn't a Windows Service.
 
 The service starts at login and restarts after a crash. The unit records the binary's absolute path as you invoked it, without resolving symlinks, so a symlinked install keeps working when the target is replaced. It also records the store folder, resolved when you install.
 
@@ -24,7 +25,7 @@ make build && cp bin/code-central ~/bin/
 code-central service restart
 ```
 
-`service restart` restarts the installed service. The service never watches for its binary being replaced, so the restart is what picks up the new version. A restart loses nothing: Claims, Rounds and all other state live in the store, the service finishes in-flight writes before it stops, and `code-central wait` retries until the service is back. Keep restarts short, because Claude Code marks an MCP server failed after about 31 seconds.
+`service restart` restarts the installed service. The service never watches for its binary being replaced, so the restart is what picks up the new version. A restart loses nothing: Claims, Rounds and all other state live in the store, the service finishes in-flight writes before it stops (on Windows `/End` terminates it instead, which loses nothing either, because every write is flushed before it is acknowledged), and `code-central wait` retries until the service is back. Keep restarts short, because Claude Code marks an MCP server failed after about 31 seconds.
 
 Until you restart, a newer hook or CLI may send a field the old service doesn't know, and the call fails with `invalid JSON: json: unknown field "<name>"`. Since the service learned to name the versions (see [Versions](#versions)), that error names both and says to run `code-central service restart`. A service from before that change doesn't know `client_version` itself, so a new hook's first `claim`, `set_session` or `post_round` fails once on `unknown field "client_version"` with no hint. Restarting the service fixes it.
 
@@ -46,7 +47,7 @@ The service keeps one backup per format it has migrated from and never deletes t
 Downgrading is manual and loses every write made since the upgrade:
 
 ```sh
-launchctl bootout gui/$(id -u)/com.github.tomoram.code-central   # macOS; Linux: systemctl --user stop code-central
+launchctl bootout gui/$(id -u)/com.github.tomoram.code-central   # macOS; Linux: systemctl --user stop code-central; Windows: schtasks /End /TN "Code Central"
 cd ~/.local/share                      # or wherever your store lives (CODE_CENTRAL_STORE, --store)
 mv code-central code-central.upgraded  # keep it until you're sure
 mv code-central.format-<n>.bak code-central
