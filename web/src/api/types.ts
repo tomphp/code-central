@@ -117,6 +117,57 @@ export interface StageView {
   needs_me_reason?: NeedsMeReason;
 }
 
+// A Spec as get_spec and submit_requirement return it.
+export interface SpecView {
+  id: string;
+  title: string;
+  labels: string[];
+  tags: Record<string, string>;
+  created: string;
+  updated: string;
+  body: string;
+  edits: EditView[];
+  link?: LinkView;
+}
+
+// How many of a Spec's Tickets are in each State; States with none are left out.
+export type StateSummary = Partial<Record<State, number>>;
+
+// get_spec: the Spec, its Tickets (finished ones too) in claim order, and
+// its requirement block when it is a Requirement.
+export interface SpecDetail extends SpecView {
+  state_summary: StateSummary;
+  finished: boolean;
+  tickets: TicketRow[];
+  requirement?: RequirementView;
+}
+
+// One find_specs result.
+export interface SpecRow {
+  id: string;
+  title: string;
+  labels: string[];
+  tags: Record<string, string>;
+  state_summary: StateSummary;
+  finished: boolean;
+  updated: string;
+  link?: LinkView;
+  requirement?: RequirementView;
+}
+
+export interface FindSpecsFilter {
+  // requirements keeps only Requirements.
+  requirements?: boolean;
+  // finished includes finished Specs, which are otherwise left out.
+  finished?: boolean;
+}
+
+// submit_requirement's result: the new Spec and its three Stage Tickets, in order.
+export interface SubmitRequirementResult {
+  spec: SpecView;
+  stages: TicketView[];
+}
+
 export interface NeedsMeGroup {
   reason: NeedsMeReason;
   tickets: NeedsMeRow[];
