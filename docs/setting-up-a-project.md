@@ -171,7 +171,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
    +Specs and Tickets live in Code Central: see `docs/agents/issue-tracker.md`.
    ```
 
-   init leaves everything else alone, `.scratch/` included. Leave `.scratch/` where it is for now: importing it into the Project is the next guide's subject.
+   init leaves everything else alone, `.scratch/` included. Leave `.scratch/` where it is for now: importing it into the Project is covered separately.
 
 3. **Commit the files.**
 
@@ -194,7 +194,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
 
 `acme-api` is now a working Project.
 
-## When init behaves differently
+## When `init` behaves differently
 
 ### A repository you don't own: `init --local`
 
@@ -230,7 +230,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
 
 3. **Check that an agent can reach the Project**, as in step 4 of [A brand new repository](#a-brand-new-repository).
 
-The mode belongs to the Project, not the clone. If you later want init's files committed after all, `code-central init --committed` asks before switching the Project, then writes the committed files and takes its lines out of `.git/info/exclude`, ready to commit.
+The mode belongs to the Project, not the clone. If you later want init's files committed after all, `code-central init --committed` asks before switching the Project, then writes the committed files and takes its lines out of `.git/info/exclude`. `CLAUDE.local.md` and `.claude/settings.local.json` stay behind as untracked files: delete them or leave them out of the commit.
 
 ### A second clone or worktree
 
@@ -253,7 +253,7 @@ $ git status --short
 
 The files it refreshed were the same as the committed ones, so `git status` is clean.
 
-**When `.mcp.json` isn't committed**, as in a local Project like `widgets`, a new clone has no `.mcp.json`. init proposes the same Project Key, finds that a Project with that key exists, and asks whether to join it:
+**When `.mcp.json` isn't committed**, as in a local Project like `widgets`, a new clone has no `.mcp.json`. init proposes the same Project Key, finds that a Project already has that Project Key, and asks whether to join it:
 
 ```console
 $ git clone https://github.com/someone/widgets.git ~/src/widgets-2
@@ -267,9 +267,13 @@ They are listed in .git/info/exclude; nothing was committed.
 Agents in a sandbox or container: see `code-central help sandboxes`.
 ```
 
-Answer `y` when this clone is the same repository as the Project: its work is the Project's work. init takes the Project's mode (here `local`) without being told. Answer `n`, or press Enter, when it's a different repository that happens to have the same name: init asks you to choose another Project Key and creates a new Project with it.
+Answer `y` when this clone is the same repository as the Project: its work is the Project's work. init takes the Project's mode (here `local`) without being told. Answer `n`, or press Enter, when it's a different repository that happens to have the same name: init asks you to choose another Project Key, then asks before creating a new Project with it.
 
-Check: `git status --short -uall` is clean, as in `widgets`.
+Check: `git status --short -uall` is clean, as in `widgets`:
+
+```console
+$ git status --short -uall
+```
 
 ### Re-running init after an upgrade
 
@@ -313,6 +317,8 @@ In `acme-api`, someone has replaced `docs/agents/triage-labels.md` with their ow
    +<!-- Written by code-central init v1.1.0. Re-running init rewrites this file. -->
    …
    $ git commit -am "Refresh Code Central's files for v1.1.0"
+   [main 6d93dd2] Refresh Code Central's files for v1.1.0
+    1 file changed, 1 insertion(+), 1 deletion(-)
    ```
 
    In a local Project there is nothing to commit: init's files are listed in `.git/info/exclude`.
