@@ -156,3 +156,33 @@ a.link-badge:hover { text-decoration: underline; }
 .markdown th, .markdown td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; }
 .markdown th { background: var(--surface-2); }
 .markdown hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
+
+/* Requirements: New requirement, the Stage strip, the Requirement pane */
+.new-req { margin: 0 0 12px; }
+.modal { position: fixed; inset: 0; background: rgb(0 0 0 / .35); display: grid; place-items: start center; padding-top: 12vh; z-index: 40; }
+.modal-card { background: var(--surface); width: min(40rem, 92vw); border-radius: 12px; padding: 18px 20px; box-shadow: 0 12px 40px rgb(0 0 0 / .25); }
+.modal-card h2 { font-size: 16px; margin-bottom: 10px; }
+.modal-card textarea { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); resize: vertical; }
+.modal-project { display: block; margin-bottom: 8px; }
+.modal-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.modal-actions .muted { flex: 1; }
+.strip { list-style: none; display: flex; gap: 3px; padding: 0; margin: 6px 0 2px; }
+.seg { flex: 1; min-width: 0; }
+.seg > button, .seg > span { width: 100%; border: 0; border-top: 4px solid var(--border); background: transparent; color: var(--muted); font: 11px system-ui; padding: 3px 2px 0; text-align: left; display: flex; justify-content: space-between; white-space: nowrap; }
+.seg > button { cursor: pointer; }
+.seg > button:disabled { cursor: default; }
+.seg.step-done > * { border-top-color: var(--r-review); color: var(--text); }
+.seg.step-running > * { border-top-color: var(--accent); color: var(--text); }
+.seg.step-queued > * { border-top-style: dashed; border-top-color: var(--accent); }
+.seg.step-needs > * { border-top-color: var(--rc); color: var(--rc); font-weight: 700; }
+.seg[aria-current="step"] > * { background: var(--surface-2); }
+.seg-n { font-variant-numeric: tabular-nums; }
+.req-head { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.req-head h2 { font-size: 19px; margin: 6px 0 4px; }
+.req-head .strip button { font-size: 12px; padding-top: 5px; }
+.req-head .waiting { font-size: 13px; }
+.impl-list { list-style: none; padding: 0; margin: 6px 0; font-size: 12.5px; }
+.impl-list li { padding: 2px 0; }
+.impl-list button.link { font-size: 12.5px; color: var(--text); text-align: left; }
+.impl-list button.link[aria-current="true"] { font-weight: 600; }
+.loud-state { color: var(--rc); }
