@@ -222,7 +222,6 @@ func TestACutOffTurnIsResumedWithBackoffUntilTheOutageIsOver(t *testing.T) {
 
 func TestAnExpiredLoginStopsTheFactory(t *testing.T) {
 	t.Parallel()
-	unixStopSequence(t)
 	h := factorytest.New(t)
 	busy := h.ReadyTicket("Busy")
 	h.Script(busy, factorytest.Wait())
@@ -238,9 +237,7 @@ func TestAnExpiredLoginStopsTheFactory(t *testing.T) {
 	if !strings.Contains(r.Stderr(), "authentication_failed") || !strings.Contains(r.Stderr(), "log in") {
 		t.Errorf("stderr %q: want it to say the login expired", r.Stderr())
 	}
-	if got := h.Signals(busy); !slices.Equal(got, []string{"INT", "TERM"}) {
-		t.Errorf("the other turn got %q, want it stopped", got)
-	}
+	wantStopped(t, h, busy)
 	for _, id := range []string{busy, expired} {
 		if tk := h.Ticket(id); tk.State != store.InProgress || len(tk.FailureReports) != 0 {
 			t.Errorf("%s is %s with %d Failure Reports; want its Claim kept", id, tk.State, len(tk.FailureReports))

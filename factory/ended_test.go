@@ -3,6 +3,7 @@ package factory_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -35,9 +36,8 @@ func stateTickets(t *testing.T, h *factorytest.Harness) []string {
 	return out
 }
 
-func TestAReleasedClaimsTurnGetsSIGINTThenSIGTERMAndIsDropped(t *testing.T) {
+func TestAReleasedClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	t.Parallel()
-	unixStopSequence(t)
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Stopped")
 	h.Script(id, factorytest.Wait())
@@ -51,10 +51,8 @@ func TestAReleasedClaimsTurnGetsSIGINTThenSIGTERMAndIsDropped(t *testing.T) {
 	h.Script(id, factorytest.Finish("Done."), factorytest.Result("success"))
 	r.Poll()
 
-	if got := h.Signals(id); !slices.Equal(got, []string{"INT", "TERM"}) {
-		t.Errorf("the turn got %q, want SIGINT then SIGTERM", got)
-	}
-	r.WaitForOutput(id + ` turn ended (implementation): "Stopped": exit 143`)
+	wantStopped(t, h, id)
+	r.WaitForOutput(fmt.Sprintf(`%s turn ended (implementation): "Stopped": exit %d`, id, stoppedExit()))
 	if ended := h.Calls()[0].Claim; slices.Contains(stateClaims(t, h), ended) {
 		t.Errorf("state file still holds the ended Claim %s", ended)
 	}
@@ -84,7 +82,6 @@ func stateClaims(t *testing.T, h *factorytest.Harness) []string {
 
 func TestACancelledClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	t.Parallel()
-	unixStopSequence(t)
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Not wanted")
 	h.Script(id, factorytest.Wait())
@@ -95,9 +92,7 @@ func TestACancelledClaimsTurnIsStoppedAndDropped(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.Poll()
-	if got := h.Signals(id); !slices.Equal(got, []string{"INT", "TERM"}) {
-		t.Errorf("the turn got %q, want SIGINT then SIGTERM", got)
-	}
+	wantStopped(t, h, id)
 	if got := stateTickets(t, h); len(got) != 0 {
 		t.Errorf("state file holds %q, want the Cancelled Ticket's Claim dropped", got)
 	}

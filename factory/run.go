@@ -256,7 +256,9 @@ func (f *factory) killGrace() time.Duration {
 func (f *factory) stopTurn(t *turn) {
 	t.stopped.Store(true)
 	for _, stop := range stopSteps(t.proc) {
-		_ = stop()
+		if err := stop(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+			f.claimf(t.claim, "%s: can't stop the turn: %v", t.claim.Ticket, err)
+		}
 		select {
 		case <-t.done:
 			return
