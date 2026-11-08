@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "code-central ping",
+            "type": "command"
+          }
+        ],
+        "matcher": "*"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "code-central hook session-id",
+            "type": "command"
+          }
+        ],
+        "matcher": "mcp__code-central__claim|mcp__code-central__post_round"
+      }
+    ]
+  }
+}

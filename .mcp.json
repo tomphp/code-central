@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "code-central": {
+      "type": "http",
+      "url": "${CODE_CENTRAL_URL:-http://localhost:7733}/p/code-central/mcp"
+    }
+  }
+}

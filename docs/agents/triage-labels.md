@@ -1,15 +1,15 @@
-# Triage Labels
+<!-- Written by code-central init d87ed95. Re-running init rewrites this file. -->
 
-The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
+# Triage labels
 
-| Label in mattpocock/skills | Label in our tracker | Meaning                                  |
-| -------------------------- | -------------------- | ---------------------------------------- |
-| `needs-triage`             | `needs-triage`       | Maintainer needs to evaluate this issue  |
-| `needs-info`               | `needs-info`         | Waiting on reporter for more information |
-| `ready-for-agent`          | `ready-for-agent`    | Fully specified, ready for an AFK agent  |
-| `ready-for-human`          | `ready-for-human`    | Requires human implementation            |
-| `wontfix`                  | `wontfix`            | Will not be actioned                     |
+The skills speak of five triage roles. In Code Central, three are States and two stay Labels. Call `get_workflow` for how Tickets move between States.
 
-When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
+| Role in the skills | In Code Central |
+| --- | --- |
+| `needs-triage` | `Draft` State (`create_ticket`, `defer`) |
+| `needs-info` | `needs-info` Label |
+| `ready-for-agent` | `Ready` State (`approve`) |
+| `ready-for-human` | `ready-for-human` Label |
+| `wontfix` | `Cancelled` State (`cancel`) |
 
-Edit the "Label in our tracker" column to match whatever vocabulary you actually use.
+When a skill applies a role that is a State, use the operation beside it instead of adding a Label.
