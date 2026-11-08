@@ -51,6 +51,20 @@ func TestEachFolderIsItsXDGVariableThenHOMEThenTheProfileFolder(t *testing.T) {
 	}
 }
 
+func TestTheStartMenuIsUnderAPPDATAElseTheProfileFolder(t *testing.T) {
+	programs := filepath.Join("Microsoft", "Windows", "Start Menu", "Programs", "a.lnk")
+	// HOME isn't read: Windows keeps the Start menu in the profile.
+	if got, err := lookup(map[string]string{"APPDATA": "/appdata", "HOME": "/home/me"}, "/profile").StartMenu("a.lnk"); err != nil || got != filepath.Join("/appdata", programs) {
+		t.Fatalf("from APPDATA: got %q, %v", got, err)
+	}
+	if got, err := lookup(map[string]string{"HOME": "/home/me"}, "/profile").StartMenu("a.lnk"); err != nil || got != filepath.Join("/profile", "AppData", "Roaming", programs) {
+		t.Fatalf("from the profile: got %q, %v", got, err)
+	}
+	if _, err := lookup(map[string]string{"HOME": "/home/me"}, "").StartMenu("a.lnk"); err == nil || err.Error() != "cannot find the Start menu: set APPDATA, or give this account a profile folder (%USERPROFILE%)" {
+		t.Fatalf("with neither: err %v", err)
+	}
+}
+
 func TestNoHomeAtAllNamesEveryOption(t *testing.T) {
 	_, err := lookup(nil, "").Data()
 	var nf *home.NotFoundError
