@@ -40,6 +40,9 @@ func (f *factory) loop(ctx context.Context) {
 // resumes first, then new claims.
 func (f *factory) poll(ctx context.Context) {
 	answered := f.reconcile(ctx)
+	if !f.paused() {
+		f.land(ctx)
+	}
 	f.sweep(ctx)
 	if f.paused() {
 		for _, c := range f.duePausedResumes(f.o.parallel - f.running()) {

@@ -181,6 +181,10 @@ type factory struct {
 	warned    map[string]bool  // dirty finished worktrees already warned of; the poll's own
 	turnsDone sync.WaitGroup
 
+	// warnedMerged is "<ticket>@<commit>" of Tickets merged in a State
+	// that can't land, already warned of; the poll's own.
+	warnedMerged map[string]bool
+
 	pauseMu sync.Mutex
 	pause   *pause // set during an outage
 
@@ -193,7 +197,7 @@ type factory struct {
 
 // start makes every start-up check, refusing with the reason.
 func start(e Env, o options) (*factory, error) {
-	f := &factory{e: e, o: o, turns: map[string]*turn{}, ended: map[string]bool{}, warned: map[string]bool{}}
+	f := &factory{e: e, o: o, turns: map[string]*turn{}, ended: map[string]bool{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}}
 	git, ok := e.lookPath("git")
 	if !ok {
 		return nil, errors.New("git isn't on PATH")

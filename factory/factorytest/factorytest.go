@@ -271,6 +271,42 @@ func (h *Harness) WaitForState(id string, state store.State) core.TicketView {
 	return tk
 }
 
+// Finished claims ticket outside the Factory and finishes it with this
+// branch and commit, so it is In Review with work to land.
+func (h *Harness) Finished(ticket, branch, commit string) {
+	h.t.Helper()
+	ctx := context.Background()
+	c := h.Server.Client
+	res, err := c.Claim(ctx, h.Project, core.ClaimInput{Ticket: core.Ref(ticket)})
+	must(h.t, err)
+	_, err = c.Finish(ctx, h.Project, core.FinishInput{Ticket: core.Ref(ticket), ClaimID: res.ClaimID, Summary: "Done.", Branch: branch, Commit: commit})
+	must(h.t, err)
+}
+
+// Accept accepts ticket as the human.
+func (h *Harness) Accept(ticket string) {
+	h.t.Helper()
+	_, err := h.Human().Accept(context.Background(), h.Project, core.TicketInput{Ticket: core.Ref(ticket)})
+	must(h.t, err)
+}
+
+// CommitOn commits file with content on branch, made from main when it
+// doesn't exist, and returns the commit. The repo is left on main.
+func (h *Harness) CommitOn(branch, file, content string) string {
+	h.t.Helper()
+	if branch != "main" {
+		if !strings.Contains(h.Git("branch", "--list", branch), branch) {
+			h.Git("branch", branch, "main")
+		}
+		h.Git("checkout", "-q", branch)
+		defer h.Git("checkout", "-q", "main")
+	}
+	must(h.t, os.WriteFile(filepath.Join(h.Repo, file), []byte(content), 0o644))
+	h.Git("add", file)
+	h.Git("commit", "-q", "-m", "Change "+file)
+	return h.Git("rev-parse", "HEAD")
+}
+
 // Running is a Factory running in-process.
 type Running struct {
 	h              *Harness
