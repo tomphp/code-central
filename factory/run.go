@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,19 +32,89 @@ func (f *factory) loop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-f.drainCh:
+			f.drain(ctx)
+			return
 		case <-f.e.After(f.o.poll):
 		}
 	}
 }
 
+// watchSignals turns the stop signals into a drain or a stop. The first
+// Ctrl-C drains; a second Ctrl-C, SIGTERM or SIGHUP stops the running
+// turns and exits. Either way every Claim is kept.
+func (f *factory) watchSignals(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case sig := <-f.e.Signals:
+			if sig == os.Interrupt && !f.draining() {
+				f.printf("draining: no more claiming, resuming or landing; Ctrl-C again to stop the running turns (Claims are kept)")
+				f.drainOnce.Do(func() { close(f.drainCh) })
+				continue
+			}
+			f.printf("stopping on %v: stopping the running turns (Claims are kept)", sig)
+			f.stop()
+			return
+		}
+	}
+}
+
+// draining reports whether the first Ctrl-C has come.
+func (f *factory) draining() bool {
+	select {
+	case <-f.drainCh:
+		return true
+	default:
+		return false
+	}
+}
+
+// halted reports whether the Factory must start nothing more: it is
+// stopping or draining.
+func (f *factory) halted(ctx context.Context) bool {
+	return ctx.Err() != nil || f.draining()
+}
+
+// drain waits for the running turns to end, naming them, unless a stop
+// comes first. No turn starts while it waits: the loop has stopped.
+func (f *factory) drain(ctx context.Context) {
+	f.mu.Lock()
+	var names []string
+	for _, t := range f.turns {
+		names = append(names, t.claim.Ticket)
+	}
+	f.mu.Unlock()
+	if len(names) == 0 {
+		f.printf("drained: no turns running")
+		return
+	}
+	sort.Strings(names)
+	f.printf("draining: waiting on %d running turn(s): %s", len(names), strings.Join(names, ", "))
+	done := make(chan struct{})
+	go func() {
+		f.turnsDone.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		f.printf("drained: every turn has ended")
+	case <-ctx.Done():
+	}
+}
+
 // poll reconciles the held Claims, then fills free slots: Answered
-// resumes first, then new claims.
+// resumes first, then saved Claims a stop cut off, then new claims.
 func (f *factory) poll(ctx context.Context) {
 	answered := f.reconcile(ctx)
-	if !f.paused() {
+	if !f.paused() && !f.halted(ctx) {
 		f.land(ctx)
 	}
 	f.sweep(ctx)
+	if f.halted(ctx) {
+		return
+	}
 	if f.paused() {
 		for _, c := range f.duePausedResumes(f.o.parallel - f.running()) {
 			if !f.resumeCutOff(ctx, c) && f.live(c.ClaimID) {
@@ -53,12 +124,13 @@ func (f *factory) poll(ctx context.Context) {
 		return
 	}
 	for _, c := range answered {
-		if ctx.Err() != nil || f.running() >= f.o.parallel {
+		if f.halted(ctx) || f.running() >= f.o.parallel {
 			return
 		}
 		f.resumeAnswered(ctx, c)
 	}
-	for ctx.Err() == nil && f.running() < f.o.parallel {
+	f.resumeRestarted(ctx)
+	for !f.halted(ctx) && f.running() < f.o.parallel {
 		if !f.claimNext(ctx) {
 			return
 		}
@@ -389,6 +461,9 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, args []str
 	cmd.Dir = dir
 	cmd.Env = f.e.Environ
 	cmd.Stderr = f.e.Stderr
+	// Its own process group, so the terminal's Ctrl-C reaches only the
+	// Factory, which drains rather than interrupting the turn.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stdout, err := cmd.StdoutPipe()
 	if err == nil {
 		err = cmd.Start()
