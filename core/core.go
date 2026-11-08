@@ -30,6 +30,8 @@ type Core struct {
 	activity *activity
 	// transcripts holds each Claim's Session Events, in memory only.
 	transcripts *transcripts
+	// latestNotices throttles the ticket.changed a new latest event sends.
+	latestNotices *latestNotices
 }
 
 // New returns a Core persisting through s, telling time with clk and
@@ -40,6 +42,7 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	c := &Core{store: notifying{Store: archiveGuard{s}, bus: bus}, clock: clk, ids: idSource, events: bus}
 	c.activity = newActivity(c.now())
 	c.transcripts = &transcripts{all: map[markKey]*transcript{}}
+	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
 	return c
 }
 
@@ -102,6 +105,9 @@ type ClaimView struct {
 	LastActivity time.Time  `json:"last_activity"`
 	Ended        *time.Time `json:"ended,omitempty"`
 	EndedBy      string     `json:"ended_by,omitempty"`
+	// LatestEvent is the Claim's latest Session Event, shown short; left
+	// out when it has none. Computed, never stored.
+	LatestEvent *LatestEvent `json:"latest_event,omitempty"`
 }
 
 // TicketView is the full view of one Ticket, the same through every door.
@@ -150,6 +156,9 @@ type TicketRow struct {
 	Blocked bool        `json:"blocked"`
 	Updated time.Time   `json:"updated"`
 	Link    *LinkView   `json:"link,omitempty"`
+	// LatestEvent is the latest Session Event of the Ticket's live Claim,
+	// shown short; left out when there is none.
+	LatestEvent *LatestEvent `json:"latest_event,omitempty"`
 }
 
 // CreateProjectInput is create_project's input.
@@ -356,7 +365,7 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 			if !matches(t, in, specN) {
 				continue
 			}
-			row := ticketRow(r, key, t)
+			row := c.ticketRow(r, key, t)
 			if in.Claimable != nil && *in.Claimable != (t.State == store.Ready && !row.Blocked) {
 				continue
 			}
@@ -403,11 +412,15 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 	return true
 }
 
-func ticketRow(r store.Reader, key string, t store.Ticket) TicketRow {
-	return TicketRow{
+func (c *Core) ticketRow(r store.Reader, key string, t store.Ticket) TicketRow {
+	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: blocked(r, key, t), Updated: t.Updated, Link: linkView(t.Link),
 	}
+	if cl, ok := liveClaim(t); ok {
+		row.LatestEvent = c.latestEvent(key, t.Number, cl.Number)
+	}
+	return row
 }
 
 func claimOrder(a, b store.Ticket) int {
@@ -450,7 +463,8 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		Blocked: blocked(r, key, t), Link: linkView(t.Link),
 	}
 	for _, cl := range t.Claims {
-		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, WorkingDir: cl.WorkingDir, ResumeCommand: cl.ResumeCommand, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy}
+		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, WorkingDir: cl.WorkingDir, ResumeCommand: cl.ResumeCommand, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy,
+			LatestEvent: c.latestEvent(key, t.Number, cl.Number)}
 		if !cl.Live() {
 			ended := cl.Ended
 			cv.Ended = &ended

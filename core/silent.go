@@ -40,9 +40,10 @@ type activity struct {
 	marks map[markKey]NeedsMeReason // Silent, Long or Accepted but not landed
 }
 
-// markKey names what a timed reason or a Transcript is on, across
-// Projects: one Claim, or, for a timed reason with claim 0, an Accepted
-// Ticket, which has no live Claim.
+// markKey names what a timed reason, a Transcript or a latest event
+// notice is on, across Projects: one Claim, or, with claim 0, a whole
+// Ticket: an Accepted one, which has no live Claim, for a timed reason,
+// and any Ticket for the latest event's throttle.
 type markKey struct {
 	project string
 	ticket  int
