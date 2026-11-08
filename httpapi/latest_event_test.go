@@ -99,7 +99,7 @@ func TestTicketChangedOnANewLatestEventIsThrottledPerTicketWithATrailingNotice(t
 	defer hs.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, r := sseStream(t, ctx, hs.URL)
+	r := sseStream(t, ctx, hs.URL)
 	next := func(want string) {
 		t.Helper()
 		if name, data := nextEvent(t, r); name != "ticket.changed" || data != fmt.Sprintf(`{"project":"acme","id":"%s"}`, want) {

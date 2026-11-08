@@ -6,6 +6,7 @@ import type {
   ChangeEvent,
   FindSpecsFilter,
   FindTicketsFilter,
+  HeldSessionEvent,
   LinkedRow,
   NeedsMeView,
   ProjectRow,
@@ -16,6 +17,7 @@ import type {
   SubmitRequirementResult,
   TicketRow,
   TicketView,
+  Transcript,
 } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
@@ -36,6 +38,20 @@ export interface EventHandlers {
   // onOpen is called each time the feed is live: first with
   // reconnect=false, then reconnect=true after every reconnect, when
   // notices may have been missed and everything should be refetched.
+  onOpen?(info: { reconnect: boolean }): void;
+}
+
+export interface TranscriptHandlers {
+  // onEvent is called once for each Session Event, oldest first: the held
+  // ones, then each new one. A reconnect resumes after the last one, so
+  // none is repeated or missed.
+  onEvent(e: HeldSessionEvent): void;
+  // onTail is called before events that follow a gap: ones dropped (or
+  // lost to a restart) before they could be sent, so the follower holds
+  // only the tail of the session.
+  onTail?(): void;
+  // onOpen is called each time the stream is live: first with
+  // reconnect=false, then reconnect=true after every reconnect.
   onOpen?(info: { reconnect: boolean }): void;
 }
 
@@ -70,6 +86,11 @@ export interface Api {
   unlink(project: string, target: string): Promise<LinkedRow>;
   // subscribe opens the live feed and returns a function that closes it.
   subscribe(handlers: EventHandlers): () => void;
+  // transcript reads Claim number claim's Transcript (ticket 110).
+  transcript(project: string, id: string, claim: number): Promise<Transcript>;
+  // subscribeTranscript follows Claim number claim's Transcript, even
+  // after the Claim ends, and returns a function that stops it.
+  subscribeTranscript(project: string, id: string, claim: number, handlers: TranscriptHandlers): () => void;
 }
 
 // projectOf is a display ID's Project Key: everything before the last "-".

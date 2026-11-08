@@ -7,7 +7,17 @@ import { createHttpApi } from "./http";
 
 apiContract("HTTP API against code-central serve", async (): Promise<Driver> => {
   const svc = await serve();
-  const api = createHttpApi({ baseUrl: svc.url, retryMs: 50 });
+  // Transcript streams go through a fetch the driver can cut, as a flaky
+  // connection would (ticket 110).
+  const streams = new Set<AbortController>();
+  const cuttable: typeof fetch = (input, init) => {
+    if (!String(input).endsWith("/transcript/stream")) return fetch(input, init);
+    const cut = new AbortController();
+    streams.add(cut);
+    init?.signal?.addEventListener("abort", () => cut.abort());
+    return fetch(input, { ...init, signal: cut.signal });
+  };
+  const api = createHttpApi({ baseUrl: svc.url, retryMs: 50, fetch: cuttable });
   // The driver plays the agents over the same HTTP API.
   const agent = svc.agent;
   const specs = new Map<string, string>();
@@ -62,6 +72,10 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
         body: JSON.stringify({ session_id, events }),
       });
       if (res.status !== 204) throw new Error(`session-events: ${res.status}`);
+    },
+    dropTranscriptStreams: () => {
+      for (const cut of streams) cut.abort();
+      streams.clear();
     },
     close: svc.stop,
   };

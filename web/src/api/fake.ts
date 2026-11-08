@@ -23,8 +23,18 @@
 // postSessionEvents stands in for a Factory's POST /api/session-events: the
 // events go to the newest Claim with that session ID. Each Claim view
 // carries its latest Session Event, and each row its live Claim's, worked
-// out as the service does.
-import { numberOf, type Api, type EventHandlers, type TicketAction, type TicketActions } from "./api";
+// out as the service does. Each Claim's Transcript keeps the last
+// TRANSCRIPT_LIMIT events with a rising seq, and is a tail once it has
+// dropped some; subscribeTranscript follows it, and dropTranscriptStreams
+// stands in for a dropped connection, which reconnects by itself.
+import {
+  numberOf,
+  type Api,
+  type EventHandlers,
+  type TicketAction,
+  type TicketActions,
+  type TranscriptHandlers,
+} from "./api";
 import { fakeActions } from "./fakeActions";
 import {
   ApiError,
@@ -32,6 +42,7 @@ import {
   type ChangeEvent,
   type FindSpecsFilter,
   type FindTicketsFilter,
+  type HeldSessionEvent,
   type LatestEvent,
   type LinkedRow,
   type Mode,
@@ -51,6 +62,7 @@ import {
   type SubmitRequirementResult,
   type TicketRow,
   type TicketView,
+  type Transcript,
 } from "./types";
 
 // Every action's fake behaviour registers itself from ./actions/.
@@ -82,8 +94,30 @@ export type SeedRow = Partial<NeedsMeRow> & { id: string };
 // as core's LatestEventLimit.
 const LATEST_EVENT_LIMIT = 120;
 
+// TRANSCRIPT_LIMIT is how many Session Events a Transcript holds, as
+// core's TranscriptLimit.
+const TRANSCRIPT_LIMIT = 2000;
+
 // transcriptKey keys a Claim's Session Events, as core's markKey does.
 const transcriptKey = (ticket: string, claim: number) => `${ticket}#${claim}`;
+
+interface FakeTranscript {
+  events: HeldSessionEvent[];
+  lastSeq: number;
+  tail: boolean;
+}
+
+// A FakeFollower is one subscribeTranscript: up while its stream is
+// connected, with the last seq it was sent.
+interface FakeFollower {
+  project: string;
+  id: string;
+  claim: number;
+  h: TranscriptHandlers;
+  up: boolean;
+  opened: boolean;
+  after: number;
+}
 
 export class FakeApi implements Api {
   now = new Date("2026-11-07T09:00:00Z");
@@ -94,8 +128,9 @@ export class FakeApi implements Api {
   private specs = new Map<string, SpecView>();
   private groups: { reason: NeedsMeReason; tickets: NeedsMeRow[] }[] = [];
   private subs = new Set<EventHandlers>();
-  // transcripts is each Claim's Session Events, keyed by Ticket ID and Claim number.
-  private transcripts = new Map<string, SessionEvent[]>();
+  // transcripts is each Claim's Transcript, keyed by Ticket ID and Claim number.
+  private transcripts = new Map<string, FakeTranscript>();
+  private followers = new Set<FakeFollower>();
 
   // ---- seeding ----
 
@@ -204,8 +239,26 @@ export class FakeApi implements Api {
     }
     if (!newest || !events.length) return;
     const k = transcriptKey(newest.t.id, newest.number);
-    this.transcripts.set(k, [...(this.transcripts.get(k) ?? []), ...structuredClone(events)]);
+    const tr = this.transcripts.get(k) ?? { events: [], lastSeq: 0, tail: false };
+    for (const e of structuredClone(events)) tr.events.push({ seq: ++tr.lastSeq, ...e });
+    if (tr.events.length > TRANSCRIPT_LIMIT) {
+      tr.events = tr.events.slice(-TRANSCRIPT_LIMIT);
+      tr.tail = true;
+    }
+    this.transcripts.set(k, tr);
+    for (const f of this.followers) this.deliver(f);
     this.emit({ type: "ticket.changed", project: this.projectOf(newest.t.id), id: newest.t.id });
+  }
+
+  // dropTranscriptStreams drops every connected Transcript stream, as a
+  // flaky connection would. Each reconnects by itself, resuming after the
+  // last event it was sent.
+  dropTranscriptStreams() {
+    for (const f of this.followers) {
+      if (!f.up) continue;
+      f.up = false;
+      queueMicrotask(() => this.connect(f));
+    }
   }
 
   // ---- for actions' fake behaviour (src/api/actions/) ----
@@ -248,7 +301,50 @@ export class FakeApi implements Api {
     return () => this.subs.delete(h);
   }
 
+  // subscribeTranscript follows a Claim's Transcript as the service's
+  // stream does. Like the real one, a stream for an unknown Claim never
+  // opens.
+  subscribeTranscript(project: string, id: string, claim: number, h: TranscriptHandlers): () => void {
+    const f: FakeFollower = { project, id, claim, h, up: false, opened: false, after: 0 };
+    this.followers.add(f);
+    queueMicrotask(() => this.connect(f));
+    return () => this.followers.delete(f);
+  }
+
+  private connect(f: FakeFollower) {
+    if (!this.followers.has(f)) return;
+    try {
+      this.claimKey(f.project, f.id, f.claim);
+    } catch {
+      return;
+    }
+    f.up = true;
+    f.h.onOpen?.({ reconnect: f.opened });
+    f.opened = true;
+    this.deliver(f);
+  }
+
+  // deliver sends a connected follower the events after the last it was
+  // sent, after a tail notice when some between were dropped first.
+  private deliver(f: FakeFollower) {
+    if (!f.up) return;
+    const tr = this.transcripts.get(this.claimKey(f.project, f.id, f.claim));
+    if (!tr) return;
+    if (tr.events.length && tr.events[0].seq > f.after + 1) f.h.onTail?.();
+    for (const e of tr.events) {
+      if (e.seq <= f.after) continue;
+      f.after = e.seq;
+      f.h.onEvent(structuredClone(e));
+    }
+  }
+
   // ---- reads ----
+
+  async transcript(project: string, id: string, claim: number): Promise<Transcript> {
+    this.calls.push("transcript");
+    const tr = this.transcripts.get(this.claimKey(project, id, claim));
+    return structuredClone({ events: tr?.events ?? [], tail: tr?.tail ?? false });
+  }
 
   async listProjects(): Promise<ProjectRow[]> {
     this.calls.push("listProjects");
@@ -456,7 +552,7 @@ export class FakeApi implements Api {
   // naming the tool from the call it answers; anything else as its first
   // non-empty line; cut to LATEST_EVENT_LIMIT characters.
   private latestEvent(ticket: string, claim: number): LatestEvent | undefined {
-    const events = this.transcripts.get(transcriptKey(ticket, claim)) ?? [];
+    const events = this.transcripts.get(transcriptKey(ticket, claim))?.events ?? [];
     const e = events.at(-1);
     if (!e) return undefined;
     let line: string;
@@ -542,6 +638,16 @@ export class FakeApi implements Api {
     const t = this.tickets.get(`${project}-${n}`);
     if (!t) throw new ApiError(404, "not_found", `no Ticket ${project}-${n}`);
     return t;
+  }
+
+  // claimKey is a Claim's Transcript key; an unknown Project, Ticket or
+  // Claim is not_found, as on the service's Transcript reads.
+  private claimKey(project: string, id: string, claim: number) {
+    const t = this.projects.has(project) ? this.tickets.get(`${project}-${numberOf(id)}`) : undefined;
+    if (!t?.claims.some((c) => c.number === claim)) {
+      throw new ApiError(404, "not_found", `no Claim ${claim} of ${project}-${numberOf(id)}`);
+    }
+    return transcriptKey(t.id, claim);
   }
 
   private view(t: TicketView): TicketView {

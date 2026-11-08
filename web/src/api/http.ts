@@ -1,11 +1,18 @@
-// The real Api: the HTTP API and the SSE feed of a running Code Central.
-import { numberOf, type Api, type EventHandlers, type TicketAction, type TicketActions } from "./api";
-import { ApiError, type ChangeEvent } from "./types";
+// The real Api: the HTTP API and the SSE feeds of a running Code Central.
+import {
+  numberOf,
+  type Api,
+  type EventHandlers,
+  type TicketAction,
+  type TicketActions,
+  type TranscriptHandlers,
+} from "./api";
+import { ApiError, type ChangeEvent, type HeldSessionEvent } from "./types";
 
 export interface HttpApiOptions {
   // baseUrl is the service's origin; "" (the default) is the page's own.
   baseUrl?: string;
-  // retryMs is how long the feed waits before reconnecting.
+  // retryMs is how long a feed waits before reconnecting.
   retryMs?: number;
   fetch?: typeof fetch;
 }
@@ -35,6 +42,8 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
   }
 
   const p = (project: string) => `/api/p/${encodeURIComponent(project)}`;
+  const transcriptPath = (project: string, id: string, claim: number) =>
+    `/api/projects/${encodeURIComponent(project)}/tickets/${encodeURIComponent(numberOf(id))}/claims/${claim}/transcript`;
 
   return {
     listProjects: () => call("GET", "/api/projects"),
@@ -62,7 +71,15 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     unarchiveProject: (project) => call("POST", `${p(project)}/unarchive_project`, {}),
     renameProject: (project, display_name) => call("POST", `${p(project)}/rename_project`, { display_name }),
     unlink: (project, target) => call("POST", `${p(project)}/unlink`, { target }),
-    subscribe: (h) => subscribe(doFetch, base + "/api/events", retryMs, h),
+    subscribe: (h) =>
+      follow(doFetch, base + "/api/events", retryMs, {
+        onOpen: h.onOpen,
+        onFrame: (f) => {
+          if (f.data) h.onEvent({ type: f.name, ...JSON.parse(f.data) } as ChangeEvent);
+        },
+      }),
+    transcript: (project, id, claim) => call("GET", transcriptPath(project, id, claim)),
+    subscribeTranscript: (project, id, claim, h) => subscribeTranscript(doFetch, base + transcriptPath(project, id, claim) + "/stream", retryMs, h),
   };
 }
 
@@ -76,9 +93,41 @@ function toError(status: number, text: string): ApiError {
   return new ApiError(status, "internal", text.trim() || `HTTP ${status}`);
 }
 
-// subscribe reads the SSE feed over fetch (so it runs in Node as well as
+// subscribeTranscript follows a Transcript stream, sending the last seq
+// it saw as Last-Event-ID on each reconnect, so the stream resumes with no
+// gap and no repeats.
+function subscribeTranscript(doFetch: typeof fetch, url: string, retryMs: number, h: TranscriptHandlers): () => void {
+  let last: string | undefined;
+  return follow(doFetch, url, retryMs, {
+    headers: (): Record<string, string> => (last ? { "Last-Event-ID": last } : {}),
+    onOpen: h.onOpen,
+    onFrame: (f) => {
+      if (f.name === "tail") h.onTail?.();
+      else if (f.name === "session_event" && f.data) {
+        if (f.id) last = f.id;
+        h.onEvent(JSON.parse(f.data) as HeldSessionEvent);
+      }
+    },
+  });
+}
+
+// A Frame is one SSE event: its event:, id: and data: fields.
+interface Frame {
+  name: string;
+  id: string;
+  data: string;
+}
+
+interface Follower {
+  // headers are the extra request headers for each (re)connect.
+  headers?(): Record<string, string>;
+  onOpen?(info: { reconnect: boolean }): void;
+  onFrame(f: Frame): void;
+}
+
+// follow reads an SSE stream over fetch (so it runs in Node as well as
 // the browser) and reconnects after retryMs whenever the stream ends.
-function subscribe(doFetch: typeof fetch, url: string, retryMs: number, h: EventHandlers): () => void {
+function follow(doFetch: typeof fetch, url: string, retryMs: number, h: Follower): () => void {
   let closed = false;
   let ctrl: AbortController | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -87,11 +136,11 @@ function subscribe(doFetch: typeof fetch, url: string, retryMs: number, h: Event
   const connect = async () => {
     ctrl = new AbortController();
     try {
-      const res = await doFetch(url, { headers, signal: ctrl.signal });
+      const res = await doFetch(url, { headers: { ...headers, ...h.headers?.() }, signal: ctrl.signal });
       if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
       h.onOpen?.({ reconnect: opened });
       opened = true;
-      await readEvents(res.body, h.onEvent);
+      await readFrames(res.body, h.onFrame);
     } catch {
       // Dropped or refused: retry below.
     }
@@ -105,7 +154,7 @@ function subscribe(doFetch: typeof fetch, url: string, retryMs: number, h: Event
   };
 }
 
-async function readEvents(body: ReadableStream<Uint8Array>, onEvent: (e: ChangeEvent) => void) {
+async function readFrames(body: ReadableStream<Uint8Array>, onFrame: (f: Frame) => void) {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = "";
@@ -117,13 +166,13 @@ async function readEvents(body: ReadableStream<Uint8Array>, onEvent: (e: ChangeE
     while ((end = buf.indexOf("\n\n")) >= 0) {
       const block = buf.slice(0, end);
       buf = buf.slice(end + 2);
-      let name = "";
-      let data = "";
+      const f: Frame = { name: "", id: "", data: "" };
       for (const line of block.split("\n")) {
-        if (line.startsWith("event:")) name = line.slice(6).trim();
-        else if (line.startsWith("data:")) data += line.slice(5).trim();
+        if (line.startsWith("event:")) f.name = line.slice(6).trim();
+        else if (line.startsWith("id:")) f.id = line.slice(3).trim();
+        else if (line.startsWith("data:")) f.data += line.slice(5).trim();
       }
-      if (name && data) onEvent({ type: name, ...JSON.parse(data) } as ChangeEvent);
+      if (f.name) onFrame(f);
     }
   }
 }

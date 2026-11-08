@@ -107,6 +107,8 @@ apiContract("FakeApi", async (): Promise<Driver> => {
     },
     // ticket 109
     postSessionEvents: async (session_id, events) => fake.postSessionEvents(session_id, events),
+    // ticket 110
+    dropTranscriptStreams: () => fake.dropTranscriptStreams(),
     close: async () => {},
   };
 });
