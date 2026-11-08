@@ -496,13 +496,12 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, args []str
 	f.turnsDone.Add(1)
 	go func() {
 		defer f.turnsDone.Done()
-		var onToolCall func(string, json.RawMessage)
-		if f.o.verbose {
-			onToolCall = func(tool string, input json.RawMessage) {
-				f.claimf(c, "%s: %s", c.Ticket, toolCall(tool, input, dir))
+		end := readTurn(cmd, stdout, dir, func(e core.SessionEvent) {
+			f.events.add(c.SessionID, e)
+			if f.o.verbose && e.Kind == eventToolCall {
+				f.printf("%s: %s", c.Ticket, e.Text)
 			}
-		}
-		end := readTurn(cmd, stdout, onToolCall)
+		})
 		ran := time.Since(t.started)
 		// The turn keeps its slot until its outcome is acted on, and
 		// "turn ended" is printed once the slot is free.
@@ -516,31 +515,46 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, args []str
 	}()
 }
 
+// streamMessage is the part of a stream-json message the Factory reads.
+type streamMessage struct {
+	Type    string `json:"type"`
+	Subtype string `json:"subtype"`
+	// Error is an assistant message's API error, or an api_retry's.
+	Error   string `json:"error"`
+	Message struct {
+		Content []struct {
+			Type  string          `json:"type"`
+			Text  string          `json:"text"`
+			ID    string          `json:"id"`
+			Name  string          `json:"name"`
+			Input json.RawMessage `json:"input"`
+			// ToolUseID, Content and IsError are a tool result's.
+			ToolUseID string          `json:"tool_use_id"`
+			Content   json.RawMessage `json:"content"`
+			IsError   bool            `json:"is_error"`
+		} `json:"content"`
+	} `json:"message"`
+}
+
 // readTurn reads a started turn's stream-json to its end and waits for
-// it, giving how it ended. onToolCall, when set, is called with each tool
-// call the agent makes, in order.
-func readTurn(cmd *exec.Cmd, stdout io.Reader, onToolCall func(tool string, input json.RawMessage)) turnEnd {
+// it, giving how it ended. onEvent is called with each Session Event the
+// stream maps to, in order; dir is the turn's worktree.
+func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, onEvent func(core.SessionEvent)) turnEnd {
 	var end turnEnd
 	var retryErr string
+	tools := map[string]string{}
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
 	for sc.Scan() {
-		var msg struct {
-			Type    string `json:"type"`
-			Subtype string `json:"subtype"`
-			// Error is an assistant message's API error, or an api_retry's.
-			Error   string `json:"error"`
-			Message struct {
-				Content []struct {
-					Type  string          `json:"type"`
-					Text  string          `json:"text"`
-					Name  string          `json:"name"`
-					Input json.RawMessage `json:"input"`
-				} `json:"content"`
-			} `json:"message"`
-		}
+		var msg streamMessage
 		if json.Unmarshal(sc.Bytes(), &msg) != nil {
 			continue
+		}
+		for _, e := range streamEvents(msg, time.Now(), tools, dir) {
+			if e.Kind == eventText {
+				end.LastText = e.Text
+			}
+			onEvent(e)
 		}
 		switch msg.Type {
 		case "system":
@@ -550,14 +564,6 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, onToolCall func(tool string, inpu
 		case "assistant":
 			if msg.Error != "" {
 				end.APIError = msg.Error
-			}
-			for _, c := range msg.Message.Content {
-				if c.Type == "text" && strings.TrimSpace(c.Text) != "" {
-					end.LastText = c.Text
-				}
-				if c.Type == "tool_use" && onToolCall != nil {
-					onToolCall(c.Name, c.Input)
-				}
 			}
 		case "result":
 			var r result

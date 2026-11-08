@@ -37,6 +37,9 @@ type Env struct {
 	// Backoff is the first wait before resuming turns an outage cut off,
 	// doubling with each outage in a row; zero means a minute.
 	Backoff time.Duration
+	// EventBatchEvery is how often waiting Session Events are posted;
+	// zero means eventBatchEvery.
+	EventBatchEvery time.Duration
 	// Signals is the stop signals the Factory gets: the first Ctrl-C
 	// (os.Interrupt) drains; a second, SIGTERM or SIGHUP stops the turns
 	// at once. Nil means none come.
@@ -134,8 +137,11 @@ func Run(ctx context.Context, args []string, e Env) int {
 	ctx, f.stop = context.WithCancel(ctx)
 	defer f.stop()
 	go f.watchSignals(ctx)
+	go f.events.run()
 	f.restart(ctx)
 	f.loop(ctx)
+	// Stopping or draining makes one last flush.
+	f.events.close()
 	if reason := f.stoppedFor(); reason != "" {
 		fmt.Fprintln(e.Stderr, "code-central-factory: stopped:", reason)
 		return exitStopped
@@ -179,6 +185,7 @@ type factory struct {
 	base      string
 	worktrees string // <repo-parent>/<repo-dir>.worktrees
 	client    *client.Client
+	events    *sender // posts Session Events
 	state     *stateFile
 	lock      *os.File // held for the Factory's whole life
 
@@ -257,6 +264,11 @@ func start(e Env, o options) (*factory, error) {
 		return nil, fmt.Errorf("can't use the worktree folder %s: %v", f.worktrees, err)
 	}
 	f.client = client.New(cli.ServiceURL(e.getenv))
+	every := e.EventBatchEvery
+	if every <= 0 {
+		every = eventBatchEvery
+	}
+	f.events = newSender(f.client, every)
 	f.state = &stateFile{path: filepath.Join(e.getenv("HOME"), ".local", "state", "code-central-factory", project+".json")}
 	if err := os.MkdirAll(filepath.Dir(f.state.path), 0o755); err != nil {
 		return nil, fmt.Errorf("can't make the state folder: %v", err)

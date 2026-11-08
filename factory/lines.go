@@ -42,10 +42,14 @@ func (f *factory) about(c claim) string {
 	return fmt.Sprintf("(%s): %q", i.stage, i.title)
 }
 
-// claimf prints a line about the held Claim c. Every such line goes
-// through here, the one per-Claim logger.
+// claimf prints a line about the held Claim c and queues it as a factory
+// Session Event for c's session. Every such line goes through here, the
+// one per-Claim logger; lines with no Claim are only printed, and so is
+// a --verbose tool-call line, whose tool call is posted already.
 func (f *factory) claimf(c claim, format string, args ...any) {
-	f.printf(format, args...)
+	line := fmt.Sprintf(format, args...)
+	f.printf("%s", line)
+	f.events.add(c.SessionID, core.SessionEvent{Time: time.Now(), Kind: eventFactory, Text: line})
 }
 
 // claimed prints the line for a new Claim on tk, once its worktree is
