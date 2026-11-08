@@ -235,21 +235,27 @@ func addScope(fs *flag.FlagSet) *string {
 }
 
 func resolveScope(e Env, projectFlag string) (scope, error) {
-	project := projectFlag
-	if project == "" {
-		project = e.Getenv("CODE_CENTRAL_PROJECT")
-	}
-	if project == "" {
-		k, err := nearestKey(e.Dir)
-		if err != nil {
-			return scope{}, err
-		}
-		project = k
+	project, err := ResolveProject(e.Dir, projectFlag, e.Getenv)
+	if err != nil {
+		return scope{}, err
 	}
 	if project == "" {
 		return scope{}, usagef("no Project: pass --project <key>, set CODE_CENTRAL_PROJECT, or run `code-central init` in the repository")
 	}
 	return scope{project: project, client: newClient(e)}, nil
+}
+
+// ResolveProject is the Project Key every client of the service resolves:
+// projectFlag, else CODE_CENTRAL_PROJECT, else the key in the nearest
+// .mcp.json at or above dir. It is "" when none of them names one.
+func ResolveProject(dir, projectFlag string, getenv func(string) string) (string, error) {
+	if projectFlag != "" {
+		return projectFlag, nil
+	}
+	if p := getenv("CODE_CENTRAL_PROJECT"); p != "" {
+		return p, nil
+	}
+	return nearestKey(dir)
 }
 
 func printJSON(e Env, v any) error {

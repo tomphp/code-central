@@ -22,6 +22,7 @@ export type NeedsMeReason =
   | "needs_answer"
   | "answered"
   | "silent_claim"
+  | "long_claim"
   | "failed"
   | "in_review"
   | "blocked_by_cancelled"
@@ -87,6 +88,33 @@ export interface NeedsMeRow {
   summary?: string;
   blocker?: BlockerView;
   link?: LinkView;
+  // Set when the Ticket's Spec is a Requirement.
+  requirement?: NeedsMeRequirement;
+}
+
+// The Requirement a Needs Me row's Ticket is on; stage is set only on a
+// Stage Ticket.
+export interface NeedsMeRequirement {
+  spec: string;
+  title: string;
+  stage?: StageName;
+}
+
+export type StageName = "grilling" | "spec" | "tickets";
+
+// A Spec read's requirement block, present only on a Requirement (a Spec
+// with Stage Tickets). Nothing in it is stored.
+export interface RequirementView {
+  stages: StageView[];
+  build: { done: number; total: number };
+  waiting_for_factory: boolean;
+}
+
+export interface StageView {
+  name: StageName;
+  ticket: string;
+  state: State;
+  needs_me_reason?: NeedsMeReason;
 }
 
 export interface NeedsMeGroup {

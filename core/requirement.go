@@ -120,3 +120,96 @@ func requirementTitle(text string) string {
 	}
 	return ""
 }
+
+// RequirementView is the requirement block on a Spec read, present only
+// when the Spec is a Requirement: it has at least one Stage Ticket.
+// Nothing in it is stored.
+type RequirementView struct {
+	// Stages are the Stage Tickets in Stage order.
+	Stages []StageView `json:"stages"`
+	// Build is how far the implementation Tickets have got.
+	Build BuildProgress `json:"build"`
+	// WaitingForFactory is whether the next Ticket can be claimed but
+	// nothing has claimed it.
+	WaitingForFactory bool `json:"waiting_for_factory"`
+}
+
+// StageView is one Stage Ticket: its Stage name, Ticket ID, State and
+// Needs Me reason, if any.
+type StageView struct {
+	Name          string        `json:"name"`
+	Ticket        string        `json:"ticket"`
+	State         store.State   `json:"state"`
+	NeedsMeReason NeedsMeReason `json:"needs_me_reason,omitempty"`
+}
+
+// BuildProgress is the implementation Tickets Done over their total,
+// leaving out Cancelled ones.
+type BuildProgress struct {
+	Done  int `json:"done"`
+	Total int `json:"total"`
+}
+
+// stageOf is the Stage a Ticket's Labels mark it as, or "".
+func stageOf(t store.Ticket) string {
+	for _, l := range t.Labels {
+		if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages, name) {
+			return name
+		}
+	}
+	return ""
+}
+
+// requirementView is the requirement block for a Spec with these Tickets
+// (in claim order), or nil when none of them is a Stage Ticket.
+func (c *Core) requirementView(r store.Reader, key string, tickets []store.Ticket) *RequirementView {
+	var stages, build []store.Ticket
+	for _, t := range tickets {
+		if stageOf(t) != "" {
+			stages = append(stages, t)
+		} else {
+			build = append(build, t)
+		}
+	}
+	if len(stages) == 0 {
+		return nil
+	}
+	slices.SortStableFunc(stages, func(a, b store.Ticket) int {
+		return slices.Index(Stages, stageOf(a)) - slices.Index(Stages, stageOf(b))
+	})
+	// claimable is a Ticket a Factory could claim now; one waiting on the
+	// human doesn't count.
+	claimable := func(t store.Ticket) bool {
+		reason, _ := c.reasonOf(r, key, t)
+		return t.State == store.Ready && !blocked(r, key, t) && reason == ""
+	}
+	v := &RequirementView{Stages: []StageView{}}
+	current := -1
+	for i, t := range stages {
+		reason, _ := c.reasonOf(r, key, t)
+		v.Stages = append(v.Stages, StageView{Name: stageOf(t), Ticket: DisplayID(key, t.Number), State: t.State, NeedsMeReason: reason})
+		if current < 0 && t.State != store.Done {
+			current = i
+		}
+	}
+	anyClaimable := false
+	for _, t := range build {
+		if t.State == store.Cancelled {
+			continue
+		}
+		v.Build.Total++
+		if t.State == store.Done {
+			v.Build.Done++
+		}
+		anyClaimable = anyClaimable || claimable(t)
+	}
+	if current >= 0 {
+		v.WaitingForFactory = claimable(stages[current])
+	} else {
+		v.WaitingForFactory = anyClaimable && !slices.ContainsFunc(tickets, func(t store.Ticket) bool {
+			_, held := liveClaim(t)
+			return held
+		})
+	}
+	return v
+}

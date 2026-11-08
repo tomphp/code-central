@@ -1,6 +1,6 @@
 // Package notify sends OS Notifications when an agent is stopped and
-// waiting on the human: a new Round, a new Failure Report, or a Claim
-// turning Silent. It listens to core's change notices and also looks at
+// waiting on the human: a new Round, a new Failure Report, a Claim
+// turning Silent, or a Claim turning Long (once per Claim). It listens to core's change notices and also looks at
 // every Ticket on its own timer, as the spec has it: serve's
 // core.WatchSilent does publish a notice when a Claim turns Silent, but
 // the events bus drops notices for a slow subscriber, and the timer is
@@ -68,6 +68,7 @@ const (
 	newRound reason = iota
 	newFailure
 	silentClaim
+	longClaim
 )
 
 // reasons is each reason's wording: the one-event title (%s is the
@@ -76,6 +77,7 @@ var reasons = [...]struct{ title, one, many string }{
 	newRound:    {"%s has a new Round", "new Round", "new Rounds"},
 	newFailure:  {"%s has a new Failure Report", "failure", "failures"},
 	silentClaim: {"%s has a Silent Claim", "Silent Claim", "Silent Claims"},
+	longClaim:   {"%s has a Long Claim", "Long Claim", "Long Claims"},
 }
 
 type event struct {
@@ -90,12 +92,15 @@ func Start(ctx context.Context, cfg Config) {
 	if cfg.Log == nil {
 		cfg.Log = io.Discard
 	}
-	w := &watcher{cfg: cfg, known: map[string]core.AttentionTicket{}}
+	w := &watcher{cfg: cfg, known: map[string]core.AttentionTicket{}, long: map[longKey]bool{}}
 	// Subscribe before the first look so no change falls between them.
 	notices, stop := cfg.Source.Events().Subscribe()
 	all := cfg.Source.Attention(ctx)
 	for _, t := range all {
 		w.known[t.ID] = t
+		if t.LongClaim != 0 {
+			w.long[longKey{t.ID, t.LongClaim}] = true
+		}
 	}
 	w.startup(all)
 	go func() {
@@ -108,6 +113,15 @@ type watcher struct {
 	cfg     Config
 	known   map[string]core.AttentionTicket // by display ID
 	pending []event
+	// long is every Claim already counted as Long: one Notification each,
+	// however often it stops and starts being Long.
+	long map[longKey]bool
+}
+
+// longKey names one Claim by its Ticket's display ID and its number.
+type longKey struct {
+	ticket string
+	claim  int
 }
 
 func (w *watcher) run(ctx context.Context, notices <-chan events.Event) {
@@ -169,6 +183,10 @@ func (w *watcher) observe(t core.AttentionTicket) {
 	if t.SilentClaim != 0 && t.SilentClaim != was.SilentClaim {
 		w.pending = append(w.pending, event{silentClaim, t})
 	}
+	if k := (longKey{t.ID, t.LongClaim}); t.LongClaim != 0 && !w.long[k] {
+		w.long[k] = true
+		w.pending = append(w.pending, event{longClaim, t})
+	}
 }
 
 func (w *watcher) flush() {
@@ -215,7 +233,7 @@ func (w *watcher) summary(es []event) Notification {
 }
 
 // startup is the one summary sent at startup when Needs Me is not empty.
-// Claims already Silent go into it rather than each notifying.
+// Claims already Silent or Long go into it rather than each notifying.
 func (w *watcher) startup(all []core.AttentionTicket) {
 	var projects []string
 	for _, t := range all {

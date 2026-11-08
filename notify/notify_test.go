@@ -231,6 +231,43 @@ func TestAClaimTurningSilentNotifiesOncePerCrossing(t *testing.T) {
 	f.want(silent)
 }
 
+// tickActive moves the clock on by one tick of d, then pings ticket's
+// session so its Claim stays active.
+func (f *fixture) tickActive(ticket string, d time.Duration) {
+	f.t.Helper()
+	f.clock.BlockUntil(1)
+	f.clock.Advance(d)
+	f.core.Ping(ctx, "s-"+ticket)
+}
+
+func TestAClaimTurningLongNotifiesOncePerClaim(t *testing.T) {
+	f := newFixture(t)
+	f.project("acme", 2)
+	f.start()
+	f.claim("acme", "2")
+	for range 3 {
+		f.tickActive("2", 20*time.Minute)
+	}
+	f.tickActive("2", time.Minute) // past core.LongAfter without a move
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme-2 has a Long Claim", Body: "Task A", URL: base + "/?view=inbox&ticket=acme-2"})
+
+	// Still Long on later ticks, then Silent, then Long again: the Silent
+	// crossing notifies, the Claim never notifies as Long again.
+	for range 3 {
+		f.tickActive("2", notify.Tick)
+	}
+	f.clock.BlockUntil(1)
+	f.clock.Advance(core.SilentAfter)
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme-2 has a Silent Claim", Body: "Task A", URL: base + "/?view=inbox&ticket=acme-2"})
+	f.tickActive("2", notify.Tick)
+	f.tickActive("2", notify.Tick)
+	f.round("acme", "3")
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme-3 has a new Round", Body: "Task B", URL: base + "/?view=inbox&ticket=acme-3"})
+}
+
 func TestStartupSendsOneSummaryWhenNeedsMeIsNotEmpty(t *testing.T) {
 	f := newFixture(t)
 	f.project("acme", 3)

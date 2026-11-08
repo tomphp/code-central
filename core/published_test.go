@@ -62,11 +62,11 @@ func TestTheWorkflowsActionsAreTheTableCoreEnforces(t *testing.T) {
 func TestTheWorkflowSaysWhatCountsAsNeedsMe(t *testing.T) {
 	w := workflow(t)
 	want := []core.NeedsMeReason{
-		core.ReasonNeedsAnswer, core.ReasonAnswered, core.ReasonSilentClaim, core.ReasonFailed,
+		core.ReasonNeedsAnswer, core.ReasonAnswered, core.ReasonSilentClaim, core.ReasonLongClaim, core.ReasonFailed,
 		core.ReasonInReview, core.ReasonBlockedByCancelled, core.ReasonClosedExternally,
 	}
 	if len(w.NeedsMe) != len(want) {
-		t.Fatalf("Needs Me reasons %v, want the spec's seven in group order", w.NeedsMe)
+		t.Fatalf("Needs Me reasons %v, want the eight in group order", w.NeedsMe)
 	}
 	for i, r := range w.NeedsMe {
 		if r.Reason != want[i] || r.Meaning == "" {
