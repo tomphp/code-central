@@ -31,8 +31,8 @@ func startServe(t *testing.T, store, listen string) (*process, string) {
 // startServeBin is startServe with another binary, such as a migrationtest build.
 func startServeBin(t *testing.T, binary, store, listen string) (*process, string) {
 	t.Helper()
-	unixOnly(t, "os.Interrupt to stop serve")
 	cmd := exec.Command(binary, "serve", "--store", store, "--no-notify")
+	startInOwnGroup(cmd)
 	cmd.Env = append(os.Environ(), "CODE_CENTRAL_LISTEN="+listen)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -60,10 +60,13 @@ func startServeBin(t *testing.T, binary, store, listen string) (*process, string
 	return p, ""
 }
 
-// stop interrupts serve, as launchd and systemd do, and waits for a clean exit.
+// stop interrupts serve, as launchd, systemd and Ctrl-C do, and waits
+// for a clean exit.
 func (p *process) stop(t *testing.T) {
 	t.Helper()
-	p.cmd.Process.Signal(os.Interrupt)
+	if err := interrupt(p.cmd.Process); err != nil {
+		t.Fatalf("interrupting serve: %v", err)
+	}
 	select {
 	case err := <-p.exited:
 		if err != nil {
