@@ -134,7 +134,7 @@ describe("the Ticket detail", () => {
     const d = renderDetail(fake, t);
     const select = within(d).getByRole("combobox", { name: "Move to" });
     const options = within(select).getAllByRole("option").map((o) => o.textContent);
-    expect(options).toEqual(["Draft", "Ready", "Answered", "In Review", "Done", "Cancelled"]);
+    expect(options).toEqual(["Draft", "Ready", "Answered", "In Review", "Accepted", "Done", "Cancelled"]);
 
     await userEvent.selectOptions(select, "Ready");
     await userEvent.click(within(d).getByRole("button", { name: "Move" }));

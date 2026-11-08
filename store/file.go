@@ -190,6 +190,8 @@ type ticketFile struct {
 	Created        string              `yaml:"created"`
 	Updated        string              `yaml:"updated"`
 	Description    string              `yaml:"description"`
+	Branch         string              `yaml:"branch,omitempty"`
+	Commit         string              `yaml:"commit,omitempty"`
 	Claims         []claimFile         `yaml:"claims"`
 	Rounds         []roundFile         `yaml:"rounds"`
 	FailureReports []failureReportFile `yaml:"failure_reports"`
@@ -257,12 +259,13 @@ type commentFile struct {
 }
 
 type moveFile struct {
-	From  string `yaml:"from,omitempty"` // empty only on an imported Ticket's one move
-	To    string `yaml:"to"`
-	Actor string `yaml:"actor"`
-	Time  string `yaml:"time"`
-	Claim int    `yaml:"claim,omitempty"`
-	Via   string `yaml:"via,omitempty"`
+	From   string `yaml:"from,omitempty"` // empty only on an imported Ticket's one move
+	To     string `yaml:"to"`
+	Actor  string `yaml:"actor"`
+	Time   string `yaml:"time"`
+	Claim  int    `yaml:"claim,omitempty"`
+	Via    string `yaml:"via,omitempty"`
+	Commit string `yaml:"commit,omitempty"` // a land's commit
 }
 
 // The fields an edit's previous values may name.
@@ -421,6 +424,7 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	t := Ticket{
 		Number: n, Title: f.Title, State: State(f.State), Spec: f.Spec, Labels: f.Labels, Tags: f.Tags,
 		BlockedBy: f.BlockedBy, Replacements: f.Replacements, Description: f.Description,
+		Branch: f.Branch, Commit: f.Commit,
 	}
 	if t.Title == "" {
 		return Ticket{}, &LoadError{Field: "title", Msg: "required"}
@@ -479,7 +483,7 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		t.Comments = append(t.Comments, cm)
 	}
 	for i, m := range f.Moves {
-		mv := Move{From: State(m.From), To: State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via}
+		mv := Move{From: State(m.From), To: State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via, Commit: m.Commit}
 		field := fmt.Sprintf("moves[%d]", i)
 		if m.From != "" && !mv.From.Valid() {
 			return Ticket{}, &LoadError{Field: field + ".from", Msg: fmt.Sprintf("unknown State %q", m.From)}
@@ -587,6 +591,7 @@ func encode(record any, project string) (string, []byte, error) {
 			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
 			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: encodeLink(r.Link),
 			Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
+			Branch: r.Branch, Commit: r.Commit,
 			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},
 			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
 		}
@@ -619,7 +624,7 @@ func encode(record any, project string) (string, []byte, error) {
 			f.Comments = append(f.Comments, commentFile{Number: c.Number, Actor: c.Actor, Time: formatTime(c.Time), Claim: c.Claim, Body: c.Body})
 		}
 		for _, m := range r.Moves {
-			f.Moves = append(f.Moves, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via})
+			f.Moves = append(f.Moves, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via, Commit: m.Commit})
 		}
 		data, err = encodeYAML(f)
 	default:

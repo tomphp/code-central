@@ -102,6 +102,7 @@ var Operations = []Op{
 
 	// Requirements and the local Factory (Spec code-central-66).
 	{Name: "submit_requirement", Audience: AgentAndHuman, Write: true},
+	{Name: "land", Audience: AgentAndHuman, Write: true},
 }
 
 // Operation looks an operation up by name.

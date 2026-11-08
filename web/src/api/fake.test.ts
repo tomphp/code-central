@@ -69,11 +69,12 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       });
       await addNeedsMe(fake, "failed", { id, failure: { headline: report.what_broke.split("\n")[0], reports: 1 } });
     },
-    finish: async (key, id, summary) => {
+    finish: async (key, id, summary, on) => {
       const t = await fake.getTicket(key, id);
       const at = fake.now.toISOString();
       fake.updateTicket(id, {
         ...claimAndStop(fake, t, "In Review", "finish"),
+        ...on,
         comments: [...t.comments, { number: t.comments.length + 1, actor: "agent", time: at, claim: 1, body: summary }],
       });
       await addNeedsMe(fake, "in_review", { id, summary: summary.split("\n")[0] });

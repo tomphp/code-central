@@ -1,11 +1,12 @@
 // The action panel slot: the first thing in the selected Ticket's pane,
 // shared by every view. Each panel lives in its own folder,
 // src/panels/<name>/panel.tsx, exporting `panel: PanelDef` naming the
-// Needs Me reasons it handles; the slot finds them all on its own, so
-// adding a panel edits no shared list. See the UI note.
+// Needs Me reasons it handles, and any States it handles whatever the
+// reason (Accepted); the slot finds them all on its own, so adding a
+// panel edits no shared list. See the UI note.
 import type { ComponentType } from "react";
 import type { Api } from "../api/api";
-import type { NeedsMeReason, TicketView } from "../api/types";
+import type { NeedsMeReason, State, TicketView } from "../api/types";
 
 export interface PanelProps {
   api: Api;
@@ -16,25 +17,32 @@ export interface PanelProps {
 
 export interface PanelDef {
   reasons: NeedsMeReason[];
+  // states are the States the panel shows for when no reason picks a panel.
+  states?: State[];
   Component: ComponentType<PanelProps>;
 }
 
 const modules = import.meta.glob<{ panel: PanelDef }>("./*/panel.tsx", { eager: true });
 
 const byReason = new Map<NeedsMeReason, PanelDef>();
+const byState = new Map<State, PanelDef>();
 for (const [path, m] of Object.entries(modules)) {
   for (const r of m.panel.reasons) {
     if (byReason.has(r)) throw new Error(`two action panels handle ${r}: ${path} and another`);
     byReason.set(r, m.panel);
   }
+  for (const s of m.panel.states ?? []) {
+    if (byState.has(s)) throw new Error(`two action panels handle ${s}: ${path} and another`);
+    byState.set(s, m.panel);
+  }
 }
 
-export function panelFor(reason: NeedsMeReason | undefined): PanelDef | undefined {
-  return reason ? byReason.get(reason) : undefined;
+export function panelFor(reason: NeedsMeReason | undefined, state?: State): PanelDef | undefined {
+  return (reason && byReason.get(reason)) || (state && byState.get(state)) || undefined;
 }
 
 export function ActionPanel(props: PanelProps) {
-  const def = panelFor(props.ticket.needs_me_reason);
+  const def = panelFor(props.ticket.needs_me_reason, props.ticket.state);
   return (
     <section aria-label="Action panel" className="action-slot">
       {/* Keyed on the Ticket and its State so a panel's local state (a

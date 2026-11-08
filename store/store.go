@@ -17,7 +17,7 @@ import (
 // State is a Ticket's single position in the workflow.
 type State string
 
-// The nine States of the one fixed workflow.
+// The ten States of the one fixed workflow.
 const (
 	Draft       State = "Draft"
 	Ready       State = "Ready"
@@ -26,14 +26,15 @@ const (
 	Answered    State = "Answered"
 	Failed      State = "Failed"
 	InReview    State = "In Review"
+	Accepted    State = "Accepted"
 	Done        State = "Done"
 	Cancelled   State = "Cancelled"
 )
 
 // States lists every State in workflow order.
-var States = []State{Draft, Ready, InProgress, NeedsAnswer, Answered, Failed, InReview, Done, Cancelled}
+var States = []State{Draft, Ready, InProgress, NeedsAnswer, Answered, Failed, InReview, Accepted, Done, Cancelled}
 
-// Valid reports whether s is one of the nine States.
+// Valid reports whether s is one of the ten States.
 func (s State) Valid() bool { return slices.Contains(States, s) }
 
 // Mode is a Project's mode: where init puts its files, committed to the
@@ -99,6 +100,8 @@ type Move struct {
 	Time  time.Time
 	Claim int // Claim number, 0 when none
 	Via   string
+	// Commit is the commit that put the work into the base, on a land.
+	Commit string
 }
 
 // Claim is one agent's hold on a Ticket, from the claim until a move out
@@ -180,8 +183,12 @@ type Ticket struct {
 	Created      time.Time
 	Updated      time.Time
 	Description  string
-	Claims       []Claim
-	Rounds       []Round
+	// Branch and Commit are what the last finish naming them gave: the
+	// work's branch and its head commit. Free-form, never parsed.
+	Branch string
+	Commit string
+	Claims []Claim
+	Rounds []Round
 	// FailureReports are numbered and never edited.
 	FailureReports []FailureReport
 	Comments       []Comment
