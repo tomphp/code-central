@@ -9,7 +9,7 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Stage Guides (code-central-73).
+// Stage Guides (ticket 73).
 
 func TestEachStageHasAGuide(t *testing.T) {
 	f := newFixture(t)

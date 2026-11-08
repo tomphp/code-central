@@ -7,7 +7,7 @@ import (
 	"github.com/tomoram/code-central/core"
 )
 
-// Stage Guides (code-central-73).
+// Stage Guides (ticket 73).
 func init() {
 	cases["get_stage_guide"] = opCase{
 		ok: call{

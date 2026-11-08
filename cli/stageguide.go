@@ -6,7 +6,7 @@ import (
 	"github.com/tomoram/code-central/core"
 )
 
-// Stage Guides (code-central-73).
+// Stage Guides (ticket 73).
 func init() {
 	commands["get-stage-guide"] = command{op: "get_stage_guide", usage: "get-stage-guide grilling|spec|tickets|implementation  print a Stage Guide", run: runStageGuide}
 }

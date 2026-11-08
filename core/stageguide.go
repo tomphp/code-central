@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// Stage Guides (Spec code-central-66, ADR 0007). Code Central owns what
+// Stage Guides (Spec 66, ADR 0007). Code Central owns what
 // each Stage must produce and how to finish it; a Factory owns how to run
 // the agent. The guides ship with the service, like the workflow prose,
 // and name only Code Central operations, so any agent on any door can

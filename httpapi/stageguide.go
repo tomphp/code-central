@@ -6,7 +6,7 @@ import (
 	"github.com/tomoram/code-central/core"
 )
 
-// Stage Guides (code-central-73). Like the workflow, a guide is the same
+// Stage Guides (ticket 73). Like the workflow, a guide is the same
 // for every Project, so its route takes no Project key.
 func init() {
 	Routes["get_stage_guide"] = "GET /api/stage-guides/{stage}"

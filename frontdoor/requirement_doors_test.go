@@ -8,7 +8,7 @@ import (
 	"github.com/tomoram/code-central/core"
 )
 
-// Submitting a Requirement (code-central-67).
+// Submitting a Requirement (ticket 67).
 func init() {
 	cases["submit_requirement"] = opCase{
 		ok: call{
@@ -73,7 +73,7 @@ func requirementBlock(t *testing.T, out map[string]any) {
 	}
 }
 
-// The requirement read and filter (code-central-68) are the same on
+// The requirement read and filter (ticket 68) are the same on
 // every door.
 func TestEveryDoorReadsARequirement(t *testing.T) {
 	srv := newServer(t, submittedRequirement)

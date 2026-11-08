@@ -101,7 +101,7 @@ var Operations = []Op{
 	{Name: "archive_project", Audience: HumanOnly, Write: true},
 	{Name: "unarchive_project", Audience: HumanOnly, Write: true},
 
-	// Requirements and the local Factory (Spec code-central-66).
+	// Requirements and the local Factory (Spec 66).
 	{Name: "submit_requirement", Audience: AgentAndHuman, Write: true},
 	{Name: "land", Audience: AgentAndHuman, Write: true},
 	{Name: "get_stage_guide", Audience: AgentAndHuman},

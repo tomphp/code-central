@@ -9,7 +9,7 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Requirements (Spec code-central-66, ADR 0007). A Requirement is a Spec
+// Requirements (Spec 66, ADR 0007). A Requirement is a Spec
 // with Stage Tickets: the human submits its text, and Code Central
 // creates the Spec and its three Stages in one staged write.
 
