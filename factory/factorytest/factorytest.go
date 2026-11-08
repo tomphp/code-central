@@ -273,6 +273,13 @@ func (h *Harness) Environ() []string {
 // RemoveClaude takes the fake claude off PATH.
 func (h *Harness) RemoveClaude() { must(h.t, os.Remove(filepath.Join(h.Bin, "claude"+exeSuffix))) }
 
+// ShimClaude puts a claude.cmd on PATH in place of the fake claude, as
+// installing claude with npm on Windows leaves.
+func (h *Harness) ShimClaude() {
+	h.RemoveClaude()
+	must(h.t, os.WriteFile(filepath.Join(h.Bin, "claude.cmd"), []byte("@echo off\r\nnode \"%~dp0\\node_modules\\@anthropic-ai\\claude-code\\cli.js\" %*\r\n"), 0o755))
+}
+
 // fakeGit is what the fake git reads from the data folder.
 type fakeGit struct {
 	// Version is the version it reports.

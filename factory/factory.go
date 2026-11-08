@@ -69,9 +69,11 @@ func (e Env) home() home.Lookup {
 // lookPath finds name on the environment's PATH.
 func (e Env) lookPath(name string) (string, bool) {
 	for _, d := range filepath.SplitList(e.getenv("PATH")) {
-		p := filepath.Join(d, name+exeSuffix)
-		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && executable(fi) {
-			return p, true
+		for _, ext := range e.pathExts() {
+			p := filepath.Join(d, name+ext)
+			if fi, err := os.Stat(p); err == nil && !fi.IsDir() && executable(fi) {
+				return p, true
+			}
 		}
 	}
 	return "", false
@@ -269,6 +271,9 @@ func start(e Env, o options) (*factory, error) {
 	}
 	if f.claude, ok = e.lookPath("claude"); !ok {
 		return nil, errors.New("claude isn't on PATH")
+	}
+	if err := nativeClaude(f.claude); err != nil {
+		return nil, err
 	}
 	f.worktrees = filepath.Join(filepath.Dir(top), filepath.Base(top)+".worktrees")
 	if err := writable(f.worktrees); err != nil {

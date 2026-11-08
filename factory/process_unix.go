@@ -10,11 +10,15 @@ import (
 	"syscall"
 )
 
-// exeSuffix ends the name of a program on PATH.
-const exeSuffix = ""
+// pathExts are the endings lookPath tries on a name: none, on Unix.
+func (Env) pathExts() []string { return []string{""} }
 
 // executable reports whether the file is a program, by its execute bits.
 func executable(fi os.FileInfo) bool { return fi.Mode()&0o111 != 0 }
+
+// nativeClaude refuses a claude that can't take the Factory's prompts:
+// any claude will do on Unix.
+func nativeClaude(string) error { return nil }
 
 // startInOwnGroup has cmd start a turn in its own process group, so the
 // terminal's Ctrl-C reaches only the Factory.

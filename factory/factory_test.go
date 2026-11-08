@@ -3,6 +3,7 @@ package factory_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -54,6 +55,19 @@ func TestTheFactoryRefusesToStartWithoutClaudeOnPath(t *testing.T) {
 	h := factorytest.New(t)
 	h.RemoveClaude()
 	refuses(t, h, h.Repo, "claude isn't on PATH")
+}
+
+func TestTheFactoryRefusesToStartWhenClaudeIsOnlyTheNpmCmdShim(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.ShimClaude()
+	if runtime.GOOS != "windows" {
+		// Only Windows runs a .cmd for the bare name claude.
+		refuses(t, h, h.Repo, "claude isn't on PATH")
+		return
+	}
+	refuses(t, h, h.Repo, "claude.cmd, the npm shim, can't carry a multi-line prompt")
+	refuses(t, h, h.Repo, "irm https://claude.ai/install.ps1 | iex")
 }
 
 func TestTheFactoryRefusesToStartWithGitOlderThan2_38(t *testing.T) {
