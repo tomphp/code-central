@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,15 +28,42 @@ func sessionID(e Env, flagValue string) string {
 	return e.Getenv(sessionEnv)
 }
 
+// resumeFlags are --working-dir and --resume-command, on claim and
+// set-session. A flag left off leaves the stored value alone.
+type resumeFlags struct {
+	fs                        *flag.FlagSet
+	workingDir, resumeCommand *string
+}
+
+func addResumeFlags(fs *flag.FlagSet) resumeFlags {
+	return resumeFlags{fs: fs, workingDir: fs.String("working-dir", "", ""), resumeCommand: fs.String("resume-command", "", "")}
+}
+
+// values are the flags given, nil for each left off. Call after parsing.
+func (r resumeFlags) values() (workingDir, resumeCommand *string) {
+	r.fs.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "working-dir":
+			workingDir = r.workingDir
+		case "resume-command":
+			resumeCommand = r.resumeCommand
+		}
+	})
+	return workingDir, resumeCommand
+}
+
 func runSetSession(ctx context.Context, e Env, args []string) error {
 	fs := flagSet("set-session")
 	claim := fs.String("claim", "", "")
 	session := fs.String("session", "", "")
+	resume := addResumeFlags(fs)
 	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.SetSession(ctx, sc.project, core.SetSessionInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session)})
+	in := core.SetSessionInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session)}
+	in.WorkingDir, in.ResumeCommand = resume.values()
+	v, err := sc.client.SetSession(ctx, sc.project, in)
 	if err != nil {
 		return err
 	}
@@ -48,6 +76,8 @@ const pingLimit = 300 * time.Millisecond
 // hookInput is the part of a Claude Code hook's stdin JSON we read.
 type hookInput struct {
 	SessionID string         `json:"session_id"`
+	Cwd       string         `json:"cwd"`
+	ToolName  string         `json:"tool_name"`
 	ToolInput map[string]any `json:"tool_input"`
 }
 
@@ -108,6 +138,11 @@ func runHook(_ context.Context, e Env, args []string) error {
 		input = map[string]any{}
 	}
 	input["session_id"] = in.SessionID
+	// claim also gets the session's working directory, unless the agent
+	// gave one. post_round takes none.
+	if _, given := input["working_dir"]; !given && in.Cwd != "" && strings.HasSuffix(in.ToolName, "__claim") {
+		input["working_dir"] = in.Cwd
+	}
 	// updatedInput replaces the whole tool input. No permissionDecision:
 	// the call goes through the normal permission flow.
 	out := map[string]any{"hookSpecificOutput": map[string]any{

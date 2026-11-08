@@ -55,7 +55,7 @@ export function FailedPanel({ api, project, ticket: t, now }: PanelProps) {
 
       <div className="investigate">
         <span className="small muted">Investigate in the session that reported it</span>
-        <ResumeCommand sessionId={latest?.session_id} />
+        <ResumeCommand sessionId={latest?.session_id} workingDir={latest?.working_dir} resumeCommand={latest?.resume_command} />
       </div>
       {earlier.length > 0 && (
         <details className="earlier">

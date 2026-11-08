@@ -69,6 +69,13 @@ describe("the Failed panel", () => {
     expect(within(panel).getByText("claude --resume sess-2")).toBeInTheDocument();
   });
 
+  it("shows the latest report's copy of the Resume Command and working directory", async () => {
+    const panel = await renderPanel(
+      world([report(1, { resume_command: "old" }), report(2, { working_dir: "/work/acme-1", resume_command: "agent resume sess-2" })]),
+    );
+    expect(within(panel).getByText("cd /work/acme-1 && agent resume sess-2")).toBeInTheDocument();
+  });
+
   it("says when the latest report has no session to resume", async () => {
     const panel = await renderPanel(world([report(1), report(2, { session_id: undefined })]));
     expect(within(panel).queryByText(/claude --resume/)).toBeNull();

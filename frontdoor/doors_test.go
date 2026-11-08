@@ -128,13 +128,17 @@ var cases = map[string]opCase{
 
 	"claim": {
 		ok: call{
-			mcp:  map[string]any{"session_id": "s1"},
-			http: httpCall{"POST", "/api/p/acme/claim", `{"session_id":"s1"}`},
-			cli:  []string{"--session", "s1"},
+			mcp:  map[string]any{"session_id": "s1", "working_dir": "/w/acme-3", "resume_command": "agent resume s1"},
+			http: httpCall{"POST", "/api/p/acme/claim", `{"session_id":"s1","working_dir":"/w/acme-3","resume_command":"agent resume s1"}`},
+			cli:  []string{"--session", "s1", "--working-dir", "/w/acme-3", "--resume-command", "agent resume s1"},
 		},
 		check: func(t *testing.T, out map[string]any) {
 			field("claim_id", "claim-1")(t, out)
-			field("id", "acme-3")(t, out["ticket"].(map[string]any))
+			tk := out["ticket"].(map[string]any)
+			field("id", "acme-3")(t, tk)
+			claim := tk["claims"].([]any)[0].(map[string]any)
+			field("working_dir", "/w/acme-3")(t, claim)
+			field("resume_command", "agent resume s1")(t, claim)
 		},
 		bad: call{
 			mcp:  map[string]any{"spec": 1, "ticket": 3},
