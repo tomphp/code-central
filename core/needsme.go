@@ -87,6 +87,27 @@ type NeedsMeRow struct {
 	// Link is the Ticket's Link, whatever the reason: the row's badge, and
 	// the external item when closed externally.
 	Link *LinkView `json:"link,omitempty"`
+	// Requirement is set when the Ticket's Spec is a Requirement.
+	Requirement *NeedsMeRequirement `json:"requirement,omitempty"`
+}
+
+// NeedsMeRequirement is the Requirement a Needs Me row's Ticket is on:
+// its Spec ID and title, and the Ticket's Stage, set only on a Stage
+// Ticket.
+type NeedsMeRequirement struct {
+	Spec  string `json:"spec"`
+	Title string `json:"title"`
+	Stage string `json:"stage,omitempty"`
+}
+
+// needsMeRequirement is the Requirement t is on, or nil when its Spec
+// isn't one.
+func needsMeRequirement(r store.Reader, key string, t store.Ticket) *NeedsMeRequirement {
+	if !slices.ContainsFunc(specTickets(r, key, t.Spec), func(st store.Ticket) bool { return stageOf(st) != "" }) {
+		return nil
+	}
+	sp, _ := r.Spec(key, t.Spec)
+	return &NeedsMeRequirement{Spec: DisplayID(key, t.Spec), Title: sp.Title, Stage: stageOf(t)}
 }
 
 // RoundSummary is a Round's number and how many of its Questions are open.
@@ -145,7 +166,7 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 	if reason == "" {
 		return NeedsMeRow{}, false
 	}
-	row := NeedsMeRow{Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link)}
+	row := NeedsMeRow{Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link), Requirement: needsMeRequirement(r, key, t)}
 	switch reason {
 	case ReasonNeedsAnswer:
 		if n := len(t.Rounds); n > 0 {
