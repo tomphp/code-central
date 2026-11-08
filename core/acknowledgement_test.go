@@ -128,11 +128,22 @@ func TestSpecWritesWithFullReturnTheSpec(t *testing.T) {
 			t.Fatalf("%s: %v", name, err)
 		}
 		out := resultJSON(t, v)
-		get, err := f.core.GetSpec(ctx, "acme", core.Ref(out["id"].(string)))
+		get, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: core.Ref(out["id"].(string))})
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if want := resultJSON(t, get.SpecView); !reflect.DeepEqual(out, want) {
+		// The full read starts with the Spec's fields; it leaves out an
+		// empty edits, which the Spec gives as [].
+		want := resultJSON(t, get)
+		for k := range want {
+			if _, ok := out[k]; !ok {
+				delete(want, k)
+			}
+		}
+		if _, ok := want["edits"]; !ok {
+			want["edits"] = []any{}
+		}
+		if !reflect.DeepEqual(out, want) {
 			t.Fatalf("%s with full: %v, want the Spec %v", name, out, want)
 		}
 	}
