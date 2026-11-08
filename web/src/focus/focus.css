@@ -33,3 +33,7 @@
    inside Focus Mode they are scaled up whole, so their type, spacing and
    buttons all read larger together. */
 .focus .panel { zoom: 1.3; }
+/* Skip sits under a Ticket's panel, in line with its scaled-up buttons. */
+.focus-skip { margin: 12px 0 0; }
+.focus-skip .btn, .focus-clear .btn { font-size: 17px; padding: 8px 18px; }
+.focus-clear .btn { margin-top: 20px; }

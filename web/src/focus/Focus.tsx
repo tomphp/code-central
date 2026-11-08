@@ -27,8 +27,11 @@ export interface FocusProps {
 export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
   const project = data?.projects.find((p) => p.key === loc.project);
   const [onScreen, setOnScreen] = useState<FocusItem>();
+  // skipped lives here for this visit only: leaving Focus Mode or
+  // reloading forgets it, and it's never sent or put in the URL.
+  const [skipped, setSkipped] = useState<FocusItem[]>([]);
   const ticket = useTicket(api, onScreen?.row.project, onScreen?.row.id, version);
-  const screen = data && focusQueue({ needsMe: data.needsMe, project: loc.project, onScreen, ticket: ticket.data });
+  const screen = data && focusQueue({ needsMe: data.needsMe, project: loc.project, onScreen, ticket: ticket.data, skipped });
   const item = screen?.item;
   // What's shown becomes what's on screen, so a later read keeps it there.
   useEffect(() => {
@@ -55,6 +58,13 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
           <h2>All clear</h2>
           <p>Nothing needs you.</p>
         </section>
+      ) : screen.onlySkipped ? (
+        <section aria-label="Only skipped items left" className="focus-clear">
+          <p>You skipped {screen.remaining}, go through them again?</p>
+          <button className="btn primary" onClick={() => setSkipped([])}>
+            Go through them again
+          </button>
+        </section>
       ) : item ? (
         <Item
           key={item.key}
@@ -65,6 +75,7 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
           ticket={ticket.data?.id === item.row.id ? ticket.data : undefined}
           loc={loc}
           navigate={navigate}
+          skip={() => setSkipped([...skipped, item])}
         />
       ) : (
         <p className="focus-loading">Loading…</p>
@@ -82,12 +93,14 @@ interface ItemProps {
   ticket?: TicketView;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
+  // skip sends the item to the back of the queue.
+  skip(): void;
 }
 
 // Item is one Focus Item, top to bottom: where it's from, why it waits,
 // then its Question with the answer form, or its reason's panel with the
-// panel's own buttons.
-function Item({ api, now, data, item: { row, question }, ticket, loc, navigate }: ItemProps) {
+// panel's own buttons, and Skip.
+function Item({ api, now, data, item: { row, question }, ticket, loc, navigate, skip }: ItemProps) {
   const project = data.projects.find((p) => p.key === row.project);
   const Panel = panelFor(row.reason, ticket?.state)?.Component;
   const waited = duration(now, row.since);
@@ -98,6 +111,11 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate }
     e.preventDefault();
     navigate(inbox);
   };
+  const skipButton = (
+    <button type="button" className="btn" onClick={skip}>
+      Skip
+    </button>
+  );
 
   return (
     <article aria-label="Focus Item" className={question ? "focus-item focus-item-question" : "focus-item"}>
@@ -130,12 +148,15 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate }
           <div className="focus-question-body">
             <Markdown>{question.q.body}</Markdown>
           </div>
-          <QuestionAnswer api={api} project={row.project} ticket={row.id} q={question.q} submitOnModEnter />
+          <QuestionAnswer api={api} project={row.project} ticket={row.id} q={question.q} submitOnModEnter>
+            {skipButton}
+          </QuestionAnswer>
         </section>
-      ) : ticket ? (
-        Panel && <Panel key={ticket.state} api={api} project={row.project} ticket={ticket} now={now} />
       ) : (
-        <p className="muted">Loading…</p>
+        <>
+          {ticket ? Panel && <Panel key={ticket.state} api={api} project={row.project} ticket={ticket} now={now} /> : <p className="muted">Loading…</p>}
+          <p className="focus-skip">{skipButton}</p>
+        </>
       )}
       <p className="focus-open">
         <a href={hrefFor(inbox)} onClick={open}>

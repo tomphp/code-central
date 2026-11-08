@@ -1,6 +1,6 @@
-// The focus queue: from Needs Me in scope, the Focus Item on screen and
-// its fetched Ticket, which Focus Item Focus Mode shows, how many are
-// left, and whether all is clear. No React; the Focus layout holds what's
+// The focus queue: from Needs Me in scope, the skip list, the Focus Item
+// on screen and its fetched Ticket, which Focus Item Focus Mode shows, how
+// many are left, and whether all is clear or only skipped items are left. No React; the Focus layout holds what's
 // on screen and feeds it back in.
 import type { NeedsMeRow, NeedsMeView, QuestionView, TicketView } from "../api/types";
 
@@ -38,29 +38,50 @@ export interface FocusInput {
   onScreen?: FocusItem;
   // ticket is the latest read of the on-screen item's Ticket, if any.
   ticket?: TicketView;
+  // skipped is the Focus Items the human skipped this visit, in skip
+  // order.
+  skipped: FocusItem[];
 }
 
 export interface FocusScreen {
-  // item is the Focus Item to show; none only while all is clear.
+  // item is the Focus Item to show; none while all is clear or only
+  // skipped items are left.
   item?: FocusItem;
   // remaining is every Focus Item in scope, the one on screen included,
   // with each Round's open Questions counted one each.
   remaining: number;
   // clear is true only when nothing in scope needs the human.
   clear: boolean;
+  // onlySkipped is true when everything left in scope was skipped.
+  onlySkipped: boolean;
 }
 
-export function focusQueue({ needsMe, project, onScreen, ticket }: FocusInput): FocusScreen {
+export function focusQueue({ needsMe, project, onScreen, ticket, skipped }: FocusInput): FocusScreen {
   // Needs Me's own order, Stage Tickets as themselves, unlike the Inbox.
   const rows = needsMe.groups.flatMap((g) => g.tickets).filter((r) => !project || r.project === project);
   const items = rows.flatMap((row) => itemsOf(row, ticket));
-  // The item on screen stays put while it's still in the queue: nothing
-  // arriving, however urgent, replaces it. Once it's gone, its Round's
-  // next open Question comes before anything else.
+  // Skipped items go to the back, after every unskipped one. They come
+  // back only when the human goes through them again, which clears the
+  // skip list and starts from the front, so their own order never shows.
+  const unskipped = items.filter((i) => !isSkipped(i, skipped));
+  // The item on screen stays put while it's still in the queue and not
+  // skipped: nothing arriving, however urgent, replaces it. Once it's gone,
+  // its Round's next open, unskipped Question comes before anything else.
   const item =
-    items.find((i) => i.key === onScreen?.key) ?? (onScreen?.roundKey ? items.find((i) => i.roundKey === onScreen.roundKey) : undefined) ?? items[0];
+    unskipped.find((i) => i.key === onScreen?.key) ??
+    (onScreen?.roundKey ? unskipped.find((i) => i.roundKey === onScreen.roundKey) : undefined) ??
+    unskipped[0];
   const remaining = rows.reduce((n, r) => n + (r.reason === "needs_answer" ? (r.round?.open ?? 1) : 1), 0);
-  return { item, remaining, clear: rows.length === 0 };
+  return { item, remaining, clear: rows.length === 0, onlySkipped: !item && items.length > 0 };
+}
+
+// isSkipped is whether the human skipped the item. Skipping a Round's
+// Focus Item before its Ticket was read skips the whole Round. A Round not
+// on screen is one unread Focus Item, skipped once any of its Questions
+// was: Focus Mode only leaves a Round with open Questions when it skipped
+// them all.
+function isSkipped(item: FocusItem, skipped: FocusItem[]): boolean {
+  return skipped.some((s) => s.key === item.key || (!!item.roundKey && (s.key === item.roundKey || (!item.question && s.roundKey === item.roundKey))));
 }
 
 function itemsOf(row: NeedsMeRow, ticket?: TicketView): FocusItem[] {
