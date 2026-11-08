@@ -3,7 +3,6 @@ package factory
 import (
 	"context"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
@@ -36,33 +35,6 @@ func (f *factory) stageGuide(ctx context.Context, fromClaim *core.StageGuideView
 		return core.StageGuideView{Stage: stage}
 	}
 	return g
-}
-
-// stageWorktree gives Stage Ticket id its worktree at wt: detached at the
-// base's tip, added when it isn't there and moved to the current tip when
-// it is.
-// A dirty one is left as it is, as a failure: the Stage wrote files it
-// shouldn't have.
-func (f *factory) stageWorktree(id, wt string) error {
-	if _, err := os.Stat(wt); err != nil {
-		_, err := f.gitOut(f.repo, "worktree", "add", "-q", "--detach", wt, f.base)
-		return err
-	}
-	status, err := f.gitOut(wt, "status", "--porcelain", "--untracked-files=all")
-	if err != nil {
-		return err
-	}
-	if status != "" {
-		head, _ := f.gitOut(wt, "rev-parse", "--short", "HEAD")
-		return &failure{core.ReportFailureInput{
-			WhatBroke:       fmt.Sprintf("The Stage's worktree is dirty, so the Factory can't start the Stage. Changed files:\n\n%s", status),
-			Why:             fmt.Sprintf("A Stage writes nothing to the repository, but %s has uncommitted changes, most likely written by an earlier Claim's session. The Factory moves a Stage's worktree to %s's tip at each new Claim only when it is clean.", wt, f.base),
-			WhatToFix:       fmt.Sprintf("Look at the changes in %s and keep anything worth keeping elsewhere (a Stage's output belongs in Code Central). Then clean the worktree and send the Ticket back.", wt),
-			WhereWorkStands: fmt.Sprintf("No session ran under this Claim. The worktree %s is detached at %s, with the changes above left as they were.", wt, head),
-		}}
-	}
-	_, err = f.gitOut(wt, "checkout", "-q", "--detach", f.base)
-	return err
 }
 
 // failure is a reason to stop a Claim with a Failure Report.
