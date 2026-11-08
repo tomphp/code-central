@@ -79,6 +79,7 @@ type options struct {
 	model    string
 	base     string
 	project  string
+	verbose  bool
 }
 
 func parseFlags(args []string, stderr io.Writer) (options, error) {
@@ -90,6 +91,7 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.BoolVar(&o.bypass, "bypass-permissions", false, "run every session in bypassPermissions mode")
 	fs.StringVar(&o.model, "model", "", "the model passed to every start and resume")
 	fs.StringVar(&o.base, "base", "", "the branch work starts from (default: the branch checked out)")
+	fs.BoolVar(&o.verbose, "verbose", false, "print a line for each tool call the agents make")
 	fs.StringVar(&o.project, "project", "", "Project Key (default $CODE_CENTRAL_PROJECT, else the nearest .mcp.json)")
 	if err := fs.Parse(args); err != nil {
 		return o, err
@@ -181,10 +183,11 @@ type factory struct {
 	lock      *os.File // held for the Factory's whole life
 
 	outMu     sync.Mutex
-	mu        sync.Mutex       // guards turns and ended
-	turns     map[string]*turn // running turns by Claim ID
-	ended     map[string]bool  // Claim IDs never to be written with again
-	warned    map[string]bool  // dirty finished worktrees already warned of; the poll's own
+	mu        sync.Mutex           // guards turns, ended and info
+	turns     map[string]*turn     // running turns by Claim ID
+	ended     map[string]bool      // Claim IDs never to be written with again
+	info      map[string]claimInfo // what the lines say of each held Claim, by Claim ID
+	warned    map[string]bool      // dirty finished worktrees already warned of; the poll's own
 	turnsDone sync.WaitGroup
 
 	// warnedMerged is "<ticket>@<commit>" of Tickets merged in a State
@@ -212,7 +215,7 @@ type factory struct {
 
 // start makes every start-up check, refusing with the reason.
 func start(e Env, o options) (*factory, error) {
-	f := &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}}
+	f := &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}}
 	git, ok := e.lookPath("git")
 	if !ok {
 		return nil, errors.New("git isn't on PATH")

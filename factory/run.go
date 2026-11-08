@@ -173,7 +173,7 @@ func (f *factory) reconcile(ctx context.Context) []claim {
 		tk, err := f.client.GetTicket(ctx, f.project, core.Ref(c.Ticket))
 		if err != nil {
 			if ctx.Err() == nil {
-				f.printf("%s: get_ticket: %v", c.Ticket, err)
+				f.claimf(c, "%s: get_ticket: %v", c.Ticket, err)
 			}
 			continue
 		}
@@ -181,6 +181,7 @@ func (f *factory) reconcile(ctx context.Context) []claim {
 			f.endClaim(c, by)
 			continue
 		}
+		f.noteTicket(c, tk)
 		if tk.State == store.Answered && f.turnFor(c.ClaimID) == nil {
 			answered = append(answered, c)
 		}
@@ -205,18 +206,32 @@ func claimEnded(tk core.TicketView, c claim) (bool, string) {
 var endsItsOwnTurn = map[string]bool{"finish": true, "give_up": true, "report_failure": true}
 
 // endClaim stops c's turn, unless the session ended the Claim itself,
-// and drops c for good.
+// and drops c for good, with what the lines say of it.
 func (f *factory) endClaim(c claim, by string) {
 	f.mu.Lock()
 	f.ended[c.ClaimID] = true
 	f.mu.Unlock()
 	f.dropCutOff(c.ClaimID)
-	if t := f.turnFor(c.ClaimID); t != nil && !endsItsOwnTurn[by] {
-		f.printf("%s: Claim %s ended (%s): stopping its turn", c.Ticket, c.ClaimID, by)
+	t := f.turnFor(c.ClaimID)
+	if t != nil && !endsItsOwnTurn[by] {
+		f.claimf(c, "%s: Claim %s ended (%s): stopping its turn", c.Ticket, c.ClaimID, by)
 		f.stopTurn(t)
 	}
 	if err := f.dropClaim(c.ClaimID); err != nil {
-		f.printf("%s: can't write the state file: %v", c.Ticket, err)
+		f.claimf(c, "%s: can't write the state file: %v", c.Ticket, err)
+	}
+	if t == nil {
+		f.forgetEnded(c)
+	}
+}
+
+// forgetEnded drops what the lines say of c once it has ended. A
+// running turn's own end forgets it, after its turn ended line.
+func (f *factory) forgetEnded(c claim) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.ended[c.ClaimID] {
+		delete(f.info, c.ClaimID)
 	}
 }
 
@@ -291,13 +306,15 @@ func (f *factory) claimNext(ctx context.Context) bool {
 	stage := core.GuideStage(res.Ticket.Labels)
 	guide := f.stageGuide(ctx, res.StageGuide, stage)
 	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}}
+	f.noteTicket(c, *res.Ticket)
 	if err := f.addClaim(c); err != nil {
-		f.printf("%s: can't write the state file: %v", id, err)
+		f.claimf(c, "%s: can't write the state file: %v", id, err)
 	}
 	wt := f.worktree(id)
 	if _, err := f.client.SetSession(ctx, f.project, core.SetSessionInput{Ticket: core.Ref(id), ClaimID: res.ClaimID, SessionID: session, WorkingDir: &wt, ResumeCommand: &resume}); err != nil {
-		f.printf("%s: set_session: %v", id, err)
+		f.claimf(c, "%s: set_session: %v", id, err)
 	}
+	f.claimed(c, *res.Ticket, wt)
 	setUp := f.implementationWorktree
 	if stage != core.ImplementationStage {
 		setUp = f.stageWorktree
@@ -322,17 +339,17 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 		return
 	}
 	if pid, ok := f.sessionHolder(c.SessionID); ok {
-		f.printf("%s: session %s is held by pid %d: waiting a poll before resuming", c.Ticket, c.SessionID, pid)
+		f.claimf(c, "%s: session %s is held by pid %d: waiting a poll before resuming", c.Ticket, c.SessionID, pid)
 		return
 	}
 	res, err := f.client.PickUpAnswers(ctx, f.project, core.PickUpAnswersInput{Ticket: core.Ref(c.Ticket), ClaimID: c.ClaimID})
 	if err != nil {
 		if ctx.Err() == nil {
-			f.printf("%s: pick_up_answers: %v", c.Ticket, err)
+			f.claimf(c, "%s: pick_up_answers: %v", c.Ticket, err)
 		}
 		return
 	}
-	f.printf("%s: resuming with the answers to Round %d", c.Ticket, res.Round.Number)
+	f.claimf(c, "%s resumed %s with the answers to Round %d", c.Ticket, f.about(c), res.Round.Number)
 	c, decided := f.takeDenialAnswers(c, res)
 	prompt := answeredPrompt(c, res)
 	if decided != "" {
@@ -469,7 +486,7 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, args []str
 		err = cmd.Start()
 	}
 	if err != nil {
-		f.printf("%s: can't start claude: %v", c.Ticket, err)
+		f.claimf(c, "%s: can't start claude: %v", c.Ticket, err)
 		return
 	}
 	t := &turn{claim: c, dir: dir, proc: cmd.Process, started: time.Now(), done: make(chan struct{})}
@@ -479,21 +496,30 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, args []str
 	f.turnsDone.Add(1)
 	go func() {
 		defer f.turnsDone.Done()
-		end := readTurn(cmd, stdout)
+		var onToolCall func(string, json.RawMessage)
+		if f.o.verbose {
+			onToolCall = func(tool string, input json.RawMessage) {
+				f.claimf(c, "%s: %s", c.Ticket, toolCall(tool, input, dir))
+			}
+		}
+		end := readTurn(cmd, stdout, onToolCall)
+		ran := time.Since(t.started)
 		// The turn keeps its slot until its outcome is acted on, and
 		// "turn ended" is printed once the slot is free.
-		f.afterTurn(ctx, t, end)
+		state := f.afterTurn(ctx, t, end)
 		f.mu.Lock()
 		delete(f.turns, c.ClaimID)
 		f.mu.Unlock()
-		f.printf("%s: turn ended: %s", c.Ticket, end)
+		f.turnEnded(t, end, state, ran)
+		f.forgetEnded(c)
 		close(t.done)
 	}()
 }
 
 // readTurn reads a started turn's stream-json to its end and waits for
-// it, giving how it ended.
-func readTurn(cmd *exec.Cmd, stdout io.Reader) turnEnd {
+// it, giving how it ended. onToolCall, when set, is called with each tool
+// call the agent makes, in order.
+func readTurn(cmd *exec.Cmd, stdout io.Reader, onToolCall func(tool string, input json.RawMessage)) turnEnd {
 	var end turnEnd
 	var retryErr string
 	sc := bufio.NewScanner(stdout)
@@ -506,8 +532,10 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader) turnEnd {
 			Error   string `json:"error"`
 			Message struct {
 				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
+					Type  string          `json:"type"`
+					Text  string          `json:"text"`
+					Name  string          `json:"name"`
+					Input json.RawMessage `json:"input"`
 				} `json:"content"`
 			} `json:"message"`
 		}
@@ -526,6 +554,9 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader) turnEnd {
 			for _, c := range msg.Message.Content {
 				if c.Type == "text" && strings.TrimSpace(c.Text) != "" {
 					end.LastText = c.Text
+				}
+				if c.Type == "tool_use" && onToolCall != nil {
+					onToolCall(c.Name, c.Input)
 				}
 			}
 		case "result":

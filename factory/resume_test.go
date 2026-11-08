@@ -17,7 +17,7 @@ func answeredTicket(t *testing.T, h *factorytest.Harness, args ...string) (strin
 	h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 	r := h.Start(args...)
 	h.WaitForState(id, store.NeedsAnswer)
-	r.WaitForOutput(id + ": turn ended")
+	r.WaitForOutput(id + " turn ended")
 	h.Script(id, factorytest.Finish("Painted it blue."), factorytest.Result("success"))
 	h.Answer(id, "Blue")
 	return id, h.Calls()[0], r
@@ -79,7 +79,7 @@ func TestWhenASlotFreesAnAnsweredResumeGoesBeforeANewClaim(t *testing.T) {
 
 	r := h.Start("--parallel", "1")
 	h.WaitForState(asks, store.NeedsAnswer)
-	r.WaitForOutput(asks + ": turn ended")
+	r.WaitForOutput(asks + " turn ended")
 	r.Poll()
 	h.WaitFor(busy+"'s turn", func() bool { return len(callsFor(h, busy)) == 1 })
 
@@ -93,7 +93,7 @@ func TestWhenASlotFreesAnAnsweredResumeGoesBeforeANewClaim(t *testing.T) {
 
 	h.Continue(busy)
 	h.WaitForState(busy, store.InReview)
-	r.WaitForOutput(busy + ": turn ended")
+	r.WaitForOutput(busy + " turn ended")
 	r.Poll()
 	h.WaitFor(asks+"'s resume", func() bool { return len(callsFor(h, asks)) == 2 })
 	if s := h.Ticket(waiting).State; s != store.Ready {

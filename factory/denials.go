@@ -73,8 +73,9 @@ func distinct(ds []denial) []denial {
 }
 
 // postDenials posts a Round asking the human about each distinct call
-// t's turn had denied, and saves it so the answers can be read.
-func (f *factory) postDenials(ctx context.Context, t *turn, ds []denial) {
+// t's turn had denied, and saves it so the answers can be read. It
+// reports whether it posted the Round.
+func (f *factory) postDenials(ctx context.Context, t *turn, ds []denial) bool {
 	c := t.claim
 	ds = distinct(ds)
 	var qs []core.QuestionInput
@@ -91,13 +92,14 @@ func (f *factory) postDenials(ctx context.Context, t *turn, ds []denial) {
 	}
 	res, err := f.client.PostRound(ctx, f.project, core.PostRoundInput{Ticket: core.Ref(c.Ticket), ClaimID: c.ClaimID, SessionID: c.SessionID, Questions: qs})
 	if err != nil {
-		f.printf("%s: post_round: %v", c.Ticket, err)
-		return
+		f.claimf(c, "%s: post_round: %v", c.Ticket, err)
+		return false
 	}
 	if err := f.updateClaim(c.ClaimID, func(c *claim) { c.Denials = &denialRound{Round: res.Round, Patterns: patterns} }); err != nil {
-		f.printf("%s: can't write the state file: %v", c.Ticket, err)
+		f.claimf(c, "%s: can't write the state file: %v", c.Ticket, err)
 	}
-	f.printf("%s: the turn stopped on %d denied call(s): posted Round %d", c.Ticket, len(ds), res.Round)
+	f.claimf(c, "%s: the turn stopped on %d denied call(s): posted Round %d", c.Ticket, len(ds), res.Round)
+	return true
 }
 
 // commentDenials lists on the Ticket the distinct calls t's turn had
@@ -110,7 +112,7 @@ func (f *factory) commentDenials(ctx context.Context, t *turn, ds []denial) {
 		fmt.Fprintf(&b, "\n- `%s`", d.pattern())
 	}
 	if _, err := f.client.Comment(ctx, f.project, core.CommentInput{Ticket: core.Ref(c.Ticket), Body: b.String()}); err != nil {
-		f.printf("%s: comment: %v", c.Ticket, err)
+		f.claimf(c, "%s: comment: %v", c.Ticket, err)
 	}
 }
 
@@ -162,7 +164,7 @@ func (f *factory) takeDenialAnswers(c claim, res core.PickUpAnswersResult) (clai
 		c.AllowedTools = slices.Clone(held.AllowedTools)
 	})
 	if err != nil {
-		f.printf("%s: can't write the state file: %v", c.Ticket, err)
+		f.claimf(c, "%s: can't write the state file: %v", c.Ticket, err)
 	}
 	return c, b.String()
 }
