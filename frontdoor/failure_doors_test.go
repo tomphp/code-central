@@ -20,6 +20,11 @@ func failedTicket(t *testing.T, srv *codecentraltest.Server) {
 	})
 }
 
+func TestTheHumanSendsAFailedTicketBackOverHTTP(t *testing.T) {
+	srv := newServer(t, failedTicket)
+	field("state", "Ready")(t, httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/3/send_back", `{}`}))
+}
+
 // Failure Reports and giving up (ticket 30).
 func init() {
 	for name, c := range map[string]opCase{
@@ -65,16 +70,28 @@ func init() {
 			},
 			code: core.StaleClaim,
 		},
+		// send_back as the agent sends Accepted work back on a conflict
+		// (ticket 72); the human's send_back from Failed is tested below.
 		"send_back": {
-			setup: failedTicket,
-			ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/3/send_back", `{"note":"Fixed the migration."}`}},
+			setup: acceptedTicket,
+			ok: call{
+				mcp:  map[string]any{"ticket": "acme-3", "note": "Conflicts with main at 9f8e7d in core/claim.go."},
+				http: httpCall{"POST", "/api/p/acme/tickets/3/send_back", `{"note":"Conflicts with main at 9f8e7d in core/claim.go."}`},
+				cli:  []string{"acme-3", "--note", "Conflicts with main at 9f8e7d in core/claim.go."},
+			},
 			check: func(t *testing.T, out map[string]any) {
 				field("state", "Ready")(t, out)
-				if cs, _ := out["comments"].([]any); len(cs) != 1 {
-					t.Fatalf("comments %v", out["comments"])
+				cs, _ := out["comments"].([]any)
+				if len(cs) != 2 || cs[1].(map[string]any)["body"] != "Conflicts with main at 9f8e7d in core/claim.go." {
+					t.Fatalf("comments %v, want the finish summary then the note", out["comments"])
 				}
 			},
-			bad:  call{http: httpCall{"POST", "/api/p/acme/tickets/2/send_back", `{}`}},
+			// acme-3 is Ready by now; acme-2 is Draft.
+			bad: call{
+				mcp:  map[string]any{"ticket": "acme-2", "note": "N"},
+				http: httpCall{"POST", "/api/p/acme/tickets/2/send_back", `{"note":"N"}`},
+				cli:  []string{"acme-2", "--note", "N"},
+			},
 			code: core.ActionNotAllowed,
 		},
 		"to_draft": {

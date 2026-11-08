@@ -9,7 +9,7 @@ The `states` and `actions` above are the rules Code Central enforces; anything t
 
 ## Accepted work lands
 
-Accepting a Ticket whose finish named a `branch` moves it to Accepted: the human has accepted the work and it waits to land in the base. Any other Ticket goes straight to Done. Whoever merges the branch into the base then calls `land` with the commit that put the work there, which moves the Ticket to Done; `land` also works from In Review, for work merged before it was accepted. Only Done clears a Blocker, so a Ticket blocked by Accepted work waits until it lands.
+Accepting a Ticket whose finish named a `branch` moves it to Accepted: the human has accepted the work and it waits to land in the base. Any other Ticket goes straight to Done. Whoever merges the branch into the base then calls `land` with the commit that put the work there, which moves the Ticket to Done; `land` also works from In Review, for work merged before it was accepted. Only Done clears a Blocker, so a Ticket blocked by Accepted work waits until it lands. If the merge conflicts, `send_back` the Ticket to Ready with a note naming the base commit and the conflicting files, for another agent to resolve. A Ticket Accepted for more than 10 minutes shows the human `accepted_not_landed`.
 
 Every write's response may carry a `next_step`. Do what it says, when it says.
 

@@ -59,4 +59,4 @@ export function AcceptedPanel({ api, project, ticket: t }: PanelProps) {
   );
 }
 
-export const panel: PanelDef = { reasons: [], states: ["Accepted"], Component: AcceptedPanel };
+export const panel: PanelDef = { reasons: ["accepted_not_landed"], states: ["Accepted"], Component: AcceptedPanel };

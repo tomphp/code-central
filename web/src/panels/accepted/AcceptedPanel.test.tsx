@@ -73,4 +73,18 @@ describe("the Accepted panel", () => {
     const nav = screen.getByRole("navigation", { name: "Filters" });
     expect(await within(nav).findByRole("button", { name: "Accepted 1" })).toBeInTheDocument();
   });
+
+  it("shows Accepted but not landed in Needs Me, with how long since the accept, and this panel", async () => {
+    window.history.replaceState(null, "", "/?view=inbox&ticket=acme-1");
+    const fake = world();
+    fake.setNeedsMe([
+      { reason: "accepted_not_landed", tickets: [{ id: "acme-1", since: new Date(fake.now.getTime() - 25 * 60_000).toISOString() }] },
+    ]);
+    render(<App api={fake} now={() => fake.now} />);
+    const list = screen.getByRole("main", { name: "Tickets" });
+    expect(await within(list).findByRole("link", { name: /acme-1/ })).toHaveTextContent("Accepted 25m ago, not landed");
+    expect(within(list).getByRole("heading", { level: 3 })).toHaveTextContent("Accepted but not landed");
+    const pane = screen.getByRole("complementary", { name: "Ticket" });
+    expect(await within(pane).findByRole("region", { name: "Accepted" })).toBeInTheDocument();
+  });
 });

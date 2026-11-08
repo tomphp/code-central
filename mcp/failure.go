@@ -33,4 +33,15 @@ func init() {
 			return c.GiveUp(ctx, key, in)
 		}),
 	}
+	// Sending back Accepted work that can't land (ticket 72).
+	tools["send_back"] = tool{
+		description: "Send an Accepted Ticket back to Ready when its branch can't land, such as on a merge conflict, with a note naming the base commit and the conflicting files.",
+		schema: object(map[string]any{
+			"ticket": ref("The Ticket."),
+			"note":   text("Why it can't land: the base commit and the conflicting files, in Markdown."),
+		}, "ticket", "note"),
+		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.SendBackInput) (any, error) {
+			return c.SendBack(ctx, key, in)
+		}),
+	}
 }

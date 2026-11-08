@@ -20,7 +20,8 @@ func (c *Client) GiveUp(ctx context.Context, key string, in core.GiveUpInput) (c
 	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "give_up"), in, &out)
 }
 
-// SendBack is the human's send_back; set Actor to human.
+// SendBack is send_back: the agent's from Accepted, or, with Actor set to
+// human, the human's from Failed.
 func (c *Client) SendBack(ctx context.Context, key string, in core.SendBackInput) (core.TicketView, error) {
 	var out core.TicketView
 	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "send_back"), in, &out)
