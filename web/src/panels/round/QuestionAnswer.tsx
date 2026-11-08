@@ -2,8 +2,8 @@
 // Question's rules live in one place: the answer box, starting as the
 // saved answer, else the recommendation as an unsaved draft (labelled as
 // such), then Answer and Dismiss, which send answer and dismiss_question
-// for that one Question, and the refusal alert. The caller wraps it with
-// the Question's title and body.
+// for that one Question, any further buttons the caller adds, and the
+// refusal alert. The caller wraps it with the Question's title and body.
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Api } from "../../api/api";
 import "../../api/actions/rounds";

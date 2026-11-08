@@ -59,7 +59,7 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
           <p>Nothing needs you.</p>
         </section>
       ) : screen.onlySkipped ? (
-        <section aria-label="Only skipped items left" className="focus-clear">
+        <section aria-label="Only skipped Focus Items left" className="focus-clear">
           <p>You skipped {screen.remaining}, go through them again?</p>
           <button className="btn primary" onClick={() => setSkipped([])}>
             Go through them again
@@ -155,7 +155,9 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate, 
       ) : (
         <>
           {ticket ? Panel && <Panel key={ticket.state} api={api} project={row.project} ticket={ticket} now={now} /> : <p className="muted">Loading…</p>}
-          <p className="focus-skip">{skipButton}</p>
+          {/* Skip waits for the read, so a Round is never skipped whole
+              before its Questions are known. */}
+          {ticket && <p className="focus-skip">{skipButton}</p>}
         </>
       )}
       <p className="focus-open">

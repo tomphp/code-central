@@ -50,7 +50,14 @@ function renderApp(fake: FakeApi, url = "/?view=focus") {
 
 const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 const heading = (name: string) => within(focus()).findByRole("heading", { name });
-const skip = () => userEvent.click(within(focus()).getByRole("button", { name: "Skip" }));
+// skip waits for Skip, which shows once the Focus Item has loaded.
+const skip = async () => userEvent.click(await within(focus()).findByRole("button", { name: "Skip" }));
+// change reseeds Needs Me and sends the notice the service would.
+function change(fake: FakeApi, groups: Parameters<FakeApi["setNeedsMe"]>[0], id: string) {
+  fake.setNeedsMe(groups);
+  act(() => fake.emit({ type: "ticket.changed", project: id.split("-")[0], id }));
+}
+
 const actions = (fake: FakeApi) => fake.calls.filter((c) => !["listProjects", "needsMe", "findTickets", "findSpecs", "getSpec", "getTicket"].includes(c));
 
 describe("Skip", () => {
@@ -98,8 +105,7 @@ describe("Skip", () => {
     await skip();
     await heading("Login page");
     const t = fake.addTicket("acme", { title: "Quiet session", state: "In Progress" }); // acme-4
-    fake.setNeedsMe([...fake.needsMeGroups, { reason: "silent_claim", tickets: [{ id: t.id }] }]);
-    act(() => fake.emit({ type: "ticket.changed", project: "acme", id: t.id }));
+    change(fake, [...fake.needsMeGroups, { reason: "silent_claim", tickets: [{ id: t.id }] }], t.id);
     await skip();
 
     expect(await heading("Quiet session")).toBeInTheDocument();
@@ -167,8 +173,7 @@ describe("only skipped items left", () => {
     await skip();
     await within(focus()).findByText("You skipped 2, go through them again?");
     const t = fake.addTicket("acme", { title: "Quiet session", state: "In Progress" }); // acme-4
-    fake.setNeedsMe([...fake.needsMeGroups, { reason: "silent_claim", tickets: [{ id: t.id }] }]);
-    act(() => fake.emit({ type: "ticket.changed", project: "acme", id: t.id }));
+    change(fake, [...fake.needsMeGroups, { reason: "silent_claim", tickets: [{ id: t.id }] }], t.id);
 
     expect(await heading("Quiet session")).toBeInTheDocument();
   });
@@ -181,8 +186,7 @@ describe("only skipped items left", () => {
     await heading("Login page");
     await skip();
     await within(focus()).findByText("You skipped 2, go through them again?");
-    fake.setNeedsMe([]);
-    act(() => fake.emit({ type: "ticket.changed", project: "acme", id: "acme-2" }));
+    change(fake, [], "acme-2");
 
     expect(await within(focus()).findByText("All clear")).toBeInTheDocument();
   });

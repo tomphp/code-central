@@ -1,6 +1,7 @@
 // The focus queue: from Needs Me in scope, the skip list, the Focus Item
-// on screen and its fetched Ticket, which Focus Item Focus Mode shows, how
-// many are left, and whether all is clear or only skipped items are left. No React; the Focus layout holds what's
+// on screen and its fetched Ticket, which Focus Item Focus Mode shows,
+// how many are left, and whether all is clear or only skipped Focus Items
+// are left. No React; the Focus layout holds what's
 // on screen and feeds it back in.
 import type { NeedsMeRow, NeedsMeView, QuestionView, TicketView } from "../api/types";
 
@@ -75,13 +76,12 @@ export function focusQueue({ needsMe, project, onScreen, ticket, skipped }: Focu
   return { item, remaining, clear: rows.length === 0, onlySkipped: !item && items.length > 0 };
 }
 
-// isSkipped is whether the human skipped the item. Skipping a Round's
-// Focus Item before its Ticket was read skips the whole Round. A Round not
-// on screen is one unread Focus Item, skipped once any of its Questions
-// was: Focus Mode only leaves a Round with open Questions when it skipped
-// them all.
+// isSkipped is whether the human skipped the item. A Round not on screen
+// is one unread Focus Item, skipped once any of its Questions was: Focus
+// Mode only leaves a Round with open Questions when it skipped them all.
 function isSkipped(item: FocusItem, skipped: FocusItem[]): boolean {
-  return skipped.some((s) => s.key === item.key || (!!item.roundKey && (s.key === item.roundKey || (!item.question && s.roundKey === item.roundKey))));
+  const unreadRound = item.roundKey !== undefined && !item.question;
+  return skipped.some((s) => s.key === item.key || (unreadRound && s.roundKey === item.roundKey));
 }
 
 function itemsOf(row: NeedsMeRow, ticket?: TicketView): FocusItem[] {
