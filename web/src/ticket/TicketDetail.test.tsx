@@ -35,6 +35,9 @@ function seeded() {
   return { fake, t };
 }
 
+// claimLine is a Claim row's own line, without its Live section.
+const claimLine = (row: HTMLElement) => row.querySelector(".claim-line")!;
+
 function renderDetail(fake: FakeApi, t: TicketView) {
   render(<TicketDetail api={fake} project="acme" ticket={t} now={fake.now} />);
   return screen.getByRole("article", { name: "Ticket details" });
@@ -63,7 +66,7 @@ describe("the Ticket detail", () => {
   it("shows nothing more on a Claim row with no Session Events", () => {
     const { fake, t } = seeded();
     const rows = within(within(renderDetail(fake, t)).getByRole("list", { name: "Claims" })).getAllByRole("listitem");
-    expect(rows.map((r) => r.textContent)).toEqual([
+    expect(rows.map((r) => claimLine(r).textContent)).toEqual([
       "Claim 2 · started 1h ago · last activity 2m ago · session s-new",
       "Claim 1 · started 5h ago · last activity 4h ago · ended by release 4h ago · session s-old",
     ]);
@@ -76,7 +79,7 @@ describe("the Ticket detail", () => {
       { time: at(fake, 3), kind: "tool_result", tool_use_id: "tu-1", text: "ok" },
     ]);
     const rows = within(within(renderDetail(fake, await fake.getTicket("acme", t.id))).getByRole("list", { name: "Claims" })).getAllByRole("listitem");
-    expect(rows[0]).toHaveTextContent(/^Claim 2 · started 1h ago · last activity just now · Bash result · 3m ago · session s-new$/);
+    expect(claimLine(rows[0])).toHaveTextContent(/^Claim 2 · started 1h ago · last activity just now · Bash result · 3m ago · session s-new$/);
     expect(within(rows[0]).getByText("Bash result · 3m ago")).toHaveClass("latest-event");
     expect(rows[1]).not.toHaveTextContent("Bash");
   });
