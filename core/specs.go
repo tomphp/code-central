@@ -21,6 +21,8 @@ type SpecDetail struct {
 	StateSummary StateSummary `json:"state_summary"`
 	Finished     bool         `json:"finished"`
 	Tickets      []TicketRow  `json:"tickets"`
+	// Requirement is set only when the Spec is a Requirement.
+	Requirement *RequirementView `json:"requirement,omitempty"`
 }
 
 // SpecRow is one find_specs result.
@@ -33,6 +35,8 @@ type SpecRow struct {
 	Finished     bool              `json:"finished"`
 	Updated      time.Time         `json:"updated"`
 	Link         *LinkView         `json:"link,omitempty"`
+	// Requirement is set only when the Spec is a Requirement.
+	Requirement *RequirementView `json:"requirement,omitempty"`
 }
 
 // FindSpecsInput is find_specs' filters; every filter given must match.
@@ -42,6 +46,8 @@ type FindSpecsInput struct {
 	Tags   map[string]string `json:"tags,omitempty"`
 	// Finished includes finished Specs, which are otherwise left out.
 	Finished bool `json:"finished,omitempty"`
+	// Requirements keeps only Specs that are Requirements.
+	Requirements bool `json:"requirements,omitempty"`
 }
 
 // GetSpec is get_spec(spec).
@@ -65,6 +71,7 @@ func (c *Core) GetSpec(_ context.Context, key string, ref Ref) (SpecDetail, erro
 		for _, t := range tickets {
 			v.Tickets = append(v.Tickets, ticketRow(r, key, t))
 		}
+		v.Requirement = c.requirementView(r, key, tickets)
 		return nil
 	})
 	return v, err
@@ -88,13 +95,19 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 			if !hasAll(s.Labels, s.Tags, in.Labels, in.Tags) {
 				continue
 			}
-			summary, done := summarise(specTickets(r, key, s.Number))
+			tickets := specTickets(r, key, s.Number)
+			summary, done := summarise(tickets)
 			if done && !in.Finished {
+				continue
+			}
+			req := c.requirementView(r, key, tickets)
+			if in.Requirements && req == nil {
 				continue
 			}
 			rows = append(rows, SpecRow{
 				ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
 				StateSummary: summary, Finished: done, Updated: s.Updated, Link: linkView(s.Link),
+				Requirement: req,
 			})
 		}
 		return nil

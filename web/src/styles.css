@@ -10,6 +10,7 @@
   --r-answer: #d97706;
   --r-answered: #7c3aed;
   --r-silent: #64748b;
+  --r-long: #475569;
   --r-failed: #dc2626;
   --r-review: #059669;
   --r-blocked: #a16207;
@@ -57,6 +58,7 @@ textarea { width: 100%; resize: vertical; }
 .reason-needs_answer { --rc: var(--r-answer); }
 .reason-answered { --rc: var(--r-answered); }
 .reason-silent_claim { --rc: var(--r-silent); }
+.reason-long_claim { --rc: var(--r-long); }
 .reason-failed { --rc: var(--r-failed); }
 .reason-in_review { --rc: var(--r-review); }
 .reason-blocked_by_cancelled { --rc: var(--r-blocked); }

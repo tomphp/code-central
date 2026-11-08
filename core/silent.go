@@ -17,19 +17,23 @@ import (
 // Claim is Silent.
 const SilentAfter = 30 * time.Minute
 
+// LongAfter is how long a Claim may go without a move (claim or
+// pick_up_answers) before it is Long, if it isn't Silent.
+const LongAfter = 60 * time.Minute
+
 // PingThrottle is the shortest gap between two counted pings from one
 // session.
 const PingThrottle = time.Minute
 
 // activity is the in-memory side of last activity: when the service
 // started, each session's last counted ping, and which Claims the
-// background watch last saw Silent.
+// background watch last saw Silent or Long.
 type activity struct {
 	started time.Time
 
-	mu     sync.Mutex
-	pings  map[string]time.Time // session ID -> last counted ping
-	silent map[claimKey]bool
+	mu    sync.Mutex
+	pings map[string]time.Time       // session ID -> last counted ping
+	marks map[claimKey]NeedsMeReason // Silent or Long
 }
 
 // claimKey names one Claim across Projects.
@@ -40,7 +44,7 @@ type claimKey struct {
 }
 
 func newActivity(started time.Time) *activity {
-	return &activity{started: started, pings: map[string]time.Time{}, silent: map[claimKey]bool{}}
+	return &activity{started: started, pings: map[string]time.Time{}, marks: map[claimKey]NeedsMeReason{}}
 }
 
 // Ping is POST /api/ping {session_id}: it marks activity on every live
@@ -108,11 +112,28 @@ func (c *Core) silentSince(t store.Ticket) *time.Time {
 	return &last
 }
 
-// WatchSilent is the background ticker behind Silent Claims. On each tick
-// it reads every Project and calls changed(project, ticket ID) once for
-// each Claim that has turned Silent since the last tick, and once for each
-// that has stopped being Silent without a write (a ping), so live views
-// refetch. The time comes from the injected clock, not the tick; serve
+// longSince is the Claim's last move when it is a Long Claim, else nil:
+// In Progress, not Silent (Silent takes precedence), and more than
+// LongAfter since it last moved into In Progress.
+func (c *Core) longSince(t store.Ticket) *time.Time {
+	if t.State != store.InProgress || c.silentSince(t) != nil {
+		return nil
+	}
+	if _, ok := liveClaim(t); !ok {
+		return nil
+	}
+	moved := entered(t)
+	if c.now().Sub(moved) <= LongAfter {
+		return nil
+	}
+	return &moved
+}
+
+// WatchSilent is the background ticker behind Silent and Long Claims. On
+// each tick it reads every Project and calls changed(project, ticket ID)
+// once for each Claim whose mark (Silent, Long or neither) has changed
+// since the last tick without a write (time passing, or a ping), so live
+// views refetch. The time comes from the injected clock, not the tick; serve
 // ticks every minute. It returns when ctx ends.
 func (c *Core) WatchSilent(ctx context.Context, ticks <-chan time.Time, changed func(project, ticketID string)) {
 	for {
@@ -127,15 +148,22 @@ func (c *Core) WatchSilent(ctx context.Context, ticks <-chan time.Time, changed 
 	}
 }
 
-// silentCrossings returns the Claims whose Silent mark changed since the
-// last call, and remembers the new marks.
+// silentCrossings returns the Claims whose Silent or Long mark changed
+// since the last call, and remembers the new marks.
 func (c *Core) silentCrossings() []claimKey {
-	now := map[claimKey]bool{}
+	now := map[claimKey]NeedsMeReason{}
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			for _, t := range r.Tickets(p.Key) {
-				if cl, ok := liveClaim(t); ok && c.silentSince(t) != nil {
-					now[claimKey{p.Key, t.Number, cl.Number}] = true
+				cl, ok := liveClaim(t)
+				if !ok {
+					continue
+				}
+				k := claimKey{p.Key, t.Number, cl.Number}
+				if c.silentSince(t) != nil {
+					now[k] = ReasonSilentClaim
+				} else if c.longSince(t) != nil {
+					now[k] = ReasonLongClaim
 				}
 			}
 		}
@@ -145,16 +173,16 @@ func (c *Core) silentCrossings() []claimKey {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	var out []claimKey
-	for k := range now {
-		if !a.silent[k] {
+	for k, m := range now {
+		if a.marks[k] != m {
 			out = append(out, k)
 		}
 	}
-	for k := range a.silent {
-		if !now[k] {
+	for k := range a.marks {
+		if _, ok := now[k]; !ok {
 			out = append(out, k)
 		}
 	}
-	a.silent = now
+	a.marks = now
 	return out
 }
