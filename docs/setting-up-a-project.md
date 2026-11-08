@@ -21,13 +21,13 @@ This guide sets a repository up as a Project, so that agents can reach its Specs
    $ claude plugin install mattpocock-skills@claude-plugins-official
    ```
 
-   Or run `/plugin` in a Claude Code session and install it from there. These are the skills an agent runs, as the Factory starts them:
+   Or run `/plugin` in a Claude Code session and install it from there. These are the skills an agent runs on each Stage's Ticket and on implementation Tickets, as the Factory starts them:
 
-   | Stage | Skill |
+   | Ticket | Skill |
    | --- | --- |
-   | grilling | `/grilling`, with `/domain-modeling` alongside |
-   | spec | `/to-spec` |
-   | tickets | `/to-tickets` |
+   | grilling Stage | `/grilling`, with `/domain-modeling` alongside |
+   | spec Stage | `/to-spec` |
+   | tickets Stage | `/to-tickets` |
    | implementation | `/implement` |
 
 > [!WARNING]
@@ -57,7 +57,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
    Agents in a sandbox or container: see `code-central help sandboxes`.
    ```
 
-   The Project Key it proposes is the repository's name (from its remote, or else the folder's name). It is permanent, so pick it now. `code-central init --key acme-shop` skips the first prompt.
+   The Project Key it proposes is the repository's name (from its remote, or else the folder's name). It is permanent, so pick it now. `committed` is the Project's mode: init's files are meant to be committed to the repository, as in step 3. `code-central init --key acme-shop` skips the first prompt.
 
    Check: `git status --short -uall` lists the files init wrote.
 
@@ -76,7 +76,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
    | --- | --- |
    | `.mcp.json` | Adds the `code-central` MCP server, at `${CODE_CENTRAL_URL:-http://localhost:7733}/p/acme-shop/mcp`, so Claude Code can reach the Project. Any other servers in the file are kept. |
    | `.claude/settings.json` | The hooks: `code-central hook session-id` records the session on a Claim and a Round, and `code-central ping` marks the session active so its Claim doesn't turn Silent. |
-   | `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md` | Tell the `mattpocock-skills` skills to use Code Central's operations, States and Labels instead of an issue tracker's. Re-running init rewrites them. |
+   | `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md` | Tell the `mattpocock-skills` skills to use Code Central's operations, States and Labels instead of an issue tracker's. Re-running init rewrites them, and asks first if you've changed one. |
    | `CLAUDE.md` | A short `## Issue tracker` section pointing at `docs/agents/issue-tracker.md`. An existing `CLAUDE.md` keeps its content; init only adds the section. |
 
 3. **Commit the files.** init never commits. Committing them means every clone of `acme-shop` reaches the same Project.
@@ -121,4 +121,4 @@ You're starting `acme-shop` from nothing, in `~/src`.
 
    If it says `✘ Failed to connect`, the service isn't running: see step 1 of [Before you start](#before-you-start).
 
-`acme-shop` is now a working Project. You can stop here and work it later, whichever way you choose: the [README](../README.md) lists the guides for working it.
+`acme-shop` is now a working Project. You can stop here and work it later, whichever way you choose: the guides after this one in the [README](../README.md)'s list cover working it.
