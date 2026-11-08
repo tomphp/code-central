@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/tomoram/code-central/home"
 )
 
 // ErrLocked means another process already holds the store's lock.
@@ -33,22 +35,22 @@ func (e *LoadError) Error() string {
 
 // Dir resolves the store directory: the --store flag, then
 // CODE_CENTRAL_STORE, then $XDG_DATA_HOME/code-central, then
-// ~/.local/share/code-central.
-func Dir(flag string, getenv func(string) string) (string, error) {
+// ~/.local/share/code-central (ADR 0010).
+func Dir(flag string, h home.Lookup) (string, error) {
 	if flag != "" {
 		return flag, nil
 	}
-	if d := getenv("CODE_CENTRAL_STORE"); d != "" {
+	if d := h.Getenv("CODE_CENTRAL_STORE"); d != "" {
 		return d, nil
 	}
-	if d := getenv("XDG_DATA_HOME"); d != "" {
-		return filepath.Join(d, "code-central"), nil
+	d, err := h.Data("code-central")
+	if nf := (*home.NotFoundError)(nil); errors.As(err, &nf) {
+		nf.Vars = append([]string{"CODE_CENTRAL_STORE"}, nf.Vars...)
 	}
-	home := getenv("HOME")
-	if home == "" {
-		return "", errors.New("cannot find the store: set HOME, XDG_DATA_HOME or CODE_CENTRAL_STORE")
+	if err != nil {
+		return "", fmt.Errorf("cannot find the store: %w", err)
 	}
-	return filepath.Join(home, ".local", "share", "code-central"), nil
+	return d, nil
 }
 
 // FileStore is the file-backed Store: YAML files under one directory,

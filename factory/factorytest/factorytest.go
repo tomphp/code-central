@@ -75,7 +75,8 @@ type Harness struct {
 	// Repo is the git repo's top level. Its parent holds only it and the
 	// Factory's worktree folder, Repo + ".worktrees".
 	Repo string
-	// Home is the Factory's HOME, so its state file is under it.
+	// Home is the Factory's HOME and its profile folder, so its state file
+	// is under it even with HOME unset.
 	Home string
 	// Bin is the folder on PATH holding the fake claude (and FakeGit's git).
 	Bin string
@@ -411,10 +412,11 @@ func (h *Harness) StartIn(dir string, args ...string) *Running {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Running{h: h, cancel: cancel, done: make(chan struct{}), stdout: &buffer{}, stderr: &buffer{}, ticks: make(chan time.Time), signals: make(chan os.Signal, 2)}
 	env := factory.Env{
-		Dir:     dir,
-		Environ: h.Environ(),
-		Stdout:  r.stdout,
-		Stderr:  r.stderr,
+		Dir:         dir,
+		Environ:     h.Environ(),
+		UserHomeDir: func() (string, error) { return h.Home, nil },
+		Stdout:      r.stdout,
+		Stderr:      r.stderr,
 		After: func(time.Duration) <-chan time.Time {
 			r.waits.Add(1)
 			return r.ticks

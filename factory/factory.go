@@ -18,6 +18,7 @@ import (
 
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/client"
+	"github.com/tomoram/code-central/home"
 )
 
 // Env is everything the Factory touches outside itself, so tests can run
@@ -27,7 +28,11 @@ type Env struct {
 	Dir string
 	// Environ is the environment: it is read for PATH, HOME and the
 	// CLI's variables, and given to every child.
-	Environ        []string
+	Environ []string
+	// UserHomeDir is the profile folder the state file falls back to when
+	// HOME isn't set (home.Lookup); main passes os.UserHomeDir. nil means
+	// none.
+	UserHomeDir    func() (string, error)
 	Stdout, Stderr io.Writer
 	// After replaces time.After for the wait between polls.
 	After func(time.Duration) <-chan time.Time
@@ -270,7 +275,11 @@ func start(e Env, o options) (*factory, error) {
 		every = eventBatchEvery
 	}
 	f.events = newSender(f.client, every)
-	f.state = &stateFile{path: filepath.Join(e.getenv("HOME"), ".local", "state", "code-central-factory", project+".json")}
+	statePath, err := home.Lookup{Getenv: e.getenv, UserHomeDir: e.UserHomeDir}.State("code-central-factory", project+".json")
+	if err != nil {
+		return nil, fmt.Errorf("can't find the state folder: %w", err)
+	}
+	f.state = &stateFile{path: statePath}
 	if err := os.MkdirAll(filepath.Dir(f.state.path), 0o755); err != nil {
 		return nil, fmt.Errorf("can't make the state folder: %v", err)
 	}

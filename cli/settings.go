@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
+	"github.com/tomoram/code-central/home"
 	"gopkg.in/yaml.v3"
 )
 
@@ -25,22 +25,11 @@ type settings struct {
 	Notifications string `yaml:"notifications"`
 }
 
-// settingsPath is where the local settings live, or "" if neither
-// XDG_CONFIG_HOME nor HOME is set.
-func settingsPath(getenv func(string) string) string {
-	if d := getenv("XDG_CONFIG_HOME"); d != "" {
-		return filepath.Join(d, "code-central", "settings.yaml")
-	}
-	if h := getenv("HOME"); h != "" {
-		return filepath.Join(h, ".config", "code-central", "settings.yaml")
-	}
-	return ""
-}
-
-func loadSettings(getenv func(string) string) (settings, error) {
+func loadSettings(h home.Lookup) (settings, error) {
 	s := settings{Port: Port, Notifications: "on"}
-	path := settingsPath(getenv)
-	if path == "" {
+	// With no home at all there are no settings, only the defaults.
+	path, err := h.Config("code-central", "settings.yaml")
+	if err != nil {
 		return s, nil
 	}
 	b, err := os.ReadFile(path)

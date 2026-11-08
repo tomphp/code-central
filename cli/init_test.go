@@ -20,11 +20,12 @@ func runIn(t *testing.T, dir string, env map[string]string, stdin string, args .
 	t.Helper()
 	var out, errOut bytes.Buffer
 	code := cli.Run(context.Background(), args, cli.Env{
-		Stdin:  strings.NewReader(stdin),
-		Stdout: &out,
-		Stderr: &errOut,
-		Getenv: func(k string) string { return env[k] },
-		Dir:    dir,
+		Stdin:       strings.NewReader(stdin),
+		Stdout:      &out,
+		Stderr:      &errOut,
+		Getenv:      func(k string) string { return env[k] },
+		UserHomeDir: userHomeDir(env),
+		Dir:         dir,
 	})
 	return result{code, out.String(), errOut.String()}
 }

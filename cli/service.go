@@ -75,7 +75,7 @@ func serviceInstall(ctx context.Context, e Env, m serviceManager, args []string)
 	if err != nil {
 		return err
 	}
-	dir, err := store.Dir(*storeFlag, e.Getenv)
+	dir, err := store.Dir(*storeFlag, e.home())
 	if err != nil {
 		return err
 	}
@@ -121,11 +121,11 @@ func serviceManagerFor(e Env) (serviceManager, error) {
 	if goos == "" {
 		goos = runtime.GOOS
 	}
-	home := e.Getenv("HOME")
 	switch goos {
 	case "darwin":
-		if home == "" {
-			return serviceManager{}, errors.New("cannot find the LaunchAgents folder: HOME is not set")
+		home, err := e.home().Home()
+		if err != nil {
+			return serviceManager{}, fmt.Errorf("cannot find the LaunchAgents folder: %w", err)
 		}
 		domain := fmt.Sprintf("gui/%d", os.Getuid())
 		plist := filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist")
@@ -140,15 +140,12 @@ func serviceManagerFor(e Env) (serviceManager, error) {
 			restart: []serviceCmd{{args: []string{"launchctl", "kickstart", "-k", domain + "/" + launchdLabel}}},
 		}, nil
 	case "linux":
-		cfg := e.Getenv("XDG_CONFIG_HOME")
-		if cfg == "" {
-			if home == "" {
-				return serviceManager{}, errors.New("cannot find the systemd user folder: set HOME or XDG_CONFIG_HOME")
-			}
-			cfg = filepath.Join(home, ".config")
+		unit, err := e.home().Config("systemd", "user", systemdUnit)
+		if err != nil {
+			return serviceManager{}, fmt.Errorf("cannot find the systemd user folder: %w", err)
 		}
 		return serviceManager{
-			unitPath: filepath.Join(cfg, "systemd", "user", systemdUnit),
+			unitPath: unit,
 			unit:     systemdUnitFile,
 			install: []serviceCmd{
 				{args: []string{"systemctl", "--user", "daemon-reload"}},
