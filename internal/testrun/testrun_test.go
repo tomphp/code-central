@@ -20,36 +20,47 @@ func TestMain(m *testing.M) {
 }
 
 func fake(steps []string) int {
-	for i := 0; i+1 < len(steps); i += 2 {
+	if len(steps)%2 != 0 {
+		panic(fmt.Sprintf("fake job: steps %q aren't pairs", steps))
+	}
+	for i := 0; i < len(steps); i += 2 {
 		switch arg := steps[i+1]; steps[i] {
 		case "print":
 			fmt.Println(arg)
 		case "sleep":
-			d, _ := time.ParseDuration(arg)
+			d, err := time.ParseDuration(arg)
+			if err != nil {
+				panic(err)
+			}
 			time.Sleep(d)
 		case "exit":
-			code, _ := strconv.Atoi(arg)
+			code, err := strconv.Atoi(arg)
+			if err != nil {
+				panic(err)
+			}
 			return code
+		default:
+			panic(fmt.Sprintf("fake job: unknown step %q", steps[i]))
 		}
 	}
 	return 0
 }
 
-// fakeJob is a Job that runs the fake with these steps.
-func fakeJob(t *testing.T, name string, steps ...string) Job {
+// fakeJob is a job that runs the fake with these steps.
+func fakeJob(t *testing.T, name string, steps ...string) job {
 	t.Setenv("TESTRUN_FAKE", "1")
-	return Job{Name: name, Args: append([]string{os.Args[0]}, steps...)}
+	return job{Name: name, Args: append([]string{os.Args[0]}, steps...)}
 }
 
-// run runs the jobs and returns whether they passed, and what was printed.
-func run(budget time.Duration, jobs ...Job) (bool, string) {
+// runSuite runs the jobs and returns whether they passed, and what was printed.
+func runSuite(budget time.Duration, jobs ...job) (bool, string) {
 	var out strings.Builder
-	ok := Run(jobs, budget, &out)
+	ok := run(jobs, budget, &out)
 	return ok, out.String()
 }
 
 func TestTheSuitePassesWhenEveryJobPassesInsideTheBudget(t *testing.T) {
-	ok, out := run(10*time.Second,
+	ok, out := runSuite(10*time.Second,
 		fakeJob(t, "go test", "print", "ok go"),
 		fakeJob(t, "vitest", "print", "ok vitest"),
 	)
@@ -64,7 +75,7 @@ func TestTheSuitePassesWhenEveryJobPassesInsideTheBudget(t *testing.T) {
 }
 
 func TestTheSuiteFailsAndNamesEachJobsFailure(t *testing.T) {
-	ok, out := run(10*time.Second,
+	ok, out := runSuite(10*time.Second,
 		fakeJob(t, "go test", "print", "ok go"),
 		fakeJob(t, "vitest", "print", "FAIL a test", "exit", "1"),
 		fakeJob(t, "tsc", "print", "error TS2322", "exit", "2"),
@@ -84,9 +95,9 @@ func TestTheSuiteFailsAndNamesEachJobsFailure(t *testing.T) {
 }
 
 func TestTheSuiteFailsWhenAJobCannotStart(t *testing.T) {
-	ok, out := run(10*time.Second,
+	ok, out := runSuite(10*time.Second,
 		fakeJob(t, "go test"),
-		Job{Name: "vitest", Args: []string{"testrun-no-such-program"}},
+		job{Name: "vitest", Args: []string{"testrun-no-such-program"}},
 	)
 	if ok {
 		t.Fatalf("the suite passed:\n%s", out)
@@ -100,7 +111,7 @@ func TestTheSuiteFailsWhenAJobCannotStart(t *testing.T) {
 }
 
 func TestTheSuiteFailsWhenItTakesLongerThanTheBudget(t *testing.T) {
-	ok, out := run(50*time.Millisecond,
+	ok, out := runSuite(50*time.Millisecond,
 		fakeJob(t, "go test", "sleep", "200ms"),
 		fakeJob(t, "vitest"),
 	)

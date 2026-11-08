@@ -1,6 +1,7 @@
 # Builds and tests everything on each OS in the matrix: the same steps
 # `make test` and `make e2e` run, called directly rather than through
-# make (its 10-second budget would trip on a cold runner). Every step runs under bash, so the
+# make (its recipes need POSIX sh, perl and mktemp, and its 10-second
+# budget would trip on a cold runner). Every step runs under bash, so the
 # commands are identical on every OS and a red run on one OS is a real
 # platform difference.
 name: CI

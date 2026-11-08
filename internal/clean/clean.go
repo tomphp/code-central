@@ -1,7 +1,8 @@
 // Command clean deletes the paths it is given, and everything under
 // them, for `make clean`. It is Go rather than `rm -rf` so the recipe
 // runs the same under cmd.exe and POSIX sh. A missing path is not an
-// error.
+// error. Like internal/testrun, it is a developer tool for the Makefile,
+// not a shipped command.
 //
 //	go run ./internal/clean bin web/dist
 package main
