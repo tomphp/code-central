@@ -35,6 +35,14 @@ async function renderPanel(fake: FakeApi) {
   return screen.getByRole("region", { name: "Failed" });
 }
 
+// renderInApp opens acme-1 in the whole app's inbox and returns its Failed panel.
+async function renderInApp(fake: FakeApi) {
+  window.history.replaceState(null, "", "/?view=inbox&ticket=acme-1");
+  render(<App api={fake} now={() => fake.now} />);
+  const pane = screen.getByRole("complementary", { name: "Ticket" });
+  return within(pane).findByRole("region", { name: "Failed" });
+}
+
 describe("the Failed panel", () => {
   it("shows the failure count and the latest report's four fields", async () => {
     const panel = await renderPanel(world());
@@ -130,11 +138,48 @@ describe("the Failed panel", () => {
     expect(await within(panel).findByRole("alert")).toHaveTextContent("to_draft is not allowed");
   });
 
+  it("renders every field of the latest and earlier reports as Markdown, under plain labels", async () => {
+    const markdownFields = (n: number): Partial<FailureReportView> => ({
+      what_broke: `The **build ${n}** failed`,
+      why: `- cause ${n}\n- second cause ${n}`,
+      what_to_fix: `Run \`make ${n}\``,
+      where_work_stands: `See [the branch ${n}](https://example.com/${n})`,
+    });
+    const panel = await renderInApp(world([report(1, markdownFields(1)), report(2, markdownFields(2))]));
+    const earlier = within(panel).getByText("Earlier reports (1)").closest("details")!;
+    const groups = [
+      within(panel).getByRole("group", { name: "Failure Report 2" }),
+      within(earlier).getByRole("group", { name: "Failure Report 1", hidden: true }),
+    ];
+
+    groups.forEach((group, i) => {
+      const n = 2 - i;
+      const field = (label: string) => {
+        const dt = within(group).getByText(label);
+        expect(dt.tagName).toBe("DT");
+        expect(dt.children).toHaveLength(0); // the label stays plain text
+        const dd = dt.nextElementSibling as HTMLElement;
+        expect(dd.tagName).toBe("DD");
+        return dd;
+      };
+      expect(field("What broke").querySelector("strong")).toHaveTextContent(`build ${n}`);
+      expect(field("What broke")).not.toHaveTextContent("**");
+      expect(within(field("Why")).getAllByRole("listitem", { hidden: true })).toHaveLength(2);
+      expect(field("What to fix").querySelector("code")).toHaveTextContent(`make ${n}`);
+      const link = within(field("Where the work stands")).getByRole("link", { name: `the branch ${n}`, hidden: true });
+      expect(link).toHaveAttribute("href", `https://example.com/${n}`);
+      expect(link).toHaveAttribute("target", "_blank");
+    });
+  });
+
+  it("shows raw HTML in a report field as text", async () => {
+    const panel = await renderInApp(world([report(1, { why: '<img src=x onerror="alert(1)"> <b>bold</b>' })]));
+    const why = within(panel).getByText("Why").nextElementSibling!;
+    expect(why.querySelector("img, b")).toBeNull();
+    expect(why).toHaveTextContent('<img src=x onerror="alert(1)"> <b>bold</b>');
+  });
+
   it("is the action panel for a Failed Ticket in the inbox", async () => {
-    window.history.replaceState(null, "", "/?view=inbox&ticket=acme-1");
-    const fake = world();
-    render(<App api={fake} now={() => fake.now} />);
-    const pane = screen.getByRole("complementary", { name: "Ticket" });
-    expect(await within(pane).findByRole("region", { name: "Failed" })).toHaveTextContent("Failed 2 times");
+    expect(await renderInApp(world())).toHaveTextContent("Failed 2 times");
   });
 });

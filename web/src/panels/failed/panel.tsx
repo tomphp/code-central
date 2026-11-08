@@ -8,6 +8,7 @@ import "../../api/actions/send_back";
 import "../../api/actions/to_draft";
 import type { FailureReportView } from "../../api/types";
 import { ago } from "../../format";
+import { Markdown } from "../../Markdown";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { ResumeCommand } from "../resume/ResumeCommand";
 import { useAct } from "../../ticket/useAct";
@@ -69,7 +70,8 @@ export function FailedPanel({ api, project, ticket: t, now }: PanelProps) {
   );
 }
 
-// Report is one Failure Report's four fields.
+// Report is one Failure Report's four fields, each rendered as Markdown
+// inside its definition.
 function Report({ report: r, now }: { report: FailureReportView; now: Date }) {
   const label = `Failure Report ${r.number}`;
   return (
@@ -79,13 +81,21 @@ function Report({ report: r, now }: { report: FailureReportView; now: Date }) {
       </p>
       <dl>
         <dt>What broke</dt>
-        <dd>{r.what_broke}</dd>
+        <dd>
+          <Markdown>{r.what_broke}</Markdown>
+        </dd>
         <dt>Why</dt>
-        <dd>{r.why}</dd>
+        <dd>
+          <Markdown>{r.why}</Markdown>
+        </dd>
         <dt>What to fix</dt>
-        <dd>{r.what_to_fix}</dd>
+        <dd>
+          <Markdown>{r.what_to_fix}</Markdown>
+        </dd>
         <dt>Where the work stands</dt>
-        <dd>{r.where_work_stands}</dd>
+        <dd>
+          <Markdown>{r.where_work_stands}</Markdown>
+        </dd>
       </dl>
     </div>
   );
