@@ -20,7 +20,7 @@ func (f *factory) land(ctx context.Context) {
 	accepted := f.landable(ctx, store.Accepted)
 	sort.SliceStable(accepted, func(i, j int) bool { return acceptedAt(accepted[i]).Before(acceptedAt(accepted[j])) })
 	for _, tk := range accepted {
-		if ctx.Err() != nil || f.paused() {
+		if f.halted(ctx) || f.paused() {
 			return
 		}
 		f.landAccepted(ctx, tk)
@@ -33,7 +33,7 @@ func (f *factory) land(ctx context.Context) {
 // gets a warning line, once.
 func (f *factory) detectHandMerges(ctx context.Context) {
 	for _, tk := range f.landable(ctx, mergeableStates...) {
-		if ctx.Err() != nil || f.paused() {
+		if f.halted(ctx) || f.paused() {
 			return
 		}
 		if tk.Commit == "" || !f.inBase(tk.Commit) {
@@ -47,7 +47,7 @@ func (f *factory) detectHandMerges(ctx context.Context) {
 		key := tk.ID + "@" + tk.Commit
 		if !f.warnedMerged[key] {
 			f.warnedMerged[key] = true
-			f.printf("warning: %s is %s but its finish commit %s is already in %s: only an In Review or Accepted Ticket lands",tk.ID, tk.State, short(tk.Commit), f.base)
+			f.printf("warning: %s is %s but its finish commit %s is already in %s: only an In Review or Accepted Ticket lands", tk.ID, tk.State, short(tk.Commit), f.base)
 		}
 	}
 }

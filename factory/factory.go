@@ -37,6 +37,10 @@ type Env struct {
 	// Backoff is the first wait before resuming turns an outage cut off,
 	// doubling with each outage in a row; zero means a minute.
 	Backoff time.Duration
+	// Signals is the stop signals the Factory gets: the first Ctrl-C
+	// (os.Interrupt) drains; a second, SIGTERM or SIGHUP stops the turns
+	// at once. Nil means none come.
+	Signals <-chan os.Signal
 }
 
 func (e Env) getenv(key string) string {
@@ -127,6 +131,8 @@ func Run(ctx context.Context, args []string, e Env) int {
 	f.prune()
 	ctx, f.stop = context.WithCancel(ctx)
 	defer f.stop()
+	go f.watchSignals(ctx)
+	f.restart(ctx)
 	f.loop(ctx)
 	if reason := f.stoppedFor(); reason != "" {
 		fmt.Fprintln(e.Stderr, "code-central-factory: stopped:", reason)
@@ -185,6 +191,10 @@ type factory struct {
 	// that can't land, already warned of; the poll's own.
 	warnedMerged map[string]bool
 
+	// restarted is the saved Claims a stop cut off, to resume as cut off
+	// once a slot is free; the poll's own.
+	restarted []claim
+
 	pauseMu sync.Mutex
 	pause   *pause // set during an outage
 
@@ -193,11 +203,16 @@ type factory struct {
 	stop       context.CancelFunc
 	stopMu     sync.Mutex
 	stopReason string
+
+	// drainCh is closed by the first Ctrl-C: no more claiming, resuming
+	// or landing, and the Factory exits once its running turns end.
+	drainCh   chan struct{}
+	drainOnce sync.Once
 }
 
 // start makes every start-up check, refusing with the reason.
 func start(e Env, o options) (*factory, error) {
-	f := &factory{e: e, o: o, turns: map[string]*turn{}, ended: map[string]bool{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}}
+	f := &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}}
 	git, ok := e.lookPath("git")
 	if !ok {
 		return nil, errors.New("git isn't on PATH")
@@ -245,6 +260,10 @@ func start(e Env, o options) (*factory, error) {
 	}
 	if f.lock, err = f.state.lock(project); err != nil {
 		return nil, err
+	}
+	if err := f.state.load(); err != nil {
+		f.lock.Close()
+		return nil, fmt.Errorf("can't read the state file: %v", err)
 	}
 	return f, nil
 }

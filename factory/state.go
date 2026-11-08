@@ -81,6 +81,24 @@ func (s *stateFile) lock(project string) (*os.File, error) {
 	return lf, nil
 }
 
+// load reads the Claims a past Factory saved. A missing file holds none:
+// its Claims are lost, and never adopted.
+func (s *stateFile) load() error {
+	b, err := os.ReadFile(s.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var doc stateDoc
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return fmt.Errorf("%s: %v", s.path, err)
+	}
+	s.claims = doc.Claims
+	return nil
+}
+
 func (f *factory) addClaim(c claim) error {
 	s := f.state
 	s.mu.Lock()

@@ -99,7 +99,7 @@ func New(t testing.TB) *Harness {
 	for _, d := range []string{h.Repo, h.Home, h.Bin, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
 		must(t, os.MkdirAll(d, 0o755))
 	}
-	gitPath, err := exec.LookPath("git")
+	gitPath, err := realGit()
 	must(t, err)
 	h.env = map[string]string{
 		"PATH":                h.Bin + string(os.PathListSeparator) + filepath.Dir(gitPath) + ":/usr/bin:/bin",
@@ -126,6 +126,25 @@ func New(t testing.TB) *Harness {
 	h.Git("commit", "-q", "-m", "Set up Code Central")
 	return h
 }
+
+// realGit is the git binary itself. On macOS /usr/bin/git is an xcrun
+// shim whose lookup is cached per HOME, and every Harness has a fresh
+// HOME, so going through the shim costs ~100ms of CPU per test; the git
+// in git's exec path skips it.
+var realGit = sync.OnceValues(func() (string, error) {
+	git, err := exec.LookPath("git")
+	if err != nil {
+		return "", err
+	}
+	out, err := exec.Command(git, "--exec-path").Output()
+	if err != nil {
+		return git, nil
+	}
+	if p, err := filepath.EvalSymlinks(filepath.Join(strings.TrimSpace(string(out)), "git")); err == nil {
+		return p, nil
+	}
+	return git, nil
+})
 
 func must(t testing.TB, err error) {
 	t.Helper()
@@ -163,7 +182,7 @@ func (h *Harness) RemoveClaude() { must(h.t, os.Remove(filepath.Join(h.Bin, "cla
 // FakeGit puts a git on PATH that reports version and otherwise runs the
 // real git.
 func (h *Harness) FakeGit(version string) {
-	real, err := exec.LookPath("git")
+	real, err := realGit()
 	must(h.t, err)
 	h.writeShim("git", fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = version ] || [ \"$1\" = --version ]; then echo 'git version %s'; exit 0; fi\nexec %q \"$@\"\n", version, real))
 }
@@ -174,7 +193,9 @@ func (h *Harness) Git(args ...string) string { return h.GitIn(h.Repo, args...) }
 // GitIn runs the real git in dir and returns its trimmed output.
 func (h *Harness) GitIn(dir string, args ...string) string {
 	h.t.Helper()
-	cmd := exec.Command("git", args...)
+	git, err := realGit()
+	must(h.t, err)
+	cmd := exec.Command(git, args...)
 	cmd.Dir = dir
 	cmd.Env = h.Environ()
 	out, err := cmd.CombinedOutput()
@@ -315,6 +336,7 @@ type Running struct {
 	code           int
 	stdout, stderr *buffer
 	ticks          chan time.Time
+	signals        chan os.Signal
 	waits          atomic.Int64 // times the Factory has waited for a poll
 	polls          int64        // ticks sent by Poll
 }
@@ -328,7 +350,7 @@ func (h *Harness) Start(args ...string) *Running {
 // StartIn is Start from dir.
 func (h *Harness) StartIn(dir string, args ...string) *Running {
 	ctx, cancel := context.WithCancel(context.Background())
-	r := &Running{h: h, cancel: cancel, done: make(chan struct{}), stdout: &buffer{}, stderr: &buffer{}, ticks: make(chan time.Time)}
+	r := &Running{h: h, cancel: cancel, done: make(chan struct{}), stdout: &buffer{}, stderr: &buffer{}, ticks: make(chan time.Time), signals: make(chan os.Signal, 2)}
 	env := factory.Env{
 		Dir:     dir,
 		Environ: h.Environ(),
@@ -340,6 +362,7 @@ func (h *Harness) StartIn(dir string, args ...string) *Running {
 		},
 		KillGrace: KillGrace,
 		Backoff:   h.Backoff,
+		Signals:   r.signals,
 	}
 	go func() {
 		defer close(r.done)
@@ -408,6 +431,12 @@ func (r *Running) WaitForOutput(s string) {
 		return strings.Contains(r.stdout.String(), s)
 	})
 }
+
+// Signal sends the Factory sig, as the terminal or the OS would.
+func (r *Running) Signal(sig os.Signal) { r.signals <- sig }
+
+// Interrupt is the human's Ctrl-C.
+func (r *Running) Interrupt() { r.Signal(os.Interrupt) }
 
 // Stop stops the Factory and returns its exit code.
 func (r *Running) Stop() int {

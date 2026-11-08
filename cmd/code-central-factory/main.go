@@ -14,14 +14,18 @@ import (
 )
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
+	// The first Ctrl-C drains; a second, SIGTERM or SIGHUP stops the
+	// turns. The Factory reads them all from this channel.
+	sigs := make(chan os.Signal, 4)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	wd, _ := os.Getwd()
-	code := factory.Run(ctx, os.Args[1:], factory.Env{
+	code := factory.Run(context.Background(), os.Args[1:], factory.Env{
 		Dir:     wd,
 		Environ: os.Environ(),
 		Stdout:  os.Stdout,
 		Stderr:  os.Stderr,
+		Signals: sigs,
 	})
-	stop()
+	signal.Stop(sigs)
 	os.Exit(code)
 }
