@@ -1,0 +1,39 @@
+package cli
+
+import (
+	"context"
+
+	"github.com/tomoram/code-central/core"
+)
+
+// Submitting a Requirement.
+func init() {
+	commands["submit-requirement"] = command{op: "submit_requirement", usage: "submit-requirement [--text <md> | --file <path|->]  submit a Requirement; its first line becomes the Spec's title", run: runSubmitRequirement}
+}
+
+func runSubmitRequirement(ctx context.Context, e Env, args []string) error {
+	fs := flagSet("submit-requirement")
+	project := addScope(fs)
+	inline := fs.String("text", "", "")
+	file := fs.String("file", "", "")
+	pos, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(pos) > 0 {
+		return usagef("unexpected argument %q", pos[0])
+	}
+	sc, err := resolveScope(e, *project)
+	if err != nil {
+		return err
+	}
+	text, err := longInput(e, *inline, *file)
+	if err != nil {
+		return err
+	}
+	v, err := sc.client.SubmitRequirement(ctx, sc.project, core.SubmitRequirementInput{Text: text})
+	if err != nil {
+		return err
+	}
+	return printJSON(e, v)
+}

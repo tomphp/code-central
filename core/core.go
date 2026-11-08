@@ -261,6 +261,9 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 	if in.Spec == "" {
 		return TicketView{}, invalid("spec", "every Ticket belongs to a Spec")
 	}
+	if err := checkStageLabels("labels", in.Labels); err != nil {
+		return TicketView{}, err
+	}
 	var v TicketView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {

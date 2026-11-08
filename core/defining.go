@@ -191,6 +191,9 @@ func (c *Core) AddLabels(_ context.Context, key string, in LabelsInput) (TargetV
 	if err := checkLabels(in.Labels); err != nil {
 		return TargetView{}, err
 	}
+	if err := checkStageLabels("labels", in.Labels); err != nil {
+		return TargetView{}, err
+	}
 	return c.updateTarget(key, in.Target, func(labels *[]string, _ map[string]string) {
 		for _, l := range in.Labels {
 			if !slices.Contains(*labels, l) {
