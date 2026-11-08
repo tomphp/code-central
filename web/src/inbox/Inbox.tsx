@@ -14,7 +14,7 @@ import { RequirementPane } from "../requirement/RequirementPane";
 import { RequirementRow } from "../requirement/RequirementRow";
 import { TicketPane } from "../ticket/TicketDetail";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
-import { hrefFor, type UiLocation } from "../url";
+import { hrefFor, opensInPlace, type UiLocation } from "../url";
 
 export interface InboxProps {
   api: Api;
@@ -53,7 +53,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
   // Selecting a row: a Ticket row leaves any Requirement; a Requirement
   // row opens on its default Ticket.
   const go = (patch: Partial<UiLocation>) => (e: MouseEvent) => {
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // let the browser open a tab
+    if (!opensInPlace(e)) return;
     e.preventDefault();
     navigate(patch);
   };

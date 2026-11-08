@@ -8,3 +8,17 @@
 .focus-clear { margin: auto; text-align: center; padding-bottom: 10vh; }
 .focus-clear h2 { font-size: 40px; font-weight: 600; margin: 0 0 8px; }
 .focus-clear p { margin: 0; font-size: 20px; color: var(--muted); }
+.focus-left { color: var(--muted); font-variant-numeric: tabular-nums; }
+.focus-item { width: 100%; max-width: 760px; margin: 0 auto; padding: 40px 24px 10vh; box-sizing: border-box; }
+.focus-item h2 { font-size: 32px; line-height: 1.25; font-weight: 600; margin: 4px 0 8px; }
+.focus-from { margin: 0; font-size: 20px; }
+.focus-item-project { font-weight: 600; }
+.focus-ticket { margin: 16px 0 0; }
+.focus-ticket .tid { font-size: 20px; }
+.focus-requirement { margin: 0 0 8px; font-size: 20px; color: var(--muted); }
+.focus-why { margin: 0 0 24px; font-size: 20px; }
+.focus-open { margin: 24px 0 0; }
+/* The panels keep their own stylesheets, sized for the Inbox's side pane;
+   inside Focus Mode they are scaled up whole, so their type, spacing and
+   buttons all read larger together. */
+.focus .panel { zoom: 1.3; }

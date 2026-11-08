@@ -6,7 +6,7 @@
 // list=requirements is the Requirements view); requirement is the selected
 // Requirement's Spec ID and ticket the selected Ticket's display ID (within
 // the Requirement, when one is selected).
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { STATES, type State } from "./api/types";
 
 export type View = "inbox" | "focus";
@@ -63,4 +63,11 @@ export function useUiLocation(): [UiLocation, (patch: Partial<UiLocation>) => vo
     setLoc(readLocation(href));
   }, []);
   return [loc, navigate];
+}
+
+// opensInPlace reports whether a click on a link is a plain one, for the
+// UI to navigate itself; a modified or middle click is left to the
+// browser, to open a tab.
+export function opensInPlace(e: MouseEvent): boolean {
+  return !(e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0);
 }
