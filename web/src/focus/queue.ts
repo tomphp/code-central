@@ -1,8 +1,9 @@
 // The focus queue: from Needs Me in scope, the skip list, the Focus Item
-// on screen and its fetched Ticket, which Focus Item Focus Mode shows,
-// how many are left, and whether all is clear or only skipped Focus Items
-// are left. No React; the Focus layout holds what's
-// on screen and feeds it back in.
+// on screen, its fetched Ticket and whether the human acted on it here,
+// which Focus Item Focus Mode shows, how many are left, whether all is
+// clear or only skipped Focus Items are left, and whether the one on
+// screen was dealt with elsewhere. No React; the Focus layout holds
+// what's on screen and feeds it back in.
 import type { NeedsMeRow, NeedsMeView, QuestionView, TicketView } from "../api/types";
 
 // A Focus Item is one Ticket waiting for one Needs Me reason, its key
@@ -42,6 +43,9 @@ export interface FocusInput {
   // skipped is the Focus Items the human skipped this visit, in skip
   // order.
   skipped: FocusItem[];
+  // acted is whether the human acted on the item on screen here, in
+  // Focus Mode.
+  acted: boolean;
 }
 
 export interface FocusScreen {
@@ -55,9 +59,13 @@ export interface FocusScreen {
   clear: boolean;
   // onlySkipped is true when everything left in scope was skipped.
   onlySkipped: boolean;
+  // elsewhere is true when the item on screen is gone without the human
+  // acting on it here: its Ticket left that reason in Needs Me, or its
+  // Question is no longer open.
+  elsewhere: boolean;
 }
 
-export function focusQueue({ needsMe, project, onScreen, ticket, skipped }: FocusInput): FocusScreen {
+export function focusQueue({ needsMe, project, onScreen, ticket, skipped, acted }: FocusInput): FocusScreen {
   // Needs Me's own order, Stage Tickets as themselves, unlike the Inbox.
   const rows = needsMe.groups.flatMap((g) => g.tickets).filter((r) => !project || r.project === project);
   const items = rows.flatMap((row) => itemsOf(row, ticket));
@@ -73,7 +81,16 @@ export function focusQueue({ needsMe, project, onScreen, ticket, skipped }: Focu
     (onScreen?.roundKey ? unskipped.find((i) => i.roundKey === onScreen.roundKey) : undefined) ??
     unskipped[0];
   const remaining = rows.reduce((n, r) => n + (r.reason === "needs_answer" ? (r.round?.open ?? 1) : 1), 0);
-  return { item, remaining, clear: rows.length === 0, onlySkipped: !item && items.length > 0 };
+  return { item, remaining, clear: rows.length === 0, onlySkipped: !item && items.length > 0, elsewhere: !acted && isGone(onScreen, items) };
+}
+
+// isGone is whether the item on screen has left the queue, skipped items
+// included. A Round read since it went on screen isn't gone: it became
+// its open Questions.
+function isGone(onScreen: FocusItem | undefined, items: FocusItem[]): boolean {
+  if (!onScreen) return false;
+  const unreadRound = onScreen.roundKey !== undefined && !onScreen.question;
+  return !items.some((i) => i.key === onScreen.key || (unreadRound && i.roundKey === onScreen.roundKey));
 }
 
 // isSkipped is whether the human skipped the item. A Round not on screen

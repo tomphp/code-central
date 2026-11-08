@@ -3,7 +3,12 @@
 // live.ts, as the Inbox's does, and focusQueue picks what to show. Its
 // root's class scopes the Focus styles, so the panels inside read larger
 // here and nowhere else.
-import { useEffect, useState, type MouseEvent } from "react";
+//
+// The panels and the Question form get an Api whose act first records
+// that the item on screen was acted on, so an item that leaves after the
+// human's own action moves on silently, and one that leaves otherwise
+// moves on with a brief "Dealt with elsewhere" note.
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { Api } from "../api/api";
 import type { TicketView } from "../api/types";
 import { duration, REASON_LABEL } from "../format";
@@ -30,13 +35,30 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
   // skipped lives here for this visit only: leaving Focus Mode or
   // reloading forgets it, and it's never sent or put in the URL.
   const [skipped, setSkipped] = useState<FocusItem[]>([]);
+  // actedOn is the key of the item on screen once the human acts on it
+  // here, until a refusal takes it back.
+  const [actedOn, setActedOn] = useState<string>();
+  const [elsewhere, setElsewhere] = useState(false);
   const ticket = useTicket(api, onScreen?.row.project, onScreen?.row.id, version);
-  const screen = data && focusQueue({ needsMe: data.needsMe, project: loc.project, onScreen, ticket: ticket.data, skipped });
+  const acted = !!onScreen && actedOn === onScreen.key;
+  const screen = data && focusQueue({ needsMe: data.needsMe, project: loc.project, onScreen, ticket: ticket.data, skipped, acted });
   const item = screen?.item;
   // What's shown becomes what's on screen, so a later read keeps it there.
+  // Moving on shows the note only when the item left without the human.
   useEffect(() => {
-    if (screen && item?.key !== onScreen?.key) setOnScreen(item);
+    if (!screen || item?.key === onScreen?.key) return;
+    setOnScreen(item);
+    setActedOn(undefined);
+    setElsewhere(screen.elsewhere);
   }, [screen, item, onScreen]);
+  // The note is brief.
+  useEffect(() => {
+    if (!elsewhere) return;
+    const t = setTimeout(() => setElsewhere(false), NOTE_MS);
+    return () => clearTimeout(t);
+  }, [elsewhere, onScreen]);
+  const itemKey = item?.key;
+  const itemApi = useMemo(() => (itemKey ? recordingActs(api, itemKey, setActedOn) : undefined), [api, itemKey]);
 
   return (
     <main aria-label="Focus Mode" className="focus">
@@ -51,6 +73,11 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
           Exit
         </button>
       </header>
+      {elsewhere && (
+        <p role="status" className="focus-elsewhere">
+          Dealt with elsewhere
+        </p>
+      )}
       {!screen ? (
         <p className="focus-loading">Loading…</p>
       ) : screen.clear ? (
@@ -65,10 +92,10 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
             Go through them again
           </button>
         </section>
-      ) : item ? (
+      ) : item && itemApi ? (
         <Item
           key={item.key}
-          api={api}
+          api={itemApi}
           now={now}
           data={data}
           item={item}
@@ -82,6 +109,29 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
       )}
     </main>
   );
+}
+
+// NOTE_MS is how long the "Dealt with elsewhere" note stays.
+const NOTE_MS = 4000;
+
+// recordingActs is api with act recording that the human acted on the
+// item key before forwarding the call, and taking it back if the call is
+// refused, as a refused action left the item where it was.
+function recordingActs(api: Api, key: string, setActedOn: (f: (k?: string) => string | undefined) => void): Api {
+  const act: Api["act"] = (...args) => {
+    setActedOn(() => key);
+    return api.act(...args).catch((e: unknown) => {
+      setActedOn((k) => (k === key ? undefined : k));
+      throw e;
+    });
+  };
+  return new Proxy(api, {
+    get(target, prop) {
+      if (prop === "act") return act;
+      const v = Reflect.get(target, prop);
+      return typeof v === "function" ? v.bind(target) : v;
+    },
+  });
 }
 
 interface ItemProps {
