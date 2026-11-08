@@ -162,7 +162,8 @@ func (s *FileStore) migrate() error {
 	if err := atomicWrite(filepath.Join(stage, "store.yaml"), fmt.Appendf(nil, "format: %d\n", s.format)); err != nil {
 		return err
 	}
-	// Lock the staged store before it goes live, so the lock is never let go.
+	// Lock the staged store before it goes live, so the lock is never let
+	// go (on Windows the store's own lock already covers it).
 	lock, err := lockStaged(stage, s.dir)
 	if err != nil {
 		return err

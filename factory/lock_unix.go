@@ -1,5 +1,7 @@
 //go:build unix
 
+// The Factory's state-file lock on Unix: an flock.
+
 package factory
 
 import (
@@ -7,9 +9,6 @@ import (
 	"os"
 	"syscall"
 )
-
-// errLockHeld means another process holds the lock lockFile tried.
-var errLockHeld = errors.New("the lock is held")
 
 // lockFile takes an exclusive flock on f, without waiting, for as long as
 // f stays open.

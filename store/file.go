@@ -632,7 +632,7 @@ func encode(record any, project string) (string, []byte, error) {
 }
 
 // atomicWrite writes a temp file beside path, fsyncs it, renames it into
-// place and fsyncs the directory.
+// place and fsyncs the directory (syncDir).
 func atomicWrite(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -657,12 +657,7 @@ func atomicWrite(path string, data []byte) error {
 	if err := os.Rename(tmp.Name(), path); err != nil {
 		return err
 	}
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	return d.Sync()
+	return syncDir(dir)
 }
 
 func splitFrontmatter(data []byte) (front, body []byte, ok bool) {

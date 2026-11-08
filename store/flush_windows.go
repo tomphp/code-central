@@ -1,3 +1,5 @@
+// Handing the store's files to the disk on Windows.
+
 package store
 
 import "os"

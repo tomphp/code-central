@@ -1,5 +1,7 @@
 //go:build unix
 
+// Handing the store's files and directories to the disk on Unix.
+
 package store
 
 import (

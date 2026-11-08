@@ -52,12 +52,15 @@ type stateFile struct {
 	claims []claim
 }
 
+// errLockHeld means another process holds the lock lockFile tried.
+var errLockHeld = errors.New("the lock is held")
+
 type stateDoc struct {
 	Claims []claim `json:"claims"`
 }
 
-// lock takes the exclusive lock (lockFile) that makes this the Project's only local
-// Factory, for as long as the returned file stays open. The lock is on
+// lock takes the exclusive lock (lockFile) that makes this the Project's
+// only local Factory, for as long as the returned file stays open. The lock is on
 // <state file>.lock rather than the state file itself: each atomic write
 // renames a new file into place, which would drop a lock held on the old
 // one. The lock file holds the holder's pid.
