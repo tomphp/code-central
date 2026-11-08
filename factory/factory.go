@@ -69,8 +69,8 @@ func (e Env) home() home.Lookup {
 // lookPath finds name on the environment's PATH.
 func (e Env) lookPath(name string) (string, bool) {
 	for _, d := range filepath.SplitList(e.getenv("PATH")) {
-		p := filepath.Join(d, name)
-		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+		p := filepath.Join(d, name+exeSuffix)
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() && executable(fi) {
 			return p, true
 		}
 	}

@@ -37,6 +37,7 @@ func stateTickets(t *testing.T, h *factorytest.Harness) []string {
 
 func TestAReleasedClaimsTurnGetsSIGINTThenSIGTERMAndIsDropped(t *testing.T) {
 	t.Parallel()
+	unixStopSequence(t)
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Stopped")
 	h.Script(id, factorytest.Wait())
@@ -83,6 +84,7 @@ func stateClaims(t *testing.T, h *factorytest.Harness) []string {
 
 func TestACancelledClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	t.Parallel()
+	unixStopSequence(t)
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Not wanted")
 	h.Script(id, factorytest.Wait())
@@ -106,7 +108,10 @@ func TestAReleasedTicketIsClaimedAfreshInItsWorktreeOnItsBranch(t *testing.T) {
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Try again")
 	h.Script(id,
-		factorytest.Shell("echo wip > wip.txt && git add wip.txt && git commit -q -m wip && touch committed"),
+		factorytest.WriteFile("wip.txt", "wip\n"),
+		factorytest.Git("add", "wip.txt"),
+		factorytest.Git("commit", "-q", "-m", "wip"),
+		factorytest.WriteFile("committed", ""),
 		factorytest.Wait())
 	r := h.Start()
 	h.WaitFor("the first turn's commit", func() bool {
@@ -117,7 +122,7 @@ func TestAReleasedTicketIsClaimedAfreshInItsWorktreeOnItsBranch(t *testing.T) {
 	if _, err := h.Human().Release(context.Background(), h.Project, core.ReleaseInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
-	h.Script(id, factorytest.Shell("test -f wip.txt"), factorytest.Finish("Done."), factorytest.Result("success"))
+	h.Script(id, factorytest.NeedFile("wip.txt"), factorytest.Finish("Done."), factorytest.Result("success"))
 	r.Poll()
 	tk := h.WaitForState(id, store.InReview)
 

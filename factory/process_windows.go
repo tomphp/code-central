@@ -10,6 +10,13 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// exeSuffix ends the name of a program on PATH.
+const exeSuffix = ".exe"
+
+// executable reports whether the file is a program. Windows has no
+// execute bits; the .exe suffix says it.
+func executable(os.FileInfo) bool { return true }
+
 // startInOwnGroup has cmd start a turn in its own process group, so the
 // console's Ctrl-C reaches only the Factory.
 func startInOwnGroup(cmd *exec.Cmd) {

@@ -20,7 +20,9 @@ func TestATurnThatExitsWithItsClaimInProgressBecomesAFailureReport(t *testing.T)
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Too big")
 	h.Script(id,
-		factorytest.Shell("echo half > half.txt && git add half.txt && git commit -q -m 'Half a feature'"),
+		factorytest.WriteFile("half.txt", "half\n"),
+		factorytest.Git("add", "half.txt"),
+		factorytest.Git("commit", "-q", "-m", "Half a feature"),
 		factorytest.Say("I ran out of turns halfway through."),
 		factorytest.Step{Stdout: `{"type":"result","subtype":"error_max_turns","is_error":true,"terminal_reason":"max_turns"}`},
 		factorytest.Exit(3))
@@ -220,6 +222,7 @@ func TestACutOffTurnIsResumedWithBackoffUntilTheOutageIsOver(t *testing.T) {
 
 func TestAnExpiredLoginStopsTheFactory(t *testing.T) {
 	t.Parallel()
+	unixStopSequence(t)
 	h := factorytest.New(t)
 	busy := h.ReadyTicket("Busy")
 	h.Script(busy, factorytest.Wait())

@@ -144,7 +144,9 @@ func TestACleanWorktreeIsRemovedOnDoneAndItsBranchKept(t *testing.T) {
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Shipped")
 	h.Script(id,
-		factorytest.Shell("echo x > x.txt && git add x.txt && git commit -q -m x"),
+		factorytest.WriteFile("x.txt", "x\n"),
+		factorytest.Git("add", "x.txt"),
+		factorytest.Git("commit", "-q", "-m", "x"),
 		factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
 	h.WaitForState(id, store.InReview)
@@ -169,7 +171,7 @@ func TestADirtyWorktreeIsLeftOnCancelledWithAWarning(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Abandoned")
-	h.Script(id, factorytest.Shell("echo wip > wip.txt"), factorytest.Finish("Done."), factorytest.Result("success"))
+	h.Script(id, factorytest.WriteFile("wip.txt", "wip\n"), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
 	h.WaitForState(id, store.InReview)
 	r.WaitForOutput(id + " turn ended")
