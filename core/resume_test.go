@@ -37,20 +37,20 @@ func TestSetSessionsLastWriteWinsAndAMissingFieldLeavesTheStoredOneAlone(t *test
 	f.work(t, store.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "s1", WorkingDir: str("/a"), ResumeCommand: str("claude --resume s1")})
 
-	v, err := f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "2", ClaimID: "claim-1", SessionID: "s2", ResumeCommand: str("claude --resume s2")})
+	v, err := record(f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "2", ClaimID: "claim-1", SessionID: "s2", ResumeCommand: str("claude --resume s2"), Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantResume(t, v.Claims[0], "/a", "claude --resume s2")
 
-	v, err = f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "2", ClaimID: "claim-1", SessionID: "s2", WorkingDir: str("/b")})
+	v, err = record(f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "2", ClaimID: "claim-1", SessionID: "s2", WorkingDir: str("/b"), Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	wantResume(t, v.Claims[0], "/b", "claude --resume s2")
 
 	// Given empty is a write too: it clears the value.
-	v, err = f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "2", ClaimID: "claim-1", SessionID: "s2", ResumeCommand: str("")})
+	v, err = record(f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "2", ClaimID: "claim-1", SessionID: "s2", ResumeCommand: str(""), Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}

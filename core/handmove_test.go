@@ -19,7 +19,7 @@ func TestAHumanMoveOutOfNeedsAnswerDismissesOpenQuestionsAndEndsTheClaim(t *test
 	}
 	later := t0.Add(2 * time.Hour)
 	f.clock.Set(later)
-	v, err := f.core.Cancel(human, "acme", core.CancelInput{Ticket: "2"})
+	v, err := record(f.core.Cancel(human, "acme", core.CancelInput{Ticket: "2", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestAHumanMoveFromNeedsAnswerToInProgressKeepsTheClaim(t *testing.T) {
 	f.asking(t, qDB)
 	moved := t0.Add(2 * time.Hour)
 	f.clock.Set(moved)
-	v, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: store.InProgress})
+	v, err := record(f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: store.InProgress, Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -44,7 +44,8 @@ func init() {
 		},
 		"move": {
 			ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/2/move", `{"to_state":"Done"}`}},
-			check: field("state", "Done"),
+			check: ticketAcknowledgement("acme-2", "Done", "state", "moves"),
+			full:  field("state", "Done"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/2/move", `{"to_state":"Failed"}`}},
 			code:  core.Invalid,
 		},

@@ -16,7 +16,8 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/set_session", `{"claim_id":"claim-1","session_id":"sess-2","working_dir":"/w","resume_command":"agent resume sess-2"}`},
 				cli:  []string{"acme-3", "--claim", "claim-1", "--session", "sess-2", "--working-dir", "/w", "--resume-command", "agent resume sess-2"},
 			},
-			check: func(t *testing.T, out map[string]any) {
+			check: ticketAcknowledgement("acme-3", "In Progress", "claims"),
+			full: func(t *testing.T, out map[string]any) {
 				claims, _ := out["claims"].([]any)
 				if len(claims) != 1 {
 					t.Fatalf("claims %v", out["claims"])
@@ -36,7 +37,8 @@ func init() {
 		"release": {
 			setup: claimedTicket,
 			ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/3/release", `{"note":"Session died."}`}},
-			check: field("state", "Ready"),
+			check: ticketAcknowledgement("acme-3", "Ready", "state", "claims", "comments", "moves", "claimable"),
+			full:  field("state", "Ready"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/2/release", `{}`}},
 			code:  core.ActionNotAllowed,
 		},

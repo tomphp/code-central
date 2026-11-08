@@ -23,9 +23,8 @@ func (c *Client) ListProjects(ctx context.Context) ([]core.ProjectRow, error) {
 }
 
 // Move is the human's move(to_state).
-func (c *Client) Move(ctx context.Context, key string, in core.MoveInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "move"), in, &out)
+func (c *Client) Move(ctx context.Context, key string, in core.MoveInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "move"), in, in.Full)
 }
 
 // RenameProject is the human's rename_project.

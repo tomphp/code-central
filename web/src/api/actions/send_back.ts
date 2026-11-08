@@ -2,11 +2,11 @@
 // optional note. No note tells the next agent nothing has changed.
 import { registerFakeAction } from "../fakeActions";
 import { fakeTransition } from "../fakeTransition";
-import type { TicketView } from "../types";
+import type { TicketAcknowledgement } from "../types";
 
 declare module "../api" {
   interface TicketActions {
-    send_back: { body: { note?: string }; result: TicketView };
+    send_back: { body: { note?: string }; result: TicketAcknowledgement };
   }
 }
 

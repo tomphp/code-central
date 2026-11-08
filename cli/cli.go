@@ -93,29 +93,29 @@ func init() {
 	commands = map[string]command{
 		"init":          {usage: "init [--key <key>] [--local | --committed]  set this repository up as a Project (--local keeps init's files out of git)", run: runInit},
 		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->] [--full]", run: runCreateSpec},
-		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--description <md> | --file <path|->]", run: runCreateTicket},
+		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--description <md> | --file <path|->] [--full]", run: runCreateTicket},
 		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id>", run: runGetTicket},
 		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--spec <id>] [--claimable[=false]]", run: runFindTickets},
 
 		"edit-spec":     {op: "edit_spec", usage: "edit-spec <id> [--title <t>] [--body <md> | --file <path|->] [--full]", run: runEditSpec},
-		"edit-ticket":   {op: "edit_ticket", usage: "edit-ticket <id> [--title <t>] [--description <md> | --file <path|->]", run: runEditTicket},
+		"edit-ticket":   {op: "edit_ticket", usage: "edit-ticket <id> [--title <t>] [--description <md> | --file <path|->] [--full]", run: runEditTicket},
 		"add-labels":    {op: "add_labels", usage: "add-labels <id> <label>...", run: runAddLabels},
 		"remove-labels": {op: "remove_labels", usage: "remove-labels <id> <label>...", run: runRemoveLabels},
 		"set-tags":      {op: "set_tags", usage: "set-tags <id> <key>=<value>...", run: runSetTags},
 		"remove-tags":   {op: "remove_tags", usage: "remove-tags <id> <key>...", run: runRemoveTags},
-		"comment":       {op: "comment", usage: "comment <id> [--body <md> | --file <path|->]", run: runComment},
-		"approve":       {op: "approve", usage: "approve <id>", run: runApprove},
-		"defer":         {op: "defer", usage: "defer <id> [--reason <text> | --file <path|->]", run: runDefer},
+		"comment":       {op: "comment", usage: "comment <id> [--body <md> | --file <path|->] [--full]", run: runComment},
+		"approve":       {op: "approve", usage: "approve <id> [--full]", run: runApprove},
+		"defer":         {op: "defer", usage: "defer <id> [--reason <text> | --file <path|->] [--full]", run: runDefer},
 		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>] [--working-dir <dir>] [--resume-command <command>]", run: runClaim},
 		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->] [--branch <branch>] [--commit <sha>]", run: runFinish},
 
-		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>]  (session defaults to $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
+		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>] [--full]  (session defaults to $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
 		"ping":        {usage: "ping [--session <id>]  mark this session active (reads hook JSON on stdin); always exits 0", run: runPing},
 		"hook":        {usage: "hook session-id  PreToolUse hook: add session_id to the tool input", run: runHook},
 		// Failure Reports and giving up (ticket 30).
 		"report-failure": {op: "report_failure", usage: "report-failure <id> --claim <claim-id> --what-broke <md> --why <md> --what-to-fix <md> --where-work-stands <md> | --file <json-path|->", run: runReportFailure},
 		"give-up":        {op: "give_up", usage: "give-up <id> --claim <claim-id> [--note <md> | --file <path|->]", run: runGiveUp},
-		"send-back":      {op: "send_back", usage: "send-back <id> [--note <md> | --file <path|->]  Accepted work that can't land (a merge conflict) back to Ready; the note is required", run: runSendBack},
+		"send-back":      {op: "send_back", usage: "send-back <id> [--note <md> | --file <path|->] [--full]  Accepted work that can't land (a merge conflict) back to Ready; the note is required", run: runSendBack},
 		// Rounds and wait (ticket 29).
 		"post-round":      {op: "post_round", usage: "post-round <id> --claim <claim-id> [--session <id>] [--questions <json> | --file <path|->]  Questions as a JSON array of {title, body, recommended?}, on stdin by default", run: runPostRound},
 		"pick-up-answers": {op: "pick_up_answers", usage: "pick-up-answers <id> --claim <claim-id>", run: runPickUpAnswers},
@@ -322,6 +322,7 @@ func runCreateTicket(ctx context.Context, e Env, args []string) error {
 	state := fs.String("state", "", "")
 	desc := fs.String("description", "", "")
 	file := fs.String("file", "", "")
+	full := fs.Bool("full", false, "")
 	var labels, blockedBy strs
 	fs.Var(&labels, "label", "")
 	fs.Var(&blockedBy, "blocked-by", "")
@@ -341,7 +342,7 @@ func runCreateTicket(ctx context.Context, e Env, args []string) error {
 		return err
 	}
 	in := core.CreateTicketInput{
-		Spec: core.Ref(*spec), Title: *title, Description: text, State: store.State(*state), Labels: labels,
+		Spec: core.Ref(*spec), Title: *title, Description: text, State: store.State(*state), Labels: labels, Full: *full,
 	}
 	for _, b := range blockedBy {
 		in.BlockedBy = append(in.BlockedBy, core.Ref(b))

@@ -2,11 +2,11 @@
 // required comment saying what to change.
 import { registerFakeAction } from "../fakeActions";
 import { fakeTransition } from "../fakeTransition";
-import { ApiError, type TicketView } from "../types";
+import { ApiError, type TicketAcknowledgement } from "../types";
 
 declare module "../api" {
   interface TicketActions {
-    reject: { body: { comment: string }; result: TicketView };
+    reject: { body: { comment: string }; result: TicketAcknowledgement };
   }
 }
 

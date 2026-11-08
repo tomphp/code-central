@@ -81,6 +81,7 @@ func runSendBack(ctx context.Context, e Env, args []string) error {
 	fs := flagSet("send-back")
 	note := fs.String("note", "", "")
 	file := fs.String("file", "", "")
+	full := fs.Bool("full", false, "")
 	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
@@ -89,7 +90,7 @@ func runSendBack(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.SendBack(ctx, sc.project, core.SendBackInput{Ticket: ref, Note: text})
+	v, err := sc.client.SendBack(ctx, sc.project, core.SendBackInput{Ticket: ref, Note: text, Full: *full})
 	if err != nil {
 		return err
 	}

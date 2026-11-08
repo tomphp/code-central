@@ -7,11 +7,12 @@ import type { TicketAction, TicketActions } from "./api";
 import type { FakeApi } from "./fake";
 import type { TicketView } from "./types";
 
+// A handler returns the Ticket it wrote; the fake's act acknowledges it.
 export type FakeActionHandler<A extends TicketAction> = (
   fake: FakeApi,
   ticket: TicketView,
   body: TicketActions[A]["body"],
-) => TicketActions[A]["result"];
+) => TicketView;
 
 export const fakeActions: { [A in TicketAction]?: FakeActionHandler<A> } = {};
 

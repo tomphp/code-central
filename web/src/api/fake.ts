@@ -61,6 +61,8 @@ import {
   type StageName,
   type StateSummary,
   type SubmitRequirementResult,
+  TICKET_FIELDS,
+  type TicketAcknowledgement,
   type TicketRow,
   type TicketView,
   type Transcript,
@@ -466,7 +468,8 @@ export class FakeApi implements Api {
     this.writable(project);
     const handler = fakeActions[action];
     if (!handler) throw new Error(`FakeApi: no fake behaviour for ${action}: add one under src/api/actions/`);
-    return structuredClone(handler(this, t, body));
+    const before = structuredClone(t);
+    return acknowledge(before, handler(this, t, body));
   }
 
   async archiveProject(key: string): Promise<ProjectView> {
@@ -668,4 +671,13 @@ export class FakeApi implements Api {
     else delete v.needs_me_reason;
     return v;
   }
+}
+
+// acknowledge is a Ticket write's result, as the service derives it: the
+// fields whose value differs between the views before and after the write,
+// in the view's order, never updated.
+function acknowledge(before: TicketView, after: TicketView): TicketAcknowledgement {
+  const changed = TICKET_FIELDS.filter((f) => f !== "updated" && JSON.stringify(before[f]) !== JSON.stringify(after[f]));
+  const edit = changed.includes("edits") ? after.edits.at(-1)?.number : undefined;
+  return { id: after.id, updated: after.updated, changed, ...(edit && { edit }), state: after.state };
 }

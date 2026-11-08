@@ -13,7 +13,7 @@ func TestSetSessionUpdatesTheLiveClaimsSessionID(t *testing.T) {
 	f.work(t, store.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "old"})
 
-	v, err := f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "acme-2", ClaimID: "claim-1", SessionID: "new"})
+	v, err := record(f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "acme-2", ClaimID: "claim-1", SessionID: "new", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +21,7 @@ func TestSetSessionUpdatesTheLiveClaimsSessionID(t *testing.T) {
 		t.Fatalf("claims %+v, want session new", v.Claims)
 	}
 	// The session ID is never checked: any value, even none, is taken.
-	if v, err = f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "2", ClaimID: "claim-1"}); err != nil || v.Claims[0].SessionID != "" {
+	if v, err = record(f.core.SetSession(ctx, "acme", core.SetSessionInput{Ticket: "2", ClaimID: "claim-1", Full: true})); err != nil || v.Claims[0].SessionID != "" {
 		t.Fatalf("got %+v, %v", v.Claims, err)
 	}
 	// Pings now follow the new session.
@@ -48,7 +48,7 @@ func TestTheHumanReleasesAClaimBackToReady(t *testing.T) {
 	f.clock.Advance(time.Hour)
 	released := f.clock.Now()
 
-	v, err := f.core.Release(human, "acme", core.ReleaseInput{Ticket: "2", Note: "session died"})
+	v, err := record(f.core.Release(human, "acme", core.ReleaseInput{Ticket: "2", Note: "session died", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestTheHumanReleasesAClaimBackToReady(t *testing.T) {
 
 	// The note is optional.
 	f.claim(t, core.ClaimInput{Ticket: "3"})
-	if v, err = f.core.Release(human, "acme", core.ReleaseInput{Ticket: "3"}); err != nil || len(v.Comments) != 0 {
+	if v, err = record(f.core.Release(human, "acme", core.ReleaseInput{Ticket: "3", Full: true})); err != nil || len(v.Comments) != 0 {
 		t.Fatalf("got %+v, %v", v.Comments, err)
 	}
 }
@@ -89,7 +89,7 @@ func TestReleaseIsHumanOnlyFromInProgressOrAnswered(t *testing.T) {
 		tk.State = store.Answered
 		return w.PutTicket("acme", tk)
 	})
-	if v, err := f.core.Release(human, "acme", core.ReleaseInput{Ticket: "3"}); err != nil || v.State != store.Ready {
+	if v, err := record(f.core.Release(human, "acme", core.ReleaseInput{Ticket: "3", Full: true})); err != nil || v.State != store.Ready {
 		t.Fatalf("release from Answered: %+v, %v", v.State, err)
 	}
 }

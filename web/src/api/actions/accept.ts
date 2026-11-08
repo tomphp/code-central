@@ -2,11 +2,11 @@
 // when its finish named a branch, and into Done otherwise (ADR 0006).
 import { registerFakeAction } from "../fakeActions";
 import { fakeTransition } from "../fakeTransition";
-import type { TicketView } from "../types";
+import type { TicketAcknowledgement } from "../types";
 
 declare module "../api" {
   interface TicketActions {
-    accept: { body: Record<string, never>; result: TicketView };
+    accept: { body: Record<string, never>; result: TicketAcknowledgement };
   }
 }
 

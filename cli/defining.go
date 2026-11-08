@@ -79,11 +79,12 @@ func runEditTicket(ctx context.Context, e Env, args []string) error {
 	title := fs.String("title", "", "")
 	desc := fs.String("description", "", "")
 	file := fs.String("file", "", "")
+	full := fs.Bool("full", false, "")
 	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
 	}
-	in := core.EditTicketInput{Ticket: ref}
+	in := core.EditTicketInput{Ticket: ref, Full: *full}
 	if isSet(fs, "title") {
 		in.Title = title
 	}
@@ -157,6 +158,7 @@ func runComment(ctx context.Context, e Env, args []string) error {
 	fs := flagSet("comment")
 	body := fs.String("body", "", "")
 	file := fs.String("file", "", "")
+	full := fs.Bool("full", false, "")
 	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
@@ -165,7 +167,7 @@ func runComment(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Comment(ctx, sc.project, core.CommentInput{Ticket: ref, Body: text})
+	v, err := sc.client.Comment(ctx, sc.project, core.CommentInput{Ticket: ref, Body: text, Full: *full})
 	if err != nil {
 		return err
 	}
@@ -173,11 +175,13 @@ func runComment(ctx context.Context, e Env, args []string) error {
 }
 
 func runApprove(ctx context.Context, e Env, args []string) error {
-	sc, ref, _, err := itemCommand(e, flagSet("approve"), args, 0, 0)
+	fs := flagSet("approve")
+	full := fs.Bool("full", false, "")
+	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Approve(ctx, sc.project, core.TicketInput{Ticket: ref})
+	v, err := sc.client.Approve(ctx, sc.project, core.TicketInput{Ticket: ref, Full: *full})
 	if err != nil {
 		return err
 	}
@@ -188,6 +192,7 @@ func runDefer(ctx context.Context, e Env, args []string) error {
 	fs := flagSet("defer")
 	reason := fs.String("reason", "", "")
 	file := fs.String("file", "", "")
+	full := fs.Bool("full", false, "")
 	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
@@ -196,7 +201,7 @@ func runDefer(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Defer(ctx, sc.project, core.DeferInput{Ticket: ref, Reason: text})
+	v, err := sc.client.Defer(ctx, sc.project, core.DeferInput{Ticket: ref, Reason: text, Full: *full})
 	if err != nil {
 		return err
 	}

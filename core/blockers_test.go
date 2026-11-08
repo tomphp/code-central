@@ -22,7 +22,7 @@ func (f fixture) get(t *testing.T, ref core.Ref) core.TicketView {
 
 func (f fixture) addBlocker(t *testing.T, ticket, blocker core.Ref) core.TicketView {
 	t.Helper()
-	v, err := f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: ticket, Blocker: blocker})
+	v, err := record(f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: ticket, Blocker: blocker, Full: true}))
 	if err != nil {
 		t.Fatalf("add_blocker %s %s: %v", ticket, blocker, err)
 	}
@@ -171,7 +171,7 @@ func TestRemoveBlocker(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, store.Ready, store.Ready)
 	f.addBlocker(t, "acme-2", "acme-3")
-	v, err := f.core.RemoveBlocker(ctx, "acme", core.BlockerInput{Ticket: "acme-2", Blocker: "acme-3"})
+	v, err := record(f.core.RemoveBlocker(ctx, "acme", core.BlockerInput{Ticket: "acme-2", Blocker: "acme-3", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}

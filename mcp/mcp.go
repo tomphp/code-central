@@ -45,7 +45,7 @@ var tools = map[string]tool{
 		},
 	},
 	"create_ticket": {
-		description: "Create a Ticket in a Spec, as Draft (the default) or Ready.",
+		description: "Create a Ticket in a Spec, as Draft (the default) or Ready. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
 		schema: object(map[string]any{
 			"spec":        ref("The Spec it belongs to."),
 			"title":       text("The Ticket's title."),
@@ -53,6 +53,7 @@ var tools = map[string]tool{
 			"state":       map[string]any{"type": "string", "enum": []string{"Draft", "Ready"}, "description": "Draft (the default) or Ready."},
 			"labels":      list("Labels to add."),
 			"blocked_by":  map[string]any{"type": "array", "items": map[string]any{"type": []string{"string", "integer"}}, "description": "Tickets it waits on until they are Done. IDs: <key>-<n> or <n>."},
+			"full":        flag("Return the whole Ticket instead of the acknowledgement."),
 		}, "spec", "title"),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.CreateTicketInput
@@ -141,13 +142,14 @@ func init() {
 // sessionTools keep a Claim's session ID current (ticket 31).
 var sessionTools = map[string]tool{
 	"set_session": {
-		description: "Record the session now working your Claim, and how to get back into it, so the human can resume it. A hook usually fills session_id in for you.",
+		description: "Record the session now working your Claim, and how to get back into it, so the human can resume it. A hook usually fills session_id in for you. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
 		schema: object(map[string]any{
 			"ticket":         ref("The Ticket."),
 			"claim_id":       text("The Claim ID claim returned."),
 			"session_id":     text("Your session ID."),
 			"working_dir":    text("The directory you work in now. Left out, the recorded one stays."),
 			"resume_command": text("The command that resumes your session from working_dir. Left out, the recorded one stays."),
+			"full":           flag("Return the whole Ticket instead of the acknowledgement."),
 		}, "ticket", "claim_id", "session_id"),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.SetSessionInput
@@ -174,11 +176,12 @@ var definingTools = map[string]tool{
 		}),
 	},
 	"edit_ticket": {
-		description: "Edit a Ticket's title or description; the old text is kept in its edit history.",
+		description: "Edit a Ticket's title or description; the old text is kept in its edit history. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
 		schema: object(map[string]any{
 			"ticket":      ref("The Ticket."),
 			"title":       text("The new title."),
 			"description": text("The new description in Markdown, replacing the old one whole."),
+			"full":        flag("Return the whole Ticket instead of the acknowledgement."),
 		}, "ticket"),
 		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.EditTicketInput) (any, error) {
 			return c.EditTicket(ctx, key, in)
@@ -216,22 +219,22 @@ var definingTools = map[string]tool{
 		}),
 	},
 	"comment": {
-		description: "Comment on any Ticket, even one another agent holds; no Claim ID is needed.",
-		schema:      object(map[string]any{"ticket": ref("The Ticket."), "body": text("The comment in Markdown.")}, "ticket", "body"),
+		description: "Comment on any Ticket, even one another agent holds; no Claim ID is needed. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+		schema:      object(map[string]any{"ticket": ref("The Ticket."), "body": text("The comment in Markdown."), "full": flag("Return the whole Ticket instead of the acknowledgement.")}, "ticket", "body"),
 		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.CommentInput) (any, error) {
 			return c.Comment(ctx, key, in)
 		}),
 	},
 	"approve": {
-		description: "Approve a Draft Ticket you have finished defining, moving it to Ready so it can be claimed.",
-		schema:      object(map[string]any{"ticket": ref("The Ticket.")}, "ticket"),
+		description: "Approve a Draft Ticket you have finished defining, moving it to Ready so it can be claimed. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+		schema:      object(map[string]any{"ticket": ref("The Ticket."), "full": flag("Return the whole Ticket instead of the acknowledgement.")}, "ticket"),
 		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.TicketInput) (any, error) {
 			return c.Approve(ctx, key, in)
 		}),
 	},
 	"defer": {
-		description: "Defer a Ready Ticket that isn't ready back to Draft, with the reason stored as a comment.",
-		schema:      object(map[string]any{"ticket": ref("The Ticket."), "reason": text("Why it isn't ready.")}, "ticket", "reason"),
+		description: "Defer a Ready Ticket that isn't ready back to Draft, with the reason stored as a comment. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
+		schema:      object(map[string]any{"ticket": ref("The Ticket."), "reason": text("Why it isn't ready."), "full": flag("Return the whole Ticket instead of the acknowledgement.")}, "ticket", "reason"),
 		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.DeferInput) (any, error) {
 			return c.Defer(ctx, key, in)
 		}),

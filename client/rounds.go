@@ -21,21 +21,18 @@ func (c *Client) PickUpAnswers(ctx context.Context, key string, in core.PickUpAn
 }
 
 // Answer is the human's answer; set Actor to human.
-func (c *Client) Answer(ctx context.Context, key string, in core.AnswerInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "answer"), in, &out)
+func (c *Client) Answer(ctx context.Context, key string, in core.AnswerInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "answer"), in, in.Full)
 }
 
 // AcceptRecommended is the human's accept_recommended; set Actor to human.
-func (c *Client) AcceptRecommended(ctx context.Context, key string, in core.AcceptRecommendedInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "accept_recommended"), in, &out)
+func (c *Client) AcceptRecommended(ctx context.Context, key string, in core.AcceptRecommendedInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "accept_recommended"), in, in.Full)
 }
 
 // DismissQuestion is the human's dismiss_question; set Actor to human.
-func (c *Client) DismissQuestion(ctx context.Context, key string, in core.DismissQuestionInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "dismiss_question"), in, &out)
+func (c *Client) DismissQuestion(ctx context.Context, key string, in core.DismissQuestionInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "dismiss_question"), in, in.Full)
 }
 
 // Wait is one long-poll: it holds for up to a minute and returns the

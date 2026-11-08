@@ -16,13 +16,15 @@ import (
 type MoveInput struct {
 	Ticket  Ref         `json:"ticket"`
 	ToState store.State `json:"to_state"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // Move is the human's move(to_state): a Ticket goes to any State but its
 // own, Needs Answer and Failed. Leaving a Claim State ends the Claim;
 // leaving Needs Answer also dismisses its open Questions.
-func (c *Core) Move(ctx context.Context, key string, in MoveInput) (TicketView, error) {
-	return c.updateTicket(key, "move", in.Ticket, func(t *store.Ticket) (bool, error) {
+func (c *Core) Move(ctx context.Context, key string, in MoveInput) (Written[TicketView], error) {
+	return c.updateTicket(key, "move", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
 		to := in.ToState
 		row := Workflow[slices.IndexFunc(Workflow, func(a Action) bool { return a.Name == "move" })]
 		switch {

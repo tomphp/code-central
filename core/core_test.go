@@ -50,11 +50,23 @@ func (f fixture) spec(t *testing.T, key, title string) core.SpecView {
 
 func (f fixture) ticket(t *testing.T, key string, in core.CreateTicketInput) core.TicketView {
 	t.Helper()
-	tk, err := f.core.CreateTicket(ctx, key, in)
+	in.Full = true
+	tk, err := record(f.core.CreateTicket(ctx, key, in))
 	if err != nil {
 		t.Fatalf("create_ticket: %v", err)
 	}
 	return tk
+}
+
+// record is the Ticket a write asked for with full returned.
+func record(w core.Written[core.TicketView], err error) (core.TicketView, error) {
+	if err != nil {
+		return core.TicketView{}, err
+	}
+	if w.Record == nil {
+		return core.TicketView{}, errors.New("the write returned an acknowledgement: ask for the Ticket with Full")
+	}
+	return *w.Record, nil
 }
 
 func wantCode(t *testing.T, err error, code core.Code, field string) {

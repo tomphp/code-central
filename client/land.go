@@ -7,7 +7,6 @@ import (
 )
 
 // Land is land.
-func (c *Client) Land(ctx context.Context, key string, in core.LandInput) (core.TicketView, error) {
-	var out core.TicketView
-	return out, c.do(ctx, "POST", item(key, "tickets", in.Ticket, "land"), in, &out)
+func (c *Client) Land(ctx context.Context, key string, in core.LandInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "land"), in, in.Full)
 }

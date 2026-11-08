@@ -38,11 +38,11 @@ func TestTheSessionIDDefaultsToClaudeCodesAndTheFlagWins(t *testing.T) {
 	if s := res.Ticket.Claims[0].SessionID; s != "from-env" {
 		t.Fatalf("claim recorded session %q, want from-env", s)
 	}
-	v := decode[core.TicketView](t, run(t, env, "", "set-session", "acme-2", "--claim", res.ClaimID, "--session", "from-flag"))
+	v := decode[core.TicketView](t, run(t, env, "", "set-session", "acme-2", "--claim", res.ClaimID, "--session", "from-flag", "--full"))
 	if s := v.Claims[0].SessionID; s != "from-flag" {
 		t.Fatalf("set-session recorded %q, want from-flag", s)
 	}
-	v = decode[core.TicketView](t, run(t, env, "", "set-session", "acme-2", "--claim", res.ClaimID))
+	v = decode[core.TicketView](t, run(t, env, "", "set-session", "acme-2", "--claim", res.ClaimID, "--full"))
 	if s := v.Claims[0].SessionID; s != "from-env" {
 		t.Fatalf("set-session recorded %q, want from-env", s)
 	}

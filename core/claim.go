@@ -50,6 +50,8 @@ type FinishResult struct {
 type RejectInput struct {
 	Ticket  Ref    `json:"ticket"`
 	Comment string `json:"comment"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // stopWorking is the next step after an action that ends the agent's work.
@@ -131,7 +133,8 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 	if strings.TrimSpace(in.Summary) == "" {
 		return FinishResult{}, invalid("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
 	}
-	v, err := c.actThen(ctx, key, in.Ticket, "finish", in.ClaimID, in.Summary, func(t *store.Ticket) error {
+	// With full: finish's result still holds the whole Ticket.
+	v, err := c.actThen(ctx, key, in.Ticket, true, "finish", in.ClaimID, in.Summary, func(t *store.Ticket) error {
 		if b := strings.TrimSpace(in.Branch); b != "" {
 			t.Branch = b
 		}
@@ -143,14 +146,14 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 	if err != nil {
 		return FinishResult{}, err
 	}
-	return FinishResult{Ticket: v, NextStep: nextStep("finish")}, nil
+	return FinishResult{Ticket: *v.Record, NextStep: nextStep("finish")}, nil
 }
 
 // Accept is the human's accept(ticket): In Review to Accepted when the
 // work's finish named a branch, so it waits to land (ADR 0006), and to
 // Done otherwise.
-func (c *Core) Accept(ctx context.Context, key string, in TicketInput) (TicketView, error) {
-	return c.updateTicket(key, "accept", in.Ticket, func(t *store.Ticket) (bool, error) {
+func (c *Core) Accept(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
+	return c.updateTicket(key, "accept", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
 		to := store.Done
 		if t.Branch != "" {
 			to = store.Accepted
@@ -163,17 +166,19 @@ func (c *Core) Accept(ctx context.Context, key string, in TicketInput) (TicketVi
 type LandInput struct {
 	Ticket Ref    `json:"ticket"`
 	Commit string `json:"commit"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // Land is land(ticket, commit): human or agent, Accepted or In Review to
 // Done once the work is in the base. The commit is recorded on the Move,
 // with Via merge.
-func (c *Core) Land(ctx context.Context, key string, in LandInput) (TicketView, error) {
+func (c *Core) Land(ctx context.Context, key string, in LandInput) (Written[TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
-		return TicketView{}, invalid("commit", "land needs the commit that put the work into the base")
+		return Written[TicketView]{}, invalid("commit", "land needs the commit that put the work into the base")
 	}
-	return c.actThen(ctx, key, in.Ticket, "land", "", "", func(t *store.Ticket) error {
+	return c.actThen(ctx, key, in.Ticket, in.Full, "land", "", "", func(t *store.Ticket) error {
 		m := &t.Moves[len(t.Moves)-1]
 		m.Via, m.Commit = "merge", commit
 		return nil
@@ -183,24 +188,25 @@ func (c *Core) Land(ctx context.Context, key string, in LandInput) (TicketView, 
 // Reject is the human's reject(ticket, comment): In Review back to Ready,
 // with the comment required. The Ticket keeps its created time, so it
 // keeps its place near the front of the claim order.
-func (c *Core) Reject(ctx context.Context, key string, in RejectInput) (TicketView, error) {
+func (c *Core) Reject(ctx context.Context, key string, in RejectInput) (Written[TicketView], error) {
 	if strings.TrimSpace(in.Comment) == "" {
-		return TicketView{}, invalid("comment", "reject needs a comment saying what to change")
+		return Written[TicketView]{}, invalid("comment", "reject needs a comment saying what to change")
 	}
-	return c.act(ctx, key, in.Ticket, "reject", "", in.Comment)
+	return c.act(ctx, key, in.Ticket, in.Full, "reject", "", in.Comment)
 }
 
 // act runs one action from the workflow table on a Ticket in one write:
 // the transition, then the action's note (if any) as a comment under the
-// Claim it was made on.
-func (c *Core) act(ctx context.Context, key string, ref Ref, name, claimID, note string) (TicketView, error) {
-	return c.actThen(ctx, key, ref, name, claimID, note, nil)
+// Claim it was made on. Its result is the Acknowledgement, or with full
+// the Ticket.
+func (c *Core) act(ctx context.Context, key string, ref Ref, full bool, name, claimID, note string) (Written[TicketView], error) {
+	return c.actThen(ctx, key, ref, full, name, claimID, note, nil)
 }
 
 // actThen is act with then applied to the Ticket after the transition,
 // in the same write. An error from then abandons the write.
-func (c *Core) actThen(ctx context.Context, key string, ref Ref, name, claimID, note string, then func(*store.Ticket) error) (TicketView, error) {
-	return c.updateTicket(key, name, ref, func(t *store.Ticket) (bool, error) {
+func (c *Core) actThen(ctx context.Context, key string, ref Ref, full bool, name, claimID, note string, then func(*store.Ticket) error) (Written[TicketView], error) {
+	return c.updateTicket(key, name, ref, full, func(t *store.Ticket) (bool, error) {
 		claim := 0
 		if live, ok := liveClaim(*t); ok {
 			claim = live.Number
