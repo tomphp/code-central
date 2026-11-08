@@ -179,6 +179,42 @@ func TestHookSessionIDAddsTheSessionToTheToolInput(t *testing.T) {
 	}
 }
 
+// hookUpdatedInput runs the session-id hook on stdin and returns its
+// updatedInput.
+func hookUpdatedInput(t *testing.T, stdin string) map[string]any {
+	t.Helper()
+	r := run(t, nil, stdin, "hook", "session-id")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	var out struct {
+		HookSpecificOutput struct {
+			UpdatedInput map[string]any `json:"updatedInput"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal([]byte(r.stdout), &out); err != nil {
+		t.Fatalf("%v: %s", err, r.stdout)
+	}
+	return out.HookSpecificOutput.UpdatedInput
+}
+
+func TestHookSessionIDFillsClaimsWorkingDirFromTheHooksCwd(t *testing.T) {
+	got := hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__claim","tool_input":{"spec":"acme-1"}}`)
+	if len(got) != 3 || got["session_id"] != "abc" || got["working_dir"] != "/work/acme" {
+		t.Fatalf("updatedInput %v", got)
+	}
+	// A working_dir the agent gave is kept.
+	got = hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__claim","tool_input":{"working_dir":"/elsewhere"}}`)
+	if got["working_dir"] != "/elsewhere" {
+		t.Fatalf("updatedInput %v", got)
+	}
+	// post_round takes no working_dir, so it gets none.
+	got = hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__post_round","tool_input":{"ticket":"acme-2"}}`)
+	if _, ok := got["working_dir"]; ok || got["session_id"] != "abc" {
+		t.Fatalf("updatedInput %v", got)
+	}
+}
+
 func TestHookSessionIDNeverBlocks(t *testing.T) {
 	for name, stdin := range map[string]string{
 		"not JSON":   "nonsense",

@@ -7,7 +7,7 @@ import "../../api/actions/release";
 import { ApiError, type RoundView, type TicketView } from "../../api/types";
 import { ago, duration } from "../../format";
 import type { PanelDef, PanelProps } from "../ActionPanel";
-import { ResumeCommand } from "./ResumeCommand";
+import { ResumeCommand, type Session } from "./ResumeCommand";
 import "./resume.css";
 
 function ResumeRelease({ api, project, ticket: t, now }: PanelProps) {
@@ -20,7 +20,7 @@ function ResumeRelease({ api, project, ticket: t, now }: PanelProps) {
           ? `Answered ${ago(now, answeredAt(t))}, no session has picked it up.`
           : `Quiet for ${duration(now, quietSince(t))}.`}
       </p>
-      <ResumeCommand sessionId={sessionOf(t)} />
+      <ResumeCommand {...sessionOf(t)} />
       {answered && round && <Answers round={round} />}
       <Release api={api} project={project} ticket={t} />
     </section>
@@ -38,9 +38,15 @@ function quietSince(t: TicketView): string {
 }
 
 // sessionOf is the session to resume: the live Claim's (set_session keeps
-// it current), else the one that posted the latest Round.
-function sessionOf(t: TicketView): string | undefined {
-  return t.claims.find((c) => !c.ended)?.session_id || t.rounds.at(-1)?.session_id || undefined;
+// it current), its session ID falling back to the one that posted the
+// latest Round.
+function sessionOf(t: TicketView): Session {
+  const live = t.claims.find((c) => !c.ended);
+  return {
+    sessionId: live?.session_id || t.rounds.at(-1)?.session_id || undefined,
+    workingDir: live?.working_dir,
+    resumeCommand: live?.resume_command,
+  };
 }
 
 function Answers({ round }: { round: RoundView }) {

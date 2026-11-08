@@ -43,6 +43,8 @@ type FailureReportView struct {
 	Number          int       `json:"number"`
 	Claim           int       `json:"claim"`
 	SessionID       string    `json:"session_id,omitempty"`
+	WorkingDir      string    `json:"working_dir,omitempty"`
+	ResumeCommand   string    `json:"resume_command,omitempty"`
 	Actor           string    `json:"actor"`
 	Time            time.Time `json:"time"`
 	WhatBroke       string    `json:"what_broke"`
@@ -74,7 +76,8 @@ func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureIn
 		}
 		// transition checked live is the holder's Claim.
 		t.FailureReports = append(t.FailureReports, store.FailureReport{
-			Number: len(t.FailureReports) + 1, Claim: live.Number, SessionID: live.SessionID,
+			Number: len(t.FailureReports) + 1, Claim: live.Number,
+			SessionID: live.SessionID, WorkingDir: live.WorkingDir, ResumeCommand: live.ResumeCommand,
 			Actor: string(ActorOf(ctx)), Time: now,
 			WhatBroke: in.WhatBroke, Why: in.Why, WhatToFix: in.WhatToFix, WhereWorkStands: in.WhereWorkStands,
 		})
@@ -116,7 +119,8 @@ func failureReportViews(rs []store.FailureReport) []FailureReportView {
 	out := []FailureReportView{}
 	for _, r := range rs {
 		out = append(out, FailureReportView{
-			Number: r.Number, Claim: r.Claim, SessionID: r.SessionID, Actor: r.Actor, Time: r.Time,
+			Number: r.Number, Claim: r.Claim, SessionID: r.SessionID, WorkingDir: r.WorkingDir, ResumeCommand: r.ResumeCommand,
+			Actor: r.Actor, Time: r.Time,
 			WhatBroke: r.WhatBroke, Why: r.Why, WhatToFix: r.WhatToFix, WhereWorkStands: r.WhereWorkStands,
 		})
 	}
