@@ -130,6 +130,43 @@ describe("the Failed panel", () => {
     expect(await within(panel).findByRole("alert")).toHaveTextContent("to_draft is not allowed");
   });
 
+  it("renders every field of the latest and earlier reports as Markdown, under plain labels", async () => {
+    window.history.replaceState(null, "", "/?view=inbox&ticket=acme-1");
+    const md = (n: number): Partial<FailureReportView> => ({
+      what_broke: `The **build ${n}** failed`,
+      why: `- cause ${n}\n- second cause ${n}`,
+      what_to_fix: `Run \`make ${n}\``,
+      where_work_stands: `See [the branch ${n}](https://example.com/${n})`,
+    });
+    const fake = world([report(1, md(1)), report(2, md(2))]);
+    render(<App api={fake} now={() => fake.now} />);
+    const pane = screen.getByRole("complementary", { name: "Ticket" });
+    const panel = await within(pane).findByRole("region", { name: "Failed" });
+
+    for (const n of [2, 1]) {
+      const r = within(panel).getByRole("group", { name: `Failure Report ${n}`, hidden: true });
+      const field = (label: string) => {
+        const dt = within(r).getByText(label);
+        expect(dt.tagName).toBe("DT");
+        expect(dt.children).toHaveLength(0); // the label stays plain text
+        const dd = dt.nextElementSibling as HTMLElement;
+        expect(dd.tagName).toBe("DD");
+        return dd;
+      };
+      expect(field("What broke").querySelector("strong")).toHaveTextContent(`build ${n}`);
+      expect(field("Why").querySelectorAll("li")).toHaveLength(2);
+      expect(field("What to fix").querySelector("code")).toHaveTextContent(`make ${n}`);
+      expect(field("Where the work stands").querySelector("a")).toHaveAttribute("href", `https://example.com/${n}`);
+    }
+  });
+
+  it("shows raw HTML in a report field as text", async () => {
+    const panel = await renderPanel(world([report(1, { why: '<img src=x onerror="alert(1)"> <b>bold</b>' })]));
+    const why = within(panel).getByText("Why").nextElementSibling!;
+    expect(why.querySelector("img, b")).toBeNull();
+    expect(why).toHaveTextContent('<img src=x onerror="alert(1)"> <b>bold</b>');
+  });
+
   it("is the action panel for a Failed Ticket in the inbox", async () => {
     window.history.replaceState(null, "", "/?view=inbox&ticket=acme-1");
     const fake = world();

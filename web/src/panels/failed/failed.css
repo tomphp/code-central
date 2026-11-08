@@ -2,7 +2,10 @@
 .failed-panel h3 { font-size: 14px; color: var(--r-failed); margin-bottom: 8px; }
 .failed-panel .report dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 4px 0 8px; }
 .failed-panel .report dt { color: var(--muted); font-size: 12.5px; }
-.failed-panel .report dd { margin: 0; white-space: pre-wrap; }
+.failed-panel .report dd { margin: 0; }
+/* Tighter than the shared Markdown margins, so a report stays compact. */
+.failed-panel .report dd .markdown > * { margin: 0; }
+.failed-panel .report dd .markdown > * + * { margin-top: 4px; }
 .failed-panel .send-back-note { display: grid; gap: 4px; margin-top: 8px; }
 .failed-panel .moves { display: flex; gap: 8px; flex-wrap: wrap; }
 .failed-panel .investigate { border-top: 1px solid var(--border); padding-top: 8px; }
