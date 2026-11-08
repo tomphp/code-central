@@ -2,9 +2,9 @@
 // Question's rules live in one place: the answer box, starting as the
 // saved answer, else the recommendation as an unsaved draft (labelled as
 // such), then Answer and Dismiss, which send answer and dismiss_question
-// for that one Question, and the refusal alert. The caller wraps it with
-// the Question's title and body.
-import { useState, type KeyboardEvent } from "react";
+// for that one Question, any further buttons the caller adds, and the
+// refusal alert. The caller wraps it with the Question's title and body.
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Api } from "../../api/api";
 import "../../api/actions/rounds";
 import type { QuestionView } from "../../api/types";
@@ -18,9 +18,11 @@ export interface QuestionAnswerProps {
   q: QuestionView;
   // submitOnModEnter makes Cmd/Ctrl+Enter in the box send Answer.
   submitOnModEnter?: boolean;
+  // children are further buttons, after Answer and Dismiss.
+  children?: ReactNode;
 }
 
-export function QuestionAnswer({ api, project, ticket, q, submitOnModEnter }: QuestionAnswerProps) {
+export function QuestionAnswer({ api, project, ticket, q, submitOnModEnter, children }: QuestionAnswerProps) {
   const { busy, alert, run } = useAction();
   // draft is what the human typed since the last save; until then the box
   // shows the saved answer, else the recommendation.
@@ -55,6 +57,7 @@ export function QuestionAnswer({ api, project, ticket, q, submitOnModEnter }: Qu
             Dismiss
           </button>
         )}
+        {children}
       </div>
     </>
   );
