@@ -78,6 +78,7 @@ func serve(t *testing.T) *service {
 	cmd.Env = append(os.Environ(), "CODE_CENTRAL_LISTEN=127.0.0.1:0")
 	startInOwnGroup(cmd)
 	cmd.Cancel = func() error { return interrupt(cmd.Process) }
+	cmd.WaitDelay = 15 * time.Second // then killed
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)

@@ -203,21 +203,20 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 	case <-time.After(15 * time.Second):
 		t.Fatal("the Factory did not stop")
 	}
+	// factory/run.go's drain prints this when no turn is running.
 	if out := factoryOut.String(); !strings.Contains(out, "drained: no turns running") {
 		t.Errorf("the Factory did not drain:\n%s", out)
 	}
 }
 
-// installSelf puts this test binary at dst, as the fake claude: a hard
-// link, or a copy where the link can't be made.
+// installSelf copies this test binary to dst, as the fake claude. Not a
+// hard link: Windows refuses to delete any name of a running program, so
+// a link to this binary would fail the temporary folder's cleanup.
 func installSelf(t *testing.T, dst string) {
 	t.Helper()
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
-	}
-	if os.Link(self, dst) == nil {
-		return
 	}
 	src, err := os.Open(self)
 	if err != nil {
