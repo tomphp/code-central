@@ -51,7 +51,11 @@ export function needsMeCount(needsMe: NeedsMeView | undefined, inProject: (proje
   return requirements.size + rows.filter((r) => !r.requirement?.stage).length;
 }
 
-export const isStage =(t: { labels: string[] }) => t.labels.some((l) => l.startsWith("stage:"));
+const STAGES: StageName[] = ["grilling", "spec", "tickets"];
+
+// isStage reports whether a Ticket is a Stage Ticket: one of its Labels is
+// a Stage's, stage:grilling, stage:spec or stage:tickets, as core says.
+export const isStage = (t: { labels: string[] }) => STAGES.some((s) => t.labels.includes(`stage:${s}`));
 
 export function progress(req: RequirementView, tickets: TicketRow[], reasons: Map<string, NeedsMeReason>): Progress {
   const build = tickets.filter((t) => !isStage(t));

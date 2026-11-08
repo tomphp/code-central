@@ -108,11 +108,11 @@ type NeedsMeRequirement struct {
 // needsMeRequirement is the Requirement t is on, or nil when its Spec
 // isn't one.
 func needsMeRequirement(r store.Reader, key string, t store.Ticket) *NeedsMeRequirement {
-	if !slices.ContainsFunc(specTickets(r, key, t.Spec), func(st store.Ticket) bool { return stageOf(st) != "" }) {
+	if !slices.ContainsFunc(specTickets(r, key, t.Spec), func(st store.Ticket) bool { return StageOf(st.Labels) != "" }) {
 		return nil
 	}
 	sp, _ := r.Spec(key, t.Spec)
-	return &NeedsMeRequirement{Spec: DisplayID(key, t.Spec), Title: sp.Title, Stage: stageOf(t)}
+	return &NeedsMeRequirement{Spec: DisplayID(key, t.Spec), Title: sp.Title, Stage: StageOf(t.Labels)}
 }
 
 // RoundSummary is a Round's number and how many of its Questions are open.

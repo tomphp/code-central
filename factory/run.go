@@ -288,7 +288,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		return false
 	}
 	id := res.Ticket.ID
-	stage := stageOf(*res.Ticket)
+	stage := core.GuideStage(res.Ticket.Labels)
 	guide := f.stageGuide(ctx, res.StageGuide, stage)
 	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}}
 	if err := f.addClaim(c); err != nil {
@@ -299,7 +299,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		f.printf("%s: set_session: %v", id, err)
 	}
 	setUp := f.implementationWorktree
-	if stage != "" {
+	if stage != core.ImplementationStage {
 		setUp = f.stageWorktree
 	}
 	if err := setUp(id, wt); err != nil {

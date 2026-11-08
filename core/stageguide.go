@@ -5,8 +5,6 @@ import (
 	"embed"
 	"slices"
 	"strings"
-
-	"github.com/tomoram/code-central/store"
 )
 
 // Stage Guides (Spec code-central-66, ADR 0007). Code Central owns what
@@ -55,10 +53,10 @@ func stageGuide(stage string) StageGuideView {
 	return StageGuideView{Stage: stage, Guide: string(b)}
 }
 
-// guideStage names the guide for a Ticket: its Stage, or implementation
-// when it has no Stage Label.
-func guideStage(t store.Ticket) string {
-	if s := stageOf(t); s != "" {
+// GuideStage names the guide for a Ticket with these Labels: its Stage,
+// or ImplementationStage when it has no Stage Label.
+func GuideStage(labels []string) string {
+	if s := StageOf(labels); s != "" {
 		return s
 	}
 	return ImplementationStage
