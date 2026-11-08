@@ -60,6 +60,27 @@ describe("the Ticket detail", () => {
     expect(rows[1]).toHaveTextContent("ended by release 4h ago");
   });
 
+  it("shows nothing more on a Claim row with no Session Events", () => {
+    const { fake, t } = seeded();
+    const rows = within(within(renderDetail(fake, t)).getByRole("list", { name: "Claims" })).getAllByRole("listitem");
+    expect(rows.map((r) => r.textContent)).toEqual([
+      "Claim 2 · started 1h ago · last activity 2m ago · session s-new",
+      "Claim 1 · started 5h ago · last activity 4h ago · ended by release 4h ago · session s-old",
+    ]);
+  });
+
+  it("adds a Claim's latest Session Event and how long ago it was after its last activity", async () => {
+    const { fake, t } = seeded();
+    fake.postSessionEvents("s-new", [
+      { time: at(fake, 4), kind: "tool_call", tool: "Bash", tool_use_id: "tu-1", text: "Bash: go test ./..." },
+      { time: at(fake, 3), kind: "tool_result", tool_use_id: "tu-1", text: "ok" },
+    ]);
+    const rows = within(within(renderDetail(fake, await fake.getTicket("acme", t.id))).getByRole("list", { name: "Claims" })).getAllByRole("listitem");
+    expect(rows[0]).toHaveTextContent(/^Claim 2 · started 1h ago · last activity just now · Bash result · 3m ago · session s-new$/);
+    expect(within(rows[0]).getByText("Bash result · 3m ago")).toHaveClass("latest-event");
+    expect(rows[1]).not.toHaveTextContent("Bash");
+  });
+
   it("renders the description as Markdown", () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");

@@ -7,6 +7,7 @@ import type { EditView, State, TicketView } from "../api/types";
 import { ago, REASON_LABEL } from "../format";
 import { Markdown } from "../Markdown";
 import { ActionPanel } from "../panels/ActionPanel";
+import { LatestEventLine } from "../LatestEvent";
 import { LinkBadge } from "./LinkBadge";
 import { useAct } from "./useAct";
 
@@ -76,6 +77,12 @@ export function TicketDetail({ api, project, ticket: t, now }: TicketDetailProps
           {claims.map((c) => (
             <li key={c.number}>
               Claim {c.number} · started {ago(now, c.started)} · last activity {ago(now, c.last_activity)}
+              {c.latest_event && (
+                <>
+                  {" "}
+                  · <LatestEventLine event={c.latest_event} now={now} />
+                </>
+              )}
               {c.ended && (
                 <>
                   {" "}

@@ -117,6 +117,8 @@ textarea { width: 100%; resize: vertical; }
 /* Ticket detail and the Blocked panel (ticket 37). */
 button.link { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; color: var(--accent); cursor: pointer; }
 .ticket-body .claims { list-style: none; padding: 0; margin: 8px 0; }
+/* The latest Session Event, shown short and faintly. */
+.latest-event { color: var(--muted); }
 .ticket-body .move { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .ticket-body .move .warning { flex-basis: 100%; margin: 4px 0 0; }
 .history .previous { margin: 4px 0 8px 12px; padding: 6px 10px; border-left: 2px solid var(--border); color: var(--muted); }
@@ -184,6 +186,7 @@ a.link-badge:hover { text-decoration: underline; }
 .req-head .waiting { font-size: 13px; }
 .impl-list { list-style: none; padding: 0; margin: 6px 0; font-size: 12.5px; }
 .impl-list li { padding: 2px 0; }
+.impl-list .latest-event { display: block; padding-left: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .impl-list button.link { font-size: 12.5px; color: var(--text); text-align: left; }
 .impl-list button.link[aria-current="true"] { font-weight: 600; }
 .loud-state { color: var(--rc); }

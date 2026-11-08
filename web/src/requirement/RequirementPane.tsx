@@ -3,6 +3,7 @@
 // and under Build its implementation Tickets with their States.
 import type { NeedsMeReason, SpecDetail } from "../api/types";
 import { ago } from "../format";
+import { RowLatestEvent } from "../LatestEvent";
 import { progress, waitingNote } from "./progress";
 import { Strip } from "./Strip";
 
@@ -41,6 +42,7 @@ export function RequirementPane({ spec, reasons, now, ticket, select }: Requirem
                   <span className="tid">{t.id}</span> {t.title}
                 </button>{" "}
                 <span className={["state", reason && `reason-${reason} loud-state`].filter(Boolean).join(" ")}>{t.state}</span>
+                <RowLatestEvent row={t} now={now} />
               </li>
             );
           })}

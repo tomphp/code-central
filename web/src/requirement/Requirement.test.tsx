@@ -1,6 +1,6 @@
 // Requirement tests: the real App against FakeApi. "New requirement", the
 // Stage strip, the Requirement pane and the Requirements view.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
@@ -158,6 +158,41 @@ describe("the Requirement pane", () => {
 
     await userEvent.click(within(build).getByRole("button", { name: /acme-7/ }));
     expect(await within(detail()).findByRole("heading", { name: "CLI: archive-project" })).toBeInTheDocument();
+  });
+
+  it("shows an In Progress Build Ticket's latest Session Event faintly, and nothing on one with none", async () => {
+    const fake = await building();
+    const spec = { id: "acme-1", title: "Archive finished Projects" };
+    const claim = (session_id: string) => [{ number: 1, session_id, started: fake.now.toISOString(), last_activity: fake.now.toISOString() }];
+    fake.addTicket("acme", { title: "Archive in the API", state: "In Progress", spec, claims: claim("s-busy") }); // acme-9
+    fake.addTicket("acme", { title: "Archive in the store", state: "In Progress", spec, claims: claim("s-quiet") }); // acme-10
+    fake.postSessionEvents("s-busy", [{ time: new Date(fake.now.getTime() - 5 * 60_000).toISOString(), kind: "tool_call", tool: "Edit", text: "Edit: core/archive.go" }]);
+    renderApp(fake, "/?view=inbox&requirement=acme-1");
+
+    await within(detail()).findByRole("region", { name: "Requirement" });
+    const build = within(pane()).getByRole("list", { name: "Build" });
+    const items = within(build).getAllByRole("listitem");
+    expect(within(items[4]).getByText("Edit: core/archive.go · 5m ago")).toHaveClass("latest-event");
+    expect(items.map((li) => li.textContent)).toEqual([
+      "acme-5 store: archived flag Done",
+      "acme-6 Archive in the Project menu In Review",
+      "acme-7 CLI: archive-project Ready",
+      "acme-8 Dropped idea Cancelled",
+      "acme-9 Archive in the API In ProgressEdit: core/archive.go · 5m ago",
+      "acme-10 Archive in the store In Progress",
+    ]);
+  });
+
+  it("updates an In Progress Build Ticket's latest Session Event on the live feed", async () => {
+    const fake = await building();
+    const spec = { id: "acme-1", title: "Archive finished Projects" };
+    const claims = [{ number: 1, session_id: "s-busy", started: fake.now.toISOString(), last_activity: fake.now.toISOString() }];
+    fake.addTicket("acme", { title: "Archive in the API", state: "In Progress", spec, claims }); // acme-9
+    renderApp(fake, "/?view=inbox&requirement=acme-1");
+
+    const build = await within(detail()).findByRole("list", { name: "Build" });
+    act(() => fake.postSessionEvents("s-busy", [{ time: fake.now.toISOString(), kind: "text", text: "Writing the test first." }]));
+    expect(await within(build).findByText("Writing the test first. · just now")).toHaveClass("latest-event");
   });
 
   it("says when Build waits for a Factory", async () => {

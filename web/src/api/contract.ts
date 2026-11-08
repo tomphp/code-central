@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, ExternalState, State } from "./types";
+import type { ChangeEvent, ExternalState, SessionEvent, State } from "./types";
 import { ApiError } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -36,6 +36,9 @@ export interface Driver {
   // linkTicket creates a Draft Ticket linked to an external item as an
   // Integration would, and records its external state (ticket 42).
   linkTicket(key: string, title: string, link: { integration: string; id: string; url: string }, external: ExternalState): Promise<string>;
+  // postSessionEvents posts a session's Session Events as a Factory would
+  // (ticket 109): they go to the newest Claim with that session ID.
+  postSessionEvents(sessionId: string, events: SessionEvent[]): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -507,6 +510,66 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const plain = await d.createTicket("acme", "Local", "Draft");
       const err = await d.api.unlink("acme", plain).catch((e) => e);
       expect(err).toMatchObject({ status: 422, code: "invalid", field: "target" });
+    });
+
+    // ---- the latest Session Event (ticket 109) ----
+    it("shows a Claim's latest Session Event as one short line, on its Claim and on the Ticket's rows", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Busy", "Ready");
+      const quiet = await d.createTicket("acme", "Quiet", "Ready");
+      await d.claim("acme", id, "sess-busy");
+      await d.claim("acme", quiet, "sess-quiet");
+      const spec = (await d.api.getTicket("acme", id)).spec.id;
+      const rowOf = async (t: string) => (await d.api.findTickets("acme")).find((r) => r.id === t)!;
+      const specRowOf = async (t: string) => (await d.api.getSpec("acme", spec)).tickets.find((r) => r.id === t)!;
+
+      expect((await d.api.getTicket("acme", id)).claims[0].latest_event).toBeUndefined();
+      expect((await rowOf(id)).latest_event).toBeUndefined();
+
+      await d.postSessionEvents("sess-busy", [
+        { time: "2026-11-08T10:00:00Z", kind: "tool_call", tool: "Bash", tool_use_id: "tu-1", text: "Bash: go test ./..." },
+        { time: "2026-11-08T10:00:05Z", kind: "tool_result", tool_use_id: "tu-1", text: "FAIL\nexit 1", is_error: true },
+      ]);
+      const failed = { kind: "tool_result", text: "Bash failed", time: "2026-11-08T10:00:05Z" };
+      expect((await d.api.getTicket("acme", id)).claims[0].latest_event).toEqual(failed);
+      expect((await rowOf(id)).latest_event).toEqual(failed);
+      expect((await specRowOf(id)).latest_event).toEqual(failed);
+      expect((await d.api.getTicket("acme", quiet)).claims[0].latest_event).toBeUndefined();
+      expect((await rowOf(quiet)).latest_event).toBeUndefined();
+      expect((await specRowOf(quiet)).latest_event).toBeUndefined();
+
+      await d.postSessionEvents("sess-busy", [
+        { time: "2026-11-08T10:01:00Z", kind: "text", text: "\n  I'll fix the fixture.  \nThen run them again." },
+      ]);
+      const said = { kind: "text", text: "I'll fix the fixture.", time: "2026-11-08T10:01:00Z" };
+      expect((await rowOf(id)).latest_event).toEqual(said);
+
+      await d.postSessionEvents("sess-busy", [{ time: "2026-11-08T10:02:00Z", kind: "factory", text: "x".repeat(200) }]);
+      const long = (await rowOf(id)).latest_event!;
+      expect(long.text).toBe("x".repeat(119) + "…");
+
+      // Once the Claim ends, it keeps its latest event; the rows have no live Claim to show.
+      await d.api.act("acme", id, "release", {});
+      expect((await d.api.getTicket("acme", id)).claims[0].latest_event).toMatchObject({ kind: "factory" });
+      expect((await rowOf(id)).latest_event).toBeUndefined();
+      expect((await specRowOf(id)).latest_event).toBeUndefined();
+    });
+
+    it("sends ticket.changed over the live feed when a Claim's latest Session Event changes", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Busy", "Ready");
+      await d.claim("acme", id, "sess-busy");
+      const got: ChangeEvent[] = [];
+      let opened!: () => void;
+      const open = new Promise<void>((r) => (opened = r));
+      const stop = d.api.subscribe({ onEvent: (e) => got.push(e), onOpen: () => opened() });
+      try {
+        await open;
+        await d.postSessionEvents("sess-busy", [{ time: "2026-11-08T10:00:00Z", kind: "text", text: "Reading the Spec." }]);
+        await expect.poll(() => got.some((e) => e.type === "ticket.changed" && e.id === id), { timeout: 5000 }).toBe(true);
+      } finally {
+        stop();
+      }
     });
 
     it("delivers a change notice for each write over the live feed", async () => {
