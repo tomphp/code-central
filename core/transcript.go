@@ -11,8 +11,9 @@ import (
 
 // Session Events and Transcripts (ADR 0008). A Factory posts what a
 // Claim's session did; Code Central holds the last TranscriptLimit of them
-// per Claim, in memory only, and never interprets their kind, tool or
-// text. Like a ping, posting is not one of the operations: it never fails
+// per Claim, in memory only. It never interprets their tool or text,
+// and reads their kind only to show the latest event short (see
+// latestEvent). Like a ping, posting is not one of the operations: it never fails
 // and writes nothing to the store.
 
 // TranscriptLimit is how many Session Events a Transcript holds; the

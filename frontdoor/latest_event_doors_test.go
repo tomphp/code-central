@@ -19,6 +19,12 @@ func TestLatestEventThroughEveryDoor(t *testing.T) {
 			_, err := srv.Core.Claim(ctx, "acme", core.ClaimInput{SessionID: "s1"})
 			return err
 		})
+		// acme-2 is claimed too, but posts nothing.
+		must(t, func() error { _, err := srv.Core.Approve(ctx, "acme", core.TicketInput{Ticket: "2"}); return err })
+		must(t, func() error {
+			_, err := srv.Core.Claim(ctx, "acme", core.ClaimInput{SessionID: "s2"})
+			return err
+		})
 		srv.Core.PostSessionEvents(ctx, "s1", []core.SessionEvent{
 			{Time: time.Date(2026, 11, 7, 9, 0, 4, 0, time.UTC), Kind: "text", Text: "Planning."},
 			{Time: time.Date(2026, 11, 7, 9, 0, 5, 0, time.UTC), Kind: "tool_call", Text: "Bash: go test ./...", Tool: "Bash", ToolUseID: "tu1"},
@@ -46,8 +52,9 @@ func TestLatestEventThroughEveryDoor(t *testing.T) {
 		},
 		"get_ticket with none": {
 			check: func(t *testing.T, out map[string]any) {
-				if _, ok := out["latest_event"]; ok {
-					t.Fatalf("a Ticket with no Session Events has a latest_event: %v", out)
+				claims := out["claims"].([]any)
+				if got, ok := claims[0].(map[string]any)["latest_event"]; ok {
+					t.Fatalf("a Claim with no Session Events has latest_event %v", got)
 				}
 			},
 			calls: []map[string]any{
@@ -82,7 +89,8 @@ func TestLatestEventThroughEveryDoor(t *testing.T) {
 }
 
 // rowsHaveLatestEvent checks Ticket rows: acme-3, claimed and posting,
-// carries want; acme-2, never claimed, reads as it did before, with none.
+// carries want; acme-2, claimed but silent, reads as it did before, with
+// none.
 func rowsHaveLatestEvent(t *testing.T, rows any, want map[string]any) {
 	t.Helper()
 	seen := 0
