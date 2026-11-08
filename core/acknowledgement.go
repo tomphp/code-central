@@ -55,6 +55,11 @@ func acknowledgeCreate[V any](empty, after V, full bool) (Written[V], error) {
 	return written(empty, after, full, "id", "created", "updated")
 }
 
+// written derives the Acknowledgement from the views' JSON, listing in
+// changed every top-level field that differs except those unlisted. It
+// reads the record's id and updated, and the number of the last of its
+// edits when they changed, by those JSON names, which the Spec and Ticket
+// views share.
 func written[V any](before, after V, full bool, unlisted ...string) (Written[V], error) {
 	if full {
 		return Written[V]{Record: &after}, nil

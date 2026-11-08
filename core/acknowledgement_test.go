@@ -2,6 +2,7 @@ package core_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -131,14 +132,8 @@ func TestSpecWritesWithFullReturnTheSpec(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		if want := resultJSON(t, get.SpecView); !jsonEqual(out, want) {
+		if want := resultJSON(t, get.SpecView); !reflect.DeepEqual(out, want) {
 			t.Fatalf("%s with full: %v, want the Spec %v", name, out, want)
 		}
 	}
-}
-
-func jsonEqual(a, b map[string]any) bool {
-	x, _ := json.Marshal(a)
-	y, _ := json.Marshal(b)
-	return string(x) == string(y)
 }

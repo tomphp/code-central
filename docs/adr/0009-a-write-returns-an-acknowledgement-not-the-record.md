@@ -12,4 +12,4 @@ Writes used to echo the whole record they wrote. `edit_spec` returned the whole 
 
 ## Consequences
 
-A caller that needs the record after a write makes one more read, or passes `full`; in return every agent write is cheap. An outside Integration that reads a write's result breaks until it passes `full: true`, a one-field change. Computed fields in the view, such as `claimable`, are compared like any other, so a write that changes one lists it in `changed`. The writes that already return small views (Labels, Tags, Projects, the Link operations, `import`), `claim` and `pick_up_answers` are unchanged.
+A caller that needs the record after a write makes one more read, or passes `full`; in return every agent write is cheap. An outside Integration that reads a write's result breaks until it passes `full: true`, a one-field change. Computed fields in the view, such as `claimable`, are compared like any other, so a write that changes one lists it in `changed`. The writes that already return small views (Labels, Tags, Projects, `set_external_state`, `unlink` and `import`), `claim` and `pick_up_answers` are unchanged.
