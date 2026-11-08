@@ -1,4 +1,4 @@
 /* The In Review panel (ticket 36). */
 .review-panel h3 { font-size: 14px; color: var(--r-review); margin-bottom: 8px; }
-.review-panel .summary { white-space: pre-wrap; background: var(--surface-2); border-radius: 6px; padding: 8px 10px; }
+.review-panel .summary { background: var(--surface-2); border-radius: 6px; padding: 8px 10px; }
 .review-panel .reject-comment { display: grid; gap: 4px; }

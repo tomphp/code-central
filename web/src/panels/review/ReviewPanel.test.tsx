@@ -35,6 +35,25 @@ async function renderPanel(fake: FakeApi) {
   return screen.getByRole("region", { name: "In Review" });
 }
 
+// renderSummaryInApp opens acme-1, finished with body, in the inbox and
+// returns its Summary region.
+async function renderSummaryInApp(body: string) {
+  window.history.replaceState(null, "", "/?view=inbox&ticket=acme-1");
+  const fake = new FakeApi();
+  fake.addProject("acme", "Acme");
+  fake.addTicket("acme", {
+    title: "Login page",
+    state: "In Review",
+    comments: [{ number: 1, actor: "agent", time: finished, claim: 1, body }],
+    moves: [{ from: "In Progress", to: "In Review", actor: "agent", time: finished, claim: 1 }],
+  });
+  fake.setNeedsMe([{ reason: "in_review", tickets: [{ id: "acme-1", summary: "Added the login page" }] }]);
+  render(<App api={fake} now={() => fake.now} />);
+  const pane = screen.getByRole("complementary", { name: "Ticket" });
+  const panel = await within(pane).findByRole("region", { name: "In Review" });
+  return within(panel).getByLabelText("Summary");
+}
+
 describe("the In Review panel", () => {
   it("shows the finish summary in full", async () => {
     const panel = await renderPanel(world());
@@ -82,6 +101,19 @@ describe("the In Review panel", () => {
     const ticket = await fake.getTicket("acme", "acme-1");
     render(<ReviewPanel api={fake} project="acme" ticket={ticket} now={fake.now} />);
     expect(screen.getByRole("region", { name: "In Review" })).toHaveTextContent("No finish summary");
+  });
+
+  it("renders the finish summary as Markdown", async () => {
+    const summary = await renderSummaryInApp("Added **the login page**\n\n- form\n- redirect\n\nRun `make test`.");
+    expect(summary.querySelector("strong")).toHaveTextContent("the login page");
+    expect(within(summary).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["form", "redirect"]);
+    expect(summary.querySelector("code")).toHaveTextContent("make test");
+  });
+
+  it("shows raw HTML in the finish summary as text", async () => {
+    const summary = await renderSummaryInApp('Done <img src=x onerror="alert(1)"> here');
+    expect(summary.querySelector("img")).toBeNull();
+    expect(summary).toHaveTextContent('Done <img src=x onerror="alert(1)"> here');
   });
 
   it("is the action panel for an In Review Ticket in the inbox", async () => {
