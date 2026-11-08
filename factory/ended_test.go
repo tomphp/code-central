@@ -3,6 +3,7 @@ package factory_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -35,7 +36,7 @@ func stateTickets(t *testing.T, h *factorytest.Harness) []string {
 	return out
 }
 
-func TestAReleasedClaimsTurnGetsSIGINTThenSIGTERMAndIsDropped(t *testing.T) {
+func TestAReleasedClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Stopped")
@@ -50,10 +51,8 @@ func TestAReleasedClaimsTurnGetsSIGINTThenSIGTERMAndIsDropped(t *testing.T) {
 	h.Script(id, factorytest.Finish("Done."), factorytest.Result("success"))
 	r.Poll()
 
-	if got := h.Signals(id); !slices.Equal(got, []string{"INT", "TERM"}) {
-		t.Errorf("the turn got %q, want SIGINT then SIGTERM", got)
-	}
-	r.WaitForOutput(id + ` turn ended (implementation): "Stopped": exit 143`)
+	wantStopped(t, h, id)
+	r.WaitForOutput(fmt.Sprintf(`%s turn ended (implementation): "Stopped": exit %d`, id, stoppedExit()))
 	if ended := h.Calls()[0].Claim; slices.Contains(stateClaims(t, h), ended) {
 		t.Errorf("state file still holds the ended Claim %s", ended)
 	}
@@ -93,9 +92,7 @@ func TestACancelledClaimsTurnIsStoppedAndDropped(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.Poll()
-	if got := h.Signals(id); !slices.Equal(got, []string{"INT", "TERM"}) {
-		t.Errorf("the turn got %q, want SIGINT then SIGTERM", got)
-	}
+	wantStopped(t, h, id)
 	if got := stateTickets(t, h); len(got) != 0 {
 		t.Errorf("state file holds %q, want the Cancelled Ticket's Claim dropped", got)
 	}
@@ -106,7 +103,10 @@ func TestAReleasedTicketIsClaimedAfreshInItsWorktreeOnItsBranch(t *testing.T) {
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Try again")
 	h.Script(id,
-		factorytest.Shell("echo wip > wip.txt && git add wip.txt && git commit -q -m wip && touch committed"),
+		factorytest.WriteFile("wip.txt", "wip\n"),
+		factorytest.Git("add", "wip.txt"),
+		factorytest.Git("commit", "-q", "-m", "wip"),
+		factorytest.WriteFile("committed", ""),
 		factorytest.Wait())
 	r := h.Start()
 	h.WaitFor("the first turn's commit", func() bool {
@@ -117,7 +117,7 @@ func TestAReleasedTicketIsClaimedAfreshInItsWorktreeOnItsBranch(t *testing.T) {
 	if _, err := h.Human().Release(context.Background(), h.Project, core.ReleaseInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
-	h.Script(id, factorytest.Shell("test -f wip.txt"), factorytest.Finish("Done."), factorytest.Result("success"))
+	h.Script(id, factorytest.NeedFile("wip.txt"), factorytest.Finish("Done."), factorytest.Result("success"))
 	r.Poll()
 	tk := h.WaitForState(id, store.InReview)
 

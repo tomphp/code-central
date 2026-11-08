@@ -20,7 +20,9 @@ func TestATurnThatExitsWithItsClaimInProgressBecomesAFailureReport(t *testing.T)
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Too big")
 	h.Script(id,
-		factorytest.Shell("echo half > half.txt && git add half.txt && git commit -q -m 'Half a feature'"),
+		factorytest.WriteFile("half.txt", "half\n"),
+		factorytest.Git("add", "half.txt"),
+		factorytest.Git("commit", "-q", "-m", "Half a feature"),
 		factorytest.Say("I ran out of turns halfway through."),
 		factorytest.Step{Stdout: `{"type":"result","subtype":"error_max_turns","is_error":true,"terminal_reason":"max_turns"}`},
 		factorytest.Exit(3))
@@ -235,9 +237,7 @@ func TestAnExpiredLoginStopsTheFactory(t *testing.T) {
 	if !strings.Contains(r.Stderr(), "authentication_failed") || !strings.Contains(r.Stderr(), "log in") {
 		t.Errorf("stderr %q: want it to say the login expired", r.Stderr())
 	}
-	if got := h.Signals(busy); !slices.Equal(got, []string{"INT", "TERM"}) {
-		t.Errorf("the other turn got %q, want it stopped", got)
-	}
+	wantStopped(t, h, busy)
 	for _, id := range []string{busy, expired} {
 		if tk := h.Ticket(id); tk.State != store.InProgress || len(tk.FailureReports) != 0 {
 			t.Errorf("%s is %s with %d Failure Reports; want its Claim kept", id, tk.State, len(tk.FailureReports))

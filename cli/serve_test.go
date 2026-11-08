@@ -117,6 +117,33 @@ func TestABadPortSettingRefusesToStart(t *testing.T) {
 	}
 }
 
+func TestLogAppendsServesOutputAndTheErrorItStopsWith(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "code-central.log")
+	os.WriteFile(log, []byte("an earlier run\n"), 0o644)
+	bound, stderr, failed := serveWith(t, nil, []string{"127.0.0.1:0"}, "--log", log, "--bind", "127.0.0.1:0")
+	if failed != nil {
+		t.Fatalf("serve: %+v", *failed)
+	}
+	b, _ := os.ReadFile(log)
+	for _, want := range []string{"an earlier run\n", "--bind: also listening on", "listening on " + fmt.Sprint(bound)} {
+		if !strings.Contains(string(b), want) {
+			t.Fatalf("log lacks %q:\n%s", want, b)
+		}
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr %q; want it all in the log", stderr)
+	}
+
+	home := t.TempDir()
+	writeHomeSettings(t, home, "port: 70000\n")
+	if _, _, failed = serveWith(t, map[string]string{"HOME": home}, nil, "--log", log); failed == nil || failed.code != 1 {
+		t.Fatalf("serve accepted port 70000: %+v", failed)
+	}
+	if b, _ = os.ReadFile(log); !strings.Contains(string(b), "code-central serve: ") || !strings.Contains(string(b), "70000") {
+		t.Fatalf("log lacks the error serve stopped with:\n%s", b)
+	}
+}
+
 func TestBindAddsOneListenerAndWarnsAgainstLANAddresses(t *testing.T) {
 	bound, stderr, failed := serveWith(t, nil, []string{"127.0.0.1:0"}, "--bind", "127.0.0.1:0")
 	if failed != nil {

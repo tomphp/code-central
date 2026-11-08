@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,14 +18,13 @@ import (
 )
 
 // fakeClaudeEnv names, to a run of this test binary, the code-central
-// binary it calls as the fake claude. The shim on the Factory's PATH sets
-// it; the tests never do.
+// binary it calls as the fake claude. It is in the Factory's environment,
+// so its turns get it; the tests themselves never run with it.
 const fakeClaudeEnv = "E2E_FAKE_CLAUDE_CODE_CENTRAL"
 
 // 3. A Requirement to Done: the real service and the real Factory, with a
 // fake claude working every Stage and the one implementation Ticket.
 func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.T) {
-	unixOnly(t, "/bin/sh for the fake claude and /usr/bin:/bin on PATH")
 	svc := serve(t)
 	// git reports real paths, so resolve macOS's /var -> /private/var.
 	root, err := filepath.EvalSymlinks(t.TempDir())
@@ -38,18 +38,12 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 		}
 	}
 	git := gitBinary(t)
-	self, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	shim := fmt.Sprintf("#!/bin/sh\n%s=%q exec %q \"$@\"\n", fakeClaudeEnv, bin, self)
-	if err := os.WriteFile(filepath.Join(shims, "claude"), []byte(shim), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	installSelf(t, filepath.Join(shims, "claude"+exeSuffix))
 	env := []string{
-		"PATH=" + shims + string(os.PathListSeparator) + filepath.Dir(git) + ":/usr/bin:/bin",
+		"PATH=" + shims + string(os.PathListSeparator) + filepath.Dir(git),
 		"HOME=" + home,
-		"TMPDIR=" + os.TempDir(),
+		"TMPDIR=" + os.TempDir(), "TEMP=" + os.TempDir(), "TMP=" + os.TempDir(),
+		fakeClaudeEnv + "=" + bin,
 		"CODE_CENTRAL_URL=" + svc.url, // never the default service
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_AUTHOR_NAME=E2E", "GIT_AUTHOR_EMAIL=e2e@example.com",
@@ -93,6 +87,7 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 	// The Factory runs as its own process in the repository.
 	factory := exec.Command(factoryBin, "--poll", "5s", "--parallel", "1")
 	factory.Dir, factory.Env = repo, env
+	startInOwnGroup(factory)
 	var factoryOut syncBuffer
 	factory.Stdout, factory.Stderr = &factoryOut, &factoryOut
 	if err := factory.Start(); err != nil {
@@ -100,9 +95,12 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 	}
 	exited := make(chan error, 1)
 	go func() { exited <- factory.Wait() }()
+	stopped := false
 	t.Cleanup(func() {
-		factory.Process.Kill()
-		<-exited
+		if !stopped {
+			factory.Process.Kill()
+			<-exited
+		}
 		if t.Failed() {
 			t.Logf("Factory output:\n%s", factoryOut.String())
 		}
@@ -190,6 +188,51 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 	}
 	if m := done.Moves[len(done.Moves)-1]; m.Commit != merge {
 		t.Errorf("the land Move records commit %q, want the merge %s", m.Commit, merge)
+	}
+
+	// 5. Ctrl-C drains the idle Factory, which exits cleanly.
+	if err := interrupt(factory.Process); err != nil {
+		t.Fatalf("interrupting the Factory: %v", err)
+	}
+	select {
+	case err := <-exited:
+		stopped = true
+		if err != nil {
+			t.Fatalf("the Factory did not stop cleanly: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("the Factory did not stop")
+	}
+	// factory/run.go's drain prints this when no turn is running.
+	if out := factoryOut.String(); !strings.Contains(out, "drained: no turns running") {
+		t.Errorf("the Factory did not drain:\n%s", out)
+	}
+}
+
+// installSelf copies this test binary to dst, as the fake claude. Not a
+// hard link: Windows refuses to delete any name of a running program, so
+// a link to this binary would fail the temporary folder's cleanup.
+func installSelf(t *testing.T, dst string) {
+	t.Helper()
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.Open(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer src.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = io.Copy(out, src)
+	if cerr := out.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

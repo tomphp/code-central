@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"os"
+	"runtime"
 	"slices"
 	"syscall"
 	"testing"
@@ -35,17 +36,43 @@ func TestTheFirstCtrlCDrainsWaitingForRunningTurnsAndClaimingNoMore(t *testing.T
 	}
 }
 
-// killed checks a turn the Factory stopped on its way out: it got SIGINT
-// then SIGTERM, and its Claim is kept, In Progress and in the state
+// stopSignals is what the fake claude notes when the Factory stops a
+// turn. On Unix it gets SIGINT, which it ignores, then SIGTERM, which ends
+// it. On Windows it gets Ctrl-Break, which it ignores, so the Factory
+// kills it.
+func stopSignals() []string {
+	if runtime.GOOS == "windows" {
+		return []string{"BREAK"}
+	}
+	return []string{"INT", "TERM"}
+}
+
+// stoppedExit is the exit code of a turn the Factory stopped: 143 from
+// SIGTERM on Unix, 1 from the kill on Windows.
+func stoppedExit() int {
+	if runtime.GOOS == "windows" {
+		return 1
+	}
+	return 143
+}
+
+// wantStopped checks the turn for id got stopSignals.
+func wantStopped(t *testing.T, h *factorytest.Harness, id string) {
+	t.Helper()
+	if got, want := h.Signals(id), stopSignals(); !slices.Equal(got, want) {
+		t.Errorf("the turn got %q, want %q", got, want)
+	}
+}
+
+// killed checks a turn the Factory stopped on its way out: it got
+// stopSignals, and its Claim is kept, In Progress and in the state
 // file, with no Failure Report.
 func killed(t *testing.T, h *factorytest.Harness, r *factorytest.Running, id string) {
 	t.Helper()
 	if code := r.Exited(); code != 0 {
 		t.Errorf("exit code %d, want 0", code)
 	}
-	if got := h.Signals(id); !slices.Equal(got, []string{"INT", "TERM"}) {
-		t.Errorf("the turn got %q, want SIGINT then SIGTERM", got)
-	}
+	wantStopped(t, h, id)
 	tk := h.Ticket(id)
 	if tk.State != store.InProgress || len(tk.Claims) != 1 || tk.Claims[0].Ended != nil || len(tk.FailureReports) != 0 {
 		t.Errorf("%s is %s with Claims %+v and %d Failure Reports; want its one Claim kept, In Progress, never failed", id, tk.State, tk.Claims, len(tk.FailureReports))

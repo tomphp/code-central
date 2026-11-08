@@ -1,9 +1,11 @@
 // Package factorytest is the test harness for the local Factory: a real
 // Code Central from codecentraltest, a real temporary git repo set up as
 // a Project, and a fake `claude` on PATH. The fake is the test binary
-// itself, run again through a shell shim: it records its arguments,
-// follows a Script (print stream-json, call the code-central CLI
-// in-process, run a shell command, exit) and needs nothing built.
+// itself, linked or copied into the harness's bin folder as claude and run
+// as the fake because the harness's environment names the fake's folder:
+// it records its arguments, follows a Script (print stream-json, call the
+// code-central CLI in-process, write a file, run git, exit) and needs
+// nothing built. There is no shell, so it runs the same on every OS.
 //
 // A test package that uses it calls Main from its TestMain:
 //
@@ -26,11 +28,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
@@ -42,17 +44,38 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// fakeEnv names the harness folder to a test binary run as the fake
-// claude. The shim sets it; the Factory never sees it.
-const fakeEnv = "FACTORYTEST_FAKE_CLAUDE"
+// fakeEnv names the harness's data folder to a test binary run as a
+// fake. It is in the Factory's environment, so its turns and git get it;
+// the Factory ignores it.
+const fakeEnv = "FACTORYTEST_FAKE"
 
-// Main runs the fake claude when the test binary was started as one, and
-// the tests otherwise.
+// holdName is the program name HoldSession runs the test binary under.
+const holdName = "hold-session"
+
+// Main runs the fake the test binary was started as, named by the program
+// name it was run under (claude, git or HoldSession's), and the tests
+// otherwise.
 func Main(m *testing.M) {
-	if dir := os.Getenv(fakeEnv); dir != "" {
-		os.Exit(runFake(dir, os.Args[1:]))
+	if data := os.Getenv(fakeEnv); data != "" {
+		os.Exit(runFake(data, os.Args))
 	}
 	os.Exit(m.Run())
+}
+
+func runFake(data string, args []string) int {
+	switch name := strings.TrimSuffix(filepath.Base(args[0]), exeSuffix); name {
+	case "claude":
+		return runFakeClaude(data, args[1:])
+	case "git":
+		return runFakeGit(data, args[1:])
+	case holdName:
+		// Long enough for any test; HoldSession's release kills it sooner.
+		time.Sleep(time.Minute)
+		return 0
+	default:
+		fmt.Fprintf(os.Stderr, "factorytest: %s=%s but run as %q, not a fake\n", fakeEnv, data, name)
+		return 70
+	}
 }
 
 // Timeout bounds every wait in the harness.
@@ -65,15 +88,6 @@ const EventBatchEvery = 10 * time.Millisecond
 // KillGrace is how long the Factory under test gives a turn between
 // SIGINT and SIGTERM.
 const KillGrace = 100 * time.Millisecond
-
-// unixOnly skips t on Windows, which lacks the Unix-only tool or signal
-// it needs: ps, /bin/sh or os.Interrupt.
-func unixOnly(t testing.TB, needs string) {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skipf("needs %s; code-central-124 ports this", needs)
-	}
-}
 
 // Harness is one Factory's world. Its fields are for assertions; change
 // the Factory's environment with Setenv.
@@ -108,7 +122,6 @@ type Harness struct {
 // main whose one commit holds a .mcp.json naming it.
 func New(t testing.TB) *Harness {
 	t.Helper()
-	unixOnly(t, "/bin/sh for the fake claude and git shims, the HoldSession and Shell steps, and /usr/bin:/bin on PATH")
 	// git reports real paths, so resolve macOS's /var -> /private/var.
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	must(t, err)
@@ -130,7 +143,7 @@ func New(t testing.TB) *Harness {
 	gitPath, err := realGit()
 	must(t, err)
 	h.env = map[string]string{
-		"PATH":                h.Bin + string(os.PathListSeparator) + filepath.Dir(gitPath) + ":/usr/bin:/bin",
+		"PATH":                h.Bin + string(os.PathListSeparator) + filepath.Dir(gitPath),
 		"HOME":                h.Home,
 		"CODE_CENTRAL_URL":    h.URL,
 		"GIT_CONFIG_NOSYSTEM": "1",
@@ -139,10 +152,11 @@ func New(t testing.TB) *Harness {
 		"GIT_COMMITTER_NAME":  "Factory Test",
 		"GIT_COMMITTER_EMAIL": "factory@example.com",
 		"TMPDIR":              os.TempDir(),
+		"TEMP":                os.TempDir(),
+		"TMP":                 os.TempDir(),
+		fakeEnv:               h.data,
 	}
-	self, err := os.Executable()
-	must(t, err)
-	h.writeShim("claude", fmt.Sprintf("#!/bin/sh\n%s=%q exec %q \"$@\"\n", fakeEnv, h.data, self))
+	h.install("claude")
 
 	if _, err := h.Server.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: h.Project}); err != nil {
 		t.Fatal(err)
@@ -193,11 +207,12 @@ func (h *Harness) Refused(path string) int64 {
 // realGit is the git binary itself. On macOS /usr/bin/git is an xcrun
 // shim whose lookup is cached per HOME, and every Harness has a fresh
 // HOME, so going through the shim costs ~100ms of CPU per test; the git
-// in git's exec path skips it.
+// in git's exec path skips it. Elsewhere git on PATH is used as it is:
+// on Windows the one in the exec path can't find its DLLs.
 var realGit = sync.OnceValues(func() (string, error) {
 	git, err := exec.LookPath("git")
-	if err != nil {
-		return "", err
+	if err != nil || runtime.GOOS != "darwin" {
+		return git, err
 	}
 	out, err := exec.Command(git, "--exec-path").Output()
 	if err != nil {
@@ -216,8 +231,25 @@ func must(t testing.TB, err error) {
 	}
 }
 
-func (h *Harness) writeShim(name, body string) {
-	must(h.t, os.WriteFile(filepath.Join(h.Bin, name), []byte(body), 0o755))
+// install puts the test binary in Bin as the fake name: a hard link, or a
+// copy where the link can't be made.
+func (h *Harness) install(name string) {
+	self, err := os.Executable()
+	must(h.t, err)
+	dst := filepath.Join(h.Bin, name+exeSuffix)
+	if os.Link(self, dst) == nil {
+		return
+	}
+	src, err := os.Open(self)
+	must(h.t, err)
+	defer src.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o755)
+	must(h.t, err)
+	_, err = io.Copy(out, src)
+	if cerr := out.Close(); err == nil {
+		err = cerr
+	}
+	must(h.t, err)
 }
 
 // Setenv sets a variable in the Factory's environment; "" removes it.
@@ -240,14 +272,32 @@ func (h *Harness) Environ() []string {
 }
 
 // RemoveClaude takes the fake claude off PATH.
-func (h *Harness) RemoveClaude() { must(h.t, os.Remove(filepath.Join(h.Bin, "claude"))) }
+func (h *Harness) RemoveClaude() { must(h.t, os.Remove(filepath.Join(h.Bin, "claude"+exeSuffix))) }
+
+// ShimClaude puts a claude.cmd on PATH in place of the fake claude, as
+// installing claude with npm on Windows leaves.
+func (h *Harness) ShimClaude() {
+	h.RemoveClaude()
+	must(h.t, os.WriteFile(filepath.Join(h.Bin, "claude.cmd"), []byte("@echo off\r\nnode \"%~dp0\\node_modules\\@anthropic-ai\\claude-code\\cli.js\" %*\r\n"), 0o755))
+}
+
+// fakeGit is what the fake git reads from the data folder.
+type fakeGit struct {
+	// Version is the version it reports.
+	Version string `json:"version"`
+	// Git is the real git it runs for everything else.
+	Git string `json:"git"`
+}
 
 // FakeGit puts a git on PATH that reports version and otherwise runs the
 // real git.
 func (h *Harness) FakeGit(version string) {
 	real, err := realGit()
 	must(h.t, err)
-	h.writeShim("git", fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = version ] || [ \"$1\" = --version ]; then echo 'git version %s'; exit 0; fi\nexec %q \"$@\"\n", version, real))
+	b, err := json.Marshal(fakeGit{Version: version, Git: real})
+	must(h.t, err)
+	must(h.t, os.WriteFile(filepath.Join(h.data, "git.json"), b, 0o644))
+	h.install("git")
 }
 
 // Git runs the real git in the repo and returns its trimmed output.
@@ -269,7 +319,7 @@ func (h *Harness) GitIn(dir string, args ...string) string {
 }
 
 // Worktree is where the Factory keeps ticket's worktree.
-func (h *Harness) Worktree(ticket string) string { return h.Repo + ".worktrees/" + ticket }
+func (h *Harness) Worktree(ticket string) string { return filepath.Join(h.Repo+".worktrees", ticket) }
 
 // StateFile is the Factory's state file for the Project.
 func (h *Harness) StateFile() string {
@@ -506,7 +556,9 @@ func (r *Running) WaitForOutput(s string) {
 	})
 }
 
-// Signal sends the Factory sig, as the terminal or the OS would.
+// Signal sends the Factory sig, as the terminal or the OS would, on
+// Env.Signals: the channel the binary's main fills from signal.Notify, so
+// the Factory takes the same path as for a real Ctrl-C on every OS.
 func (r *Running) Signal(sig os.Signal) { r.signals <- sig }
 
 // Interrupt is the human's Ctrl-C.
@@ -558,22 +610,32 @@ func (b *buffer) String() string {
 	return b.b.String()
 }
 
-// Step is one thing the fake claude does. In CLI args, Shell and Stdout,
-// {{ticket}}, {{claim}} and {{session}} stand for the run's Ticket, Claim
-// and session ID.
+// Step is one thing the fake claude does. In CLI and Git args, Write's
+// content and Stdout, {{ticket}}, {{claim}} and {{session}} stand for the
+// run's Ticket, Claim and session ID.
 type Step struct {
 	// CLI runs the code-central CLI with these args in the worktree.
 	CLI []string `json:"cli,omitempty"`
-	// Shell runs sh -c in the worktree.
-	Shell string `json:"shell,omitempty"`
+	// Write writes a file in the worktree.
+	Write *File `json:"write,omitempty"`
+	// Git runs git on PATH with these args in the worktree.
+	Git []string `json:"git,omitempty"`
+	// Need fails the run unless this file is in the worktree.
+	Need string `json:"need,omitempty"`
 	// Stdout prints one line, such as a stream-json message.
 	Stdout string `json:"stdout,omitempty"`
 	// Exit exits with this code, skipping the rest.
 	Exit *int `json:"exit,omitempty"`
 	// Wait blocks until the test calls Continue for the run's Ticket. It
-	// notes each SIGINT and SIGTERM it gets (see Signals), ignores SIGINT
-	// and exits 143 on SIGTERM.
+	// notes each stop signal it gets (see Signals): on Unix it ignores
+	// SIGINT and exits 143 on SIGTERM; on Windows it ignores Ctrl-Break.
 	Wait bool `json:"wait,omitempty"`
+}
+
+// File is a file a Write step writes, Name relative to the worktree.
+type File struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
 }
 
 // Wait blocks the run until Continue, so the turn stays running.
@@ -600,7 +662,11 @@ func (h *Harness) Continue(ticket string) {
 // until the returned func or the end of the test.
 func (h *Harness) HoldSession(session string) (release func()) {
 	h.t.Helper()
-	cmd := exec.Command("/bin/sh", "-c", "sleep 60; :", "claude", "--resume", session)
+	self, err := os.Executable()
+	must(h.t, err)
+	cmd := exec.Command(self)
+	cmd.Args = []string{holdName, "--resume", session}
+	cmd.Env = append(os.Environ(), fakeEnv+"="+h.data)
 	must(h.t, cmd.Start())
 	var once sync.Once
 	release = func() {
@@ -614,7 +680,7 @@ func (h *Harness) HoldSession(session string) (release func()) {
 }
 
 // Signals is the signals runs of ticket got while in a Wait step, in
-// order: "INT" and "TERM".
+// order: "INT" and "TERM" on Unix, "BREAK" on Windows.
 func (h *Harness) Signals(ticket string) []string {
 	b, err := os.ReadFile(filepath.Join(h.data, "signals", ticket))
 	if os.IsNotExist(err) {
@@ -627,8 +693,14 @@ func (h *Harness) Signals(ticket string) []string {
 // CLI calls the code-central CLI.
 func CLI(args ...string) Step { return Step{CLI: args} }
 
-// Shell runs a shell command in the worktree.
-func Shell(cmd string) Step { return Step{Shell: cmd} }
+// WriteFile writes name in the worktree with content.
+func WriteFile(name, content string) Step { return Step{Write: &File{Name: name, Content: content}} }
+
+// Git runs git with args in the worktree.
+func Git(args ...string) Step { return Step{Git: args} }
+
+// NeedFile fails the run unless name is in the worktree.
+func NeedFile(name string) Step { return Step{Need: name} }
 
 // Finish finishes the run's Ticket under its Claim.
 func Finish(summary string) Step {
@@ -782,8 +854,36 @@ var (
 	claimLine  = regexp.MustCompile(`(?m)^Claim: (\S+)$`)
 )
 
-// runFake is the fake claude: claude [flags] <prompt>.
-func runFake(data string, args []string) int {
+// runFakeGit is the fake git: it reports the version FakeGit set and runs
+// the real git for everything else.
+func runFakeGit(data string, args []string) int {
+	var g fakeGit
+	b, err := os.ReadFile(filepath.Join(data, "git.json"))
+	if err == nil {
+		err = json.Unmarshal(b, &g)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "fake git:", err)
+		return 70
+	}
+	if len(args) > 0 && (args[0] == "version" || args[0] == "--version") {
+		fmt.Println("git version " + g.Version)
+		return 0
+	}
+	cmd := exec.Command(g.Git, args...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		if exit, ok := err.(*exec.ExitError); ok {
+			return exit.ExitCode()
+		}
+		fmt.Fprintln(os.Stderr, "fake git:", err)
+		return 70
+	}
+	return 0
+}
+
+// runFakeClaude is the fake claude: claude [flags] <prompt>.
+func runFakeClaude(data string, args []string) int {
 	wd, _ := os.Getwd()
 	c := Call{Args: args, Dir: wd}
 	if len(args) > 0 {
@@ -800,6 +900,21 @@ func runFake(data string, args []string) int {
 	} else if s, ok := c.Flag("--resume"); ok {
 		c.Session = s
 	}
+	steps := DefaultScript
+	if b, err := os.ReadFile(filepath.Join(data, "scripts", c.Ticket+".json")); err == nil {
+		steps = nil
+		if err := json.Unmarshal(b, &steps); err != nil {
+			fmt.Fprintln(os.Stderr, "fake claude:", err)
+			return 70
+		}
+	}
+	// A test stops a waiting run as soon as it sees the call, so take the
+	// stop signals before recording it: none is lost before Wait starts.
+	sigs := make(chan os.Signal, 2)
+	if slices.ContainsFunc(steps, func(s Step) bool { return s.Wait }) {
+		signal.Notify(sigs, waitSignals...)
+		defer signal.Stop(sigs)
+	}
 	b, _ := json.Marshal(c)
 	name := fmt.Sprintf("%020d-%d.json", time.Now().UnixNano(), os.Getpid())
 	// Write beside calls/ and rename in, so Calls never reads half a file.
@@ -813,38 +928,45 @@ func runFake(data string, args []string) int {
 		return 70
 	}
 
-	steps := DefaultScript
-	if b, err := os.ReadFile(filepath.Join(data, "scripts", c.Ticket+".json")); err == nil {
-		steps = nil
-		if err := json.Unmarshal(b, &steps); err != nil {
-			fmt.Fprintln(os.Stderr, "fake claude:", err)
-			return 70
-		}
-	}
 	fill := strings.NewReplacer("{{ticket}}", c.Ticket, "{{claim}}", c.Claim, "{{session}}", c.Session).Replace
+	fillAll := func(args []string) []string {
+		var filled []string
+		for _, a := range args {
+			filled = append(filled, fill(a))
+		}
+		return filled
+	}
 	fmt.Println(`{"type":"system","subtype":"init","session_id":"` + c.Session + `"}`)
 	for _, s := range steps {
 		switch {
 		case s.Exit != nil:
 			return *s.Exit
 		case s.Wait:
-			if code, stop := wait(data, c.Ticket); stop {
+			if code, stop := wait(data, c.Ticket, sigs); stop {
 				return code
 			}
 		case s.Stdout != "":
 			fmt.Println(fill(s.Stdout))
-		case s.Shell != "":
-			cmd := exec.Command("/bin/sh", "-c", fill(s.Shell))
+		case s.Write != nil:
+			if err := os.WriteFile(s.Write.Name, []byte(fill(s.Write.Content)), 0o644); err != nil {
+				fmt.Fprintln(os.Stderr, "fake claude:", err)
+				return 70
+			}
+		case s.Git != nil:
+			filled := fillAll(s.Git)
+			cmd := exec.Command("git", filled...)
 			cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 			if err := cmd.Run(); err != nil {
-				fmt.Fprintln(os.Stderr, "fake claude: shell:", err)
+				fmt.Fprintf(os.Stderr, "fake claude: git %s: %v\n", strings.Join(filled, " "), err)
+				return 70
+			}
+		case s.Need != "":
+			if _, err := os.Stat(s.Need); err != nil {
+				fmt.Fprintln(os.Stderr, "fake claude: need", s.Need+":", err)
 				return 70
 			}
 		case s.CLI != nil:
-			var filled []string
-			for _, a := range s.CLI {
-				filled = append(filled, fill(a))
-			}
+			filled := fillAll(s.CLI)
 			code := cli.Run(context.Background(), filled, cli.Env{Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: os.Stderr, Getenv: os.Getenv})
 			if code != 0 {
 				fmt.Fprintf(os.Stderr, "fake claude: code-central %s exited %d\n", strings.Join(filled, " "), code)
@@ -856,11 +978,8 @@ func runFake(data string, args []string) int {
 }
 
 // wait is the fake's Wait step: it returns when the test continues the
-// run, or with stop set when SIGTERM ends it.
-func wait(data, ticket string) (code int, stop bool) {
-	sigs := make(chan os.Signal, 2)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	defer signal.Stop(sigs)
+// run, or with stop set when a signal on sigs ends it.
+func wait(data, ticket string, sigs <-chan os.Signal) (code int, stop bool) {
 	note := func(s string) {
 		f, err := os.OpenFile(filepath.Join(data, "signals", ticket), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err == nil {
@@ -872,11 +991,11 @@ func wait(data, ticket string) (code int, stop bool) {
 	for {
 		select {
 		case s := <-sigs:
-			if s == syscall.SIGTERM {
-				note("TERM")
+			name, ends := signalName(s)
+			note(name)
+			if ends {
 				return 143, true
 			}
-			note("INT")
 		case <-time.After(5 * time.Millisecond):
 			if os.Remove(cont) == nil {
 				return 0, false
