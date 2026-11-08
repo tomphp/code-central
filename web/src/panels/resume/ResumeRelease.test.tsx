@@ -56,6 +56,7 @@ function answeredWorld() {
         questions: [
           { number: 1, title: "Which colour?", body: "Red or blue", status: "answered", answer: "Blue" },
           { number: 2, title: "Which size?", body: "S or M", status: "dismissed" },
+          { number: 3, title: "Rounded corners?", body: "Or square", status: "answered", answer: "**yes**, `4px`" },
         ],
       },
     ],
@@ -136,6 +137,8 @@ describe("the Resume-then-Release panel", () => {
     expect(answers).toHaveTextContent("Blue");
     expect(answers).toHaveTextContent("Which size?");
     expect(answers).toHaveTextContent("Dismissed");
+    // Answers are what the human typed, so they stay plain text.
+    expect(answers).toHaveTextContent("**yes**, `4px`");
   });
 
   it("falls back to the latest Round's session when the Claim has none", async () => {

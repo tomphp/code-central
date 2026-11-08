@@ -8,6 +8,7 @@
 import { useState } from "react";
 import "../../api/actions/rounds";
 import type { QuestionView } from "../../api/types";
+import { Markdown } from "../../Markdown";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import "./round.css";
 
@@ -93,7 +94,9 @@ function QuestionForm({ q, answer, dismiss }: { q: QuestionView; answer: (text: 
         <span className="tid">Q{q.number}</span> {q.title}
       </legend>
       <span className={`qstatus qstatus-${q.status}`}>{STATUS[q.status]}</span>
-      <div className="question-body">{q.body}</div>
+      <div className="question-body">
+        <Markdown>{q.body}</Markdown>
+      </div>
       <label htmlFor={boxId} className={isRecommendation ? "draft-note" : "visually-hidden"}>
         {isRecommendation ? "Recommended answer, a draft: nothing is saved until you answer" : "Your answer"}
       </label>
