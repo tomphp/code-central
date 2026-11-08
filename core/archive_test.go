@@ -320,7 +320,7 @@ func TestAnArchivedProjectStaysReadable(t *testing.T) {
 	if rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []store.State{store.Done, store.Cancelled}}); err != nil || len(rows) != 2 {
 		t.Fatalf("find_tickets: %+v, %v", rows, err)
 	}
-	if s, err := f.core.GetSpec(ctx, "acme", "1"); err != nil || s.ID != "acme-1" {
+	if s, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "1"}); err != nil || s.ID != "acme-1" {
 		t.Fatalf("get_spec: %+v, %v", s, err)
 	}
 	if _, err := f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{Finished: true}); err != nil {

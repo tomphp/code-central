@@ -5,7 +5,7 @@ Specs and Tickets for this repository live in Code Central, through the `code-ce
 | When a skill says | Use |
 | --- | --- |
 | Publish to the issue tracker | `create_spec` for a spec, `create_ticket` for an issue |
-| Fetch the relevant ticket | `get_ticket` or `get_spec` |
+| Fetch the relevant ticket | `get_ticket` or `get_spec` (which takes `parts` and `sections` to read less) |
 | Search or list issues | `find_tickets` or `find_specs` |
 | Comment | `comment` |
 | Apply or remove a label | `add_labels` or `remove_labels` |

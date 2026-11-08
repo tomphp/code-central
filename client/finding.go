@@ -30,9 +30,14 @@ func (c *Client) Cancel(ctx context.Context, key string, in core.CancelInput) (c
 }
 
 // GetSpec is get_spec.
-func (c *Client) GetSpec(ctx context.Context, key string, ref core.Ref) (core.SpecDetail, error) {
+func (c *Client) GetSpec(ctx context.Context, key string, in core.GetSpecInput) (core.SpecDetail, error) {
+	q := url.Values{"part": in.Parts, "section": in.Sections}
+	path := scoped(key, "specs/"+url.PathEscape(string(in.Spec)))
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
 	var out core.SpecDetail
-	return out, c.do(ctx, "GET", scoped(key, "specs/"+url.PathEscape(string(ref))), nil, &out)
+	return out, c.do(ctx, "GET", path, nil, &out)
 }
 
 // FindSpecs is find_specs.

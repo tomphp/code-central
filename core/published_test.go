@@ -90,6 +90,7 @@ func TestTheProseCoversTheRulesTheTableCannotSay(t *testing.T) {
 		"A send-back with no note means nothing has changed",
 		"branch named after the Ticket ID", "commit often", "Don't push",
 		"Holding several Claims", "Silence is tracked per session", "same resume command", "same files",
+		"`parts: [\"body\"]`", "`sections`", "`outline`", "add `tickets` only when sibling Tickets matter",
 	} {
 		if !strings.Contains(prose, want) {
 			t.Errorf("get_workflow prose does not say %q", want)

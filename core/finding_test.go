@@ -65,12 +65,12 @@ func TestGetSpecShowsItsProgress(t *testing.T) {
 	f.setState(t, 3, store.Done)
 	empty := f.spec(t, "acme", "Later") // acme-5
 
-	v, err := f.core.GetSpec(ctx, "acme", "acme-1")
+	v, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.ID != "acme-1" || v.Title != "Login" || v.Body != "body\n" {
-		t.Fatalf("spec %+v", v.SpecView)
+	if v.ID != "acme-1" || v.Title != "Login" || *v.Body != "body\n" {
+		t.Fatalf("spec %+v", v)
 	}
 	want := map[store.State]int{store.Ready: 1, store.Done: 1, store.Draft: 1}
 	if !maps.Equal(v.StateSummary, want) || v.Finished {
@@ -81,7 +81,7 @@ func TestGetSpecShowsItsProgress(t *testing.T) {
 		t.Fatalf("tickets %v", got)
 	}
 
-	v, err = f.core.GetSpec(ctx, "acme", core.Ref(empty.ID))
+	v, err = f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: core.Ref(empty.ID)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestGetSpecShowsItsProgress(t *testing.T) {
 		t.Fatalf("a Spec with no Tickets: summary %v finished %v tickets %v", v.StateSummary, v.Finished, v.Tickets)
 	}
 
-	_, err = f.core.GetSpec(ctx, "acme", "acme-2")
+	_, err = f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-2"})
 	wantCode(t, err, core.NotFound, "")
 }
 

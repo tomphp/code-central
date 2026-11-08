@@ -43,7 +43,7 @@ func TestTheTeachingFilesMapTheSkillsToCodeCentral(t *testing.T) {
 		t.Fatalf("teaching files %v", files)
 	}
 	for _, want := range []string{
-		"get_workflow", "create_spec", "create_ticket", "get_ticket", "get_spec", "comment",
+		"get_workflow", "create_spec", "create_ticket", "get_ticket", "get_spec", "`parts` and `sections`", "comment",
 		"`wayfinder:map`", "add_blocker", "find_tickets(spec, claimable)", "claim(ticket)", "finish",
 	} {
 		if !strings.Contains(tracker, want) {

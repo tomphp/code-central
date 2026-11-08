@@ -101,8 +101,8 @@ func TestAnImportWritesEverySpecAndTicket(t *testing.T) {
 	if res.DryRun || len(res.Specs) != 2 || !strings.Contains(res.NextStep, "Delete `.scratch/`") || !strings.Contains(res.NextStep, "commit") {
 		t.Fatalf("result: %+v", res)
 	}
-	sp, err := f.core.GetSpec(ctx, "acme", "acme-2")
-	if err != nil || sp.Body != "# Login\n" || sp.Tags["source"] != ".scratch/login/spec.md" || len(sp.Tickets) != 2 {
+	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-2"})
+	if err != nil || *sp.Body != "# Login\n" || sp.Tags["source"] != ".scratch/login/spec.md" || len(sp.Tickets) != 2 {
 		t.Fatalf("spec: %+v, %v", sp, err)
 	}
 	form, _ := f.core.GetTicket(ctx, "acme", "acme-3")
