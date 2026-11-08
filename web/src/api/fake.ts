@@ -26,7 +26,8 @@
 // out as the service does. Each Claim's Transcript keeps the last
 // TRANSCRIPT_LIMIT events with a rising seq, and is a tail once it has
 // dropped some; subscribeTranscript follows it, and dropTranscriptStreams
-// stands in for a dropped connection, which reconnects by itself.
+// stands in for a dropped connection, which reconnects by itself;
+// followingTranscripts counts the followers not yet stopped.
 import {
   numberOf,
   type Api,
@@ -259,6 +260,12 @@ export class FakeApi implements Api {
       f.up = false;
       queueMicrotask(() => this.connect(f));
     }
+  }
+
+  // followingTranscripts is how many subscribeTranscript calls are still
+  // following, for tests that check a view stops following when it closes.
+  followingTranscripts(): number {
+    return this.followers.size;
   }
 
   // ---- for actions' fake behaviour (src/api/actions/) ----

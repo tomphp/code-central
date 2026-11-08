@@ -9,6 +9,7 @@ import { Markdown } from "../Markdown";
 import { ActionPanel } from "../panels/ActionPanel";
 import { LatestEventLine } from "../LatestEvent";
 import { LinkBadge } from "./LinkBadge";
+import { Live } from "./Live";
 import { useAct } from "./useAct";
 
 export interface TicketPaneProps {
@@ -40,8 +41,9 @@ export function TicketPane(props: TicketPaneProps) {
 export type TicketDetailProps = TicketPaneProps;
 
 // TicketDetail is everything about a Ticket below its action panel: Spec,
-// Labels, description, Blockers, Claim activity, move, and a collapsed
-// history of moves, comments and edits merged by time.
+// Labels, description, Blockers, Claim activity with each Claim's Live
+// section, move, and a collapsed history of moves, comments and edits
+// merged by time.
 export function TicketDetail({ api, project, ticket: t, now }: TicketDetailProps) {
   const claims = [...t.claims].sort((a, b) => b.number - a.number);
   return (
@@ -76,20 +78,30 @@ export function TicketDetail({ api, project, ticket: t, now }: TicketDetailProps
         <ul aria-label="Claims" className="claims muted small">
           {claims.map((c) => (
             <li key={c.number}>
-              Claim {c.number} · started {ago(now, c.started)} · last activity {ago(now, c.last_activity)}
-              {c.latest_event && (
-                <>
-                  {" "}
-                  · <LatestEventLine event={c.latest_event} now={now} />
-                </>
-              )}
-              {c.ended && (
-                <>
-                  {" "}
-                  · ended{c.ended_by && <> by {c.ended_by}</>} {ago(now, c.ended)}
-                </>
-              )}
-              {c.session_id && <> · session {c.session_id}</>}
+              <div className="claim-line">
+                Claim {c.number} · started {ago(now, c.started)} · last activity {ago(now, c.last_activity)}
+                {c.latest_event && (
+                  <>
+                    {" "}
+                    · <LatestEventLine event={c.latest_event} now={now} />
+                  </>
+                )}
+                {c.ended && (
+                  <>
+                    {" "}
+                    · ended{c.ended_by && <> by {c.ended_by}</>} {ago(now, c.ended)}
+                  </>
+                )}
+                {c.session_id && <> · session {c.session_id}</>}
+              </div>
+              <Live
+                key={`${t.id}#${c.number}`}
+                api={api}
+                project={project}
+                id={t.id}
+                claim={c.number}
+                defaultOpen={!c.ended && t.state === "In Progress"}
+              />
             </li>
           ))}
         </ul>
