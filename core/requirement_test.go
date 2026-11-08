@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -122,8 +123,51 @@ func TestARequirementsTitleIsItsFirstLine(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
 	text := "\n# Dark mode  \nMore.\n"
-	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: text})
-	if err != nil || res.Spec.Title != "Dark mode" || res.Spec.Body != text {
+	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: text, Full: true})
+	if err != nil || res.Spec.Record.Title != "Dark mode" || res.Spec.Record.Body != text {
 		t.Fatalf("spec %+v, %v", res.Spec, err)
+	}
+}
+
+func TestSubmittingARequirementAcknowledgesItsSpecAndStages(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode})
+	if err != nil {
+		t.Fatalf("submit_requirement: %v", err)
+	}
+	wantAcknowledgement(t, res.Spec, "acme-1", t0, []string{"title", "body"}, 0)
+	if len(res.Stages) != 3 {
+		t.Fatalf("stages %+v", res.Stages)
+	}
+	wantTicketAcknowledgement(t, res.Stages[0], "acme-2", t0, store.Ready,
+		[]string{"title", "state", "spec", "labels", "description", "moves", "claimable"}, 0)
+	for i, id := range []string{"acme-3", "acme-4"} {
+		wantTicketAcknowledgement(t, res.Stages[i+1], id, t0, store.Ready,
+			[]string{"title", "state", "spec", "labels", "blocked_by", "blockers", "description", "moves", "blocked"}, 0)
+	}
+}
+
+func TestSubmittingARequirementWithFullReturnsTheSpecAndStages(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, Full: true})
+	if err != nil {
+		t.Fatalf("submit_requirement: %v", err)
+	}
+	out := resultJSON(t, res)
+	sp, _ := out["spec"].(map[string]any)
+	if sp["id"] != "acme-1" || sp["body"] != darkMode {
+		t.Fatalf("spec %v", out["spec"])
+	}
+	stages, _ := out["stages"].([]any)
+	if len(stages) != 3 {
+		t.Fatalf("stages %v", out["stages"])
+	}
+	for i, label := range []string{"stage:grilling", "stage:spec", "stage:tickets"} {
+		st := stages[i].(map[string]any)
+		if st["state"] != "Ready" || !reflect.DeepEqual(st["labels"], []any{label}) || st["moves"] == nil {
+			t.Fatalf("stage %d: %v", i, st)
+		}
 	}
 }

@@ -37,13 +37,16 @@ func checkStageLabels(field string, labels []string) error {
 // free text, whose first line becomes the Spec's title.
 type SubmitRequirementInput struct {
 	Text string `json:"text"`
+	// Full asks for the Spec and Stage Tickets in place of their
+	// Acknowledgements.
+	Full bool `json:"full,omitempty"`
 }
 
 // SubmitRequirementResult is the new Requirement: its Spec and its three
-// Stage Tickets, in order.
+// Stage Tickets, in order, each acknowledged, or with full each the record.
 type SubmitRequirementResult struct {
-	Spec   SpecView     `json:"spec"`
-	Stages []TicketView `json:"stages"`
+	Spec   Written[SpecView]     `json:"spec"`
+	Stages []Written[TicketView] `json:"stages"`
 }
 
 // stageTickets are what submit_requirement writes for each Stage: its
@@ -94,10 +97,17 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 	var res SubmitRequirementResult
 	err = c.store.View(func(r store.Reader) error {
 		s, _ := r.Spec(key, specN)
-		res.Spec = specView(key, s)
+		var err error
+		if res.Spec, err = acknowledgeCreate(specView(key, store.Spec{}), specView(key, s), in.Full); err != nil {
+			return err
+		}
 		for _, n := range stageNs {
 			t, _ := r.Ticket(key, n)
-			res.Stages = append(res.Stages, c.ticketView(r, key, t))
+			stage, err := acknowledgeCreate(c.ticketView(r, key, store.Ticket{}), c.ticketView(r, key, t), in.Full)
+			if err != nil {
+				return err
+			}
+			res.Stages = append(res.Stages, stage)
 		}
 		return nil
 	})

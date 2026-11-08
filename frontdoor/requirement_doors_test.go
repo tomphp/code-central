@@ -18,8 +18,21 @@ func init() {
 		},
 		check: func(t *testing.T, out map[string]any) {
 			sp, _ := out["spec"].(map[string]any)
+			acknowledgement("acme-4", "title", "body")(t, sp)
+			stages, _ := out["stages"].([]any)
+			if len(stages) != 3 {
+				t.Fatalf("stages %v", out["stages"])
+			}
+			ticketAcknowledgement("acme-5", "Ready", "title", "state", "spec", "labels", "description", "moves", "claimable")(t, stages[0].(map[string]any))
+			for i, id := range []string{"acme-6", "acme-7"} {
+				ticketAcknowledgement(id, "Ready", "title", "state", "spec", "labels", "blocked_by", "blockers", "description", "moves", "blocked")(t, stages[i+1].(map[string]any))
+			}
+		},
+		full: func(t *testing.T, out map[string]any) {
+			sp, _ := out["spec"].(map[string]any)
 			field("id", "acme-4")(t, sp)
 			field("title", "Dark mode")(t, sp)
+			field("body", "Dark mode\n\nA toggle in settings.")(t, sp)
 			stages, _ := out["stages"].([]any)
 			if len(stages) != 3 {
 				t.Fatalf("stages %v", out["stages"])
@@ -131,7 +144,7 @@ func TestNeedsMeRowsNameTheirRequirementOverHTTP(t *testing.T) {
 
 func TestTheSubmitRequirementCommandReadsTheTextFromAFile(t *testing.T) {
 	srv := newServer(t)
-	out := cliOK(t, srv, []string{"submit-requirement", "--file", "testdata/requirement.md"})
+	out := cliOK(t, srv, []string{"submit-requirement", "--file", "testdata/requirement.md", "--full"})
 	sp, _ := out["spec"].(map[string]any)
 	field("title", "Export to CSV")(t, sp)
 }
