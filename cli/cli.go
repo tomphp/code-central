@@ -18,6 +18,7 @@ import (
 
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/home"
 	"github.com/tomoram/code-central/notify"
 	"github.com/tomoram/code-central/store"
 )
@@ -28,6 +29,10 @@ type Env struct {
 	Stdin          io.Reader
 	Stdout, Stderr io.Writer
 	Getenv         func(string) string
+	// UserHomeDir is the profile folder the default paths fall back to
+	// when HOME isn't set (home.Lookup); main passes os.UserHomeDir. nil
+	// means none, so tests never find the real one.
+	UserHomeDir func() (string, error)
 	// Dir is the working directory; "" means the process's.
 	Dir string
 
@@ -53,6 +58,11 @@ type Env struct {
 	// Notifier shows serve's OS Notifications. nil sends none, so tests
 	// never show a real one; main passes notify.OS().
 	Notifier notify.Sender
+}
+
+// home is where the default paths are found.
+func (e Env) home() home.Lookup {
+	return home.Lookup{Getenv: e.Getenv, UserHomeDir: e.UserHomeDir}
 }
 
 // Exit codes.

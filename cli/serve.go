@@ -79,7 +79,7 @@ func runServe(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	local, err := loadSettings(e.Getenv)
+	local, err := loadSettings(e.home())
 	if err != nil {
 		return err
 	}
@@ -89,7 +89,7 @@ func runServe(ctx context.Context, e Env, args []string) error {
 			return err
 		}
 	}
-	dir, err := store.Dir(o.store, e.Getenv)
+	dir, err := store.Dir(o.store, e.home())
 	if err != nil {
 		return err
 	}

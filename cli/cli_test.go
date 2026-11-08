@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
@@ -28,6 +29,17 @@ type result struct {
 func run(t *testing.T, env map[string]string, stdin string, args ...string) result {
 	t.Helper()
 	return runIn(t, t.TempDir(), env, stdin, args...)
+}
+
+// userHomeDir is os.UserHomeDir on a Windows account: the profile folder
+// is env's USERPROFILE, and there is none when that isn't set.
+func userHomeDir(env map[string]string) func() (string, error) {
+	return func() (string, error) {
+		if d := env["USERPROFILE"]; d != "" {
+			return d, nil
+		}
+		return "", errors.New("%USERPROFILE% is not defined")
+	}
 }
 
 func decode[T any](t *testing.T, r result) T {

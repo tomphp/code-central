@@ -54,3 +54,15 @@ func TestTheStateFileHoldsEachClaimAfterItIsMade(t *testing.T) {
 		t.Errorf("state file %s; want %s under Claim %s and session %s, with no allowed tools", b, id, c.Claim, c.Session)
 	}
 }
+
+func TestWithNoHOMETheStateFileIsUnderTheProfileFolder(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.Setenv("HOME", "") // as on Windows: Home is then only the profile folder
+	id := h.ReadyTicket("Work")
+	h.Start()
+	h.WaitForState(id, store.InReview)
+	if _, err := os.Stat(h.StateFile()); err != nil {
+		t.Fatalf("no state file under the profile folder: %v", err)
+	}
+}

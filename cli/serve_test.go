@@ -29,6 +29,7 @@ func serveWith(t *testing.T, env map[string]string, addrs []string, args ...stri
 		code := cli.Run(ctx, append([]string{"serve", "--store", t.TempDir()}, args...), cli.Env{
 			Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut,
 			Getenv:      func(k string) string { return env[k] },
+			UserHomeDir: userHomeDir(env),
 			ServeAddrs:  addrs,
 			OnListening: func(a []string) { listening <- a },
 		})
@@ -94,6 +95,16 @@ func TestXDGConfigHomeHoldsTheSettings(t *testing.T) {
 	_, _, failed := serveWith(t, map[string]string{"XDG_CONFIG_HOME": cfg, "HOME": t.TempDir()}, []string{"127.0.0.1:0"})
 	if failed == nil || failed.code != 1 || !strings.Contains(failed.stderr, "settings.yaml") || !strings.Contains(failed.stderr, "colour") {
 		t.Fatalf("serve accepted an unknown setting: %+v", failed)
+	}
+}
+
+func TestWithNoHOMETheProfileFolderHoldsTheSettings(t *testing.T) {
+	profile := t.TempDir()
+	writeHomeSettings(t, profile, "port: 70000\n")
+	_, _, failed := serveWith(t, map[string]string{"USERPROFILE": profile}, nil)
+	want := filepath.Join(profile, ".config", "code-central", "settings.yaml")
+	if failed == nil || failed.code != 1 || !strings.Contains(failed.stderr, want) {
+		t.Fatalf("serve didn't read %s: %+v", want, failed)
 	}
 }
 
