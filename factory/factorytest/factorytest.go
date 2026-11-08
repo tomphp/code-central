@@ -184,6 +184,18 @@ func (h *Harness) StateFile() string {
 // and returns its ID.
 func (h *Harness) ReadyTicket(title string) string {
 	h.t.Helper()
+	return h.readyTicket(title)
+}
+
+// StageTicket creates a Ready Stage Ticket, marked by stage's Label, on
+// the same shared Spec, and returns its ID.
+func (h *Harness) StageTicket(stage, title string) string {
+	h.t.Helper()
+	return h.readyTicket(title, core.StageLabel(stage))
+}
+
+func (h *Harness) readyTicket(title string, labels ...string) string {
+	h.t.Helper()
 	ctx := context.Background()
 	c := h.Server.Client
 	if h.spec == "" {
@@ -191,7 +203,7 @@ func (h *Harness) ReadyTicket(title string) string {
 		must(h.t, err)
 		h.spec = s.ID
 	}
-	tk, err := c.CreateTicket(ctx, h.Project, core.CreateTicketInput{Spec: core.Ref(h.spec), Title: title, State: store.Ready})
+	tk, err := c.CreateTicket(ctx, h.Project, core.CreateTicketInput{Spec: core.Ref(h.spec), Title: title, State: store.Ready, Labels: labels})
 	must(h.t, err)
 	return tk.ID
 }

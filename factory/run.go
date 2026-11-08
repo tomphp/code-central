@@ -63,6 +63,8 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		return false
 	}
 	id := res.Ticket.ID
+	stage := stageOf(*res.Ticket)
+	guide := f.stageGuide(ctx, res.StageGuide, stage)
 	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}}
 	if err := f.addClaim(c); err != nil {
 		f.printf("%s: can't write the state file: %v", id, err)
@@ -71,7 +73,15 @@ func (f *factory) claimNext(ctx context.Context) bool {
 	if _, err := f.client.SetSession(ctx, f.project, core.SetSessionInput{Ticket: core.Ref(id), ClaimID: res.ClaimID, SessionID: session, WorkingDir: &wt, ResumeCommand: &resume}); err != nil {
 		f.printf("%s: set_session: %v", id, err)
 	}
-	if err := f.implementationWorktree(id, wt); err != nil {
+	setUp := f.implementationWorktree
+	if stage != "" {
+		setUp = f.stageWorktree
+	}
+	if err := setUp(id, wt); err != nil {
+		if fl := (*failure)(nil); errors.As(err, &fl) {
+			f.reportFailure(ctx, c, fl)
+			return true
+		}
 		f.printf("%s: can't set up the worktree: %v", id, err)
 		return true
 	}
@@ -86,7 +96,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 			f.nRunning--
 			f.mu.Unlock()
 		}()
-		end := f.runTurn(ctx, c, wt, implementPrompt(c))
+		end := f.runTurn(ctx, c, wt, firstPrompt(c, stage, guide))
 		f.printf("%s: turn ended: %s", id, end)
 	}()
 	return true
@@ -108,16 +118,6 @@ func (f *factory) implementationWorktree(id, wt string) error {
 	}
 	_, err := f.gitOut(f.repo, "worktree", "add", "-q", "-b", id, wt, f.base)
 	return err
-}
-
-func implementPrompt(c claim) string {
-	return fmt.Sprintf(`/implement %s
-
-Ticket: %s
-Claim: %s
-
-You are running under code-central-factory, in this Ticket's own worktree on branch %s. Work the Ticket under Claim %s: commit on this branch only, with no push and no PR, and finish the Ticket when it is done.`,
-		c.Ticket, c.Ticket, c.ClaimID, c.Ticket, c.ClaimID)
 }
 
 // result is the stream-json result message that ends a turn.
