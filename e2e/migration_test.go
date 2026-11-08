@@ -32,12 +32,10 @@ const (
 // build, whose test-only step is additive) migrates and loads it within
 // the same budget.
 func TestA10000TicketStoreLoadsAndMigratesWithinTheBudget(t *testing.T) {
-	// Before the store is written and the next build made, not at serve.
-	unixOnly(t, "os.Interrupt to stop serve")
 	dir := filepath.Join(t.TempDir(), "code-central")
 	writeSyntheticStore(t, dir)
 
-	next := filepath.Join(t.TempDir(), "code-central-next")
+	next := filepath.Join(t.TempDir(), "code-central-next"+exeSuffix)
 	build := exec.Command("go", "build", "-tags", "migrationtest", "-o", next, "../cmd/code-central")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("building the migrationtest binary: %v\n%s", err, out)
