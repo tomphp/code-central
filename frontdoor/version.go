@@ -10,12 +10,12 @@ import (
 // CLI of another version can warn.
 const VersionHeader = "X-Code-Central-Version"
 
-// ClientVersionHeader carries the caller's version on a request, so an
+// ClientVersionHeader carries the client's version on a request, so an
 // unknown field's error can say whether the versions differ.
 const ClientVersionHeader = "X-Code-Central-Client-Version"
 
 // Versioned sets VersionHeader to version on every response from h, and
-// gives every request's context the service's version and the caller's
+// gives every request's context the service's version and the client's
 // from ClientVersionHeader, for core.Decode.
 func Versioned(h http.Handler, version string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

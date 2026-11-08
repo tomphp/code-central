@@ -69,10 +69,10 @@ Running it again rewrites the files it generated without asking, and asks before
 
 `make build` stamps `git describe --tags --always --dirty` as the version. `code-central --version` prints it, and the service sends it in the `X-Code-Central-Version` response header.
 
-A caller sends its own version in the `X-Code-Central-Client-Version` request header. The CLI sends it on every request, and any HTTP caller may. MCP calls can't carry a header from the CLI, so an MCP caller sends it as a top-level `client_version` field instead, which every operation accepts without listing it and which wins over the header. When the service rejects a request for an unknown field, the error says whether the versions are the likely cause:
+A client sends its own version in the `X-Code-Central-Client-Version` request header. The CLI sends it on every request, and any HTTP client may. MCP calls can't carry a header from the CLI, so an MCP client sends it as a top-level `client_version` field instead, which every operation accepts without listing it and which wins over the header. When the service rejects a request for an unknown field, the error says whether the versions are the likely cause:
 
-- the caller's version differs from the service's: ``invalid JSON: json: unknown field "working_dir": the caller is version v1.9 and the service is v1.8; run `code-central service restart` ``
-- the caller sent no version: ``invalid JSON: json: unknown field "x" (the service is v1.8; if your client is newer, run `code-central service restart`) ``
+- the client's version differs from the service's: ``invalid JSON: json: unknown field "working_dir": the caller is version v1.9 and the service is v1.8; run `code-central service restart` ``
+- the client sent no version: ``invalid JSON: json: unknown field "x" (the service is v1.8; if your client is newer, run `code-central service restart`) ``
 - the versions are equal: the field is just unknown, and the message says no more.
 
 Versions are compared for equality only. Other errors (a wrong type, trailing data) never get the hint.

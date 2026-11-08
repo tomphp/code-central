@@ -23,7 +23,7 @@ import (
 const unknownAddedLater = `invalid JSON: json: unknown field "added_later"`
 
 var versionCases = []struct {
-	name, caller, want string
+	name, client, want string
 }{
 	{"a different version", "v1.9", unknownAddedLater + ": the caller is version v1.9 and the service is v1.8; run `code-central service restart`"},
 	{"the same version", "v1.8", unknownAddedLater},
@@ -53,8 +53,8 @@ func TestMCPUnknownFieldsNameTheVersionsSentAsClientVersion(t *testing.T) {
 	for _, tc := range versionCases {
 		t.Run(tc.name, func(t *testing.T) {
 			args := map[string]any{"title": "S", "added_later": 1}
-			if tc.caller != "" {
-				args["client_version"] = tc.caller
+			if tc.client != "" {
+				args["client_version"] = tc.client
 			}
 			checkUnknownAddedLater(t, mcpRejected(t, s, "create_spec", args, core.Invalid), tc.want)
 		})
@@ -83,8 +83,8 @@ func TestHTTPUnknownFieldsNameTheVersionsSentAsTheHeader(t *testing.T) {
 				t.Fatal(err)
 			}
 			req.Header.Set(frontdoor.ActorHeader, string(core.Human))
-			if tc.caller != "" {
-				req.Header.Set(frontdoor.ClientVersionHeader, tc.caller)
+			if tc.client != "" {
+				req.Header.Set(frontdoor.ClientVersionHeader, tc.client)
 			}
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
@@ -135,7 +135,7 @@ func TestCLIUnknownFieldsNameTheVersionsSentAsTheHeader(t *testing.T) {
 			exit := cli.Run(context.Background(), []string{"create-spec", "--title", "S"}, cli.Env{
 				Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut,
 				Getenv:  func(k string) string { return env[k] },
-				Version: tc.caller,
+				Version: tc.client,
 			})
 			if exit != 2 || out.Len() != 0 {
 				t.Fatalf("exit %d, stdout %q; want exit 2 and no output", exit, out.String())

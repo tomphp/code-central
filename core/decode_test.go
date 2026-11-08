@@ -26,7 +26,7 @@ func decodeErr(t *testing.T, ctx context.Context, in string) *core.Error {
 
 const bareUnknown = `invalid JSON: json: unknown field "working_dir"`
 
-func TestAnUnknownFieldNamesBothVersionsWhenTheCallersDiffers(t *testing.T) {
+func TestAnUnknownFieldNamesBothVersionsWhenTheClientsDiffers(t *testing.T) {
 	ctx := core.WithVersions(context.Background(), "v1.8", "v1.9")
 	e := decodeErr(t, ctx, `{"title":"T","working_dir":"/w"}`)
 	want := bareUnknown + ": the caller is version v1.9 and the service is v1.8; run `code-central service restart`"
@@ -35,7 +35,7 @@ func TestAnUnknownFieldNamesBothVersionsWhenTheCallersDiffers(t *testing.T) {
 	}
 }
 
-func TestAnUnknownFieldGivesASoftHintWhenTheCallersVersionIsUnknown(t *testing.T) {
+func TestAnUnknownFieldGivesASoftHintWhenTheClientsVersionIsUnknown(t *testing.T) {
 	ctx := core.WithVersions(context.Background(), "v1.8", "")
 	e := decodeErr(t, ctx, `{"working_dir":"/w"}`)
 	want := bareUnknown + " (the service is v1.8; if your client is newer, run `code-central service restart`)"
