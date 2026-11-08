@@ -34,7 +34,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
       return (
         <>
           {banner}
-          <Focus data={inbox.data} loc={loc} navigate={navigate} />
+          <Focus api={api} now={now()} version={version} data={inbox.data} loc={loc} navigate={navigate} />
         </>
       );
     case "inbox":

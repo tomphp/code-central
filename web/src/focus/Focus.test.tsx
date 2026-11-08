@@ -43,7 +43,9 @@ describe("entering and leaving Focus Mode", () => {
   });
 
   it("enters with no project when the Inbox is unfiltered, and shows no Project in its header", async () => {
-    renderApp(world());
+    const fake = world();
+    fake.setNeedsMe([]); // no Focus Item, whose own Project would show
+    renderApp(fake);
     await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("button", { name: "Focus" }));
     expect(window.location.search).toBe("?view=focus");
     expect(within(focus()).queryByText(/Acme|Beta/)).toBeNull();
