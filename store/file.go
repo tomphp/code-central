@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -58,7 +57,7 @@ func Dir(flag string, getenv func(string) string) (string, error) {
 type FileStore struct {
 	*index
 	dir  string
-	lock *os.File
+	lock *storeLock
 	// format is the store format this build reads and writes, and steps
 	// the migrations up to it: Format and migrations, except in tests.
 	format int
@@ -78,8 +77,7 @@ func (s *FileStore) Close() error {
 	if s.lock == nil {
 		return nil
 	}
-	syscall.Flock(int(s.lock.Fd()), syscall.LOCK_UN)
-	err := s.lock.Close()
+	err := s.lock.release()
 	s.lock = nil
 	return err
 }
@@ -98,7 +96,7 @@ func open(dir string, format int, steps []MigrationStep) (*FileStore, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	lock, err := lockFile(dir)
+	lock, err := lockStore(dir)
 	if err != nil {
 		return nil, err
 	}
@@ -634,7 +632,7 @@ func encode(record any, project string) (string, []byte, error) {
 }
 
 // atomicWrite writes a temp file beside path, fsyncs it, renames it into
-// place and fsyncs the directory.
+// place and fsyncs the directory (syncDir).
 func atomicWrite(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -659,12 +657,7 @@ func atomicWrite(path string, data []byte) error {
 	if err := os.Rename(tmp.Name(), path); err != nil {
 		return err
 	}
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	return d.Sync()
+	return syncDir(dir)
 }
 
 func splitFrontmatter(data []byte) (front, body []byte, ok bool) {

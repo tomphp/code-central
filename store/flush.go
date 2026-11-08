@@ -1,17 +1,12 @@
 package store
 
-import (
-	"os"
-	"runtime"
-	"syscall"
-)
+import "os"
 
-// writeFlushed writes a new file and hands its data to the disk, without
-// the drive-cache flush a full fsync does on macOS (F_FULLFSYNC, several
-// milliseconds a file). A migration stages thousands of files, so it
-// flushes each one this way and then makes them all durable at once with
-// one full fsync (atomicWrite of the staged store.yaml) before any rename.
-// Elsewhere this is a plain fsync, which is already the full one.
+// writeFlushed writes a new file and hands its data to the disk with
+// flushFile, which on macOS skips the drive-cache flush of a full fsync.
+// A migration stages thousands of files, so it flushes each one this way
+// and then makes them all durable at once with one full fsync
+// (atomicWrite of the staged store.yaml) before any rename.
 func writeFlushed(path string, data []byte) error {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -21,12 +16,7 @@ func writeFlushed(path string, data []byte) error {
 		f.Close()
 		return err
 	}
-	if runtime.GOOS == "darwin" {
-		err = syscall.Fsync(int(f.Fd()))
-	} else {
-		err = f.Sync()
-	}
-	if err != nil {
+	if err := flushFile(f); err != nil {
 		f.Close()
 		return err
 	}
