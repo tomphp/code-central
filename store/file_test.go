@@ -92,6 +92,22 @@ func TestSecondOpenOfSameStoreIsRefused(t *testing.T) {
 	openFile(t, dir) // the lock is released on Close
 }
 
+// On a case-insensitive file system (Windows, and macOS by default) the
+// path in another case is the same store, so it is locked; on a
+// case-sensitive one (Linux) it is another folder, so another store.
+func TestTheSameStoreInAnotherCaseIsRefused(t *testing.T) {
+	root := t.TempDir()
+	dir, other := filepath.Join(root, "Store"), filepath.Join(root, "STORE")
+	openFile(t, dir)
+	if _, err := os.Stat(other); errors.Is(err, fs.ErrNotExist) {
+		openFile(t, other)
+		return
+	}
+	if _, err := store.Open(other); !errors.Is(err, store.ErrLocked) {
+		t.Fatalf("open in another case: err = %v, want ErrLocked", err)
+	}
+}
+
 func TestFilesAreWrittenInFixedFieldOrder(t *testing.T) {
 	dir := t.TempDir()
 	s := openFile(t, dir)
