@@ -18,7 +18,7 @@ func TestAnExistingWorktreeOnTheTicketsBranchIsReused(t *testing.T) {
 	if err := os.WriteFile(left, []byte("wip"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h.Script(id, factorytest.Shell("test -f left-by-an-earlier-claim.txt"), factorytest.Finish("Done."), factorytest.Result("success"))
+	h.Script(id, factorytest.NeedFile("left-by-an-earlier-claim.txt"), factorytest.Finish("Done."), factorytest.Result("success"))
 
 	h.Start()
 	h.WaitForState(id, store.InReview)

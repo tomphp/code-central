@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"os"
+	"runtime"
 	"slices"
 	"syscall"
 	"testing"
@@ -35,6 +36,16 @@ func TestTheFirstCtrlCDrainsWaitingForRunningTurnsAndClaimingNoMore(t *testing.T
 	}
 }
 
+// unixStopSequence skips t on Windows, where the Factory stops a turn
+// with Ctrl-Break and then kills it: t expects SIGINT then SIGTERM, and
+// code-central-149 has the stop tests choose the sequence by OS.
+func unixStopSequence(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("expects SIGINT then SIGTERM; code-central-149 expects Ctrl-Break, then killed, on Windows")
+	}
+}
+
 // killed checks a turn the Factory stopped on its way out: it got SIGINT
 // then SIGTERM, and its Claim is kept, In Progress and in the state
 // file, with no Failure Report.
@@ -57,6 +68,7 @@ func killed(t *testing.T, h *factorytest.Harness, r *factorytest.Running, id str
 
 func TestASecondCtrlCStopsTheRunningTurnsAndKeepsTheirClaims(t *testing.T) {
 	t.Parallel()
+	unixStopSequence(t)
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait())
@@ -71,6 +83,7 @@ func TestASecondCtrlCStopsTheRunningTurnsAndKeepsTheirClaims(t *testing.T) {
 
 func TestSIGTERMOrSIGHUPStopsTheRunningTurnsAtOnce(t *testing.T) {
 	t.Parallel()
+	unixStopSequence(t)
 	for _, sig := range []os.Signal{syscall.SIGTERM, syscall.SIGHUP} {
 		t.Run(sig.String(), func(t *testing.T) {
 			t.Parallel()

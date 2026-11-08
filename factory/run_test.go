@@ -13,7 +13,9 @@ func TestTheFactoryClaimsAReadyTicketAndRunsOneSessionToInReview(t *testing.T) {
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Add a button")
 	h.Script(id,
-		factorytest.Shell("echo button > button.txt && git add button.txt && git commit -q -m 'Add a button'"),
+		factorytest.WriteFile("button.txt", "button\n"),
+		factorytest.Git("add", "button.txt"),
+		factorytest.Git("commit", "-q", "-m", "Add a button"),
 		factorytest.Finish("Added the button."),
 		factorytest.Result("success"))
 	mainTip := h.Git("rev-parse", "main")

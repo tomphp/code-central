@@ -10,6 +10,12 @@ import (
 	"syscall"
 )
 
+// exeSuffix ends the name of a program on PATH.
+const exeSuffix = ""
+
+// executable reports whether the file is a program, by its execute bits.
+func executable(fi os.FileInfo) bool { return fi.Mode()&0o111 != 0 }
+
 // startInOwnGroup has cmd start a turn in its own process group, so the
 // terminal's Ctrl-C reaches only the Factory.
 func startInOwnGroup(cmd *exec.Cmd) {
