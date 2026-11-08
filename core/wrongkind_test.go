@@ -16,10 +16,7 @@ func (f fixture) wrongKind(t *testing.T) {
 // wantNotFound checks err is not_found, with no field, saying msg.
 func wantNotFound(t *testing.T, err error, msg string) {
 	t.Helper()
-	wantCode(t, err, core.NotFound, "")
-	if got := err.(*core.Error).Message; got != msg {
-		t.Fatalf("message %q, want %q", got, msg)
-	}
+	wantMessage(t, err, core.NotFound, msg)
 }
 
 // ticketOps runs each operation whose main target is a Ticket on ref,

@@ -233,21 +233,21 @@ func TestTheHoldingSessionClaimsItsTicketAgainAndGetsTheSameClaim(t *testing.T) 
 			b, _ := json.Marshal(before)
 			a, _ := json.Marshal(after)
 			if string(a) != string(b) {
-				t.Fatalf("a re-claim wrote the Ticket:\nbefore %s\nafter  %s", b, a)
+				t.Fatalf("claiming again wrote the Ticket:\nbefore %s\nafter  %s", b, a)
 			}
 			if r, _ := json.Marshal(res.Ticket); string(r) != string(b) {
-				t.Fatalf("the re-claim's view %s, want the Ticket as it is %s", r, b)
+				t.Fatalf("claiming again gave the view %s, want the Ticket as it is %s", r, b)
 			}
 			select {
 			case e := <-notices:
-				t.Fatalf("a re-claim sent a notice %+v", e)
+				t.Fatalf("claiming again sent a notice %+v", e)
 			default:
 			}
 		})
 	}
 }
 
-func TestAReClaimTakesNoNewClaimID(t *testing.T) {
+func TestClaimingAgainTakesNoNewClaimID(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, store.Ready, store.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "sess-1"})
@@ -290,6 +290,7 @@ func TestClaimingATicketAnotherSessionHoldsSaysWhoHoldsIt(t *testing.T) {
 		"acme-2 is held by Claim 1 of another session; claim another Ticket, or ask the human to release it; if this session holds it, call claim again with your session_id")
 }
 
+// wantMessage checks err has code, with no field, saying msg.
 func wantMessage(t *testing.T, err error, code core.Code, msg string) {
 	t.Helper()
 	wantCode(t, err, code, "")

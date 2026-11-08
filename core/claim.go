@@ -80,9 +80,7 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 			}
 			// The holding session claims again: its Claim, nothing written
 			// (ADR 0010).
-			v := c.ticketView(w, key, t)
-			g := stageGuide(GuideStage(t.Labels))
-			res = ClaimResult{ClaimID: live.ID, Ticket: &v, StageGuide: &g}
+			res = c.claimResult(w, key, t, live.ID)
 			return nil
 		}
 		if t.State == store.Ready && blocked(w, key, t) {
@@ -100,12 +98,17 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}
-		v := c.ticketView(w, key, t)
-		g := stageGuide(GuideStage(t.Labels))
-		res = ClaimResult{ClaimID: claim.ID, Ticket: &v, StageGuide: &g}
+		res = c.claimResult(w, key, t, claim.ID)
 		return nil
 	})
 	return res, err
+}
+
+// claimResult is claim's result for Claim id on t.
+func (c *Core) claimResult(r store.Reader, key string, t store.Ticket, id string) ClaimResult {
+	v := c.ticketView(r, key, t)
+	g := stageGuide(GuideStage(t.Labels))
+	return ClaimResult{ClaimID: id, Ticket: &v, StageGuide: &g}
 }
 
 // heldError is claim's action_not_allowed on a named Ticket whose live

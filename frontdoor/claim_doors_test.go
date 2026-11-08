@@ -1,3 +1,4 @@
+// Claiming a Ticket again by the session that holds it (ticket 141).
 package frontdoor_test
 
 import (
@@ -36,7 +37,7 @@ func TestTheHoldingSessionClaimsAgainOnEveryDoor(t *testing.T) {
 				t.Fatalf("claim_id %v, then %v; want the same Claim ID back", first["claim_id"], again["claim_id"])
 			}
 			if tk, _ := again["ticket"].(map[string]any); tk["id"] != "acme-3" || tk["state"] != "In Progress" || again["stage_guide"] == nil {
-				t.Fatalf("re-claim %v, want acme-3 In Progress with its Stage Guide", again)
+				t.Fatalf("claim again %v, want acme-3 In Progress with its Stage Guide", again)
 			}
 			if other.Message != held {
 				t.Fatalf("message %q, want %q", other.Message, held)
