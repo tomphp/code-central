@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 // Migrating the store (ADR 0003, design ticket 21). When store.yaml holds
@@ -164,32 +163,34 @@ func (s *FileStore) migrate() error {
 		return err
 	}
 	// Lock the staged store before it goes live, so the lock is never let go.
-	lock, err := lockFile(stage)
+	lock, err := lockStaged(stage, s.dir)
 	if err != nil {
 		return err
 	}
 	if err := os.Rename(s.dir, bak); err != nil {
-		unlock(lock)
+		lock.release()
 		return err
 	}
 	done = true // from here a restart finishes the job (finishMigration)
 	if stopMigrationBetweenRenames {
-		unlock(lock)
+		lock.release()
 		return errMigrationStopped
 	}
 	if err := os.Rename(stage, s.dir); err != nil {
-		unlock(lock)
+		lock.release()
 		if os.Rename(bak, s.dir) == nil {
 			os.RemoveAll(stage)
 		}
 		return err
 	}
 	if err := syncDir(filepath.Dir(s.dir)); err != nil {
-		unlock(lock)
+		lock.release()
 		return err
 	}
-	unlock(s.lock) // the old store's lock, now in the backup
-	s.lock = lock
+	if lock != nil { // nil where the store's own lock already covers the staged store
+		s.lock.release() // the old store's lock, now in the backup
+		s.lock = lock
+	}
 	s.migrated = &Migration{From: from, To: s.format, Backup: bak}
 	return nil
 }
@@ -286,29 +287,6 @@ func (s *FileStore) stageFile(stage, rel string, from int, chain []MigrationStep
 		return &MigrationError{From: from, To: s.format, Step: "write", File: rel, Err: err}
 	}
 	return nil
-}
-
-// lockFile takes the exclusive lock on the store at dir.
-func lockFile(dir string) (*os.File, error) {
-	lock, err := os.OpenFile(filepath.Join(dir, "lock"), os.O_CREATE|os.O_RDWR, 0o644)
-	if err != nil {
-		return nil, err
-	}
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		lock.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
-			return nil, fmt.Errorf("%s: %w", dir, ErrLocked)
-		}
-		return nil, err
-	}
-	return lock, nil
-}
-
-func unlock(lock *os.File) {
-	if lock != nil {
-		syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
-		lock.Close()
-	}
 }
 
 // Migration is a migration Open ran: the store went from format From to
