@@ -621,6 +621,21 @@ func TestIDsOfTheWrongKindAreRejectedNamingTheOperationToUse(t *testing.T) {
 	}
 }
 
+func TestATicketGivenAsSpecIsRejectedNamingTheFieldAndItsSpec(t *testing.T) {
+	srv := newServer(t) // acme-1 is a Spec, acme-2 a Ticket of it
+	s := connect(t, srv, "acme")
+	want := "acme-2 is a Ticket of Spec acme-1; pass acme-1 as spec"
+	for i, e := range []core.Error{
+		mcpRejected(t, s, "create_ticket", map[string]any{"spec": "acme-2", "title": "Form"}, core.Invalid),
+		httpRejected(t, srv, httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":"acme-2","title":"Form"}`}, core.Invalid),
+		cliRejected(t, srv, []string{"create-ticket", "--spec", "acme-2", "--title", "Form"}, core.Invalid),
+	} {
+		if e.Field != "spec" || e.Message != want {
+			t.Errorf("%s: field %q message %q, want spec %q", []string{"mcp", "http", "cli"}[i], e.Field, e.Message, want)
+		}
+	}
+}
+
 func TestMCPRejectsUnknownArguments(t *testing.T) {
 	srv := newServer(t)
 	e := mcpRejected(t, connect(t, srv, "acme"), "create_spec", map[string]any{"title": "S", "project": "other"}, core.Invalid)
