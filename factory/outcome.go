@@ -66,19 +66,12 @@ func (f *factory) reportStuck(ctx context.Context, t *turn, end turnEnd) {
 	if strings.TrimSpace(end.LastText) == "" {
 		why = "The agent printed no text."
 	}
-	in := core.ReportFailureInput{
-		Ticket:          core.Ref(c.Ticket),
-		ClaimID:         c.ClaimID,
+	f.reportFailure(ctx, c, &failure{core.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The turn exited with its Claim still In Progress: %s.", end.how()),
 		Why:             why,
 		WhatToFix:       fmt.Sprintf("Read the session (claude --resume %s, in %s) to see why it stopped, fix the cause and send the Ticket back.", c.SessionID, t.dir),
 		WhereWorkStands: f.whereWorkStands(t.dir),
-	}
-	if _, err := f.client.ReportFailure(ctx, f.project, in); err != nil {
-		f.printf("%s: report_failure: %v", c.Ticket, err)
-		return
-	}
-	f.printf("%s: the turn exited with its Claim still In Progress: reported a failure", c.Ticket)
+	}})
 }
 
 // how is how the turn ended: its exit code, subtype and terminal reason.
