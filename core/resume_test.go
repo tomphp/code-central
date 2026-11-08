@@ -73,7 +73,7 @@ func TestAFailureReportCopiesTheSessionWorkingDirAndResumeCommand(t *testing.T) 
 	f := newFixture(t)
 	f.work(t, store.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "s1", WorkingDir: str("/a"), ResumeCommand: str("claude --resume s1")})
-	res, err := f.core.ReportFailure(ctx, "acme", report("2", "claim-1"))
+	res, err := f.core.ReportFailure(ctx, "acme", fullReport("2", "claim-1"))
 	if err != nil {
 		t.Fatal(err)
 	}

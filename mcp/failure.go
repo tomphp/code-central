@@ -9,7 +9,7 @@ import (
 // Failure Reports and giving up (ticket 30).
 func init() {
 	tools["report_failure"] = tool{
-		description: "Report a failure when nothing the human can answer will unblock you: what broke, why, what to fix and where the work stands. Ends your Claim; then stop working this Ticket.",
+		description: "Report a failure when nothing the human can answer will unblock you: what broke, why, what to fix and where the work stands. Ends your Claim; then stop working this Ticket. Returns an acknowledgement with the next step, or the Ticket with full.",
 		schema: object(map[string]any{
 			"ticket":            ref("The Ticket."),
 			"claim_id":          text("The Claim ID claim returned."),
@@ -17,17 +17,19 @@ func init() {
 			"why":               text("Why it broke, in Markdown."),
 			"what_to_fix":       text("What has to change before this Ticket can go on, in Markdown."),
 			"where_work_stands": text("Where the work stands: branch, commits, what is done, in Markdown."),
+			"full":              flag("Return the whole Ticket instead of the acknowledgement."),
 		}, "ticket", "claim_id", "what_broke", "why", "what_to_fix", "where_work_stands"),
 		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.ReportFailureInput) (any, error) {
 			return c.ReportFailure(ctx, key, in)
 		}),
 	}
 	tools["give_up"] = tool{
-		description: "Give a claimed Ticket back to Ready when nothing is wrong but you can't finish it, with a note on how far you got. Ends your Claim; then stop working this Ticket.",
+		description: "Give a claimed Ticket back to Ready when nothing is wrong but you can't finish it, with a note on how far you got. Ends your Claim; then stop working this Ticket. Returns an acknowledgement with the next step, or the Ticket with full.",
 		schema: object(map[string]any{
 			"ticket":   ref("The Ticket."),
 			"claim_id": text("The Claim ID claim returned."),
 			"note":     text("How far you got and why you are stopping, in Markdown."),
+			"full":     flag("Return the whole Ticket instead of the acknowledgement."),
 		}, "ticket", "claim_id", "note"),
 		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.GiveUpInput) (any, error) {
 			return c.GiveUp(ctx, key, in)

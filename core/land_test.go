@@ -17,7 +17,7 @@ func (f fixture) inReviewOnBranch(t *testing.T) core.FinishResult {
 	f.work(t, store.Ready)
 	f.claim(t, core.ClaimInput{})
 	f.clock.Set(t0.Add(time.Hour))
-	res, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done on acme-2.", Branch: "acme-2", Commit: "abc123"})
+	res, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done on acme-2.", Branch: "acme-2", Commit: "abc123", Full: true})
 	if err != nil {
 		t.Fatalf("finish: %v", err)
 	}

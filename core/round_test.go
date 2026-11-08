@@ -31,9 +31,8 @@ var (
 func TestPostRoundStoresANumberedRoundAndMovesToNeedsAnswer(t *testing.T) {
 	f := newFixture(t)
 	res := f.asking(t, qDB, qName)
-	want := core.PostRoundResult{Round: 1, NextStep: "End your turn now, after running `code-central wait acme-2` in the background if you can run background commands."}
-	if res != want {
-		t.Fatalf("got %+v, want %+v", res, want)
+	if want := "End your turn now, after running `code-central wait acme-2` in the background if you can run background commands."; res.Round != 1 || res.NextStep != want {
+		t.Fatalf("got round %d, next step %q; want round 1, %q", res.Round, res.NextStep, want)
 	}
 	v := f.get(t, "2")
 	if v.State != store.NeedsAnswer {

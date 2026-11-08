@@ -53,16 +53,17 @@ func (h *fakeHost) run(env map[string]string, args ...string) result {
 	if env == nil {
 		env = map[string]string{}
 	}
-	if env["HOME"] == "" {
+	if _, ok := env["HOME"]; !ok {
 		env["HOME"] = h.home
 	}
 	var out, errOut bytes.Buffer
 	code := cli.Run(context.Background(), args, cli.Env{
 		Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut,
-		Getenv:  func(k string) string { return env[k] },
-		Dir:     h.dir,
-		Program: "bin/code-central", // as invoked, relative to Dir
-		GOOS:    h.goos,
+		Getenv:      func(k string) string { return env[k] },
+		UserHomeDir: userHomeDir(env),
+		Dir:         h.dir,
+		Program:     "bin/code-central", // as invoked, relative to Dir
+		GOOS:        h.goos,
 		RunService: func(_ context.Context, name string, args ...string) error {
 			call := strings.Join(append([]string{name}, args...), " ")
 			h.calls = append(h.calls, call)
@@ -172,6 +173,38 @@ func TestSystemdUnitHonoursXDGConfigHome(t *testing.T) {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
 	h.read(filepath.Join(cfg, "systemd", "user", "code-central.service"))
+}
+
+func TestWithNoHOMEServiceInstallUsesTheProfileFolder(t *testing.T) {
+	for _, tc := range []struct{ goos, unit string }{
+		{"darwin", filepath.Join("Library", "LaunchAgents", "com.github.tomoram.code-central.plist")},
+		{"linux", filepath.Join(".config", "systemd", "user", "code-central.service")},
+	} {
+		t.Run(tc.goos, func(t *testing.T) {
+			h := newHost(t, tc.goos)
+			profile := t.TempDir()
+			if r := h.run(map[string]string{"HOME": "", "USERPROFILE": profile}, "service", "install"); r.code != 0 {
+				t.Fatalf("exit %d: %s", r.code, r.stderr)
+			}
+			// The store's default is under the profile folder too.
+			if unit := h.read(filepath.Join(profile, tc.unit)); !strings.Contains(unit, filepath.Join(profile, ".local", "share", "code-central")) {
+				t.Fatalf("unit doesn't name the profile folder's store:\n%s", unit)
+			}
+		})
+	}
+}
+
+func TestWithNoHomeAtAllServiceInstallNamesEveryOption(t *testing.T) {
+	h := newHost(t, "linux")
+	r := h.run(map[string]string{"HOME": ""}, "service", "install")
+	if want := "set XDG_CONFIG_HOME or HOME, or give this account a profile folder (%USERPROFILE% on Windows)"; r.code != 1 || !strings.Contains(r.stderr, want) {
+		t.Fatalf("exit %d, stderr %q; want %q", r.code, r.stderr, want)
+	}
+	h = newHost(t, "linux")
+	r = h.run(map[string]string{"HOME": "", "XDG_CONFIG_HOME": t.TempDir()}, "service", "install")
+	if want := "cannot find the store: set CODE_CENTRAL_STORE, XDG_DATA_HOME or HOME, or give this account a profile folder (%USERPROFILE% on Windows)"; r.code != 1 || !strings.Contains(r.stderr, want) {
+		t.Fatalf("exit %d, stderr %q; want %q", r.code, r.stderr, want)
+	}
 }
 
 func TestServiceRestartRestartsTheInstalledService(t *testing.T) {

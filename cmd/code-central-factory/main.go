@@ -20,11 +20,12 @@ func main() {
 	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	wd, _ := os.Getwd()
 	code := factory.Run(context.Background(), os.Args[1:], factory.Env{
-		Dir:     wd,
-		Environ: os.Environ(),
-		Stdout:  os.Stdout,
-		Stderr:  os.Stderr,
-		Signals: sigs,
+		Dir:         wd,
+		Environ:     os.Environ(),
+		UserHomeDir: os.UserHomeDir,
+		Stdout:      os.Stdout,
+		Stderr:      os.Stderr,
+		Signals:     sigs,
 	})
 	signal.Stop(sigs)
 	os.Exit(code)

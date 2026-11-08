@@ -22,10 +22,15 @@ type PostRoundInput struct {
 	ClaimID   string          `json:"claim_id"`
 	SessionID string          `json:"session_id,omitempty"`
 	Questions []QuestionInput `json:"questions"`
+	// Full asks for the Round number and the next step without the
+	// Acknowledgement: post_round's record is its Round, not the Ticket.
+	Full bool `json:"full,omitempty"`
 }
 
-// PostRoundResult is post_round's result: the Round number and the next step.
+// PostRoundResult is post_round's result: the Acknowledgement (none with
+// full), the Round number and the next step.
 type PostRoundResult struct {
+	*Acknowledgement
 	Round    int    `json:"round"`
 	NextStep string `json:"next_step"`
 }
@@ -110,8 +115,7 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 		}
 	}
 	var res PostRoundResult
-	// With full, as the Ticket isn't returned: no before view is built.
-	_, err := c.updateTicket(key, "post_round", in.Ticket, true, func(t *store.Ticket) (bool, error) {
+	v, err := c.updateTicket(key, "post_round", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
 		claim, _ := liveClaim(*t)
 		now := c.now()
 		if err := transition(ctx, t, key, "post_round", in.ClaimID, now); err != nil {
@@ -133,7 +137,13 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 		res = PostRoundResult{Round: r.Number, NextStep: strings.ReplaceAll(nextStep("post_round"), "<id>", DisplayID(key, t.Number))}
 		return true, nil
 	})
-	return res, err
+	if err != nil {
+		return PostRoundResult{}, err
+	}
+	if v.Record == nil {
+		res.Acknowledgement = &v.Acknowledgement
+	}
+	return res, nil
 }
 
 // PickUpAnswers is pick_up_answers(ticket, claim_id): the holder moves

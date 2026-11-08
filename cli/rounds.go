@@ -30,6 +30,7 @@ func runPostRound(ctx context.Context, e Env, args []string) error {
 	session := fs.String("session", "", "")
 	questions := fs.String("questions", "", "")
 	file := fs.String("file", "", "")
+	full := fs.Bool("full", false, "")
 	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
@@ -41,7 +42,7 @@ func runPostRound(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.PostRoundInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session)}
+	in := core.PostRoundInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session), Full: *full}
 	if err := core.Decode(ctx, []byte(text), &in.Questions); err != nil {
 		var ce *core.Error
 		if errors.As(err, &ce) {

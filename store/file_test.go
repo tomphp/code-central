@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/home"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/store/storetest"
 )
@@ -322,7 +323,13 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 }
 
 func TestDefaultDir(t *testing.T) {
-	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+	// A Windows account: no HOME, but a profile folder.
+	env := func(m map[string]string) home.Lookup {
+		return home.Lookup{
+			Getenv:      func(k string) string { return m[k] },
+			UserHomeDir: func() (string, error) { return "/profile", nil },
+		}
+	}
 	cases := []struct {
 		name string
 		flag string
@@ -333,6 +340,7 @@ func TestDefaultDir(t *testing.T) {
 		{"env override", "", map[string]string{"CODE_CENTRAL_STORE": "/env", "XDG_DATA_HOME": "/xdg", "HOME": "/home/me"}, "/env"},
 		{"xdg", "", map[string]string{"XDG_DATA_HOME": "/xdg", "HOME": "/home/me"}, filepath.Join("/xdg", "code-central")},
 		{"home fallback", "", map[string]string{"HOME": "/home/me"}, filepath.Join("/home/me", ".local", "share", "code-central")},
+		{"profile fallback", "", nil, filepath.Join("/profile", ".local", "share", "code-central")},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

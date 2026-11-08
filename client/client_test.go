@@ -77,7 +77,7 @@ func TestTheDeliveryLoopRoundTrip(t *testing.T) {
 		t.Fatalf("claim: %+v, %v", c, err)
 	}
 	f, err := agent.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-3", ClaimID: c.ClaimID, Summary: "Done."})
-	if err != nil || f.Ticket.State != store.InReview {
+	if err != nil || f.Acknowledgement == nil || f.State != store.InReview || f.NextStep != "stop working this Ticket" {
 		t.Fatalf("finish: %+v, %v", f, err)
 	}
 	_, err = agent.Accept(ctx, "acme", core.TicketInput{Ticket: "acme-3"})

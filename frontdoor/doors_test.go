@@ -162,7 +162,8 @@ var cases = map[string]opCase{
 			http: httpCall{"POST", "/api/p/acme/tickets/3/finish", `{"claim_id":"claim-1","summary":"Done.","branch":"acme-3","commit":"abc123"}`},
 			cli:  []string{"acme-3", "--claim", "claim-1", "--summary", "Done.", "--branch", "acme-3", "--commit", "abc123"},
 		},
-		check: func(t *testing.T, out map[string]any) {
+		check: stopAcknowledgement("In Review", "state", "branch", "commit", "claims", "comments", "moves", "needs_me_reason"),
+		full: func(t *testing.T, out map[string]any) {
 			field("next_step", "stop working this Ticket")(t, out)
 			tk := out["ticket"].(map[string]any)
 			field("state", "In Review")(t, tk)

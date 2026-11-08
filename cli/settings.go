@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 
+	"github.com/tomoram/code-central/home"
 	"gopkg.in/yaml.v3"
 )
 
 // settings are the local, machine-only settings serve reads at startup
 // from $XDG_CONFIG_HOME/code-central/settings.yaml (falling back to
-// ~/.config/code-central/settings.yaml). They never live in a repository,
+// ~/.config/code-central/settings.yaml, where ~ is HOME or else the
+// profile folder: ADR 0010). They never live in a repository,
 // so changing one never changes a committed file. A missing file means
 // the defaults; an unknown key or bad value stops serve, naming the file.
 // Add new settings as fields here, defaulted in loadSettings.
@@ -25,22 +26,11 @@ type settings struct {
 	Notifications string `yaml:"notifications"`
 }
 
-// settingsPath is where the local settings live, or "" if neither
-// XDG_CONFIG_HOME nor HOME is set.
-func settingsPath(getenv func(string) string) string {
-	if d := getenv("XDG_CONFIG_HOME"); d != "" {
-		return filepath.Join(d, "code-central", "settings.yaml")
-	}
-	if h := getenv("HOME"); h != "" {
-		return filepath.Join(h, ".config", "code-central", "settings.yaml")
-	}
-	return ""
-}
-
-func loadSettings(getenv func(string) string) (settings, error) {
+func loadSettings(h home.Lookup) (settings, error) {
 	s := settings{Port: Port, Notifications: "on"}
-	path := settingsPath(getenv)
-	if path == "" {
+	// With no home at all there are no settings, only the defaults.
+	path, err := h.Config("code-central", "settings.yaml")
+	if err != nil {
 		return s, nil
 	}
 	b, err := os.ReadFile(path)

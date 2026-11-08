@@ -9,7 +9,7 @@ import (
 // Rounds of Questions (ticket 29).
 func init() {
 	tools["post_round"] = tool{
-		description: "Ask the human a Round of Questions on a Ticket you hold, in one write; it moves to Needs Answer and you keep the Claim.",
+		description: "Ask the human a Round of Questions on a Ticket you hold, in one write; it moves to Needs Answer and you keep the Claim. Returns an acknowledgement with the Round number and the next step, or only those with full.",
 		schema: object(map[string]any{
 			"ticket":     ref("The Ticket."),
 			"claim_id":   text("The Claim ID claim returned."),
@@ -24,6 +24,7 @@ func init() {
 				}, "title", "body"),
 				"description": "The Questions, each with a title, a body and an optional recommended answer.",
 			},
+			"full": flag("Return only the Round number and the next step instead of the acknowledgement."),
 		}, "ticket", "claim_id", "questions"),
 		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.PostRoundInput) (any, error) {
 			return c.PostRound(ctx, key, in)
