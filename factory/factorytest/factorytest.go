@@ -16,6 +16,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -53,6 +57,10 @@ func Main(m *testing.M) {
 // Timeout bounds every wait in the harness.
 const Timeout = 10 * time.Second
 
+// EventBatchEvery is how often the Factory under test posts waiting
+// Session Events.
+const EventBatchEvery = 10 * time.Millisecond
+
 // KillGrace is how long the Factory under test gives a turn between
 // SIGINT and SIGTERM.
 const KillGrace = 100 * time.Millisecond
@@ -74,7 +82,12 @@ type Harness struct {
 	// Backoff is the Factory's first wait before resuming turns an outage
 	// cut off; set it before Start. New makes it a millisecond.
 	Backoff time.Duration
-	data    string // scripts/ and calls/
+	// URL is the Code Central the Factory and its sessions reach: Server
+	// behind a proxy that SetDown can take down.
+	URL     string
+	down    atomic.Bool
+	refused sync.Map // path -> *atomic.Int64, requests refused while down
+	data    string   // scripts/ and calls/
 	env     map[string]string
 	spec    string
 }
@@ -99,12 +112,13 @@ func New(t testing.TB) *Harness {
 	for _, d := range []string{h.Repo, h.Home, h.Bin, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
 		must(t, os.MkdirAll(d, 0o755))
 	}
+	h.URL = h.startProxy()
 	gitPath, err := realGit()
 	must(t, err)
 	h.env = map[string]string{
 		"PATH":                h.Bin + string(os.PathListSeparator) + filepath.Dir(gitPath) + ":/usr/bin:/bin",
 		"HOME":                h.Home,
-		"CODE_CENTRAL_URL":    h.Server.URL,
+		"CODE_CENTRAL_URL":    h.URL,
 		"GIT_CONFIG_NOSYSTEM": "1",
 		"GIT_AUTHOR_NAME":     "Factory Test",
 		"GIT_AUTHOR_EMAIL":    "factory@example.com",
@@ -125,6 +139,42 @@ func New(t testing.TB) *Harness {
 	h.Git("add", ".mcp.json")
 	h.Git("commit", "-q", "-m", "Set up Code Central")
 	return h
+}
+
+// startProxy starts the proxy in front of Server and returns its URL.
+// While the harness is down it drops every connection, as a stopped Code
+// Central would refuse it.
+func (h *Harness) startProxy() string {
+	target, err := url.Parse(h.Server.URL)
+	must(h.t, err)
+	rp := httputil.NewSingleHostReverseProxy(target)
+	ps := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !h.down.Load() {
+			rp.ServeHTTP(w, r)
+			return
+		}
+		n, _ := h.refused.LoadOrStore(r.URL.Path, &atomic.Int64{})
+		n.(*atomic.Int64).Add(1)
+		if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+			conn.Close()
+		}
+	}))
+	h.t.Cleanup(ps.Close)
+	return ps.URL
+}
+
+// SetDown takes Code Central down for the Factory and its sessions, or
+// brings it back up. The harness's own reads still reach it.
+func (h *Harness) SetDown(down bool) { h.down.Store(down) }
+
+// Refused is how many requests to path, such as "/api/session-events",
+// were refused while Code Central was down.
+func (h *Harness) Refused(path string) int64 {
+	n, ok := h.refused.Load(path)
+	if !ok {
+		return 0
+	}
+	return n.(*atomic.Int64).Load()
 }
 
 // realGit is the git binary itself. On macOS /usr/bin/git is an xcrun
@@ -249,6 +299,14 @@ func (h *Harness) Ticket(id string) core.TicketView {
 	return tk
 }
 
+// Transcript reads the Transcript of ticket's Claim number claim.
+func (h *Harness) Transcript(ticket string, claim int) core.TranscriptView {
+	h.t.Helper()
+	tr, err := h.Server.Client.Transcript(context.Background(), h.Project, core.Ref(ticket), claim)
+	must(h.t, err)
+	return tr
+}
+
 // Human is a client of the harness's Code Central acting as the human.
 func (h *Harness) Human() *client.Client {
 	c := client.New(h.Server.URL)
@@ -362,7 +420,9 @@ func (h *Harness) StartIn(dir string, args ...string) *Running {
 		},
 		KillGrace: KillGrace,
 		Backoff:   h.Backoff,
-		Signals:   r.signals,
+		// Session Events are posted often, so tests needn't wait a second.
+		EventBatchEvery: EventBatchEvery,
+		Signals:         r.signals,
 	}
 	go func() {
 		defer close(r.done)
@@ -616,6 +676,27 @@ func ToolUse(tool, input string) Step {
 		"type": "assistant",
 		"message": map[string]any{"role": "assistant", "content": []map[string]any{
 			{"type": "tool_use", "id": "toolu_" + tool, "name": tool, "input": json.RawMessage(input)},
+		}},
+	})
+	return Step{Stdout: string(b)}
+}
+
+// Think prints a stream-json assistant message with a thinking block.
+func Think(thinking string) Step {
+	b, _ := json.Marshal(map[string]any{
+		"type":    "assistant",
+		"message": map[string]any{"role": "assistant", "content": []map[string]string{{"type": "thinking", "thinking": thinking}}},
+	})
+	return Step{Stdout: string(b)}
+}
+
+// ToolResult prints a stream-json user message answering the tool call
+// toolUseID with content, a string or a list of content blocks.
+func ToolResult(toolUseID string, content any, isError bool) Step {
+	b, _ := json.Marshal(map[string]any{
+		"type": "user",
+		"message": map[string]any{"role": "user", "content": []map[string]any{
+			{"type": "tool_result", "tool_use_id": toolUseID, "content": content, "is_error": isError},
 		}},
 	})
 	return Step{Stdout: string(b)}

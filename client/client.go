@@ -151,6 +151,14 @@ func (c *Client) PostSessionEvents(ctx context.Context, sessionID string, events
 	return c.do(ctx, "POST", "/api/session-events", in, nil)
 }
 
+// Transcript is GET /api/projects/{key}/tickets/{n}/claims/{c}/transcript:
+// the Session Events held for the Ticket's Claim number claim.
+func (c *Client) Transcript(ctx context.Context, key string, ticket core.Ref, claim int) (core.TranscriptView, error) {
+	var out core.TranscriptView
+	path := "/api/projects/" + url.PathEscape(key) + "/tickets/" + url.PathEscape(string(ticket)) + "/claims/" + strconv.Itoa(claim) + "/transcript"
+	return out, c.do(ctx, "GET", path, nil, &out)
+}
+
 // EditSpec is edit_spec.
 func (c *Client) EditSpec(ctx context.Context, key string, in core.EditSpecInput) (core.SpecView, error) {
 	var out core.SpecView
