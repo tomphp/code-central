@@ -62,6 +62,7 @@ func TestTheOutlineListsEveryHeadingWithItsLevel(t *testing.T) {
 		"tilde fences":          {"~~~\n# no\n~~~\n# yes", []core.Heading{{Text: "yes", Level: 1}}},
 		"a longer fence closes": {"````\n```\n# no\n````\n# yes", []core.Heading{{Text: "yes", Level: 1}}},
 		"an empty heading":      {"#\n## Next", []core.Heading{{Text: "", Level: 1}, {Text: "Next", Level: 2}}},
+		"CRLF line endings":     {"## Foo ##\r\n```\r\n# no\r\n```\r\n# Bar\r\n", []core.Heading{{Text: "Foo", Level: 2}, {Text: "Bar", Level: 1}}},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -85,6 +86,7 @@ func TestSectionsCutTheNamedPartsOfABody(t *testing.T) {
 		"a top-level Section runs to the end":          {[]string{"Appendix"}, "# Appendix\n\n## notes\n\nSecond notes."},
 		"the whole body after the preamble":            {[]string{"Title", "Appendix"}, sectioned[len("Preamble text.\n\n"):]},
 		"a name given twice is cut once":               {[]string{"Detail", "detail"}, "### Detail\n\nSmall print."},
+		"any leading # marks in a name are ignored":    {[]string{"#Detail"}, "### Detail\n\nSmall print."},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

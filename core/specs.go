@@ -16,9 +16,10 @@ import (
 type StateSummary map[store.State]int
 
 // SpecDetail is get_spec's result: the Spec, its State summary and its
-// Tickets as find_tickets rows (finished ones too), in claim order. A
-// lighter read leaves out each part not asked for (nil, so it has no key)
-// and adds the body's Outline.
+// Tickets as find_tickets rows (finished ones too), in claim order. Its
+// first fields are SpecView's, in its order, so the full read is the
+// SpecView it used to embed; a lighter read leaves out each part not asked
+// for (nil, so it has no key) and adds the body's Outline.
 type SpecDetail struct {
 	ID      string            `json:"id"`
 	Title   string            `json:"title"`
@@ -103,17 +104,18 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 			return notFound("there is no Spec %s", DisplayID(key, n))
 		}
 		tickets := specTickets(r, key, n)
+		sv := specView(key, s)
 		v = SpecDetail{
-			ID: DisplayID(key, n), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
-			Created: s.Created, Updated: s.Updated, Link: linkView(s.Link),
+			ID: sv.ID, Title: sv.Title, Labels: sv.Labels, Tags: sv.Tags,
+			Created: sv.Created, Updated: sv.Updated, Link: sv.Link,
 		}
 		v.StateSummary, v.Finished = summarise(tickets)
 		v.Requirement = c.requirementView(r, key, tickets)
-		if len(in.Parts) > 0 || len(in.Sections) > 0 {
+		if in.lighter() {
 			v.Outline = Outline(s.Body)
 		}
 		if parts[PartBody] {
-			body := s.Body
+			body := sv.Body
 			if len(in.Sections) > 0 {
 				var unmatched []string
 				if body, unmatched = Sections(s.Body, in.Sections); unmatched != nil {
@@ -123,7 +125,7 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 			v.Body = &body
 		}
 		if parts[PartEdits] {
-			v.Edits = editViews(s.Edits)
+			v.Edits = sv.Edits
 		}
 		if parts[PartTickets] {
 			v.Tickets = []TicketRow{}
@@ -136,14 +138,19 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 	return v, err
 }
 
+// lighter reports whether the read asks for less than the full Spec, so
+// returns the Outline.
+func (in GetSpecInput) lighter() bool { return len(in.Parts) > 0 || len(in.Sections) > 0 }
+
 // parts is the set of parts the read returns, checking them against
 // Sections.
 func (in GetSpecInput) parts() (map[string]bool, error) {
-	if len(in.Parts) == 0 {
-		return map[string]bool{PartBody: true, PartTickets: true, PartEdits: true}, nil
+	asked := in.Parts
+	if len(asked) == 0 {
+		asked = specParts
 	}
 	out := map[string]bool{}
-	for _, p := range in.Parts {
+	for _, p := range asked {
 		if !slices.Contains(specParts, p) {
 			return nil, invalid("parts", "unknown part %q (the parts are %s)", p, strings.Join(specParts, ", "))
 		}

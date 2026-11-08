@@ -156,3 +156,16 @@ func TestGetSpecRejectsAContradictoryOrMistypedRead(t *testing.T) {
 		}
 	}
 }
+
+func TestALighterReadKeepsTheLinkAndTheRequirement(t *testing.T) {
+	f := newFixture(t)
+	f.linked(t)
+	if out := f.readSpec(t, core.GetSpecInput{Spec: "acme-1", Parts: []string{"tickets"}}); out["link"] == nil {
+		t.Fatalf("a linked Spec's lighter read has no link: %v", out)
+	}
+	f = newFixture(t)
+	f.requirement(t)
+	if out := f.readSpec(t, core.GetSpecInput{Spec: "acme-2", Parts: []string{"edits"}}); out["requirement"] == nil {
+		t.Fatalf("a Requirement's lighter read has no requirement: %v", out)
+	}
+}

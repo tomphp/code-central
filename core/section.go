@@ -67,7 +67,7 @@ func Sections(body string, names []string) (string, []string) {
 				break
 			}
 		}
-		cuts = append(cuts, strings.TrimRight(strings.Join(lines[h.line:covered], "\n"), " \t\n"))
+		cuts = append(cuts, strings.TrimRight(strings.Join(lines[h.line:covered], "\n"), " \t\r\n"))
 	}
 	var unmatched []string
 	for _, n := range names {
@@ -81,17 +81,16 @@ func Sections(body string, names []string) (string, []string) {
 	return strings.Join(cuts, "\n\n"), nil
 }
 
-// headings finds the ATX headings in lines, skipping fenced code. A fence
-// closes on a line of the same character at least as long.
+// headings finds the ATX headings in lines, skipping fenced code.
 func headings(lines []string) []heading {
 	var out []heading
 	open := ""
 	for i, l := range lines {
+		l = strings.TrimSuffix(l, "\r")
 		if m := fence.FindStringSubmatch(l); m != nil {
-			switch {
-			case open == "":
+			if open == "" {
 				open = m[1]
-			case m[1][0] == open[0] && len(m[1]) >= len(open) && strings.TrimSpace(l[strings.Index(l, m[1])+len(m[1]):]) == "":
+			} else if closesFence(m[1], strings.TrimPrefix(strings.TrimLeft(l, " "), m[1]), open) {
 				open = ""
 			}
 			continue
@@ -106,6 +105,13 @@ func headings(lines []string) []heading {
 	return out
 }
 
+// closesFence reports whether a fence line (its marks, then the rest of
+// the line) closes the open fence: the same character, at least as many,
+// and nothing after them.
+func closesFence(marks, rest, open string) bool {
+	return marks[0] == open[0] && len(marks) >= len(open) && strings.TrimSpace(rest) == ""
+}
+
 // headingText is a heading's content without its closing # marks.
 func headingText(s string) string {
 	return strings.TrimSpace(closing.ReplaceAllString(s, ""))
@@ -114,9 +120,5 @@ func headingText(s string) string {
 // headingKey is how a name matches a heading: trimmed, without leading or
 // closing # marks, case-insensitively.
 func headingKey(name string) string {
-	name = strings.TrimSpace(name)
-	if m := atx.FindStringSubmatch(name); m != nil {
-		name = m[2]
-	}
-	return strings.ToLower(headingText(name))
+	return strings.ToLower(headingText(strings.TrimLeft(strings.TrimSpace(name), "#")))
 }
