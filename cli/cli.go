@@ -107,7 +107,7 @@ func init() {
 		"approve":       {op: "approve", usage: "approve <id>", run: runApprove},
 		"defer":         {op: "defer", usage: "defer <id> [--reason <text> | --file <path|->]", run: runDefer},
 		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>] [--working-dir <dir>] [--resume-command <command>]", run: runClaim},
-		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->]", run: runFinish},
+		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->] [--branch <branch>] [--commit <sha>]", run: runFinish},
 
 		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>]  (session defaults to $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
 		"ping":        {usage: "ping [--session <id>]  mark this session active (reads hook JSON on stdin); always exits 0", run: runPing},
@@ -235,21 +235,27 @@ func addScope(fs *flag.FlagSet) *string {
 }
 
 func resolveScope(e Env, projectFlag string) (scope, error) {
-	project := projectFlag
-	if project == "" {
-		project = e.Getenv("CODE_CENTRAL_PROJECT")
-	}
-	if project == "" {
-		k, err := nearestKey(e.Dir)
-		if err != nil {
-			return scope{}, err
-		}
-		project = k
+	project, err := ResolveProject(e.Dir, projectFlag, e.Getenv)
+	if err != nil {
+		return scope{}, err
 	}
 	if project == "" {
 		return scope{}, usagef("no Project: pass --project <key>, set CODE_CENTRAL_PROJECT, or run `code-central init` in the repository")
 	}
 	return scope{project: project, client: newClient(e)}, nil
+}
+
+// ResolveProject is the Project Key every client of the service resolves:
+// projectFlag, else CODE_CENTRAL_PROJECT, else the key in the nearest
+// .mcp.json at or above dir. It is "" when none of them names one.
+func ResolveProject(dir, projectFlag string, getenv func(string) string) (string, error) {
+	if projectFlag != "" {
+		return projectFlag, nil
+	}
+	if p := getenv("CODE_CENTRAL_PROJECT"); p != "" {
+		return p, nil
+	}
+	return nearestKey(dir)
 }
 
 func printJSON(e Env, v any) error {
@@ -437,6 +443,8 @@ func runFinish(ctx context.Context, e Env, args []string) error {
 	claim := fs.String("claim", "", "")
 	summary := fs.String("summary", "", "")
 	file := fs.String("file", "", "")
+	branch := fs.String("branch", "", "")
+	commit := fs.String("commit", "", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -452,7 +460,7 @@ func runFinish(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Finish(ctx, sc.project, core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text})
+	v, err := sc.client.Finish(ctx, sc.project, core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text, Branch: *branch, Commit: *commit})
 	if err != nil {
 		return err
 	}

@@ -9,6 +9,7 @@ export const STATES = [
   "Answered",
   "Failed",
   "In Review",
+  "Accepted",
   "Done",
   "Cancelled",
 ] as const;
@@ -259,6 +260,8 @@ export interface MoveView {
   time: string;
   claim?: number;
   via?: string;
+  // commit is the commit that put the work into the base, on a land.
+  commit?: string;
 }
 
 export interface EditView {
@@ -281,6 +284,10 @@ export interface TicketView {
   created: string;
   updated: string;
   description: string;
+  // branch and commit are the work's branch and head commit, as the last
+  // finish naming them gave them. Work with a branch is Accepted, then lands.
+  branch?: string;
+  commit?: string;
   claims: ClaimView[];
   rounds: RoundView[];
   failure_reports: FailureReportView[];

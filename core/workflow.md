@@ -5,7 +5,11 @@ The `states` and `actions` above are the rules Code Central enforces; anything t
 1. `claim` takes the next claimable Ticket (Ready, no open Blockers, oldest first), or the one or the Spec you name. It returns a Claim ID and the full Ticket. `{"ticket": null}` means nothing can be claimed: stop.
 2. Read the whole Ticket before starting: its description, its Spec, past Claims and how each ended, every Failure Report, comments and send-back notes. A Ticket that failed before failed for a reason; don't repeat the attempt that failed.
 3. Work on a branch named after the Ticket ID (for example `acme-12`), and commit and push often, so the next session can pick the work up if yours ends. Code Central never checks this; it is the convention everyone relies on.
-4. `finish` with a summary: what was done, where (the branch or commit), and what the reviewer should check. Then stop working this Ticket: the human accepts it to Done or rejects it to Ready.
+4. `finish` with a summary: what was done, where (the branch or commit), and what the reviewer should check. When the work is on a branch, also pass `branch` and its head `commit`. Then stop working this Ticket: the human accepts it or rejects it to Ready.
+
+## Accepted work lands
+
+Accepting a Ticket whose finish named a `branch` moves it to Accepted: the human has accepted the work and it waits to land in the base. Any other Ticket goes straight to Done. Whoever merges the branch into the base then calls `land` with the commit that put the work there, which moves the Ticket to Done; `land` also works from In Review, for work merged before it was accepted. Only Done clears a Blocker, so a Ticket blocked by Accepted work waits until it lands.
 
 Every write's response may carry a `next_step`. Do what it says, when it says.
 
