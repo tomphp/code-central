@@ -1,5 +1,6 @@
 import type { Api } from "./api/api";
 import { projectOf } from "./api/api";
+import { Focus } from "./focus/Focus";
 import { Inbox } from "./inbox/Inbox";
 import { useInboxData, useLiveVersion, useSpec, useTicket } from "./live";
 import { defaultTicket, needsMeCount, progress, reasonsOf } from "./requirement/progress";
@@ -25,13 +26,21 @@ export function App({ api, now = () => new Date() }: AppProps) {
   const ticket = useTicket(api, selected && projectOf(selected), selected, version);
   useNeedsMeTitle(inbox.data && needsMeCount(inbox.data.needsMe));
 
-  // One layout in v1. A later view (focus queue, board) is another case
-  // here, reusing the same data and the shared Ticket pane and panels.
+  // Each view is a layout over the same live data; a later one (a board)
+  // is another case here, reusing the shared Ticket pane and panels.
+  const banner = inbox.error && <p className="banner">{inbox.error.message}</p>;
   switch (loc.view) {
+    case "focus":
+      return (
+        <>
+          {banner}
+          <Focus data={inbox.data} loc={loc} navigate={navigate} />
+        </>
+      );
     case "inbox":
       return (
         <>
-          {inbox.error && <p className="banner">{inbox.error.message}</p>}
+          {banner}
           <Inbox
             api={api}
             now={now()}

@@ -80,6 +80,9 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
           project={loc.project}
           onSubmitted={(r) => navigate({ list: "requirements", state: undefined, requirement: r.spec.id, ticket: undefined })}
         />
+        <button className="btn focus-enter" onClick={() => navigate({ view: "focus" })}>
+          Focus
+        </button>
         <FilterButton on={!loc.project} label="All Projects" count={totalCount} loud onClick={() => navigate({ project: undefined })} />
         {projects
           .filter((p) => !p.archived)

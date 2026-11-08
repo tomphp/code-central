@@ -1,14 +1,15 @@
 // What the UI shows lives in the URL:
-// ?view=inbox&project=<key>&state=<State>&list=requirements&requirement=<spec id>&ticket=<id>.
-// view is the layout (only the inbox in v1; a focus queue or board later);
-// project, state and list are the left pane's filters (no state and no
-// list = Needs Me; list=requirements is the Requirements view); requirement
-// is the selected Requirement's Spec ID and ticket the selected Ticket's
-// display ID (within the Requirement, when one is selected).
+// ?view=inbox&project=<key>&state=<State>&list=requirements&requirement=<spec id>&ticket=<id>,
+// or ?view=focus&project=<key> for Focus Mode, which keeps only project.
+// view is the layout (anything but focus is the inbox); project, state and
+// list are the left pane's filters (no state and no list = Needs Me;
+// list=requirements is the Requirements view); requirement is the selected
+// Requirement's Spec ID and ticket the selected Ticket's display ID (within
+// the Requirement, when one is selected).
 import { useCallback, useEffect, useState } from "react";
 import { STATES, type State } from "./api/types";
 
-export type View = "inbox";
+export type View = "inbox" | "focus";
 export type List = "requirements";
 
 export interface UiLocation {
@@ -22,6 +23,7 @@ export interface UiLocation {
 
 export function readLocation(search: string): UiLocation {
   const q = new URLSearchParams(search);
+  if (q.get("view") === "focus") return { view: "focus", project: q.get("project") || undefined };
   const state = q.get("state") as State | null;
   return {
     view: "inbox",
@@ -36,6 +38,7 @@ export function readLocation(search: string): UiLocation {
 export function hrefFor(loc: UiLocation): string {
   const q = new URLSearchParams({ view: loc.view });
   if (loc.project) q.set("project", loc.project);
+  if (loc.view === "focus") return `?${q}`;
   if (loc.state) q.set("state", loc.state);
   if (loc.list) q.set("list", loc.list);
   if (loc.requirement) q.set("requirement", loc.requirement);
@@ -55,9 +58,9 @@ export function useUiLocation(): [UiLocation, (patch: Partial<UiLocation>) => vo
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   const navigate = useCallback((patch: Partial<UiLocation>) => {
-    const next = { ...readLocation(window.location.search), ...patch };
-    window.history.pushState(null, "", hrefFor(next));
-    setLoc(next);
+    const href = hrefFor({ ...readLocation(window.location.search), ...patch });
+    window.history.pushState(null, "", href);
+    setLoc(readLocation(href));
   }, []);
   return [loc, navigate];
 }
