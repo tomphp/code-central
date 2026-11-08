@@ -1,10 +1,10 @@
-/* Focus Mode: one readable column filling the window. Every Focus style
-   is scoped under .focus, so nothing here reaches the Inbox. */
+/* Focus Mode: one readable column filling the window. Its styles hang off
+   the layout's own classes, so none of them reach the Inbox. */
 .focus { min-height: 100vh; display: flex; flex-direction: column; font-size: 18px; }
-.focus .focus-head { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
-.focus .focus-project { font-weight: 600; }
-.focus .focus-exit { margin-left: auto; }
-.focus .focus-loading { margin: auto; color: var(--muted); }
-.focus .focus-clear { margin: auto; text-align: center; padding-bottom: 10vh; }
-.focus .focus-clear h2 { font-size: 40px; font-weight: 600; margin: 0 0 8px; }
-.focus .focus-clear p { margin: 0; font-size: 20px; color: var(--muted); }
+.focus-head { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
+.focus-project { font-weight: 600; }
+.focus-exit { margin-left: auto; }
+.focus-loading { margin: auto; color: var(--muted); }
+.focus-clear { margin: auto; text-align: center; padding-bottom: 10vh; }
+.focus-clear h2 { font-size: 40px; font-weight: 600; margin: 0 0 8px; }
+.focus-clear p { margin: 0; font-size: 20px; color: var(--muted); }
