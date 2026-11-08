@@ -291,15 +291,13 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		specN, err := in.Spec.number(key, "spec")
+		sp, err := resolveSpec(w, key, "create_ticket", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
-		if _, ok := w.Spec(key, specN); !ok {
-			return invalid("spec", "there is no Spec %s", DisplayID(key, specN))
-		}
+		specN := sp.Number
 		// A new Ticket has no dependants yet, so its Blockers can't form a cycle.
-		blockedBy, err := ticketRefs(w, key, in.BlockedBy, "blocked_by")
+		blockedBy, err := ticketRefs(w, key, "create_ticket", "blocked_by", in.BlockedBy)
 		if err != nil {
 			return err
 		}
@@ -355,6 +353,11 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 		if in.Spec != "" {
 			n, err := in.Spec.number(key, "spec")
 			if err != nil {
+				return err
+			}
+			// A Ticket is rejected naming its Spec; a Spec that doesn't
+			// exist matches no Tickets.
+			if err := ticketNotSpec(r, key, "find_tickets", "spec", n); err != nil {
 				return err
 			}
 			specN = n

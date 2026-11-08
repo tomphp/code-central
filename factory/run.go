@@ -15,7 +15,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/tomoram/code-central/core"
@@ -242,8 +241,8 @@ func (f *factory) live(claimID string) bool {
 	return !f.ended[claimID]
 }
 
-// killGrace is how long a turn being stopped has after SIGINT, and then
-// after SIGTERM.
+// killGrace is how long a turn being stopped has after each stop step
+// but the last (stopSteps).
 func (f *factory) killGrace() time.Duration {
 	if f.e.KillGrace > 0 {
 		return f.e.KillGrace
@@ -251,12 +250,13 @@ func (f *factory) killGrace() time.Duration {
 	return 10 * time.Second
 }
 
-// stopTurn sends t SIGINT, then SIGTERM if it lingers, and waits for it
-// to end. A turn that outlives SIGTERM too is killed.
+// stopTurn takes t through stopSteps, moving to the next step if it
+// lingers past the grace period, and waits for it to end: on Unix SIGINT,
+// then SIGTERM, then kill; on Windows Ctrl-Break, then kill.
 func (f *factory) stopTurn(t *turn) {
 	t.stopped.Store(true)
-	for _, sig := range []os.Signal{syscall.SIGINT, syscall.SIGTERM, os.Kill} {
-		_ = t.proc.Signal(sig)
+	for _, stop := range stopSteps(t.proc) {
+		_ = stop()
 		select {
 		case <-t.done:
 			return
@@ -362,18 +362,12 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 // this one whose command line names session, as a claude still running
 // that session would.
 func (f *factory) sessionHolder(session string) (int, bool) {
-	ps, ok := f.e.lookPath("ps")
-	if !ok {
-		ps = "/bin/ps"
-	}
-	cmd := exec.Command(ps, "-A", "-o", "pid=,args=")
-	cmd.Env = f.e.Environ
-	out, err := cmd.Output()
+	out, err := f.e.listProcesses()
 	if err != nil {
 		f.printf("can't read the process list: %v", err)
 		return 0, false
 	}
-	for _, line := range strings.Split(string(out), "\n") {
+	for _, line := range strings.Split(out, "\n") {
 		pidText, args, _ := strings.Cut(strings.TrimSpace(line), " ")
 		pid, err := strconv.Atoi(pidText)
 		if err != nil || pid == os.Getpid() {
@@ -480,7 +474,7 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, args []str
 	cmd.Stderr = f.e.Stderr
 	// Its own process group, so the terminal's Ctrl-C reaches only the
 	// Factory, which drains rather than interrupting the turn.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	startInOwnGroup(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err == nil {
 		err = cmd.Start()

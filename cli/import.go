@@ -59,7 +59,7 @@ func runImport(ctx context.Context, e Env, args []string) error {
 		return err
 	}
 	in := core.ImportInput{DryRun: *dryRun}
-	if err := core.Decode([]byte(text), &in.Payload); err != nil {
+	if err := core.Decode(ctx, []byte(text), &in.Payload); err != nil {
 		return err
 	}
 	v, err := sc.client.Import(ctx, sc.project, in)

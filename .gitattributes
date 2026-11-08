@@ -1,0 +1,4 @@
+# Check every text file out with LF, on Windows too, so fixtures and
+# golden files compare byte for byte. Git detects binary files itself;
+# the repository has no binary fixtures to mark.
+* text=auto eol=lf

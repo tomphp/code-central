@@ -16,7 +16,21 @@ func (f fixture) wrongKind(t *testing.T) {
 // wantNotFound checks err is not_found, with no field, saying msg.
 func wantNotFound(t *testing.T, err error, msg string) {
 	t.Helper()
-	wantMessage(t, err, core.NotFound, msg)
+	wantMessage(t, err, core.NotFound, "", msg)
+}
+
+// wantInvalid checks err is invalid with field, saying msg.
+func wantInvalid(t *testing.T, err error, field, msg string) {
+	t.Helper()
+	wantMessage(t, err, core.Invalid, field, msg)
+}
+
+func wantMessage(t *testing.T, err error, code core.Code, field, msg string) {
+	t.Helper()
+	wantCode(t, err, code, field)
+	if got := err.(*core.Error).Message; got != msg {
+		t.Fatalf("message %q, want %q", got, msg)
+	}
 }
 
 // ticketOps runs each operation whose main target is a Ticket on ref,
@@ -204,4 +218,86 @@ func TestOperationsOnEitherKindAreUnchanged(t *testing.T) {
 	}
 	_, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-3", Labels: []string{"x"}})
 	wantNotFound(t, err, "there is no Spec or Ticket acme-3")
+}
+
+// nestedOp runs an operation with ref in a nested field, and every other
+// input valid, so only that lookup can fail.
+type nestedOp struct {
+	field   string
+	run     func(core.Ref) error
+	neither string // the message for an ID of neither kind; "" when it isn't an error
+}
+
+// nestedOps is each operation with a nested Ref, run on f.linked: Spec
+// acme-1 with linked Ticket acme-2 on it, and nothing as acme-3.
+func nestedOps(f fixture) map[string]nestedOp {
+	c := f.core
+	noSpec := "there is no Spec acme-3"
+	noTicket := "there is no Ticket acme-3"
+	return map[string]nestedOp{
+		"create_ticket spec": {"spec", func(r core.Ref) error {
+			_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: r, Title: "T"})
+			return err
+		}, noSpec},
+		"create_linked_ticket spec": {"spec", func(r core.Ref) error {
+			_, err := c.CreateLinkedTicket(integration, "acme", core.CreateLinkedTicketInput{Spec: r, Title: "T", Link: ghLink("20")})
+			return err
+		}, noSpec},
+		"claim spec": {"spec", func(r core.Ref) error { _, err := c.Claim(ctx, "acme", core.ClaimInput{Spec: r}); return err }, noSpec},
+		"find_tickets spec": {"spec", func(r core.Ref) error {
+			_, err := c.FindTickets(ctx, "acme", core.FindTicketsInput{Spec: r})
+			return err
+		}, ""},
+		"update_linked_ticket spec": {"spec", func(r core.Ref) error {
+			_, err := c.UpdateLinkedTicket(integration, "acme", core.UpdateLinkedTicketInput{Ticket: "2", Spec: &r})
+			return err
+		}, noSpec},
+		"create_ticket blocked_by": {"blocked_by", func(r core.Ref) error {
+			_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "T", BlockedBy: []core.Ref{r}})
+			return err
+		}, noTicket},
+		"add_blocker blocker": {"blocker", func(r core.Ref) error {
+			_, err := c.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "2", Blocker: r})
+			return err
+		}, noTicket},
+		"remove_blocker blocker": {"blocker", func(r core.Ref) error {
+			_, err := c.RemoveBlocker(ctx, "acme", core.BlockerInput{Ticket: "2", Blocker: r})
+			return err
+		}, "acme-3 is not a Blocker of acme-2"},
+		"cancel replacements": {"replacements", func(r core.Ref) error {
+			_, err := c.Cancel(human, "acme", core.CancelInput{Ticket: "2", Replacements: []core.Ref{r}})
+			return err
+		}, noTicket},
+	}
+}
+
+func TestAWrongKindIDInANestedFieldNamesTheFieldAndWhatToGiveInstead(t *testing.T) {
+	f := newFixture(t)
+	f.linked(t)
+	for name, op := range nestedOps(f) {
+		t.Run(name, func(t *testing.T) {
+			if op.field == "spec" {
+				wantInvalid(t, op.run("acme-2"), "spec", "acme-2 is a Ticket of Spec acme-1; pass acme-1 as spec")
+				return
+			}
+			wantInvalid(t, op.run("acme-1"), op.field, "acme-1 is a Spec, not a Ticket; give a Ticket of it (get_spec lists them)")
+		})
+	}
+}
+
+func TestAnIDOfNeitherKindInANestedFieldKeepsItsMessage(t *testing.T) {
+	f := newFixture(t)
+	f.linked(t)
+	for name, op := range nestedOps(f) {
+		t.Run(name, func(t *testing.T) {
+			err := op.run("acme-3")
+			if op.neither == "" {
+				if err != nil {
+					t.Fatalf("err = %v, want none", err)
+				}
+				return
+			}
+			wantInvalid(t, err, op.field, op.neither)
+		})
+	}
 }

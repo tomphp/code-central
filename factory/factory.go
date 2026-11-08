@@ -31,8 +31,9 @@ type Env struct {
 	Stdout, Stderr io.Writer
 	// After replaces time.After for the wait between polls.
 	After func(time.Duration) <-chan time.Time
-	// KillGrace is how long a turn being stopped has between SIGINT and
-	// SIGTERM; zero means ten seconds.
+	// KillGrace is how long a turn being stopped has after each stop step
+	// but the last (SIGINT, SIGTERM; Ctrl-Break on Windows); zero means
+	// ten seconds.
 	KillGrace time.Duration
 	// Backoff is the first wait before resuming turns an outage cut off,
 	// doubling with each outage in a row; zero means a minute.

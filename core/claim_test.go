@@ -275,7 +275,7 @@ func TestOnlyANamedTicketAndAMatchingSessionGetTheirClaimBack(t *testing.T) {
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Td", State: store.Ready}) // acme-4
 	f.claim(t, core.ClaimInput{Ticket: "4"})
 	_, err = f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "4"})
-	wantMessage(t, err, core.ActionNotAllowed,
+	wantMessage(t, err, core.ActionNotAllowed, "",
 		"acme-4 is held by Claim 1 of another session; claim another Ticket, or ask the human to release it; if this session holds it, call claim again with your session_id")
 }
 
@@ -283,18 +283,9 @@ func TestClaimingATicketAnotherSessionHoldsSaysWhoHoldsIt(t *testing.T) {
 	f := newFixture(t)
 	f.asking(t, qDB) // acme-2 Needs Answer under Claim 1 of sess-1
 	_, err := f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "2", SessionID: "sess-2"})
-	wantMessage(t, err, core.ActionNotAllowed,
+	wantMessage(t, err, core.ActionNotAllowed, "",
 		"acme-2 is held by Claim 1 of another session; claim another Ticket, or ask the human to release it")
 	_, err = f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "2"})
-	wantMessage(t, err, core.ActionNotAllowed,
+	wantMessage(t, err, core.ActionNotAllowed, "",
 		"acme-2 is held by Claim 1 of another session; claim another Ticket, or ask the human to release it; if this session holds it, call claim again with your session_id")
-}
-
-// wantMessage checks err has code, with no field, saying msg.
-func wantMessage(t *testing.T, err error, code core.Code, msg string) {
-	t.Helper()
-	wantCode(t, err, code, "")
-	if got := err.(*core.Error).Message; got != msg {
-		t.Fatalf("message %q, want %q", got, msg)
-	}
 }
