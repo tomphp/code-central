@@ -104,7 +104,7 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 		}
 	}
 	var res PostRoundResult
-	_, err := c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
+	_, err := c.updateTicket(key, "post_round", in.Ticket, func(t *store.Ticket) (bool, error) {
 		claim, _ := liveClaim(*t)
 		now := c.now()
 		if err := transition(ctx, t, key, "post_round", in.ClaimID, now); err != nil {
@@ -133,7 +133,7 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 // Answered to In Progress in one step and gets the latest Round back.
 func (c *Core) PickUpAnswers(ctx context.Context, key string, in PickUpAnswersInput) (PickUpAnswersResult, error) {
 	var res PickUpAnswersResult
-	_, err := c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
+	_, err := c.updateTicket(key, "pick_up_answers", in.Ticket, func(t *store.Ticket) (bool, error) {
 		if err := transition(ctx, t, key, "pick_up_answers", in.ClaimID, c.now()); err != nil {
 			return false, err
 		}
@@ -215,7 +215,7 @@ func (c *Core) onQuestion(ctx context.Context, key string, ref Ref, name string,
 // open Question the Ticket moves to Answered in the same write.
 func (c *Core) onRound(ctx context.Context, key string, ref Ref, name string,
 	find func(*store.Ticket) (*store.Round, error), apply func(*store.Round, time.Time) bool) (TicketView, error) {
-	return c.updateTicket(key, ref, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, name, ref, func(t *store.Ticket) (bool, error) {
 		if actor := ActorOf(ctx); actor != Human {
 			return false, &Error{Code: ActionNotAllowed, AllowedActions: allowedActions(t.State, actor),
 				Message: fmt.Sprintf("%s is a human action; this request is made as %s", name, actor)}

@@ -34,7 +34,7 @@ func (c *Core) EditTicket(ctx context.Context, key string, in EditTicketInput) (
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
 		return TicketView{}, invalid("title", "a Ticket needs a title")
 	}
-	return c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "edit_ticket", in.Ticket, func(t *store.Ticket) (bool, error) {
 		if err := definitionOwned(ctx, DisplayID(key, t.Number), t.Link); err != nil {
 			return false, err
 		}
@@ -68,14 +68,11 @@ func (c *Core) EditSpec(ctx context.Context, key string, in EditSpecInput) (Spec
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		n, err := in.Spec.number(key, "spec")
+		s, err := resolveSpec(w, key, "edit_spec", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
-		s, ok := w.Spec(key, n)
-		if !ok {
-			return notFound("there is no Spec %s", DisplayID(key, n))
-		}
+		n := s.Number
 		if err := definitionOwned(ctx, DisplayID(key, n), s.Link); err != nil {
 			return err
 		}
@@ -128,7 +125,7 @@ func (c *Core) Comment(ctx context.Context, key string, in CommentInput) (Ticket
 	if strings.TrimSpace(in.Body) == "" {
 		return TicketView{}, invalid("body", "a comment needs a body")
 	}
-	return c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "comment", in.Ticket, func(t *store.Ticket) (bool, error) {
 		addComment(t, ActorOf(ctx), c.now(), 0, in.Body)
 		return true, nil
 	})
@@ -136,7 +133,7 @@ func (c *Core) Comment(ctx context.Context, key string, in CommentInput) (Ticket
 
 // Approve is approve(ticket): Draft to Ready.
 func (c *Core) Approve(ctx context.Context, key string, in TicketInput) (TicketView, error) {
-	return c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "approve", in.Ticket, func(t *store.Ticket) (bool, error) {
 		return true, transition(ctx, t, key, "approve", "", c.now())
 	})
 }
@@ -147,7 +144,7 @@ func (c *Core) Defer(ctx context.Context, key string, in DeferInput) (TicketView
 	if strings.TrimSpace(in.Reason) == "" {
 		return TicketView{}, invalid("reason", "defer needs a reason")
 	}
-	return c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "defer", in.Ticket, func(t *store.Ticket) (bool, error) {
 		if err := transition(ctx, t, key, "defer", "", c.now()); err != nil {
 			return false, err
 		}
@@ -162,10 +159,10 @@ func addComment(t *store.Ticket, a Actor, at time.Time, claim int, body string) 
 	t.Comments = append(t.Comments, store.Comment{Number: len(t.Comments) + 1, Actor: string(a), Time: at, Claim: claim, Body: body})
 }
 
-// updateTicket loads one Ticket under the write lock and applies fn. When
+// updateTicket loads the Ticket op names under the write lock and applies fn. When
 // fn reports a change, the Ticket's updated time is set and it is written.
-func (c *Core) updateTicket(key string, ref Ref, fn func(t *store.Ticket) (bool, error)) (TicketView, error) {
-	return c.updateTicketIn(key, ref, func(_ store.Reader, t *store.Ticket) (bool, error) { return fn(t) })
+func (c *Core) updateTicket(key, op string, ref Ref, fn func(t *store.Ticket) (bool, error)) (TicketView, error) {
+	return c.updateTicketIn(key, op, ref, func(_ store.Reader, t *store.Ticket) (bool, error) { return fn(t) })
 }
 
 // TargetView is a Spec's or Ticket's Labels and Tags, as the Label and

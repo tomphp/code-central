@@ -34,7 +34,7 @@ type BlockerView struct {
 // AddBlocker is add_blocker(ticket, blocker). A link already there
 // writes nothing; one that would form a cycle is rejected with cycle.
 func (c *Core) AddBlocker(_ context.Context, key string, in BlockerInput) (TicketView, error) {
-	return c.updateTicketIn(key, in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, "add_blocker", in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
 		b, err := ticketRef(r, key, in.Blocker, "blocker")
 		if err != nil {
 			return false, err
@@ -60,7 +60,7 @@ func (c *Core) AddBlocker(_ context.Context, key string, in BlockerInput) (Ticke
 // link. A Ticket that blocks only through a Cancelled Blocker's
 // Replacements is unlinked by removing that Cancelled Blocker.
 func (c *Core) RemoveBlocker(_ context.Context, key string, in BlockerInput) (TicketView, error) {
-	return c.updateTicketIn(key, in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, "remove_blocker", in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
 		b, err := in.Blocker.number(key, "blocker")
 		if err != nil {
 			return false, err
@@ -230,13 +230,13 @@ func ticketRefs(r store.Reader, key string, refs []Ref, field string) ([]int, er
 
 // updateTicketIn is updateTicket with the Reader, for writes that check
 // other Tickets.
-func (c *Core) updateTicketIn(key string, ref Ref, fn func(r store.Reader, t *store.Ticket) (bool, error)) (TicketView, error) {
+func (c *Core) updateTicketIn(key, op string, ref Ref, fn func(r store.Reader, t *store.Ticket) (bool, error)) (TicketView, error) {
 	var v TicketView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		t, err := ticket(w, key, ref)
+		t, err := resolveTicket(w, key, op, "ticket", ref)
 		if err != nil {
 			return err
 		}

@@ -24,7 +24,7 @@ type SetSessionInput struct {
 // in any State the Claim spans, and how to get back into it. Pings from
 // that session then count as the Claim's activity. The last write wins.
 func (c *Core) SetSession(_ context.Context, key string, in SetSessionInput) (TicketView, error) {
-	return c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "set_session", in.Ticket, func(t *store.Ticket) (bool, error) {
 		cl, err := holder(t, key, in.ClaimID)
 		if err != nil {
 			return false, err
