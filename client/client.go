@@ -28,6 +28,9 @@ type Client struct {
 	// Actor is sent with every request; empty means agent, which is how
 	// every code-central command writes.
 	Actor core.Actor
+	// Version, when set, is this client's version, sent on every request
+	// as ClientVersionHeader.
+	Version string
 	// OnVersion, when set, is called with the service's version header
 	// on every response that carries one.
 	OnVersion func(serviceVersion string)
@@ -35,6 +38,9 @@ type Client struct {
 
 // VersionHeader is the response header carrying the service's version.
 const VersionHeader = "X-Code-Central-Version"
+
+// ClientVersionHeader is the request header carrying the client's version.
+const ClientVersionHeader = "X-Code-Central-Client-Version"
 
 // New returns a Client for the service at baseURL.
 func New(baseURL string) *Client {
@@ -250,6 +256,9 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 		actor = core.Agent
 	}
 	req.Header.Set("X-Code-Central-Actor", string(actor))
+	if c.Version != "" {
+		req.Header.Set(ClientVersionHeader, c.Version)
+	}
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {

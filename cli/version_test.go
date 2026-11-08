@@ -3,7 +3,10 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/tomoram/code-central/cli"
@@ -40,6 +43,40 @@ func TestTheServiceSendsItsVersionInAResponseHeader(t *testing.T) {
 	resp.Body.Close()
 	if got := resp.Header.Get("X-Code-Central-Version"); got != "v1.4.0" {
 		t.Fatalf("version header %q", got)
+	}
+}
+
+func TestTheCLISendsItsVersionOnEveryRequest(t *testing.T) {
+	srv := codecentraltest.NewServer(t)
+	if _, err := srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"}); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var sent []string
+	target := srv.URL
+	hs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		sent = append(sent, r.Header.Get("X-Code-Central-Client-Version"))
+		mu.Unlock()
+		req, _ := http.NewRequestWithContext(r.Context(), r.Method, target+r.URL.RequestURI(), r.Body)
+		req.Header = r.Header
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer resp.Body.Close()
+		w.WriteHeader(resp.StatusCode)
+		var b bytes.Buffer
+		b.ReadFrom(resp.Body)
+		w.Write(b.Bytes())
+	}))
+	defer hs.Close()
+	env := map[string]string{"CODE_CENTRAL_URL": hs.URL, "CODE_CENTRAL_PROJECT": "acme"}
+	runVersion(t, "v1.9.0", env, "create-spec", "--title", "Login")
+	runVersion(t, "v1.9.0", env, "get-ticket", "1")
+	if len(sent) != 2 || sent[0] != "v1.9.0" || sent[1] != "v1.9.0" {
+		t.Fatalf("client versions sent %q, want v1.9.0 on both requests", sent)
 	}
 }
 
