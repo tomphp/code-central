@@ -666,6 +666,12 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         await expect.poll(() => order.length, { timeout: 5000 }).toBe(2001);
         expect(order.slice(0, 3)).toEqual(["tail", "3", "4"]);
         expect(order.at(-1)).toBe("2002");
+
+        // A reconnect misses nothing, so it brings no second notice.
+        d.dropTranscriptStreams();
+        await d.postSessionEvents("sess-busy", [said("2003")]);
+        await expect.poll(() => order.length, { timeout: 5000 }).toBe(2002);
+        expect(order.at(-1)).toBe("2003");
       } finally {
         stop();
       }

@@ -46,8 +46,9 @@ export interface TranscriptHandlers {
   // ones, then each new one. A reconnect resumes after the last one, so
   // none is repeated or missed.
   onEvent(e: HeldSessionEvent): void;
-  // onTail is called before the first events that follow dropped ones:
-  // the Transcript holds only the tail of the session.
+  // onTail is called before events that follow a gap: ones dropped (or
+  // lost to a restart) before they could be sent, so the follower holds
+  // only the tail of the session.
   onTail?(): void;
   // onOpen is called each time the stream is live: first with
   // reconnect=false, then reconnect=true after every reconnect.

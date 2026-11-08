@@ -18,9 +18,19 @@ import (
 
 // sseStream opens GET /api/events and returns a reader positioned after
 // the opening comment, so the subscription is live when it returns.
-func sseStream(t *testing.T, ctx context.Context, url string) (*http.Response, *bufio.Reader) {
+func sseStream(t *testing.T, ctx context.Context, url string) *bufio.Reader {
 	t.Helper()
-	req, _ := http.NewRequestWithContext(ctx, "GET", url+"/api/events", nil)
+	return openSSE(t, ctx, url+"/api/events", nil)
+}
+
+// openSSE opens the SSE stream at url with the request headers, as
+// sseStream does.
+func openSSE(t *testing.T, ctx context.Context, url string, header http.Header) *bufio.Reader {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if header != nil {
+		req.Header = header
+	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -34,7 +44,7 @@ func sseStream(t *testing.T, ctx context.Context, url string) (*http.Response, *
 		t.Fatalf("opening line %q, %v", line, err)
 	}
 	r.ReadString('\n') // the blank line ending the comment
-	return res, r
+	return r
 }
 
 // nextEvent reads one SSE event: its event: and data: lines.
@@ -67,7 +77,7 @@ func TestEventsStreamsEveryChangeNoticeAsSSE(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, r := sseStream(t, ctx, hs.URL)
+	r := sseStream(t, ctx, hs.URL)
 	do(mux, "POST", "/api/projects/create_project", `{"key":"acme"}`)
 	do(mux, "POST", "/api/p/acme/create_spec", `{"title":"S"}`)
 	do(mux, "POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"A"}`)

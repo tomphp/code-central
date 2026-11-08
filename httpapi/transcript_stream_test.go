@@ -28,28 +28,16 @@ func transcriptStream(t *testing.T, url string, ticket, claim int, lastID string
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	req, _ := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/api/projects/acme/tickets/%d/claims/%d/transcript/stream", url, ticket, claim), nil)
+	header := http.Header{}
 	if lastID != "" {
-		req.Header.Set("Last-Event-ID", lastID)
+		header.Set("Last-Event-ID", lastID)
 	}
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { res.Body.Close() })
-	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "text/event-stream" {
-		t.Fatalf("status %d, content type %q", res.StatusCode, res.Header.Get("Content-Type"))
-	}
-	r := bufio.NewReader(res.Body)
-	if line, err := r.ReadString('\n'); err != nil || !strings.HasPrefix(line, ":") {
-		t.Fatalf("opening line %q, %v", line, err)
-	}
-	r.ReadString('\n')
-	return r
+	return openSSE(t, ctx, fmt.Sprintf("%s/api/projects/acme/tickets/%d/claims/%d/transcript/stream", url, ticket, claim), header)
 }
 
-// liveServer serves h until the test ends, closing it after the streams
-// the test opened, which Close would otherwise wait on.
+// liveServer serves h until the test ends. Its Close is registered before
+// any stream the test opens, so it runs after their cancels (Cleanups run
+// last first): Close waits on open requests.
 func liveServer(t *testing.T, h http.Handler) *httptest.Server {
 	hs := httptest.NewServer(h)
 	t.Cleanup(hs.Close)
@@ -169,11 +157,34 @@ func TestATranscriptStreamSendsATailNoticeWhenEarlierEventsWereDropped(t *testin
 	wantTail(t, r)
 	wantEvents(t, r, 3, "3", "4")
 
-	r = transcriptStream(t, hs.URL, 2, 1, "2001")
+	// A follower that had 1 missed 2.
+	r = transcriptStream(t, hs.URL, 2, 1, "1")
 	wantTail(t, r)
+	wantEvents(t, r, 3, "3")
+
+	// One that had 2001 missed nothing: no notice, before or after.
+	r = transcriptStream(t, hs.URL, 2, 1, "2001")
 	wantEvents(t, r, 2002, "2002")
 	f.events(t, "s1", "2003")
-	wantEvents(t, r, 2003, "2003") // the notice is sent once
+	wantEvents(t, r, 2003, "2003")
+}
+
+func TestATranscriptStreamSendsATailNoticeWhenEventsAreDroppedBeforeItSendsThem(t *testing.T) {
+	f := newTranscriptFixture(t)
+	hs := liveServer(t, f.h)
+	f.claim(t, 2, "s1")
+	f.events(t, "s1", "1")
+	r := transcriptStream(t, hs.URL, 2, 1, "")
+	wantEvents(t, r, 1, "1")
+
+	// One batch overflows the Transcript: 2 is dropped before it is sent.
+	var batch []string
+	for i := 2; i <= core.TranscriptLimit+2; i++ {
+		batch = append(batch, fmt.Sprint(i))
+	}
+	f.events(t, "s1", batch...)
+	wantTail(t, r)
+	wantEvents(t, r, 3, "3", "4")
 }
 
 func TestATranscriptStreamSendsNoTailNoticeForAWholeTranscript(t *testing.T) {
@@ -191,9 +202,11 @@ func TestATranscriptStreamBegunAfterARestartIsATailAndStartsAgain(t *testing.T) 
 	f.claim(t, 2, "s1")
 	f.events(t, "s1", "one", "two", "three")
 
-	// Code Central restarts mid-Claim, and seqs start again from 1.
+	// Code Central restarts mid-Claim, losing the Transcript. The new one's
+	// seqs start past any the last service gave.
 	f.clock.Advance(time.Minute)
 	f.h = serve(f.store, f.clock)
+	first := int(f.clock.Now().UnixMilli()) + 1
 	hs := liveServer(t, f.h)
 
 	// A follower that held seq 3 before the restart, and one opened afresh,
@@ -203,8 +216,15 @@ func TestATranscriptStreamBegunAfterARestartIsATailAndStartsAgain(t *testing.T) 
 	f.events(t, "s1", "after the restart")
 	for _, r := range []*bufio.Reader{resumed, fresh} {
 		wantTail(t, r)
-		wantEvents(t, r, 1, "after the restart")
+		wantEvents(t, r, first, "after the restart")
 	}
+
+	// So does one that reconnects only after several new events, more
+	// than it held before.
+	f.events(t, "s1", "two", "three", "four")
+	late := transcriptStream(t, hs.URL, 2, 1, "3")
+	wantTail(t, late)
+	wantEvents(t, late, first, "after the restart", "two", "three", "four")
 }
 
 func TestATranscriptStreamStaysOpenAfterTheClaimEnds(t *testing.T) {

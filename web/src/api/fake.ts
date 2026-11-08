@@ -117,7 +117,6 @@ interface FakeFollower {
   up: boolean;
   opened: boolean;
   after: number;
-  tailSent: boolean;
 }
 
 export class FakeApi implements Api {
@@ -306,7 +305,7 @@ export class FakeApi implements Api {
   // stream does. Like the real one, a stream for an unknown Claim never
   // opens.
   subscribeTranscript(project: string, id: string, claim: number, h: TranscriptHandlers): () => void {
-    const f: FakeFollower = { project, id, claim, h, up: false, opened: false, after: 0, tailSent: false };
+    const f: FakeFollower = { project, id, claim, h, up: false, opened: false, after: 0 };
     this.followers.add(f);
     queueMicrotask(() => this.connect(f));
     return () => this.followers.delete(f);
@@ -325,16 +324,13 @@ export class FakeApi implements Api {
     this.deliver(f);
   }
 
-  // deliver sends a connected follower what it hasn't had yet: a tail
-  // notice once, then the events after the last it was sent.
+  // deliver sends a connected follower the events after the last it was
+  // sent, after a tail notice when some between were dropped first.
   private deliver(f: FakeFollower) {
     if (!f.up) return;
     const tr = this.transcripts.get(this.claimKey(f.project, f.id, f.claim));
     if (!tr) return;
-    if (tr.tail && !f.tailSent) {
-      f.tailSent = true;
-      f.h.onTail?.();
-    }
+    if (tr.events.length && tr.events[0].seq > f.after + 1) f.h.onTail?.();
     for (const e of tr.events) {
       if (e.seq <= f.after) continue;
       f.after = e.seq;

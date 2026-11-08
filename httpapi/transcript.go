@@ -23,8 +23,10 @@ const TranscriptPath = "GET /api/projects/{key}/tickets/{n}/claims/{c}/transcrip
 // Events. On connect it sends the held events, then each new one, as
 // session_event events whose id is the event's seq; a reconnect's
 // Last-Event-ID gets only the events after it. A tail event (data {})
-// comes before the first events that follow a gap: the Transcript holds
-// only part of the session. The stream stays open after the Claim ends.
+// comes before events that follow a gap: ones dropped from the Transcript
+// (or lost to a restart) before the stream could send them, so the client
+// holds only the tail of the session. The stream stays open after the
+// Claim ends.
 // Like the Transcript read, it is outside core's operations and MCP.
 const TranscriptStreamPath = "GET /api/projects/{key}/tickets/{n}/claims/{c}/transcript/stream"
 

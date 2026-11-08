@@ -42,7 +42,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
   }
 
   const p = (project: string) => `/api/p/${encodeURIComponent(project)}`;
-  const claimPath = (project: string, id: string, claim: number) =>
+  const transcriptPath = (project: string, id: string, claim: number) =>
     `/api/projects/${encodeURIComponent(project)}/tickets/${encodeURIComponent(numberOf(id))}/claims/${claim}/transcript`;
 
   return {
@@ -78,8 +78,8 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
           if (f.data) h.onEvent({ type: f.name, ...JSON.parse(f.data) } as ChangeEvent);
         },
       }),
-    transcript: (project, id, claim) => call("GET", claimPath(project, id, claim)),
-    subscribeTranscript: (project, id, claim, h) => subscribeTranscript(doFetch, base + claimPath(project, id, claim) + "/stream", retryMs, h),
+    transcript: (project, id, claim) => call("GET", transcriptPath(project, id, claim)),
+    subscribeTranscript: (project, id, claim, h) => subscribeTranscript(doFetch, base + transcriptPath(project, id, claim) + "/stream", retryMs, h),
   };
 }
 

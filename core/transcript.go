@@ -94,8 +94,13 @@ func (c *Core) hold(k markKey, started time.Time, events []SessionEvent) {
 	defer ts.mu.Unlock()
 	tr := ts.all[k]
 	if tr == nil {
-		// A Claim older than the service lost its earlier events.
-		tr = &transcript{tail: started.Before(c.activity.started)}
+		tr = &transcript{}
+		if started.Before(c.activity.started) {
+			// A Claim older than the service lost its earlier events. Its
+			// seqs start past any the last service gave, so a follower
+			// resuming from one of those misses none of the new ones.
+			tr.tail, tr.lastSeq = true, int(c.activity.started.UnixMilli())
+		}
 		ts.all[k] = tr
 	}
 	for _, e := range events {
@@ -201,17 +206,16 @@ func (c *Core) claimKey(key string, ticket Ref, claim int) (markKey, error) {
 // It holds no events of its own, only the last seq it gave, so a slow
 // follower costs nothing and can't fall behind a full buffer.
 type TranscriptFeed struct {
-	ts       *transcripts
-	k        markKey
-	wake     chan struct{}
-	after    int
-	tailSent bool
+	ts    *transcripts
+	k     markKey
+	wake  chan struct{}
+	after int
 }
 
 // FollowTranscript starts a feed of Claim number claim's Transcript after
 // seq after (0 for all of it), as a reconnect's Last-Event-ID asks. A seq
-// beyond the Transcript's newest is one from before a restart, whose seqs
-// started again, so the feed starts from the beginning. It stays open
+// beyond the Transcript's newest is none it gave, so the feed starts from
+// the beginning. It stays open
 // after the Claim ends, because a late Factory line still arrives. An
 // unknown Project, Ticket or Claim is not_found. Stop ends it.
 func (c *Core) FollowTranscript(_ context.Context, key string, ticket Ref, claim, after int) (*TranscriptFeed, error) {
@@ -242,8 +246,8 @@ func (c *Core) FollowTranscript(_ context.Context, key string, ticket Ref, claim
 func (f *TranscriptFeed) Wake() <-chan struct{} { return f.wake }
 
 // Next gives the held events after the last it gave, oldest first, and
-// says whether a tail notice is due before them: once per feed, when the
-// Transcript holds only part of the session.
+// says whether a tail notice is due before them: when events between the
+// last it gave and the oldest held were dropped before it could give them.
 func (f *TranscriptFeed) Next() (tail bool, events []HeldSessionEvent) {
 	f.ts.mu.Lock()
 	defer f.ts.mu.Unlock()
@@ -251,8 +255,8 @@ func (f *TranscriptFeed) Next() (tail bool, events []HeldSessionEvent) {
 	if tr == nil {
 		return false, nil
 	}
-	if tr.tail && !f.tailSent {
-		tail, f.tailSent = true, true
+	if len(tr.events) > 0 && tr.events[0].Seq > f.after+1 {
+		tail = true
 	}
 	for _, e := range tr.events {
 		if e.Seq > f.after {
