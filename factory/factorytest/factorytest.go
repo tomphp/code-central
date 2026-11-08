@@ -151,6 +151,8 @@ func New(t testing.TB) *Harness {
 		"GIT_COMMITTER_NAME":  "Factory Test",
 		"GIT_COMMITTER_EMAIL": "factory@example.com",
 		"TMPDIR":              os.TempDir(),
+		"TEMP":                os.TempDir(),
+		"TMP":                 os.TempDir(),
 		fakeEnv:               h.data,
 	}
 	h.install("claude")
@@ -912,6 +914,13 @@ func runFakeClaude(data string, args []string) int {
 		}
 	}
 	fill := strings.NewReplacer("{{ticket}}", c.Ticket, "{{claim}}", c.Claim, "{{session}}", c.Session).Replace
+	fillAll := func(args []string) []string {
+		var filled []string
+		for _, a := range args {
+			filled = append(filled, fill(a))
+		}
+		return filled
+	}
 	fmt.Println(`{"type":"system","subtype":"init","session_id":"` + c.Session + `"}`)
 	for _, s := range steps {
 		switch {
@@ -929,10 +938,7 @@ func runFakeClaude(data string, args []string) int {
 				return 70
 			}
 		case s.Git != nil:
-			var filled []string
-			for _, a := range s.Git {
-				filled = append(filled, fill(a))
-			}
+			filled := fillAll(s.Git)
 			cmd := exec.Command("git", filled...)
 			cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 			if err := cmd.Run(); err != nil {
@@ -945,10 +951,7 @@ func runFakeClaude(data string, args []string) int {
 				return 70
 			}
 		case s.CLI != nil:
-			var filled []string
-			for _, a := range s.CLI {
-				filled = append(filled, fill(a))
-			}
+			filled := fillAll(s.CLI)
 			code := cli.Run(context.Background(), filled, cli.Env{Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: os.Stderr, Getenv: os.Getenv})
 			if code != 0 {
 				fmt.Fprintf(os.Stderr, "fake claude: code-central %s exited %d\n", strings.Join(filled, " "), code)

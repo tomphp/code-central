@@ -1,3 +1,5 @@
+// How the fakes are named on PATH and take stop signals on Windows.
+
 package factorytest
 
 import "os"

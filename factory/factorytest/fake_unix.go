@@ -1,5 +1,7 @@
 //go:build unix
 
+// How the fakes are named on PATH and take stop signals on Unix.
+
 package factorytest
 
 import (
