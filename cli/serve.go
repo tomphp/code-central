@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/tomoram/code-central/clock"
@@ -219,7 +218,7 @@ func listen(addrs []string) ([]net.Listener, error) {
 	var out []net.Listener
 	for _, a := range addrs {
 		l, err := net.Listen("tcp", a)
-		if errors.Is(err, syscall.EADDRNOTAVAIL) && len(addrs) > 1 {
+		if addrNotAvail(err) && len(addrs) > 1 {
 			continue
 		}
 		if err != nil {
@@ -243,7 +242,7 @@ func listenOne(addr string) (net.Listener, error) {
 }
 
 func listenError(addr string, err error) error {
-	if errors.Is(err, syscall.EADDRINUSE) {
+	if addrInUse(err) {
 		return fmt.Errorf("%s is already in use by another program (is another code-central serve running?); "+
 			"refusing to start. To move Code Central, set `port` in the local settings and point agents at it with CODE_CENTRAL_URL", addr)
 	}
