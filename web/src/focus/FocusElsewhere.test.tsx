@@ -83,7 +83,18 @@ describe("dealt with elsewhere", () => {
     expect(within(focus()).getByRole("textbox")).toHaveValue("");
   });
 
-  it("shows the note on All clear when the last item goes elsewhere", async () => {
+  it("keeps the note while the next item, a Round, is read into its first Question", async () => {
+    const fake = world();
+    fake.setNeedsMe([fake.needsMeGroups[1], fake.needsMeGroups[0], fake.needsMeGroups[2]]);
+    renderApp(fake);
+    await within(focus()).findByRole("button", { name: "Send back" });
+    change(fake, without(fake, "acme-2"), "acme-2");
+
+    expect(await heading("Which colour?")).toBeInTheDocument();
+    expect(within(focus()).getByText("Dealt with elsewhere")).toBeInTheDocument();
+  });
+
+  it("isn't on All clear, which stays calm, when the last item goes elsewhere", async () => {
     const fake = tickets();
     fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason === "failed"));
     renderApp(fake);
@@ -91,7 +102,7 @@ describe("dealt with elsewhere", () => {
     change(fake, [], "acme-2");
 
     expect(await within(focus()).findByText("All clear")).toBeInTheDocument();
-    expect(within(focus()).getByText("Dealt with elsewhere")).toBeInTheDocument();
+    expect(note()).toBeNull();
   });
 
   it("goes once the human moves on from the next item", async () => {
@@ -133,6 +144,20 @@ describe("the human's own action", () => {
     fake.setNeedsMe([...fake.needsMeGroups].reverse());
     renderApp(fake);
     await userEvent.click(await within(focus()).findByRole("button", { name: "Accept" }));
+
+    expect(await heading("Flaky build")).toBeInTheDocument();
+    expect(note()).toBeNull();
+  });
+
+  it("moves a Ticket item on with no note after Unlink, a write that isn't a Ticket action", async () => {
+    const fake = tickets();
+    const link = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7", external_state: "closed", detached: false } as const;
+    const t = fake.addTicket("acme", { title: "Closed upstream", state: "Ready", link }); // acme-4
+    fake.setNeedsMe([{ reason: "closed_externally", tickets: [{ id: t.id, link: t.link }] }, ...fake.needsMeGroups]);
+    renderApp(fake);
+    await userEvent.click(await within(focus()).findByRole("button", { name: "Unlink" }));
+    // The service takes it out of Needs Me and sends its notice.
+    change(fake, without(fake, t.id), t.id);
 
     expect(await heading("Flaky build")).toBeInTheDocument();
     expect(note()).toBeNull();

@@ -4,8 +4,8 @@
 // root's class scopes the Focus styles, so the panels inside read larger
 // here and nowhere else.
 //
-// The panels and the Question form get an Api whose act first records
-// that the item on screen was acted on, so an item that leaves after the
+// The panels and the Question form get an Api whose writes (act, and
+// unlink) first record that the item on screen was acted on, so an item that leaves after the
 // human's own action moves on silently, and one that leaves otherwise
 // moves on with a brief "Dealt with elsewhere" note.
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
@@ -44,21 +44,33 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
   const screen = data && focusQueue({ needsMe: data.needsMe, project: loc.project, onScreen, ticket: ticket.data, skipped, acted });
   const item = screen?.item;
   // What's shown becomes what's on screen, so a later read keeps it there.
-  // Moving on shows the note only when the item left without the human.
+  // Moving on shows the note only when the item left without the human;
+  // a Round becoming its first Question, once read, isn't moving on, so
+  // it keeps the note.
   useEffect(() => {
     if (!screen || item?.key === onScreen?.key) return;
+    const roundRead = !!onScreen?.roundKey && !onScreen.question && onScreen.roundKey === item?.roundKey;
     setOnScreen(item);
     setActedOn(undefined);
-    setElsewhere(screen.elsewhere);
+    if (!roundRead) setElsewhere(screen.elsewhere);
   }, [screen, item, onScreen]);
-  // The note is brief.
+  // The note is brief: it goes after NOTE_MS, or when the human moves on.
   useEffect(() => {
     if (!elsewhere) return;
-    const t = setTimeout(() => setElsewhere(false), NOTE_MS);
-    return () => clearTimeout(t);
-  }, [elsewhere, onScreen]);
+    const timer = setTimeout(() => setElsewhere(false), NOTE_MS);
+    return () => clearTimeout(timer);
+  }, [elsewhere]);
   const itemKey = item?.key;
-  const itemApi = useMemo(() => (itemKey ? recordingActs(api, itemKey, setActedOn) : undefined), [api, itemKey]);
+  const itemApi = useMemo(
+    () =>
+      itemKey
+        ? recordingWrites(api, {
+            onWrite: () => setActedOn(itemKey),
+            onRefused: () => setActedOn((k) => (k === itemKey ? undefined : k)),
+          })
+        : undefined,
+    [api, itemKey],
+  );
 
   return (
     <main aria-label="Focus Mode" className="focus">
@@ -73,7 +85,8 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
           Exit
         </button>
       </header>
-      {elsewhere && (
+      {/* Only over the next item: All clear stays calm, with nothing else on it. */}
+      {elsewhere && item && (
         <p role="status" className="focus-elsewhere">
           Dealt with elsewhere
         </p>
@@ -114,22 +127,27 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
 // NOTE_MS is how long the "Dealt with elsewhere" note stays.
 const NOTE_MS = 4000;
 
-// recordingActs is api with act recording that the human acted on the
-// item key before forwarding the call, and taking it back if the call is
-// refused, as a refused action left the item where it was.
-function recordingActs(api: Api, key: string, setActedOn: (f: (k?: string) => string | undefined) => void): Api {
-  const act: Api["act"] = (...args) => {
-    setActedOn(() => key);
-    return api.act(...args).catch((e: unknown) => {
-      setActedOn((k) => (k === key ? undefined : k));
-      throw e;
-    });
-  };
+// WRITES are the Api calls a panel or the Question form makes to act on
+// a Ticket.
+const WRITES: ReadonlySet<PropertyKey> = new Set<keyof Api>(["act", "unlink"]);
+
+// recordingWrites is api with each write calling onWrite before it's
+// forwarded, so the live notice it causes finds it recorded, and
+// onRefused if it's refused, as a refused write left the item where it
+// was. Every other call goes straight to api.
+function recordingWrites(api: Api, { onWrite, onRefused }: { onWrite(): void; onRefused(): void }): Api {
   return new Proxy(api, {
     get(target, prop) {
-      if (prop === "act") return act;
       const v = Reflect.get(target, prop);
-      return typeof v === "function" ? v.bind(target) : v;
+      if (typeof v !== "function") return v;
+      if (!WRITES.has(prop)) return v.bind(target);
+      return (...args: unknown[]) => {
+        onWrite();
+        return (v.apply(target, args) as Promise<unknown>).catch((e: unknown) => {
+          onRefused();
+          throw e;
+        });
+      };
     },
   });
 }
