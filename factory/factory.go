@@ -31,6 +31,9 @@ type Env struct {
 	Stdout, Stderr io.Writer
 	// After replaces time.After for the wait between polls.
 	After func(time.Duration) <-chan time.Time
+	// KillGrace is how long a turn being stopped has between SIGINT and
+	// SIGTERM; zero means ten seconds.
+	KillGrace time.Duration
 }
 
 func (e Env) getenv(key string) string {
@@ -141,15 +144,16 @@ type factory struct {
 	state     *stateFile
 	lock      *os.File // held for the Factory's whole life
 
-	outMu    sync.Mutex
-	mu       sync.Mutex // guards nRunning
-	nRunning int
-	turns    sync.WaitGroup
+	outMu     sync.Mutex
+	mu        sync.Mutex       // guards turns and ended
+	turns     map[string]*turn // running turns by Claim ID
+	ended     map[string]bool  // Claim IDs never to be written with again
+	turnsDone sync.WaitGroup
 }
 
 // start makes every start-up check, refusing with the reason.
 func start(e Env, o options) (*factory, error) {
-	f := &factory{e: e, o: o}
+	f := &factory{e: e, o: o, turns: map[string]*turn{}, ended: map[string]bool{}}
 	git, ok := e.lookPath("git")
 	if !ok {
 		return nil, errors.New("git isn't on PATH")
