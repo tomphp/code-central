@@ -12,7 +12,7 @@ code-central service install          # [--store <dir>] [--bind <ip>]
 
 - **macOS:** writes the launchd agent `~/Library/LaunchAgents/com.github.tomoram.code-central.plist` and loads it. Logs go to `~/Library/Logs/code-central.log`.
 - **Linux:** writes the systemd user unit `~/.config/systemd/user/code-central.service` (or under `$XDG_CONFIG_HOME`), enables it and starts it. Logs: `journalctl --user -u code-central`.
-- **Windows:** writes the scheduled task `~\.local\state\code-central\code-central-task.xml`, registers it for your account as the task `Code Central` (no admin rights needed) and starts it. Logs go to `~\.local\state\code-central\code-central.log`. See [ADR 0011](adr/0011-service-install-on-windows-is-a-per-user-scheduled-task-not-a-windows-service.md) for why it isn't a Windows Service.
+- **Windows:** writes the scheduled task `~\.local\state\code-central\code-central-task.xml`, registers it for your account as the task `Code Central` (no admin rights needed) and starts it. The task runs `serve --log`, which appends to `~\.local\state\code-central\code-central.log`. See [ADR 0011](adr/0011-service-install-on-windows-is-a-per-user-scheduled-task-not-a-windows-service.md) for why it isn't a Windows Service.
 
 The service starts at login and restarts after a crash. The unit records the binary's absolute path as you invoked it, without resolving symlinks, so a symlinked install keeps working when the target is replaced. It also records the store folder, resolved when you install.
 

@@ -44,13 +44,12 @@ func newHost(t *testing.T, goos string) *fakeHost {
 	linkOrCopy(t, testBinary(t), real)
 	os.MkdirAll(filepath.Join(h.dir, "bin"), 0o755)
 	h.bin = filepath.Join(h.dir, "bin", "code-central"+exe)
-	bin := h.bin
-	if err := os.Symlink(real, bin); err != nil {
+	if err := os.Symlink(real, h.bin); err != nil {
 		if runtime.GOOS != "windows" {
 			t.Fatal(err)
 		}
 		// Symlinks need Developer Mode on Windows; a hard link will do.
-		linkOrCopy(t, real, bin)
+		linkOrCopy(t, real, h.bin)
 	}
 	// As invoked, relative to Dir; on Windows without its .exe, as
 	// typed at a prompt.
@@ -58,6 +57,22 @@ func newHost(t *testing.T, goos string) *fakeHost {
 	return h
 }
 
+// taskXML is where service install writes the scheduled task on Windows.
+func (h *fakeHost) taskXML() string {
+	return filepath.Join(h.home, ".local", "state", "code-central", "code-central-task.xml")
+}
+
+// wantTaskStarted checks install's schtasks calls: register (replacing
+// any task of the same name), end it (allowed to fail), run it.
+func (h *fakeHost) wantTaskStarted() {
+	h.t.Helper()
+	wantCalls(h.t, h.calls,
+		"schtasks /Create /TN Code Central /XML "+h.taskXML()+" /F",
+		"schtasks /End /TN Code Central",
+		"schtasks /Run /TN Code Central")
+}
+
+// testBinary is this test binary's path: the fake code-central.
 func testBinary(t *testing.T) string {
 	t.Helper()
 	p, err := os.Executable()
@@ -313,50 +328,52 @@ func TestServiceInstallRegistersAScheduledTaskOnWindows(t *testing.T) {
 	if r.code != 0 {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
-	state := filepath.Join(h.home, ".local", "state", "code-central")
-	xmlPath := filepath.Join(state, "code-central-task.xml") // next to the log
-	task := h.read(xmlPath)
-	log := filepath.Join(state, "code-central.log")
-	cmdline := `/d /c &#34;&#34;` + h.bin + `&#34; &#34;serve&#34; &#34;--store&#34; &#34;` + store +
-		`&#34; &#34;--bind&#34; &#34;172.17.0.1&#34; &gt;&gt; &#34;` + log + `&#34; 2&gt;&amp;1&#34;`
+	task := h.read(h.taskXML()) // next to the log
+	log := filepath.Join(filepath.Dir(h.taskXML()), "code-central.log")
 	for _, want := range []string{
 		`<?xml version="1.0" encoding="UTF-16"?>`,
 		"<LogonTrigger>\n      <Enabled>true</Enabled>\n      <UserId>LOVELACE-PC\\ada</UserId>", // at this user's logon
 		"<UserId>LOVELACE-PC\\ada</UserId>\n      <LogonType>InteractiveToken</LogonType>",       // as them, in their session
 		"<RestartOnFailure>\n      <Interval>PT1M</Interval>\n      <Count>999</Count>",
-		"<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>", // no time limit
-		"<Command>cmd.exe</Command>\n      <Arguments>" + cmdline + "</Arguments>",
+		"<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>",            // no time limit
+		"<MultipleInstancesPolicy>Queue</MultipleInstancesPolicy>", // /Run waits for an /End still in progress
+		// The binary itself, so /End ends serve, with launchd's and
+		// systemd's serve arguments and its output in the log.
+		"<Command>" + h.bin + "</Command>\n      <Arguments>serve --store &#34;" + store +
+			"&#34; --bind 172.17.0.1 --log " + windowsQuoted(log) + "</Arguments>",
 	} {
 		if !strings.Contains(task, want) {
 			t.Fatalf("task lacks %q:\n%s", want, task)
 		}
 	}
-	wantCalls(t, h.calls,
-		"schtasks /Create /TN Code Central /XML "+xmlPath+" /F",
-		"schtasks /End /TN Code Central",
-		"schtasks /Run /TN Code Central")
+	h.wantTaskStarted()
 	if !strings.Contains(r.stdout, h.bin) {
 		t.Fatalf("stdout %q doesn't name the binary", r.stdout)
 	}
 }
 
+// windowsQuoted is p as the task's arguments hold it, XML-escaped: quoted
+// only when it has a space.
+func windowsQuoted(p string) string {
+	if strings.Contains(p, " ") {
+		return "&#34;" + p + "&#34;"
+	}
+	return p
+}
+
 func TestServiceInstallAgainReplacesTheScheduledTask(t *testing.T) {
 	h := newHost(t, "windows")
-	xmlPath := filepath.Join(h.home, ".local", "state", "code-central", "code-central-task.xml")
-	os.MkdirAll(filepath.Dir(xmlPath), 0o755)
-	os.WriteFile(xmlPath, []byte("an older task"), 0o644)
+	os.MkdirAll(filepath.Dir(h.taskXML()), 0o755)
+	os.WriteFile(h.taskXML(), []byte("an older task"), 0o644)
 	// Ending a task that isn't running fails; install carries on.
 	h.failCall = "schtasks /End"
 	if r := h.run(nil, "service", "install"); r.code != 0 {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
-	if got := h.read(xmlPath); strings.Contains(got, "an older task") {
+	if got := h.read(h.taskXML()); strings.Contains(got, "an older task") {
 		t.Fatalf("task not rewritten:\n%s", got)
 	}
-	wantCalls(t, h.calls,
-		"schtasks /Create /TN Code Central /XML "+xmlPath+" /F", // /F replaces the registered task
-		"schtasks /End /TN Code Central",
-		"schtasks /Run /TN Code Central")
+	h.wantTaskStarted()
 
 	h.calls = nil
 	if r := h.run(nil, "service", "restart"); r.code != 0 {
@@ -365,14 +382,33 @@ func TestServiceInstallAgainReplacesTheScheduledTask(t *testing.T) {
 	wantCalls(t, h.calls, "schtasks /End /TN Code Central", "schtasks /Run /TN Code Central")
 }
 
-func TestScheduledTaskRefusesWhatCmdWouldMisread(t *testing.T) {
+func TestScheduledTaskRefusesAPathTaskSchedulerWouldExpand(t *testing.T) {
 	h := newHost(t, "windows")
 	r := h.run(nil, "service", "install", "--store", filepath.Join(h.dir, "100%PATH%"))
-	if r.code == 0 || !strings.Contains(r.stderr, "cmd.exe would misread") || len(h.calls) != 0 {
+	if r.code == 0 || !strings.Contains(r.stderr, "Task Scheduler would expand its %") || len(h.calls) != 0 {
 		t.Fatalf("exit %d, stderr %q, calls %v", r.code, r.stderr, h.calls)
 	}
-	r = h.run(map[string]string{"USERNAME": ""}, "service", "install")
+}
+
+func TestScheduledTaskWithNoUSERNAMESaysSo(t *testing.T) {
+	h := newHost(t, "windows")
+	r := h.run(map[string]string{"USERNAME": ""}, "service", "install")
 	if r.code == 0 || !strings.Contains(r.stderr, "USERNAME isn't set") || len(h.calls) != 0 {
 		t.Fatalf("exit %d, stderr %q, calls %v", r.code, r.stderr, h.calls)
+	}
+}
+
+func TestWindowsArgRoundTripsThroughTheCommandLine(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{`C:\Users\ada\bin\code-central.exe`, `C:\Users\ada\bin\code-central.exe`},
+		{`C:\my store`, `"C:\my store"`},
+		{`C:\my store\`, `"C:\my store\\"`}, // the closing quote isn't escaped
+		{`a"b`, `"a\"b"`},
+		{`a\"b`, `"a\\\"b"`},
+		{``, `""`},
+	} {
+		if got := cli.WindowsArg(tc.in); got != tc.want {
+			t.Errorf("WindowsArg(%q) = %s, want %s", tc.in, got, tc.want)
+		}
 	}
 }

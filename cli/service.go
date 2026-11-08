@@ -251,12 +251,13 @@ func lookPath(name, path string) (string, error) {
 	return "", fmt.Errorf("cannot find %s on PATH; run service install with the binary's path", name)
 }
 
+func xmlEscape(s string) string {
+	var b bytes.Buffer
+	xml.EscapeText(&b, []byte(s))
+	return b.String()
+}
+
 func launchdPlist(args []string, log string) []byte {
-	esc := func(s string) string {
-		var b bytes.Buffer
-		xml.EscapeText(&b, []byte(s))
-		return b.String()
-	}
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -268,7 +269,7 @@ func launchdPlist(args []string, log string) []byte {
 	<array>
 `)
 	for _, a := range args {
-		b.WriteString("\t\t<string>" + esc(a) + "</string>\n")
+		b.WriteString("\t\t<string>" + xmlEscape(a) + "</string>\n")
 	}
 	b.WriteString(`	</array>
 	<key>RunAtLoad</key>
@@ -279,9 +280,9 @@ func launchdPlist(args []string, log string) []byte {
 		<false/>
 	</dict>
 	<key>StandardOutPath</key>
-	<string>` + esc(log) + `</string>
+	<string>` + xmlEscape(log) + `</string>
 	<key>StandardErrorPath</key>
-	<string>` + esc(log) + `</string>
+	<string>` + xmlEscape(log) + `</string>
 </dict>
 </plist>
 `)
@@ -312,29 +313,23 @@ WantedBy=default.target
 `)
 }
 
-// scheduledTaskXML is the Task Scheduler task that runs serve at user's
-// logon, in their session, restarting it when it fails. A task's action
-// can't redirect output, so cmd.exe runs serve with its output appended
-// to log. The file is UTF-16 with a byte-order mark, as Task Scheduler
-// exports it, so schtasks reads it on every Windows version.
+// scheduledTaskXML is the Task Scheduler task that runs serve at the
+// user's logon, in their session, restarting it when it fails. It runs
+// the binary itself, not through cmd.exe, so /End ends serve and a crash
+// fails the task; serve's --log stands in for redirecting its output.
+// The file is UTF-16 with a byte-order mark, as Task Scheduler exports
+// it, so schtasks reads it on every Windows version.
 func scheduledTaskXML(args []string, log, user string) ([]byte, error) {
-	esc := func(s string) string {
-		var b bytes.Buffer
-		xml.EscapeText(&b, []byte(s))
-		return b.String()
+	args = append(append([]string{}, args...), "--log", log)
+	// Task Scheduler expands %NAME% in a task's command and arguments.
+	for _, a := range args {
+		if strings.Contains(a, "%") {
+			return nil, fmt.Errorf("cannot run %q from a scheduled task: Task Scheduler would expand its %%", a)
+		}
 	}
-	// cmd.exe expands %NAME% even inside quotes, and a path can't hold
-	// a quote, so either would change the command.
-	var cmdline []string
-	for _, a := range append(append([]string{}, args...), ">>", log, "2>&1") {
-		if strings.ContainsAny(a, `"%`) {
-			return nil, fmt.Errorf("cannot run %q from a scheduled task: cmd.exe would misread its %% or \"", a)
-		}
-		if a == ">>" || a == "2>&1" {
-			cmdline = append(cmdline, a)
-		} else {
-			cmdline = append(cmdline, `"`+a+`"`)
-		}
+	quoted := make([]string, len(args)-1)
+	for i, a := range args[1:] {
+		quoted[i] = windowsArg(a)
 	}
 	doc := `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
@@ -344,12 +339,12 @@ func scheduledTaskXML(args []string, log, user string) ([]byte, error) {
   <Triggers>
     <LogonTrigger>
       <Enabled>true</Enabled>
-      <UserId>` + esc(user) + `</UserId>
+      <UserId>` + xmlEscape(user) + `</UserId>
     </LogonTrigger>
   </Triggers>
   <Principals>
     <Principal id="Author">
-      <UserId>` + esc(user) + `</UserId>
+      <UserId>` + xmlEscape(user) + `</UserId>
       <LogonType>InteractiveToken</LogonType>
       <RunLevel>LeastPrivilege</RunLevel>
     </Principal>
@@ -360,7 +355,7 @@ func scheduledTaskXML(args []string, log, user string) ([]byte, error) {
       <Interval>PT1M</Interval>
       <Count>999</Count>
     </RestartOnFailure>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <MultipleInstancesPolicy>Queue</MultipleInstancesPolicy>
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <StartWhenAvailable>true</StartWhenAvailable>
@@ -369,8 +364,8 @@ func scheduledTaskXML(args []string, log, user string) ([]byte, error) {
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>cmd.exe</Command>
-      <Arguments>` + esc(`/d /c "`+strings.Join(cmdline, " ")+`"`) + `</Arguments>
+      <Command>` + xmlEscape(args[0]) + `</Command>
+      <Arguments>` + xmlEscape(strings.Join(quoted, " ")) + `</Arguments>
     </Exec>
   </Actions>
 </Task>
@@ -381,4 +376,31 @@ func scheduledTaskXML(args []string, log, user string) ([]byte, error) {
 		binary.LittleEndian.PutUint16(b[2*i:], c)
 	}
 	return b, nil
+}
+
+// windowsArg quotes a for a Windows command line, as CommandLineToArgvW
+// and Go's os.Args read it back: quotes around anything with a space,
+// and a backslash doubled where it comes before a quote.
+func windowsArg(a string) string {
+	if a != "" && !strings.ContainsAny(a, " \t\"") {
+		return a
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	slashes := 0
+	for _, c := range a {
+		switch c {
+		case '\\':
+			slashes++
+		case '"':
+			b.WriteString(strings.Repeat(`\`, slashes+1)) // n slashes become 2n+1
+			slashes = 0
+		default:
+			slashes = 0
+		}
+		b.WriteRune(c)
+	}
+	b.WriteString(strings.Repeat(`\`, slashes)) // to 2n before the closing quote
+	b.WriteByte('"')
+	return b.String()
 }
