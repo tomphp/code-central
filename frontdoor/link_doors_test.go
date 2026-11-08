@@ -33,12 +33,17 @@ func init() {
 		"create_linked_spec": {
 			ok:    call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_spec", `{"title":"Epic","link":{"integration":"github","id":"1","url":"https://github.com/acme/web/issues/1"}}`}},
 			check: acknowledgement("acme-4", "title", "link"),
-			bad:   call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_spec", `{"title":"Epic","link":{"integration":"github"}}`}},
-			code:  core.Invalid,
+			full: func(t *testing.T, out map[string]any) {
+				field("id", "acme-4")(t, out)
+				field("external_state", "open")(t, out["link"].(map[string]any))
+			},
+			bad:  call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_spec", `{"title":"Epic","link":{"integration":"github"}}`}},
+			code: core.Invalid,
 		},
 		"create_linked_ticket": {
-			ok: call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_ticket", `{"spec":"1","title":"Issue","state":"Ready","link":{"integration":"github","id":"2"}}`}},
-			check: func(t *testing.T, out map[string]any) {
+			ok:    call{http: httpCall{"POST", "/api/p/acme/integration/create_linked_ticket", `{"spec":"1","title":"Issue","state":"Ready","link":{"integration":"github","id":"2"}}`}},
+			check: ticketAcknowledgement("acme-4", "Ready", "title", "state", "spec", "claimable", "link"),
+			full: func(t *testing.T, out map[string]any) {
 				field("state", "Ready")(t, out)
 				field("id", "2")(t, out["link"].(map[string]any))
 			},
@@ -49,13 +54,15 @@ func init() {
 			setup: linkedItems,
 			ok:    call{http: httpCall{"POST", "/api/p/acme/integration/specs/4/update_linked_spec", `{"title":"Epic 2"}`}},
 			check: acknowledgement("acme-4", "title", "edits"),
+			full:  field("title", "Epic 2"),
 			bad:   call{http: httpCall{"POST", "/api/p/acme/integration/specs/1/update_linked_spec", `{"title":"Not linked"}`}},
 			code:  core.ActionNotAllowed,
 		},
 		"update_linked_ticket": {
 			setup: linkedItems,
 			ok:    call{http: httpCall{"POST", "/api/p/acme/integration/tickets/5/update_linked_ticket", `{"spec":"acme-1"}`}},
-			check: func(t *testing.T, out map[string]any) { field("id", "acme-1")(t, out["spec"].(map[string]any)) },
+			check: ticketAcknowledgement("acme-5", "Draft", "spec", "edits"),
+			full:  func(t *testing.T, out map[string]any) { field("id", "acme-1")(t, out["spec"].(map[string]any)) },
 			bad:   call{http: httpCall{"POST", "/api/p/acme/integration/tickets/2/update_linked_ticket", `{"title":"Not linked"}`}},
 			code:  core.ActionNotAllowed,
 		},

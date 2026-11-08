@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/tomoram/code-central/store"
 )
 
 // A write that used to echo the whole record returns an Acknowledgement
@@ -24,6 +26,8 @@ type Acknowledgement struct {
 	Changed []string `json:"changed"`
 	// Edit is the number of the edit the write recorded, if it recorded one.
 	Edit int `json:"edit,omitempty"`
+	// State is a Ticket's State after the write; a Spec has none.
+	State store.State `json:"state,omitempty"`
 }
 
 // Written is an acknowledging write's result: its Acknowledgement, or
@@ -57,9 +61,9 @@ func acknowledgeCreate[V any](empty, after V, full bool) (Written[V], error) {
 
 // written derives the Acknowledgement from the views' JSON, listing in
 // changed every top-level field that differs except those unlisted. It
-// reads the record's id and updated, and the number of the last of its
-// edits when they changed, by those JSON names, which the Spec and Ticket
-// views share.
+// reads the record's id and updated, the number of the last of its edits
+// when they changed, and a Ticket's state, by those JSON names, which the
+// Spec and Ticket views share (a Spec view has no state).
 func written[V any](before, after V, full bool, unlisted ...string) (Written[V], error) {
 	if full {
 		return Written[V]{Record: &after}, nil
@@ -83,6 +87,11 @@ func written[V any](before, after V, full bool, unlisted ...string) (Written[V],
 	}
 	if err := json.Unmarshal(a["updated"], &ack.Updated); err != nil {
 		return Written[V]{}, err
+	}
+	if state, ok := a["state"]; ok {
+		if err := json.Unmarshal(state, &ack.State); err != nil {
+			return Written[V]{}, err
+		}
 	}
 	if slices.Contains(ack.Changed, "edits") {
 		var edits []struct {

@@ -2,11 +2,11 @@
 // shown only as a Cancelled Ticket's Replacement (its view has `via`) is
 // removed by naming that Cancelled Ticket.
 import { registerFakeAction } from "../fakeActions";
-import { ApiError, FINISHED, type TicketView } from "../types";
+import { ApiError, FINISHED, type TicketAcknowledgement } from "../types";
 
 declare module "../api" {
   interface TicketActions {
-    remove_blocker: { body: { blocker: string }; result: TicketView };
+    remove_blocker: { body: { blocker: string }; result: TicketAcknowledgement };
   }
 }
 

@@ -17,7 +17,8 @@ func init() {
 			http: httpCall{"POST", "/api/p/acme/tickets/3/land", `{"commit":"def456"}`},
 			cli:  []string{"acme-3", "--commit", "def456"},
 		},
-		check: func(t *testing.T, out map[string]any) {
+		check: ticketAcknowledgement("acme-3", "Done", "state", "moves"),
+		full: func(t *testing.T, out map[string]any) {
 			field("state", "Done")(t, out)
 			moves, _ := out["moves"].([]any)
 			last, _ := moves[len(moves)-1].(map[string]any)

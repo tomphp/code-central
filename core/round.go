@@ -50,18 +50,24 @@ type AnswerInput struct {
 	Ticket   Ref    `json:"ticket"`
 	Question int    `json:"question"`
 	Text     string `json:"text"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // DismissQuestionInput is the human's dismiss_question(question).
 type DismissQuestionInput struct {
 	Ticket   Ref `json:"ticket"`
 	Question int `json:"question"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // AcceptRecommendedInput is the human's accept_recommended(round).
 type AcceptRecommendedInput struct {
 	Ticket Ref `json:"ticket"`
 	Round  int `json:"round"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // RoundView is one Round as reads show it.
@@ -104,7 +110,8 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 		}
 	}
 	var res PostRoundResult
-	_, err := c.updateTicket(key, "post_round", in.Ticket, func(t *store.Ticket) (bool, error) {
+	// With full, as the Ticket isn't returned: no before view is built.
+	_, err := c.updateTicket(key, "post_round", in.Ticket, true, func(t *store.Ticket) (bool, error) {
 		claim, _ := liveClaim(*t)
 		now := c.now()
 		if err := transition(ctx, t, key, "post_round", in.ClaimID, now); err != nil {
@@ -133,7 +140,8 @@ func (c *Core) PostRound(ctx context.Context, key string, in PostRoundInput) (Po
 // Answered to In Progress in one step and gets the latest Round back.
 func (c *Core) PickUpAnswers(ctx context.Context, key string, in PickUpAnswersInput) (PickUpAnswersResult, error) {
 	var res PickUpAnswersResult
-	_, err := c.updateTicket(key, "pick_up_answers", in.Ticket, func(t *store.Ticket) (bool, error) {
+	// With full, as the Ticket isn't returned: no before view is built.
+	_, err := c.updateTicket(key, "pick_up_answers", in.Ticket, true, func(t *store.Ticket) (bool, error) {
 		if err := transition(ctx, t, key, "pick_up_answers", in.ClaimID, c.now()); err != nil {
 			return false, err
 		}
@@ -152,33 +160,33 @@ func (c *Core) PickUpAnswers(ctx context.Context, key string, in PickUpAnswersIn
 // Answer is the human's answer(question, text). An answer can be changed
 // until its Round is complete; the last open Question answered moves the
 // Ticket to Answered.
-func (c *Core) Answer(ctx context.Context, key string, in AnswerInput) (TicketView, error) {
+func (c *Core) Answer(ctx context.Context, key string, in AnswerInput) (Written[TicketView], error) {
 	if strings.TrimSpace(in.Text) == "" {
-		return TicketView{}, invalid("text", "an answer needs text; to decline a Question, dismiss it")
+		return Written[TicketView]{}, invalid("text", "an answer needs text; to decline a Question, dismiss it")
 	}
-	return c.onQuestion(ctx, key, in.Ticket, "answer", in.Question, func(q *store.Question, now time.Time) {
+	return c.onQuestion(ctx, key, in.Ticket, in.Full, "answer", in.Question, func(q *store.Question, now time.Time) {
 		q.Status, q.Answer, q.Closed = store.QuestionAnswered, in.Text, now
 	})
 }
 
 // DismissQuestion is the human's dismiss_question(question): one Question
 // declined without moving the Ticket, unless it was the last open one.
-func (c *Core) DismissQuestion(ctx context.Context, key string, in DismissQuestionInput) (TicketView, error) {
-	return c.onQuestion(ctx, key, in.Ticket, "dismiss_question", in.Question, func(q *store.Question, now time.Time) {
+func (c *Core) DismissQuestion(ctx context.Context, key string, in DismissQuestionInput) (Written[TicketView], error) {
+	return c.onQuestion(ctx, key, in.Ticket, in.Full, "dismiss_question", in.Question, func(q *store.Question, now time.Time) {
 		q.Status, q.Answer, q.Closed = store.QuestionDismissed, "", now
 	})
 }
 
 // AcceptRecommended is the human's accept_recommended(round): every open
 // Question with a recommendation is answered with it.
-func (c *Core) AcceptRecommended(ctx context.Context, key string, in AcceptRecommendedInput) (TicketView, error) {
+func (c *Core) AcceptRecommended(ctx context.Context, key string, in AcceptRecommendedInput) (Written[TicketView], error) {
 	find := func(t *store.Ticket) (*store.Round, error) {
 		if in.Round < 1 || in.Round > len(t.Rounds) {
 			return nil, notFound("there is no Round %d on %s", in.Round, DisplayID(key, t.Number))
 		}
 		return &t.Rounds[in.Round-1], nil
 	}
-	return c.onRound(ctx, key, in.Ticket, "accept_recommended", find, func(r *store.Round, now time.Time) bool {
+	return c.onRound(ctx, key, in.Ticket, in.Full, "accept_recommended", find, func(r *store.Round, now time.Time) bool {
 		changed := false
 		for i := range r.Questions {
 			if q := &r.Questions[i]; q.Status == store.QuestionOpen && q.Recommended != "" {
@@ -191,7 +199,7 @@ func (c *Core) AcceptRecommended(ctx context.Context, key string, in AcceptRecom
 }
 
 // onQuestion runs a Round action on Question n of the Ticket.
-func (c *Core) onQuestion(ctx context.Context, key string, ref Ref, name string, n int, apply func(*store.Question, time.Time)) (TicketView, error) {
+func (c *Core) onQuestion(ctx context.Context, key string, ref Ref, full bool, name string, n int, apply func(*store.Question, time.Time)) (Written[TicketView], error) {
 	var target int
 	find := func(t *store.Ticket) (*store.Round, error) {
 		for i := range t.Rounds {
@@ -204,7 +212,7 @@ func (c *Core) onQuestion(ctx context.Context, key string, ref Ref, name string,
 		}
 		return nil, notFound("there is no Question %d on %s", n, DisplayID(key, t.Number))
 	}
-	return c.onRound(ctx, key, ref, name, find, func(r *store.Round, now time.Time) bool {
+	return c.onRound(ctx, key, ref, full, name, find, func(r *store.Round, now time.Time) bool {
 		apply(&r.Questions[target], now)
 		return true
 	})
@@ -213,9 +221,9 @@ func (c *Core) onQuestion(ctx context.Context, key string, ref Ref, name string,
 // onRound runs one of the human's Round actions: only the human may take
 // it, only on a Round that is not yet complete, and when it leaves no
 // open Question the Ticket moves to Answered in the same write.
-func (c *Core) onRound(ctx context.Context, key string, ref Ref, name string,
-	find func(*store.Ticket) (*store.Round, error), apply func(*store.Round, time.Time) bool) (TicketView, error) {
-	return c.updateTicket(key, name, ref, func(t *store.Ticket) (bool, error) {
+func (c *Core) onRound(ctx context.Context, key string, ref Ref, full bool, name string,
+	find func(*store.Ticket) (*store.Round, error), apply func(*store.Round, time.Time) bool) (Written[TicketView], error) {
+	return c.updateTicket(key, name, ref, full, func(t *store.Ticket) (bool, error) {
 		if actor := ActorOf(ctx); actor != Human {
 			return false, &Error{Code: ActionNotAllowed, AllowedActions: allowedActions(t.State, actor),
 				Message: fmt.Sprintf("%s is a human action; this request is made as %s", name, actor)}

@@ -3,11 +3,11 @@
 // via merge (ADR 0006).
 import { registerFakeAction } from "../fakeActions";
 import { fakeTransition } from "../fakeTransition";
-import { ApiError, type TicketView } from "../types";
+import { ApiError, type TicketAcknowledgement } from "../types";
 
 declare module "../api" {
   interface TicketActions {
-    land: { body: { commit: string }; result: TicketView };
+    land: { body: { commit: string }; result: TicketAcknowledgement };
   }
 }
 

@@ -2,7 +2,7 @@
 
 The `states` and `actions` above are the rules Code Central enforces; anything they don't allow is rejected with `action_not_allowed` and the actions that are allowed. Who `agent` can take, the human can take too. `agent (holder)` actions need the live Claim ID as `claim_id`; reads, comments and the other triage writes don't.
 
-1. `claim` takes the next claimable Ticket (Ready, no open Blockers, oldest first), or the one or the Spec you name. It returns a Claim ID, the full Ticket and its `stage_guide`: what the Ticket must produce, where it lands and how to finish it. Follow the guide; `get_stage_guide` serves it again. `{"ticket": null}` means nothing can be claimed: stop.
+1. `claim` takes the next claimable Ticket (Ready, no open Blockers, oldest first), or the one or the Spec you name. It returns a Claim ID, the full Ticket and its `stage_guide`: what the Ticket must produce, where it lands and how to finish it. Follow the guide; `get_stage_guide` serves it again. `{"ticket": null}` means nothing can be claimed: stop. `claim` on a Ticket your session already holds, with your `session_id`, returns the same Claim and writes nothing.
 2. Read the whole Ticket before starting: its description, its Spec, past Claims and how each ended, every Failure Report, comments and send-back notes. A Ticket that failed before failed for a reason; don't repeat the attempt that failed. Read the Spec with `get_spec` and `parts: ["body"]`, or with `sections` for a large Spec (choose them from the `outline` it returns), and add `tickets` only when sibling Tickets matter.
 3. Work on a branch named after the Ticket ID (for example `acme-12`), and commit often, so the next session can pick the work up if yours ends. Don't push or open a pull request. Code Central never checks this; it is the convention everyone relies on.
 4. `finish` with a summary: what was done, where (the branch or commit), and what the reviewer should check. When the work is on a branch, also pass `branch` and its head `commit`. Then stop working this Ticket: the human accepts it or rejects it to Ready.
@@ -13,7 +13,7 @@ Accepting a Ticket whose finish named a `branch` moves it to Accepted: the human
 
 Every write's response may carry a `next_step`. Do what it says, when it says.
 
-If a write returns `stale_claim`, your Claim has ended (the human released or moved the Ticket, or another session holds it now). Stop working that Ticket at once and don't write to it again with that Claim ID. If you lose your Claim ID, for example after context compaction, stop the same way and tell the human, who can release the Ticket.
+If a write returns `stale_claim`, your Claim has ended (the human released or moved the Ticket, or another session holds it now). Stop working that Ticket at once and don't write to it again with that Claim ID. If you lose your Claim ID, for example after context compaction, `claim` the Ticket again with your `session_id` to get it back; without your session ID, stop the same way and tell the human, who can release the Ticket.
 
 ## Questions go to Rounds
 

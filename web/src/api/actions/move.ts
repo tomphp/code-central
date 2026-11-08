@@ -3,11 +3,11 @@
 // the pattern for every human action: declare its body and result by
 // merging into TicketActions, then register the fake's behaviour.
 import { registerFakeAction } from "../fakeActions";
-import { ApiError, STATES, type State, type TicketView } from "../types";
+import { ApiError, STATES, type State, type TicketAcknowledgement } from "../types";
 
 declare module "../api" {
   interface TicketActions {
-    move: { body: { to_state: State }; result: TicketView };
+    move: { body: { to_state: State }; result: TicketAcknowledgement };
   }
 }
 

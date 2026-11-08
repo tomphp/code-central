@@ -13,15 +13,17 @@ type CancelInput struct {
 	Ticket       Ref    `json:"ticket"`
 	Replacements []Ref  `json:"replacements,omitempty"`
 	Reason       string `json:"reason,omitempty"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // Cancel is the agent's cancel(ticket, replacements, reason?) on a Draft
 // or Ready Ticket, and the human's cancel(replacements?) on any
 // unfinished one. Anything the Ticket was blocking becomes blocked by its
 // Replacements when read, so only this Ticket's file is written.
-func (c *Core) Cancel(ctx context.Context, key string, in CancelInput) (TicketView, error) {
+func (c *Core) Cancel(ctx context.Context, key string, in CancelInput) (Written[TicketView], error) {
 	actor := ActorOf(ctx)
-	return c.updateTicketIn(key, "cancel", in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, "cancel", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
 		claim := 0
 		if live, ok := liveClaim(*t); ok {
 			claim = live.Number
@@ -34,7 +36,7 @@ func (c *Core) Cancel(ctx context.Context, key string, in CancelInput) (TicketVi
 		if actor != Human && len(in.Replacements) == 0 {
 			return false, invalid("replacements", "an agent cancels a Ticket only by naming at least one Replacement that takes over its work")
 		}
-		reps, err := ticketRefs(r, key, in.Replacements, "replacements")
+		reps, err := ticketRefs(r, key, "cancel", "replacements", in.Replacements)
 		if err != nil {
 			return false, err
 		}

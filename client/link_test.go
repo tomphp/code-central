@@ -31,7 +31,7 @@ func TestAnIntegrationRoundTrip(t *testing.T) {
 	if s, err := gh.UpdateLinkedSpec(ctx, "acme", core.UpdateLinkedSpecInput{Spec: core.Ref(sp.Record.ID), Title: &title}); err != nil || s.Edit != 1 || s.Record != nil {
 		t.Fatalf("update_linked_spec: %+v, %v", s, err)
 	}
-	if v, err := gh.UpdateLinkedTicket(ctx, "acme", core.UpdateLinkedTicketInput{Ticket: core.Ref(tk.ID), Title: &title}); err != nil || v.Edits[0].Actor != "integration" {
+	if v, err := gh.UpdateLinkedTicket(ctx, "acme", core.UpdateLinkedTicketInput{Ticket: core.Ref(tk.ID), Title: &title, Full: true}); err != nil || v.Record.Edits[0].Actor != "integration" {
 		t.Fatalf("update_linked_ticket: %+v, %v", v, err)
 	}
 	if row, err := gh.SetExternalState(ctx, "acme", core.SetExternalStateInput{Target: core.Ref(tk.ID), ExternalState: store.ExternalDeleted}); err != nil || row.Link.ExternalState != store.ExternalDeleted {

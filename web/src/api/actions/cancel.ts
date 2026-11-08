@@ -2,11 +2,11 @@
 // none; the optional reason is stored as a comment. (Ticket 36's Failed
 // panel and ticket 37's Blocked panel both use it.)
 import { registerFakeAction } from "../fakeActions";
-import { ApiError, FINISHED, type TicketView } from "../types";
+import { ApiError, FINISHED, type TicketAcknowledgement } from "../types";
 
 declare module "../api" {
   interface TicketActions {
-    cancel: { body: { replacements?: string[]; reason?: string }; result: TicketView };
+    cancel: { body: { replacements?: string[]; reason?: string }; result: TicketAcknowledgement };
   }
 }
 

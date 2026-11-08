@@ -38,11 +38,11 @@ func TestTheSessionIDDefaultsToClaudeCodesAndTheFlagWins(t *testing.T) {
 	if s := res.Ticket.Claims[0].SessionID; s != "from-env" {
 		t.Fatalf("claim recorded session %q, want from-env", s)
 	}
-	v := decode[core.TicketView](t, run(t, env, "", "set-session", "acme-2", "--claim", res.ClaimID, "--session", "from-flag"))
+	v := decode[core.TicketView](t, run(t, env, "", "set-session", "acme-2", "--claim", res.ClaimID, "--session", "from-flag", "--full"))
 	if s := v.Claims[0].SessionID; s != "from-flag" {
 		t.Fatalf("set-session recorded %q, want from-flag", s)
 	}
-	v = decode[core.TicketView](t, run(t, env, "", "set-session", "acme-2", "--claim", res.ClaimID))
+	v = decode[core.TicketView](t, run(t, env, "", "set-session", "acme-2", "--claim", res.ClaimID, "--full"))
 	if s := v.Claims[0].SessionID; s != "from-env" {
 		t.Fatalf("set-session recorded %q, want from-env", s)
 	}
@@ -170,12 +170,17 @@ func TestHookSessionIDAddsTheSessionToTheToolInput(t *testing.T) {
 		t.Fatalf("%v: %s", err, r.stdout)
 	}
 	h := out.HookSpecificOutput
-	// updatedInput replaces the whole input, so every field is kept; no
-	// permission decision is made, so the normal permission flow applies.
-	want := map[string]any{"spec": "acme-1", "session_id": "abc"}
-	if h.HookEventName != "PreToolUse" || len(h.UpdatedInput) != 2 || h.UpdatedInput["spec"] != want["spec"] ||
-		h.UpdatedInput["session_id"] != want["session_id"] || h.PermissionDecision != nil {
+	// updatedInput replaces the whole input, so every field is kept, and
+	// the CLI's version goes alongside the session; no permission decision
+	// is made, so the normal permission flow applies.
+	want := map[string]any{"spec": "acme-1", "session_id": "abc", "client_version": cli.Version}
+	if h.HookEventName != "PreToolUse" || len(h.UpdatedInput) != len(want) || h.PermissionDecision != nil {
 		t.Fatalf("hook output %s", r.stdout)
+	}
+	for k, v := range want {
+		if h.UpdatedInput[k] != v {
+			t.Fatalf("updatedInput[%q] = %v, want %v", k, h.UpdatedInput[k], v)
+		}
 	}
 }
 
@@ -200,7 +205,7 @@ func hookUpdatedInput(t *testing.T, stdin string) map[string]any {
 
 func TestHookSessionIDFillsClaimAndSetSessionsWorkingDirFromTheHooksCwd(t *testing.T) {
 	got := hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__claim","tool_input":{"spec":"acme-1"}}`)
-	if len(got) != 3 || got["session_id"] != "abc" || got["working_dir"] != "/work/acme" {
+	if len(got) != 4 || got["session_id"] != "abc" || got["working_dir"] != "/work/acme" {
 		t.Fatalf("updatedInput %v", got)
 	}
 	// A working_dir the agent gave is kept.
@@ -210,12 +215,12 @@ func TestHookSessionIDFillsClaimAndSetSessionsWorkingDirFromTheHooksCwd(t *testi
 	}
 	// set_session takes one too.
 	got = hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__set_session","tool_input":{"ticket":"acme-2","claim_id":"c1"}}`)
-	if len(got) != 4 || got["session_id"] != "abc" || got["working_dir"] != "/work/acme" {
+	if len(got) != 5 || got["session_id"] != "abc" || got["working_dir"] != "/work/acme" {
 		t.Fatalf("updatedInput %v", got)
 	}
 	// post_round takes no working_dir, so it gets none.
 	got = hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__post_round","tool_input":{"ticket":"acme-2"}}`)
-	if _, ok := got["working_dir"]; ok || got["session_id"] != "abc" {
+	if _, ok := got["working_dir"]; ok || got["session_id"] != "abc" || got["client_version"] != cli.Version {
 		t.Fatalf("updatedInput %v", got)
 	}
 }
@@ -234,7 +239,7 @@ func TestHookSessionIDNeverBlocks(t *testing.T) {
 	}
 	// No tool_input still gets one holding the session.
 	r := run(t, nil, `{"session_id":"abc"}`, "hook", "session-id")
-	if r.code != 0 || !strings.Contains(r.stdout, `"updatedInput":{"session_id":"abc"}`) {
+	if r.code != 0 || !strings.Contains(r.stdout, `"updatedInput":{"client_version":"`+cli.Version+`","session_id":"abc"}`) {
 		t.Fatalf("hook: %+v", r)
 	}
 	if r := run(t, nil, "", "hook", "nope"); r.code != 0 {

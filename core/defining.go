@@ -25,16 +25,18 @@ type EditTicketInput struct {
 	Ticket      Ref     `json:"ticket"`
 	Title       *string `json:"title,omitempty"`
 	Description *string `json:"description,omitempty"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
-// EditTicket is edit_ticket(ticket, title?, description?). An edit that
-// changes something records the previous values in edits; one that
+// EditTicket is edit_ticket(ticket, title?, description?, full?). An edit
+// that changes something records the previous values in edits; one that
 // changes nothing writes nothing.
-func (c *Core) EditTicket(ctx context.Context, key string, in EditTicketInput) (TicketView, error) {
+func (c *Core) EditTicket(ctx context.Context, key string, in EditTicketInput) (Written[TicketView], error) {
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
-		return TicketView{}, invalid("title", "a Ticket needs a title")
+		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
 	}
-	return c.updateTicket(key, "edit_ticket", in.Ticket, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "edit_ticket", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
 		if err := definitionOwned(ctx, DisplayID(key, t.Number), t.Link); err != nil {
 			return false, err
 		}
@@ -108,46 +110,52 @@ func change(prev map[string]string, name string, field *string, to *string) {
 // TicketInput names one Ticket, for actions that need nothing else.
 type TicketInput struct {
 	Ticket Ref `json:"ticket"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // CommentInput is comment's input.
 type CommentInput struct {
 	Ticket Ref    `json:"ticket"`
 	Body   string `json:"body"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // DeferInput is defer's input; the reason is required.
 type DeferInput struct {
 	Ticket Ref    `json:"ticket"`
 	Reason string `json:"reason"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // Comment is comment(ticket, body). It works on any Ticket, including
 // one another agent holds, and needs no Claim ID.
-func (c *Core) Comment(ctx context.Context, key string, in CommentInput) (TicketView, error) {
+func (c *Core) Comment(ctx context.Context, key string, in CommentInput) (Written[TicketView], error) {
 	if strings.TrimSpace(in.Body) == "" {
-		return TicketView{}, invalid("body", "a comment needs a body")
+		return Written[TicketView]{}, invalid("body", "a comment needs a body")
 	}
-	return c.updateTicket(key, "comment", in.Ticket, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "comment", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
 		addComment(t, ActorOf(ctx), c.now(), 0, in.Body)
 		return true, nil
 	})
 }
 
 // Approve is approve(ticket): Draft to Ready.
-func (c *Core) Approve(ctx context.Context, key string, in TicketInput) (TicketView, error) {
-	return c.updateTicket(key, "approve", in.Ticket, func(t *store.Ticket) (bool, error) {
+func (c *Core) Approve(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
+	return c.updateTicket(key, "approve", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
 		return true, transition(ctx, t, key, "approve", "", c.now())
 	})
 }
 
 // Defer is defer(ticket, reason): Ready to Draft, with the reason stored
 // as a comment.
-func (c *Core) Defer(ctx context.Context, key string, in DeferInput) (TicketView, error) {
+func (c *Core) Defer(ctx context.Context, key string, in DeferInput) (Written[TicketView], error) {
 	if strings.TrimSpace(in.Reason) == "" {
-		return TicketView{}, invalid("reason", "defer needs a reason")
+		return Written[TicketView]{}, invalid("reason", "defer needs a reason")
 	}
-	return c.updateTicket(key, "defer", in.Ticket, func(t *store.Ticket) (bool, error) {
+	return c.updateTicket(key, "defer", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
 		if err := transition(ctx, t, key, "defer", "", c.now()); err != nil {
 			return false, err
 		}
@@ -164,9 +172,10 @@ func addComment(t *store.Ticket, a Actor, at time.Time, claim int, body string) 
 
 // updateTicket loads the Ticket ref names, for operation op, under the
 // write lock and applies fn. When fn reports a change, the Ticket's
-// updated time is set and it is written.
-func (c *Core) updateTicket(key, op string, ref Ref, fn func(t *store.Ticket) (bool, error)) (TicketView, error) {
-	return c.updateTicketIn(key, op, ref, func(_ store.Reader, t *store.Ticket) (bool, error) { return fn(t) })
+// updated time is set and it is written. Its result is the write's
+// Acknowledgement, or with full the Ticket.
+func (c *Core) updateTicket(key, op string, ref Ref, full bool, fn func(t *store.Ticket) (bool, error)) (Written[TicketView], error) {
+	return c.updateTicketIn(key, op, ref, full, func(_ store.Reader, t *store.Ticket) (bool, error) { return fn(t) })
 }
 
 // TargetView is a Spec's or Ticket's Labels and Tags, as the Label and

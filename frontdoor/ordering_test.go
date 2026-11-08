@@ -17,7 +17,8 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/2/add_blocker", `{"blocker":"acme-3"}`},
 				cli:  []string{"acme-2", "acme-3"},
 			},
-			check: ids("blocked_by", "acme-3"),
+			check: ticketAcknowledgement("acme-2", "Draft", "blocked_by", "blockers", "blocked"),
+			full:  ids("blocked_by", "acme-3"),
 			bad: call{
 				mcp:  map[string]any{"ticket": 3, "blocker": 3},
 				http: httpCall{"POST", "/api/p/acme/tickets/3/add_blocker", `{"blocker":3}`},
@@ -32,7 +33,8 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/2/remove_blocker", `{"blocker":"acme-3"}`},
 				cli:  []string{"acme-2", "acme-3"},
 			},
-			check: ids("blocked_by"),
+			check: ticketAcknowledgement("acme-2", "Draft", "blocked_by", "blockers", "blocked"),
+			full:  ids("blocked_by"),
 			bad: call{
 				mcp:  map[string]any{"ticket": 2, "blocker": 9},
 				http: httpCall{"POST", "/api/p/acme/tickets/2/remove_blocker", `{"blocker":9}`},
@@ -47,7 +49,8 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/cancel", `{"replacements":[4],"reason":"Superseded."}`},
 				cli:  []string{"acme-3", "acme-4", "--reason", "Superseded."},
 			},
-			check: func(t *testing.T, out map[string]any) {
+			check: ticketAcknowledgement("acme-3", "Cancelled", "state", "replacements", "comments", "moves", "claimable"),
+			full: func(t *testing.T, out map[string]any) {
 				field("state", "Cancelled")(t, out)
 				ids("replacements", "acme-4")(t, out)
 			},
@@ -155,17 +158,17 @@ func TestBlockedByTagAndClaimableReachEveryDoor(t *testing.T) {
 	t.Run("http", func(t *testing.T) {
 		srv := newServer(t, tagged)
 		oneRow(t, httpOK(t, srv, httpCall{"GET", "/api/p/acme/tickets?tag=area%3Dweb&claimable=true", ""}))
-		created(t, httpOK(t, srv, httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"Next","blocked_by":["acme-3"]}`}))
+		created(t, httpOK(t, srv, httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"Next","blocked_by":["acme-3"],"full":true}`}))
 	})
 	t.Run("mcp", func(t *testing.T) {
 		srv := newServer(t, tagged)
 		s := connect(t, srv, "acme")
 		oneRow(t, mcpOK(t, s, "find_tickets", map[string]any{"tags": map[string]any{"area": "web"}, "claimable": true}))
-		created(t, mcpOK(t, s, "create_ticket", map[string]any{"spec": 1, "title": "Next", "blocked_by": []any{3}}))
+		created(t, mcpOK(t, s, "create_ticket", map[string]any{"spec": 1, "title": "Next", "blocked_by": []any{3}, "full": true}))
 	})
 	t.Run("cli", func(t *testing.T) {
 		srv := newServer(t, tagged)
 		oneRow(t, cliOK(t, srv, []string{"find-tickets", "--tag", "area=web", "--claimable"}))
-		created(t, cliOK(t, srv, []string{"create-ticket", "--spec", "1", "--title", "Next", "--blocked-by", "acme-3"}))
+		created(t, cliOK(t, srv, []string{"create-ticket", "--spec", "1", "--title", "Next", "--blocked-by", "acme-3", "--full"}))
 	})
 }

@@ -77,7 +77,7 @@ func TestAcceptMovesInReviewToDoneAsTheHuman(t *testing.T) {
 	f.inReview(t)
 	f.clock.Set(t0.Add(2 * time.Hour))
 
-	v, err := f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"})
+	v, err := record(f.core.Accept(human, "acme", core.TicketInput{Ticket: "2", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestRejectSendsTheTicketBackToReadyWithTheComment(t *testing.T) {
 	_, err := f.core.Reject(human, "acme", core.RejectInput{Ticket: "2", Comment: ""})
 	wantCode(t, err, core.Invalid, "comment")
 
-	v, err := f.core.Reject(human, "acme", core.RejectInput{Ticket: "2", Comment: "The button is missing."})
+	v, err := record(f.core.Reject(human, "acme", core.RejectInput{Ticket: "2", Comment: "The button is missing.", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}

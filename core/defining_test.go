@@ -27,9 +27,10 @@ func defining(t *testing.T) fixture {
 func TestEditTicketRecordsThePreviousTextOfChangedFields(t *testing.T) {
 	f := defining(t)
 	f.clock.Advance(time.Minute)
-	v, err := f.core.EditTicket(core.WithActor(ctx, core.Human), "acme", core.EditTicketInput{
+	v, err := record(f.core.EditTicket(core.WithActor(ctx, core.Human), "acme", core.EditTicketInput{
 		Ticket: "acme-2", Title: ptr("Form"), Description: ptr("Build it well.\n"),
-	})
+		Full: true,
+	}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +42,7 @@ func TestEditTicketRecordsThePreviousTextOfChangedFields(t *testing.T) {
 		t.Fatalf("edits %+v, want only %+v (an unchanged title is not recorded)", v.Edits, want)
 	}
 
-	v, err = f.core.EditTicket(ctx, "acme", core.EditTicketInput{Ticket: "2", Title: ptr("Login form")})
+	v, err = record(f.core.EditTicket(ctx, "acme", core.EditTicketInput{Ticket: "2", Title: ptr("Login form"), Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +63,8 @@ func TestAnEditThatChangesNothingRecordsNothing(t *testing.T) {
 		{Ticket: "2"},
 		{Ticket: "2", Title: ptr("Form"), Description: ptr("Build it.\n")},
 	} {
-		v, err := f.core.EditTicket(ctx, "acme", in)
+		in.Full = true
+		v, err := record(f.core.EditTicket(ctx, "acme", in))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -219,7 +221,7 @@ func TestCommentWorksOnAnyTicketWithNoClaim(t *testing.T) {
 		return w.PutTicket("acme", store.Ticket{Number: 3, Title: "Held", State: store.InProgress, Spec: 1, Created: t0, Updated: t0})
 	})
 	f.clock.Advance(time.Minute)
-	v, err := f.core.Comment(core.WithActor(ctx, core.Human), "acme", core.CommentInput{Ticket: "3", Body: "Try the other API.\n"})
+	v, err := record(f.core.Comment(core.WithActor(ctx, core.Human), "acme", core.CommentInput{Ticket: "3", Body: "Try the other API.\n", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +229,7 @@ func TestCommentWorksOnAnyTicketWithNoClaim(t *testing.T) {
 	if len(v.Comments) != 1 || v.Comments[0] != want || v.State != store.InProgress || !v.Updated.Equal(want.Time) {
 		t.Fatalf("view: %+v", v)
 	}
-	v, _ = f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "acme-3", Body: "Noted."})
+	v, _ = record(f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "acme-3", Body: "Noted.", Full: true}))
 	if len(v.Comments) != 2 || v.Comments[1].Number != 2 || v.Comments[1].Actor != "agent" {
 		t.Fatalf("second comment: %+v", v.Comments)
 	}
@@ -241,7 +243,7 @@ func TestCommentWorksOnAnyTicketWithNoClaim(t *testing.T) {
 func TestApproveMovesDraftToReady(t *testing.T) {
 	f := defining(t)
 	f.clock.Advance(time.Minute)
-	v, err := f.core.Approve(core.WithActor(ctx, core.Human), "acme", core.TicketInput{Ticket: "2"})
+	v, err := record(f.core.Approve(core.WithActor(ctx, core.Human), "acme", core.TicketInput{Ticket: "2", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +261,7 @@ func TestDeferMovesReadyToDraftWithTheReasonAsAComment(t *testing.T) {
 	_, err := f.core.Defer(ctx, "acme", core.DeferInput{Ticket: "3", Reason: " "})
 	wantCode(t, err, core.Invalid, "reason")
 	f.clock.Advance(time.Minute)
-	v, err := f.core.Defer(ctx, "acme", core.DeferInput{Ticket: "3", Reason: "Needs the schema first."})
+	v, err := record(f.core.Defer(ctx, "acme", core.DeferInput{Ticket: "3", Reason: "Needs the schema first.", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}

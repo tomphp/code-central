@@ -56,12 +56,13 @@ func runSetSession(ctx context.Context, e Env, args []string) error {
 	fs := flagSet("set-session")
 	claim := fs.String("claim", "", "")
 	session := fs.String("session", "", "")
+	full := fs.Bool("full", false, "")
 	resume := addResumeFlags(fs)
 	sc, ref, _, err := itemCommand(e, fs, args, 0, 0)
 	if err != nil {
 		return err
 	}
-	in := core.SetSessionInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session)}
+	in := core.SetSessionInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session), Full: *full}
 	in.WorkingDir, in.ResumeCommand = resume.values()
 	v, err := sc.client.SetSession(ctx, sc.project, in)
 	if err != nil {
@@ -138,6 +139,9 @@ func runHook(_ context.Context, e Env, args []string) error {
 		input = map[string]any{}
 	}
 	input["session_id"] = in.SessionID
+	// The CLI's version goes alongside, so a service of another version
+	// names both versions when it rejects a field it doesn't know.
+	input["client_version"] = e.version()
 	// claim and set_session also get the session's working directory,
 	// unless the agent gave one. post_round takes none, and decodes
 	// strictly.

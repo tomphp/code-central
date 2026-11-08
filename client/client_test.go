@@ -45,8 +45,11 @@ func TestProjectSpecAndTicketRoundTrip(t *testing.T) {
 		t.Fatalf("edit_spec with full: %+v, %v", s, err)
 	}
 	tk, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Form", State: store.Ready, Labels: []string{"ui"}})
-	if err != nil || tk.ID != "acme-2" || tk.State != store.Ready || tk.Spec.Title != "Login" {
+	if err != nil || tk.ID != "acme-2" || tk.State != store.Ready || tk.Record != nil {
 		t.Fatalf("create_ticket: %+v, %v", tk, err)
+	}
+	if tk, err := c.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "Hi.", Full: true}); err != nil || tk.Record == nil || tk.Record.Spec.Title != "Login" {
+		t.Fatalf("comment with full: %+v, %v", tk, err)
 	}
 	got, err := c.GetTicket(ctx, "acme", "2")
 	if err != nil || got.ID != "acme-2" || got.Title != "Form" || !got.Claimable {

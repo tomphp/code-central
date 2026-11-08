@@ -2,11 +2,11 @@
 // Answered Ticket back to Ready. The released session's next write is
 // rejected as stale. The optional note is stored as a comment.
 import { registerFakeAction } from "../fakeActions";
-import { ApiError, type TicketView } from "../types";
+import { ApiError, type TicketAcknowledgement } from "../types";
 
 declare module "../api" {
   interface TicketActions {
-    release: { body: { note?: string }; result: TicketView };
+    release: { body: { note?: string }; result: TicketAcknowledgement };
   }
 }
 

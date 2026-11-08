@@ -74,6 +74,31 @@ func TestMCPUnknownFieldsNameTheVersionsSentAsClientVersion(t *testing.T) {
 	}
 }
 
+func TestMCPUnknownFieldsOnAHookedCallNameTheHooksVersion(t *testing.T) {
+	srv := versionedServer(t)
+	s := connect(t, srv, "acme")
+	// A newer agent's claim, with a field this service doesn't know, as the
+	// session-id hook of a v1.9 CLI rewrites it.
+	var out bytes.Buffer
+	stdin := `{"session_id":"abc","tool_name":"mcp__code-central__claim","tool_input":{"added_later":1}}`
+	if exit := cli.Run(context.Background(), []string{"hook", "session-id"}, cli.Env{
+		Stdin: strings.NewReader(stdin), Stdout: &out, Stderr: io.Discard,
+		Getenv: func(string) string { return "" }, Version: "v1.9",
+	}); exit != 0 {
+		t.Fatalf("hook exit %d", exit)
+	}
+	var hook struct {
+		HookSpecificOutput struct {
+			UpdatedInput map[string]any `json:"updatedInput"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &hook); err != nil {
+		t.Fatalf("%v: %s", err, out.String())
+	}
+	e := mcpRejected(t, s, "claim", hook.HookSpecificOutput.UpdatedInput, core.Invalid)
+	checkUnknownAddedLater(t, e, versionCases[0].want)
+}
+
 func TestHTTPUnknownFieldsNameTheVersionsSentAsTheHeader(t *testing.T) {
 	srv := versionedServer(t)
 	for _, tc := range versionCases {

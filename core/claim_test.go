@@ -198,3 +198,94 @@ func TestTwoConcurrentClaimsNeverTakeTheSameTicket(t *testing.T) {
 type fixedID string
 
 func (f fixedID) ClaimID() string { return string(f) }
+
+func TestTheHoldingSessionClaimsItsTicketAgainAndGetsTheSameClaim(t *testing.T) {
+	for _, c := range []struct {
+		state store.State
+		setup func(f fixture)
+	}{
+		{store.InProgress, func(f fixture) {
+			f.work(t, store.Ready)
+			f.claim(t, core.ClaimInput{SessionID: "sess-1"})
+		}},
+		{store.NeedsAnswer, func(f fixture) { f.asking(t, qDB) }},
+		{store.Answered, func(f fixture) {
+			f.asking(t, qDB)
+			if _, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
+				t.Fatal(err)
+			}
+		}},
+	} {
+		t.Run(string(c.state), func(t *testing.T) {
+			f := newFixture(t)
+			c.setup(f)
+			f.clock.Advance(time.Hour)
+			before := f.get(t, "2")
+			notices, stop := f.core.Events().Subscribe()
+			defer stop()
+
+			dir, resume := "/elsewhere", "other --resume"
+			res := f.claim(t, core.ClaimInput{Ticket: "acme-2", SessionID: "sess-1", WorkingDir: &dir, ResumeCommand: &resume})
+			if res.ClaimID != "claim-1" || res.Ticket.State != c.state || res.StageGuide == nil || res.StageGuide.Stage != "implementation" {
+				t.Fatalf("got claim %q on %s, guide %+v; want claim-1 in %s with the implementation guide", res.ClaimID, res.Ticket.State, res.StageGuide, c.state)
+			}
+			after := f.get(t, "2")
+			b, _ := json.Marshal(before)
+			a, _ := json.Marshal(after)
+			if string(a) != string(b) {
+				t.Fatalf("claiming again wrote the Ticket:\nbefore %s\nafter  %s", b, a)
+			}
+			if r, _ := json.Marshal(res.Ticket); string(r) != string(b) {
+				t.Fatalf("claiming again gave the view %s, want the Ticket as it is %s", r, b)
+			}
+			select {
+			case e := <-notices:
+				t.Fatalf("claiming again sent a notice %+v", e)
+			default:
+			}
+		})
+	}
+}
+
+func TestClaimingAgainTakesNoNewClaimID(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready, store.Ready)
+	f.claim(t, core.ClaimInput{SessionID: "sess-1"})
+	f.claim(t, core.ClaimInput{Ticket: "2", SessionID: "sess-1"})
+	if got := f.claim(t, core.ClaimInput{}).ClaimID; got != "claim-2" {
+		t.Fatalf("the next fresh Claim got %q, want claim-2", got)
+	}
+}
+
+func TestOnlyANamedTicketAndAMatchingSessionGetTheirClaimBack(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
+	f.claim(t, core.ClaimInput{SessionID: "sess-1"})
+
+	// A bare or Spec-narrowed claim takes the next Ticket, not your own.
+	if res := f.claim(t, core.ClaimInput{SessionID: "sess-1"}); res.Ticket.ID != "acme-3" || res.ClaimID != "claim-2" {
+		t.Fatalf("bare claim took %s with %q, want acme-3 with claim-2", res.Ticket.ID, res.ClaimID)
+	}
+	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{Spec: "1", SessionID: "sess-1"})
+	if err != nil || res.Ticket != nil {
+		t.Fatalf("Spec-narrowed claim got %+v, %v; want nothing claimable", res, err)
+	}
+
+	// An empty session ID never matches, not even a Claim made without one.
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Td", State: store.Ready}) // acme-4
+	f.claim(t, core.ClaimInput{Ticket: "4"})
+	_, err = f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "4"})
+	wantMessage(t, err, core.ActionNotAllowed, "",
+		"acme-4 is held by Claim 1 of another session; claim another Ticket, or ask the human to release it; if this session holds it, call claim again with your session_id")
+}
+
+func TestClaimingATicketAnotherSessionHoldsSaysWhoHoldsIt(t *testing.T) {
+	f := newFixture(t)
+	f.asking(t, qDB) // acme-2 Needs Answer under Claim 1 of sess-1
+	_, err := f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "2", SessionID: "sess-2"})
+	wantMessage(t, err, core.ActionNotAllowed, "",
+		"acme-2 is held by Claim 1 of another session; claim another Ticket, or ask the human to release it")
+	_, err = f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "2"})
+	wantMessage(t, err, core.ActionNotAllowed, "",
+		"acme-2 is held by Claim 1 of another session; claim another Ticket, or ask the human to release it; if this session holds it, call claim again with your session_id")
+}

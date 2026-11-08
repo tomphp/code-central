@@ -154,40 +154,43 @@ type CreateLinkedTicketInput struct {
 	Description string      `json:"description,omitempty"`
 	State       store.State `json:"state,omitempty"`
 	Link        LinkInput   `json:"link"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // CreateLinkedTicket is the integration's create_linked_ticket(spec,
-// title, description, state, link).
-func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLinkedTicketInput) (TicketView, error) {
+// title, description, state, link, full?).
+func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLinkedTicketInput) (Written[TicketView], error) {
 	if err := requireActor(ctx, "create_linked_ticket", Integration); err != nil {
-		return TicketView{}, err
+		return Written[TicketView]{}, err
 	}
 	if strings.TrimSpace(in.Title) == "" {
-		return TicketView{}, invalid("title", "a Ticket needs a title")
+		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
 	}
 	state := in.State
 	if state == "" {
 		state = store.Draft
 	}
 	if state != store.Draft && state != store.Ready {
-		return TicketView{}, invalid("state", "an Integration creates a Ticket in Draft or Ready, not %q", state)
+		return Written[TicketView]{}, invalid("state", "an Integration creates a Ticket in Draft or Ready, not %q", state)
 	}
 	if in.Spec == "" {
-		return TicketView{}, invalid("spec", "every Ticket belongs to a Spec")
+		return Written[TicketView]{}, invalid("spec", "every Ticket belongs to a Spec")
 	}
 	l, err := in.Link.link()
 	if err != nil {
-		return TicketView{}, err
+		return Written[TicketView]{}, err
 	}
-	var v TicketView
+	var v Written[TicketView]
 	err = c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		specN, err := specOf(w, key, in.Spec)
+		sp, err := resolveSpec(w, key, "create_linked_ticket", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
+		specN := sp.Number
 		if id, ok := linkedTo(w, key, l, false); ok {
 			return invalid("link.id", "%s %s is already linked to Ticket %s", l.Integration, l.ID, id)
 		}
@@ -196,22 +199,10 @@ func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLink
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}
-		v = c.ticketView(w, key, t)
-		return nil
+		v, err = acknowledgeCreate(c.ticketView(w, key, store.Ticket{}), c.ticketView(w, key, t), in.Full)
+		return err
 	})
 	return v, err
-}
-
-// specOf is the number of the Spec ref names, which must exist.
-func specOf(r store.Reader, key string, ref Ref) (int, error) {
-	n, err := ref.number(key, "spec")
-	if err != nil {
-		return 0, err
-	}
-	if _, ok := r.Spec(key, n); !ok {
-		return 0, invalid("spec", "there is no Spec %s", DisplayID(key, n))
-	}
-	return n, nil
 }
 
 // UpdateLinkedSpecInput is update_linked_spec's input. A field left out
@@ -271,28 +262,31 @@ type UpdateLinkedTicketInput struct {
 	Title       *string `json:"title,omitempty"`
 	Description *string `json:"description,omitempty"`
 	Spec        *Ref    `json:"spec,omitempty"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // UpdateLinkedTicket is the integration's update_linked_ticket(ticket,
-// title?, description?, spec?) on a Ticket whose Link isn't detached,
-// recorded in its edits.
-func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in UpdateLinkedTicketInput) (TicketView, error) {
+// title?, description?, spec?, full?) on a Ticket whose Link isn't
+// detached, recorded in its edits.
+func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in UpdateLinkedTicketInput) (Written[TicketView], error) {
 	if err := requireActor(ctx, "update_linked_ticket", Integration); err != nil {
-		return TicketView{}, err
+		return Written[TicketView]{}, err
 	}
 	if in.Title != nil && strings.TrimSpace(*in.Title) == "" {
-		return TicketView{}, invalid("title", "a Ticket needs a title")
+		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
 	}
-	return c.updateTicketIn(key, "update_linked_ticket", in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, "update_linked_ticket", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
 		if err := ownedByLink(DisplayID(key, t.Number), t.Link); err != nil {
 			return false, err
 		}
 		prev := map[string]string{}
 		if in.Spec != nil {
-			n, err := specOf(r, key, *in.Spec)
+			sp, err := resolveSpec(r, key, "update_linked_ticket", "spec", *in.Spec)
 			if err != nil {
 				return false, err
 			}
+			n := sp.Number
 			if n != t.Spec {
 				prev["spec"] = DisplayID(key, t.Spec)
 				t.Spec = n

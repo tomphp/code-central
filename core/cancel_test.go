@@ -14,7 +14,8 @@ func (f fixture) cancel(t *testing.T, c core.CancelInput, as ...core.Actor) core
 	if len(as) > 0 {
 		cx = core.WithActor(ctx, as[0])
 	}
-	v, err := f.core.Cancel(cx, "acme", c)
+	c.Full = true
+	v, err := record(f.core.Cancel(cx, "acme", c))
 	if err != nil {
 		t.Fatalf("cancel %s: %v", c.Ticket, err)
 	}
@@ -118,7 +119,7 @@ func TestACancelledBlockerWithNoReplacementsKeepsItsDependantsBlocked(t *testing
 		t.Fatalf("blocked %v claimable %v blockers %v", v.Blocked, v.Claimable, blockerIDs(v))
 	}
 	// Removing the stranded Blocker frees it.
-	if v, err := f.core.RemoveBlocker(human, "acme", core.BlockerInput{Ticket: "acme-2", Blocker: "acme-3"}); err != nil || v.Blocked {
+	if v, err := record(f.core.RemoveBlocker(human, "acme", core.BlockerInput{Ticket: "acme-2", Blocker: "acme-3", Full: true})); err != nil || v.Blocked {
 		t.Fatalf("remove: %v, blocked %v", err, v.Blocked)
 	}
 }

@@ -125,7 +125,7 @@ func TestSendBackMovesFailedToReadyKeepingItsPlace(t *testing.T) {
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Later", State: store.Ready})
 	f.clock.Set(t0.Add(2 * time.Hour))
 
-	v, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "Migration 12 is in now."})
+	v, err := record(f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "Migration 12 is in now.", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestSendBackMovesFailedToReadyKeepingItsPlace(t *testing.T) {
 func TestSendBackWithoutANoteStoresNoComment(t *testing.T) {
 	f := newFixture(t)
 	f.failed(t)
-	v, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2"})
+	v, err := record(f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestSendBackWithoutANoteStoresNoComment(t *testing.T) {
 func TestToDraftMovesFailedToDraft(t *testing.T) {
 	f := newFixture(t)
 	f.failed(t)
-	v, err := f.core.ToDraft(human, "acme", core.TicketInput{Ticket: "2"})
+	v, err := record(f.core.ToDraft(human, "acme", core.TicketInput{Ticket: "2", Full: true}))
 	if err != nil {
 		t.Fatal(err)
 	}

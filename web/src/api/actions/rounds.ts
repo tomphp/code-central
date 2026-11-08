@@ -5,13 +5,13 @@
 // that closes its last open Question moves the Ticket to Answered.
 import type { FakeApi } from "../fake";
 import { registerFakeAction } from "../fakeActions";
-import { ApiError, type RoundView, type TicketView } from "../types";
+import { ApiError, type RoundView, type TicketAcknowledgement, type TicketView } from "../types";
 
 declare module "../api" {
   interface TicketActions {
-    answer: { body: { question: number; text: string }; result: TicketView };
-    dismiss_question: { body: { question: number }; result: TicketView };
-    accept_recommended: { body: { round: number }; result: TicketView };
+    answer: { body: { question: number; text: string }; result: TicketAcknowledgement };
+    dismiss_question: { body: { question: number }; result: TicketAcknowledgement };
+    accept_recommended: { body: { round: number }; result: TicketAcknowledgement };
   }
 }
 

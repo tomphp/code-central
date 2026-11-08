@@ -111,7 +111,8 @@ type ClaimView struct {
 	LatestEvent *LatestEvent `json:"latest_event,omitempty"`
 }
 
-// TicketView is the full view of one Ticket, the same through every door.
+// TicketView is the full view of one Ticket, as every read returns it,
+// and as its writes return it with full.
 type TicketView struct {
 	ID           string            `json:"id"`
 	Title        string            `json:"title"`
@@ -186,6 +187,8 @@ type CreateTicketInput struct {
 	State       store.State `json:"state,omitempty"`
 	Labels      []string    `json:"labels,omitempty"`
 	BlockedBy   []Ref       `json:"blocked_by,omitempty"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // FindTicketsInput is find_tickets' filters; every filter given must match.
@@ -268,38 +271,37 @@ func (c *Core) CreateSpec(_ context.Context, key string, in CreateSpecInput) (Wr
 	return v, err
 }
 
-// CreateTicket is create_ticket(spec, title, description, state, labels).
-func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput) (TicketView, error) {
+// CreateTicket is create_ticket(spec, title, description, state, labels,
+// blocked_by, full?).
+func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput) (Written[TicketView], error) {
 	if strings.TrimSpace(in.Title) == "" {
-		return TicketView{}, invalid("title", "a Ticket needs a title")
+		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
 	}
 	state := in.State
 	if state == "" {
 		state = store.Draft
 	}
 	if state != store.Draft && state != store.Ready {
-		return TicketView{}, invalid("state", "a new Ticket is Draft or Ready, not %q", state)
+		return Written[TicketView]{}, invalid("state", "a new Ticket is Draft or Ready, not %q", state)
 	}
 	if in.Spec == "" {
-		return TicketView{}, invalid("spec", "every Ticket belongs to a Spec")
+		return Written[TicketView]{}, invalid("spec", "every Ticket belongs to a Spec")
 	}
 	if err := checkStageLabels("labels", in.Labels); err != nil {
-		return TicketView{}, err
+		return Written[TicketView]{}, err
 	}
-	var v TicketView
+	var v Written[TicketView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		specN, err := in.Spec.number(key, "spec")
+		sp, err := resolveSpec(w, key, "create_ticket", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
-		if _, ok := w.Spec(key, specN); !ok {
-			return invalid("spec", "there is no Spec %s", DisplayID(key, specN))
-		}
+		specN := sp.Number
 		// A new Ticket has no dependants yet, so its Blockers can't form a cycle.
-		blockedBy, err := ticketRefs(w, key, in.BlockedBy, "blocked_by")
+		blockedBy, err := ticketRefs(w, key, "create_ticket", "blocked_by", in.BlockedBy)
 		if err != nil {
 			return err
 		}
@@ -311,8 +313,8 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}
-		v = c.ticketView(w, key, t)
-		return nil
+		v, err = acknowledgeCreate(c.ticketView(w, key, store.Ticket{}), c.ticketView(w, key, t), in.Full)
+		return err
 	})
 	return v, err
 }
@@ -355,6 +357,11 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 		if in.Spec != "" {
 			n, err := in.Spec.number(key, "spec")
 			if err != nil {
+				return err
+			}
+			// A Ticket is rejected naming its Spec; a Spec that doesn't
+			// exist matches no Tickets.
+			if err := ticketNotSpec(r, key, "find_tickets", "spec", n); err != nil {
 				return err
 			}
 			specN = n

@@ -42,8 +42,11 @@ type opCase struct {
 	setup func(t *testing.T, srv *codecentraltest.Server)
 	ok    call
 	check func(t *testing.T, out map[string]any)
-	bad   call
-	code  core.Code
+	// full, on a write that acknowledges (ADR 0009), checks the record
+	// the same call returns with full.
+	full func(t *testing.T, out map[string]any)
+	bad  call
+	code core.Code
 	// cliUsage says the CLI's rejected call is a usage error (exit 1):
 	// the operation takes no input the service could reject.
 	cliUsage bool
@@ -71,6 +74,10 @@ var cases = map[string]opCase{
 			cli:  []string{"--title", "Search", "--body", "Find things."},
 		},
 		check: acknowledgement("acme-4", "title", "body"),
+		full: func(t *testing.T, out map[string]any) {
+			field("id", "acme-4")(t, out)
+			field("body", "Find things.")(t, out)
+		},
 		bad: call{
 			mcp:  map[string]any{"title": ""},
 			http: httpCall{"POST", "/api/p/acme/create_spec", `{"title":""}`},
@@ -84,7 +91,8 @@ var cases = map[string]opCase{
 			http: httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"Form","state":"Ready","labels":["ui"],"description":"Build it."}`},
 			cli:  []string{"--spec", "1", "--title", "Form", "--state", "Ready", "--label", "ui", "--description", "Build it."},
 		},
-		check: field("id", "acme-4"),
+		check: ticketAcknowledgement("acme-4", "Ready", "title", "state", "spec", "labels", "description", "claimable"),
+		full:  field("id", "acme-4"),
 		bad: call{
 			mcp:  map[string]any{"spec": "acme-9", "title": "Form"},
 			http: httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":"acme-9","title":"Form"}`},
@@ -171,14 +179,16 @@ var cases = map[string]opCase{
 	"accept": {
 		setup: ticketInReview,
 		ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/3/accept", `{}`}},
-		check: field("state", "Done"),
+		check: ticketAcknowledgement("acme-3", "Done", "state", "moves", "needs_me_reason"),
+		full:  field("state", "Done"),
 		bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/3/accept", `{}`}},
 		code:  core.ActionNotAllowed,
 	},
 	"reject": {
 		setup: ticketInReview,
 		ok:    call{http: httpCall{"POST", "/api/p/acme/tickets/3/reject", `{"comment":"Not yet."}`}},
-		check: field("state", "Ready"),
+		check: ticketAcknowledgement("acme-3", "Ready", "state", "comments", "moves", "claimable", "needs_me_reason"),
+		full:  field("state", "Ready"),
 		bad:   call{http: httpCall{"POST", "/api/p/acme/tickets/3/reject", `{"comment":""}`}},
 		code:  core.Invalid,
 	},
@@ -219,6 +229,13 @@ func init() {
 				cli:  []string{"acme-1", "--title", "Sign in", "--body", "New."},
 			},
 			check: acknowledgement("acme-1", "title", "body", "edits"),
+			full: func(t *testing.T, out map[string]any) {
+				field("title", "Sign in")(t, out)
+				field("body", "New.")(t, out)
+				if edits, _ := out["edits"].([]any); len(edits) != 1 {
+					t.Fatalf("edits %v", out["edits"])
+				}
+			},
 			bad: call{
 				mcp:  map[string]any{"spec": 2, "title": "X"},
 				http: httpCall{"POST", "/api/p/acme/specs/2/edit_spec", `{"title":"X"}`},
@@ -232,7 +249,8 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/2/edit_ticket", `{"title":"Form","description":"Build it."}`},
 				cli:  []string{"2", "--title", "Form", "--description", "Build it."},
 			},
-			check: func(t *testing.T, out map[string]any) {
+			check: ticketAcknowledgement("acme-2", "Draft", "title", "description", "edits"),
+			full: func(t *testing.T, out map[string]any) {
 				field("title", "Form")(t, out)
 				field("description", "Build it.")(t, out)
 			},
@@ -313,7 +331,8 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/comment", `{"body":"Looks fine."}`},
 				cli:  []string{"3", "--body", "Looks fine."},
 			},
-			check: func(t *testing.T, out map[string]any) {
+			check: ticketAcknowledgement("acme-3", "Ready", "comments"),
+			full: func(t *testing.T, out map[string]any) {
 				cs, _ := out["comments"].([]any)
 				if len(cs) != 1 || cs[0].(map[string]any)["body"] != "Looks fine." {
 					t.Fatalf("comments %v", out["comments"])
@@ -332,7 +351,8 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/2/approve", `{}`},
 				cli:  []string{"acme-2"},
 			},
-			check: field("state", "Ready"),
+			check: ticketAcknowledgement("acme-2", "Ready", "state", "moves", "claimable"),
+			full:  field("state", "Ready"),
 			bad: call{
 				mcp:  map[string]any{"ticket": 3},
 				http: httpCall{"POST", "/api/p/acme/tickets/3/approve", ``},
@@ -346,7 +366,8 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/defer", `{"reason":"Not yet."}`},
 				cli:  []string{"3", "--reason", "Not yet."},
 			},
-			check: field("state", "Draft"),
+			check: ticketAcknowledgement("acme-3", "Draft", "state", "comments", "moves", "claimable"),
+			full:  field("state", "Draft"),
 			bad: call{
 				mcp:  map[string]any{"ticket": 3},
 				http: httpCall{"POST", "/api/p/acme/tickets/3/defer", `{}`},
@@ -617,6 +638,21 @@ func TestIDsOfTheWrongKindAreRejectedNamingTheOperationToUse(t *testing.T) {
 			if e.Message != want {
 				t.Errorf("%s: message %q, want %q", []string{"mcp", "http", "cli"}[i], e.Message, want)
 			}
+		}
+	}
+}
+
+func TestATicketGivenAsSpecIsRejectedNamingTheFieldAndItsSpec(t *testing.T) {
+	srv := newServer(t) // acme-1 is a Spec, acme-2 a Ticket of it
+	s := connect(t, srv, "acme")
+	want := "acme-2 is a Ticket of Spec acme-1; pass acme-1 as spec"
+	for i, e := range []core.Error{
+		mcpRejected(t, s, "create_ticket", map[string]any{"spec": "acme-2", "title": "Form"}, core.Invalid),
+		httpRejected(t, srv, httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":"acme-2","title":"Form"}`}, core.Invalid),
+		cliRejected(t, srv, []string{"create-ticket", "--spec", "acme-2", "--title", "Form"}, core.Invalid),
+	} {
+		if e.Field != "spec" || e.Message != want {
+			t.Errorf("%s: field %q message %q, want spec %q", []string{"mcp", "http", "cli"}[i], e.Field, e.Message, want)
 		}
 	}
 }
