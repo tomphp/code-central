@@ -22,6 +22,7 @@ const (
 	ReasonNeedsAnswer        NeedsMeReason = "needs_answer"
 	ReasonAnswered           NeedsMeReason = "answered"
 	ReasonSilentClaim        NeedsMeReason = "silent_claim"
+	ReasonLongClaim          NeedsMeReason = "long_claim"
 	ReasonFailed             NeedsMeReason = "failed"
 	ReasonInReview           NeedsMeReason = "in_review"
 	ReasonBlockedByCancelled NeedsMeReason = "blocked_by_cancelled"
@@ -36,6 +37,7 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonNeedsAnswer, "Needs Answer: a Round waits for the human's answers"},
 	{ReasonAnswered, "Answered: the answers wait for the asking session to pick them up"},
 	{ReasonSilentClaim, "Silent Claim: In Progress with no activity for 30 minutes"},
+	{ReasonLongClaim, "Long Claim: In Progress and active, but no move (claim or pick_up_answers) for more than 60 minutes"},
 	{ReasonFailed, "Failed: a Failure Report waits for the human"},
 	{ReasonInReview, "In Review: finished work waits to be accepted or rejected"},
 	{ReasonBlockedByCancelled, "Blocked by a Cancelled Ticket with no Replacements"},
@@ -64,6 +66,7 @@ type NeedsMeGroup struct {
 // NeedsMeRow is one waiting Ticket with what its one-line detail needs.
 // Since is when it started waiting: the Round posted, the last answer,
 // the last activity (Silent Claim, so the quiet time is now minus it),
+// the last move (Long Claim),
 // the Failure Report, the finish, or the Blocker's cancel. Only the
 // detail field for its reason is set.
 type NeedsMeRow struct {
@@ -195,6 +198,9 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 	case store.InProgress:
 		if s := c.silentSince(t); s != nil {
 			return ReasonSilentClaim, *s
+		}
+		if s := c.longSince(t); s != nil {
+			return ReasonLongClaim, *s
 		}
 	case store.Failed:
 		return ReasonFailed, entered(t)
