@@ -38,7 +38,7 @@ Run this by hand once v1 is built (`make build`). These paths can't be automated
 ## Real Claude Code
 
 - [ ] `code-central init` in a repository; a new session lists the `code-central` MCP server.
-- [ ] The PreToolUse hook `code-central hook session-id` adds `session_id` to `claim`, `set_session` and `post_round` (and `working_dir` to `claim` and `set_session`) through `updatedInput`, and the normal permission prompt still appears.
+- [ ] The PreToolUse hook `code-central hook session-id` adds `session_id` and `client_version` to `claim`, `set_session` and `post_round` (and `working_dir` to `claim` and `set_session`) through `updatedInput`, and the normal permission prompt still appears.
 - [ ] `CLAUDE_CODE_SESSION_ID` is set in the session's Bash tool and matches the hook's `session_id`.
 - [ ] The PostToolUse hook `code-central ping` keeps a Claim from turning Silent, and never slows or blocks a tool call, even with the service stopped.
 - [ ] `code-central service restart` while a session is mid-`wait`: `wait` resumes, and the MCP server reconnects without the session marking it failed.
