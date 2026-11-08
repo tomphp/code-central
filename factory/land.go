@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -53,8 +54,11 @@ func (f *factory) detectHandMerges(ctx context.Context) {
 }
 
 // mergeableStates are the States a Ticket with a finish commit can be in
-// short of Accepted, Done and Cancelled.
-var mergeableStates = []store.State{store.InReview, store.Ready, store.InProgress, store.NeedsAnswer, store.Answered, store.Failed}
+// short of Accepted, Done and Cancelled: every State but those and Draft,
+// which comes before any work.
+var mergeableStates = slices.DeleteFunc(slices.Clone(store.States), func(s store.State) bool {
+	return s == store.Draft || s == store.Accepted || s == store.Done || s == store.Cancelled
+})
 
 // inBase reports whether commit is reachable from the base.
 func (f *factory) inBase(commit string) bool {
@@ -155,6 +159,7 @@ func (f *factory) cantLandYet(ctx context.Context, tk core.TicketView, why strin
 	}
 }
 
+// firstLine is s up to its first newline.
 func firstLine(s string) string {
 	l, _, _ := strings.Cut(s, "\n")
 	return l
