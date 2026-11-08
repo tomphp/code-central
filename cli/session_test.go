@@ -198,7 +198,7 @@ func hookUpdatedInput(t *testing.T, stdin string) map[string]any {
 	return out.HookSpecificOutput.UpdatedInput
 }
 
-func TestHookSessionIDFillsClaimsWorkingDirFromTheHooksCwd(t *testing.T) {
+func TestHookSessionIDFillsClaimAndSetSessionsWorkingDirFromTheHooksCwd(t *testing.T) {
 	got := hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__claim","tool_input":{"spec":"acme-1"}}`)
 	if len(got) != 3 || got["session_id"] != "abc" || got["working_dir"] != "/work/acme" {
 		t.Fatalf("updatedInput %v", got)
@@ -206,6 +206,11 @@ func TestHookSessionIDFillsClaimsWorkingDirFromTheHooksCwd(t *testing.T) {
 	// A working_dir the agent gave is kept.
 	got = hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__claim","tool_input":{"working_dir":"/elsewhere"}}`)
 	if got["working_dir"] != "/elsewhere" {
+		t.Fatalf("updatedInput %v", got)
+	}
+	// set_session takes one too.
+	got = hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__set_session","tool_input":{"ticket":"acme-2","claim_id":"c1"}}`)
+	if len(got) != 4 || got["session_id"] != "abc" || got["working_dir"] != "/work/acme" {
 		t.Fatalf("updatedInput %v", got)
 	}
 	// post_round takes no working_dir, so it gets none.
@@ -278,7 +283,7 @@ func TestInitWritesTheHooks(t *testing.T) {
 	ok(t, runIn(t, dir, map[string]string{"CODE_CENTRAL_URL": srv.URL}, "\ny\n", "init"))
 	doc := settings(t, dir)
 	want := map[string]map[string][]string{
-		"PreToolUse":  {"mcp__code-central__claim|mcp__code-central__post_round": {"code-central hook session-id"}},
+		"PreToolUse":  {"mcp__code-central__claim|mcp__code-central__set_session|mcp__code-central__post_round": {"code-central hook session-id"}},
 		"PostToolUse": {"Write": {"gofmt -w"}, "*": {"code-central ping"}},
 	}
 	got := hookCommands(doc)
