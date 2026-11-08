@@ -7,8 +7,12 @@
 .qstatus { position: absolute; right: 0; top: 10px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; background: var(--surface-2); color: var(--muted); }
 .qstatus-answered { color: var(--r-review); }
 .question-body { clear: both; }
-.question-body .markdown p, .question-body .markdown ul, .question-body .markdown ol, .question-body .markdown pre, .question-body .markdown table, .question-body .markdown blockquote { margin-bottom: 6px; }
-.question-body .markdown h1, .question-body .markdown h2, .question-body .markdown h3, .question-body .markdown h4, .question-body .markdown h5, .question-body .markdown h6 { margin: 8px 0 4px; }
+/* A Question's body as Markdown (ticket 88): tighter than the shared
+   .markdown rules so a Round stays compact, with the edges still zeroed. */
+.question-body .markdown > * { margin-bottom: 6px; }
+.question-body .markdown > :is(h1, h2, h3, h4, h5, h6) { margin-top: 8px; margin-bottom: 4px; }
+.question-body .markdown > :first-child { margin-top: 0; }
+.question-body .markdown > :last-child { margin-bottom: 0; }
 .question textarea { width: 100%; box-sizing: border-box; resize: vertical; }
 .question-dismissed .question-body, .question-dismissed textarea { opacity: .6; }
 .draft-note { font-size: 12px; color: var(--r-answer); }

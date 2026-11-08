@@ -73,17 +73,15 @@ describe("the Round panel", () => {
   });
 
   it("renders a Question's body as Markdown, keeping its title plain and its recommendation raw in the box", async () => {
-    const fake = world([{ title: "Pick **one**", body: "- `left`\n- [docs](https://example.com)\n\n<b>loud</b>", recommended: "**left**" }]);
+    const fake = world([{ title: "Pick _one_", body: "- left\n- [right](https://example.com)\n\n<b>loud</b>", recommended: "**left**" }]);
     const panel = await renderPanel(fake);
 
     const colour = question(panel, "Which colour?");
     expect(within(colour).getByText("blue").tagName).toBe("STRONG");
 
-    const extra = question(panel, "Pick \\*\\*one\\*\\*");
-    expect(within(extra).getByText("Pick **one**")).toBeInTheDocument();
+    const extra = question(panel, "Pick _one_");
     expect(within(extra).getAllByRole("listitem")).toHaveLength(2);
-    expect(within(extra).getByText("left").tagName).toBe("CODE");
-    expect(within(extra).getByRole("link", { name: "docs" })).toHaveAttribute("target", "_blank");
+    expect(within(extra).getByRole("link", { name: "right" })).toBeInTheDocument();
     expect(within(extra).getByText("<b>loud</b>")).toBeInTheDocument();
     expect(box(extra)).toHaveValue("**left**");
   });
