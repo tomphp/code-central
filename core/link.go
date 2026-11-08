@@ -186,10 +186,11 @@ func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLink
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		specN, err := specOf(w, key, in.Spec)
+		sp, err := resolveSpec(w, key, "create_linked_ticket", "spec", in.Spec)
 		if err != nil {
 			return err
 		}
+		specN := sp.Number
 		if id, ok := linkedTo(w, key, l, false); ok {
 			return invalid("link.id", "%s %s is already linked to Ticket %s", l.Integration, l.ID, id)
 		}
@@ -202,18 +203,6 @@ func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLink
 		return err
 	})
 	return v, err
-}
-
-// specOf is the number of the Spec ref names, which must exist.
-func specOf(r store.Reader, key string, ref Ref) (int, error) {
-	n, err := ref.number(key, "spec")
-	if err != nil {
-		return 0, err
-	}
-	if _, ok := r.Spec(key, n); !ok {
-		return 0, invalid("spec", "there is no Spec %s", DisplayID(key, n))
-	}
-	return n, nil
 }
 
 // UpdateLinkedSpecInput is update_linked_spec's input. A field left out
@@ -293,10 +282,11 @@ func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in UpdateLink
 		}
 		prev := map[string]string{}
 		if in.Spec != nil {
-			n, err := specOf(r, key, *in.Spec)
+			sp, err := resolveSpec(r, key, "update_linked_ticket", "spec", *in.Spec)
 			if err != nil {
 				return false, err
 			}
+			n := sp.Number
 			if n != t.Spec {
 				prev["spec"] = DisplayID(key, t.Spec)
 				t.Spec = n

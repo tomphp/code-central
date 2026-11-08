@@ -133,16 +133,16 @@ func TestSpecWritesWithFullReturnTheSpec(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		// The full read adds the Spec's Tickets and State summary to the
-		// record a write returns.
+		// get_spec's full read adds the Spec's Tickets and more to the
+		// record, so only the record's keys are compared.
 		want := resultJSON(t, get)
-		if _, ok := out["body"]; !ok {
-			t.Fatalf("%s with full: %v, want the Spec %v", name, out, want)
-		}
-		for k, got := range out {
-			if !reflect.DeepEqual(got, want[k]) {
-				t.Fatalf("%s with full: %s is %v, want the Spec's %v", name, k, got, want[k])
+		for k := range want {
+			if _, ok := resultJSON(t, core.SpecView{})[k]; !ok && k != "link" {
+				delete(want, k)
 			}
+		}
+		if !reflect.DeepEqual(out, want) {
+			t.Fatalf("%s with full: %v, want the Spec %v", name, out, want)
 		}
 	}
 }

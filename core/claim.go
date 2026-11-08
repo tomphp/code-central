@@ -110,12 +110,11 @@ func claimTarget(r store.Reader, key string, in ClaimInput) (t store.Ticket, fou
 	}
 	specN := 0
 	if in.Spec != "" {
-		if specN, err = in.Spec.number(key, "spec"); err != nil {
+		sp, err := resolveSpec(r, key, "claim", "spec", in.Spec)
+		if err != nil {
 			return t, false, err
 		}
-		if _, ok := r.Spec(key, specN); !ok {
-			return t, false, invalid("spec", "there is no Spec %s", DisplayID(key, specN))
-		}
+		specN = sp.Number
 	}
 	tickets := r.Tickets(key)
 	slices.SortStableFunc(tickets, claimOrder)

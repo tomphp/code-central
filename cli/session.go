@@ -139,6 +139,9 @@ func runHook(_ context.Context, e Env, args []string) error {
 		input = map[string]any{}
 	}
 	input["session_id"] = in.SessionID
+	// The CLI's version goes alongside, so a service of another version
+	// names both versions when it rejects a field it doesn't know.
+	input["client_version"] = e.version()
 	// claim and set_session also get the session's working directory,
 	// unless the agent gave one. post_round takes none, and decodes
 	// strictly.

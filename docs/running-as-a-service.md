@@ -26,6 +26,8 @@ code-central service restart
 
 `service restart` restarts the installed service. The service never watches for its binary being replaced, so the restart is what picks up the new version. A restart loses nothing: Claims, Rounds and all other state live in the store, the service finishes in-flight writes before it stops, and `code-central wait` retries until the service is back. Keep restarts short, because Claude Code marks an MCP server failed after about 31 seconds.
 
+Until you restart, a newer hook or CLI may send a field the old service doesn't know, and the call fails with `invalid JSON: json: unknown field "<name>"`. Since the service learned to name the versions (see [Versions](#versions)), that error names both and says to run `code-central service restart`. A service from before that change doesn't know `client_version` itself, so a new hook's first `claim`, `set_session` or `post_round` fails once on `unknown field "client_version"` with no hint. Restarting the service fixes it.
+
 ### The store is migrated at startup
 
 `store.yaml` records the store's `format`. When a new binary finds an older one, `serve` migrates the store before it binds the port. There is no separate `migrate` command, so a login item never crash-loops after an upgrade. Startup runs in this order:
@@ -66,6 +68,14 @@ Running it again rewrites the files it generated without asking, and asks before
 ## Versions
 
 `make build` stamps `git describe --tags --always --dirty` as the version. `code-central --version` prints it, and the service sends it in the `X-Code-Central-Version` response header.
+
+A client sends its own version in the `X-Code-Central-Client-Version` request header. The CLI sends it on every request, and any HTTP client may. MCP calls can't carry a header from the CLI, so an MCP client sends it as a top-level `client_version` field instead, which every operation accepts without listing it and which wins over the header. When the service rejects a request for an unknown field, the error says whether the versions are the likely cause:
+
+- the client's version differs from the service's: ``invalid JSON: json: unknown field "working_dir": the caller is version v1.9 and the service is v1.8; run `code-central service restart` ``
+- the client sent no version: ``invalid JSON: json: unknown field "x" (the service is v1.8; if your client is newer, run `code-central service restart`) ``
+- the versions are equal: the field is just unknown, and the message says no more.
+
+Versions are compared for equality only. Other errors (a wrong type, trailing data) never get the hint.
 
 A CLI of a different version keeps working but warns on stderr. When both versions are clean tags, the warning names the older side: "run `code-central service restart`" when the service is older (you replaced the binary but didn't restart), or "this CLI is older than the service" (for example a stale copy inside a sandbox).
 

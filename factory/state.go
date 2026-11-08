@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 )
 
 // claim is one Claim the Factory holds, as the state file keeps it. The
@@ -53,12 +52,15 @@ type stateFile struct {
 	claims []claim
 }
 
+// errLockHeld means another process holds the lock lockFile tried.
+var errLockHeld = errors.New("the lock is held")
+
 type stateDoc struct {
 	Claims []claim `json:"claims"`
 }
 
-// lock takes the exclusive flock that makes this the Project's only local
-// Factory, for as long as the returned file stays open. The lock is on
+// lock takes the exclusive lock (lockFile) that makes this the Project's
+// only local Factory, for as long as the returned file stays open. The lock is on
 // <state file>.lock rather than the state file itself: each atomic write
 // renames a new file into place, which would drop a lock held on the old
 // one. The lock file holds the holder's pid.
@@ -67,10 +69,10 @@ func (s *stateFile) lock(project string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(lf.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := lockFile(lf); err != nil {
 		b, _ := os.ReadFile(lf.Name())
 		lf.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) {
+		if errors.Is(err, errLockHeld) {
 			return nil, fmt.Errorf("a Factory is already running for %s (pid %s)", project, strings.TrimSpace(string(b)))
 		}
 		return nil, err

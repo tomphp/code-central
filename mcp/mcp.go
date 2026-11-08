@@ -38,7 +38,7 @@ var tools = map[string]tool{
 		}, "title"),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.CreateSpecInput
-			if err := core.Decode(args, &in); err != nil {
+			if err := core.Decode(ctx, args, &in); err != nil {
 				return nil, err
 			}
 			return c.CreateSpec(ctx, key, in)
@@ -57,7 +57,7 @@ var tools = map[string]tool{
 		}, "spec", "title"),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.CreateTicketInput
-			if err := core.Decode(args, &in); err != nil {
+			if err := core.Decode(ctx, args, &in); err != nil {
 				return nil, err
 			}
 			return c.CreateTicket(ctx, key, in)
@@ -70,7 +70,7 @@ var tools = map[string]tool{
 			var in struct {
 				Ticket core.Ref `json:"ticket"`
 			}
-			if err := core.Decode(args, &in); err != nil {
+			if err := core.Decode(ctx, args, &in); err != nil {
 				return nil, err
 			}
 			return c.GetTicket(ctx, key, in.Ticket)
@@ -88,7 +88,7 @@ var tools = map[string]tool{
 		}),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.FindTicketsInput
-			if err := core.Decode(args, &in); err != nil {
+			if err := core.Decode(ctx, args, &in); err != nil {
 				return nil, err
 			}
 			return c.FindTickets(ctx, key, in)
@@ -105,7 +105,7 @@ var tools = map[string]tool{
 		}),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.ClaimInput
-			if err := core.Decode(args, &in); err != nil {
+			if err := core.Decode(ctx, args, &in); err != nil {
 				return nil, err
 			}
 			return c.Claim(ctx, key, in)
@@ -122,7 +122,7 @@ var tools = map[string]tool{
 		}, "ticket", "claim_id", "summary"),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.FinishInput
-			if err := core.Decode(args, &in); err != nil {
+			if err := core.Decode(ctx, args, &in); err != nil {
 				return nil, err
 			}
 			return c.Finish(ctx, key, in)
@@ -153,7 +153,7 @@ var sessionTools = map[string]tool{
 		}, "ticket", "claim_id", "session_id"),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.SetSessionInput
-			if err := core.Decode(args, &in); err != nil {
+			if err := core.Decode(ctx, args, &in); err != nil {
 				return nil, err
 			}
 			return c.SetSession(ctx, key, in)
@@ -245,7 +245,7 @@ var definingTools = map[string]tool{
 func decoded[In any](f func(ctx context.Context, c *core.Core, key string, in In) (any, error)) func(context.Context, *core.Core, string, []byte) (any, error) {
 	return func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 		var in In
-		if err := core.Decode(args, &in); err != nil {
+		if err := core.Decode(ctx, args, &in); err != nil {
 			return nil, err
 		}
 		return f(ctx, c, key, in)
