@@ -3,8 +3,9 @@ package core
 import "github.com/tomoram/code-central/store"
 
 // Specs and Tickets share one number counter per Project, so a number
-// that isn't the kind asked for may be the other kind. resolveTicket and
-// resolveSpec are the one place that says so, naming what to do instead.
+// that isn't the kind asked for may be the other kind. specNotTicket and
+// ticketNotSpec, which resolveTicket and resolveSpec call, are the one
+// place that says so, naming what to do instead.
 // op is the snake_case operation name and field the input it came in: the
 // operation's main target fails not_found, a nested field invalid with
 // the field.

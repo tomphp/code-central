@@ -132,10 +132,11 @@ func TestSpecWritesWithFullReturnTheSpec(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
-		// get_spec's full read adds the Spec's Tickets and more to the record.
+		// get_spec's full read adds the Spec's Tickets and more to the
+		// record, so only the record's keys are compared.
 		want := resultJSON(t, get)
 		for k := range want {
-			if _, ok := out[k]; !ok {
+			if _, ok := resultJSON(t, core.SpecView{})[k]; !ok && k != "link" {
 				delete(want, k)
 			}
 		}

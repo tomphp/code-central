@@ -355,7 +355,8 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 			if err != nil {
 				return err
 			}
-			// A Spec that doesn't exist matches no Tickets.
+			// A Ticket is rejected naming its Spec; a Spec that doesn't
+			// exist matches no Tickets.
 			if err := ticketNotSpec(r, key, "find_tickets", "spec", n); err != nil {
 				return err
 			}

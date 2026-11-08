@@ -35,11 +35,11 @@ type BlockerView struct {
 // writes nothing; one that would form a cycle is rejected with cycle.
 func (c *Core) AddBlocker(_ context.Context, key string, in BlockerInput) (TicketView, error) {
 	return c.updateTicketIn(key, "add_blocker", in.Ticket, func(r store.Reader, t *store.Ticket) (bool, error) {
-		bt, err := resolveTicket(r, key, "add_blocker", "blocker", in.Blocker)
+		blocker, err := resolveTicket(r, key, "add_blocker", "blocker", in.Blocker)
 		if err != nil {
 			return false, err
 		}
-		b := bt.Number
+		b := blocker.Number
 		if b == t.Number {
 			return false, &Error{Code: Cycle, Message: fmt.Sprintf("%s can't block itself", DisplayID(key, b))}
 		}

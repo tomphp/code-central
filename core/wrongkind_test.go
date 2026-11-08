@@ -16,7 +16,18 @@ func (f fixture) wrongKind(t *testing.T) {
 // wantNotFound checks err is not_found, with no field, saying msg.
 func wantNotFound(t *testing.T, err error, msg string) {
 	t.Helper()
-	wantCode(t, err, core.NotFound, "")
+	wantMessage(t, err, core.NotFound, "", msg)
+}
+
+// wantInvalid checks err is invalid with field, saying msg.
+func wantInvalid(t *testing.T, err error, field, msg string) {
+	t.Helper()
+	wantMessage(t, err, core.Invalid, field, msg)
+}
+
+func wantMessage(t *testing.T, err error, code core.Code, field, msg string) {
+	t.Helper()
+	wantCode(t, err, code, field)
 	if got := err.(*core.Error).Message; got != msg {
 		t.Fatalf("message %q, want %q", got, msg)
 	}
@@ -257,15 +268,6 @@ func nestedOps(f fixture) map[string]nestedOp {
 			_, err := c.Cancel(human, "acme", core.CancelInput{Ticket: "2", Replacements: []core.Ref{r}})
 			return err
 		}, noTicket},
-	}
-}
-
-// wantInvalid checks err is invalid with field, saying msg.
-func wantInvalid(t *testing.T, err error, field, msg string) {
-	t.Helper()
-	wantCode(t, err, core.Invalid, field)
-	if got := err.(*core.Error).Message; got != msg {
-		t.Fatalf("message %q, want %q", got, msg)
 	}
 }
 
