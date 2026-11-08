@@ -13,6 +13,7 @@
   --r-long: #475569;
   --r-failed: #dc2626;
   --r-review: #059669;
+  --r-landing: #0f766e;
   --r-blocked: #a16207;
   --r-external: #0e7490;
   color-scheme: light;
@@ -61,6 +62,7 @@ textarea { width: 100%; resize: vertical; }
 .reason-long_claim { --rc: var(--r-long); }
 .reason-failed { --rc: var(--r-failed); }
 .reason-in_review { --rc: var(--r-review); }
+.reason-accepted_not_landed { --rc: var(--r-landing); }
 .reason-blocked_by_cancelled { --rc: var(--r-blocked); }
 .reason-closed_externally { --rc: var(--r-external); }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--rc, var(--r-answer)); flex: none; }

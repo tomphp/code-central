@@ -131,13 +131,14 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 	if strings.TrimSpace(in.Summary) == "" {
 		return FinishResult{}, invalid("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
 	}
-	v, err := c.actThen(ctx, key, in.Ticket, "finish", in.ClaimID, in.Summary, func(t *store.Ticket) {
+	v, err := c.actThen(ctx, key, in.Ticket, "finish", in.ClaimID, in.Summary, func(t *store.Ticket) error {
 		if b := strings.TrimSpace(in.Branch); b != "" {
 			t.Branch = b
 		}
 		if cm := strings.TrimSpace(in.Commit); cm != "" {
 			t.Commit = cm
 		}
+		return nil
 	})
 	if err != nil {
 		return FinishResult{}, err
@@ -172,9 +173,10 @@ func (c *Core) Land(ctx context.Context, key string, in LandInput) (TicketView, 
 	if commit == "" {
 		return TicketView{}, invalid("commit", "land needs the commit that put the work into the base")
 	}
-	return c.actThen(ctx, key, in.Ticket, "land", "", "", func(t *store.Ticket) {
+	return c.actThen(ctx, key, in.Ticket, "land", "", "", func(t *store.Ticket) error {
 		m := &t.Moves[len(t.Moves)-1]
 		m.Via, m.Commit = "merge", commit
+		return nil
 	})
 }
 
@@ -196,8 +198,8 @@ func (c *Core) act(ctx context.Context, key string, ref Ref, name, claimID, note
 }
 
 // actThen is act with then applied to the Ticket after the transition,
-// in the same write.
-func (c *Core) actThen(ctx context.Context, key string, ref Ref, name, claimID, note string, then func(*store.Ticket)) (TicketView, error) {
+// in the same write. An error from then abandons the write.
+func (c *Core) actThen(ctx context.Context, key string, ref Ref, name, claimID, note string, then func(*store.Ticket) error) (TicketView, error) {
 	return c.updateTicket(key, ref, func(t *store.Ticket) (bool, error) {
 		claim := 0
 		if live, ok := liveClaim(*t); ok {
@@ -211,7 +213,9 @@ func (c *Core) actThen(ctx context.Context, key string, ref Ref, name, claimID, 
 			addComment(t, ActorOf(ctx), now, claim, note)
 		}
 		if then != nil {
-			then(t)
+			if err := then(t); err != nil {
+				return false, err
+			}
 		}
 		return true, nil
 	})
