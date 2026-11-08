@@ -107,9 +107,13 @@ type Claim struct {
 	Number    int
 	ID        string // the Claim ID; never returned by a read
 	SessionID string
-	Started   time.Time
-	Ended     time.Time // zero while the Claim is live
-	EndedBy   string    // the action that ended it
+	// WorkingDir and ResumeCommand are free-form, never parsed: how the
+	// human gets back into the Claim's session.
+	WorkingDir    string
+	ResumeCommand string
+	Started       time.Time
+	Ended         time.Time // zero while the Claim is live
+	EndedBy       string    // the action that ended it
 }
 
 // FailureReport is one numbered, permanent report of why an agent with
@@ -118,6 +122,8 @@ type FailureReport struct {
 	Number          int
 	Claim           int
 	SessionID       string // the Claim's session ID when the report was posted
+	WorkingDir      string // the Claim's working directory then
+	ResumeCommand   string // the Claim's Resume Command then
 	Actor           string
 	Time            time.Time
 	WhatBroke       string

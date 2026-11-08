@@ -13,6 +13,10 @@ type ClaimInput struct {
 	Spec      Ref    `json:"spec,omitempty"`
 	Ticket    Ref    `json:"ticket,omitempty"`
 	SessionID string `json:"session_id,omitempty"`
+	// WorkingDir and ResumeCommand are free-form and never parsed; nil
+	// leaves them unset.
+	WorkingDir    *string `json:"working_dir,omitempty"`
+	ResumeCommand *string `json:"resume_command,omitempty"`
 }
 
 // ClaimResult is claim's result: the Claim ID with the full Ticket view,
@@ -44,7 +48,7 @@ type RejectInput struct {
 // stopWorking is the next step after an action that ends the agent's work.
 const stopWorking = "stop working this Ticket"
 
-// Claim is claim(spec?, ticket?, session_id?): the next claimable Ticket
+// Claim is claim(spec?, ticket?, session_id?, working_dir?, resume_command?): the next claimable Ticket
 // in claim order (or the named one) moves to In Progress under a new
 // Claim, in one atomic step under the store's write lock.
 func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResult, error) {
@@ -64,7 +68,9 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 			return blockedError(w, key, t, ActorOf(ctx))
 		}
 		now := c.now()
-		t.Claims = append(t.Claims, store.Claim{Number: len(t.Claims) + 1, SessionID: in.SessionID, Started: now})
+		cl := store.Claim{Number: len(t.Claims) + 1, SessionID: in.SessionID, Started: now}
+		setResume(&cl, in.WorkingDir, in.ResumeCommand)
+		t.Claims = append(t.Claims, cl)
 		if err := transition(ctx, &t, key, "claim", "", now); err != nil {
 			return err
 		}

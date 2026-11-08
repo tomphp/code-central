@@ -86,9 +86,13 @@ type MoveView struct {
 
 // ClaimView is one Claim as reads show it: never with its Claim ID.
 type ClaimView struct {
-	Number    int       `json:"number"`
-	SessionID string    `json:"session_id,omitempty"`
-	Started   time.Time `json:"started"`
+	Number    int    `json:"number"`
+	SessionID string `json:"session_id,omitempty"`
+	// WorkingDir and ResumeCommand are as the holder last set them, empty
+	// when unset: never a filled-in default.
+	WorkingDir    string    `json:"working_dir,omitempty"`
+	ResumeCommand string    `json:"resume_command,omitempty"`
+	Started       time.Time `json:"started"`
 	// LastActivity is the latest write the Claim's agent made on the Ticket.
 	LastActivity time.Time  `json:"last_activity"`
 	Ended        *time.Time `json:"ended,omitempty"`
@@ -436,7 +440,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		Blocked: blocked(r, key, t), Link: linkView(t.Link),
 	}
 	for _, cl := range t.Claims {
-		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy}
+		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, WorkingDir: cl.WorkingDir, ResumeCommand: cl.ResumeCommand, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy}
 		if !cl.Live() {
 			ended := cl.Ended
 			cv.Ended = &ended

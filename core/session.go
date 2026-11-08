@@ -7,28 +7,44 @@ import (
 )
 
 // SetSessionInput is set_session's input. The session ID is never
-// checked; it is only shown to the human for resuming the session.
+// checked; it is only shown to the human for resuming the session. The
+// working directory and Resume Command are free-form and never parsed:
+// one that isn't given (nil) leaves the stored value alone, and one given
+// empty clears it.
 type SetSessionInput struct {
-	Ticket    Ref    `json:"ticket"`
-	ClaimID   string `json:"claim_id"`
-	SessionID string `json:"session_id"`
+	Ticket        Ref     `json:"ticket"`
+	ClaimID       string  `json:"claim_id"`
+	SessionID     string  `json:"session_id"`
+	WorkingDir    *string `json:"working_dir,omitempty"`
+	ResumeCommand *string `json:"resume_command,omitempty"`
 }
 
-// SetSession is set_session(ticket, claim_id, session_id): the holder
-// records the session now working its Claim, in any State the Claim
-// spans. Pings from that session then count as the Claim's activity.
+// SetSession is set_session(ticket, claim_id, session_id, working_dir?,
+// resume_command?): the holder records the session now working its Claim,
+// in any State the Claim spans, and how to get back into it. Pings from
+// that session then count as the Claim's activity. The last write wins.
 func (c *Core) SetSession(_ context.Context, key string, in SetSessionInput) (TicketView, error) {
 	return c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
 		cl, err := holder(t, key, in.ClaimID)
 		if err != nil {
 			return false, err
 		}
-		if cl.SessionID == in.SessionID {
-			return false, nil
-		}
+		before := *cl
 		cl.SessionID = in.SessionID
-		return true, nil
+		setResume(cl, in.WorkingDir, in.ResumeCommand)
+		return *cl != before, nil
 	})
+}
+
+// setResume writes each of the working directory and Resume Command that
+// is given, leaving the others as they are.
+func setResume(cl *store.Claim, workingDir, resumeCommand *string) {
+	if workingDir != nil {
+		cl.WorkingDir = *workingDir
+	}
+	if resumeCommand != nil {
+		cl.ResumeCommand = *resumeCommand
+	}
 }
 
 // ReleaseInput is release's input; the note is optional.

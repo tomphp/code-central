@@ -21,6 +21,7 @@ export type NeedsMeReason =
   | "needs_answer"
   | "answered"
   | "silent_claim"
+  | "long_claim"
   | "failed"
   | "in_review"
   | "blocked_by_cancelled"
@@ -168,6 +169,9 @@ export interface SpecQuestions {
 export interface ClaimView {
   number: number;
   session_id?: string;
+  // As the holder last set them; left out when unset, never a default.
+  working_dir?: string;
+  resume_command?: string;
   started: string;
   last_activity: string;
   ended?: string;
@@ -177,7 +181,10 @@ export interface ClaimView {
 export interface FailureReportView {
   number: number;
   claim: number;
+  // Copies of the Claim's, made when the report was written.
   session_id?: string;
+  working_dir?: string;
+  resume_command?: string;
   actor: string;
   time: string;
   what_broke: string;

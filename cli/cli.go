@@ -106,10 +106,10 @@ func init() {
 		"comment":       {op: "comment", usage: "comment <id> [--body <md> | --file <path|->]", run: runComment},
 		"approve":       {op: "approve", usage: "approve <id>", run: runApprove},
 		"defer":         {op: "defer", usage: "defer <id> [--reason <text> | --file <path|->]", run: runDefer},
-		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>]", run: runClaim},
+		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>] [--working-dir <dir>] [--resume-command <command>]", run: runClaim},
 		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->]", run: runFinish},
 
-		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>]  (default $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
+		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>]  (session defaults to $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
 		"ping":        {usage: "ping [--session <id>]  mark this session active (reads hook JSON on stdin); always exits 0", run: runPing},
 		"hook":        {usage: "hook session-id  PreToolUse hook: add session_id to the tool input", run: runHook},
 		// Failure Reports and giving up (ticket 30).
@@ -410,6 +410,7 @@ func runClaim(ctx context.Context, e Env, args []string) error {
 	spec := fs.String("spec", "", "")
 	ticket := fs.String("ticket", "", "")
 	session := fs.String("session", "", "")
+	resume := addResumeFlags(fs)
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -421,7 +422,9 @@ func runClaim(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Claim(ctx, sc.project, core.ClaimInput{Spec: core.Ref(*spec), Ticket: core.Ref(*ticket), SessionID: sessionID(e, *session)})
+	in := core.ClaimInput{Spec: core.Ref(*spec), Ticket: core.Ref(*ticket), SessionID: sessionID(e, *session)}
+	in.WorkingDir, in.ResumeCommand = resume.values()
+	v, err := sc.client.Claim(ctx, sc.project, in)
 	if err != nil {
 		return err
 	}
