@@ -206,7 +206,7 @@ func claimEnded(tk core.TicketView, c claim) (bool, string) {
 var endsItsOwnTurn = map[string]bool{"finish": true, "give_up": true, "report_failure": true}
 
 // endClaim stops c's turn, unless the session ended the Claim itself,
-// and drops c for good.
+// and drops c for good, with what the lines say of it.
 func (f *factory) endClaim(c claim, by string) {
 	f.mu.Lock()
 	f.ended[c.ClaimID] = true

@@ -20,10 +20,14 @@ type claimInfo struct {
 	stage string // a Stage or core.ImplementationStage
 }
 
-// noteTicket keeps what the lines say of c's Ticket, as tk gives it.
+// noteTicket keeps what the lines say of c's Ticket, as tk gives it,
+// unless c has ended.
 func (f *factory) noteTicket(c claim, tk core.TicketView) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.ended[c.ClaimID] {
+		return
+	}
 	f.info[c.ClaimID] = claimInfo{title: tk.Title, stage: core.GuideStage(tk.Labels)}
 }
 

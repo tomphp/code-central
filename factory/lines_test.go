@@ -190,6 +190,12 @@ func TestVerbosePrintsOneLinePerToolCallWithItsSummary(t *testing.T) {
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("tool-call lines:\n%s\n\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
+	if got := line(t, r, id+" claimed"); !strings.HasPrefix(got, id+` claimed (implementation): "Busy" in Spec `) {
+		t.Errorf("claimed line under --verbose: %s", got)
+	}
+	if got := line(t, r, id+" turn ended"); !strings.HasPrefix(got, id+` turn ended (implementation): "Busy": exit 0, success; now In Review; ran `) {
+		t.Errorf("turn ended line under --verbose: %s", got)
+	}
 }
 
 func TestWithoutVerboseNoToolCallLinesArePrinted(t *testing.T) {
