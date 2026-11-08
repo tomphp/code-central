@@ -3,6 +3,7 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
@@ -10,42 +11,90 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"github.com/tomoram/code-central/cli"
 )
 
-// unixOnly skips t on Windows, which lacks the Unix-only tool or signal
-// it needs: ps, /bin/sh or os.Interrupt.
-func unixOnly(t *testing.T, needs string) {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skipf("needs %s; code-central-124 ports this", needs)
-	}
-}
-
 // fakeHost is a pretend machine: a temporary HOME, a working directory
-// holding a symlinked binary, and a recording runner in place of
-// launchctl and systemctl. Nothing real is ever installed or restarted.
+// holding a linked binary, and a recording runner in place of launchctl,
+// systemctl and schtasks. Nothing real is ever installed or restarted.
 type fakeHost struct {
 	t        *testing.T
 	goos     string
 	home     string
 	dir      string
+	program  string
+	bin      string // the binary's absolute path, as the unit names it
 	calls    []string
 	failCall string
 }
 
+// newHost makes a host whose code-central is this test binary, linked
+// into bin under its own name. It is never run: service install only
+// records its path.
 func newHost(t *testing.T, goos string) *fakeHost {
 	t.Helper()
-	unixOnly(t, "/bin/sh for the fake code-central binary")
 	h := &fakeHost{t: t, goos: goos, home: t.TempDir(), dir: t.TempDir()}
-	real := filepath.Join(h.dir, "real-code-central")
-	os.WriteFile(real, []byte("#!/bin/sh\n"), 0o755)
+	exe := ""
+	if runtime.GOOS == "windows" {
+		exe = ".exe"
+	}
+	real := filepath.Join(h.dir, "real-code-central"+exe)
+	linkOrCopy(t, testBinary(t), real)
 	os.MkdirAll(filepath.Join(h.dir, "bin"), 0o755)
-	if err := os.Symlink(real, filepath.Join(h.dir, "bin", "code-central")); err != nil {
+	h.bin = filepath.Join(h.dir, "bin", "code-central"+exe)
+	if err := os.Symlink(real, h.bin); err != nil {
+		if runtime.GOOS != "windows" {
+			t.Fatal(err)
+		}
+		// Symlinks need Developer Mode on Windows; a hard link will do.
+		linkOrCopy(t, real, h.bin)
+	}
+	// As invoked, relative to Dir; on Windows without its .exe, as
+	// typed at a prompt.
+	h.program = filepath.Join("bin", "code-central")
+	return h
+}
+
+// taskXML is where service install writes the scheduled task on Windows.
+func (h *fakeHost) taskXML() string {
+	return filepath.Join(h.home, ".local", "state", "code-central", "code-central-task.xml")
+}
+
+// wantTaskStarted checks install's schtasks calls: register (replacing
+// any task of the same name), end it (allowed to fail), run it.
+func (h *fakeHost) wantTaskStarted() {
+	h.t.Helper()
+	wantCalls(h.t, h.calls,
+		"schtasks /Create /TN Code Central /XML "+h.taskXML()+" /F",
+		"schtasks /End /TN Code Central",
+		"schtasks /Run /TN Code Central")
+}
+
+// testBinary is this test binary's path: the fake code-central.
+func testBinary(t *testing.T) string {
+	t.Helper()
+	p, err := os.Executable()
+	if err != nil {
 		t.Fatal(err)
 	}
-	return h
+	return p
+}
+
+// linkOrCopy hard-links src to dst, or copies it across volumes.
+func linkOrCopy(t *testing.T, src, dst string) {
+	t.Helper()
+	if os.Link(src, dst) == nil {
+		return
+	}
+	b, err := os.ReadFile(src)
+	if err == nil {
+		err = os.WriteFile(dst, b, 0o755)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func (h *fakeHost) run(env map[string]string, args ...string) result {
@@ -56,13 +105,16 @@ func (h *fakeHost) run(env map[string]string, args ...string) result {
 	if _, ok := env["HOME"]; !ok {
 		env["HOME"] = h.home
 	}
+	if _, ok := env["USERNAME"]; !ok && h.goos == "windows" {
+		env["USERNAME"], env["USERDOMAIN"] = "ada", "LOVELACE-PC"
+	}
 	var out, errOut bytes.Buffer
 	code := cli.Run(context.Background(), args, cli.Env{
 		Stdin: strings.NewReader(""), Stdout: &out, Stderr: &errOut,
 		Getenv:      func(k string) string { return env[k] },
 		UserHomeDir: userHomeDir(env),
 		Dir:         h.dir,
-		Program:     "bin/code-central", // as invoked, relative to Dir
+		Program:     h.program,
 		GOOS:        h.goos,
 		RunService: func(_ context.Context, name string, args ...string) error {
 			call := strings.Join(append([]string{name}, args...), " ")
@@ -76,13 +128,21 @@ func (h *fakeHost) run(env map[string]string, args ...string) result {
 	return result{code, out.String(), errOut.String()}
 }
 
+// read reads a unit, decoding a scheduled task's UTF-16 into LF lines.
 func (h *fakeHost) read(path string) string {
 	h.t.Helper()
 	b, err := os.ReadFile(path)
 	if err != nil {
 		h.t.Fatalf("unit not written: %v", err)
 	}
-	return string(b)
+	if !bytes.HasPrefix(b, []byte{0xff, 0xfe}) {
+		return string(b)
+	}
+	u := make([]uint16, (len(b)-2)/2)
+	for i := range u {
+		u[i] = binary.LittleEndian.Uint16(b[2+2*i:])
+	}
+	return strings.ReplaceAll(string(utf16.Decode(u)), "\r\n", "\n")
 }
 
 func wantCalls(t *testing.T, got []string, want ...string) {
@@ -99,7 +159,7 @@ func TestServiceInstallWritesALaunchdAgentOnMacOS(t *testing.T) {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
 	plist := h.read(filepath.Join(h.home, "Library", "LaunchAgents", "com.github.tomoram.code-central.plist"))
-	bin := filepath.Join(h.dir, "bin", "code-central") // the symlink as invoked, not its target
+	bin := h.bin // the symlink as invoked, not its target
 	for _, want := range []string{
 		"<key>Label</key>\n\t<string>com.github.tomoram.code-central</string>",
 		"<string>" + bin + "</string>\n\t\t<string>serve</string>\n\t\t<string>--store</string>\n\t\t<string>" +
@@ -150,7 +210,7 @@ func TestServiceInstallWritesASystemdUserUnitOnLinux(t *testing.T) {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
 	unit := h.read(filepath.Join(h.home, ".config", "systemd", "user", "code-central.service"))
-	bin := filepath.Join(h.dir, "bin", "code-central")
+	bin := h.bin
 	for _, want := range []string{
 		`ExecStart="` + bin + `" serve --store "` + store + `"`,
 		"Restart=on-failure",      // restarts after a crash
@@ -179,6 +239,7 @@ func TestWithNoHOMEServiceInstallUsesTheProfileFolder(t *testing.T) {
 	for _, tc := range []struct{ goos, unit string }{
 		{"darwin", filepath.Join("Library", "LaunchAgents", "com.github.tomoram.code-central.plist")},
 		{"linux", filepath.Join(".config", "systemd", "user", "code-central.service")},
+		{"windows", filepath.Join(".local", "state", "code-central", "code-central-task.xml")},
 	} {
 		t.Run(tc.goos, func(t *testing.T) {
 			h := newHost(t, tc.goos)
@@ -211,6 +272,7 @@ func TestServiceRestartRestartsTheInstalledService(t *testing.T) {
 	for _, tc := range []struct{ goos, want string }{
 		{"darwin", fmt.Sprintf("launchctl kickstart -k gui/%d/com.github.tomoram.code-central", os.Getuid())},
 		{"linux", "systemctl --user restart code-central.service"},
+		{"windows", "schtasks /End /TN Code Central\nschtasks /Run /TN Code Central"},
 	} {
 		t.Run(tc.goos, func(t *testing.T) {
 			h := newHost(t, tc.goos)
@@ -221,7 +283,7 @@ func TestServiceRestartRestartsTheInstalledService(t *testing.T) {
 			if r := h.run(nil, "service", "restart"); r.code != 0 {
 				t.Fatalf("restart: exit %d: %s", r.code, r.stderr)
 			}
-			wantCalls(t, h.calls, tc.want)
+			wantCalls(t, h.calls, strings.Split(tc.want, "\n")...)
 		})
 	}
 }
@@ -244,9 +306,9 @@ func TestServiceReportsAFailedRunner(t *testing.T) {
 }
 
 func TestServiceRefusesOtherSystemsAndBadArguments(t *testing.T) {
-	h := newHost(t, "windows")
-	if r := h.run(nil, "service", "install"); r.code != 1 || !strings.Contains(r.stderr, "launchd") {
-		t.Fatalf("windows: exit %d, stderr %q", r.code, r.stderr)
+	h := newHost(t, "freebsd")
+	if r := h.run(nil, "service", "install"); r.code != 1 || !strings.Contains(r.stderr, "Windows (Task Scheduler), not freebsd") {
+		t.Fatalf("freebsd: exit %d, stderr %q", r.code, r.stderr)
 	}
 	h = newHost(t, "linux")
 	for _, args := range [][]string{{"service"}, {"service", "start"}, {"service", "install", "--bind", "0.0.0.0"}} {
@@ -256,5 +318,97 @@ func TestServiceRefusesOtherSystemsAndBadArguments(t *testing.T) {
 	}
 	if len(h.calls) != 0 {
 		t.Fatalf("calls %v", h.calls)
+	}
+}
+
+func TestServiceInstallRegistersAScheduledTaskOnWindows(t *testing.T) {
+	h := newHost(t, "windows")
+	store := filepath.Join(h.dir, "my store")
+	r := h.run(nil, "service", "install", "--store", store, "--bind", "172.17.0.1")
+	if r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	task := h.read(h.taskXML()) // next to the log
+	log := filepath.Join(filepath.Dir(h.taskXML()), "code-central.log")
+	for _, want := range []string{
+		`<?xml version="1.0" encoding="UTF-16"?>`,
+		"<LogonTrigger>\n      <Enabled>true</Enabled>\n      <UserId>LOVELACE-PC\\ada</UserId>", // at this user's logon
+		"<UserId>LOVELACE-PC\\ada</UserId>\n      <LogonType>InteractiveToken</LogonType>",       // as them, in their session
+		"<RestartOnFailure>\n      <Interval>PT1M</Interval>\n      <Count>999</Count>",
+		"<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>",            // no time limit
+		"<MultipleInstancesPolicy>Queue</MultipleInstancesPolicy>", // /Run waits for an /End still in progress
+		// The binary itself, so /End ends serve, with launchd's and
+		// systemd's serve arguments and its output in the log.
+		"<Command>" + h.bin + "</Command>\n      <Arguments>serve --store &#34;" + store +
+			"&#34; --bind 172.17.0.1 --log " + windowsQuoted(log) + "</Arguments>",
+	} {
+		if !strings.Contains(task, want) {
+			t.Fatalf("task lacks %q:\n%s", want, task)
+		}
+	}
+	h.wantTaskStarted()
+	if !strings.Contains(r.stdout, h.bin) {
+		t.Fatalf("stdout %q doesn't name the binary", r.stdout)
+	}
+}
+
+// windowsQuoted is p as the task's arguments hold it, XML-escaped: quoted
+// only when it has a space.
+func windowsQuoted(p string) string {
+	if strings.Contains(p, " ") {
+		return "&#34;" + p + "&#34;"
+	}
+	return p
+}
+
+func TestServiceInstallAgainReplacesTheScheduledTask(t *testing.T) {
+	h := newHost(t, "windows")
+	os.MkdirAll(filepath.Dir(h.taskXML()), 0o755)
+	os.WriteFile(h.taskXML(), []byte("an older task"), 0o644)
+	// Ending a task that isn't running fails; install carries on.
+	h.failCall = "schtasks /End"
+	if r := h.run(nil, "service", "install"); r.code != 0 {
+		t.Fatalf("exit %d: %s", r.code, r.stderr)
+	}
+	if got := h.read(h.taskXML()); strings.Contains(got, "an older task") {
+		t.Fatalf("task not rewritten:\n%s", got)
+	}
+	h.wantTaskStarted()
+
+	h.calls = nil
+	if r := h.run(nil, "service", "restart"); r.code != 0 {
+		t.Fatalf("restart: exit %d: %s", r.code, r.stderr)
+	}
+	wantCalls(t, h.calls, "schtasks /End /TN Code Central", "schtasks /Run /TN Code Central")
+}
+
+func TestScheduledTaskRefusesAPathTaskSchedulerWouldExpand(t *testing.T) {
+	h := newHost(t, "windows")
+	r := h.run(nil, "service", "install", "--store", filepath.Join(h.dir, "100%PATH%"))
+	if r.code == 0 || !strings.Contains(r.stderr, "Task Scheduler would expand its %") || len(h.calls) != 0 {
+		t.Fatalf("exit %d, stderr %q, calls %v", r.code, r.stderr, h.calls)
+	}
+}
+
+func TestScheduledTaskWithNoUSERNAMESaysSo(t *testing.T) {
+	h := newHost(t, "windows")
+	r := h.run(map[string]string{"USERNAME": ""}, "service", "install")
+	if r.code == 0 || !strings.Contains(r.stderr, "USERNAME isn't set") || len(h.calls) != 0 {
+		t.Fatalf("exit %d, stderr %q, calls %v", r.code, r.stderr, h.calls)
+	}
+}
+
+func TestWindowsArgRoundTripsThroughTheCommandLine(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{`C:\Users\ada\bin\code-central.exe`, `C:\Users\ada\bin\code-central.exe`},
+		{`C:\my store`, `"C:\my store"`},
+		{`C:\my store\`, `"C:\my store\\"`}, // the closing quote isn't escaped
+		{`a"b`, `"a\"b"`},
+		{`a\"b`, `"a\\\"b"`},
+		{``, `""`},
+	} {
+		if got := cli.WindowsArg(tc.in); got != tc.want {
+			t.Errorf("WindowsArg(%q) = %s, want %s", tc.in, got, tc.want)
+		}
 	}
 }

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"unicode/utf16"
 
 	"github.com/tomoram/code-central/store"
 )
@@ -19,15 +21,16 @@ import (
 func init() {
 	commands["service"] = command{
 		usage: "service install [--store <dir>] [--bind <ip>] | service restart  run serve as a login item " +
-			"(launchd on macOS, systemd user unit on Linux); install again after an upgrade",
+			"(launchd on macOS, systemd user unit on Linux, a scheduled task on Windows); install again after an upgrade",
 		run: runService,
 	}
 }
 
-// The launchd label and the systemd unit name.
+// The launchd label, the systemd unit name and the scheduled task's name.
 const (
-	launchdLabel = "com.github.tomoram.code-central"
-	systemdUnit  = "code-central.service"
+	launchdLabel  = "com.github.tomoram.code-central"
+	systemdUnit   = "code-central.service"
+	scheduledTask = "Code Central"
 )
 
 func runService(ctx context.Context, e Env, args []string) error {
@@ -48,10 +51,8 @@ func runService(ctx context.Context, e Env, args []string) error {
 		if _, err := os.Stat(m.unitPath); errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("Code Central isn't installed as a service (no %s): run `code-central service install`", m.unitPath)
 		}
-		for _, c := range m.restart {
-			if err := runServiceCmd(ctx, e, c); err != nil {
-				return err
-			}
+		if err := runServiceCmds(ctx, e, m.restart); err != nil {
+			return err
 		}
 		fmt.Fprintln(e.Stdout, "Restarted the Code Central service.")
 		return nil
@@ -92,19 +93,21 @@ func serviceInstall(ctx context.Context, e Env, m serviceManager, args []string)
 	if err := os.MkdirAll(filepath.Dir(m.unitPath), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(m.unitPath, m.unit(serveArgs), 0o644); err != nil {
+	unit, err := m.unit(serveArgs)
+	if err != nil {
 		return err
 	}
-	for _, c := range m.install {
-		if err := runServiceCmd(ctx, e, c); err != nil && !c.mayFail {
-			return err
-		}
+	if err := os.WriteFile(m.unitPath, unit, 0o644); err != nil {
+		return err
+	}
+	if err := runServiceCmds(ctx, e, m.install); err != nil {
+		return err
 	}
 	fmt.Fprintf(e.Stdout, "Installed %s and (re)started the service: %s\n", m.unitPath, strings.Join(serveArgs, " "))
 	return nil
 }
 
-// serviceCmd is one launchctl or systemctl call.
+// serviceCmd is one launchctl, systemctl or schtasks call.
 type serviceCmd struct {
 	args    []string
 	mayFail bool // e.g. booting out a service that isn't loaded
@@ -112,7 +115,7 @@ type serviceCmd struct {
 
 type serviceManager struct {
 	unitPath         string
-	unit             func(serveArgs []string) []byte
+	unit             func(serveArgs []string) ([]byte, error)
 	install, restart []serviceCmd
 }
 
@@ -132,7 +135,7 @@ func serviceManagerFor(e Env) (serviceManager, error) {
 		log := filepath.Join(dir, "Library", "Logs", "code-central.log")
 		return serviceManager{
 			unitPath: plist,
-			unit:     func(a []string) []byte { return launchdPlist(a, log) },
+			unit:     func(a []string) ([]byte, error) { return launchdPlist(a, log), nil },
 			install: []serviceCmd{
 				{args: []string{"launchctl", "bootout", domain + "/" + launchdLabel}, mayFail: true},
 				{args: []string{"launchctl", "bootstrap", domain, plist}},
@@ -146,7 +149,7 @@ func serviceManagerFor(e Env) (serviceManager, error) {
 		}
 		return serviceManager{
 			unitPath: unit,
-			unit:     systemdUnitFile,
+			unit:     func(a []string) ([]byte, error) { return systemdUnitFile(a), nil },
 			install: []serviceCmd{
 				{args: []string{"systemctl", "--user", "daemon-reload"}},
 				{args: []string{"systemctl", "--user", "enable", systemdUnit}},
@@ -154,9 +157,45 @@ func serviceManagerFor(e Env) (serviceManager, error) {
 			},
 			restart: []serviceCmd{{args: []string{"systemctl", "--user", "restart", systemdUnit}}},
 		}, nil
+	case "windows":
+		// The task's XML sits next to its log (ADR 0011).
+		dir, err := e.home().State("code-central")
+		if err != nil {
+			return serviceManager{}, fmt.Errorf("cannot find the service's folder: %w", err)
+		}
+		user := e.Getenv("USERNAME")
+		if user == "" {
+			return serviceManager{}, errors.New("cannot find who to run the scheduled task as: USERNAME isn't set")
+		}
+		if d := e.Getenv("USERDOMAIN"); d != "" {
+			user = d + `\` + user
+		}
+		task := filepath.Join(dir, "code-central-task.xml")
+		log := filepath.Join(dir, "code-central.log")
+		end := serviceCmd{args: []string{"schtasks", "/End", "/TN", scheduledTask}, mayFail: true} // it may not be running
+		run := serviceCmd{args: []string{"schtasks", "/Run", "/TN", scheduledTask}}
+		return serviceManager{
+			unitPath: task,
+			unit:     func(a []string) ([]byte, error) { return scheduledTaskXML(a, log, user) },
+			install: []serviceCmd{
+				{args: []string{"schtasks", "/Create", "/TN", scheduledTask, "/XML", task, "/F"}},
+				end, run,
+			},
+			restart: []serviceCmd{end, run},
+		}, nil
 	default:
-		return serviceManager{}, fmt.Errorf("service install supports macOS (launchd) and Linux (systemd), not %s; run `code-central serve` instead", goos)
+		return serviceManager{}, fmt.Errorf("service install supports macOS (launchd), Linux (systemd) and Windows (Task Scheduler), not %s; run `code-central serve` instead", goos)
 	}
+}
+
+// runServiceCmds runs cs in order, carrying on past a failure that may fail.
+func runServiceCmds(ctx context.Context, e Env, cs []serviceCmd) error {
+	for _, c := range cs {
+		if err := runServiceCmd(ctx, e, c); err != nil && !c.mayFail {
+			return err
+		}
+	}
+	return nil
 }
 
 func runServiceCmd(ctx context.Context, e Env, c serviceCmd) error {
@@ -175,13 +214,17 @@ func runServiceCmd(ctx context.Context, e Env, c serviceCmd) error {
 }
 
 // programPath is the binary's absolute path as invoked, without resolving
-// symlinks, so a symlinked install keeps working after an upgrade.
+// symlinks, so a symlinked install keeps working after an upgrade. On
+// Windows the binary may have been invoked without its .exe.
 func programPath(e Env) (string, error) {
 	p := e.Program
 	if p == "" {
 		return os.Executable()
 	}
-	if !strings.ContainsRune(p, filepath.Separator) {
+	if runtime.GOOS == "windows" && filepath.Ext(p) == "" {
+		p += ".exe"
+	}
+	if filepath.Base(p) == p {
 		found, err := lookPath(p, e.Getenv("PATH"))
 		if err != nil {
 			return "", err
@@ -200,19 +243,21 @@ func lookPath(name, path string) (string, error) {
 			d = "."
 		}
 		c := filepath.Join(d, name)
-		if fi, err := os.Stat(c); err == nil && !fi.IsDir() && fi.Mode()&0o111 != 0 {
+		// Windows has no execute bit; the .exe is what makes it a program.
+		if fi, err := os.Stat(c); err == nil && !fi.IsDir() && (runtime.GOOS == "windows" || fi.Mode()&0o111 != 0) {
 			return c, nil
 		}
 	}
 	return "", fmt.Errorf("cannot find %s on PATH; run service install with the binary's path", name)
 }
 
+func xmlEscape(s string) string {
+	var b bytes.Buffer
+	xml.EscapeText(&b, []byte(s))
+	return b.String()
+}
+
 func launchdPlist(args []string, log string) []byte {
-	esc := func(s string) string {
-		var b bytes.Buffer
-		xml.EscapeText(&b, []byte(s))
-		return b.String()
-	}
 	var b strings.Builder
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -224,7 +269,7 @@ func launchdPlist(args []string, log string) []byte {
 	<array>
 `)
 	for _, a := range args {
-		b.WriteString("\t\t<string>" + esc(a) + "</string>\n")
+		b.WriteString("\t\t<string>" + xmlEscape(a) + "</string>\n")
 	}
 	b.WriteString(`	</array>
 	<key>RunAtLoad</key>
@@ -235,9 +280,9 @@ func launchdPlist(args []string, log string) []byte {
 		<false/>
 	</dict>
 	<key>StandardOutPath</key>
-	<string>` + esc(log) + `</string>
+	<string>` + xmlEscape(log) + `</string>
 	<key>StandardErrorPath</key>
-	<string>` + esc(log) + `</string>
+	<string>` + xmlEscape(log) + `</string>
 </dict>
 </plist>
 `)
@@ -266,4 +311,96 @@ RestartSec=2
 [Install]
 WantedBy=default.target
 `)
+}
+
+// scheduledTaskXML is the Task Scheduler task that runs serve at the
+// user's logon, in their session, restarting it when it fails. It runs
+// the binary itself, not through cmd.exe, so /End ends serve and a crash
+// fails the task; serve's --log stands in for redirecting its output.
+// The file is UTF-16 with a byte-order mark, as Task Scheduler exports
+// it, so schtasks reads it on every Windows version.
+func scheduledTaskXML(args []string, log, user string) ([]byte, error) {
+	args = append(append([]string{}, args...), "--log", log)
+	// Task Scheduler expands %NAME% in a task's command and arguments.
+	for _, a := range args {
+		if strings.Contains(a, "%") {
+			return nil, fmt.Errorf("cannot run %q from a scheduled task: Task Scheduler would expand its %%", a)
+		}
+	}
+	quoted := make([]string, len(args)-1)
+	for i, a := range args[1:] {
+		quoted[i] = windowsArg(a)
+	}
+	doc := `<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Runs code-central serve at logon. Written by code-central service install.</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+      <UserId>` + xmlEscape(user) + `</UserId>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <UserId>` + xmlEscape(user) + `</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>999</Count>
+    </RestartOnFailure>
+    <MultipleInstancesPolicy>Queue</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Enabled>true</Enabled>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>` + xmlEscape(args[0]) + `</Command>
+      <Arguments>` + xmlEscape(strings.Join(quoted, " ")) + `</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+`
+	u := utf16.Encode([]rune("\uFEFF" + strings.ReplaceAll(doc, "\n", "\r\n")))
+	b := make([]byte, 2*len(u))
+	for i, c := range u {
+		binary.LittleEndian.PutUint16(b[2*i:], c)
+	}
+	return b, nil
+}
+
+// windowsArg quotes a for a Windows command line, as CommandLineToArgvW
+// and Go's os.Args read it back: quotes around anything with a space,
+// and a backslash doubled where it comes before a quote.
+func windowsArg(a string) string {
+	if a != "" && !strings.ContainsAny(a, " \t\"") {
+		return a
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	slashes := 0
+	for _, c := range a {
+		switch c {
+		case '\\':
+			slashes++
+		case '"':
+			b.WriteString(strings.Repeat(`\`, slashes+1)) // n slashes become 2n+1
+			slashes = 0
+		default:
+			slashes = 0
+		}
+		b.WriteRune(c)
+	}
+	b.WriteString(strings.Repeat(`\`, slashes)) // to 2n before the closing quote
+	b.WriteByte('"')
+	return b.String()
 }
