@@ -184,3 +184,5 @@ a.link-badge:hover { text-decoration: underline; }
 .impl-list button.link { font-size: 12.5px; color: var(--text); text-align: left; }
 .impl-list button.link[aria-current="true"] { font-weight: 600; }
 .loud-state { color: var(--rc); }
+.reason-requirements { --rc: var(--accent); }
+.req-chip { color: var(--accent); }
