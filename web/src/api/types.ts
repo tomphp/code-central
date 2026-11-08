@@ -163,10 +163,11 @@ export interface FindSpecsFilter {
   finished?: boolean;
 }
 
-// submit_requirement's result: the new Spec and its three Stage Tickets, in order.
+// submit_requirement's result (ADR 0009): the acknowledgements of the
+// new Spec and its three Stage Tickets, in order.
 export interface SubmitRequirementResult {
-  spec: SpecView;
-  stages: TicketView[];
+  spec: SpecAcknowledgement;
+  stages: TicketAcknowledgement[];
 }
 
 export interface NeedsMeGroup {
@@ -352,6 +353,22 @@ export const TICKET_FIELDS = [
   "created", "updated", "description", "branch", "commit", "claims", "rounds", "failure_reports",
   "comments", "moves", "edits", "blocked", "claimable", "silent_since", "needs_me_reason", "link",
 ] as const satisfies readonly (keyof TicketView)[];
+
+// SPEC_FIELDS are SpecView's fields in the service's order, the order a
+// SpecAcknowledgement's changed lists them in.
+export const SPEC_FIELDS = [
+  "id", "title", "labels", "tags", "created", "updated", "body", "edits", "link",
+] as const satisfies readonly (keyof SpecView)[];
+
+// SpecAcknowledgement is what a Spec write returns (ADR 0009): the names
+// of the fields it changed, never their values. edit is set when the
+// write recorded an edit.
+export interface SpecAcknowledgement {
+  id: string;
+  updated: string;
+  changed: (typeof SPEC_FIELDS)[number][];
+  edit?: number;
+}
 
 // TicketAcknowledgement is what a Ticket write returns (ADR 0009): the
 // names of the fields it changed, never their values, and the Ticket's

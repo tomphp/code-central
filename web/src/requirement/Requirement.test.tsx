@@ -98,7 +98,7 @@ async function building() {
   const r = await fake.submitRequirement("acme", "Archive finished Projects\nOnce everything is Done."); // acme-1, stages acme-2..4
   fake.now = now;
   for (const t of r.stages) fake.updateTicket(t.id, { state: "Done" });
-  const spec = { id: r.spec.id, title: r.spec.title };
+  const spec = { id: r.spec.id, title: "Archive finished Projects" };
   fake.addTicket("acme", { title: "store: archived flag", state: "Done", spec }); // acme-5
   fake.addTicket("acme", { title: "Archive in the Project menu", state: "In Review", spec }); // acme-6
   fake.addTicket("acme", { title: "CLI: archive-project", state: "Ready", spec }); // acme-7

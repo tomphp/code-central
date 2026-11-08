@@ -184,7 +184,7 @@ async function requirements() {
   fake.updateTicket("acme-3", { state: "Needs Answer" });
   const building = await fake.submitRequirement("acme", "Archive finished Projects"); // acme-5, stages acme-6..8
   for (const t of building.stages) fake.updateTicket(t.id, { state: "Done" });
-  const spec = { id: building.spec.id, title: building.spec.title };
+  const spec = { id: building.spec.id, title: "Archive finished Projects" };
   fake.addTicket("acme", { title: "Archive in the Project menu", state: "In Review", spec }); // acme-9
   fake.addTicket("acme", { title: "CLI: archive-project", state: "Failed", spec }); // acme-10
   await fake.submitRequirement("acme", "Render Markdown"); // acme-11, stages acme-12..14

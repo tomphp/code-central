@@ -57,6 +57,8 @@ import {
   type SpecDetail,
   type SpecQuestions,
   type SpecRow,
+  SPEC_FIELDS,
+  type SpecAcknowledgement,
   type SpecView,
   type StageName,
   type StateSummary,
@@ -440,7 +442,7 @@ export class FakeApi implements Api {
         }),
       );
     }
-    return { spec, stages };
+    return { spec: acknowledgeCreate(SPEC_FIELDS, spec), stages: stages.map((t) => acknowledgeCreate(TICKET_FIELDS, t)) };
   }
 
   // specQuestions reads a Spec from its seeded Tickets' spec, so a Spec
@@ -671,6 +673,25 @@ export class FakeApi implements Api {
     else delete v.needs_me_reason;
     return v;
   }
+}
+
+// acknowledgeCreate is a create's result, as the service derives it: the
+// fields the create filled in, in the view's order, never the id and
+// times every create sets.
+function acknowledgeCreate(fields: typeof SPEC_FIELDS, after: SpecView): SpecAcknowledgement;
+function acknowledgeCreate(fields: typeof TICKET_FIELDS, after: TicketView): TicketAcknowledgement;
+function acknowledgeCreate(fields: readonly string[], after: SpecView | TicketView) {
+  const v = after as unknown as Record<string, unknown>;
+  const changed = fields.filter((f) => !["id", "created", "updated"].includes(f) && !blank(v[f]));
+  return { id: after.id, updated: after.updated, changed, ..."state" in after && { state: after.state } };
+}
+
+// blank is whether a view's field holds what the empty record does.
+function blank(v: unknown): boolean {
+  if (v === undefined || v === "" || v === false) return true;
+  if (Array.isArray(v)) return v.length === 0;
+  if (typeof v === "object" && v) return Object.values(v).every(blank);
+  return false;
 }
 
 // acknowledge is a Ticket write's result, as the service derives it: the

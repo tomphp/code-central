@@ -459,17 +459,26 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     it("submits a Requirement as its Spec and three chained Stage Tickets, waiting for a Factory", async () => {
       await d.createProject("acme", "Acme");
       const r = await d.api.submitRequirement("acme", "Export a Spec as Markdown\nOne file, Tickets included.");
-      expect(r.spec).toMatchObject({ title: "Export a Spec as Markdown", body: "Export a Spec as Markdown\nOne file, Tickets included." });
-      expect(r.stages.map((t) => [t.labels, t.state])).toEqual([
+      expect(Object.keys(r.spec).sort()).toEqual(["changed", "id", "updated"]);
+      expect(Number.isNaN(Date.parse(r.spec.updated))).toBe(false);
+      expect(r.spec.changed).toEqual(["title", "body"]);
+      expect(r.stages).toHaveLength(3);
+      for (const [i, t] of r.stages.entries()) {
+        wantAcknowledgement(t, t.id, "Ready", ["title", "state", "spec", "labels", "description", "moves"]);
+        expect(t.changed).toContain(i === 0 ? "claimable" : "blocked_by");
+      }
+
+      const stages = await Promise.all(r.stages.map((t) => d.api.getTicket("acme", t.id)));
+      expect(stages.map((t) => [t.labels, t.state])).toEqual([
         [["stage:grilling"], "Ready"],
         [["stage:spec"], "Ready"],
         [["stage:tickets"], "Ready"],
       ]);
-      expect(r.stages[1].blocked_by).toEqual([r.stages[0].id]);
-      expect(r.stages[2].blocked_by).toEqual([r.stages[1].id]);
+      expect(stages[1].blocked_by).toEqual([r.stages[0].id]);
+      expect(stages[2].blocked_by).toEqual([r.stages[1].id]);
 
       const s = await d.api.getSpec("acme", r.spec.id);
-      expect(s).toMatchObject({ id: r.spec.id, title: "Export a Spec as Markdown", finished: false });
+      expect(s).toMatchObject({ id: r.spec.id, title: "Export a Spec as Markdown", body: "Export a Spec as Markdown\nOne file, Tickets included.", finished: false });
       expect(Number.isNaN(Date.parse(s.created))).toBe(false);
       expect(s.tickets.map((t) => t.id)).toEqual(r.stages.map((t) => t.id));
       expect(s.requirement).toEqual({
