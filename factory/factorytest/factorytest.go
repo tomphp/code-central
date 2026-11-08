@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -65,6 +66,15 @@ const EventBatchEvery = 10 * time.Millisecond
 // SIGINT and SIGTERM.
 const KillGrace = 100 * time.Millisecond
 
+// unixOnly skips t on Windows, which lacks the Unix-only tool or signal
+// it needs: ps, /bin/sh or os.Interrupt.
+func unixOnly(t testing.TB, needs string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skipf("needs %s; code-central-124 ports this", needs)
+	}
+}
+
 // Harness is one Factory's world. Its fields are for assertions; change
 // the Factory's environment with Setenv.
 type Harness struct {
@@ -98,6 +108,7 @@ type Harness struct {
 // main whose one commit holds a .mcp.json naming it.
 func New(t testing.TB) *Harness {
 	t.Helper()
+	unixOnly(t, "/bin/sh for the fake claude and git shims, the HoldSession and Shell steps, and /usr/bin:/bin on PATH")
 	// git reports real paths, so resolve macOS's /var -> /private/var.
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	must(t, err)

@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     defaults:
@@ -35,6 +35,12 @@ jobs:
         shell: bash
 
     steps:
+      # Before checkout, so Windows gets the repository's bytes, not CRLF.
+      # .gitattributes says eol=lf too; this keeps it explicit.
+      - name: No CRLF conversion
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+
       - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v6
@@ -53,8 +59,9 @@ jobs:
         run: npm ci
 
       # Against the committed placeholder page, so no Vite build is needed.
+      # -v so the log lists every skipped test with its reason.
       - name: go test
-        run: go test ./...
+        run: go test -v ./...
 
       - name: vitest
         working-directory: web
@@ -84,7 +91,7 @@ jobs:
         run: npx playwright-core install chromium
 
       - name: Go e2e
-        run: go test -tags e2e -count=1 ./e2e/
+        run: go test -v -tags e2e -count=1 ./e2e/
 
       # PLAYWRIGHT_CHANNEL set but empty: the Chromium installed above, not
       # the system Chrome the suite defaults to.

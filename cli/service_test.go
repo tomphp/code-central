@@ -7,11 +7,21 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/cli"
 )
+
+// unixOnly skips t on Windows, which lacks the Unix-only tool or signal
+// it needs: ps, /bin/sh or os.Interrupt.
+func unixOnly(t *testing.T, needs string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skipf("needs %s; code-central-124 ports this", needs)
+	}
+}
 
 // fakeHost is a pretend machine: a temporary HOME, a working directory
 // holding a symlinked binary, and a recording runner in place of
@@ -27,6 +37,7 @@ type fakeHost struct {
 
 func newHost(t *testing.T, goos string) *fakeHost {
 	t.Helper()
+	unixOnly(t, "/bin/sh for the fake code-central binary")
 	h := &fakeHost{t: t, goos: goos, home: t.TempDir(), dir: t.TempDir()}
 	real := filepath.Join(h.dir, "real-code-central")
 	os.WriteFile(real, []byte("#!/bin/sh\n"), 0o755)

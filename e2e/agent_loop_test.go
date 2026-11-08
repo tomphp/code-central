@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +64,15 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+// unixOnly skips t on Windows, which lacks the Unix-only tool or signal
+// it needs: ps, /bin/sh or os.Interrupt.
+func unixOnly(t *testing.T, needs string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skipf("needs %s; code-central-124 ports this", needs)
+	}
+}
+
 // service is a running `code-central serve` on a free loopback port.
 type service struct {
 	url string
@@ -73,6 +83,7 @@ var listening = regexp.MustCompile(`listening on \[([^\] ]+)`)
 
 func serve(t *testing.T) *service {
 	t.Helper()
+	unixOnly(t, "os.Interrupt to stop serve")
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, "serve", "--store", t.TempDir(), "--no-notify") // tests never show a real OS Notification
 	cmd.Env = append(os.Environ(), "CODE_CENTRAL_LISTEN=127.0.0.1:0")
@@ -245,7 +256,7 @@ func TestTheAgentLoop(t *testing.T) {
 		t.Fatalf("pick_up_answers: %v", picked)
 	}
 	finished := tool(t, agent, "finish", map[string]any{"ticket": "acme-2", "claim_id": claimID, "summary": "Built on branch acme-2."})
-	if finished["ticket"].(map[string]any)["state"] != "In Review" {
+	if finished["state"] != "In Review" {
 		t.Fatalf("finish: %v", finished)
 	}
 	if done := svc.human(t, "/api/p/acme/tickets/2/accept", `{}`); done["state"] != "Done" {
