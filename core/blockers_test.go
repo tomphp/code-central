@@ -95,7 +95,7 @@ func TestOnlyDoneClearsABlocker(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
 	f.addBlocker(t, "acme-2", "acme-3")
-	for _, s := range []store.State{store.InProgress, store.InReview, store.Failed, store.Cancelled} {
+	for _, s := range []store.State{store.InProgress, store.InReview, store.Accepted, store.Failed, store.Cancelled} {
 		f.setState(t, 3, s)
 		if v := f.get(t, "acme-2"); !v.Blocked {
 			t.Fatalf("a %s Blocker cleared the block", s)

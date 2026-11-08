@@ -142,8 +142,8 @@ func TestARejectedTicketNeedsAFreshClaimAndKeepsItsPlace(t *testing.T) {
 }
 
 func TestEveryActionIsCheckedAgainstTheOneTable(t *testing.T) {
-	if got := len(store.States); got != 9 {
-		t.Fatalf("%d States, want nine", got)
+	if got := len(store.States); got != 10 {
+		t.Fatalf("%d States, want ten", got)
 	}
 	for _, a := range core.Workflow {
 		for _, s := range append(slices.Clone(a.From), a.To) {
@@ -159,8 +159,8 @@ func TestEveryActionIsCheckedAgainstTheOneTable(t *testing.T) {
 	wantCode(t, err, core.StaleClaim, "")
 	_, err = f.core.Accept(ctx, "acme", core.TicketInput{Ticket: "2"})
 	e := err.(*core.Error)
-	if len(e.AllowedActions) != 0 {
-		t.Fatalf("an agent may do nothing from In Review, got %v", e.AllowedActions)
+	if !slices.Equal(e.AllowedActions, []string{"land"}) {
+		t.Fatalf("an agent may only land from In Review, got %v", e.AllowedActions)
 	}
 	f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"})
 	_, err = f.core.Reject(human, "acme", core.RejectInput{Ticket: "2", Comment: "late"})

@@ -19,12 +19,15 @@ type NeedsMeReason string
 
 // The reasons, in group order: cheapest to unblock first.
 const (
-	ReasonNeedsAnswer        NeedsMeReason = "needs_answer"
-	ReasonAnswered           NeedsMeReason = "answered"
-	ReasonSilentClaim        NeedsMeReason = "silent_claim"
-	ReasonLongClaim          NeedsMeReason = "long_claim"
-	ReasonFailed             NeedsMeReason = "failed"
-	ReasonInReview           NeedsMeReason = "in_review"
+	ReasonNeedsAnswer NeedsMeReason = "needs_answer"
+	ReasonAnswered    NeedsMeReason = "answered"
+	ReasonSilentClaim NeedsMeReason = "silent_claim"
+	ReasonLongClaim   NeedsMeReason = "long_claim"
+	ReasonFailed      NeedsMeReason = "failed"
+	ReasonInReview    NeedsMeReason = "in_review"
+	// ReasonAcceptedNotLanded is a Ticket Accepted for more than
+	// NotLandedAfter (ticket 72): its work hasn't reached the base.
+	ReasonAcceptedNotLanded  NeedsMeReason = "accepted_not_landed"
 	ReasonBlockedByCancelled NeedsMeReason = "blocked_by_cancelled"
 	// ReasonClosedExternally is a linked Ticket whose external item isn't
 	// open, whose Link isn't detached and that isn't finished (ticket 42).
@@ -40,6 +43,7 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonLongClaim, "Long Claim: In Progress and active, but no move (claim or pick_up_answers) for more than 60 minutes"},
 	{ReasonFailed, "Failed: a Failure Report waits for the human"},
 	{ReasonInReview, "In Review: finished work waits to be accepted or rejected"},
+	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted for more than 10 minutes without landing in the base"},
 	{ReasonBlockedByCancelled, "Blocked by a Cancelled Ticket with no Replacements"},
 	{ReasonClosedExternally, "Closed externally: its linked item was closed, deleted or left its Integration's query; cancel it, mark it Done or unlink it"},
 }
@@ -67,7 +71,8 @@ type NeedsMeGroup struct {
 // Since is when it started waiting: the Round posted, the last answer,
 // the last activity (Silent Claim, so the quiet time is now minus it),
 // the last move (Long Claim),
-// the Failure Report, the finish, or the Blocker's cancel. Only the
+// the Failure Report, the finish, the accept (Accepted but not landed),
+// or the Blocker's cancel. Only the
 // detail field for its reason is set.
 type NeedsMeRow struct {
 	Project string        `json:"project"`
@@ -227,6 +232,10 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 		return ReasonFailed, entered(t)
 	case store.InReview:
 		return ReasonInReview, entered(t)
+	case store.Accepted:
+		if s := c.notLandedSince(t); s != nil {
+			return ReasonAcceptedNotLanded, *s
+		}
 	}
 	if b, ok := cancelledBlocker(r, key, t); ok {
 		return ReasonBlockedByCancelled, cancelledAt(r, key, b)

@@ -49,7 +49,7 @@ type Action struct {
 }
 
 // unfinished is every State except Done and Cancelled.
-var unfinished = []store.State{store.Draft, store.Ready, store.InProgress, store.NeedsAnswer, store.Answered, store.Failed, store.InReview}
+var unfinished = []store.State{store.Draft, store.Ready, store.InProgress, store.NeedsAnswer, store.Answered, store.Failed, store.InReview, store.Accepted}
 
 // Workflow is the one action table, in the spec's order.
 var Workflow = []Action{
@@ -75,13 +75,24 @@ var Workflow = []Action{
 		NextStep: stopWorking},
 	{Name: "send_back", From: []store.State{store.Failed}, To: store.Ready, Who: HumanActor,
 		Requires: "note (optional)"},
+	// An agent that can't land Accepted work (a merge conflict) sends it
+	// back for another agent to resolve (ticket 72).
+	{Name: "send_back", From: []store.State{store.Accepted}, To: store.Ready, Who: AgentActor,
+		Requires: "note (required), stored as a comment: why it can't land, such as the base commit and the conflicting files"},
 	{Name: "to_draft", From: []store.State{store.Failed}, To: store.Draft, Who: HumanActor},
 	{Name: "finish", From: []store.State{store.InProgress}, To: store.InReview, Who: Holder,
 		Requires: "summary (required): what was done, where (branch or commit), what to check",
 		NextStep: stopWorking},
-	{Name: "accept", From: []store.State{store.InReview}, To: store.Done, Who: HumanActor},
+	// accept has two rows: work whose finish named a branch is Accepted
+	// and waits to land (ADR 0006); any other Ticket goes straight to Done.
+	{Name: "accept", From: []store.State{store.InReview}, To: store.Accepted, Who: HumanActor,
+		Requires: "nothing; taken when the last finish named a branch"},
+	{Name: "accept", From: []store.State{store.InReview}, To: store.Done, Who: HumanActor,
+		Requires: "nothing; taken when no finish named a branch"},
 	{Name: "reject", From: []store.State{store.InReview}, To: store.Ready, Who: HumanActor,
 		Requires: "comment (required)"},
+	{Name: "land", From: []store.State{store.Accepted, store.InReview}, To: store.Done, Who: AnyActor,
+		Requires: "commit (required): the commit that put the work into the base, recorded on the Move with via merge"},
 	{Name: "cancel", From: []store.State{store.Draft, store.Ready}, To: store.Cancelled, Who: AgentActor,
 		Requires: "replacements (required), reason (optional)"},
 	{Name: "cancel", From: unfinished, To: store.Cancelled, Who: HumanActor,
@@ -124,11 +135,13 @@ func allowedActions(state store.State, actor Actor) []string {
 }
 
 // check finds the row letting actor take action name on a Ticket in
-// state, or returns action_not_allowed naming the allowed actions.
-func check(name string, state store.State, actor Actor, ticketID string) (Action, error) {
+// state, or returns action_not_allowed naming the allowed actions. When
+// to is set, a row with a fixed To elsewhere doesn't match: an action
+// with several rows from one State (accept) picks its row by target.
+func check(name string, state, to store.State, actor Actor, ticketID string) (Action, error) {
 	humanOnly := false
 	for _, a := range Workflow {
-		if a.Name != name || !slices.Contains(a.From, state) {
+		if a.Name != name || !slices.Contains(a.From, state) || (to != "" && a.To != "" && a.To != to) {
 			continue
 		}
 		if a.Who.may(actor) {
@@ -176,7 +189,8 @@ func transition(ctx context.Context, t *store.Ticket, key, name, claimID string,
 
 // transitionTo is transition for an action whose row leaves the target
 // to the Actor (move): to is used when the row's To is "". Move has
-// already checked to against the row's Except.
+// already checked to against the row's Except. For an action with a row
+// per target (accept), to picks the row.
 func transitionTo(ctx context.Context, t *store.Ticket, key, name, claimID string, to store.State, now time.Time) error {
 	actor := ActorOf(ctx)
 	id := DisplayID(key, t.Number)
@@ -190,7 +204,7 @@ func transitionTo(ctx context.Context, t *store.Ticket, key, name, claimID strin
 	if name == automaticAnswered {
 		a, err = automatic(name, t.State)
 	} else {
-		a, err = check(name, t.State, actor, id)
+		a, err = check(name, t.State, to, actor, id)
 	}
 	if err != nil {
 		return err

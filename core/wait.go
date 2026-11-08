@@ -66,7 +66,7 @@ func (c *Core) waitResult(key string, ref Ref) (WaitResult, error) {
 		res = WaitResult{Ticket: DisplayID(key, t.Number), State: t.State}
 		if n := len(t.Moves); n > 0 {
 			m := t.Moves[n-1]
-			res.LastMove = &MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via}
+			res.LastMove = &MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit}
 		}
 		return nil
 	})

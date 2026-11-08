@@ -25,8 +25,9 @@ export interface Driver {
   // "contract-session") and posts a Failure Report, moving it to Failed.
   reportFailure(key: string, id: string, report: FailureReportBody): Promise<void>;
   // finish claims a Ready Ticket as an agent and finishes it with the
-  // summary, moving it to In Review.
-  finish(key: string, id: string, summary: string): Promise<void>;
+  // summary, moving it to In Review. on names the work's branch and head
+  // commit (ticket 71).
+  finish(key: string, id: string, summary: string, on?: { branch: string; commit: string }): Promise<void>;
   // addBlocker makes id wait on blocker, as an agent's add_blocker.
   addBlocker(key: string, id: string, blocker: string): Promise<void>;
   // claim claims a Ready Ticket as an agent with a session ID, moving it
@@ -302,6 +303,34 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.needsMe()).count).toBe(0);
     });
 
+    // ---- Accepted and land (ticket 71) ----
+
+    it("accepts work on a branch into Accepted, then lands it into Done with the commit", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
+
+      const a = await d.api.act("acme", id, "accept", {});
+      expect(a).toMatchObject({ id, state: "Accepted", branch: "impl-7", commit: "abc123" });
+      expect(a.moves.at(-1)).toMatchObject({ from: "In Review", to: "Accepted", actor: "human" });
+
+      const blank = await d.api.act("acme", id, "land", { commit: " " }).catch((e) => e);
+      expect(blank).toMatchObject({ status: 422, code: "invalid", field: "commit" });
+
+      const t = await d.api.act("acme", id, "land", { commit: "def456" });
+      expect(t).toMatchObject({ id, state: "Done" });
+      expect(t.moves.at(-1)).toMatchObject({ from: "Accepted", to: "Done", actor: "human", via: "merge", commit: "def456" });
+    });
+
+    it("cancels an Accepted Ticket", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
+      await d.api.act("acme", id, "accept", {});
+
+      expect(await d.api.act("acme", id, "cancel", {})).toMatchObject({ id, state: "Cancelled" });
+    });
+
     it("rejects an In Review Ticket back to Ready only with a comment", async () => {
       await d.createProject("acme", "Acme");
       const id = await d.createTicket("acme", "Login page", "Ready");
@@ -397,6 +426,62 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const t = await d.api.act("acme", id, "release", {});
       expect(t.state).toBe("Ready");
       expect(t.comments).toEqual([]);
+    });
+
+    // ---- Requirements (code-central-74) ----
+    it("submits a Requirement as its Spec and three chained Stage Tickets, waiting for a Factory", async () => {
+      await d.createProject("acme", "Acme");
+      const r = await d.api.submitRequirement("acme", "Export a Spec as Markdown\nOne file, Tickets included.");
+      expect(r.spec).toMatchObject({ title: "Export a Spec as Markdown", body: "Export a Spec as Markdown\nOne file, Tickets included." });
+      expect(r.stages.map((t) => [t.labels, t.state])).toEqual([
+        [["stage:grilling"], "Ready"],
+        [["stage:spec"], "Ready"],
+        [["stage:tickets"], "Ready"],
+      ]);
+      expect(r.stages[1].blocked_by).toEqual([r.stages[0].id]);
+      expect(r.stages[2].blocked_by).toEqual([r.stages[1].id]);
+
+      const s = await d.api.getSpec("acme", r.spec.id);
+      expect(s).toMatchObject({ id: r.spec.id, title: "Export a Spec as Markdown", finished: false });
+      expect(Number.isNaN(Date.parse(s.created))).toBe(false);
+      expect(s.tickets.map((t) => t.id)).toEqual(r.stages.map((t) => t.id));
+      expect(s.requirement).toEqual({
+        stages: [
+          { name: "grilling", ticket: r.stages[0].id, state: "Ready" },
+          { name: "spec", ticket: r.stages[1].id, state: "Ready" },
+          { name: "tickets", ticket: r.stages[2].id, state: "Ready" },
+        ],
+        build: { done: 0, total: 0 },
+        waiting_for_factory: true,
+      });
+    });
+
+    it("refuses a Requirement with no text", async () => {
+      await d.createProject("acme", "Acme");
+      const e = await d.api.submitRequirement("acme", "  \n ").catch((e) => e);
+      expect(e).toBeInstanceOf(ApiError);
+      expect(e).toMatchObject({ status: 422, code: "invalid", field: "text" });
+    });
+
+    it("finds only Requirements with requirements: true, finished ones included when asked", async () => {
+      await d.createProject("acme", "Acme");
+      await d.createTicket("acme", "Not a Requirement", "Ready");
+      const r = await d.api.submitRequirement("acme", "Export a Spec");
+
+      const all = await d.api.findSpecs("acme");
+      expect(all.length).toBeGreaterThan(1);
+      expect(all.find((s) => s.id === r.spec.id)?.requirement?.waiting_for_factory).toBe(true);
+      expect(all.filter((s) => s.id !== r.spec.id).every((s) => s.requirement === undefined)).toBe(true);
+
+      const reqs = await d.api.findSpecs("acme", { requirements: true });
+      expect(reqs.map((s) => [s.id, s.title, s.finished])).toEqual([[r.spec.id, "Export a Spec", false]]);
+
+      for (const t of r.stages) await d.api.act("acme", t.id, "move", { to_state: "Done" });
+      expect(await d.api.findSpecs("acme", { requirements: true })).toEqual([]);
+      const delivered = await d.api.findSpecs("acme", { requirements: true, finished: true });
+      expect(delivered.map((s) => [s.id, s.finished])).toEqual([[r.spec.id, true]]);
+      expect(delivered[0].requirement).toMatchObject({ build: { done: 0, total: 0 }, waiting_for_factory: false });
+      expect(delivered[0].requirement!.stages.map((s) => s.state)).toEqual(["Done", "Done", "Done"]);
     });
 
     // ---- the Integration contract (ticket 42) ----

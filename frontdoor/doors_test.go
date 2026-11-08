@@ -150,13 +150,16 @@ var cases = map[string]opCase{
 	"finish": {
 		setup: claimedTicket,
 		ok: call{
-			mcp:  map[string]any{"ticket": "acme-3", "claim_id": "claim-1", "summary": "Done."},
-			http: httpCall{"POST", "/api/p/acme/tickets/3/finish", `{"claim_id":"claim-1","summary":"Done."}`},
-			cli:  []string{"acme-3", "--claim", "claim-1", "--summary", "Done."},
+			mcp:  map[string]any{"ticket": "acme-3", "claim_id": "claim-1", "summary": "Done.", "branch": "acme-3", "commit": "abc123"},
+			http: httpCall{"POST", "/api/p/acme/tickets/3/finish", `{"claim_id":"claim-1","summary":"Done.","branch":"acme-3","commit":"abc123"}`},
+			cli:  []string{"acme-3", "--claim", "claim-1", "--summary", "Done.", "--branch", "acme-3", "--commit", "abc123"},
 		},
 		check: func(t *testing.T, out map[string]any) {
 			field("next_step", "stop working this Ticket")(t, out)
-			field("state", "In Review")(t, out["ticket"].(map[string]any))
+			tk := out["ticket"].(map[string]any)
+			field("state", "In Review")(t, tk)
+			field("branch", "acme-3")(t, tk)
+			field("commit", "abc123")(t, tk)
 		},
 		bad: call{
 			mcp:  map[string]any{"ticket": "acme-3", "claim_id": "claim-9", "summary": "Done."},
@@ -373,7 +376,7 @@ func init() {
 		check: func(t *testing.T, out map[string]any) {
 			states, _ := out["states"].([]any)
 			actions, _ := out["actions"].([]any)
-			if len(states) != 9 || len(actions) != len(core.Workflow) || out["prose"] == "" {
+			if len(states) != 10 || len(actions) != len(core.Workflow) || out["prose"] == "" {
 				t.Fatalf("workflow %v", out)
 			}
 		},

@@ -19,11 +19,13 @@ type ClaimInput struct {
 	ResumeCommand *string `json:"resume_command,omitempty"`
 }
 
-// ClaimResult is claim's result: the Claim ID with the full Ticket view,
+// ClaimResult is claim's result: the Claim ID with the full Ticket view
+// and the Stage Guide for its Stage (implementation when it has none),
 // or {ticket: null} when nothing can be claimed.
 type ClaimResult struct {
-	ClaimID string      `json:"claim_id,omitempty"`
-	Ticket  *TicketView `json:"ticket"`
+	ClaimID    string          `json:"claim_id,omitempty"`
+	Ticket     *TicketView     `json:"ticket"`
+	StageGuide *StageGuideView `json:"stage_guide,omitempty"`
 }
 
 // FinishInput is finish's input.
@@ -31,6 +33,11 @@ type FinishInput struct {
 	Ticket  Ref    `json:"ticket"`
 	ClaimID string `json:"claim_id"`
 	Summary string `json:"summary"`
+	// Branch and Commit name the work's branch and its head commit. Both
+	// are optional and free-form; one left out keeps the stored value. A
+	// Ticket with a branch is Accepted, not Done, when the human accepts it.
+	Branch string `json:"branch,omitempty"`
+	Commit string `json:"commit,omitempty"`
 }
 
 // FinishResult is finish's result: the Ticket and the next step.
@@ -80,7 +87,8 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 			return err
 		}
 		v := c.ticketView(w, key, t)
-		res = ClaimResult{ClaimID: claim.ID, Ticket: &v}
+		g := stageGuide(guideStage(t))
+		res = ClaimResult{ClaimID: claim.ID, Ticket: &v, StageGuide: &g}
 		return nil
 	})
 	return res, err
@@ -123,16 +131,53 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 	if strings.TrimSpace(in.Summary) == "" {
 		return FinishResult{}, invalid("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
 	}
-	v, err := c.act(ctx, key, in.Ticket, "finish", in.ClaimID, in.Summary)
+	v, err := c.actThen(ctx, key, in.Ticket, "finish", in.ClaimID, in.Summary, func(t *store.Ticket) error {
+		if b := strings.TrimSpace(in.Branch); b != "" {
+			t.Branch = b
+		}
+		if cm := strings.TrimSpace(in.Commit); cm != "" {
+			t.Commit = cm
+		}
+		return nil
+	})
 	if err != nil {
 		return FinishResult{}, err
 	}
 	return FinishResult{Ticket: v, NextStep: nextStep("finish")}, nil
 }
 
-// Accept is the human's accept(ticket): In Review to Done.
+// Accept is the human's accept(ticket): In Review to Accepted when the
+// work's finish named a branch, so it waits to land (ADR 0006), and to
+// Done otherwise.
 func (c *Core) Accept(ctx context.Context, key string, in TicketInput) (TicketView, error) {
-	return c.act(ctx, key, in.Ticket, "accept", "", "")
+	return c.updateTicket(key, in.Ticket, func(t *store.Ticket) (bool, error) {
+		to := store.Done
+		if t.Branch != "" {
+			to = store.Accepted
+		}
+		return true, transitionTo(ctx, t, key, "accept", "", to, c.now())
+	})
+}
+
+// LandInput is land's input: the commit that put the work into the base.
+type LandInput struct {
+	Ticket Ref    `json:"ticket"`
+	Commit string `json:"commit"`
+}
+
+// Land is land(ticket, commit): human or agent, Accepted or In Review to
+// Done once the work is in the base. The commit is recorded on the Move,
+// with Via merge.
+func (c *Core) Land(ctx context.Context, key string, in LandInput) (TicketView, error) {
+	commit := strings.TrimSpace(in.Commit)
+	if commit == "" {
+		return TicketView{}, invalid("commit", "land needs the commit that put the work into the base")
+	}
+	return c.actThen(ctx, key, in.Ticket, "land", "", "", func(t *store.Ticket) error {
+		m := &t.Moves[len(t.Moves)-1]
+		m.Via, m.Commit = "merge", commit
+		return nil
+	})
 }
 
 // Reject is the human's reject(ticket, comment): In Review back to Ready,
@@ -149,6 +194,12 @@ func (c *Core) Reject(ctx context.Context, key string, in RejectInput) (TicketVi
 // the transition, then the action's note (if any) as a comment under the
 // Claim it was made on.
 func (c *Core) act(ctx context.Context, key string, ref Ref, name, claimID, note string) (TicketView, error) {
+	return c.actThen(ctx, key, ref, name, claimID, note, nil)
+}
+
+// actThen is act with then applied to the Ticket after the transition,
+// in the same write. An error from then abandons the write.
+func (c *Core) actThen(ctx context.Context, key string, ref Ref, name, claimID, note string, then func(*store.Ticket) error) (TicketView, error) {
 	return c.updateTicket(key, ref, func(t *store.Ticket) (bool, error) {
 		claim := 0
 		if live, ok := liveClaim(*t); ok {
@@ -160,6 +211,11 @@ func (c *Core) act(ctx context.Context, key string, ref Ref, name, claimID, note
 		}
 		if note != "" {
 			addComment(t, ActorOf(ctx), now, claim, note)
+		}
+		if then != nil {
+			if err := then(t); err != nil {
+				return false, err
+			}
 		}
 		return true, nil
 	})

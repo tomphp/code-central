@@ -1,4 +1,5 @@
-// accept: the human accepts an In Review Ticket into Done.
+// accept: the human accepts an In Review Ticket: into Accepted, to land,
+// when its finish named a branch, and into Done otherwise (ADR 0006).
 import { registerFakeAction } from "../fakeActions";
 import { fakeTransition } from "../fakeTransition";
 import type { TicketView } from "../types";
@@ -9,4 +10,4 @@ declare module "../api" {
   }
 }
 
-registerFakeAction("accept", (fake, t) => fakeTransition(fake, t, "accept", ["In Review"], "Done"));
+registerFakeAction("accept", (fake, t) => fakeTransition(fake, t, "accept", ["In Review"], t.branch ? "Accepted" : "Done"));
