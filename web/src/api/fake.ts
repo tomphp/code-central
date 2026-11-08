@@ -61,6 +61,7 @@ import {
   type SpecAcknowledgement,
   type SpecView,
   type StageName,
+  type State,
   type StateSummary,
   type SubmitRequirementResult,
   TICKET_FIELDS,
@@ -442,7 +443,7 @@ export class FakeApi implements Api {
         }),
       );
     }
-    return { spec: acknowledgeCreate(SPEC_FIELDS, spec), stages: stages.map((t) => acknowledgeCreate(TICKET_FIELDS, t)) };
+    return { spec: acknowledgeSpecCreate(spec), stages: stages.map(acknowledgeTicketCreate) };
   }
 
   // specQuestions reads a Spec from its seeded Tickets' spec, so a Spec
@@ -675,30 +676,35 @@ export class FakeApi implements Api {
   }
 }
 
-// acknowledgeCreate is a create's result, as the service derives it: the
-// fields the create filled in, in the view's order, never the id and
-// times every create sets.
-function acknowledgeCreate(fields: typeof SPEC_FIELDS, after: SpecView): SpecAcknowledgement;
-function acknowledgeCreate(fields: typeof TICKET_FIELDS, after: TicketView): TicketAcknowledgement;
-function acknowledgeCreate(fields: readonly string[], after: SpecView | TicketView) {
-  const v = after as unknown as Record<string, unknown>;
-  const changed = fields.filter((f) => !["id", "created", "updated"].includes(f) && !blank(v[f]));
-  return { id: after.id, updated: after.updated, changed, ..."state" in after && { state: after.state } };
-}
-
-// blank is whether a view's field holds what the empty record does.
-function blank(v: unknown): boolean {
-  if (v === undefined || v === "" || v === false) return true;
-  if (Array.isArray(v)) return v.length === 0;
-  if (typeof v === "object" && v) return Object.values(v).every(blank);
-  return false;
-}
-
-// acknowledge is a Ticket write's result, as the service derives it: the
-// fields whose value differs between the views before and after the write,
-// in the view's order, never updated.
-function acknowledge(before: TicketView, after: TicketView): TicketAcknowledgement {
-  const changed = TICKET_FIELDS.filter((f) => f !== "updated" && JSON.stringify(before[f]) !== JSON.stringify(after[f]));
+// written is a write's acknowledgement, as the service derives it: the
+// fields, in the view's order, whose value differs between the views
+// before and after the write, except those unlisted.
+function written<V extends SpecView | TicketView>(fields: readonly (keyof V & string)[], before: V, after: V, unlisted: string[]) {
+  const changed = fields.filter((f) => !unlisted.includes(f) && JSON.stringify(before[f]) !== JSON.stringify(after[f]));
   const edit = changed.includes("edits") ? after.edits.at(-1)?.number : undefined;
-  return { id: after.id, updated: after.updated, changed, ...(edit && { edit }), state: after.state };
+  return { id: after.id, updated: after.updated, changed, ...(edit && { edit }) };
+}
+
+// acknowledge is a Ticket write's result: written, never updated, with
+// the Ticket's State.
+function acknowledge(before: TicketView, after: TicketView): TicketAcknowledgement {
+  return { ...written(TICKET_FIELDS, before, after, ["updated"]), state: after.state };
+}
+
+// A create's acknowledgement is written from the empty record's view, as
+// the service's is, never listing the id and times every create sets.
+const CREATED = ["id", "created", "updated"];
+const EMPTY_SPEC: SpecView = { id: "", title: "", labels: [], tags: {}, created: "", updated: "", body: "", edits: [] };
+const EMPTY_TICKET: TicketView = {
+  id: "", title: "", state: "" as State, spec: { id: "", title: "" }, labels: [], tags: {}, blocked_by: [], blockers: [],
+  replacements: [], created: "", updated: "", description: "", claims: [], rounds: [], failure_reports: [], comments: [],
+  moves: [], edits: [], blocked: false, claimable: false,
+};
+
+function acknowledgeSpecCreate(after: SpecView): SpecAcknowledgement {
+  return written(SPEC_FIELDS, EMPTY_SPEC, after, CREATED);
+}
+
+function acknowledgeTicketCreate(after: TicketView): TicketAcknowledgement {
+  return { ...written(TICKET_FIELDS, EMPTY_TICKET, after, CREATED), state: after.state };
 }

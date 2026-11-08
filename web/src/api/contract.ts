@@ -463,9 +463,10 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(Number.isNaN(Date.parse(r.spec.updated))).toBe(false);
       expect(r.spec.changed).toEqual(["title", "body"]);
       expect(r.stages).toHaveLength(3);
+      const chained = ["title", "state", "spec", "labels", "blocked_by", "blockers", "description", "moves", "blocked"];
       for (const [i, t] of r.stages.entries()) {
-        wantAcknowledgement(t, t.id, "Ready", ["title", "state", "spec", "labels", "description", "moves"]);
-        expect(t.changed).toContain(i === 0 ? "claimable" : "blocked_by");
+        wantAcknowledgement(t, t.id, "Ready");
+        expect(t.changed).toEqual(i === 0 ? ["title", "state", "spec", "labels", "description", "moves", "claimable"] : chained);
       }
 
       const stages = await Promise.all(r.stages.map((t) => d.api.getTicket("acme", t.id)));
