@@ -2,7 +2,8 @@
 
 // Package e2e is the end-to-end tier: the real binary, a real store in a
 // temporary folder and real processes. Run it with `make e2e`, which
-// builds the binary and passes it in CODE_CENTRAL_BIN.
+// builds the binaries and passes them in CODE_CENTRAL_BIN and
+// CODE_CENTRAL_FACTORY_BIN.
 package e2e
 
 import (
@@ -23,26 +24,43 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-var bin string
+var bin, factoryBin string
 
+// TestMain finds the binaries, building any not passed in, and runs the
+// tests. Run by the Factory as claude, it is the fake claude instead.
 func TestMain(m *testing.M) {
-	bin = os.Getenv("CODE_CENTRAL_BIN")
-	if bin == "" {
-		dir, err := os.MkdirTemp("", "code-central-e2e")
-		if err != nil {
-			panic(err)
-		}
-		bin = filepath.Join(dir, "code-central")
-		build := exec.Command("go", "build", "-o", bin, "../cmd/code-central")
-		build.Stdout, build.Stderr = os.Stderr, os.Stderr
-		if err := build.Run(); err != nil {
-			panic(err)
-		}
-		code := m.Run()
-		os.RemoveAll(dir)
-		os.Exit(code)
+	if cc := os.Getenv(fakeClaudeEnv); cc != "" {
+		os.Exit(fakeClaude(cc, os.Args[1:]))
 	}
-	os.Exit(m.Run())
+	bin = os.Getenv("CODE_CENTRAL_BIN")
+	factoryBin = os.Getenv("CODE_CENTRAL_FACTORY_BIN")
+	var dir string
+	build := func(pkg, name string) string {
+		if dir == "" {
+			var err error
+			if dir, err = os.MkdirTemp("", "code-central-e2e"); err != nil {
+				panic(err)
+			}
+		}
+		out := filepath.Join(dir, name)
+		cmd := exec.Command("go", "build", "-o", out, pkg)
+		cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
+		if err := cmd.Run(); err != nil {
+			panic(err)
+		}
+		return out
+	}
+	if bin == "" {
+		bin = build("../cmd/code-central", "code-central")
+	}
+	if factoryBin == "" {
+		factoryBin = build("../cmd/code-central-factory", "code-central-factory")
+	}
+	code := m.Run()
+	if dir != "" {
+		os.RemoveAll(dir)
+	}
+	os.Exit(code)
 }
 
 // service is a running `code-central serve` on a free loopback port.
