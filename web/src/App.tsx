@@ -2,7 +2,7 @@ import type { Api } from "./api/api";
 import { projectOf } from "./api/api";
 import { Inbox } from "./inbox/Inbox";
 import { useInboxData, useLiveVersion, useSpec, useTicket } from "./live";
-import { defaultTicket, progress, reasonsOf } from "./requirement/progress";
+import { defaultTicket, needsMeCount, progress, reasonsOf } from "./requirement/progress";
 import { useNeedsMeTitle } from "./title";
 import { useUiLocation } from "./url";
 
@@ -23,7 +23,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
   const selected =
     loc.ticket ?? (requirement ? defaultTicket(progress(requirement.requirement, requirement.tickets, reasons)) : undefined);
   const ticket = useTicket(api, selected && projectOf(selected), selected, version);
-  useNeedsMeTitle(inbox.data?.needsMe.count);
+  useNeedsMeTitle(inbox.data && needsMeCount(inbox.data.needsMe));
 
   // One layout in v1. A later view (focus queue, board) is another case
   // here, reusing the same data and the shared Ticket pane and panels.

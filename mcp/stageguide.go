@@ -6,7 +6,7 @@ import (
 	"github.com/tomoram/code-central/core"
 )
 
-// Stage Guides (code-central-73).
+// Stage Guides (ticket 73).
 func init() {
 	tools["get_stage_guide"] = tool{
 		description: "Get a Stage Guide again (claim returns it): what a Ticket of that Stage produces and how to finish it.",

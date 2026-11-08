@@ -1,7 +1,7 @@
 // The Stage strip: Grilling · Spec · Tickets · Build n/m, one segment per
-// step. A queued step (waiting for a Factory) is dashed. With onPick its
-// segments are buttons that select the step's Ticket; without, it is a
-// picture only (inside a row link).
+// Stage and one for Build. A queued segment (waiting for a Factory) is
+// dashed. With onPick its segments are buttons that select the segment's
+// Ticket; without, it is a picture only (inside a row link).
 import type { Progress, Segment } from "./progress";
 
 export interface StripProps {
@@ -31,16 +31,16 @@ export function Strip({ p, onPick, current }: StripProps) {
         return (
           <li
             key={s.stage}
-            className={["seg", `step-${s.step}`, s.reason && `reason-${s.reason}`].filter(Boolean).join(" ")}
-            data-step={s.step}
+            className={["seg", `progress-${s.progress}`, s.reason && `reason-${s.reason}`].filter(Boolean).join(" ")}
+            data-progress={s.progress}
             aria-current={selected ? "step" : undefined}
           >
             {onPick ? (
-              <button type="button" disabled={!s.ticket && !p.build.length} onClick={() => onPick(s)} title={stepTitle(s)}>
+              <button type="button" disabled={!s.ticket && !p.build.length} onClick={() => onPick(s)} title={segmentTitle(s)}>
                 {label}
               </button>
             ) : (
-              <span title={stepTitle(s)}>{label}</span>
+              <span title={segmentTitle(s)}>{label}</span>
             )}
           </li>
         );
@@ -49,8 +49,8 @@ export function Strip({ p, onPick, current }: StripProps) {
   );
 }
 
-const STEP_TITLE = { done: "Done", needs: "Needs you", queued: "Waiting for a Factory", running: "A Factory is on it", waiting: "Not started" };
+const PROGRESS_TITLE = { done: "Done", needs: "Needs you", queued: "Waiting for a Factory", running: "A Factory is on it", waiting: "Not started" };
 
-function stepTitle(s: Segment) {
-  return `${s.name}: ${STEP_TITLE[s.step]}`;
+function segmentTitle(s: Segment) {
+  return `${s.name}: ${PROGRESS_TITLE[s.progress]}`;
 }

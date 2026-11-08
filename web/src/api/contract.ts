@@ -428,7 +428,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(t.comments).toEqual([]);
     });
 
-    // ---- Requirements (code-central-74) ----
+    // ---- Requirements (ticket 74) ----
     it("submits a Requirement as its Spec and three chained Stage Tickets, waiting for a Factory", async () => {
       await d.createProject("acme", "Acme");
       const r = await d.api.submitRequirement("acme", "Export a Spec as Markdown\nOne file, Tickets included.");

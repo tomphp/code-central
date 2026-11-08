@@ -120,8 +120,8 @@ describe("the Requirement pane", () => {
     await within(detail()).findByRole("region", { name: "Requirement" });
     expect(pane()).toHaveTextContent("acme-1");
     expect(pane()).toHaveTextContent("submitted just now");
-    expect(segment(/^Grilling/).closest("li")).toHaveAttribute("data-step", "queued");
-    expect(segment(/^Spec/).closest("li")).toHaveAttribute("data-step", "waiting");
+    expect(segment(/^Grilling/).closest("li")).toHaveAttribute("data-progress", "queued");
+    expect(segment(/^Spec/).closest("li")).toHaveAttribute("data-progress", "waiting");
     expect(segment(/^Build/)).toBeDisabled();
     expect(within(pane()).getByText("Waiting for a Factory to claim Grilling. Nothing needs you yet.")).toBeInTheDocument();
     // With no Ticket needing the human, the Ticket pane opens on the current Stage.
@@ -136,7 +136,7 @@ describe("the Requirement pane", () => {
     expect(pane()).toHaveTextContent("submitted 2h ago");
     expect(within(pane()).getByRole("heading", { name: "Archive finished Projects" })).toBeInTheDocument();
     expect(segment(/^Build/)).toHaveTextContent("Build 1/3");
-    expect(segment(/^Build/).closest("li")).toHaveAttribute("data-step", "needs");
+    expect(segment(/^Build/).closest("li")).toHaveAttribute("data-progress", "needs");
     expect(segment(/^Build/).closest("li")).toHaveAttribute("aria-current", "step");
     // acme-7 can be claimed, but something needs the human.
     expect(within(pane()).getByText("Waiting for a Factory to claim a Build Ticket.")).toBeInTheDocument();
@@ -168,12 +168,12 @@ describe("the Requirement pane", () => {
 
     expect(await within(detail()).findByText("Waiting for a Factory to claim a Build Ticket. Nothing needs you yet.")).toBeInTheDocument();
     expect(segment(/^Build/)).toHaveTextContent("Build 2/3");
-    expect(segment(/^Build/).closest("li")).toHaveAttribute("data-step", "queued");
+    expect(segment(/^Build/).closest("li")).toHaveAttribute("data-progress", "queued");
   });
 });
 
 describe("the Requirements view", () => {
-  it("lists every Requirement with its strip, delivered ones included, and opens one", async () => {
+  it("lists every Requirement with its strip, finished ones included, and opens one", async () => {
     const fake = await building(); // acme-1
     const fresh = await fake.submitRequirement("acme", "Export a Spec"); // acme-9
     const done = await fake.submitRequirement("acme", "Render Markdown"); // acme-13
@@ -191,7 +191,7 @@ describe("the Requirements view", () => {
     expect(row("acme-1")).toHaveTextContent("Build: In Review");
     expect(within(row("acme-1")).getByLabelText("Needs you")).toBeInTheDocument();
     expect(row(fresh.spec.id)).toHaveTextContent("Grilling: waiting for a Factory");
-    expect(row(done.spec.id)).toHaveTextContent("Delivered");
+    expect(row(done.spec.id)).toHaveTextContent("Finished");
     expect(params().get("list")).toBe("requirements");
 
     await userEvent.click(row("acme-1"));

@@ -29,7 +29,7 @@ export function RequirementRow({ spec, p, link }: RequirementRowProps) {
 // headline is a Requirement's one line: what needs the human, else what
 // it is waiting for.
 export function headline(spec: ProjectSpec, p: Progress): string {
-  if (spec.finished) return p.total ? `Delivered · ${p.done} of ${p.total} Tickets Done` : "Delivered";
+  if (spec.finished) return p.total ? `Finished · ${p.done} of ${p.total} Tickets Done` : "Finished";
   const n = p.needs[0];
   if (n) {
     const where = n.stage ? p.segments.find((s) => s.stage === n.stage)!.name : "Build";
@@ -37,5 +37,5 @@ export function headline(spec: ProjectSpec, p: Progress): string {
   }
   if (p.waitingForFactory) return `${p.current.name}: waiting for a Factory`;
   if (p.current.stage === "build") return p.total ? `Build: ${p.done} of ${p.total} Done` : "Build: no Tickets yet";
-  return `${p.current.name}: ${p.current.step === "running" ? "a Factory is on it" : "not started"}`;
+  return `${p.current.name}: ${p.current.progress === "running" ? "a Factory is on it" : "not started"}`;
 }

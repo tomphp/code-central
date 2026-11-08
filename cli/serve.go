@@ -132,7 +132,7 @@ func runServe(ctx context.Context, e Env, args []string) error {
 	c := core.New(st, clk, ids.Random{})
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
-	go c.WatchSilent(ctx, ticker.C, func(project, ticketID string) {
+	go c.WatchTimedReasons(ctx, ticker.C, func(project, ticketID string) {
 		c.Events().Publish(events.Event{Type: events.TicketChanged, Project: project, ID: ticketID})
 	})
 	handler := frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), bindHosts...), e.version())

@@ -87,7 +87,7 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 			return err
 		}
 		v := c.ticketView(w, key, t)
-		g := stageGuide(guideStage(t))
+		g := stageGuide(GuideStage(t.Labels))
 		res = ClaimResult{ClaimID: claim.ID, Ticket: &v, StageGuide: &g}
 		return nil
 	})

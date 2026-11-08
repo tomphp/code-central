@@ -88,7 +88,7 @@ func TestTheProseCoversTheRulesTheTableCannotSay(t *testing.T) {
 	for _, want := range []string{
 		"Three exits on trouble", "`post_round`", "`report_failure`", "`give_up`",
 		"A send-back with no note means nothing has changed",
-		"branch named after the Ticket ID", "commit and push often",
+		"branch named after the Ticket ID", "commit often", "Don't push",
 		"Holding several Claims", "Silence is tracked per session", "same resume command", "same files",
 	} {
 		if !strings.Contains(prose, want) {

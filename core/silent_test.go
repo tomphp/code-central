@@ -159,7 +159,7 @@ func TestTheWatchSendsTicketChangedWhenAClaimTurnsSilentOrStopsBeingSilent(t *te
 	watchCtx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
-		f.core.WatchSilent(watchCtx, ticks, func(project, id string) { changes <- change{project, id} })
+		f.core.WatchTimedReasons(watchCtx, ticks, func(project, id string) { changes <- change{project, id} })
 		close(done)
 	}()
 	defer func() { stop(); <-done }()

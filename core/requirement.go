@@ -9,7 +9,7 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Requirements (Spec code-central-66, ADR 0007). A Requirement is a Spec
+// Requirements (Spec 66, ADR 0007). A Requirement is a Spec
 // with Stage Tickets: the human submits its text, and Code Central
 // creates the Spec and its three Stages in one staged write.
 
@@ -46,18 +46,13 @@ type SubmitRequirementResult struct {
 	Stages []TicketView `json:"stages"`
 }
 
-// stageTitles are each Stage Ticket's title, before the Requirement's.
-var stageTitles = map[string]string{
-	"grilling": "Grilling",
-	"spec":     "Spec",
-	"tickets":  "Tickets",
-}
-
-// stageDescriptions say what each Stage does, given the Spec's ID.
-var stageDescriptions = map[string]string{
-	"grilling": "Grill the human on the Requirement in Spec [%[1]s](%[1]s), until every decision, new term and open point is settled.\n",
-	"spec":     "Write the Spec for the Requirement in Spec [%[1]s](%[1]s), from its text and the grilling Ticket's Rounds and resolution.\n",
-	"tickets":  "Slice the Spec [%[1]s](%[1]s) into implementation Tickets.\n",
+// stageTickets are what submit_requirement writes for each Stage: its
+// Ticket's title, before the Requirement's, and its description, given
+// the Spec's ID. Each Stage's guide is stageguides/<name>.md.
+var stageTickets = map[string]struct{ title, description string }{
+	"grilling": {"Grilling", "Grill the human on the Requirement in Spec [%[1]s](%[1]s), until every decision, new term and open point is settled.\n"},
+	"spec":     {"Spec", "Write the Spec for the Requirement in Spec [%[1]s](%[1]s), from its text and the grilling Ticket's Rounds and resolution.\n"},
+	"tickets":  {"Tickets", "Slice the Spec [%[1]s](%[1]s) into implementation Tickets.\n"},
 }
 
 // SubmitRequirement is submit_requirement(text). It writes as human
@@ -84,9 +79,9 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 				blockedBy = []int{n - 1}
 			}
 			im.Tickets = append(im.Tickets, store.Ticket{
-				Number: n, Title: stageTitles[stage] + ": " + title, State: store.Ready, Spec: specN,
+				Number: n, Title: stageTickets[stage].title + ": " + title, State: store.Ready, Spec: specN,
 				Labels: []string{StageLabel(stage)}, BlockedBy: blockedBy, Created: now, Updated: now,
-				Description: fmt.Sprintf(stageDescriptions[stage], specID),
+				Description: fmt.Sprintf(stageTickets[stage].description, specID),
 				Moves:       []store.Move{{To: store.Ready, Actor: string(Human), Time: now, Via: "submit_requirement"}},
 			})
 			stageNs = append(stageNs, n)
@@ -150,9 +145,10 @@ type BuildProgress struct {
 	Total int `json:"total"`
 }
 
-// stageOf is the Stage a Ticket's Labels mark it as, or "".
-func stageOf(t store.Ticket) string {
-	for _, l := range t.Labels {
+// StageOf is the Stage a Ticket's Labels mark it as, or "" for an
+// implementation Ticket.
+func StageOf(labels []string) string {
+	for _, l := range labels {
 		if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages, name) {
 			return name
 		}
@@ -165,7 +161,7 @@ func stageOf(t store.Ticket) string {
 func (c *Core) requirementView(r store.Reader, key string, tickets []store.Ticket) *RequirementView {
 	var stages, build []store.Ticket
 	for _, t := range tickets {
-		if stageOf(t) != "" {
+		if StageOf(t.Labels) != "" {
 			stages = append(stages, t)
 		} else {
 			build = append(build, t)
@@ -175,7 +171,7 @@ func (c *Core) requirementView(r store.Reader, key string, tickets []store.Ticke
 		return nil
 	}
 	slices.SortStableFunc(stages, func(a, b store.Ticket) int {
-		return slices.Index(Stages, stageOf(a)) - slices.Index(Stages, stageOf(b))
+		return slices.Index(Stages, StageOf(a.Labels)) - slices.Index(Stages, StageOf(b.Labels))
 	})
 	// claimable is a Ticket a Factory could claim now; one waiting on the
 	// human doesn't count.
@@ -187,7 +183,7 @@ func (c *Core) requirementView(r store.Reader, key string, tickets []store.Ticke
 	current := -1
 	for i, t := range stages {
 		reason, _ := c.reasonOf(r, key, t)
-		v.Stages = append(v.Stages, StageView{Name: stageOf(t), Ticket: DisplayID(key, t.Number), State: t.State, NeedsMeReason: reason})
+		v.Stages = append(v.Stages, StageView{Name: StageOf(t.Labels), Ticket: DisplayID(key, t.Number), State: t.State, NeedsMeReason: reason})
 		if current < 0 && t.State != store.Done {
 			current = i
 		}

@@ -219,7 +219,7 @@ describe("Requirements in Needs Me", () => {
 
   it("keeps Requirements not waiting on the human in a collapsed in-flight group", async () => {
     const fake = await requirements();
-    const done = await fake.submitRequirement("acme", "Delivered work"); // acme-16
+    const done = await fake.submitRequirement("acme", "Finished work"); // acme-16
     for (const t of done.stages) fake.updateTicket(t.id, { state: "Done" });
     renderApp(fake);
     const summary = await within(list()).findByText("Requirements in flight (1): not waiting on you");
@@ -228,7 +228,7 @@ describe("Requirements in Needs Me", () => {
     const row = within(group).getByRole("link", { name: /acme-11/, hidden: true });
     expect(row).not.toBeVisible();
     expect(row).toHaveTextContent("Grilling: waiting for a Factory");
-    // Neither the Requirement in Build, whose Tickets show as rows, nor the delivered one.
+    // Neither the Requirement in Build, whose Tickets show as rows, nor the finished one.
     expect([...group.querySelectorAll<HTMLElement>("a[data-id]")].map((a) => a.dataset.id)).toEqual(["acme-11"]);
   });
 
@@ -253,6 +253,28 @@ describe("Requirements in Needs Me", () => {
     renderApp(await requirements());
     // acme-1's row, acme-9, acme-10 and acme-15.
     await waitFor(() => expect(within(nav()).getByRole("button", { name: "Needs Me 4" })).toBeInTheDocument());
+  });
+
+  it("counts Requirement rows, not Stage Tickets, in the tab title and All Projects too", async () => {
+    const fake = await requirements();
+    // A second Stage Ticket of acme-1 needing the human is still one row.
+    fake.updateTicket("acme-2", { state: "Failed" });
+    fake.setNeedsMe([
+      { reason: "needs_answer", tickets: [{ id: "acme-3", round: { number: 1, open: 1, questions: 1 } }] },
+      {
+        reason: "failed",
+        tickets: [
+          { id: "acme-2", failure: { headline: "Lost", reports: 1 } },
+          { id: "acme-10", failure: { headline: "Tests fail", reports: 1 } },
+          { id: "acme-15", failure: { headline: "Lint", reports: 1 } },
+        ],
+      },
+      { reason: "in_review", tickets: [{ id: "acme-9", summary: "Menu item added" }] },
+    ]);
+    renderApp(fake);
+    await waitFor(() => expect(within(nav()).getByRole("button", { name: "Needs Me 4" })).toBeInTheDocument());
+    expect(within(nav()).getByRole("button", { name: "All Projects 4" })).toBeInTheDocument();
+    await waitFor(() => expect(document.title).toBe("(4) Code Central"));
   });
 });
 

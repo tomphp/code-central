@@ -8,7 +8,7 @@ import (
 	"github.com/tomoram/code-central/core"
 )
 
-// Accepted and land (code-central-71).
+// Accepted and land (ticket 71).
 func init() {
 	cases["land"] = opCase{
 		setup: acceptedTicket,

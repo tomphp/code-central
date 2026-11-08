@@ -2,10 +2,10 @@
 // waiting on the human: a new Round, a new Failure Report, a Claim
 // turning Silent, or a Claim turning Long (once per Claim). It listens to core's change notices and also looks at
 // every Ticket on its own timer, as the spec has it: serve's
-// core.WatchSilent does publish a notice when a Claim turns Silent, but
+// core.WatchTimedReasons does publish a notice when a Claim turns Silent, but
 // the events bus drops notices for a slow subscriber, and the timer is
 // what still catches a crossing (or a Round) whose notice was dropped,
-// and works wherever WatchSilent isn't running. Events are gathered over Window into one Notification or one
+// and works wherever WatchTimedReasons isn't running. Events are gathered over Window into one Notification or one
 // summary. At startup it sends one summary if Needs Me is not empty.
 package notify
 

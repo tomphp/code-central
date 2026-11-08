@@ -36,7 +36,7 @@ func TestTheWatchSendsTicketChangedWhenAcceptedWorkTurnsNotLanded(t *testing.T) 
 	watchCtx, stop := context.WithCancel(ctx)
 	done := make(chan struct{})
 	go func() {
-		f.core.WatchSilent(watchCtx, ticks, func(_, id string) { changes <- id })
+		f.core.WatchTimedReasons(watchCtx, ticks, func(_, id string) { changes <- id })
 		close(done)
 	}()
 	defer func() { stop(); <-done }()

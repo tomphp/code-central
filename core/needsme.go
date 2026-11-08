@@ -108,11 +108,11 @@ type NeedsMeRequirement struct {
 // needsMeRequirement is the Requirement t is on, or nil when its Spec
 // isn't one.
 func needsMeRequirement(r store.Reader, key string, t store.Ticket) *NeedsMeRequirement {
-	if !slices.ContainsFunc(specTickets(r, key, t.Spec), func(st store.Ticket) bool { return stageOf(st) != "" }) {
+	if !slices.ContainsFunc(specTickets(r, key, t.Spec), func(st store.Ticket) bool { return StageOf(st.Labels) != "" }) {
 		return nil
 	}
 	sp, _ := r.Spec(key, t.Spec)
-	return &NeedsMeRequirement{Spec: DisplayID(key, t.Spec), Title: sp.Title, Stage: stageOf(t)}
+	return &NeedsMeRequirement{Spec: DisplayID(key, t.Spec), Title: sp.Title, Stage: StageOf(t.Labels)}
 }
 
 // RoundSummary is a Round's number and how many of its Questions are open.
@@ -221,21 +221,14 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 		return ReasonNeedsAnswer, entered(t)
 	case store.Answered:
 		return ReasonAnswered, entered(t)
-	case store.InProgress:
-		if s := c.silentSince(t); s != nil {
-			return ReasonSilentClaim, *s
-		}
-		if s := c.longSince(t); s != nil {
-			return ReasonLongClaim, *s
+	case store.InProgress, store.Accepted:
+		if reason, since := c.timedReason(t); reason != "" {
+			return reason, since
 		}
 	case store.Failed:
 		return ReasonFailed, entered(t)
 	case store.InReview:
 		return ReasonInReview, entered(t)
-	case store.Accepted:
-		if s := c.notLandedSince(t); s != nil {
-			return ReasonAcceptedNotLanded, *s
-		}
 	}
 	if b, ok := cancelledBlocker(r, key, t); ok {
 		return ReasonBlockedByCancelled, cancelledAt(r, key, b)
