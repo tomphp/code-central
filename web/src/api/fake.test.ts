@@ -105,6 +105,8 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       }
       return t.id;
     },
+    // ticket 109
+    postSessionEvents: async (session_id, events) => fake.postSessionEvents(session_id, events),
     close: async () => {},
   };
 });

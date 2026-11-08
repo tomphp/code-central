@@ -54,6 +54,15 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
       await as(`/api/p/${key}/integration/set_external_state`, { target: id, external_state });
       return id;
     },
+    // ticket 109: as a Factory; the endpoint answers 204 with no body.
+    postSessionEvents: async (session_id, events) => {
+      const res = await fetch(svc.url + "/api/session-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id, events }),
+      });
+      if (res.status !== 204) throw new Error(`session-events: ${res.status}`);
+    },
     close: svc.stop,
   };
 });

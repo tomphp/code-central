@@ -188,6 +188,9 @@ export interface TicketRow {
   blocked: boolean;
   updated: string;
   link?: LinkView;
+  // latest_event is the latest Session Event of the Ticket's live Claim;
+  // left out when there is none.
+  latest_event?: LatestEvent;
 }
 
 export interface FindTicketsFilter {
@@ -229,6 +232,32 @@ export interface ClaimView {
   last_activity: string;
   ended?: string;
   ended_by?: string;
+  // latest_event is the Claim's latest Session Event, shown short; left
+  // out when the Claim has none.
+  latest_event?: LatestEvent;
+}
+
+export type SessionEventKind = "text" | "tool_call" | "tool_result" | "factory";
+
+// A Session Event as a Factory posts it (POST /api/session-events): one
+// thing a Claim's session did. Code Central treats tool and text as
+// opaque strings.
+export interface SessionEvent {
+  time: string;
+  kind: SessionEventKind;
+  text: string;
+  tool?: string;
+  tool_use_id?: string;
+  is_error?: boolean;
+  truncated?: boolean;
+}
+
+// A Claim's latest Session Event, shown short: text is one line of at
+// most 120 characters. Computed on read, never stored.
+export interface LatestEvent {
+  kind: SessionEventKind;
+  text: string;
+  time: string;
 }
 
 export interface FailureReportView {

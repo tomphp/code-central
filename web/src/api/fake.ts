@@ -19,6 +19,11 @@
 // State summary, finished, and a Requirement's requirement block
 // (a Stage's Needs Me reason is Needs Me's, as set by setNeedsMe).
 // submitRequirement writes a Spec and its three Stage Tickets.
+//
+// postSessionEvents stands in for a Factory's POST /api/session-events: the
+// events go to the newest Claim with that session ID, and each Claim
+// view, and each row of a Ticket with a live Claim, shows its latest
+// event shown short, as the service works it out.
 import { numberOf, type Api, type EventHandlers, type TicketAction, type TicketActions } from "./api";
 import { fakeActions } from "./fakeActions";
 import {
@@ -27,6 +32,7 @@ import {
   type ChangeEvent,
   type FindSpecsFilter,
   type FindTicketsFilter,
+  type LatestEvent,
   type LinkedRow,
   type Mode,
   type NeedsMeReason,
@@ -35,6 +41,7 @@ import {
   type ProjectRow,
   type ProjectView,
   type RequirementView,
+  type SessionEvent,
   type SpecDetail,
   type SpecQuestions,
   type SpecRow,
@@ -71,6 +78,10 @@ const STAGES: { name: StageName; title: string }[] = [
 const stageOf = (t: { labels: string[] }) => STAGES.find((s) => t.labels.includes(`stage:${s.name}`))?.name;
 export type SeedRow = Partial<NeedsMeRow> & { id: string };
 
+// LATEST_EVENT_LIMIT is the most characters the latest event's text keeps,
+// as core's LatestEventLimit.
+const LATEST_EVENT_LIMIT = 120;
+
 export class FakeApi implements Api {
   now = new Date("2026-11-07T09:00:00Z");
   // calls records each read and action by name, for tests that check a refetch.
@@ -80,6 +91,8 @@ export class FakeApi implements Api {
   private specs = new Map<string, SpecView>();
   private groups: { reason: NeedsMeReason; tickets: NeedsMeRow[] }[] = [];
   private subs = new Set<EventHandlers>();
+  // transcripts is each Claim's Session Events, keyed by Ticket ID and Claim number.
+  private transcripts = new Map<string, SessionEvent[]>();
 
   // ---- seeding ----
 
@@ -169,6 +182,26 @@ export class FakeApi implements Api {
         };
       }),
     }));
+  }
+
+  // postSessionEvents adds a session's Session Events to the newest Claim
+  // with that session ID, live or ended, as a Factory's post would. It
+  // counts as activity on the session's live Claims and sends
+  // ticket.changed (unthrottled: the fake holds data, not timing). With
+  // no such Claim the events are dropped.
+  postSessionEvents(session_id: string, events: SessionEvent[]) {
+    let newest: { t: TicketView; number: number; started: string } | undefined;
+    for (const t of this.tickets.values()) {
+      for (const c of t.claims) {
+        if (c.session_id !== session_id) continue;
+        if (!c.ended) c.last_activity = this.now.toISOString();
+        if (!newest || c.started > newest.started) newest = { t, number: c.number, started: c.started };
+      }
+    }
+    if (!newest || !events.length) return;
+    const k = `${newest.t.id}#${newest.number}`;
+    this.transcripts.set(k, [...(this.transcripts.get(k) ?? []), ...structuredClone(events)]);
+    this.emit({ type: "ticket.changed", project: this.projectOf(newest.t.id), id: newest.t.id });
   }
 
   // ---- for actions' fake behaviour (src/api/actions/) ----
@@ -403,7 +436,36 @@ export class FakeApi implements Api {
       blocked: t.blocked,
       updated: t.updated,
       ...(t.link && { link: { ...t.link } }),
+      ...this.liveLatest(t),
     }));
+  }
+
+  // liveLatest is a row's latest_event: its live Claim's, if it has one.
+  private liveLatest(t: TicketView): { latest_event?: LatestEvent } {
+    const live = t.claims.find((c) => !c.ended);
+    const latest_event = live && this.latestEvent(t.id, live.number);
+    return latest_event ? { latest_event } : {};
+  }
+
+  // latestEvent is a Claim's latest Session Event shown short, as core's
+  // latestEvent: a tool result as "<Tool> result" or "<Tool> failed",
+  // naming the tool from the call it answers; anything else as its first
+  // non-empty line; cut to LATEST_EVENT_LIMIT characters.
+  private latestEvent(ticket: string, claim: number): LatestEvent | undefined {
+    const events = this.transcripts.get(`${ticket}#${claim}`) ?? [];
+    const e = events.at(-1);
+    if (!e) return undefined;
+    let line: string;
+    if (e.kind === "tool_result") {
+      const call = e.tool_use_id ? [...events].reverse().find((c) => c.kind === "tool_call" && c.tool_use_id === e.tool_use_id) : undefined;
+      const tool = e.tool || call?.tool || "Tool";
+      line = `${tool} ${e.is_error ? "failed" : "result"}`;
+    } else {
+      line = e.text.split("\n").map((l) => l.trim()).find((l) => l) ?? "";
+    }
+    const chars = [...line];
+    const text = chars.length <= LATEST_EVENT_LIMIT ? line : chars.slice(0, LATEST_EVENT_LIMIT - 1).join("") + "…";
+    return { kind: e.kind, text, time: e.time };
   }
 
   // requirementOf is a Needs Me row's requirement field: set when the
@@ -481,6 +543,10 @@ export class FakeApi implements Api {
   private view(t: TicketView): TicketView {
     const reason = this.rows().find((r) => r.id === t.id)?.reason;
     const v = structuredClone(t);
+    for (const c of v.claims) {
+      const latest = this.latestEvent(t.id, c.number);
+      if (latest) c.latest_event = latest;
+    }
     if (reason) v.needs_me_reason = reason;
     else delete v.needs_me_reason;
     return v;
