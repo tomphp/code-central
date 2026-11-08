@@ -17,16 +17,28 @@ The short, permanent name that identifies a Project to anything connecting to Co
 _Avoid_: Slug, Project ID
 
 **Factory**:
-An agent-based orchestrator that automates the delivery of work.
-_Avoid_: Controller, runner
+A program outside Code Central that claims Tickets and runs agents on them to deliver work.
+_Avoid_: Controller, runner, orchestrator
 
 **Spec**:
 The description of a piece of work, such as a feature or user story, delivered through one or more Tickets.
 _Avoid_: Epic, feature, PRD
 
+**Requirement**:
+A Spec started from the human's free text and defined through Stages before it is built. Its free text is the Requirement's text.
+_Avoid_: Prompt, feature request, idea
+
 **Ticket**:
 A unit of work within a Spec. Every Ticket belongs to exactly one Spec.
 _Avoid_: Issue, task, card
+
+**Stage**:
+One of the three fixed steps that turn a Requirement's text into implementation Tickets (grilling, spec and tickets), each done as its own Ticket.
+_Avoid_: Phase, step, definition Ticket
+
+**Stage Guide**:
+Code Central's instructions telling an agent what a Stage must produce and how to finish it. Implementation Tickets get one too.
+_Avoid_: Prompt, playbook, skill
 
 **State**:
 The single position a Ticket occupies in the delivery workflow.
@@ -35,6 +47,10 @@ _Avoid_: Status
 **Finished**:
 A Ticket that is Done or Cancelled, or a Spec that has Tickets and all of them are finished.
 _Avoid_: Closed, archived, complete
+
+**Land**:
+For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing.
+_Avoid_: Merge, ship, deliver, complete
 
 **Blocker**:
 A Ticket in the same Project that must reach Done before another Ticket can be claimed.
@@ -52,9 +68,17 @@ _Avoid_: Lock, assignment
 The identifier Code Central issues with a Claim, which proves the holder on every write that needs one.
 _Avoid_: Token, holder ID
 
+**Resume Command**:
+The command, given by whoever claims, that brings a Claim's session back from its working directory.
+_Avoid_: Resume string, attach command
+
 **Silent Claim**:
 A Claim on a Ticket in progress with no recent activity, which may mean its session has died.
 _Avoid_: Stale, stalled, lost
+
+**Long Claim**:
+A Claim on a Ticket in progress that is still active but hasn't moved for a long time, which may mean its agent is going round in circles.
+_Avoid_: Looping, runaway, stuck
 
 **Actor**:
 Who made a change: the human, an agent, or an Integration.
@@ -81,7 +105,7 @@ An agent's permanent record of what broke on a Ticket, why, and what to fix, pos
 _Avoid_: Error, incident
 
 **Label**:
-A free-form name on a Spec or Ticket, with no workflow meaning.
+A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels are reserved, and mark a Ticket's Stage.
 _Avoid_: Category
 
 **Tag**:
