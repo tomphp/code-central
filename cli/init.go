@@ -168,8 +168,12 @@ func isCode(err error, code core.Code) bool {
 	return errors.As(err, &ce) && ce.Code == code
 }
 
-func serviceURL(e Env) string {
-	if u := e.Getenv("CODE_CENTRAL_URL"); u != "" {
+func serviceURL(e Env) string { return ServiceURL(e.Getenv) }
+
+// ServiceURL is the service every client talks to: CODE_CENTRAL_URL, else
+// client.DefaultURL.
+func ServiceURL(getenv func(string) string) string {
+	if u := getenv("CODE_CENTRAL_URL"); u != "" {
 		return u
 	}
 	return client.DefaultURL

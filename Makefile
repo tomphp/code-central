@@ -41,11 +41,13 @@ $(WEB_DEPS): web/package.json web/package-lock.json
 web: $(WEB_DEPS)
 	npm --prefix web run build
 
-# Builds the binary with the built UI embedded (-tags webdist). In
-# development, run `code-central serve` and `npm --prefix web run dev`:
-# Vite serves the UI on :5173 and proxies /api to the service.
+# Builds the binary with the built UI embedded (-tags webdist), and the
+# local Factory, code-central-factory. In development, run
+# `code-central serve` and `npm --prefix web run dev`: Vite serves the UI
+# on :5173 and proxies /api to the service.
 build: web
 	go build -tags webdist -ldflags "$(LDFLAGS)" -o bin/code-central ./cmd/code-central
+	go build -o bin/code-central-factory ./cmd/code-central-factory
 
 # Builds the binary, then runs the end-to-end tier against it (real
 # binary, real store in a temporary folder, never port 7733): the Go
