@@ -106,7 +106,7 @@ func TestTheFactorysLinesAboutAClaimArePostedToItsTranscript(t *testing.T) {
 	h.Answer(id, "Green")
 	r.Poll()
 	h.WaitFor("the resumed turn to end", func() bool { return strings.Count(r.Stdout(), id+" turn ended") == 2 })
-	tr := h.Transcript(id, 1)
+	var tr core.TranscriptView
 	h.WaitFor("the second turn ended line in the Transcript", func() bool {
 		tr = h.Transcript(id, 1)
 		return len(tr.Events) == 4

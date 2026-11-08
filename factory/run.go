@@ -551,6 +551,9 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, onEvent func(core.Ses
 			continue
 		}
 		for _, e := range streamEvents(msg, time.Now(), tools, dir) {
+			if e.Kind == eventText {
+				end.LastText = e.Text
+			}
 			onEvent(e)
 		}
 		switch msg.Type {
@@ -561,11 +564,6 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, onEvent func(core.Ses
 		case "assistant":
 			if msg.Error != "" {
 				end.APIError = msg.Error
-			}
-			for _, c := range msg.Message.Content {
-				if c.Type == "text" && strings.TrimSpace(c.Text) != "" {
-					end.LastText = c.Text
-				}
 			}
 		case "result":
 			var r result

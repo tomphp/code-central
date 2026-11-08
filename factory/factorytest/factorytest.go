@@ -84,12 +84,13 @@ type Harness struct {
 	Backoff time.Duration
 	// URL is the Code Central the Factory and its sessions reach: Server
 	// behind a proxy that SetDown can take down.
-	URL     string
-	down    atomic.Bool
-	refused sync.Map // path -> *atomic.Int64, requests refused while down
-	data    string   // scripts/ and calls/
-	env     map[string]string
-	spec    string
+	URL       string
+	down      atomic.Bool
+	refusedMu sync.Mutex
+	refused   map[string]int64 // requests refused while down, by path
+	data      string           // scripts/ and calls/
+	env       map[string]string
+	spec      string
 }
 
 // New starts a Code Central with Project "acme" and a git repo on branch
@@ -108,6 +109,7 @@ func New(t testing.TB) *Harness {
 		Bin:     filepath.Join(root, "bin"),
 		data:    filepath.Join(root, "data"),
 		Backoff: time.Millisecond,
+		refused: map[string]int64{},
 	}
 	for _, d := range []string{h.Repo, h.Home, h.Bin, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
 		must(t, os.MkdirAll(d, 0o755))
@@ -153,8 +155,9 @@ func (h *Harness) startProxy() string {
 			rp.ServeHTTP(w, r)
 			return
 		}
-		n, _ := h.refused.LoadOrStore(r.URL.Path, &atomic.Int64{})
-		n.(*atomic.Int64).Add(1)
+		h.refusedMu.Lock()
+		h.refused[r.URL.Path]++
+		h.refusedMu.Unlock()
 		if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
 			conn.Close()
 		}
@@ -170,11 +173,9 @@ func (h *Harness) SetDown(down bool) { h.down.Store(down) }
 // Refused is how many requests to path, such as "/api/session-events",
 // were refused while Code Central was down.
 func (h *Harness) Refused(path string) int64 {
-	n, ok := h.refused.Load(path)
-	if !ok {
-		return 0
-	}
-	return n.(*atomic.Int64).Load()
+	h.refusedMu.Lock()
+	defer h.refusedMu.Unlock()
+	return h.refused[path]
 }
 
 // realGit is the git binary itself. On macOS /usr/bin/git is an xcrun

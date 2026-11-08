@@ -44,7 +44,8 @@ func (f *factory) about(c claim) string {
 
 // claimf prints a line about the held Claim c and queues it as a factory
 // Session Event for c's session. Every such line goes through here, the
-// one per-Claim logger; lines with no Claim are only printed.
+// one per-Claim logger; lines with no Claim are only printed, and so is
+// a --verbose tool-call line, whose tool call is posted already.
 func (f *factory) claimf(c claim, format string, args ...any) {
 	line := fmt.Sprintf(format, args...)
 	f.printf("%s", line)

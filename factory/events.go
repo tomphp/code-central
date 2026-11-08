@@ -90,12 +90,16 @@ func (s *sender) run() {
 	for {
 		select {
 		case <-s.stop:
-			s.flush()
+			// The last flush has one eventPostTimeout in all, so a hung
+			// Code Central holds up the stop no longer than that.
+			ctx, cancel := context.WithTimeout(context.Background(), eventPostTimeout)
+			s.flush(ctx)
+			cancel()
 			return
 		case <-tick.C:
 		case <-s.full:
 		}
-		s.flush()
+		s.flush(context.Background())
 	}
 }
 
@@ -106,8 +110,9 @@ func (s *sender) close() {
 }
 
 // flush posts every waiting event, one post per session, each with
-// eventPostTimeout. A post that fails is dropped, never retried.
-func (s *sender) flush() {
+// eventPostTimeout within ctx. A post that fails is dropped, never
+// retried.
+func (s *sender) flush(ctx context.Context) {
 	s.mu.Lock()
 	waiting := s.waiting
 	s.waiting = nil
@@ -121,7 +126,7 @@ func (s *sender) flush() {
 		bySession[w.session] = append(bySession[w.session], w.event)
 	}
 	for _, session := range sessions {
-		ctx, cancel := context.WithTimeout(context.Background(), eventPostTimeout)
+		ctx, cancel := context.WithTimeout(ctx, eventPostTimeout)
 		_ = s.client.PostSessionEvents(ctx, session, bySession[session])
 		cancel()
 	}
