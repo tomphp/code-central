@@ -8,7 +8,9 @@ import type { Api } from "../api/api";
 import type { TicketView } from "../api/types";
 import { duration, REASON_LABEL } from "../format";
 import { useTicket, type InboxData } from "../live";
+import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
+import { QuestionAnswer } from "../panels/round/QuestionAnswer";
 import { hrefFor, opensInPlace, type UiLocation } from "../url";
 import { focusQueue, type FocusItem } from "./queue";
 import "./focus.css";
@@ -24,14 +26,14 @@ export interface FocusProps {
 
 export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
   const project = data?.projects.find((p) => p.key === loc.project);
-  const [onScreen, setOnScreen] = useState<string>();
-  const screen = data && focusQueue({ needsMe: data.needsMe, project: loc.project, onScreen });
+  const [onScreen, setOnScreen] = useState<FocusItem>();
+  const ticket = useTicket(api, onScreen?.row.project, onScreen?.row.id, version);
+  const screen = data && focusQueue({ needsMe: data.needsMe, project: loc.project, onScreen, ticket: ticket.data });
   const item = screen?.item;
   // What's shown becomes what's on screen, so a later read keeps it there.
   useEffect(() => {
-    if (screen && item?.key !== onScreen) setOnScreen(item?.key);
-  }, [screen, item?.key, onScreen]);
-  const ticket = useTicket(api, item?.row.project, item?.row.id, version);
+    if (screen && item?.key !== onScreen?.key) setOnScreen(item);
+  }, [screen, item, onScreen]);
 
   return (
     <main aria-label="Focus Mode" className="focus">
@@ -65,7 +67,7 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
           navigate={navigate}
         />
       ) : (
-        <p className="focus-loading">Questions wait for you in the Inbox.</p>
+        <p className="focus-loading">Loading…</p>
       )}
     </main>
   );
@@ -82,9 +84,10 @@ interface ItemProps {
   navigate(patch: Partial<UiLocation>): void;
 }
 
-// Item is one Ticket Focus Item, top to bottom: where it's from, why it
-// waits, then its reason's panel with its own buttons.
-function Item({ api, now, data, item: { row }, ticket, loc, navigate }: ItemProps) {
+// Item is one Focus Item, top to bottom: where it's from, why it waits,
+// then its Question with the answer form, or its reason's panel with the
+// panel's own buttons.
+function Item({ api, now, data, item: { row, question }, ticket, loc, navigate }: ItemProps) {
   const project = data.projects.find((p) => p.key === row.project);
   const Panel = panelFor(row.reason, ticket?.state)?.Component;
   const waited = duration(now, row.since);
@@ -97,7 +100,7 @@ function Item({ api, now, data, item: { row }, ticket, loc, navigate }: ItemProp
   };
 
   return (
-    <article aria-label="Focus Item" className="focus-item">
+    <article aria-label="Focus Item" className={question ? "focus-item focus-item-question" : "focus-item"}>
       <p className="focus-from">
         <span className="focus-item-project">{project?.display_name ?? row.project}</span> <span className="muted">{row.project}</span>
       </p>
@@ -118,7 +121,18 @@ function Item({ api, now, data, item: { row }, ticket, loc, navigate }: ItemProp
       </p>
       {/* Keyed on the State too, as the Inbox's slot is, so a panel's local
           state never carries over to another State. */}
-      {ticket ? (
+      {question ? (
+        <section aria-label="Question" className="focus-question">
+          <p className="focus-question-of">
+            Question {question.n} of {question.m} · Round {question.round}
+          </p>
+          <h3>{question.q.title}</h3>
+          <div className="focus-question-body">
+            <Markdown>{question.q.body}</Markdown>
+          </div>
+          <QuestionAnswer api={api} project={row.project} ticket={row.id} q={question.q} modEnter />
+        </section>
+      ) : ticket ? (
         Panel && <Panel key={ticket.state} api={api} project={row.project} ticket={ticket} now={now} />
       ) : (
         <p className="muted">Loading…</p>
