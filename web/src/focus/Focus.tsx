@@ -3,7 +3,12 @@
 // live.ts, as the Inbox's does, and focusQueue picks what to show. Its
 // root's class scopes the Focus styles, so the panels inside read larger
 // here and nowhere else.
-import { useEffect, useState, type MouseEvent } from "react";
+//
+// The panels and the Question form get an Api whose writes (act, and
+// unlink) first record that the item on screen was acted on, so an item that leaves after the
+// human's own action moves on silently, and one that leaves otherwise
+// moves on with a brief "Dealt with elsewhere" note.
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import type { Api } from "../api/api";
 import type { TicketView } from "../api/types";
 import { duration, REASON_LABEL } from "../format";
@@ -30,13 +35,42 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
   // skipped lives here for this visit only: leaving Focus Mode or
   // reloading forgets it, and it's never sent or put in the URL.
   const [skipped, setSkipped] = useState<FocusItem[]>([]);
+  // actedOn is the key of the item on screen once the human acts on it
+  // here, until a refusal takes it back.
+  const [actedOn, setActedOn] = useState<string>();
+  const [elsewhere, setElsewhere] = useState(false);
   const ticket = useTicket(api, onScreen?.row.project, onScreen?.row.id, version);
-  const screen = data && focusQueue({ needsMe: data.needsMe, project: loc.project, onScreen, ticket: ticket.data, skipped });
+  const acted = !!onScreen && actedOn === onScreen.key;
+  const screen = data && focusQueue({ needsMe: data.needsMe, project: loc.project, onScreen, ticket: ticket.data, skipped, acted });
   const item = screen?.item;
   // What's shown becomes what's on screen, so a later read keeps it there.
+  // Moving on shows the note only when the item left without the human;
+  // a Round becoming its first Question, once read, isn't moving on, so
+  // it keeps the note.
   useEffect(() => {
-    if (screen && item?.key !== onScreen?.key) setOnScreen(item);
+    if (!screen || item?.key === onScreen?.key) return;
+    const roundRead = !!onScreen?.roundKey && !onScreen.question && onScreen.roundKey === item?.roundKey;
+    setOnScreen(item);
+    setActedOn(undefined);
+    if (!roundRead) setElsewhere(screen.elsewhere);
   }, [screen, item, onScreen]);
+  // The note is brief: it goes after NOTE_MS, or when the human moves on.
+  useEffect(() => {
+    if (!elsewhere) return;
+    const timer = setTimeout(() => setElsewhere(false), NOTE_MS);
+    return () => clearTimeout(timer);
+  }, [elsewhere]);
+  const itemKey = item?.key;
+  const itemApi = useMemo(
+    () =>
+      itemKey
+        ? recordingWrites(api, {
+            onWrite: () => setActedOn(itemKey),
+            onRefused: () => setActedOn((k) => (k === itemKey ? undefined : k)),
+          })
+        : undefined,
+    [api, itemKey],
+  );
 
   return (
     <main aria-label="Focus Mode" className="focus">
@@ -51,6 +85,12 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
           Exit
         </button>
       </header>
+      {/* Only over the next item: All clear stays calm, with nothing else on it. */}
+      {elsewhere && item && (
+        <p role="status" className="focus-elsewhere">
+          Dealt with elsewhere
+        </p>
+      )}
       {!screen ? (
         <p className="focus-loading">Loading…</p>
       ) : screen.clear ? (
@@ -65,10 +105,10 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
             Go through them again
           </button>
         </section>
-      ) : item ? (
+      ) : item && itemApi ? (
         <Item
           key={item.key}
-          api={api}
+          api={itemApi}
           now={now}
           data={data}
           item={item}
@@ -82,6 +122,34 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
       )}
     </main>
   );
+}
+
+// NOTE_MS is how long the "Dealt with elsewhere" note stays.
+const NOTE_MS = 4000;
+
+// WRITES are the Api calls a panel or the Question form makes to act on
+// a Ticket.
+const WRITES: ReadonlySet<PropertyKey> = new Set<keyof Api>(["act", "unlink"]);
+
+// recordingWrites is api with each write calling onWrite before it's
+// forwarded, so the live notice it causes finds it recorded, and
+// onRefused if it's refused, as a refused write left the item where it
+// was. Every other call goes straight to api.
+function recordingWrites(api: Api, { onWrite, onRefused }: { onWrite(): void; onRefused(): void }): Api {
+  return new Proxy(api, {
+    get(target, prop) {
+      const v = Reflect.get(target, prop);
+      if (typeof v !== "function") return v;
+      if (!WRITES.has(prop)) return v.bind(target);
+      return (...args: unknown[]) => {
+        onWrite();
+        return (v.apply(target, args) as Promise<unknown>).catch((e: unknown) => {
+          onRefused();
+          throw e;
+        });
+      };
+    },
+  });
 }
 
 interface ItemProps {
