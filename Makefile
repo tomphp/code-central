@@ -5,7 +5,7 @@ TEST_BUDGET := 10
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test e2e build web clean
+.PHONY: test typecheck vitest e2e build web clean
 
 # Runs the fast suite and fails if it takes more than $(TEST_BUDGET)
 # seconds of wall-clock time. Three jobs run in parallel: `go test ./...`
@@ -32,6 +32,15 @@ test: $(WEB_DEPS)
 		echo "make test took $${elapsed}s, over the $(TEST_BUDGET)s budget"; exit 1; \
 	fi; \
 	echo "make test: $${elapsed}s (budget $(TEST_BUDGET)s)"
+
+# The inner loop while working on the UI: the TypeScript type check, and
+# vitest on one file (F=src/...) or on all of them. Both install web
+# dependencies first, so they work in a fresh worktree.
+typecheck: $(WEB_DEPS)
+	cd web && node_modules/.bin/tsc --noEmit
+
+vitest: $(WEB_DEPS)
+	cd web && node_modules/.bin/vitest run $(F:web/%=%)
 
 $(WEB_DEPS): web/package.json web/package-lock.json
 	@command -v npm >/dev/null || { echo "make: npm not found; the UI needs Node (go test ./... alone runs without it)"; exit 1; }

@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues live as local markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+Specs and Tickets live in Code Central: see `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
@@ -11,3 +11,7 @@ Uses the five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Checks
+
+While working, run `make typecheck` and `make vitest F=<file>` (they install web dependencies first in a fresh worktree); run `make test` once at the end.
