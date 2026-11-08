@@ -9,7 +9,7 @@ import type { TicketView } from "../api/types";
 import { duration, REASON_LABEL } from "../format";
 import { useTicket, type InboxData } from "../live";
 import { panelFor } from "../panels/ActionPanel";
-import { hrefFor, type UiLocation } from "../url";
+import { hrefFor, opensInPlace, type UiLocation } from "../url";
 import { focusQueue, type FocusItem } from "./queue";
 import "./focus.css";
 
@@ -87,10 +87,11 @@ interface ItemProps {
 function Item({ api, now, data, item: { row }, ticket, loc, navigate }: ItemProps) {
   const project = data.projects.find((p) => p.key === row.project);
   const Panel = panelFor(row.reason, ticket?.state)?.Component;
+  const waited = duration(now, row.since);
   // A Stage Ticket opens in its Requirement, with it selected.
   const inbox = { view: "inbox" as const, project: loc.project, requirement: row.requirement?.stage && row.requirement.spec, ticket: row.id };
   const open = (e: MouseEvent) => {
-    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // let the browser open a tab
+    if (!opensInPlace(e)) return;
     e.preventDefault();
     navigate(inbox);
   };
@@ -113,9 +114,15 @@ function Item({ api, now, data, item: { row }, ticket, loc, navigate }: ItemProp
         <span className={`reason reason-${row.reason}`}>
           <span className="dot" aria-hidden="true" /> <span>{REASON_LABEL[row.reason]}</span>
         </span>{" "}
-        · <span>{duration(now, row.since) === "just now" ? "just now" : `waiting ${duration(now, row.since)}`}</span>
+        · <span>{waited === "just now" ? waited : `waiting ${waited}`}</span>
       </p>
-      {ticket ? Panel && <Panel api={api} project={row.project} ticket={ticket} now={now} /> : <p className="muted">Loading…</p>}
+      {/* Keyed on the State too, as the Inbox's slot is, so a panel's local
+          state never carries over to another State. */}
+      {ticket ? (
+        Panel && <Panel key={ticket.state} api={api} project={row.project} ticket={ticket} now={now} />
+      ) : (
+        <p className="muted">Loading…</p>
+      )}
       <p className="focus-open">
         <a href={hrefFor(inbox)} onClick={open}>
           Open in Inbox

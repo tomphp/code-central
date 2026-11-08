@@ -89,7 +89,7 @@ describe("a Ticket Focus Item", () => {
     expect(within(await item()).getByText("Requirement: Dark mode · spec")).toBeInTheDocument();
   });
 
-  it("shows its reason's action panel, with its own buttons", async () => {
+  it("shows its reason's panel, with the panel's own buttons", async () => {
     const fake = world();
     fake.setNeedsMe([{ reason: "in_review", tickets: [{ id: "acme-1" }] }]);
     renderApp(fake);
