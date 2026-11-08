@@ -58,10 +58,11 @@ var findingTools = map[string]tool{
 	"find_specs": {
 		description: "Find this Project's Specs with their State summaries; finished Specs are left out unless finished is true.",
 		schema: object(map[string]any{
-			"title":    text("Only Specs whose title contains this text."),
-			"labels":   list("Only Specs with all of these Labels."),
-			"tags":     tagFilter("Only Specs with all of these Tags, as {key: value}."),
-			"finished": flag("Include finished Specs."),
+			"title":        text("Only Specs whose title contains this text."),
+			"labels":       list("Only Specs with all of these Labels."),
+			"tags":         tagFilter("Only Specs with all of these Tags, as {key: value}."),
+			"finished":     flag("Include finished Specs."),
+			"requirements": flag("Only Requirements: Specs with Stage Tickets."),
 		}),
 		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.FindSpecsInput) (any, error) {
 			return c.FindSpecs(ctx, key, in)

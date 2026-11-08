@@ -48,6 +48,9 @@ func (c *Client) FindSpecs(ctx context.Context, key string, in core.FindSpecsInp
 	if in.Finished {
 		q.Set("finished", strconv.FormatBool(true))
 	}
+	if in.Requirements {
+		q.Set("requirements", strconv.FormatBool(true))
+	}
 	path := scoped(key, "specs")
 	if len(q) > 0 {
 		path += "?" + q.Encode()

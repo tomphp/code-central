@@ -15,7 +15,7 @@ func init() {
 		"remove-blocker": {op: "remove_blocker", usage: "remove-blocker <id> <blocker-id>", run: runRemoveBlocker},
 		"cancel":         {op: "cancel", usage: "cancel <id> <replacement-id>... [--reason <text> | --file <path|->]", run: runCancel},
 		"get-spec":       {op: "get_spec", usage: "get-spec <id>", run: runGetSpec},
-		"find-specs":     {op: "find_specs", usage: "find-specs [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--finished]", run: runFindSpecs},
+		"find-specs":     {op: "find_specs", usage: "find-specs [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--finished] [--requirements]", run: runFindSpecs},
 	} {
 		commands[name] = c
 	}
@@ -101,6 +101,7 @@ func runFindSpecs(ctx context.Context, e Env, args []string) error {
 	project := addScope(fs)
 	title := fs.String("title", "", "")
 	finished := fs.Bool("finished", false, "")
+	requirements := fs.Bool("requirements", false, "")
 	var labels, tags strs
 	fs.Var(&labels, "label", "")
 	fs.Var(&tags, "tag", "")
@@ -115,7 +116,7 @@ func runFindSpecs(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	in := core.FindSpecsInput{Title: *title, Labels: labels, Finished: *finished}
+	in := core.FindSpecsInput{Title: *title, Labels: labels, Finished: *finished, Requirements: *requirements}
 	if in.Tags, err = tagFlags(tags); err != nil {
 		return err
 	}

@@ -42,7 +42,7 @@ func init() {
 		}},
 		"find_specs": {"GET /api/p/{key}/specs", func(c *core.Core, r *http.Request) (any, error) {
 			q := r.URL.Query()
-			if err := onlyParams(q, "title", "label", "tag", "finished"); err != nil {
+			if err := onlyParams(q, "title", "label", "tag", "finished", "requirements"); err != nil {
 				return nil, err
 			}
 			in := core.FindSpecsInput{Title: q.Get("title"), Labels: q["label"]}
@@ -55,6 +55,11 @@ func init() {
 				return nil, err
 			}
 			in.Finished = finished != nil && *finished
+			requirements, err := boolParam(q, "requirements")
+			if err != nil {
+				return nil, err
+			}
+			in.Requirements = requirements != nil && *requirements
 			return c.FindSpecs(r.Context(), r.PathValue("key"), in)
 		}},
 	} {
