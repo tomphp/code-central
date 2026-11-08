@@ -45,6 +45,19 @@ func ticketAcknowledgement(id, state string, changed ...string) func(*testing.T,
 	}
 }
 
+// stopAcknowledgement is ticketAcknowledgement for acme-3 after an action
+// that ends the agent's work, which also gives its next step.
+func stopAcknowledgement(state string, changed ...string) func(*testing.T, map[string]any) {
+	return func(t *testing.T, out map[string]any) {
+		t.Helper()
+		ticketAcknowledgement("acme-3", state, changed...)(t, out)
+		field("next_step", "stop working this Ticket")(t, out)
+		if _, ok := out["ticket"]; ok {
+			t.Fatalf("acknowledgement %v holds the Ticket", out)
+		}
+	}
+}
+
 // writes are the operations that acknowledge: the cases with a check on
 // their call with full.
 func writes() []string {

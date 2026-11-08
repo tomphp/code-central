@@ -39,12 +39,25 @@ type FinishInput struct {
 	// Ticket with a branch is Accepted, not Done, when the human accepts it.
 	Branch string `json:"branch,omitempty"`
 	Commit string `json:"commit,omitempty"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
-// FinishResult is finish's result: the Ticket and the next step.
+// FinishResult is finish's result: the Acknowledgement and the next step,
+// or with full the Ticket and the next step.
 type FinishResult struct {
-	Ticket   TicketView `json:"ticket"`
-	NextStep string     `json:"next_step"`
+	*Acknowledgement
+	Ticket   *TicketView `json:"ticket,omitempty"`
+	NextStep string      `json:"next_step"`
+}
+
+// stopped is the result of an action that ends the agent's work, from the
+// write's result v and the action's next step.
+func stopped(v Written[TicketView], name string) FinishResult {
+	if v.Record != nil {
+		return FinishResult{Ticket: v.Record, NextStep: nextStep(name)}
+	}
+	return FinishResult{Acknowledgement: &v.Acknowledgement, NextStep: nextStep(name)}
 }
 
 // RejectInput is reject's input.
@@ -160,8 +173,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 	if strings.TrimSpace(in.Summary) == "" {
 		return FinishResult{}, invalid("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
 	}
-	// With full: finish's result still holds the whole Ticket.
-	v, err := c.actThen(ctx, key, in.Ticket, true, "finish", in.ClaimID, in.Summary, func(t *store.Ticket) error {
+	v, err := c.actThen(ctx, key, in.Ticket, in.Full, "finish", in.ClaimID, in.Summary, func(t *store.Ticket) error {
 		if b := strings.TrimSpace(in.Branch); b != "" {
 			t.Branch = b
 		}
@@ -173,7 +185,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 	if err != nil {
 		return FinishResult{}, err
 	}
-	return FinishResult{Ticket: *v.Record, NextStep: nextStep("finish")}, nil
+	return stopped(v, "finish"), nil
 }
 
 // Accept is the human's accept(ticket): In Review to Accepted when the

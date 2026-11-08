@@ -107,17 +107,17 @@ func init() {
 		"approve":       {op: "approve", usage: "approve <id> [--full]", run: runApprove},
 		"defer":         {op: "defer", usage: "defer <id> [--reason <text> | --file <path|->] [--full]", run: runDefer},
 		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>] [--working-dir <dir>] [--resume-command <command>]", run: runClaim},
-		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->] [--branch <branch>] [--commit <sha>]", run: runFinish},
+		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->] [--branch <branch>] [--commit <sha>] [--full]", run: runFinish},
 
 		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>] [--full]  (session defaults to $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
 		"ping":        {usage: "ping [--session <id>]  mark this session active (reads hook JSON on stdin); always exits 0", run: runPing},
 		"hook":        {usage: "hook session-id  PreToolUse hook: add session_id and client_version to the tool input", run: runHook},
 		// Failure Reports and giving up (ticket 30).
-		"report-failure": {op: "report_failure", usage: "report-failure <id> --claim <claim-id> --what-broke <md> --why <md> --what-to-fix <md> --where-work-stands <md> | --file <json-path|->", run: runReportFailure},
-		"give-up":        {op: "give_up", usage: "give-up <id> --claim <claim-id> [--note <md> | --file <path|->]", run: runGiveUp},
+		"report-failure": {op: "report_failure", usage: "report-failure <id> --claim <claim-id> --what-broke <md> --why <md> --what-to-fix <md> --where-work-stands <md> | --file <json-path|-> [--full]", run: runReportFailure},
+		"give-up":        {op: "give_up", usage: "give-up <id> --claim <claim-id> [--note <md> | --file <path|->] [--full]", run: runGiveUp},
 		"send-back":      {op: "send_back", usage: "send-back <id> [--note <md> | --file <path|->] [--full]  Accepted work that can't land (a merge conflict) back to Ready; the note is required", run: runSendBack},
 		// Rounds and wait (ticket 29).
-		"post-round":      {op: "post_round", usage: "post-round <id> --claim <claim-id> [--session <id>] [--questions <json> | --file <path|->]  Questions as a JSON array of {title, body, recommended?}, on stdin by default", run: runPostRound},
+		"post-round":      {op: "post_round", usage: "post-round <id> --claim <claim-id> [--session <id>] [--questions <json> | --file <path|->] [--full]  Questions as a JSON array of {title, body, recommended?}, on stdin by default", run: runPostRound},
 		"pick-up-answers": {op: "pick_up_answers", usage: "pick-up-answers <id> --claim <claim-id>", run: runPickUpAnswers},
 		"wait":            {usage: "wait <id>  wait for the Ticket to leave Needs Answer: exit 0 when Answered, 3 when it left for another State", run: runWait},
 	}
@@ -448,6 +448,7 @@ func runFinish(ctx context.Context, e Env, args []string) error {
 	file := fs.String("file", "", "")
 	branch := fs.String("branch", "", "")
 	commit := fs.String("commit", "", "")
+	full := fs.Bool("full", false, "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -463,7 +464,7 @@ func runFinish(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Finish(ctx, sc.project, core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text, Branch: *branch, Commit: *commit})
+	v, err := sc.client.Finish(ctx, sc.project, core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text, Branch: *branch, Commit: *commit, Full: *full})
 	if err != nil {
 		return err
 	}

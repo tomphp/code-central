@@ -91,6 +91,7 @@ func TestTheProseCoversTheRulesTheTableCannotSay(t *testing.T) {
 		"branch named after the Ticket ID", "commit often", "Don't push",
 		"Holding several Claims", "Silence is tracked per session", "same resume command", "same files",
 		"`parts: [\"body\"]`", "`sections`", "`outline`", "add `tickets` only when sibling Tickets matter",
+		"returns an acknowledgement (`id`, `updated`, `changed`, …)", "`full: true` returns the record",
 	} {
 		if !strings.Contains(prose, want) {
 			t.Errorf("get_workflow prose does not say %q", want)
@@ -99,7 +100,7 @@ func TestTheProseCoversTheRulesTheTableCannotSay(t *testing.T) {
 }
 
 func TestTheInstructionsPointAtGetWorkflowAndTheRoundRule(t *testing.T) {
-	for _, want := range []string{"Code Central holds", "get_workflow", "post_round", "never printed in the terminal", "numbered question"} {
+	for _, want := range []string{"Code Central holds", "get_workflow", "post_round", "never printed in the terminal", "numbered question", "acknowledgement", "`full: true`"} {
 		if !strings.Contains(core.Instructions, want) {
 			t.Errorf("MCP instructions do not say %q", want)
 		}

@@ -378,3 +378,107 @@ func TestRoundActionsAcknowledgeTheRoundsAndAnsweredOnTheLastOne(t *testing.T) {
 	}
 	wantTicketAcknowledgement(t, v, "acme-2", t0.Add(2*time.Hour), store.Answered, []string{"state", "rounds", "moves", "needs_me_reason"}, 0)
 }
+
+func TestClaimEndingActionsAcknowledgeWithTheirNextStep(t *testing.T) {
+	at := t0.Add(10 * time.Minute) // before the Claim falls silent
+	for _, c := range []struct {
+		name    string
+		write   func(fixture) (any, error)
+		state   store.State
+		changed []string
+	}{
+		{"finish", func(f fixture) (any, error) {
+			return f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done."})
+		}, store.InReview, []string{"state", "claims", "comments", "moves", "needs_me_reason"}},
+		{"finish on a branch", func(f fixture) (any, error) {
+			return f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done.", Branch: "acme-2", Commit: "abc123"})
+		}, store.InReview, []string{"state", "branch", "commit", "claims", "comments", "moves", "needs_me_reason"}},
+		{"report_failure", func(f fixture) (any, error) {
+			return f.core.ReportFailure(ctx, "acme", report("2", "claim-1"))
+		}, store.Failed, []string{"state", "claims", "failure_reports", "moves", "needs_me_reason"}},
+		{"give_up", func(f fixture) (any, error) {
+			return f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-1", Note: "Out of context."})
+		}, store.Ready, []string{"state", "claims", "comments", "moves", "claimable"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t)
+			f.work(t, store.Ready)
+			f.claim(t, core.ClaimInput{})
+			f.clock.Set(at)
+			v, err := c.write(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantTicketAcknowledgement(t, v, "acme-2", at, c.state, c.changed, 0)
+			if out := resultJSON(t, v); out["next_step"] != "stop working this Ticket" || out["ticket"] != nil {
+				t.Fatalf("acknowledgement %v, want the next step and no ticket", out)
+			}
+		})
+	}
+}
+
+func TestPostRoundAcknowledgesWithTheRoundAndTheNextStep(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready)
+	f.claim(t, core.ClaimInput{})
+	f.clock.Set(t0.Add(10 * time.Minute)) // before the Claim falls silent
+	v, err := f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []core.QuestionInput{qDB}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// claims: posting a Round is the Claim's latest activity.
+	wantTicketAcknowledgement(t, v, "acme-2", t0.Add(10*time.Minute), store.NeedsAnswer, []string{"state", "claims", "rounds", "moves", "needs_me_reason"}, 0)
+	out := resultJSON(t, v)
+	if out["round"] != float64(1) || out["next_step"] != "End your turn now, after running `code-central wait acme-2` in the background if you can run background commands." {
+		t.Fatalf("acknowledgement %v, want round 1 and the next step", out)
+	}
+}
+
+func TestClaimEndingActionsAndPostRoundWithFullReturnTodaysResult(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		write func(fixture) (any, error)
+		step  string
+	}{
+		{"finish", func(f fixture) (any, error) {
+			return f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: "Done.", Full: true})
+		}, "stop working this Ticket"},
+		{"report_failure", func(f fixture) (any, error) {
+			return f.core.ReportFailure(ctx, "acme", fullReport("2", "claim-1"))
+		}, "stop working this Ticket"},
+		{"give_up", func(f fixture) (any, error) {
+			return f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-1", Note: "Out of context.", Full: true})
+		}, "stop working this Ticket"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t)
+			f.work(t, store.Ready)
+			f.claim(t, core.ClaimInput{})
+			v, err := c.write(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			get, err := f.core.GetTicket(ctx, "acme", "2")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := map[string]any{"ticket": resultJSON(t, get), "next_step": c.step}
+			if out := resultJSON(t, v); !reflect.DeepEqual(out, want) {
+				t.Fatalf("with full: %v, want %v", out, want)
+			}
+		})
+	}
+	t.Run("post_round", func(t *testing.T) {
+		f := newFixture(t)
+		f.work(t, store.Ready)
+		f.claim(t, core.ClaimInput{})
+		v, err := f.core.PostRound(ctx, "acme", core.PostRoundInput{Ticket: "2", ClaimID: "claim-1", Questions: []core.QuestionInput{qName}, Full: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := map[string]any{"round": float64(1), "next_step": "End your turn now, after running `code-central wait acme-2` in the background if you can run background commands."}
+		if out := resultJSON(t, v); !reflect.DeepEqual(out, want) {
+			t.Fatalf("with full: %v, want %v", out, want)
+		}
+	})
+}

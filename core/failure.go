@@ -18,6 +18,8 @@ type ReportFailureInput struct {
 	Why             string `json:"why"`
 	WhatToFix       string `json:"what_to_fix"`
 	WhereWorkStands string `json:"where_work_stands"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // GiveUpInput is give_up's input; the note is required.
@@ -25,6 +27,8 @@ type GiveUpInput struct {
 	Ticket  Ref    `json:"ticket"`
 	ClaimID string `json:"claim_id"`
 	Note    string `json:"note"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // SendBackInput is send_back's input. From Failed (the human's) the note
@@ -38,7 +42,8 @@ type SendBackInput struct {
 }
 
 // StopResult is the result of an action that ends the agent's work: the
-// Ticket and the next step, "stop working this Ticket".
+// Acknowledgement, or with full the Ticket, and the next step, "stop
+// working this Ticket".
 type StopResult = FinishResult
 
 // FailureReportView is one Failure Report as reads show it.
@@ -71,8 +76,7 @@ func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureIn
 			return StopResult{}, invalid(f.name, "a Failure Report needs %s: %s", f.name, f.hint)
 		}
 	}
-	// With full: report_failure's result still holds the whole Ticket.
-	v, err := c.updateTicket(key, "report_failure", in.Ticket, true, func(t *store.Ticket) (bool, error) {
+	v, err := c.updateTicket(key, "report_failure", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
 		now := c.now()
 		live, _ := liveClaim(*t)
 		if err := transition(ctx, t, key, "report_failure", in.ClaimID, now); err != nil {
@@ -90,7 +94,7 @@ func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureIn
 	if err != nil {
 		return StopResult{}, err
 	}
-	return StopResult{Ticket: *v.Record, NextStep: nextStep("report_failure")}, nil
+	return stopped(v, "report_failure"), nil
 }
 
 // GiveUp is give_up(ticket, claim_id, note): the holder, finding nothing
@@ -100,12 +104,11 @@ func (c *Core) GiveUp(ctx context.Context, key string, in GiveUpInput) (StopResu
 	if strings.TrimSpace(in.Note) == "" {
 		return StopResult{}, invalid("note", "give_up needs a note saying how far you got and why you are stopping")
 	}
-	// With full: give_up's result still holds the whole Ticket.
-	v, err := c.act(ctx, key, in.Ticket, true, "give_up", in.ClaimID, in.Note)
+	v, err := c.act(ctx, key, in.Ticket, in.Full, "give_up", in.ClaimID, in.Note)
 	if err != nil {
 		return StopResult{}, err
 	}
-	return StopResult{Ticket: *v.Record, NextStep: nextStep("give_up")}, nil
+	return stopped(v, "give_up"), nil
 }
 
 // SendBack is send_back(ticket, note): the human's from Failed to Ready,

@@ -20,7 +20,7 @@ const Instructions = "Code Central holds this Project's work: Specs, and the Tic
 	"The Round rule: while you hold a Claim, every question for the human is a Round posted with post_round, " +
 	"never printed in the terminal, even when the human is at the terminal. " +
 	"When a skill grills, each numbered question becomes one Question, with its recommendation as the recommended answer. " +
-	"Every write tells you its next step; follow it. " +
+	"A write returns an acknowledgement, or the record with `full: true`, and tells you its next step; follow it. " +
 	"To import a `.scratch/` folder, call `get_import_guide`."
 
 //go:embed workflow.md

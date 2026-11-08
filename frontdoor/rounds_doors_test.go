@@ -2,6 +2,7 @@ package frontdoor_test
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
@@ -42,10 +43,17 @@ func init() {
 				cli:  []string{"acme-3", "--claim", "claim-1", "--questions", `[{"title":"DB?","body":"Which one?","recommended":"SQLite"}]`},
 			},
 			check: func(t *testing.T, out map[string]any) {
+				ticketAcknowledgement("acme-3", "Needs Answer", "state", "rounds", "moves", "needs_me_reason")(t, out)
 				if out["round"] != 1.0 {
 					t.Fatalf("round %v in %v", out["round"], out)
 				}
 				field("next_step", "End your turn now, after running `code-central wait acme-3` in the background if you can run background commands.")(t, out)
+			},
+			full: func(t *testing.T, out map[string]any) {
+				want := map[string]any{"round": 1.0, "next_step": "End your turn now, after running `code-central wait acme-3` in the background if you can run background commands."}
+				if !reflect.DeepEqual(out, want) {
+					t.Fatalf("with full: %v, want %v", out, want)
+				}
 			},
 			bad: call{
 				mcp:  map[string]any{"ticket": "acme-3", "claim_id": "claim-1", "questions": []map[string]any{}},

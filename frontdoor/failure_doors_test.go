@@ -36,7 +36,8 @@ func init() {
 					`{"claim_id":"claim-1","what_broke":"B","why":"W","what_to_fix":"F","where_work_stands":"S"}`},
 				cli: []string{"acme-3", "--claim", "claim-1", "--what-broke", "B", "--why", "W", "--what-to-fix", "F", "--where-work-stands", "S"},
 			},
-			check: func(t *testing.T, out map[string]any) {
+			check: stopAcknowledgement("Failed", "state", "claims", "failure_reports", "moves", "needs_me_reason"),
+			full: func(t *testing.T, out map[string]any) {
 				field("next_step", "stop working this Ticket")(t, out)
 				tk := out["ticket"].(map[string]any)
 				field("state", "Failed")(t, tk)
@@ -59,7 +60,8 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/tickets/3/give_up", `{"claim_id":"claim-1","note":"Out of time."}`},
 				cli:  []string{"acme-3", "--claim", "claim-1", "--note", "Out of time."},
 			},
-			check: func(t *testing.T, out map[string]any) {
+			check: stopAcknowledgement("Ready", "state", "claims", "comments", "moves", "claimable"),
+			full: func(t *testing.T, out map[string]any) {
 				field("next_step", "stop working this Ticket")(t, out)
 				field("state", "Ready")(t, out["ticket"].(map[string]any))
 			},
