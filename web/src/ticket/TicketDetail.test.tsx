@@ -77,7 +77,7 @@ describe("the Ticket detail", () => {
     ]);
     const rows = within(within(renderDetail(fake, await fake.getTicket("acme", t.id))).getByRole("list", { name: "Claims" })).getAllByRole("listitem");
     expect(rows[0]).toHaveTextContent(/^Claim 2 · started 1h ago · last activity just now · Bash result · 3m ago · session s-new$/);
-    expect(within(rows[0]).getByText("Bash result")).toHaveClass("latest-event");
+    expect(within(rows[0]).getByText("Bash result · 3m ago")).toHaveClass("latest-event");
     expect(rows[1]).not.toHaveTextContent("Bash");
   });
 

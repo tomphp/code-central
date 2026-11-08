@@ -252,8 +252,8 @@ export interface SessionEvent {
   truncated?: boolean;
 }
 
-// A Claim's latest Session Event, shown short: text is one line of at
-// most 120 characters. Computed on read, never stored.
+// A Claim's latest Session Event, shown short: text is one line, cut as
+// core's LatestEventLimit says. Computed on read, never stored.
 export interface LatestEvent {
   kind: SessionEventKind;
   text: string;

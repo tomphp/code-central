@@ -7,6 +7,7 @@ import type { EditView, State, TicketView } from "../api/types";
 import { ago, REASON_LABEL } from "../format";
 import { Markdown } from "../Markdown";
 import { ActionPanel } from "../panels/ActionPanel";
+import { LatestEventLine } from "../LatestEvent";
 import { LinkBadge } from "./LinkBadge";
 import { useAct } from "./useAct";
 
@@ -79,7 +80,7 @@ export function TicketDetail({ api, project, ticket: t, now }: TicketDetailProps
               {c.latest_event && (
                 <>
                   {" "}
-                  · <span className="latest-event">{c.latest_event.text}</span> · {ago(now, c.latest_event.time)}
+                  · <LatestEventLine event={c.latest_event} now={now} />
                 </>
               )}
               {c.ended && (

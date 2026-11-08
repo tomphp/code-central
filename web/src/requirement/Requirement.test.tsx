@@ -1,6 +1,6 @@
 // Requirement tests: the real App against FakeApi. "New requirement", the
 // Stage strip, the Requirement pane and the Requirements view.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
@@ -181,6 +181,18 @@ describe("the Requirement pane", () => {
       "acme-9 Archive in the API In ProgressEdit: core/archive.go · 5m ago",
       "acme-10 Archive in the store In Progress",
     ]);
+  });
+
+  it("updates an In Progress Build Ticket's latest Session Event on the live feed", async () => {
+    const fake = await building();
+    const spec = { id: "acme-1", title: "Archive finished Projects" };
+    const claims = [{ number: 1, session_id: "s-busy", started: fake.now.toISOString(), last_activity: fake.now.toISOString() }];
+    fake.addTicket("acme", { title: "Archive in the API", state: "In Progress", spec, claims }); // acme-9
+    renderApp(fake, "/?view=inbox&requirement=acme-1");
+
+    const build = await within(detail()).findByRole("list", { name: "Build" });
+    act(() => fake.postSessionEvents("s-busy", [{ time: fake.now.toISOString(), kind: "text", text: "Writing the test first." }]));
+    expect(await within(build).findByText("Writing the test first. · just now")).toHaveClass("latest-event");
   });
 
   it("says when Build waits for a Factory", async () => {

@@ -513,7 +513,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     });
 
     // ---- the latest Session Event (ticket 109) ----
-    it("shows a Claim's latest Session Event, shown short, on its Claim and on the Ticket's rows", async () => {
+    it("shows a Claim's latest Session Event as one short line, on its Claim and on the Ticket's rows", async () => {
       await d.createProject("acme", "Acme");
       const id = await d.createTicket("acme", "Busy", "Ready");
       const quiet = await d.createTicket("acme", "Quiet", "Ready");

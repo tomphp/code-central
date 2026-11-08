@@ -5,7 +5,8 @@ import type { MouseEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import { FINISHED, STATES, type NeedsMeReason, type NeedsMeRow, type SpecDetail, type State, type TicketView } from "../api/types";
-import { duration, latestLine, REASON_LABEL, rowDetail } from "../format";
+import { duration, REASON_LABEL, rowDetail } from "../format";
+import { RowLatestEvent } from "../LatestEvent";
 import { LinkBadge } from "../ticket/LinkBadge";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { NewRequirement } from "../requirement/NewRequirement";
@@ -236,8 +237,17 @@ function NeedsMeLink({ row, now, link }: { row: NeedsMeRow; now: Date; link: Row
 // StateList is one State's Tickets, flat, with its Stage Tickets folded
 // into a collapsed group after them: a Factory runs those. An In Progress
 // row shows its latest Session Event under its title.
-function StateList(p: { tickets: ProjectTicket[]; reasons: Map<string, NeedsMeReason>; now: Date; link: InboxRowLinkFactory }) {
-  const { tickets, reasons, now, link } = p;
+function StateList({
+  tickets,
+  reasons,
+  now,
+  link,
+}: {
+  tickets: ProjectTicket[];
+  reasons: Map<string, NeedsMeReason>;
+  now: Date;
+  link: InboxRowLinkFactory;
+}) {
   const stages = tickets.filter(isStage);
   const row = (t: ProjectTicket) => (
     <a key={t.id} className="row" {...link(t.id)}>
@@ -247,7 +257,7 @@ function StateList(p: { tickets: ProjectTicket[]; reasons: Map<string, NeedsMeRe
         {t.link && <LinkBadge link={t.link} plain />}
         {reasons.has(t.id) && <span className="dot needs-you" role="img" aria-label="Needs you" />}
       </span>
-      {t.state === "In Progress" && t.latest_event && <span className="row-detail latest-event">{latestLine(now, t.latest_event)}</span>}
+      <RowLatestEvent row={t} now={now} className="row-detail" />
     </a>
   );
   return (
