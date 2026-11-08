@@ -16,17 +16,18 @@ import type { NeedsMeRow, NeedsMeView, QuestionView, TicketView } from "../api/t
 export interface FocusItem {
   key: string;
   row: NeedsMeRow;
-  // round is the key every Focus Item of one Round shares.
-  round?: string;
+  // roundKey is the key every Focus Item of one Round shares.
+  roundKey?: string;
   question?: FocusQuestion;
 }
 
 export interface FocusQuestion {
   q: QuestionView;
-  // n is the Question's place in its Round, of m.
-  n: number;
-  m: number;
+  // round is the Round's number; place is the Question's place among the
+  // Round's count Questions, open or not.
   round: number;
+  place: number;
+  count: number;
 }
 
 export interface FocusInput {
@@ -57,23 +58,24 @@ export function focusQueue({ needsMe, project, onScreen, ticket }: FocusInput): 
   // arriving, however urgent, replaces it. Once it's gone, its Round's
   // next open Question comes before anything else.
   const item =
-    items.find((i) => i.key === onScreen?.key) ?? (onScreen?.round ? items.find((i) => i.round === onScreen.round) : undefined) ?? items[0];
+    items.find((i) => i.key === onScreen?.key) ?? (onScreen?.roundKey ? items.find((i) => i.roundKey === onScreen.roundKey) : undefined) ?? items[0];
   const remaining = rows.reduce((n, r) => n + (r.reason === "needs_answer" ? (r.round?.open ?? 1) : 1), 0);
   return { item, remaining, clear: rows.length === 0 };
 }
 
 function itemsOf(row: NeedsMeRow, ticket?: TicketView): FocusItem[] {
   if (row.reason !== "needs_answer") return [{ key: `${row.id} ${row.reason}`, row }];
-  const read = ticket?.id === row.id ? ticket : undefined;
-  const round = read ? (row.round ? read.rounds.find((r) => r.number === row.round!.number) : read.rounds.at(-1)) : undefined;
-  const number = round?.number ?? row.round?.number;
-  const key = `${row.id} round ${number}`;
-  if (!read) return [{ key, row, round: key }];
+  // The key comes from the row alone, so it's the same before and after
+  // the read; a row naming no Round means the Ticket's latest.
+  const roundKey = `${row.id} round ${row.round?.number ?? "latest"}`;
+  if (ticket?.id !== row.id) return [{ key: roundKey, row, roundKey }];
+  const round = row.round ? ticket.rounds.find((r) => r.number === row.round?.number) : ticket.rounds.at(-1);
+  if (!round) return [];
   // A read Ticket with no open Question left in the Round has none to
   // show, though Needs Me may not have caught up yet.
-  return (round?.questions ?? []).flatMap((q, i, qs) =>
+  return round.questions.flatMap((q, i) =>
     q.status === "open"
-      ? [{ key: `${key} question ${q.number}`, row, round: key, question: { q, n: i + 1, m: qs.length, round: round!.number } }]
+      ? [{ key: `${roundKey} question ${q.number}`, row, roundKey, question: { q, round: round.number, place: i + 1, count: round.questions.length } }]
       : [],
   );
 }

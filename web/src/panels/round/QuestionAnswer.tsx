@@ -9,42 +9,18 @@ import type { Api } from "../../api/api";
 import "../../api/actions/rounds";
 import type { QuestionView } from "../../api/types";
 import "./round.css";
-
-// useAction runs one request at a time and keeps its refusal to show.
-export function useAction() {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const run = async (f: () => Promise<unknown>): Promise<boolean> => {
-    setBusy(true);
-    try {
-      await f();
-      setError(undefined);
-      return true;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
-  const alert = error && (
-    <p role="alert" className="warning">
-      {error}
-    </p>
-  );
-  return { busy, alert, run };
-}
+import { useAction } from "./useAction";
 
 export interface QuestionAnswerProps {
   api: Api;
   project: string;
   ticket: string;
   q: QuestionView;
-  // modEnter makes Cmd/Ctrl+Enter in the box send Answer.
-  modEnter?: boolean;
+  // submitOnModEnter makes Cmd/Ctrl+Enter in the box send Answer.
+  submitOnModEnter?: boolean;
 }
 
-export function QuestionAnswer({ api, project, ticket, q, modEnter }: QuestionAnswerProps) {
+export function QuestionAnswer({ api, project, ticket, q, submitOnModEnter }: QuestionAnswerProps) {
   const { busy, alert, run } = useAction();
   // draft is what the human typed since the last save; until then the box
   // shows the saved answer, else the recommendation.
@@ -57,7 +33,7 @@ export function QuestionAnswer({ api, project, ticket, q, modEnter }: QuestionAn
   const answer = () => save(() => api.act(project, ticket, "answer", { question: q.number, text }));
   const dismiss = () => save(() => api.act(project, ticket, "dismiss_question", { question: q.number }));
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!modEnter || e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;
+    if (!submitOnModEnter || e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;
     e.preventDefault();
     if (canAnswer) answer();
   };

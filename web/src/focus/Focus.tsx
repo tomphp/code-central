@@ -124,13 +124,13 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate }
       {question ? (
         <section aria-label="Question" className="focus-question">
           <p className="focus-question-of">
-            Question {question.n} of {question.m} · Round {question.round}
+            Question {question.place} of {question.count} · Round {question.round}
           </p>
           <h3>{question.q.title}</h3>
           <div className="focus-question-body">
             <Markdown>{question.q.body}</Markdown>
           </div>
-          <QuestionAnswer api={api} project={row.project} ticket={row.id} q={question.q} modEnter />
+          <QuestionAnswer api={api} project={row.project} ticket={row.id} q={question.q} submitOnModEnter />
         </section>
       ) : ticket ? (
         Panel && <Panel key={ticket.state} api={api} project={row.project} ticket={ticket} now={now} />

@@ -224,6 +224,19 @@ describe("a Round's Questions in the queue", () => {
     expect(await within(focus()).findByRole("heading", { name: "Quiet session" })).toBeInTheDocument();
   });
 
+  it("finishes the Ticket's latest Round first when its Needs Me row names no Round", async () => {
+    const fake = world();
+    fake.setNeedsMe([{ reason: "needs_answer", tickets: [{ id: "acme-1" }] }, ...fake.needsMeGroups.slice(1)]);
+    renderApp(fake);
+    await question("Which colour?");
+    const t = fake.addTicket("acme", { title: "Quiet session", state: "In Progress" }); // acme-3
+    change(fake, [{ reason: "silent_claim", tickets: [{ id: t.id }] }, ...fake.needsMeGroups], t.id);
+    await waitFor(() => expect(within(focus()).getByText("3 left")).toBeInTheDocument());
+
+    await userEvent.click(within(focus()).getByRole("button", { name: "Answer" }));
+    expect(await question("Which size?")).toBeInTheDocument();
+  });
+
   it("moves on to the Round's next open Question when the one on screen is closed elsewhere", async () => {
     const fake = world();
     renderApp(fake);

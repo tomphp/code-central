@@ -9,7 +9,8 @@ import "../../api/actions/rounds";
 import type { QuestionView } from "../../api/types";
 import { Markdown } from "../../Markdown";
 import type { PanelDef, PanelProps } from "../ActionPanel";
-import { QuestionAnswer, useAction } from "./QuestionAnswer";
+import { QuestionAnswer } from "./QuestionAnswer";
+import { useAction } from "./useAction";
 import "./round.css";
 
 export const panel: PanelDef = { reasons: ["needs_answer"], Component: RoundPanel };
