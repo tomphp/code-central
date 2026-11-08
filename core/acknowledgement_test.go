@@ -313,3 +313,68 @@ func TestTicketWritesWithFullReturnTheTicket(t *testing.T) {
 		}
 	}
 }
+
+func TestReviewAndFailureActionsAcknowledgeWithTheNewState(t *testing.T) {
+	at := t0.Add(2 * time.Hour)
+	for _, c := range []struct {
+		name    string
+		setup   func(fixture, *testing.T)
+		write   func(fixture) (any, error)
+		state   store.State
+		changed []string
+	}{
+		{"accept", fixture.inReview, func(f fixture) (any, error) {
+			return f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"})
+		}, store.Done, []string{"state", "moves", "needs_me_reason"}},
+		{"reject", fixture.inReview, func(f fixture) (any, error) {
+			return f.core.Reject(human, "acme", core.RejectInput{Ticket: "2", Comment: "Not yet."})
+		}, store.Ready, []string{"state", "comments", "moves", "claimable", "needs_me_reason"}},
+		{"land", fixture.inReview, func(f fixture) (any, error) {
+			return f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "def456"})
+		}, store.Done, []string{"state", "moves", "needs_me_reason"}},
+		{"send_back", fixture.failed, func(f fixture) (any, error) {
+			return f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "Fixed."})
+		}, store.Ready, []string{"state", "comments", "moves", "claimable", "needs_me_reason"}},
+		{"to_draft", fixture.failed, func(f fixture) (any, error) {
+			return f.core.ToDraft(human, "acme", core.TicketInput{Ticket: "2"})
+		}, store.Draft, []string{"state", "moves", "needs_me_reason"}},
+		{"release", func(f fixture, t *testing.T) {
+			f.work(t, store.Ready)
+			f.claim(t, core.ClaimInput{})
+		}, func(f fixture) (any, error) {
+			return f.core.Release(human, "acme", core.ReleaseInput{Ticket: "2"})
+		}, store.Ready, []string{"state", "claims", "moves", "claimable", "silent_since", "needs_me_reason"}}, // a Silent Claim, two hours quiet
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t)
+			c.setup(f, t)
+			f.clock.Set(at)
+			v, err := c.write(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantTicketAcknowledgement(t, v, "acme-2", at, c.state, c.changed, 0)
+		})
+	}
+}
+
+func TestRoundActionsAcknowledgeTheRoundsAndAnsweredOnTheLastOne(t *testing.T) {
+	f := newFixture(t)
+	f.asking(t, qDB, qName)
+	f.clock.Set(t0.Add(2 * time.Hour))
+	v, err := f.core.AcceptRecommended(human, "acme", core.AcceptRecommendedInput{Ticket: "2", Round: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantTicketAcknowledgement(t, v, "acme-2", t0.Add(2*time.Hour), store.NeedsAnswer, []string{"rounds"}, 0)
+	v, err = f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "Postgres"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantTicketAcknowledgement(t, v, "acme-2", t0.Add(2*time.Hour), store.NeedsAnswer, []string{"rounds"}, 0)
+	v, err = f.core.DismissQuestion(human, "acme", core.DismissQuestionInput{Ticket: "2", Question: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantTicketAcknowledgement(t, v, "acme-2", t0.Add(2*time.Hour), store.Answered, []string{"state", "rounds", "moves", "needs_me_reason"}, 0)
+}
