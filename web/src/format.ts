@@ -4,6 +4,7 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   needs_answer: "Questions",
   answered: "Answered",
   silent_claim: "Silent Claim",
+  long_claim: "Long Claim",
   failed: "Failed",
   in_review: "In Review",
   blocked_by_cancelled: "Blocked by a Cancelled Ticket",
@@ -29,6 +30,8 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
       return `Answered ${ago(now, r.since)}, no session has picked it up`;
     case "silent_claim":
       return `Quiet for ${duration(now, r.since)}`;
+    case "long_claim":
+      return `No move for ${duration(now, r.since)}`;
     case "failed":
       if (!r.failure) return "Failed";
       return r.failure.reports > 1 ? `${r.failure.headline} · failed ${r.failure.reports}×` : r.failure.headline;

@@ -1,7 +1,8 @@
-// The Resume-then-Release panel, one for both an Answered Ticket no
-// session has picked up and a Silent Claim: how long it has waited or been
-// quiet, then the cheap, safe option (resume the session), then Release,
-// which warns what it costs first.
+// The Resume-then-Release panel, one for an Answered Ticket no session has
+// picked up and for a Silent or Long Claim: how long it has waited, been
+// quiet or gone without a move, then the cheap, safe option (resume the
+// session), then Release, which warns what it costs first. On a Silent or
+// Long Claim, release reads "Stop": the session may still be running.
 import { useState } from "react";
 import "../../api/actions/release";
 import { ApiError, type RoundView, type TicketView } from "../../api/types";
@@ -18,11 +19,13 @@ function ResumeRelease({ api, project, ticket: t, now }: PanelProps) {
       <p>
         {answered
           ? `Answered ${ago(now, answeredAt(t))}, no session has picked it up.`
-          : `Quiet for ${duration(now, quietSince(t))}.`}
+          : t.needs_me_reason === "long_claim"
+            ? `Active, but no move for ${duration(now, movedAt(t))}.`
+            : `Quiet for ${duration(now, quietSince(t))}.`}
       </p>
       <ResumeCommand {...sessionOf(t)} />
       {answered && round && <Answers round={round} />}
-      <Release api={api} project={project} ticket={t} />
+      <Release api={api} project={project} ticket={t} verb={answered ? "Release" : "Stop"} />
     </section>
   );
 }
@@ -30,6 +33,11 @@ function ResumeRelease({ api, project, ticket: t, now }: PanelProps) {
 // answeredAt is when the Ticket last moved to Answered.
 function answeredAt(t: TicketView): string {
   return t.moves.filter((m) => m.to === "Answered").at(-1)?.time ?? t.updated;
+}
+
+// movedAt is when the Long Claim last moved into In Progress.
+function movedAt(t: TicketView): string {
+  return t.moves.filter((m) => m.to === "In Progress").at(-1)?.time ?? t.claims.find((c) => !c.ended)?.started ?? t.updated;
 }
 
 // quietSince is the Silent Claim's last activity.
@@ -65,7 +73,19 @@ function Answers({ round }: { round: RoundView }) {
   );
 }
 
-function Release({ api, project, ticket: t }: { api: PanelProps["api"]; project: string; ticket: TicketView }) {
+// Release is the release action, labelled verb: "Release", or "Stop" on a
+// Silent or Long Claim. Either way it is the same release.
+function Release({
+  api,
+  project,
+  ticket: t,
+  verb,
+}: {
+  api: PanelProps["api"];
+  project: string;
+  ticket: TicketView;
+  verb: "Release" | "Stop";
+}) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -75,7 +95,7 @@ function Release({ api, project, ticket: t }: { api: PanelProps["api"]; project:
     return (
       <p>
         <button type="button" className="btn danger" onClick={() => setOpen(true)}>
-          Release…
+          {verb}…
         </button>
       </p>
     );
@@ -97,7 +117,7 @@ function Release({ api, project, ticket: t }: { api: PanelProps["api"]; project:
   return (
     <div className="release">
       <p role="alert" className="warning">
-        Releasing ends this Claim for good and moves {t.id} back to Ready: a live session's next write will be
+        {verb === "Stop" ? "Stopping" : "Releasing"} ends this Claim for good and moves {t.id} back to Ready: a live session's next write will be
         rejected, and the Claim can't be restored.
       </p>
       <label>
@@ -107,7 +127,7 @@ function Release({ api, project, ticket: t }: { api: PanelProps["api"]; project:
       {error && <p className="warning">{error}</p>}
       <p>
         <button type="button" className="btn danger" disabled={busy} onClick={release}>
-          Release Claim
+          {verb} Claim
         </button>{" "}
         <button type="button" className="btn" disabled={busy} onClick={() => setOpen(false)}>
           Keep the Claim
@@ -117,4 +137,4 @@ function Release({ api, project, ticket: t }: { api: PanelProps["api"]; project:
   );
 }
 
-export const panel: PanelDef = { reasons: ["answered", "silent_claim"], Component: ResumeRelease };
+export const panel: PanelDef = { reasons: ["answered", "silent_claim", "long_claim"], Component: ResumeRelease };

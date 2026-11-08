@@ -21,6 +21,7 @@ export type NeedsMeReason =
   | "needs_answer"
   | "answered"
   | "silent_claim"
+  | "long_claim"
   | "failed"
   | "in_review"
   | "blocked_by_cancelled"
