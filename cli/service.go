@@ -123,13 +123,13 @@ func serviceManagerFor(e Env) (serviceManager, error) {
 	}
 	switch goos {
 	case "darwin":
-		home, err := e.home().Home()
+		dir, err := e.home().Home()
 		if err != nil {
 			return serviceManager{}, fmt.Errorf("cannot find the LaunchAgents folder: %w", err)
 		}
 		domain := fmt.Sprintf("gui/%d", os.Getuid())
-		plist := filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist")
-		log := filepath.Join(home, "Library", "Logs", "code-central.log")
+		plist := filepath.Join(dir, "Library", "LaunchAgents", launchdLabel+".plist")
+		log := filepath.Join(dir, "Library", "Logs", "code-central.log")
 		return serviceManager{
 			unitPath: plist,
 			unit:     func(a []string) []byte { return launchdPlist(a, log) },

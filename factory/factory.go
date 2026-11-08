@@ -61,6 +61,11 @@ func (e Env) getenv(key string) string {
 	return ""
 }
 
+// home is where the state file is found.
+func (e Env) home() home.Lookup {
+	return home.Lookup{Getenv: e.getenv, UserHomeDir: e.UserHomeDir}
+}
+
 // lookPath finds name on the environment's PATH.
 func (e Env) lookPath(name string) (string, bool) {
 	for _, d := range filepath.SplitList(e.getenv("PATH")) {
@@ -275,7 +280,7 @@ func start(e Env, o options) (*factory, error) {
 		every = eventBatchEvery
 	}
 	f.events = newSender(f.client, every)
-	statePath, err := home.Lookup{Getenv: e.getenv, UserHomeDir: e.UserHomeDir}.State("code-central-factory", project+".json")
+	statePath, err := e.home().State("code-central-factory", project+".json")
 	if err != nil {
 		return nil, fmt.Errorf("can't find the state folder: %w", err)
 	}

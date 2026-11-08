@@ -38,8 +38,8 @@ func TestEachFolderIsItsXDGVariableThenHOMEThenTheProfileFolder(t *testing.T) {
 		// XDG_STATE_HOME isn't read: the state files stay where they always were.
 		{"state from HOME", home.Lookup.State, map[string]string{"XDG_STATE_HOME": "/xdg", "HOME": "/home/me"}, "/profile", p("/home/me", ".local", "state", "a")},
 		{"state from the profile", home.Lookup.State, nil, "/profile", p("/profile", ".local", "state", "a")},
-		{"home from HOME", func(l home.Lookup, elem ...string) (string, error) { return l.Home(elem...) }, map[string]string{"HOME": "/home/me"}, "/profile", p("/home/me", "a")},
-		{"home from the profile", func(l home.Lookup, elem ...string) (string, error) { return l.Home(elem...) }, nil, "/profile", p("/profile", "a")},
+		{"home from HOME", home.Lookup.Home, map[string]string{"HOME": "/home/me"}, "/profile", p("/home/me", "a")},
+		{"home from the profile", home.Lookup.Home, nil, "/profile", p("/profile", "a")},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
