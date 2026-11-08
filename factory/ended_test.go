@@ -52,8 +52,7 @@ func TestAReleasedClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	r.Poll()
 
 	wantStopped(t, h, id)
-	_, exit := stopped()
-	r.WaitForOutput(fmt.Sprintf(`%s turn ended (implementation): "Stopped": exit %d`, id, exit))
+	r.WaitForOutput(fmt.Sprintf(`%s turn ended (implementation): "Stopped": exit %d`, id, stoppedExit()))
 	if ended := h.Calls()[0].Claim; slices.Contains(stateClaims(t, h), ended) {
 		t.Errorf("state file still holds the ended Claim %s", ended)
 	}

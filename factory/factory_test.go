@@ -66,8 +66,12 @@ func TestTheFactoryRefusesToStartWhenClaudeIsOnlyTheNpmCmdShim(t *testing.T) {
 		refuses(t, h, h.Repo, "claude isn't on PATH")
 		return
 	}
-	refuses(t, h, h.Repo, "claude.cmd, the npm shim, can't carry a multi-line prompt")
-	refuses(t, h, h.Repo, "irm https://claude.ai/install.ps1 | iex")
+	code, _, stderr := h.Run()
+	for _, why := range []string{"claude.cmd, like the npm shim claude.cmd, can't carry a multi-line prompt", "irm https://claude.ai/install.ps1 | iex"} {
+		if code == 0 || !strings.Contains(stderr, why) {
+			t.Errorf("exit %d, stderr %q; want a refusal saying %q", code, stderr, why)
+		}
+	}
 }
 
 func TestTheFactoryRefusesToStartWithGitOlderThan2_38(t *testing.T) {

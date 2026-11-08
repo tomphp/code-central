@@ -33,16 +33,16 @@ func (e Env) pathExts() []string {
 // execute bits; the PATHEXT ending says it.
 func executable(os.FileInfo) bool { return true }
 
-// nativeClaude refuses a claude that is a .cmd or .bat, such as the npm
-// shim: Go runs one through cmd.exe, which cuts arguments at a newline
-// and expands %...%, so a multi-line prompt wouldn't arrive intact.
-func nativeClaude(path string) error {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".cmd", ".bat":
-		return fmt.Errorf("claude on PATH is %s: %s, the npm shim, can't carry a multi-line prompt, because Windows runs it through cmd.exe, which cuts arguments at a newline. "+
-			"Install the native claude.exe with `irm https://claude.ai/install.ps1 | iex` in PowerShell, put it before the npm folder on PATH, and start the Factory again", path, filepath.Base(path))
+// refuseClaudeShim refuses a claude that isn't the native claude.exe,
+// such as the npm shim claude.cmd: Go runs a .cmd or .bat through
+// cmd.exe, which cuts arguments at a newline and expands %...%, so a
+// multi-line prompt wouldn't arrive intact.
+func refuseClaudeShim(path string) error {
+	if strings.EqualFold(filepath.Ext(path), ".exe") {
+		return nil
 	}
-	return nil
+	return fmt.Errorf("claude on PATH is %s, not the native claude.exe: %s, like the npm shim claude.cmd, can't carry a multi-line prompt, because Windows runs it through cmd.exe, which cuts arguments at a newline. "+
+		"Install the native claude.exe with `irm https://claude.ai/install.ps1 | iex` in PowerShell, put it before the npm folder on PATH, and start the Factory again", path, filepath.Base(path))
 }
 
 // startInOwnGroup has cmd start a turn in its own process group, so the

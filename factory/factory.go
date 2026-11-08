@@ -272,7 +272,7 @@ func start(e Env, o options) (*factory, error) {
 	if f.claude, ok = e.lookPath("claude"); !ok {
 		return nil, errors.New("claude isn't on PATH")
 	}
-	if err := nativeClaude(f.claude); err != nil {
+	if err := refuseClaudeShim(f.claude); err != nil {
 		return nil, err
 	}
 	f.worktrees = filepath.Join(filepath.Dir(top), filepath.Base(top)+".worktrees")

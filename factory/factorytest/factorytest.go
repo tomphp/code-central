@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -899,6 +900,21 @@ func runFakeClaude(data string, args []string) int {
 	} else if s, ok := c.Flag("--resume"); ok {
 		c.Session = s
 	}
+	steps := DefaultScript
+	if b, err := os.ReadFile(filepath.Join(data, "scripts", c.Ticket+".json")); err == nil {
+		steps = nil
+		if err := json.Unmarshal(b, &steps); err != nil {
+			fmt.Fprintln(os.Stderr, "fake claude:", err)
+			return 70
+		}
+	}
+	// A test stops a waiting run as soon as it sees the call, so take the
+	// stop signals before recording it: none is lost before Wait starts.
+	sigs := make(chan os.Signal, 2)
+	if slices.ContainsFunc(steps, func(s Step) bool { return s.Wait }) {
+		signal.Notify(sigs, waitSignals...)
+		defer signal.Stop(sigs)
+	}
 	b, _ := json.Marshal(c)
 	name := fmt.Sprintf("%020d-%d.json", time.Now().UnixNano(), os.Getpid())
 	// Write beside calls/ and rename in, so Calls never reads half a file.
@@ -912,14 +928,6 @@ func runFakeClaude(data string, args []string) int {
 		return 70
 	}
 
-	steps := DefaultScript
-	if b, err := os.ReadFile(filepath.Join(data, "scripts", c.Ticket+".json")); err == nil {
-		steps = nil
-		if err := json.Unmarshal(b, &steps); err != nil {
-			fmt.Fprintln(os.Stderr, "fake claude:", err)
-			return 70
-		}
-	}
 	fill := strings.NewReplacer("{{ticket}}", c.Ticket, "{{claim}}", c.Claim, "{{session}}", c.Session).Replace
 	fillAll := func(args []string) []string {
 		var filled []string
@@ -934,7 +942,7 @@ func runFakeClaude(data string, args []string) int {
 		case s.Exit != nil:
 			return *s.Exit
 		case s.Wait:
-			if code, stop := wait(data, c.Ticket); stop {
+			if code, stop := wait(data, c.Ticket, sigs); stop {
 				return code
 			}
 		case s.Stdout != "":
@@ -970,11 +978,8 @@ func runFakeClaude(data string, args []string) int {
 }
 
 // wait is the fake's Wait step: it returns when the test continues the
-// run, or with stop set when a signal ends it.
-func wait(data, ticket string) (code int, stop bool) {
-	sigs := make(chan os.Signal, 2)
-	signal.Notify(sigs, waitSignals...)
-	defer signal.Stop(sigs)
+// run, or with stop set when a signal on sigs ends it.
+func wait(data, ticket string, sigs <-chan os.Signal) (code int, stop bool) {
 	note := func(s string) {
 		f, err := os.OpenFile(filepath.Join(data, "signals", ticket), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err == nil {
