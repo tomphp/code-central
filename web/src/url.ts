@@ -1,16 +1,22 @@
-// What the UI shows lives in the URL: ?view=inbox&project=<key>&state=<State>&ticket=<id>.
+// What the UI shows lives in the URL:
+// ?view=inbox&project=<key>&state=<State>&list=requirements&requirement=<spec id>&ticket=<id>.
 // view is the layout (only the inbox in v1; a focus queue or board later);
-// project and state are the left pane's filters (no state = Needs Me);
-// ticket is the selected Ticket's display ID.
+// project, state and list are the left pane's filters (no state and no
+// list = Needs Me; list=requirements is the Requirements view); requirement
+// is the selected Requirement's Spec ID and ticket the selected Ticket's
+// display ID (within the Requirement, when one is selected).
 import { useCallback, useEffect, useState } from "react";
 import { STATES, type State } from "./api/types";
 
 export type View = "inbox";
+export type List = "requirements";
 
 export interface UiLocation {
   view: View;
   project?: string;
   state?: State;
+  list?: List;
+  requirement?: string;
   ticket?: string;
 }
 
@@ -21,6 +27,8 @@ export function readLocation(search: string): UiLocation {
     view: "inbox",
     project: q.get("project") || undefined,
     state: state && STATES.includes(state) ? state : undefined,
+    list: q.get("list") === "requirements" ? "requirements" : undefined,
+    requirement: q.get("requirement") || undefined,
     ticket: q.get("ticket") || undefined,
   };
 }
@@ -29,6 +37,8 @@ export function hrefFor(loc: UiLocation): string {
   const q = new URLSearchParams({ view: loc.view });
   if (loc.project) q.set("project", loc.project);
   if (loc.state) q.set("state", loc.state);
+  if (loc.list) q.set("list", loc.list);
+  if (loc.requirement) q.set("requirement", loc.requirement);
   if (loc.ticket) q.set("ticket", loc.ticket);
   return `?${q}`;
 }
