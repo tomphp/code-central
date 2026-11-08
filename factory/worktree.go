@@ -202,6 +202,17 @@ func (f *factory) turnRunningOn(ticket string) bool {
 	return false
 }
 
+// setUpFailed is the failure for an error setting up the worktree at wt
+// that isn't already one, such as a git command failing.
+func (f *factory) setUpFailed(wt string, err error) *failure {
+	return &failure{core.ReportFailureInput{
+		WhatBroke:       fmt.Sprintf("The Factory couldn't set up this Ticket's worktree at %s: %v", wt, err),
+		Why:             "A git command the Factory runs to set up the worktree failed, so no session could start.",
+		WhatToFix:       "Read the git error above, fix what it names in the repository (a stale lock file, a bad base, a full disk), then send the Ticket back.",
+		WhereWorkStands: fmt.Sprintf("No session ran under this Claim. The Factory stopped at the failed git command and touched nothing after it; check `git worktree list` for %s.", wt),
+	}}
+}
+
 func (f *factory) strayDirectory(wt string) error {
 	return &failure{core.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("Something that isn't a git worktree is at this Ticket's worktree path, %s, so the Factory can't set up the worktree.", wt),

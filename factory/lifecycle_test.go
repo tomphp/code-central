@@ -215,3 +215,24 @@ func TestTheSweepAtStartRemovesFinishedTicketsWorktreesAndPrunes(t *testing.T) {
 		t.Errorf("branch %s was deleted", done)
 	}
 }
+
+func TestAGitFailureSettingUpTheWorktreeIsAFailureReport(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("git says no")
+	// A stale ref lock makes `git worktree add -b` fail to make the branch.
+	lock := filepath.Join(h.Git("rev-parse", "--absolute-git-dir"), "refs", "heads", id+".lock")
+	if err := os.WriteFile(lock, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h.Start()
+	report := lastFailure(t, h, id)
+
+	if !strings.Contains(report, "worktree add") || !strings.Contains(report, h.Worktree(id)) {
+		t.Errorf("failure report %q doesn't name the git command that failed and the path", report)
+	}
+	if n := len(h.Calls()); n != 0 {
+		t.Errorf("claude ran %d times, want none", n)
+	}
+}

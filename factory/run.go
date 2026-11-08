@@ -303,11 +303,11 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		setUp = f.stageWorktree
 	}
 	if err := setUp(id, wt); err != nil {
-		if fl := (*failure)(nil); errors.As(err, &fl) {
-			f.reportFailure(ctx, c, fl)
-			return true
+		fl := (*failure)(nil)
+		if !errors.As(err, &fl) {
+			fl = f.setUpFailed(wt, err)
 		}
-		f.printf("%s: can't set up the worktree: %v", id, err)
+		f.reportFailure(ctx, c, fl)
 		return true
 	}
 	f.startTurn(ctx, c, wt, append(f.startArgs(c), firstPrompt(c, stage, guide)))
