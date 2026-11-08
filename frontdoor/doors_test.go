@@ -70,7 +70,7 @@ var cases = map[string]opCase{
 			http: httpCall{"POST", "/api/p/acme/create_spec", `{"title":"Search","body":"Find things."}`},
 			cli:  []string{"--title", "Search", "--body", "Find things."},
 		},
-		check: field("id", "acme-4"),
+		check: acknowledgement("acme-4", "title", "body"),
 		bad: call{
 			mcp:  map[string]any{"title": ""},
 			http: httpCall{"POST", "/api/p/acme/create_spec", `{"title":""}`},
@@ -218,13 +218,7 @@ func init() {
 				http: httpCall{"POST", "/api/p/acme/specs/1/edit_spec", `{"title":"Sign in","body":"New."}`},
 				cli:  []string{"acme-1", "--title", "Sign in", "--body", "New."},
 			},
-			check: func(t *testing.T, out map[string]any) {
-				field("title", "Sign in")(t, out)
-				field("body", "New.")(t, out)
-				if edits, _ := out["edits"].([]any); len(edits) != 1 {
-					t.Fatalf("edits %v", out["edits"])
-				}
-			},
+			check: acknowledgement("acme-1", "title", "body", "edits"),
 			bad: call{
 				mcp:  map[string]any{"spec": 2, "title": "X"},
 				http: httpCall{"POST", "/api/p/acme/specs/2/edit_spec", `{"title":"X"}`},

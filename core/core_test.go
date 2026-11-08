@@ -41,11 +41,11 @@ func (f fixture) project(t *testing.T, key string) core.ProjectView {
 
 func (f fixture) spec(t *testing.T, key, title string) core.SpecView {
 	t.Helper()
-	s, err := f.core.CreateSpec(ctx, key, core.CreateSpecInput{Title: title, Body: "body\n"})
+	s, err := f.core.CreateSpec(ctx, key, core.CreateSpecInput{Title: title, Body: "body\n", Full: true})
 	if err != nil {
 		t.Fatalf("create_spec: %v", err)
 	}
-	return s
+	return *s.Record
 }
 
 func (f fixture) ticket(t *testing.T, key string, in core.CreateTicketInput) core.TicketView {

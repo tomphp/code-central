@@ -21,7 +21,7 @@ func ghLink(id string) core.LinkInput {
 func (f fixture) linked(t *testing.T) (core.SpecView, core.TicketView) {
 	t.Helper()
 	f.project(t, "acme")
-	sp, err := f.core.CreateLinkedSpec(integration, "acme", core.CreateLinkedSpecInput{Title: "Login", Body: "Users log in.\n", Link: ghLink("10")})
+	sp, err := f.core.CreateLinkedSpec(integration, "acme", core.CreateLinkedSpecInput{Title: "Login", Body: "Users log in.\n", Link: ghLink("10"), Full: true})
 	if err != nil {
 		t.Fatalf("create_linked_spec: %v", err)
 	}
@@ -29,7 +29,7 @@ func (f fixture) linked(t *testing.T) (core.SpecView, core.TicketView) {
 	if err != nil {
 		t.Fatalf("create_linked_ticket: %v", err)
 	}
-	return sp, tk
+	return *sp.Record, tk
 }
 
 func wantLink(t *testing.T, got *core.LinkView, want core.LinkView) {
@@ -136,8 +136,8 @@ func TestTheIntegrationsDefinitionUpdatesGoThroughEditHistory(t *testing.T) {
 		t.Fatalf("edits %+v", v.Edits)
 	}
 	body := "New body.\n"
-	sp, err := f.core.UpdateLinkedSpec(integration, "acme", core.UpdateLinkedSpecInput{Spec: "1", Body: &body})
-	if err != nil || sp.Body != body || len(sp.Edits) != 1 || sp.Edits[0].Actor != "integration" || sp.Edits[0].Previous["body"] != "Users log in.\n" {
+	sp, err := f.core.UpdateLinkedSpec(integration, "acme", core.UpdateLinkedSpecInput{Spec: "1", Body: &body, Full: true})
+	if err != nil || sp.Record.Body != body || len(sp.Record.Edits) != 1 || sp.Record.Edits[0].Actor != "integration" || sp.Record.Edits[0].Previous["body"] != "Users log in.\n" {
 		t.Fatalf("spec %+v, %v", sp, err)
 	}
 	// edit_ticket as the integration is a definition write too.

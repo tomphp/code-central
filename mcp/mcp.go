@@ -30,10 +30,11 @@ type tool struct {
 // cross-door suite checks the served list against core.Operations.
 var tools = map[string]tool{
 	"create_spec": {
-		description: "Create a Spec, the description of a piece of work delivered through one or more Tickets.",
+		description: "Create a Spec, the description of a piece of work delivered through one or more Tickets; returns an acknowledgement with its ID, or the Spec with full.",
 		schema: object(map[string]any{
 			"title": text("The Spec's title."),
 			"body":  text("The Spec in Markdown."),
+			"full":  flag("Return the whole Spec instead of the acknowledgement."),
 		}, "title"),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.CreateSpecInput
@@ -161,11 +162,12 @@ var sessionTools = map[string]tool{
 // definingTools shape work after it is created (ticket 27).
 var definingTools = map[string]tool{
 	"edit_spec": {
-		description: "Edit a Spec's title or body; a body given replaces the old one whole, and the old text is kept in its edit history.",
+		description: "Edit a Spec's title or body; a body given replaces the old one whole, and the old text is kept in its edit history. Returns an acknowledgement naming the changed fields, or the Spec with full.",
 		schema: object(map[string]any{
 			"spec":  ref("The Spec."),
 			"title": text("The new title."),
 			"body":  text("The new body in Markdown, replacing the old one whole."),
+			"full":  flag("Return the whole Spec instead of the acknowledgement."),
 		}, "spec"),
 		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.EditSpecInput) (any, error) {
 			return c.EditSpec(ctx, key, in)

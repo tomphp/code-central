@@ -85,28 +85,30 @@ func TestEditTicketRejects(t *testing.T) {
 func TestEditSpecReplacesTheBodyWholeAndKeepsTheOldOne(t *testing.T) {
 	f := defining(t)
 	f.clock.Advance(time.Minute)
-	v, err := f.core.EditSpec(core.WithActor(ctx, core.Human), "acme", core.EditSpecInput{Spec: "acme-1", Body: ptr("# Login\n\nNew.\n")})
+	v, err := f.core.EditSpec(core.WithActor(ctx, core.Human), "acme", core.EditSpecInput{Spec: "acme-1", Body: ptr("# Login\n\nNew.\n"), Full: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Body != "# Login\n\nNew.\n" || v.Title != "Login" || !v.Updated.Equal(t0.Add(time.Minute)) {
-		t.Fatalf("view: %+v", v)
+	sp := v.Record
+	if sp.Body != "# Login\n\nNew.\n" || sp.Title != "Login" || !sp.Updated.Equal(t0.Add(time.Minute)) {
+		t.Fatalf("view: %+v", sp)
 	}
 	want := core.EditView{Number: 1, Actor: "human", Time: t0.Add(time.Minute), Previous: map[string]string{"body": "body\n"}}
-	if len(v.Edits) != 1 || !editEqual(v.Edits[0], want) {
-		t.Fatalf("edits %+v, want %+v", v.Edits, want)
+	if len(sp.Edits) != 1 || !editEqual(sp.Edits[0], want) {
+		t.Fatalf("edits %+v, want %+v", sp.Edits, want)
 	}
-	v, err = f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Title: ptr("Sign in"), Body: ptr("# Login\n\nNew.\n")})
+	v, err = f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Title: ptr("Sign in"), Body: ptr("# Login\n\nNew.\n"), Full: true})
 	if err != nil {
 		t.Fatal(err)
 	}
+	sp = v.Record
 	want = core.EditView{Number: 2, Actor: "agent", Time: t0.Add(time.Minute), Previous: map[string]string{"title": "Login"}}
-	if len(v.Edits) != 2 || !editEqual(v.Edits[1], want) || v.Title != "Sign in" {
-		t.Fatalf("edits %+v, want a second entry %+v", v.Edits, want)
+	if len(sp.Edits) != 2 || !editEqual(sp.Edits[1], want) || sp.Title != "Sign in" {
+		t.Fatalf("edits %+v, want a second entry %+v", sp.Edits, want)
 	}
-	v, _ = f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Title: ptr("Sign in")})
-	if len(v.Edits) != 2 {
-		t.Fatalf("a no-op edit was recorded: %+v", v.Edits)
+	v, _ = f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1", Title: ptr("Sign in"), Full: true})
+	if len(v.Record.Edits) != 2 {
+		t.Fatalf("a no-op edit was recorded: %+v", v.Record.Edits)
 	}
 }
 
@@ -145,7 +147,7 @@ func TestLabelsAreAddedAndRemovedByNameOnSpecsAndTickets(t *testing.T) {
 	if err != nil || v.ID != "acme-1" || v.Kind != "spec" || !slices.Equal(v.Labels, []string{"auth"}) {
 		t.Fatalf("add to a Spec: %+v, %v", v, err)
 	}
-	sp, _ := f.core.EditSpec(ctx, "acme", core.EditSpecInput{Spec: "1"})
+	sp, _ := f.core.GetSpec(ctx, "acme", "1")
 	if !slices.Equal(sp.Labels, []string{"auth"}) || len(sp.Edits) != 0 {
 		t.Fatalf("spec after: %+v", sp)
 	}

@@ -60,7 +60,8 @@ type ProjectView struct {
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 }
 
-// SpecView is a Spec as every read returns it.
+// SpecView is a Spec as every read returns it, and as its writes return
+// it with full.
 type SpecView struct {
 	ID      string            `json:"id"`
 	Title   string            `json:"title"`
@@ -173,6 +174,8 @@ type CreateProjectInput struct {
 type CreateSpecInput struct {
 	Title string `json:"title"`
 	Body  string `json:"body"`
+	// Full asks for the Spec in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
 }
 
 // CreateTicketInput is create_ticket's input. State defaults to Draft.
@@ -243,12 +246,12 @@ func (c *Core) GetProject(_ context.Context, key string) (ProjectView, error) {
 	return v, err
 }
 
-// CreateSpec is create_spec(title, body).
-func (c *Core) CreateSpec(_ context.Context, key string, in CreateSpecInput) (SpecView, error) {
+// CreateSpec is create_spec(title, body, full?).
+func (c *Core) CreateSpec(_ context.Context, key string, in CreateSpecInput) (Written[SpecView], error) {
 	if strings.TrimSpace(in.Title) == "" {
-		return SpecView{}, invalid("title", "a Spec needs a title")
+		return Written[SpecView]{}, invalid("title", "a Spec needs a title")
 	}
-	var v SpecView
+	var v Written[SpecView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -258,8 +261,9 @@ func (c *Core) CreateSpec(_ context.Context, key string, in CreateSpecInput) (Sp
 		if err := w.PutSpec(key, s); err != nil {
 			return err
 		}
-		v = specView(key, s)
-		return nil
+		var err error
+		v, err = acknowledgeCreate(specView(key, store.Spec{}), specView(key, s), in.Full)
+		return err
 	})
 	return v, err
 }

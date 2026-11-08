@@ -92,12 +92,12 @@ var commands map[string]command
 func init() {
 	commands = map[string]command{
 		"init":          {usage: "init [--key <key>] [--local | --committed]  set this repository up as a Project (--local keeps init's files out of git)", run: runInit},
-		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->]", run: runCreateSpec},
+		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->] [--full]", run: runCreateSpec},
 		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--description <md> | --file <path|->]", run: runCreateTicket},
 		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id>", run: runGetTicket},
 		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--spec <id>] [--claimable[=false]]", run: runFindTickets},
 
-		"edit-spec":     {op: "edit_spec", usage: "edit-spec <id> [--title <t>] [--body <md> | --file <path|->]", run: runEditSpec},
+		"edit-spec":     {op: "edit_spec", usage: "edit-spec <id> [--title <t>] [--body <md> | --file <path|->] [--full]", run: runEditSpec},
 		"edit-ticket":   {op: "edit_ticket", usage: "edit-ticket <id> [--title <t>] [--description <md> | --file <path|->]", run: runEditTicket},
 		"add-labels":    {op: "add_labels", usage: "add-labels <id> <label>...", run: runAddLabels},
 		"remove-labels": {op: "remove_labels", usage: "remove-labels <id> <label>...", run: runRemoveLabels},
@@ -291,6 +291,7 @@ func runCreateSpec(ctx context.Context, e Env, args []string) error {
 	title := fs.String("title", "", "")
 	body := fs.String("body", "", "")
 	file := fs.String("file", "", "")
+	full := fs.Bool("full", false, "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -306,7 +307,7 @@ func runCreateSpec(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.CreateSpec(ctx, sc.project, core.CreateSpecInput{Title: *title, Body: text})
+	v, err := sc.client.CreateSpec(ctx, sc.project, core.CreateSpecInput{Title: *title, Body: text, Full: *full})
 	if err != nil {
 		return err
 	}
