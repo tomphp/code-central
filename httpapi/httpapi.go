@@ -228,6 +228,15 @@ func Register(mux *http.ServeMux, c *core.Core) {
 		})
 	}
 	mux.HandleFunc("POST /api/ping", ping(c))
+	mux.HandleFunc(SessionEventsPath, sessionEvents(c))
+	mux.HandleFunc(TranscriptPath, func(w http.ResponseWriter, r *http.Request) {
+		v, err := transcript(c, r)
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, v)
+	})
 	mux.HandleFunc(EventsPath, events(c))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {

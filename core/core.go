@@ -28,6 +28,8 @@ type Core struct {
 	events *events.Bus
 	// activity is the in-memory last-activity record behind Silent Claims.
 	activity *activity
+	// transcripts holds each Claim's Session Events, in memory only.
+	transcripts *transcripts
 }
 
 // New returns a Core persisting through s, telling time with clk and
@@ -37,6 +39,7 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	bus := events.New()
 	c := &Core{store: notifying{Store: archiveGuard{s}, bus: bus}, clock: clk, ids: idSource, events: bus}
 	c.activity = newActivity(c.now())
+	c.transcripts = &transcripts{all: map[markKey]*transcript{}}
 	return c
 }
 

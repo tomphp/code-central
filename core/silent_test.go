@@ -107,6 +107,21 @@ func TestAPingMarksEveryLiveClaimWithThatSessionInAnyProject(t *testing.T) {
 	wantSilentSince(t, web, time.Time{})
 }
 
+func TestAClaimWhoseSessionKeepsPostingSessionEventsNeverGoesSilent(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready)
+	f.claim(t, core.ClaimInput{SessionID: "s1"})
+
+	for range 12 { // three hours, posting every quarter of an hour
+		f.clock.Advance(15 * time.Minute)
+		f.core.PostSessionEvents(ctx, "s1", []core.SessionEvent{{Time: f.clock.Now(), Kind: "tool_call", Text: "Bash: go test ./..."}})
+		wantSilentSince(t, f.get(t, "acme-2"), time.Time{})
+	}
+	posted := f.clock.Now()
+	f.clock.Advance(30 * time.Minute)
+	wantSilentSince(t, f.get(t, "acme-2"), posted) // quiet once the posts stop
+}
+
 func TestOnlyInProgressIsEverSilent(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, store.Ready, store.Ready)

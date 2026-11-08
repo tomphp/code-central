@@ -80,6 +80,14 @@ _Avoid_: Stale, stalled, lost
 A Claim on a Ticket in progress that is still active but hasn't moved for a long time, which may mean its agent is going round in circles.
 _Avoid_: Looping, runaway, stuck
 
+**Session Event**:
+One thing a Claim's session did, as posted to Code Central: agent text, a tool call, a tool result, or a Factory log line.
+_Avoid_: Log entry, message, activity
+
+**Transcript**:
+The Session Events of one Claim, in order, as Code Central holds them. It may be only the tail of the session.
+_Avoid_: Log, conversation, stream
+
 **Actor**:
 Who made a change: the human, an agent, or an Integration.
 _Avoid_: User, caller
