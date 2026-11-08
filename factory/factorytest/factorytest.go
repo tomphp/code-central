@@ -609,6 +609,18 @@ func Say(text string) Step {
 	return Step{Stdout: string(b)}
 }
 
+// ToolUse prints a stream-json assistant message calling tool with input,
+// a JSON object kept as written so its key order holds.
+func ToolUse(tool, input string) Step {
+	b, _ := json.Marshal(map[string]any{
+		"type": "assistant",
+		"message": map[string]any{"role": "assistant", "content": []map[string]any{
+			{"type": "tool_use", "id": "toolu_" + tool, "name": tool, "input": json.RawMessage(input)},
+		}},
+	})
+	return Step{Stdout: string(b)}
+}
+
 // Exit exits with code.
 func Exit(code int) Step { return Step{Exit: &code} }
 

@@ -53,7 +53,7 @@ func TestAReleasedClaimsTurnGetsSIGINTThenSIGTERMAndIsDropped(t *testing.T) {
 	if got := h.Signals(id); !slices.Equal(got, []string{"INT", "TERM"}) {
 		t.Errorf("the turn got %q, want SIGINT then SIGTERM", got)
 	}
-	r.WaitForOutput(id + ": turn ended: exit 143")
+	r.WaitForOutput(id + ` turn ended (implementation): "Stopped": exit 143`)
 	if ended := h.Calls()[0].Claim; slices.Contains(stateClaims(t, h), ended) {
 		t.Errorf("state file still holds the ended Claim %s", ended)
 	}

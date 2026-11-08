@@ -9,25 +9,27 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// afterTurn acts on how a turn ended. A turn the Factory stopped, or one
-// that ended because the Factory is stopping, is left alone.
-func (f *factory) afterTurn(ctx context.Context, t *turn, end turnEnd) {
+// afterTurn acts on how a turn ended, and returns the State the Ticket
+// was left in, as the Factory read it or moved it; "" when it read none.
+// A turn the Factory stopped, or one that ended because the Factory is
+// stopping, is left alone.
+func (f *factory) afterTurn(ctx context.Context, t *turn, end turnEnd) store.State {
 	if ctx.Err() != nil || t.stopped.Load() {
-		return
+		return ""
 	}
 	c := t.claim
 	apiErr := end.apiError()
 	if apiErr == authFailed {
 		f.stopFor(fmt.Sprintf("claude's login has expired or is missing (authentication_failed, on %s): log in with `claude /login`, then start the Factory again", c.Ticket))
-		return
+		return ""
 	}
 	if !outageErrors[apiErr] {
 		f.turnWentWell(t)
 	}
 	tk, err := f.client.GetTicket(ctx, f.project, core.Ref(c.Ticket))
 	if err != nil {
-		f.printf("%s: get_ticket: %v", c.Ticket, err)
-		return
+		f.claimf(c, "%s: get_ticket: %v", c.Ticket, err)
+		return ""
 	}
 	var denials []denial
 	if end.Result != nil {
@@ -42,31 +44,37 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, end turnEnd) {
 		if len(denials) > 0 {
 			f.commentDenials(ctx, t, denials)
 		}
-		return
+		return tk.State
 	}
 	if !f.live(c.ClaimID) {
-		return
+		return tk.State
 	}
 	if outageErrors[apiErr] {
 		f.cutOff(c, apiErr)
-		return
+		return tk.State
 	}
 	if len(denials) > 0 {
-		f.postDenials(ctx, t, denials)
-		return
+		if f.postDenials(ctx, t, denials) {
+			return store.NeedsAnswer
+		}
+		return tk.State
 	}
-	f.reportStuck(ctx, t, end)
+	if f.reportStuck(ctx, t, end) {
+		return store.Failed
+	}
+	return tk.State
 }
 
 // reportStuck files a Failure Report, as the holder, for a turn that
-// exited on its own with its Claim still In Progress.
-func (f *factory) reportStuck(ctx context.Context, t *turn, end turnEnd) {
+// exited on its own with its Claim still In Progress, and reports
+// whether it did.
+func (f *factory) reportStuck(ctx context.Context, t *turn, end turnEnd) bool {
 	c := t.claim
 	why := "The agent's last text:\n\n" + end.LastText
 	if strings.TrimSpace(end.LastText) == "" {
 		why = "The agent printed no text."
 	}
-	f.reportFailure(ctx, c, &failure{core.ReportFailureInput{
+	return f.reportFailure(ctx, c, &failure{core.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The turn exited with its Claim still In Progress: %s.", end.how()),
 		Why:             why,
 		WhatToFix:       fmt.Sprintf("Read the session (claude --resume %s, in %s) to see why it stopped, fix the cause and send the Ticket back.", c.SessionID, t.dir),

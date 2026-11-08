@@ -183,7 +183,7 @@ func TestAPausedFactoryDoesNotLand(t *testing.T) {
 	cut := h.ReadyTicket("Cut off")
 	h.Script(cut, factorytest.APIError("rate_limit"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
-	r.WaitForOutput(cut + ": turn ended")
+	r.WaitForOutput(cut + " turn ended")
 
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r.Poll()

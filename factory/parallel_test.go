@@ -35,7 +35,7 @@ func TestParallelCapsTheTurnsRunningAtOnce(t *testing.T) {
 
 	h.Continue(a)
 	h.WaitForState(a, store.InReview)
-	r.WaitForOutput(a + ": turn ended")
+	r.WaitForOutput(a + " turn ended")
 	r.Poll()
 	h.WaitFor(c+"'s turn", func() bool { return len(callsFor(h, c)) == 1 })
 }
@@ -49,7 +49,7 @@ func TestAClaimParkedInNeedsAnswerDoesNotTakeASlot(t *testing.T) {
 
 	r := h.Start("--parallel", "1")
 	h.WaitForState(a, store.NeedsAnswer)
-	r.WaitForOutput(a + ": turn ended")
+	r.WaitForOutput(a + " turn ended")
 	r.Poll()
 	h.WaitFor(b+"'s turn", func() bool { return len(callsFor(h, b)) == 1 })
 }

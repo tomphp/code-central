@@ -19,23 +19,24 @@ func (f *factory) restart(ctx context.Context) {
 		tk, err := f.client.GetTicket(ctx, f.project, core.Ref(c.Ticket))
 		if err != nil {
 			if ctx.Err() == nil {
-				f.printf("%s: get_ticket: %v: keeping its saved Claim", c.Ticket, err)
+				f.claimf(c, "%s: get_ticket: %v: keeping its saved Claim", c.Ticket, err)
 			}
 			continue
 		}
 		if ended, by := claimEnded(tk, c); ended {
-			f.printf("%s: saved Claim %s has ended (%s): dropping it", c.Ticket, c.ClaimID, by)
+			f.claimf(c, "%s: saved Claim %s has ended (%s): dropping it", c.Ticket, c.ClaimID, by)
 			f.endClaim(c, by)
 			continue
 		}
+		f.noteTicket(c, tk)
 		switch tk.State {
 		case store.InProgress:
-			f.printf("%s: saved Claim %s was cut off: resuming it", c.Ticket, c.ClaimID)
+			f.claimf(c, "%s: saved Claim %s was cut off: resuming it", c.Ticket, c.ClaimID)
 			f.restarted = append(f.restarted, c)
 		case store.Answered, store.NeedsAnswer:
-			f.printf("%s: saved Claim %s is %s: keeping it", c.Ticket, c.ClaimID, tk.State)
+			f.claimf(c, "%s: saved Claim %s is %s: keeping it", c.Ticket, c.ClaimID, tk.State)
 		default:
-			f.printf("%s: saved Claim %s is %s: dropping it", c.Ticket, c.ClaimID, tk.State)
+			f.claimf(c, "%s: saved Claim %s is %s: dropping it", c.Ticket, c.ClaimID, tk.State)
 			f.endClaim(c, string(tk.State))
 		}
 	}

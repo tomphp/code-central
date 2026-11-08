@@ -165,10 +165,10 @@ func (f *factory) resumeCutOff(ctx context.Context, c claim) bool {
 		return false
 	}
 	if pid, ok := f.sessionHolder(c.SessionID); ok {
-		f.printf("%s: session %s is held by pid %d: waiting a poll before resuming", c.Ticket, c.SessionID, pid)
+		f.claimf(c, "%s: session %s is held by pid %d: waiting a poll before resuming", c.Ticket, c.SessionID, pid)
 		return false
 	}
-	f.printf("%s: resuming the cut-off turn", c.Ticket)
+	f.claimf(c, "%s resumed %s after being cut off", c.Ticket, f.about(c))
 	f.startTurn(ctx, c, f.worktree(c.Ticket), append(f.resumeArgs(c), cutOffPrompt(c)))
 	return true
 }

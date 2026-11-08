@@ -72,7 +72,7 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 	}
 
 	// The cut-off session waits a poll while another process holds it.
-	r.WaitForOutput(answered + ": turn ended")
+	r.WaitForOutput(answered + " turn ended")
 	r.Poll()
 	r.WaitForOutput("session " + first[cutOff].Session + " is held by pid")
 	hold()

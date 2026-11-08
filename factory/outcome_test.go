@@ -25,7 +25,7 @@ func TestATurnThatExitsWithItsClaimInProgressBecomesAFailureReport(t *testing.T)
 		factorytest.Step{Stdout: `{"type":"result","subtype":"error_max_turns","is_error":true,"terminal_reason":"max_turns"}`},
 		factorytest.Exit(3))
 	r := h.Start()
-	r.WaitForOutput(id + ": turn ended: exit 3, error_max_turns (max_turns)")
+	r.WaitForOutput(id + ` turn ended (implementation): "Too big": exit 3, error_max_turns (max_turns); now Failed; ran `)
 
 	tk := h.WaitForState(id, store.Failed)
 	if len(tk.FailureReports) != 1 {
@@ -55,7 +55,7 @@ func TestATurnThatEndsWithDenialsAndNoExitGetsARoundOfOneQuestionPerDistinctCall
 	r := h.Start()
 
 	tk := h.WaitForState(id, store.NeedsAnswer)
-	r.WaitForOutput(id + ": turn ended")
+	r.WaitForOutput(id + " turn ended")
 	if len(tk.Rounds) != 1 {
 		t.Fatalf("%d Rounds, want 1", len(tk.Rounds))
 	}
@@ -89,7 +89,7 @@ func TestWhatTheHumanAllowsIsPassedAsAllowedToolsOnThatClaimsLaterRunsOnly(t *te
 		factorytest.Denied("curl https://example.com")))
 	r := h.Start()
 	tk := h.WaitForState(id, store.NeedsAnswer)
-	r.WaitForOutput(id + ": turn ended")
+	r.WaitForOutput(id + " turn ended")
 
 	h.Script(id, factorytest.Finish("Installed."), factorytest.Result("success"))
 	for i, answer := range []string{"allow", "deny it wipes my cache", "Allow Bash(curl:*)"} {
@@ -129,7 +129,7 @@ func TestDenialsOnATurnThatFinishedAreListedInAComment(t *testing.T) {
 		factorytest.Denied("golangci-lint run")))
 	r := h.Start()
 	h.WaitForState(id, store.InReview)
-	r.WaitForOutput(id + ": turn ended")
+	r.WaitForOutput(id + " turn ended")
 
 	var tk core.TicketView
 	var body string
@@ -158,7 +158,7 @@ func TestAnOutagePausesClaimingAndResumingAndSaysWhatItIsWaitingOn(t *testing.T)
 	cut := h.ReadyTicket("Cut off")
 	h.Script(cut, factorytest.APIError("rate_limit"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
-	r.WaitForOutput(cut + ": turn ended")
+	r.WaitForOutput(cut + " turn ended")
 
 	next := h.ReadyTicket("Next")
 	r.Poll()
@@ -180,7 +180,7 @@ func TestACutOffTurnIsResumedWithBackoffUntilTheOutageIsOver(t *testing.T) {
 	r := h.Start()
 	turnsEnded := func(n int) {
 		t.Helper()
-		h.WaitFor(fmt.Sprintf("%d turns to end", n), func() bool { return strings.Count(r.Stdout(), cut+": turn ended") == n })
+		h.WaitFor(fmt.Sprintf("%d turns to end", n), func() bool { return strings.Count(r.Stdout(), cut+" turn ended") == n })
 	}
 	turnsEnded(1)
 	r.WaitForOutput("in 1ms")

@@ -28,15 +28,17 @@ type failure struct{ report core.ReportFailureInput }
 
 func (e *failure) Error() string { return e.report.WhatBroke }
 
-// reportFailure posts the failure for Claim c as its holder.
-func (f *factory) reportFailure(ctx context.Context, c claim, fl *failure) {
+// reportFailure posts the failure for Claim c as its holder, and reports
+// whether it did.
+func (f *factory) reportFailure(ctx context.Context, c claim, fl *failure) bool {
 	in := fl.report
 	in.Ticket, in.ClaimID = core.Ref(c.Ticket), c.ClaimID
 	if _, err := f.client.ReportFailure(ctx, f.project, in); err != nil {
-		f.printf("%s: report_failure: %v", c.Ticket, err)
-		return
+		f.claimf(c, "%s: report_failure: %v", c.Ticket, err)
+		return false
 	}
-	f.printf("%s: Failed: %s", c.Ticket, firstLine(in.WhatBroke))
+	f.claimf(c, "%s: Failed: %s", c.Ticket, firstLine(in.WhatBroke))
+	return true
 }
 
 // stageSkills is the skill each Stage, and implementation, starts, as a
