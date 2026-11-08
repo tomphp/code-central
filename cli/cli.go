@@ -111,7 +111,7 @@ func init() {
 
 		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>]  (session defaults to $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
 		"ping":        {usage: "ping [--session <id>]  mark this session active (reads hook JSON on stdin); always exits 0", run: runPing},
-		"hook":        {usage: "hook session-id  PreToolUse hook: add session_id to the tool input", run: runHook},
+		"hook":        {usage: "hook session-id  PreToolUse hook: add session_id and client_version to the tool input", run: runHook},
 		// Failure Reports and giving up (ticket 30).
 		"report-failure": {op: "report_failure", usage: "report-failure <id> --claim <claim-id> --what-broke <md> --why <md> --what-to-fix <md> --where-work-stands <md> | --file <json-path|->", run: runReportFailure},
 		"give-up":        {op: "give_up", usage: "give-up <id> --claim <claim-id> [--note <md> | --file <path|->]", run: runGiveUp},
