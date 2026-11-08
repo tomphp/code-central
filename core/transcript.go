@@ -57,6 +57,8 @@ type TranscriptView struct {
 type transcripts struct {
 	mu  sync.Mutex
 	all map[markKey]*transcript
+	// feeds is each Claim's followers (FollowTranscript).
+	feeds map[markKey]map[*TranscriptFeed]struct{}
 }
 
 type transcript struct {
@@ -105,6 +107,12 @@ func (c *Core) hold(k markKey, started time.Time, events []SessionEvent) {
 		tr.events = tr.events[over:]
 		tr.tail = true
 	}
+	for f := range ts.feeds[k] {
+		select {
+		case f.wake <- struct{}{}:
+		default: // already woken
+		}
+	}
 }
 
 // newestClaim is the most recently started Claim with the session ID, in
@@ -146,6 +154,24 @@ func cutText(text string, truncated bool) (string, bool) {
 // Project, Ticket or Claim is not_found; a Claim with none held has an
 // empty Transcript.
 func (c *Core) Transcript(_ context.Context, key string, ticket Ref, claim int) (TranscriptView, error) {
+	k, err := c.claimKey(key, ticket, claim)
+	if err != nil {
+		return TranscriptView{}, err
+	}
+	ts := c.transcripts
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	v := TranscriptView{Events: []HeldSessionEvent{}}
+	if tr := ts.all[k]; tr != nil {
+		v.Events = append(v.Events, tr.events...)
+		v.Tail = tr.tail
+	}
+	return v, nil
+}
+
+// claimKey is Claim number claim of a Ticket, as a Transcript's key. An
+// unknown Project, Ticket or Claim is not_found.
+func (c *Core) claimKey(key string, ticket Ref, claim int) (markKey, error) {
 	var k markKey
 	err := c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
@@ -167,16 +193,84 @@ func (c *Core) Transcript(_ context.Context, key string, ticket Ref, claim int) 
 		}
 		return notFound("%s has no Claim %d", DisplayID(key, n), claim)
 	})
+	return k, err
+}
+
+// A TranscriptFeed follows one Claim's Transcript: the stream read
+// (GET .../transcript/stream) sends what Next gives each time Wake fires.
+// It holds no events of its own, only the last seq it gave, so a slow
+// follower costs nothing and can't fall behind a full buffer.
+type TranscriptFeed struct {
+	ts       *transcripts
+	k        markKey
+	wake     chan struct{}
+	after    int
+	tailSent bool
+}
+
+// FollowTranscript starts a feed of Claim number claim's Transcript after
+// seq after (0 for all of it), as a reconnect's Last-Event-ID asks. A seq
+// beyond the Transcript's newest is one from before a restart, whose seqs
+// started again, so the feed starts from the beginning. It stays open
+// after the Claim ends, because a late Factory line still arrives. An
+// unknown Project, Ticket or Claim is not_found. Stop ends it.
+func (c *Core) FollowTranscript(_ context.Context, key string, ticket Ref, claim, after int) (*TranscriptFeed, error) {
+	k, err := c.claimKey(key, ticket, claim)
 	if err != nil {
-		return TranscriptView{}, err
+		return nil, err
 	}
 	ts := c.transcripts
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	v := TranscriptView{Events: []HeldSessionEvent{}}
+	last := 0
 	if tr := ts.all[k]; tr != nil {
-		v.Events = append(v.Events, tr.events...)
-		v.Tail = tr.tail
+		last = tr.lastSeq
 	}
-	return v, nil
+	if after < 0 || after > last {
+		after = 0
+	}
+	f := &TranscriptFeed{ts: ts, k: k, wake: make(chan struct{}, 1), after: after}
+	if ts.feeds[k] == nil {
+		ts.feeds[k] = map[*TranscriptFeed]struct{}{}
+	}
+	ts.feeds[k][f] = struct{}{}
+	f.wake <- struct{}{} // the held events are waiting already
+	return f, nil
+}
+
+// Wake fires when Next may have events to give.
+func (f *TranscriptFeed) Wake() <-chan struct{} { return f.wake }
+
+// Next gives the held events after the last it gave, oldest first, and
+// says whether a tail notice is due before them: once per feed, when the
+// Transcript holds only part of the session.
+func (f *TranscriptFeed) Next() (tail bool, events []HeldSessionEvent) {
+	f.ts.mu.Lock()
+	defer f.ts.mu.Unlock()
+	tr := f.ts.all[f.k]
+	if tr == nil {
+		return false, nil
+	}
+	if tr.tail && !f.tailSent {
+		tail, f.tailSent = true, true
+	}
+	for _, e := range tr.events {
+		if e.Seq > f.after {
+			events = append(events, e)
+		}
+	}
+	if len(events) > 0 {
+		f.after = events[len(events)-1].Seq
+	}
+	return tail, events
+}
+
+// Stop ends the feed.
+func (f *TranscriptFeed) Stop() {
+	f.ts.mu.Lock()
+	defer f.ts.mu.Unlock()
+	delete(f.ts.feeds[f.k], f)
+	if len(f.ts.feeds[f.k]) == 0 {
+		delete(f.ts.feeds, f.k)
+	}
 }

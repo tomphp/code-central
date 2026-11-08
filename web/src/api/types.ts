@@ -252,6 +252,20 @@ export interface SessionEvent {
   truncated?: boolean;
 }
 
+// A Session Event as a Claim's Transcript holds it: seq rises within the
+// Transcript, and is the SSE id its stream resumes from.
+export interface HeldSessionEvent extends SessionEvent {
+  seq: number;
+}
+
+// A Claim's Transcript (GET .../claims/{c}/transcript): the held events,
+// oldest first. tail is true when it holds only part of the session:
+// Code Central keeps the last 2,000 and none from before its last restart.
+export interface Transcript {
+  events: HeldSessionEvent[];
+  tail: boolean;
+}
+
 // A Claim's latest Session Event, shown short: text is one line, cut as
 // core's LatestEventLimit says. Computed on read, never stored.
 export interface LatestEvent {

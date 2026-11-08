@@ -41,7 +41,7 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	bus := events.New()
 	c := &Core{store: notifying{Store: archiveGuard{s}, bus: bus}, clock: clk, ids: idSource, events: bus}
 	c.activity = newActivity(c.now())
-	c.transcripts = &transcripts{all: map[markKey]*transcript{}}
+	c.transcripts = &transcripts{all: map[markKey]*transcript{}, feeds: map[markKey]map[*TranscriptFeed]struct{}{}}
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
 	return c
 }
