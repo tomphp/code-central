@@ -14,7 +14,8 @@ import (
 	"github.com/tomoram/code-central/cli"
 )
 
-// unixOnly skips t on Windows, which lacks the Unix tool it needs.
+// unixOnly skips t on Windows, which lacks the Unix-only tool or signal
+// it needs: ps, /bin/sh or os.Interrupt.
 func unixOnly(t *testing.T, needs string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {

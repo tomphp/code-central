@@ -66,7 +66,8 @@ const EventBatchEvery = 10 * time.Millisecond
 // SIGINT and SIGTERM.
 const KillGrace = 100 * time.Millisecond
 
-// unixOnly skips t on Windows, which lacks the Unix tool it needs.
+// unixOnly skips t on Windows, which lacks the Unix-only tool or signal
+// it needs: ps, /bin/sh or os.Interrupt.
 func unixOnly(t testing.TB, needs string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
