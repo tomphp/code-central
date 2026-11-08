@@ -30,7 +30,7 @@ func ticketNumbered(r store.Reader, key, op, field string, n int) (store.Ticket,
 	return store.Ticket{}, missing(op, field, "there is no Ticket %s", id)
 }
 
-// resolveSpec reads the number of the Spec ref names as op's field.
+// resolveSpec reads the Spec ref names as op's field.
 func resolveSpec(r store.Reader, key, op, field string, ref Ref) (store.Spec, error) {
 	n, err := ref.number(key, field)
 	if err != nil {

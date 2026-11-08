@@ -159,8 +159,9 @@ func addComment(t *store.Ticket, a Actor, at time.Time, claim int, body string) 
 	t.Comments = append(t.Comments, store.Comment{Number: len(t.Comments) + 1, Actor: string(a), Time: at, Claim: claim, Body: body})
 }
 
-// updateTicket loads the Ticket op names under the write lock and applies fn. When
-// fn reports a change, the Ticket's updated time is set and it is written.
+// updateTicket loads the Ticket ref names, for operation op, under the
+// write lock and applies fn. When fn reports a change, the Ticket's
+// updated time is set and it is written.
 func (c *Core) updateTicket(key, op string, ref Ref, fn func(t *store.Ticket) (bool, error)) (TicketView, error) {
 	return c.updateTicketIn(key, op, ref, func(_ store.Reader, t *store.Ticket) (bool, error) { return fn(t) })
 }
