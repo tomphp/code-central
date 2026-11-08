@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -62,6 +63,23 @@ func (f *factory) addClaim(c claim) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.claims = append(s.claims, c)
+	return s.write()
+}
+
+// heldClaims is the Claims the Factory holds, oldest first.
+func (f *factory) heldClaims() []claim {
+	s := f.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]claim{}, s.claims...)
+}
+
+// dropClaim takes the Claim off the state file.
+func (f *factory) dropClaim(claimID string) error {
+	s := f.state
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.claims = slices.DeleteFunc(s.claims, func(c claim) bool { return c.ClaimID == claimID })
 	return s.write()
 }
 
