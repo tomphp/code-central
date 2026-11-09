@@ -68,3 +68,20 @@ export function ago(now: Date, at: string): string {
   const d = duration(now, at);
   return d === "just now" ? d : `${d} ago`;
 }
+
+// bytes is a size in readable units: bytes under 1 KB, then KB, then MB,
+// to one decimal place (1 KB is 1024 bytes).
+export function bytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${oneDecimal(n / 1024)} KB`;
+  return `${oneDecimal(n / (1024 * 1024))} MB`;
+}
+
+// count is a whole number with thousands separators: "12,345".
+export function count(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
+function oneDecimal(x: number): string {
+  return String(Math.round(x * 10) / 10);
+}

@@ -18,6 +18,7 @@ import (
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/usage"
 )
 
 // Core is the domain. Build one with New.
@@ -32,6 +33,8 @@ type Core struct {
 	transcripts *transcripts
 	// latestNotices throttles the ticket.changed a new latest event sends.
 	latestNotices *latestNotices
+	// usage records agents' MCP calls (Usage); nil records nothing.
+	usage *usage.Recorder
 }
 
 // New returns a Core persisting through s, telling time with clk and

@@ -1,6 +1,6 @@
 # The Context Report
 
-The Context Report measures what agents load into context while they work this repository's Tickets. It reads Claude Code's own session logs on your machine (`~/.claude/projects/<project-dir>/<session>.jsonl`, with subagents under `<session>/subagents/`), not Code Central. A change that cuts what agents load compares the report against a saved baseline, to show the size it saved and any sign that it cut too far. It is a developer tool for this repository, built from `internal/contextreport`.
+The Context Report measures what agents load into context while they work this repository's Tickets. It reads Claude Code's own session logs on your machine (`~/.claude/projects/<project-dir>/<session>.jsonl`, with subagents under `<session>/subagents/`), not Code Central. A change that cuts what agents load compares the report against a saved baseline, to show the size it saved and any sign that it cut too far. It is a developer tool for this repository, built from `internal/contextreport`. It is not [Usage](running-as-a-service.md#usage), the UI's view of the Code Central calls agents make: Usage records what Code Central sees, for every Project and kept 90 days, while the Context Report reads Claude Code's logs on one machine, covers every tool, and keeps no history of its own.
 
 ## Running it
 

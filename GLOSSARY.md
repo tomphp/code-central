@@ -106,7 +106,16 @@ _Avoid_: Log, conversation, stream
 
 **Context Report**:
 What agents load into context, measured from Claude Code's own session logs on the machine (not Transcripts): the size of tool results per kind of session (each Stage, implementation, and the review and other subagents), tool and operation, the largest results, the Specs and Tickets read more than once, and signs that a cut went too far, each with its change against a saved baseline.
+It is not Usage: it reads Claude Code's logs on the machine, while Usage records what Code Central and the Factory see.
 _Avoid_: Token report, usage report
+
+**Usage**:
+The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used.
+_Avoid_: Analytics dashboard, stats, metrics
+
+**Context Size**:
+How many tokens a session's model read for one response (input, cache write and cache read), which is how full its context window was.
+_Avoid_: Context length, prompt size
 
 **Actor**:
 Who made a change: the human, an agent, or an Integration.

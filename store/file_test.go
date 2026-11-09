@@ -424,3 +424,28 @@ func TestDefaultDir(t *testing.T) {
 		})
 	}
 }
+
+// A Project's usage/ folder (ADR 0016) is the usage recorder's, not the
+// loader's: its JSON Lines files, even unreadable ones, never affect
+// startup.
+func TestUsageFoldersDoNotAffectLoading(t *testing.T) {
+	dir := t.TempDir()
+	s := openFile(t, dir)
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: t0, Mode: store.ModeCommitted})
+	})
+	s.Close()
+	writeFile(t, filepath.Join(dir, "projects/acme/usage/2026-11-07.jsonl"), `{"type":"mcp_call","op":"claim"}`+"\nnot json\n")
+
+	s = openFile(t, dir)
+	var keys []string
+	s.View(func(r store.Reader) error {
+		for _, p := range r.Projects() {
+			keys = append(keys, p.Key)
+		}
+		return nil
+	})
+	if !slices.Equal(keys, []string{"acme"}) {
+		t.Fatalf("projects %v, want acme", keys)
+	}
+}

@@ -15,6 +15,7 @@ import { RequirementPane } from "../requirement/RequirementPane";
 import { RequirementRow } from "../requirement/RequirementRow";
 import { TicketPane } from "../ticket/TicketDetail";
 import { OptionsLink } from "../options/OptionsLink";
+import { UsageLink } from "../usage/UsageLink";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 
@@ -85,6 +86,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
       <nav aria-label="Filters" className="inbox-nav">
         <div className="inbox-title">
           <h1>Code Central</h1>
+          <UsageLink loc={loc} navigate={navigate} />
           <OptionsLink loc={loc} navigate={navigate} />
         </div>
         <NewRequirement

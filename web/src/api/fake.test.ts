@@ -1,6 +1,6 @@
 import { apiContract, type Driver } from "./contract";
 import { FakeApi } from "./fake";
-import type { NeedsMeReason, NeedsMeRow, State, TicketView } from "./types";
+import type { ApiError, NeedsMeReason, NeedsMeRow, State, TicketView } from "./types";
 
 // claimAndStop is what the service ends up with after an agent claims a
 // Ready Ticket (session "contract-session") and makes a stopping move.
@@ -107,6 +107,22 @@ apiContract("FakeApi", async (): Promise<Driver> => {
     },
     // ticket 109
     postSessionEvents: async (session_id, events) => fake.postSessionEvents(session_id, events),
+    // Spec code-central-201: the service records an agent's call itself;
+    // the fake answers it with its own reads and records it.
+    mcpCall: async (key, op, args) => {
+      let text: string;
+      let error: string | undefined;
+      try {
+        const result = op === "get_ticket" ? await fake.getTicket(key, String(args.ticket)) : await fake.findTickets(key);
+        text = JSON.stringify(result);
+      } catch (e) {
+        error = (e as ApiError).code;
+        text = JSON.stringify({ code: error, message: (e as ApiError).message });
+      }
+      const bytes = (s: string) => new TextEncoder().encode(s).length;
+      fake.recordCall(key, { op, request_bytes: bytes(JSON.stringify(args)), response_bytes: bytes(text), error });
+      return { text, error };
+    },
     // ticket 110
     dropTranscriptStreams: () => fake.dropTranscriptStreams(),
     close: async () => {},
