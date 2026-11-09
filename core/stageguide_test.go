@@ -152,7 +152,9 @@ func TestTheSpecGuideReplacesTheBodyInTheSpecTemplate(t *testing.T) {
 		"Testing Decisions", "Out of Scope", "Further Notes",
 		"Create no Spec", "add no Label",
 		"grilling Ticket's Rounds and resolution",
-		"`parts: [\"rounds\", \"comments\"]`",
+		// It reads the resolution comment, and a Round only when that points
+		// to one, not the whole grilling Ticket.
+		"resolution comment", "`get_ticket` and `parts`", "only when the comment points to one",
 		"test seams", "key decisions", "out of scope",
 	)
 }
@@ -164,6 +166,8 @@ func TestTheTicketsGuideCreatesReadyTicketsBlockedByItself(t *testing.T) {
 		"numbered breakdown", "blocking edges",
 		"`edit_ticket`", "`cancel`", "Replacements", "never adds a second batch",
 		"writing them", // new terms and ADRs go to an implementation Ticket
+		// It reads the sections it slices from, not the whole Spec.
+		"`get_spec` and `sections`", "read the rest only when",
 	)
 }
 
@@ -225,5 +229,53 @@ func TestAClaimOfNothingCarriesNoGuide(t *testing.T) {
 	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{})
 	if err != nil || res.Ticket != nil || res.StageGuide != nil {
 		t.Fatalf("claim of nothing: %+v, %v", res, err)
+	}
+}
+
+// troubleSections are each Stage Guide's section on what to do when the
+// agent can't carry on, by Stage: from its heading to the next section or
+// the end.
+func troubleSections(t *testing.T) map[string]string {
+	t.Helper()
+	const heading = "## When you can't carry on"
+	f := newFixture(t)
+	out := map[string]string{}
+	for _, stage := range core.GuideStages {
+		g := guide(t, f, stage)
+		i := strings.Index(g, heading)
+		if i < 0 {
+			t.Fatalf("the %s guide has no %q section", stage, heading)
+		}
+		s := g[i:]
+		if j := strings.Index(s[len(heading):], "\n## "); j >= 0 {
+			s = s[:len(heading)+j+1]
+		}
+		out[stage] = s
+	}
+	return out
+}
+
+func TestEveryGuideSaysWhatToDoWhenTheAgentCantCarryOn(t *testing.T) {
+	for stage, s := range troubleSections(t) {
+		wantAll(t, stage, s,
+			// The three exits, with report_failure's four fields and
+			// give_up's note on where the work stands.
+			"`post_round`",
+			"`report_failure`", "`what_broke`", "`why`", "`what_to_fix`", "`where_work_stands`",
+			"`give_up`", "where the work stands",
+			"Never leave a claimed Ticket without one of these or `finish`",
+			"`stale_claim`", "stop at once",
+			"`claim` the Ticket again with your `session_id`", "tell the human",
+			"A send-back with no note means the cause in the last Failure Report still stands",
+		)
+	}
+}
+
+func TestGetWorkflowsTroubleRulesAreTheStageGuidesText(t *testing.T) {
+	prose := workflow(t).Prose
+	for stage, s := range troubleSections(t) {
+		if !strings.Contains(prose, s) {
+			t.Errorf("get_workflow's prose doesn't carry the %s guide's trouble rules:\n%s", stage, s)
+		}
 	}
 }

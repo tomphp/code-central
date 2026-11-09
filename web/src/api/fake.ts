@@ -31,6 +31,12 @@
 // dropped some; subscribeTranscript follows it, and dropTranscriptStreams
 // stands in for a dropped connection, which reconnects by itself;
 // followingTranscripts counts the followers not yet stopped.
+//
+// Map: the fake's types and limits, then FakeApi in parts marked
+// "// ---- <part> ----": seeding, for actions' fake behaviour, the live
+// feed, the Api's reads and writes, and internals; then the
+// acknowledgements a write returns. grep -n '^ *// ---- ' lists the
+// marks, to sed -n the part between two.
 import {
   numberOf,
   type Api,
@@ -370,7 +376,7 @@ export class FakeApi implements Api {
     }
   }
 
-  // ---- reads ----
+  // ---- the Api ----
 
   async transcript(project: string, id: string, claim: number): Promise<Transcript> {
     this.calls.push("transcript");
@@ -737,6 +743,8 @@ export class FakeApi implements Api {
     return v;
   }
 }
+
+// ---- acknowledgements ----
 
 // written is a write's acknowledgement, as the service derives it: the
 // fields, in the view's order, whose value differs between the views

@@ -70,3 +70,11 @@ func oneSentence(s string) bool {
 	s = strings.TrimSpace(s)
 	return s != "" && !strings.ContainsAny(s, "\r\n") && !sentenceBreak.MatchString(s)
 }
+
+func TestTheStageGuidesTroubleRulesStayWithin800Bytes(t *testing.T) {
+	for stage, s := range troubleSections(t) {
+		if n := len(s); n > 800 {
+			t.Errorf("the %s guide's trouble rules are %d bytes, over the 800 budget", stage, n)
+		}
+	}
+}

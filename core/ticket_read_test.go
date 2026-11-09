@@ -252,15 +252,20 @@ func TestTheSpecStageReadsTheGrillingTicketsAnswersAndResolution(t *testing.T) {
 	if v := f.readTicket(t, core.GetTicketInput{Ticket: "2"}); !reflect.DeepEqual(v["left_out"], map[string]any{"rounds": float64(1), "moves": float64(4)}) {
 		t.Fatalf("left_out %v", v["left_out"])
 	}
-	// The spec guide's read has the answer and the resolution.
-	v, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "2", Parts: []string{"rounds", "comments"}})
+	// The spec guide reads the resolution comment, then the Rounds when it
+	// points to one.
+	v, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "2", Parts: []string{"comments"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(commentBodies(v), []string{resolution}) {
+		t.Fatalf("comments %q", commentBodies(v))
+	}
+	v, err = f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "2", Parts: []string{"rounds"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if q := v.Rounds[0].Questions[0]; q.Answer != "SQLite, one file" {
 		t.Fatalf("question %+v", q)
-	}
-	if !slices.Equal(commentBodies(v), []string{resolution}) {
-		t.Fatalf("comments %q", commentBodies(v))
 	}
 }
