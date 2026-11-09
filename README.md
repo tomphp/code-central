@@ -7,6 +7,7 @@ Code Central is one service that holds a Project's Specs and Tickets. Agents wor
 Read them in this order:
 
 1. [Setting up a Project](docs/setting-up-a-project.md): what to install first, then setting a brand new or an existing repository up as a Project, and the cases where `init` behaves differently: a repository you don't own, a second clone or worktree, re-running it after an upgrade, and agents in a sandbox or container.
+2. [Importing a `.scratch/` folder](docs/importing-scratch.md): turning the specs and tickets in a repository's `.scratch/` folder into Specs and Tickets in its Project, by asking Claude Code or with `code-central import`.
 
 ## Running the service
 
