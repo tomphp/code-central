@@ -1,7 +1,6 @@
 package core_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -90,35 +89,20 @@ func TestTheWatchSendsTicketChangedWhenAClaimTurnsLongOrSilentTurnsLong(t *testi
 	f.work(t, store.Ready)
 	f.claim(t, core.ClaimInput{SessionID: "s1"})
 
-	ticks := make(chan time.Time)
-	changes := make(chan string, 10)
-	watchCtx, stop := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() {
-		f.core.WatchTimedReasons(watchCtx, ticks, func(_, id string) { changes <- id })
-		close(done)
-	}()
-	defer func() { stop(); <-done }()
-	tick := func() int {
-		ticks <- f.clock.Now()
-		ticks <- f.clock.Now() // the second send returns once the first tick is handled
-		return len(changes)
-	}
+	tick := watch(t, f)
 
 	f.keepActive(core.LongAfter + time.Second)
-	if n := tick(); n != 1 {
-		t.Fatalf("%d notices, want one for acme-2 turning Long", n)
+	if got := tick(); len(got) != 1 || got[0].id != "acme-2" {
+		t.Fatalf("got %v, want one for acme-2 turning Long", got)
 	}
-	<-changes
-	if n := tick(); n != 0 {
-		t.Fatalf("%d notices, want none while it stays Long", n)
+	if got := tick(); len(got) != 0 {
+		t.Fatalf("got %v, want none while it stays Long", got)
 	}
 	f.clock.Advance(core.SilentAfter)
 	tick() // Long to Silent
-	<-changes
 	f.core.Ping(ctx, "s1")
-	if n := tick(); n != 1 {
-		t.Fatalf("%d notices, want one for acme-2 going from Silent back to Long", n)
+	if got := tick(); len(got) != 1 || got[0].id != "acme-2" {
+		t.Fatalf("got %v, want one for acme-2 going from Silent back to Long", got)
 	}
 }
 

@@ -28,7 +28,7 @@ describe("Project Options", () => {
     await userEvent.click(within(menu).getByRole("menuitem", { name: "Options" }));
 
     expect(await screen.findByRole("heading", { name: "Acme: Project Options" })).toBeInTheDocument();
-    expect(window.location.search).toBe("?view=options&project=acme");
+    expect(window.location.search).toBe("?view=project-options&project=acme");
 
     unmount();
     renderApp(fake, window.location.pathname + window.location.search);
@@ -43,7 +43,7 @@ describe("Project Options", () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
     await fake.setLandingMethod("acme", { method: "branch", push: false, remote: "upstream" });
-    renderApp(fake, "/?view=options&project=acme");
+    renderApp(fake, "/?view=project-options&project=acme");
 
     const merge = await within(await screen.findByRole("group", { name: "Landing Method" })).findByRole("radio", { name: "Merge into base" });
     expect(merge).not.toBeChecked();
@@ -66,7 +66,7 @@ describe("Project Options", () => {
   it("saves the Landing Method, and shows a field error from the service", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
-    renderApp(fake, "/?view=options&project=acme");
+    renderApp(fake, "/?view=project-options&project=acme");
 
     const save = await within(page()).findByRole("button", { name: "Save" });
     expect(within(landing()).getByRole("radio", { name: "Merge into base" })).toBeChecked();
@@ -95,7 +95,7 @@ describe("Project Options", () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
     await fake.setLandingMethod("acme", { method: "merge", push: true, remote: "upstream" });
-    renderApp(fake, "/?view=options&project=acme");
+    renderApp(fake, "/?view=project-options&project=acme");
 
     const remote = await within(await screen.findByRole("group", { name: "Landing Method" })).findByRole("textbox", { name: "Remote" });
     await userEvent.type(remote, " ");
@@ -108,7 +108,7 @@ describe("Project Options", () => {
   it("shows a change made elsewhere, as another tab would", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
-    renderApp(fake, "/?view=options&project=acme");
+    renderApp(fake, "/?view=project-options&project=acme");
     expect(await within(await screen.findByRole("group", { name: "Landing Method" })).findByRole("radio", { name: "Merge into base" })).toBeChecked();
 
     await fake.setLandingMethod("acme", { method: "branch", push: true, remote: "upstream" });
@@ -128,7 +128,7 @@ describe("Project Options", () => {
   it("shows an Archived Project's options read-only, by its URL", async () => {
     const fake = new FakeApi();
     fake.addProject("old", "Old App", { archived: true });
-    renderApp(fake, "/?view=options&project=old");
+    renderApp(fake, "/?view=project-options&project=old");
     expect(await within(page()).findByText(/archived: unarchive it to change its options/)).toBeInTheDocument();
     expect(within(landing()).getByRole("radio", { name: "Merge into base" })).toBeDisabled();
     expect(within(landing()).getByRole("checkbox", { name: "Push" })).toBeDisabled();
@@ -138,7 +138,7 @@ describe("Project Options", () => {
   it("says when the URL names no such Project", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
-    renderApp(fake, "/?view=options&project=nope");
+    renderApp(fake, "/?view=project-options&project=nope");
     expect(await within(page()).findByText("There is no Project nope.")).toBeInTheDocument();
     expect(within(page()).getByRole("link", { name: "Back to the inbox" })).toBeInTheDocument();
   });

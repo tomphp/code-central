@@ -1,8 +1,10 @@
 // What the UI shows lives in the URL:
 // ?view=inbox&project=<key>&state=<State>&list=requirements&requirement=<spec id>&ticket=<id>,
 // or ?view=focus&project=<key> for Focus Mode, which keeps only project,
-// or ?view=options&project=<key> for a Project's Project Options page.
-// view is the layout (anything but focus or options is the inbox); project, state and
+// or ?view=options&from=<inbox|focus>&... for the Options view, which keeps
+// the parameters of the view it came from, to return to it,
+// or ?view=project-options&project=<key> for a Project's Project Options page.
+// view is the layout (anything else is the inbox); project, state and
 // list are the left pane's filters (no state and no list = Needs Me;
 // list=requirements is the Requirements view); requirement is the selected
 // Requirement's Spec ID and ticket the selected Ticket's display ID (within
@@ -10,11 +12,15 @@
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { STATES, type State } from "./api/types";
 
-export type View = "inbox" | "focus" | "options";
+export type View = "inbox" | "focus" | "options" | "project-options";
+// A ReturnView is a view the Options view returns to.
+export type ReturnView = Exclude<View, "options" | "project-options">;
 export type List = "requirements";
 
 export interface UiLocation {
   view: View;
+  // from is the view the Options view returns to; returnViewOf reads it.
+  from?: ReturnView;
   project?: string;
   state?: State;
   list?: List;
@@ -24,8 +30,13 @@ export interface UiLocation {
 
 export function readLocation(search: string): UiLocation {
   const q = new URLSearchParams(search);
+  if (q.get("view") === "options") {
+    const from = returnViewOf({ view: "options", from: q.get("from") as ReturnView });
+    q.set("view", from);
+    return { ...readLocation(`?${q}`), view: "options", from };
+  }
   const view = q.get("view");
-  if (view === "focus" || view === "options") return { view, project: q.get("project") || undefined };
+  if (view === "focus" || view === "project-options") return { view, project: q.get("project") || undefined };
   const state = q.get("state") as State | null;
   return {
     view: "inbox",
@@ -38,6 +49,12 @@ export function readLocation(search: string): UiLocation {
 }
 
 export function hrefFor(loc: UiLocation): string {
+  if (loc.view === "options") {
+    const from = returnViewOf(loc);
+    const back = new URLSearchParams(hrefFor({ ...loc, view: from }));
+    back.delete("view");
+    return `?${new URLSearchParams({ view: "options", from })}${back.size ? `&${back}` : ""}`;
+  }
   const q = new URLSearchParams({ view: loc.view });
   if (loc.project) q.set("project", loc.project);
   if (loc.view !== "inbox") return `?${q}`;
@@ -46,6 +63,13 @@ export function hrefFor(loc: UiLocation): string {
   if (loc.requirement) q.set("requirement", loc.requirement);
   if (loc.ticket) q.set("ticket", loc.ticket);
   return `?${q}`;
+}
+
+// returnViewOf is the view to return to from loc: from the Options view,
+// the one it came from, the Inbox unless Focus Mode; from any other, itself.
+export function returnViewOf(loc: UiLocation): ReturnView {
+  const view = loc.view === "options" ? loc.from : loc.view;
+  return view === "focus" ? "focus" : "inbox";
 }
 
 // useUiLocation reads the URL and returns a navigate that pushes a change

@@ -7,6 +7,7 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   long_claim: "Long Claim",
   failed: "Failed",
   in_review: "In Review",
+  to_merge: "To merge",
   accepted_not_landed: "Accepted but not landed",
   blocked_by_cancelled: "Blocked by a Cancelled Ticket",
   closed_externally: "Closed externally",
@@ -38,6 +39,8 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
       return r.failure.reports > 1 ? `${r.failure.headline} · failed ${r.failure.reports}×` : r.failure.headline;
     case "in_review":
       return r.summary || "Finished";
+    case "to_merge":
+      return `Accepted ${ago(now, r.since)}: merge ${r.branch ?? "its branch"} into the base`;
     case "accepted_not_landed":
       return `Accepted ${ago(now, r.since)}, not landed`;
     case "blocked_by_cancelled":

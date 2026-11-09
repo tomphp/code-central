@@ -1,7 +1,6 @@
 package core_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -31,30 +30,17 @@ func TestTheWatchSendsTicketChangedWhenAcceptedWorkTurnsNotLanded(t *testing.T) 
 	f := newFixture(t)
 	f.accepted(t)
 
-	ticks := make(chan time.Time)
-	changes := make(chan string, 10)
-	watchCtx, stop := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() {
-		f.core.WatchTimedReasons(watchCtx, ticks, func(_, id string) { changes <- id })
-		close(done)
-	}()
-	defer func() { stop(); <-done }()
-	tick := func() int {
-		ticks <- f.clock.Now()
-		ticks <- f.clock.Now() // the second send returns once the first tick is handled
-		return len(changes)
-	}
+	tick := watch(t, f)
 
-	if n := tick(); n != 0 {
-		t.Fatalf("%d notices, want none before the threshold", n)
+	if got := tick(); len(got) != 0 {
+		t.Fatalf("got %v, want none before the threshold", got)
 	}
 	f.clock.Advance(core.NotLandedAfter + time.Second)
-	if n := tick(); n != 1 || <-changes != "acme-2" {
-		t.Fatalf("%d notices, want one for acme-2 turning Accepted but not landed", n)
+	if got := tick(); len(got) != 1 || got[0].id != "acme-2" {
+		t.Fatalf("got %v, want one for acme-2 turning Accepted but not landed", got)
 	}
-	if n := tick(); n != 0 {
-		t.Fatalf("%d notices, want none while it stays not landed", n)
+	if got := tick(); len(got) != 0 {
+		t.Fatalf("got %v, want none while it stays not landed", got)
 	}
 }
 

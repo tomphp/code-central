@@ -39,6 +39,10 @@ Run this by hand once v1 is built (`make build`). These paths can't be automated
 - [ ] After `sbx policy allow network localhost:7733`, a sandboxed agent reaches the MCP endpoint (check whether the proxy rewrites `Host`; the allowlist covers both).
 - [ ] An older `code-central` copy inside the sandbox warns about the version but keeps working.
 
+## The UI
+
+- [ ] Open the Options view from the Inbox and from Focus Mode, choose **Activity Dashboard**, and with the Options view open in a second browser, watch it follow the change. Restart the service: the choice is kept, and `options.yaml` sits beside `store.yaml`.
+
 ## Real Claude Code
 
 - [ ] `code-central init` in a repository; a new session lists the `code-central` MCP server.

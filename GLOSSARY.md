@@ -112,6 +112,10 @@ _Avoid_: User, caller
 The Tickets waiting on the human before they can move.
 _Avoid_: Inbox, blocked
 
+**To merge**:
+The Needs Me reason of an Accepted Ticket under the Branch Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge.
+_Avoid_: Ready to merge, awaiting merge
+
 **Focus Mode**:
 A view showing the human one Focus Item at a time from Needs Me, moving to the next as each is dealt with or skipped.
 _Avoid_: Zen mode, queue view

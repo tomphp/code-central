@@ -10,6 +10,37 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
+// change is one notice from WatchTimedReasons.
+type change struct{ project, id string }
+
+// watch runs f.core.WatchTimedReasons until the test ends and returns
+// tick: one tick at the clock's time, returning the notices it sent.
+func watch(t *testing.T, f fixture) (tick func() []change) {
+	t.Helper()
+	ticks := make(chan time.Time)
+	changes := make(chan change, 10)
+	watchCtx, stop := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		f.core.WatchTimedReasons(watchCtx, ticks, func(project, id string) { changes <- change{project, id} })
+		close(done)
+	}()
+	t.Cleanup(func() { stop(); <-done })
+	return func() []change {
+		ticks <- f.clock.Now()
+		ticks <- f.clock.Now() // the second send returns once the first tick is handled
+		var got []change
+		for {
+			select {
+			case c := <-changes:
+				got = append(got, c)
+			default:
+				return got
+			}
+		}
+	}
+}
+
 func wantSilentSince(t *testing.T, v core.TicketView, want time.Time) {
 	t.Helper()
 	if want.IsZero() {
@@ -168,29 +199,7 @@ func TestTheWatchSendsTicketChangedWhenAClaimTurnsSilentOrStopsBeingSilent(t *te
 	f.clock.Advance(10 * time.Minute)
 	f.claim(t, core.ClaimInput{Ticket: "3", SessionID: "s2"})
 
-	ticks := make(chan time.Time)
-	type change struct{ project, id string }
-	changes := make(chan change, 10)
-	watchCtx, stop := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() {
-		f.core.WatchTimedReasons(watchCtx, ticks, func(project, id string) { changes <- change{project, id} })
-		close(done)
-	}()
-	defer func() { stop(); <-done }()
-	tick := func() []change {
-		ticks <- f.clock.Now()
-		ticks <- f.clock.Now() // the second send returns once the first tick is handled
-		var got []change
-		for {
-			select {
-			case c := <-changes:
-				got = append(got, c)
-			default:
-				return got
-			}
-		}
-	}
+	tick := watch(t, f)
 
 	if got := tick(); len(got) != 0 {
 		t.Fatalf("nothing is Silent yet, got %v", got)

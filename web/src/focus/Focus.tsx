@@ -10,12 +10,13 @@
 // moves on with a brief "Dealt with elsewhere" note.
 import { useEffect, useMemo, useState } from "react";
 import type { Api } from "../api/api";
-import type { TicketView } from "../api/types";
+import type { FocusClear, TicketView } from "../api/types";
 import { duration, REASON_LABEL } from "../format";
 import { useTicket, type InboxData } from "../live";
 import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
 import { QuestionAnswer } from "../panels/round/QuestionAnswer";
+import { OptionsLink } from "../options/OptionsLink";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { focusQueue, type FocusItem } from "./queue";
 import "./focus.css";
@@ -25,6 +26,9 @@ export interface FocusProps {
   now: Date;
   version: number;
   data?: InboxData;
+  // focusClear is what to show when nothing needs the human. Only All
+  // clear exists so far; the Activity Dashboard comes with its own Ticket.
+  focusClear: FocusClear;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
 }
@@ -81,6 +85,7 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
           </span>
         )}
         {screen && !screen.clear && <span className="focus-left">{screen.remaining} left</span>}
+        <OptionsLink loc={loc} navigate={navigate} className="focus-options" />
         <button className="btn focus-exit" onClick={() => navigate({ view: "inbox" })}>
           Exit
         </button>

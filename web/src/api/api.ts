@@ -10,6 +10,7 @@ import type {
   Landing,
   LinkedRow,
   NeedsMeView,
+  Options,
   ProjectRow,
   ProjectView,
   SpecDetail,
@@ -89,6 +90,11 @@ export interface Api {
   // unlink detaches a Spec's or Ticket's Link (ticket 42). It isn't a
   // TicketAction: its target, a Spec or a Ticket, goes in the body.
   unlink(project: string, target: string): Promise<LinkedRow>;
+  // options reads the human's Options; setOptions changes those given and
+  // answers with them all as they now stand. An unknown Option or a value
+  // outside its set is refused as invalid, naming it, and nothing changes.
+  options(): Promise<Options>;
+  setOptions(change: Partial<Options>): Promise<Options>;
   // subscribe opens the live feed and returns a function that closes it.
   subscribe(handlers: EventHandlers): () => void;
   // transcript reads Claim number claim's Transcript (ticket 110).
