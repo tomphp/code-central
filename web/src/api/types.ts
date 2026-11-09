@@ -106,6 +106,19 @@ export interface NeedsMeRow {
   link?: LinkView;
   // Set when the Ticket's Spec is a Requirement.
   requirement?: NeedsMeRequirement;
+  // spec is a Map Ticket's or Prototype's Spec, as its context, set when
+  // that Spec isn't a Requirement.
+  spec?: NeedsMeSpec;
+  // prototype is set on a Ticket labelled prototype, for its badge.
+  prototype?: boolean;
+}
+
+// The Spec a Needs Me row's Map Ticket or Prototype is on; map is set
+// when it is a Map.
+export interface NeedsMeSpec {
+  spec: string;
+  title: string;
+  map?: boolean;
 }
 
 // The Requirement a Needs Me row's Ticket is on; stage is set only on a
@@ -518,16 +531,21 @@ export interface UsageSession {
   responses: number;
 }
 
-// UsageDay is one local day's token usage by kind of session.
+// UsageDay is one local day's token usage (day is YYYY-MM-DD in the
+// service's time zone): the kinds of session with any usage that day, in
+// the kinds' order; none on a day with no usage.
 export interface UsageDay {
   day: string;
-  kinds: {
-    kind: string;
-    input_tokens: number;
-    cache_write_tokens: number;
-    cache_read_tokens: number;
-    output_tokens: number;
-  }[];
+  kinds: UsageDayTokens[];
+}
+
+// UsageDayTokens is one kind of session's tokens on one day, by token type.
+export interface UsageDayTokens {
+  kind: string;
+  input_tokens: number;
+  cache_write_tokens: number;
+  cache_read_tokens: number;
+  output_tokens: number;
 }
 
 // UsageResponse is one model response's token usage as a Factory posts
@@ -542,9 +560,9 @@ export interface UsageResponse {
   output_tokens: number;
 }
 
-// UsageView is GET /api/usage: kinds and sessions come from the token
-// usage a Factory posts, sessions newest first and at most 50. Days stays
-// empty for now.
+// UsageView is GET /api/usage: kinds, sessions and days come from the
+// token usage a Factory posts, sessions newest first and at most 50, and
+// days a row for every local day in the range, oldest first.
 export interface UsageView {
   operations: UsageOperation[];
   kinds: UsageKind[];

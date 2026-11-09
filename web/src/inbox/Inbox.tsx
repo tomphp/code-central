@@ -9,6 +9,7 @@ import { FINISHED, STATES, type MapView, type NeedsMeReason, type NeedsMeRow, ty
 import { duration, REASON_LABEL, rowDetail } from "../format";
 import { RowLatestEvent } from "../LatestEvent";
 import { LinkBadge } from "../ticket/LinkBadge";
+import { PrototypeBadge } from "../ticket/PrototypeBadge";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { MapPane } from "../map/MapPane";
 import { MapRow } from "../map/MapRow";
@@ -261,11 +262,13 @@ function NeedsMeLink({ row, now, link }: { row: NeedsMeRow; now: Date; link: Row
       <span className="row-top">
         <span className="tid">{row.id}</span>
         <span className="row-title">{row.title}</span>
+        {row.prototype && <PrototypeBadge />}
         {row.link && <LinkBadge link={row.link} plain />}
         <span className="muted small">{duration(now, row.since)}</span>
       </span>
       <span className="row-detail">
-        {row.requirement && <span className="req-chip">↳ {row.requirement.title}</span>} {rowDetail(now, row)}
+        {row.requirement && <span className="req-chip">↳ {row.requirement.title}</span>}
+        {row.spec && <span className="req-chip">↳ {row.spec.map ? `Map: ${row.spec.title}` : row.spec.title}</span>} {rowDetail(now, row)}
       </span>
     </a>
   );

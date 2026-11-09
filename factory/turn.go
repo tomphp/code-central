@@ -104,12 +104,12 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, args []str
 	f.turnsDone.Add(1)
 	go func() {
 		defer f.turnsDone.Done()
-		end := readTurn(cmd, stdout, dir, func(e core.SessionEvent) {
+		end := readTurn(cmd, stdout, dir, newUsageReader(f.claimInfo(c).stage, f.e.Now), func(e core.SessionEvent) {
 			f.events.add(c.SessionID, e)
 			if f.o.verbose && e.Kind == eventToolCall {
 				f.printf("%s: %s", c.Ticket, e.Text)
 			}
-		})
+		}, func(r core.UsageResponse) { f.usage.add(c.SessionID, r) })
 		ran := f.e.Now().Sub(t.started)
 		// The turn keeps its slot until its outcome is acted on, and
 		// "turn ended" is printed once the slot is free.
@@ -128,8 +128,14 @@ type streamMessage struct {
 	Type    string `json:"type"`
 	Subtype string `json:"subtype"`
 	// Error is an assistant message's API error, or an api_retry's.
-	Error   string `json:"error"`
-	Message struct {
+	Error string `json:"error"`
+	// ParentToolUseID is the Agent call a subagent's message runs under;
+	// empty for the main session's.
+	ParentToolUseID string `json:"parent_tool_use_id"`
+	Message         struct {
+		// ID and Usage are an assistant message's model response's.
+		ID      string       `json:"id"`
+		Usage   *streamUsage `json:"usage"`
 		Content []struct {
 			Type  string          `json:"type"`
 			Text  string          `json:"text"`
@@ -146,8 +152,9 @@ type streamMessage struct {
 
 // readTurn reads a started turn's stream-json to its end and waits for
 // it, giving how it ended. onEvent is called with each Session Event the
-// stream maps to, in order; dir is the turn's worktree.
-func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, onEvent func(core.SessionEvent)) turnEnd {
+// stream maps to, in order, and onResponse with each model response's
+// usage, as usage reads them; dir is the turn's worktree.
+func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, usage *usageReader, onEvent func(core.SessionEvent), onResponse func(core.UsageResponse)) turnEnd {
 	var end turnEnd
 	var retryErr string
 	tools := map[string]string{}
@@ -157,6 +164,9 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, onEvent func(core.Ses
 		var msg streamMessage
 		if json.Unmarshal(sc.Bytes(), &msg) != nil {
 			continue
+		}
+		if r, ok := usage.read(msg); ok {
+			onResponse(r)
 		}
 		for _, e := range streamEvents(msg, time.Now(), tools, dir) {
 			if e.Kind == eventText {

@@ -3,9 +3,10 @@
 // Central calls table, one row per MCP operation, sortable by each
 // column; and Context Size, each kind of session's peaks and the recent
 // sessions, each linking to its Ticket and opening its Context Size,
-// response by response, on a line chart. It loads when opened and
-// whenever its scope, range or session changes, never live. Back returns
-// to the view it was opened from.
+// response by response, on a line chart; and token usage, a bar per day
+// filtered by kind of session. It loads when opened and whenever its
+// scope, range or session changes, never live. Back returns to the view
+// it was opened from.
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "../api/api";
 import {
@@ -24,6 +25,7 @@ import { bytes, count } from "../format";
 import { useFetch } from "../live";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { LineChart } from "./LineChart";
+import { TokenChart } from "./TokenChart";
 import "./usage.css";
 
 export interface UsageViewProps {
@@ -100,6 +102,14 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
                 </>
               ) : (
                 <p className="muted">No sessions {over}. Only sessions the Factory runs are counted.</p>
+              )}
+            </section>
+            <section aria-labelledby="usage-tokens">
+              <h2 id="usage-tokens">Token usage</h2>
+              {data.kinds.length ? (
+                <TokenChart days={data.days} kinds={data.kinds.map((k) => k.kind)} />
+              ) : (
+                <p className="muted">No token usage {over}. Only sessions the Factory runs are counted.</p>
               )}
             </section>
           </>

@@ -148,6 +148,41 @@ func ToolUse(tool, input string) Step {
 	return Step{Stdout: string(b)}
 }
 
+// Response prints a stream-json assistant message that is one content
+// block of the model response id, carrying the response's usage, as
+// claude prints each block of a response. parent is the Agent call a
+// subagent's response runs under, "" for the main session's.
+func Response(id, parent string, input, cacheWrite, cacheRead, output int) Step {
+	msg := map[string]any{
+		"type": "assistant",
+		"message": map[string]any{
+			"id": id, "role": "assistant",
+			"content": []map[string]string{{"type": "thinking", "thinking": "Responding."}},
+			"usage": map[string]int{
+				"input_tokens": input, "cache_creation_input_tokens": cacheWrite,
+				"cache_read_input_tokens": cacheRead, "output_tokens": output,
+			},
+		},
+	}
+	if parent != "" {
+		msg["parent_tool_use_id"] = parent
+	}
+	b, _ := json.Marshal(msg)
+	return Step{Stdout: string(b)}
+}
+
+// AgentCall prints a stream-json assistant message calling the Agent tool
+// with this tool-use ID and description, starting a subagent.
+func AgentCall(id, description string) Step {
+	b, _ := json.Marshal(map[string]any{
+		"type": "assistant",
+		"message": map[string]any{"role": "assistant", "content": []map[string]any{
+			{"type": "tool_use", "id": id, "name": "Agent", "input": map[string]string{"description": description, "prompt": description}},
+		}},
+	})
+	return Step{Stdout: string(b)}
+}
+
 // Think prints a stream-json assistant message with a thinking block.
 func Think(thinking string) Step {
 	b, _ := json.Marshal(map[string]any{

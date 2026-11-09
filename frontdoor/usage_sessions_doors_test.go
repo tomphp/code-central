@@ -29,24 +29,27 @@ func postUsage(t *testing.T, srv *codecentraltest.Server, body string) {
 }
 
 // response is one posted model response: its Context Size is
-// input + write + read, and output is a tenth of that.
+// input + write + read, and its output, when left at 0, is a tenth of that.
 type response struct {
-	time               time.Time
-	agent, kind        string
-	input, write, read int
+	time                       time.Time
+	agent, kind                string
+	input, write, read, output int
 }
 
 func postResponses(t *testing.T, srv *codecentraltest.Server, session string, rs ...response) {
 	t.Helper()
 	var items []string
 	for _, r := range rs {
+		if r.output == 0 {
+			r.output = (r.input + r.write + r.read) / 10
+		}
 		agent := ""
 		if r.agent != "" {
 			agent = fmt.Sprintf(`"agent":%q,`, r.agent)
 		}
 		items = append(items, fmt.Sprintf(
 			`{"time":%q,%s"kind":%q,"input_tokens":%d,"cache_write_tokens":%d,"cache_read_tokens":%d,"output_tokens":%d}`,
-			r.time.Format(time.RFC3339Nano), agent, r.kind, r.input, r.write, r.read, (r.input+r.write+r.read)/10))
+			r.time.Format(time.RFC3339Nano), agent, r.kind, r.input, r.write, r.read, r.output))
 	}
 	postUsage(t, srv, fmt.Sprintf(`{"session_id":%q,"responses":[%s]}`, session, strings.Join(items, ",")))
 }

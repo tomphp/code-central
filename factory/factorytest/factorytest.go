@@ -94,9 +94,9 @@ type Harness struct {
 	// Backoff is the Factory's first wait before resuming turns an outage
 	// cut off; set it before Start. New makes it a millisecond.
 	Backoff time.Duration
-	// Clock is the Factory's time for an outage's backoff: it stands
-	// still until the test moves it, so a backoff is over only when the
-	// test says so.
+	// Clock is the Factory's time for an outage's backoff and for dating
+	// model responses: it stands still until the test moves it, so a
+	// backoff is over only when the test says so.
 	Clock *clock.Fake
 	// URL is the Code Central the Factory and its sessions reach: Server
 	// behind a proxy that SetDown can take down.
@@ -116,16 +116,19 @@ func New(t testing.TB) *Harness {
 	// git reports real paths, so resolve macOS's /var -> /private/var.
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	must(t, err)
+	// Code Central's clock starts where the Factory's does, so the model
+	// responses the Factory dates fall on Code Central's today in Usage.
+	now := time.Now()
 	h := &Harness{
 		t:       t,
-		Server:  codecentraltest.NewServer(t),
+		Server:  codecentraltest.NewServer(t, codecentraltest.WithStart(now)),
 		Project: project,
 		Repo:    filepath.Join(root, "work", "repo"),
 		Home:    filepath.Join(root, "home"),
 		Bin:     filepath.Join(root, "bin"),
 		data:    filepath.Join(root, "data"),
 		Backoff: time.Millisecond,
-		Clock:   clock.NewFake(time.Now()),
+		Clock:   clock.NewFake(now),
 		refused: map[string]int64{},
 	}
 	template := filepath.Join(root, "git-template")
@@ -441,6 +444,14 @@ func (h *Harness) Transcript(ticket string, claim int) core.TranscriptView {
 	tr, err := h.Server.Client.Transcript(context.Background(), h.Project, core.Ref(ticket), claim)
 	must(h.t, err)
 	return tr
+}
+
+// Usage reads Usage for the Project over the default range.
+func (h *Harness) Usage() core.UsageView {
+	h.t.Helper()
+	u, err := h.Server.Client.Usage(context.Background(), h.Project, 0)
+	must(h.t, err)
+	return u
 }
 
 // Human is a client of the harness's Code Central acting as the human.
