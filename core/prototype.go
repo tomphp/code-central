@@ -23,7 +23,7 @@ type SubmitPrototypeInput struct {
 // whoever calls, a Ready Prototype titled "Prototype: <first line>" with
 // the text as its description.
 func (c *Core) SubmitPrototype(_ context.Context, key string, in SubmitPrototypeInput) (Written[TicketView], error) {
-	title := requirementTitle(in.Text)
+	title := titleLine(in.Text)
 	if title == "" {
 		return Written[TicketView]{}, invalid("text", "a Prototype needs text; its first line becomes the Ticket's title")
 	}
