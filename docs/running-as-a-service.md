@@ -101,6 +101,10 @@ Preferences you change while Code Central runs are **Options**, not settings. Se
 
 The one Option so far is *Focus Mode, when nothing needs you*: **All clear** (the default) or **Activity Dashboard**.
 
+With **Activity Dashboard** chosen, Focus Mode shows the dashboard wherever it would have said All clear. It has a blue block with the number of Ready Tickets and an amber block with the number of In Progress Tickets, and below them a list of the In Progress Tickets. Each entry shows the Ticket's ID and title, its Project (unless Focus Mode is filtered to one), the Requirement and Stage for a Stage Ticket, and its Session's latest event, such as `Read: core/core.go · 2m ago`. Click an entry to open its Ticket in the Inbox. The counts cover only the Project Focus Mode is filtered to, and leave out Archived Projects. They include blocked Ready Tickets and Stage Tickets, so they can be higher than the Inbox's State counts, which leave out the Stage Tickets folded under each State view. The dashboard follows the live feed, and gives way to a Focus Item as soon as something needs you. The "You skipped N" screen is unchanged.
+
+Scripts can read and set Options over the HTTP API, sending `X-Code-Central-Actor: human` to change them: `GET /api/options`, and `POST /api/set_options` with a body such as `{"focus_clear": "activity_dashboard"}`.
+
 The service keeps Options in its store, in `options.yaml` beside `store.yaml`, so they survive a restart and a cleared browser. There is no file until you first change one, and no MCP tool or CLI command changes them. `settings.yaml` is still the place for what the service needs at startup, such as the port.
 
 ## Reaching it from Docker: `--bind`

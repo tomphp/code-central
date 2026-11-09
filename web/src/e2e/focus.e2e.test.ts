@@ -4,7 +4,8 @@
 // an agent posts a Round, its first Question appears with no reload, the
 // human answers each Question there in order, the agent's background
 // `code-central wait` exits 0, and Focus Mode moves on to the Answered
-// Focus Item, then to All clear once the agent picks the answers up.
+// Focus Item, then to All clear once the agent picks the answers up, and
+// to the Activity Dashboard once the human chooses it over the API.
 // Browser set-up as in round.e2e.test.ts.
 import { spawn } from "node:child_process";
 import { chromium, type Browser } from "playwright-core";
@@ -107,5 +108,23 @@ describe("end-to-end: the human answers a live Round in Focus Mode", () => {
     await focus.getByRole("region", { name: "All clear" }).waitFor();
     await focus.getByText("Nothing needs you.").waitFor();
     expect(await page.title()).toBe("Code Central");
+
+    // The human chooses the Activity Dashboard over the API: the open Focus
+    // Mode switches to it live, counting the agent's Ticket In Progress.
+    const res = await fetch(`${svc.url}/api/set_options`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Code-Central-Actor": "human" },
+      body: JSON.stringify({ focus_clear: "activity_dashboard" }),
+    });
+    expect(res.ok).toBe(true);
+    const dashboard = focus.getByRole("region", { name: "Activity Dashboard" });
+    await dashboard.waitFor();
+    expect(await focus.getByRole("region", { name: "All clear" }).count()).toBe(0);
+    await dashboard.getByRole("group", { name: "Ready" }).getByText("0", { exact: true }).waitFor();
+    await dashboard.getByRole("group", { name: "In Progress" }).getByText("1", { exact: true }).waitFor();
+    const entry = dashboard.getByRole("list", { name: "In Progress" }).getByRole("listitem");
+    expect(await entry.count()).toBe(1);
+    await entry.getByText(id, { exact: true }).waitFor();
+    await entry.getByText("Login form").waitFor();
   }, 30_000);
 });

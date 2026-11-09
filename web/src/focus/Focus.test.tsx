@@ -1,11 +1,12 @@
 // Focus Mode tests: the real App against FakeApi, at ?view=focus. They
 // check what the human sees and does: the URL, the header, All clear,
 // loading and errors.
-import { render, screen, within, waitFor, act } from "@testing-library/react";
+import { screen, within, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
+import { focus, renderApp } from "./focusTesting";
 import { ApiError } from "../api/types";
 
 function world() {
@@ -18,12 +19,6 @@ function world() {
   return fake;
 }
 
-function renderApp(fake: FakeApi, url = "/") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
-}
-
-const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 const params = () => new URLSearchParams(window.location.search);
 
 describe("entering and leaving Focus Mode", () => {
@@ -45,7 +40,7 @@ describe("entering and leaving Focus Mode", () => {
   it("enters with no project when the Inbox is unfiltered, and shows no Project in its header", async () => {
     const fake = world();
     fake.setNeedsMe([]); // no Focus Item, whose own Project would show
-    renderApp(fake);
+    renderApp(fake, "/");
     await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("button", { name: "Focus" }));
     expect(window.location.search).toBe("?view=focus");
     expect(within(focus()).queryByText(/Acme|Beta/)).toBeNull();

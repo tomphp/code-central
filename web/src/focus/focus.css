@@ -41,3 +41,20 @@
 /* A brief note, under the header, when the item on screen was dealt with
    elsewhere. */
 .focus-elsewhere { margin: 16px auto 0; padding: 6px 14px; border-radius: 6px; background: var(--border); color: var(--muted); font-size: 16px; }
+/* The Activity Dashboard, in place of All clear: two State blocks side by
+   side, each with its number in big type, and the In Progress Tickets
+   below them, filling the body. */
+.dashboard { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 32px 24px 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px; }
+.dashboard-blocks { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.dashboard-block { --sc: var(--s-ready); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 16px; border-radius: 16px; background: var(--sc); color: #fff; min-height: 30vh; }
+.dashboard-block.state-in-progress { --sc: var(--s-in-progress); }
+.dashboard-count { font-size: clamp(72px, 14vw, 160px); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.dashboard-state { margin-top: 8px; font-size: 24px; font-weight: 600; }
+.dashboard-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.dashboard-entry a { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border); border-left: 4px solid var(--s-in-progress); background: var(--surface); color: var(--text); text-decoration: none; }
+.dashboard-entry a:hover { border-color: var(--muted); border-left-color: var(--s-in-progress); }
+.dashboard-entry-top { display: flex; align-items: baseline; gap: 10px; }
+.dashboard-entry-top .tid { font-size: 14px; }
+.dashboard-entry-title { font-weight: 600; flex: 1; min-width: 0; }
+.dashboard-entry-detail { font-size: 15px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dashboard-empty { margin: 0; text-align: center; color: var(--muted); font-size: 20px; }

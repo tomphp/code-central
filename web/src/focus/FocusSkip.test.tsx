@@ -2,11 +2,12 @@
 // skipped Focus Item goes to the back of the queue, a skipped Question
 // lets its Round carry on, and once only skipped items are left Focus Mode
 // offers to go through them again. Skips live in the tab's memory only.
-import { render, screen, within, act } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
+import { change, focus, renderApp } from "./focusTesting";
 import type { RoundView } from "../api/types";
 
 // world has acme-1 waiting on Round 1 (Questions 1 and 2 open), then
@@ -43,21 +44,9 @@ function tickets() {
   return fake;
 }
 
-function renderApp(fake: FakeApi, url = "/?view=focus") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
-}
-
-const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 const heading = (name: string) => within(focus()).findByRole("heading", { name });
 // skip waits for Skip, which shows once the Focus Item has loaded.
 const skip = async () => userEvent.click(await within(focus()).findByRole("button", { name: "Skip" }));
-// change reseeds Needs Me and sends the notice the service would.
-function change(fake: FakeApi, groups: Parameters<FakeApi["setNeedsMe"]>[0], id: string) {
-  fake.setNeedsMe(groups);
-  act(() => fake.emit({ type: "ticket.changed", project: id.split("-")[0], id }));
-}
-
 
 describe("Skip", () => {
   it("sits next to Answer and Dismiss on a Question Focus Item", async () => {

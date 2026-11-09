@@ -2,11 +2,12 @@
 // open Question of a Round is its own Focus Item, answered through the
 // Round panel's shared form; live changes are simulated by reseeding Needs
 // Me and emitting a notice.
-import { render, screen, within, waitFor, act, fireEvent } from "@testing-library/react";
+import { screen, within, waitFor, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
+import { change, focus, renderApp } from "./focusTesting";
 import type { RoundView } from "../api/types";
 
 const hourAgo = (fake: FakeApi, h: number) => new Date(fake.now.getTime() - h * 3_600_000).toISOString();
@@ -42,22 +43,10 @@ function world() {
   return fake;
 }
 
-function renderApp(fake: FakeApi, url = "/?view=focus") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
-}
-
-const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 const item = () => within(focus()).findByRole("article", { name: "Focus Item" });
 const question = (title: string) => within(focus()).findByRole("heading", { name: title });
 const box = () => within(focus()).getByRole("textbox");
 const stored = async (fake: FakeApi, id = "acme-1") => (await fake.getTicket("acme", id)).rounds[1].questions;
-
-// change reseeds Needs Me and sends the notice the service would.
-function change(fake: FakeApi, groups: Parameters<FakeApi["setNeedsMe"]>[0], id = "acme-1") {
-  fake.setNeedsMe(groups);
-  act(() => fake.emit({ type: "ticket.changed", project: id.split("-")[0], id }));
-}
 
 describe("a Question Focus Item", () => {
   it("shows where it's from, why it waits, where it is in the Round, its title large and its body as Markdown", async () => {

@@ -1,11 +1,12 @@
 // Ticket Focus Items: the real App against FakeApi, at ?view=focus. One
 // Focus Item at a time, in Needs Me's order, with its reason's panel; live
 // changes are simulated by reseeding Needs Me and emitting a notice.
-import { render, screen, within, waitFor, act } from "@testing-library/react";
+import { screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
+import { change, focus, renderApp } from "./focusTesting";
 
 const hourAgo = (fake: FakeApi, h: number) => new Date(fake.now.getTime() - h * 3_600_000).toISOString();
 
@@ -26,19 +27,7 @@ function world() {
   return fake;
 }
 
-function renderApp(fake: FakeApi, url = "/?view=focus") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
-}
-
-const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 const item = () => within(focus()).findByRole("article", { name: "Focus Item" });
-
-// change reseeds Needs Me and sends the notice the service would.
-function change(fake: FakeApi, groups: Parameters<FakeApi["setNeedsMe"]>[0], id = "acme-1") {
-  fake.setNeedsMe(groups);
-  act(() => fake.emit({ type: "ticket.changed", project: id.split("-")[0], id }));
-}
 
 describe("a Ticket Focus Item", () => {
   it("shows where it's from and why it waits, in Needs Me's order", async () => {

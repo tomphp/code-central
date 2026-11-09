@@ -55,7 +55,10 @@ const STAGES: StageName[] = ["grilling", "spec", "tickets"];
 
 // isStage reports whether a Ticket is a Stage Ticket: one of its Labels is
 // a Stage's, stage:grilling, stage:spec or stage:tickets, as core says.
-export const isStage = (t: { labels: string[] }) => STAGES.some((s) => t.labels.includes(`stage:${s}`));
+export const isStage = (t: { labels: string[] }) => !!stageOf(t);
+
+// stageOf is a Stage Ticket's Stage, from its Label; none for any other Ticket.
+export const stageOf = (t: { labels: string[] }): StageName | undefined => STAGES.find((s) => t.labels.includes(`stage:${s}`));
 
 export function progress(req: RequirementView, tickets: TicketRow[], reasons: Map<string, NeedsMeReason>): Progress {
   const build = tickets.filter((t) => !isStage(t));
