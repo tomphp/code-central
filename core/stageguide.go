@@ -69,15 +69,9 @@ func stageGuide(stage string) StageGuideView {
 // map-<type> for a Map Ticket, prototype for a Prototype, or
 // ImplementationStage only when it has no reserved type Label.
 func GuideName(labels []string) string {
-	if s := StageOf(labels); s != "" {
-		return s
-	}
 	for _, l := range labels {
-		if l == PrototypeLabel {
-			return PrototypeLabel
-		}
-		if t, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(WayfinderTypes, t) {
-			return mapGuidePrefix + t
+		if g, ok := typeGuide(l); ok {
+			return g
 		}
 	}
 	return ImplementationStage

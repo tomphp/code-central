@@ -42,25 +42,22 @@ func (f *factory) reportFailure(ctx context.Context, c claim, fl *failure) bool 
 	return true
 }
 
-// stageSkills is the skill each guide the Factory runs starts, as a
-// slash command, by guide name; "" starts none, so the prompt is the
-// guide alone. It is the only place that names upstream skills. A
-// Ticket whose guide isn't here, a Prototype or a Map's research, is
-// left unclaimed.
-var stageSkills = map[string]string{
-	"grilling":               "grilling",
-	"spec":                   "to-spec",
-	"tickets":                "to-tickets",
-	"map-chart":              "wayfinder",
-	"map-grilling":           "grilling",
-	"map-task":               "",
-	core.ImplementationStage: "implement",
-}
+// guideSkill is the skill a guide starts, as a slash command name, and
+// the skill to run alongside it, if any.
+type guideSkill struct{ skill, alongside string }
 
-// alongside is the skill each guide runs beside its own, by guide name.
-var alongside = map[string]string{
-	"grilling":     "domain-modeling",
-	"map-grilling": "domain-modeling",
+// stageSkills is the skill each guide the Factory runs starts, by guide
+// name; an empty skill starts none, so the prompt is the guide alone. It
+// is the only place that names upstream skills. A Ticket whose guide
+// isn't here, a Prototype or a Map's research, is left unclaimed.
+var stageSkills = map[string]guideSkill{
+	"grilling":               {"grilling", "domain-modeling"},
+	"spec":                   {skill: "to-spec"},
+	"tickets":                {skill: "to-tickets"},
+	"map-chart":              {skill: "wayfinder"},
+	"map-grilling":           {"grilling", "domain-modeling"},
+	"map-task":               {},
+	core.ImplementationStage: {skill: "implement"},
 }
 
 // runs reports whether the Factory runs a Ticket with the named guide.
@@ -74,16 +71,17 @@ func runs(guide string) bool {
 // it, and the guide from the claim. stage is the guide's name.
 func firstPrompt(c claim, stage string, g core.StageGuideView) string {
 	var b strings.Builder
-	if skill := stageSkills[stage]; skill != "" {
-		fmt.Fprintf(&b, "/%s %s\n\n", skill, c.Ticket)
+	sk := stageSkills[stage]
+	if sk.skill != "" {
+		fmt.Fprintf(&b, "/%s %s\n\n", sk.skill, c.Ticket)
 	}
 	fmt.Fprintf(&b, "Ticket: %s\nClaim: %s\n\n", c.Ticket, c.ClaimID)
 	claimed := fmt.Sprintf("The Factory has already claimed this Ticket for you: Claim %s is yours, so don't call claim, and pass %s as claim_id on every write that needs it.", c.ClaimID, c.ClaimID)
 	if stage == core.ImplementationStage {
 		fmt.Fprintf(&b, "You are running under code-central-factory, in this Ticket's own worktree on branch %s. %s Commit on this branch only, with no push and no PR, and finish the Ticket when it is done.", c.Ticket, claimed)
 	} else {
-		if skill := alongside[stage]; skill != "" {
-			fmt.Fprintf(&b, "Run /%s alongside /%s, to sharpen the terms as you grill.\n\n", skill, stageSkills[stage])
+		if sk.alongside != "" {
+			fmt.Fprintf(&b, "Run /%s alongside /%s, to sharpen the terms as you grill.\n\n", sk.alongside, sk.skill)
 		}
 		what, writer := "the "+stage+" Stage", "A Stage"
 		if !slices.Contains(core.Stages, stage) {

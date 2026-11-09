@@ -215,7 +215,7 @@ func (c *Core) AddLabels(_ context.Context, key string, in LabelsInput) (TargetV
 		}
 		// Only a new type Label is checked against the rest, so Labels
 		// a Ticket carried before the rule can still be added to.
-		if !onSpec && slices.ContainsFunc(in.Labels, typeLabel) {
+		if !onSpec && slices.ContainsFunc(in.Labels, isTypeLabel) {
 			return checkOneType("labels", *labels)
 		}
 		return nil

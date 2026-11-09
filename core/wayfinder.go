@@ -37,17 +37,26 @@ var wayfinderLabelList = func() string {
 	return strings.Join(ls[:len(ls)-1], ", ") + " and " + ls[len(ls)-1]
 }()
 
-// typeLabel reports whether l is a reserved type Label, which a Ticket
-// carries at most one of: a Stage, a Map Ticket type or prototype.
-func typeLabel(l string) bool {
+// typeGuide is the guide a reserved type Label gives its Ticket, which
+// carries at most one: a Stage, a Map Ticket type or prototype. ok is
+// false for any other Label.
+func typeGuide(l string) (guide string, ok bool) {
 	if l == PrototypeLabel {
-		return true
+		return PrototypeLabel, true
 	}
-	if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok {
-		return slices.Contains(WayfinderTypes, name)
+	if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(WayfinderTypes, name) {
+		return mapGuidePrefix + name, true
 	}
-	name, ok := strings.CutPrefix(l, StagePrefix)
-	return ok && slices.Contains(Stages, name)
+	if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages, name) {
+		return name, true
+	}
+	return "", false
+}
+
+// isTypeLabel reports whether l is a reserved type Label.
+func isTypeLabel(l string) bool {
+	_, ok := typeGuide(l)
+	return ok
 }
 
 // checkReservedNames rejects a reserved-prefix Label that names nothing:
@@ -88,7 +97,7 @@ func checkPlacement(field string, labels []string, onSpec bool) error {
 func checkOneType(field string, labels []string) error {
 	var types []string
 	for _, l := range labels {
-		if typeLabel(l) && !slices.Contains(types, l) {
+		if isTypeLabel(l) && !slices.Contains(types, l) {
 			types = append(types, l)
 		}
 	}
@@ -98,18 +107,15 @@ func checkOneType(field string, labels []string) error {
 	return nil
 }
 
-// checkReservedLabels checks the reserved Labels in labels, the whole
-// list a Spec (onSpec) or Ticket will carry: each names a reserved name,
-// sits on the right kind of record, and a Ticket has at most one type.
-func checkReservedLabels(field string, labels []string, onSpec bool) error {
+// checkTicketLabels checks the reserved Labels in labels, the whole list
+// a new Ticket will carry: each names a reserved name, belongs on a
+// Ticket, and there is at most one type.
+func checkTicketLabels(field string, labels []string) error {
 	if err := checkReservedNames(field, labels); err != nil {
 		return err
 	}
-	if err := checkPlacement(field, labels, onSpec); err != nil {
+	if err := checkPlacement(field, labels, false); err != nil {
 		return err
-	}
-	if onSpec {
-		return nil
 	}
 	return checkOneType(field, labels)
 }

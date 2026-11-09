@@ -165,7 +165,7 @@ An agent's permanent record of what broke on a Ticket, why, and what to fix, pos
 _Avoid_: Error, incident
 
 **Label**:
-A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels, Wayfinder Labels and `prototype` are reserved: they mark a Ticket's Stage, a Map or a Map's Ticket type, and a Prototype.
+A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels, Wayfinder Labels and `prototype` are reserved: they mark a Ticket's Stage, a Map or a Map's Ticket type, and a Prototype. A Ticket carries at most one reserved type Label (a Stage Label, a Map Ticket type's Wayfinder Label or `prototype`), which chooses its Stage Guide.
 _Avoid_: Category
 
 **Wayfinder Label**:
