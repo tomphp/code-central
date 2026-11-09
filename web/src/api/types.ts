@@ -106,6 +106,19 @@ export interface NeedsMeRow {
   link?: LinkView;
   // Set when the Ticket's Spec is a Requirement.
   requirement?: NeedsMeRequirement;
+  // spec is a Map Ticket's or Prototype's Spec, as its context, set when
+  // that Spec isn't a Requirement.
+  spec?: NeedsMeSpec;
+  // prototype is set on a Ticket labelled prototype, for its badge.
+  prototype?: boolean;
+}
+
+// The Spec a Needs Me row's Map Ticket or Prototype is on; map is set
+// when it is a Map.
+export interface NeedsMeSpec {
+  spec: string;
+  title: string;
+  map?: boolean;
 }
 
 // The Requirement a Needs Me row's Ticket is on; stage is set only on a
@@ -133,6 +146,25 @@ export interface StageView {
   needs_me_reason?: NeedsMeReason;
 }
 
+// A Spec read's Map block, present only on a Map (a Spec labelled
+// wayfinder:map). Nothing in it is stored.
+export interface MapView {
+  // decided is the Map's Wayfinder Tickets that are Done.
+  decided: number;
+  // total is its Wayfinder Tickets that aren't Cancelled.
+  total: number;
+  // needs_you is its Tickets with a Needs Me reason, Prototypes included.
+  needs_you: number;
+  // can_write_spec is whether it has no unfinished Tickets.
+  can_write_spec: boolean;
+}
+
+// A Map Ticket's type, from its reserved Label; "ticket" when it has none.
+export type NodeType = "chart" | "grilling" | "research" | "task" | "prototype" | "ticket";
+
+// MAP_LABEL marks a Spec as a Map.
+export const MAP_LABEL = "wayfinder:map";
+
 // A Spec as get_spec and submit_requirement return it.
 export interface SpecView {
   id: string;
@@ -150,12 +182,13 @@ export interface SpecView {
 export type StateSummary = Partial<Record<State, number>>;
 
 // get_spec: the Spec, its Tickets (finished ones too) in claim order, and
-// its requirement block when it is a Requirement.
+// its requirement block when it is a Requirement, or Map block when a Map.
 export interface SpecDetail extends SpecView {
   state_summary: StateSummary;
   finished: boolean;
   tickets: TicketRow[];
   requirement?: RequirementView;
+  map?: MapView;
 }
 
 // One find_specs result.
@@ -169,11 +202,14 @@ export interface SpecRow {
   updated: string;
   link?: LinkView;
   requirement?: RequirementView;
+  map?: MapView;
 }
 
 export interface FindSpecsFilter {
   // requirements keeps only Requirements.
   requirements?: boolean;
+  // labels keeps only Specs with every one of these Labels.
+  labels?: string[];
   // finished includes finished Specs, which are otherwise left out.
   finished?: boolean;
 }
@@ -183,6 +219,13 @@ export interface FindSpecsFilter {
 export interface SubmitRequirementResult {
   spec: SpecAcknowledgement;
   stages: TicketAcknowledgement[];
+}
+
+// submit_map's result: the acknowledgements of the new Map's Spec and its
+// Charting Ticket.
+export interface SubmitMapResult {
+  spec: SpecAcknowledgement;
+  charting: TicketAcknowledgement;
 }
 
 export interface NeedsMeGroup {
@@ -204,6 +247,8 @@ export interface TicketRow {
   blocked: boolean;
   updated: string;
   link?: LinkView;
+  // node_type is the Ticket's type on a Map; left out on any other Spec.
+  node_type?: NodeType;
   // latest_event is the latest Session Event of the Ticket's live Claim;
   // left out when there is none.
   latest_event?: LatestEvent;
@@ -459,7 +504,8 @@ export interface UsageOperation {
   errors: number;
 }
 
-// UsageKind is one kind of session's Context Size figures.
+// UsageKind is one kind of session's Context Size figures: its sessions,
+// and the average (to the nearest token) and largest of their peaks.
 export interface UsageKind {
   kind: string;
   sessions: number;
@@ -467,7 +513,9 @@ export interface UsageKind {
   largest_peak: number;
 }
 
-// UsageSession is one recent session, a Claim's main session or one of its subagents.
+// UsageSession is one recent session, a Claim's main session or one of its
+// subagents (agent), with the Claim and kind of its latest response; peak
+// is its largest Context Size and started its first response's time.
 export interface UsageSession {
   project: string;
   ticket: string;
@@ -480,20 +528,38 @@ export interface UsageSession {
   responses: number;
 }
 
-// UsageDay is one local day's token usage by kind of session.
+// UsageDay is one local day's token usage (day is YYYY-MM-DD in the
+// service's time zone): the kinds of session with any usage that day, in
+// the kinds' order; none on a day with no usage.
 export interface UsageDay {
   day: string;
-  kinds: {
-    kind: string;
-    input_tokens: number;
-    cache_write_tokens: number;
-    cache_read_tokens: number;
-    output_tokens: number;
-  }[];
+  kinds: UsageDayTokens[];
 }
 
-// UsageView is GET /api/usage. Kinds, sessions and days stay empty until
-// the Factory posts token usage.
+// UsageDayTokens is one kind of session's tokens on one day, by token type.
+export interface UsageDayTokens {
+  kind: string;
+  input_tokens: number;
+  cache_write_tokens: number;
+  cache_read_tokens: number;
+  output_tokens: number;
+}
+
+// UsageResponse is one model response's token usage as a Factory posts
+// it to POST /api/usage; agent is left out for the main session.
+export interface UsageResponse {
+  time: string;
+  agent?: string;
+  kind: string;
+  input_tokens: number;
+  cache_write_tokens: number;
+  cache_read_tokens: number;
+  output_tokens: number;
+}
+
+// UsageView is GET /api/usage: kinds, sessions and days come from the
+// token usage a Factory posts, sessions newest first and at most 50, and
+// days a row for every local day in the range, oldest first.
 export interface UsageView {
   operations: UsageOperation[];
   kinds: UsageKind[];

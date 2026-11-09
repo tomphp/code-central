@@ -181,6 +181,10 @@ _Avoid_: Category
 A reserved `wayfinder:` Label marking a Map (`wayfinder:map`) or a Map's Ticket type (`chart`, `grilling`, `research`, `task`).
 _Avoid_: Map Label, kind
 
+**Node type**:
+A Ticket's type on a Map, as Spec reads show it: its Wayfinder Label's type (`chart`, `grilling`, `research`, `task`), `prototype`, or `ticket` for a Ticket with neither.
+_Avoid_: Ticket kind
+
 **Tag**:
 A free-form key and value on a Spec or Ticket, with no meaning to Code Central's workflow; the Factory reads the `guided` Tag on a Map, and the read side the `prototype`, `research` and `map` Tags.
 _Avoid_: Label, attribute, property

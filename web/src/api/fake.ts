@@ -18,11 +18,15 @@
 // A Spec read derives what the service derives from its Tickets: the
 // State summary, finished, and a Requirement's requirement block
 // (a Stage's Needs Me reason is Needs Me's, as set by setNeedsMe).
-// submitRequirement writes a Spec and its three Stage Tickets.
+// submitRequirement writes a Spec and its three Stage Tickets, and
+// submitMap a Map's Spec and its Charting Ticket; a Map's read derives its
+// Map block, and its Tickets' rows their node type.
 //
 // recordCall stands in for an agent's MCP call, which the service records
-// as Usage itself; usage reads the calls back as the service does: over
-// the last days local days, for one Project or all of them.
+// as Usage itself, and postUsage for a Factory's POST /api/usage, filed
+// under the newest Claim with its session ID; usage reads them back as the
+// service does: over the last days local days, for one Project or all of
+// them.
 //
 // The Options start at their defaults; setOptions validates as the
 // service does, and sends options.changed only when something changed.
@@ -62,10 +66,13 @@ import {
   type LatestEvent,
   type LinkedRow,
   type Landing,
+  MAP_LABEL,
+  type MapView,
   type Mode,
   type NeedsMeReason,
   type NeedsMeRow,
   type NeedsMeView,
+  type NodeType,
   type Options,
   type ProjectRow,
   type ProjectView,
@@ -80,6 +87,7 @@ import {
   type StageName,
   type State,
   type StateSummary,
+  type SubmitMapResult,
   type SubmitRequirementResult,
   TICKET_FIELDS,
   type TicketAcknowledgement,
@@ -87,8 +95,13 @@ import {
   type TicketView,
   type Transcript,
   USAGE_DAYS,
+  type UsageDay,
+  type UsageDayTokens,
   type UsageFilter,
+  type UsageKind,
   type UsageOperation,
+  type UsageResponse,
+  type UsageSession,
   type UsageView,
 } from "./types";
 
@@ -103,6 +116,20 @@ interface FakeUsageCall {
   error?: string;
 }
 
+// A FakeUsageRecord is a posted response as the service records it, under its Claim.
+interface FakeUsageRecord extends UsageResponse {
+  project: string;
+  ticket: string;
+  claim: number;
+  session_id: string;
+}
+
+// KIND_ORDER is the order Usage lists kinds of session in; any other kind follows, by name.
+const KIND_ORDER = ["grilling", "spec", "tickets", "implementation", "review", "subagent"];
+
+// RECENT_SESSIONS is how many sessions a Usage read lists.
+const RECENT_SESSIONS = 50;
+
 // localDay numbers t's day in the local time zone, as the service dates Usage.
 function localDay(t: Date): number {
   return Math.round(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()) / 86_400_000);
@@ -111,6 +138,88 @@ function localDay(t: Date): number {
 // average is total / n rounded to the nearest whole number, halves up, as the service rounds.
 function average(total: number, n: number): number {
   return Math.floor((2 * total + n) / (2 * n));
+}
+
+// contextSize is how many tokens a response read: input, cache write and cache read.
+function contextSize(r: UsageResponse): number {
+  return r.input_tokens + r.cache_write_tokens + r.cache_read_tokens;
+}
+
+// usageSessions are the sessions the responses belong to, newest first, as
+// the service works them out: a session is its session ID plus its agent,
+// with the Claim and kind of its latest response.
+function usageSessions(responses: FakeUsageRecord[]): UsageSession[] {
+  const byKey = new Map<string, { s: UsageSession; latest: number }>();
+  for (const r of responses) {
+    const key = `${r.session_id}\u0000${r.agent ?? ""}`;
+    const t = Date.parse(r.time);
+    let e = byKey.get(key);
+    if (!e) {
+      e = { s: { project: "", ticket: "", claim: 0, session_id: r.session_id, ...(r.agent ? { agent: r.agent } : {}), kind: "", started: r.time, peak: 0, responses: 0 }, latest: -Infinity };
+      byKey.set(key, e);
+    }
+    e.s.responses++;
+    e.s.peak = Math.max(e.s.peak, contextSize(r));
+    if (t < Date.parse(e.s.started)) e.s.started = r.time;
+    if (t >= e.latest) {
+      e.latest = t;
+      Object.assign(e.s, { project: r.project, ticket: r.ticket, claim: r.claim, kind: r.kind });
+    }
+  }
+  const by = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  return [...byKey.values()]
+    .map((e) => e.s)
+    .sort((a, b) => Date.parse(b.started) - Date.parse(a.started) || by(a.session_id, b.session_id) || by(a.agent ?? "", b.agent ?? ""));
+}
+
+// usageKinds is each kind of session's Context Size figures, in KIND_ORDER.
+function usageKinds(sessions: UsageSession[]): UsageKind[] {
+  const byKind = new Map<string, { k: UsageKind; total: number }>();
+  for (const s of sessions) {
+    const e = byKind.get(s.kind) ?? { k: { kind: s.kind, sessions: 0, average_peak: 0, largest_peak: 0 }, total: 0 };
+    e.k.sessions++;
+    e.k.largest_peak = Math.max(e.k.largest_peak, s.peak);
+    e.total += s.peak;
+    byKind.set(s.kind, e);
+  }
+  return [...byKind.values()]
+    .map((e) => ({ ...e.k, average_peak: average(e.total, e.k.sessions) }))
+    .sort((a, b) => compareKinds(a.kind, b.kind));
+}
+
+// compareKinds orders kinds by KIND_ORDER, then any other by name.
+function compareKinds(a: string, b: string): number {
+  const rank = (kind: string) => (KIND_ORDER.includes(kind) ? KIND_ORDER.indexOf(kind) : KIND_ORDER.length);
+  return rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0);
+}
+
+// dateOf is t's local day as YYYY-MM-DD, as the service names a day.
+function dateOf(t: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
+}
+
+// usageDays is a row for each of the last days local days to today,
+// oldest first, with the responses' tokens that day summed by kind.
+function usageDays(today: Date, days: number, responses: FakeUsageRecord[]): UsageDay[] {
+  const byDay = new Map<string, Map<string, UsageDayTokens>>();
+  for (const r of responses) {
+    const day = dateOf(new Date(r.time));
+    const kinds = byDay.get(day) ?? new Map<string, UsageDayTokens>();
+    const k = kinds.get(r.kind) ?? { kind: r.kind, input_tokens: 0, cache_write_tokens: 0, cache_read_tokens: 0, output_tokens: 0 };
+    k.input_tokens += r.input_tokens;
+    k.cache_write_tokens += r.cache_write_tokens;
+    k.cache_read_tokens += r.cache_read_tokens;
+    k.output_tokens += r.output_tokens;
+    kinds.set(r.kind, k);
+    byDay.set(day, kinds);
+  }
+  const rows: UsageDay[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const day = dateOf(new Date(today.getFullYear(), today.getMonth(), today.getDate() - i));
+    rows.push({ day, kinds: [...(byDay.get(day)?.values() ?? [])].sort((a, b) => compareKinds(a.kind, b.kind)) });
+  }
+  return rows;
 }
 
 // Every action's fake behaviour registers itself from ./actions/.
@@ -137,6 +246,19 @@ const STAGES: { name: StageName; title: string }[] = [
   { name: "tickets", title: "Tickets" },
 ];
 const stageOf = (t: { labels: string[] }) => STAGES.find((s) => t.labels.includes(`stage:${s.name}`))?.name;
+// The Map's Ticket types and its body's sections, as core's WayfinderTypes
+// and MapSections.
+const WAYFINDER_TYPES = ["chart", "grilling", "research", "task"] as const;
+const MAP_SECTIONS = ["Destination", "Notes", "Decisions so far", "Not yet specified", "Out of scope"];
+// specTitle is the text's first non-blank line without Markdown heading
+// marks, as core's specTitle.
+const specTitle = (text: string) =>
+  text
+    .split("\n")
+    .map((l) => l.trim().replace(/^#+/, "").trim())
+    .find((l) => l) ?? "";
+const nodeTypeOf = (t: { labels: string[] }): NodeType =>
+  t.labels.includes("prototype") ? "prototype" : (WAYFINDER_TYPES.find((n) => t.labels.includes(`wayfinder:${n}`)) ?? "ticket");
 export type SeedRow = Partial<NeedsMeRow> & { id: string };
 
 // LATEST_EVENT_LIMIT is the most characters the latest event's text keeps,
@@ -192,6 +314,7 @@ export class FakeApi implements Api {
   private followers = new Set<FakeFollower>();
   private opts: Options = { ...DEFAULT_OPTIONS };
   private usageCalls: FakeUsageCall[] = [];
+  private usageResponses: FakeUsageRecord[] = [];
 
   // ---- seeding ----
 
@@ -278,12 +401,15 @@ export class FakeApi implements Api {
       tickets: g.tickets.map((r) => {
         const t = this.tickets.get(r.id);
         const requirement = t && this.requirementOf(t);
+        const spec = t && !requirement ? this.needsMeSpecOf(t) : undefined;
         return {
           project: this.projectOf(r.id),
           title: t?.title ?? r.id,
           state: t?.state ?? "In Progress",
           since: this.now.toISOString(),
           ...(requirement && { requirement }),
+          ...(spec && { spec }),
+          ...(t?.labels.includes("prototype") && { prototype: true }),
           ...r,
           reason: g.reason,
         };
@@ -297,15 +423,7 @@ export class FakeApi implements Api {
   // ticket.changed (unthrottled: the fake holds data, not timing). With
   // no such Claim the events are dropped.
   postSessionEvents(sessionId: string, events: SessionEvent[]) {
-    if (!sessionId) return;
-    let newest: { t: TicketView; number: number; started: string } | undefined;
-    for (const t of this.tickets.values()) {
-      for (const c of t.claims) {
-        if (c.session_id !== sessionId) continue;
-        if (!c.ended) c.last_activity = this.now.toISOString();
-        if (!newest || c.started > newest.started) newest = { t, number: c.number, started: c.started };
-      }
-    }
+    const newest = this.pingSession(sessionId);
     if (!newest || !events.length) return;
     const k = transcriptKey(newest.t.id, newest.number);
     const tr = this.transcripts.get(k) ?? { events: [], lastSeq: 0, tail: false };
@@ -317,6 +435,32 @@ export class FakeApi implements Api {
     this.transcripts.set(k, tr);
     for (const f of this.followers) this.deliver(f);
     this.emit({ type: "ticket.changed", project: this.projectOf(newest.t.id), id: newest.t.id });
+  }
+
+  // postUsage records a session's model responses under the newest Claim
+  // with that session ID, live or ended, as a Factory's POST /api/usage
+  // would. It counts as activity on the session's live Claims. With no
+  // such Claim the responses are dropped.
+  postUsage(sessionId: string, responses: UsageResponse[]) {
+    const newest = this.pingSession(sessionId);
+    if (!newest) return;
+    const claim = { project: this.projectOf(newest.t.id), ticket: newest.t.id, claim: newest.number, session_id: sessionId };
+    for (const r of structuredClone(responses)) this.usageResponses.push({ ...r, ...claim });
+  }
+
+  // pingSession marks activity on a session's live Claims, as a ping
+  // does, and returns its newest Claim, live or ended.
+  private pingSession(sessionId: string): { t: TicketView; number: number; started: string } | undefined {
+    if (!sessionId) return undefined;
+    let newest: { t: TicketView; number: number; started: string } | undefined;
+    for (const t of this.tickets.values()) {
+      for (const c of t.claims) {
+        if (c.session_id !== sessionId) continue;
+        if (!c.ended) c.last_activity = this.now.toISOString();
+        if (!newest || c.started > newest.started) newest = { t, number: c.number, started: c.started };
+      }
+    }
+    return newest;
   }
 
   // dropTranscriptStreams drops every connected Transcript stream, as a
@@ -457,8 +601,15 @@ export class FakeApi implements Api {
     const id = `${project}-${spec.slice(spec.lastIndexOf("-") + 1)}`;
     const s = this.allSpecs(project).find((s) => s.id === id);
     if (!s) throw new ApiError(404, "not_found", `there is no Spec ${id}`);
-    const { state_summary, finished, requirement } = this.derive(id);
-    return structuredClone({ ...s, state_summary, finished, tickets: this.rowsOf(this.ticketsOf(id)), ...(requirement && { requirement }) });
+    const { state_summary, finished, requirement, map } = this.derive(id);
+    return structuredClone({
+      ...s,
+      state_summary,
+      finished,
+      tickets: this.rowsOf(this.ticketsOf(id)),
+      ...(requirement && { requirement }),
+      ...(map && { map }),
+    });
   }
 
   async findSpecs(project: string, filter: FindSpecsFilter = {}): Promise<SpecRow[]> {
@@ -468,7 +619,8 @@ export class FakeApi implements Api {
       this.allSpecs(project)
         .map((s) => ({ s, ...this.derive(s.id) }))
         .filter((r) => (filter.finished || !r.finished) && (!filter.requirements || r.requirement))
-        .map(({ s, state_summary, finished, requirement }) => ({
+        .filter((r) => (filter.labels ?? []).every((l) => r.s.labels.includes(l)))
+        .map(({ s, state_summary, finished, requirement, map }) => ({
           id: s.id,
           title: s.title,
           labels: s.labels,
@@ -478,6 +630,7 @@ export class FakeApi implements Api {
           updated: s.updated,
           ...(s.link && { link: s.link }),
           ...(requirement && { requirement }),
+          ...(map && { map }),
         })),
     );
   }
@@ -507,6 +660,25 @@ export class FakeApi implements Api {
       );
     }
     return { spec: acknowledgeSpecCreate(spec), stages: stages.map(acknowledgeTicketCreate) };
+  }
+
+  async submitMap(project: string, text: string): Promise<SubmitMapResult> {
+    this.calls.push("submitMap");
+    this.writable(project);
+    const title = specTitle(text);
+    if (!title) throw new ApiError(422, "invalid", "a Map needs text; its first line becomes the Spec's title", "text");
+    const body = text.replace(/\n+$/, "") + "\n" + MAP_SECTIONS.map((h) => `\n## ${h}\n`).join("");
+    const spec = this.addSpec(project, { title, body, labels: [MAP_LABEL] });
+    const charting = this.addTicket(project, {
+      title: `Charting: ${title}`,
+      state: "Ready",
+      spec: { id: spec.id, title },
+      labels: ["wayfinder:chart"],
+      description: `Chart the Map [${spec.id}](${spec.id}): settle its destination with the human, fill in its sections and create its first decision Tickets.\n`,
+      claimable: true,
+      moves: [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_map" }],
+    });
+    return { spec: acknowledgeSpecCreate(spec), charting: acknowledgeTicketCreate(charting) };
   }
 
   // specQuestions reads a Spec from its seeded Tickets' spec, so a Spec
@@ -633,10 +805,13 @@ export class FakeApi implements Api {
     if (!USAGE_DAYS.includes(days)) throw new ApiError(422, "invalid", `days must be 7, 30 or 90, not ${days}`, "days");
     if (filter.project && !this.projects.has(filter.project)) throw new ApiError(404, "not_found", `no Project "${filter.project}"`);
     const today = localDay(this.now);
+    const inRange = (r: { project: string; time: string }) => {
+      const ago = today - localDay(new Date(r.time));
+      return (!filter.project || r.project === filter.project) && ago >= 0 && ago < days;
+    };
     const rows = new Map<string, UsageOperation>();
     for (const c of this.usageCalls) {
-      const ago = today - localDay(new Date(c.time));
-      if ((filter.project && c.project !== filter.project) || ago < 0 || ago >= days) continue;
+      if (!inRange(c)) continue;
       const row = rows.get(c.op) ?? { op: c.op, calls: 0, request_bytes: 0, average_request_bytes: 0, response_bytes: 0, average_response_bytes: 0, errors: 0 };
       row.calls++;
       row.request_bytes += c.request_bytes;
@@ -647,7 +822,9 @@ export class FakeApi implements Api {
     const operations = [...rows.values()]
       .map((r) => ({ ...r, average_request_bytes: average(r.request_bytes, r.calls), average_response_bytes: average(r.response_bytes, r.calls) }))
       .sort((a, b) => b.calls - a.calls || (a.op < b.op ? -1 : 1));
-    return { operations, kinds: [], sessions: [], days: [] };
+    const responses = this.usageResponses.filter(inRange);
+    const sessions = usageSessions(responses);
+    return { operations, kinds: usageKinds(sessions), sessions: sessions.slice(0, RECENT_SESSIONS), days: usageDays(this.now, days, responses) };
   }
 
   // ---- internals ----
@@ -668,6 +845,7 @@ export class FakeApi implements Api {
   }
 
   private rowsOf(tickets: TicketView[]): TicketRow[] {
+    const onMap = (t: TicketView) => !!this.specs.get(t.spec.id)?.labels.includes(MAP_LABEL);
     return tickets.map((t) => ({
       id: t.id,
       title: t.title,
@@ -677,6 +855,7 @@ export class FakeApi implements Api {
       blocked: t.blocked,
       updated: t.updated,
       ...(t.link && { link: { ...t.link } }),
+      ...(onMap(t) && { node_type: nodeTypeOf(t) }),
       ...this.liveLatest(t),
     }));
   }
@@ -717,15 +896,38 @@ export class FakeApi implements Api {
     return { spec: t.spec.id, title: this.specs.get(t.spec.id)?.title ?? t.spec.title, ...(stage && { stage }) };
   }
 
+  // needsMeSpecOf is a Needs Me row's spec field, for a Ticket whose Spec
+  // isn't a Requirement: set when the Ticket is on a Map, or is a Map
+  // Ticket or a Prototype.
+  private needsMeSpecOf(t: TicketView): NeedsMeRow["spec"] {
+    const s = this.specs.get(t.spec.id);
+    const map = !!s?.labels.includes("wayfinder:map");
+    if (!map && !t.labels.some((l) => l === "prototype" || /^wayfinder:(chart|grilling|research|task)$/.test(l))) return undefined;
+    return { spec: t.spec.id, title: s?.title ?? t.spec.title, ...(map && { map }) };
+  }
+
   // derive is what a Spec read works out from the Spec's Tickets.
-  private derive(spec: string): { state_summary: StateSummary; finished: boolean; requirement?: RequirementView } {
+  private derive(spec: string): { state_summary: StateSummary; finished: boolean; requirement?: RequirementView; map?: MapView } {
     const tickets = this.ticketsOf(spec);
     const state_summary: StateSummary = {};
     for (const t of tickets) state_summary[t.state] = (state_summary[t.state] ?? 0) + 1;
     const finished = tickets.length > 0 && tickets.every((t) => FINISHED.includes(t.state));
+    const reason = (t: TicketView) => this.rows().find((r) => r.id === t.id)?.reason;
+    if (this.specs.get(spec)?.labels.includes(MAP_LABEL)) {
+      const wayfinder = tickets.filter((t) => nodeTypeOf(t) !== "prototype" && nodeTypeOf(t) !== "ticket" && t.state !== "Cancelled");
+      return {
+        state_summary,
+        finished,
+        map: {
+          decided: wayfinder.filter((t) => t.state === "Done").length,
+          total: wayfinder.length,
+          needs_you: tickets.filter(reason).length,
+          can_write_spec: tickets.every((t) => FINISHED.includes(t.state)),
+        },
+      };
+    }
     const stages = STAGES.map((s) => tickets.find((t) => stageOf(t) === s.name)).filter((t) => !!t);
     if (!stages.length) return { state_summary, finished };
-    const reason = (t: TicketView) => this.rows().find((r) => r.id === t.id)?.reason;
     // A Ticket a Factory could claim now; one waiting on the human doesn't count.
     const claimable = (t: TicketView) =>
       t.state === "Ready" && !reason(t) && t.blocked_by.every((b) => this.tickets.get(b)?.state === "Done");

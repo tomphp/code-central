@@ -12,6 +12,7 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/usage"
 )
 
 var ctx = context.Background()
@@ -127,6 +128,31 @@ func TestUnreachableServiceIsServiceUnavailable(t *testing.T) {
 	for _, want := range []string{url, "code-central serve", "code-central service install"} {
 		if !strings.Contains(e.Message, want) {
 			t.Errorf("message %q doesn't mention %q", e.Message, want)
+		}
+	}
+}
+
+func TestPostUsageIsReadBackAsTheClaimsSession(t *testing.T) {
+	srv := codecentraltest.NewServer(t)
+	c := srv.Client
+	c.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})
+	c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})
+	c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "A", State: store.Ready})
+	if _, err := c.Claim(ctx, "acme", core.ClaimInput{SessionID: "s1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	sent := []core.UsageResponse{{Time: srv.Clock.Now(), Kind: "implementation", Tokens: usage.Tokens{InputTokens: 10, CacheReadTokens: 90, OutputTokens: 5}}}
+	if err := c.PostUsage(ctx, "s1", sent); err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	if err := c.PostUsage(ctx, "unknown", sent); err != nil {
+		t.Fatalf("post for an unknown session: %v", err)
+	}
+	for _, key := range []string{"acme", ""} {
+		u, err := c.Usage(ctx, key, 30)
+		if err != nil || len(u.Sessions) != 1 || u.Sessions[0].SessionID != "s1" || u.Sessions[0].Peak != 100 {
+			t.Fatalf("Usage(%q) %+v, %v; want the one session posted, peak 100", key, u, err)
 		}
 	}
 }

@@ -109,6 +109,7 @@ var Operations = []Op{
 	{Name: "get_stage_guide", Audience: AgentAndHuman},
 
 	// Maps and Prototypes (Spec code-central-213).
+	{Name: "submit_map", Audience: AgentAndHuman, Write: true},
 	{Name: "submit_prototype", Audience: AgentAndHuman, Write: true},
 
 	// Options, the human's global preferences (Spec code-central-160).

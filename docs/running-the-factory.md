@@ -70,6 +70,8 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Check: `acme-shop-2` is In Progress, and the Requirement's row reads *Grilling: a Factory is on it*. Nothing needs you yet.
 
+   **New Map**, beside **New requirement**, starts a Map from the same dialog instead. Its one Ready Ticket, *Charting: …*, is claimed within a poll like a grilling Ticket, in a read-only Stage worktree, and grills you on the Map's destination through Rounds. The Map's row in the **Requirements** view counts its decisions, such as *0/1 decided*, in place of the Stage strip.
+
 3. **Watch the session in the Claim's Live section.** In the Ticket detail, under the description, each Claim has a line and a **Live** section. The line says when the Claim started, its last activity, the latest thing its session did and the session's ID. While the Ticket is In Progress, Live is open and follows the session's Transcript as it goes: the Factory's own lines, marked `FACTORY`, each tool call on one line with its result collapsed beneath it, and the agent's text:
 
    ```text
@@ -86,6 +88,8 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    ```
 
    Click **Live** to close it, or to open it on a Claim that has ended. Every Ticket the Factory works has one, for every Stage and every implementation Ticket. To enter a session yourself, run the Claim's Resume Command (the `resume:` part of the Factory's line) in its worktree. Don't do it while the Factory has a turn running on it: the two would write into one session.
+
+   The Factory also posts each model response's token usage to the service, so its sessions appear in [Usage](running-as-a-service.md#usage)'s Context Size and token figures. The main session counts under its Stage (`grilling`, `spec`, `tickets`) or `implementation`; each subagent is a session of its own, counted as `review` when its Agent call is described `Spec review …` or `Standards review …` and as `subagent` otherwise. A session resumed after you answer a Round adds to the same Usage session. Sessions you run by hand post nothing, so they aren't counted there, though their Code Central calls are. Like the Transcript, posting never holds up or fails a turn: a post the service can't take, such as an older service's `404`, is dropped.
 
    Check: the Live section shows the session's calls as they happen.
 
@@ -272,6 +276,8 @@ Its first prompt tells the session to commit on that branch only, with no push a
 Because it finishes with no branch, accepting a Prototype makes it Done straight away, whatever the Landing Method: nothing is merged, pushed or landed. The worktree stays through Needs Answer and In Review, and the Factory removes it once the Prototype is Done or Cancelled. It never deletes the `prototype/` branch, so `git switch prototype/acme-shop-10` brings the Prototype back.
 
 The Factory leaves a Map's research Ticket (`wayfinder:research`) unclaimed for now, and claims the Tickets after it. A Ticket with any of these Labels is never run as an implementation Ticket.
+
+When a Map's Ticket asks you a Round or finishes into In Review, it waits on you in **Needs Me** and Focus Mode as its own entry, not folded into a row as a Stage Ticket is. Its row reads `↳ Map: Dark mode` under its title, and its Focus Item reads *Map: Dark mode*. A Prototype also carries a **Prototype** badge, and on a plain Spec its row names that Spec instead.
 
 ## How accepted work lands
 

@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement } from "./types";
+import type { ChangeEvent, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
 import { ApiError } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -44,6 +44,10 @@ export interface Driver {
   // call, its error code. The fake's driver plays find_tickets and
   // get_ticket only (Spec code-central-201).
   mcpCall(key: string, op: "find_tickets" | "get_ticket", args: Record<string, unknown>): Promise<{ text: string; error?: string }>;
+  // postUsage posts a session's model responses' token usage as a Factory
+  // would (Spec code-central-201): they go to the newest Claim with that
+  // session ID.
+  postUsage(sessionId: string, responses: UsageResponse[]): Promise<void>;
   // dropTranscriptStreams drops every open Transcript stream, as a flaky
   // connection would; each reconnects by itself (ticket 110).
   dropTranscriptStreams(): void;
@@ -550,6 +554,51 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(delivered[0].requirement!.stages.map((s) => s.state)).toEqual(["Done", "Done", "Done"]);
     });
 
+    // ---- Maps (code-central-218) ----
+    it("submits a Map as its Spec, with the Map's sections, and one Ready Charting Ticket", async () => {
+      await d.createProject("acme", "Acme");
+      const r = await d.api.submitMap("acme", "Offline mode\nWorks on a plane.");
+      expect(r.spec.changed).toEqual(["title", "labels", "body"]);
+      wantAcknowledgement(r.charting, r.charting.id, "Ready");
+      expect(r.charting.changed).toEqual(["title", "state", "spec", "labels", "description", "moves", "claimable"]);
+
+      const charting = await d.api.getTicket("acme", r.charting.id);
+      expect(charting).toMatchObject({ title: "Charting: Offline mode", labels: ["wayfinder:chart"], state: "Ready", claimable: true });
+      expect(charting.description).toContain(r.spec.id);
+
+      const s = await d.api.getSpec("acme", r.spec.id);
+      expect(s).toMatchObject({ title: "Offline mode", labels: ["wayfinder:map"] });
+      expect(s.body).toBe(
+        "Offline mode\nWorks on a plane.\n\n## Destination\n\n## Notes\n\n## Decisions so far\n\n## Not yet specified\n\n## Out of scope\n",
+      );
+      expect(s.requirement).toBeUndefined();
+      expect(s.map).toEqual({ decided: 0, total: 1, needs_you: 0, can_write_spec: false });
+      expect(s.tickets.map((t) => [t.id, t.node_type])).toEqual([[r.charting.id, "chart"]]);
+
+      await d.api.act("acme", r.charting.id, "move", { to_state: "Done" });
+      expect((await d.api.getSpec("acme", r.spec.id)).map).toEqual({ decided: 1, total: 1, needs_you: 0, can_write_spec: true });
+    });
+
+    it("refuses a Map with no text", async () => {
+      await d.createProject("acme", "Acme");
+      const e = await d.api.submitMap("acme", "  \n ").catch((e) => e);
+      expect(e).toBeInstanceOf(ApiError);
+      expect(e).toMatchObject({ status: 422, code: "invalid", field: "text" });
+    });
+
+    it("finds Maps by their Label, each row with its Map block, and no node type off a Map", async () => {
+      await d.createProject("acme", "Acme");
+      const plain = await d.createTicket("acme", "Not on a Map", "Ready");
+      const r = await d.api.submitMap("acme", "Offline mode");
+
+      const maps = await d.api.findSpecs("acme", { labels: ["wayfinder:map"] });
+      expect(maps.map((s) => [s.id, s.map])).toEqual([[r.spec.id, { decided: 0, total: 1, needs_you: 0, can_write_spec: false }]]);
+      expect((await d.api.findSpecs("acme")).filter((s) => s.id !== r.spec.id).every((s) => s.map === undefined)).toBe(true);
+      const rows = await d.api.findTickets("acme");
+      expect(rows.find((t) => t.id === plain)?.node_type).toBeUndefined();
+      expect(rows.find((t) => t.id === r.charting.id)?.node_type).toBe("chart");
+    });
+
     // ---- the Integration contract (ticket 42) ----
     it("reads a linked Ticket closed externally, and unlinks it", async () => {
       await d.createProject("acme", "Acme");
@@ -739,10 +788,19 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
     // ---- Usage (Spec code-central-201) ----
 
-    it("reads no Usage before any agent call", async () => {
+    it("reads no Usage before any agent call, with a row of no tokens for every day in the range", async () => {
       await d.createProject("acme", "Acme");
-      expect(await d.api.usage()).toEqual({ operations: [], kinds: [], sessions: [], days: [] });
-      expect(await d.api.usage({ project: "acme", days: 90 })).toEqual({ operations: [], kinds: [], sessions: [], days: [] });
+      for (const [u, days] of [
+        [await d.api.usage(), 7],
+        [await d.api.usage({ project: "acme", days: 90 }), 90],
+      ] as const) {
+        expect({ ...u, days: [] }).toEqual({ operations: [], kinds: [], sessions: [], days: [] });
+        expect(u.days).toHaveLength(days);
+        expect(u.days.every((r) => r.kinds.length === 0)).toBe(true);
+        // One row a day, oldest first, with no day missed.
+        const noon = (day: string) => Date.parse(`${day}T12:00:00Z`) / 86_400_000;
+        expect(u.days.map((r) => noon(r.day) - noon(u.days[0].day))).toEqual([...Array(days).keys()]);
+      }
     });
 
     it("counts each agent MCP call by operation, with its sizes and errors, and never the UI's own reads", async () => {
@@ -776,7 +834,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         row([found, other], [{}, { state: ["Ready"] }], "find_tickets"),
         row([got, missing], [{ ticket: id }, { ticket: "acme-99" }], "get_ticket"),
       ]);
-      expect(await d.api.usage({ days: 30 })).toEqual(all);
+      expect((await d.api.usage({ days: 30 })).operations).toEqual(all.operations);
 
       const acme = await d.api.usage({ project: "acme" });
       expect(acme.operations.map((r) => [r.op, r.calls, r.errors])).toEqual([
@@ -785,6 +843,84 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       ]);
       const beta = await d.api.usage({ project: "beta", days: 7 });
       expect(beta.operations).toEqual([row([other], [{ state: ["Ready"] }], "find_tickets")]);
+    });
+
+    it("files posted token usage under the newest Claim with its session, as each kind's peaks and the recent sessions", async () => {
+      await d.createProject("acme", "Acme");
+      await d.createProject("beta", "Beta");
+      const impl = await d.createTicket("acme", "Build it", "Ready");
+      const spec = await d.createTicket("beta", "Write it", "Ready");
+      await d.claim("acme", impl, "sess-impl");
+      await d.claim("beta", spec, "sess-spec");
+      // The service's now, from the Claim, so the responses fall in range.
+      const base = Date.parse((await d.api.getTicket("acme", impl)).claims[0].started);
+      const at = (s: number) => new Date(base + s * 1000).toISOString();
+      const resp = (s: number, kind: string, input: number, write: number, read: number, agent?: string): UsageResponse => ({
+        time: at(s),
+        ...(agent ? { agent } : {}),
+        kind,
+        input_tokens: input,
+        cache_write_tokens: write,
+        cache_read_tokens: read,
+        output_tokens: 7,
+      });
+      await d.postUsage("sess-impl", [
+        resp(1, "implementation", 5, 20_000, 0),
+        resp(2, "implementation", 5, 1_000, 60_000),
+        resp(3, "review", 3, 9_000, 0, "toolu_a"),
+        resp(4, "custom", 1, 100, 0, "toolu_b"),
+      ]);
+      await d.postUsage("sess-spec", [resp(5, "spec", 2, 30_000, 0)]);
+      await d.postUsage("sess-nobody", [resp(6, "spec", 2, 90_000, 0)]);
+
+      const all = await d.api.usage();
+      expect(all.kinds).toEqual([
+        { kind: "spec", sessions: 1, average_peak: 30_002, largest_peak: 30_002 },
+        { kind: "implementation", sessions: 1, average_peak: 61_005, largest_peak: 61_005 },
+        { kind: "review", sessions: 1, average_peak: 9_003, largest_peak: 9_003 },
+        { kind: "custom", sessions: 1, average_peak: 101, largest_peak: 101 },
+      ]);
+      const session = (project: string, ticket: string, session_id: string, kind: string, started: number, peak: number, responses: number, agent?: string) => ({
+        project,
+        ticket,
+        claim: 1,
+        session_id,
+        ...(agent ? { agent } : {}),
+        kind,
+        started,
+        peak,
+        responses,
+      });
+      const sessions = (u: typeof all) => u.sessions.map((s) => ({ ...s, started: Date.parse(s.started) }));
+      expect(sessions(all)).toEqual([
+        session("beta", spec, "sess-spec", "spec", Date.parse(at(5)), 30_002, 1),
+        session("acme", impl, "sess-impl", "custom", Date.parse(at(4)), 101, 1, "toolu_b"),
+        session("acme", impl, "sess-impl", "review", Date.parse(at(3)), 9_003, 1, "toolu_a"),
+        session("acme", impl, "sess-impl", "implementation", Date.parse(at(1)), 61_005, 2),
+      ]);
+      expect(sessions(await d.api.usage({ project: "beta", days: 30 }))).toEqual([sessions(all)[0]]);
+      expect((await d.api.usage({ project: "acme" })).kinds.map((k) => k.kind)).toEqual(["implementation", "review", "custom"]);
+      expect(all.operations).toEqual([]);
+
+      // The day's tokens by kind, in the kinds' order, on the local day they were used.
+      const tokens = (kind: string, input: number, write: number, read: number, output: number) => ({
+        kind,
+        input_tokens: input,
+        cache_write_tokens: write,
+        cache_read_tokens: read,
+        output_tokens: output,
+      });
+      // The service and the tests share a machine, and so a time zone.
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const t = new Date(at(1));
+      const day = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
+      expect(all.days.filter((r) => r.kinds.length)).toEqual([
+        {
+          day,
+          kinds: [tokens("spec", 2, 30_000, 0, 7), tokens("implementation", 10, 21_000, 60_000, 14), tokens("review", 3, 9_000, 0, 7), tokens("custom", 1, 100, 0, 7)],
+        },
+      ]);
+      expect((await d.api.usage({ project: "beta", days: 30 })).days.filter((r) => r.kinds.length)).toEqual([{ day, kinds: [tokens("spec", 2, 30_000, 0, 7)] }]);
     });
 
     it("refuses Usage for an unknown Project and any range but 7, 30 or 90 days", async () => {

@@ -17,6 +17,7 @@ import (
 
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/client"
+	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/home"
 )
 
@@ -36,7 +37,8 @@ type Env struct {
 	// After replaces time.After for the wait between polls.
 	After func(time.Duration) <-chan time.Time
 	// Now replaces time.Now for an outage's backoff and the turns it
-	// waits on; nil means time.Now.
+	// waits on, and dates the model responses posted to Usage; nil means
+	// time.Now.
 	Now func() time.Time
 	// KillGrace is how long a turn being stopped has after each stop step
 	// but the last (SIGINT, SIGTERM; Ctrl-Break on Windows); zero means
@@ -45,8 +47,8 @@ type Env struct {
 	// Backoff is the first wait before resuming turns an outage cut off,
 	// doubling with each outage in a row; zero means a minute.
 	Backoff time.Duration
-	// EventBatchEvery is how often waiting Session Events are posted;
-	// zero means eventBatchEvery.
+	// EventBatchEvery is how often waiting Session Events and token usage
+	// are posted; zero means postEvery.
 	EventBatchEvery time.Duration
 	// Signals is the stop signals the Factory gets: the first Ctrl-C
 	// (os.Interrupt) drains; a second, SIGTERM or SIGHUP stops the turns
@@ -156,10 +158,16 @@ func Run(ctx context.Context, args []string, e Env) int {
 	defer f.stop()
 	go f.watchSignals(ctx)
 	go f.events.run()
+	go f.usage.run()
 	f.restart(ctx)
 	f.loop(ctx)
-	// Stopping or draining makes one last flush.
-	f.events.close()
+	// Stopping or draining makes one last flush of each, side by side, so
+	// a hung Code Central holds up the stop one postTimeout at most.
+	var flushed sync.WaitGroup
+	for _, close := range []func(){f.events.close, f.usage.close} {
+		flushed.Go(close)
+	}
+	flushed.Wait()
 	if reason := f.stoppedFor(); reason != "" {
 		fmt.Fprintln(e.Stderr, "code-central-factory: stopped:", reason)
 		return exitStopped
@@ -206,7 +214,8 @@ type factory struct {
 	base       string
 	worktrees  string // <repo-parent>/<repo-dir>.worktrees
 	client     *client.Client
-	events     *sender // posts Session Events
+	events     *sender[core.SessionEvent]  // posts Session Events
+	usage      *sender[core.UsageResponse] // posts model responses' token usage
 	state      *stateFile
 	lock       *os.File // held for the Factory's whole life
 
@@ -306,9 +315,10 @@ func start(e Env, o options) (*factory, error) {
 	f.client = client.New(cli.ServiceURL(e.getenv))
 	every := e.EventBatchEvery
 	if every <= 0 {
-		every = eventBatchEvery
+		every = postEvery
 	}
-	f.events = newSender(f.client, every)
+	f.events = newSender(f.client.PostSessionEvents, every)
+	f.usage = newSender(f.client.PostUsage, every)
 	// A Project that can't be read yet is checked on every poll instead.
 	if p, err := f.client.GetProject(context.Background(), project); err == nil {
 		if why := f.missingRemote(p.Landing); why != "" {

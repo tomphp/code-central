@@ -85,6 +85,15 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
       const text: string = result.content[0].text;
       return { text, error: result.isError ? JSON.parse(text).code : undefined };
     },
+    // Spec code-central-201: as a Factory; the endpoint answers 204 with no body.
+    postUsage: async (session_id, responses) => {
+      const res = await fetch(svc.url + "/api/usage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id, responses }),
+      });
+      if (res.status !== 204) throw new Error(`usage: ${res.status}`);
+    },
     dropTranscriptStreams: () => {
       for (const cut of streams) cut.abort();
       streams.clear();

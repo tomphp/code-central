@@ -157,6 +157,35 @@ func (c *Client) PostSessionEvents(ctx context.Context, sessionID string, events
 	return c.do(ctx, "POST", "/api/session-events", in, nil)
 }
 
+// PostUsage is POST /api/usage: it records a batch of model responses'
+// token usage under the newest Claim with this session ID. The service
+// always answers 204; an older one, without the endpoint, 404.
+func (c *Client) PostUsage(ctx context.Context, sessionID string, responses []core.UsageResponse) error {
+	in := struct {
+		SessionID string               `json:"session_id"`
+		Responses []core.UsageResponse `json:"responses"`
+	}{sessionID, responses}
+	return c.do(ctx, "POST", "/api/usage", in, nil)
+}
+
+// Usage is GET /api/usage: Usage for one Project, or every Project when
+// key is "", over the last days local days (0 for the default).
+func (c *Client) Usage(ctx context.Context, key string, days int) (core.UsageView, error) {
+	q := url.Values{}
+	if key != "" {
+		q.Set("project", key)
+	}
+	if days != 0 {
+		q.Set("days", strconv.Itoa(days))
+	}
+	path := "/api/usage"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	var out core.UsageView
+	return out, c.do(ctx, "GET", path, nil, &out)
+}
+
 // Transcript is GET /api/projects/{key}/tickets/{n}/claims/{c}/transcript:
 // the Session Events held for the Ticket's Claim number claim.
 func (c *Client) Transcript(ctx context.Context, key string, ticket core.Ref, claim int) (core.TranscriptView, error) {

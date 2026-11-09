@@ -32,7 +32,7 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
    Manage MCP servers
    …
      Project MCPs (/Users/you/src/acme-shop/.mcp.json)
-   ❯ ✔ code-central 32 tools
+   ❯ ✔ code-central 33 tools
    …
    ```
 
@@ -49,6 +49,30 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
    Check: the UI opens the Requirement, `acme-shop-1 Format prices for display`, with its Grilling, Spec, Tickets and Build strip. Below it is its grilling Ticket, `acme-shop-2 Grilling: Format prices for display`, in Ready. The Requirement says *Waiting for a Factory to claim Grilling. Nothing needs you yet.* You'll claim it from your session instead.
 
    From a terminal, `code-central submit-requirement --text "…"` submits a Requirement too.
+
+   **New Map**, beside **New requirement**, opens the same dialog to start a Map instead: a destination you'll find the way to one decision at a time, before there is a Requirement to grill. Type where you want to get to and click **Submit map**. Code Central creates the Map, a Spec labelled `wayfinder:map` whose body is your text followed by the empty sections `Destination`, `Notes`, `Decisions so far`, `Not yet specified` and `Out of scope`, and one Ready Charting Ticket for an agent to claim. In the **Requirements** view the Map's row shows how many of its decisions are made, such as *0/1 decided*, in place of the Stage strip, and adds *· 1 needs you* when one of its Tickets does. From a terminal, `code-central submit-map` does the same. Here it is in a new Project:
+
+   ```console
+   $ code-central submit-map --text "Offline checkout
+
+   Customers should be able to finish an order with no connection, and have it go through once they're back online."
+   {
+     "spec": {
+       "id": "acme-shop-1",
+   …
+       "changed": [
+         "title",
+         "labels",
+         "body"
+       ]
+     },
+     "charting": {
+       "id": "acme-shop-2",
+   …
+       "state": "Ready"
+     }
+   }
+   ```
 
 3. **Grill the Requirement.** In the session, type:
 

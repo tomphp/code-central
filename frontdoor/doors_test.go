@@ -448,7 +448,13 @@ func field(name, want string) func(*testing.T, map[string]any) {
 // newServer starts the fixture, then runs each setup given.
 func newServer(t *testing.T, setups ...func(*testing.T, *codecentraltest.Server)) *codecentraltest.Server {
 	t.Helper()
-	srv := codecentraltest.NewServer(t)
+	return newServerWith(t, nil, setups...)
+}
+
+// newServerWith is newServer started with opts.
+func newServerWith(t *testing.T, opts []codecentraltest.Option, setups ...func(*testing.T, *codecentraltest.Server)) *codecentraltest.Server {
+	t.Helper()
+	srv := codecentraltest.NewServer(t, opts...)
 	ctx := context.Background()
 	must(t, func() error { _, err := srv.Core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); return err })
 	must(t, func() error { _, err := srv.Core.CreateProject(ctx, core.CreateProjectInput{Key: "other"}); return err })

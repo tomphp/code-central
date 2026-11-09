@@ -174,6 +174,9 @@ type TicketRow struct {
 	Blocked bool        `json:"blocked"`
 	Updated time.Time   `json:"updated"`
 	Link    *LinkView   `json:"link,omitempty"`
+	// NodeType is the Ticket's type on a Map (see NodeType); left out for
+	// a Ticket on any other Spec.
+	NodeType string `json:"node_type,omitempty"`
 	// LatestEvent is the latest Session Event of the Ticket's live Claim,
 	// shown short; left out when there is none.
 	LatestEvent *LatestEvent `json:"latest_event,omitempty"`
@@ -387,13 +390,17 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 			}
 			specN = n
 		}
+		maps := map[int]bool{}
+		for _, s := range r.Specs(key) {
+			maps[s.Number] = isMap(s.Labels)
+		}
 		tickets := r.Tickets(key)
 		slices.SortStableFunc(tickets, claimOrder)
 		for _, t := range tickets {
 			if !matches(t, in, specN) {
 				continue
 			}
-			row := c.ticketRow(r, key, t)
+			row := c.ticketRow(r, key, t, maps[t.Spec])
 			if in.Claimable != nil && *in.Claimable != (t.State == store.Ready && !row.Blocked) {
 				continue
 			}
@@ -440,10 +447,15 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 	return true
 }
 
-func (c *Core) ticketRow(r store.Reader, key string, t store.Ticket) TicketRow {
+// ticketRow is t as a find_tickets row; onMap says t is on a Map, so the
+// row carries its node type.
+func (c *Core) ticketRow(r store.Reader, key string, t store.Ticket, onMap bool) TicketRow {
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: blocked(r, key, t), Updated: t.Updated, Link: linkView(t.Link),
+	}
+	if onMap {
+		row.NodeType = NodeType(t.Labels)
 	}
 	if cl, ok := liveClaim(t); ok {
 		row.LatestEvent = c.latestEvent(key, t.Number, cl.Number)
