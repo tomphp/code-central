@@ -53,4 +53,3 @@ func TestUnderBranchAnAcceptedTicketIsLeftOnItsBranchAndLandedOnceMergedByHand(t
 		t.Errorf("want the Branch line once, got %q", r.Stdout())
 	}
 }
-

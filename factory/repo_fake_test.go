@@ -265,4 +265,3 @@ func (r *fakeRepo) removeWorktree(path string) error {
 	r.list = slices.DeleteFunc(r.list, func(w gitWorktree) bool { return w.path == path })
 	return nil
 }
-
