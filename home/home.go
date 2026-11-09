@@ -5,6 +5,7 @@
 package home
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 )
@@ -52,6 +53,23 @@ func (l Lookup) Config(elem ...string) (string, error) {
 // state files stay where they always were on macOS and Linux.
 func (l Lookup) State(elem ...string) (string, error) {
 	return l.under("", []string{".local", "state"}, elem)
+}
+
+// StartMenu is elem under the Start menu's Programs folder on Windows:
+// under %APPDATA%, else the profile folder's AppData\Roaming. HOME isn't
+// read, because Windows keeps the Start menu in the profile whatever HOME
+// says.
+func (l Lookup) StartMenu(elem ...string) (string, error) {
+	d := l.Getenv("APPDATA")
+	if d == "" && l.UserHomeDir != nil {
+		if p, err := l.UserHomeDir(); err == nil && p != "" {
+			d = filepath.Join(p, "AppData", "Roaming")
+		}
+	}
+	if d == "" {
+		return "", errors.New("cannot find the Start menu: set APPDATA, or give this account a profile folder (%USERPROFILE%)")
+	}
+	return filepath.Join(append([]string{d, "Microsoft", "Windows", "Start Menu", "Programs"}, elem...)...), nil
 }
 
 // under is elem under $xdg, or else under the home folder's fallback.

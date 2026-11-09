@@ -13,7 +13,7 @@ This guide sets a repository up as a Project, so that agents can reach its Specs
    X-Code-Central-Version: v1.…
    ```
 
-2. **Install Claude Code and sign in.** Check that `claude` runs in a terminal.
+2. **Install Claude Code and sign in.** Check that `claude` runs in a terminal. On Windows, the Factory needs the native `claude.exe`, installed with `irm https://claude.ai/install.ps1 | iex` in PowerShell: it refuses the npm shim `claude.cmd`, which can't carry a multi-line prompt.
 
 3. **Install the `mattpocock-skills` plugin in Claude Code.** Each Stage runs one of its skills:
 

@@ -36,27 +36,43 @@ func TestTheFirstCtrlCDrainsWaitingForRunningTurnsAndClaimingNoMore(t *testing.T
 	}
 }
 
-// unixStopSequence skips t on Windows, where the Factory stops a turn
-// with Ctrl-Break and then kills it: t expects SIGINT then SIGTERM, and
-// code-central-149 has the stop tests choose the sequence by OS.
-func unixStopSequence(t *testing.T) {
-	t.Helper()
+// stopSignals is what the fake claude notes when the Factory stops a
+// turn. On Unix it gets SIGINT, which it ignores, then SIGTERM, which ends
+// it. On Windows it gets Ctrl-Break, which it ignores, so the Factory
+// kills it.
+func stopSignals() []string {
 	if runtime.GOOS == "windows" {
-		t.Skip("expects SIGINT then SIGTERM; code-central-149 expects Ctrl-Break, then killed, on Windows")
+		return []string{"BREAK"}
+	}
+	return []string{"INT", "TERM"}
+}
+
+// stoppedExit is the exit code of a turn the Factory stopped: 143 from
+// SIGTERM on Unix, 1 from the kill on Windows.
+func stoppedExit() int {
+	if runtime.GOOS == "windows" {
+		return 1
+	}
+	return 143
+}
+
+// wantStopped checks the turn for id got stopSignals.
+func wantStopped(t *testing.T, h *factorytest.Harness, id string) {
+	t.Helper()
+	if got, want := h.Signals(id), stopSignals(); !slices.Equal(got, want) {
+		t.Errorf("the turn got %q, want %q", got, want)
 	}
 }
 
-// killed checks a turn the Factory stopped on its way out: it got SIGINT
-// then SIGTERM, and its Claim is kept, In Progress and in the state
+// killed checks a turn the Factory stopped on its way out: it got
+// stopSignals, and its Claim is kept, In Progress and in the state
 // file, with no Failure Report.
 func killed(t *testing.T, h *factorytest.Harness, r *factorytest.Running, id string) {
 	t.Helper()
 	if code := r.Exited(); code != 0 {
 		t.Errorf("exit code %d, want 0", code)
 	}
-	if got := h.Signals(id); !slices.Equal(got, []string{"INT", "TERM"}) {
-		t.Errorf("the turn got %q, want SIGINT then SIGTERM", got)
-	}
+	wantStopped(t, h, id)
 	tk := h.Ticket(id)
 	if tk.State != store.InProgress || len(tk.Claims) != 1 || tk.Claims[0].Ended != nil || len(tk.FailureReports) != 0 {
 		t.Errorf("%s is %s with Claims %+v and %d Failure Reports; want its one Claim kept, In Progress, never failed", id, tk.State, tk.Claims, len(tk.FailureReports))
@@ -68,7 +84,6 @@ func killed(t *testing.T, h *factorytest.Harness, r *factorytest.Running, id str
 
 func TestASecondCtrlCStopsTheRunningTurnsAndKeepsTheirClaims(t *testing.T) {
 	t.Parallel()
-	unixStopSequence(t)
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait())
@@ -83,7 +98,6 @@ func TestASecondCtrlCStopsTheRunningTurnsAndKeepsTheirClaims(t *testing.T) {
 
 func TestSIGTERMOrSIGHUPStopsTheRunningTurnsAtOnce(t *testing.T) {
 	t.Parallel()
-	unixStopSequence(t)
 	for _, sig := range []os.Signal{syscall.SIGTERM, syscall.SIGHUP} {
 		t.Run(sig.String(), func(t *testing.T) {
 			t.Parallel()
