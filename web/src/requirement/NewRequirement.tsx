@@ -3,8 +3,12 @@
 // the filtered Project, or the only one; with several and none filtered,
 // the modal asks which. A Prototype goes on the Spec whose view it is on.
 // "Write the Spec", in a finished Map's header, opens the New requirement
-// modal prefilled from the Map and submits it with the Map.
-import { useEffect, useId, useState, type FormEvent } from "react";
+// modal prefilled from the Map and submits it with the Map. A caller can
+// render its own opening control in place of the button, such as a menu
+// item; the modal goes in a portal on the body, so it outlives a menu that
+// closes behind it.
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import type { ApiError, ProjectRow, SpecAcknowledgement, TicketAcknowledgement } from "../api/types";
@@ -16,6 +20,9 @@ export interface NewRequirementProps {
   // project is the filtered Project, if any.
   project?: string;
   onSubmitted(r: { spec: SpecAcknowledgement }): void;
+  // trigger renders the control that opens the modal, given what opens
+  // it, in place of the button.
+  trigger?(open: () => void): ReactNode;
 }
 
 // Kind is what a button submits: its words, and the write it calls,
@@ -107,15 +114,20 @@ interface NewFromTextProps<R> {
   projects: ProjectRow[];
   project?: string;
   onSubmitted(r: R): void;
+  trigger?(open: () => void): ReactNode;
 }
 
-function NewFromText<R>({ kind, api, projects, project, onSubmitted }: NewFromTextProps<R>) {
+function NewFromText<R>({ kind, api, projects, project, onSubmitted, trigger }: NewFromTextProps<R>) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button className={kind.className} onClick={() => setOpen(true)}>
-        {kind.button}
-      </button>
+      {trigger ? (
+        trigger(() => setOpen(true))
+      ) : (
+        <button className={kind.className} onClick={() => setOpen(true)}>
+          {kind.button}
+        </button>
+      )}
       {open && (
         <Modal
           kind={kind}
@@ -158,7 +170,7 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
     });
   };
 
-  return (
+  return createPortal(
     <div className="modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <h2 id={titleId}>{kind.button}</h2>
@@ -195,6 +207,7 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

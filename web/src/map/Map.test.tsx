@@ -19,14 +19,13 @@ const params = () => new URLSearchParams(window.location.search);
 const row = (id: string) => list().querySelector<HTMLElement>(`a[data-id="${id}"]`)!;
 
 describe("New Map", () => {
-  it("sits beside New requirement, submits the same free-text dialog and selects the new Map", async () => {
+  it("opens from the + New menu, submits the same free-text dialog and selects the new Map", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
     renderApp(fake);
 
-    const newMap = await within(nav()).findByRole("button", { name: "New Map" });
-    expect(newMap.parentElement).toBe(within(nav()).getByRole("button", { name: "New requirement" }).parentElement);
-    await userEvent.click(newMap);
+    await userEvent.click(await within(nav()).findByRole("button", { name: "More to create" }));
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Map" }));
     const modal = screen.getByRole("dialog", { name: "New Map" });
     expect(within(modal).getAllByRole("textbox")).toHaveLength(1);
     expect(within(modal).getByRole("button", { name: "Submit map" })).toBeDisabled();

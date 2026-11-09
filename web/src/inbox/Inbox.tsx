@@ -1,8 +1,9 @@
-// The triage inbox: "New requirement" and "New Map", Projects and Views on
-// the left, then an Admin section linking Usage and Options, the list in
-// the middle, the selected Requirement, Map or plain Spec and Ticket on
-// the right. A layout only: the data comes from live.ts and the Ticket
-// pane is shared with any later view.
+// The triage inbox: on the left, a top row of the split "+ New" button
+// (New requirement, with Requirement and Map in its ▾ menu) and "◎ Focus",
+// then Projects and Views, then an Admin section linking Usage and Options;
+// the list in the middle; the selected Requirement, Map or plain Spec and
+// Ticket on the right. A layout only: the data comes from live.ts and the
+// Ticket pane is shared with any later view.
 import type { MouseEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
@@ -14,7 +15,6 @@ import { PrototypeBadge } from "../ticket/PrototypeBadge";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { MapPane } from "../map/MapPane";
 import { MapRow } from "../map/MapRow";
-import { NewMap, NewRequirement } from "../requirement/NewRequirement";
 import { isStage, needsMeCount, progress, reasonsOf } from "../requirement/progress";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { RequirementRow } from "../requirement/RequirementRow";
@@ -22,6 +22,7 @@ import { SpecPane } from "../spec/SpecPane";
 import { TicketPane } from "../ticket/TicketDetail";
 import { OptionsLink } from "../options/OptionsLink";
 import { UsageLink } from "../usage/UsageLink";
+import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 
@@ -102,23 +103,15 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
         <div className="inbox-title">
           <h1>Code Central</h1>
         </div>
-        <div className="new-specs">
-          <NewRequirement
-            api={api}
-            projects={projects.filter((p) => !p.archived)}
-            project={loc.project}
-            onSubmitted={(r) => navigate({ list: "requirements", state: undefined, requirement: r.spec.id, ticket: undefined })}
-          />
-          <NewMap
-            api={api}
-            projects={projects.filter((p) => !p.archived)}
-            project={loc.project}
-            onSubmitted={(r) => navigate({ list: "requirements", state: undefined, requirement: r.spec.id, ticket: undefined })}
-          />
-        </div>
-        <button className="btn focus-enter" onClick={() => navigate({ view: "focus" })}>
-          Focus
-        </button>
+        <SidebarTop
+          newProps={{
+            api,
+            projects: projects.filter((p) => !p.archived),
+            project: loc.project,
+            onSubmitted: (r) => navigate({ list: "requirements", state: undefined, requirement: r.spec.id, ticket: undefined }),
+          }}
+          onFocusMode={() => navigate({ view: "focus" })}
+        />
         <FilterButton on={!loc.project} label="All Projects" count={totalCount} loud onClick={() => navigate({ project: undefined })} />
         {projects.filter((p) => !p.archived).map(projectFilter)}
         <h2>View</h2>

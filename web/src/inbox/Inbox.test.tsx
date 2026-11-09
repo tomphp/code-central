@@ -381,6 +381,101 @@ describe("Map Tickets and Prototypes in Needs Me", () => {
   });
 });
 
+describe("the sidebar's top row: + New and Focus", () => {
+  const menuButton = () => within(nav()).getByRole("button", { name: "More to create" });
+  const findMenuButton = () => within(nav()).findByRole("button", { name: "More to create" });
+
+  it("shows + New, its ▾ and Focus at the top of the sidebar", async () => {
+    renderApp(world());
+    const newButton = await within(nav()).findByRole("button", { name: "New requirement" });
+    expect(newButton).toHaveTextContent("+ New");
+    expect(menuButton()).toHaveAttribute("aria-haspopup", "menu");
+    expect(menuButton()).toHaveAttribute("aria-expanded", "false");
+    expect(within(nav()).getByRole("button", { name: "Focus" })).toHaveTextContent("◎ Focus");
+    expect(within(nav()).queryByRole("button", { name: "New Map" })).toBeNull();
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("opens the New requirement dialog from + New", async () => {
+    renderApp(world());
+    await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
+    expect(screen.getByRole("dialog", { name: "New requirement" })).toBeVisible();
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("opens a menu of Requirement and Map from ▾, each with its hint", async () => {
+    renderApp(world());
+    await userEvent.click(await findMenuButton());
+    expect(menuButton()).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("menu", { name: "More to create" })).toBeVisible();
+    const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toEqual([expect.stringContaining("Requirement"), expect.stringContaining("Map")]);
+    expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Requirement" })).toHaveAccessibleDescription(
+      "Grilled into a Spec and Tickets",
+    );
+    expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Map" })).toHaveAccessibleDescription(
+      "Charts the decisions to get somewhere",
+    );
+  });
+
+  it.each([
+    ["Requirement", "New requirement", "Submit requirement", "submitRequirement"],
+    ["Map", "New Map", "Submit map", "submitMap"],
+  ])("opens %s's dialog from the menu, which stays visible once the menu closes, and submits to the new Spec", async (item, dialog, submit, call) => {
+    const fake = world();
+    renderApp(fake, "/?project=acme");
+    await userEvent.click(await findMenuButton());
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: item }));
+
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(menuButton()).toHaveAttribute("aria-expanded", "false");
+    const modal = screen.getByRole("dialog", { name: dialog });
+    expect(modal).toBeVisible();
+    await userEvent.type(within(modal).getByRole("textbox"), "Offline mode");
+    await userEvent.click(within(modal).getByRole("button", { name: submit }));
+
+    expect(fake.calls).toContain(call);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(params().get("list")).toBe("requirements");
+    expect(params().get("requirement")).toBe("acme-5");
+  });
+
+  it("closes the menu on Esc and on a click outside it", async () => {
+    renderApp(world());
+    await userEvent.click(await findMenuButton());
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(menuButton()).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(menuButton());
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    await userEvent.click(list());
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("closes the menu when + New is clicked instead", async () => {
+    renderApp(world());
+    await userEvent.click(await findMenuButton());
+    await userEvent.click(within(nav()).getByRole("button", { name: "New requirement" }));
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(menuButton()).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("dialog", { name: "New requirement" })).toBeVisible();
+  });
+
+  it("toggles the menu shut from ▾", async () => {
+    renderApp(world());
+    await userEvent.click(await findMenuButton());
+    await userEvent.click(menuButton());
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("enters Focus Mode from Focus", async () => {
+    renderApp(world());
+    await userEvent.click(await within(nav()).findByRole("button", { name: "Focus" }));
+    expect(params().get("view")).toBe("focus");
+  });
+});
+
 describe("the Admin section", () => {
   const follows = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
 
