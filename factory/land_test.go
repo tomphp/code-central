@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
@@ -179,7 +178,6 @@ func TestATicketMergedWhileInAnotherStateGetsOnlyAWarningLine(t *testing.T) {
 func TestAPausedFactoryDoesNotLand(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	h.Backoff = time.Hour
 	cut := h.ReadyTicket("Cut off")
 	h.Script(cut, factorytest.APIError("rate_limit"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()

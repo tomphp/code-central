@@ -36,6 +36,9 @@ type Env struct {
 	Stdout, Stderr io.Writer
 	// After replaces time.After for the wait between polls.
 	After func(time.Duration) <-chan time.Time
+	// Now replaces time.Now for an outage's backoff and the turns it
+	// waits on; nil means time.Now.
+	Now func() time.Time
 	// KillGrace is how long a turn being stopped has after each stop step
 	// but the last (SIGINT, SIGTERM; Ctrl-Break on Windows); zero means
 	// ten seconds.
@@ -128,6 +131,9 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 func Run(ctx context.Context, args []string, e Env) int {
 	if e.After == nil {
 		e.After = time.After
+	}
+	if e.Now == nil {
+		e.Now = time.Now
 	}
 	o, err := parseFlags(args, e.Stderr)
 	if err != nil {

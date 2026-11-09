@@ -38,6 +38,7 @@ import (
 
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/client"
+	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory"
@@ -107,6 +108,10 @@ type Harness struct {
 	// Backoff is the Factory's first wait before resuming turns an outage
 	// cut off; set it before Start. New makes it a millisecond.
 	Backoff time.Duration
+	// Clock is the Factory's time for an outage's backoff: it stands
+	// still until the test moves it, so a backoff is over only when the
+	// test says so.
+	Clock *clock.Fake
 	// URL is the Code Central the Factory and its sessions reach: Server
 	// behind a proxy that SetDown can take down.
 	URL       string
@@ -134,6 +139,7 @@ func New(t testing.TB) *Harness {
 		Bin:     filepath.Join(root, "bin"),
 		data:    filepath.Join(root, "data"),
 		Backoff: time.Millisecond,
+		Clock:   clock.NewFake(time.Now()),
 		refused: map[string]int64{},
 	}
 	for _, d := range []string{h.Repo, h.Home, h.Bin, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
@@ -510,13 +516,24 @@ type Running struct {
 }
 
 // Start runs the Factory in the repo with args until Stop or the end of
-// the test. Polls after the first happen only on Tick.
+// the test, and returns once its first poll has finished (or it has
+// exited), so whatever the test sets up next is first seen by a later
+// poll. Polls after the first happen only on Tick.
 func (h *Harness) Start(args ...string) *Running {
+	h.t.Helper()
 	return h.StartIn(h.Repo, args...)
 }
 
 // StartIn is Start from dir.
 func (h *Harness) StartIn(dir string, args ...string) *Running {
+	h.t.Helper()
+	r := h.launch(dir, args...)
+	r.waitForPolls(1)
+	return r
+}
+
+// launch runs the Factory in dir with args, without waiting.
+func (h *Harness) launch(dir string, args ...string) *Running {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Running{h: h, cancel: cancel, done: make(chan struct{}), stdout: &buffer{}, stderr: &buffer{}, ticks: make(chan time.Time), signals: make(chan os.Signal, 2)}
 	env := factory.Env{
@@ -529,6 +546,7 @@ func (h *Harness) StartIn(dir string, args ...string) *Running {
 			r.waits.Add(1)
 			return r.ticks
 		},
+		Now:       h.Clock.Now,
 		KillGrace: KillGrace,
 		Backoff:   h.Backoff,
 		// Session Events are posted often, so tests needn't wait a second.
@@ -553,7 +571,7 @@ func (h *Harness) Run(args ...string) (code int, stdout, stderr string) {
 // RunIn is Run from dir.
 func (h *Harness) RunIn(dir string, args ...string) (code int, stdout, stderr string) {
 	h.t.Helper()
-	r := h.StartIn(dir, args...)
+	r := h.launch(dir, args...)
 	select {
 	case <-r.done:
 	case <-time.After(Timeout):
