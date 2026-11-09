@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -195,18 +194,21 @@ func (f *factory) printf(format string, args ...any) {
 
 // factory is a started Factory.
 type factory struct {
-	e         Env
-	o         options
-	git       string
-	claude    string
-	repo      string // the git top level
-	project   string
-	base      string
-	worktrees string // <repo-parent>/<repo-dir>.worktrees
-	client    *client.Client
-	events    *sender // posts Session Events
-	state     *stateFile
-	lock      *os.File // held for the Factory's whole life
+	e      Env
+	o      options
+	git    string
+	claude string
+	repo   string // the git top level
+	// repository is the repo at the top level, as landing and the sweep
+	// use it.
+	repository repo
+	project    string
+	base       string
+	worktrees  string // <repo-parent>/<repo-dir>.worktrees
+	client     *client.Client
+	events     *sender // posts Session Events
+	state      *stateFile
+	lock       *os.File // held for the Factory's whole life
 
 	outMu     sync.Mutex
 	mu        sync.Mutex           // guards turns, ended and info
@@ -261,6 +263,7 @@ func start(e Env, o options) (*factory, error) {
 		return nil, fmt.Errorf("not in a git repository (%s)", e.Dir)
 	}
 	f.repo = top
+	f.repository = gitRepo{git: git, dir: top, environ: e.Environ}
 	if err := f.checkGitVersion(); err != nil {
 		return nil, err
 	}
@@ -371,14 +374,5 @@ func writable(dir string) error {
 
 // gitOut runs git in dir and returns its trimmed output.
 func (f *factory) gitOut(dir string, args ...string) (string, error) {
-	cmd := exec.Command(f.git, args...)
-	cmd.Dir = dir
-	cmd.Env = f.e.Environ
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
-	}
-	return strings.TrimSpace(string(out)), nil
+	return gitOut(f.git, f.e.Environ, dir, args...)
 }

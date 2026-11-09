@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
@@ -21,27 +20,7 @@ type gitWorktree struct {
 }
 
 // worktreeList is what `git worktree list` reports, the repo itself first.
-func (f *factory) worktreeList() ([]gitWorktree, error) {
-	out, err := f.gitOut(f.repo, "worktree", "list", "--porcelain")
-	if err != nil {
-		return nil, err
-	}
-	var list []gitWorktree
-	for _, block := range strings.Split(out, "\n\n") {
-		var w gitWorktree
-		for _, line := range strings.Split(block, "\n") {
-			if p, ok := strings.CutPrefix(line, "worktree "); ok {
-				w.path = p
-			} else if b, ok := strings.CutPrefix(line, "branch "); ok {
-				w.branch = strings.TrimPrefix(b, "refs/heads/")
-			}
-		}
-		if w.path != "" {
-			list = append(list, w)
-		}
-	}
-	return list, nil
-}
+func (f *factory) worktreeList() ([]gitWorktree, error) { return f.repository.worktrees() }
 
 // find is the worktree at path.
 func find(list []gitWorktree, path string) (gitWorktree, bool) {
@@ -126,7 +105,7 @@ func (f *factory) stageWorktree(id, wt string) error {
 // status is wt's uncommitted changes, untracked files included: "" when
 // it is clean.
 func (f *factory) status(wt string) (string, error) {
-	return f.gitOut(wt, "status", "--porcelain", "--untracked-files=all")
+	return f.repository.status(wt)
 }
 
 // prune runs `git worktree prune`, dropping worktrees whose folders are
@@ -183,7 +162,7 @@ func (f *factory) sweep(ctx context.Context, method store.LandingMethod) {
 			}
 			continue
 		}
-		if _, err := f.gitOut(f.repo, "worktree", "remove", w.path); err != nil {
+		if err := f.repository.removeWorktree(w.path); err != nil {
 			f.printf("warning: %s: can't remove the worktree %s: %v", id, w.path, err)
 			continue
 		}

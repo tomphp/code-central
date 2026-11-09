@@ -2,9 +2,7 @@ package factory
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os/exec"
 	"slices"
 	"sort"
 	"strings"
@@ -13,6 +11,17 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
 )
+
+// landAndSweep is a poll's landing: it reads the Landing Method, lands
+// what it can unless the Factory is paused, halted or missing the Push
+// remote, and sweeps the worktrees the Factory is done with.
+func (f *factory) landAndSweep(ctx context.Context) {
+	landing, ok := f.landing(ctx)
+	if ok && !f.paused() && !f.halted(ctx) && f.remoteReady(landing) {
+		f.land(ctx, landing)
+	}
+	f.sweep(ctx, landing.Method)
+}
 
 // landing reads the Project's Landing Method, with its Push option, which the human can
 // change at any time, so it is read again on every poll. ok is false when
@@ -34,7 +43,7 @@ func (f *factory) missingRemote(landing core.LandingView) string {
 	if !landing.Push {
 		return ""
 	}
-	if _, err := f.gitOut(f.repo, "remote", "get-url", landing.Remote); err == nil {
+	if f.repository.hasRemote(landing.Remote) {
 		return ""
 	}
 	return fmt.Sprintf("Push names the remote %q, which this repository doesn't have: add it with `git remote add`, or change it on the Project's Project Options page in Code Central", landing.Remote)
@@ -133,7 +142,7 @@ func (f *factory) workOf(tk core.TicketView) (commit, what string, err error) {
 	if work == "" {
 		work, what = "refs/heads/"+tk.Branch, "its branch "+tk.Branch
 	}
-	commit, err = f.gitOut(f.repo, "rev-parse", "--verify", "-q", work+"^{commit}")
+	commit, err = f.repository.commit(work)
 	return commit, what, err
 }
 
@@ -171,8 +180,7 @@ var mergeableStates = slices.DeleteFunc(slices.Clone(store.States), func(s store
 
 // inBase reports whether commit is reachable from the base.
 func (f *factory) inBase(commit string) bool {
-	_, err := f.gitOut(f.repo, "merge-base", "--is-ancestor", commit, "refs/heads/"+f.base)
-	return err == nil
+	return f.repository.isAncestor(commit, "refs/heads/"+f.base)
 }
 
 // landable is every Ticket in these States, read in full.
@@ -211,7 +219,7 @@ func acceptedAt(tk core.TicketView) time.Time {
 // landAccepted merges an Accepted Ticket's work into the base and lands
 // it.
 func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, landing core.LandingView) {
-	baseTip, err := f.gitOut(f.repo, "rev-parse", "--verify", "-q", "refs/heads/"+f.base)
+	baseTip, err := f.repository.commit("refs/heads/" + f.base)
 	if err != nil {
 		f.cantLandYet(ctx, tk, fmt.Sprintf("the base, %s, isn't a branch, so the Factory can't move it.", f.base))
 		return
@@ -225,7 +233,7 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, landing 
 		f.landPushed(ctx, tk, landing, head)
 		return
 	}
-	tree, conflicts, err := f.mergeTree(baseTip, head)
+	tree, conflicts, err := f.repository.mergeTree(baseTip, head)
 	if err != nil {
 		f.printf("warning: %s: can't merge: %v", tk.ID, err)
 		return
@@ -235,7 +243,7 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, landing 
 		return
 	}
 	msg := fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title)
-	merge, err := f.gitOut(f.repo, "commit-tree", tree, "-p", baseTip, "-p", head, "-m", msg)
+	merge, err := f.repository.commitTree(tree, msg, baseTip, head)
 	if err != nil {
 		f.printf("warning: %s: can't make the merge commit: %v", tk.ID, err)
 		return
@@ -276,16 +284,12 @@ func (f *factory) pushBase(ctx context.Context, remote, commit string) (pushed b
 // ahead is left as it is. It returns whether it pushed, or why the push
 // failed.
 func (f *factory) push(ctx context.Context, remote, branch, commit string) (pushed bool, why string) {
-	if _, err := f.gitOut(f.repo, "merge-base", "--is-ancestor", commit, "refs/remotes/"+remote+"/"+branch); err == nil {
+	if f.repository.isAncestor(commit, "refs/remotes/"+remote+"/"+branch) {
 		return false, ""
 	}
 	// A stop kills it, so a push that hangs doesn't hold up the Factory.
-	cmd := exec.CommandContext(ctx, f.git, "push", remote, branch)
-	cmd.Dir = f.repo
-	// A prompt for credentials would wait forever: nobody answers it.
-	cmd.Env = append(slices.Clone(f.e.Environ), "GIT_TERMINAL_PROMPT=0")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return false, fmt.Sprintf("couldn't push %s to %s:\n\n```\n%s\n```", branch, remote, strings.TrimSpace(string(out)))
+	if out, err := f.repository.push(ctx, remote, branch); err != nil {
+		return false, fmt.Sprintf("couldn't push %s to %s:\n\n```\n%s\n```", branch, remote, out)
 	}
 	return true, ""
 }
@@ -324,33 +328,6 @@ func firstLine(s string) string {
 	return l
 }
 
-// mergeTree merges head into base without touching any working tree: the
-// merged tree, or the conflicting files.
-func (f *factory) mergeTree(base, head string) (tree string, conflicts []string, err error) {
-	cmd := exec.Command(f.git, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head)
-	cmd.Dir = f.repo
-	cmd.Env = f.e.Environ
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	var exit *exec.ExitError
-	if err != nil && !(errors.As(err, &exit) && exit.ExitCode() == 1) {
-		return "", nil, fmt.Errorf("git merge-tree: %v: %s", err, strings.TrimSpace(stderr.String()))
-	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	tree = lines[0]
-	if err == nil {
-		return tree, nil, nil
-	}
-	for _, l := range lines[1:] {
-		if l == "" {
-			break
-		}
-		conflicts = append(conflicts, l)
-	}
-	return tree, conflicts, nil
-}
-
 // sendBack sends a Ticket whose work conflicts with the base back to
 // Ready, so a later Claim resolves the conflict and the human reviews it
 // again.
@@ -374,7 +351,7 @@ func (f *factory) sendBack(ctx context.Context, tk core.TicketView, head, baseTi
 // where it is checked out, or by ref with old as a guard. It returns why
 // it couldn't, or "".
 func (f *factory) advanceBase(old, merge string) string {
-	list, err := f.worktreeList()
+	list, err := f.repository.worktrees()
 	if err != nil {
 		return err.Error()
 	}
@@ -385,19 +362,16 @@ func (f *factory) advanceBase(old, merge string) string {
 		if moved := f.baseMoved(old); moved != "" {
 			return moved
 		}
-		cmd := exec.Command(f.git, "merge", "--ff-only", "-q", merge)
-		cmd.Dir = w.path
-		cmd.Env = f.e.Environ
-		out, err := cmd.CombinedOutput()
+		out, err := f.repository.fastForward(w.path, merge)
 		if err == nil {
 			return ""
 		}
 		if moved := f.baseMoved(old); moved != "" {
 			return moved
 		}
-		return fmt.Sprintf("uncommitted changes in %s, where %s is checked out, are in the way:\n\n%s", w.path, f.base, strings.TrimSpace(string(out)))
+		return fmt.Sprintf("uncommitted changes in %s, where %s is checked out, are in the way:\n\n%s", w.path, f.base, out)
 	}
-	if _, err := f.gitOut(f.repo, "update-ref", "refs/heads/"+f.base, merge, old); err != nil {
+	if err := f.repository.updateRef("refs/heads/"+f.base, merge, old); err != nil {
 		if moved := f.baseMoved(old); moved != "" {
 			return moved
 		}
@@ -408,7 +382,7 @@ func (f *factory) advanceBase(old, merge string) string {
 
 // baseMoved says so when the base is no longer at old.
 func (f *factory) baseMoved(old string) string {
-	if tip, err := f.gitOut(f.repo, "rev-parse", "--verify", "-q", "refs/heads/"+f.base); err == nil && tip == old {
+	if tip, err := f.repository.commit("refs/heads/" + f.base); err == nil && tip == old {
 		return ""
 	}
 	return fmt.Sprintf("%s moved while the Factory was merging.", f.base)
