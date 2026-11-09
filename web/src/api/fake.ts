@@ -60,6 +60,8 @@ import {
   DEFAULT_OPTIONS,
   FINISHED,
   FOCUS_CLEARS,
+  GUIDED_ON,
+  GUIDED_TAG,
   type ChangeEvent,
   type FindSpecsFilter,
   type FindTicketsFilter,
@@ -90,6 +92,7 @@ import {
   type StateSummary,
   type SubmitMapResult,
   type SubmitRequirementResult,
+  type TargetView,
   TICKET_FIELDS,
   type TicketAcknowledgement,
   type TicketRow,
@@ -800,6 +803,31 @@ export class FakeApi implements Api {
     return { kind: "ticket", id: v.id, title: v.title, state: v.state, link: v.link! };
   }
 
+  async setTags(project: string, target: string, tags: Record<string, string>): Promise<TargetView> {
+    this.calls.push("setTags");
+    return this.retag(project, target, (old) => ({ ...old, ...tags }));
+  }
+
+  async removeTags(project: string, target: string, keys: string[]): Promise<TargetView> {
+    this.calls.push("removeTags");
+    return this.retag(project, target, (old) => Object.fromEntries(Object.entries(old).filter(([k]) => !keys.includes(k))));
+  }
+
+  // retag replaces a Spec's or Ticket's Tags with change's.
+  private retag(project: string, target: string, change: (old: Record<string, string>) => Record<string, string>): TargetView {
+    this.writable(project);
+    const id = `${project}-${target.slice(target.lastIndexOf("-") + 1)}`;
+    const s = this.specs.get(id);
+    if (s) {
+      Object.assign(s, { tags: change(s.tags), updated: this.now.toISOString() });
+      this.emit({ type: "spec.changed", project, id });
+      return structuredClone({ id, kind: "spec", labels: s.labels, tags: s.tags });
+    }
+    const old = this.ticket(project, target);
+    const t = this.updateTicket(old.id, { tags: change(old.tags) });
+    return structuredClone({ id: t.id, kind: "ticket", labels: t.labels, tags: t.tags });
+  }
+
   async options(): Promise<Options> {
     this.calls.push("options");
     return { ...this.opts };
@@ -968,6 +996,7 @@ export class FakeApi implements Api {
           decided: wayfinder.filter((t) => t.state === "Done").length,
           total: wayfinder.length,
           needs_you: tickets.filter(reason).length,
+          guided: this.specs.get(spec)?.tags[GUIDED_TAG] === GUIDED_ON,
           can_write_spec: tickets.every((t) => FINISHED.includes(t.state)),
         },
       };

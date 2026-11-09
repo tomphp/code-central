@@ -1,12 +1,12 @@
 // The Map view, in the pane a Requirement's view uses and above the
 // shared Ticket pane: the header (ID, title, submitted time, the Map's
-// count, New Prototype and its Destination), then the Map's Tickets as a left-to-right
+// count, the Guided toggle, New Prototype and its Destination), then the Map's Tickets as a left-to-right
 // graph with Blockers as edges and the fog of what isn't specified yet on
 // the right, beside its collapsible Decisions so far and Out of scope.
 import { useId, useState } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
-import type { MapView, NeedsMeReason, SpecDetail, TicketRow } from "../api/types";
+import { GUIDED_ON, GUIDED_TAG, type MapView, type NeedsMeReason, type SpecDetail, type TicketRow } from "../api/types";
 import { ago } from "../format";
 import { Markdown } from "../Markdown";
 import { NewPrototype } from "../requirement/NewRequirement";
@@ -34,12 +34,19 @@ export function MapPane({ api, spec, reasons, now, ticket, select }: MapPaneProp
   const destination = mapSection(spec.body, "Destination");
   const fog = mapSection(spec.body, "Not yet specified");
   const start = (t: TicketRow) => run(() => api.act(projectOf(t.id), t.id, "approve", {}));
+  // Guided hands starting the next decision to the Factory: it approves
+  // the first frontier Ticket whenever the Map is idle.
+  const setGuided = (on: boolean) =>
+    run(() => (on ? api.setTags(projectOf(spec.id), spec.id, { [GUIDED_TAG]: GUIDED_ON }) : api.removeTags(projectOf(spec.id), spec.id, [GUIDED_TAG])));
 
   return (
     <section aria-label="Map" className="req-head map-view">
       <span className="tid">{spec.id}</span> <span className="muted small">Map · submitted {ago(now, spec.created)}</span>
       <h2>{spec.title}</h2>
       <p className="map-count">{mapCount(spec.map)}</p>
+      <label className="map-guided" title="The Factory starts the next decision whenever the Map is idle">
+        <input type="checkbox" checked={spec.map.guided} disabled={busy} onChange={(e) => setGuided(e.target.checked)} /> Guided
+      </label>
       <div className="spec-actions">
         <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
       </div>
