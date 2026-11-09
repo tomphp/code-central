@@ -168,7 +168,7 @@ func (f *factory) sweep(ctx context.Context, method store.LandingMethod) {
 			}
 			continue
 		}
-		if !finished(tk.State, method) {
+		if !doneWithWorktree(tk.State, method) {
 			continue
 		}
 		status, err := f.status(w.path)
@@ -192,9 +192,9 @@ func (f *factory) sweep(ctx context.Context, method store.LandingMethod) {
 	}
 }
 
-// finished reports whether the Factory is done with a Ticket's worktree
-// in state, under the Landing Method.
-func finished(state store.State, method store.LandingMethod) bool {
+// doneWithWorktree reports whether the Factory is done with the worktree
+// of a Ticket in state, under the Landing Method.
+func doneWithWorktree(state store.State, method store.LandingMethod) bool {
 	return state == store.Done || state == store.Cancelled || state == store.Accepted && method == store.LandingBranch
 }
 

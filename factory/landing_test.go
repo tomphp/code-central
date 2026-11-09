@@ -16,11 +16,8 @@ var branchLanding = core.SetLandingMethodInput{Method: store.LandingBranch}
 // withWorktree makes an Accepted Ticket whose branch adds file, with the
 // worktree a Factory Claim would have left at its path.
 func withWorktree(h *factorytest.Harness, title, file, content string) (id, commit string) {
-	id = h.ReadyTicket(title)
-	commit = h.CommitOn(id, file, content)
+	id, commit = accepted(h, title, file, content)
 	h.Git("worktree", "add", "-q", h.Worktree(id), id)
-	h.Finished(id, id, commit)
-	h.Accept(id)
 	return id, commit
 }
 
@@ -120,15 +117,21 @@ func TestUnderBranchADirtyWorktreeOfAnAcceptedTicketIsWarnedAboutAndLeft(t *test
 func TestUnderMergeAnAcceptedTicketsWorktreeIsKeptUntilItLands(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	id, _ := withWorktree(h, "Change the readme", "README", "theirs\n")
-	h.CommitOn("main", "README", "ours\n")
-	// Hold the next Claim's turn, so the sent-back Ticket isn't worked.
-	h.Script(id, factorytest.Wait())
+	id, _ := withWorktree(h, "Add a feature", "feature.txt", "feature\n")
+	// Uncommitted changes in the base checkout hold the merge, so the
+	// Ticket is still Accepted when the sweep runs.
+	mine := filepath.Join(h.Repo, "feature.txt")
+	if err := os.WriteFile(mine, []byte("my work in progress\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	r := h.Start()
 	r.Poll()
-	if strings.Contains(r.Stdout(), "removed its worktree") {
-		t.Errorf("a worktree was removed under Merge: %q", r.Stdout())
+	if s := h.Ticket(id).State; s != store.Accepted {
+		t.Fatalf("%s is %s, want it held Accepted", id, s)
+	}
+	if _, err := os.Stat(h.Worktree(id)); err != nil {
+		t.Errorf("the worktree of an Accepted Ticket was removed under Merge: %v", err)
 	}
 }
 

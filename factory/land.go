@@ -54,8 +54,7 @@ func (f *factory) land(ctx context.Context, method store.LandingMethod) {
 // is left as it is, with a line saying so once: never merged, never sent
 // back.
 func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView) {
-	work, what := workOf(tk)
-	head, err := f.gitOut(f.repo, "rev-parse", "--verify", "-q", work+"^{commit}")
+	head, what, err := f.workOf(tk)
 	if err == nil && f.inBase(head) {
 		f.printf("%s: merged into %s by hand", tk.ID, f.base)
 		f.landAt(ctx, tk, head)
@@ -77,17 +76,20 @@ func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView) {
 	f.printf("%s: Accepted under the Branch Landing Method: merge %s into %s and the Factory lands it", tk.ID, merge, f.base)
 }
 
-// workOf is the work the human reviewed: the finish commit, or with none,
-// the branch's tip; and how to name it.
-func workOf(tk core.TicketView) (ref, what string) {
-	if tk.Commit != "" {
-		return tk.Commit, "its commit " + tk.Commit
+// workOf is the commit of the work the human reviewed: the finish
+// commit, or with none, the branch's tip. what names it, and err says
+// it isn't in the repository.
+func (f *factory) workOf(tk core.TicketView) (commit, what string, err error) {
+	work, what := tk.Commit, "its commit "+tk.Commit
+	if work == "" {
+		work, what = "refs/heads/"+tk.Branch, "its branch "+tk.Branch
 	}
-	return "refs/heads/" + tk.Branch, "its branch " + tk.Branch
+	commit, err = f.gitOut(f.repo, "rev-parse", "--verify", "-q", work+"^{commit}")
+	return commit, what, err
 }
 
 // detectHandMerges lands In Review Tickets whose finish commit is in the
-// base: the human merged them. (Accepted ones are land's.) A Ticket merged while in any other State
+// base: the human merged them. (land sees to Accepted ones.) A Ticket merged while in any other State
 // gets a warning line, once.
 func (f *factory) detectHandMerges(ctx context.Context) {
 	for _, tk := range f.landable(ctx, mergeableStates...) {
@@ -164,8 +166,7 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView) {
 		f.cantLandYet(ctx, tk, fmt.Sprintf("the base, %s, isn't a branch, so the Factory can't move it.", f.base))
 		return
 	}
-	work, what := workOf(tk)
-	head, err := f.gitOut(f.repo, "rev-parse", "--verify", "-q", work+"^{commit}")
+	head, what, err := f.workOf(tk)
 	if err != nil {
 		f.cantLandYet(ctx, tk, what+" isn't in this repository.")
 		return
