@@ -83,6 +83,7 @@ func lastLine(s string) string {
 }
 
 func TestInitWritesTheTeachingFilesAndAPointerToThem(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	dir := gitRepo(t, "api")
 	write(t, dir, "CLAUDE.md", "# API\n\nBe kind.\n")
@@ -107,6 +108,7 @@ func TestInitWritesTheTeachingFilesAndAPointerToThem(t *testing.T) {
 }
 
 func TestInitAddsNoSecondPointer(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	dir := gitRepo(t, "api")
 	claude := "Issues: see `docs/agents/issue-tracker.md`.\n"
@@ -118,6 +120,7 @@ func TestInitAddsNoSecondPointer(t *testing.T) {
 }
 
 func TestInitLocalKeepsEverythingOutOfTheRepository(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	dir := gitRepo(t, "api")
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL}
@@ -158,6 +161,7 @@ func TestInitLocalKeepsEverythingOutOfTheRepository(t *testing.T) {
 }
 
 func TestAFlagThatConflictsWithTheStoredModeAsksBeforeSwitching(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	dir := gitRepo(t, "api")
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL}
@@ -190,6 +194,7 @@ func TestAFlagThatConflictsWithTheStoredModeAsksBeforeSwitching(t *testing.T) {
 }
 
 func TestReRunningInitRefreshesWhatItWroteAndAsksAboutAnythingElse(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	dir := gitRepo(t, "api")
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL}
@@ -229,6 +234,7 @@ func TestReRunningInitRefreshesWhatItWroteAndAsksAboutAnythingElse(t *testing.T)
 }
 
 func TestHelpSandboxesCoversSbxAndBind(t *testing.T) {
+	t.Parallel()
 	r := ok(t, run(t, nil, "", "help", "sandboxes"))
 	for _, want := range []string{"sbx policy allow network localhost:7733", "--bind", "CODE_CENTRAL_URL"} {
 		if !strings.Contains(r.stdout, want) {
@@ -241,6 +247,7 @@ func TestHelpSandboxesCoversSbxAndBind(t *testing.T) {
 }
 
 func TestConnectionErrorsPointAtTheSandboxHelp(t *testing.T) {
+	t.Parallel()
 	r := run(t, map[string]string{"CODE_CENTRAL_URL": "http://" + freeAddr(t), "CODE_CENTRAL_PROJECT": "acme"}, "", "get-ticket", "1")
 	if e := wantError(t, r, core.ServiceUnavailable); !strings.Contains(e.Message, "code-central help sandboxes") {
 		t.Fatalf("message %q", e.Message)

@@ -10,6 +10,7 @@ import (
 )
 
 func TestReportFailureTakesTheFieldsAsJSONOnStdinWithFlagsOverriding(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	ctx := context.Background()
 	srv.Core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"})
@@ -29,6 +30,7 @@ func TestReportFailureTakesTheFieldsAsJSONOnStdinWithFlagsOverriding(t *testing.
 }
 
 func TestReportFailureRejectsAFileThatIsNotTheFourFields(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "acme"}
 	if r := run(t, env, `{"broke":"x"}`, "report-failure", "acme-2", "--claim", "c", "--file", "-"); r.code != 1 {

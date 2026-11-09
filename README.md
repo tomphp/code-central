@@ -1,6 +1,6 @@
 # Code Central
 
-Code Central is one service that holds a Project's Specs and Tickets. Agents work them through a fixed workflow: a Requirement goes through the grilling, spec and tickets Stages, then becomes implementation Tickets, and the human answers Rounds and accepts the work in the UI along the way. You run it on your own machine, and every repository you set up as a Project talks to it.
+Code Central is one service that holds a Project's Specs and Tickets. Agents work them through a fixed workflow: a Requirement goes through the grilling, spec and tickets Stages, then becomes implementation Tickets, and the human answers Rounds and accepts the work in the UI along the way. When the destination isn't clear yet, the human starts a Map with **New Map** instead, and agents find the way to it one decision at a time. You run it on your own machine, and every repository you set up as a Project talks to it.
 
 ## The guides
 
@@ -13,4 +13,4 @@ Read them in this order:
 
 ## Running the service
 
-[Running Code Central as a service](docs/running-as-a-service.md) covers installing (download the archive for your OS and CPU from [GitHub Releases](https://github.com/tomphp/code-central/releases), or build from source), upgrading and downgrading the service, its versions, and the Options you set in the UI.
+[Running Code Central as a service](docs/running-as-a-service.md) covers installing (download the archive for your OS and CPU from [GitHub Releases](https://github.com/tomphp/code-central/releases), or build from source), upgrading and downgrading the service, its versions, the Options you set in the UI, and [Usage](docs/running-as-a-service.md#usage), what agents have consumed.

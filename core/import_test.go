@@ -105,7 +105,7 @@ func TestAnImportWritesEverySpecAndTicket(t *testing.T) {
 	if err != nil || *sp.Body != "# Login\n" || sp.Tags["source"] != ".scratch/login/spec.md" || len(sp.Tickets) != 2 {
 		t.Fatalf("spec: %+v, %v", sp, err)
 	}
-	form, _ := f.core.GetTicket(ctx, "acme", "acme-3")
+	form, _ := f.core.GetTicket(ctx, "acme", whole("acme-3"))
 	if form.State != store.Done || form.Description != "Build the form.\n" || form.Spec.ID != "acme-2" || len(form.Claims) != 0 {
 		t.Fatalf("form: %+v", form)
 	}
@@ -113,14 +113,14 @@ func TestAnImportWritesEverySpecAndTicket(t *testing.T) {
 	if len(form.Moves) != 1 || form.Moves[0] != (core.MoveView{To: store.Done, Actor: "agent", Time: t0, Via: "import"}) {
 		t.Fatalf("moves: %+v", form.Moves)
 	}
-	if api, _ := f.core.GetTicket(ctx, "acme", "acme-4"); api.Blocked || !api.Claimable {
+	if api, _ := f.core.GetTicket(ctx, "acme", whole("acme-4")); api.Blocked || !api.Claimable {
 		t.Fatalf("API is blocked only by Done acme-3: %+v", api)
 	}
-	pdf, _ := f.core.GetTicket(ctx, "acme", "acme-7")
+	pdf, _ := f.core.GetTicket(ctx, "acme", whole("acme-7"))
 	if !pdf.Blocked || !slices.Equal(pdf.BlockedBy, []string{"acme-4"}) {
 		t.Fatalf("pdf: %+v", pdf)
 	}
-	tax, _ := f.core.GetTicket(ctx, "acme", "acme-8")
+	tax, _ := f.core.GetTicket(ctx, "acme", whole("acme-8"))
 	if tax.State != store.Cancelled || len(tax.Comments) != 1 || tax.Comments[0].Body != "wontfix: out of scope\n" || tax.Comments[0].Actor != "agent" {
 		t.Fatalf("tax: %+v", tax)
 	}
@@ -261,7 +261,8 @@ func TestTheImportGuidePublishesTheMappingRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"spec.md", "map.md", "ready-for-agent", "wontfix", "Deferred", "Superseded",
-		"scratch.status", "`source`", "Labels:", "dry_run", "doubts", "go-ahead"} {
+		"scratch.status", "`source`", "Labels:", "dry_run", "doubts", "go-ahead",
+		"`wayfinder:map` (Specs only)", "`wayfinder:research`", "`prototype` (Tickets only)", "at most one of"} {
 		if !strings.Contains(g.Guide, want) {
 			t.Errorf("the guide doesn't mention %q", want)
 		}

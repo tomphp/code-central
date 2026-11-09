@@ -1,0 +1,5 @@
+{"type":"user","timestamp":"2026-01-02T10:30:00Z","cwd":"/r/acme.worktrees/acme-2","message":{"role":"user","content":"Review a code change against its spec."}}
+{"type":"assistant","timestamp":"2026-01-02T10:30:01Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"u1","name":"mcp__code-central__get_ticket","input":{"ticket":"acme-2"}}]}}
+{"type":"user","timestamp":"2026-01-02T10:30:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"u1","content":[{"type":"text","text":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}]}]}}
+{"type":"assistant","timestamp":"2026-01-02T10:30:03Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"u2","name":"Bash","input":{"command":"git diff"}}]}}
+{"type":"user","timestamp":"2026-01-02T10:30:04Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"u2","content":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}]}}

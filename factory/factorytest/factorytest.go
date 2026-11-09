@@ -6,6 +6,8 @@
 // it records its arguments, follows a Script (print stream-json, call the
 // code-central CLI in-process, write a file, run git, exit) and needs
 // nothing built. There is no shell, so it runs the same on every OS.
+// script.go holds the Script's Steps and the Calls read back; fake.go
+// holds the fakes themselves.
 //
 // A test package that uses it calls Main from its TestMain:
 //
@@ -24,11 +26,8 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
-	"regexp"
 	"runtime"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -36,8 +35,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/client"
+	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory"
@@ -59,23 +58,11 @@ func Main(m *testing.M) {
 	if data := os.Getenv(fakeEnv); data != "" {
 		os.Exit(runFake(data, os.Args))
 	}
-	os.Exit(m.Run())
-}
-
-func runFake(data string, args []string) int {
-	switch name := strings.TrimSuffix(filepath.Base(args[0]), exeSuffix); name {
-	case "claude":
-		return runFakeClaude(data, args[1:])
-	case "git":
-		return runFakeGit(data, args[1:])
-	case holdName:
-		// Long enough for any test; HoldSession's release kills it sooner.
-		time.Sleep(time.Minute)
-		return 0
-	default:
-		fmt.Fprintf(os.Stderr, "factorytest: %s=%s but run as %q, not a fake\n", fakeEnv, data, name)
-		return 70
+	code := m.Run()
+	if seedDir != "" {
+		os.RemoveAll(seedDir)
 	}
+	os.Exit(code)
 }
 
 // Timeout bounds every wait in the harness.
@@ -107,6 +94,10 @@ type Harness struct {
 	// Backoff is the Factory's first wait before resuming turns an outage
 	// cut off; set it before Start. New makes it a millisecond.
 	Backoff time.Duration
+	// Clock is the Factory's time for an outage's backoff and for dating
+	// model responses: it stands still until the test moves it, so a
+	// backoff is over only when the test says so.
+	Clock *clock.Fake
 	// URL is the Code Central the Factory and its sessions reach: Server
 	// behind a proxy that SetDown can take down.
 	URL       string
@@ -125,49 +116,104 @@ func New(t testing.TB) *Harness {
 	// git reports real paths, so resolve macOS's /var -> /private/var.
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	must(t, err)
+	// Code Central's clock starts where the Factory's does, so the model
+	// responses the Factory dates fall on Code Central's today in Usage.
+	now := time.Now()
 	h := &Harness{
 		t:       t,
-		Server:  codecentraltest.NewServer(t),
-		Project: "acme",
+		Server:  codecentraltest.NewServer(t, codecentraltest.WithStart(now)),
+		Project: project,
 		Repo:    filepath.Join(root, "work", "repo"),
 		Home:    filepath.Join(root, "home"),
 		Bin:     filepath.Join(root, "bin"),
 		data:    filepath.Join(root, "data"),
 		Backoff: time.Millisecond,
+		Clock:   clock.NewFake(now),
 		refused: map[string]int64{},
 	}
-	for _, d := range []string{h.Repo, h.Home, h.Bin, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
+	template := filepath.Join(root, "git-template")
+	for _, d := range []string{h.Home, h.Bin, template, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
 		must(t, os.MkdirAll(d, 0o755))
 	}
 	h.URL = h.startProxy()
 	gitPath, err := realGit()
 	must(t, err)
 	h.env = map[string]string{
-		"PATH":                h.Bin + string(os.PathListSeparator) + filepath.Dir(gitPath),
-		"HOME":                h.Home,
-		"CODE_CENTRAL_URL":    h.URL,
-		"GIT_CONFIG_NOSYSTEM": "1",
-		"GIT_AUTHOR_NAME":     "Factory Test",
-		"GIT_AUTHOR_EMAIL":    "factory@example.com",
-		"GIT_COMMITTER_NAME":  "Factory Test",
-		"GIT_COMMITTER_EMAIL": "factory@example.com",
-		"TMPDIR":              os.TempDir(),
-		"TEMP":                os.TempDir(),
-		"TMP":                 os.TempDir(),
-		fakeEnv:               h.data,
+		"PATH":             h.Bin + string(os.PathListSeparator) + filepath.Dir(gitPath),
+		"HOME":             h.Home,
+		"CODE_CENTRAL_URL": h.URL,
+		// An empty template: git init writes no sample hooks to remove.
+		"GIT_TEMPLATE_DIR": template,
+		"TMPDIR":           os.TempDir(),
+		"TEMP":             os.TempDir(),
+		"TMP":              os.TempDir(),
+		fakeEnv:            h.data,
+	}
+	for k, v := range gitIdentity {
+		h.env[k] = v
 	}
 	h.install("claude")
 
 	if _, err := h.Server.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: h.Project}); err != nil {
 		t.Fatal(err)
 	}
-	mcp := `{"mcpServers":{"code-central":{"type":"http","url":"${CODE_CENTRAL_URL:-http://localhost:7733}/p/` + h.Project + `/mcp"}}}` + "\n"
-	h.Git("init", "-q", "-b", "main")
-	must(t, os.WriteFile(filepath.Join(h.Repo, ".mcp.json"), []byte(mcp), 0o644))
-	h.Git("add", ".mcp.json")
-	h.Git("commit", "-q", "-m", "Set up Code Central")
+	seed, err := seedRepo()
+	must(t, err)
+	must(t, os.CopyFS(h.Repo, os.DirFS(seed)))
 	return h
 }
+
+// project is the Project Key of every Harness.
+const project = "acme"
+
+// gitIdentity is every git's environment in the harness: no system
+// config, and a fixed author and committer.
+var gitIdentity = map[string]string{
+	"GIT_CONFIG_NOSYSTEM": "1",
+	"GIT_AUTHOR_NAME":     "Factory Test",
+	"GIT_AUTHOR_EMAIL":    "factory@example.com",
+	"GIT_COMMITTER_NAME":  "Factory Test",
+	"GIT_COMMITTER_EMAIL": "factory@example.com",
+}
+
+// seedDir holds seedRepo's repo; Main removes it.
+var seedDir string
+
+// seedRepo is a repo on branch main whose one commit holds a .mcp.json
+// naming the Project. It is made once per test binary and each
+// Harness copies it, which costs no git processes.
+var seedRepo = sync.OnceValues(func() (string, error) {
+	git, err := realGit()
+	if err != nil {
+		return "", err
+	}
+	if seedDir, err = os.MkdirTemp("", "factorytest-seed"); err != nil {
+		return "", err
+	}
+	repo := filepath.Join(seedDir, "repo")
+	template := filepath.Join(seedDir, "git-template")
+	for _, d := range []string{repo, template} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			return "", err
+		}
+	}
+	mcp := `{"mcpServers":{"code-central":{"type":"http","url":"${CODE_CENTRAL_URL:-http://localhost:7733}/p/` + project + `/mcp"}}}` + "\n"
+	if err := os.WriteFile(filepath.Join(repo, ".mcp.json"), []byte(mcp), 0o644); err != nil {
+		return "", err
+	}
+	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"add", ".mcp.json"}, {"commit", "-q", "-m", "Set up Code Central"}} {
+		cmd := exec.Command(git, args...)
+		cmd.Dir = repo
+		cmd.Env = []string{"HOME=" + seedDir, "GIT_TEMPLATE_DIR=" + template}
+		for k, v := range gitIdentity {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+	return repo, nil
+})
 
 // startProxy starts the proxy in front of Server and returns its URL.
 // While the harness is down it drops every connection, as a stopped Code
@@ -281,6 +327,28 @@ func (h *Harness) ShimClaude() {
 	must(h.t, os.WriteFile(filepath.Join(h.Bin, "claude.cmd"), []byte("@echo off\r\nnode \"%~dp0\\node_modules\\@anthropic-ai\\claude-code\\cli.js\" %*\r\n"), 0o755))
 }
 
+// HoldSession starts a process, outside the Factory, whose command line
+// names session, as another claude driving that session would. It runs
+// until the returned func or the end of the test.
+func (h *Harness) HoldSession(session string) (release func()) {
+	h.t.Helper()
+	self, err := os.Executable()
+	must(h.t, err)
+	cmd := exec.Command(self)
+	cmd.Args = []string{holdName, "--resume", session}
+	cmd.Env = append(os.Environ(), fakeEnv+"="+h.data)
+	must(h.t, cmd.Start())
+	var once sync.Once
+	release = func() {
+		once.Do(func() {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		})
+	}
+	h.t.Cleanup(release)
+	return release
+}
+
 // fakeGit is what the fake git reads from the data folder.
 type fakeGit struct {
 	// Version is the version it reports.
@@ -340,6 +408,14 @@ func (h *Harness) StageTicket(stage, title string) string {
 	return h.readyTicket(title, core.StageLabel(stage))
 }
 
+// LabelledTicket creates a Ready Ticket carrying label, such as a
+// Wayfinder Label or prototype, on the same shared Spec, and returns its
+// ID.
+func (h *Harness) LabelledTicket(label, title string) string {
+	h.t.Helper()
+	return h.readyTicket(title, label)
+}
+
 func (h *Harness) readyTicket(title string, labels ...string) string {
 	h.t.Helper()
 	ctx := context.Background()
@@ -368,6 +444,14 @@ func (h *Harness) Transcript(ticket string, claim int) core.TranscriptView {
 	tr, err := h.Server.Client.Transcript(context.Background(), h.Project, core.Ref(ticket), claim)
 	must(h.t, err)
 	return tr
+}
+
+// Usage reads Usage for the Project over the default range.
+func (h *Harness) Usage() core.UsageView {
+	h.t.Helper()
+	u, err := h.Server.Client.Usage(context.Background(), h.Project, 0)
+	must(h.t, err)
+	return u
 }
 
 // Human is a client of the harness's Code Central acting as the human.
@@ -510,13 +594,24 @@ type Running struct {
 }
 
 // Start runs the Factory in the repo with args until Stop or the end of
-// the test. Polls after the first happen only on Tick.
+// the test, and returns once its first poll has finished (or it has
+// exited), so whatever the test sets up next is first seen by a later
+// poll. Polls after the first happen only on Tick.
 func (h *Harness) Start(args ...string) *Running {
+	h.t.Helper()
 	return h.StartIn(h.Repo, args...)
 }
 
 // StartIn is Start from dir.
 func (h *Harness) StartIn(dir string, args ...string) *Running {
+	h.t.Helper()
+	r := h.launch(dir, args...)
+	r.waitForPolls(1)
+	return r
+}
+
+// launch runs the Factory in dir with args, without waiting.
+func (h *Harness) launch(dir string, args ...string) *Running {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Running{h: h, cancel: cancel, done: make(chan struct{}), stdout: &buffer{}, stderr: &buffer{}, ticks: make(chan time.Time), signals: make(chan os.Signal, 2)}
 	env := factory.Env{
@@ -529,6 +624,7 @@ func (h *Harness) StartIn(dir string, args ...string) *Running {
 			r.waits.Add(1)
 			return r.ticks
 		},
+		Now:       h.Clock.Now,
 		KillGrace: KillGrace,
 		Backoff:   h.Backoff,
 		// Session Events are posted often, so tests needn't wait a second.
@@ -553,7 +649,7 @@ func (h *Harness) Run(args ...string) (code int, stdout, stderr string) {
 // RunIn is Run from dir.
 func (h *Harness) RunIn(dir string, args ...string) (code int, stdout, stderr string) {
 	h.t.Helper()
-	r := h.StartIn(dir, args...)
+	r := h.launch(dir, args...)
 	select {
 	case <-r.done:
 	case <-time.After(Timeout):
@@ -655,398 +751,4 @@ func (b *buffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.b.String()
-}
-
-// Step is one thing the fake claude does. In CLI and Git args, Write's
-// content and Stdout, {{ticket}}, {{claim}} and {{session}} stand for the
-// run's Ticket, Claim and session ID.
-type Step struct {
-	// CLI runs the code-central CLI with these args in the worktree.
-	CLI []string `json:"cli,omitempty"`
-	// Write writes a file in the worktree.
-	Write *File `json:"write,omitempty"`
-	// Git runs git on PATH with these args in the worktree.
-	Git []string `json:"git,omitempty"`
-	// Need fails the run unless this file is in the worktree.
-	Need string `json:"need,omitempty"`
-	// Stdout prints one line, such as a stream-json message.
-	Stdout string `json:"stdout,omitempty"`
-	// Exit exits with this code, skipping the rest.
-	Exit *int `json:"exit,omitempty"`
-	// Wait blocks until the test calls Continue for the run's Ticket. It
-	// notes each stop signal it gets (see Signals): on Unix it ignores
-	// SIGINT and exits 143 on SIGTERM; on Windows it ignores Ctrl-Break.
-	Wait bool `json:"wait,omitempty"`
-}
-
-// File is a file a Write step writes, Name relative to the worktree.
-type File struct {
-	Name    string `json:"name"`
-	Content string `json:"content"`
-}
-
-// Wait blocks the run until Continue, so the turn stays running.
-func Wait() Step { return Step{Wait: true} }
-
-// PostRound posts a Round of one Question under the run's Claim.
-func PostRound(title string) Step {
-	q, _ := json.Marshal([]core.QuestionInput{{Title: title, Body: title}})
-	return CLI("post-round", "{{ticket}}", "--claim", "{{claim}}", "--session", "{{session}}", "--questions", string(q))
-}
-
-// Continue lets the run of ticket now in a Wait step carry on.
-func (h *Harness) Continue(ticket string) {
-	h.t.Helper()
-	must(h.t, os.WriteFile(filepath.Join(h.data, "continue", ticket), nil, 0o644))
-	h.WaitFor(ticket+"'s run to carry on", func() bool {
-		_, err := os.Stat(filepath.Join(h.data, "continue", ticket))
-		return os.IsNotExist(err)
-	})
-}
-
-// HoldSession starts a process, outside the Factory, whose command line
-// names session, as another claude driving that session would. It runs
-// until the returned func or the end of the test.
-func (h *Harness) HoldSession(session string) (release func()) {
-	h.t.Helper()
-	self, err := os.Executable()
-	must(h.t, err)
-	cmd := exec.Command(self)
-	cmd.Args = []string{holdName, "--resume", session}
-	cmd.Env = append(os.Environ(), fakeEnv+"="+h.data)
-	must(h.t, cmd.Start())
-	var once sync.Once
-	release = func() {
-		once.Do(func() {
-			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
-		})
-	}
-	h.t.Cleanup(release)
-	return release
-}
-
-// Signals is the signals runs of ticket got while in a Wait step, in
-// order: "INT" and "TERM" on Unix, "BREAK" on Windows.
-func (h *Harness) Signals(ticket string) []string {
-	b, err := os.ReadFile(filepath.Join(h.data, "signals", ticket))
-	if os.IsNotExist(err) {
-		return nil
-	}
-	must(h.t, err)
-	return strings.Fields(string(b))
-}
-
-// CLI calls the code-central CLI.
-func CLI(args ...string) Step { return Step{CLI: args} }
-
-// WriteFile writes name in the worktree with content.
-func WriteFile(name, content string) Step { return Step{Write: &File{Name: name, Content: content}} }
-
-// Git runs git with args in the worktree.
-func Git(args ...string) Step { return Step{Git: args} }
-
-// NeedFile fails the run unless name is in the worktree.
-func NeedFile(name string) Step { return Step{Need: name} }
-
-// Finish finishes the run's Ticket under its Claim.
-func Finish(summary string) Step {
-	return CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", summary)
-}
-
-// Result prints the stream-json result message with this subtype.
-func Result(subtype string) Step {
-	return Step{Stdout: `{"type":"result","subtype":"` + subtype + `","is_error":` + fmt.Sprint(subtype != "success") + `,"session_id":"{{session}}","result":"Turn over."}`}
-}
-
-// Denial is one call auto mode denied, as a result's permission_denials
-// lists it.
-type Denial struct {
-	Tool  string         `json:"tool_name"`
-	ID    string         `json:"tool_use_id"`
-	Input map[string]any `json:"tool_input"`
-}
-
-// Denied is a denied Bash call running command.
-func Denied(command string) Denial {
-	return Denial{Tool: "Bash", ID: "toolu_" + fmt.Sprint(len(command)), Input: map[string]any{"command": command}}
-}
-
-// ResultDenied prints a success result listing these denied calls.
-func ResultDenied(denials ...Denial) Step {
-	b, _ := json.Marshal(map[string]any{
-		"type": "result", "subtype": "success", "is_error": false, "session_id": "{{session}}",
-		"result": "I couldn't do that.", "permission_denials": denials,
-	})
-	return Step{Stdout: string(b)}
-}
-
-// APIError prints the stream-json assistant message claude prints when an
-// API call fails for good, with this error code ("rate_limit",
-// "authentication_failed", ...).
-func APIError(code string) Step {
-	b, _ := json.Marshal(map[string]any{
-		"type":    "assistant",
-		"message": map[string]any{"role": "assistant", "content": []map[string]string{{"type": "text", "text": "API Error: " + code}}},
-		"error":   code,
-	})
-	return Step{Stdout: string(b)}
-}
-
-// Say prints a stream-json assistant message with this text.
-func Say(text string) Step {
-	b, _ := json.Marshal(map[string]any{
-		"type":    "assistant",
-		"message": map[string]any{"role": "assistant", "content": []map[string]string{{"type": "text", "text": text}}},
-	})
-	return Step{Stdout: string(b)}
-}
-
-// ToolUse prints a stream-json assistant message calling tool with input,
-// a JSON object kept as written so its key order holds.
-func ToolUse(tool, input string) Step {
-	b, _ := json.Marshal(map[string]any{
-		"type": "assistant",
-		"message": map[string]any{"role": "assistant", "content": []map[string]any{
-			{"type": "tool_use", "id": "toolu_" + tool, "name": tool, "input": json.RawMessage(input)},
-		}},
-	})
-	return Step{Stdout: string(b)}
-}
-
-// Think prints a stream-json assistant message with a thinking block.
-func Think(thinking string) Step {
-	b, _ := json.Marshal(map[string]any{
-		"type":    "assistant",
-		"message": map[string]any{"role": "assistant", "content": []map[string]string{{"type": "thinking", "thinking": thinking}}},
-	})
-	return Step{Stdout: string(b)}
-}
-
-// ToolResult prints a stream-json user message answering the tool call
-// toolUseID with content, a string or a list of content blocks.
-func ToolResult(toolUseID string, content any, isError bool) Step {
-	b, _ := json.Marshal(map[string]any{
-		"type": "user",
-		"message": map[string]any{"role": "user", "content": []map[string]any{
-			{"type": "tool_result", "tool_use_id": toolUseID, "content": content, "is_error": isError},
-		}},
-	})
-	return Step{Stdout: string(b)}
-}
-
-// Exit exits with code.
-func Exit(code int) Step { return Step{Exit: &code} }
-
-// DefaultScript is what the fake does for a Ticket with no Script: finish
-// the Ticket, then end the turn with a success result.
-var DefaultScript = []Step{Finish("Done."), Result("success")}
-
-// Script sets what the fake does on every run for ticket.
-func (h *Harness) Script(ticket string, steps ...Step) {
-	b, err := json.Marshal(steps)
-	must(h.t, err)
-	must(h.t, os.WriteFile(filepath.Join(h.data, "scripts", ticket+".json"), b, 0o644))
-}
-
-// Call is one run of the fake claude.
-type Call struct {
-	Args    []string `json:"args"`
-	Dir     string   `json:"dir"`
-	Prompt  string   `json:"prompt"`
-	Ticket  string   `json:"ticket"`
-	Claim   string   `json:"claim"`
-	Session string   `json:"session"`
-}
-
-// Flag is the value after flag in the call's args, and whether it is there.
-func (c Call) Flag(flag string) (string, bool) {
-	for i, a := range c.Args {
-		if a == flag && i+1 < len(c.Args) {
-			return c.Args[i+1], true
-		}
-	}
-	return "", false
-}
-
-// Has reports whether arg is one of the call's args.
-func (c Call) Has(arg string) bool {
-	for _, a := range c.Args {
-		if a == arg {
-			return true
-		}
-	}
-	return false
-}
-
-// Calls is every run of the fake claude so far, oldest first.
-func (h *Harness) Calls() []Call {
-	h.t.Helper()
-	dir := filepath.Join(h.data, "calls")
-	entries, err := os.ReadDir(dir)
-	must(h.t, err)
-	var out []Call
-	for _, e := range entries {
-		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
-		must(h.t, err)
-		var c Call
-		must(h.t, json.Unmarshal(b, &c))
-		out = append(out, c)
-	}
-	return out
-}
-
-var (
-	ticketLine = regexp.MustCompile(`(?m)^Ticket: (\S+)$`)
-	claimLine  = regexp.MustCompile(`(?m)^Claim: (\S+)$`)
-)
-
-// runFakeGit is the fake git: it reports the version FakeGit set and runs
-// the real git for everything else.
-func runFakeGit(data string, args []string) int {
-	var g fakeGit
-	b, err := os.ReadFile(filepath.Join(data, "git.json"))
-	if err == nil {
-		err = json.Unmarshal(b, &g)
-	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "fake git:", err)
-		return 70
-	}
-	if len(args) > 0 && (args[0] == "version" || args[0] == "--version") {
-		fmt.Println("git version " + g.Version)
-		return 0
-	}
-	cmd := exec.Command(g.Git, args...)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	if err := cmd.Run(); err != nil {
-		if exit, ok := err.(*exec.ExitError); ok {
-			return exit.ExitCode()
-		}
-		fmt.Fprintln(os.Stderr, "fake git:", err)
-		return 70
-	}
-	return 0
-}
-
-// runFakeClaude is the fake claude: claude [flags] <prompt>.
-func runFakeClaude(data string, args []string) int {
-	wd, _ := os.Getwd()
-	c := Call{Args: args, Dir: wd}
-	if len(args) > 0 {
-		c.Prompt = args[len(args)-1]
-	}
-	if m := ticketLine.FindStringSubmatch(c.Prompt); m != nil {
-		c.Ticket = m[1]
-	}
-	if m := claimLine.FindStringSubmatch(c.Prompt); m != nil {
-		c.Claim = m[1]
-	}
-	if s, ok := c.Flag("--session-id"); ok {
-		c.Session = s
-	} else if s, ok := c.Flag("--resume"); ok {
-		c.Session = s
-	}
-	steps := DefaultScript
-	if b, err := os.ReadFile(filepath.Join(data, "scripts", c.Ticket+".json")); err == nil {
-		steps = nil
-		if err := json.Unmarshal(b, &steps); err != nil {
-			fmt.Fprintln(os.Stderr, "fake claude:", err)
-			return 70
-		}
-	}
-	// A test stops a waiting run as soon as it sees the call, so take the
-	// stop signals before recording it: none is lost before Wait starts.
-	sigs := make(chan os.Signal, 2)
-	if slices.ContainsFunc(steps, func(s Step) bool { return s.Wait }) {
-		signal.Notify(sigs, waitSignals...)
-		defer signal.Stop(sigs)
-	}
-	b, _ := json.Marshal(c)
-	name := fmt.Sprintf("%020d-%d.json", time.Now().UnixNano(), os.Getpid())
-	// Write beside calls/ and rename in, so Calls never reads half a file.
-	tmp := filepath.Join(data, name)
-	err := os.WriteFile(tmp, b, 0o644)
-	if err == nil {
-		err = os.Rename(tmp, filepath.Join(data, "calls", name))
-	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "fake claude:", err)
-		return 70
-	}
-
-	fill := strings.NewReplacer("{{ticket}}", c.Ticket, "{{claim}}", c.Claim, "{{session}}", c.Session).Replace
-	fillAll := func(args []string) []string {
-		var filled []string
-		for _, a := range args {
-			filled = append(filled, fill(a))
-		}
-		return filled
-	}
-	fmt.Println(`{"type":"system","subtype":"init","session_id":"` + c.Session + `"}`)
-	for _, s := range steps {
-		switch {
-		case s.Exit != nil:
-			return *s.Exit
-		case s.Wait:
-			if code, stop := wait(data, c.Ticket, sigs); stop {
-				return code
-			}
-		case s.Stdout != "":
-			fmt.Println(fill(s.Stdout))
-		case s.Write != nil:
-			if err := os.WriteFile(s.Write.Name, []byte(fill(s.Write.Content)), 0o644); err != nil {
-				fmt.Fprintln(os.Stderr, "fake claude:", err)
-				return 70
-			}
-		case s.Git != nil:
-			filled := fillAll(s.Git)
-			cmd := exec.Command("git", filled...)
-			cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
-			if err := cmd.Run(); err != nil {
-				fmt.Fprintf(os.Stderr, "fake claude: git %s: %v\n", strings.Join(filled, " "), err)
-				return 70
-			}
-		case s.Need != "":
-			if _, err := os.Stat(s.Need); err != nil {
-				fmt.Fprintln(os.Stderr, "fake claude: need", s.Need+":", err)
-				return 70
-			}
-		case s.CLI != nil:
-			filled := fillAll(s.CLI)
-			code := cli.Run(context.Background(), filled, cli.Env{Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: os.Stderr, Getenv: os.Getenv})
-			if code != 0 {
-				fmt.Fprintf(os.Stderr, "fake claude: code-central %s exited %d\n", strings.Join(filled, " "), code)
-				return 70
-			}
-		}
-	}
-	return 0
-}
-
-// wait is the fake's Wait step: it returns when the test continues the
-// run, or with stop set when a signal on sigs ends it.
-func wait(data, ticket string, sigs <-chan os.Signal) (code int, stop bool) {
-	note := func(s string) {
-		f, err := os.OpenFile(filepath.Join(data, "signals", ticket), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-		if err == nil {
-			fmt.Fprintln(f, s)
-			f.Close()
-		}
-	}
-	cont := filepath.Join(data, "continue", ticket)
-	for {
-		select {
-		case s := <-sigs:
-			name, ends := signalName(s)
-			note(name)
-			if ends {
-				return 143, true
-			}
-		case <-time.After(5 * time.Millisecond):
-			if os.Remove(cont) == nil {
-				return 0, false
-			}
-		}
-	}
 }

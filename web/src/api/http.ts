@@ -59,11 +59,13 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     findSpecs: (project, filter = {}) => {
       const q = new URLSearchParams();
       if (filter.requirements) q.set("requirements", "true");
+      for (const l of filter.labels ?? []) q.append("label", l);
       if (filter.finished) q.set("finished", "true");
       const qs = q.toString();
       return call("GET", `${p(project)}/specs${qs ? `?${qs}` : ""}`);
     },
     submitRequirement: (project, text) => call("POST", `${p(project)}/submit_requirement`, { text }),
+    submitMap: (project, text) => call("POST", `${p(project)}/submit_map`, { text }),
     specQuestions: (project, spec) => call("GET", `${p(project)}/specs/${encodeURIComponent(numberOf(spec))}/questions`),
     act: <A extends TicketAction>(project: string, id: string, action: A, body: TicketActions[A]["body"]) =>
       call<TicketActions[A]["result"]>("POST", `${p(project)}/tickets/${encodeURIComponent(numberOf(id))}/${action}`, body),
@@ -74,6 +76,18 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     unlink: (project, target) => call("POST", `${p(project)}/unlink`, { target }),
     options: () => call("GET", "/api/options"),
     setOptions: (change) => call("POST", "/api/set_options", change),
+    usage: (filter = {}) => {
+      const q = new URLSearchParams();
+      if (filter.project) q.set("project", filter.project);
+      if (filter.days) q.set("days", String(filter.days));
+      const qs = q.toString();
+      return call("GET", `/api/usage${qs ? `?${qs}` : ""}`);
+    },
+    sessionUsage: ({ project, session, agent }) => {
+      const q = new URLSearchParams({ project, session });
+      if (agent) q.set("agent", agent);
+      return call("GET", `/api/usage/session?${q}`);
+    },
     subscribe: (h) =>
       follow(doFetch, base + "/api/events", retryMs, {
         onOpen: h.onOpen,

@@ -74,7 +74,17 @@ var handlers = map[string]handlerFunc{
 		return c.CreateTicket(r.Context(), r.PathValue("key"), in)
 	},
 	"get_ticket": func(c *core.Core, r *http.Request) (any, error) {
-		return c.GetTicket(r.Context(), r.PathValue("key"), core.Ref(r.PathValue("n")))
+		q := r.URL.Query()
+		if err := onlyParams(q, "part"); err != nil {
+			return nil, err
+		}
+		// With no part named, the HTTP API returns the whole Ticket: the
+		// UI and the Factory read every part.
+		parts := q["part"]
+		if len(parts) == 0 {
+			parts = core.TicketParts
+		}
+		return c.GetTicket(r.Context(), r.PathValue("key"), core.GetTicketInput{Ticket: core.Ref(r.PathValue("n")), Parts: parts})
 	},
 	"find_tickets": func(c *core.Core, r *http.Request) (any, error) {
 		q := r.URL.Query()
@@ -213,7 +223,7 @@ var handlers = map[string]handlerFunc{
 // request's Actor is already in its context (frontdoor.Guard reads the
 // Actor header); without one it is agent.
 func Register(mux *http.ServeMux, c *core.Core) {
-	all := map[string]handlerFunc{WaitPath: wait, TranscriptPath: transcript}
+	all := map[string]handlerFunc{WaitPath: wait, TranscriptPath: transcript, UsagePath: usageRead, SessionUsagePath: sessionUsageRead}
 	for name, pattern := range Routes {
 		all[pattern] = handlers[name]
 	}
@@ -229,6 +239,7 @@ func Register(mux *http.ServeMux, c *core.Core) {
 	}
 	mux.HandleFunc("POST /api/ping", ping(c))
 	mux.HandleFunc(SessionEventsPath, sessionEvents(c))
+	mux.HandleFunc(PostUsagePath, postUsage(c))
 	mux.HandleFunc(EventsPath, events(c))
 	mux.HandleFunc(TranscriptStreamPath, transcriptStream(c))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {

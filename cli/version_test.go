@@ -28,6 +28,7 @@ func runVersion(t *testing.T, version string, env map[string]string, args ...str
 }
 
 func TestVersionFlagPrintsTheStampedVersion(t *testing.T) {
+	t.Parallel()
 	r := runVersion(t, "v1.2.0-3-gabc123-dirty", nil, "--version")
 	if r.code != 0 || r.stdout != "code-central v1.2.0-3-gabc123-dirty\n" {
 		t.Fatalf("exit %d, stdout %q, stderr %q", r.code, r.stdout, r.stderr)
@@ -35,6 +36,7 @@ func TestVersionFlagPrintsTheStampedVersion(t *testing.T) {
 }
 
 func TestTheServiceSendsItsVersionInAResponseHeader(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t, codecentraltest.WithVersion("v1.4.0"))
 	resp, err := srv.Client.HTTP.Get(srv.URL + "/api/workflow")
 	if err != nil {
@@ -47,6 +49,7 @@ func TestTheServiceSendsItsVersionInAResponseHeader(t *testing.T) {
 }
 
 func TestTheCLISendsItsVersionOnEveryRequest(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	if _, err := srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
@@ -81,6 +84,7 @@ func TestTheCLISendsItsVersionOnEveryRequest(t *testing.T) {
 }
 
 func TestTheCLIWarnsWithoutFailingWhenVersionsDiffer(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, cli, service, want string
 	}{
@@ -112,6 +116,7 @@ func TestTheCLIWarnsWithoutFailingWhenVersionsDiffer(t *testing.T) {
 }
 
 func TestTheCLIIsQuietWhenVersionsMatch(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t, codecentraltest.WithVersion("v1.2.0"))
 	if _, err := srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
@@ -123,6 +128,7 @@ func TestTheCLIIsQuietWhenVersionsMatch(t *testing.T) {
 }
 
 func TestPingStaysSilentOnAVersionMismatch(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t, codecentraltest.WithVersion("v9.0.0"))
 	r := runVersion(t, "v1.0.0", map[string]string{"CODE_CENTRAL_URL": srv.URL}, "ping", "--session", "s1")
 	if r.code != 0 || r.stdout != "" || r.stderr != "" {

@@ -40,7 +40,7 @@ func ticketOps(f fixture) map[string]func(core.Ref) error {
 	title := "T"
 	q := []core.QuestionInput{{Title: "Q", Body: "B"}}
 	return map[string]func(core.Ref) error{
-		"get_ticket": func(r core.Ref) error { _, err := c.GetTicket(ctx, "acme", r); return err },
+		"get_ticket": func(r core.Ref) error { _, err := c.GetTicket(ctx, "acme", whole(r)); return err },
 		"edit_ticket": func(r core.Ref) error {
 			_, err := c.EditTicket(ctx, "acme", core.EditTicketInput{Ticket: r, Title: &title})
 			return err

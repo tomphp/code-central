@@ -19,6 +19,7 @@ import (
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/notify"
 	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/usage"
 	"github.com/tomoram/code-central/web"
 )
 
@@ -152,12 +153,13 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 
 	clk := clock.System{}
 	c := core.New(st, clk, ids.Random{})
+	c.SetUsage(usage.New(dir, clk, time.Local, e.Stderr))
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	go c.WatchTimedReasons(ctx, ticker.C, func(project, ticketID string) {
 		c.Events().Publish(events.Event{Type: events.TicketChanged, Project: project, ID: ticketID})
 	})
-	handler := frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), bindHosts...), e.version())
+	handler := frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), e.Stderr, bindHosts...), e.version())
 
 	bound := make([]string, 0, len(listeners))
 	for _, l := range listeners {

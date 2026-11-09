@@ -1,20 +1,25 @@
-// The triage inbox: "New requirement", Projects and Views on the left,
-// the list in the middle, the selected Requirement and Ticket on the right. A layout only: the data comes
+// The triage inbox: "New requirement" and "New Map", Projects and Views on
+// the left, the list in the middle, the selected Requirement or Map and
+// Ticket on the right. A layout only: the data comes
 // from live.ts and the Ticket pane is shared with any later view.
 import type { MouseEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
-import { FINISHED, STATES, type NeedsMeReason, type NeedsMeRow, type ProjectRow, type SpecDetail, type State, type TicketView } from "../api/types";
+import { FINISHED, STATES, type MapView, type NeedsMeReason, type NeedsMeRow, type ProjectRow, type SpecDetail, type State, type TicketView } from "../api/types";
 import { duration, REASON_LABEL, rowDetail } from "../format";
 import { RowLatestEvent } from "../LatestEvent";
 import { LinkBadge } from "../ticket/LinkBadge";
+import { PrototypeBadge } from "../ticket/PrototypeBadge";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
-import { NewRequirement } from "../requirement/NewRequirement";
+import { MapPane } from "../map/MapPane";
+import { MapRow } from "../map/MapRow";
+import { NewMap, NewRequirement } from "../requirement/NewRequirement";
 import { isStage, needsMeCount, progress, reasonsOf } from "../requirement/progress";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { RequirementRow } from "../requirement/RequirementRow";
 import { TicketPane } from "../ticket/TicketDetail";
 import { OptionsLink } from "../options/OptionsLink";
+import { UsageLink } from "../usage/UsageLink";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 
@@ -26,12 +31,14 @@ export interface InboxProps {
   navigate(patch: Partial<UiLocation>): void;
   // requirement is the selected Requirement, once read.
   requirement?: SpecDetail & { requirement: NonNullable<SpecDetail["requirement"]> };
+  // map is the selected Map, once read; it shares requirement's place.
+  map?: SpecDetail & { map: MapView };
   requirementError?: string;
   ticket?: TicketView;
   ticketError?: string;
 }
 
-export function Inbox({ api, now, data, loc, navigate, requirement, requirementError, ticket, ticketError }: InboxProps) {
+export function Inbox({ api, now, data, loc, navigate, requirement, map, requirementError, ticket, ticketError }: InboxProps) {
   const inProject = (key: string) => !loc.project || key === loc.project;
   const projects = data?.projects ?? [];
   const archived = projects.filter((p) => p.archived);
@@ -44,6 +51,9 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
   const reasons = reasonsOf(data?.needsMe);
   const tickets = (data?.tickets ?? []).filter((t) => inProject(t.project));
   const requirements = requirementList((data?.requirements ?? []).filter((s) => inProject(s.project)));
+  const maps = (data?.maps ?? []).filter((s) => inProject(s.project));
+  // The Requirements view lists Maps among the Requirements.
+  const listed = requirementList(byCreation([...requirements, ...maps]));
   const progressOf = (s: ProjectSpec) => progress(s.requirement!, (data?.tickets ?? []).filter((t) => t.spec === s.id), reasons);
   const needingReqs = requirements.filter((s) => stageNeeds.has(s.id));
   // In flight: unfinished, and nothing of it waits on the human.
@@ -85,14 +95,23 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
       <nav aria-label="Filters" className="inbox-nav">
         <div className="inbox-title">
           <h1>Code Central</h1>
+          <UsageLink loc={loc} navigate={navigate} />
           <OptionsLink loc={loc} navigate={navigate} />
         </div>
-        <NewRequirement
-          api={api}
-          projects={projects.filter((p) => !p.archived)}
-          project={loc.project}
-          onSubmitted={(r) => navigate({ list: "requirements", state: undefined, requirement: r.spec.id, ticket: undefined })}
-        />
+        <div className="new-specs">
+          <NewRequirement
+            api={api}
+            projects={projects.filter((p) => !p.archived)}
+            project={loc.project}
+            onSubmitted={(r) => navigate({ list: "requirements", state: undefined, requirement: r.spec.id, ticket: undefined })}
+          />
+          <NewMap
+            api={api}
+            projects={projects.filter((p) => !p.archived)}
+            project={loc.project}
+            onSubmitted={(r) => navigate({ list: "requirements", state: undefined, requirement: r.spec.id, ticket: undefined })}
+          />
+        </div>
         <button className="btn focus-enter" onClick={() => navigate({ view: "focus" })}>
           Focus
         </button>
@@ -103,7 +122,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
         <FilterButton
           on={loc.list === "requirements"}
           label="Requirements"
-          count={requirements.filter((s) => !s.finished).length}
+          count={listed.filter((s) => !s.finished).length}
           onClick={() => navigate({ list: "requirements", state: undefined })}
         />
         {STATES.map((s) => (
@@ -126,10 +145,14 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
           <p className="empty">Loading…</p>
         ) : loc.list === "requirements" ? (
           <>
-            {requirements.length === 0 && <p className="empty">No Requirements yet.</p>}
-            {requirements.map((s) => (
-              <RequirementRow key={s.id} spec={s} p={progressOf(s)} link={requirementLink(s.id)} />
-            ))}
+            {listed.length === 0 && <p className="empty">No Requirements yet.</p>}
+            {listed.map((s) =>
+              s.map ? (
+                <MapRow key={s.id} spec={{ ...s, map: s.map }} link={requirementLink(s.id)} />
+              ) : (
+                <RequirementRow key={s.id} spec={s} p={progressOf(s)} link={requirementLink(s.id)} />
+              ),
+            )}
           </>
         ) : loc.state ? (
           <StateList tickets={stateList(tickets, loc.state)} reasons={reasons} now={now} link={rowLink} />
@@ -175,6 +198,8 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
             <p className="empty">{requirementError}</p>
           ) : requirement ? (
             <RequirementPane spec={requirement} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
+          ) : map ? (
+            <MapPane spec={map} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
           ) : (
             <p className="empty">Loading…</p>
           ))}
@@ -195,6 +220,13 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
 function stateList(tickets: ProjectTicket[], state: State): ProjectTicket[] {
   const rows = tickets.filter((t) => t.state === state);
   return FINISHED.includes(state) ? rows.sort((a, b) => b.updated.localeCompare(a.updated)) : rows;
+}
+
+// byCreation puts Specs from several lists back in creation order: by
+// Project, then ID.
+function byCreation(specs: ProjectSpec[]): ProjectSpec[] {
+  const n = (s: ProjectSpec) => Number(s.id.slice(s.id.lastIndexOf("-") + 1));
+  return [...specs].sort((a, b) => a.project.localeCompare(b.project) || n(a) - n(b));
 }
 
 // requirementList is the Requirements view's order: unfinished ones, then
@@ -230,11 +262,13 @@ function NeedsMeLink({ row, now, link }: { row: NeedsMeRow; now: Date; link: Row
       <span className="row-top">
         <span className="tid">{row.id}</span>
         <span className="row-title">{row.title}</span>
+        {row.prototype && <PrototypeBadge />}
         {row.link && <LinkBadge link={row.link} plain />}
         <span className="muted small">{duration(now, row.since)}</span>
       </span>
       <span className="row-detail">
-        {row.requirement && <span className="req-chip">↳ {row.requirement.title}</span>} {rowDetail(now, row)}
+        {row.requirement && <span className="req-chip">↳ {row.requirement.title}</span>}
+        {row.spec && <span className="req-chip">↳ {row.spec.map ? `Map: ${row.spec.title}` : row.spec.title}</span>} {rowDetail(now, row)}
       </span>
     </a>
   );

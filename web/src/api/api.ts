@@ -16,10 +16,15 @@ import type {
   SpecDetail,
   SpecQuestions,
   SpecRow,
+  SubmitMapResult,
   SubmitRequirementResult,
   TicketRow,
   TicketView,
   Transcript,
+  UsageFilter,
+  SessionUsageFilter,
+  SessionUsageView,
+  UsageView,
 } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
@@ -69,6 +74,9 @@ export interface Api {
   // submitRequirement creates a Requirement from the human's text: its
   // Spec and three Stage Tickets, Grilling ready for a Factory.
   submitRequirement(project: string, text: string): Promise<SubmitRequirementResult>;
+  // submitMap creates a Map from the human's text: its Spec, with the
+  // Map's empty sections, and a Charting Ticket ready for a Factory.
+  submitMap(project: string, text: string): Promise<SubmitMapResult>;
   // specQuestions rolls up a Spec's Questions: its Tickets' Rounds.
   specQuestions(project: string, spec: string): Promise<SpecQuestions>;
   act<A extends TicketAction>(
@@ -95,6 +103,14 @@ export interface Api {
   // outside its set is refused as invalid, naming it, and nothing changes.
   options(): Promise<Options>;
   setOptions(change: Partial<Options>): Promise<Options>;
+  // usage reads Usage: the Code Central calls agents made in one Project,
+  // or all of them, over the last 7 (the default), 30 or 90 local days.
+  // An unknown Project is not_found.
+  usage(filter?: UsageFilter): Promise<UsageView>;
+  // sessionUsage reads one session's responses, oldest first, each with
+  // its Context Size, for its line chart. An unknown Project is not_found;
+  // an unknown session has none.
+  sessionUsage(filter: SessionUsageFilter): Promise<SessionUsageView>;
   // subscribe opens the live feed and returns a function that closes it.
   subscribe(handlers: EventHandlers): () => void;
   // transcript reads Claim number claim's Transcript (ticket 110).

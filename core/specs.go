@@ -38,6 +38,8 @@ type SpecDetail struct {
 	Tickets      []TicketRow  `json:"tickets,omitzero"`
 	// Requirement is set only when the Spec is a Requirement.
 	Requirement *RequirementView `json:"requirement,omitempty"`
+	// Map is set only when the Spec is a Map.
+	Map *MapView `json:"map,omitempty"`
 }
 
 // GetSpecInput is get_spec's input. With neither Parts nor Sections, the
@@ -50,7 +52,8 @@ type GetSpecInput struct {
 	Sections []string `json:"sections,omitempty"`
 }
 
-// The parts of a Spec a lighter get_spec can ask for.
+// The parts of a Spec a lighter get_spec can ask for. A Ticket has edits
+// too, so PartEdits names its edits part as well.
 const (
 	PartBody    = "body"
 	PartTickets = "tickets"
@@ -71,6 +74,8 @@ type SpecRow struct {
 	Link         *LinkView         `json:"link,omitempty"`
 	// Requirement is set only when the Spec is a Requirement.
 	Requirement *RequirementView `json:"requirement,omitempty"`
+	// Map is set only when the Spec is a Map.
+	Map *MapView `json:"map,omitempty"`
 }
 
 // FindSpecsInput is find_specs' filters; every filter given must match.
@@ -108,6 +113,7 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 		}
 		v.StateSummary, v.Finished = summarise(tickets)
 		v.Requirement = c.requirementView(r, key, tickets)
+		v.Map = c.mapView(r, key, s, tickets)
 		if in.lighter() {
 			v.Outline = Outline(s.Body)
 		}
@@ -126,8 +132,9 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 		}
 		if parts[PartTickets] {
 			v.Tickets = []TicketRow{}
+			onMap := isMap(s.Labels)
 			for _, t := range tickets {
-				v.Tickets = append(v.Tickets, c.ticketRow(r, key, t))
+				v.Tickets = append(v.Tickets, c.ticketRow(r, key, t, onMap))
 			}
 		}
 		return nil
@@ -146,12 +153,9 @@ func (in GetSpecInput) parts() (map[string]bool, error) {
 	if len(asked) == 0 {
 		asked = specParts
 	}
-	out := map[string]bool{}
-	for _, p := range asked {
-		if !slices.Contains(specParts, p) {
-			return nil, invalid("parts", "unknown part %q (the parts are %s)", p, strings.Join(specParts, ", "))
-		}
-		out[p] = true
+	out, err := partSet(asked, specParts)
+	if err != nil {
+		return nil, err
 	}
 	if len(in.Sections) > 0 && !out[PartBody] {
 		return nil, invalid("sections", "sections cut the body, so parts must include body")
@@ -206,7 +210,7 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 			rows = append(rows, SpecRow{
 				ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
 				StateSummary: summary, Finished: done, Updated: s.Updated, Link: linkView(s.Link),
-				Requirement: req,
+				Requirement: req, Map: c.mapView(r, key, s, tickets),
 			})
 		}
 		return nil

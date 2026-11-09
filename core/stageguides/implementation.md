@@ -1,6 +1,6 @@
 # Stage Guide: implementation
 
-You hold a Claim on an implementation Ticket. Its description holds the acceptance criteria, and its Spec holds the decisions behind them. `get_stage_guide` with stage `implementation` serves this guide again if you lose it.
+You hold a Claim on an implementation Ticket. Its description holds the acceptance criteria, and its Spec holds the decisions behind them. Read the Spec's Implementation Decisions and Testing Decisions with `get_spec` and `sections`; read the rest only when a criterion points there. `get_stage_guide` with stage `implementation` serves this guide again if you lose it.
 
 ## What this Ticket produces
 

@@ -30,7 +30,7 @@ cp bin/code-central bin/code-central-factory ~/bin/   # or symlink them; anywher
 code-central service install
 ```
 
-`make build` also turns on the repository's `commit-msg` hook in that clone, which refuses commits until cocogitto is installed; see the Commits section of [CLAUDE.md](../CLAUDE.md).
+`make build` also turns on the repository's `commit-msg` hook in that clone, which refuses commits until cocogitto (`cog`) is on PATH; its message says how to install it.
 
 ### What `service install` does
 
@@ -94,6 +94,24 @@ Files written by an older `init` keep working: the `.mcp.json` URL, the port, th
 
 Running it again rewrites the files it generated without asking, and asks before replacing any file you've changed.
 
+## The service log
+
+The service writes its log to stderr, or appends it to the file `serve --log` names; [What `service install` does](#what-service-install-does) says where each OS keeps it. Besides startup and migration messages, it holds one line for each MCP tool call an agent makes:
+
+```text
+code-central serve: mcp get_ticket project=acme id=acme-2 bytes=1534
+code-central serve: mcp create_spec project=acme id=acme-4 bytes=96
+code-central serve: mcp find_tickets project=acme bytes=2210
+code-central serve: mcp get_ticket project=acme id=acme-99 bytes=71 error=not_found
+```
+
+- `mcp <operation>` is the tool called, and `project` the Project its URL names.
+- `id` is the Ticket or Spec the call names (a bare number is shown as `<key>-<n>`), or else the one it returns, such as the Spec `create_spec` made or the Ticket `claim` gave. It is left out when there is neither.
+- `bytes` is the length of the text the agent is given, so the context the call loads into the agent.
+- `error=<code>` ends the line of a call the service rejected; `bytes` is then the error's size.
+
+Calls to the HTTP API, from the CLI and the UI, are not logged. [Usage](#usage) adds these calls up per operation in the UI. To add up what one session's Code Central calls load, filter the log by time or `project`; the [Context Report](context-report.md) measures everything else an agent loads, from Claude Code's session logs.
+
 ## Versions
 
 A release's binary is stamped with its tag, such as `v1.1.0`, and `make build` stamps `git describe --tags --always --dirty`, such as `v1.1.0-3-g0cf9d18-dirty`. `code-central --version` prints it, and the service sends it in the `X-Code-Central-Version` response header.
@@ -134,6 +152,31 @@ With **Activity Dashboard** chosen, Focus Mode shows the dashboard wherever it w
 Scripts can read and set Options over the HTTP API, sending `X-Code-Central-Actor: human` to change them: `GET /api/options`, and `POST /api/set_options` with a body such as `{"focus_clear": "activity_dashboard"}`.
 
 The service keeps Options in its store, in `options.yaml` beside `store.yaml`, so they survive a restart and a cleared browser. There is no file until you first change one, and no MCP tool or CLI command changes them. `settings.yaml` is still the place for what the service needs at startup, such as the port.
+
+## Usage
+
+**Usage** shows what agents have consumed: the Code Central calls they made, how full their sessions' context got, and the tokens they used each day, in one Project or in all of them, over the last 7, 30 or 90 days. Open it with **Usage** at the top of the Inbox's left pane, or in Focus Mode's header. It opens on **All Projects** and **Last 7 days**; the **Projects** picker lists every Project, Archived ones marked `(Archived)`, and the **Range** picker offers 7, 30 and 90 days. Both go in the address (`/?view=usage&project=acme&days=30`), so a reload or a bookmark keeps them, and **Back to the Inbox** or **Back to Focus Mode** returns you to where you were. A day is a day in the service's local time, and "the last 7 days" is today and the 6 days before it.
+
+The **Code Central calls** table has one row per MCP operation: its calls, the total and average size of the requests (the arguments' JSON) and of the responses (the text the agent was given, as `bytes=` in [the service log](#the-service-log)), and how many the service rejected. Sizes are in B, KB and MB, with the exact figure on hover. Click a column's header to sort by it, and again to reverse it. Only agents' MCP calls are counted, rejected ones included: not calls to a Project that doesn't exist, and never the HTTP API's, so neither the UI nor the Factory adds to it. Usage loads when you open it and when you change the Project or range; it doesn't follow the live feed.
+
+**Context Size** is how many tokens a session's model read for one response (input, cache write and cache read), which is how full its context window was; a session's peak is the largest of its responses'. The **Context Size by kind** table gives each kind of session (grilling, spec, tickets, implementation, review, subagent, then any other by name) its number of sessions, its average peak and its largest peak. Below it, **Recent sessions** lists the newest 50, newest first: each one's Ticket, which opens that Ticket in the Inbox, its Project, Claim, session ID, kind, start, peak Context Size and number of model responses. A session is its session ID plus its subagent, so each review or other subagent is a session of its own, and a session resumed under a later Claim stays one session, shown under its latest Claim. Token counts have thousands separators, with the exact figure on hover. Only sessions whose token usage is posted to the service are counted, so sessions you run by hand aren't; a section with nothing to show says so.
+
+**Token usage** draws one bar per day of the range, oldest first, including days with none, stacked by input, cache write, cache read and output tokens. The **Kind** picker narrows the bars to one kind of session, or shows **All kinds**, without reading Usage again. Point at a bar, or tab to it, to see that day's exact figures and their total. It counts tokens only and never shows a price, since a subscription has none per token.
+
+Click a session's ID in **Recent sessions** to open its Context Size response by response as a line chart at the top of Usage. The chart reads every day Usage keeps, whatever the range, and hovering or focusing a point shows that response's time, Context Size and four token counts. The open session goes in the address too (`/?view=usage&session_project=acme&session=<id>&agent=<id>`, `agent` left out for a main session), so a reload or a bookmark reopens it. **Close session** closes it, and so does the browser's Back when the session was the last thing you opened.
+
+The token usage comes from a Factory, which posts each model response to `POST /api/usage` with `{"session_id": "...", "responses": [...]}`. Each response has its `time`, its `agent` (left out for the main session), its `kind` and its `input_tokens`, `cache_write_tokens`, `cache_read_tokens` and `output_tokens`. The service files them under the newest Claim with that session ID, which gives the Project, Ticket and Claim, and drops them when there is none. The post counts as a ping, and it always answers `204`, even for an unknown session or a body it can't read.
+
+The service records each call and each response as one line of JSON in `projects/<key>/usage/<YYYY-MM-DD>.jsonl` in its store, one file per Project per local day, which you can read or grep by hand:
+
+```json
+{"type":"mcp_call","time":"2026-11-09T14:01:43Z","op":"get_ticket","id":"acme-2","request_bytes":12,"response_bytes":1534}
+{"type":"model_response","time":"2026-11-09T14:01:50Z","ticket":"acme-2","claim":1,"session_id":"68888598-50ac-4366-b89d-06e9cdf7a179","kind":"implementation","input_tokens":4,"cache_write_tokens":1830,"cache_read_tokens":41022,"output_tokens":312}
+```
+
+A record that can't be written, or a line that can't be read, is noted in the service log and skipped; it never fails an agent's call or a read. Usage keeps 90 days: the service deletes each file whose day is more than 90 days before today when it starts, and again with the first record of each new day, logging any file it can't delete ([ADR 0016](adr/0016-usage-records-are-append-only-json-lines-files-per-project-per-day-kept-90-days.md)).
+
+Scripts can read it over the HTTP API: `GET /api/usage?project=<key>&days=<7|30|90>`. Leave out `project` for all Projects, Archived ones included; `days` defaults to 7. An unknown Project is `not_found`, and any other `days` is `invalid`. The answer's `operations` are the calls table's rows, `kinds` the Context Size by kind, `sessions` the recent sessions, and `days` a row for every local day in the range, oldest first, each with its `day` (`YYYY-MM-DD`) and its `kinds`: each kind of session with any usage that day, with its four token counts. `GET /api/usage/session?project=<key>&session=<id>&agent=<id>` reads one session's responses, oldest first, over the 90 days kept: each one's `time`, `context_size` and four token counts. Leave out `agent` for a main session. An unknown Project is `not_found`, and an unknown session has no `responses`.
 
 ## Reaching it from Docker: `--bind`
 

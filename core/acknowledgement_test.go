@@ -304,7 +304,7 @@ func TestTicketWritesWithFullReturnTheTicket(t *testing.T) {
 			t.Fatalf("%s: %v", w.name, err)
 		}
 		out := resultJSON(t, v)
-		get, err := f.core.GetTicket(ctx, "acme", core.Ref(out["id"].(string)))
+		get, err := f.core.GetTicket(ctx, "acme", whole(core.Ref(out["id"].(string))))
 		if err != nil {
 			t.Fatalf("%s: %v", w.name, err)
 		}
@@ -458,7 +458,7 @@ func TestClaimEndingActionsAndPostRoundWithFullReturnTheirFormerResult(t *testin
 			if err != nil {
 				t.Fatal(err)
 			}
-			get, err := f.core.GetTicket(ctx, "acme", "2")
+			get, err := f.core.GetTicket(ctx, "acme", whole("2"))
 			if err != nil {
 				t.Fatal(err)
 			}

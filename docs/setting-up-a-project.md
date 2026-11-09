@@ -29,6 +29,11 @@ This guide sets a repository up as a Project, so that agents can reach its Specs
    | spec Stage | `/to-spec` |
    | tickets Stage | `/to-tickets` |
    | implementation | `/implement` |
+   | a Map's Charting (`wayfinder:chart`) | `/wayfinder` |
+   | a Map's grilling (`wayfinder:grilling`) | `/grilling`, with `/domain-modeling` alongside |
+   | a Map's task (`wayfinder:task`) | none: the Guide alone |
+
+   The Factory doesn't run a Prototype (`prototype`) or a Map's research (`wayfinder:research`) Ticket yet, so it leaves them unclaimed.
 
 > [!WARNING]
 > **Don't run `/setup-matt-pocock-skills` in a Project.** `code-central init` already writes `docs/agents/` and a pointer to it in `CLAUDE.md`, which tell the skills that Specs and Tickets live in Code Central. The setup skill would point them at GitHub issues or a `.scratch/` folder instead.
@@ -106,7 +111,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
    Manage MCP servers
    …
      Project MCPs (/Users/you/src/acme-shop/.mcp.json)
-   ❯ ✔ code-central 32 tools
+   ❯ ✔ code-central 33 tools
    …
    ```
 

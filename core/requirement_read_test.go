@@ -175,3 +175,56 @@ func TestFindSpecsCanKeepOnlyRequirements(t *testing.T) {
 		t.Fatalf("find_specs requirements: %+v, %v", only, err)
 	}
 }
+
+func TestNeedsMeListsMapTicketsAndPrototypesOneByOneWithTheirSpec(t *testing.T) {
+	f := newFixture(t)
+	f.requirement(t)
+	f.spec(t, "acme", "Find the way") // acme-6
+	if _, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-6", Labels: []string{core.MapLabel}}); err != nil {
+		t.Fatal(err)
+	}
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "6", Title: "Charting", Labels: []string{"wayfinder:chart"}, State: store.Ready}) // acme-7
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "6", Title: "Which store", Labels: []string{"wayfinder:grilling"}})               // acme-8
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "6", Title: "Try the graph", Labels: []string{"prototype"}, State: store.Ready})  // acme-9
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Try the form", Labels: []string{"prototype"}, State: store.Ready})   // acme-10
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Try the toggle", Labels: []string{"prototype"}, State: store.Ready}) // acme-11
+	for _, n := range []int{7, 8, 9, 10, 11} {
+		f.setState(t, n, store.InReview)
+	}
+	v, err := f.core.NeedsMe(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]core.NeedsMeRow{}
+	for _, g := range v.Groups {
+		for _, row := range g.Tickets {
+			got[row.ID] = row
+		}
+	}
+	mapSpec := core.NeedsMeSpec{Spec: "acme-6", Title: "Find the way", Map: true}
+	for id, want := range map[string]struct {
+		spec      *core.NeedsMeSpec
+		prototype bool
+	}{
+		"acme-7":  {&mapSpec, false},
+		"acme-8":  {&mapSpec, false},
+		"acme-9":  {&mapSpec, true},
+		"acme-10": {&core.NeedsMeSpec{Spec: "acme-1", Title: "Login"}, true},
+		// On a Requirement, the Requirement is its context.
+		"acme-11": {nil, true},
+	} {
+		row, ok := got[id]
+		if !ok {
+			t.Fatalf("%s isn't its own Needs Me row", id)
+		}
+		if row.Prototype != want.prototype || (row.Spec == nil) != (want.spec == nil) || (row.Spec != nil && *row.Spec != *want.spec) {
+			t.Errorf("%s spec %+v prototype %v, want %+v %v", id, row.Spec, row.Prototype, want.spec, want.prototype)
+		}
+		if row.Requirement != nil && (id != "acme-11" || row.Requirement.Stage != "") {
+			t.Errorf("%s requirement %+v", id, row.Requirement)
+		}
+	}
+	if got["acme-11"].Requirement == nil {
+		t.Error("a Prototype on a Requirement names it")
+	}
+}

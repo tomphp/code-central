@@ -2,6 +2,7 @@ package core_test
 
 import (
 	"encoding/json"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -50,8 +51,8 @@ func TestClaimTakesTheNextReadyTicketInClaimOrder(t *testing.T) {
 		t.Fatalf("got claim %q on %s (%s), want claim-1 on acme-3 In Progress", res.ClaimID, res.Ticket.ID, res.Ticket.State)
 	}
 	want := core.MoveView{From: store.Ready, To: store.InProgress, Actor: "agent", Time: t0.Add(time.Hour), Claim: 1}
-	if len(res.Ticket.Moves) != 1 || res.Ticket.Moves[0] != want {
-		t.Fatalf("moves %+v, want [%+v]", res.Ticket.Moves, want)
+	if moves := f.get(t, "acme-3").Moves; len(moves) != 1 || moves[0] != want {
+		t.Fatalf("moves %+v, want [%+v]", moves, want)
 	}
 	if c := res.Ticket.Claims; len(c) != 1 || c[0].Number != 1 || c[0].SessionID != "sess-1" || !c[0].Started.Equal(t0.Add(time.Hour)) || c[0].Ended != nil {
 		t.Fatalf("claims %+v", c)
@@ -149,7 +150,7 @@ func TestTheClaimIDIsLeftOutOfEveryRead(t *testing.T) {
 		t.Fatalf("claim ID %q", res.ClaimID)
 	}
 	view, _ := json.Marshal(res.Ticket)
-	got, err := f.core.GetTicket(ctx, "acme", "2")
+	got, err := f.core.GetTicket(ctx, "acme", whole("2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,8 +236,12 @@ func TestTheHoldingSessionClaimsItsTicketAgainAndGetsTheSameClaim(t *testing.T) 
 			if string(a) != string(b) {
 				t.Fatalf("claiming again wrote the Ticket:\nbefore %s\nafter  %s", b, a)
 			}
-			if r, _ := json.Marshal(res.Ticket); string(r) != string(b) {
-				t.Fatalf("claiming again gave the view %s, want the Ticket as it is %s", r, b)
+			now, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "2"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if r, n := asJSON(t, res.Ticket), asJSON(t, now); !reflect.DeepEqual(r, n) {
+				t.Fatalf("claiming again gave the view %v, want the Ticket as it is %v", r, n)
 			}
 			select {
 			case e := <-notices:

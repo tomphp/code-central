@@ -1,0 +1,793 @@
+{
+  "sessions": 204,
+  "from": "2026-11-08T15:21:46.083Z",
+  "to": "2026-11-09T10:06:53.016Z",
+  "kinds": [
+    {
+      "name": "grilling",
+      "sessions": 11,
+      "bytes": 900030,
+      "tools": [
+        {
+          "name": "Code Central",
+          "calls": 85,
+          "bytes": 482098
+        },
+        {
+          "name": "Bash",
+          "calls": 111,
+          "bytes": 417682
+        },
+        {
+          "name": "Skill",
+          "calls": 5,
+          "bytes": 250
+        },
+        {
+          "name": "ToolSearch",
+          "calls": 13,
+          "bytes": 0
+        }
+      ],
+      "operations": [
+        {
+          "name": "comment",
+          "calls": 13,
+          "bytes": 147081
+        },
+        {
+          "name": "finish",
+          "calls": 11,
+          "bytes": 144479
+        },
+        {
+          "name": "pick_up_answers",
+          "calls": 14,
+          "bytes": 100565
+        },
+        {
+          "name": "get_workflow",
+          "calls": 3,
+          "bytes": 33548
+        },
+        {
+          "name": "get_ticket",
+          "calls": 12,
+          "bytes": 29622
+        },
+        {
+          "name": "get_spec",
+          "calls": 5,
+          "bytes": 11066
+        },
+        {
+          "name": "edit_spec",
+          "calls": 11,
+          "bytes": 9282
+        },
+        {
+          "name": "submit_requirement",
+          "calls": 1,
+          "bytes": 3155
+        },
+        {
+          "name": "post_round",
+          "calls": 14,
+          "bytes": 2804
+        },
+        {
+          "name": "find_specs",
+          "calls": 1,
+          "bytes": 496
+        }
+      ],
+      "rounds": 14,
+      "questions": 91
+    },
+    {
+      "name": "spec",
+      "sessions": 11,
+      "bytes": 972575,
+      "tools": [
+        {
+          "name": "Code Central",
+          "calls": 59,
+          "bytes": 544113
+        },
+        {
+          "name": "Bash",
+          "calls": 85,
+          "bytes": 427635
+        },
+        {
+          "name": "Agent",
+          "calls": 1,
+          "bytes": 827
+        },
+        {
+          "name": "ToolSearch",
+          "calls": 12,
+          "bytes": 0
+        }
+      ],
+      "operations": [
+        {
+          "name": "get_ticket",
+          "calls": 23,
+          "bytes": 241126
+        },
+        {
+          "name": "edit_spec",
+          "calls": 12,
+          "bytes": 216860
+        },
+        {
+          "name": "finish",
+          "calls": 11,
+          "bytes": 48373
+        },
+        {
+          "name": "get_spec",
+          "calls": 11,
+          "bytes": 31784
+        },
+        {
+          "name": "pick_up_answers",
+          "calls": 1,
+          "bytes": 5821
+        },
+        {
+          "name": "post_round",
+          "calls": 1,
+          "bytes": 149
+        }
+      ],
+      "rounds": 1,
+      "questions": 3
+    },
+    {
+      "name": "tickets",
+      "sessions": 11,
+      "bytes": 667436,
+      "tools": [
+        {
+          "name": "Code Central",
+          "calls": 103,
+          "bytes": 583364
+        },
+        {
+          "name": "Bash",
+          "calls": 34,
+          "bytes": 84072
+        },
+        {
+          "name": "ToolSearch",
+          "calls": 13,
+          "bytes": 0
+        }
+      ],
+      "operations": [
+        {
+          "name": "get_spec",
+          "calls": 12,
+          "bytes": 313443
+        },
+        {
+          "name": "create_ticket",
+          "calls": 57,
+          "bytes": 136873
+        },
+        {
+          "name": "get_workflow",
+          "calls": 5,
+          "bytes": 54210
+        },
+        {
+          "name": "finish",
+          "calls": 11,
+          "bytes": 31611
+        },
+        {
+          "name": "get_ticket",
+          "calls": 12,
+          "bytes": 23666
+        },
+        {
+          "name": "edit_ticket",
+          "calls": 2,
+          "bytes": 12317
+        },
+        {
+          "name": "add_blocker",
+          "calls": 3,
+          "bytes": 9836
+        },
+        {
+          "name": "comment",
+          "calls": 1,
+          "bytes": 1408
+        }
+      ]
+    },
+    {
+      "name": "implementation",
+      "sessions": 69,
+      "bytes": 7245179,
+      "tools": [
+        {
+          "name": "Bash",
+          "calls": 1981,
+          "bytes": 4484471
+        },
+        {
+          "name": "Code Central",
+          "calls": 233,
+          "bytes": 2600988
+        },
+        {
+          "name": "Read",
+          "calls": 31,
+          "bytes": 73511
+        },
+        {
+          "name": "Agent",
+          "calls": 101,
+          "bytes": 59414
+        },
+        {
+          "name": "Write",
+          "calls": 67,
+          "bytes": 12888
+        },
+        {
+          "name": "TaskStop",
+          "calls": 2,
+          "bytes": 7799
+        },
+        {
+          "name": "Edit",
+          "calls": 24,
+          "bytes": 3318
+        },
+        {
+          "name": "Skill",
+          "calls": 55,
+          "bytes": 2464
+        },
+        {
+          "name": "SendMessage",
+          "calls": 2,
+          "bytes": 326
+        },
+        {
+          "name": "ToolSearch",
+          "calls": 74,
+          "bytes": 0
+        }
+      ],
+      "operations": [
+        {
+          "name": "get_spec",
+          "calls": 55,
+          "bytes": 1522077
+        },
+        {
+          "name": "finish",
+          "calls": 69,
+          "bytes": 396270
+        },
+        {
+          "name": "get_ticket",
+          "calls": 76,
+          "bytes": 374876
+        },
+        {
+          "name": "get_workflow",
+          "calls": 28,
+          "bytes": 303576
+        },
+        {
+          "name": "pick_up_answers",
+          "calls": 2,
+          "bytes": 3438
+        },
+        {
+          "name": "find_tickets",
+          "calls": 1,
+          "bytes": 453
+        },
+        {
+          "name": "post_round",
+          "calls": 2,
+          "bytes": 298
+        }
+      ],
+      "rounds": 2,
+      "questions": 2
+    },
+    {
+      "name": "review",
+      "sessions": 98,
+      "bytes": 3700374,
+      "tools": [
+        {
+          "name": "Bash",
+          "calls": 542,
+          "bytes": 3155614
+        },
+        {
+          "name": "Code Central",
+          "calls": 24,
+          "bytes": 318833
+        },
+        {
+          "name": "Read",
+          "calls": 6,
+          "bytes": 219949
+        },
+        {
+          "name": "SubagentHandback",
+          "calls": 98,
+          "bytes": 5978
+        },
+        {
+          "name": "ToolSearch",
+          "calls": 12,
+          "bytes": 0
+        }
+      ],
+      "operations": [
+        {
+          "name": "get_spec",
+          "calls": 13,
+          "bytes": 269207
+        },
+        {
+          "name": "get_ticket",
+          "calls": 11,
+          "bytes": 49626
+        }
+      ],
+      "wider_reads": 1
+    },
+    {
+      "name": "subagent",
+      "sessions": 4,
+      "bytes": 354394,
+      "tools": [
+        {
+          "name": "Bash",
+          "calls": 72,
+          "bytes": 261433
+        },
+        {
+          "name": "WebFetch",
+          "calls": 10,
+          "bytes": 92744
+        },
+        {
+          "name": "SubagentHandback",
+          "calls": 3,
+          "bytes": 183
+        },
+        {
+          "name": "Agent",
+          "calls": 1,
+          "bytes": 34
+        }
+      ]
+    }
+  ],
+  "largest": [
+    {
+      "kind": "review",
+      "ticket": "code-central-110",
+      "tool": "Read",
+      "input": "…ode-central-110/eeefdafe-aa2e-40b9-9c58-e087dbdf962b/tool-results/b4oon60v5.txt",
+      "bytes": 47276
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-141",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-120\"}",
+      "bytes": 45152
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-143",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-120\"}",
+      "bytes": 45137
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-142",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-120\"}",
+      "bytes": 45080
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-140",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-120\"}",
+      "bytes": 45064
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-139",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-120\"}",
+      "bytes": 45005
+    },
+    {
+      "kind": "tickets",
+      "ticket": "code-central-123",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-120\"}",
+      "bytes": 43706
+    },
+    {
+      "kind": "spec",
+      "ticket": "code-central-122",
+      "tool": "mcp__code-central__edit_spec",
+      "input": "{\"body\":\"## Problem Statement\\n\\nA review of every agent session on this reposi…",
+      "bytes": 42609
+    },
+    {
+      "kind": "review",
+      "ticket": "code-central-136",
+      "tool": "Read",
+      "input": "…ode-central-136/f04dbd37-1420-4d36-85fc-6ae67480fb75/tool-results/b1pnv2cuw.txt",
+      "bytes": 38022
+    },
+    {
+      "kind": "review",
+      "ticket": "code-central-105",
+      "tool": "Read",
+      "input": "…ode-central-105/dc16fec5-ac0c-4fc6-80fd-5788f2246a88/tool-results/b3gpi90gq.txt",
+      "bytes": 34212
+    },
+    {
+      "kind": "review",
+      "ticket": "code-central-151",
+      "tool": "Read",
+      "input": "…ode-central-151/69aa2217-9d23-40b0-9371-d0abe540159f/tool-results/bsqri44by.txt",
+      "bytes": 34165
+    },
+    {
+      "kind": "review",
+      "ticket": "code-central-97",
+      "tool": "Read",
+      "input": "…code-central-97/6cf4627e-b96b-43bb-a902-59e73c539e67/tool-results/bcc3f7fnm.txt",
+      "bytes": 34141
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-153",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-124\"}",
+      "bytes": 32770
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-147",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-124\"}",
+      "bytes": 32647
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-148",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-124\"}",
+      "bytes": 32647
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-151",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-124\"}",
+      "bytes": 32643
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-149",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-124\"}",
+      "bytes": 32611
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-150",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-124\"}",
+      "bytes": 32611
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-146",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-124\"}",
+      "bytes": 32518
+    },
+    {
+      "kind": "implementation",
+      "ticket": "code-central-152",
+      "tool": "mcp__code-central__get_spec",
+      "input": "{\"spec\":\"code-central-124\"}",
+      "bytes": 32517
+    }
+  ],
+  "re_reads": [
+    {
+      "id": "code-central-124",
+      "reads": 13,
+      "sessions": 13,
+      "readers": [
+        "code-central-115 tickets",
+        "code-central-125 grilling",
+        "code-central-126 spec",
+        "code-central-127 tickets",
+        "code-central-145 implementation",
+        "code-central-146 implementation",
+        "code-central-147 implementation",
+        "code-central-148 implementation",
+        "code-central-149 implementation",
+        "code-central-150 implementation",
+        "code-central-151 implementation",
+        "code-central-152 implementation",
+        "code-central-153 implementation"
+      ]
+    },
+    {
+      "id": "code-central-116",
+      "reads": 12,
+      "sessions": 12,
+      "readers": [
+        "code-central-117 grilling",
+        "code-central-118 spec",
+        "code-central-119 tickets",
+        "code-central-134 implementation",
+        "code-central-134 review",
+        "code-central-135 implementation",
+        "code-central-135 review",
+        "code-central-136 implementation",
+        "code-central-137 implementation",
+        "code-central-137 review",
+        "code-central-138 implementation",
+        "code-central-138 review"
+      ]
+    },
+    {
+      "id": "code-central-128",
+      "reads": 10,
+      "sessions": 10,
+      "readers": [
+        "code-central-130 spec",
+        "code-central-131 tickets",
+        "code-central-155 implementation",
+        "code-central-155 review",
+        "code-central-156 implementation",
+        "code-central-157 implementation",
+        "code-central-158 implementation",
+        "code-central-158 review",
+        "code-central-159 implementation"
+      ]
+    },
+    {
+      "id": "code-central-101",
+      "reads": 9,
+      "sessions": 9,
+      "readers": [
+        "code-central-103 spec",
+        "code-central-104 tickets",
+        "code-central-105 implementation",
+        "code-central-106 implementation",
+        "code-central-107 implementation",
+        "code-central-108 implementation",
+        "code-central-109 implementation",
+        "code-central-110 implementation",
+        "code-central-111 implementation"
+      ]
+    },
+    {
+      "id": "code-central-160",
+      "reads": 9,
+      "sessions": 9,
+      "readers": [
+        "code-central-162 spec",
+        "code-central-163 tickets",
+        "code-central-168 implementation",
+        "code-central-169 implementation",
+        "code-central-170 implementation",
+        "code-central-170 review",
+        "code-central-171 implementation",
+        "code-central-171 review",
+        "code-central-172 implementation"
+      ]
+    },
+    {
+      "id": "code-central-91",
+      "reads": 9,
+      "sessions": 9,
+      "readers": [
+        "code-central-100 implementation",
+        "code-central-93 spec",
+        "code-central-94 tickets",
+        "code-central-95 implementation",
+        "code-central-96 implementation",
+        "code-central-96 review",
+        "code-central-97 implementation",
+        "code-central-98 implementation",
+        "code-central-99 implementation"
+      ]
+    },
+    {
+      "id": "code-central-120",
+      "reads": 8,
+      "sessions": 8,
+      "readers": [
+        "code-central-121 grilling",
+        "code-central-122 spec",
+        "code-central-123 tickets",
+        "code-central-139 implementation",
+        "code-central-140 implementation",
+        "code-central-141 implementation",
+        "code-central-142 implementation",
+        "code-central-143 implementation"
+      ]
+    },
+    {
+      "id": "code-central-164",
+      "reads": 8,
+      "sessions": 8,
+      "readers": [
+        "code-central-166 spec",
+        "code-central-167 tickets",
+        "code-central-173 implementation",
+        "code-central-174 implementation",
+        "code-central-175 implementation",
+        "code-central-176 implementation",
+        "code-central-177 implementation",
+        "code-central-178 implementation"
+      ]
+    },
+    {
+      "id": "code-central-179",
+      "reads": 7,
+      "sessions": 6,
+      "readers": [
+        "code-central-181 spec",
+        "code-central-182 tickets",
+        "code-central-183 implementation",
+        "code-central-183 review",
+        "code-central-184 implementation",
+        "code-central-184 review"
+      ]
+    },
+    {
+      "id": "code-central-112",
+      "reads": 6,
+      "sessions": 6,
+      "readers": [
+        "code-central-113 grilling",
+        "code-central-114 spec",
+        "code-central-115 tickets",
+        "code-central-132 implementation",
+        "code-central-133 implementation",
+        "code-central-133 review"
+      ]
+    },
+    {
+      "id": "code-central-133",
+      "reads": 5,
+      "sessions": 5,
+      "readers": [
+        "code-central-127 tickets",
+        "code-central-133 implementation",
+        "code-central-133 review"
+      ]
+    },
+    {
+      "id": "code-central-84",
+      "reads": 5,
+      "sessions": 5,
+      "readers": [
+        "code-central-85 grilling",
+        "code-central-86 spec",
+        "code-central-87 tickets",
+        "code-central-88 implementation",
+        "code-central-90 implementation"
+      ]
+    },
+    {
+      "id": "code-central-183",
+      "reads": 4,
+      "sessions": 4,
+      "readers": [
+        "code-central-183 implementation",
+        "code-central-183 review"
+      ]
+    },
+    {
+      "id": "code-central-113",
+      "reads": 3,
+      "sessions": 3,
+      "readers": [
+        "code-central-113 grilling",
+        "code-central-114 spec",
+        "code-central-125 grilling"
+      ]
+    },
+    {
+      "id": "code-central-125",
+      "reads": 3,
+      "sessions": 3,
+      "readers": [
+        "code-central-114 spec",
+        "code-central-125 grilling",
+        "code-central-126 spec"
+      ]
+    },
+    {
+      "id": "code-central-148",
+      "reads": 3,
+      "sessions": 3,
+      "readers": [
+        "code-central-148 implementation",
+        "code-central-149 implementation",
+        "code-central-150 implementation"
+      ]
+    },
+    {
+      "id": "code-central-158",
+      "reads": 3,
+      "sessions": 3,
+      "readers": [
+        "code-central-158 implementation",
+        "code-central-158 review"
+      ]
+    },
+    {
+      "id": "code-central-171",
+      "reads": 3,
+      "sessions": 3,
+      "readers": [
+        "code-central-171 implementation",
+        "code-central-171 review"
+      ]
+    },
+    {
+      "id": "code-central-102",
+      "reads": 2,
+      "sessions": 2,
+      "readers": [
+        "code-central-102 grilling",
+        "code-central-103 spec"
+      ]
+    },
+    {
+      "id": "code-central-108",
+      "reads": 2,
+      "sessions": 2,
+      "readers": [
+        "code-central-107 implementation",
+        "code-central-108 implementation"
+      ]
+    }
+  ],
+  "within_session": 1,
+  "across_sessions": 128,
+  "wider_reads": [
+    {
+      "kind": "review",
+      "ticket": "code-central-184",
+      "operation": "get_spec",
+      "id": "code-central-179",
+      "from": "{\"parts\":[\"body\"],\"sections\":[\"Release workflow\",\"Documentation\",\"Testing Decis…",
+      "to": "{\"parts\":[\"body\"],\"sections\":[\"Release workflow (new, alongside `ci.yml`)\",\"Doc…"
+    }
+  ]
+}

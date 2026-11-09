@@ -69,10 +69,16 @@ func (c *Client) CreateTicket(ctx context.Context, key string, in core.CreateTic
 	return write[core.TicketView](ctx, c, scoped(key, "create_ticket"), in, in.Full)
 }
 
-// GetTicket is get_ticket.
-func (c *Client) GetTicket(ctx context.Context, key string, ref core.Ref) (core.TicketView, error) {
+// GetTicket is get_ticket with the parts named, or the whole Ticket with
+// none, as the HTTP API returns it.
+func (c *Client) GetTicket(ctx context.Context, key string, ref core.Ref, parts ...string) (core.TicketView, error) {
+	q := url.Values{"part": parts}
+	path := scoped(key, "tickets/"+url.PathEscape(string(ref)))
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
 	var out core.TicketView
-	return out, c.do(ctx, "GET", scoped(key, "tickets/"+url.PathEscape(string(ref))), nil, &out)
+	return out, c.do(ctx, "GET", path, nil, &out)
 }
 
 // FindTickets is find_tickets.
@@ -149,6 +155,35 @@ func (c *Client) PostSessionEvents(ctx context.Context, sessionID string, events
 		Events    []core.SessionEvent `json:"events"`
 	}{sessionID, events}
 	return c.do(ctx, "POST", "/api/session-events", in, nil)
+}
+
+// PostUsage is POST /api/usage: it records a batch of model responses'
+// token usage under the newest Claim with this session ID. The service
+// always answers 204; an older one, without the endpoint, 404.
+func (c *Client) PostUsage(ctx context.Context, sessionID string, responses []core.UsageResponse) error {
+	in := struct {
+		SessionID string               `json:"session_id"`
+		Responses []core.UsageResponse `json:"responses"`
+	}{sessionID, responses}
+	return c.do(ctx, "POST", "/api/usage", in, nil)
+}
+
+// Usage is GET /api/usage: Usage for one Project, or every Project when
+// key is "", over the last days local days (0 for the default).
+func (c *Client) Usage(ctx context.Context, key string, days int) (core.UsageView, error) {
+	q := url.Values{}
+	if key != "" {
+		q.Set("project", key)
+	}
+	if days != 0 {
+		q.Set("days", strconv.Itoa(days))
+	}
+	path := "/api/usage"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	var out core.UsageView
+	return out, c.do(ctx, "GET", path, nil, &out)
 }
 
 // Transcript is GET /api/projects/{key}/tickets/{n}/claims/{c}/transcript:

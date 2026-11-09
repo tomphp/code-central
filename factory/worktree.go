@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
@@ -18,29 +17,6 @@ func (f *factory) worktree(ticket string) string { return filepath.Join(f.worktr
 type gitWorktree struct {
 	path   string
 	branch string // "" when detached
-}
-
-// worktreeList is what `git worktree list` reports, the repo itself first.
-func (f *factory) worktreeList() ([]gitWorktree, error) {
-	out, err := f.gitOut(f.repo, "worktree", "list", "--porcelain")
-	if err != nil {
-		return nil, err
-	}
-	var list []gitWorktree
-	for _, block := range strings.Split(out, "\n\n") {
-		var w gitWorktree
-		for _, line := range strings.Split(block, "\n") {
-			if p, ok := strings.CutPrefix(line, "worktree "); ok {
-				w.path = p
-			} else if b, ok := strings.CutPrefix(line, "branch "); ok {
-				w.branch = strings.TrimPrefix(b, "refs/heads/")
-			}
-		}
-		if w.path != "" {
-			list = append(list, w)
-		}
-	}
-	return list, nil
 }
 
 // find is the worktree at path.
@@ -59,7 +35,7 @@ func find(list []gitWorktree, path string) (gitWorktree, bool) {
 // or branch id checked out elsewhere, is a failure, and nothing is
 // touched.
 func (f *factory) implementationWorktree(id, wt string) error {
-	list, err := f.worktreeList()
+	list, err := f.repository.worktrees()
 	if err != nil {
 		return err
 	}
@@ -91,7 +67,7 @@ func (f *factory) implementationWorktree(id, wt string) error {
 // it shouldn't have. Anything at wt but a detached worktree is a failure
 // too, and nothing is touched.
 func (f *factory) stageWorktree(id, wt string) error {
-	list, err := f.worktreeList()
+	list, err := f.repository.worktrees()
 	if err != nil {
 		return err
 	}
@@ -106,7 +82,7 @@ func (f *factory) stageWorktree(id, wt string) error {
 	if w.branch != "" {
 		return f.wrongWorktree(wt, w, "detached")
 	}
-	status, err := f.status(wt)
+	status, err := f.repository.status(wt)
 	if err != nil {
 		return err
 	}
@@ -121,12 +97,6 @@ func (f *factory) stageWorktree(id, wt string) error {
 	}
 	_, err = f.gitOut(wt, "checkout", "-q", "--detach", f.base)
 	return err
-}
-
-// status is wt's uncommitted changes, untracked files included: "" when
-// it is clean.
-func (f *factory) status(wt string) (string, error) {
-	return f.gitOut(wt, "status", "--porcelain", "--untracked-files=all")
 }
 
 // prune runs `git worktree prune`, dropping worktrees whose folders are
@@ -144,7 +114,7 @@ func (f *factory) prune() {
 // warning line when dirty. Branches are never deleted, and anything else
 // is kept.
 func (f *factory) sweep(ctx context.Context, method store.LandingMethod) {
-	list, err := f.worktreeList()
+	list, err := f.repository.worktrees()
 	if err != nil {
 		f.printf("warning: can't list the worktrees: %v", err)
 		return
@@ -171,7 +141,7 @@ func (f *factory) sweep(ctx context.Context, method store.LandingMethod) {
 		if !doneWithWorktree(tk.State, method) {
 			continue
 		}
-		status, err := f.status(w.path)
+		status, err := f.repository.status(w.path)
 		if err != nil {
 			f.printf("warning: %s: can't read the worktree %s: %v", id, w.path, err)
 			continue
@@ -183,7 +153,7 @@ func (f *factory) sweep(ctx context.Context, method store.LandingMethod) {
 			}
 			continue
 		}
-		if _, err := f.gitOut(f.repo, "worktree", "remove", w.path); err != nil {
+		if err := f.repository.removeWorktree(w.path); err != nil {
 			f.printf("warning: %s: can't remove the worktree %s: %v", id, w.path, err)
 			continue
 		}

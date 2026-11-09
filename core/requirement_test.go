@@ -39,7 +39,7 @@ func TestSubmittingARequirementCreatesItsSpecAndThreeChainedStages(t *testing.T)
 		t.Fatalf("stages %+v", res.Stages)
 	}
 	for i, w := range want {
-		tk, err := f.core.GetTicket(ctx, "acme", core.Ref(w.id))
+		tk, err := f.core.GetTicket(ctx, "acme", whole(core.Ref(w.id)))
 		if err != nil {
 			t.Fatalf("get_ticket %s: %v", w.id, err)
 		}
@@ -48,7 +48,7 @@ func TestSubmittingARequirementCreatesItsSpecAndThreeChainedStages(t *testing.T)
 			t.Fatalf("stage %d: %+v", i, tk)
 		}
 	}
-	grilling, _ := f.core.GetTicket(ctx, "acme", "acme-3")
+	grilling, _ := f.core.GetTicket(ctx, "acme", whole("acme-3"))
 	if !strings.Contains(grilling.Description, "acme-2") {
 		t.Fatalf("the grilling Ticket's description should point at the Spec: %q", grilling.Description)
 	}
@@ -65,7 +65,7 @@ func TestARequirementIsWrittenAsTheHumanWhoeverSubmitsIt(t *testing.T) {
 		t.Fatalf("submit_requirement: %v", err)
 	}
 	for _, id := range []string{"acme-2", "acme-3", "acme-4"} {
-		tk, _ := f.core.GetTicket(ctx, "acme", core.Ref(id))
+		tk, _ := f.core.GetTicket(ctx, "acme", whole(core.Ref(id)))
 		if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != store.Ready || tk.Moves[0].Via != "submit_requirement" {
 			t.Fatalf("%s moves %+v", id, tk.Moves)
 		}
@@ -94,13 +94,13 @@ func TestOnlyTheThreeStageNamesMayUseTheReservedStagePrefix(t *testing.T) {
 
 	_, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"ui", "stage:build"}})
 	wantCode(t, err, core.Invalid, "labels")
-	tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"stage:spec", "stages", "backstage:x"}})
+	tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"stages", "backstage:x"}})
 
 	_, err = f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: []string{"stage:"}})
 	wantCode(t, err, core.Invalid, "labels")
 	_, err = f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{"stage:implementation"}})
 	wantCode(t, err, core.Invalid, "labels")
-	if _, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: []string{"stage:grilling", "stage:tickets"}}); err != nil {
+	if _, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: []string{"stage:grilling"}}); err != nil {
 		t.Fatalf("add_labels with known Stage names: %v", err)
 	}
 

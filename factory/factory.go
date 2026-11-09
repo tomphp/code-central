@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/client"
+	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/home"
 )
 
@@ -36,6 +36,10 @@ type Env struct {
 	Stdout, Stderr io.Writer
 	// After replaces time.After for the wait between polls.
 	After func(time.Duration) <-chan time.Time
+	// Now replaces time.Now for an outage's backoff and the turns it
+	// waits on, and dates the model responses posted to Usage; nil means
+	// time.Now.
+	Now func() time.Time
 	// KillGrace is how long a turn being stopped has after each stop step
 	// but the last (SIGINT, SIGTERM; Ctrl-Break on Windows); zero means
 	// ten seconds.
@@ -43,8 +47,8 @@ type Env struct {
 	// Backoff is the first wait before resuming turns an outage cut off,
 	// doubling with each outage in a row; zero means a minute.
 	Backoff time.Duration
-	// EventBatchEvery is how often waiting Session Events are posted;
-	// zero means eventBatchEvery.
+	// EventBatchEvery is how often waiting Session Events and token usage
+	// are posted; zero means postEvery.
 	EventBatchEvery time.Duration
 	// Signals is the stop signals the Factory gets: the first Ctrl-C
 	// (os.Interrupt) drains; a second, SIGTERM or SIGHUP stops the turns
@@ -129,6 +133,9 @@ func Run(ctx context.Context, args []string, e Env) int {
 	if e.After == nil {
 		e.After = time.After
 	}
+	if e.Now == nil {
+		e.Now = time.Now
+	}
 	o, err := parseFlags(args, e.Stderr)
 	if err != nil {
 		if !errors.Is(err, flag.ErrHelp) {
@@ -151,10 +158,16 @@ func Run(ctx context.Context, args []string, e Env) int {
 	defer f.stop()
 	go f.watchSignals(ctx)
 	go f.events.run()
+	go f.usage.run()
 	f.restart(ctx)
 	f.loop(ctx)
-	// Stopping or draining makes one last flush.
-	f.events.close()
+	// Stopping or draining makes one last flush of each, side by side, so
+	// a hung Code Central holds up the stop one postTimeout at most.
+	var flushed sync.WaitGroup
+	for _, close := range []func(){f.events.close, f.usage.close} {
+		flushed.Go(close)
+	}
+	flushed.Wait()
 	if reason := f.stoppedFor(); reason != "" {
 		fmt.Fprintln(e.Stderr, "code-central-factory: stopped:", reason)
 		return exitStopped
@@ -189,18 +202,22 @@ func (f *factory) printf(format string, args ...any) {
 
 // factory is a started Factory.
 type factory struct {
-	e         Env
-	o         options
-	git       string
-	claude    string
-	repo      string // the git top level
-	project   string
-	base      string
-	worktrees string // <repo-parent>/<repo-dir>.worktrees
-	client    *client.Client
-	events    *sender // posts Session Events
-	state     *stateFile
-	lock      *os.File // held for the Factory's whole life
+	e      Env
+	o      options
+	git    string
+	claude string
+	repo   string // the git top level
+	// repository is the repo at the top level, as landing and the sweep
+	// use it.
+	repository repo
+	project    string
+	base       string
+	worktrees  string // <repo-parent>/<repo-dir>.worktrees
+	client     *client.Client
+	events     *sender[core.SessionEvent]  // posts Session Events
+	usage      *sender[core.UsageResponse] // posts model responses' token usage
+	state      *stateFile
+	lock       *os.File // held for the Factory's whole life
 
 	outMu     sync.Mutex
 	mu        sync.Mutex           // guards turns, ended and info
@@ -242,9 +259,15 @@ type factory struct {
 	drainOnce sync.Once
 }
 
+// newFactory is a factory with nothing found out yet: start fills in the
+// rest.
+func newFactory(e Env, o options) *factory {
+	return &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, warnedRemote: map[string]bool{}}
+}
+
 // start makes every start-up check, refusing with the reason.
 func start(e Env, o options) (*factory, error) {
-	f := &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, warnedRemote: map[string]bool{}}
+	f := newFactory(e, o)
 	git, ok := e.lookPath("git")
 	if !ok {
 		return nil, errors.New("git isn't on PATH")
@@ -255,6 +278,7 @@ func start(e Env, o options) (*factory, error) {
 		return nil, fmt.Errorf("not in a git repository (%s)", e.Dir)
 	}
 	f.repo = top
+	f.repository = gitRepo{git: git, dir: top, environ: e.Environ}
 	if err := f.checkGitVersion(); err != nil {
 		return nil, err
 	}
@@ -291,9 +315,10 @@ func start(e Env, o options) (*factory, error) {
 	f.client = client.New(cli.ServiceURL(e.getenv))
 	every := e.EventBatchEvery
 	if every <= 0 {
-		every = eventBatchEvery
+		every = postEvery
 	}
-	f.events = newSender(f.client, every)
+	f.events = newSender(f.client.PostSessionEvents, every)
+	f.usage = newSender(f.client.PostUsage, every)
 	// A Project that can't be read yet is checked on every poll instead.
 	if p, err := f.client.GetProject(context.Background(), project); err == nil {
 		if why := f.missingRemote(p.Landing); why != "" {
@@ -365,14 +390,5 @@ func writable(dir string) error {
 
 // gitOut runs git in dir and returns its trimmed output.
 func (f *factory) gitOut(dir string, args ...string) (string, error) {
-	cmd := exec.Command(f.git, args...)
-	cmd.Dir = dir
-	cmd.Env = f.e.Environ
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
-	}
-	return strings.TrimSpace(string(out)), nil
+	return gitOut(f.git, f.e.Environ, dir, args...)
 }

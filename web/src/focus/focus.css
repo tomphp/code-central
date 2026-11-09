@@ -3,8 +3,8 @@
 .focus { min-height: 100vh; display: flex; flex-direction: column; font-size: 18px; }
 .focus-head { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
 .focus-project { font-weight: 600; }
-/* Options and Exit sit together at the header's far end. */
-.focus-options { margin-left: auto; }
+/* Usage, Options and Exit sit together at the header's far end. */
+.focus-usage { margin-left: auto; }
 .focus-loading { margin: auto; color: var(--muted); }
 .focus-clear { margin: auto; text-align: center; padding-bottom: 10vh; }
 .focus-clear h2 { font-size: 40px; font-weight: 600; margin: 0 0 8px; }
@@ -17,6 +17,7 @@
 .focus-ticket { margin: 16px 0 0; }
 .focus-ticket .tid { font-size: 20px; }
 .focus-requirement { margin: 0 0 8px; font-size: 20px; color: var(--muted); }
+.focus-badges { margin: 0 0 8px; }
 .focus-why { margin: 0 0 24px; font-size: 20px; }
 .focus-open { margin: 24px 0 0; }
 /* A Question Focus Item: the Question reads largest, its Ticket's title

@@ -80,7 +80,7 @@ func TestReportFailureNeedsEveryField(t *testing.T) {
 		_, err := f.core.ReportFailure(ctx, "acme", in)
 		wantCode(t, err, core.Invalid, field)
 	}
-	if got, _ := f.core.GetTicket(ctx, "acme", "2"); got.State != store.InProgress || len(got.FailureReports) != 0 {
+	if got, _ := f.core.GetTicket(ctx, "acme", whole("2")); got.State != store.InProgress || len(got.FailureReports) != 0 {
 		t.Fatalf("state %s, reports %d: want still In Progress with none", got.State, len(got.FailureReports))
 	}
 }
@@ -228,7 +228,7 @@ func TestGiveUpNeedsANoteAndTheHolder(t *testing.T) {
 	wantCode(t, err, core.Invalid, "note")
 	_, err = f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-9", Note: "n"})
 	wantCode(t, err, core.StaleClaim, "")
-	if got, _ := f.core.GetTicket(ctx, "acme", "2"); got.State != store.InProgress {
+	if got, _ := f.core.GetTicket(ctx, "acme", whole("2")); got.State != store.InProgress {
 		t.Fatalf("state %s", got.State)
 	}
 }
@@ -260,7 +260,7 @@ func TestTheNextClaimSeesTheWholeHistory(t *testing.T) {
 	if len(v.Comments) != 2 || v.Comments[1].Body != "Fixed the migration." {
 		t.Fatalf("comments %+v", v.Comments)
 	}
-	got, _ := f.core.GetTicket(ctx, "acme", "2")
+	got, _ := f.core.GetTicket(ctx, "acme", whole("2"))
 	if len(got.Claims) != 2 || len(got.FailureReports) != 1 || len(got.Comments) != 2 {
 		t.Fatalf("get_ticket %+v", got)
 	}
@@ -270,7 +270,7 @@ func TestAClaimsLastActivityIsTheLatestAgentWriteDuringIt(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, store.Ready)
 	f.claim(t, core.ClaimInput{}) // t0+1m
-	got, _ := f.core.GetTicket(ctx, "acme", "2")
+	got, _ := f.core.GetTicket(ctx, "acme", whole("2"))
 	if la := got.Claims[0].LastActivity; !la.Equal(t0.Add(time.Minute)) {
 		t.Fatalf("last activity %v, want the claim itself", la)
 	}
@@ -278,7 +278,7 @@ func TestAClaimsLastActivityIsTheLatestAgentWriteDuringIt(t *testing.T) {
 	f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "Working."})
 	f.clock.Set(t0.Add(30 * time.Minute))
 	f.core.Comment(human, "acme", core.CommentInput{Ticket: "2", Body: "How is it going?"})
-	got, _ = f.core.GetTicket(ctx, "acme", "2")
+	got, _ = f.core.GetTicket(ctx, "acme", whole("2"))
 	if la := got.Claims[0].LastActivity; !la.Equal(t0.Add(20 * time.Minute)) {
 		t.Fatalf("last activity %v, want the agent's comment, not the human's", la)
 	}

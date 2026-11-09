@@ -36,16 +36,28 @@ _Avoid_: Chapter, part, block
 A Spec started from the human's free text and defined through Stages before it is built. Its free text is the Requirement's text.
 _Avoid_: Prompt, feature request, idea
 
+**Map**:
+A Spec that finds the way to a loosely-defined destination through decision Tickets worked one at a time, each marked by a reserved Wayfinder Label. Its body is the index of decisions made, the fog not yet specified and what is out of scope.
+_Avoid_: Wayfinder session, roadmap, journey
+
+**Charting**:
+The first Ticket of a Map, which names its destination with the human and creates the first decision Tickets and their Blockers.
+_Avoid_: Planning, setup
+
 **Ticket**:
 A unit of work within a Spec. Every Ticket belongs to exactly one Spec.
 _Avoid_: Issue, task, card
+
+**Prototype**:
+A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to try and react to, so a decision can be made. Its work never lands.
+_Avoid_: Spike, mock-up, demo
 
 **Stage**:
 One of the three fixed steps that turn a Requirement's text into implementation Tickets (grilling, spec and tickets), each done as its own Ticket.
 _Avoid_: Phase, step, definition Ticket
 
 **Stage Guide**:
-Code Central's instructions telling an agent what a Stage must produce and how to finish it. Implementation Tickets get one too.
+Code Central's instructions telling an agent what a Stage must produce, how to finish it and what to do when it can't carry on. Implementation Tickets, a Map's Tickets and Prototypes get one too, though they are not Stages.
 _Avoid_: Prompt, playbook, skill
 
 **State**:
@@ -104,6 +116,19 @@ _Avoid_: Log entry, message, activity
 The Session Events of one Claim, in order, as Code Central holds them. It may be only the tail of the session.
 _Avoid_: Log, conversation, stream
 
+**Context Report**:
+What agents load into context, measured from Claude Code's own session logs on the machine (not Transcripts): the size of tool results per kind of session (each Stage, implementation, and the review and other subagents), tool and operation, the largest results, the Specs and Tickets read more than once, and signs that a cut went too far, each with its change against a saved baseline.
+It is not Usage: it reads Claude Code's logs on the machine, while Usage records what Code Central and the Factory see.
+_Avoid_: Token report, usage report
+
+**Usage**:
+The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used.
+_Avoid_: Analytics dashboard, stats, metrics
+
+**Context Size**:
+How many tokens a session's model read for one response (input, cache write and cache read), which is how full its context window was.
+_Avoid_: Context length, prompt size
+
 **Actor**:
 Who made a change: the human, an agent, or an Integration.
 _Avoid_: User, caller
@@ -149,11 +174,19 @@ An agent's permanent record of what broke on a Ticket, why, and what to fix, pos
 _Avoid_: Error, incident
 
 **Label**:
-A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels are reserved, and mark a Ticket's Stage.
+A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels, Wayfinder Labels and `prototype` are reserved: they mark a Ticket's Stage, a Map or a Map's Ticket type, and a Prototype. A Ticket carries at most one reserved type Label (a Stage Label, a Map Ticket type's Wayfinder Label or `prototype`), which chooses its Stage Guide.
 _Avoid_: Category
 
+**Wayfinder Label**:
+A reserved `wayfinder:` Label marking a Map (`wayfinder:map`) or a Map's Ticket type (`chart`, `grilling`, `research`, `task`).
+_Avoid_: Map Label, kind
+
+**Node type**:
+A Ticket's type on a Map, as Spec reads show it: its Wayfinder Label's type (`chart`, `grilling`, `research`, `task`), `prototype`, or `ticket` for a Ticket with neither.
+_Avoid_: Ticket kind
+
 **Tag**:
-A free-form key and value on a Spec or Ticket, with no workflow meaning.
+A free-form key and value on a Spec or Ticket, with no meaning to Code Central's workflow; the Factory reads the `guided` Tag on a Map, and the read side the `prototype`, `research` and `map` Tags.
 _Avoid_: Label, attribute, property
 
 **Import**:

@@ -1,6 +1,6 @@
 # Stage Guide: tickets
 
-You hold a Claim on the tickets Stage of a Requirement. The Requirement is the Spec this Ticket belongs to, and its body is now the full Spec. `get_stage_guide` with stage `tickets` serves this guide again if you lose it.
+You hold a Claim on the tickets Stage of a Requirement. The Requirement is the Spec this Ticket belongs to, and its body is now the full Spec. Read its User Stories, Implementation Decisions, Testing Decisions and Out of Scope with `get_spec` and `sections`; read the rest only when one of them points there. `get_stage_guide` with stage `tickets` serves this guide again if you lose it.
 
 ## What this Ticket produces
 

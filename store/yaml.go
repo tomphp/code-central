@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -59,70 +61,196 @@ func setLiteral(n *yaml.Node) {
 
 // decodeStrict decodes a YAML mapping into the struct out points to,
 // refusing unknown and duplicate keys. On failure it returns the name of
-// the offending field (nested fields as a[0].b).
+// the offending field (nested fields as a[0].b). The store's own files
+// take parseBlockYAML's fast path; anything else is parsed by yaml.v3.
 func decodeStrict(data []byte, out any) (string, error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return "file", fmt.Errorf("not valid YAML: %v", err)
+	doc, ok := parseBlockYAML(data)
+	if !ok {
+		doc = new(yaml.Node)
+		if err := yaml.Unmarshal(data, doc); err != nil {
+			return "file", fmt.Errorf("not valid YAML: %v", err)
+		}
 	}
 	if len(doc.Content) == 0 {
 		return "file", errors.New("empty")
 	}
-	return decodeNode(doc.Content[0], reflect.ValueOf(out).Elem(), "")
+	field, err := decodeNode(doc.Content[0], reflect.ValueOf(out).Elem())
+	return orFile(field), err
 }
 
-func decodeNode(n *yaml.Node, v reflect.Value, path string) (string, error) {
+// decodeNode decodes n into v. On failure it returns the offending
+// field's path relative to v, "" for v itself.
+func decodeNode(n *yaml.Node, v reflect.Value) (string, error) {
 	switch {
 	case v.Kind() == reflect.Struct:
 		if n.Kind != yaml.MappingNode {
-			return orFile(path), errors.New("must be a mapping")
+			return "", errors.New("must be a mapping")
 		}
-		fields := map[string]int{}
-		for i := 0; i < v.NumField(); i++ {
-			name, _, _ := strings.Cut(v.Type().Field(i).Tag.Get("yaml"), ",")
-			fields[name] = i
-		}
-		seen := map[string]bool{}
+		fields := fieldsOf(v.Type())
+		seen := make([]bool, len(fields))
 		for i := 0; i+1 < len(n.Content); i += 2 {
 			key := n.Content[i].Value
-			fieldPath := key
-			if path != "" {
-				fieldPath = path + "." + key
-			}
 			idx, ok := fields[key]
 			if !ok {
-				return fieldPath, errors.New("unknown field")
+				return key, errors.New("unknown field")
 			}
-			if seen[key] {
-				return fieldPath, errors.New("duplicate field")
+			if seen[idx] {
+				return key, errors.New("duplicate field")
 			}
-			seen[key] = true
-			if f, err := decodeNode(n.Content[i+1], v.Field(idx), fieldPath); err != nil {
-				return f, err
+			seen[idx] = true
+			if f, err := decodeNode(n.Content[i+1], v.Field(idx)); err != nil {
+				return key + subPath(f), err
 			}
 		}
 		return "", nil
 	case v.Kind() == reflect.Pointer && v.Type().Elem().Kind() == reflect.Struct:
 		v.Set(reflect.New(v.Type().Elem()))
-		return decodeNode(n, v.Elem(), path)
+		return decodeNode(n, v.Elem())
 	case v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Struct:
 		if n.Kind != yaml.SequenceNode {
-			return orFile(path), errors.New("must be a list")
+			return "", errors.New("must be a list")
 		}
 		s := reflect.MakeSlice(v.Type(), len(n.Content), len(n.Content))
 		for i, c := range n.Content {
-			if f, err := decodeNode(c, s.Index(i), fmt.Sprintf("%s[%d]", path, i)); err != nil {
-				return f, err
+			if f, err := decodeNode(c, s.Index(i)); err != nil {
+				return fmt.Sprintf("[%d]", i) + subPath(f), err
 			}
 		}
 		v.Set(s)
 		return "", nil
 	default:
+		if decodeLeaf(n, v) {
+			return "", nil
+		}
 		if err := n.Decode(v.Addr().Interface()); err != nil {
-			return orFile(path), fmt.Errorf("wrong type: %v", err)
+			return "", fmt.Errorf("wrong type: %v", err)
 		}
 		return "", nil
 	}
+}
+
+// subPath joins a child's relative path onto its parent's.
+func subPath(path string) string {
+	if path == "" || path[0] == '[' {
+		return path
+	}
+	return "." + path
+}
+
+// fieldIndexes caches each struct type's YAML keys and field indexes.
+var fieldIndexes sync.Map // reflect.Type → map[string]int
+
+// fieldsOf maps a struct type's YAML keys to its field indexes.
+func fieldsOf(t reflect.Type) map[string]int {
+	if f, ok := fieldIndexes.Load(t); ok {
+		return f.(map[string]int)
+	}
+	fields := map[string]int{}
+	for i := 0; i < t.NumField(); i++ {
+		name, _, _ := strings.Cut(t.Field(i).Tag.Get("yaml"), ",")
+		fields[name] = i
+	}
+	fieldIndexes.Store(t, fields)
+	return fields
+}
+
+// decodeLeaf decodes the common leaves of the store's files exactly as
+// n.Decode would, without its per-call setup, and is false for anything
+// else: a string or int scalar, and a list of them or a map of strings.
+func decodeLeaf(n *yaml.Node, v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.String:
+		s, ok := leafString(n)
+		if ok {
+			v.SetString(s)
+		}
+		return ok
+	case reflect.Int:
+		i, ok := leafInt(n)
+		if ok {
+			v.SetInt(int64(i))
+		}
+		return ok
+	case reflect.Slice:
+		if n.Kind != yaml.SequenceNode || (v.Type().Elem().Kind() != reflect.String && v.Type().Elem().Kind() != reflect.Int) {
+			return false
+		}
+		s := reflect.MakeSlice(v.Type(), len(n.Content), len(n.Content))
+		for i, c := range n.Content {
+			if isNull(c) || !decodeLeaf(c, s.Index(i)) {
+				return false // yaml.v3 leaves a null item out
+			}
+		}
+		v.Set(s)
+		return true
+	case reflect.Map:
+		if n.Kind != yaml.MappingNode || v.Type().Key().Kind() != reflect.String || v.Type().Elem().Kind() != reflect.String {
+			return false
+		}
+		m := reflect.MakeMapWithSize(v.Type(), len(n.Content)/2)
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			k, ok := leafString(n.Content[i])
+			if !ok || k == "" || m.MapIndex(reflect.ValueOf(k)).IsValid() {
+				return false // yaml.v3 names a duplicate key
+			}
+			val, ok := leafString(n.Content[i+1])
+			if !ok {
+				return false
+			}
+			m.SetMapIndex(reflect.ValueOf(k), reflect.ValueOf(val))
+		}
+		v.Set(m)
+		return true
+	}
+	return false
+}
+
+// leafString is a scalar read into a string: its text, or "" for null.
+func leafString(n *yaml.Node) (string, bool) {
+	if n.Kind != yaml.ScalarNode {
+		return "", false
+	}
+	switch n.Style {
+	case yaml.DoubleQuotedStyle, yaml.SingleQuotedStyle, yaml.LiteralStyle, yaml.FoldedStyle:
+		return n.Value, n.Tag == "" || n.Tag == "!!str"
+	case 0:
+		if isNull(n) {
+			return "", true
+		}
+		return n.Value, n.Value != "<<" && n.Tag != "!!null"
+	}
+	return "", false
+}
+
+// isNull is whether n is a plain null scalar.
+func isNull(n *yaml.Node) bool {
+	if n.Kind != yaml.ScalarNode || n.Style != 0 || (n.Tag != "" && n.Tag != "!!null") {
+		return false
+	}
+	switch n.Value {
+	case "", "~", "null", "Null", "NULL":
+		return true
+	}
+	return false
+}
+
+// leafInt is a plain decimal scalar read into an int. Past 18 digits
+// it may overflow, which yaml.v3 reports, so those fall back.
+func leafInt(n *yaml.Node) (int, bool) {
+	if n.Kind != yaml.ScalarNode || n.Style != 0 || (n.Tag != "" && n.Tag != "!!int") {
+		return 0, false
+	}
+	s := strings.TrimPrefix(n.Value, "-")
+	if s == "" || len(s) > 18 || (s[0] == '0' && len(s) > 1) {
+		return 0, false
+	}
+	for _, c := range []byte(s) {
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+	}
+	i, err := strconv.Atoi(n.Value)
+	return i, err == nil
 }
 
 func orFile(path string) string {

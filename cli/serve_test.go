@@ -71,6 +71,7 @@ func writeHomeSettings(t *testing.T, home, text string) {
 }
 
 func TestTheLocalPortSettingMovesTheService(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	port := freePort(t)
 	writeHomeSettings(t, home, fmt.Sprintf("port: %d\n", port))
@@ -89,6 +90,7 @@ func TestTheLocalPortSettingMovesTheService(t *testing.T) {
 }
 
 func TestXDGConfigHomeHoldsTheSettings(t *testing.T) {
+	t.Parallel()
 	cfg := t.TempDir()
 	os.MkdirAll(filepath.Join(cfg, "code-central"), 0o755)
 	os.WriteFile(filepath.Join(cfg, "code-central", "settings.yaml"), []byte("colour: red\n"), 0o644)
@@ -99,6 +101,7 @@ func TestXDGConfigHomeHoldsTheSettings(t *testing.T) {
 }
 
 func TestWithNoHOMETheProfileFolderHoldsTheSettings(t *testing.T) {
+	t.Parallel()
 	profile := t.TempDir()
 	writeHomeSettings(t, profile, "port: 70000\n")
 	_, _, failed := serveWith(t, map[string]string{"USERPROFILE": profile}, nil)
@@ -109,6 +112,7 @@ func TestWithNoHOMETheProfileFolderHoldsTheSettings(t *testing.T) {
 }
 
 func TestABadPortSettingRefusesToStart(t *testing.T) {
+	t.Parallel()
 	home := t.TempDir()
 	writeHomeSettings(t, home, "port: 70000\n")
 	_, _, failed := serveWith(t, map[string]string{"HOME": home}, nil)
@@ -118,6 +122,7 @@ func TestABadPortSettingRefusesToStart(t *testing.T) {
 }
 
 func TestLogAppendsServesOutputAndTheErrorItStopsWith(t *testing.T) {
+	t.Parallel()
 	log := filepath.Join(t.TempDir(), "code-central.log")
 	os.WriteFile(log, []byte("an earlier run\n"), 0o644)
 	bound, stderr, failed := serveWith(t, nil, []string{"127.0.0.1:0"}, "--log", log, "--bind", "127.0.0.1:0")
@@ -145,6 +150,7 @@ func TestLogAppendsServesOutputAndTheErrorItStopsWith(t *testing.T) {
 }
 
 func TestBindAddsOneListenerAndWarnsAgainstLANAddresses(t *testing.T) {
+	t.Parallel()
 	bound, stderr, failed := serveWith(t, nil, []string{"127.0.0.1:0"}, "--bind", "127.0.0.1:0")
 	if failed != nil {
 		t.Fatalf("serve: %+v", *failed)
@@ -166,6 +172,7 @@ func TestBindAddsOneListenerAndWarnsAgainstLANAddresses(t *testing.T) {
 }
 
 func TestBindRefusesEverythingButOneSpecificAddress(t *testing.T) {
+	t.Parallel()
 	for _, bad := range []string{"0.0.0.0", "::", "[::]:7733", "0.0.0.0:0", "example.com", ""} {
 		_, _, failed := serveWith(t, nil, []string{"127.0.0.1:0"}, "--bind", bad)
 		if failed == nil || failed.code != 1 {
@@ -175,6 +182,7 @@ func TestBindRefusesEverythingButOneSpecificAddress(t *testing.T) {
 }
 
 func TestServeUsageWarnsAgainstALANAddress(t *testing.T) {
+	t.Parallel()
 	r := run(t, nil, "", "help")
 	if !strings.Contains(r.stdout, "--bind") || !strings.Contains(r.stdout, "never a LAN address") {
 		t.Fatalf("help: %s", r.stdout)

@@ -14,6 +14,7 @@ import (
 // On shutdown the service lets an in-flight write finish and answers held
 // long-polls at once, before it stops.
 func TestShutdownFinishesInFlightWritesAndClosesLongPolls(t *testing.T) {
+	t.Parallel()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

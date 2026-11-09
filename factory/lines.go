@@ -17,7 +17,7 @@ import (
 // Ticket, so a restart fills it again from the first read.
 type claimInfo struct {
 	title string
-	stage string // a Stage or core.ImplementationStage
+	stage string // the guide's name, one of core.GuideNames
 }
 
 // noteTicket keeps what the lines say of c's Ticket, as tk gives it,
@@ -28,18 +28,25 @@ func (f *factory) noteTicket(c claim, tk core.TicketView) {
 	if f.ended[c.ClaimID] {
 		return
 	}
-	f.info[c.ClaimID] = claimInfo{title: tk.Title, stage: core.GuideStage(tk.Labels)}
+	f.info[c.ClaimID] = claimInfo{title: tk.Title, stage: core.GuideName(tk.Labels)}
 }
 
 // about is "(<stage>): "<title>"", naming c's Ticket in a line.
 func (f *factory) about(c claim) string {
+	i := f.claimInfo(c)
+	return fmt.Sprintf("(%s): %q", i.stage, i.title)
+}
+
+// claimInfo is what the lines say of c's Ticket; with nothing noted, its
+// stage is implementation.
+func (f *factory) claimInfo(c claim) claimInfo {
 	f.mu.Lock()
 	i, ok := f.info[c.ClaimID]
 	f.mu.Unlock()
 	if !ok {
 		i.stage = core.ImplementationStage
 	}
-	return fmt.Sprintf("(%s): %q", i.stage, i.title)
+	return i
 }
 
 // claimf prints a line about the held Claim c and queues it as a factory
@@ -85,7 +92,7 @@ func toolCall(tool string, input json.RawMessage, wt string) string {
 	}
 	path := func(key string) string {
 		p := str(key)
-		if r, err := filepath.Rel(wt, p); err == nil && filepath.IsAbs(p) && r != ".." && !strings.HasPrefix(r, "../") {
+		if r, err := filepath.Rel(wt, p); err == nil && filepath.IsAbs(p) && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator)) {
 			return r
 		}
 		return p

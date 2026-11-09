@@ -42,11 +42,12 @@ func (f *factory) restart(ctx context.Context) {
 	}
 }
 
-// resumeRestarted resumes the cut-off saved Claims while slots are free.
+// resumeRestarted resumes the cut-off saved Claims while slots are free
+// and no outage has paused the Factory.
 // One another process holds waits a poll; one that has ended is gone.
 func (f *factory) resumeRestarted(ctx context.Context) {
 	var wait []claim
-	for len(f.restarted) > 0 && !f.halted(ctx) && f.running() < f.o.parallel {
+	for len(f.restarted) > 0 && f.slotFree(ctx) {
 		c := f.restarted[0]
 		f.restarted = f.restarted[1:]
 		if !f.resumeCutOff(ctx, c) && f.live(c.ClaimID) {

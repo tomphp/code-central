@@ -245,6 +245,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: "Dark mode"})
 		return err
 	},
+	"submit_map": func(f fixture) error {
+		_, err := f.core.SubmitMap(ctx, "acme", core.SubmitMapInput{Text: "Offline mode"})
+		return err
+	},
 	"land": func(f fixture) error {
 		_, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "abc123"})
 		return err
@@ -318,7 +322,7 @@ func TestAnArchivedProjectStaysReadable(t *testing.T) {
 	f.finishedWork(t)
 	f.project(t, "other")
 	f.archive(t, "acme")
-	if v, err := f.core.GetTicket(ctx, "acme", "acme-2"); err != nil || v.State != store.Done {
+	if v, err := f.core.GetTicket(ctx, "acme", whole("acme-2")); err != nil || v.State != store.Done {
 		t.Fatalf("get_ticket: %+v, %v", v, err)
 	}
 	if rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []store.State{store.Done, store.Cancelled}}); err != nil || len(rows) != 2 {

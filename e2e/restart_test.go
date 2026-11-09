@@ -140,7 +140,7 @@ func TestRestartDuringAWait(t *testing.T) {
 	}
 
 	// The state survived the restart.
-	code, out = svc.cli(t, repo, "", "get-ticket", "acme-2")
+	code, out = svc.cli(t, repo, "", "get-ticket", "acme-2", "--part", "rounds")
 	var tk struct {
 		State  string `json:"state"`
 		Rounds []struct {
