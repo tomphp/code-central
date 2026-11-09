@@ -140,7 +140,7 @@ func TestTheGrillingGuideRetitlesTheSpecAndPostsAResolution(t *testing.T) {
 		"already clear", "with no Round",
 		"points at the resolution comment",
 		// A redo reads the earlier Rounds, which claim's Ticket leaves out.
-		"`parts: [\"rounds\", \"comments\"]`",
+		"`parts: [\"rounds\"]`",
 	)
 }
 

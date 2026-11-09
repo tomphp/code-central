@@ -39,10 +39,16 @@ func (in GetTicketInput) parts() (map[string]bool, error) {
 	if len(asked) == 0 {
 		asked = DefaultTicketParts
 	}
+	return partSet(asked, TicketParts)
+}
+
+// partSet is the parts asked for as a set, each checked against all the
+// parts there are.
+func partSet(asked, all []string) (map[string]bool, error) {
 	out := map[string]bool{}
 	for _, p := range asked {
-		if !slices.Contains(TicketParts, p) {
-			return nil, invalid("parts", "unknown part %q (the parts are %s)", p, strings.Join(TicketParts, ", "))
+		if !slices.Contains(all, p) {
+			return nil, invalid("parts", "unknown part %q (the parts are %s)", p, strings.Join(all, ", "))
 		}
 		out[p] = true
 	}
@@ -87,6 +93,9 @@ func (v TicketView) only(parts map[string]bool) TicketView {
 
 // defaultView is the Ticket as a read naming no parts returns it.
 func defaultView(v TicketView) TicketView {
-	parts, _ := GetTicketInput{}.parts()
+	parts := map[string]bool{}
+	for _, p := range DefaultTicketParts {
+		parts[p] = true
+	}
 	return v.only(parts)
 }
