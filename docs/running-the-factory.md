@@ -246,21 +246,32 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
 ## Map Tickets and Prototypes
 
-A Map's Tickets each carry a Wayfinder Label, and the Factory claims them like a Stage's Ticket, by the skill its Label names:
+A Map's Tickets each carry a Wayfinder Label, and the Factory claims them like a Stage's Ticket, by the skill its Label names. A Prototype is claimed by its skill too:
 
 | Label | Guide | Skill |
 | --- | --- | --- |
 | `wayfinder:chart` | `map-chart` | `/wayfinder` |
 | `wayfinder:grilling` | `map-grilling` | `/grilling`, with `/domain-modeling` alongside |
 | `wayfinder:task` | `map-task` | none: the prompt is the Guide alone |
+| `prototype` | `prototype` | `/prototype` |
 
-Each runs in a read-only worktree detached at the base's tip, as a Stage does, and writes to Code Central, not to the repository. Its line names its Guide in place of the Stage:
+Each Map Ticket runs in a read-only worktree detached at the base's tip, as a Stage does, and writes to Code Central, not to the repository. Its line names its Guide in place of the Stage:
 
 ```text
 acme-shop-9 claimed (map-chart): "Charting: Dark mode" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-9; resume: claude --resume …
 ```
 
-The Factory leaves a Prototype (`prototype`) and a Map's research Ticket (`wayfinder:research`) unclaimed for now, and claims the Tickets after them. A Ticket with any of these Labels is never run as an implementation Ticket.
+A **Prototype** is a Ticket labelled `prototype`, on any Spec. Submit one with `code-central submit-prototype <spec> --text "…"` (or `submit_prototype` over MCP); its first line becomes the title, after "Prototype: ". The Factory claims it with `/prototype` and runs it in a worktree of its own, as for implementation, but on a local branch `prototype/<ticket>`:
+
+```text
+acme-shop-10 claimed (prototype): "Prototype: A theme picker in the header" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-10; resume: claude --resume …
+```
+
+Its first prompt tells the session to commit on that branch only, with no push and no PR, to record where the Prototype is in a `prototype` Tag (`prototype/acme-shop-10@1a2b3c4 /Users/you/src/acme-shop.worktrees/acme-shop-10`), to open its first Round with a "Try it" Question, and to finish with no branch. The Ticket panel shows the Tag as *Prototype at `/Users/you/src/acme-shop.worktrees/acme-shop-10` on `prototype/acme-shop-10` (`1a2b3c4`)*, so you can try it in that worktree while you answer.
+
+Because it finishes with no branch, accepting a Prototype makes it Done straight away, whatever the Landing Method: nothing is merged, pushed or landed. The worktree stays through Needs Answer and In Review, and the Factory removes it once the Prototype is Done or Cancelled. It never deletes the `prototype/` branch, so `git switch prototype/acme-shop-10` brings the Prototype back.
+
+The Factory leaves a Map's research Ticket (`wayfinder:research`) unclaimed for now, and claims the Tickets after it. A Ticket with any of these Labels is never run as an implementation Ticket.
 
 ## How accepted work lands
 

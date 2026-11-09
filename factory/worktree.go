@@ -29,12 +29,12 @@ func find(list []gitWorktree, path string) (gitWorktree, bool) {
 	return gitWorktree{}, false
 }
 
-// implementationWorktree gives implementation Ticket id its worktree at
-// wt on branch id: reused when it is there, else added on the existing
+// branchWorktree gives a Ticket its worktree at wt on branch id, its
+// workBranch: reused when it is there, else added on the existing
 // branch, else on a new branch from the base's tip. Anything else at wt,
 // or branch id checked out elsewhere, is a failure, and nothing is
 // touched.
-func (f *factory) implementationWorktree(id, wt string) error {
+func (f *factory) branchWorktree(id, wt string) error {
 	list, err := f.repository.worktrees()
 	if err != nil {
 		return err
@@ -61,12 +61,12 @@ func (f *factory) implementationWorktree(id, wt string) error {
 	return err
 }
 
-// stageWorktree gives Stage Ticket id its worktree at wt: detached at the
+// stageWorktree gives a Stage Ticket its worktree at wt: detached at the
 // base's tip, added when it isn't there and moved to the current tip when
 // it is. A dirty one is left as it is, as a failure: the Stage wrote files
 // it shouldn't have. Anything at wt but a detached worktree is a failure
 // too, and nothing is touched.
-func (f *factory) stageWorktree(id, wt string) error {
+func (f *factory) stageWorktree(wt string) error {
 	list, err := f.repository.worktrees()
 	if err != nil {
 		return err

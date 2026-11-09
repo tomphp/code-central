@@ -49,7 +49,7 @@ type guideSkill struct{ skill, alongside string }
 // stageSkills is the skill each guide the Factory runs starts, by guide
 // name; an empty skill starts none, so the prompt is the guide alone. It
 // is the only place that names upstream skills. A Ticket whose guide
-// isn't here, a Prototype or a Map's research, is left unclaimed.
+// isn't here, a Map's research, is left unclaimed.
 var stageSkills = map[string]guideSkill{
 	"grilling":               {"grilling", "domain-modeling"},
 	"spec":                   {skill: "to-spec"},
@@ -57,6 +57,7 @@ var stageSkills = map[string]guideSkill{
 	"map-chart":              {skill: "wayfinder"},
 	"map-grilling":           {"grilling", "domain-modeling"},
 	"map-task":               {},
+	core.PrototypeLabel:      {skill: "prototype"},
 	core.ImplementationStage: {skill: "implement"},
 }
 
@@ -66,10 +67,25 @@ func runs(guide string) bool {
 	return ok
 }
 
+// workBranch is the branch a Ticket with the named guide works on: its
+// own ID for implementation, which lands, and prototype/<ticket> for a
+// Prototype, which is local and never lands. Any other guide works
+// detached, on no branch.
+func workBranch(guide, ticket string) string {
+	switch guide {
+	case core.ImplementationStage:
+		return ticket
+	case core.PrototypeLabel:
+		return core.PrototypeLabel + "/" + ticket
+	}
+	return ""
+}
+
 // firstPrompt is the prompt that starts a Claim's first turn: the guide's
 // skill as a slash command, the Ticket and Claim, how the Factory runs
-// it, and the guide from the claim. stage is the guide's name.
-func firstPrompt(c claim, stage string, g core.StageGuideView) string {
+// it in its worktree wt, and the guide from the claim. stage is the
+// guide's name.
+func firstPrompt(c claim, stage, wt string, g core.StageGuideView) string {
 	var b strings.Builder
 	sk := stageSkills[stage]
 	if sk.skill != "" {
@@ -77,9 +93,12 @@ func firstPrompt(c claim, stage string, g core.StageGuideView) string {
 	}
 	fmt.Fprintf(&b, "Ticket: %s\nClaim: %s\n\n", c.Ticket, c.ClaimID)
 	claimed := fmt.Sprintf("The Factory has already claimed this Ticket for you: Claim %s is yours, so don't call claim, and pass %s as claim_id on every write that needs it.", c.ClaimID, c.ClaimID)
-	if stage == core.ImplementationStage {
-		fmt.Fprintf(&b, "You are running under code-central-factory, in this Ticket's own worktree on branch %s. %s Commit on this branch only, with no push and no PR, and finish the Ticket when it is done.", c.Ticket, claimed)
-	} else {
+	switch branch := workBranch(stage, c.Ticket); stage {
+	case core.ImplementationStage:
+		fmt.Fprintf(&b, "You are running under code-central-factory, in this Ticket's own worktree on branch %s. %s Commit on this branch only, with no push and no PR, and finish the Ticket when it is done.", branch, claimed)
+	case core.PrototypeLabel:
+		fmt.Fprintf(&b, "You are running under code-central-factory, in this Ticket's own worktree, %s, on the local branch %s. %s Commit on this branch only, with no push and no PR. Record the prototype Tag as `%s@<commit> %s`, with the branch's head commit; open the first Round with a \"Try it\" Question; and finish with no branch, since a Prototype never lands.", wt, branch, claimed, branch, wt)
+	default:
 		if sk.alongside != "" {
 			fmt.Fprintf(&b, "Run /%s alongside /%s, to sharpen the terms as you grill.\n\n", sk.alongside, sk.skill)
 		}

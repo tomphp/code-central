@@ -176,3 +176,45 @@ describe("the Ticket detail", () => {
     expect(await within(d).findByRole("alert")).toHaveTextContent("can't move acme-1 from Ready to Ready");
   });
 });
+
+describe("a Prototype's Ticket detail", () => {
+  function prototype(tag?: string) {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    return fake.addTicket("acme", {
+      title: "Prototype: the theme picker",
+      state: "Needs Answer",
+      labels: ["prototype"],
+      tags: tag === undefined ? {} : { prototype: tag },
+    });
+  }
+  const line = (t: TicketView) => {
+    render(<TicketDetail api={new FakeApi()} project="acme" ticket={t} now={new Date()} />);
+    return screen.queryByText(/^Prototype at/);
+  };
+
+  it("shows where the Prototype is from its prototype Tag", () => {
+    const l = line(prototype("prototype/acme-3@1a2b3c4 /home/me/code/app.worktrees/acme-3"));
+    expect(l).toHaveTextContent("Prototype at /home/me/code/app.worktrees/acme-3 on prototype/acme-3 (1a2b3c4)");
+    expect(within(l!).getByText("/home/me/code/app.worktrees/acme-3").tagName).toBe("CODE");
+    expect(within(l!).getByText("prototype/acme-3").tagName).toBe("CODE");
+    expect(within(l!).getByText("1a2b3c4").tagName).toBe("CODE");
+  });
+
+  it("keeps the spaces in the worktree's path", () => {
+    expect(line(prototype("prototype/acme-3@1a2b3c4 /Users/me/My Code/app.worktrees/acme-3"))).toHaveTextContent(
+      "Prototype at /Users/me/My Code/app.worktrees/acme-3 on prototype/acme-3 (1a2b3c4)",
+    );
+  });
+
+  it.each(["just some text", "prototype/acme-3 /home/me/app", "prototype/acme-3@1a2b3c4", "@1a2b3c4 /home/me/app"])(
+    "shows a Tag that doesn't parse, %j, as it is",
+    (raw) => {
+      expect(line(prototype(raw))).toHaveTextContent(`Prototype at ${raw}`);
+    },
+  );
+
+  it("shows no line without the Tag", () => {
+    expect(line(prototype())).toBeNull();
+  });
+});

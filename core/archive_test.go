@@ -245,6 +245,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: "Dark mode"})
 		return err
 	},
+	"submit_prototype": func(f fixture) error {
+		_, err := f.core.SubmitPrototype(ctx, "acme", core.SubmitPrototypeInput{Spec: "acme-1", Text: "Theme picker"})
+		return err
+	},
 	"land": func(f fixture) error {
 		_, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "abc123"})
 		return err

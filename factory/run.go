@@ -345,11 +345,12 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		f.claimf(c, "%s: set_session: %v", id, err)
 	}
 	f.claimed(c, *res.Ticket, wt)
-	setUp := f.implementationWorktree
-	if stage != core.ImplementationStage {
-		setUp = f.stageWorktree
+	if branch := workBranch(stage, id); branch != "" {
+		err = f.branchWorktree(branch, wt)
+	} else {
+		err = f.stageWorktree(wt)
 	}
-	if err := setUp(id, wt); err != nil {
+	if err != nil {
 		fl := (*failure)(nil)
 		if !errors.As(err, &fl) {
 			fl = f.setUpFailed(wt, err)
@@ -357,7 +358,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		f.reportFailure(ctx, c, fl)
 		return true
 	}
-	f.startTurn(ctx, c, wt, append(f.startArgs(c), firstPrompt(c, stage, guide)))
+	f.startTurn(ctx, c, wt, append(f.startArgs(c), firstPrompt(c, stage, wt, guide)))
 	return true
 }
 
