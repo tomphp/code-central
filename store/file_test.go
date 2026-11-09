@@ -284,7 +284,7 @@ func TestOptionsAreOneFileAtTheStoreRoot(t *testing.T) {
 	s := openFile(t, dir)
 	before := listFiles(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutOptions(store.Options{FocusClear: store.FocusActivityDashboard})
+		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear})
 	})
 	var added []string
 	for _, f := range listFiles(t, dir) {
@@ -295,7 +295,7 @@ func TestOptionsAreOneFileAtTheStoreRoot(t *testing.T) {
 	if !slices.Equal(added, []string{"options.yaml"}) {
 		t.Fatalf("files added by an options write: %v", added)
 	}
-	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: activity_dashboard\n" {
+	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: all_clear\n" {
 		t.Fatalf("options.yaml = %q", got)
 	}
 }
@@ -306,8 +306,21 @@ func TestAnOptionsFileWithNoKeysReadsAsTheDefaults(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "options.yaml"), "{}\n")
 	s := openFile(t, dir)
 	s.View(func(r store.Reader) error {
-		if o := r.Options(); o.FocusClear != store.FocusAllClear {
+		if o := r.Options(); o.FocusClear != store.FocusActivityDashboard {
 			t.Fatalf("options = %+v, want the defaults", o)
+		}
+		return nil
+	})
+}
+
+func TestAnOptionsFileKeepsAnExplicitAllClear(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "store.yaml"), fmt.Sprintf("format: %d\n", store.Format))
+	writeFile(t, filepath.Join(dir, "options.yaml"), "focus_clear: all_clear\n")
+	s := openFile(t, dir)
+	s.View(func(r store.Reader) error {
+		if o := r.Options(); o.FocusClear != store.FocusAllClear {
+			t.Fatalf("options = %+v, want the All clear the file holds", o)
 		}
 		return nil
 	})

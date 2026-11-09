@@ -264,7 +264,7 @@ const (
 )
 
 // FocusClears lists every FocusClear, the default first.
-var FocusClears = []FocusClear{FocusAllClear, FocusActivityDashboard}
+var FocusClears = []FocusClear{FocusActivityDashboard, FocusAllClear}
 
 // Valid reports whether f is one of the FocusClears.
 func (f FocusClear) Valid() bool { return slices.Contains(FocusClears, f) }
@@ -277,7 +277,7 @@ type Options struct {
 
 // DefaultOptions are the Options of a store that has never had any
 // written.
-func DefaultOptions() Options { return Options{FocusClear: FocusAllClear} }
+func DefaultOptions() Options { return Options{FocusClear: FocusActivityDashboard} }
 
 // FocusClearNames is the FocusClears as strings, for messages and the
 // schema.

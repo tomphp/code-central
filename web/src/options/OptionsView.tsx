@@ -27,12 +27,12 @@ const FOCUS_CLEAR: OptionDefinition<"focus_clear"> = {
   name: "focus_clear",
   label: "Focus Mode, when nothing needs you",
   choices: [
-    { value: "all_clear", label: "All clear", hint: "A calm All clear message and nothing else." },
     {
       value: "activity_dashboard",
       label: "Activity Dashboard",
       hint: "How many Tickets are Ready and In Progress, and the In Progress Tickets.",
     },
+    { value: "all_clear", label: "All clear", hint: "A calm All clear message and nothing else." },
   ],
 };
 

@@ -2,7 +2,7 @@ import type { Api } from "./api/api";
 import { projectOf } from "./api/api";
 import { Focus } from "./focus/Focus";
 import { Inbox } from "./inbox/Inbox";
-import { DEFAULT_OPTIONS } from "./api/types";
+import type { FocusClear } from "./api/types";
 import { useInboxData, useLiveVersion, useOptions, useSpec, useTicket } from "./live";
 import { OptionsView } from "./options/OptionsView";
 import { ProjectOptions } from "./options/ProjectOptions";
@@ -23,7 +23,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
   const inbox = useInboxData(api, version);
   const options = useOptions(api, version);
   // While the Options load, or when the last read failed, Focus Mode shows All clear.
-  const focusClear = (!options.error && options.data?.focus_clear) || DEFAULT_OPTIONS.focus_clear;
+  const focusClear: FocusClear = (!options.error && options.data?.focus_clear) || "all_clear";
   const spec = useSpec(api, loc.requirement && projectOf(loc.requirement), loc.requirement, version);
   const requirement = spec.data?.id === loc.requirement && spec.data?.requirement ? { ...spec.data, requirement: spec.data.requirement } : undefined;
   const map = spec.data?.id === loc.requirement && spec.data?.map ? { ...spec.data, map: spec.data.map } : undefined;

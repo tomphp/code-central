@@ -108,7 +108,7 @@ projects/<key>/tickets/<n>.yaml
       previous: map[string]string
 
 values
-  options focus_clear (default all_clear): all_clear, activity_dashboard
+  options focus_clear (default activity_dashboard): activity_dashboard, all_clear
   project landing.method (no landing: merge, push false, remote origin): merge, branch
   ticket state, moves[].from, moves[].to: Draft, Ready, In Progress, Needs Answer, Answered, Failed, In Review, Accepted, Done, Cancelled
   rounds[].questions[].status: open, answered, dismissed

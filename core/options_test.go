@@ -58,7 +58,7 @@ func TestGetOptionsIsEveryActorsAndStartsAtTheDefaults(t *testing.T) {
 	f := newFixture(t)
 	for _, a := range []core.Actor{core.Human, core.Agent, core.Integration} {
 		o, err := f.core.GetOptions(core.WithActor(ctx, a))
-		if err != nil || o.FocusClear != store.FocusAllClear {
+		if err != nil || o.FocusClear != store.FocusActivityDashboard {
 			t.Fatalf("get_options as %s: %+v, %v", a, o, err)
 		}
 	}
@@ -67,10 +67,10 @@ func TestGetOptionsIsEveryActorsAndStartsAtTheDefaults(t *testing.T) {
 func TestSetOptionsIsTheHumans(t *testing.T) {
 	f := newFixture(t)
 	for _, a := range []core.Actor{core.Agent, core.Integration} {
-		_, err := f.core.SetOptions(core.WithActor(ctx, a), core.SetOptionsInput{FocusClear: focus(store.FocusActivityDashboard)})
+		_, err := f.core.SetOptions(core.WithActor(ctx, a), core.SetOptionsInput{FocusClear: focus(store.FocusAllClear)})
 		wantCode(t, err, core.ActionNotAllowed, "")
 	}
-	if o, _ := f.core.GetOptions(ctx); o.FocusClear != store.FocusAllClear {
+	if o, _ := f.core.GetOptions(ctx); o.FocusClear != store.FocusActivityDashboard {
 		t.Fatalf("a refused set_options changed the Options: %+v", o)
 	}
 }
@@ -78,8 +78,8 @@ func TestSetOptionsIsTheHumans(t *testing.T) {
 func TestSetOptionsChangesAndPublishesOneNotice(t *testing.T) {
 	c, writes, notices := countingCore(t)
 
-	o, err := c.SetOptions(human, core.SetOptionsInput{FocusClear: focus(store.FocusActivityDashboard)})
-	if err != nil || o.FocusClear != store.FocusActivityDashboard {
+	o, err := c.SetOptions(human, core.SetOptionsInput{FocusClear: focus(store.FocusAllClear)})
+	if err != nil || o.FocusClear != store.FocusAllClear {
 		t.Fatalf("set_options: %+v, %v", o, err)
 	}
 	if got := <-notices; got != (events.Event{Type: events.OptionsChanged}) {
@@ -94,7 +94,7 @@ func TestSetOptionsChangesAndPublishesOneNotice(t *testing.T) {
 	}
 
 	// The same value again, or nothing at all, changes nothing.
-	for _, in := range []core.SetOptionsInput{{FocusClear: focus(store.FocusActivityDashboard)}, {}} {
+	for _, in := range []core.SetOptionsInput{{FocusClear: focus(store.FocusAllClear)}, {}} {
 		if got, err := c.SetOptions(human, in); err != nil || got != o {
 			t.Fatalf("a no-op set_options: %+v, %v", got, err)
 		}
@@ -110,7 +110,7 @@ func TestSetOptionsValidatesBeforeWriting(t *testing.T) {
 
 	_, err := c.SetOptions(human, core.SetOptionsInput{FocusClear: focus("fireworks")})
 	wantCode(t, err, core.Invalid, "focus_clear")
-	for _, want := range []string{"focus_clear", "all_clear", "activity_dashboard"} {
+	for _, want := range []string{"focus_clear", "allowed: activity_dashboard, all_clear"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal should name %q: %v", want, err)
 		}
@@ -125,7 +125,7 @@ func TestSetOptionsRecordsNothingOnAnyTicket(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, store.Ready)
 	before, _ := f.core.GetTicket(ctx, "acme", whole("2"))
-	if _, err := f.core.SetOptions(human, core.SetOptionsInput{FocusClear: focus(store.FocusActivityDashboard)}); err != nil {
+	if _, err := f.core.SetOptions(human, core.SetOptionsInput{FocusClear: focus(store.FocusAllClear)}); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := f.core.GetTicket(ctx, "acme", whole("2"))

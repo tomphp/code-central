@@ -1079,11 +1079,11 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     // ---- Options (Spec code-central-160) ----
 
     it("reads the default Options, and sets focus_clear and reads it back", async () => {
-      expect(await d.api.options()).toEqual({ focus_clear: "all_clear" });
-
-      expect(await d.api.setOptions({ focus_clear: "activity_dashboard" })).toEqual({ focus_clear: "activity_dashboard" });
       expect(await d.api.options()).toEqual({ focus_clear: "activity_dashboard" });
-      expect(await d.api.setOptions({})).toEqual({ focus_clear: "activity_dashboard" });
+
+      expect(await d.api.setOptions({ focus_clear: "all_clear" })).toEqual({ focus_clear: "all_clear" });
+      expect(await d.api.options()).toEqual({ focus_clear: "all_clear" });
+      expect(await d.api.setOptions({})).toEqual({ focus_clear: "all_clear" });
     });
 
     it("refuses an unknown Option and a bad value, changing nothing", async () => {
@@ -1094,9 +1094,9 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       const bad = await d.api.setOptions({ focus_clear: "fireworks" } as never).catch((e) => e);
       expect(bad).toMatchObject({ status: 422, code: "invalid", field: "focus_clear" });
-      expect(bad.message).toContain("activity_dashboard");
+      expect(bad.message).toContain("allowed: activity_dashboard, all_clear");
 
-      expect(await d.api.options()).toEqual({ focus_clear: "all_clear" });
+      expect(await d.api.options()).toEqual({ focus_clear: "activity_dashboard" });
     });
 
     it("sends options.changed over the live feed when the Options change", async () => {
@@ -1106,7 +1106,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const stop = d.api.subscribe({ onEvent: (e) => got.push(e), onOpen: () => opened() });
       try {
         await open;
-        await d.api.setOptions({ focus_clear: "activity_dashboard" });
+        await d.api.setOptions({ focus_clear: "all_clear" });
         await expect.poll(() => got, { timeout: 5000 }).toEqual([{ type: "options.changed" }]);
       } finally {
         stop();

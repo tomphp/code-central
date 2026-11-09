@@ -1,12 +1,13 @@
 // Activity Dashboard tests: the real App against FakeApi, at ?view=focus,
-// with the Focus Mode Option at Activity Dashboard. They check what the
-// human sees: where the dashboard shows, its counts and its In Progress
-// list.
+// with the Focus Mode Option at its default, Activity Dashboard. They
+// check what the human sees: where the dashboard shows, its counts and
+// its In Progress list.
 import { screen, within, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
+import { ApiError } from "../api/types";
 import { change, focus, renderApp } from "./focusTesting";
 
 function world() {
@@ -20,49 +21,62 @@ function world() {
   return fake;
 }
 
-async function dashboardOn(fake: FakeApi) {
-  await fake.setOptions({ focus_clear: "activity_dashboard" });
-}
-
 const dashboard = () => within(focus()).findByRole("region", { name: "Activity Dashboard" });
 // block is state's block, named by its State; count is the number on it.
 const block = (d: HTMLElement, state: string) => within(d).getByRole("group", { name: state });
 const count = (d: HTMLElement, state: string) => within(block(d, state)).getByTestId("count").textContent;
 
 describe("where the Activity Dashboard shows", () => {
-  it("shows All clear by default", async () => {
+  it("shows where All clear would by default", async () => {
     renderApp(world());
-    expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
-    expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
-  });
-
-  it("shows where All clear would once the Option is set", async () => {
-    const fake = world();
-    await dashboardOn(fake);
-    renderApp(fake);
     const d = await dashboard();
     expect(within(focus()).queryByRole("region", { name: "All clear" })).toBeNull();
     expect(count(d, "Ready")).toBe("2");
     expect(count(d, "In Progress")).toBe("1");
   });
 
-  it("switches live between All clear and the dashboard on options.changed, with no reload", async () => {
+  it("shows All clear, never the dashboard, until the Options are read", async () => {
     const fake = world();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const options = fake.options.bind(fake);
+    vi.spyOn(fake, "options").mockImplementation(async () => {
+      await gate;
+      return options();
+    });
     renderApp(fake);
-    await within(focus()).findByRole("region", { name: "All clear" });
+    expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
+    expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
 
-    await act(() => dashboardOn(fake));
+    release();
     expect(await dashboard()).toBeInTheDocument();
     expect(within(focus()).queryByRole("region", { name: "All clear" })).toBeNull();
+  });
 
-    await act(() => fake.setOptions({ focus_clear: "all_clear" }));
+  it("shows All clear, not the dashboard, when the Options can't be read", async () => {
+    const fake = world();
+    vi.spyOn(fake, "options").mockRejectedValue(new ApiError(0, "service_unavailable", "Code Central isn't reachable"));
+    renderApp(fake);
     expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
     expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
   });
 
+  it("switches live between the dashboard and All clear on options.changed, with no reload", async () => {
+    const fake = world();
+    renderApp(fake);
+    await dashboard();
+
+    await act(() => fake.setOptions({ focus_clear: "all_clear" }));
+    expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
+    expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
+
+    await act(() => fake.setOptions({ focus_clear: "activity_dashboard" }));
+    expect(await dashboard()).toBeInTheDocument();
+    expect(within(focus()).queryByRole("region", { name: "All clear" })).toBeNull();
+  });
+
   it("gives way to a Focus Item the moment one appears, and comes back when it goes", async () => {
     const fake = world();
-    await dashboardOn(fake);
     renderApp(fake);
     await dashboard();
 
@@ -76,7 +90,6 @@ describe("where the Activity Dashboard shows", () => {
 
   it("leaves the skipped screen as it is", async () => {
     const fake = world();
-    await dashboardOn(fake);
     fake.updateTicket("acme-2", { state: "Failed" });
     fake.setNeedsMe([{ reason: "failed", tickets: [{ id: "acme-2" }] }]);
     renderApp(fake);
@@ -90,7 +103,6 @@ describe("where the Activity Dashboard shows", () => {
 describe("the counts", () => {
   it("cover only Focus Mode's Project when scoped, and every Project when not", async () => {
     const fake = world();
-    await dashboardOn(fake);
     const { unmount } = renderApp(fake, "/?view=focus&project=beta");
     let d = await dashboard();
     expect(count(d, "Ready")).toBe("1");
@@ -105,7 +117,6 @@ describe("the counts", () => {
 
   it("leave out Archived Projects", async () => {
     const fake = world();
-    await dashboardOn(fake);
     fake.addProject("old", "Old", { archived: true });
     fake.addTicket("old", { title: "Left behind", state: "Ready" });
     fake.addTicket("old", { title: "Still going", state: "In Progress" });
@@ -118,7 +129,6 @@ describe("the counts", () => {
 
   it("include Stage Tickets and blocked Ready Tickets, and follow a change live", async () => {
     const fake = world();
-    await dashboardOn(fake);
     const spec = fake.addSpec("acme", { title: "Dark mode" });
     fake.addTicket("acme", { title: "Grilling: Dark mode", state: "In Progress", spec: { id: spec.id, title: spec.title }, labels: ["stage:grilling"] });
     fake.addTicket("acme", { title: "Waits on login", state: "Ready", blocked: true });
@@ -154,7 +164,6 @@ const entries = (d: HTMLElement) => within(inProgress(d)).getAllByRole("listitem
 describe("the In Progress list", () => {
   it("lists the In Progress Tickets by Project, then Ticket number", async () => {
     const fake = busy();
-    await dashboardOn(fake);
     renderApp(fake);
     const d = await dashboard();
     expect(entries(d).map((e) => within(e).getByText(/^(acme|beta)-\d+$/).textContent)).toEqual(["acme-2", "acme-11", "acme-12", "beta-2"]);
@@ -162,7 +171,6 @@ describe("the In Progress list", () => {
 
   it("shows each entry's ID, title, Project and latest event line", async () => {
     const fake = busy();
-    await dashboardOn(fake);
     renderApp(fake);
     const d = await dashboard();
     const [quiet, , theme, beta] = entries(d);
@@ -173,7 +181,6 @@ describe("the In Progress list", () => {
 
   it("shows a Stage Ticket's Requirement and Stage", async () => {
     const fake = busy();
-    await dashboardOn(fake);
     renderApp(fake);
     const stage = entries(await dashboard())[1];
     expect(within(stage).getByText("Requirement: Dark mode · Spec")).toBeInTheDocument();
@@ -181,7 +188,6 @@ describe("the In Progress list", () => {
 
   it("leaves out the Project when scoped to one", async () => {
     const fake = busy();
-    await dashboardOn(fake);
     renderApp(fake, "/?view=focus&project=acme");
     const d = await dashboard();
     expect(entries(d)[0]).toHaveTextContent(/^acme-2Sign-up page$/);
@@ -190,7 +196,6 @@ describe("the In Progress list", () => {
 
   it("follows the live feed: a new latest event, and a Ticket leaving In Progress", async () => {
     const fake = busy();
-    await dashboardOn(fake);
     renderApp(fake);
     const d = await dashboard();
     act(() => fake.postSessionEvents("s-busy", [{ time: fake.now.toISOString(), kind: "text", text: "Writing the test first." }]));
@@ -203,7 +208,6 @@ describe("the In Progress list", () => {
 
   it("says Nothing in progress when it's empty, with the blocks still showing", async () => {
     const fake = world();
-    await dashboardOn(fake);
     renderApp(fake, "/?view=focus&project=beta");
     const d = await dashboard();
     expect(within(d).getByText("Nothing in progress")).toBeInTheDocument();
@@ -214,7 +218,6 @@ describe("the In Progress list", () => {
 
   it("opens an entry's Ticket in the Inbox, keeping the Project filter", async () => {
     const fake = busy();
-    await dashboardOn(fake);
     renderApp(fake, "/?view=focus&project=acme");
     await userEvent.click(within(entries(await dashboard())[0]).getByRole("link"));
     expect(window.location.search).toBe("?view=inbox&project=acme&ticket=acme-2");
@@ -223,7 +226,6 @@ describe("the In Progress list", () => {
 
   it("opens a Stage Ticket in its Requirement", async () => {
     const fake = busy();
-    await dashboardOn(fake);
     renderApp(fake);
     await userEvent.click(within(entries(await dashboard())[1]).getByRole("link"));
     expect(window.location.search).toBe("?view=inbox&requirement=acme-10&ticket=acme-11");
@@ -237,7 +239,6 @@ const entry = (d: HTMLElement, id: string) => within(inProgress(d)).getByText(id
 describe("pulses", () => {
   it("marks neither a block nor an entry on first show", async () => {
     const fake = busy();
-    await dashboardOn(fake);
     renderApp(fake);
     const d = await dashboard();
     expect(pulsing(block(d, "Ready"))).toBe(false);
@@ -247,7 +248,6 @@ describe("pulses", () => {
 
   it("marks a block when its count changes, and not the other", async () => {
     const fake = busy();
-    await dashboardOn(fake);
     renderApp(fake);
     const d = await dashboard();
 
@@ -259,7 +259,6 @@ describe("pulses", () => {
 
   it("marks only the entry whose Ticket a notice names, and no block when a refetch leaves the counts the same", async () => {
     const fake = busy();
-    await dashboardOn(fake);
     renderApp(fake);
     const d = await dashboard();
 
@@ -272,7 +271,6 @@ describe("pulses", () => {
 
   it("marks an entry on a notice that changes nothing it shows", async () => {
     const fake = busy();
-    await dashboardOn(fake);
     renderApp(fake);
     const d = await dashboard();
 
@@ -283,7 +281,6 @@ describe("pulses", () => {
 
   it("marks an entry that joins the list", async () => {
     const fake = busy();
-    await dashboardOn(fake);
     renderApp(fake);
     const d = await dashboard();
 
@@ -295,7 +292,6 @@ describe("pulses", () => {
 
   it("marks the first entry to join an empty list", async () => {
     const fake = world();
-    await dashboardOn(fake);
     renderApp(fake, "/?view=focus&project=beta");
     const d = await dashboard();
 
