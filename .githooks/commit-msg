@@ -1,0 +1,25 @@
+#!/bin/sh
+# Refuses a commit message that doesn't follow Conventional Commits, as
+# cog.toml defines them. `make hooks` (a dependency of test, typecheck,
+# vitest and build) points core.hooksPath here. POSIX sh, so Git for
+# Windows runs it with its bundled sh too.
+
+# Merge commits are exempt: `Merge main into …` and the Factory's
+# `Merge code-central-N: …` landings.
+case "$(head -n 1 "$1")" in
+Merge\ *) exit 0 ;;
+esac
+
+if ! command -v cog >/dev/null 2>&1; then
+	cat >&2 <<'MSG'
+commit-msg: cog (cocogitto) is not on PATH, so this commit message can't be checked.
+Install it, then commit again:
+  macOS/Linux: brew install cocogitto
+  any OS with Rust: cargo install cocogitto
+  Windows: download a release binary from https://github.com/cocogitto/cocogitto/releases and put cog on PATH
+See the Commits section of CLAUDE.md for the setup step.
+MSG
+	exit 1
+fi
+
+exec cog verify --file "$1"

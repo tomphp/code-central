@@ -5,7 +5,7 @@ TEST_BUDGET := 10
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test typecheck vitest e2e build web clean
+.PHONY: test typecheck vitest e2e build web clean hooks
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
@@ -19,18 +19,25 @@ endif
 # and the TypeScript type check in parallel. Installing web dependencies
 # (first run, or after the lockfile changes) happens before the clock
 # starts.
-test: $(WEB_DEPS)
+test: $(WEB_DEPS) hooks
 	@go run ./internal/testrun -budget $(TEST_BUDGET)s
 
 # The inner loop while working on the UI: the TypeScript type check, and
 # vitest on one file (F=src/...) or on all of them. Both install web
 # dependencies first, so they work in a fresh worktree. The tools run
 # through node rather than node_modules/.bin, whose shims differ by OS.
-typecheck: $(WEB_DEPS)
+typecheck: $(WEB_DEPS) hooks
 	cd web && node node_modules/typescript/bin/tsc --noEmit
 
-vitest: $(WEB_DEPS)
+vitest: $(WEB_DEPS) hooks
 	cd web && node node_modules/vitest/vitest.mjs run $(F:web/%=%)
+
+# Turns on the committed commit-msg hook in .githooks/, which refuses a
+# message that isn't a conventional commit (see CLAUDE.md's Commits). The
+# setting is in the clone's shared config, so every worktree gets it; the
+# path is relative, so each runs its own checked-out copy.
+hooks:
+	git config core.hooksPath .githooks
 
 $(WEB_DEPS): web/package.json web/package-lock.json
 	$(if $(shell npm --version),,$(error npm not found; the UI needs Node (go test ./... alone runs without it)))
@@ -44,7 +51,7 @@ web: $(WEB_DEPS)
 # local Factory, code-central-factory. In development, run
 # `code-central serve` and `npm --prefix web run dev`: Vite serves the UI
 # on :5173 and proxies /api to the service.
-build: web
+build: web hooks
 	go build -tags webdist -ldflags "$(LDFLAGS)" -o bin/code-central$(EXE) ./cmd/code-central
 	go build -o bin/code-central-factory$(EXE) ./cmd/code-central-factory
 
