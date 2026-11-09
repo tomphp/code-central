@@ -36,16 +36,28 @@ _Avoid_: Chapter, part, block
 A Spec started from the human's free text and defined through Stages before it is built. Its free text is the Requirement's text.
 _Avoid_: Prompt, feature request, idea
 
+**Map**:
+A Spec that finds the way to a loosely-defined destination through decision Tickets worked one at a time, each marked by a reserved Wayfinder Label. Its body is the index of decisions made, the fog not yet specified and what is out of scope.
+_Avoid_: Wayfinder session, roadmap, journey
+
+**Charting**:
+The first Ticket of a Map, which names its destination with the human and creates the first decision Tickets and their Blockers.
+_Avoid_: Planning, setup
+
 **Ticket**:
 A unit of work within a Spec. Every Ticket belongs to exactly one Spec.
 _Avoid_: Issue, task, card
+
+**Prototype**:
+A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to try and react to, so a decision can be made. Its work never lands.
+_Avoid_: Spike, mock-up, demo
 
 **Stage**:
 One of the three fixed steps that turn a Requirement's text into implementation Tickets (grilling, spec and tickets), each done as its own Ticket.
 _Avoid_: Phase, step, definition Ticket
 
 **Stage Guide**:
-Code Central's instructions telling an agent what a Stage must produce, how to finish it and what to do when it can't carry on. Implementation Tickets get one too.
+Code Central's instructions telling an agent what a Stage must produce, how to finish it and what to do when it can't carry on. Implementation Tickets, a Map's Tickets and Prototypes get one too, though they are not Stages.
 _Avoid_: Prompt, playbook, skill
 
 **State**:
@@ -153,11 +165,15 @@ An agent's permanent record of what broke on a Ticket, why, and what to fix, pos
 _Avoid_: Error, incident
 
 **Label**:
-A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels are reserved, and mark a Ticket's Stage.
+A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels, Wayfinder Labels and `prototype` are reserved: they mark a Ticket's Stage, a Map or a Map's Ticket type, and a Prototype.
 _Avoid_: Category
 
+**Wayfinder Label**:
+A reserved `wayfinder:` Label marking a Map (`wayfinder:map`) or a Map's Ticket type (`chart`, `grilling`, `research`, `task`).
+_Avoid_: Map Label, kind
+
 **Tag**:
-A free-form key and value on a Spec or Ticket, with no workflow meaning.
+A free-form key and value on a Spec or Ticket, with no meaning to Code Central's workflow; the Factory reads the `guided` Tag on a Map, and the read side the `prototype`, `research` and `map` Tags.
 _Avoid_: Label, attribute, property
 
 **Import**:

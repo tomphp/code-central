@@ -201,15 +201,24 @@ func (c *Core) AddLabels(_ context.Context, key string, in LabelsInput) (TargetV
 	if err := checkLabels(in.Labels); err != nil {
 		return TargetView{}, err
 	}
-	if err := checkStageLabels("labels", in.Labels); err != nil {
+	if err := checkReservedNames("labels", in.Labels); err != nil {
 		return TargetView{}, err
 	}
-	return c.updateTarget(key, in.Target, func(labels *[]string, _ map[string]string) {
+	return c.updateTarget(key, in.Target, func(onSpec bool, labels *[]string, _ map[string]string) error {
+		if err := checkPlacement("labels", in.Labels, onSpec); err != nil {
+			return err
+		}
 		for _, l := range in.Labels {
 			if !slices.Contains(*labels, l) {
 				*labels = append(*labels, l)
 			}
 		}
+		// Only a new type Label is checked against the rest, so Labels
+		// a Ticket carried before the rule can still be added to.
+		if !onSpec && slices.ContainsFunc(in.Labels, typeLabel) {
+			return checkOneType("labels", *labels)
+		}
+		return nil
 	})
 }
 
@@ -219,8 +228,9 @@ func (c *Core) RemoveLabels(_ context.Context, key string, in LabelsInput) (Targ
 	if err := checkLabels(in.Labels); err != nil {
 		return TargetView{}, err
 	}
-	return c.updateTarget(key, in.Target, func(labels *[]string, _ map[string]string) {
+	return c.updateTarget(key, in.Target, func(_ bool, labels *[]string, _ map[string]string) error {
 		*labels = slices.DeleteFunc(*labels, func(l string) bool { return slices.Contains(in.Labels, l) })
+		return nil
 	})
 }
 
@@ -264,8 +274,9 @@ func (c *Core) SetTags(_ context.Context, key string, in SetTagsInput) (TargetVi
 			return TargetView{}, invalid("tags", "Tag %q needs a non-empty, single-line value", k)
 		}
 	}
-	return c.updateTarget(key, in.Target, func(_ *[]string, tags map[string]string) {
+	return c.updateTarget(key, in.Target, func(_ bool, _ *[]string, tags map[string]string) error {
 		maps.Copy(tags, in.Tags)
+		return nil
 	})
 }
 
@@ -279,17 +290,18 @@ func (c *Core) RemoveTags(_ context.Context, key string, in RemoveTagsInput) (Ta
 			return TargetView{}, invalid("keys", "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
 		}
 	}
-	return c.updateTarget(key, in.Target, func(_ *[]string, tags map[string]string) {
+	return c.updateTarget(key, in.Target, func(_ bool, _ *[]string, tags map[string]string) error {
 		for _, k := range in.Keys {
 			delete(tags, k)
 		}
+		return nil
 	})
 }
 
 // updateTarget loads the Spec or Ticket numbered by ref (they share one
 // counter) and applies fn to its Labels and Tags. It is written only
 // when they changed. Label and Tag changes aren't recorded in edits.
-func (c *Core) updateTarget(key string, ref Ref, fn func(labels *[]string, tags map[string]string)) (TargetView, error) {
+func (c *Core) updateTarget(key string, ref Ref, fn func(onSpec bool, labels *[]string, tags map[string]string) error) (TargetView, error) {
 	var v TargetView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
@@ -299,16 +311,22 @@ func (c *Core) updateTarget(key string, ref Ref, fn func(labels *[]string, tags 
 		if err != nil {
 			return err
 		}
-		apply := func(labels *[]string, tags *map[string]string) bool {
+		apply := func(onSpec bool, labels *[]string, tags *map[string]string) (bool, error) {
 			oldL, oldT := slices.Clone(*labels), maps.Clone(*tags)
 			if *tags == nil {
 				*tags = map[string]string{}
 			}
-			fn(labels, *tags)
-			return !slices.Equal(oldL, *labels) || !maps.Equal(oldT, *tags)
+			if err := fn(onSpec, labels, *tags); err != nil {
+				return false, err
+			}
+			return !slices.Equal(oldL, *labels) || !maps.Equal(oldT, *tags), nil
 		}
 		if s, ok := w.Spec(key, n); ok {
-			if apply(&s.Labels, &s.Tags) {
+			changed, err := apply(true, &s.Labels, &s.Tags)
+			if err != nil {
+				return err
+			}
+			if changed {
 				s.Updated = c.now()
 				if err := w.PutSpec(key, s); err != nil {
 					return err
@@ -318,7 +336,11 @@ func (c *Core) updateTarget(key string, ref Ref, fn func(labels *[]string, tags 
 			return nil
 		}
 		if t, ok := w.Ticket(key, n); ok {
-			if apply(&t.Labels, &t.Tags) {
+			changed, err := apply(false, &t.Labels, &t.Tags)
+			if err != nil {
+				return err
+			}
+			if changed {
 				t.Updated = c.now()
 				if err := w.PutTicket(key, t); err != nil {
 					return err

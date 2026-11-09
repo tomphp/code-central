@@ -34,6 +34,11 @@ var guideBudgets = map[string]int{
 	"spec":           3300,
 	"tickets":        3500,
 	"implementation": 3300,
+	"map-chart":      3600,
+	"map-grilling":   3600,
+	"map-research":   3300,
+	"map-task":       3000,
+	"prototype":      3300,
 }
 
 func TestTheMCPInstructionsStayWithinAbout150Words(t *testing.T) {
@@ -105,7 +110,7 @@ func TestTheStageGuidesTroubleRulesStayWithin800Bytes(t *testing.T) {
 
 func TestEachStageGuideStaysWithinItsBudget(t *testing.T) {
 	f := newFixture(t)
-	for _, stage := range core.GuideStages {
+	for _, stage := range core.GuideNames {
 		limit, ok := guideBudgets[stage]
 		if !ok {
 			t.Errorf("the %s guide has no budget", stage)

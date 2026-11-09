@@ -17,7 +17,7 @@ import (
 // Ticket, so a restart fills it again from the first read.
 type claimInfo struct {
 	title string
-	stage string // a Stage or core.ImplementationStage
+	stage string // the guide's name, one of core.GuideNames
 }
 
 // noteTicket keeps what the lines say of c's Ticket, as tk gives it,
@@ -28,7 +28,7 @@ func (f *factory) noteTicket(c claim, tk core.TicketView) {
 	if f.ended[c.ClaimID] {
 		return
 	}
-	f.info[c.ClaimID] = claimInfo{title: tk.Title, stage: core.GuideStage(tk.Labels)}
+	f.info[c.ClaimID] = claimInfo{title: tk.Title, stage: core.GuideName(tk.Labels)}
 }
 
 // about is "(<stage>): "<title>"", naming c's Ticket in a line.

@@ -179,7 +179,7 @@ func checkImport(p ImportPayload) error {
 		if strings.TrimSpace(s.Title) == "" {
 			return invalid(at+".title", "a Spec needs a title: the folder's name when it has no spec.md or map.md")
 		}
-		if err := checkImportLabelsTags(at, s.Labels, s.Tags); err != nil {
+		if err := checkImportLabelsTags(at, s.Labels, s.Tags, true); err != nil {
 			return err
 		}
 	}
@@ -201,7 +201,7 @@ func checkImport(p ImportPayload) error {
 		if t.State != "" && !slices.Contains(importStates, t.State) {
 			return invalid(at+".state", "an imported Ticket is Draft, Ready, Done or Cancelled, not %q", t.State)
 		}
-		if err := checkImportLabelsTags(at, t.Labels, t.Tags); err != nil {
+		if err := checkImportLabelsTags(at, t.Labels, t.Tags, false); err != nil {
 			return err
 		}
 		for j, b := range t.BlockedBy {
@@ -225,13 +225,21 @@ func checkImport(p ImportPayload) error {
 	return nil
 }
 
-func checkImportLabelsTags(at string, labels []string, tags map[string]string) error {
+func checkImportLabelsTags(at string, labels []string, tags map[string]string, onSpec bool) error {
 	for j, l := range labels {
 		field := fmt.Sprintf("%s.labels[%d]", at, j)
 		if !singleLine(l) {
 			return invalid(field, "a Label is non-empty and single-line, not %q", l)
 		}
-		if err := checkStageLabels(field, []string{l}); err != nil {
+		if err := checkReservedNames(field, []string{l}); err != nil {
+			return err
+		}
+		if err := checkPlacement(field, []string{l}, onSpec); err != nil {
+			return err
+		}
+	}
+	if !onSpec {
+		if err := checkOneType(at+".labels", labels); err != nil {
 			return err
 		}
 	}

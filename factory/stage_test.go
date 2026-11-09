@@ -180,3 +180,95 @@ func TestTheGrillingStageStartsGrillingWithDomainModelingAndItsStageGuide(t *tes
 		t.Errorf("prompt %q doesn't name get_stage_guide", c.Prompt)
 	}
 }
+
+func TestEachMapTicketStartsItsSkillWithItsGuideInADetachedWorktree(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	ids := map[string]string{ // guide -> Ticket
+		"map-chart":    h.LabelledTicket("wayfinder:chart", "Charting: Dark mode"),
+		"map-grilling": h.LabelledTicket("wayfinder:grilling", "Which themes?"),
+		"map-task":     h.LabelledTicket("wayfinder:task", "Set up the design account"),
+	}
+	mainTip := h.Git("rev-parse", "main")
+
+	h.Start()
+	for _, id := range ids {
+		h.WaitForState(id, store.InReview)
+	}
+
+	calls := map[string]factorytest.Call{}
+	for _, c := range h.Calls() {
+		calls[c.Ticket] = c
+	}
+	starts := map[string]string{
+		"map-chart":    "/wayfinder " + ids["map-chart"] + "\n\nTicket: " + ids["map-chart"] + "\n",
+		"map-grilling": "/grilling " + ids["map-grilling"] + "\n\nTicket: " + ids["map-grilling"] + "\n",
+		"map-task":     "Ticket: " + ids["map-task"] + "\n", // no skill: the guide alone
+	}
+	for name, id := range ids {
+		c := calls[id]
+		if !strings.HasPrefix(c.Prompt, starts[name]) {
+			t.Errorf("%s: prompt %q doesn't start %q", name, c.Prompt, starts[name])
+		}
+		if !strings.Contains(c.Prompt, guide(t, h, name)) {
+			t.Errorf("%s: prompt %q doesn't paste in its guide", name, c.Prompt)
+		}
+		if want := "in a detached, read-only worktree at the base's tip, for this " + name + " Ticket."; !strings.Contains(c.Prompt, want) {
+			t.Errorf("%s: prompt %q doesn't say %q", name, c.Prompt, want)
+		}
+		if want := "It writes nothing to the repository: no files, no commits and no branches."; !strings.Contains(c.Prompt, want) {
+			t.Errorf("%s: prompt %q doesn't say %q", name, c.Prompt, want)
+		}
+		if want := `get_stage_guide, stage "` + name + `"`; !strings.Contains(c.Prompt, want) {
+			t.Errorf("%s: prompt %q doesn't say %q", name, c.Prompt, want)
+		}
+		if strings.Contains(c.Prompt, "/implement") || strings.Contains(c.Prompt, guide(t, h, core.ImplementationStage)) {
+			t.Errorf("%s: prompt %q runs it as implementation", name, c.Prompt)
+		}
+		if c.Dir != h.Worktree(id) {
+			t.Errorf("%s: claude ran in %s, want the worktree %s", name, c.Dir, h.Worktree(id))
+		}
+		if head := h.GitIn(h.Worktree(id), "rev-parse", "--abbrev-ref", "HEAD"); head != "HEAD" {
+			t.Errorf("%s: the worktree is on branch %q, want it detached", name, head)
+		}
+		if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != mainTip {
+			t.Errorf("%s: the worktree is at %s, want main's tip %s", name, got, mainTip)
+		}
+		if b := h.Git("branch", "--list", id); b != "" {
+			t.Errorf("%s: made branch %q", name, b)
+		}
+	}
+	if p := calls[ids["map-grilling"]].Prompt; !strings.Contains(p, "Run /domain-modeling alongside /grilling") {
+		t.Errorf("map-grilling prompt %q doesn't start domain-modeling too", p)
+	}
+	for _, name := range []string{"map-chart", "map-task"} {
+		if p := calls[ids[name]].Prompt; strings.Contains(p, "/domain-modeling") {
+			t.Errorf("%s prompt %q starts domain-modeling", name, p)
+		}
+	}
+}
+
+func TestAPrototypeAndAMapResearchTicketAreLeftUnclaimed(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	prototype := h.LabelledTicket("prototype", "Prototype: the theme picker")
+	research := h.LabelledTicket("wayfinder:research", "Which colour libraries exist?")
+	later := h.ReadyTicket("Add a button") // claimed after them in claim order
+
+	h.Start()
+	h.WaitForState(later, store.InReview)
+
+	for _, c := range h.Calls() {
+		if c.Ticket != later {
+			t.Errorf("claude ran for %s: %q", c.Ticket, c.Prompt)
+		}
+	}
+	for _, id := range []string{prototype, research} {
+		if tk := h.Ticket(id); tk.State != store.Ready || len(tk.Claims) != 0 {
+			t.Errorf("%s is %s with %d Claims, want Ready and never claimed", id, tk.State, len(tk.Claims))
+		}
+		if _, err := os.Stat(h.Worktree(id)); !os.IsNotExist(err) {
+			t.Errorf("%s got a worktree: %v", id, err)
+		}
+	}
+}

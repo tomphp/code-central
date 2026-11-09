@@ -405,6 +405,14 @@ func (h *Harness) StageTicket(stage, title string) string {
 	return h.readyTicket(title, core.StageLabel(stage))
 }
 
+// LabelledTicket creates a Ready Ticket carrying label, such as a
+// Wayfinder Label or prototype, on the same shared Spec, and returns its
+// ID.
+func (h *Harness) LabelledTicket(label, title string) string {
+	h.t.Helper()
+	return h.readyTicket(title, label)
+}
+
 func (h *Harness) readyTicket(title string, labels ...string) string {
 	h.t.Helper()
 	ctx := context.Background()

@@ -94,13 +94,13 @@ func TestOnlyTheThreeStageNamesMayUseTheReservedStagePrefix(t *testing.T) {
 
 	_, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"ui", "stage:build"}})
 	wantCode(t, err, core.Invalid, "labels")
-	tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"stage:spec", "stages", "backstage:x"}})
+	tk := f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Form", Labels: []string{"stages", "backstage:x"}})
 
 	_, err = f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: []string{"stage:"}})
 	wantCode(t, err, core.Invalid, "labels")
 	_, err = f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{"stage:implementation"}})
 	wantCode(t, err, core.Invalid, "labels")
-	if _, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: []string{"stage:grilling", "stage:tickets"}}); err != nil {
+	if _, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(tk.ID), Labels: []string{"stage:grilling"}}); err != nil {
 		t.Fatalf("add_labels with known Stage names: %v", err)
 	}
 
