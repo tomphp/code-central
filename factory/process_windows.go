@@ -3,12 +3,14 @@
 package factory
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -61,16 +63,54 @@ func stopSteps(p *os.Process) []func() error {
 }
 
 // listProcesses is every process as a line "<pid> <command line>", read
-// with PowerShell's Get-CimInstance. A turn's command line holds its
+// natively: a snapshot of the processes, and each one's command line
+// from NtQueryInformationProcess. Starting PowerShell for the same list
+// took seconds, more under load. A process the Factory can't open, such
+// as another user's, is left out. A turn's command line holds its
 // multi-line prompt, so its line breaks become spaces.
-func (e Env) listProcesses() (string, error) {
-	ps, ok := e.lookPath("powershell")
-	if !ok {
-		ps = "powershell.exe"
+func (Env) listProcesses() (string, error) {
+	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return "", fmt.Errorf("snapshot the processes: %w", err)
 	}
-	cmd := exec.Command(ps, "-NoProfile", "-NonInteractive", "-Command",
-		`Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.CommandLine -replace '[\r\n]+', ' ')" }`)
-	cmd.Env = e.Environ
-	out, err := cmd.Output()
-	return string(out), err
+	defer windows.CloseHandle(snap)
+	var b strings.Builder
+	entry := windows.ProcessEntry32{Size: uint32(unsafe.Sizeof(windows.ProcessEntry32{}))}
+	for err = windows.Process32First(snap, &entry); err == nil; err = windows.Process32Next(snap, &entry) {
+		args, ok := commandLine(entry.ProcessID)
+		if !ok {
+			continue
+		}
+		fmt.Fprintf(&b, "%d %s\n", entry.ProcessID, lineBreaks.Replace(args))
+	}
+	if !errors.Is(err, windows.ERROR_NO_MORE_FILES) {
+		return "", fmt.Errorf("read the processes: %w", err)
+	}
+	return b.String(), nil
+}
+
+var lineBreaks = strings.NewReplacer("\r\n", " ", "\r", " ", "\n", " ")
+
+// commandLine is the command line of the process pid, if the Factory
+// can open it.
+func commandLine(pid uint32) (string, bool) {
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+	if err != nil {
+		return "", false
+	}
+	defer windows.CloseHandle(h)
+	// The answer is a UNICODE_STRING followed by the text it points to.
+	buf := make([]byte, 4096)
+	for {
+		var n uint32
+		err := windows.NtQueryInformationProcess(h, windows.ProcessCommandLineInformation, unsafe.Pointer(&buf[0]), uint32(len(buf)), &n)
+		switch {
+		case err == nil:
+			return (*windows.NTUnicodeString)(unsafe.Pointer(&buf[0])).String(), true
+		case (errors.Is(err, windows.STATUS_INFO_LENGTH_MISMATCH) || errors.Is(err, windows.STATUS_BUFFER_TOO_SMALL) || errors.Is(err, windows.STATUS_BUFFER_OVERFLOW)) && int(n) > len(buf):
+			buf = make([]byte, n)
+		default:
+			return "", false
+		}
+	}
 }
