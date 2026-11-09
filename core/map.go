@@ -41,7 +41,7 @@ const chartingDescription = "Chart the Map [%[1]s](%[1]s): settle its destinatio
 // SubmitMap is submit_map(text). It writes as human whoever calls, both
 // records or neither.
 func (c *Core) SubmitMap(_ context.Context, key string, in SubmitMapInput) (SubmitMapResult, error) {
-	title := requirementTitle(in.Text)
+	title := specTitle(in.Text)
 	if title == "" {
 		return SubmitMapResult{}, invalid("text", "a Map needs text; its first line becomes the Spec's title")
 	}
@@ -134,10 +134,11 @@ func (c *Core) mapView(r store.Reader, key string, s store.Spec, tickets []store
 // WayfinderTypes, prototype, or ticket for a Ticket with neither.
 func NodeType(labels []string) string {
 	for _, l := range labels {
-		if l == PrototypeLabel {
-			return PrototypeLabel
+		guide, _ := typeGuide(l)
+		if guide == PrototypeLabel {
+			return guide
 		}
-		if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(WayfinderTypes, name) {
+		if name, ok := strings.CutPrefix(guide, mapGuidePrefix); ok {
 			return name
 		}
 	}

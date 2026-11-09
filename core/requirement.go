@@ -61,7 +61,7 @@ var stageTickets = map[string]struct{ title, description string }{
 // SubmitRequirement is submit_requirement(text). It writes as human
 // whoever calls, all four records or none.
 func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequirementInput) (SubmitRequirementResult, error) {
-	title := requirementTitle(in.Text)
+	title := specTitle(in.Text)
 	if title == "" {
 		return SubmitRequirementResult{}, invalid("text", "a Requirement needs text; its first line becomes the Spec's title")
 	}
@@ -114,9 +114,9 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 	return res, err
 }
 
-// requirementTitle is the text's first non-blank line, without any
+// specTitle is the text's first non-blank line, without any
 // Markdown heading marks; empty when the text is blank.
-func requirementTitle(text string) string {
+func specTitle(text string) string {
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "#"))
 		if line != "" {

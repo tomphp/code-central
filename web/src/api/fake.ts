@@ -147,6 +147,13 @@ const stageOf = (t: { labels: string[] }) => STAGES.find((s) => t.labels.include
 // and MapSections.
 const WAYFINDER_TYPES = ["chart", "grilling", "research", "task"] as const;
 const MAP_SECTIONS = ["Destination", "Notes", "Decisions so far", "Not yet specified", "Out of scope"];
+// specTitle is the text's first non-blank line without Markdown heading
+// marks, as core's specTitle.
+const specTitle = (text: string) =>
+  text
+    .split("\n")
+    .map((l) => l.trim().replace(/^#+/, "").trim())
+    .find((l) => l) ?? "";
 const nodeTypeOf = (t: { labels: string[] }): NodeType =>
   t.labels.includes("prototype") ? "prototype" : (WAYFINDER_TYPES.find((n) => t.labels.includes(`wayfinder:${n}`)) ?? "ticket");
 export type SeedRow = Partial<NeedsMeRow> & { id: string };
@@ -533,7 +540,7 @@ export class FakeApi implements Api {
   async submitMap(project: string, text: string): Promise<SubmitMapResult> {
     this.calls.push("submitMap");
     this.writable(project);
-    const title = text.trim().split("\n")[0].replace(/^\s*#*/, "").trim();
+    const title = specTitle(text);
     if (!title) throw new ApiError(422, "invalid", "a Map needs text; its first line becomes the Spec's title", "text");
     const body = text.replace(/\n+$/, "") + "\n" + MAP_SECTIONS.map((h) => `\n## ${h}\n`).join("");
     const spec = this.addSpec(project, { title, body, labels: [MAP_LABEL] });
@@ -542,7 +549,7 @@ export class FakeApi implements Api {
       state: "Ready",
       spec: { id: spec.id, title },
       labels: ["wayfinder:chart"],
-      description: `Chart the Map [${spec.id}](${spec.id}).\n`,
+      description: `Chart the Map [${spec.id}](${spec.id}): settle its destination with the human, fill in its sections and create its first decision Tickets.\n`,
       claimable: true,
       moves: [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_map" }],
     });
