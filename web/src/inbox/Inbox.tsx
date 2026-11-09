@@ -199,7 +199,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, require
           ) : requirement ? (
             <RequirementPane spec={requirement} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
           ) : map ? (
-            <MapPane spec={map} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
+            <MapPane api={api} spec={map} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
           ) : (
             <p className="empty">Loading…</p>
           ))}

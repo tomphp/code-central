@@ -818,7 +818,7 @@ export class FakeApi implements Api {
       blocked: t.blocked,
       updated: t.updated,
       ...(t.link && { link: { ...t.link } }),
-      ...(onMap(t) && { node_type: nodeTypeOf(t) }),
+      ...(onMap(t) && { node_type: nodeTypeOf(t), blocked_by: [...t.blocked_by] }),
       ...this.liveLatest(t),
     }));
   }
