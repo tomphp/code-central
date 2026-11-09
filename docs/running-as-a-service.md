@@ -30,7 +30,7 @@ cp bin/code-central bin/code-central-factory ~/bin/   # or symlink them; anywher
 code-central service install
 ```
 
-`make build` also turns on the repository's `commit-msg` hook in that clone, which refuses commits until cocogitto is installed; see the Commits section of [CLAUDE.md](../CLAUDE.md).
+`make build` also turns on the repository's `commit-msg` hook in that clone, which refuses commits until cocogitto (`cog`) is on PATH; its message says how to install it.
 
 ### What `service install` does
 
