@@ -74,7 +74,17 @@ var handlers = map[string]handlerFunc{
 		return c.CreateTicket(r.Context(), r.PathValue("key"), in)
 	},
 	"get_ticket": func(c *core.Core, r *http.Request) (any, error) {
-		return c.GetTicket(r.Context(), r.PathValue("key"), core.Ref(r.PathValue("n")))
+		q := r.URL.Query()
+		if err := onlyParams(q, "part"); err != nil {
+			return nil, err
+		}
+		// With no part named, the HTTP API returns the whole Ticket: the
+		// UI and the Factory read every part.
+		parts := q["part"]
+		if len(parts) == 0 {
+			parts = core.TicketParts
+		}
+		return c.GetTicket(r.Context(), r.PathValue("key"), core.GetTicketInput{Ticket: core.Ref(r.PathValue("n")), Parts: parts})
 	},
 	"find_tickets": func(c *core.Core, r *http.Request) (any, error) {
 		q := r.URL.Query()

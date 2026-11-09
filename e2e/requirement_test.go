@@ -108,7 +108,7 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 
 	ticket := func(id string) ticketView {
 		t.Helper()
-		code, out := svc.cli(t, repo, "", "get-ticket", id)
+		code, out := svc.cli(t, repo, "", "get-ticket", id, "--part", "moves")
 		var tk ticketView
 		if code != 0 || json.Unmarshal([]byte(out), &tk) != nil {
 			t.Fatalf("get-ticket %s: exit %d: %s", id, code, out)

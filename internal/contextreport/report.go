@@ -285,10 +285,9 @@ func readID(op string, input map[string]any, ticket string) string {
 }
 
 // defaultParts is the parts each read fetches when it names none.
-// get_ticket has no parts yet, so its default is a part of its own,
-// which any part it gains later is more than.
 var defaultParts = map[string][]string{
-	"get_spec": {"body", "tickets", "edits"},
+	"get_spec":   {"body", "tickets", "edits"},
+	"get_ticket": {"claims", "failure_reports", "comments"},
 }
 
 // readScope is what a read fetches: each of its parts (its default parts

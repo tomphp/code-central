@@ -104,7 +104,7 @@ func init() {
 		"init":          {usage: "init [--key <key>] [--local | --committed]  set this repository up as a Project (--local keeps init's files out of git)", run: runInit},
 		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->] [--full]", run: runCreateSpec},
 		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--description <md> | --file <path|->] [--full]", run: runCreateTicket},
-		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id>", run: runGetTicket},
+		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id> [--part claims|failure_reports|comments|rounds|moves|edits]...", run: runGetTicket},
 		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--spec <id>] [--claimable[=false]]", run: runFindTickets},
 
 		"edit-spec":     {op: "edit_spec", usage: "edit-spec <id> [--title <t>] [--body <md> | --file <path|->] [--full]", run: runEditSpec},
@@ -367,6 +367,8 @@ func runCreateTicket(ctx context.Context, e Env, args []string) error {
 func runGetTicket(ctx context.Context, e Env, args []string) error {
 	fs := flagSet("get-ticket")
 	project := addScope(fs)
+	var parts strs
+	fs.Var(&parts, "part", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
@@ -378,7 +380,12 @@ func runGetTicket(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.GetTicket(ctx, sc.project, core.Ref(pos[0]))
+	// The HTTP API returns the whole Ticket when no part is named, so the
+	// CLI names get_ticket's default parts itself.
+	if len(parts) == 0 {
+		parts = core.DefaultTicketParts
+	}
+	v, err := sc.client.GetTicket(ctx, sc.project, core.Ref(pos[0]), parts...)
 	if err != nil {
 		return err
 	}

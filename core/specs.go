@@ -50,7 +50,8 @@ type GetSpecInput struct {
 	Sections []string `json:"sections,omitempty"`
 }
 
-// The parts of a Spec a lighter get_spec can ask for.
+// The parts of a Spec a lighter get_spec can ask for. A Ticket has edits
+// too, so PartEdits names its edits part as well.
 const (
 	PartBody    = "body"
 	PartTickets = "tickets"
@@ -146,12 +147,9 @@ func (in GetSpecInput) parts() (map[string]bool, error) {
 	if len(asked) == 0 {
 		asked = specParts
 	}
-	out := map[string]bool{}
-	for _, p := range asked {
-		if !slices.Contains(specParts, p) {
-			return nil, invalid("parts", "unknown part %q (the parts are %s)", p, strings.Join(specParts, ", "))
-		}
-		out[p] = true
+	out, err := partSet(asked, specParts)
+	if err != nil {
+		return nil, err
 	}
 	if len(in.Sections) > 0 && !out[PartBody] {
 		return nil, invalid("sections", "sections cut the body, so parts must include body")

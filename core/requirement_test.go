@@ -39,7 +39,7 @@ func TestSubmittingARequirementCreatesItsSpecAndThreeChainedStages(t *testing.T)
 		t.Fatalf("stages %+v", res.Stages)
 	}
 	for i, w := range want {
-		tk, err := f.core.GetTicket(ctx, "acme", core.Ref(w.id))
+		tk, err := f.core.GetTicket(ctx, "acme", whole(core.Ref(w.id)))
 		if err != nil {
 			t.Fatalf("get_ticket %s: %v", w.id, err)
 		}
@@ -48,7 +48,7 @@ func TestSubmittingARequirementCreatesItsSpecAndThreeChainedStages(t *testing.T)
 			t.Fatalf("stage %d: %+v", i, tk)
 		}
 	}
-	grilling, _ := f.core.GetTicket(ctx, "acme", "acme-3")
+	grilling, _ := f.core.GetTicket(ctx, "acme", whole("acme-3"))
 	if !strings.Contains(grilling.Description, "acme-2") {
 		t.Fatalf("the grilling Ticket's description should point at the Spec: %q", grilling.Description)
 	}
@@ -65,7 +65,7 @@ func TestARequirementIsWrittenAsTheHumanWhoeverSubmitsIt(t *testing.T) {
 		t.Fatalf("submit_requirement: %v", err)
 	}
 	for _, id := range []string{"acme-2", "acme-3", "acme-4"} {
-		tk, _ := f.core.GetTicket(ctx, "acme", core.Ref(id))
+		tk, _ := f.core.GetTicket(ctx, "acme", whole(core.Ref(id)))
 		if len(tk.Moves) != 1 || tk.Moves[0].Actor != "human" || tk.Moves[0].To != store.Ready || tk.Moves[0].Via != "submit_requirement" {
 			t.Fatalf("%s moves %+v", id, tk.Moves)
 		}

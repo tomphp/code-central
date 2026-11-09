@@ -139,6 +139,8 @@ func TestTheGrillingGuideRetitlesTheSpecAndPostsAResolution(t *testing.T) {
 		"Leave the Spec's body as the Requirement's text",
 		"already clear", "with no Round",
 		"points at the resolution comment",
+		// A redo reads the earlier Rounds, which claim's Ticket leaves out.
+		"`parts: [\"rounds\"]`",
 	)
 }
 
