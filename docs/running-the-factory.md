@@ -47,7 +47,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Without `--bypass-permissions`, every session runs in auto mode with no permission prompts. Anything auto mode won't allow is denied and the turn carries on without it. If a turn ends on denied calls, the Factory posts a Round asking you about each one, and answering it lets the session try again. Allow rules for the repository go in its committed `.claude/settings.json`.
 
-   The first Ctrl-C drains: the Factory claims, resumes and lands nothing more, lets the running turns finish, then exits. A second Ctrl-C stops the running turns. Either way the Claims are kept, and the Factory picks them up when you start it again. Step 7 shows it.
+   The first Ctrl-C drains: the Factory claims, resumes and lands nothing more, lets the running turns finish, then exits. A second Ctrl-C stops the running turns. Either way the Claims are kept, and the Factory picks them up when you start it again. Step 8 shows it.
 
    Check: the Factory is still running, and its only line is `base: main`.
 
@@ -84,7 +84,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    I've posted Round 1 on acme-shop-2 with six questions, each with a recommended answer. …
    ```
 
-   Click **Live** to close it, or to open it on a Claim that has ended. Every Ticket the Factory works has one, for every Stage and every implementation Ticket. To enter a session yourself, run the resume command from the Factory's line in the Claim's worktree. Don't do it while the Factory has a turn running on it: the two would write into one session.
+   Click **Live** to close it, or to open it on a Claim that has ended. Every Ticket the Factory works has one, for every Stage and every implementation Ticket. To enter a session yourself, run the Claim's Resume Command (the `resume:` part of the Factory's line) in its worktree. Don't do it while the Factory has a turn running on it: the two would write into one session.
 
    Check: the Live section shows the session's calls as they happen.
 
@@ -123,7 +123,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    …
    ```
 
-   Read it, and the resolution comment in the Ticket's history, then click **Accept**. To send it back, write what to change in *What to change (required to reject)* and click **Reject**: the Ticket goes back to Ready, and the Factory claims it again on its next poll. The new session reads your note before anything else.
+   Read it, and the resolution comment in the Ticket's history, then click **Accept**. To send it back, write what to change in *What to change (required to reject)* and click **Reject**: the Ticket goes back to Ready, and the Factory claims it again on its next poll. Your note is kept as a comment on the Ticket, for the new session to work from.
 
    The Factory removes the Ticket's worktree and claims the next Stage:
 
@@ -134,7 +134,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Check: the strip's Grilling segment is done, and the Requirement's row reads *Spec: a Factory is on it*.
 
-6. **Review and accept the spec and tickets Stages.** Each comes to In Review without you doing anything. A session posts a Round only if it has a Question the earlier Stages didn't settle. Neither did in this run.
+6. **Review and accept the spec and tickets Stages.** Each comes to In Review without you doing anything. A session posts a Round only if it has a Question the earlier Stages didn't settle. Neither session did in this run.
 
    ```text
    acme-shop-3 turn ended (spec): "Spec: Format prices for display": exit 0, success (completed); now In Review; ran 57s
@@ -226,7 +226,8 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    - If the branch conflicts with the base, it sends the Ticket back to Ready with a comment naming the conflicting files, and its next Claim merges the base in first.
    - If it can't move the base, say because uncommitted changes in `~/src/acme-shop` are in the way, the Ticket stays Accepted with a comment saying why, and the Factory tries again on every poll.
-   - If you merge an In Review Ticket's branch yourself, the Factory notices it on its next poll and lands the Ticket.
+
+   You can still merge an In Review Ticket's branch yourself: the Factory notices it on its next poll and lands the Ticket.
 
    Check: both Tickets are Done, Build shows *2/2*, and the Requirement's row reads *Finished · 2 of 2 Tickets Done*.
 
@@ -238,6 +239,6 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    drained: no turns running
    ```
 
-   With turns running, it waits for them to finish before it exits. Press Ctrl-C again to stop them instead. Their Claims are kept, and the Factory resumes them when you next start it in the repository.
+   With turns running, it prints `draining: waiting on …` and exits once they finish, or stops them at a second Ctrl-C, as in step 1.
 
    Check: the Factory has exited, and the Requirement is still *Finished*.
