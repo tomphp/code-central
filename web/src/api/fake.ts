@@ -20,7 +20,8 @@
 // (a Stage's Needs Me reason is Needs Me's, as set by setNeedsMe).
 // submitRequirement writes a Spec and its three Stage Tickets, and
 // submitMap a Map's Spec and its Charting Ticket; a Map's read derives its
-// Map block, and its Tickets' rows their node type.
+// Map block, and its Tickets' rows their node type. submitPrototype
+// writes a Ready prototype Ticket on any Spec.
 //
 // recordCall stands in for an agent's MCP call, which the service records
 // as Usage itself, and postUsage for a Factory's POST /api/usage, filed
@@ -602,7 +603,7 @@ export class FakeApi implements Api {
   async getSpec(project: string, spec: string): Promise<SpecDetail> {
     this.calls.push("getSpec");
     this.project(project);
-    const id = `${project}-${spec.slice(spec.lastIndexOf("-") + 1)}`;
+    const id = this.specId(project, spec);
     const s = this.allSpecs(project).find((s) => s.id === id);
     if (!s) throw new ApiError(404, "not_found", `there is no Spec ${id}`);
     const { state_summary, finished, requirement, map } = this.derive(id);
@@ -685,12 +686,32 @@ export class FakeApi implements Api {
     return { spec: acknowledgeSpecCreate(spec), charting: acknowledgeTicketCreate(charting) };
   }
 
+  async submitPrototype(project: string, spec: string, text: string): Promise<TicketAcknowledgement> {
+    this.calls.push("submitPrototype");
+    this.writable(project);
+    const title = specTitle(text);
+    if (!title) throw new ApiError(422, "invalid", "a Prototype needs text; its first line becomes the Ticket's title", "text");
+    const id = this.specId(project, spec);
+    const on = this.allSpecs(project).find((s) => s.id === id);
+    if (!on) throw new ApiError(422, "invalid", `there is no Spec ${id}`, "spec");
+    const prototype = this.addTicket(project, {
+      title: `Prototype: ${title}`,
+      state: "Ready",
+      spec: { id, title: on.title },
+      labels: ["prototype"],
+      description: text,
+      claimable: true,
+      moves: [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_prototype" }],
+    });
+    return acknowledgeTicketCreate(prototype);
+  }
+
   // specQuestions reads a Spec from its seeded Tickets' spec, so a Spec
   // no Ticket names is not found.
   async specQuestions(project: string, spec: string): Promise<SpecQuestions> {
     this.calls.push("specQuestions");
     this.project(project);
-    const id = `${project}-${spec.slice(spec.lastIndexOf("-") + 1)}`;
+    const id = this.specId(project, spec);
     const of = [...this.tickets.values()].filter((t) => t.spec.id === id);
     if (!of.length) throw new ApiError(404, "not_found", `there is no Spec ${id}`);
     return structuredClone({
@@ -992,6 +1013,11 @@ export class FakeApi implements Api {
 
   private projectOf(id: string) {
     return id.slice(0, id.lastIndexOf("-"));
+  }
+
+  // specId is the display ID of spec, given as an ID or a number, in project.
+  private specId(project: string, spec: string) {
+    return `${project}-${spec.slice(spec.lastIndexOf("-") + 1)}`;
   }
 
   private project(key: string) {

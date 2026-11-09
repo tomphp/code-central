@@ -74,7 +74,7 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
    }
    ```
 
-   Selecting the Map opens the Map view where a Requirement's strip would be. Under the Map's title and count is its Destination, and below that its Tickets as a graph read left to right: each Blocker sits left of the Tickets it blocks, with an arrow to each. Each node shows the Ticket's type (`chart`, `grilling`, `research`, `task`, `prototype` or `ticket`), ID, title and State, and its top edge takes the strip's colours: green when done, the reason's colour when it needs you, solid blue while an agent is on it, dashed blue while it waits to be claimed, and grey while it is Draft or blocked. A Draft node that nothing blocks is on the frontier and has **Start**, which approves it to Ready. A dim **Not yet specified** node at the right edge shows that section of the Map when you click it. **Decisions so far** and **Out of scope** sit beside the graph and fold away. Clicking a node opens its Ticket below, as a Stage of a Requirement does. On a new Map there is only Charting, and the sections say *None yet.* until Charting fills them.
+   Selecting the Map opens the Map view where a Requirement's strip would be. Under the Map's title and count are **New Prototype** (see [Prototypes](#prototypes)) and its Destination, and below that its Tickets as a graph read left to right: each Blocker sits left of the Tickets it blocks, with an arrow to each. Each node shows the Ticket's type (`chart`, `grilling`, `research`, `task`, `prototype` or `ticket`), ID, title and State, and its top edge takes the strip's colours: green when done, the reason's colour when it needs you, solid blue while an agent is on it, dashed blue while it waits to be claimed, and grey while it is Draft or blocked. A Draft node that nothing blocks is on the frontier and has **Start**, which approves it to Ready. A dim **Not yet specified** node at the right edge shows that section of the Map when you click it. **Decisions so far** and **Out of scope** sit beside the graph and fold away. Clicking a node opens its Ticket below, as a Stage of a Requirement does. On a new Map there is only Charting, and the sections say *None yet.* until Charting fills them.
 
 3. **Grill the Requirement.** In the session, type:
 
@@ -253,7 +253,9 @@ Choose between the two ways:
 
 ## Prototypes
 
-A Prototype is a cheap, throwaway artifact for you to try, so a decision can be made: a Ticket labelled `prototype`, on any Spec. Submit one from a terminal, naming the Spec:
+A Prototype is a cheap, throwaway artifact for you to try, so a decision can be made: a Ticket labelled `prototype`, on any Spec. In the UI, open the Spec (a Requirement or a Map from the **Requirements** view, or any Spec by clicking its name in the Ticket panel) and click **New Prototype** under its title. The same free-text dialog opens: say what to try and the decision it should inform, and click **Submit prototype**. The first line becomes the title, after "Prototype: ", and the new Prototype opens in the Ticket panel, Ready for a Factory. A Spec that is neither a Requirement nor a Map opens as a plain Spec view: its title, **New Prototype** and its Tickets with their States.
+
+Or submit one from a terminal, naming the Spec:
 
 ```console
 $ code-central submit-prototype acme-shop-1 --text "A price badge on the product card
