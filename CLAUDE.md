@@ -16,6 +16,10 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 While working, run `make typecheck` and `make vitest F=<file>` (they install web dependencies first in a fresh worktree); run `make test` once at the end.
 
+## Context report
+
+To measure what agents load into context, compare the sessions since a change against the baseline: `make context-report ARGS="-baseline internal/contextreport/baseline.json -since <RFC 3339 time>"`. `docs/context-report.md` explains the figures.
+
 ## Docs
 
 The guides in `docs/` and the README show real commands and output. When a change affects what they show (`init`, the CLI, the Factory, the UI or the Stages' skills), update them in the same change.
