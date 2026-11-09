@@ -14,3 +14,6 @@ Read them in this order:
 ## Running the service
 
 [Running Code Central as a service](docs/running-as-a-service.md) covers installing (download the archive for your OS and CPU from [GitHub Releases](https://github.com/tomphp/code-central/releases), or build from source), upgrading and downgrading the service, its versions, the Options you set in the UI, and [Usage](docs/running-as-a-service.md#usage), what agents have consumed.
+
+> [!WARNING]
+> **On Windows, a power cut or crash just after an upgrade can leave the store unreadable.** When an upgrade changes the store's format, the service migrates it at startup, and on Windows it doesn't wait for every migrated file to reach the disk (that would take minutes on a large store). If Windows goes down within a few seconds of that, the service may refuse to start. Nothing is lost: the old store is kept as `code-central.format-<n>.bak`. See [The store is migrated at startup](docs/running-as-a-service.md#the-store-is-migrated-at-startup) for how to restore it.
