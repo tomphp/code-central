@@ -6,12 +6,13 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeApi } from "../api/fake";
-import { change, focus, renderApp, without } from "./focusTesting";
+import { allClearOn, change, focus, renderApp, without } from "./focusTesting";
 
 // world has acme-1 Failed, then acme-2 In Review, in that Needs Me order,
 // with beta active and old archived.
 function world() {
   const fake = new FakeApi();
+  allClearOn(fake);
   fake.addProject("acme", "Acme");
   fake.addProject("beta", "Beta");
   fake.addProject("old", "Old", { archived: true });

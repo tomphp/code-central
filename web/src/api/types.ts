@@ -491,7 +491,8 @@ export type ChangeEvent =
   | { type: "options.changed" };
 
 // FocusClear is what Focus Mode shows when nothing needs the human.
-export const FOCUS_CLEARS = ["all_clear", "activity_dashboard"] as const;
+// The default first.
+export const FOCUS_CLEARS = ["activity_dashboard", "all_clear"] as const;
 export type FocusClear = (typeof FOCUS_CLEARS)[number];
 
 // Options are the human's global preferences, kept by the service
@@ -500,9 +501,8 @@ export interface Options {
   focus_clear: FocusClear;
 }
 
-// DEFAULT_OPTIONS are the Options a fresh store reads, and what the UI
-// uses while they load or when they can't be read.
-export const DEFAULT_OPTIONS: Options = { focus_clear: "all_clear" };
+// DEFAULT_OPTIONS are the Options a fresh store reads.
+export const DEFAULT_OPTIONS: Options = { focus_clear: FOCUS_CLEARS[0] };
 
 
 // ---- Usage (Spec code-central-201) ----

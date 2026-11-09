@@ -37,29 +37,29 @@ func TestOptionsRoutes(t *testing.T) {
 
 func TestGetAndSetOptions(t *testing.T) {
 	h := asHuman(newHandler(t))
-	if rec := do(h, "GET", "/api/options", ""); rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"all_clear"}` {
+	if rec := do(h, "GET", "/api/options", ""); rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"activity_dashboard"}` {
 		t.Fatalf("get_options: %d %s", rec.Code, rec.Body)
 	}
-	rec := do(h, "POST", "/api/set_options", `{"focus_clear":"activity_dashboard"}`)
-	if rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"activity_dashboard"}` {
+	rec := do(h, "POST", "/api/set_options", `{"focus_clear":"all_clear"}`)
+	if rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"all_clear"}` {
 		t.Fatalf("set_options: %d %s", rec.Code, rec.Body)
 	}
-	if rec := do(h, "GET", "/api/options", ""); strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"activity_dashboard"}` {
+	if rec := do(h, "GET", "/api/options", ""); strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"all_clear"}` {
 		t.Fatalf("get_options after set: %s", rec.Body)
 	}
 	// An empty change answers the Options as they stand.
-	if rec := do(h, "POST", "/api/set_options", `{}`); rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"activity_dashboard"}` {
+	if rec := do(h, "POST", "/api/set_options", `{}`); rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"all_clear"}` {
 		t.Fatalf("empty set_options: %d %s", rec.Code, rec.Body)
 	}
 }
 
 func TestSetOptionsIsRefusedForAnAgent(t *testing.T) {
 	h := newHandler(t) // no Actor: the agent
-	rec := do(h, "POST", "/api/set_options", `{"focus_clear":"activity_dashboard"}`)
+	rec := do(h, "POST", "/api/set_options", `{"focus_clear":"all_clear"}`)
 	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"code":"action_not_allowed"`) {
 		t.Fatalf("agent set_options: %d %s", rec.Code, rec.Body)
 	}
-	if rec := do(h, "GET", "/api/options", ""); strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"all_clear"}` {
+	if rec := do(h, "GET", "/api/options", ""); strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"activity_dashboard"}` {
 		t.Fatalf("the agent can read the Options, unchanged: %d %s", rec.Code, rec.Body)
 	}
 }
@@ -68,7 +68,7 @@ func TestSetOptionsRefusesBadInput(t *testing.T) {
 	h := asHuman(newHandler(t))
 	for _, c := range []struct{ name, body, field, mentions string }{
 		{"unknown Option", `{"colour":"red"}`, "colour", "the Options are: focus_clear"},
-		{"value outside its set", `{"focus_clear":"fireworks"}`, "focus_clear", "activity_dashboard"},
+		{"value outside its set", `{"focus_clear":"fireworks"}`, "focus_clear", "allowed: activity_dashboard, all_clear"},
 		{"wrong type", `{"focus_clear":3}`, "focus_clear", "focus_clear"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -83,7 +83,7 @@ func TestSetOptionsRefusesBadInput(t *testing.T) {
 			}
 		})
 	}
-	if rec := do(h, "GET", "/api/options", ""); strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"all_clear"}` {
+	if rec := do(h, "GET", "/api/options", ""); strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"activity_dashboard"}` {
 		t.Fatalf("a refused set_options changed the Options: %s", rec.Body)
 	}
 }
@@ -91,8 +91,8 @@ func TestSetOptionsRefusesBadInput(t *testing.T) {
 func TestEventsCarryOptionsChangedWithNoProjectOrID(t *testing.T) {
 	mux, r := liveFeed(t)
 	h := asHuman(mux)
-	do(h, "POST", "/api/set_options", `{"focus_clear":"activity_dashboard"}`)
-	do(h, "POST", "/api/set_options", `{"focus_clear":"activity_dashboard"}`) // no change, no event
+	do(h, "POST", "/api/set_options", `{"focus_clear":"all_clear"}`)
+	do(h, "POST", "/api/set_options", `{"focus_clear":"all_clear"}`) // no change, no event
 	do(h, "POST", "/api/projects/create_project", `{"key":"acme"}`)
 
 	want := [][2]string{
@@ -116,7 +116,7 @@ func TestWaitDoesNotWakeOnOptionsChanged(t *testing.T) {
 	done := make(chan *httptest.ResponseRecorder, 1)
 	go func() { done <- do(h, "GET", "/api/p/acme/tickets/2/wait?from=Ready", "") }()
 	clk.BlockUntil(1)
-	if rec := do(h, "POST", "/api/set_options", `{"focus_clear":"activity_dashboard"}`); rec.Code != 200 {
+	if rec := do(h, "POST", "/api/set_options", `{"focus_clear":"all_clear"}`); rec.Code != 200 {
 		t.Fatalf("set_options: %d %s", rec.Code, rec.Body)
 	}
 	select {

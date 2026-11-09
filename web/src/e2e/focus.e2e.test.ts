@@ -1,11 +1,12 @@
 // End-to-end (`make e2e`): Playwright drives a real browser against the UI
 // embedded in the built binary, for what FakeApi can't show: the real Needs
-// Me and the live feed driving Focus Mode. Focus Mode is open at All clear,
-// an agent posts a Round, its first Question appears with no reload, the
-// human answers each Question there in order, the agent's background
-// `code-central wait` exits 0, and Focus Mode moves on to the Answered
-// Focus Item, then to All clear once the agent picks the answers up, and
-// to the Activity Dashboard once the human chooses it over the API.
+// Me and the live feed driving Focus Mode. Focus Mode is open at the
+// Activity Dashboard, an agent posts a Round, its first Question appears
+// with no reload, the human answers each Question there in order, the
+// agent's background `code-central wait` exits 0, and Focus Mode moves on
+// to the Answered Focus Item, then back to the dashboard once the agent
+// picks the answers up, and to All clear once the human chooses it over
+// the API.
 // Browser set-up as in round.e2e.test.ts.
 import { spawn } from "node:child_process";
 import { chromium, type Browser } from "playwright-core";
@@ -36,7 +37,7 @@ describe("end-to-end: the human answers a live Round in Focus Mode", () => {
     // The human has Focus Mode open before anything needs them.
     await page.goto(svc.url + "/?view=focus");
     const focus = page.getByRole("main", { name: "Focus Mode" });
-    await focus.getByRole("region", { name: "All clear" }).waitFor();
+    await focus.getByRole("region", { name: "Activity Dashboard" }).waitFor();
 
     // The agent claims, asks, and waits in the background.
     const { claim_id } = await svc.agent("/api/p/acme/claim", { ticket: id, session_id: "e2e-session" });
@@ -103,22 +104,12 @@ describe("end-to-end: the human answers a live Round in Focus Mode", () => {
       ["answered", "16 characters"],
     ]);
 
-    // The agent picks the answers up: nothing needs the human any more.
+    // The agent picks the answers up: nothing needs the human any more, and
+    // the dashboard comes back, counting the agent's Ticket In Progress.
     await svc.agent(`/api/p/acme/tickets/${n}/pick_up_answers`, { claim_id });
-    await focus.getByRole("region", { name: "All clear" }).waitFor();
-    await focus.getByText("Nothing needs you.").waitFor();
-    expect(await page.title()).toBe("Code Central");
-
-    // The human chooses the Activity Dashboard over the API: the open Focus
-    // Mode switches to it live, counting the agent's Ticket In Progress.
-    const res = await fetch(`${svc.url}/api/set_options`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Code-Central-Actor": "human" },
-      body: JSON.stringify({ focus_clear: "activity_dashboard" }),
-    });
-    expect(res.ok).toBe(true);
     const dashboard = focus.getByRole("region", { name: "Activity Dashboard" });
     await dashboard.waitFor();
+    expect(await page.title()).toBe("Code Central");
     expect(await focus.getByRole("region", { name: "All clear" }).count()).toBe(0);
     await dashboard.getByRole("group", { name: "Ready" }).getByText("0", { exact: true }).waitFor();
     await dashboard.getByRole("group", { name: "In Progress" }).getByText("1", { exact: true }).waitFor();
@@ -126,5 +117,17 @@ describe("end-to-end: the human answers a live Round in Focus Mode", () => {
     expect(await entry.count()).toBe(1);
     await entry.getByText(id, { exact: true }).waitFor();
     await entry.getByText("Login form").waitFor();
+
+    // The human chooses All clear over the API: the open Focus Mode
+    // switches to it live.
+    const res = await fetch(`${svc.url}/api/set_options`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Code-Central-Actor": "human" },
+      body: JSON.stringify({ focus_clear: "all_clear" }),
+    });
+    expect(res.ok).toBe(true);
+    await focus.getByRole("region", { name: "All clear" }).waitFor();
+    await focus.getByText("Nothing needs you.").waitFor();
+    expect(await dashboard.count()).toBe(0);
   }, 30_000);
 });

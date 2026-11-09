@@ -6,7 +6,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
-import { change, focus, renderApp } from "./focusTesting";
+import { allClearOn, change, focus, renderApp } from "./focusTesting";
 
 const hourAgo = (fake: FakeApi, h: number) => new Date(fake.now.getTime() - h * 3_600_000).toISOString();
 
@@ -14,6 +14,7 @@ const hourAgo = (fake: FakeApi, h: number) => new Date(fake.now.getTime() - h * 
 // beta-1 Accepted but not landed, in that Needs Me order.
 function world() {
   const fake = new FakeApi();
+  allClearOn(fake);
   fake.addProject("acme", "Acme");
   fake.addProject("beta", "Beta");
   fake.addTicket("acme", { title: "Login page", state: "In Review" }); // acme-1

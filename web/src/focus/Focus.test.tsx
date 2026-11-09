@@ -6,11 +6,12 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
-import { focus, renderApp } from "./focusTesting";
+import { allClearOn, focus, renderApp } from "./focusTesting";
 import { ApiError } from "../api/types";
 
 function world() {
   const fake = new FakeApi();
+  allClearOn(fake);
   fake.addProject("acme", "Acme");
   fake.addProject("beta", "Beta");
   fake.addTicket("acme", { title: "Pick a colour", state: "Needs Answer" }); // acme-1

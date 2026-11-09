@@ -64,7 +64,7 @@ edits: []
 		t.Errorf("the backup is not the format-5 store:\n%v", got)
 	}
 	s.View(func(r store.Reader) error {
-		if o := r.Options(); o.FocusClear != store.FocusAllClear {
+		if o := r.Options(); o.FocusClear != store.FocusActivityDashboard {
 			t.Errorf("options after migrating = %+v, want the defaults", o)
 		}
 		return nil

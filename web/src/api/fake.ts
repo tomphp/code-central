@@ -426,6 +426,12 @@ export class FakeApi implements Api {
     }));
   }
 
+  // seedOptions sets the Options as a store would hold them, recording no
+  // action and sending no notice.
+  seedOptions(options: Partial<Options>) {
+    this.opts = { ...this.opts, ...options };
+  }
+
   // postSessionEvents adds a session's Session Events to the newest Claim
   // with that session ID, live or ended, as a Factory's post would. It
   // counts as activity on the session's live Claims and sends

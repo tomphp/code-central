@@ -33,7 +33,7 @@ describe("opening and leaving the Options view", () => {
 
     expect(options()).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Filters" })).toBeNull();
-    expect(await within(focusControl()).findByRole("radio", { name: "All clear", checked: true })).toBeInTheDocument();
+    expect(await within(focusControl()).findByRole("radio", { name: "Activity Dashboard", checked: true })).toBeInTheDocument();
 
     await userEvent.click(within(options()).getByRole("button", { name: "Back to the Inbox" }));
     expect(window.location.search).toBe("?view=inbox&project=acme&state=Ready&ticket=acme-1");
@@ -65,71 +65,72 @@ describe("opening and leaving the Options view", () => {
 });
 
 describe("the Focus Mode Option", () => {
-  it("offers All clear and Activity Dashboard, and saves a choice at once", async () => {
+  it("offers Activity Dashboard first, then All clear, and saves a choice at once", async () => {
     const fake = world();
     renderApp(fake, "/?view=options");
-    await waitFor(() => expect(choice("All clear")).toBeChecked());
-    expect(choice("Activity Dashboard")).not.toBeChecked();
-
-    await userEvent.click(choice("Activity Dashboard"));
     await waitFor(() => expect(choice("Activity Dashboard")).toBeChecked());
-    expect(await fake.options()).toEqual({ focus_clear: "activity_dashboard" });
-    expect(within(options()).queryByRole("alert")).toBeNull();
+    expect(within(focusControl()).getAllByRole("radio").map((r) => r.getAttribute("value"))).toEqual(["activity_dashboard", "all_clear"]);
+    expect(choice("All clear")).not.toBeChecked();
 
     await userEvent.click(choice("All clear"));
-    await waitFor(async () => expect(await fake.options()).toEqual({ focus_clear: "all_clear" }));
-    expect(choice("All clear")).toBeChecked();
+    await waitFor(() => expect(choice("All clear")).toBeChecked());
+    expect(await fake.options()).toEqual({ focus_clear: "all_clear" });
+    expect(within(options()).queryByRole("alert")).toBeNull();
+
+    await userEvent.click(choice("Activity Dashboard"));
+    await waitFor(async () => expect(await fake.options()).toEqual({ focus_clear: "activity_dashboard" }));
+    expect(choice("Activity Dashboard")).toBeChecked();
   });
 
   it("shows the error when a save is refused, and keeps showing the saved value", async () => {
     const fake = world();
     renderApp(fake, "/?view=options");
-    await waitFor(() => expect(choice("All clear")).toBeChecked());
+    await waitFor(() => expect(choice("Activity Dashboard")).toBeChecked());
     vi.spyOn(fake, "setOptions").mockRejectedValue(new ApiError(422, "invalid", "focus_clear is not an Option's value", "focus_clear"));
 
-    await userEvent.click(choice("Activity Dashboard"));
+    await userEvent.click(choice("All clear"));
     expect(await within(options()).findByRole("alert")).toHaveTextContent("focus_clear is not an Option's value");
-    expect(choice("All clear")).toBeChecked();
-    expect(await fake.options()).toEqual({ focus_clear: "all_clear" });
+    expect(choice("Activity Dashboard")).toBeChecked();
+    expect(await fake.options()).toEqual({ focus_clear: "activity_dashboard" });
   });
 
   it("shows the error when the service can't be reached", async () => {
     const fake = world();
     renderApp(fake, "/?view=options");
-    await waitFor(() => expect(choice("All clear")).toBeChecked());
+    await waitFor(() => expect(choice("Activity Dashboard")).toBeChecked());
     vi.spyOn(fake, "setOptions").mockRejectedValue(new ApiError(0, "service_unavailable", "Code Central isn't reachable"));
 
-    await userEvent.click(choice("Activity Dashboard"));
+    await userEvent.click(choice("All clear"));
     expect(await within(options()).findByRole("alert")).toHaveTextContent("Code Central isn't reachable");
   });
 
   it("clears the error once a later save succeeds", async () => {
     const fake = world();
     renderApp(fake, "/?view=options");
-    await waitFor(() => expect(choice("All clear")).toBeChecked());
+    await waitFor(() => expect(choice("Activity Dashboard")).toBeChecked());
     vi.spyOn(fake, "setOptions").mockRejectedValueOnce(new ApiError(0, "service_unavailable", "Code Central isn't reachable"));
 
-    await userEvent.click(choice("Activity Dashboard"));
+    await userEvent.click(choice("All clear"));
     await within(options()).findByRole("alert");
-    await userEvent.click(choice("Activity Dashboard"));
-    await waitFor(() => expect(choice("Activity Dashboard")).toBeChecked());
+    await userEvent.click(choice("All clear"));
+    await waitFor(() => expect(choice("All clear")).toBeChecked());
     expect(within(options()).queryByRole("alert")).toBeNull();
   });
 
   it("shows a value changed elsewhere once options.changed arrives", async () => {
     const fake = world();
     renderApp(fake, "/?view=options");
-    await waitFor(() => expect(choice("All clear")).toBeChecked());
+    await waitFor(() => expect(choice("Activity Dashboard")).toBeChecked());
 
     // Another browser's change: setOptions sends options.changed.
-    await act(() => fake.setOptions({ focus_clear: "activity_dashboard" }));
-    await waitFor(() => expect(choice("Activity Dashboard")).toBeChecked());
+    await act(() => fake.setOptions({ focus_clear: "all_clear" }));
+    await waitFor(() => expect(choice("All clear")).toBeChecked());
   });
 
   it("refetches the Options on a reconnect, apart from the Inbox data", async () => {
     const fake = world();
     renderApp(fake, "/?view=options");
-    await waitFor(() => expect(choice("All clear")).toBeChecked());
+    await waitFor(() => expect(choice("Activity Dashboard")).toBeChecked());
     const before = fake.calls.filter((c) => c === "options").length;
 
     act(() => fake.reconnect());
@@ -141,7 +142,7 @@ describe("the Focus Mode Option", () => {
     vi.spyOn(fake, "options").mockRejectedValue(new ApiError(0, "service_unavailable", "Code Central isn't reachable"));
     renderApp(fake, "/?view=options");
     expect(await within(options()).findByRole("alert")).toHaveTextContent("Code Central isn't reachable");
-    expect(choice("All clear")).not.toBeChecked();
     expect(choice("Activity Dashboard")).not.toBeChecked();
+    expect(choice("All clear")).not.toBeChecked();
   });
 });

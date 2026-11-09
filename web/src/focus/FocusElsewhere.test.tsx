@@ -7,13 +7,14 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
-import { change, focus, renderApp, without } from "./focusTesting";
+import { allClearOn, change, focus, renderApp, without } from "./focusTesting";
 import type { RoundView } from "../api/types";
 
 // world has acme-1 waiting on Round 1 (Questions 1 and 2 open), then
 // acme-2 Failed and acme-3 In Review, in that Needs Me order.
 function world() {
   const fake = new FakeApi();
+  allClearOn(fake);
   fake.addProject("acme", "Acme");
   const rounds: RoundView[] = [
     {

@@ -23,3 +23,9 @@ export function change(fake: FakeApi, groups: Parameters<FakeApi["setNeedsMe"]>[
   fake.setNeedsMe(groups);
   act(() => fake.emit({ type: "ticket.changed", project: id.split("-")[0], id }));
 }
+
+// allClearOn sets the Focus Mode Option to All clear, for the tests of All
+// clear itself: a fresh store shows the Activity Dashboard.
+export function allClearOn(fake: FakeApi) {
+  fake.seedOptions({ focus_clear: "all_clear" });
+}
