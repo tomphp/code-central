@@ -3,6 +3,7 @@ import { projectOf } from "./api/api";
 import { Focus } from "./focus/Focus";
 import { Inbox } from "./inbox/Inbox";
 import { useInboxData, useLiveVersion, useSpec, useTicket } from "./live";
+import { ProjectOptions } from "./options/ProjectOptions";
 import { defaultTicket, needsMeCount, progress, reasonsOf } from "./requirement/progress";
 import { useNeedsMeTitle } from "./title";
 import { useUiLocation } from "./url";
@@ -35,6 +36,13 @@ export function App({ api, now = () => new Date() }: AppProps) {
         <>
           {banner}
           <Focus api={api} now={now()} version={version} data={inbox.data} loc={loc} navigate={navigate} />
+        </>
+      );
+    case "options":
+      return (
+        <>
+          {banner}
+          <ProjectOptions api={api} projects={inbox.data?.projects} project={loc.project} navigate={navigate} />
         </>
       );
     case "inbox":

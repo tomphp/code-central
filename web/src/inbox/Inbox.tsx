@@ -4,7 +4,7 @@
 import type { MouseEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
-import { FINISHED, STATES, type NeedsMeReason, type NeedsMeRow, type SpecDetail, type State, type TicketView } from "../api/types";
+import { FINISHED, STATES, type NeedsMeReason, type NeedsMeRow, type ProjectRow, type SpecDetail, type State, type TicketView } from "../api/types";
 import { duration, REASON_LABEL, rowDetail } from "../format";
 import { RowLatestEvent } from "../LatestEvent";
 import { LinkBadge } from "../ticket/LinkBadge";
@@ -71,6 +71,17 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
     "aria-current": loc.requirement === id ? ("true" as const) : undefined,
   });
 
+  const projectFilter = (p: ProjectRow) => (
+    <ProjectFilter
+      key={p.key}
+      api={api}
+      project={p}
+      on={loc.project === p.key}
+      onSelect={() => navigate({ project: p.key })}
+      options={{ href: hrefFor({ view: "options", project: p.key }), onClick: go({ view: "options", project: p.key }) }}
+    />
+  );
+
   return (
     <div className="inbox">
       <nav aria-label="Filters" className="inbox-nav">
@@ -85,11 +96,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
           Focus
         </button>
         <FilterButton on={!loc.project} label="All Projects" count={totalCount} loud onClick={() => navigate({ project: undefined })} />
-        {projects
-          .filter((p) => !p.archived)
-          .map((p) => (
-            <ProjectFilter key={p.key} api={api} project={p} on={loc.project === p.key} onSelect={() => navigate({ project: p.key })} />
-          ))}
+        {projects.filter((p) => !p.archived).map(projectFilter)}
         <h2>View</h2>
         <FilterButton on={!loc.state && !loc.list} label="Needs Me" count={shownCount} loud onClick={() => navigate({ state: undefined, list: undefined })} />
         <FilterButton
@@ -109,9 +116,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
           />
         ))}
         <ArchivedProjects count={archived.length}>
-          {archived.map((p) => (
-            <ProjectFilter key={p.key} api={api} project={p} on={loc.project === p.key} onSelect={() => navigate({ project: p.key })} />
-          ))}
+          {archived.map(projectFilter)}
         </ArchivedProjects>
       </nav>
 

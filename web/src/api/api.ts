@@ -7,6 +7,7 @@ import type {
   FindSpecsFilter,
   FindTicketsFilter,
   HeldSessionEvent,
+  Landing,
   LinkedRow,
   NeedsMeView,
   ProjectRow,
@@ -81,6 +82,10 @@ export interface Api {
   unarchiveProject(project: string): Promise<ProjectView>;
   // renameProject changes a Project's display name, never its key.
   renameProject(project: string, displayName: string): Promise<ProjectView>;
+  // setLandingMethod sets how the Project's accepted work lands. The
+  // remote is trimmed; under Push it can't be empty, and without Push an
+  // empty one is stored as origin.
+  setLandingMethod(project: string, landing: Landing): Promise<ProjectView>;
   // unlink detaches a Spec's or Ticket's Link (ticket 42). It isn't a
   // TicketAction: its target, a Spec or a Ticket, goes in the body.
   unlink(project: string, target: string): Promise<LinkedRow>;

@@ -1,6 +1,6 @@
 # Setting up a Project
 
-This guide sets a repository up as a Project, so that agents can reach its Specs and Tickets in Code Central. It follows two made-up repositories to a Claude Code session that lists the `code-central` MCP server: `acme-shop`, started from an empty folder, and `acme-api`, which already has code and history. Then it covers the cases where `init` behaves differently. The output shown is copied from a real run, cut with `…` where it is long.
+This guide sets a repository up as a Project, so that agents can reach its Specs and Tickets in Code Central. It follows two made-up repositories to a Claude Code session that lists the `code-central` MCP server: `acme-shop`, started from an empty folder, and `acme-api`, which already has code and history. Then it shows where to choose how a Project's accepted work lands, and covers the cases where `init` behaves differently. The output shown is copied from a real run, cut with `…` where it is long.
 
 ## Before you start
 
@@ -193,6 +193,18 @@ You're starting `acme-shop` from nothing, in `~/src`.
    After you approve it, the line ends `✔ Connected`.
 
 `acme-api` is now a working Project.
+
+## Choosing how accepted work lands
+
+Each Project has a **Landing Method**: what the Factory does with an implementation Ticket's branch once you accept it. A new Project starts on **Merge into base** with **Push** off: the Factory merges the branch into the base locally and lands the Ticket, and nothing leaves the machine. Leave it there unless you want something else.
+
+To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=options&project=acme-api`, so you can bookmark it. Its **Landing Method** section offers:
+
+- **Merge into base**: the Factory merges the accepted branch into the base and lands the Ticket. The default.
+- **Leave as a branch**: the Factory leaves the branch for you to merge, and lands the Ticket when it sees the merge in the base. Until then the Ticket waits in Needs Me as **To merge**.
+- **Push**, with a **Remote** (`origin` unless you change it): under Merge, the Factory pushes the base to the remote after merging, and the Ticket lands only once the push succeeds; under Leave as a branch, it pushes the Ticket's branch when you accept it. The Factory checks the remote exists, never force-pushes, and under Merge pushes the whole base, your own commits on it too. Remote can't be empty while Push is on: Save says so.
+
+**Save** applies the change, and every open UI tab shows it. A running Factory picks it up on its next poll, for every Ticket still waiting to land. [Running the Factory](running-the-factory.md) covers what it does under each method. An Archived Project has no Options item, and its Project Options page is read-only until you unarchive it.
 
 ## When `init` behaves differently
 

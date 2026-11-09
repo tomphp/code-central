@@ -1,6 +1,7 @@
 // What the UI shows lives in the URL:
 // ?view=inbox&project=<key>&state=<State>&list=requirements&requirement=<spec id>&ticket=<id>,
-// or ?view=focus&project=<key> for Focus Mode, which keeps only project.
+// or ?view=focus&project=<key> for Focus Mode, which keeps only project,
+// or ?view=options&project=<key> for a Project's Project Options page.
 // view is the layout (anything but focus is the inbox); project, state and
 // list are the left pane's filters (no state and no list = Needs Me;
 // list=requirements is the Requirements view); requirement is the selected
@@ -9,7 +10,7 @@
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { STATES, type State } from "./api/types";
 
-export type View = "inbox" | "focus";
+export type View = "inbox" | "focus" | "options";
 export type List = "requirements";
 
 export interface UiLocation {
@@ -23,7 +24,8 @@ export interface UiLocation {
 
 export function readLocation(search: string): UiLocation {
   const q = new URLSearchParams(search);
-  if (q.get("view") === "focus") return { view: "focus", project: q.get("project") || undefined };
+  const view = q.get("view");
+  if (view === "focus" || view === "options") return { view, project: q.get("project") || undefined };
   const state = q.get("state") as State | null;
   return {
     view: "inbox",
@@ -38,7 +40,7 @@ export function readLocation(search: string): UiLocation {
 export function hrefFor(loc: UiLocation): string {
   const q = new URLSearchParams({ view: loc.view });
   if (loc.project) q.set("project", loc.project);
-  if (loc.view === "focus") return `?${q}`;
+  if (loc.view !== "inbox") return `?${q}`;
   if (loc.state) q.set("state", loc.state);
   if (loc.list) q.set("list", loc.list);
   if (loc.requirement) q.set("requirement", loc.requirement);

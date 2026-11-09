@@ -70,6 +70,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     archiveProject: (project) => call("POST", `${p(project)}/archive_project`, {}),
     unarchiveProject: (project) => call("POST", `${p(project)}/unarchive_project`, {}),
     renameProject: (project, display_name) => call("POST", `${p(project)}/rename_project`, { display_name }),
+    setLandingMethod: (project, landing) => call("POST", `${p(project)}/set_landing_method`, landing),
     unlink: (project, target) => call("POST", `${p(project)}/unlink`, { target }),
     subscribe: (h) =>
       follow(doFetch, base + "/api/events", retryMs, {
