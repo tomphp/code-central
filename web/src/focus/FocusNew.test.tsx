@@ -29,7 +29,7 @@ const heading = (name: string) => within(focus()).findByRole("heading", { name }
 const newButton = () => within(focus()).findByRole("button", { name: "New requirement" });
 const menuButton = () => within(focus()).getByRole("button", { name: "More to create" });
 const item = (name: string) => within(screen.getByRole("menu")).getByRole("menuitem", { name });
-// header is Focus Mode's header, whose buttons read in order.
+// headerButtons are the buttons in Focus Mode's header, in order.
 const headerButtons = async () =>
   within((await newButton()).closest("header")!)
     .getAllByRole("button")
@@ -61,7 +61,7 @@ describe("+ New ▾ in Focus Mode's header", () => {
     expect(menuButton()).not.toHaveClass("primary");
   });
 
-  it("shows on a Focus Item, All clear, You skipped N and Loading…", async () => {
+  it("shows on Loading…, a Focus Item and You skipped N", async () => {
     const fake = world();
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
@@ -190,6 +190,44 @@ describe("+ New ▾ in Focus Mode's header", () => {
       expect(await within(focus()).findByText("You skipped 2, go through them again?")).toBeInTheDocument();
     });
 
+    it("leaves a half-written answer on the Focus Item as it was", async () => {
+      const fake = world();
+      fake.addTicket("acme", {
+        title: "Pick a colour",
+        state: "Needs Answer",
+        rounds: [{ number: 1, claim: 1, posted: fake.now.toISOString(), questions: [{ number: 1, title: "Which colour?", body: "Red or blue", status: "open" }] }],
+      }); // acme-3
+      fake.setNeedsMe([{ reason: "needs_answer", tickets: [{ id: "acme-3", round: { number: 1, open: 1, questions: 1 } }] }]);
+      renderApp(fake);
+      await heading("Which colour?");
+      await userEvent.type(within(focus()).getByRole("textbox", { name: "Your answer" }), "Blue");
+
+      await userEvent.click(await newButton());
+      await submit("New requirement", "Submit requirement");
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(within(focus()).getByRole("textbox", { name: "Your answer" })).toHaveValue("Blue");
+    });
+
+    it("submits from a modal opened while Loading…, once the Projects arrive", async () => {
+      const fake = world();
+      fake.setNeedsMe([]);
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const needsMe = fake.needsMe.bind(fake);
+      vi.spyOn(fake, "needsMe").mockImplementationOnce(async () => {
+        await gate;
+        return needsMe();
+      });
+      renderApp(fake);
+      await userEvent.click(await newButton());
+      release();
+      await within(focus()).findByRole("region", { name: "All clear" });
+
+      await submit("New requirement", "Submit requirement");
+      expect(fake.calls).toContain("submitRequirement");
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
+
     it("keeps the modal open with its error when the submit is refused", async () => {
       const fake = world();
       fake.submitRequirement = async () => {
@@ -217,7 +255,7 @@ describe("+ New ▾ in Focus Mode's header", () => {
       expect((await fake.findSpecs("beta")).map((s) => s.title)).toContain("Offline mode");
     });
 
-    it("asks among the active Projects only across all of them", async () => {
+    it("asks which active Project when Focus Mode isn't filtered to one, leaving out the Archived", async () => {
       renderApp(world());
       await userEvent.click(await newButton());
       const select = within(screen.getByRole("dialog")).getByRole("combobox", { name: "Project" });

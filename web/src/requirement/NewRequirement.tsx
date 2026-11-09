@@ -147,7 +147,10 @@ function NewFromText<R>({ kind, api, projects, project, onSubmitted, trigger }: 
 
 function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFromTextProps<R> & { onClose(): void }) {
   const [text, setText] = useState(kind.text ?? "");
-  const [chosen, setChosen] = useState(project ?? projects[0]?.key ?? "");
+  // Until the human picks one, the Project follows the props, so a modal
+  // opened before the Projects are read still has one once they are.
+  const [picked, setPicked] = useState<string>();
+  const chosen = picked ?? project ?? projects[0]?.key ?? "";
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const titleId = useId();
@@ -178,7 +181,7 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
           {ask && (
             <label className="modal-project small">
               Project{" "}
-              <select value={chosen} onChange={(e) => setChosen(e.target.value)}>
+              <select value={chosen} onChange={(e) => setPicked(e.target.value)}>
                 {projects.map((p) => (
                   <option key={p.key} value={p.key}>
                     {p.display_name}
