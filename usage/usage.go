@@ -7,6 +7,10 @@
 // the service log and dropped. Reading skips a line it can't parse and
 // counts it in the log, unlike the store's YAML, where a bad file stops
 // startup.
+//
+// Retention: a file whose day is more than 90 days before today is
+// deleted at startup, and again whenever the recorder opens the first
+// file of a new day. There is no timer.
 package usage
 
 import (
@@ -19,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,6 +50,10 @@ type Records struct {
 	Calls []Call
 }
 
+// keep is how many days before today a file is kept: one whose day is
+// earlier than that is deleted.
+const keep = 90
+
 // The record types, each line's "type".
 const typeCall = "mcp_call"
 
@@ -66,16 +75,21 @@ type Recorder struct {
 	// append never waits on a store write: appends take it to write,
 	// reads to read, so a read never sees half a line.
 	mu sync.RWMutex
+	// prunedOn is the day the old files were last deleted on, under mu.
+	prunedOn string
 }
 
 // New returns a Recorder keeping its files under dir (the store's
 // directory), dating each record by its day in loc, reading "today" from
-// clk, and writing failures and skipped lines to log.
+// clk, and writing failures and skipped lines to log. It deletes the
+// files older than keep days before it returns.
 func New(dir string, clk clock.Clock, loc *time.Location, log io.Writer) *Recorder {
 	if log == nil {
 		log = io.Discard
 	}
-	return &Recorder{dir: dir, clock: clk, loc: loc, log: log}
+	r := &Recorder{dir: dir, clock: clk, loc: loc, log: log}
+	r.prune()
+	return r
 }
 
 // RecordCall appends c to project's file for c's day. A failure is
@@ -99,6 +113,9 @@ func (r *Recorder) append(project string, t time.Time, v record) error {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if day(r.today()) != r.prunedOn {
+		r.prune()
+	}
 	dir := r.projectDir(project)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -124,7 +141,7 @@ func (r *Recorder) Read(project string, days int) Records {
 	if project == "" {
 		projects = r.projects()
 	}
-	today := r.clock.Now().In(r.loc)
+	today := r.today()
 	for i := days - 1; i >= 0; i-- {
 		d := day(today.AddDate(0, 0, -i))
 		for _, p := range projects {
@@ -133,6 +150,38 @@ func (r *Recorder) Read(project string, days int) Records {
 	}
 	return out
 }
+
+// prune deletes every Project's files whose day is more than keep days
+// before today, with mu held or before the Recorder is shared. A file it
+// can't delete is logged and left for the next day.
+func (r *Recorder) prune() {
+	today := r.today()
+	r.prunedOn = day(today)
+	oldest := day(today.AddDate(0, 0, -keep))
+	for _, p := range r.projects() {
+		dir := r.projectDir(p)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			if !errors.Is(err, fs.ErrNotExist) {
+				fmt.Fprintf(r.log, "code-central serve: usage: cannot read %s: %v\n", dir, err)
+			}
+			continue
+		}
+		for _, e := range entries {
+			d, ok := strings.CutSuffix(e.Name(), ".jsonl")
+			if _, err := time.Parse(time.DateOnly, d); !ok || err != nil || d >= oldest {
+				continue
+			}
+			path := filepath.Join(dir, e.Name())
+			if err := os.Remove(path); err != nil {
+				fmt.Fprintf(r.log, "code-central serve: usage: cannot delete %s: %v\n", path, err)
+			}
+		}
+	}
+}
+
+// today is the clock's time in the service's time zone.
+func (r *Recorder) today() time.Time { return r.clock.Now().In(r.loc) }
 
 // projects is every Project with a usage folder.
 func (r *Recorder) projects() []string {

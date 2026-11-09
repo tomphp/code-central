@@ -260,3 +260,93 @@ func TestAFailedUsageAppendStillAnswersTheCall(t *testing.T) {
 		t.Fatalf("rows %+v, want none", u.Operations)
 	}
 }
+
+// usageFile is the path of acme's usage file for day.
+func usageFile(srv *codecentraltest.Server, day time.Time) string {
+	return filepath.Join(srv.UsageDir, "projects", "acme", "usage", day.Format(time.DateOnly)+".jsonl")
+}
+
+func exists(t *testing.T, path string) bool {
+	t.Helper()
+	_, err := os.Stat(path)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	return err == nil
+}
+
+// Retention keeps a file until its day is more than 90 days before
+// today, in the service's local time: here UTC+10, where 00:30 on 6
+// April is still 5 April in UTC, so counting in UTC would keep the old
+// file.
+func TestUsageDeletesFilesMoreThan90DaysOldAtStartup(t *testing.T) {
+	loc := time.FixedZone("AEST", 10*60*60)
+	dir := t.TempDir()
+	old := time.Date(2026, 1, 5, 23, 30, 0, 0, loc)
+	kept := old.AddDate(0, 0, 1)
+	recent := old.AddDate(0, 0, 2)
+	first := acmeServer(t, codecentraltest.WithUsageDir(dir), codecentraltest.WithLocation(loc))
+	for _, at := range []time.Time{old, kept, recent} {
+		first.Clock.Set(at)
+		mcpOK(t, connect(t, first, "acme"), "find_tickets", map[string]any{})
+	}
+
+	// 91 days after old: old is more than 90 days before today, kept
+	// exactly 90 and recent 89, inside a 90-day read.
+	today := time.Date(2026, 4, 6, 0, 30, 0, 0, loc)
+	second := acmeServer(t, codecentraltest.WithUsageDir(dir), codecentraltest.WithLocation(loc), codecentraltest.WithStart(today))
+	if exists(t, usageFile(second, old)) {
+		t.Errorf("%s is more than 90 days old and still there", usageFile(second, old))
+	}
+	for _, day := range []time.Time{kept, recent} {
+		if !exists(t, usageFile(second, day)) {
+			t.Errorf("%s is within 90 days and was deleted", usageFile(second, day))
+		}
+	}
+	if got := operation(t, readUsage(t, second, "?days=90"), "find_tickets"); got.Calls != 1 {
+		t.Fatalf("row %+v, want the recent call", got)
+	}
+}
+
+func TestUsageDeletesOldFilesOnTheFirstRecordOfANewDay(t *testing.T) {
+	srv := acmeServer(t)
+	old := codecentraltest.Start
+	kept := old.AddDate(0, 0, 1)
+	for _, at := range []time.Time{old, kept} {
+		srv.Clock.Set(at)
+		mcpOK(t, connect(t, srv, "acme"), "find_tickets", map[string]any{})
+	}
+
+	// There is no timer: moving the clock alone deletes nothing.
+	srv.Clock.Set(old.AddDate(0, 0, 91))
+	if !exists(t, usageFile(srv, old)) {
+		t.Fatalf("%s was deleted before any record of the new day", usageFile(srv, old))
+	}
+	mcpOK(t, connect(t, srv, "acme"), "find_tickets", map[string]any{})
+	if exists(t, usageFile(srv, old)) {
+		t.Errorf("%s is more than 90 days old and still there", usageFile(srv, old))
+	}
+	if !exists(t, usageFile(srv, kept)) {
+		t.Errorf("%s is 90 days old and was deleted", usageFile(srv, kept))
+	}
+}
+
+func TestAFailedUsageDeletionIsLoggedAndStillAnswersTheCall(t *testing.T) {
+	log := &syncBuffer{}
+	srv := acmeServer(t, codecentraltest.WithLog(log))
+	// A folder with something in it where an old file would be, so the
+	// deletion fails on every OS.
+	stuck := usageFile(srv, codecentraltest.Start.AddDate(0, 0, -91))
+	if err := os.MkdirAll(filepath.Join(stuck, "inside"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	srv.Clock.Set(codecentraltest.Start.AddDate(0, 0, 1))
+	mcpOK(t, connect(t, srv, "acme"), "find_tickets", map[string]any{})
+	if !strings.Contains(log.String(), "usage: cannot delete "+stuck) {
+		t.Fatalf("log %q should say the deletion failed", log.String())
+	}
+	if got := operation(t, readUsage(t, srv, ""), "find_tickets"); got.Calls != 1 {
+		t.Fatalf("row %+v, want the call recorded", got)
+	}
+}

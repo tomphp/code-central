@@ -48,6 +48,7 @@ type options struct {
 	log      io.Writer
 	usageDir string
 	location *time.Location
+	start    time.Time
 }
 
 // WithVersion makes the server report version in its version header.
@@ -66,10 +67,14 @@ func WithUsageDir(dir string) Option { return func(o *options) { o.usageDir = di
 // by day; it is UTC unless given.
 func WithLocation(loc *time.Location) Option { return func(o *options) { o.location = loc } }
 
+// WithStart starts the fake clock at t instead of Start, so a server
+// can start on a later day, as a restarted service would.
+func WithStart(t time.Time) Option { return func(o *options) { o.start = t } }
+
 // NewServer starts a test service, stopped when t ends.
 func NewServer(t testing.TB, opts ...Option) *Server {
 	t.Helper()
-	o := options{version: Version, location: time.UTC}
+	o := options{version: Version, location: time.UTC, start: Start}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -77,7 +82,7 @@ func NewServer(t testing.TB, opts ...Option) *Server {
 		o.usageDir = t.TempDir()
 	}
 	s := store.NewMemory()
-	clk := clock.NewFake(Start)
+	clk := clock.NewFake(o.start)
 	c := core.New(s, clk, &ids.Sequence{})
 	c.SetUsage(usage.New(o.usageDir, clk, o.location, o.log))
 	hs := httptest.NewServer(frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), o.log), o.version))
