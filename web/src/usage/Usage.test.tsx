@@ -237,18 +237,20 @@ describe("the Code Central calls table", () => {
   });
 });
 
+// claimed claims a new Ticket in project for session, returning its ID.
+function claimed(fake: FakeApi, project: string, title: string, session: string): string {
+  const at = fake.now.toISOString();
+  return fake.addTicket(project, { title, state: "In Progress", claims: [{ number: 1, session_id: session, started: at, last_activity: at }] }).id;
+}
+
+// response is one model response, minutes after the fake's now, reading
+// context tokens in all.
+function response(fake: FakeApi, minutes: number, kind: string, context: number, agent?: string): UsageResponse {
+  const time = new Date(fake.now.getTime() + minutes * 60_000).toISOString();
+  return { time, ...(agent ? { agent } : {}), kind, input_tokens: 4, cache_write_tokens: 1_000, cache_read_tokens: context - 1_004, output_tokens: 50 };
+}
+
 describe("Context Size", () => {
-  // claimed claims a new Ticket in project for session, returning its ID.
-  function claimed(fake: FakeApi, project: string, title: string, session: string): string {
-    const at = fake.now.toISOString();
-    return fake.addTicket(project, { title, state: "In Progress", claims: [{ number: 1, session_id: session, started: at, last_activity: at }] }).id;
-  }
-  // response is one model response, minutes after the fake's now, reading
-  // context tokens in all.
-  function response(fake: FakeApi, minutes: number, kind: string, context: number, agent?: string): UsageResponse {
-    const time = new Date(fake.now.getTime() + minutes * 60_000).toISOString();
-    return { time, ...(agent ? { agent } : {}), kind, input_tokens: 4, cache_write_tokens: 1_000, cache_read_tokens: context - 1_004, output_tokens: 50 };
-  }
   function seeded() {
     const fake = world();
     const impl = claimed(fake, "acme", "Build it", "sess-impl"); // acme-2
@@ -298,7 +300,7 @@ describe("Context Size", () => {
       "Responses",
     ]);
     const sessions = within(sessionsTable()).getAllByRole("row").slice(1);
-    expect(sessions.map((r) => within(r).getByRole("link").textContent)).toEqual([spec, impl, impl]);
+    expect(sessions.map((r) => within(within(r).getByRole("rowheader")).getByRole("link").textContent)).toEqual([spec, impl, impl]);
     expect(sessions.map((r) => within(r).getAllByRole("cell").map((c) => c.textContent))).toEqual([
       ["Beta", "1", "sess-spec", "spec", expect.any(String), "80,000", "1"],
       ["Acme", "1", "sess-impl · toolu_review", "review", expect.any(String), "21,000", "1"],
@@ -323,7 +325,7 @@ describe("Context Size", () => {
     const { fake, spec } = seeded();
     renderApp(fake, "/?view=usage&project=beta");
     await waitFor(() => expect(within(usage()).getByRole("table", { name: "Recent sessions" })).toBeInTheDocument());
-    expect(within(sessionsTable()).getAllByRole("link").map((l) => l.textContent)).toEqual([spec]);
+    expect(within(sessionsTable()).getAllByRole("rowheader").map((h) => h.textContent)).toEqual([spec]);
     expect(within(kindsTable()).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["spec"]);
   });
 
@@ -343,6 +345,135 @@ describe("Context Size", () => {
     expect(within(usage()).queryByRole("table", { name: "Code Central calls" })).toBeNull();
     expect(within(usage()).getByRole("table", { name: "Context Size by kind" })).toBeInTheDocument();
     expect(within(usage()).queryByText(/No usage yet/)).toBeNull();
+  });
+});
+
+describe("a session's Context Size", () => {
+  function seeded() {
+    const fake = world();
+    claimed(fake, "acme", "Build it", "sess-impl");
+    fake.postUsage("sess-impl", [
+      response(fake, 1, "implementation", 40_000),
+      response(fake, 2, "implementation", 123_456),
+      response(fake, 3, "review", 21_000, "toolu_review"),
+      response(fake, 4, "implementation", 98_765),
+    ]);
+    return fake;
+  }
+
+  const sessionsTable = () => within(usage()).getByRole("table", { name: "Recent sessions" });
+  const panel = () => within(usage()).getByRole("region", { name: /^Session / });
+  const chart = () => within(panel()).getByRole("img", { name: "Context Size per response" });
+  const points = () => within(chart()).getAllByRole("button");
+  const search = () => new URLSearchParams(window.location.search);
+
+  it("opens a session from the recent sessions as a line chart of its Context Size per response", async () => {
+    renderApp(seeded(), "/?view=usage");
+    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    const link = within(sessionsTable()).getByRole("link", { name: "sess-impl" });
+    expect(link).toHaveAttribute("href", "?view=usage&session_project=acme&session=sess-impl");
+
+    await userEvent.click(link);
+    expect(search().get("session")).toBe("sess-impl");
+    expect(search().get("session_project")).toBe("acme");
+    expect(search().get("agent")).toBeNull();
+    await waitFor(() => expect(points()).toHaveLength(3));
+    expect(panel()).toHaveAccessibleName("Session sess-impl");
+    expect(within(panel()).getByText("3 responses · peak 123,456 tokens")).toBeInTheDocument();
+    expect(points().map((p) => p.getAttribute("aria-label"))).toEqual([
+      "Response 1: 40,000 tokens",
+      "Response 2: 123,456 tokens",
+      "Response 3: 98,765 tokens",
+    ]);
+    // The highest point is drawn highest, the lowest lowest.
+    const ys = points().map((p) => Number(p.getAttribute("cy")));
+    expect(ys[1]).toBeLessThan(ys[2]);
+    expect(ys[2]).toBeLessThan(ys[0]);
+  });
+
+  it("opens a subagent's session with its agent in the address", async () => {
+    renderApp(seeded(), "/?view=usage&days=30");
+    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    const link = within(sessionsTable()).getByRole("link", { name: "sess-impl · toolu_review" });
+    // The link keeps the range too, for a new tab or a copied link.
+    expect(link).toHaveAttribute("href", "?view=usage&days=30&session_project=acme&session=sess-impl&agent=toolu_review");
+    await userEvent.click(link);
+    expect(window.location.search).toBe("?view=usage&days=30&session_project=acme&session=sess-impl&agent=toolu_review");
+    await waitFor(() => expect(points()).toHaveLength(1));
+    expect(panel()).toHaveAccessibleName("Session sess-impl · toolu_review");
+    expect(points()[0]).toHaveAttribute("aria-label", "Response 1: 21,000 tokens");
+  });
+
+  it("reopens the session from the address, whatever the scope", async () => {
+    const fake = seeded();
+    renderApp(fake, "/?view=usage&project=beta&session_project=acme&session=sess-impl");
+    await waitFor(() => expect(points()).toHaveLength(3));
+    expect(scope()).toHaveValue("beta");
+    expect(fake.calls.filter((c) => c === "sessionUsage")).toHaveLength(1);
+  });
+
+  it("shows the session even when the rest of Usage can't be read", async () => {
+    const fake = seeded();
+    fake.usage = async () => {
+      throw new Error("Usage is down");
+    };
+    renderApp(fake, "/?view=usage&session_project=acme&session=sess-impl");
+    expect(await within(usage()).findByRole("alert")).toHaveTextContent("Usage is down");
+    await waitFor(() => expect(points()).toHaveLength(3));
+  });
+
+  it("shows a point's exact figures on hover, with thousands separators", async () => {
+    renderApp(seeded(), "/?view=usage&session_project=acme&session=sess-impl");
+    await waitFor(() => expect(points()).toHaveLength(3));
+    expect(within(panel()).queryByRole("tooltip")).toBeNull();
+
+    await userEvent.hover(points()[1]);
+    const tip = within(panel()).getByRole("tooltip");
+    expect(tip).toHaveTextContent("Response 2");
+    expect(tip).toHaveTextContent("Context Size123,456 tokens");
+    expect(tip).toHaveTextContent("Input4");
+    expect(tip).toHaveTextContent("Cache write1,000");
+    expect(tip).toHaveTextContent("Cache read122,452");
+    expect(tip).toHaveTextContent("Output50");
+
+    await userEvent.unhover(points()[1]);
+    expect(within(panel()).queryByRole("tooltip")).toBeNull();
+  });
+
+  it("closes the session, leaving the scope and range in the address", async () => {
+    renderApp(seeded(), "/?view=usage&project=acme&days=30&session_project=acme&session=sess-impl");
+    await waitFor(() => expect(points()).toHaveLength(3));
+    await userEvent.click(within(panel()).getByRole("button", { name: "Close session" }));
+    expect(window.location.search).toBe("?view=usage&project=acme&days=30");
+    expect(within(usage()).queryByRole("region", { name: /^Session / })).toBeNull();
+  });
+
+  it("closes the session on the browser's Back, and leaves Usage on the next", async () => {
+    renderApp(seeded(), "/?view=focus&project=acme");
+    await userEvent.click(within(screen.getByRole("main", { name: "Focus Mode" })).getByRole("link", { name: "Usage" }));
+    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    await userEvent.click(within(sessionsTable()).getByRole("link", { name: "sess-impl" }));
+    await waitFor(() => expect(points()).toHaveLength(3));
+
+    act(() => window.history.back());
+    await waitFor(() => expect(within(usage()).queryByRole("region", { name: /^Session / })).toBeNull());
+    expect(search().get("session")).toBeNull();
+
+    act(() => window.history.back());
+    expect(await screen.findByRole("main", { name: "Focus Mode" })).toBeInTheDocument();
+  });
+
+  it("returns to where Usage was opened from with a session open", async () => {
+    renderApp(seeded(), "/?view=usage&session_project=acme&session=sess-impl&back=view%3Dfocus%26project%3Dacme");
+    await waitFor(() => expect(points()).toHaveLength(3));
+    await userEvent.click(within(usage()).getByRole("button", { name: "Back to Focus Mode" }));
+    expect(window.location.search).toBe("?view=focus&project=acme");
+  });
+
+  it("says when a session has no responses", async () => {
+    renderApp(seeded(), "/?view=usage&session_project=acme&session=sess-gone");
+    expect(await within(usage()).findByText("No responses for this session in the last 90 days.")).toBeInTheDocument();
+    expect(within(panel()).queryByRole("img")).toBeNull();
   });
 });
 

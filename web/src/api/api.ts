@@ -22,6 +22,8 @@ import type {
   TicketView,
   Transcript,
   UsageFilter,
+  SessionUsageFilter,
+  SessionUsageView,
   UsageView,
 } from "./types";
 
@@ -105,6 +107,10 @@ export interface Api {
   // or all of them, over the last 7 (the default), 30 or 90 local days.
   // An unknown Project is not_found.
   usage(filter?: UsageFilter): Promise<UsageView>;
+  // sessionUsage reads one session's responses, oldest first, each with
+  // its Context Size, for its line chart. An unknown Project is not_found;
+  // an unknown session has none.
+  sessionUsage(filter: SessionUsageFilter): Promise<SessionUsageView>;
   // subscribe opens the live feed and returns a function that closes it.
   subscribe(handlers: EventHandlers): () => void;
   // transcript reads Claim number claim's Transcript (ticket 110).

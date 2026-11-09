@@ -32,9 +32,8 @@ This guide sets a repository up as a Project, so that agents can reach its Specs
    | a Map's Charting (`wayfinder:chart`) | `/wayfinder` |
    | a Map's grilling (`wayfinder:grilling`) | `/grilling`, with `/domain-modeling` alongside |
    | a Map's task (`wayfinder:task`) | none: the Guide alone |
+   | a Map's research (`wayfinder:research`) | `/research`, on a local `research/<ticket>` branch |
    | a Prototype (`prototype`) | `/prototype`, on a local `prototype/<ticket>` branch |
-
-   The Factory doesn't run a Map's research (`wayfinder:research`) Ticket yet, so it leaves it unclaimed.
 
    The grilling Stage, Charting and a Map's grilling Ticket hand a Question answered **Prototype this** to a new Prototype, then pick up again as a redo once it is Done: see [Prototypes](working-with-claude-code.md#prototypes).
 

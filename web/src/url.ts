@@ -4,16 +4,18 @@
 // or ?view=options&from=<inbox|focus>&... for the Options view, which keeps
 // the parameters of the view it came from, to return to it,
 // or ?view=project-options&project=<key> for a Project's Project Options page,
-// or ?view=usage&project=<key>&days=<30|90>&back=<query> for Usage, where
-// project is Usage's scope (none = All Projects), days its range (none =
-// 7), and back the query of the view it returns to (none = the Inbox).
+// or ?view=usage&project=<key>&days=<30|90>&session_project=<key>&session=<id>&agent=<id>&back=<query>
+// for Usage, where project is Usage's scope (none = All Projects), days its
+// range (none = 7), session_project, session and agent the session open
+// on its line chart (agent none for a main session), and back the query
+// of the view it returns to (none = the Inbox).
 // view is the layout (anything else is the inbox); project, state and
 // list are the left pane's filters (no state and no list = Needs Me;
 // list=requirements is the Requirements view); requirement is the selected
 // Requirement's Spec ID and ticket the selected Ticket's display ID (within
 // the Requirement, when one is selected).
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
-import { STATES, USAGE_DAYS, type State, type UsageDays } from "./api/types";
+import { STATES, USAGE_DAYS, type State, type UsageDays, type SessionUsageFilter } from "./api/types";
 
 export type View = "inbox" | "focus" | "options" | "project-options" | "usage";
 // A ReturnView is a view the Options view and Usage return to.
@@ -31,6 +33,8 @@ export interface UiLocation {
   ticket?: string;
   // days is Usage's range; none is the default, 7.
   days?: UsageDays;
+  // session is the session Usage has open on its line chart.
+  session?: SessionUsageFilter;
   // back is where Usage returns to, a ReturnView with its parameters.
   back?: UiLocation;
 }
@@ -49,10 +53,12 @@ export function readLocation(search: string): UiLocation {
   if (view === "usage") {
     const days = Number(q.get("days")) as UsageDays;
     const back = readLocation(`?${q.get("back") ?? ""}`);
+    const [sessionProject, session, agent] = [q.get("session_project"), q.get("session"), q.get("agent")];
     return {
       view,
       project: q.get("project") || undefined,
       days: USAGE_DAYS.includes(days) && days !== USAGE_DAYS[0] ? days : undefined,
+      session: sessionProject && session ? { project: sessionProject, session, ...(agent ? { agent } : {}) } : undefined,
       back: back.view === "inbox" || back.view === "focus" ? back : readLocation(INBOX),
     };
   }
@@ -79,6 +85,11 @@ export function hrefFor(loc: UiLocation): string {
   if (loc.project) q.set("project", loc.project);
   if (loc.view === "usage") {
     if (loc.days && loc.days !== USAGE_DAYS[0]) q.set("days", String(loc.days));
+    if (loc.session) {
+      q.set("session_project", loc.session.project);
+      q.set("session", loc.session.session);
+      if (loc.session.agent) q.set("agent", loc.session.agent);
+    }
     const back = loc.back ? hrefFor(loc.back) : INBOX;
     if (back !== INBOX) q.set("back", back.slice(1));
     return `?${q}`;

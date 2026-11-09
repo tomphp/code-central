@@ -256,10 +256,11 @@ A Map's Tickets each carry a Wayfinder Label, and the Factory claims them like a
 | --- | --- | --- |
 | `wayfinder:chart` | `map-chart` | `/wayfinder` |
 | `wayfinder:grilling` | `map-grilling` | `/grilling`, with `/domain-modeling` alongside |
+| `wayfinder:research` | `map-research` | `/research` |
 | `wayfinder:task` | `map-task` | none: the prompt is the Guide alone |
 | `prototype` | `prototype` | `/prototype` |
 
-Each Map Ticket runs in a read-only worktree detached at the base's tip, as a Stage does, and writes to Code Central, not to the repository. Its line names its Guide in place of the Stage:
+A Map's Charting, grilling and task Tickets each run in a read-only worktree detached at the base's tip, as a Stage does, and write to Code Central, not to the repository. Each one's line names its Guide in place of the Stage:
 
 ```text
 acme-shop-9 claimed (map-chart): "Charting: Dark mode" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-9; resume: claude --resume …
@@ -277,7 +278,15 @@ Because it finishes with no branch, accepting a Prototype makes it Done straight
 
 A Prototype can also come from a Round. Answer a Question from the grilling Stage, Charting or a Map's grilling Ticket with **Prototype this**, a button on each Question that fills the answer with `Prototype this: ` for your note. The session creates a Ready Prototype on the same Spec from the Question and your note, makes it block the asking Ticket, and gives up. The Factory claims the Prototype as above. Once you accept it, the asking Ticket is unblocked, and the Factory claims it again as a redo, which carries on from the Prototype's resolution comment.
 
-The Factory leaves a Map's research Ticket (`wayfinder:research`) unclaimed for now, and claims the Tickets after it. A Ticket with any of these Labels is never run as an implementation Ticket.
+A Map's **research** Ticket (`wayfinder:research`) runs in the background with `/research`, in a worktree of its own on a local branch `research/<ticket>`, just as a Prototype does:
+
+```text
+acme-shop-11 claimed (map-research): "Which colour libraries exist?" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-11; resume: claude --resume …
+```
+
+Its first prompt tells the session to commit its findings on that branch only, with no push and no PR, to record where they are in a `research` Tag (`research/acme-shop-11@9f8e7d6`), and to finish with no branch. Accepting it makes it Done straight away, whatever the Landing Method, with nothing merged, pushed or landed. The Factory removes its worktree once it is Done or Cancelled and never deletes the `research/` branch, so `git show research/acme-shop-11` still finds the findings.
+
+A Ticket with any of these Labels is never run as an implementation Ticket.
 
 When a Map's Ticket asks you a Round or finishes into In Review, it waits on you in **Needs Me** and Focus Mode as its own entry, not folded into a row as a Stage Ticket is. Its row reads `↳ Map: Dark mode` under its title, and its Focus Item reads *Map: Dark mode*. A Prototype also carries a **Prototype** badge, and on a plain Spec its row names that Spec instead.
 
