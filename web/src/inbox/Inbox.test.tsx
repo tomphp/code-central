@@ -1,7 +1,7 @@
 // Inbox layout tests: the real App and panels against FakeApi. They check
 // layout only; what the service computes (group order, reasons) is the
 // fake's seeded data, rendered as received.
-import { render, screen, within, waitFor, act } from "@testing-library/react";
+import { render, screen, within, waitFor, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
@@ -384,6 +384,7 @@ describe("Map Tickets and Prototypes in Needs Me", () => {
 describe("the sidebar's top row: + New and Focus", () => {
   const menuButton = () => within(nav()).getByRole("button", { name: "More to create" });
   const findMenuButton = () => within(nav()).findByRole("button", { name: "More to create" });
+  const item = (name: string) => within(screen.getByRole("menu")).getByRole("menuitem", { name });
 
   it("shows + New, its ▾ and Focus at the top of the sidebar", async () => {
     renderApp(world());
@@ -410,10 +411,10 @@ describe("the sidebar's top row: + New and Focus", () => {
     expect(screen.getByRole("menu", { name: "More to create" })).toBeVisible();
     const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
     expect(items.map((i) => i.textContent)).toEqual([expect.stringContaining("Requirement"), expect.stringContaining("Map")]);
-    expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Requirement" })).toHaveAccessibleDescription(
+    expect(item("Requirement")).toHaveAccessibleDescription(
       "Grilled into a Spec and Tickets",
     );
-    expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Map" })).toHaveAccessibleDescription(
+    expect(item("Map")).toHaveAccessibleDescription(
       "Charts the decisions to get somewhere",
     );
   });
@@ -421,11 +422,11 @@ describe("the sidebar's top row: + New and Focus", () => {
   it.each([
     ["Requirement", "New requirement", "Submit requirement", "submitRequirement"],
     ["Map", "New Map", "Submit map", "submitMap"],
-  ])("opens %s's dialog from the menu, which stays visible once the menu closes, and submits to the new Spec", async (item, dialog, submit, call) => {
+  ])("opens %s's dialog from the menu, which stays visible once the menu closes, and submits to the new Spec", async (name, dialog, submit, call) => {
     const fake = world();
     renderApp(fake, "/?project=acme");
     await userEvent.click(await findMenuButton());
-    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: item }));
+    await userEvent.click(item(name));
 
     expect(screen.queryByRole("menu")).toBeNull();
     expect(menuButton()).toHaveAttribute("aria-expanded", "false");
@@ -470,11 +471,11 @@ describe("the sidebar's top row: + New and Focus", () => {
   });
 
   describe("by keyboard", () => {
-    const item = (name: string) => within(screen.getByRole("menu")).getByRole("menuitem", { name });
+    const focusMenuButton = async () => (await findMenuButton()).focus();
 
     it("opens with ↓ on the first item, and moves with the arrows, wrapping at either end", async () => {
       renderApp(world());
-      (await findMenuButton()).focus();
+      await focusMenuButton();
       await userEvent.keyboard("{ArrowDown}");
       expect(menuButton()).toHaveAttribute("aria-expanded", "true");
       expect(item("Requirement")).toHaveFocus();
@@ -491,14 +492,14 @@ describe("the sidebar's top row: + New and Focus", () => {
 
     it.each([["{Enter}"], [" "]])("opens with %s on the first item", async (key) => {
       renderApp(world());
-      (await findMenuButton()).focus();
+      await focusMenuButton();
       await userEvent.keyboard(key);
       expect(item("Requirement")).toHaveFocus();
     });
 
     it.each([["{Enter}"], [" "]])("picks the focused item with %s: the menu closes and its dialog opens", async (key) => {
       renderApp(world());
-      (await findMenuButton()).focus();
+      await focusMenuButton();
       await userEvent.keyboard("{ArrowDown}{ArrowDown}");
       await userEvent.keyboard(key);
       expect(screen.queryByRole("menu")).toBeNull();
@@ -506,9 +507,21 @@ describe("the sidebar's top row: + New and Focus", () => {
       expect(screen.getByRole("dialog", { name: "New Map" })).toBeVisible();
     });
 
+    it("leaves the arrows to the dialog an item opened", async () => {
+      renderApp(world());
+      await focusMenuButton();
+      await userEvent.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+      const text = within(screen.getByRole("dialog", { name: "New Map" })).getByRole("textbox");
+      await userEvent.type(text, "Offline{Enter}mode");
+      // fireEvent is false when a handler cancelled the key, as the caret would stay put.
+      expect(fireEvent.keyDown(text, { key: "ArrowUp" })).toBe(true);
+      expect(fireEvent.keyDown(text, { key: "ArrowDown" })).toBe(true);
+      expect(text).toHaveFocus();
+    });
+
     it("closes on Esc and returns focus to ▾", async () => {
       renderApp(world());
-      (await findMenuButton()).focus();
+      await focusMenuButton();
       await userEvent.keyboard("{ArrowDown}{ArrowDown}{Escape}");
       expect(screen.queryByRole("menu")).toBeNull();
       expect(menuButton()).toHaveAttribute("aria-expanded", "false");
@@ -517,7 +530,7 @@ describe("the sidebar's top row: + New and Focus", () => {
 
     it("closes when Tab leaves the menu", async () => {
       renderApp(world());
-      (await findMenuButton()).focus();
+      await focusMenuButton();
       await userEvent.keyboard("{ArrowDown}");
       await userEvent.tab();
       expect(screen.queryByRole("menu")).toBeNull();

@@ -3,7 +3,7 @@
 // Requirement and Map, so every kind is discoverable. The menu stays
 // mounted while closed, so a modal opened from one of its items outlives it.
 // The ▾ and its menu follow the usual menu-button keyboard pattern.
-import { useEffect, useId, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { NewMap, NewRequirement, type NewRequirementProps } from "../requirement/NewRequirement";
 
 export interface SidebarTopProps {
@@ -20,8 +20,11 @@ export function SidebarTop({ newProps, onFocusMode }: SidebarTopProps) {
   const menu = useRef<HTMLDivElement>(null);
   const moreId = useId();
 
+  const items = () => Array.from(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+  const focusFirst = () => items()[0]?.focus();
+
   // A click anywhere but the ▾ (which toggles) and the menu closes it,
-  // + New and Focus included.
+  // + New and Focus included; Esc closes it and returns focus to the ▾.
   useEffect(() => {
     if (!open) return;
     const inside = (t: Node) => more.current?.contains(t) || menu.current?.contains(t);
@@ -41,22 +44,26 @@ export function SidebarTop({ newProps, onFocusMode }: SidebarTopProps) {
 
   // Opening the menu focuses its first item.
   useEffect(() => {
-    if (open) items()[0]?.focus();
+    if (open) focusFirst();
   }, [open]);
 
-  const items = () => Array.from(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
-
   // ↓ on the ▾ opens the menu as Enter and Space do, by their click.
-  const onMoreKey = (e: React.KeyboardEvent) => {
+  const onMoreKey = (e: ReactKeyboardEvent) => {
     if (e.key !== "ArrowDown") return;
     e.preventDefault();
-    if (open) items()[0]?.focus();
+    if (open) focusFirst();
     else setOpen(true);
   };
 
   // ↑ and ↓ move between the items, wrapping; Tab out of the menu closes it.
-  const onMenuKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Tab") return setOpen(false);
+  // Keys from a modal an item opened bubble here through its portal, and
+  // are left alone.
+  const onMenuKey = (e: ReactKeyboardEvent) => {
+    if (!menu.current?.contains(e.target as Node)) return;
+    if (e.key === "Tab") {
+      setOpen(false);
+      return;
+    }
     const step = { ArrowDown: 1, ArrowUp: -1 }[e.key];
     if (!step) return;
     e.preventDefault();
