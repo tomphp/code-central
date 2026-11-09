@@ -1,6 +1,7 @@
 package factory_test
 
 import (
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -50,9 +51,9 @@ func TestATurnsStreamJSONIsPostedAsSessionEvents(t *testing.T) {
 		factorytest.Say("  \n"),
 		factorytest.ToolUse("Bash", `{"command":"go test ./...\necho done","description":"Run the tests"}`),
 		factorytest.ToolResult("toolu_Bash", "ok", false),
-		factorytest.ToolUse("Read", `{"file_path":"`+wt+`/shed/paint.go"}`),
+		factorytest.ToolUse("Read", `{"file_path":`+inWorktree(wt, "shed/paint.go")+`}`),
 		factorytest.ToolResult("toolu_Read", []map[string]string{{"type": "text", "text": "package shed"}, {"type": "text", "text": "func Paint() {}"}}, false),
-		factorytest.ToolUse("Grep", `{"pattern":"TODO","path":"`+wt+`/shed"}`),
+		factorytest.ToolUse("Grep", `{"pattern":"TODO","path":`+inWorktree(wt, "shed")+`}`),
 		factorytest.ToolResult("toolu_Grep", strings.Repeat("é", 3000), true),
 		factorytest.ToolUse("mcp__code-central__get_ticket", `{"ticket":"`+id+`"}`),
 		factorytest.ToolUse("Frobnicate", `{"level":3,"target":"the shed"}`),
@@ -70,7 +71,7 @@ func TestATurnsStreamJSONIsPostedAsSessionEvents(t *testing.T) {
 		{Kind: "text", Text: "I'll paint the shed.\n\nFirst, the tests."},
 		{Kind: "tool_call", Text: "Bash: go test ./...", Tool: "Bash", ToolUseID: "toolu_Bash"},
 		{Kind: "tool_result", Text: "ok", Tool: "Bash", ToolUseID: "toolu_Bash"},
-		{Kind: "tool_call", Text: "Read: shed/paint.go", Tool: "Read", ToolUseID: "toolu_Read"},
+		{Kind: "tool_call", Text: "Read: " + filepath.FromSlash("shed/paint.go"), Tool: "Read", ToolUseID: "toolu_Read"},
 		{Kind: "tool_result", Text: "package shed\nfunc Paint() {}", Tool: "Read", ToolUseID: "toolu_Read"},
 		{Kind: "tool_call", Text: "Grep: TODO in shed", Tool: "Grep", ToolUseID: "toolu_Grep"},
 		{Kind: "tool_result", Text: cut, Tool: "Grep", ToolUseID: "toolu_Grep", IsError: true, Truncated: true},

@@ -85,7 +85,7 @@ func toolCall(tool string, input json.RawMessage, wt string) string {
 	}
 	path := func(key string) string {
 		p := str(key)
-		if r, err := filepath.Rel(wt, p); err == nil && filepath.IsAbs(p) && r != ".." && !strings.HasPrefix(r, "../") {
+		if r, err := filepath.Rel(wt, p); err == nil && filepath.IsAbs(p) && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator)) {
 			return r
 		}
 		return p

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -144,7 +145,8 @@ func (g gitRepo) worktrees() ([]gitWorktree, error) {
 		var w gitWorktree
 		for _, line := range strings.Split(block, "\n") {
 			if p, ok := strings.CutPrefix(line, "worktree "); ok {
-				w.path = p
+				// git writes C:/... on Windows; the Factory's paths are C:\...
+				w.path = filepath.FromSlash(p)
 			} else if b, ok := strings.CutPrefix(line, "branch "); ok {
 				w.branch = strings.TrimPrefix(b, "refs/heads/")
 			}

@@ -1,8 +1,10 @@
 package factory_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -129,11 +131,11 @@ func toolCalls(wt string) []factorytest.Step {
 	long := strings.Repeat("x", 200)
 	return []factorytest.Step{
 		factorytest.ToolUse("Bash", `{"command":"go test ./factory/...\necho done","description":"Run the tests"}`),
-		factorytest.ToolUse("Read", `{"file_path":"`+wt+`/factory/run.go"}`),
+		factorytest.ToolUse("Read", `{"file_path":`+inWorktree(wt, "factory/run.go")+`}`),
 		factorytest.ToolUse("Edit", `{"file_path":"/etc/hosts","old_string":"a","new_string":"b"}`),
-		factorytest.ToolUse("Write", `{"file_path":"`+wt+`/notes.md","content":"hi"}`),
-		factorytest.ToolUse("NotebookEdit", `{"notebook_path":"`+wt+`/a.ipynb","new_source":"x"}`),
-		factorytest.ToolUse("Grep", `{"pattern":"func main","path":"`+wt+`/cmd"}`),
+		factorytest.ToolUse("Write", `{"file_path":`+inWorktree(wt, "notes.md")+`,"content":"hi"}`),
+		factorytest.ToolUse("NotebookEdit", `{"notebook_path":`+inWorktree(wt, "a.ipynb")+`,"new_source":"x"}`),
+		factorytest.ToolUse("Grep", `{"pattern":"func main","path":`+inWorktree(wt, "cmd")+`}`),
 		factorytest.ToolUse("Grep", `{"pattern":"TODO"}`),
 		factorytest.ToolUse("Glob", `{"pattern":"**/*.go"}`),
 		factorytest.ToolUse("WebFetch", `{"url":"https://example.com/a","prompt":"Read it"}`),
@@ -149,6 +151,13 @@ func toolCalls(wt string) []factorytest.Step {
 		factorytest.Finish("Done."),
 		factorytest.Result("success"),
 	}
+}
+
+// inWorktree is the JSON string of the path rel (slash-separated) in the
+// worktree wt, as a session on this OS would give it.
+func inWorktree(wt, rel string) string {
+	b, _ := json.Marshal(filepath.Join(wt, filepath.FromSlash(rel)))
+	return string(b)
 }
 
 func TestVerbosePrintsOneLinePerToolCallWithItsSummary(t *testing.T) {
@@ -169,7 +178,7 @@ func TestVerbosePrintsOneLinePerToolCallWithItsSummary(t *testing.T) {
 	}
 	want := []string{
 		"Bash: go test ./factory/...",
-		"Read: factory/run.go",
+		"Read: " + filepath.FromSlash("factory/run.go"),
 		"Edit: /etc/hosts",
 		"Write: notes.md",
 		"NotebookEdit: a.ipynb",

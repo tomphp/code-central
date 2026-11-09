@@ -222,9 +222,8 @@ func TestServiceInstallWritesASystemdUserUnitOnLinux(t *testing.T) {
 		t.Fatalf("exit %d: %s", r.code, r.stderr)
 	}
 	unit := h.read(filepath.Join(h.home, ".config", "systemd", "user", "code-central.service"))
-	bin := h.bin
 	for _, want := range []string{
-		`ExecStart="` + bin + `" serve --store "` + store + `"`,
+		`ExecStart="` + systemdEscaped(h.bin) + `" serve --store "` + systemdEscaped(store) + `"`,
 		"Restart=on-failure",      // restarts after a crash
 		"WantedBy=default.target", // starts at login
 	} {
@@ -237,6 +236,10 @@ func TestServiceInstallWritesASystemdUserUnitOnLinux(t *testing.T) {
 		"systemctl --user enable code-central.service",
 		"systemctl --user restart code-central.service")
 }
+
+// systemdEscaped is s as a systemd unit writes it inside quotes: the
+// backslashes of a Windows path doubled.
+func systemdEscaped(s string) string { return strings.ReplaceAll(s, `\`, `\\`) }
 
 func TestSystemdUnitHonoursXDGConfigHome(t *testing.T) {
 	t.Parallel()
@@ -262,7 +265,11 @@ func TestWithNoHOMEServiceInstallUsesTheProfileFolder(t *testing.T) {
 				t.Fatalf("exit %d: %s", r.code, r.stderr)
 			}
 			// The store's default is under the profile folder too.
-			if unit := h.read(filepath.Join(profile, tc.unit)); !strings.Contains(unit, filepath.Join(profile, ".local", "share", "code-central")) {
+			want := filepath.Join(profile, ".local", "share", "code-central")
+			if tc.goos == "linux" {
+				want = systemdEscaped(want)
+			}
+			if unit := h.read(filepath.Join(profile, tc.unit)); !strings.Contains(unit, want) {
 				t.Fatalf("unit doesn't name the profile folder's store:\n%s", unit)
 			}
 		})
