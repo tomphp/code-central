@@ -345,3 +345,95 @@ describe("Context Size", () => {
     expect(within(usage()).queryByText(/No usage yet/)).toBeNull();
   });
 });
+
+describe("Token usage", () => {
+  // tokens is one model response, minutes after the fake's now, with the
+  // four token counts given.
+  function tokens(fake: FakeApi, minutes: number, kind: string, t: [number, number, number, number], agent?: string): UsageResponse {
+    const time = new Date(fake.now.getTime() + minutes * 60_000).toISOString();
+    return { time, ...(agent ? { agent } : {}), kind, input_tokens: t[0], cache_write_tokens: t[1], cache_read_tokens: t[2], output_tokens: t[3] };
+  }
+  function seeded() {
+    const fake = world();
+    const at = fake.now.toISOString();
+    fake.addTicket("acme", { title: "Build it", state: "In Progress", claims: [{ number: 1, session_id: "sess-impl", started: at, last_activity: at }] });
+    fake.addTicket("beta", { title: "Write it", state: "In Progress", claims: [{ number: 1, session_id: "sess-spec", started: at, last_activity: at }] });
+    fake.postUsage("sess-impl", [
+      tokens(fake, 1, "implementation", [10, 2_000, 150_000, 1_200]),
+      tokens(fake, 2, "review", [3, 1_000, 20_000, 400], "toolu_review"),
+      // Two days ago.
+      tokens(fake, -2 * 24 * 60, "implementation", [5, 500, 9_000, 300]),
+    ]);
+    fake.postUsage("sess-spec", [tokens(fake, 3, "spec", [7, 3_000, 70_000, 900])]);
+    return fake;
+  }
+
+  const chart = () => within(usage()).getByRole("group", { name: "Token usage per day" });
+  const bars = () => within(chart()).getAllByRole("img");
+  const kind = () => within(usage()).getByRole("combobox", { name: "Kind" });
+  const figures = () => within(usage()).getByRole("status", { name: "Day's figures" });
+
+  it("draws one bar per day in the range, oldest first, stacked by token type", async () => {
+    renderApp(seeded(), "/?view=usage");
+    await waitFor(() => expect(bars()).toHaveLength(7));
+    expect(bars()[6]).toHaveAccessibleName(/: 248,520 tokens$/);
+    expect(bars()[4]).toHaveAccessibleName(/: 9,805 tokens$/);
+    expect(bars()[5]).toHaveAccessibleName(/: 0 tokens$/);
+    expect(within(usage()).getAllByText(/^(Input|Cache write|Cache read|Output)$/).map((l) => l.textContent)).toEqual(["Input", "Cache write", "Cache read", "Output"]);
+
+    await userEvent.selectOptions(range(), "Last 30 days");
+    await waitFor(() => expect(bars()).toHaveLength(30));
+  });
+
+  it("shows a bar's exact figures with thousands separators on hover, and never a dollar figure", async () => {
+    renderApp(seeded(), "/?view=usage");
+    await waitFor(() => expect(bars()).toHaveLength(7));
+    await userEvent.hover(bars()[6]);
+    const shown = within(figures());
+    expect(shown.getByText("Input").nextSibling).toHaveTextContent("20");
+    expect(shown.getByText("Cache write").nextSibling).toHaveTextContent("6,000");
+    expect(shown.getByText("Cache read").nextSibling).toHaveTextContent("240,000");
+    expect(shown.getByText("Output").nextSibling).toHaveTextContent("2,500");
+    expect(shown.getByText("Total").nextSibling).toHaveTextContent("248,520");
+    expect(usage().textContent).not.toMatch(/\$/);
+  });
+
+  it("filters the bars by kind without reading Usage again", async () => {
+    const fake = seeded();
+    renderApp(fake, "/?view=usage");
+    await waitFor(() => expect(bars()).toHaveLength(7));
+    const reads = fake.calls.filter((c) => c === "usage").length;
+    expect(within(kind()).getAllByRole("option").map((o) => o.textContent)).toEqual(["All kinds", "spec", "implementation", "review"]);
+
+    await userEvent.selectOptions(kind(), "review");
+    expect(bars()[6]).toHaveAccessibleName(/: 21,403 tokens$/);
+    expect(bars()[4]).toHaveAccessibleName(/: 0 tokens$/);
+    await userEvent.selectOptions(kind(), "implementation");
+    expect(bars()[6]).toHaveAccessibleName(/: 153,210 tokens$/);
+    expect(bars()[4]).toHaveAccessibleName(/: 9,805 tokens$/);
+    await userEvent.selectOptions(kind(), "All kinds");
+    expect(bars()[6]).toHaveAccessibleName(/: 248,520 tokens$/);
+    expect(fake.calls.filter((c) => c === "usage").length).toBe(reads);
+  });
+
+  it("goes back to all kinds when the chosen kind isn't in the new scope", async () => {
+    renderApp(seeded(), "/?view=usage");
+    await waitFor(() => expect(bars()).toHaveLength(7));
+    await userEvent.selectOptions(kind(), "review");
+    await waitFor(() => expect(within(scope()).getAllByRole("option")).toHaveLength(4));
+    await userEvent.selectOptions(scope(), "Beta");
+
+    await waitFor(() => expect(within(kind()).getAllByRole("option").map((o) => o.textContent)).toEqual(["All kinds", "spec"]));
+    expect(kind()).toHaveValue("");
+    expect(bars()[6]).toHaveAccessibleName(/: 73,907 tokens$/);
+  });
+
+  it("says there is no token usage when there are calls but no sessions", async () => {
+    const fake = world();
+    calls(fake, "acme", "claim", 1, { request: 10, response: 100 });
+    renderApp(fake, "/?view=usage");
+    await waitFor(() => expect(ops()).toEqual(["claim"]));
+    expect(within(usage()).getByText("No token usage in All Projects over the last 7 days. Only sessions the Factory runs are counted.")).toBeInTheDocument();
+    expect(within(usage()).queryByRole("group", { name: "Token usage per day" })).toBeNull();
+  });
+});

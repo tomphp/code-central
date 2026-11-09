@@ -788,10 +788,19 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
     // ---- Usage (Spec code-central-201) ----
 
-    it("reads no Usage before any agent call", async () => {
+    it("reads no Usage before any agent call, with a row of no tokens for every day in the range", async () => {
       await d.createProject("acme", "Acme");
-      expect(await d.api.usage()).toEqual({ operations: [], kinds: [], sessions: [], days: [] });
-      expect(await d.api.usage({ project: "acme", days: 90 })).toEqual({ operations: [], kinds: [], sessions: [], days: [] });
+      for (const [u, days] of [
+        [await d.api.usage(), 7],
+        [await d.api.usage({ project: "acme", days: 90 }), 90],
+      ] as const) {
+        expect({ ...u, days: [] }).toEqual({ operations: [], kinds: [], sessions: [], days: [] });
+        expect(u.days).toHaveLength(days);
+        expect(u.days.every((r) => r.kinds.length === 0)).toBe(true);
+        // One row a day, oldest first, with no day missed.
+        const noon = (day: string) => Date.parse(`${day}T12:00:00Z`) / 86_400_000;
+        expect(u.days.map((r) => noon(r.day) - noon(u.days[0].day))).toEqual([...Array(days).keys()]);
+      }
     });
 
     it("counts each agent MCP call by operation, with its sizes and errors, and never the UI's own reads", async () => {
@@ -825,7 +834,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         row([found, other], [{}, { state: ["Ready"] }], "find_tickets"),
         row([got, missing], [{ ticket: id }, { ticket: "acme-99" }], "get_ticket"),
       ]);
-      expect(await d.api.usage({ days: 30 })).toEqual(all);
+      expect((await d.api.usage({ days: 30 })).operations).toEqual(all.operations);
 
       const acme = await d.api.usage({ project: "acme" });
       expect(acme.operations.map((r) => [r.op, r.calls, r.errors])).toEqual([
@@ -892,6 +901,26 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(sessions(await d.api.usage({ project: "beta", days: 30 }))).toEqual([sessions(all)[0]]);
       expect((await d.api.usage({ project: "acme" })).kinds.map((k) => k.kind)).toEqual(["implementation", "review", "custom"]);
       expect(all.operations).toEqual([]);
+
+      // The day's tokens by kind, in the kinds' order, on the local day they were used.
+      const tokens = (kind: string, input: number, write: number, read: number, output: number) => ({
+        kind,
+        input_tokens: input,
+        cache_write_tokens: write,
+        cache_read_tokens: read,
+        output_tokens: output,
+      });
+      // The service and the tests share a machine, and so a time zone.
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const t = new Date(at(1));
+      const day = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
+      expect(all.days.filter((r) => r.kinds.length)).toEqual([
+        {
+          day,
+          kinds: [tokens("spec", 2, 30_000, 0, 7), tokens("implementation", 10, 21_000, 60_000, 14), tokens("review", 3, 9_000, 0, 7), tokens("custom", 1, 100, 0, 7)],
+        },
+      ]);
+      expect((await d.api.usage({ project: "beta", days: 30 })).days.filter((r) => r.kinds.length)).toEqual([{ day, kinds: [tokens("spec", 2, 30_000, 0, 7)] }]);
     });
 
     it("refuses Usage for an unknown Project and any range but 7, 30 or 90 days", async () => {

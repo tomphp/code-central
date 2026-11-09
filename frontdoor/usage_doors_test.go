@@ -78,8 +78,8 @@ func TestUsageCountsEachMCPCallWithItsSizes(t *testing.T) {
 	if len(u.Operations) != 1 {
 		t.Fatalf("rows %+v, want only get_ticket", u.Operations)
 	}
-	if u.Kinds == nil || u.Sessions == nil || u.Days == nil || len(u.Kinds)+len(u.Sessions)+len(u.Days) != 0 {
-		t.Fatalf("kinds, sessions and days should be empty lists, got %+v", u)
+	if u.Kinds == nil || u.Sessions == nil || len(u.Kinds)+len(u.Sessions) != 0 {
+		t.Fatalf("kinds and sessions should be empty lists, got %+v", u)
 	}
 }
 
