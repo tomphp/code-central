@@ -110,7 +110,7 @@ code-central serve: mcp get_ticket project=acme id=acme-99 bytes=71 error=not_fo
 - `bytes` is the length of the text the agent is given, so the context the call loads into the agent.
 - `error=<code>` ends the line of a call the service rejected; `bytes` is then the error's size.
 
-Calls to the HTTP API, from the CLI and the UI, are not logged. To add up what a session's Code Central calls load, filter the log by time or `project`; the [Context Report](context-report.md) measures everything else an agent loads, from Claude Code's session logs.
+Calls to the HTTP API, from the CLI and the UI, are not logged. [Usage](#usage) adds these calls up per operation in the UI. To add up what one session's Code Central calls load, filter the log by time or `project`; the [Context Report](context-report.md) measures everything else an agent loads, from Claude Code's session logs.
 
 ## Versions
 
@@ -152,6 +152,22 @@ With **Activity Dashboard** chosen, Focus Mode shows the dashboard wherever it w
 Scripts can read and set Options over the HTTP API, sending `X-Code-Central-Actor: human` to change them: `GET /api/options`, and `POST /api/set_options` with a body such as `{"focus_clear": "activity_dashboard"}`.
 
 The service keeps Options in its store, in `options.yaml` beside `store.yaml`, so they survive a restart and a cleared browser. There is no file until you first change one, and no MCP tool or CLI command changes them. `settings.yaml` is still the place for what the service needs at startup, such as the port.
+
+## Usage
+
+**Usage** shows what agents have consumed: the Code Central calls they made, in one Project or in all of them, over the last 7, 30 or 90 days. Open it with **Usage** at the top of the Inbox's left pane, or in Focus Mode's header. It opens on **All Projects** and **Last 7 days**; the **Projects** picker lists every Project, Archived ones marked `(Archived)`, and the **Range** picker offers 7, 30 and 90 days. Both go in the address (`/?view=usage&project=acme&days=30`), so a reload or a bookmark keeps them, and **Back to the Inbox** or **Back to Focus Mode** returns you to where you were. A day is a day in the service's local time, and "the last 7 days" is today and the 6 days before it.
+
+The **Code Central calls** table has one row per MCP operation: its calls, the total and average size of the requests (the arguments' JSON) and of the responses (the text the agent was given, as `bytes=` in [the service log](#the-service-log)), and how many the service rejected. Sizes are in B, KB and MB, with the exact figure on hover. Click a column's header to sort by it, and again to reverse it. Only agents' MCP calls are counted, rejected ones included: not calls to a Project that doesn't exist, and never the HTTP API's, so neither the UI nor the Factory adds to it. Usage loads when you open it and when you change the Project or range; it doesn't follow the live feed.
+
+The service records each call as one line of JSON in `projects/<key>/usage/<YYYY-MM-DD>.jsonl` in its store, one file per Project per local day, which you can read or grep by hand:
+
+```json
+{"type":"mcp_call","time":"2026-11-09T14:01:43Z","op":"get_ticket","id":"acme-2","request_bytes":12,"response_bytes":1534}
+```
+
+A record that can't be written, or a line that can't be read, is noted in the service log and skipped; it never fails an agent's call or a read. Usage keeps 90 days ([ADR 0016](adr/0016-usage-records-are-append-only-json-lines-files-per-project-per-day-kept-90-days.md)).
+
+Scripts can read it over the HTTP API: `GET /api/usage?project=<key>&days=<7|30|90>`. Leave out `project` for all Projects, Archived ones included; `days` defaults to 7. An unknown Project is `not_found`, and any other `days` is `invalid`. The answer's `operations` are the table's rows; its `kinds`, `sessions` and `days` are for token usage, which comes later, and are empty for now.
 
 ## Reaching it from Docker: `--bind`
 
