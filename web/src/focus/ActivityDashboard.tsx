@@ -81,9 +81,9 @@ export function ActivityDashboard({ api, now, data, loc, navigate }: ActivityDas
 // StateCount is one State's block: its count in big type, its State name under it.
 // It pulses when the count differs from the one it last showed.
 function StateCount({ state, count }: { state: State; count: number }) {
-  const { className: pulse, ...pulsing } = usePulse(count);
+  const pulse = usePulse(`dashboard-block state-${state.replace(" ", "-").toLowerCase()}`, count);
   return (
-    <div role="group" aria-label={state} className={`dashboard-block state-${state.replace(" ", "-").toLowerCase()} ${pulse}`} {...pulsing}>
+    <div role="group" aria-label={state} {...pulse}>
       <span className="dashboard-count" data-testid="count">
         {count}
       </span>
@@ -103,12 +103,12 @@ interface InProgressEntryProps extends Omit<ActivityDashboardProps, "api"> {
 }
 
 function InProgressEntry({ now, data, ticket: t, changes, joined, loc, navigate }: InProgressEntryProps) {
-  const { className: pulse, ...pulsing } = usePulse(changes, joined);
+  const pulse = usePulse("dashboard-entry", changes, joined);
   const stage = stageOf(t);
   const requirement = stage && data.requirements.find((s) => s.id === t.spec);
   const inbox = { view: "inbox" as const, project: loc.project, requirement: stage && t.spec, ticket: t.id };
   return (
-    <li className={`dashboard-entry ${pulse}`} {...pulsing}>
+    <li {...pulse}>
       <a href={hrefFor(inbox)} onClick={clickTo(navigate, inbox)}>
         <span className="dashboard-entry-top">
           <span className="tid">{t.id}</span>

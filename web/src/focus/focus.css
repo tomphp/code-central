@@ -63,8 +63,8 @@
    the same; a new pulse swaps between them, so the browser restarts it.
    Under reduced motion it is a brief brightness flash, with no scaling. */
 .dashboard-entry { --sc: var(--s-in-progress); border-radius: 10px; }
-.pulse-0 { animation: dashboard-pulse-0 600ms ease-out; }
-.pulse-1 { animation: dashboard-pulse-1 600ms ease-out; }
+.dashboard-pulse-0 { animation: dashboard-pulse-0 600ms ease-out; }
+.dashboard-pulse-1 { animation: dashboard-pulse-1 600ms ease-out; }
 @keyframes dashboard-pulse-0 {
   0% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
   30% { transform: scale(1.03); box-shadow: 0 0 28px 6px var(--sc); }
@@ -76,8 +76,8 @@
   100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pulse-0 { animation-name: dashboard-flash-0; }
-  .pulse-1 { animation-name: dashboard-flash-1; }
+  .dashboard-pulse-0 { animation-name: dashboard-flash-0; }
+  .dashboard-pulse-1 { animation-name: dashboard-flash-1; }
   @keyframes dashboard-flash-0 { 30% { filter: brightness(1.4); } }
   @keyframes dashboard-flash-1 { 30% { filter: brightness(1.4); } }
 }

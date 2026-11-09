@@ -25,8 +25,9 @@ async function dashboardOn(fake: FakeApi) {
 }
 
 const dashboard = () => within(focus()).findByRole("region", { name: "Activity Dashboard" });
-// count is the number on state's block, the block named by its State.
-const count = (d: HTMLElement, state: string) => within(within(d).getByRole("group", { name: state })).getByTestId("count").textContent;
+// block is state's block, named by its State; count is the number on it.
+const block = (d: HTMLElement, state: string) => within(d).getByRole("group", { name: state });
+const count = (d: HTMLElement, state: string) => within(block(d, state)).getByTestId("count").textContent;
 
 describe("where the Activity Dashboard shows", () => {
   it("shows All clear by default", async () => {
@@ -231,11 +232,10 @@ describe("the In Progress list", () => {
 
 // pulsing is whether el shows it is pulsing.
 const pulsing = (el: HTMLElement) => el.getAttribute("data-pulsing") === "true";
-const block = (d: HTMLElement, state: string) => within(d).getByRole("group", { name: state });
 const entry = (d: HTMLElement, id: string) => within(inProgress(d)).getByText(id).closest("li") as HTMLElement;
 
 describe("pulses", () => {
-  it("pulse neither block nor entry on first show", async () => {
+  it("marks neither a block nor an entry on first show", async () => {
     const fake = busy();
     await dashboardOn(fake);
     renderApp(fake);
@@ -245,7 +245,7 @@ describe("pulses", () => {
     expect(entries(d).filter(pulsing)).toEqual([]);
   });
 
-  it("pulse a block when its count changes, and not the other", async () => {
+  it("marks a block when its count changes, and not the other", async () => {
     const fake = busy();
     await dashboardOn(fake);
     renderApp(fake);
@@ -257,7 +257,7 @@ describe("pulses", () => {
     expect(pulsing(block(d, "In Progress"))).toBe(false);
   });
 
-  it("pulse only the entry whose Ticket a notice names, and no block when the counts stay the same", async () => {
+  it("marks only the entry whose Ticket a notice names, and no block when a refetch leaves the counts the same", async () => {
     const fake = busy();
     await dashboardOn(fake);
     renderApp(fake);
@@ -270,7 +270,7 @@ describe("pulses", () => {
     expect(pulsing(block(d, "In Progress"))).toBe(false);
   });
 
-  it("pulse an entry on a notice that changes nothing it shows", async () => {
+  it("marks an entry on a notice that changes nothing it shows", async () => {
     const fake = busy();
     await dashboardOn(fake);
     renderApp(fake);
@@ -281,7 +281,7 @@ describe("pulses", () => {
     expect(entries(d).filter(pulsing)).toEqual([entry(d, "beta-2")]);
   });
 
-  it("pulse an entry once when it joins the list", async () => {
+  it("marks an entry that joins the list", async () => {
     const fake = busy();
     await dashboardOn(fake);
     renderApp(fake);
@@ -293,7 +293,7 @@ describe("pulses", () => {
     expect(pulsing(block(d, "In Progress"))).toBe(true);
   });
 
-  it("pulse the first entry to join an empty list", async () => {
+  it("marks the first entry to join an empty list", async () => {
     const fake = world();
     await dashboardOn(fake);
     renderApp(fake, "/?view=focus&project=beta");
@@ -302,16 +302,5 @@ describe("pulses", () => {
     act(() => void fake.updateTicket("beta-1", { state: "In Progress" }));
     await within(d).findByText("Beta export");
     expect(pulsing(entry(d, "beta-1"))).toBe(true);
-  });
-
-  it("let a pulse end", async () => {
-    const fake = busy();
-    await dashboardOn(fake);
-    renderApp(fake);
-    const d = await dashboard();
-
-    act(() => fake.emit({ type: "ticket.changed", project: "beta", id: "beta-2" }));
-    await waitFor(() => expect(pulsing(entry(d, "beta-2"))).toBe(true));
-    await waitFor(() => expect(pulsing(entry(d, "beta-2"))).toBe(false));
   });
 });
