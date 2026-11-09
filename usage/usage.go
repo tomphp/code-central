@@ -48,6 +48,12 @@ type Records struct {
 // The record types, each line's "type".
 const typeCall = "mcp_call"
 
+// record is one line of a file: its type, then that type's fields.
+type record struct {
+	Type string `json:"type"`
+	Call
+}
+
 // Recorder appends and reads usage records. Its zero value is not
 // usable; build one with New. A nil Recorder records nothing and reads
 // nothing.
@@ -78,10 +84,7 @@ func (r *Recorder) RecordCall(project string, c Call) {
 	if r == nil {
 		return
 	}
-	if err := r.append(project, c.Time, struct {
-		Type string `json:"type"`
-		Call
-	}{typeCall, c}); err != nil {
+	if err := r.append(project, c.Time, record{typeCall, c}); err != nil {
 		fmt.Fprintf(r.log, "code-central serve: usage: dropped an %s record for %s: %v\n", typeCall, project, err)
 	}
 }
@@ -89,7 +92,7 @@ func (r *Recorder) RecordCall(project string, c Call) {
 // append writes v as one line to the end of project's file for t's day,
 // opened for appending. There is no fsync: a crash may lose the last
 // records, which usage can afford.
-func (r *Recorder) append(project string, t time.Time, v any) error {
+func (r *Recorder) append(project string, t time.Time, v record) error {
 	line, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -162,10 +165,7 @@ func (r *Recorder) readFile(path string, out *Records) {
 	sc := bufio.NewScanner(f)
 	sc.Buffer(nil, 1<<20)
 	for sc.Scan() {
-		var rec struct {
-			Type string `json:"type"`
-			Call
-		}
+		var rec record
 		if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
 			skipped++
 			continue

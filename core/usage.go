@@ -26,7 +26,10 @@ func (c *Core) SetUsage(u *usage.Recorder) { c.usage = u }
 
 // RecordCall records an agent's MCP call to key's Project, timed now. A
 // call to a Project that doesn't exist is not recorded: there is nowhere
-// to file it. Recording never fails the call.
+// to file it, and a usage folder with no project.yaml would stop the
+// store loading. That check is a store read, as the call itself made; the
+// append then takes only the recorder's own lock. Recording never fails
+// the call.
 func (c *Core) RecordCall(key string, call usage.Call) {
 	if c.usage == nil || !c.projectExists(key) {
 		return
