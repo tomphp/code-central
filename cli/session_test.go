@@ -32,6 +32,7 @@ func claimable(t *testing.T) (*codecentraltest.Server, map[string]string) {
 }
 
 func TestTheSessionIDDefaultsToClaudeCodesAndTheFlagWins(t *testing.T) {
+	t.Parallel()
 	_, env := claimable(t)
 	env["CLAUDE_CODE_SESSION_ID"] = "from-env"
 	res := decode[core.ClaimResult](t, run(t, env, "", "claim"))
@@ -60,6 +61,7 @@ func silentAfter(t *testing.T, srv *codecentraltest.Server, d time.Duration) *ti
 }
 
 func TestPingMarksActivityFromTheFlagOrTheHooksJSON(t *testing.T) {
+	t.Parallel()
 	srv, env := claimable(t)
 	decode[core.ClaimResult](t, run(t, env, "", "claim", "--session", "s1"))
 
@@ -81,6 +83,7 @@ func TestPingMarksActivityFromTheFlagOrTheHooksJSON(t *testing.T) {
 }
 
 func TestPingAlwaysExitsZero(t *testing.T) {
+	t.Parallel()
 	for name, tc := range map[string]struct {
 		env   map[string]string
 		stdin string
@@ -101,6 +104,7 @@ func TestPingAlwaysExitsZero(t *testing.T) {
 }
 
 func TestPingGivesUpAfter300Milliseconds(t *testing.T) {
+	t.Parallel()
 	arrived := make(chan struct{})
 	hung := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.ReadAll(r.Body) // so the server notices the client hanging up
@@ -152,6 +156,7 @@ func TestPingGivesUpAfter300Milliseconds(t *testing.T) {
 }
 
 func TestHookSessionIDAddsTheSessionToTheToolInput(t *testing.T) {
+	t.Parallel()
 	in := `{"session_id":"abc","hook_event_name":"PreToolUse","tool_name":"mcp__code-central__claim","tool_input":{"spec":"acme-1","session_id":"stale"}}`
 	r := run(t, nil, in, "hook", "session-id")
 	if r.code != 0 {
@@ -204,6 +209,7 @@ func hookUpdatedInput(t *testing.T, stdin string) map[string]any {
 }
 
 func TestHookSessionIDFillsClaimAndSetSessionsWorkingDirFromTheHooksCwd(t *testing.T) {
+	t.Parallel()
 	got := hookUpdatedInput(t, `{"session_id":"abc","cwd":"/work/acme","tool_name":"mcp__code-central__claim","tool_input":{"spec":"acme-1"}}`)
 	if len(got) != 4 || got["session_id"] != "abc" || got["working_dir"] != "/work/acme" {
 		t.Fatalf("updatedInput %v", got)
@@ -226,6 +232,7 @@ func TestHookSessionIDFillsClaimAndSetSessionsWorkingDirFromTheHooksCwd(t *testi
 }
 
 func TestHookSessionIDNeverBlocks(t *testing.T) {
+	t.Parallel()
 	for name, stdin := range map[string]string{
 		"not JSON":   "nonsense",
 		"no session": `{"tool_input":{"spec":"acme-1"}}`,
@@ -279,6 +286,7 @@ func hookCommands(doc map[string]any) map[string]map[string][]string {
 }
 
 func TestInitWritesTheHooks(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	dir := gitRepo(t, "api")
 	os.MkdirAll(filepath.Join(dir, ".claude"), 0o755)

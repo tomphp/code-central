@@ -9,6 +9,7 @@ import (
 )
 
 func TestImportReadsThePayloadFromStdin(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	srv.Core.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "acme"}

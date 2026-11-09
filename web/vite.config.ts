@@ -24,5 +24,11 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     exclude: ["src/**/*.e2e.test.ts"],
     setupFiles: ["src/test-setup.ts"],
+    // Test files share their workers' module state rather than each
+    // getting a fresh environment, which halves the suite's CPU. No file
+    // mocks modules or globals, and the setup cleans up after each test,
+    // so they don't lean on each other: a shuffled order and one worker
+    // pass the same.
+    isolate: false,
   },
 });

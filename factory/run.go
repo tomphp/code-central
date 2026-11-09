@@ -107,11 +107,7 @@ func (f *factory) drain(ctx context.Context) {
 // resumes first, then saved Claims a stop cut off, then new claims.
 func (f *factory) poll(ctx context.Context) {
 	answered := f.reconcile(ctx)
-	landing, ok := f.landing(ctx)
-	if ok && !f.paused() && !f.halted(ctx) && f.remoteReady(landing) {
-		f.land(ctx, landing)
-	}
-	f.sweep(ctx, landing.Method)
+	f.landAndSweep(ctx)
 	if f.halted(ctx) {
 		return
 	}
@@ -124,17 +120,26 @@ func (f *factory) poll(ctx context.Context) {
 		return
 	}
 	for _, c := range answered {
-		if f.halted(ctx) || f.running() >= f.o.parallel {
+		if !f.slotFree(ctx) {
 			return
 		}
 		f.resumeAnswered(ctx, c)
 	}
 	f.resumeRestarted(ctx)
-	for !f.halted(ctx) && f.running() < f.o.parallel {
+	for f.slotFree(ctx) {
 		if !f.claimNext(ctx) {
 			return
 		}
 	}
+}
+
+// slotFree reports whether the poll may start another turn: a slot is
+// free and the Factory is neither halted nor paused. A turn this poll
+// started may have been cut off since, freeing its slot, so the pause is
+// read after the slot: a turn records its outage before giving its slot
+// up, so a slot freed by a cut-off turn is always seen with the pause.
+func (f *factory) slotFree(ctx context.Context) bool {
+	return !f.halted(ctx) && f.running() < f.o.parallel && !f.paused()
 }
 
 // turn is one running `claude -p` process, for one Claim.
@@ -486,7 +491,7 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, args []str
 		f.claimf(c, "%s: can't start claude: %v", c.Ticket, err)
 		return
 	}
-	t := &turn{claim: c, dir: dir, proc: cmd.Process, started: time.Now(), done: make(chan struct{})}
+	t := &turn{claim: c, dir: dir, proc: cmd.Process, started: f.e.Now(), done: make(chan struct{})}
 	f.mu.Lock()
 	f.turns[c.ClaimID] = t
 	f.mu.Unlock()
@@ -499,7 +504,7 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, args []str
 				f.printf("%s: %s", c.Ticket, e.Text)
 			}
 		})
-		ran := time.Since(t.started)
+		ran := f.e.Now().Sub(t.started)
 		// The turn keeps its slot until its outcome is acted on, and
 		// "turn ended" is printed once the slot is free.
 		state := f.afterTurn(ctx, t, end)

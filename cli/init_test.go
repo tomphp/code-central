@@ -97,6 +97,7 @@ func ok(t *testing.T, r result) result {
 }
 
 func TestInitProposesTheKeyFromTheRepository(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		folder  string
@@ -122,6 +123,7 @@ func TestInitProposesTheKeyFromTheRepository(t *testing.T) {
 }
 
 func TestInitTakesAnOverride(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	dir := gitRepo(t, "checkout")
 	ok(t, runIn(t, dir, map[string]string{"CODE_CENTRAL_URL": srv.URL}, "acme\ny\n", "init"))
@@ -141,6 +143,7 @@ func TestInitTakesAnOverride(t *testing.T) {
 }
 
 func TestInitRefusesATakenKeyUnlessTheHumanJoinsIt(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "api"})
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL}
@@ -170,6 +173,7 @@ func TestInitRefusesATakenKeyUnlessTheHumanJoinsIt(t *testing.T) {
 }
 
 func TestInitAsksBeforeCreatingAProject(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	dir := gitRepo(t, "api")
 	r := runIn(t, dir, map[string]string{"CODE_CENTRAL_URL": srv.URL}, "\nn\n", "init")
@@ -185,6 +189,7 @@ func TestInitAsksBeforeCreatingAProject(t *testing.T) {
 }
 
 func TestInitAsksAgainAfterAnInvalidKey(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	dir := gitRepo(t, "api")
 	ok(t, runIn(t, dir, map[string]string{"CODE_CENTRAL_URL": srv.URL}, "Bad Key\ny\ngood\ny\n", "init"))
@@ -192,6 +197,7 @@ func TestInitAsksAgainAfterAnInvalidKey(t *testing.T) {
 }
 
 func TestInitMergesIntoAnExistingMCPFileAndNeverCommits(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	dir := gitRepo(t, "api")
 	existing := `{"mcpServers": {"other": {"command": "other-server"}}, "extra": true}`
@@ -220,6 +226,7 @@ func TestInitMergesIntoAnExistingMCPFileAndNeverCommits(t *testing.T) {
 }
 
 func TestInitLeavesAKnownKeyAlone(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
 	dir := gitRepo(t, "api", "origin=https://github.com/acme/api.git")
@@ -236,6 +243,7 @@ func TestInitLeavesAKnownKeyAlone(t *testing.T) {
 }
 
 func TestInitProposesTheFilesKeyWhenTheStoreDoesNotKnowIt(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	dir := gitRepo(t, "api")
 	os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(`{"mcpServers":{"code-central":{"type":"http","url":"`+"${CODE_CENTRAL_URL:-http://localhost:7733}/p/acme/mcp"+`"}}}`), 0o644)
@@ -247,6 +255,7 @@ func TestInitProposesTheFilesKeyWhenTheStoreDoesNotKnowIt(t *testing.T) {
 }
 
 func TestInitWorksOutsideGit(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	dir := filepath.Join(t.TempDir(), "Notes")
 	os.Mkdir(dir, 0o755)
@@ -259,6 +268,7 @@ func TestInitWorksOutsideGit(t *testing.T) {
 }
 
 func TestShellCommandsFindTheProjectFromTheNearestMCPFile(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	for _, k := range []string{"acme", "flag", "envkey"} {
 		srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: k})
@@ -284,6 +294,7 @@ func TestShellCommandsFindTheProjectFromTheNearestMCPFile(t *testing.T) {
 }
 
 func TestInitReportsAnUnreachableService(t *testing.T) {
+	t.Parallel()
 	dir := gitRepo(t, "api")
 	wantError(t, runIn(t, dir, map[string]string{"CODE_CENTRAL_URL": "http://" + freeAddr(t)}, "\ny\n", "init"), core.ServiceUnavailable)
 }
@@ -291,6 +302,7 @@ func TestInitReportsAnUnreachableService(t *testing.T) {
 // An archived Project stays put away: init says so and writes nothing,
 // whether .mcp.json already names it or the human types its key.
 func TestInitSaysWhenAProjectIsArchived(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
 	if _, err := srv.Core.ArchiveProject(core.WithActor(context.Background(), core.Human), "acme"); err != nil {

@@ -38,6 +38,7 @@ import (
 
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/client"
+	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory"
@@ -59,7 +60,11 @@ func Main(m *testing.M) {
 	if data := os.Getenv(fakeEnv); data != "" {
 		os.Exit(runFake(data, os.Args))
 	}
-	os.Exit(m.Run())
+	code := m.Run()
+	if seedDir != "" {
+		os.RemoveAll(seedDir)
+	}
+	os.Exit(code)
 }
 
 func runFake(data string, args []string) int {
@@ -107,6 +112,10 @@ type Harness struct {
 	// Backoff is the Factory's first wait before resuming turns an outage
 	// cut off; set it before Start. New makes it a millisecond.
 	Backoff time.Duration
+	// Clock is the Factory's time for an outage's backoff: it stands
+	// still until the test moves it, so a backoff is over only when the
+	// test says so.
+	Clock *clock.Fake
 	// URL is the Code Central the Factory and its sessions reach: Server
 	// behind a proxy that SetDown can take down.
 	URL       string
@@ -128,46 +137,98 @@ func New(t testing.TB) *Harness {
 	h := &Harness{
 		t:       t,
 		Server:  codecentraltest.NewServer(t),
-		Project: "acme",
+		Project: project,
 		Repo:    filepath.Join(root, "work", "repo"),
 		Home:    filepath.Join(root, "home"),
 		Bin:     filepath.Join(root, "bin"),
 		data:    filepath.Join(root, "data"),
 		Backoff: time.Millisecond,
+		Clock:   clock.NewFake(time.Now()),
 		refused: map[string]int64{},
 	}
-	for _, d := range []string{h.Repo, h.Home, h.Bin, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
+	template := filepath.Join(root, "git-template")
+	for _, d := range []string{h.Home, h.Bin, template, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
 		must(t, os.MkdirAll(d, 0o755))
 	}
 	h.URL = h.startProxy()
 	gitPath, err := realGit()
 	must(t, err)
 	h.env = map[string]string{
-		"PATH":                h.Bin + string(os.PathListSeparator) + filepath.Dir(gitPath),
-		"HOME":                h.Home,
-		"CODE_CENTRAL_URL":    h.URL,
-		"GIT_CONFIG_NOSYSTEM": "1",
-		"GIT_AUTHOR_NAME":     "Factory Test",
-		"GIT_AUTHOR_EMAIL":    "factory@example.com",
-		"GIT_COMMITTER_NAME":  "Factory Test",
-		"GIT_COMMITTER_EMAIL": "factory@example.com",
-		"TMPDIR":              os.TempDir(),
-		"TEMP":                os.TempDir(),
-		"TMP":                 os.TempDir(),
-		fakeEnv:               h.data,
+		"PATH":             h.Bin + string(os.PathListSeparator) + filepath.Dir(gitPath),
+		"HOME":             h.Home,
+		"CODE_CENTRAL_URL": h.URL,
+		// An empty template: git init writes no sample hooks to remove.
+		"GIT_TEMPLATE_DIR": template,
+		"TMPDIR":           os.TempDir(),
+		"TEMP":             os.TempDir(),
+		"TMP":              os.TempDir(),
+		fakeEnv:            h.data,
+	}
+	for k, v := range gitIdentity {
+		h.env[k] = v
 	}
 	h.install("claude")
 
 	if _, err := h.Server.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: h.Project}); err != nil {
 		t.Fatal(err)
 	}
-	mcp := `{"mcpServers":{"code-central":{"type":"http","url":"${CODE_CENTRAL_URL:-http://localhost:7733}/p/` + h.Project + `/mcp"}}}` + "\n"
-	h.Git("init", "-q", "-b", "main")
-	must(t, os.WriteFile(filepath.Join(h.Repo, ".mcp.json"), []byte(mcp), 0o644))
-	h.Git("add", ".mcp.json")
-	h.Git("commit", "-q", "-m", "Set up Code Central")
+	seed, err := seedRepo()
+	must(t, err)
+	must(t, os.CopyFS(h.Repo, os.DirFS(seed)))
 	return h
 }
+
+// project is the Project Key of every Harness.
+const project = "acme"
+
+// gitIdentity is every git's environment in the harness: no system
+// config, and a fixed author and committer.
+var gitIdentity = map[string]string{
+	"GIT_CONFIG_NOSYSTEM": "1",
+	"GIT_AUTHOR_NAME":     "Factory Test",
+	"GIT_AUTHOR_EMAIL":    "factory@example.com",
+	"GIT_COMMITTER_NAME":  "Factory Test",
+	"GIT_COMMITTER_EMAIL": "factory@example.com",
+}
+
+// seedDir holds seedRepo's repo; Main removes it.
+var seedDir string
+
+// seedRepo is a repo on branch main whose one commit holds a .mcp.json
+// naming the Project. It is made once per test binary and each
+// Harness copies it, which costs no git processes.
+var seedRepo = sync.OnceValues(func() (string, error) {
+	git, err := realGit()
+	if err != nil {
+		return "", err
+	}
+	if seedDir, err = os.MkdirTemp("", "factorytest-seed"); err != nil {
+		return "", err
+	}
+	repo := filepath.Join(seedDir, "repo")
+	template := filepath.Join(seedDir, "git-template")
+	for _, d := range []string{repo, template} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			return "", err
+		}
+	}
+	mcp := `{"mcpServers":{"code-central":{"type":"http","url":"${CODE_CENTRAL_URL:-http://localhost:7733}/p/` + project + `/mcp"}}}` + "\n"
+	if err := os.WriteFile(filepath.Join(repo, ".mcp.json"), []byte(mcp), 0o644); err != nil {
+		return "", err
+	}
+	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"add", ".mcp.json"}, {"commit", "-q", "-m", "Set up Code Central"}} {
+		cmd := exec.Command(git, args...)
+		cmd.Dir = repo
+		cmd.Env = []string{"HOME=" + seedDir, "GIT_TEMPLATE_DIR=" + template}
+		for k, v := range gitIdentity {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+	return repo, nil
+})
 
 // startProxy starts the proxy in front of Server and returns its URL.
 // While the harness is down it drops every connection, as a stopped Code
@@ -510,13 +571,24 @@ type Running struct {
 }
 
 // Start runs the Factory in the repo with args until Stop or the end of
-// the test. Polls after the first happen only on Tick.
+// the test, and returns once its first poll has finished (or it has
+// exited), so whatever the test sets up next is first seen by a later
+// poll. Polls after the first happen only on Tick.
 func (h *Harness) Start(args ...string) *Running {
+	h.t.Helper()
 	return h.StartIn(h.Repo, args...)
 }
 
 // StartIn is Start from dir.
 func (h *Harness) StartIn(dir string, args ...string) *Running {
+	h.t.Helper()
+	r := h.launch(dir, args...)
+	r.waitForPolls(1)
+	return r
+}
+
+// launch runs the Factory in dir with args, without waiting.
+func (h *Harness) launch(dir string, args ...string) *Running {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Running{h: h, cancel: cancel, done: make(chan struct{}), stdout: &buffer{}, stderr: &buffer{}, ticks: make(chan time.Time), signals: make(chan os.Signal, 2)}
 	env := factory.Env{
@@ -529,6 +601,7 @@ func (h *Harness) StartIn(dir string, args ...string) *Running {
 			r.waits.Add(1)
 			return r.ticks
 		},
+		Now:       h.Clock.Now,
 		KillGrace: KillGrace,
 		Backoff:   h.Backoff,
 		// Session Events are posted often, so tests needn't wait a second.
@@ -553,7 +626,7 @@ func (h *Harness) Run(args ...string) (code int, stdout, stderr string) {
 // RunIn is Run from dir.
 func (h *Harness) RunIn(dir string, args ...string) (code int, stdout, stderr string) {
 	h.t.Helper()
-	r := h.StartIn(dir, args...)
+	r := h.launch(dir, args...)
 	select {
 	case <-r.done:
 	case <-time.After(Timeout):
