@@ -1,4 +1,4 @@
-# Importing a `.scratch/` folder
+# Importing `.scratch/` into a Project
 
 This guide turns the specs and tickets in a repository's `.scratch/` folder into Specs and Tickets in its Project. It continues `acme-api` from [Setting up a Project](setting-up-a-project.md), whose `.scratch/` folder holds one spec and two tickets from planning. The output shown is copied from a real run, cut with `…` where it is long.
 
@@ -29,7 +29,7 @@ An Import is one-way and runs once: afterwards Code Central owns the work, and y
    …
    ```
 
-   Each feature folder becomes a Spec, and each file in its `issues/` becomes a Ticket on that Spec. A ticket's `Status:` line sets its State, its `Blocked by:` line its Blockers and its `Labels:` line its Labels.
+   Each feature folder becomes a Spec, and each file in its `issues/` becomes a Ticket on that Spec. A ticket's `Status:` line sets its State, its `Blocked by:` line its Blockers, its `Labels:` line its Labels, and any other `Key: value` line a Tag.
 
 ## By asking Claude Code
 
@@ -58,7 +58,7 @@ An Import is one-way and runs once: afterwards Code Central owns the work, and y
    Should I go ahead with the real import? Once it's done, I'd suggest deleting `.scratch/` in a separate commit.
    ```
 
-   `ready-for-agent` comes in as Ready, so an agent can claim it straight away. Any other status that `get_import_guide` doesn't map comes in as Draft, for you to approve when it's ready. The original line is kept as the Tag `scratch.status`.
+   `ready-for-agent` comes in as Ready, so an agent can claim it straight away. Any other status that `get_import_guide` doesn't map comes in as Draft, for you to approve when it's ready to be worked. The original line is kept as the Tag `scratch.status`.
 
    Check: nothing has been written yet. The Project has no Tickets:
 
@@ -67,7 +67,7 @@ An Import is one-way and runs once: afterwards Code Central owns the work, and y
    []
    ```
 
-2. **Check the plan, then go ahead.** Read the doubts first: the agent lists any ticket whose status disagrees with its body (say, Ready with every box ticked) and any Blocker it had to drop, and you pick the State for each. Tell it what to change, or tell it to go ahead:
+2. **Check the plan, then go ahead.** Read the doubts first: the agent lists any ticket whose State disagrees with its body (say, Ready with every box ticked) and any Blocker it had to drop, and you pick the State for each. Tell it what to change, or tell it to go ahead:
 
    ```text
    > Go ahead.
@@ -121,7 +121,7 @@ An Import is one-way and runs once: afterwards Code Central owns the work, and y
    …
    ```
 
-`acme-api`'s planned work is now in its Project. Move `acme-api-3` to Ready in the UI when it's ready to be worked; `acme-api-2` is Ready now.
+`acme-api`'s planned work is now in its Project. `acme-api-2` is Ready now. Approve `acme-api-3` when it's ready to be worked: in the UI, move it to Ready.
 
 ## By the CLI
 
@@ -139,7 +139,7 @@ An Import is one-way and runs once: afterwards Code Central owns the work, and y
 
    It covers which State each status becomes, how Labels, Tags and Blockers are written, and the order IDs are given in.
 
-2. **Write the Import.** Put it in a file outside the repository, here `~/acme-api-import.json`: `specs` with one Spec per feature folder, and `tickets` with every ticket. `source` is each file's path from the repository root, and `spec` and `blocked_by` name other files by their `source`. Take out the header lines that became the State, Blockers and Labels; keep the rest of each file as it is.
+2. **Write the Import.** Put it in a file outside the repository, here `~/acme-api-import.json`: `specs` with one Spec per feature folder, and `tickets` with every ticket. `source` is each file's path from the repository root, and `spec` and `blocked_by` name other files by their `source`. Take out the header lines that became the State, Blockers, Labels or Tags; keep the rest of each file as it is.
 
    ```json
    {
@@ -172,6 +172,8 @@ An Import is one-way and runs once: afterwards Code Central owns the work, and y
      ]
    }
    ```
+
+   Check: `jq empty ~/acme-api-import.json` prints nothing, so the file is valid JSON. The next step checks the rest.
 
 3. **Preview it with `--dry-run`.** The service checks the whole Import and writes nothing. It prints the plan, with the ID each Spec and Ticket will get and the count per State:
 
@@ -264,7 +266,7 @@ An Import is one-way and runs once: afterwards Code Central owns the work, and y
 
    They show in the UI as in step 3 of [By asking Claude Code](#by-asking-claude-code).
 
-5. **Delete `.scratch/` and commit that**, as in step 4 of [By asking Claude Code](#by-asking-claude-code), and delete `~/acme-api-import.json`.
+5. **Delete `.scratch/` and commit that**, as in step 4 of [By asking Claude Code](#by-asking-claude-code), and delete `~/acme-api-import.json`. Check: `git status --short` prints nothing, and `.scratch/` is gone.
 
 ## Importing twice
 

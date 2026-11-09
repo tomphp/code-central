@@ -171,7 +171,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
    +Specs and Tickets live in Code Central: see `docs/agents/issue-tracker.md`.
    ```
 
-   init leaves everything else alone, `.scratch/` included. Leave `.scratch/` where it is for now: [Importing a `.scratch/` folder](importing-scratch.md) brings it into the Project.
+   init leaves everything else alone, `.scratch/` included. Leave `.scratch/` where it is for now: [Importing `.scratch/` into a Project](importing-scratch.md) brings it into the Project.
 
 3. **Commit the files.**
 
