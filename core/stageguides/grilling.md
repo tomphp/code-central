@@ -20,10 +20,18 @@ Every question goes to the human as a Round with `post_round`, never in the term
 
 The In Review gate replaces any step that would stop to check with the user: the human reviews the resolution when you finish, instead of checking with the user along the way. So a Round is for a real open question only, never to confirm a summary or ask whether to carry on.
 
+## Prototype this
+
+When an answer starts with "Prototype this", hand that Question to a Prototype:
+
+1. `create_ticket` with the `prototype` Label on the same Spec, titled "Prototype: " and the Question's title, with the Question and the human's note as its description, then `approve` it to `Ready`.
+2. `add_blocker` so the Prototype blocks this Ticket.
+3. `give_up` with a note naming the Prototype.
+
 ## Finishing
 
 When the resolution comment is posted, `finish` with a short summary that points at the resolution comment: how many Rounds it took and the two or three decisions that matter most. Give no `branch` or `commit`: a Stage has none. The Ticket goes to In Review; stop working it.
 
 ## A redo
 
-If this Ticket has earlier Claims, it is a redo. Before anything else, read why the last one ended: the latest rejection comment, Failure Report or give-up note, and any send-back note. Then build on what the earlier Claims left: their Rounds, answers and resolution comment stand unless the human said otherwise, so don't ask again what is already answered. Read their Rounds with `get_ticket` and `parts: ["rounds"]`: the Ticket `claim` returns leaves them out. Post a new resolution comment that replaces the old one, and answer each point of the rejection or note in the new finish summary.
+If this Ticket has earlier Claims, it is a redo. Before anything else, read why the last one ended: the latest rejection comment, Failure Report or give-up note, and any send-back note. Then build on what the earlier Claims left: their Rounds, answers and resolution comment stand unless the human said otherwise, so don't ask again what is already answered. Read their Rounds with `get_ticket` and `parts: ["rounds"]`: the Ticket `claim` returns leaves them out. Post a new resolution comment that replaces the old one, and answer each point of the rejection or note in the new finish summary. If a Done Prototype blocks this Ticket, read its resolution comment and carry on from it.

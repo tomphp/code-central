@@ -45,12 +45,16 @@ A Map's Draft Tickets that nothing blocks: the decisions that can be started nex
 _Avoid_: Next steps, backlog
 
 **Map view**:
-The UI's view of a Map: its Destination, its Tickets as a left-to-right graph with Blockers as edges and **Start** on each frontier Ticket, a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph. Its header has **Write the Spec** once the Map is finished, and links the Requirements written from it.
+The UI's view of a Map: its Destination, **New Prototype**, its Tickets as a left-to-right graph with Blockers as edges and **Start** on each frontier Ticket, a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph. Its header has **Write the Spec** once the Map is finished, and links the Requirements written from it.
 _Avoid_: Map board, roadmap
 
 **Write the Spec**:
 The human's action on a finished Map (every Ticket Done or Cancelled) that creates a new Requirement with no grilling Stage, whose `map` Tag names the Map; its spec Stage works from the Map's Decisions so far and the resolutions they link. The Map stays as the record.
 _Avoid_: Promote, convert the Map
+
+**Spec view**:
+The UI's view of a plain Spec, one that is neither a Requirement nor a Map: its title, **New Prototype** and its Tickets with their States. It opens from the Spec's name in the Ticket panel.
+_Avoid_: Spec page, Spec board
 
 **Charting**:
 The first Ticket of a Map, which names its destination with the human and creates the first decision Tickets and their Blockers.
@@ -61,7 +65,7 @@ A unit of work within a Spec. Every Ticket belongs to exactly one Spec.
 _Avoid_: Issue, task, card
 
 **Prototype**:
-A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to try and react to, so a decision can be made. Its work never lands.
+A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to try and react to, so a decision can be made. Its work never lands. A Question answered "Prototype this" in a grilling or Charting Round becomes one, which blocks the asking Ticket until it is Done.
 _Avoid_: Spike, mock-up, demo
 
 **Stage**:

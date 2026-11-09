@@ -266,7 +266,7 @@ A Map's Charting, grilling and task Tickets each run in a read-only worktree det
 acme-shop-9 claimed (map-chart): "Charting: Dark mode" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-9; resume: claude --resume …
 ```
 
-A **Prototype** is a Ticket labelled `prototype`, on any Spec. Submit one with `code-central submit-prototype <spec> --text "…"` (or `submit_prototype` over MCP); its first line becomes the title, after "Prototype: ". The Factory claims it with `/prototype` and runs it in a worktree of its own, as for implementation, but on a local branch `prototype/<ticket>`:
+A **Prototype** is a Ticket labelled `prototype`, on any Spec. Ask for one with **New Prototype** under the title of the Spec's view in the UI (Requirement, Map or plain Spec), or submit one with `code-central submit-prototype <spec> --text "…"` (or `submit_prototype` over MCP); its first line becomes the title, after "Prototype: ". The Factory claims it with `/prototype` and runs it in a worktree of its own, as for implementation, but on a local branch `prototype/<ticket>`:
 
 ```text
 acme-shop-10 claimed (prototype): "Prototype: A theme picker in the header" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-10; resume: claude --resume …
@@ -275,6 +275,8 @@ acme-shop-10 claimed (prototype): "Prototype: A theme picker in the header" in S
 Its first prompt tells the session to commit on that branch only, with no push and no PR, to record where the Prototype is in a `prototype` Tag (`prototype/acme-shop-10@1a2b3c4 /Users/you/src/acme-shop.worktrees/acme-shop-10`), to open its first Round with a "Try it" Question, and to finish with no branch. The Ticket panel shows the Tag as *Prototype at `/Users/you/src/acme-shop.worktrees/acme-shop-10` on `prototype/acme-shop-10` (`1a2b3c4`)*, so you can try it in that worktree while you answer.
 
 Because it finishes with no branch, accepting a Prototype makes it Done straight away, whatever the Landing Method: nothing is merged, pushed or landed. The worktree stays through Needs Answer and In Review, and the Factory removes it once the Prototype is Done or Cancelled. It never deletes the `prototype/` branch, so `git switch prototype/acme-shop-10` brings the Prototype back.
+
+A Prototype can also come from a Round. Answer a Question from the grilling Stage, Charting or a Map's grilling Ticket with **Prototype this**, a button on each Question that fills the answer with `Prototype this: ` for your note. The session creates a Ready Prototype on the same Spec from the Question and your note, makes it block the asking Ticket, and gives up. The Factory claims the Prototype as above. Once you accept it, the asking Ticket is unblocked, and the Factory claims it again as a redo, which carries on from the Prototype's resolution comment.
 
 A Map's **research** Ticket (`wayfinder:research`) runs in the background with `/research`, in a worktree of its own on a local branch `research/<ticket>`, just as a Prototype does:
 
@@ -286,7 +288,7 @@ Its first prompt tells the session to commit its findings on that branch only, w
 
 A Ticket with any of these Labels is never run as an implementation Ticket.
 
-Selecting the Map in the **Requirements** view opens the Map view: its Destination, then its Tickets as a graph read left to right, each Blocker before what it blocks, coloured like the Stage strip, and a dim **Not yet specified** node at the right edge that shows that section when clicked. A Draft Ticket that nothing blocks is on the frontier: click **Start** on its node to approve it to Ready, and the Factory claims it within a poll. Clicking a node opens its Ticket below. **Decisions so far** and **Out of scope** sit beside the graph.
+Selecting the Map in the **Requirements** view opens the Map view: **New Prototype** and its Destination, then its Tickets as a graph read left to right, each Blocker before what it blocks, coloured like the Stage strip, and a dim **Not yet specified** node at the right edge that shows that section when clicked. A Draft Ticket that nothing blocks is on the frontier: click **Start** on its node to approve it to Ready, and the Factory claims it within a poll. Clicking a node opens its Ticket below. **Decisions so far** and **Out of scope** sit beside the graph.
 
 Once every Ticket on the Map is Done or Cancelled, the Map view's header has **Write the Spec**. It opens the **New requirement** dialog with the Map's title, a link to the Map and its Destination already filled in. Edit the text if you like, then click **Submit requirement**. Code Central creates a new Requirement with only the spec and tickets Stages, and its spec Stage is Ready straight away. The Factory claims it within a poll like any spec Stage, and the agent works from the Map's Decisions so far and the resolution comments they link, in place of a grilling Ticket. The Requirement's strip shows a done **Map** segment where Grilling would be, linking back to the Map. The Map stays as the record, and its header links each Requirement written from it. From a terminal, `code-central submit-requirement --map <map> --text "…"` does the same.
 

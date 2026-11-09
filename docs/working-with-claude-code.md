@@ -74,7 +74,7 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
    }
    ```
 
-   Selecting the Map opens the Map view where a Requirement's strip would be. Under the Map's title and count is its Destination, and below that its Tickets as a graph read left to right: each Blocker sits left of the Tickets it blocks, with an arrow to each. Each node shows the Ticket's type (`chart`, `grilling`, `research`, `task`, `prototype` or `ticket`), ID, title and State, and its top edge takes the strip's colours: green when done, the reason's colour when it needs you, solid blue while an agent is on it, dashed blue while it waits to be claimed, and grey while it is Draft or blocked. A Draft node that nothing blocks is on the frontier and has **Start**, which approves it to Ready. A dim **Not yet specified** node at the right edge shows that section of the Map when you click it. **Decisions so far** and **Out of scope** sit beside the graph and fold away. Clicking a node opens its Ticket below, as a Stage of a Requirement does. On a new Map there is only Charting, and the sections say *None yet.* until Charting fills them.
+   Selecting the Map opens the Map view where a Requirement's strip would be. Under the Map's title and count are **New Prototype** (see [Prototypes](#prototypes)) and its Destination, and below that its Tickets as a graph read left to right: each Blocker sits left of the Tickets it blocks, with an arrow to each. Each node shows the Ticket's type (`chart`, `grilling`, `research`, `task`, `prototype` or `ticket`), ID, title and State, and its top edge takes the strip's colours: green when done, the reason's colour when it needs you, solid blue while an agent is on it, dashed blue while it waits to be claimed, and grey while it is Draft or blocked. A Draft node that nothing blocks is on the frontier and has **Start**, which approves it to Ready. A dim **Not yet specified** node at the right edge shows that section of the Map when you click it. **Decisions so far** and **Out of scope** sit beside the graph and fold away. Clicking a node opens its Ticket below, as a Stage of a Requirement does. On a new Map there is only Charting, and the sections say *None yet.* until Charting fills them.
 
    When every Ticket on the Map is Done or Cancelled, the header gains **Write the Spec**. It opens the **New requirement** dialog, titled *Write the Spec*, with the Map's title, a link to the Map and its Destination filled in. **Submit requirement** creates a Requirement whose Spec has a `map` Tag naming the Map, and only two Stages: Spec, which is Ready at once, and Tickets. The agent on the spec Stage works from the Map's Decisions so far and the resolution comments they link, not from a grilling Ticket. In the Requirement's strip the first segment is a done **Map**, which links back to the Map, and the Map's header links each Requirement written from it.
 
@@ -106,7 +106,8 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
 4. **Answer the Round in the UI.** Each Question has the agent's recommended answer filled in as a draft. Nothing is saved until you answer. For each Question you can:
 
    - edit the text if you want, and click **Answer**,
-   - or click **Dismiss** to leave it unanswered, so the agent decides without it.
+   - or click **Dismiss** to leave it unanswered, so the agent decides without it,
+   - or click **Prototype this**, which fills the box with `Prototype this: `, add a note on what to try, and click **Answer**, to settle it with a [Prototype](#prototypes) first.
 
    **Accept all recommended**, at the top of the Round, answers every open Question with its draft.
 
@@ -254,7 +255,9 @@ Choose between the two ways:
 
 ## Prototypes
 
-A Prototype is a cheap, throwaway artifact for you to try, so a decision can be made: a Ticket labelled `prototype`, on any Spec. Submit one from a terminal, naming the Spec:
+A Prototype is a cheap, throwaway artifact for you to try, so a decision can be made: a Ticket labelled `prototype`, on any Spec. In the UI, open the Spec (a Requirement or a Map from the **Requirements** view, or any Spec by clicking its name in the Ticket panel) and click **New Prototype** under its title. The same free-text dialog opens: say what to try and the decision it should inform, and click **Submit prototype**. The first line becomes the title, after "Prototype: ", and the new Prototype opens in the Ticket panel, Ready for a Factory. A Spec that is neither a Requirement nor a Map opens as a plain Spec view: its title, **New Prototype** and its Tickets with their States.
+
+Or submit one from a terminal, naming the Spec:
 
 ```console
 $ code-central submit-prototype acme-shop-1 --text "A price badge on the product card
@@ -279,3 +282,5 @@ $ claude
 ```
 
 The `prototype` Guide has the session commit on that branch only, never push it, set a `prototype` Tag to `<branch>@<commit> <worktree path>`, and post a Round whose first Question, "Try it", says what to run and where to look. The Ticket panel shows the Tag as *Prototype at `<path>` on `<branch>` (`<commit>`)*. Answer the Round, and the session posts a resolution comment, what was learned and which decision it informs, and finishes with no branch. Accepting the Prototype makes it Done straight away: there is nothing to merge or land. Remove the worktree once you're done with it; the branch keeps the Prototype.
+
+A Question can also become a Prototype. In a Round from the grilling Stage, Charting or a Map's grilling Ticket, answer a Question with **Prototype this** and a note, such as `Prototype this: try a badge and plain text side by side`. Typing an answer that starts with "Prototype this" works the same. When the session picks up the answers, it creates a Prototype on the same Spec, with the Question and your note as its description, and approves it to Ready. It makes the Prototype block its own Ticket and gives up with a note naming the Prototype. Once the Prototype is Done, the asking Ticket is claimed again as a redo, which reads the Prototype's resolution comment and carries on from it. The spec and tickets Stages and implementation never hand a Question to a Prototype.

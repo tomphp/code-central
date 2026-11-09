@@ -1,12 +1,13 @@
-// "New requirement" and "New Map": the left pane's buttons, each with the
-// same modal, one free-text box. It submits to the filtered Project, or
-// the only one; with several and none filtered, the modal asks which.
+// "New requirement", "New Map" and "New Prototype": buttons that each
+// open the same modal, one free-text box. A new Requirement or Map goes to
+// the filtered Project, or the only one; with several and none filtered,
+// the modal asks which. A Prototype goes on the Spec whose view it is on.
 // "Write the Spec", in a finished Map's header, opens the New requirement
 // modal prefilled from the Map and submits it with the Map.
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
-import type { ApiError, ProjectRow, SpecAcknowledgement } from "../api/types";
+import type { ApiError, ProjectRow, SpecAcknowledgement, TicketAcknowledgement } from "../api/types";
 
 export interface NewRequirementProps {
   api: Api;
@@ -17,8 +18,9 @@ export interface NewRequirementProps {
   onSubmitted(r: { spec: SpecAcknowledgement }): void;
 }
 
-// Kind is what a button submits: its words, and the write it calls.
-interface Kind {
+// Kind is what a button submits: its words, and the write it calls,
+// which resolves to R.
+interface Kind<R> {
   button: string;
   className: string;
   // noun names the text box.
@@ -27,10 +29,10 @@ interface Kind {
   creates: string;
   // text prefills the text box.
   text?: string;
-  submit(api: Api, project: string, text: string): Promise<{ spec: SpecAcknowledgement }>;
+  submit(api: Api, project: string, text: string): Promise<R>;
 }
 
-const REQUIREMENT: Kind = {
+const REQUIREMENT: Kind<{ spec: SpecAcknowledgement }> = {
   button: "New requirement",
   className: "btn primary",
   noun: "Requirement",
@@ -39,7 +41,7 @@ const REQUIREMENT: Kind = {
   submit: (api, project, text) => api.submitRequirement(project, text),
 };
 
-const MAP: Kind = {
+const MAP: Kind<{ spec: SpecAcknowledgement }> = {
   button: "New Map",
   className: "btn",
   noun: "Map",
@@ -48,12 +50,22 @@ const MAP: Kind = {
   submit: (api, project, text) => api.submitMap(project, text),
 };
 
+// prototypeOn is New Prototype on spec.
+const prototypeOn = (spec: string): Kind<TicketAcknowledgement> => ({
+  button: "New Prototype",
+  className: "btn",
+  noun: "Prototype",
+  placeholder: "Describe what to try out, and the decision it should inform. The first line becomes the title.",
+  creates: "Creates a Ready Prototype on this Spec. A Factory builds it on a branch that never lands.",
+  submit: (api, project, text) => api.submitPrototype(project, spec, text),
+});
+
 export function NewRequirement(props: NewRequirementProps) {
-  return <NewSpec kind={REQUIREMENT} {...props} />;
+  return <NewFromText kind={REQUIREMENT} {...props} />;
 }
 
 export function NewMap(props: NewRequirementProps) {
-  return <NewSpec kind={MAP} {...props} />;
+  return <NewFromText kind={MAP} {...props} />;
 }
 
 export interface WriteTheSpecProps {
@@ -67,7 +79,7 @@ export interface WriteTheSpecProps {
 // Stage: its text starts as the Map's title, a link to it and its
 // Destination.
 export function WriteTheSpec({ api, map, onSubmitted }: WriteTheSpecProps) {
-  const kind: Kind = {
+  const kind: Kind<{ spec: SpecAcknowledgement }> = {
     ...REQUIREMENT,
     button: "Write the Spec",
     className: "btn",
@@ -75,10 +87,29 @@ export function WriteTheSpec({ api, map, onSubmitted }: WriteTheSpecProps) {
     text: [map.title, `From the Map [${map.id}](${map.id}).`, map.destination].filter(Boolean).join("\n\n") + "\n",
     submit: (api, project, text) => api.submitRequirement(project, text, map.id),
   };
-  return <NewSpec kind={kind} api={api} projects={[]} project={projectOf(map.id)} onSubmitted={onSubmitted} />;
+  return <NewFromText kind={kind} api={api} projects={[]} project={projectOf(map.id)} onSubmitted={onSubmitted} />;
 }
 
-function NewSpec({ kind, api, projects, project, onSubmitted }: NewRequirementProps & { kind: Kind }) {
+export interface NewPrototypeProps {
+  api: Api;
+  // spec is the Spec the Prototype goes on.
+  spec: string;
+  onSubmitted(t: TicketAcknowledgement): void;
+}
+
+export function NewPrototype({ api, spec, onSubmitted }: NewPrototypeProps) {
+  return <NewFromText kind={prototypeOn(spec)} api={api} projects={[]} project={projectOf(spec)} onSubmitted={onSubmitted} />;
+}
+
+interface NewFromTextProps<R> {
+  kind: Kind<R>;
+  api: Api;
+  projects: ProjectRow[];
+  project?: string;
+  onSubmitted(r: R): void;
+}
+
+function NewFromText<R>({ kind, api, projects, project, onSubmitted }: NewFromTextProps<R>) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -102,7 +133,7 @@ function NewSpec({ kind, api, projects, project, onSubmitted }: NewRequirementPr
   );
 }
 
-function Modal({ kind, api, projects, project, onClose, onSubmitted }: NewRequirementProps & { kind: Kind; onClose(): void }) {
+function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFromTextProps<R> & { onClose(): void }) {
   const [text, setText] = useState(kind.text ?? "");
   const [chosen, setChosen] = useState(project ?? projects[0]?.key ?? "");
   const [error, setError] = useState<string>();

@@ -1,6 +1,6 @@
 // The triage inbox: "New requirement" and "New Map", Projects and Views on
-// the left, the list in the middle, the selected Requirement or Map and
-// Ticket on the right. A layout only: the data comes
+// the left, the list in the middle, the selected Requirement, Map or plain
+// Spec and Ticket on the right. A layout only: the data comes
 // from live.ts and the Ticket pane is shared with any later view.
 import type { MouseEvent } from "react";
 import type { Api } from "../api/api";
@@ -17,6 +17,7 @@ import { NewMap, NewRequirement } from "../requirement/NewRequirement";
 import { isStage, needsMeCount, progress, reasonsOf } from "../requirement/progress";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { RequirementRow } from "../requirement/RequirementRow";
+import { SpecPane } from "../spec/SpecPane";
 import { TicketPane } from "../ticket/TicketDetail";
 import { OptionsLink } from "../options/OptionsLink";
 import { UsageLink } from "../usage/UsageLink";
@@ -33,12 +34,15 @@ export interface InboxProps {
   requirement?: SpecDetail & { requirement: NonNullable<SpecDetail["requirement"]> };
   // map is the selected Map, once read; it shares requirement's place.
   map?: SpecDetail & { map: MapView };
+  // spec is the selected plain Spec, neither a Requirement nor a Map,
+  // once read; it shares requirement's place too.
+  spec?: SpecDetail;
   requirementError?: string;
   ticket?: TicketView;
   ticketError?: string;
 }
 
-export function Inbox({ api, now, data, loc, navigate, requirement, map, requirementError, ticket, ticketError }: InboxProps) {
+export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, requirementError, ticket, ticketError }: InboxProps) {
   const inProject = (key: string) => !loc.project || key === loc.project;
   const projects = data?.projects ?? [];
   const archived = projects.filter((p) => p.archived);
@@ -199,6 +203,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, require
             <p className="empty">{requirementError}</p>
           ) : requirement ? (
             <RequirementPane
+              api={api}
               spec={requirement}
               reasons={reasons}
               now={now}
@@ -217,13 +222,21 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, require
               specLink={specLink}
               written={(id) => navigate({ list: "requirements", state: undefined, requirement: id, ticket: undefined })}
             />
+          ) : spec ? (
+            <SpecPane api={api} spec={spec} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
           ) : (
             <p className="empty">Loading…</p>
           ))}
         {ticketError ? (
           <p className="empty">{ticketError}</p>
         ) : ticket && loc.ticket && ticket.id === loc.ticket ? (
-          <TicketPane api={api} project={projectOf(ticket.id)} ticket={ticket} now={now} />
+          <TicketPane
+            api={api}
+            project={projectOf(ticket.id)}
+            ticket={ticket}
+            now={now}
+            openSpec={(id) => navigate({ requirement: id })}
+          />
         ) : (
           !loc.requirement && <p className="empty">{loc.ticket ? "Loading…" : "Select a Ticket."}</p>
         )}
