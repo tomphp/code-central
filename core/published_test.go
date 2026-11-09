@@ -86,8 +86,8 @@ func TestTheWorkflowSaysWhatCountsAsNeedsMe(t *testing.T) {
 func TestTheProseCoversTheRulesTheTableCannotSay(t *testing.T) {
 	prose := workflow(t).Prose
 	for _, want := range []string{
-		"Three exits on trouble", "`post_round`", "`report_failure`", "`give_up`",
-		"A send-back with no note means nothing has changed",
+		"When you can't carry on", "`post_round`", "`report_failure`", "`give_up`",
+		"A send-back with no note means the cause in the last Failure Report still stands",
 		"branch named after the Ticket ID", "commit often", "Don't push",
 		"Holding several Claims", "Silence is tracked per session", "same resume command", "same files",
 		"`parts: [\"body\"]`", "`sections`", "`outline`", "add `tickets` only when sibling Tickets matter",
@@ -100,8 +100,11 @@ func TestTheProseCoversTheRulesTheTableCannotSay(t *testing.T) {
 	}
 }
 
-func TestTheInstructionsPointAtGetWorkflowAndTheRoundRule(t *testing.T) {
-	for _, want := range []string{"Code Central holds", "get_workflow", "post_round", "never printed in the terminal", "numbered question", "acknowledgement", "`full: true`"} {
+func TestTheInstructionsPointAtTheStageGuideAndTheRoundRule(t *testing.T) {
+	if strings.Contains(core.Instructions, "Call get_workflow before working a Ticket") {
+		t.Error("MCP instructions still send every session to get_workflow")
+	}
+	for _, want := range []string{"Code Central holds", "`stage_guide`", "`get_workflow`", "triage", "landing", "post_round", "never printed in the terminal", "numbered question", "acknowledgement", "`full: true`"} {
 		if !strings.Contains(core.Instructions, want) {
 			t.Errorf("MCP instructions do not say %q", want)
 		}

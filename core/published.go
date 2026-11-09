@@ -4,19 +4,21 @@ import (
 	"context"
 	_ "embed"
 	"maps"
+	"strings"
 
 	"github.com/tomoram/code-central/store"
 )
 
 // The published workflow: what an agent session is taught by the server
 // rather than by copies in a repository. The MCP instructions reach every
-// session; get_workflow holds the rest; each write's next step arrives
-// when it matters. A core test keeps all of it within its context budget.
+// session; a Claim's Stage Guide has what working it needs; get_workflow
+// holds the whole workflow; each write's next step arrives when it matters. A core test keeps all of it within its context budget.
 
 // Instructions are the MCP server instructions every session receives.
 const Instructions = "Code Central holds this Project's work: Specs, and the Tickets that deliver them, " +
 	"each in one State of a fixed workflow, and it shows the human what needs them. " +
-	"Call get_workflow before working a Ticket: it has every State, action and rule. " +
+	"A Claim's `stage_guide` has what you need to work it; " +
+	"`get_workflow` holds the whole workflow, for triage, landing and the human's actions. " +
 	"The Round rule: while you hold a Claim, every question for the human is a Round posted with post_round, " +
 	"never printed in the terminal, even when the human is at the terminal. " +
 	"When a skill grills, each numbered question becomes one Question, with its recommendation as the recommended answer. " +
@@ -24,7 +26,17 @@ const Instructions = "Code Central holds this Project's work: Specs, and the Tic
 	"To import a `.scratch/` folder, call `get_import_guide`."
 
 //go:embed workflow.md
-var workflowProse string
+var workflowSource string
+
+// troubleRules are what to do when an agent can't carry on. Every Stage
+// Guide ends with them, and get_workflow's prose carries the same text in
+// place of its marker, so the two can't drift.
+//
+//go:embed trouble.md
+var troubleRules string
+
+// workflowProse is get_workflow's prose, with the trouble rules in place.
+var workflowProse = strings.Replace(workflowSource, "<!-- trouble.md -->\n", troubleRules, 1)
 
 // stateMeanings are the ten States' meanings, in workflow order.
 var stateMeanings = map[store.State]string{

@@ -13,27 +13,13 @@ Accepting a Ticket whose finish named a `branch` moves it to Accepted to wait to
 
 A write returns an acknowledgement (`id`, `updated`, `changed`, …), not the record; `full: true` returns the record. Every write's response may carry a `next_step`. Do what it says, when it says.
 
-If a write returns `stale_claim`, your Claim has ended (the human released or moved the Ticket, or another session holds it now). Stop working that Ticket at once and don't write to it again with that Claim ID. If you lose your Claim ID, for example after context compaction, `claim` the Ticket again with your `session_id` to get it back; without your session ID, stop the same way and tell the human, who can release the Ticket.
-
 ## Questions go to Rounds
 
 While you hold a Claim, every question for the human is a Round posted with `post_round`, never printed in the terminal, even when the human is sitting at it: only the UI records answers. Put everything you need into one Round. Each Question has a title, a body and, when you have one, a recommended answer. A grilling skill's numbered questions become one Question each, with its recommendation.
 
 After `post_round`, end your turn as its next step says. When the Ticket is Answered, `pick_up_answers` returns the answers, the dismissed Questions and the comments added since; carry on from there. A dismissed Question was deliberately left unanswered: decide without it. To grill in the terminal instead, don't claim.
 
-## Three exits on trouble
-
-When you can't carry on, take exactly one of these, by what would unblock you:
-
-- **Ask a Question** (`post_round`) if the human can unblock this session: a decision, missing information, an access you lack.
-- **Report a failure** (`report_failure`) if nothing can: something is broken that this Ticket can't fix, or the Ticket itself is wrong. All four fields are required: `what_broke` (a headline, then the symptom), `why`, `what_to_fix` and `where_work_stands`. The Ticket goes to Failed and your Claim ends; stop working this Ticket.
-- **Give up cleanly** (`give_up`) if nothing is wrong but this session can't finish, for example it is running out of context or time. The note must say where the work stands (branch, what is done, what is left), so the next agent doesn't start cold. The Ticket goes back to Ready and your Claim ends; stop working this Ticket.
-
-Never leave a claimed Ticket without one of these or `finish`.
-
-## Sent back from Failed
-
-The human sends a Failed Ticket back to Ready with an optional note. A send-back with no note means nothing has changed: the cause in the last Failure Report is still there, so check it before repeating the attempt, and report a failure again if it still stands.
+<!-- trouble.md -->
 
 ## Defining work
 

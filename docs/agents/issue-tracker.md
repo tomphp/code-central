@@ -2,7 +2,7 @@
 
 # Issue tracker: Code Central
 
-Specs and Tickets for this repository live in Code Central, through the `code-central` MCP server (or the `code-central` CLI, with the same operations in kebab-case). Call `get_workflow` before working a Ticket: it holds the rules, and this file only maps the skills' operations to Code Central operations by name.
+Specs and Tickets for this repository live in Code Central, through the `code-central` MCP server (or the `code-central` CLI, with the same operations in kebab-case). A Claim's `stage_guide` has what you need to work it, and `get_workflow` holds the whole workflow; this file only maps the skills' operations to Code Central operations by name.
 
 | When a skill says | Use |
 | --- | --- |
