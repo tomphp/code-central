@@ -100,12 +100,22 @@ type MapView struct {
 	Total int `json:"total"`
 	// NeedsYou is its Tickets with a Needs Me reason, Prototypes included.
 	NeedsYou int `json:"needs_you"`
+	// Guided is whether its guided Tag is on: the Factory then starts its
+	// next decision whenever it is idle.
+	Guided bool `json:"guided"`
 	// CanWriteSpec is whether it has no unfinished Tickets.
 	CanWriteSpec bool `json:"can_write_spec"`
 	// Requirements are the Specs whose map Tag names this Map: the
 	// Requirements Write the Spec made from it, in creation order.
 	Requirements []string `json:"requirements"`
 }
+
+// GuidedTag is the Tag that marks a Map as guided when its value is
+// GuidedOn; a missing Tag or any other value means off.
+const (
+	GuidedTag = "guided"
+	GuidedOn  = "on"
+)
 
 // isMap reports whether a Spec's Labels mark it as a Map.
 func isMap(labels []string) bool { return slices.Contains(labels, MapLabel) }
@@ -117,7 +127,7 @@ func (c *Core) mapView(r store.Reader, key string, s store.Spec, tickets []store
 		return nil
 	}
 	id := DisplayID(key, s.Number)
-	v := &MapView{CanWriteSpec: true, Requirements: []string{}}
+	v := &MapView{Guided: s.Tags[GuidedTag] == GuidedOn, CanWriteSpec: true, Requirements: []string{}}
 	for _, sp := range r.Specs(key) {
 		if sp.Tags[MapTag] == id {
 			v.Requirements = append(v.Requirements, DisplayID(key, sp.Number))

@@ -75,6 +75,8 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     renameProject: (project, display_name) => call("POST", `${p(project)}/rename_project`, { display_name }),
     setLandingMethod: (project, landing) => call("POST", `${p(project)}/set_landing_method`, landing),
     unlink: (project, target) => call("POST", `${p(project)}/unlink`, { target }),
+    setTags: (project, target, tags) => call("POST", `${p(project)}/set_tags`, { target, tags }),
+    removeTags: (project, target, keys) => call("POST", `${p(project)}/remove_tags`, { target, keys }),
     options: () => call("GET", "/api/options"),
     setOptions: (change) => call("POST", "/api/set_options", change),
     usage: (filter = {}) => {

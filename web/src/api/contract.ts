@@ -572,11 +572,11 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         "Offline mode\nWorks on a plane.\n\n## Destination\n\n## Notes\n\n## Decisions so far\n\n## Not yet specified\n\n## Out of scope\n",
       );
       expect(s.requirement).toBeUndefined();
-      expect(s.map).toEqual({ decided: 0, total: 1, needs_you: 0, can_write_spec: false, requirements: [] });
+      expect(s.map).toEqual({ decided: 0, total: 1, needs_you: 0, guided: false, can_write_spec: false, requirements: [] });
       expect(s.tickets.map((t) => [t.id, t.node_type])).toEqual([[r.charting.id, "chart"]]);
 
       await d.api.act("acme", r.charting.id, "move", { to_state: "Done" });
-      expect((await d.api.getSpec("acme", r.spec.id)).map).toEqual({ decided: 1, total: 1, needs_you: 0, can_write_spec: true, requirements: [] });
+      expect((await d.api.getSpec("acme", r.spec.id)).map).toEqual({ decided: 1, total: 1, needs_you: 0, guided: false, can_write_spec: true, requirements: [] });
     });
 
     it("writes the Spec from a finished Map: a Requirement with only the spec and tickets Stages, tagged with the Map", async () => {
@@ -615,6 +615,21 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.getSpec("acme", plain.spec.id)).requirement?.map).toBeUndefined();
     });
 
+    it("guides a Map only while its guided Tag is on", async () => {
+      await d.createProject("acme", "Acme");
+      const r = await d.api.submitMap("acme", "Offline mode");
+      const guided = async () => (await d.api.getSpec("acme", r.spec.id)).map?.guided;
+
+      expect(await d.api.setTags("acme", r.spec.id, { guided: "on" })).toEqual({ id: r.spec.id, kind: "spec", labels: ["wayfinder:map"], tags: { guided: "on" } });
+      expect(await guided()).toBe(true);
+      expect((await d.api.findSpecs("acme", { labels: ["wayfinder:map"] }))[0].map?.guided).toBe(true);
+      await d.api.setTags("acme", r.spec.id, { guided: "yes" });
+      expect(await guided()).toBe(false);
+      await d.api.setTags("acme", r.spec.id, { guided: "on", area: "web" });
+      expect(await d.api.removeTags("acme", r.spec.id, ["guided"])).toMatchObject({ tags: { area: "web" } });
+      expect(await guided()).toBe(false);
+    });
+
     it("refuses a Map with no text", async () => {
       await d.createProject("acme", "Acme");
       const e = await d.api.submitMap("acme", "  \n ").catch((e) => e);
@@ -628,7 +643,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const r = await d.api.submitMap("acme", "Offline mode");
 
       const maps = await d.api.findSpecs("acme", { labels: ["wayfinder:map"] });
-      expect(maps.map((s) => [s.id, s.map])).toEqual([[r.spec.id, { decided: 0, total: 1, needs_you: 0, can_write_spec: false, requirements: [] }]]);
+      expect(maps.map((s) => [s.id, s.map])).toEqual([[r.spec.id, { decided: 0, total: 1, needs_you: 0, guided: false, can_write_spec: false, requirements: [] }]]);
       expect((await d.api.findSpecs("acme")).filter((s) => s.id !== r.spec.id).every((s) => s.map === undefined)).toBe(true);
       const rows = await d.api.findTickets("acme");
       expect(rows.find((t) => t.id === plain)?.node_type).toBeUndefined();

@@ -74,6 +74,15 @@ export interface LinkView {
   detached: boolean;
 }
 
+// set_tags' and remove_tags' result: the Spec or Ticket with its Labels
+// and Tags as they now stand.
+export interface TargetView {
+  id: string;
+  kind: "spec" | "ticket";
+  labels: string[];
+  tags: Record<string, string>;
+}
+
 // unlink's result: the Spec or Ticket with its now detached Link.
 export interface LinkedRow {
   kind: "spec" | "ticket";
@@ -158,12 +167,20 @@ export interface MapView {
   total: number;
   // needs_you is its Tickets with a Needs Me reason, Prototypes included.
   needs_you: number;
+  // guided is whether its guided Tag is on: the Factory then starts its
+  // next decision whenever the Map is idle.
+  guided: boolean;
   // can_write_spec is whether it has no unfinished Tickets.
   can_write_spec: boolean;
   // requirements are the Specs Write the Spec made from it: those whose
   // map Tag names it.
   requirements: string[];
 }
+
+// GUIDED_TAG marks a Map as guided when its value is GUIDED_ON; a missing
+// Tag or any other value means off.
+export const GUIDED_TAG = "guided";
+export const GUIDED_ON = "on";
 
 // A Map Ticket's type, from its reserved Label; "ticket" when it has none.
 export type NodeType = "chart" | "grilling" | "research" | "task" | "prototype" | "ticket";

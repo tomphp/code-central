@@ -102,8 +102,9 @@ func (f *factory) drain(ctx context.Context) {
 	}
 }
 
-// poll reconciles the held Claims, then fills free slots: Answered
-// resumes first, then saved Claims a stop cut off, then new claims.
+// poll reconciles the held Claims, starts the next decision of each idle
+// guided Map, then fills free slots: Answered resumes first, then saved
+// Claims a stop cut off, then new claims.
 func (f *factory) poll(ctx context.Context) {
 	answered := f.reconcile(ctx)
 	f.landAndSweep(ctx)
@@ -118,6 +119,7 @@ func (f *factory) poll(ctx context.Context) {
 		}
 		return
 	}
+	f.startGuidedMaps(ctx)
 	for _, c := range answered {
 		if !f.slotFree(ctx) {
 			return

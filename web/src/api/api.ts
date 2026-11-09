@@ -25,6 +25,7 @@ import type {
   UsageFilter,
   SessionUsageFilter,
   SessionUsageView,
+  TargetView,
   UsageView,
 } from "./types";
 
@@ -104,6 +105,10 @@ export interface Api {
   // unlink detaches a Spec's or Ticket's Link (ticket 42). It isn't a
   // TicketAction: its target, a Spec or a Ticket, goes in the body.
   unlink(project: string, target: string): Promise<LinkedRow>;
+  // setTags merges tags into a Spec's or Ticket's Tags, overwriting only
+  // the keys it names; removeTags removes the keys named.
+  setTags(project: string, target: string, tags: Record<string, string>): Promise<TargetView>;
+  removeTags(project: string, target: string, keys: string[]): Promise<TargetView>;
   // options reads the human's Options; setOptions changes those given and
   // answers with them all as they now stand. An unknown Option or a value
   // outside its set is refused as invalid, naming it, and nothing changes.

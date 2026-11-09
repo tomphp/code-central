@@ -44,6 +44,10 @@ _Avoid_: Wayfinder session, roadmap, journey
 A Map's Draft Tickets that nothing blocks: the decisions that can be started next. Starting one approves it to Ready. It is worked out on each read, never stored.
 _Avoid_: Next steps, backlog
 
+**Guided Map**:
+A Map whose `guided` Tag is `on`. Whenever it is idle, with every Ticket on it but research Draft, Done or Cancelled, the Factory approves its first frontier Ticket in created order, so nothing else waits on the human or an agent. Turning it off hands starting back to the human's **Start**.
+_Avoid_: Autopilot, auto-advance
+
 **Map view**:
 The UI's view of a Map: its Destination, **New Prototype**, its Tickets as a left-to-right graph with Blockers as edges and **Start** on each frontier Ticket, a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph. Its header has **Write the Spec** once the Map is finished, and links the Requirements written from it.
 _Avoid_: Map board, roadmap

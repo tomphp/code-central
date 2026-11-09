@@ -220,6 +220,33 @@ describe("the Map view", () => {
     expect(outOfScope.open).toBe(true);
   });
 
+  it("has a Guided toggle in its header that sets the guided Tag on and removes it", async () => {
+    const fake = new FakeApi();
+    offlineMode(fake);
+    const pane = await open(fake);
+
+    const guided = within(pane).getByRole("checkbox", { name: "Guided" });
+    expect(guided).not.toBeChecked();
+    await userEvent.click(guided);
+    expect(fake.calls).toContain("setTags");
+    expect((await fake.getSpec("acme", "acme-1")).tags).toEqual({ guided: "on" });
+    await waitFor(() => expect(within(pane).getByRole("checkbox", { name: "Guided" })).toBeChecked());
+
+    await userEvent.click(within(pane).getByRole("checkbox", { name: "Guided" }));
+    expect(fake.calls).toContain("removeTags");
+    expect((await fake.getSpec("acme", "acme-1")).tags).toEqual({});
+    await waitFor(() => expect(within(pane).getByRole("checkbox", { name: "Guided" })).not.toBeChecked());
+  });
+
+  it("shows a Map as guided only when its guided Tag is on", async () => {
+    const fake = new FakeApi();
+    offlineMode(fake);
+    await fake.setTags("acme", "acme-1", { guided: "yes" });
+    const pane = await open(fake);
+
+    expect(within(pane).getByRole("checkbox", { name: "Guided" })).not.toBeChecked();
+  });
+
   it("says when a section is still empty", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
