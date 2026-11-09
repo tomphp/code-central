@@ -15,6 +15,7 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"github.com/tomoram/code-central/notify"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -100,6 +101,14 @@ func serviceInstall(ctx context.Context, e Env, m serviceManager, args []string)
 	if err := os.WriteFile(m.unitPath, unit, 0o644); err != nil {
 		return err
 	}
+	if m.shortcutPath != "" {
+		if err := os.MkdirAll(filepath.Dir(m.shortcutPath), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(m.shortcutPath, shortcutFile(bin, notify.AppID), 0o644); err != nil {
+			return err
+		}
+	}
 	if err := runServiceCmds(ctx, e, m.install); err != nil {
 		return err
 	}
@@ -114,7 +123,10 @@ type serviceCmd struct {
 }
 
 type serviceManager struct {
-	unitPath         string
+	unitPath string
+	// shortcutPath, on Windows, is the Start-menu shortcut that makes
+	// toasts show as Code Central.
+	shortcutPath     string
 	unit             func(serveArgs []string) ([]byte, error)
 	install, restart []serviceCmd
 }
@@ -170,13 +182,18 @@ func serviceManagerFor(e Env) (serviceManager, error) {
 		if d := e.Getenv("USERDOMAIN"); d != "" {
 			user = d + `\` + user
 		}
+		shortcut, err := notify.ShortcutPath(e.home())
+		if err != nil {
+			return serviceManager{}, err
+		}
 		task := filepath.Join(dir, "code-central-task.xml")
 		log := filepath.Join(dir, "code-central.log")
 		end := serviceCmd{args: []string{"schtasks", "/End", "/TN", scheduledTask}, mayFail: true} // it may not be running
 		run := serviceCmd{args: []string{"schtasks", "/Run", "/TN", scheduledTask}}
 		return serviceManager{
-			unitPath: task,
-			unit:     func(a []string) ([]byte, error) { return scheduledTaskXML(a, log, user) },
+			unitPath:     task,
+			shortcutPath: shortcut,
+			unit:         func(a []string) ([]byte, error) { return scheduledTaskXML(a, log, user) },
 			install: []serviceCmd{
 				{args: []string{"schtasks", "/Create", "/TN", scheduledTask, "/XML", task, "/F"}},
 				end, run,
