@@ -1,12 +1,13 @@
-// OptionsLink opens the Options view from a view's header, remembering
-// that view so leaving Options returns to it.
+// OptionsLink opens the Options view from the Inbox's Admin section,
+// remembering that view so leaving Options returns to it; className
+// styles it as the row it sits in.
 import type { MouseEvent } from "react";
 import { hrefFor, opensInPlace, returnViewOf, type UiLocation } from "../url";
 
 export interface OptionsLinkProps {
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
-  className?: string;
+  className: string;
 }
 
 export function OptionsLink({ loc, navigate, className }: OptionsLinkProps) {
@@ -17,7 +18,7 @@ export function OptionsLink({ loc, navigate, className }: OptionsLinkProps) {
     navigate(to);
   };
   return (
-    <a href={hrefFor({ ...loc, ...to })} onClick={open} className={className ?? "options-link"}>
+    <a href={hrefFor({ ...loc, ...to })} onClick={open} className={className}>
       Options
     </a>
   );

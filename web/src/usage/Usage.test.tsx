@@ -1,6 +1,6 @@
 // Usage view tests: the real App against FakeApi, at ?view=usage. They
-// check what the human sees and does: opening it from the Inbox's and
-// Focus Mode's headers and going Back, the address keeping the scope and
+// check what the human sees and does: opening it from the Inbox's Admin
+// section and going Back, the address keeping the scope and
 // range, the scope and range pickers, the Code Central calls table and
 // its sorting, the Context Size table and the recent sessions with their
 // Ticket links, the empty states, and loading only when opened or changed.
@@ -53,7 +53,7 @@ function column(name: string): string[] {
 const ops = () => column("Operation");
 
 describe("opening and leaving Usage", () => {
-  it("opens from the Inbox's header on All Projects and 7 days, and returns to the Inbox with its filter and Ticket", async () => {
+  it("opens from the Inbox's Admin section on All Projects and 7 days, and returns to the Inbox with its filter and Ticket", async () => {
     renderApp(world(), "/?view=inbox&project=acme&state=Ready&ticket=acme-1");
     const nav = screen.getByRole("navigation", { name: "Filters" });
     await userEvent.click(within(nav).getByRole("link", { name: "Usage" }));
@@ -69,11 +69,8 @@ describe("opening and leaving Usage", () => {
     expect(await screen.findByRole("navigation", { name: "Filters" })).toBeInTheDocument();
   });
 
-  it("opens from Focus Mode's header and returns to Focus Mode with its Project", async () => {
-    renderApp(world(), "/?view=focus&project=acme");
-    await userEvent.click(within(screen.getByRole("main", { name: "Focus Mode" })).getByRole("link", { name: "Usage" }));
-
-    expect(usage()).toBeInTheDocument();
+  it("returns to Focus Mode with its Project when the address names it", async () => {
+    renderApp(world(), "/?view=usage&back=view%3Dfocus%26project%3Dacme");
     expect(scope()).toHaveValue("");
     await userEvent.click(within(usage()).getByRole("button", { name: "Back to Focus Mode" }));
     expect(window.location.search).toBe("?view=focus&project=acme");
@@ -87,13 +84,13 @@ describe("opening and leaving Usage", () => {
   });
 
   it("returns to where the human was on the browser's Back", async () => {
-    renderApp(world(), "/?view=focus&project=acme");
-    await userEvent.click(within(screen.getByRole("main", { name: "Focus Mode" })).getByRole("link", { name: "Usage" }));
+    renderApp(world(), "/?view=inbox&project=acme");
+    await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("link", { name: "Usage" }));
     expect(usage()).toBeInTheDocument();
 
     act(() => window.history.back());
-    expect(await screen.findByRole("main", { name: "Focus Mode" })).toBeInTheDocument();
-    expect(window.location.search).toBe("?view=focus&project=acme");
+    expect(await screen.findByRole("navigation", { name: "Filters" })).toBeInTheDocument();
+    expect(window.location.search).toBe("?view=inbox&project=acme");
   });
 });
 
@@ -111,17 +108,17 @@ describe("scope and range", () => {
     calls(fake, "beta", "find_tickets", 1, { request: 10, response: 100 });
     // Twenty days ago: only in the 30 and 90 day ranges.
     fake.recordCall("acme", { op: "finish", request_bytes: 10, response_bytes: 100, time: "2026-10-18T09:00:00Z" });
-    const { unmount } = renderApp(fake, "/?view=focus");
-    await userEvent.click(within(screen.getByRole("main", { name: "Focus Mode" })).getByRole("link", { name: "Usage" }));
+    const { unmount } = renderApp(fake, "/?state=Ready");
+    await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("link", { name: "Usage" }));
     await waitFor(() => expect(ops()).toEqual(["claim", "find_tickets"]));
 
     await waitFor(() => expect(within(scope()).getAllByRole("option")).toHaveLength(4));
     await userEvent.selectOptions(scope(), "Acme");
-    expect(window.location.search).toBe("?view=usage&project=acme&back=view%3Dfocus");
+    expect(window.location.search).toBe("?view=usage&project=acme&back=view%3Dinbox%26state%3DReady");
     await waitFor(() => expect(ops()).toEqual(["claim"]));
 
     await userEvent.selectOptions(range(), "Last 30 days");
-    expect(window.location.search).toBe("?view=usage&project=acme&days=30&back=view%3Dfocus");
+    expect(window.location.search).toBe("?view=usage&project=acme&days=30&back=view%3Dinbox%26state%3DReady");
     await waitFor(() => expect(ops()).toEqual(["claim", "finish"]));
 
     unmount();
@@ -129,8 +126,8 @@ describe("scope and range", () => {
     expect(scope()).toHaveValue("acme");
     expect(range()).toHaveValue("30");
     await waitFor(() => expect(ops()).toEqual(["claim", "finish"]));
-    await userEvent.click(within(usage()).getByRole("button", { name: "Back to Focus Mode" }));
-    expect(window.location.search).toBe("?view=focus");
+    await userEvent.click(within(usage()).getByRole("button", { name: "Back to the Inbox" }));
+    expect(window.location.search).toBe("?view=inbox&state=Ready");
   });
 
   it("goes back to All Projects and 7 days, leaving them out of the address", async () => {
@@ -449,8 +446,8 @@ describe("a session's Context Size", () => {
   });
 
   it("closes the session on the browser's Back, and leaves Usage on the next", async () => {
-    renderApp(seeded(), "/?view=focus&project=acme");
-    await userEvent.click(within(screen.getByRole("main", { name: "Focus Mode" })).getByRole("link", { name: "Usage" }));
+    renderApp(seeded(), "/?view=inbox&project=acme");
+    await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("link", { name: "Usage" }));
     await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
     await userEvent.click(within(sessionsTable()).getByRole("link", { name: "sess-impl" }));
     await waitFor(() => expect(points()).toHaveLength(3));
@@ -460,7 +457,7 @@ describe("a session's Context Size", () => {
     expect(search().get("session")).toBeNull();
 
     act(() => window.history.back());
-    expect(await screen.findByRole("main", { name: "Focus Mode" })).toBeInTheDocument();
+    expect(await screen.findByRole("navigation", { name: "Filters" })).toBeInTheDocument();
   });
 
   it("returns to where Usage was opened from with a session open", async () => {

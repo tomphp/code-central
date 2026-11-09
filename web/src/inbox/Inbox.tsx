@@ -1,7 +1,8 @@
 // The triage inbox: "New requirement" and "New Map", Projects and Views on
-// the left, the list in the middle, the selected Requirement, Map or plain
-// Spec and Ticket on the right. A layout only: the data comes
-// from live.ts and the Ticket pane is shared with any later view.
+// the left, then an Admin section linking Usage and Options, the list in
+// the middle, the selected Requirement, Map or plain Spec and Ticket on
+// the right. A layout only: the data comes from live.ts and the Ticket
+// pane is shared with any later view.
 import type { MouseEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
@@ -100,8 +101,6 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
       <nav aria-label="Filters" className="inbox-nav">
         <div className="inbox-title">
           <h1>Code Central</h1>
-          <UsageLink loc={loc} navigate={navigate} />
-          <OptionsLink loc={loc} navigate={navigate} />
         </div>
         <div className="new-specs">
           <NewRequirement
@@ -140,6 +139,9 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
             onClick={() => navigate({ state: s, list: undefined })}
           />
         ))}
+        <h2>Admin</h2>
+        <UsageLink loc={loc} navigate={navigate} className="filter" />
+        <OptionsLink loc={loc} navigate={navigate} className="filter" />
         <ArchivedProjects count={archived.length}>
           {archived.map(projectFilter)}
         </ArchivedProjects>

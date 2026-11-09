@@ -1,6 +1,6 @@
 // Options view tests: the real App against FakeApi, at ?view=options. They
-// check what the human sees and does: opening it from the Inbox's and
-// Focus Mode's headers, saving the Focus Mode Option, a refused or failed
+// check what the human sees and does: opening it from the Inbox's Admin
+// section, saving the Focus Mode Option, a refused or failed
 // save, returning to where they came from, and a change made elsewhere.
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -26,7 +26,7 @@ const focusControl = () => within(options()).getByRole("radiogroup", { name: "Fo
 const choice = (name: string) => within(focusControl()).getByRole("radio", { name });
 
 describe("opening and leaving the Options view", () => {
-  it("opens from the Inbox's header and returns to the Inbox with its filter and Ticket", async () => {
+  it("opens from the Inbox's Admin section and returns to the Inbox with its filter and Ticket", async () => {
     renderApp(world(), "/?view=inbox&project=acme&state=Ready&ticket=acme-1");
     const nav = screen.getByRole("navigation", { name: "Filters" });
     await userEvent.click(within(nav).getByRole("link", { name: "Options" }));
@@ -40,12 +40,8 @@ describe("opening and leaving the Options view", () => {
     expect(await screen.findByRole("navigation", { name: "Filters" })).toBeInTheDocument();
   });
 
-  it("opens from Focus Mode's header and returns to Focus Mode with its Project", async () => {
-    renderApp(world(), "/?view=focus&project=acme");
-    const focus = screen.getByRole("main", { name: "Focus Mode" });
-    await userEvent.click(within(focus).getByRole("link", { name: "Options" }));
-
-    expect(options()).toBeInTheDocument();
+  it("returns to Focus Mode with its Project when the address names it", async () => {
+    renderApp(world(), "/?view=options&from=focus&project=acme");
     await userEvent.click(within(options()).getByRole("button", { name: "Back to Focus Mode" }));
     expect(window.location.search).toBe("?view=focus&project=acme");
     expect(screen.getByRole("main", { name: "Focus Mode" })).toBeInTheDocument();
@@ -58,13 +54,13 @@ describe("opening and leaving the Options view", () => {
   });
 
   it("returns to where the human was on Back", async () => {
-    renderApp(world(), "/?view=focus&project=acme");
-    await userEvent.click(within(screen.getByRole("main", { name: "Focus Mode" })).getByRole("link", { name: "Options" }));
+    renderApp(world(), "/?view=inbox&project=acme");
+    await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("link", { name: "Options" }));
     expect(options()).toBeInTheDocument();
 
     act(() => window.history.back());
-    expect(await screen.findByRole("main", { name: "Focus Mode" })).toBeInTheDocument();
-    expect(window.location.search).toBe("?view=focus&project=acme");
+    expect(await screen.findByRole("navigation", { name: "Filters" })).toBeInTheDocument();
+    expect(window.location.search).toBe("?view=inbox&project=acme");
   });
 });
 
