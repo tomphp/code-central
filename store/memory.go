@@ -209,8 +209,8 @@ func (w *writer) PutImport(project string, im Import) error {
 }
 
 func (w *writer) PutOptions(o Options) error {
-	if field := o.badField(); field != "" {
-		return fmt.Errorf("store: options: %s: %w", field, ErrInvalidOption)
+	if !o.FocusClear.Valid() {
+		return fmt.Errorf("%w: focus_clear %q", ErrInvalidOption, o.FocusClear)
 	}
 	if err := w.begin(o, ""); err != nil {
 		return err

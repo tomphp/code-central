@@ -304,19 +304,11 @@ func (s *FileStore) loadOptions() error {
 	if f.FocusClear != "" {
 		o.FocusClear = FocusClear(f.FocusClear)
 	}
-	if field := o.badField(); field != "" {
-		return &LoadError{File: rel, Field: field, Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusClear, joinFocusClears())}
+	if !o.FocusClear.Valid() {
+		return &LoadError{File: rel, Field: "focus_clear", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusClear, strings.Join(focusClearNames(), " or "))}
 	}
 	s.options = o
 	return nil
-}
-
-func joinFocusClears() string {
-	var vs []string
-	for _, f := range FocusClears {
-		vs = append(vs, string(f))
-	}
-	return strings.Join(vs, " or ")
 }
 
 var numbered = regexp.MustCompile(`^[1-9][0-9]*$`)

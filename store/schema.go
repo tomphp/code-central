@@ -33,11 +33,7 @@ func Schema() string {
 	for _, s := range States {
 		states = append(states, string(s))
 	}
-	var focusClears []string
-	for _, f := range FocusClears {
-		focusClears = append(focusClears, string(f))
-	}
-	values("  options focus_clear (default all_clear)", focusClears)
+	values("  options focus_clear (default all_clear)", focusClearNames())
 	values("  ticket state, moves[].from, moves[].to", states)
 	values("  rounds[].questions[].status", []string{string(QuestionOpen), string(QuestionAnswered), string(QuestionDismissed)})
 	var external []string

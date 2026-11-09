@@ -221,12 +221,14 @@ type Options struct {
 // written.
 func DefaultOptions() Options { return Options{FocusClear: FocusAllClear} }
 
-// badField names the first Option outside its set, or is empty.
-func (o Options) badField() string {
-	if !o.FocusClear.Valid() {
-		return "focus_clear"
+// focusClearNames is the FocusClears as strings, for messages and the
+// schema.
+func focusClearNames() []string {
+	var out []string
+	for _, f := range FocusClears {
+		out = append(out, string(f))
 	}
-	return ""
+	return out
 }
 
 // Reader reads from memory. Records returned are copies.
@@ -295,7 +297,7 @@ var (
 	// ErrExists means an Import named a Spec or Ticket number already in use.
 	ErrExists = errors.New("store: an import may only add new records")
 	// ErrInvalidOption means an Option written was outside its set.
-	ErrInvalidOption = errors.New("value outside the Option's set")
+	ErrInvalidOption = errors.New("store: an Option's value is outside its set")
 )
 
 func (s Spec) clone() Spec {
