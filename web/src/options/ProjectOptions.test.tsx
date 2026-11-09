@@ -91,6 +91,20 @@ describe("Project Options", () => {
     expect(save).toBeDisabled();
   });
 
+  it("shows what was stored after a save the service tidied into no change", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    await fake.setLandingMethod("acme", { method: "merge", push: true, remote: "upstream" });
+    renderApp(fake, "/?view=options&project=acme");
+
+    const remote = await within(await screen.findByRole("group", { name: "Landing Method" })).findByRole("textbox", { name: "Remote" });
+    await userEvent.type(remote, " ");
+    await userEvent.click(within(page()).getByRole("button", { name: "Save" }));
+    expect(await within(page()).findByRole("status")).toHaveTextContent("Saved");
+    expect(remote).toHaveValue("upstream");
+    expect(within(page()).getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
   it("shows a change made elsewhere, as another tab would", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");

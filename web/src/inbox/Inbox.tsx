@@ -15,7 +15,7 @@ import { RequirementPane } from "../requirement/RequirementPane";
 import { RequirementRow } from "../requirement/RequirementRow";
 import { TicketPane } from "../ticket/TicketDetail";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
-import { hrefFor, opensInPlace, type UiLocation } from "../url";
+import { clickTo, hrefFor, type UiLocation } from "../url";
 
 export interface InboxProps {
   api: Api;
@@ -53,11 +53,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
 
   // Selecting a row: a Ticket row leaves any Requirement; a Requirement
   // row opens on its default Ticket.
-  const go = (patch: Partial<UiLocation>) => (e: MouseEvent) => {
-    if (!opensInPlace(e)) return;
-    e.preventDefault();
-    navigate(patch);
-  };
+  const go = (patch: Partial<UiLocation>) => clickTo(navigate, patch);
   const rowLink = (id: string) => ({
     href: hrefFor({ ...loc, requirement: undefined, ticket: id }),
     onClick: go({ requirement: undefined, ticket: id }),
@@ -71,6 +67,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
     "aria-current": loc.requirement === id ? ("true" as const) : undefined,
   });
 
+  // Only an active Project has a Project Options link: an Archived one takes no writes.
   const projectFilter = (p: ProjectRow) => (
     <ProjectFilter
       key={p.key}
@@ -78,7 +75,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
       project={p}
       on={loc.project === p.key}
       onSelect={() => navigate({ project: p.key })}
-      options={{ href: hrefFor({ view: "options", project: p.key }), onClick: go({ view: "options", project: p.key }) }}
+      projectOptions={p.archived ? undefined : { href: hrefFor({ view: "options", project: p.key }), onClick: go({ view: "options", project: p.key }) }}
     />
   );
 

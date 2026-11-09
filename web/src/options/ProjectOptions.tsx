@@ -1,10 +1,10 @@
 // The Project Options page: one Project's settings, reached from its menu
 // in the left pane. Its one section today is the Landing Method; later
 // settings are more sections here.
-import { useEffect, useId, useState, type FormEvent, type MouseEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
 import type { ApiError, Landing, LandingMethod, ProjectRow } from "../api/types";
-import { hrefFor, opensInPlace, type UiLocation } from "../url";
+import { clickTo, hrefFor, type UiLocation } from "../url";
 
 export interface ProjectOptionsProps {
   api: Api;
@@ -17,15 +17,10 @@ export interface ProjectOptionsProps {
 export function ProjectOptions({ api, projects, project: key, navigate }: ProjectOptionsProps) {
   const project = projects?.find((p) => p.key === key);
   const back: UiLocation = { view: "inbox", project: project?.key };
-  const onBack = (e: MouseEvent) => {
-    if (!opensInPlace(e)) return;
-    e.preventDefault();
-    navigate(back);
-  };
 
   return (
-    <main aria-label="Project Options" className="options">
-      <a className="options-back" href={hrefFor(back)} onClick={onBack}>
+    <main aria-label="Project Options" className="project-options">
+      <a className="project-options-back" href={hrefFor(back)} onClick={clickTo(navigate, back)}>
         Back to the inbox
       </a>
       {!projects ? (
@@ -42,16 +37,16 @@ export function ProjectOptions({ api, projects, project: key, navigate }: Projec
   );
 }
 
-const METHODS: { method: LandingMethod; label: string; does: string }[] = [
+const METHODS: { method: LandingMethod; label: string; hint: string }[] = [
   {
     method: "merge",
     label: "Merge into base",
-    does: "The Factory merges the accepted branch into the base and lands the Ticket.",
+    hint: "The Factory merges the accepted branch into the base and lands the Ticket.",
   },
   {
     method: "branch",
     label: "Leave as a branch",
-    does: "The Factory leaves the branch for you to merge, and lands the Ticket when it sees the merge in the base.",
+    hint: "The Factory leaves the branch for you to merge, and lands the Ticket when it sees the merge in the base.",
   },
 ];
 
@@ -73,8 +68,12 @@ function LandingMethodSection({ api, project }: { api: Api; project: ProjectRow 
   const save = (e: FormEvent) => {
     e.preventDefault();
     setError(undefined);
+    // The draft becomes what was stored: the service may tidy it into no change.
     api.setLandingMethod(project.key, draft).then(
-      () => setSaved(true),
+      (v) => {
+        setDraft(v.landing);
+        setSaved(true);
+      },
       (e: ApiError) => setError(e),
     );
   };
@@ -83,11 +82,11 @@ function LandingMethodSection({ api, project }: { api: Api; project: ProjectRow 
 
   return (
     <form onSubmit={save}>
-      <fieldset className="options-section" disabled={project.archived}>
+      <fieldset className="project-options-section" disabled={project.archived}>
         <legend>Landing Method</legend>
         {project.archived && <p className="muted">The Project is archived: unarchive it to change its options.</p>}
         {METHODS.map((m) => (
-          <div key={m.method} className="options-choice">
+          <div key={m.method} className="project-options-choice">
             <label>
               <input
                 type="radio"
@@ -98,22 +97,22 @@ function LandingMethodSection({ api, project }: { api: Api; project: ProjectRow 
               />{" "}
               {m.label}
             </label>
-            <p className="options-hint" id={`${id}-${m.method}`}>
-              {m.does}
+            <p className="project-options-hint" id={`${id}-${m.method}`}>
+              {m.hint}
             </p>
           </div>
         ))}
-        <div className="options-choice">
+        <div className="project-options-choice">
           <label>
             <input type="checkbox" checked={draft.push} onChange={(e) => edit({ push: e.target.checked })} aria-describedby={`${id}-push`} />{" "}
             Push
           </label>
-          <p className="options-hint" id={`${id}-push`}>
+          <p className="project-options-hint" id={`${id}-push`}>
             Merge pushes the base to the remote after merging; Leave as a branch pushes the Ticket's branch when you accept it. The Factory
             checks the remote exists, never force-pushes, and under Merge pushes the whole base, your own commits on it too.
           </p>
         </div>
-        <label className="options-remote">
+        <label className="project-options-remote">
           Remote{" "}
           <input
             value={draft.remote}
@@ -128,7 +127,7 @@ function LandingMethodSection({ api, project }: { api: Api; project: ProjectRow 
             {error.message}
           </p>
         )}
-        <div className="options-actions">
+        <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>
             Save
           </button>

@@ -2,7 +2,7 @@
 // ?view=inbox&project=<key>&state=<State>&list=requirements&requirement=<spec id>&ticket=<id>,
 // or ?view=focus&project=<key> for Focus Mode, which keeps only project,
 // or ?view=options&project=<key> for a Project's Project Options page.
-// view is the layout (anything but focus is the inbox); project, state and
+// view is the layout (anything but focus or options is the inbox); project, state and
 // list are the left pane's filters (no state and no list = Needs Me;
 // list=requirements is the Requirements view); requirement is the selected
 // Requirement's Spec ID and ticket the selected Ticket's display ID (within
@@ -72,4 +72,14 @@ export function useUiLocation(): [UiLocation, (patch: Partial<UiLocation>) => vo
 // browser, to open a tab.
 export function opensInPlace(e: MouseEvent): boolean {
   return !(e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0);
+}
+
+// clickTo is a link's click handler: a plain click navigates in place,
+// any other is left to the browser.
+export function clickTo(navigate: (patch: Partial<UiLocation>) => void, patch: Partial<UiLocation>) {
+  return (e: MouseEvent) => {
+    if (!opensInPlace(e)) return;
+    e.preventDefault();
+    navigate(patch);
+  };
 }

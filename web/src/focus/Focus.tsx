@@ -8,7 +8,7 @@
 // unlink) first record that the item on screen was acted on, so an item that leaves after the
 // human's own action moves on silently, and one that leaves otherwise
 // moves on with a brief "Dealt with elsewhere" note.
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Api } from "../api/api";
 import type { TicketView } from "../api/types";
 import { duration, REASON_LABEL } from "../format";
@@ -16,7 +16,7 @@ import { useTicket, type InboxData } from "../live";
 import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
 import { QuestionAnswer } from "../panels/round/QuestionAnswer";
-import { hrefFor, opensInPlace, type UiLocation } from "../url";
+import { clickTo, hrefFor, type UiLocation } from "../url";
 import { focusQueue, type FocusItem } from "./queue";
 import "./focus.css";
 
@@ -174,11 +174,7 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate, 
   const waited = duration(now, row.since);
   // A Stage Ticket opens in its Requirement, with it selected.
   const inbox = { view: "inbox" as const, project: loc.project, requirement: row.requirement?.stage && row.requirement.spec, ticket: row.id };
-  const open = (e: MouseEvent) => {
-    if (!opensInPlace(e)) return;
-    e.preventDefault();
-    navigate(inbox);
-  };
+  const open = clickTo(navigate, inbox);
   const skipButton = (
     <button type="button" className="btn" onClick={skip}>
       Skip

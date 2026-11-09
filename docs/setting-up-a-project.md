@@ -201,10 +201,10 @@ Each Project has a **Landing Method**: what the Factory does with an implementat
 To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=options&project=acme-api`, so you can bookmark it. Its **Landing Method** section offers:
 
 - **Merge into base**: the Factory merges the accepted branch into the base and lands the Ticket. The default.
-- **Leave as a branch**: the Factory leaves the branch for you to merge, and lands the Ticket when it sees the merge in the base. Until then the Ticket waits in Needs Me as **To merge**.
+- **Leave as a branch**: the Factory leaves the branch for you to merge, and lands the Ticket when it sees the merge in the base.
 - **Push**, with a **Remote** (`origin` unless you change it): under Merge, the Factory pushes the base to the remote after merging, and the Ticket lands only once the push succeeds; under Leave as a branch, it pushes the Ticket's branch when you accept it. The Factory checks the remote exists, never force-pushes, and under Merge pushes the whole base, your own commits on it too. Remote can't be empty while Push is on: Save says so.
 
-**Save** applies the change, and every open UI tab shows it. A running Factory picks it up on its next poll, for every Ticket still waiting to land. [Running the Factory](running-the-factory.md) covers what it does under each method. An Archived Project has no Options item, and its Project Options page is read-only until you unarchive it.
+**Save** applies the change to the Project in Code Central, and every open UI tab shows it. An Archived Project has no Options item, and its Project Options page is read-only until you unarchive it.
 
 ## When `init` behaves differently
 
