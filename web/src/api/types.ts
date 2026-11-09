@@ -106,6 +106,19 @@ export interface NeedsMeRow {
   link?: LinkView;
   // Set when the Ticket's Spec is a Requirement.
   requirement?: NeedsMeRequirement;
+  // spec is a Map Ticket's or Prototype's Spec, as its context, set when
+  // that Spec isn't a Requirement.
+  spec?: NeedsMeSpec;
+  // prototype is set on a Ticket labelled prototype, for its badge.
+  prototype?: boolean;
+}
+
+// The Spec a Needs Me row's Map Ticket or Prototype is on; map is set
+// when it is a Map.
+export interface NeedsMeSpec {
+  spec: string;
+  title: string;
+  map?: boolean;
 }
 
 // The Requirement a Needs Me row's Ticket is on; stage is set only on a

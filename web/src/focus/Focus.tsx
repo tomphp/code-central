@@ -16,6 +16,7 @@ import { useTicket, type InboxData } from "../live";
 import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
 import { QuestionAnswer } from "../panels/round/QuestionAnswer";
+import { PrototypeBadge } from "../ticket/PrototypeBadge";
 import { OptionsLink } from "../options/OptionsLink";
 import { UsageLink } from "../usage/UsageLink";
 import { clickTo, hrefFor, type UiLocation } from "../url";
@@ -203,6 +204,12 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate, 
       {row.requirement && (
         <p className="focus-requirement">
           {row.requirement.stage ? `Requirement: ${row.requirement.title} · ${row.requirement.stage}` : `Requirement: ${row.requirement.title}`}
+        </p>
+      )}
+      {row.spec && <p className="focus-requirement">{`${row.spec.map ? "Map" : "Spec"}: ${row.spec.title}`}</p>}
+      {row.prototype && (
+        <p className="focus-badges">
+          <PrototypeBadge />
         </p>
       )}
       <p className="focus-why">

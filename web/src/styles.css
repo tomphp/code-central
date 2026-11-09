@@ -176,6 +176,9 @@ a.link-badge:hover { text-decoration: underline; }
 .link-badge.detached { opacity: 0.6; }
 .linked-note { margin: 6px 0; }
 
+/* The Prototype badge on a Needs Me row and a Focus Item (Spec 213). */
+.prototype-badge { color: var(--accent); border-color: var(--accent); white-space: nowrap; }
+
 /* Rendered Markdown (ticket 47), sized for a panel rather than a page. */
 .markdown { overflow-wrap: anywhere; }
 .markdown > :first-child { margin-top: 0; }

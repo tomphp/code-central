@@ -345,3 +345,38 @@ describe("the latest Session Event in the In Progress list", () => {
     expect(asking).not.toHaveTextContent("posted a Round");
   });
 });
+
+// wayfinding is a Map acme-1 whose Charting Ticket acme-2 needs an answer
+// and whose Prototype acme-3 is In Review, and a Prototype acme-5 on the
+// plain Spec acme-4, also In Review.
+function wayfinding() {
+  const fake = new FakeApi();
+  fake.addProject("acme", "Acme");
+  const map = fake.addSpec("acme", { title: "Find the way", labels: ["wayfinder:map"] }); // acme-1
+  const onMap = { id: map.id, title: map.title };
+  fake.addTicket("acme", { title: "Charting: Find the way", state: "Needs Answer", spec: onMap, labels: ["wayfinder:chart"] }); // acme-2
+  fake.addTicket("acme", { title: "Prototype: the graph", state: "In Review", spec: onMap, labels: ["prototype"] }); // acme-3
+  const plain = fake.addSpec("acme", { title: "Login" }); // acme-4
+  fake.addTicket("acme", { title: "Prototype: the form", state: "In Review", spec: { id: plain.id, title: plain.title }, labels: ["prototype"] }); // acme-5
+  fake.setNeedsMe([
+    { reason: "needs_answer", tickets: [{ id: "acme-2", round: { number: 1, open: 1, questions: 1 } }] },
+    { reason: "in_review", tickets: [{ id: "acme-3" }, { id: "acme-5" }] },
+  ]);
+  return fake;
+}
+
+describe("Map Tickets and Prototypes in Needs Me", () => {
+  it("lists each as its own row with its Map's or Spec's name, and a Prototype badge on a Prototype", async () => {
+    renderApp(wayfinding());
+    await waitFor(() => expect(rowIds()).toEqual(["acme-2", "acme-3", "acme-5"]));
+    expect(groupHeads()).toEqual(["Questions 1", "In Review 2"]);
+    const row = (id: string) => within(list()).getByRole("link", { name: new RegExp(id) });
+    expect(row("acme-2")).toHaveTextContent("↳ Map: Find the way");
+    expect(within(row("acme-2")).queryByText("Prototype")).toBeNull();
+    expect(row("acme-3")).toHaveTextContent("↳ Map: Find the way");
+    expect(within(row("acme-3")).getByText("Prototype")).toHaveClass("label", "prototype-badge");
+    expect(row("acme-5")).toHaveTextContent("↳ Login");
+    expect(row("acme-5")).not.toHaveTextContent("Map:");
+    expect(within(row("acme-5")).getByText("Prototype")).toHaveClass("prototype-badge");
+  });
+});
