@@ -1,28 +1,66 @@
-// "New requirement": the left pane's primary button and its modal, one
-// free-text box. It submits to the filtered Project, or the only one;
-// with several and none filtered, the modal asks which.
+// "New requirement" and "New Map": the left pane's buttons, each with the
+// same modal, one free-text box. It submits to the filtered Project, or
+// the only one; with several and none filtered, the modal asks which.
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
-import type { ApiError, ProjectRow, SubmitRequirementResult } from "../api/types";
+import type { ApiError, ProjectRow, SpecAcknowledgement } from "../api/types";
 
 export interface NewRequirementProps {
   api: Api;
-  // projects are the Projects a Requirement can go to: the active ones.
+  // projects are the Projects a Requirement or Map can go to: the active ones.
   projects: ProjectRow[];
   // project is the filtered Project, if any.
   project?: string;
-  onSubmitted(r: SubmitRequirementResult): void;
+  onSubmitted(r: { spec: SpecAcknowledgement }): void;
 }
 
-export function NewRequirement({ api, projects, project, onSubmitted }: NewRequirementProps) {
+// Kind is what a button submits: its words, and the write it calls.
+interface Kind {
+  button: string;
+  className: string;
+  // noun names the text box.
+  noun: string;
+  placeholder: string;
+  creates: string;
+  submit(api: Api, project: string, text: string): Promise<{ spec: SpecAcknowledgement }>;
+}
+
+const REQUIREMENT: Kind = {
+  button: "New requirement",
+  className: "btn primary",
+  noun: "Requirement",
+  placeholder: "Describe what you want built. The first line becomes the working title.",
+  creates: "Creates a Spec and its Grilling, Spec and Tickets Stages. A Factory picks up Grilling.",
+  submit: (api, project, text) => api.submitRequirement(project, text),
+};
+
+const MAP: Kind = {
+  button: "New Map",
+  className: "btn",
+  noun: "Map",
+  placeholder: "Describe where you want to get to. The first line becomes the working title.",
+  creates: "Creates a Map and its Charting Ticket. A Factory picks up Charting.",
+  submit: (api, project, text) => api.submitMap(project, text),
+};
+
+export function NewRequirement(props: NewRequirementProps) {
+  return <NewSpec kind={REQUIREMENT} {...props} />;
+}
+
+export function NewMap(props: NewRequirementProps) {
+  return <NewSpec kind={MAP} {...props} />;
+}
+
+function NewSpec({ kind, api, projects, project, onSubmitted }: NewRequirementProps & { kind: Kind }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button className="btn primary new-req" onClick={() => setOpen(true)}>
-        New requirement
+      <button className={kind.className} onClick={() => setOpen(true)}>
+        {kind.button}
       </button>
       {open && (
         <Modal
+          kind={kind}
           api={api}
           projects={projects}
           project={project}
@@ -37,7 +75,7 @@ export function NewRequirement({ api, projects, project, onSubmitted }: NewRequi
   );
 }
 
-function Modal({ api, projects, project, onClose, onSubmitted }: NewRequirementProps & { onClose(): void }) {
+function Modal({ kind, api, projects, project, onClose, onSubmitted }: NewRequirementProps & { kind: Kind; onClose(): void }) {
   const [text, setText] = useState("");
   const [chosen, setChosen] = useState(project ?? projects[0]?.key ?? "");
   const [error, setError] = useState<string>();
@@ -56,7 +94,7 @@ function Modal({ api, projects, project, onClose, onSubmitted }: NewRequirementP
     if (!text.trim() || !chosen) return;
     setBusy(true);
     setError(undefined);
-    api.submitRequirement(chosen, text).then(onSubmitted, (e: ApiError) => {
+    kind.submit(api, chosen, text).then(onSubmitted, (e: ApiError) => {
       setBusy(false);
       setError(e.message);
     });
@@ -65,7 +103,7 @@ function Modal({ api, projects, project, onClose, onSubmitted }: NewRequirementP
   return (
     <div className="modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-        <h2 id={titleId}>New requirement</h2>
+        <h2 id={titleId}>{kind.button}</h2>
         <form onSubmit={submit}>
           {ask && (
             <label className="modal-project small">
@@ -80,8 +118,8 @@ function Modal({ api, projects, project, onClose, onSubmitted }: NewRequirementP
             </label>
           )}
           <textarea
-            aria-label="Requirement"
-            placeholder="Describe what you want built. The first line becomes the working title."
+            aria-label={kind.noun}
+            placeholder={kind.placeholder}
             rows={8}
             value={text}
             autoFocus
@@ -89,12 +127,12 @@ function Modal({ api, projects, project, onClose, onSubmitted }: NewRequirementP
           />
           {error && <p className="warning">{error}</p>}
           <div className="modal-actions">
-            <span className="muted small">Creates a Spec and its Grilling, Spec and Tickets Stages. A Factory picks up Grilling.</span>
+            <span className="muted small">{kind.creates}</span>
             <button type="button" className="btn" onClick={onClose}>
               Cancel
             </button>
             <button type="submit" className="btn primary" disabled={busy || !text.trim() || !chosen}>
-              Submit requirement
+              Submit {kind.noun.toLowerCase()}
             </button>
           </div>
         </form>

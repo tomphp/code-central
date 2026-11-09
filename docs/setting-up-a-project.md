@@ -111,7 +111,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
    Manage MCP servers
    …
      Project MCPs (/Users/you/src/acme-shop/.mcp.json)
-   ❯ ✔ code-central 32 tools
+   ❯ ✔ code-central 33 tools
    …
    ```
 

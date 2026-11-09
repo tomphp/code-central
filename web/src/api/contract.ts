@@ -554,6 +554,51 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(delivered[0].requirement!.stages.map((s) => s.state)).toEqual(["Done", "Done", "Done"]);
     });
 
+    // ---- Maps (code-central-218) ----
+    it("submits a Map as its Spec, with the Map's sections, and one Ready Charting Ticket", async () => {
+      await d.createProject("acme", "Acme");
+      const r = await d.api.submitMap("acme", "Offline mode\nWorks on a plane.");
+      expect(r.spec.changed).toEqual(["title", "labels", "body"]);
+      wantAcknowledgement(r.charting, r.charting.id, "Ready");
+      expect(r.charting.changed).toEqual(["title", "state", "spec", "labels", "description", "moves", "claimable"]);
+
+      const charting = await d.api.getTicket("acme", r.charting.id);
+      expect(charting).toMatchObject({ title: "Charting: Offline mode", labels: ["wayfinder:chart"], state: "Ready", claimable: true });
+      expect(charting.description).toContain(r.spec.id);
+
+      const s = await d.api.getSpec("acme", r.spec.id);
+      expect(s).toMatchObject({ title: "Offline mode", labels: ["wayfinder:map"] });
+      expect(s.body).toBe(
+        "Offline mode\nWorks on a plane.\n\n## Destination\n\n## Notes\n\n## Decisions so far\n\n## Not yet specified\n\n## Out of scope\n",
+      );
+      expect(s.requirement).toBeUndefined();
+      expect(s.map).toEqual({ decided: 0, total: 1, needs_you: 0, can_write_spec: false });
+      expect(s.tickets.map((t) => [t.id, t.node_type])).toEqual([[r.charting.id, "chart"]]);
+
+      await d.api.act("acme", r.charting.id, "move", { to_state: "Done" });
+      expect((await d.api.getSpec("acme", r.spec.id)).map).toEqual({ decided: 1, total: 1, needs_you: 0, can_write_spec: true });
+    });
+
+    it("refuses a Map with no text", async () => {
+      await d.createProject("acme", "Acme");
+      const e = await d.api.submitMap("acme", "  \n ").catch((e) => e);
+      expect(e).toBeInstanceOf(ApiError);
+      expect(e).toMatchObject({ status: 422, code: "invalid", field: "text" });
+    });
+
+    it("finds Maps by their Label, each row with its Map block, and no node type off a Map", async () => {
+      await d.createProject("acme", "Acme");
+      const plain = await d.createTicket("acme", "Not on a Map", "Ready");
+      const r = await d.api.submitMap("acme", "Offline mode");
+
+      const maps = await d.api.findSpecs("acme", { labels: ["wayfinder:map"] });
+      expect(maps.map((s) => [s.id, s.map])).toEqual([[r.spec.id, { decided: 0, total: 1, needs_you: 0, can_write_spec: false }]]);
+      expect((await d.api.findSpecs("acme")).filter((s) => s.id !== r.spec.id).every((s) => s.map === undefined)).toBe(true);
+      const rows = await d.api.findTickets("acme");
+      expect(rows.find((t) => t.id === plain)?.node_type).toBeUndefined();
+      expect(rows.find((t) => t.id === r.charting.id)?.node_type).toBe("chart");
+    });
+
     // ---- the Integration contract (ticket 42) ----
     it("reads a linked Ticket closed externally, and unlinks it", async () => {
       await d.createProject("acme", "Acme");

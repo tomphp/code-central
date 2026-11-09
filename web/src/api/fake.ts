@@ -18,7 +18,9 @@
 // A Spec read derives what the service derives from its Tickets: the
 // State summary, finished, and a Requirement's requirement block
 // (a Stage's Needs Me reason is Needs Me's, as set by setNeedsMe).
-// submitRequirement writes a Spec and its three Stage Tickets.
+// submitRequirement writes a Spec and its three Stage Tickets, and
+// submitMap a Map's Spec and its Charting Ticket; a Map's read derives its
+// Map block, and its Tickets' rows their node type.
 //
 // recordCall stands in for an agent's MCP call, which the service records
 // as Usage itself, and postUsage for a Factory's POST /api/usage, filed
@@ -64,10 +66,13 @@ import {
   type LatestEvent,
   type LinkedRow,
   type Landing,
+  MAP_LABEL,
+  type MapView,
   type Mode,
   type NeedsMeReason,
   type NeedsMeRow,
   type NeedsMeView,
+  type NodeType,
   type Options,
   type ProjectRow,
   type ProjectView,
@@ -82,6 +87,7 @@ import {
   type StageName,
   type State,
   type StateSummary,
+  type SubmitMapResult,
   type SubmitRequirementResult,
   TICKET_FIELDS,
   type TicketAcknowledgement,
@@ -204,6 +210,19 @@ const STAGES: { name: StageName; title: string }[] = [
   { name: "tickets", title: "Tickets" },
 ];
 const stageOf = (t: { labels: string[] }) => STAGES.find((s) => t.labels.includes(`stage:${s.name}`))?.name;
+// The Map's Ticket types and its body's sections, as core's WayfinderTypes
+// and MapSections.
+const WAYFINDER_TYPES = ["chart", "grilling", "research", "task"] as const;
+const MAP_SECTIONS = ["Destination", "Notes", "Decisions so far", "Not yet specified", "Out of scope"];
+// specTitle is the text's first non-blank line without Markdown heading
+// marks, as core's specTitle.
+const specTitle = (text: string) =>
+  text
+    .split("\n")
+    .map((l) => l.trim().replace(/^#+/, "").trim())
+    .find((l) => l) ?? "";
+const nodeTypeOf = (t: { labels: string[] }): NodeType =>
+  t.labels.includes("prototype") ? "prototype" : (WAYFINDER_TYPES.find((n) => t.labels.includes(`wayfinder:${n}`)) ?? "ticket");
 export type SeedRow = Partial<NeedsMeRow> & { id: string };
 
 // LATEST_EVENT_LIMIT is the most characters the latest event's text keeps,
@@ -543,8 +562,15 @@ export class FakeApi implements Api {
     const id = `${project}-${spec.slice(spec.lastIndexOf("-") + 1)}`;
     const s = this.allSpecs(project).find((s) => s.id === id);
     if (!s) throw new ApiError(404, "not_found", `there is no Spec ${id}`);
-    const { state_summary, finished, requirement } = this.derive(id);
-    return structuredClone({ ...s, state_summary, finished, tickets: this.rowsOf(this.ticketsOf(id)), ...(requirement && { requirement }) });
+    const { state_summary, finished, requirement, map } = this.derive(id);
+    return structuredClone({
+      ...s,
+      state_summary,
+      finished,
+      tickets: this.rowsOf(this.ticketsOf(id)),
+      ...(requirement && { requirement }),
+      ...(map && { map }),
+    });
   }
 
   async findSpecs(project: string, filter: FindSpecsFilter = {}): Promise<SpecRow[]> {
@@ -554,7 +580,8 @@ export class FakeApi implements Api {
       this.allSpecs(project)
         .map((s) => ({ s, ...this.derive(s.id) }))
         .filter((r) => (filter.finished || !r.finished) && (!filter.requirements || r.requirement))
-        .map(({ s, state_summary, finished, requirement }) => ({
+        .filter((r) => (filter.labels ?? []).every((l) => r.s.labels.includes(l)))
+        .map(({ s, state_summary, finished, requirement, map }) => ({
           id: s.id,
           title: s.title,
           labels: s.labels,
@@ -564,6 +591,7 @@ export class FakeApi implements Api {
           updated: s.updated,
           ...(s.link && { link: s.link }),
           ...(requirement && { requirement }),
+          ...(map && { map }),
         })),
     );
   }
@@ -593,6 +621,25 @@ export class FakeApi implements Api {
       );
     }
     return { spec: acknowledgeSpecCreate(spec), stages: stages.map(acknowledgeTicketCreate) };
+  }
+
+  async submitMap(project: string, text: string): Promise<SubmitMapResult> {
+    this.calls.push("submitMap");
+    this.writable(project);
+    const title = specTitle(text);
+    if (!title) throw new ApiError(422, "invalid", "a Map needs text; its first line becomes the Spec's title", "text");
+    const body = text.replace(/\n+$/, "") + "\n" + MAP_SECTIONS.map((h) => `\n## ${h}\n`).join("");
+    const spec = this.addSpec(project, { title, body, labels: [MAP_LABEL] });
+    const charting = this.addTicket(project, {
+      title: `Charting: ${title}`,
+      state: "Ready",
+      spec: { id: spec.id, title },
+      labels: ["wayfinder:chart"],
+      description: `Chart the Map [${spec.id}](${spec.id}): settle its destination with the human, fill in its sections and create its first decision Tickets.\n`,
+      claimable: true,
+      moves: [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_map" }],
+    });
+    return { spec: acknowledgeSpecCreate(spec), charting: acknowledgeTicketCreate(charting) };
   }
 
   // specQuestions reads a Spec from its seeded Tickets' spec, so a Spec
@@ -758,6 +805,7 @@ export class FakeApi implements Api {
   }
 
   private rowsOf(tickets: TicketView[]): TicketRow[] {
+    const onMap = (t: TicketView) => !!this.specs.get(t.spec.id)?.labels.includes(MAP_LABEL);
     return tickets.map((t) => ({
       id: t.id,
       title: t.title,
@@ -767,6 +815,7 @@ export class FakeApi implements Api {
       blocked: t.blocked,
       updated: t.updated,
       ...(t.link && { link: { ...t.link } }),
+      ...(onMap(t) && { node_type: nodeTypeOf(t) }),
       ...this.liveLatest(t),
     }));
   }
@@ -808,14 +857,27 @@ export class FakeApi implements Api {
   }
 
   // derive is what a Spec read works out from the Spec's Tickets.
-  private derive(spec: string): { state_summary: StateSummary; finished: boolean; requirement?: RequirementView } {
+  private derive(spec: string): { state_summary: StateSummary; finished: boolean; requirement?: RequirementView; map?: MapView } {
     const tickets = this.ticketsOf(spec);
     const state_summary: StateSummary = {};
     for (const t of tickets) state_summary[t.state] = (state_summary[t.state] ?? 0) + 1;
     const finished = tickets.length > 0 && tickets.every((t) => FINISHED.includes(t.state));
+    const reason = (t: TicketView) => this.rows().find((r) => r.id === t.id)?.reason;
+    if (this.specs.get(spec)?.labels.includes(MAP_LABEL)) {
+      const wayfinder = tickets.filter((t) => nodeTypeOf(t) !== "prototype" && nodeTypeOf(t) !== "ticket" && t.state !== "Cancelled");
+      return {
+        state_summary,
+        finished,
+        map: {
+          decided: wayfinder.filter((t) => t.state === "Done").length,
+          total: wayfinder.length,
+          needs_you: tickets.filter(reason).length,
+          can_write_spec: tickets.every((t) => FINISHED.includes(t.state)),
+        },
+      };
+    }
     const stages = STAGES.map((s) => tickets.find((t) => stageOf(t) === s.name)).filter((t) => !!t);
     if (!stages.length) return { state_summary, finished };
-    const reason = (t: TicketView) => this.rows().find((r) => r.id === t.id)?.reason;
     // A Ticket a Factory could claim now; one waiting on the human doesn't count.
     const claimable = (t: TicketView) =>
       t.state === "Ready" && !reason(t) && t.blocked_by.every((b) => this.tickets.get(b)?.state === "Done");
