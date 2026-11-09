@@ -416,6 +416,18 @@ describe("Token usage", () => {
     expect(fake.calls.filter((c) => c === "usage").length).toBe(reads);
   });
 
+  it("goes back to all kinds when the chosen kind isn't in the new scope", async () => {
+    renderApp(seeded(), "/?view=usage");
+    await waitFor(() => expect(bars()).toHaveLength(7));
+    await userEvent.selectOptions(kind(), "review");
+    await waitFor(() => expect(within(scope()).getAllByRole("option")).toHaveLength(4));
+    await userEvent.selectOptions(scope(), "Beta");
+
+    await waitFor(() => expect(within(kind()).getAllByRole("option").map((o) => o.textContent)).toEqual(["All kinds", "spec"]));
+    expect(kind()).toHaveValue("");
+    expect(bars()[6]).toHaveAccessibleName(/: 73,907 tokens$/);
+  });
+
   it("says there is no token usage when there are calls but no sessions", async () => {
     const fake = world();
     calls(fake, "acme", "claim", 1, { request: 10, response: 100 });

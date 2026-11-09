@@ -910,8 +910,10 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         cache_read_tokens: read,
         output_tokens: output,
       });
+      // The service and the tests share a machine, and so a time zone.
+      const pad = (n: number) => String(n).padStart(2, "0");
       const t = new Date(at(1));
-      const day = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+      const day = `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
       expect(all.days.filter((r) => r.kinds.length)).toEqual([
         {
           day,

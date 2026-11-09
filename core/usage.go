@@ -151,11 +151,8 @@ type UsageDay struct {
 
 // UsageDayTokens is one kind's tokens on one day, by token type.
 type UsageDayTokens struct {
-	Kind             string `json:"kind"`
-	InputTokens      int    `json:"input_tokens"`
-	CacheWriteTokens int    `json:"cache_write_tokens"`
-	CacheReadTokens  int    `json:"cache_read_tokens"`
-	OutputTokens     int    `json:"output_tokens"`
+	Kind string `json:"kind"`
+	usage.Tokens
 }
 
 // Usage reads Usage. An unknown Project is not_found, and a Days outside
@@ -233,10 +230,7 @@ func usageDays(days []string, responses []usage.Response) []UsageDay {
 			k = &UsageDayTokens{Kind: r.Kind}
 			kinds[r.Kind] = k
 		}
-		k.InputTokens += r.InputTokens
-		k.CacheWriteTokens += r.CacheWriteTokens
-		k.CacheReadTokens += r.CacheReadTokens
-		k.OutputTokens += r.OutputTokens
+		k.Add(r.Tokens)
 	}
 	rows := make([]UsageDay, len(days))
 	for i, d := range days {

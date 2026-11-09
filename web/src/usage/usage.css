@@ -33,11 +33,11 @@
 .token-grid text, .token-day { fill: var(--muted); }
 .token-hit { fill: transparent; }
 .token-bar { outline: none; }
-.token-bar.shown .token-hit { fill: var(--border); opacity: 0.5; }
-.token-input { fill: #2f5bd3; background: #2f5bd3; }
-.token-cache-write { fill: #d97706; background: #d97706; }
-.token-cache-read { fill: #93a9e8; background: #93a9e8; }
-.token-output { fill: #059669; background: #059669; }
+.token-bar.hovered .token-hit { fill: var(--border); opacity: 0.5; }
+.token-input { fill: var(--accent); background: var(--accent); }
+.token-cache-write { fill: var(--r-answer); background: var(--r-answer); }
+.token-cache-read { fill: var(--r-answered); background: var(--r-answered); }
+.token-output { fill: var(--r-review); background: var(--r-review); }
 .token-figures { min-height: 44px; margin-top: 6px; font-size: 13px; }
 .token-figures dl { display: flex; gap: 18px; margin: 4px 0 0; }
 .token-figures dt { color: var(--muted); }

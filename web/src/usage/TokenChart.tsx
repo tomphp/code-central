@@ -33,8 +33,10 @@ const BOTTOM = 22;
 const TOP = 8;
 
 export function TokenChart({ days, kinds }: TokenChartProps) {
-  const [kind, setKind] = useState("");
-  const [shown, setShown] = useState<number>();
+  const [chosen, setKind] = useState("");
+  // A kind the new scope or range doesn't have counts as all kinds.
+  const kind = kinds.includes(chosen) ? chosen : "";
+  const [hovered, setHovered] = useState<number>();
   const rows = days.map((d) => ({ day: d.day, totals: totals(d.kinds.filter((k) => !kind || k.kind === kind)) }));
   const top = niceMax(Math.max(0, ...rows.map((r) => sum(r.totals))));
   const plotHeight = HEIGHT - TOP - BOTTOM;
@@ -42,8 +44,8 @@ export function TokenChart({ days, kinds }: TokenChartProps) {
   const barWidth = Math.max(1, slot * 0.7);
   const y = (n: number) => TOP + plotHeight - (top ? (n / top) * plotHeight : 0);
   // Label about seven days along the axis, whatever the range.
-  const every = Math.ceil(rows.length / 7);
-  const focused = shown === undefined ? undefined : rows[shown];
+  const labelStep = Math.ceil(rows.length / 7);
+  const focused = hovered === undefined ? undefined : rows[hovered];
 
   return (
     <>
@@ -68,7 +70,7 @@ export function TokenChart({ days, kinds }: TokenChartProps) {
           ))}
         </ul>
       </div>
-      <svg role="group" aria-label="Token usage per day" className="token-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} onMouseLeave={() => setShown(undefined)}>
+      <svg role="group" aria-label="Token usage per day" className="token-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} onMouseLeave={() => setHovered(undefined)}>
         {(top ? [0, top / 2, top] : [0]).map((n) => (
           <g key={n} className="token-grid" aria-hidden="true">
             <line x1={LEFT} x2={WIDTH} y1={y(n)} y2={y(n)} />
@@ -86,10 +88,10 @@ export function TokenChart({ days, kinds }: TokenChartProps) {
               role="img"
               aria-label={`${dayLabel(r.day)}: ${count(sum(r.totals))} tokens`}
               tabIndex={0}
-              className={shown === i ? "token-bar shown" : "token-bar"}
-              onMouseEnter={() => setShown(i)}
-              onFocus={() => setShown(i)}
-              onBlur={() => setShown(undefined)}
+              className={hovered === i ? "token-bar hovered" : "token-bar"}
+              onMouseEnter={() => setHovered(i)}
+              onFocus={() => setHovered(i)}
+              onBlur={() => setHovered(undefined)}
             >
               {/* The whole slot takes the hover, so a short bar is easy to reach. */}
               <rect className="token-hit" x={LEFT + i * slot} y={TOP} width={slot} height={plotHeight} />
@@ -99,7 +101,7 @@ export function TokenChart({ days, kinds }: TokenChartProps) {
                 base += n;
                 return rect;
               })}
-              {i % every === (rows.length - 1) % every && (
+              {i % labelStep === (rows.length - 1) % labelStep && (
                 <text className="token-day" x={x + barWidth / 2} y={HEIGHT - 6} textAnchor="middle">
                   {dayLabel(r.day)}
                 </text>

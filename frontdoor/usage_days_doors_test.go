@@ -18,22 +18,11 @@ import (
 // aest is UTC+10, where the local day and the UTC day part at 10:00 local.
 var aest = time.FixedZone("AEST", 10*60*60)
 
-// tokens is one kind's posted tokens: input, cache write, cache read and
-// output.
+// tokens is one kind's tokens on a day: input, cache write, cache read
+// and output.
 type tokens struct {
-	kind                      string
+	kind                       string
 	input, write, read, output int
-}
-
-func postTokens(t *testing.T, srv *codecentraltest.Server, session string, at time.Time, agent string, tk tokens) {
-	t.Helper()
-	agentField := ""
-	if agent != "" {
-		agentField = fmt.Sprintf(`"agent":%q,`, agent)
-	}
-	postUsage(t, srv, fmt.Sprintf(
-		`{"session_id":%q,"responses":[{"time":%q,%s"kind":%q,"input_tokens":%d,"cache_write_tokens":%d,"cache_read_tokens":%d,"output_tokens":%d}]}`,
-		session, at.Format(time.RFC3339Nano), agentField, tk.kind, tk.input, tk.write, tk.read, tk.output))
 }
 
 // dayTokens is u's days as each day's kinds, by day.
@@ -73,8 +62,8 @@ func TestTokenUsageBucketsByTheServicesLocalDay(t *testing.T) {
 	// Both on the 5th in UTC, but either side of midnight in UTC+10.
 	before := time.Date(2026, 1, 5, 23, 59, 0, 0, aest)
 	after := time.Date(2026, 1, 6, 0, 1, 0, 0, aest)
-	postTokens(t, srv, "s1", before, "", tokens{"implementation", 1, 2, 3, 4})
-	postTokens(t, srv, "s1", after, "", tokens{"implementation", 10, 20, 30, 40})
+	postResponses(t, srv, "s1", response{time: before, kind: "implementation", input: 1, write: 2, read: 3, output: 4})
+	postResponses(t, srv, "s1", response{time: after, kind: "implementation", input: 10, write: 20, read: 30, output: 40})
 	srv.Clock.Set(after)
 
 	got := dayTokens(readUsage(t, srv, ""))
@@ -107,12 +96,12 @@ func TestTokenUsageSplitsEachDayByKindAndTokenType(t *testing.T) {
 	claim(t, srv, "other", "o")
 	today := at(60)
 	yesterday := at(60 - 24*60)
-	postTokens(t, srv, "a", today, "", tokens{"implementation", 1, 100, 1_000, 10})
-	postTokens(t, srv, "a", today, "", tokens{"implementation", 2, 200, 2_000, 20})
-	postTokens(t, srv, "a", today, "toolu_r", tokens{"review", 3, 300, 0, 30})
-	postTokens(t, srv, "a", today, "toolu_x", tokens{"custom", 4, 400, 0, 40})
-	postTokens(t, srv, "o", today, "", tokens{"implementation", 5, 500, 5_000, 50})
-	postTokens(t, srv, "o", yesterday, "", tokens{"spec", 6, 600, 6_000, 60})
+	postResponses(t, srv, "a", response{time: today, kind: "implementation", input: 1, write: 100, read: 1_000, output: 10})
+	postResponses(t, srv, "a", response{time: today, kind: "implementation", input: 2, write: 200, read: 2_000, output: 20})
+	postResponses(t, srv, "a", response{time: today, agent: "toolu_r", kind: "review", input: 3, write: 300, read: 0, output: 30})
+	postResponses(t, srv, "a", response{time: today, agent: "toolu_x", kind: "custom", input: 4, write: 400, read: 0, output: 40})
+	postResponses(t, srv, "o", response{time: today, kind: "implementation", input: 5, write: 500, read: 5_000, output: 50})
+	postResponses(t, srv, "o", response{time: yesterday, kind: "spec", input: 6, write: 600, read: 6_000, output: 60})
 	srv.Clock.Set(today)
 
 	all := dayTokens(readUsage(t, srv, ""))

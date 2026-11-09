@@ -72,6 +72,14 @@ type Tokens struct {
 	OutputTokens     int `json:"output_tokens"`
 }
 
+// Add adds o's counts to t's.
+func (t *Tokens) Add(o Tokens) {
+	t.InputTokens += o.InputTokens
+	t.CacheWriteTokens += o.CacheWriteTokens
+	t.CacheReadTokens += o.CacheReadTokens
+	t.OutputTokens += o.OutputTokens
+}
+
 // ContextSize is how many tokens the model read for the response: how
 // full the session's context window was.
 func (t Tokens) ContextSize() int { return t.InputTokens + t.CacheWriteTokens + t.CacheReadTokens }
