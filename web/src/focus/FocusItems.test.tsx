@@ -53,6 +53,17 @@ describe("a Ticket Focus Item", () => {
     expect(within(focus()).getAllByRole("article", { name: "Focus Item" })).toHaveLength(1);
   });
 
+  it("comes up To merge like any other Needs Me item, with the Accepted panel's Branch wording", async () => {
+    const fake = world();
+    fake.setNeedsMe([{ reason: "to_merge", tickets: [{ id: "beta-1", branch: "beta-1", since: hourAgo(fake, 1) }] }]);
+    renderApp(fake);
+    const it = await item();
+    expect(within(it).getByRole("heading", { name: "Beta land" })).toBeInTheDocument();
+    expect(within(it).getByText("To merge")).toBeInTheDocument();
+    const panel = await within(it).findByRole("region", { name: "Accepted" });
+    expect(panel).toHaveTextContent("merge beta-1 into the base and the Factory lands it");
+  });
+
   it("shows the remaining count, the item on screen included", async () => {
     renderApp(world());
     await item();

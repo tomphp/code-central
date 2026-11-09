@@ -87,4 +87,34 @@ describe("the Accepted panel", () => {
     const pane = screen.getByRole("complementary", { name: "Ticket" });
     expect(await within(pane).findByRole("region", { name: "Accepted" })).toBeInTheDocument();
   });
+
+  it("under Branch, tells the human to merge the branch, keeping Land and Cancel", async () => {
+    const fake = world();
+    fake.setNeedsMe([{ reason: "to_merge", tickets: [{ id: "acme-1", branch: "acme-1" }] }]);
+    const panel = await renderPanel(fake);
+    expect(panel).toHaveTextContent("merge acme-1 into the base and the Factory lands it, or Land it yourself with the commit");
+    expect(within(panel).getByRole("button", { name: "Land" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+  });
+
+  it("under Merge, says nothing about merging it yourself", async () => {
+    const panel = await renderPanel(world());
+    expect(panel).not.toHaveTextContent("merge acme-1 into the base");
+    expect(panel).toHaveTextContent("It is Done once it is merged into the base and landed.");
+  });
+
+  it("shows To merge in Needs Me, naming the branch, with this panel", async () => {
+    window.history.replaceState(null, "", "/?view=inbox&ticket=acme-1");
+    const fake = world();
+    fake.setNeedsMe([
+      { reason: "to_merge", tickets: [{ id: "acme-1", branch: "acme-1", since: new Date(fake.now.getTime() - 5 * 60_000).toISOString() }] },
+    ]);
+    render(<App api={fake} now={() => fake.now} />);
+    const list = screen.getByRole("main", { name: "Tickets" });
+    expect(await within(list).findByRole("link", { name: /acme-1/ })).toHaveTextContent("Accepted 5m ago: merge acme-1 into the base");
+    expect(within(list).getByRole("heading", { level: 3 })).toHaveTextContent("To merge");
+    const pane = screen.getByRole("complementary", { name: "Ticket" });
+    const panel = await within(pane).findByRole("region", { name: "Accepted" });
+    expect(panel).toHaveTextContent("and the Factory lands it");
+  });
 });
