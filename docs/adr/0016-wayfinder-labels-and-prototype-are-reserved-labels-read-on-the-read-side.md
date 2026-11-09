@@ -13,4 +13,4 @@ Code Central serves a Guide for each type (`map-chart`, `map-grilling`, `map-res
 
 ## Consequences
 
-A Prototype or research Ticket skips landing only because `finish` names no branch. The `guided`, `prototype`, `research` and `map` Tags carry meaning only for the Factory and the read side: the Factory reads `guided` on a Map, and the read side shows the others; Code Central's workflow never reads them. A Ticket that was labelled `prototype` or `wayfinder:*` before this change is no longer run as an implementation Ticket.
+A Prototype or research Ticket skips landing only because `finish` names no branch. The `guided`, `prototype`, `research` and `map` Tags carry meaning only for the Factory and the read side: the Factory reads `guided` on a Map, and the read side shows the others (`submit_requirement` sets `map` when Write the Spec makes a Requirement from a Map); Code Central's workflow never reads them. A Ticket that was labelled `prototype` or `wayfinder:*` before this change is no longer run as an implementation Ticket.

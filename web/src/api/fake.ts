@@ -674,7 +674,7 @@ export class FakeApi implements Api {
   // finishedMap is the ID of the Map submitRequirement's map names, which
   // must be a Map with no unfinished Tickets.
   private finishedMap(project: string, map: string): string {
-    const id = `${project}-${map.slice(map.lastIndexOf("-") + 1)}`;
+    const id = `${project}-${numberOf(map)}`;
     const s = this.specs.get(id);
     if (!s) throw new ApiError(404, "not_found", `there is no Spec ${id}`);
     if (!s.labels.includes(MAP_LABEL)) throw new ApiError(422, "invalid", `${id} isn't a Map: a Map is a Spec labelled ${MAP_LABEL}`, "map");
@@ -977,6 +977,8 @@ export class FakeApi implements Api {
     }
     const stages = STAGES.map((s) => tickets.find((t) => stageOf(t) === s.name)).filter((t) => !!t);
     if (!stages.length) return { state_summary, finished };
+    // The Map a Requirement was made from, when it has no grilling Stage.
+    const map = stageOf(stages[0]) !== "grilling" ? this.specs.get(spec)?.tags.map : undefined;
     // A Ticket a Factory could claim now; one waiting on the human doesn't count.
     const claimable = (t: TicketView) =>
       t.state === "Ready" && !reason(t) && t.blocked_by.every((b) => this.tickets.get(b)?.state === "Done");
@@ -987,7 +989,7 @@ export class FakeApi implements Api {
       state_summary,
       finished,
       requirement: {
-        ...(this.specs.get(spec)?.tags.map && { map: this.specs.get(spec)!.tags.map }),
+        ...(map && { map }),
         stages: stages.map((t) => ({ name: stageOf(t)!, ticket: t.id, state: t.state, ...(reason(t) && { needs_me_reason: reason(t) }) })),
         build: { done: build.filter((t) => t.state === "Done").length, total: build.length },
         waiting_for_factory: current ? claimable(current) : build.some(claimable) && !held,

@@ -45,8 +45,12 @@ A Map's Draft Tickets that nothing blocks: the decisions that can be started nex
 _Avoid_: Next steps, backlog
 
 **Map view**:
-The UI's view of a Map: its Destination, its Tickets as a left-to-right graph with Blockers as edges and **Start** on each frontier Ticket, a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph.
+The UI's view of a Map: its Destination, its Tickets as a left-to-right graph with Blockers as edges and **Start** on each frontier Ticket, a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph. Its header has **Write the Spec** once the Map is finished, and links the Requirements written from it.
 _Avoid_: Map board, roadmap
+
+**Write the Spec**:
+The human's action on a finished Map (every Ticket Done or Cancelled) that creates a new Requirement with no grilling Stage, whose `map` Tag names the Map; its spec Stage works from the Map's Decisions so far and the resolutions they link. The Map stays as the record.
+_Avoid_: Promote, convert the Map
 
 **Charting**:
 The first Ticket of a Map, which names its destination with the human and creates the first decision Tickets and their Blockers.

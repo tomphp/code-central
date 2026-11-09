@@ -4,7 +4,7 @@
 // Ticket; without, it is a picture only (inside a row link). A Requirement
 // made from a Map has a done Map segment in place of Grilling, a link to
 // the Map with mapLink.
-import type { MouseEvent } from "react";
+import type { Link } from "../url";
 import type { Progress, Segment } from "./progress";
 
 export interface StripProps {
@@ -13,7 +13,7 @@ export interface StripProps {
   // current is the selected Ticket, marking the segment it belongs to.
   current?: string;
   // mapLink links the Map segment to its Map.
-  mapLink?(map: string): { href: string; onClick(e: MouseEvent): void };
+  mapLink?(map: string): Link;
 }
 
 export function Strip({ p, onPick, current, mapLink }: StripProps) {

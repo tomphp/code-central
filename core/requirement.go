@@ -46,7 +46,8 @@ type SubmitRequirementInput struct {
 }
 
 // SubmitRequirementResult is the new Requirement: its Spec and its Stage
-// Tickets (three, or two when made from a Map), in order, each acknowledged, or with full each the record.
+// Tickets (three, or two when made from a Map), in order, each
+// acknowledged, or with full each the record.
 type SubmitRequirementResult struct {
 	Spec   Written[SpecView]     `json:"spec"`
 	Stages []Written[TicketView] `json:"stages"`
@@ -184,8 +185,8 @@ func titleLine(text string) string {
 // when the Spec is a Requirement: it has at least one Stage Ticket.
 // Nothing in it is stored.
 type RequirementView struct {
-	// Map is the Map the Requirement was made from, from its map Tag; it
-	// then has no grilling Stage.
+	// Map is the Map the Requirement was made from, from its map Tag, set
+	// only when it has no grilling Stage.
 	Map string `json:"map,omitempty"`
 	// Stages are the Stage Tickets in Stage order.
 	Stages []StageView `json:"stages"`
@@ -246,7 +247,10 @@ func (c *Core) requirementView(r store.Reader, key string, s store.Spec, tickets
 		reason, _ := c.reasonOf(r, key, t)
 		return t.State == store.Ready && !blocked(r, key, t) && reason == ""
 	}
-	v := &RequirementView{Map: s.Tags[MapTag], Stages: []StageView{}}
+	v := &RequirementView{Stages: []StageView{}}
+	if StageOf(stages[0].Labels) != "grilling" {
+		v.Map = s.Tags[MapTag]
+	}
 	current := -1
 	for i, t := range stages {
 		reason, _ := c.reasonOf(r, key, t)

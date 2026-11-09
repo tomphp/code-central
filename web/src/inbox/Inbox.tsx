@@ -71,15 +71,13 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, require
     "data-id": id,
     "aria-current": !loc.requirement && loc.ticket === id ? ("true" as const) : undefined,
   });
+  // specLink opens a Spec, a Requirement or Map, on its default Ticket.
+  const specLink = (id: string) => ({ href: hrefFor({ ...loc, requirement: id, ticket: undefined }), onClick: go({ requirement: id, ticket: undefined }) });
   const requirementLink = (id: string) => ({
-    href: hrefFor({ ...loc, requirement: id, ticket: undefined }),
-    onClick: go({ requirement: id, ticket: undefined }),
+    ...specLink(id),
     "data-id": id,
     "aria-current": loc.requirement === id ? ("true" as const) : undefined,
   });
-
-  // specLink opens another Spec, a Map or Requirement, from the selected one.
-  const specLink = (id: string) => ({ href: hrefFor({ ...loc, requirement: id, ticket: undefined }), onClick: go({ requirement: id, ticket: undefined }) });
 
   // Only an active Project has a Project Options link: an Archived one takes no writes.
   const projectFilter = (p: ProjectRow) => (

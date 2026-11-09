@@ -345,6 +345,13 @@ func TestARequirementNotMadeFromAMapNamesNoMap(t *testing.T) {
 	if err != nil || sp.Requirement.Map != "" || len(sp.Tags) != 0 {
 		t.Fatalf("spec %+v, %v", sp, err)
 	}
+	// A map Tag set by hand names no Map while the grilling Stage is there.
+	if _, err := f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: "acme-1", Tags: map[string]string{"map": "acme-9"}}); err != nil {
+		t.Fatal(err)
+	}
+	if sp, _ := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"}); sp.Requirement.Map != "" {
+		t.Fatalf("requirement %+v", sp.Requirement)
+	}
 }
 
 func TestWritingTheSpecIsRefusedForASpecThatIsNotAFinishedMap(t *testing.T) {

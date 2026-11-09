@@ -2,10 +2,10 @@
 // title, submitted time), the clickable Stage strip (its Map segment
 // linking to the Map it was made from, if any), what it waits for,
 // and under Build its implementation Tickets with their States.
-import type { MouseEvent } from "react";
 import type { NeedsMeReason, SpecDetail } from "../api/types";
 import { ago } from "../format";
 import { RowLatestEvent } from "../LatestEvent";
+import type { Link } from "../url";
 import { progress, waitingNote } from "./progress";
 import { Strip } from "./Strip";
 
@@ -17,7 +17,7 @@ export interface RequirementPaneProps {
   ticket?: string;
   select(ticket: string): void;
   // specLink links another Spec, such as the Map it was made from.
-  specLink(spec: string): { href: string; onClick(e: MouseEvent): void };
+  specLink(spec: string): Link;
 }
 
 export function RequirementPane({ spec, reasons, now, ticket, select, specLink }: RequirementPaneProps) {

@@ -4,13 +4,14 @@
 // to the Requirements made from it), then the Map's Tickets as a left-to-right
 // graph with Blockers as edges and the fog of what isn't specified yet on
 // the right, beside its collapsible Decisions so far and Out of scope.
-import { useId, useState, type MouseEvent } from "react";
+import { useId, useState } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import type { MapView, NeedsMeReason, SpecDetail, TicketRow } from "../api/types";
 import { ago } from "../format";
 import { Markdown } from "../Markdown";
 import { WriteTheSpec } from "../requirement/NewRequirement";
+import type { Link } from "../url";
 import { useAct } from "../ticket/useAct";
 import { FOG, isFrontier, layoutMap, NODE, nodeProgress } from "./graph";
 import { mapCount } from "./MapRow";
@@ -25,7 +26,7 @@ export interface MapPaneProps {
   ticket?: string;
   select(ticket: string): void;
   // specLink links another Spec: a Requirement made from the Map.
-  specLink(spec: string): { href: string; onClick(e: MouseEvent): void };
+  specLink(spec: string): Link;
   // written is called with the Requirement Write the Spec made.
   written(spec: string): void;
 }
