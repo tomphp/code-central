@@ -286,3 +286,33 @@ func TestEachTicketRowOnAMapCarriesItsBlockers(t *testing.T) {
 		}
 	}
 }
+
+// A Map is guided only when its guided Tag is on: a missing Tag or any
+// other value means off.
+func TestTheMapBlockIsGuidedOnlyWhenItsGuidedTagIsOn(t *testing.T) {
+	f := newFixture(t)
+	f.mapWith(t)
+	if m := f.mapOf(t, "acme-1"); m.Guided {
+		t.Fatalf("a Map with no guided Tag isn't guided: %+v", m)
+	}
+	for value, want := range map[string]bool{"on": true, "On": false, "true": false, "off": false} {
+		if _, err := f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: "acme-1", Tags: map[string]string{"guided": value}}); err != nil {
+			t.Fatalf("set_tags: %v", err)
+		}
+		if m := f.mapOf(t, "acme-1"); m.Guided != want {
+			t.Fatalf("guided: %s gives guided %v", value, m.Guided)
+		}
+	}
+	f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: "acme-1", Tags: map[string]string{"guided": "on"}})
+	if _, err := f.core.RemoveTags(ctx, "acme", core.RemoveTagsInput{Target: "acme-1", Keys: []string{"guided"}}); err != nil {
+		t.Fatalf("remove_tags: %v", err)
+	}
+	if m := f.mapOf(t, "acme-1"); m.Guided {
+		t.Fatalf("removing the guided Tag turns it off: %+v", m)
+	}
+	f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: "acme-1", Tags: map[string]string{"guided": "on"}})
+	rows, err := f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{})
+	if err != nil || !rows[0].Map.Guided {
+		t.Fatalf("find_specs rows carry guided too: %+v, %v", rows, err)
+	}
+}
