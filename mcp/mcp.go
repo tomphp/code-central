@@ -67,17 +67,14 @@ var tools = map[string]tool{
 		},
 	},
 	"get_ticket": {
-		description: "Get one Ticket's full view, including its description and moves.",
-		schema:      object(map[string]any{"ticket": ref("The Ticket.")}, "ticket"),
-		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
-			var in struct {
-				Ticket core.Ref `json:"ticket"`
-			}
-			if err := core.Decode(ctx, args, &in); err != nil {
-				return nil, err
-			}
-			return c.GetTicket(ctx, key, in.Ticket)
-		},
+		description: "Get one Ticket: its description, State, Blockers, past Claims and how each ended, every Failure Report and every comment; left_out counts what it leaves out, and parts (claims, failure_reports, comments, rounds, moves, edits) asks for exactly those.",
+		schema: object(map[string]any{
+			"ticket": ref("The Ticket."),
+			"parts":  list("Only these parts, any of claims, failure_reports, comments, rounds, moves and edits; claims, failure_reports and comments when left out."),
+		}, "ticket"),
+		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.GetTicketInput) (any, error) {
+			return c.GetTicket(ctx, key, in)
+		}),
 	},
 	"find_tickets": {
 		description: "Find this Project's Tickets in claim order; every filter given must match.",

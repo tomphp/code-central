@@ -318,7 +318,7 @@ func TestAnArchivedProjectStaysReadable(t *testing.T) {
 	f.finishedWork(t)
 	f.project(t, "other")
 	f.archive(t, "acme")
-	if v, err := f.core.GetTicket(ctx, "acme", "acme-2"); err != nil || v.State != store.Done {
+	if v, err := f.core.GetTicket(ctx, "acme", whole("acme-2")); err != nil || v.State != store.Done {
 		t.Fatalf("get_ticket: %+v, %v", v, err)
 	}
 	if rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []store.State{store.Done, store.Cancelled}}); err != nil || len(rows) != 2 {

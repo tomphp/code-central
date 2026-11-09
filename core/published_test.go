@@ -90,6 +90,7 @@ func TestTheProseCoversTheRulesTheTableCannotSay(t *testing.T) {
 		"A send-back with no note means nothing has changed",
 		"branch named after the Ticket ID", "commit often", "Don't push",
 		"Holding several Claims", "Silence is tracked per session", "same resume command", "same files",
+		"`claim` returns these", "`get_ticket` with `parts` returns what `left_out` counts", "`rounds` on a redo",
 		"`parts: [\"body\"]`", "`sections`", "`outline`", "add `tickets` only when sibling Tickets matter",
 		"returns an acknowledgement (`id`, `updated`, `changed`, …)", "`full: true` returns the record",
 		"Under a Project's Branch Landing Method, an Accepted Ticket shows the human `to_merge` at once",

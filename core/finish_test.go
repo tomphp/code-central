@@ -53,7 +53,7 @@ func TestFinishNeedsASummary(t *testing.T) {
 	f.claim(t, core.ClaimInput{})
 	_, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: "claim-1", Summary: " "})
 	wantCode(t, err, core.Invalid, "summary")
-	if got, _ := f.core.GetTicket(ctx, "acme", "2"); got.State != store.InProgress {
+	if got, _ := f.core.GetTicket(ctx, "acme", whole("2")); got.State != store.InProgress {
 		t.Fatalf("state %s, want still In Progress", got.State)
 	}
 }
@@ -97,7 +97,7 @@ func TestAcceptAndRejectAreHumanActions(t *testing.T) {
 	wantCode(t, err, core.ActionNotAllowed, "")
 	_, err = f.core.Reject(core.WithActor(ctx, core.Integration), "acme", core.RejectInput{Ticket: "2", Comment: "No."})
 	wantCode(t, err, core.ActionNotAllowed, "")
-	if got, _ := f.core.GetTicket(ctx, "acme", "2"); got.State != store.InReview {
+	if got, _ := f.core.GetTicket(ctx, "acme", whole("2")); got.State != store.InReview {
 		t.Fatalf("state %s, want still In Review", got.State)
 	}
 }

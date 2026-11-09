@@ -139,6 +139,8 @@ func TestTheGrillingGuideRetitlesTheSpecAndPostsAResolution(t *testing.T) {
 		"Leave the Spec's body as the Requirement's text",
 		"already clear", "with no Round",
 		"points at the resolution comment",
+		// A redo reads the earlier Rounds, which claim's Ticket leaves out.
+		"`parts: [\"rounds\", \"comments\"]`",
 	)
 }
 
@@ -150,6 +152,7 @@ func TestTheSpecGuideReplacesTheBodyInTheSpecTemplate(t *testing.T) {
 		"Testing Decisions", "Out of Scope", "Further Notes",
 		"Create no Spec", "add no Label",
 		"grilling Ticket's Rounds and resolution",
+		"`parts: [\"rounds\", \"comments\"]`",
 		"test seams", "key decisions", "out of scope",
 	)
 }

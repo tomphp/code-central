@@ -131,7 +131,7 @@ func TestAPingMarksEveryLiveClaimWithThatSessionInAnyProject(t *testing.T) {
 
 	wantSilentSince(t, f.get(t, "acme-2"), time.Time{})
 	wantSilentSince(t, f.get(t, "acme-3"), claimed)
-	web, err := f.core.GetTicket(ctx, "web", "2")
+	web, err := f.core.GetTicket(ctx, "web", whole("2"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,10 +185,10 @@ func TestAfterARestartLastActivityCountsFromServiceStart(t *testing.T) {
 	started := f.clock.Now()
 	restarted := core.New(f.store, f.clock, &ids.Sequence{})
 	f.clock.Advance(29 * time.Minute)
-	v, _ := restarted.GetTicket(ctx, "acme", "2")
+	v, _ := restarted.GetTicket(ctx, "acme", whole("2"))
 	wantSilentSince(t, v, time.Time{})
 	f.clock.Advance(time.Minute)
-	v, _ = restarted.GetTicket(ctx, "acme", "2")
+	v, _ = restarted.GetTicket(ctx, "acme", whole("2"))
 	wantSilentSince(t, v, started)
 }
 

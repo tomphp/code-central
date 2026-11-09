@@ -671,8 +671,12 @@ func TestMCPAndTheCLIAlwaysWriteAsTheAgent(t *testing.T) {
 	viaMCP := mcpOK(t, connect(t, srv, "acme"), "claim", map[string]any{})
 	viaCLI := cliOK(t, srv, []string{"claim"})
 	for door, out := range map[string]map[string]any{"mcp": viaMCP, "cli": viaCLI} {
-		moves := out["ticket"].(map[string]any)["moves"].([]any)
-		if a := moves[0].(map[string]any)["actor"]; a != "agent" {
+		// claim's Ticket leaves its moves out, so read the whole Ticket.
+		tk, err := srv.Client.GetTicket(context.Background(), "acme", core.Ref(out["ticket"].(map[string]any)["id"].(string)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a := tk.Moves[0].Actor; a != "agent" {
 			t.Errorf("%s: the claim was made as %v, want agent", door, a)
 		}
 	}

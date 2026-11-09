@@ -119,7 +119,7 @@ func TestOperationsOnAnUnknownProject(t *testing.T) {
 	wantCode(t, err, core.UnknownProject, "")
 	_, err = f.core.CreateTicket(ctx, "nope", core.CreateTicketInput{Spec: "1", Title: "T"})
 	wantCode(t, err, core.UnknownProject, "")
-	_, err = f.core.GetTicket(ctx, "nope", "1")
+	_, err = f.core.GetTicket(ctx, "nope", whole("1"))
 	wantCode(t, err, core.UnknownProject, "")
 	_, err = f.core.FindTickets(ctx, "nope", core.FindTicketsInput{})
 	wantCode(t, err, core.UnknownProject, "")
@@ -164,11 +164,11 @@ func TestCreateTicket(t *testing.T) {
 		t.Fatalf("ready: %+v", ready)
 	}
 
-	got, err := f.core.GetTicket(ctx, "acme", "acme-2")
+	got, err := f.core.GetTicket(ctx, "acme", whole("acme-2"))
 	if err != nil || got.ID != "acme-2" || got.Title != "Form" {
 		t.Fatalf("get_ticket: %+v, %v", got, err)
 	}
-	if got, err := f.core.GetTicket(ctx, "acme", "3"); err != nil || got.Title != "API" {
+	if got, err := f.core.GetTicket(ctx, "acme", whole("3")); err != nil || got.Title != "API" {
 		t.Fatalf("get_ticket by bare number: %+v, %v", got, err)
 	}
 }
@@ -211,10 +211,10 @@ func TestGetTicketNotFound(t *testing.T) {
 	f.project(t, "acme")
 	f.spec(t, "acme", "Login")
 	for _, ref := range []core.Ref{"1", "5", "acme-7"} {
-		_, err := f.core.GetTicket(ctx, "acme", ref)
+		_, err := f.core.GetTicket(ctx, "acme", whole(ref))
 		wantCode(t, err, core.NotFound, "")
 	}
-	_, err := f.core.GetTicket(ctx, "acme", "banana")
+	_, err := f.core.GetTicket(ctx, "acme", whole("banana"))
 	wantCode(t, err, core.Invalid, "ticket")
 }
 

@@ -69,10 +69,16 @@ func (c *Client) CreateTicket(ctx context.Context, key string, in core.CreateTic
 	return write[core.TicketView](ctx, c, scoped(key, "create_ticket"), in, in.Full)
 }
 
-// GetTicket is get_ticket.
-func (c *Client) GetTicket(ctx context.Context, key string, ref core.Ref) (core.TicketView, error) {
+// GetTicket is get_ticket with the parts named, or the whole Ticket with
+// none, as the HTTP API returns it.
+func (c *Client) GetTicket(ctx context.Context, key string, ref core.Ref, parts ...string) (core.TicketView, error) {
+	q := url.Values{"part": parts}
+	path := scoped(key, "tickets/"+url.PathEscape(string(ref)))
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
 	var out core.TicketView
-	return out, c.do(ctx, "GET", scoped(key, "tickets/"+url.PathEscape(string(ref))), nil, &out)
+	return out, c.do(ctx, "GET", path, nil, &out)
 }
 
 // FindTickets is find_tickets.

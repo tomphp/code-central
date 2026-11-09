@@ -124,11 +124,11 @@ func TestSetOptionsValidatesBeforeWriting(t *testing.T) {
 func TestSetOptionsRecordsNothingOnAnyTicket(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, store.Ready)
-	before, _ := f.core.GetTicket(ctx, "acme", "2")
+	before, _ := f.core.GetTicket(ctx, "acme", whole("2"))
 	if _, err := f.core.SetOptions(human, core.SetOptionsInput{FocusClear: focus(store.FocusActivityDashboard)}); err != nil {
 		t.Fatal(err)
 	}
-	after, _ := f.core.GetTicket(ctx, "acme", "2")
+	after, _ := f.core.GetTicket(ctx, "acme", whole("2"))
 	if len(after.Moves) != len(before.Moves) || len(after.Edits) != len(before.Edits) || len(after.Comments) != len(before.Comments) {
 		t.Fatalf("set_options touched a Ticket: %+v", after)
 	}

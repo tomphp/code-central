@@ -120,8 +120,9 @@ type ClaimView struct {
 	LatestEvent *LatestEvent `json:"latest_event,omitempty"`
 }
 
-// TicketView is the full view of one Ticket, as every read returns it,
-// and as its writes return it with full.
+// TicketView is the full view of one Ticket, as its writes return it with
+// full. A read (get_ticket, claim) may leave parts out: each part left out
+// is nil, so it has no key, and LeftOut counts what it had.
 type TicketView struct {
 	ID           string            `json:"id"`
 	Title        string            `json:"title"`
@@ -139,14 +140,17 @@ type TicketView struct {
 	// last finish naming them gave them.
 	Branch         string              `json:"branch,omitempty"`
 	Commit         string              `json:"commit,omitempty"`
-	Claims         []ClaimView         `json:"claims"`
-	Rounds         []RoundView         `json:"rounds"`
-	FailureReports []FailureReportView `json:"failure_reports"`
-	Comments       []CommentView       `json:"comments"`
-	Moves          []MoveView          `json:"moves"`
-	Edits          []EditView          `json:"edits"`
-	Blocked        bool                `json:"blocked"`
-	Claimable      bool                `json:"claimable"`
+	Claims         []ClaimView         `json:"claims,omitzero"`
+	Rounds         []RoundView         `json:"rounds,omitzero"`
+	FailureReports []FailureReportView `json:"failure_reports,omitzero"`
+	Comments       []CommentView       `json:"comments,omitzero"`
+	Moves          []MoveView          `json:"moves,omitzero"`
+	Edits          []EditView          `json:"edits,omitzero"`
+	// LeftOut counts each part a read left out that has anything, by
+	// part name.
+	LeftOut   map[string]int `json:"left_out,omitempty"`
+	Blocked   bool           `json:"blocked"`
+	Claimable bool           `json:"claimable"`
 	// SilentSince is set while the Ticket is a Silent Claim: In Progress
 	// with no activity for 30 minutes. It is the time of the last
 	// activity, so the quiet time is now minus it. Computed, never stored.
@@ -328,18 +332,23 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 	return v, err
 }
 
-// GetTicket is get_ticket(ticket).
-func (c *Core) GetTicket(_ context.Context, key string, ref Ref) (TicketView, error) {
+// GetTicket is get_ticket(ticket, parts?): the Ticket with the parts asked
+// for, or its default parts.
+func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (TicketView, error) {
+	parts, err := in.parts()
+	if err != nil {
+		return TicketView{}, err
+	}
 	var v TicketView
-	err := c.store.View(func(r store.Reader) error {
+	err = c.store.View(func(r store.Reader) error {
 		if _, ok := r.Project(key); !ok {
 			return unknownProject(key)
 		}
-		t, err := resolveTicket(r, key, "get_ticket", "ticket", ref)
+		t, err := resolveTicket(r, key, "get_ticket", "ticket", in.Ticket)
 		if err != nil {
 			return err
 		}
-		v = c.ticketView(r, key, t)
+		v = c.ticketView(r, key, t).only(parts)
 		return nil
 	})
 	return v, err

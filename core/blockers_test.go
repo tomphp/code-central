@@ -11,9 +11,14 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
+// whole asks get_ticket for every part: the whole Ticket.
+func whole(ref core.Ref) core.GetTicketInput {
+	return core.GetTicketInput{Ticket: ref, Parts: core.TicketParts}
+}
+
 func (f fixture) get(t *testing.T, ref core.Ref) core.TicketView {
 	t.Helper()
-	v, err := f.core.GetTicket(ctx, "acme", ref)
+	v, err := f.core.GetTicket(ctx, "acme", whole(ref))
 	if err != nil {
 		t.Fatalf("get_ticket %s: %v", ref, err)
 	}

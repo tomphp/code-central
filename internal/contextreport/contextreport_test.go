@@ -161,8 +161,10 @@ func TestOnlyReadsForMoreThanBeforeAreWiderReads(t *testing.T) {
 		// Wider: the body after only the tickets.
 		spec(map[string]any{"spec": "acme-9", "parts": []any{"tickets"}}),
 		spec(map[string]any{"spec": "acme-9", "parts": []any{"body"}}),
-		// Wider: any part of a Ticket after its default, and full.
+		// Wider: a part of a Ticket its default leaves out, and full; the
+		// comments it already had are not.
 		read("get_ticket", map[string]any{"ticket": "acme-2"}),
+		read("get_ticket", map[string]any{"ticket": "acme-2", "parts": []any{"comments"}}),
 		read("get_ticket", map[string]any{"ticket": "acme-2", "parts": []any{"rounds"}}),
 		read("get_ticket", map[string]any{"ticket": "acme-2", "full": true}),
 	}}}

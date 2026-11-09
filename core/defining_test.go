@@ -50,7 +50,7 @@ func TestEditTicketRecordsThePreviousTextOfChangedFields(t *testing.T) {
 	if len(v.Edits) != 2 || !editEqual(v.Edits[1], want) {
 		t.Fatalf("edits %+v, want a second entry %+v", v.Edits, want)
 	}
-	got, _ := f.core.GetTicket(ctx, "acme", "2")
+	got, _ := f.core.GetTicket(ctx, "acme", whole("2"))
 	if len(got.Edits) != 2 || got.Title != "Login form" {
 		t.Fatalf("get_ticket: %+v", got)
 	}
@@ -140,7 +140,7 @@ func TestLabelsAreAddedAndRemovedByNameOnSpecsAndTickets(t *testing.T) {
 	if err != nil || !slices.Equal(v.Labels, []string{"auth"}) {
 		t.Fatalf("remove from a Ticket: %+v, %v", v, err)
 	}
-	tk, _ := f.core.GetTicket(ctx, "acme", "3")
+	tk, _ := f.core.GetTicket(ctx, "acme", whole("3"))
 	if !slices.Equal(tk.Labels, []string{"auth"}) || len(tk.Edits) != 0 || !tk.Updated.Equal(t0.Add(time.Minute)) {
 		t.Fatalf("ticket after: %+v (Label changes aren't recorded in edits)", tk)
 	}
@@ -183,7 +183,7 @@ func TestSetTagsMergesAndRemoveTagsRemoves(t *testing.T) {
 	if err != nil || !maps.Equal(v.Tags, map[string]string{"scratch.status": "ready"}) {
 		t.Fatalf("remove_tags: %+v, %v", v, err)
 	}
-	tk, _ := f.core.GetTicket(ctx, "acme", "2")
+	tk, _ := f.core.GetTicket(ctx, "acme", whole("2"))
 	if tk.Tags["scratch.status"] != "ready" || len(tk.Edits) != 0 {
 		t.Fatalf("ticket: %+v (Tag changes aren't recorded in edits)", tk)
 	}

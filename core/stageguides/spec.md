@@ -14,7 +14,7 @@ The Spec's body, written in full. Replace it with `edit_spec`, giving `body`, in
 6. Out of Scope
 7. Further Notes
 
-Work from the Requirement's text (the Spec's body as the human submitted it) and the grilling Ticket's Rounds and resolution: read that Ticket with `get_ticket`. Carry every decision, new term and ADR from the resolution into the Spec, so the tickets Stage can assign writing them. Testing Decisions name the seams the tests go through.
+Work from the Requirement's text (the Spec's body as the human submitted it) and the grilling Ticket's Rounds and resolution: read that Ticket with `get_ticket` and `parts: ["rounds", "comments"]`, since its default leaves Rounds out. Carry every decision, new term and ADR from the resolution into the Spec, so the tickets Stage can assign writing them. Testing Decisions name the seams the tests go through.
 
 Create no Spec and add no Label: the Spec already exists, and its Tickets carry the Stages. Keep the Spec's title unless the work has plainly outgrown it.
 
