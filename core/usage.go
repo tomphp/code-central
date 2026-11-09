@@ -95,7 +95,7 @@ type UsageInput struct {
 	Days int
 }
 
-// UsageView is Usage as the read returns it. Days stays empty for now.
+// UsageView is Usage as the read returns it.
 type UsageView struct {
 	Operations []UsageOperation `json:"operations"`
 	Kinds      []UsageKind      `json:"kinds"`
@@ -142,7 +142,8 @@ type UsageSession struct {
 	Responses int       `json:"responses"`
 }
 
-// UsageDay is one local day's token usage, by kind of session.
+// UsageDay is one local day's token usage, by kind of session: the kinds
+// with any usage that day, in kindOrder; none on a day with no usage.
 type UsageDay struct {
 	Day   string           `json:"day"`
 	Kinds []UsageDayTokens `json:"kinds"`
@@ -176,7 +177,7 @@ func (c *Core) Usage(_ context.Context, in UsageInput) (UsageView, error) {
 		Operations: operations(recs.Calls),
 		Kinds:      kinds(sessions),
 		Sessions:   recent,
-		Days:       []UsageDay{},
+		Days:       usageDays(recs.Days, recs.Responses),
 	}, nil
 }
 
@@ -217,6 +218,37 @@ func usageSessions(responses []usage.Response) []UsageSession {
 	return sessions
 }
 
+// usageDays is a row for each of days, oldest first, with the responses'
+// tokens on that day summed by kind.
+func usageDays(days []string, responses []usage.Response) []UsageDay {
+	byDay := map[string]map[string]*UsageDayTokens{}
+	for _, r := range responses {
+		kinds := byDay[r.Day]
+		if kinds == nil {
+			kinds = map[string]*UsageDayTokens{}
+			byDay[r.Day] = kinds
+		}
+		k := kinds[r.Kind]
+		if k == nil {
+			k = &UsageDayTokens{Kind: r.Kind}
+			kinds[r.Kind] = k
+		}
+		k.InputTokens += r.InputTokens
+		k.CacheWriteTokens += r.CacheWriteTokens
+		k.CacheReadTokens += r.CacheReadTokens
+		k.OutputTokens += r.OutputTokens
+	}
+	rows := make([]UsageDay, len(days))
+	for i, d := range days {
+		rows[i] = UsageDay{Day: d, Kinds: []UsageDayTokens{}}
+		for _, k := range byDay[d] {
+			rows[i].Kinds = append(rows[i].Kinds, *k)
+		}
+		slices.SortFunc(rows[i].Kinds, func(a, b UsageDayTokens) int { return compareKinds(a.Kind, b.Kind) })
+	}
+	return rows
+}
+
 // kindOrder is the order kinds are listed in, as the Context Report
 // lists them; any other kind follows, by name.
 var kindOrder = []string{"grilling", "spec", "tickets", "implementation", "review", "subagent"}
@@ -240,16 +272,19 @@ func kinds(sessions []UsageSession) []UsageKind {
 		k.AveragePeak = average(total[k.Kind], k.Sessions)
 		rows = append(rows, *k)
 	}
+	slices.SortFunc(rows, func(a, b UsageKind) int { return compareKinds(a.Kind, b.Kind) })
+	return rows
+}
+
+// compareKinds orders kinds by kindOrder, then any other by name.
+func compareKinds(a, b string) int {
 	rank := func(kind string) int {
 		if i := slices.Index(kindOrder, kind); i >= 0 {
 			return i
 		}
 		return len(kindOrder)
 	}
-	slices.SortFunc(rows, func(a, b UsageKind) int {
-		return cmp.Or(cmp.Compare(rank(a.Kind), rank(b.Kind)), cmp.Compare(a.Kind, b.Kind))
-	})
-	return rows
+	return cmp.Or(cmp.Compare(rank(a), rank(b)), cmp.Compare(a, b))
 }
 
 // operations is the operations table: one row per op, most called

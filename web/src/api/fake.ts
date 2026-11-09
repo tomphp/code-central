@@ -95,6 +95,8 @@ import {
   type TicketView,
   type Transcript,
   USAGE_DAYS,
+  type UsageDay,
+  type UsageDayTokens,
   type UsageFilter,
   type UsageKind,
   type UsageOperation,
@@ -180,10 +182,44 @@ function usageKinds(sessions: UsageSession[]): UsageKind[] {
     e.total += s.peak;
     byKind.set(s.kind, e);
   }
-  const rank = (kind: string) => (KIND_ORDER.includes(kind) ? KIND_ORDER.indexOf(kind) : KIND_ORDER.length);
   return [...byKind.values()]
     .map((e) => ({ ...e.k, average_peak: average(e.total, e.k.sessions) }))
-    .sort((a, b) => rank(a.kind) - rank(b.kind) || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0));
+    .sort((a, b) => compareKinds(a.kind, b.kind));
+}
+
+// compareKinds orders kinds by KIND_ORDER, then any other by name.
+function compareKinds(a: string, b: string): number {
+  const rank = (kind: string) => (KIND_ORDER.includes(kind) ? KIND_ORDER.indexOf(kind) : KIND_ORDER.length);
+  return rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0);
+}
+
+// dateOf is t's local day as YYYY-MM-DD, as the service names a day.
+function dateOf(t: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`;
+}
+
+// usageDays is a row for each of the last days local days to today,
+// oldest first, with the responses' tokens that day summed by kind.
+function usageDays(today: Date, days: number, responses: FakeUsageRecord[]): UsageDay[] {
+  const byDay = new Map<string, Map<string, UsageDayTokens>>();
+  for (const r of responses) {
+    const day = dateOf(new Date(r.time));
+    const kinds = byDay.get(day) ?? new Map<string, UsageDayTokens>();
+    const k = kinds.get(r.kind) ?? { kind: r.kind, input_tokens: 0, cache_write_tokens: 0, cache_read_tokens: 0, output_tokens: 0 };
+    k.input_tokens += r.input_tokens;
+    k.cache_write_tokens += r.cache_write_tokens;
+    k.cache_read_tokens += r.cache_read_tokens;
+    k.output_tokens += r.output_tokens;
+    kinds.set(r.kind, k);
+    byDay.set(day, kinds);
+  }
+  const rows: UsageDay[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const day = dateOf(new Date(today.getFullYear(), today.getMonth(), today.getDate() - i));
+    rows.push({ day, kinds: [...(byDay.get(day)?.values() ?? [])].sort((a, b) => compareKinds(a.kind, b.kind)) });
+  }
+  return rows;
 }
 
 // Every action's fake behaviour registers itself from ./actions/.
@@ -783,8 +819,9 @@ export class FakeApi implements Api {
     const operations = [...rows.values()]
       .map((r) => ({ ...r, average_request_bytes: average(r.request_bytes, r.calls), average_response_bytes: average(r.response_bytes, r.calls) }))
       .sort((a, b) => b.calls - a.calls || (a.op < b.op ? -1 : 1));
-    const sessions = usageSessions(this.usageResponses.filter(inRange));
-    return { operations, kinds: usageKinds(sessions), sessions: sessions.slice(0, RECENT_SESSIONS), days: [] };
+    const responses = this.usageResponses.filter(inRange);
+    const sessions = usageSessions(responses);
+    return { operations, kinds: usageKinds(sessions), sessions: sessions.slice(0, RECENT_SESSIONS), days: usageDays(this.now, days, responses) };
   }
 
   // ---- internals ----

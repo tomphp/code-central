@@ -48,8 +48,10 @@ type Call struct {
 // Response is one model response's token usage in a Claim's session, as
 // a Factory posted it: a model_response record.
 type Response struct {
-	// Project is the Project whose file holds the record, set on read.
+	// Project is the Project whose file holds the record, and Day that
+	// file's local day, both set on read.
 	Project string    `json:"-"`
+	Day     string    `json:"-"`
 	Time    time.Time `json:"time"`
 	// Ticket is the Claim's Ticket's display ID, and Claim its number.
 	Ticket    string `json:"ticket"`
@@ -74,10 +76,12 @@ type Tokens struct {
 // full the session's context window was.
 func (t Tokens) ContextSize() int { return t.InputTokens + t.CacheWriteTokens + t.CacheReadTokens }
 
-// Records are the records a read found, oldest file first.
+// Records are the records a read found, oldest file first, and Days the
+// local days it read, oldest first, as YYYY-MM-DD.
 type Records struct {
 	Calls     []Call
 	Responses []Response
+	Days      []string
 }
 
 // keepDays is how many days before today a file is kept: one whose day is
@@ -196,8 +200,9 @@ func (r *Recorder) Read(project string, days int) Records {
 	today := r.today()
 	for i := days - 1; i >= 0; i-- {
 		d := day(today.AddDate(0, 0, -i))
+		out.Days = append(out.Days, d)
 		for _, p := range projects {
-			r.readFile(p, filepath.Join(r.projectDir(p), d+".jsonl"), &out)
+			r.readFile(p, d, &out)
 		}
 	}
 	return out
@@ -250,9 +255,11 @@ func (r *Recorder) projects() []string {
 	return slices.Sorted(slices.Values(keys))
 }
 
-// readFile adds path's records, project's, to out, skipping and counting any line
-// that doesn't parse. A missing file holds no records.
-func (r *Recorder) readFile(project, path string, out *Records) {
+// readFile adds the records of project's file for day d to out, skipping
+// and counting any line that doesn't parse. A missing file holds no
+// records.
+func (r *Recorder) readFile(project, d string, out *Records) {
+	path := filepath.Join(r.projectDir(project), d+".jsonl")
 	f, err := os.Open(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return
@@ -280,7 +287,8 @@ func (r *Recorder) readFile(project, path string, out *Records) {
 		case typeResponse:
 			out.Responses, err = appendRecord(out.Responses, sc.Bytes())
 			if err == nil {
-				out.Responses[len(out.Responses)-1].Project = project
+				resp := &out.Responses[len(out.Responses)-1]
+				resp.Project, resp.Day = project, d
 			}
 		default:
 			// A type this build doesn't know, from a newer one: not an error.
