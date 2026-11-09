@@ -44,13 +44,14 @@ func (c *Core) GetStageGuide(_ context.Context, in StageGuideInput) (StageGuideV
 	return stageGuide(in.Stage), nil
 }
 
-// stageGuide is the named Stage's guide; the name must be one of GuideStages.
+// stageGuide is the named Stage's guide, ending with the trouble rules;
+// the name must be one of GuideStages.
 func stageGuide(stage string) StageGuideView {
 	b, err := stageGuides.ReadFile("stageguides/" + stage + ".md")
 	if err != nil {
 		panic("core: no Stage Guide for " + stage)
 	}
-	return StageGuideView{Stage: stage, Guide: string(b)}
+	return StageGuideView{Stage: stage, Guide: string(b) + "\n" + troubleRules}
 }
 
 // GuideStage names the guide for a Ticket with these Labels: its Stage,

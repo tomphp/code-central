@@ -57,8 +57,9 @@ type TeachingFile struct {
 var teaching embed.FS
 
 // TeachingFiles are the docs/agents/ files init writes: pointers that map
-// the skills' operations to Code Central's by name and send agents to
-// get_workflow for the rules, so nothing in a repository goes stale.
+// the skills' operations to Code Central's by name and send agents to the
+// Stage Guide and get_workflow for the rules, so nothing in a repository
+// goes stale.
 func TeachingFiles() []TeachingFile {
 	var out []TeachingFile
 	for _, name := range []string{"issue-tracker.md", "triage-labels.md"} {
