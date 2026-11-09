@@ -25,6 +25,7 @@ export type NeedsMeReason =
   | "long_claim"
   | "failed"
   | "in_review"
+  | "to_merge"
   | "accepted_not_landed"
   | "blocked_by_cancelled"
   | "closed_externally";
@@ -99,6 +100,8 @@ export interface NeedsMeRow {
   round?: { number: number; open: number; questions: number };
   failure?: { headline: string; reports: number };
   summary?: string;
+  // branch is the Ticket's branch, for the human to merge (to_merge).
+  branch?: string;
   blocker?: BlockerView;
   link?: LinkView;
   // Set when the Ticket's Spec is a Requirement.

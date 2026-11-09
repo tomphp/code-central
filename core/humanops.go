@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -98,6 +99,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		l.Remote = store.DefaultLandingRemote
 	}
 	var v ProjectView
+	var accepted []int
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -107,11 +109,26 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 			v = projectView(p)
 			return nil
 		}
+		if p.Landing.Method != l.Method {
+			for _, t := range w.Tickets(key) {
+				if t.State == store.Accepted {
+					accepted = append(accepted, t.Number)
+				}
+			}
+		}
 		p.Landing = l
 		v = projectView(p)
 		return w.PutProject(p)
 	})
-	return v, err
+	if err != nil {
+		return v, err
+	}
+	// The method decides an Accepted Ticket's Needs Me reason (To merge,
+	// or Accepted but not landed), so each one changed without a write.
+	for _, n := range accepted {
+		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, n)})
+	}
+	return v, nil
 }
 
 // ProjectRow is one list_projects row: the Project and how many of its

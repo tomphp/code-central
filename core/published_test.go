@@ -71,10 +71,10 @@ func TestTheWorkflowSaysWhatCountsAsNeedsMe(t *testing.T) {
 	w := workflow(t)
 	want := []core.NeedsMeReason{
 		core.ReasonNeedsAnswer, core.ReasonAnswered, core.ReasonSilentClaim, core.ReasonLongClaim, core.ReasonFailed,
-		core.ReasonInReview, core.ReasonAcceptedNotLanded, core.ReasonBlockedByCancelled, core.ReasonClosedExternally,
+		core.ReasonInReview, core.ReasonToMerge, core.ReasonAcceptedNotLanded, core.ReasonBlockedByCancelled, core.ReasonClosedExternally,
 	}
 	if len(w.NeedsMe) != len(want) {
-		t.Fatalf("Needs Me reasons %v, want the nine in group order", w.NeedsMe)
+		t.Fatalf("Needs Me reasons %v, want the ten in group order", w.NeedsMe)
 	}
 	for i, r := range w.NeedsMe {
 		if r.Reason != want[i] || r.Meaning == "" {
@@ -92,6 +92,7 @@ func TestTheProseCoversTheRulesTheTableCannotSay(t *testing.T) {
 		"Holding several Claims", "Silence is tracked per session", "same resume command", "same files",
 		"`parts: [\"body\"]`", "`sections`", "`outline`", "add `tickets` only when sibling Tickets matter",
 		"returns an acknowledgement (`id`, `updated`, `changed`, …)", "`full: true` returns the record",
+		"Under a Project's Branch Landing Method, an Accepted Ticket shows the human `to_merge` at once",
 	} {
 		if !strings.Contains(prose, want) {
 			t.Errorf("get_workflow prose does not say %q", want)

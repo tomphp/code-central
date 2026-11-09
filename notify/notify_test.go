@@ -217,6 +217,22 @@ func TestAcceptedButNotLandedNeverNotifies(t *testing.T) {
 	f.want(notify.Notification{Title: "acme-3 has a new Round", Body: "Task B", URL: base + "/?view=inbox&ticket=acme-3"})
 }
 
+func TestToMergeNeverNotifies(t *testing.T) {
+	f := newFixture(t)
+	f.project("acme", 2)
+	human := core.WithActor(ctx, core.Human)
+	must(t)(f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingBranch}))
+	f.start()
+	claim := f.claim("acme", "2")
+	must(t)(f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: claim, Summary: "done", Branch: "acme-2", Commit: "abc"}))
+	must(t)(f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"}))
+	f.clock.BlockUntil(1)
+	f.clock.Advance(notify.Tick)
+	f.round("acme", "3")
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme-3 has a new Round", Body: "Task B", URL: base + "/?view=inbox&ticket=acme-3"})
+}
+
 func TestAClaimTurningSilentNotifiesOncePerCrossing(t *testing.T) {
 	f := newFixture(t)
 	f.project("acme", 2)
