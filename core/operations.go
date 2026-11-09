@@ -107,6 +107,11 @@ var Operations = []Op{
 	{Name: "submit_requirement", Audience: AgentAndHuman, Write: true},
 	{Name: "land", Audience: AgentAndHuman, Write: true},
 	{Name: "get_stage_guide", Audience: AgentAndHuman},
+
+	// Options, the human's global preferences (Spec code-central-160).
+	// HTTP only: no MCP tool and no CLI command.
+	{Name: "get_options", Audience: HumanOnly},
+	{Name: "set_options", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

@@ -115,6 +115,11 @@ func (w *noticeWriter) PutImport(key string, im store.Import) error {
 	return w.put(w.Writer.PutImport(key, im), events.Event{Type: events.ProjectChanged, Project: key})
 }
 
+// PutOptions sends options.changed, which names no Project and no ID.
+func (w *noticeWriter) PutOptions(o store.Options) error {
+	return w.put(w.Writer.PutOptions(o), events.Event{Type: events.OptionsChanged})
+}
+
 func (w *noticeWriter) put(err error, e events.Event) error {
 	if err == nil {
 		w.notice = &e

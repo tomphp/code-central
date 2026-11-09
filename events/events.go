@@ -12,10 +12,14 @@ const (
 	TicketChanged  = "ticket.changed"
 	SpecChanged    = "spec.changed"
 	ProjectChanged = "project.changed"
+	// OptionsChanged is about no Project: its Project and ID are empty.
+	OptionsChanged = "options.changed"
 )
 
 // Event is one change notice. ID is the display ID of the Ticket or Spec
-// and is empty for project.changed.
+// and is empty for project.changed. Project is empty for options.changed,
+// the one notice about no Project; a listener that reads Project treats
+// an empty one as not about any Project.
 type Event struct {
 	Type    string `json:"type"`
 	Project string `json:"project"`

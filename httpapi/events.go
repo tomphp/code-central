@@ -10,8 +10,9 @@ import (
 
 // EventsPath is the UI's live feed (ticket 33): Server-Sent Events, one
 // per change notice on core's events bus. Each event's name is the notice
-// type (ticket.changed, spec.changed, project.changed) and its data names
-// what changed: {project, id} or {project}. It is not one of core's
+// type (ticket.changed, spec.changed, project.changed, options.changed)
+// and its data names what changed: {project, id}, {project}, or {} for
+// options.changed, which is about no Project. It is not one of core's
 // operations, so it sits outside Routes. There is no replay: a client
 // that reconnects refetches everything.
 const EventsPath = "GET /api/events"
@@ -40,7 +41,7 @@ func events(c *core.Core) http.HandlerFunc {
 					return
 				}
 				data, _ := json.Marshal(struct {
-					Project string `json:"project"`
+					Project string `json:"project,omitempty"`
 					ID      string `json:"id,omitempty"`
 				}{e.Project, e.ID})
 				fmt.Fprintf(w, "event: %s\ndata: %s\n\n", e.Type, data)
