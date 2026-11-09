@@ -68,6 +68,8 @@ Until you restart, a newer hook or CLI may send a field the old service doesn't 
 
 If a step fails, the original store is untouched, the staging folder is deleted, and the service refuses to start, naming the step and the file. A store with a newer `format` than the binary knows is refused by name (`unknown format`), so an older binary never misreads it. A 10,000-Ticket store migrates and loads in well under the 10 seconds the end-to-end suite allows.
 
+On Windows, a migration doesn't wait for each staged file to reach the disk, because flushing 10,000 files one by one takes minutes. If the power fails or Windows crashes within a few seconds of a migration, some of the migrated files may not have been written, and the service then refuses to start, naming a file that fails to load. Your data is still in `code-central.format-<n>.bak`: restore it as in [Downgrading](#downgrading), but keep the new binary, so the next start migrates again. Only the migration takes this risk; every other write reaches the disk before the service acknowledges it.
+
 The service keeps one backup per format it has migrated from and never deletes them. If a backup for that format already exists (say you downgraded and upgraded again), the migration stops and names it: move it aside and restart. Delete old backups yourself once you're happy with the new version.
 
 ### Downgrading
