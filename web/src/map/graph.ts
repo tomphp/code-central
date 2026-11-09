@@ -35,18 +35,19 @@ export function nodeProgress(t: TicketRow, reason?: NeedsMeReason): SegmentProgr
   }
 }
 
-export interface Placed {
-  x: number; // left
-  y: number; // top
+// TopLeft is where a node's top-left corner goes.
+export interface TopLeft {
+  x: number;
+  y: number;
 }
 
 export interface MapLayout {
   width: number;
   height: number;
-  nodes: Map<string, Placed>;
+  nodes: Map<string, TopLeft>;
   // edges run from a Blocker to the Ticket it blocks, as SVG path data.
   edges: { from: string; to: string; d: string }[];
-  fog: Placed;
+  fog: TopLeft;
 }
 
 // layoutMap lays the Tickets out left to right, each Blocker left of what
@@ -61,7 +62,7 @@ export function layoutMap(tickets: TicketRow[]): MapLayout {
   for (const t of tickets) for (const b of t.blocked_by ?? []) if (ids.has(b)) g.setEdge(b, t.id);
   dagre.layout(g);
 
-  const nodes = new Map<string, Placed>();
+  const nodes = new Map<string, TopLeft>();
   let right = MARGIN - RANK_GAP;
   let height = FOG.height + 2 * MARGIN;
   for (const id of ids) {

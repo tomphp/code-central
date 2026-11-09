@@ -112,7 +112,7 @@ function aMap(fake: FakeApi, tickets: { title: string; label: string; state: Sta
 // The Map below: Charting is done; Which store is the frontier and
 // blocks Sync libraries; Ask legal runs; Try a cache needs the human;
 // Pick a format is queued for a Factory.
-const sample = (fake: FakeApi) =>
+const offlineMode = (fake: FakeApi) =>
   aMap(fake, [
     { title: "Charting: Offline mode", label: "wayfinder:chart", state: "Done" }, // acme-2
     { title: "Which store", label: "wayfinder:grilling", state: "Draft", blockedBy: ["acme-2"] }, // acme-3
@@ -132,7 +132,7 @@ describe("the Map view", () => {
 
   it("replaces the Requirement view with a left-to-right graph of the Map's Tickets, coloured by progress, with Blockers as edges", async () => {
     const fake = new FakeApi();
-    sample(fake);
+    offlineMode(fake);
     fake.setNeedsMe([{ reason: "in_review", tickets: [{ id: "acme-6" }] }]);
     const pane = await open(fake);
 
@@ -164,7 +164,7 @@ describe("the Map view", () => {
 
   it("shows Start only on frontier nodes, Draft and not blocked, and Start approves", async () => {
     const fake = new FakeApi();
-    sample(fake);
+    offlineMode(fake);
     const pane = await open(fake);
 
     const starts = within(graph(pane)).getAllByRole("button", { name: /^Start/ });
@@ -180,7 +180,7 @@ describe("the Map view", () => {
 
   it("opens a node's Ticket in the Ticket panel", async () => {
     const fake = new FakeApi();
-    sample(fake);
+    offlineMode(fake);
     const pane = await open(fake);
 
     await userEvent.click(within(node(pane, "acme-5")).getByRole("button", { name: /Ask legal/ }));
@@ -190,7 +190,7 @@ describe("the Map view", () => {
 
   it("draws one dim fog node on the right for Not yet specified, which shows that section when clicked", async () => {
     const fake = new FakeApi();
-    sample(fake);
+    offlineMode(fake);
     const pane = await open(fake);
 
     const fog = within(graph(pane)).getAllByRole("button", { name: "Not yet specified" });
@@ -205,7 +205,7 @@ describe("the Map view", () => {
 
   it("heads the view with the Destination, and puts collapsible Decisions so far and Out of scope beside the graph", async () => {
     const fake = new FakeApi();
-    sample(fake);
+    offlineMode(fake);
     const pane = await open(fake);
 
     expect(within(pane).getByRole("heading", { name: "Offline mode", level: 2 })).toBeInTheDocument();

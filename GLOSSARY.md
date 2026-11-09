@@ -40,6 +40,14 @@ _Avoid_: Prompt, feature request, idea
 A Spec that finds the way to a loosely-defined destination through decision Tickets worked one at a time, each marked by a reserved Wayfinder Label. Its body is the index of decisions made, the fog not yet specified and what is out of scope.
 _Avoid_: Wayfinder session, roadmap, journey
 
+**Frontier**:
+A Map's Draft Tickets that nothing blocks: the decisions that can be started next. Starting one approves it to Ready. It is worked out on each read, never stored.
+_Avoid_: Next steps, backlog
+
+**Map view**:
+The UI's view of a Map: its Destination, its Tickets as a left-to-right graph with Blockers as edges and **Start** on each frontier Ticket, a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph.
+_Avoid_: Map board, roadmap
+
 **Charting**:
 The first Ticket of a Map, which names its destination with the human and creates the first decision Tickets and their Blockers.
 _Avoid_: Planning, setup
