@@ -4,7 +4,7 @@
 import type { MouseEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
-import { FINISHED, STATES, type NeedsMeReason, type NeedsMeRow, type SpecDetail, type State, type TicketView } from "../api/types";
+import { FINISHED, STATES, type NeedsMeReason, type NeedsMeRow, type ProjectRow, type SpecDetail, type State, type TicketView } from "../api/types";
 import { duration, REASON_LABEL, rowDetail } from "../format";
 import { RowLatestEvent } from "../LatestEvent";
 import { LinkBadge } from "../ticket/LinkBadge";
@@ -16,7 +16,7 @@ import { RequirementRow } from "../requirement/RequirementRow";
 import { TicketPane } from "../ticket/TicketDetail";
 import { OptionsLink } from "../options/OptionsLink";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
-import { hrefFor, opensInPlace, type UiLocation } from "../url";
+import { clickTo, hrefFor, type UiLocation } from "../url";
 
 export interface InboxProps {
   api: Api;
@@ -54,11 +54,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
 
   // Selecting a row: a Ticket row leaves any Requirement; a Requirement
   // row opens on its default Ticket.
-  const go = (patch: Partial<UiLocation>) => (e: MouseEvent) => {
-    if (!opensInPlace(e)) return;
-    e.preventDefault();
-    navigate(patch);
-  };
+  const go = (patch: Partial<UiLocation>) => clickTo(navigate, patch);
   const rowLink = (id: string) => ({
     href: hrefFor({ ...loc, requirement: undefined, ticket: id }),
     onClick: go({ requirement: undefined, ticket: id }),
@@ -71,6 +67,18 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
     "data-id": id,
     "aria-current": loc.requirement === id ? ("true" as const) : undefined,
   });
+
+  // Only an active Project has a Project Options link: an Archived one takes no writes.
+  const projectFilter = (p: ProjectRow) => (
+    <ProjectFilter
+      key={p.key}
+      api={api}
+      project={p}
+      on={loc.project === p.key}
+      onSelect={() => navigate({ project: p.key })}
+      projectOptions={p.archived ? undefined : { href: hrefFor({ view: "project-options", project: p.key }), onClick: go({ view: "project-options", project: p.key }) }}
+    />
+  );
 
   return (
     <div className="inbox">
@@ -89,11 +97,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
           Focus
         </button>
         <FilterButton on={!loc.project} label="All Projects" count={totalCount} loud onClick={() => navigate({ project: undefined })} />
-        {projects
-          .filter((p) => !p.archived)
-          .map((p) => (
-            <ProjectFilter key={p.key} api={api} project={p} on={loc.project === p.key} onSelect={() => navigate({ project: p.key })} />
-          ))}
+        {projects.filter((p) => !p.archived).map(projectFilter)}
         <h2>View</h2>
         <FilterButton on={!loc.state && !loc.list} label="Needs Me" count={shownCount} loud onClick={() => navigate({ state: undefined, list: undefined })} />
         <FilterButton
@@ -113,9 +117,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
           />
         ))}
         <ArchivedProjects count={archived.length}>
-          {archived.map((p) => (
-            <ProjectFilter key={p.key} api={api} project={p} on={loc.project === p.key} onSelect={() => navigate({ project: p.key })} />
-          ))}
+          {archived.map(projectFilter)}
         </ArchivedProjects>
       </nav>
 

@@ -530,6 +530,24 @@ export class FakeApi implements Api {
     return this.projectView(p);
   }
 
+  async setLandingMethod(key: string, landing: Landing): Promise<ProjectView> {
+    this.calls.push("setLandingMethod");
+    if (landing.method !== "merge" && landing.method !== "branch") {
+      throw new ApiError(422, "invalid", `Landing Method "${landing.method}" is neither "merge" nor "branch"`, "method");
+    }
+    const l = { method: landing.method, push: landing.push, remote: landing.remote.trim() };
+    if (!l.remote) {
+      if (l.push) throw new ApiError(422, "invalid", 'Push needs a git remote to push to, such as "origin"', "remote");
+      l.remote = "origin";
+    }
+    const p = this.writable(key);
+    if (JSON.stringify(p.landing) !== JSON.stringify(l)) {
+      p.landing = l;
+      this.emit({ type: "project.changed", project: key });
+    }
+    return this.projectView(p);
+  }
+
   // unlink detaches a seeded Ticket's Link, taking it out of Needs Me if it
   // was there as closed externally (the only reason a Link gives).
   async unlink(project: string, target: string): Promise<LinkedRow> {
