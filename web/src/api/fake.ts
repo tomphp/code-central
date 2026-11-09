@@ -20,7 +20,8 @@
 // (a Stage's Needs Me reason is Needs Me's, as set by setNeedsMe).
 // submitRequirement writes a Spec and its three Stage Tickets, and
 // submitMap a Map's Spec and its Charting Ticket; a Map's read derives its
-// Map block, and its Tickets' rows their node type.
+// Map block, and its Tickets' rows their node type. submitPrototype
+// writes a Ready prototype Ticket on any Spec.
 //
 // recordCall stands in for an agent's MCP call, which the service records
 // as Usage itself, and postUsage for a Factory's POST /api/usage, filed
@@ -683,6 +684,26 @@ export class FakeApi implements Api {
       moves: [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_map" }],
     });
     return { spec: acknowledgeSpecCreate(spec), charting: acknowledgeTicketCreate(charting) };
+  }
+
+  async submitPrototype(project: string, spec: string, text: string): Promise<TicketAcknowledgement> {
+    this.calls.push("submitPrototype");
+    this.writable(project);
+    const title = specTitle(text);
+    if (!title) throw new ApiError(422, "invalid", "a Prototype needs text; its first line becomes the Ticket's title", "text");
+    const id = `${project}-${spec.slice(spec.lastIndexOf("-") + 1)}`;
+    const on = this.allSpecs(project).find((s) => s.id === id);
+    if (!on) throw new ApiError(422, "invalid", `there is no Spec ${id}`, "spec");
+    const prototype = this.addTicket(project, {
+      title: `Prototype: ${title}`,
+      state: "Ready",
+      spec: { id, title: on.title },
+      labels: ["prototype"],
+      description: text,
+      claimable: true,
+      moves: [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_prototype" }],
+    });
+    return acknowledgeTicketCreate(prototype);
   }
 
   // specQuestions reads a Spec from its seeded Tickets' spec, so a Spec

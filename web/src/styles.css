@@ -226,6 +226,7 @@ a.link-badge:hover { text-decoration: underline; }
 .seg-n { font-variant-numeric: tabular-nums; }
 .req-head { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
 .req-head h2 { font-size: 19px; margin: 6px 0 4px; }
+.req-head .spec-actions { display: flex; gap: 6px; margin: 4px 0 6px; }
 .req-head .strip button { font-size: 12px; padding-top: 5px; }
 .req-head .waiting { font-size: 13px; }
 .impl-list { list-style: none; padding: 0; margin: 6px 0; font-size: 12.5px; }

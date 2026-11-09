@@ -266,7 +266,7 @@ A Map's Charting, grilling and task Tickets each run in a read-only worktree det
 acme-shop-9 claimed (map-chart): "Charting: Dark mode" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-9; resume: claude --resume …
 ```
 
-A **Prototype** is a Ticket labelled `prototype`, on any Spec. Submit one with `code-central submit-prototype <spec> --text "…"` (or `submit_prototype` over MCP); its first line becomes the title, after "Prototype: ". The Factory claims it with `/prototype` and runs it in a worktree of its own, as for implementation, but on a local branch `prototype/<ticket>`:
+A **Prototype** is a Ticket labelled `prototype`, on any Spec. Ask for one with **New Prototype** under the title of the Spec's view in the UI (Requirement, Map or plain Spec), or submit one with `code-central submit-prototype <spec> --text "…"` (or `submit_prototype` over MCP); its first line becomes the title, after "Prototype: ". The Factory claims it with `/prototype` and runs it in a worktree of its own, as for implementation, but on a local branch `prototype/<ticket>`:
 
 ```text
 acme-shop-10 claimed (prototype): "Prototype: A theme picker in the header" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-10; resume: claude --resume …
@@ -286,7 +286,7 @@ Its first prompt tells the session to commit its findings on that branch only, w
 
 A Ticket with any of these Labels is never run as an implementation Ticket.
 
-Selecting the Map in the **Requirements** view opens the Map view: its Destination, then its Tickets as a graph read left to right, each Blocker before what it blocks, coloured like the Stage strip, and a dim **Not yet specified** node at the right edge that shows that section when clicked. A Draft Ticket that nothing blocks is on the frontier: click **Start** on its node to approve it to Ready, and the Factory claims it within a poll. Clicking a node opens its Ticket below. **Decisions so far** and **Out of scope** sit beside the graph.
+Selecting the Map in the **Requirements** view opens the Map view: **New Prototype** and its Destination, then its Tickets as a graph read left to right, each Blocker before what it blocks, coloured like the Stage strip, and a dim **Not yet specified** node at the right edge that shows that section when clicked. A Draft Ticket that nothing blocks is on the frontier: click **Start** on its node to approve it to Ready, and the Factory claims it within a poll. Clicking a node opens its Ticket below. **Decisions so far** and **Out of scope** sit beside the graph.
 
 When a Map's Ticket asks you a Round or finishes into In Review, it waits on you in **Needs Me** and Focus Mode as its own entry, not folded into a row as a Stage Ticket is. Its row reads `↳ Map: Dark mode` under its title, and its Focus Item reads *Map: Dark mode*. A Prototype also carries a **Prototype** badge, and on a plain Spec its row names that Spec instead.
 

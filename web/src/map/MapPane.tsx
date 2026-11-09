@@ -1,6 +1,6 @@
 // The Map view, in the pane a Requirement's view uses and above the
 // shared Ticket pane: the header (ID, title, submitted time, the Map's
-// count and its Destination), then the Map's Tickets as a left-to-right
+// count, New Prototype and its Destination), then the Map's Tickets as a left-to-right
 // graph with Blockers as edges and the fog of what isn't specified yet on
 // the right, beside its collapsible Decisions so far and Out of scope.
 import { useId, useState } from "react";
@@ -9,6 +9,7 @@ import { projectOf } from "../api/api";
 import type { MapView, NeedsMeReason, SpecDetail, TicketRow } from "../api/types";
 import { ago } from "../format";
 import { Markdown } from "../Markdown";
+import { NewPrototype } from "../requirement/NewRequirement";
 import { useAct } from "../ticket/useAct";
 import { FOG, isFrontier, layoutMap, NODE, nodeProgress } from "./graph";
 import { mapCount } from "./MapRow";
@@ -39,6 +40,9 @@ export function MapPane({ api, spec, reasons, now, ticket, select }: MapPaneProp
       <span className="tid">{spec.id}</span> <span className="muted small">Map · submitted {ago(now, spec.created)}</span>
       <h2>{spec.title}</h2>
       <p className="map-count">{mapCount(spec.map)}</p>
+      <div className="spec-actions">
+        <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
+      </div>
       <div aria-label="Destination" className="map-destination">
         {destination ? <Markdown>{destination}</Markdown> : <p className="muted">No Destination yet.</p>}
       </div>

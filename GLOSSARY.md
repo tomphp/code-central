@@ -45,7 +45,7 @@ A Map's Draft Tickets that nothing blocks: the decisions that can be started nex
 _Avoid_: Next steps, backlog
 
 **Map view**:
-The UI's view of a Map: its Destination, its Tickets as a left-to-right graph with Blockers as edges and **Start** on each frontier Ticket, a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph.
+The UI's view of a Map: its Destination, **New Prototype**, its Tickets as a left-to-right graph with Blockers as edges and **Start** on each frontier Ticket, a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph.
 _Avoid_: Map board, roadmap
 
 **Charting**:

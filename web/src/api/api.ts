@@ -18,6 +18,7 @@ import type {
   SpecRow,
   SubmitMapResult,
   SubmitRequirementResult,
+  TicketAcknowledgement,
   TicketRow,
   TicketView,
   Transcript,
@@ -77,6 +78,9 @@ export interface Api {
   // submitMap creates a Map from the human's text: its Spec, with the
   // Map's empty sections, and a Charting Ticket ready for a Factory.
   submitMap(project: string, text: string): Promise<SubmitMapResult>;
+  // submitPrototype asks for a Prototype on any Spec from the human's
+  // text: a Ready prototype Ticket titled by its first line.
+  submitPrototype(project: string, spec: string, text: string): Promise<TicketAcknowledgement>;
   // specQuestions rolls up a Spec's Questions: its Tickets' Rounds.
   specQuestions(project: string, spec: string): Promise<SpecQuestions>;
   act<A extends TicketAction>(
