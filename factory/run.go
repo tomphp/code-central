@@ -119,7 +119,7 @@ func (f *factory) poll(ctx context.Context) {
 		}
 		return
 	}
-	f.guide(ctx)
+	f.startGuidedMaps(ctx)
 	for _, c := range answered {
 		if !f.slotFree(ctx) {
 			return

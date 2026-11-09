@@ -57,6 +57,7 @@ func putState(t *testing.T, h *factorytest.Harness, id string, state store.State
 	mustNot(t, err)
 }
 
+// mustNot fails the test on err.
 func mustNot(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
@@ -64,6 +65,7 @@ func mustNot(t *testing.T, err error) {
 	}
 }
 
+// wantState checks Ticket id is in want, saying why it should be.
 func wantState(t *testing.T, h *factorytest.Harness, id string, want store.State, why string) {
 	t.Helper()
 	if got := h.Ticket(id).State; got != want {

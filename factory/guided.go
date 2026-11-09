@@ -1,21 +1,20 @@
-// Guided progression (Spec code-central-213, ADR 0016): on each poll, the
-// Factory starts the next decision of every guided Map that is idle. It
-// lives here, in the poll, because nothing in Code Central schedules
-// (ADR 0005).
+// Guided progression (Spec code-central-213; ADR 0016, Wayfinder Labels):
+// on each poll, the Factory starts the next decision of every guided Map
+// that is idle. It lives here, in the poll, because nothing in Code
+// Central schedules (ADR 0005).
 
 package factory
 
 import (
 	"context"
-	"slices"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
 )
 
-// guide approves the first frontier Ticket, in created order, of each
-// guided Map that is idle: at most one Ticket per Map per poll.
-func (f *factory) guide(ctx context.Context) {
+// startGuidedMaps approves the first frontier Ticket, in created order,
+// of each guided Map that is idle: at most one Ticket per Map per poll.
+func (f *factory) startGuidedMaps(ctx context.Context) {
 	maps, err := f.client.FindSpecs(ctx, f.project, core.FindSpecsInput{
 		Labels: []string{core.MapLabel}, Tags: map[string]string{core.GuidedTag: core.GuidedOn}})
 	if err != nil {
@@ -56,7 +55,7 @@ func (f *factory) guide(ctx context.Context) {
 // waits on the human or an agent, so it holds the Map.
 func nextDecision(rows []core.TicketRow) (next core.TicketRow, ok bool) {
 	for _, r := range rows {
-		if r.State != store.Draft && !slices.Contains(r.Labels, core.WayfinderPrefix+"research") {
+		if r.State != store.Draft && r.NodeType != "research" {
 			return core.TicketRow{}, false
 		}
 	}

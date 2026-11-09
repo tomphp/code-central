@@ -35,7 +35,7 @@ export function MapPane({ api, spec, reasons, now, ticket, select }: MapPaneProp
   const start = (t: TicketRow) => run(() => api.act(projectOf(t.id), t.id, "approve", {}));
   // Guided hands starting the next decision to the Factory: it approves
   // the first frontier Ticket whenever the Map is idle.
-  const guide = (on: boolean) =>
+  const setGuided = (on: boolean) =>
     run(() => (on ? api.setTags(projectOf(spec.id), spec.id, { [GUIDED_TAG]: GUIDED_ON }) : api.removeTags(projectOf(spec.id), spec.id, [GUIDED_TAG])));
 
   return (
@@ -44,7 +44,7 @@ export function MapPane({ api, spec, reasons, now, ticket, select }: MapPaneProp
       <h2>{spec.title}</h2>
       <p className="map-count">{mapCount(spec.map)}</p>
       <label className="map-guided" title="The Factory starts the next decision whenever the Map is idle">
-        <input type="checkbox" checked={spec.map.guided} disabled={busy} onChange={(e) => guide(e.target.checked)} /> Guided
+        <input type="checkbox" checked={spec.map.guided} disabled={busy} onChange={(e) => setGuided(e.target.checked)} /> Guided
       </label>
       <div aria-label="Destination" className="map-destination">
         {destination ? <Markdown>{destination}</Markdown> : <p className="muted">No Destination yet.</p>}
