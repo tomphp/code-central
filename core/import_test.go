@@ -261,7 +261,8 @@ func TestTheImportGuidePublishesTheMappingRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"spec.md", "map.md", "ready-for-agent", "wontfix", "Deferred", "Superseded",
-		"scratch.status", "`source`", "Labels:", "dry_run", "doubts", "go-ahead"} {
+		"scratch.status", "`source`", "Labels:", "dry_run", "doubts", "go-ahead",
+		"`wayfinder:map` (Specs only)", "`wayfinder:research`", "`prototype` (Tickets only)", "at most one of"} {
 		if !strings.Contains(g.Guide, want) {
 			t.Errorf("the guide doesn't mention %q", want)
 		}

@@ -303,7 +303,7 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 	if in.Spec == "" {
 		return Written[TicketView]{}, invalid("spec", "every Ticket belongs to a Spec")
 	}
-	if err := checkStageLabels("labels", in.Labels); err != nil {
+	if err := checkTicketLabels("labels", in.Labels); err != nil {
 		return Written[TicketView]{}, err
 	}
 	var v Written[TicketView]

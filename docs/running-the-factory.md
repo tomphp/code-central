@@ -244,6 +244,24 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Check: the Factory has exited, and the Requirement is still *Finished*.
 
+## Map Tickets and Prototypes
+
+A Map's Tickets each carry a Wayfinder Label, and the Factory claims them like a Stage's Ticket, by the skill its Label names:
+
+| Label | Guide | Skill |
+| --- | --- | --- |
+| `wayfinder:chart` | `map-chart` | `/wayfinder` |
+| `wayfinder:grilling` | `map-grilling` | `/grilling`, with `/domain-modeling` alongside |
+| `wayfinder:task` | `map-task` | none: the prompt is the Guide alone |
+
+Each runs in a read-only worktree detached at the base's tip, as a Stage does, and writes to Code Central, not to the repository. Its line names its Guide in place of the Stage:
+
+```text
+acme-shop-9 claimed (map-chart): "Charting: Dark mode" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-9; resume: claude --resume …
+```
+
+The Factory leaves a Prototype (`prototype`) and a Map's research Ticket (`wayfinder:research`) unclaimed for now, and claims the Tickets after them. A Ticket with any of these Labels is never run as an implementation Ticket.
+
 ## How accepted work lands
 
 Each Project has a **Landing Method**, which you set on its **Project Options** page, from the three-dots menu on the Project. The Factory reads it again on every poll, before it lands anything, so a change applies from its next poll to every Ticket still waiting to land, with no restart.

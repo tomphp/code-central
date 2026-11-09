@@ -10,6 +10,9 @@ Each Stage works the same way. You type the Stage's skill as a slash command, fo
 | spec Stage | `/to-spec` |
 | tickets Stage | `/to-tickets` |
 | implementation | `/implement` |
+| a Map's Charting (`wayfinder:chart`) | `/wayfinder` |
+| a Map's grilling (`wayfinder:grilling`) | `/grilling` |
+| a Map's task (`wayfinder:task`) | no skill: ask the session to claim it |
 
 Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only start when you type them: asked in plain words to "write the Spec", the session does the work without the skill and skips its process. `/grilling` can also start from a plain request to grill you, but typing it is surer.
 

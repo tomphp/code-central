@@ -292,14 +292,37 @@ func (f *factory) stopAll() {
 	wg.Wait()
 }
 
-// claimNext claims the Project's next claimable Ticket and starts its
-// turn. It reports whether it claimed one.
+// nextRunnable is the Project's first claimable Ticket, in claim order,
+// whose guide the Factory runs. ok is false when there is none.
+func (f *factory) nextRunnable(ctx context.Context) (id core.Ref, ok bool) {
+	claimable := true
+	rows, err := f.client.FindTickets(ctx, f.project, core.FindTicketsInput{Claimable: &claimable})
+	if err != nil {
+		if ctx.Err() == nil {
+			f.printf("find_tickets: %v", err)
+		}
+		return "", false
+	}
+	for _, r := range rows {
+		if runs(core.GuideName(r.Labels)) {
+			return core.Ref(r.ID), true
+		}
+	}
+	return "", false
+}
+
+// claimNext claims the Project's next claimable Ticket that it runs and
+// starts its turn. It reports whether it claimed one.
 func (f *factory) claimNext(ctx context.Context) bool {
+	next, ok := f.nextRunnable(ctx)
+	if !ok {
+		return false
+	}
 	session := newSessionID()
 	resume := "claude --resume " + session
 	// The worktree's path is fixed by the Ticket ID, which isn't known
 	// until the claim, so the claim names it afterwards (set_session).
-	res, err := f.client.Claim(ctx, f.project, core.ClaimInput{SessionID: session, ResumeCommand: &resume})
+	res, err := f.client.Claim(ctx, f.project, core.ClaimInput{Ticket: next, SessionID: session, ResumeCommand: &resume})
 	if err != nil {
 		if ctx.Err() == nil {
 			f.printf("claim: %v", err)
@@ -310,7 +333,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		return false
 	}
 	id := res.Ticket.ID
-	stage := core.GuideStage(res.Ticket.Labels)
+	stage := core.GuideName(res.Ticket.Labels)
 	guide := f.stageGuide(ctx, res.StageGuide, stage)
 	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}}
 	f.noteTicket(c, *res.Ticket)

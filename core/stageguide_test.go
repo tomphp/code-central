@@ -13,7 +13,7 @@ import (
 
 func TestEachStageHasAGuide(t *testing.T) {
 	f := newFixture(t)
-	for _, stage := range []string{"grilling", "spec", "tickets", "implementation"} {
+	for _, stage := range []string{"grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"} {
 		g, err := f.core.GetStageGuide(ctx, core.StageGuideInput{Stage: stage})
 		if err != nil {
 			t.Fatalf("get_stage_guide %s: %v", stage, err)
@@ -26,7 +26,7 @@ func TestEachStageHasAGuide(t *testing.T) {
 
 func TestAnUnknownStageHasNoGuide(t *testing.T) {
 	f := newFixture(t)
-	for _, stage := range []string{"", "build", "stage:spec", "Spec"} {
+	for _, stage := range []string{"", "build", "stage:spec", "Spec", "map", "chart", "wayfinder:chart", "map-map", "research"} {
 		_, err := f.core.GetStageGuide(ctx, core.StageGuideInput{Stage: stage})
 		wantCode(t, err, core.Invalid, "stage")
 	}
@@ -54,7 +54,7 @@ var notAnOperationName = map[string]*regexp.Regexp{
 
 func TestStageGuidesNameOnlyCodeCentralOperations(t *testing.T) {
 	f := newFixture(t)
-	for _, stage := range core.GuideStages {
+	for _, stage := range core.GuideNames {
 		g := guide(t, f, stage)
 		for what, re := range notAnOperationName {
 			if m := re.FindString(g); m != "" {
@@ -101,7 +101,7 @@ func wantAll(t *testing.T, stage, g string, phrases ...string) {
 
 func TestEveryGuideSaysWhatItProducesHowToFinishAndHowToRedo(t *testing.T) {
 	f := newFixture(t)
-	for _, stage := range core.GuideStages {
+	for _, stage := range core.GuideNames {
 		wantAll(t, stage, guide(t, f, stage),
 			"## What this Ticket produces",
 			"## Finishing",
@@ -240,7 +240,7 @@ func troubleSections(t *testing.T) map[string]string {
 	const heading = "## When you can't carry on"
 	f := newFixture(t)
 	out := map[string]string{}
-	for _, stage := range core.GuideStages {
+	for _, stage := range core.GuideNames {
 		g := guide(t, f, stage)
 		i := strings.Index(g, heading)
 		if i < 0 {
