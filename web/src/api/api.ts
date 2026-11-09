@@ -20,6 +20,8 @@ import type {
   TicketRow,
   TicketView,
   Transcript,
+  UsageFilter,
+  UsageView,
 } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
@@ -95,6 +97,10 @@ export interface Api {
   // outside its set is refused as invalid, naming it, and nothing changes.
   options(): Promise<Options>;
   setOptions(change: Partial<Options>): Promise<Options>;
+  // usage reads Usage: the Code Central calls agents made in one Project,
+  // or all of them, over the last 7 (the default), 30 or 90 local days.
+  // An unknown Project is not_found.
+  usage(filter?: UsageFilter): Promise<UsageView>;
   // subscribe opens the live feed and returns a function that closes it.
   subscribe(handlers: EventHandlers): () => void;
   // transcript reads Claim number claim's Transcript (ticket 110).

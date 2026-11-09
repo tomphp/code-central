@@ -17,6 +17,7 @@ import (
 	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/usage"
 	"github.com/tomoram/code-central/web"
 )
 
@@ -30,6 +31,9 @@ type Server struct {
 	Clock  *clock.Fake
 	Core   *core.Core
 	Store  store.Store
+	// UsageDir is the folder the usage recorder keeps its files under,
+	// as the store's directory holds them in the real service.
+	UsageDir string
 }
 
 // Version is the service version a test server reports unless
@@ -40,8 +44,10 @@ const Version = "dev"
 type Option func(*options)
 
 type options struct {
-	version string
-	log     io.Writer
+	version  string
+	log      io.Writer
+	usageDir string
+	location *time.Location
 }
 
 // WithVersion makes the server report version in its version header.
@@ -51,17 +57,30 @@ func WithVersion(version string) Option { return func(o *options) { o.version = 
 // log.
 func WithLog(log io.Writer) Option { return func(o *options) { o.log = log } }
 
+// WithUsageDir keeps Usage under dir instead of a new temporary folder,
+// so a second server started on it reads the first one's records, as a
+// restarted service would.
+func WithUsageDir(dir string) Option { return func(o *options) { o.usageDir = dir } }
+
+// WithLocation makes the server's local time zone loc, which dates Usage
+// by day; it is UTC unless given.
+func WithLocation(loc *time.Location) Option { return func(o *options) { o.location = loc } }
+
 // NewServer starts a test service, stopped when t ends.
 func NewServer(t testing.TB, opts ...Option) *Server {
 	t.Helper()
-	o := options{version: Version}
+	o := options{version: Version, location: time.UTC}
 	for _, opt := range opts {
 		opt(&o)
+	}
+	if o.usageDir == "" {
+		o.usageDir = t.TempDir()
 	}
 	s := store.NewMemory()
 	clk := clock.NewFake(Start)
 	c := core.New(s, clk, &ids.Sequence{})
+	c.SetUsage(usage.New(o.usageDir, clk, o.location, o.log))
 	hs := httptest.NewServer(frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), o.log), o.version))
 	t.Cleanup(hs.Close)
-	return &Server{URL: hs.URL, Client: client.New(hs.URL), Clock: clk, Core: c, Store: s}
+	return &Server{URL: hs.URL, Client: client.New(hs.URL), Clock: clk, Core: c, Store: s, UsageDir: o.usageDir}
 }

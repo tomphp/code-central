@@ -74,6 +74,13 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     unlink: (project, target) => call("POST", `${p(project)}/unlink`, { target }),
     options: () => call("GET", "/api/options"),
     setOptions: (change) => call("POST", "/api/set_options", change),
+    usage: (filter = {}) => {
+      const q = new URLSearchParams();
+      if (filter.project) q.set("project", filter.project);
+      if (filter.days) q.set("days", String(filter.days));
+      const qs = q.toString();
+      return call("GET", `/api/usage${qs ? `?${qs}` : ""}`);
+    },
     subscribe: (h) =>
       follow(doFetch, base + "/api/events", retryMs, {
         onOpen: h.onOpen,

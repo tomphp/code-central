@@ -77,7 +77,8 @@ textarea { width: 100%; resize: vertical; }
 .inbox-nav { border-right: 1px solid var(--border); padding: 16px 10px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
 .inbox-nav h1 { font-size: 15px; padding: 0 8px 12px; }
 .inbox-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.inbox-title .options-link { font-size: 13px; padding: 0 8px; }
+.inbox-title h1 { margin-right: auto; }
+.inbox-title .options-link, .inbox-title .usage-link { font-size: 13px; padding: 0 8px; }
 .inbox-nav h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 16px 8px 4px; }
 .filter { display: flex; justify-content: space-between; text-align: left; border: 0; background: transparent; color: var(--text); font: inherit; padding: 5px 8px; border-radius: 6px; cursor: pointer; }
 .filter.sub { font-size: 12.5px; padding: 3px 8px 3px 16px; }

@@ -433,3 +433,70 @@ export interface Options {
 // uses while they load or when they can't be read.
 export const DEFAULT_OPTIONS: Options = { focus_clear: "all_clear" };
 
+
+// ---- Usage (Spec code-central-201) ----
+
+// USAGE_DAYS are the ranges Usage reads, in local days; the first is the default.
+export const USAGE_DAYS = [7, 30, 90] as const;
+export type UsageDays = (typeof USAGE_DAYS)[number];
+
+// UsageFilter is a Usage read: one Project, or all of them (Archived
+// ones too) when project is left out, over the last days local days.
+export interface UsageFilter {
+  project?: string;
+  days?: UsageDays;
+}
+
+// UsageOperation is one MCP operation's row in the Code Central calls
+// table. Sizes are in bytes; averages are rounded to the nearest byte.
+export interface UsageOperation {
+  op: string;
+  calls: number;
+  request_bytes: number;
+  average_request_bytes: number;
+  response_bytes: number;
+  average_response_bytes: number;
+  errors: number;
+}
+
+// UsageKind is one kind of session's Context Size figures.
+export interface UsageKind {
+  kind: string;
+  sessions: number;
+  average_peak: number;
+  largest_peak: number;
+}
+
+// UsageSession is one recent session, a Claim's main session or one of its subagents.
+export interface UsageSession {
+  project: string;
+  ticket: string;
+  claim: number;
+  session_id: string;
+  agent?: string;
+  kind: string;
+  started: string;
+  peak: number;
+  responses: number;
+}
+
+// UsageDay is one local day's token usage by kind of session.
+export interface UsageDay {
+  day: string;
+  kinds: {
+    kind: string;
+    input_tokens: number;
+    cache_write_tokens: number;
+    cache_read_tokens: number;
+    output_tokens: number;
+  }[];
+}
+
+// UsageView is GET /api/usage. Kinds, sessions and days stay empty until
+// the Factory posts token usage.
+export interface UsageView {
+  operations: UsageOperation[];
+  kinds: UsageKind[];
+  sessions: UsageSession[];
+  days: UsageDay[];
+}

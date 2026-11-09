@@ -9,6 +9,7 @@ import { ProjectOptions } from "./options/ProjectOptions";
 import { defaultTicket, needsMeCount, progress, reasonsOf } from "./requirement/progress";
 import { useNeedsMeTitle } from "./title";
 import { useUiLocation } from "./url";
+import { UsageView } from "./usage/UsageView";
 
 export interface AppProps {
   api: Api;
@@ -45,6 +46,8 @@ export function App({ api, now = () => new Date() }: AppProps) {
       );
     case "options":
       return <OptionsView api={api} options={options} loc={loc} navigate={navigate} />;
+    case "usage":
+      return <UsageView api={api} projects={inbox.data?.projects} loc={loc} navigate={navigate} />;
     case "project-options":
       return (
         <>

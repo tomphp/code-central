@@ -39,6 +39,11 @@ export interface Driver {
   // postSessionEvents posts a session's Session Events as a Factory would
   // (ticket 109): they go to the newest Claim with that session ID.
   postSessionEvents(sessionId: string, events: SessionEvent[]): Promise<void>;
+  // mcpCall makes one agent MCP tool call to key's Project, as Claude Code
+  // would, and returns the text the agent was given and, for a rejected
+  // call, its error code. The fake's driver plays find_tickets and
+  // get_ticket only (Spec code-central-201).
+  mcpCall(key: string, op: "find_tickets" | "get_ticket", args: Record<string, unknown>): Promise<{ text: string; error?: string }>;
   // dropTranscriptStreams drops every open Transcript stream, as a flaky
   // connection would; each reconnects by itself (ticket 110).
   dropTranscriptStreams(): void;
@@ -730,6 +735,65 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       } finally {
         stop();
       }
+    });
+
+    // ---- Usage (Spec code-central-201) ----
+
+    it("reads no Usage before any agent call", async () => {
+      await d.createProject("acme", "Acme");
+      expect(await d.api.usage()).toEqual({ operations: [], kinds: [], sessions: [], days: [] });
+      expect(await d.api.usage({ project: "acme", days: 90 })).toEqual({ operations: [], kinds: [], sessions: [], days: [] });
+    });
+
+    it("counts each agent MCP call by operation, with its sizes and errors, and never the UI's own reads", async () => {
+      await d.createProject("acme", "Acme");
+      await d.createProject("beta", "Beta");
+      const id = await d.createTicket("acme", "Pick a colour", "Ready");
+      const found = await d.mcpCall("acme", "find_tickets", {});
+      const got = await d.mcpCall("acme", "get_ticket", { ticket: id });
+      const missing = await d.mcpCall("acme", "get_ticket", { ticket: "acme-99" });
+      const other = await d.mcpCall("beta", "find_tickets", { state: ["Ready"] });
+      expect([got.error, missing.error]).toEqual([undefined, "not_found"]);
+      await d.api.findTickets("acme");
+      await d.api.getTicket("acme", id);
+
+      const bytes = (s: string) => new TextEncoder().encode(s).length;
+      const row = (calls: { text: string; error?: string }[], args: unknown[], op: string) => {
+        const req = args.reduce<number>((n, a) => n + bytes(JSON.stringify(a)), 0);
+        const resp = calls.reduce((n, c) => n + bytes(c.text), 0);
+        return {
+          op,
+          calls: calls.length,
+          request_bytes: req,
+          average_request_bytes: Math.floor((2 * req + calls.length) / (2 * calls.length)),
+          response_bytes: resp,
+          average_response_bytes: Math.floor((2 * resp + calls.length) / (2 * calls.length)),
+          errors: calls.filter((c) => c.error).length,
+        };
+      };
+      const all = await d.api.usage();
+      expect(all.operations).toEqual([
+        row([found, other], [{}, { state: ["Ready"] }], "find_tickets"),
+        row([got, missing], [{ ticket: id }, { ticket: "acme-99" }], "get_ticket"),
+      ]);
+      expect(await d.api.usage({ days: 30 })).toEqual(all);
+
+      const acme = await d.api.usage({ project: "acme" });
+      expect(acme.operations.map((r) => [r.op, r.calls, r.errors])).toEqual([
+        ["get_ticket", 2, 1],
+        ["find_tickets", 1, 0],
+      ]);
+      const beta = await d.api.usage({ project: "beta", days: 7 });
+      expect(beta.operations).toEqual([row([other], [{ state: ["Ready"] }], "find_tickets")]);
+    });
+
+    it("refuses Usage for an unknown Project and any range but 7, 30 or 90 days", async () => {
+      const unknown = await d.api.usage({ project: "nope" }).catch((e) => e);
+      expect(unknown).toBeInstanceOf(ApiError);
+      expect(unknown).toMatchObject({ status: 404, code: "not_found" });
+
+      const bad = await d.api.usage({ days: 14 as never }).catch((e) => e);
+      expect(bad).toMatchObject({ status: 422, code: "invalid", field: "days" });
     });
 
     // ---- Options (Spec code-central-160) ----

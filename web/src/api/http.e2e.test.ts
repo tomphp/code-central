@@ -73,6 +73,18 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
       });
       if (res.status !== 204) throw new Error(`session-events: ${res.status}`);
     },
+    // Spec code-central-201: one JSON-RPC tools/call to the Project's MCP
+    // endpoint, which records it as Usage.
+    mcpCall: async (key, op, args) => {
+      const res = await fetch(`${svc.url}/p/${key}/mcp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: op, arguments: args } }),
+      });
+      const { result } = await res.json();
+      const text: string = result.content[0].text;
+      return { text, error: result.isError ? JSON.parse(text).code : undefined };
+    },
     dropTranscriptStreams: () => {
       for (const cut of streams) cut.abort();
       streams.clear();

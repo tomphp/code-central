@@ -19,6 +19,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/usage"
 )
 
 // A tool is one agent operation as an MCP tool: a one-line description,
@@ -280,7 +281,8 @@ func ref(desc string) map[string]any {
 // route along with the HTTP API.
 //
 // log, when not nil, gets one line per tool call with the size of the
-// text the agent is given (see logCall).
+// text the agent is given (see logCall). Each such call is also recorded
+// as Usage, under the URL's Project when it exists.
 func Register(mux *http.ServeMux, c *core.Core, log io.Writer) {
 	if log == nil {
 		log = io.Discard
@@ -304,6 +306,10 @@ func newServer(c *core.Core, key string, log io.Writer) *sdk.Server {
 				res, text, code, err := result(v, err)
 				if err == nil {
 					logCall(log, op.Name, key, req.Params.Arguments, text, code)
+					c.RecordCall(key, usage.Call{
+						Op: op.Name, ID: callID(key, req.Params.Arguments, text),
+						RequestBytes: len(req.Params.Arguments), ResponseBytes: len(text), Error: string(code),
+					})
 				}
 				return res, err
 			})

@@ -20,6 +20,10 @@
 // (a Stage's Needs Me reason is Needs Me's, as set by setNeedsMe).
 // submitRequirement writes a Spec and its three Stage Tickets.
 //
+// recordCall stands in for an agent's MCP call, which the service records
+// as Usage itself; usage reads the calls back as the service does: over
+// the last days local days, for one Project or all of them.
+//
 // The Options start at their defaults; setOptions validates as the
 // service does, and sends options.changed only when something changed.
 //
@@ -82,7 +86,32 @@ import {
   type TicketRow,
   type TicketView,
   type Transcript,
+  USAGE_DAYS,
+  type UsageFilter,
+  type UsageOperation,
+  type UsageView,
 } from "./types";
+
+// A FakeUsageCall is one agent MCP call as the service records it.
+interface FakeUsageCall {
+  project: string;
+  time: string;
+  op: string;
+  request_bytes: number;
+  response_bytes: number;
+  // error is a rejected call's error code.
+  error?: string;
+}
+
+// localDay numbers t's day in the local time zone, as the service dates Usage.
+function localDay(t: Date): number {
+  return Math.round(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()) / 86_400_000);
+}
+
+// average is total / n rounded to the nearest whole number, halves up, as the service rounds.
+function average(total: number, n: number): number {
+  return Math.floor((2 * total + n) / (2 * n));
+}
 
 // Every action's fake behaviour registers itself from ./actions/.
 import.meta.glob("./actions/*.ts", { eager: true });
@@ -141,7 +170,7 @@ interface FakeFollower {
 
 // READS are the Api's reads, by name, which actions leaves out.
 const READS: ReadonlySet<string> = new Set<keyof Api>([
-  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript",
+  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript", "usage",
 ]);
 
 export class FakeApi implements Api {
@@ -162,6 +191,7 @@ export class FakeApi implements Api {
   private transcripts = new Map<string, FakeTranscript>();
   private followers = new Set<FakeFollower>();
   private opts: Options = { ...DEFAULT_OPTIONS };
+  private usageCalls: FakeUsageCall[] = [];
 
   // ---- seeding ----
 
@@ -177,6 +207,13 @@ export class FakeApi implements Api {
       next: 1,
     });
     this.emit({ type: "project.changed", project: key });
+  }
+
+  // recordCall records an agent's MCP call to project, made now unless
+  // the call says when.
+  recordCall(project: string, call: Omit<FakeUsageCall, "project" | "time"> & { time?: string }) {
+    if (!this.projects.has(project)) throw new Error(`FakeApi: no Project ${project}`);
+    this.usageCalls.push({ ...call, project, time: call.time ?? this.now.toISOString() });
   }
 
   addTicket(project: string, seed: SeedTicket): TicketView {
@@ -588,6 +625,29 @@ export class FakeApi implements Api {
       this.emit({ type: "options.changed" });
     }
     return { ...this.opts };
+  }
+
+  async usage(filter: UsageFilter = {}): Promise<UsageView> {
+    this.calls.push("usage");
+    const days = filter.days ?? USAGE_DAYS[0];
+    if (!USAGE_DAYS.includes(days)) throw new ApiError(422, "invalid", `days must be 7, 30 or 90, not ${days}`, "days");
+    if (filter.project && !this.projects.has(filter.project)) throw new ApiError(404, "not_found", `no Project "${filter.project}"`);
+    const today = localDay(this.now);
+    const rows = new Map<string, UsageOperation>();
+    for (const c of this.usageCalls) {
+      const ago = today - localDay(new Date(c.time));
+      if ((filter.project && c.project !== filter.project) || ago < 0 || ago >= days) continue;
+      const row = rows.get(c.op) ?? { op: c.op, calls: 0, request_bytes: 0, average_request_bytes: 0, response_bytes: 0, average_response_bytes: 0, errors: 0 };
+      row.calls++;
+      row.request_bytes += c.request_bytes;
+      row.response_bytes += c.response_bytes;
+      if (c.error) row.errors++;
+      rows.set(c.op, row);
+    }
+    const operations = [...rows.values()]
+      .map((r) => ({ ...r, average_request_bytes: average(r.request_bytes, r.calls), average_response_bytes: average(r.response_bytes, r.calls) }))
+      .sort((a, b) => b.calls - a.calls || (a.op < b.op ? -1 : 1));
+    return { operations, kinds: [], sessions: [], days: [] };
   }
 
   // ---- internals ----
