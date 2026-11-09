@@ -18,6 +18,7 @@ import { panelFor } from "../panels/ActionPanel";
 import { QuestionAnswer } from "../panels/round/QuestionAnswer";
 import { OptionsLink } from "../options/OptionsLink";
 import { hrefFor, opensInPlace, type UiLocation } from "../url";
+import { ActivityDashboard } from "./ActivityDashboard";
 import { focusQueue, type FocusItem } from "./queue";
 import "./focus.css";
 
@@ -26,14 +27,14 @@ export interface FocusProps {
   now: Date;
   version: number;
   data?: InboxData;
-  // focusClear is what to show when nothing needs the human. Only All
-  // clear exists so far; the Activity Dashboard comes with its own Ticket.
+  // focusClear is what to show when nothing needs the human: All clear,
+  // or the Activity Dashboard.
   focusClear: FocusClear;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
+export function Focus({ api, now, version, data, focusClear, loc, navigate }: FocusProps) {
   const project = data?.projects.find((p) => p.key === loc.project);
   const [onScreen, setOnScreen] = useState<FocusItem>();
   // skipped lives here for this visit only: leaving Focus Mode or
@@ -98,6 +99,8 @@ export function Focus({ api, now, version, data, loc, navigate }: FocusProps) {
       )}
       {!screen ? (
         <p className="focus-loading">Loading…</p>
+      ) : screen.clear && focusClear === "activity_dashboard" ? (
+        <ActivityDashboard now={now} data={data} loc={loc} navigate={navigate} />
       ) : screen.clear ? (
         <section aria-label="All clear" className="focus-clear">
           <h2>All clear</h2>

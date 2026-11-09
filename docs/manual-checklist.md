@@ -42,6 +42,7 @@ Run this by hand once v1 is built (`make build`). These paths can't be automated
 ## The UI
 
 - [ ] Open the Options view from the Inbox and from Focus Mode, choose **Activity Dashboard**, and with the Options view open in a second browser, watch it follow the change. Restart the service: the choice is kept, and `options.yaml` sits beside `store.yaml`.
+- [ ] With **Activity Dashboard** chosen and Focus Mode open in a second browser, Focus Mode switches from All clear to the dashboard without a reload. Its Ready and In Progress counts match the Inbox's State views with their folded Stage Tickets added, and while a real Session runs, its entry's latest event line keeps up. When something needs you, the dashboard gives way to the Focus Item.
 
 ## Real Claude Code
 
