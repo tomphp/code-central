@@ -49,7 +49,7 @@ A unit of work within a Spec. Every Ticket belongs to exactly one Spec.
 _Avoid_: Issue, task, card
 
 **Prototype**:
-A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to try and react to, so a decision can be made. Its work never lands.
+A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to try and react to, so a decision can be made. Its work never lands. A Question answered "Prototype this" in a grilling or Charting Round becomes one, which blocks the asking Ticket until it is Done.
 _Avoid_: Spike, mock-up, demo
 
 **Stage**:

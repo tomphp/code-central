@@ -22,7 +22,7 @@ The In Review gate replaces any step that would stop to check with the user: the
 
 When an answer starts with "Prototype this", hand that Question to a Prototype:
 
-1. `create_ticket` with the `prototype` Label on the same Spec, with the Question and the human's note as its description, then `approve` it to `Ready`.
+1. `create_ticket` with the `prototype` Label on the same Spec, titled "Prototype: " and the Question's title, with the Question and the human's note as its description, then `approve` it to `Ready`.
 2. `add_blocker` so the Prototype blocks this Ticket.
 3. `give_up` with a note naming the Prototype.
 

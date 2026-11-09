@@ -1,10 +1,11 @@
 // A Question's answer form, shared by the Round panel and Focus Mode so a
 // Question's rules live in one place: the answer box, starting as the
 // saved answer, else the recommendation as an unsaved draft (labelled as
-// such), then Answer and Dismiss, which send answer and dismiss_question
-// for that one Question, Prototype this, which fills the box with
-// "Prototype this: " for the human to add a note to, any further buttons
-// the caller adds, and the refusal alert. The caller wraps it with the Question's title and body.
+// such); Answer and Dismiss, which send answer and dismiss_question for
+// that one Question; Prototype this, which fills the box with
+// "Prototype this: " for the human to add a note to; any further buttons
+// the caller adds; and the refusal alert. The caller wraps it with the
+// Question's title and body.
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Api } from "../../api/api";
 import "../../api/actions/rounds";
@@ -19,7 +20,7 @@ export interface QuestionAnswerProps {
   q: QuestionView;
   // submitOnModEnter makes Cmd/Ctrl+Enter in the box send Answer.
   submitOnModEnter?: boolean;
-  // children are further buttons, after Answer and Dismiss.
+  // children are further buttons, after Answer, Dismiss and Prototype this.
   children?: ReactNode;
 }
 

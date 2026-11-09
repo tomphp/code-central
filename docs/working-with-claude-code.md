@@ -102,8 +102,8 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
 4. **Answer the Round in the UI.** Each Question has the agent's recommended answer filled in as a draft. Nothing is saved until you answer. For each Question you can:
 
    - edit the text if you want, and click **Answer**,
-   - or click **Dismiss** to leave it unanswered, so the agent decides without it.
-   - or click **Prototype this** to settle it by trying something first. It fills the box with `Prototype this: `; add a note on what to try, and click **Answer**. See [Prototypes](#prototypes).
+   - or click **Dismiss** to leave it unanswered, so the agent decides without it,
+   - or click **Prototype this**, which fills the box with `Prototype this: `, add a note on what to try, and click **Answer**, to settle it with a [Prototype](#prototypes) first.
 
    **Accept all recommended**, at the top of the Round, answers every open Question with its draft.
 
