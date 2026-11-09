@@ -2,9 +2,10 @@
 // Question's rules live in one place: the answer box, starting as the
 // saved answer, else the recommendation as an unsaved draft (labelled as
 // such), then Answer and Dismiss, which send answer and dismiss_question
-// for that one Question, any further buttons the caller adds, and the
-// refusal alert. The caller wraps it with the Question's title and body.
-import { useState, type KeyboardEvent, type ReactNode } from "react";
+// for that one Question, Prototype this, which fills the box with
+// "Prototype this: " for the human to add a note to, any further buttons
+// the caller adds, and the refusal alert. The caller wraps it with the Question's title and body.
+import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Api } from "../../api/api";
 import "../../api/actions/rounds";
 import type { QuestionView } from "../../api/types";
@@ -39,6 +40,11 @@ export function QuestionAnswer({ api, project, ticket, q, submitOnModEnter, chil
     e.preventDefault();
     if (canAnswer) answer();
   };
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+  const prototypeThis = () => {
+    setDraft(PROTOTYPE_THIS);
+    boxRef.current?.focus();
+  };
   const boxId = `question-${q.number}-answer`;
 
   return (
@@ -46,7 +52,7 @@ export function QuestionAnswer({ api, project, ticket, q, submitOnModEnter, chil
       <label htmlFor={boxId} className={isRecommendation ? "draft-note" : "visually-hidden"}>
         {isRecommendation ? "Recommended answer, a draft: nothing is saved until you answer" : "Your answer"}
       </label>
-      <textarea id={boxId} rows={2} value={text} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} />
+      <textarea ref={boxRef} id={boxId} rows={2} value={text} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} />
       {alert}
       <div className="question-actions">
         <button className="btn primary" disabled={!canAnswer} onClick={answer}>
@@ -57,8 +63,15 @@ export function QuestionAnswer({ api, project, ticket, q, submitOnModEnter, chil
             Dismiss
           </button>
         )}
+        <button className="btn" disabled={busy} onClick={prototypeThis}>
+          Prototype this
+        </button>
         {children}
       </div>
     </>
   );
 }
+
+// PROTOTYPE_THIS starts an answer that asks the agent to hand the Question
+// to a Prototype; the Guides of the questioning Stages act on it.
+const PROTOTYPE_THIS = "Prototype this: ";

@@ -103,6 +103,7 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
 
    - edit the text if you want, and click **Answer**,
    - or click **Dismiss** to leave it unanswered, so the agent decides without it.
+   - or click **Prototype this** to settle it by trying something first. It fills the box with `Prototype this: `; add a note on what to try, and click **Answer**. See [Prototypes](#prototypes).
 
    **Accept all recommended**, at the top of the Round, answers every open Question with its draft.
 
@@ -275,3 +276,5 @@ $ claude
 ```
 
 The `prototype` Guide has the session commit on that branch only, never push it, set a `prototype` Tag to `<branch>@<commit> <worktree path>`, and post a Round whose first Question, "Try it", says what to run and where to look. The Ticket panel shows the Tag as *Prototype at `<path>` on `<branch>` (`<commit>`)*. Answer the Round, and the session posts a resolution comment, what was learned and which decision it informs, and finishes with no branch. Accepting the Prototype makes it Done straight away: there is nothing to merge or land. Remove the worktree once you're done with it; the branch keeps the Prototype.
+
+A Question can also become a Prototype. In a Round from the grilling Stage, Charting or a Map's grilling Ticket, answer a Question with **Prototype this** and a note, such as `Prototype this: try a badge and plain text side by side`. Typing an answer that starts with "Prototype this" works the same. When the session picks up the answers, it creates a Prototype on the same Spec, with the Question and your note as its description, and approves it to Ready. It makes the Prototype block its own Ticket and gives up with a note naming the Prototype. Once the Prototype is Done, the asking Ticket is claimed again as a redo, which reads the Prototype's resolution comment and carries on from it. The spec and tickets Stages and implementation never hand a Question to a Prototype.

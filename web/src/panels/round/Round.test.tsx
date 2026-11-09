@@ -141,6 +141,23 @@ describe("the Round panel", () => {
     expect(within(panel).queryByRole("button", { name: "Accept all recommended" })).toBeNull();
   });
 
+  it("fills a Question's box with \"Prototype this: \" for the human to add a note to, saving nothing", async () => {
+    const fake = world();
+    const panel = await renderPanel(fake);
+    const colour = question(panel, "Which colour?");
+    await userEvent.click(within(colour).getByRole("button", { name: "Prototype this" }));
+
+    expect(box(colour)).toHaveValue("Prototype this: ");
+    expect(box(colour)).toHaveFocus();
+    expect(within(colour).queryByText(/Recommended answer/)).toBeNull();
+    expect(box(question(panel, "Which size?"))).toHaveValue("");
+    expect(fake.actions()).toEqual([]);
+
+    await userEvent.type(box(colour), "try both on the login page");
+    await userEvent.click(within(colour).getByRole("button", { name: "Answer" }));
+    await waitFor(async () => expect((await stored(fake))[0].answer).toBe("Prototype this: try both on the login page"));
+  });
+
   it("shows the service's refusal", async () => {
     const fake = world();
     const panel = await renderPanel(fake);
