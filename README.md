@@ -2,6 +2,66 @@
 
 Code Central is one service that holds a Project's Specs and Tickets. Agents work them through a fixed workflow: a Requirement goes through the grilling, spec and tickets Stages, then becomes implementation Tickets, and the human answers Rounds and accepts the work in the UI along the way. When the destination isn't clear yet, the human starts a Map instead, with **Map** in the **▾** menu beside **+ New**, and agents find the way to it one decision at a time. The same **+ New ▾** sits in Focus Mode's header, beside **Exit**, and submitting there keeps you in Focus Mode where you were, with a brief "Requirement added" or "Map added" note. Once every decision is made, **Write the Spec** turns the Map into a Requirement that skips grilling, since the Map's decisions already did that work. On any Spec, **New Prototype** asks for a cheap, throwaway artifact to try before a decision is made. You run it on your own machine, and every repository you set up as a Project talks to it.
 
+## Quickstart
+
+### Assumptions
+
+1. You are using a Mac (it might work on other systems but I've not yet tried them)
+2. You have Claude Code installed and logged in
+3. You want to spend tokens
+
+### Installing
+
+Install the [Matt Pocock Skills](https://www.aihero.dev/skills). Code Central currently only supports this awesome workflow.
+
+```
+claude plugins install mattpocock-skills
+```
+
+Install Code Central and make sure that both `code-central` and `code-central-factory` are executable and on your PATH.
+
+### Starting
+
+Run `code-central serve` in a terminal window (don't use `install` when just trying it out).
+
+Once started, it is accessible on [http://localhost:7733/](http://localhost:7733/).
+
+### Bootstap a new project
+
+Create a new repository and initialise it.
+
+```
+mkdir hello-world
+cd hello-world
+git init
+code-central init
+git add .
+git commit "initialize code central"
+```
+
+At this point, `hello-world` should appear in the UI.
+
+### Developing
+
+Start the factory in your project repository (there are other approaches, but start with this).
+
+```
+cd hello-world
+code-central-factory
+```
+
+Start adding requirements in the Code Central UI.
+
+Press the **Focus** button, and repond whenever you are prompted.
+
+### Tips
+
+- Start by just adding _Requirements_ (_Maps_ are for large pieces of work and use the `/wayfinder` skill).
+- Don't be afraid to add several requirements at a time.
+- Don't be afraid to bootstrap multiple projects and work on them concurrently (you will need a factory running per project).
+- Try tell a requirement to create a prototype.
+
+
 ## The guides
 
 Read them in this order:
