@@ -3,13 +3,12 @@
 // Progress, and the In Progress Tickets are listed below them. It reads
 // only the Inbox data Focus Mode already has, scoped as Focus Mode is,
 // with Archived Projects left out.
-import type { MouseEvent } from "react";
 import { numberOf } from "../api/api";
 import type { State } from "../api/types";
 import { RowLatestEvent } from "../LatestEvent";
 import type { InboxData, ProjectTicket } from "../live";
 import { STAGE_TITLE, stageOf } from "../requirement/progress";
-import { hrefFor, opensInPlace, type UiLocation } from "../url";
+import { linkTo, type UiLocation } from "../url";
 
 export interface ActivityDashboardProps {
   now: Date;
@@ -32,13 +31,13 @@ export function ActivityDashboard({ now, data, loc, navigate }: ActivityDashboar
   return (
     <section aria-label="Activity Dashboard" className="dashboard">
       <div className="dashboard-blocks">
-        <Block state="Ready" count={inState("Ready").length} />
-        <Block state="In Progress" count={inProgress.length} />
+        <StateCount state="Ready" count={inState("Ready").length} />
+        <StateCount state="In Progress" count={inProgress.length} />
       </div>
       {inProgress.length ? (
         <ul aria-label="In Progress" className="dashboard-list">
           {inProgress.map((t) => (
-            <Entry key={t.id} now={now} data={data} ticket={t} loc={loc} navigate={navigate} />
+            <InProgressEntry key={t.id} now={now} data={data} ticket={t} loc={loc} navigate={navigate} />
           ))}
         </ul>
       ) : (
@@ -48,8 +47,8 @@ export function ActivityDashboard({ now, data, loc, navigate }: ActivityDashboar
   );
 }
 
-// Block is one State's count: its number in big type, its State name under it.
-function Block({ state, count }: { state: State; count: number }) {
+// StateCount is one State's block: its count in big type, its State name under it.
+function StateCount({ state, count }: { state: State; count: number }) {
   return (
     <div role="group" aria-label={state} className={`dashboard-block state-${state.replace(" ", "-").toLowerCase()}`}>
       <span className="dashboard-count" data-testid="count">
@@ -60,28 +59,16 @@ function Block({ state, count }: { state: State; count: number }) {
   );
 }
 
-interface EntryProps {
-  now: Date;
-  data: InboxData;
-  ticket: ProjectTicket;
-  loc: UiLocation;
-  navigate(patch: Partial<UiLocation>): void;
-}
-
-// Entry is one In Progress Ticket. It opens in the Inbox as a Focus Item's
-// "Open in Inbox" does: a Stage Ticket in its Requirement, with it selected.
-function Entry({ now, data, ticket: t, loc, navigate }: EntryProps) {
+// InProgressEntry is one In Progress Ticket. It opens in the Inbox as a
+// Focus Item's "Open in Inbox" does: a Stage Ticket in its Requirement,
+// with it selected.
+function InProgressEntry({ now, data, ticket: t, loc, navigate }: ActivityDashboardProps & { ticket: ProjectTicket }) {
   const stage = stageOf(t);
   const requirement = stage && data.requirements.find((s) => s.id === t.spec);
-  const inbox = { view: "inbox" as const, project: loc.project, requirement: stage && t.spec, ticket: t.id };
-  const open = (e: MouseEvent) => {
-    if (!opensInPlace(e)) return;
-    e.preventDefault();
-    navigate(inbox);
-  };
+  const inbox = linkTo({ view: "inbox", project: loc.project, requirement: stage && t.spec, ticket: t.id }, navigate);
   return (
     <li className="dashboard-entry">
-      <a href={hrefFor(inbox)} onClick={open}>
+      <a {...inbox}>
         <span className="dashboard-entry-top">
           <span className="tid">{t.id}</span>
           <span className="dashboard-entry-title">{t.title}</span>

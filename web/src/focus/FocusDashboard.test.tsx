@@ -2,11 +2,12 @@
 // with the Focus Mode Option at Activity Dashboard. They check what the
 // human sees: where the dashboard shows, its counts and its In Progress
 // list.
-import { render, screen, within, act, waitFor } from "@testing-library/react";
+import { screen, within, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
+import { change, focus, renderApp } from "./focusTesting";
 
 function world() {
   const fake = new FakeApi();
@@ -23,20 +24,8 @@ async function dashboardOn(fake: FakeApi) {
   await fake.setOptions({ focus_clear: "activity_dashboard" });
 }
 
-function renderApp(fake: FakeApi, url = "/?view=focus") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
-}
-
-// change reseeds Needs Me and sends the notice the service would.
-function change(fake: FakeApi, groups: Parameters<FakeApi["setNeedsMe"]>[0], id: string) {
-  fake.setNeedsMe(groups);
-  act(() => fake.emit({ type: "ticket.changed", project: id.split("-")[0], id }));
-}
-
-const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 const dashboard = () => within(focus()).findByRole("region", { name: "Activity Dashboard" });
-// count is the number on the block for state, the block named by its State.
+// count is the number on state's block, the block named by its State.
 const count = (d: HTMLElement, state: string) => within(within(d).getByRole("group", { name: state })).getByTestId("count").textContent;
 
 describe("where the Activity Dashboard shows", () => {

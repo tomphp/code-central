@@ -8,7 +8,7 @@
 // unlink) first record that the item on screen was acted on, so an item that leaves after the
 // human's own action moves on silently, and one that leaves otherwise
 // moves on with a brief "Dealt with elsewhere" note.
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Api } from "../api/api";
 import type { FocusClear, TicketView } from "../api/types";
 import { duration, REASON_LABEL } from "../format";
@@ -17,7 +17,7 @@ import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
 import { QuestionAnswer } from "../panels/round/QuestionAnswer";
 import { OptionsLink } from "../options/OptionsLink";
-import { hrefFor, opensInPlace, type UiLocation } from "../url";
+import { linkTo, type UiLocation } from "../url";
 import { ActivityDashboard } from "./ActivityDashboard";
 import { focusQueue, type FocusItem } from "./queue";
 import "./focus.css";
@@ -181,12 +181,7 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate, 
   const Panel = panelFor(row.reason, ticket?.state)?.Component;
   const waited = duration(now, row.since);
   // A Stage Ticket opens in its Requirement, with it selected.
-  const inbox = { view: "inbox" as const, project: loc.project, requirement: row.requirement?.stage && row.requirement.spec, ticket: row.id };
-  const open = (e: MouseEvent) => {
-    if (!opensInPlace(e)) return;
-    e.preventDefault();
-    navigate(inbox);
-  };
+  const inbox = linkTo({ view: "inbox", project: loc.project, requirement: row.requirement?.stage && row.requirement.spec, ticket: row.id }, navigate);
   const skipButton = (
     <button type="button" className="btn" onClick={skip}>
       Skip
@@ -237,7 +232,7 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate, 
         </>
       )}
       <p className="focus-open">
-        <a href={hrefFor(inbox)} onClick={open}>
+        <a {...inbox}>
           Open in Inbox
         </a>
       </p>

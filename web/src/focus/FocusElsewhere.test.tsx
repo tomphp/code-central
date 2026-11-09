@@ -2,11 +2,12 @@
 // ?view=focus. An item on screen that goes away without the human acting
 // on it here moves on with a brief note; one the human acted on moves on
 // silently; a refused action keeps the item on screen with its alert.
-import { render, screen, within, act } from "@testing-library/react";
+import { screen, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
+import { change, focus, renderApp } from "./focusTesting";
 import type { RoundView } from "../api/types";
 
 // world has acme-1 waiting on Round 1 (Questions 1 and 2 open), then
@@ -43,19 +44,8 @@ function tickets() {
   return fake;
 }
 
-function renderApp(fake: FakeApi, url = "/?view=focus") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
-}
-
-const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 const heading = (name: string) => within(focus()).findByRole("heading", { name });
 const note = () => within(focus()).queryByText("Dealt with elsewhere");
-// change reseeds Needs Me and sends the notice the service would.
-function change(fake: FakeApi, groups: Parameters<FakeApi["setNeedsMe"]>[0], id: string) {
-  fake.setNeedsMe(groups);
-  act(() => fake.emit({ type: "ticket.changed", project: id.split("-")[0], id }));
-}
 const without = (fake: FakeApi, id: string) => fake.needsMeGroups.map((g) => ({ ...g, tickets: g.tickets.filter((r) => r.id !== id) })).filter((g) => g.tickets.length);
 
 describe("dealt with elsewhere", () => {

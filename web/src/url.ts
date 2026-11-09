@@ -95,3 +95,16 @@ export function useUiLocation(): [UiLocation, (patch: Partial<UiLocation>) => vo
 export function opensInPlace(e: MouseEvent): boolean {
   return !(e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0);
 }
+
+// linkTo is a link's href and onClick for to: a plain click navigates in
+// place, any other is left to the browser.
+export function linkTo(to: UiLocation, navigate: (patch: Partial<UiLocation>) => void) {
+  return {
+    href: hrefFor(to),
+    onClick: (e: MouseEvent) => {
+      if (!opensInPlace(e)) return;
+      e.preventDefault();
+      navigate(to);
+    },
+  };
+}
