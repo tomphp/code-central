@@ -157,7 +157,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	go c.WatchTimedReasons(ctx, ticker.C, func(project, ticketID string) {
 		c.Events().Publish(events.Event{Type: events.TicketChanged, Project: project, ID: ticketID})
 	})
-	handler := frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), bindHosts...), e.version())
+	handler := frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), e.Stderr, bindHosts...), e.version())
 
 	bound := make([]string, 0, len(listeners))
 	for _, l := range listeners {

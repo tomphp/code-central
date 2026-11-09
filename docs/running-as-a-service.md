@@ -94,6 +94,24 @@ Files written by an older `init` keep working: the `.mcp.json` URL, the port, th
 
 Running it again rewrites the files it generated without asking, and asks before replacing any file you've changed.
 
+## The service log
+
+The service writes its log to stderr, or appends it to the file `serve --log` names; [What `service install` does](#what-service-install-does) says where each OS keeps it. Besides startup and migration messages, it holds one line for each MCP tool call an agent makes:
+
+```text
+code-central serve: mcp get_ticket project=acme id=acme-2 bytes=1534
+code-central serve: mcp create_spec project=acme id=acme-4 bytes=96
+code-central serve: mcp find_tickets project=acme bytes=2210
+code-central serve: mcp get_ticket project=acme id=acme-99 bytes=71 error=not_found
+```
+
+- `mcp <operation>` is the tool called, and `project` the Project its URL names.
+- `id` is the Ticket or Spec the call names (a bare number is shown as `<key>-<n>`), or else the one it returns, such as the Spec `create_spec` made or the Ticket `claim` gave. It is left out when there is neither.
+- `bytes` is the length of the text the agent is given, so the context the call loads into the agent.
+- `error=<code>` ends the line of a call the service rejected; `bytes` is then the error's size.
+
+Calls to the HTTP API, from the CLI and the UI, are not logged. To add up what a session's Code Central calls load, filter the log by time or `project`; the [Context Report](context-report.md) measures everything else an agent loads, from Claude Code's session logs.
+
 ## Versions
 
 A release's binary is stamped with its tag, such as `v1.1.0`, and `make build` stamps `git describe --tags --always --dirty`, such as `v1.1.0-3-g0cf9d18-dirty`. `code-central --version` prints it, and the service sends it in the `X-Code-Central-Version` response header.

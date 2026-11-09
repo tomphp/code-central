@@ -6,6 +6,7 @@
 package codecentraltest
 
 import (
+	"io"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -38,10 +39,17 @@ const Version = "dev"
 // Option configures NewServer.
 type Option func(*options)
 
-type options struct{ version string }
+type options struct {
+	version string
+	log     io.Writer
+}
 
 // WithVersion makes the server report version in its version header.
 func WithVersion(version string) Option { return func(o *options) { o.version = version } }
+
+// WithLog makes the server write its log, as serve's --log holds it, to
+// log.
+func WithLog(log io.Writer) Option { return func(o *options) { o.log = log } }
 
 // NewServer starts a test service, stopped when t ends.
 func NewServer(t testing.TB, opts ...Option) *Server {
@@ -53,7 +61,7 @@ func NewServer(t testing.TB, opts ...Option) *Server {
 	s := store.NewMemory()
 	clk := clock.NewFake(Start)
 	c := core.New(s, clk, &ids.Sequence{})
-	hs := httptest.NewServer(frontdoor.Versioned(frontdoor.Handler(c, web.Handler()), o.version))
+	hs := httptest.NewServer(frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), o.log), o.version))
 	t.Cleanup(hs.Close)
 	return &Server{URL: hs.URL, Client: client.New(hs.URL), Clock: clk, Core: c, Store: s}
 }
