@@ -250,9 +250,15 @@ type factory struct {
 	drainOnce sync.Once
 }
 
+// newFactory is a factory with nothing found out yet: start fills in the
+// rest.
+func newFactory(e Env, o options) *factory {
+	return &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, warnedRemote: map[string]bool{}}
+}
+
 // start makes every start-up check, refusing with the reason.
 func start(e Env, o options) (*factory, error) {
-	f := &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, warnedRemote: map[string]bool{}}
+	f := newFactory(e, o)
 	git, ok := e.lookPath("git")
 	if !ok {
 		return nil, errors.New("git isn't on PATH")
