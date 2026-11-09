@@ -64,7 +64,8 @@ func newLandWorld(t *testing.T) *landWorld {
 	repo := newFakeRepo(fakeTop)
 	f := newFactory(Env{Stdout: out, Now: time.Now}, options{parallel: 1})
 	f.repo, f.repository, f.project, f.base, f.client = fakeTop, repo, "acme", "main", srv.Client
-	f.worktrees = fakeTop + ".worktrees"
+	// As start builds it: with the OS's separators.
+	f.worktrees = filepath.FromSlash(fakeTop + ".worktrees")
 	return &landWorld{t: t, f: f, repo: repo, srv: srv, human: human, out: out}
 }
 
