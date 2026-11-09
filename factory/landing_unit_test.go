@@ -455,11 +455,12 @@ func TestAChangeOfLandingMethodAppliesFromTheNextPoll(t *testing.T) {
 	base := w.repo.tip("refs/heads/main")
 
 	w.poll()
+	w.poll()
 	if s := w.ticket(first).State; s != store.Accepted || w.repo.tip("refs/heads/main") != base {
 		t.Fatalf("%s is %s and main moved; want it left under Branch", first, s)
 	}
 	if got := w.lines(first + ": Accepted under the Branch Landing Method: merge " + first + " into main and the Factory lands it"); got != 1 {
-		t.Errorf("want the Branch line once, got %q", w.out)
+		t.Errorf("want the Branch line once over two polls, got %q", w.out)
 	}
 
 	// Branch to Merge: the Accepted Ticket not merged by hand is merged.
