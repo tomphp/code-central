@@ -1,6 +1,8 @@
 package core_test
 
 import (
+	"maps"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -133,14 +135,14 @@ func TestOnlyASpecLabelledAsAMapCarriesAMapBlock(t *testing.T) {
 		t.Fatalf("a plain Spec has no Map block: %+v", m)
 	}
 	m := f.mapOf(t, "acme-1")
-	if m == nil || *m != (core.MapView{Decided: 0, Total: 1, NeedsYou: 0, CanWriteSpec: false}) {
+	if m == nil || !reflect.DeepEqual(*m, core.MapView{Decided: 0, Total: 1, NeedsYou: 0, CanWriteSpec: false, Requirements: []string{}}) {
 		t.Fatalf("a new Map: %+v", m)
 	}
 	rows, err := f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{})
 	if err != nil || len(rows) != 2 || rows[0].Map == nil || rows[1].Map != nil {
 		t.Fatalf("find_specs rows %+v, %v", rows, err)
 	}
-	if *rows[0].Map != *m {
+	if !reflect.DeepEqual(rows[0].Map, m) {
 		t.Fatalf("the row's Map block %+v, get_spec's %+v", rows[0].Map, m)
 	}
 }
@@ -163,13 +165,13 @@ func TestTheMapBlockCountsItsDecisionsAndWhatNeedsTheHuman(t *testing.T) {
 	m := f.mapOf(t, "acme-1")
 	// decided: chart and grilling Done; total: the four Wayfinder Tickets
 	// not Cancelled; needs_you: research and the Prototype In Review.
-	if *m != (core.MapView{Decided: 2, Total: 4, NeedsYou: 2, CanWriteSpec: false}) {
+	if !reflect.DeepEqual(*m, core.MapView{Decided: 2, Total: 4, NeedsYou: 2, CanWriteSpec: false, Requirements: []string{}}) {
 		t.Fatalf("map %+v", m)
 	}
 	for _, n := range []int{4, 5, 7, 8} {
 		f.setState(t, n, store.Done)
 	}
-	if m := f.mapOf(t, "acme-1"); *m != (core.MapView{Decided: 4, Total: 4, NeedsYou: 0, CanWriteSpec: true}) {
+	if m := f.mapOf(t, "acme-1"); !reflect.DeepEqual(*m, core.MapView{Decided: 4, Total: 4, NeedsYou: 0, CanWriteSpec: true, Requirements: []string{}}) {
 		t.Fatalf("a Map with nothing unfinished can write its Spec: %+v", m)
 	}
 }
@@ -284,5 +286,90 @@ func TestEachTicketRowOnAMapCarriesItsBlockers(t *testing.T) {
 		if row.ID == "acme-8" && row.BlockedBy != nil {
 			t.Fatalf("a Ticket on a plain Spec leaves its Blockers out: %+v", row)
 		}
+	}
+}
+
+// Write the Spec: a finished Map becomes a new Requirement with no
+// grilling Stage, whose spec Stage works from the Map.
+func TestWritingTheSpecFromAMapCreatesARequirementWithOnlyTheSpecAndTicketsStages(t *testing.T) {
+	f := newFixture(t)
+	f.mapWith(t) // Charting is acme-2
+	f.setState(t, 2, store.Done)
+	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, Map: "acme-1"})
+	if err != nil {
+		t.Fatalf("submit_requirement with map: %v", err)
+	}
+	if res.Spec.ID != "acme-3" || len(res.Stages) != 2 || res.Stages[0].ID != "acme-4" || res.Stages[1].ID != "acme-5" {
+		t.Fatalf("result %+v", res)
+	}
+	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sp.Title != "Add a dark mode" || *sp.Body != darkMode || !maps.Equal(sp.Tags, map[string]string{"map": "acme-1"}) || len(sp.Labels) != 0 {
+		t.Fatalf("spec %+v", sp)
+	}
+	specStage, tickets := f.get(t, "acme-4"), f.get(t, "acme-5")
+	if !slices.Equal(specStage.Labels, []string{"stage:spec"}) || len(specStage.BlockedBy) != 0 || !specStage.Claimable ||
+		specStage.Title != "Spec: Add a dark mode" || specStage.Moves[0].Via != "submit_requirement" {
+		t.Fatalf("the spec Stage is unblocked: %+v", specStage)
+	}
+	if !slices.Equal(tickets.Labels, []string{"stage:tickets"}) || !slices.Equal(tickets.BlockedBy, []string{"acme-4"}) {
+		t.Fatalf("the tickets Stage follows it: %+v", tickets)
+	}
+	for _, want := range []string{"acme-3", "acme-1", "Decisions so far", "resolution"} {
+		if !strings.Contains(specStage.Description, want) {
+			t.Fatalf("the spec Stage's description should name %q: %q", want, specStage.Description)
+		}
+	}
+	if sp.Requirement == nil || sp.Requirement.Map != "acme-1" || len(sp.Requirement.Stages) != 2 ||
+		sp.Requirement.Stages[0].Name != "spec" || sp.Requirement.Stages[1].Name != "tickets" {
+		t.Fatalf("requirement block %+v", sp.Requirement)
+	}
+	if m := f.mapOf(t, "acme-1"); !slices.Equal(m.Requirements, []string{"acme-3"}) {
+		t.Fatalf("the Map lists the Requirement made from it: %+v", m)
+	}
+	rows, err := f.core.FindSpecs(ctx, "acme", core.FindSpecsInput{Finished: true})
+	if err != nil || len(rows) != 2 || rows[1].Requirement.Map != "acme-1" || !slices.Equal(rows[0].Map.Requirements, []string{"acme-3"}) {
+		t.Fatalf("find_specs rows %+v, %v", rows, err)
+	}
+}
+
+func TestARequirementNotMadeFromAMapNamesNoMap(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	if _, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode}); err != nil {
+		t.Fatal(err)
+	}
+	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
+	if err != nil || sp.Requirement.Map != "" || len(sp.Tags) != 0 {
+		t.Fatalf("spec %+v, %v", sp, err)
+	}
+}
+
+func TestWritingTheSpecIsRefusedForASpecThatIsNotAFinishedMap(t *testing.T) {
+	f := newFixture(t)
+	f.mapWith(t, core.CreateTicketInput{Title: "Which store", Labels: []string{"wayfinder:grilling"}}) // acme-3
+	f.setState(t, 2, store.Done)
+	f.spec(t, "acme", "Login") // acme-4, a plain Spec
+
+	_, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, Map: "acme-4"})
+	wantCode(t, err, core.Invalid, "map")
+	// The Map still has a Draft decision Ticket.
+	_, err = f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, Map: "acme-1"})
+	wantCode(t, err, core.ActionNotAllowed, "")
+	if err == nil || !strings.Contains(err.Error(), "acme-3 (Draft)") {
+		t.Fatalf("the refusal names the unfinished Ticket: %v", err)
+	}
+	f.store.View(func(r store.Reader) error {
+		if len(r.Specs("acme")) != 2 || len(r.Tickets("acme")) != 2 {
+			t.Fatal("a refused Requirement wrote something")
+		}
+		return nil
+	})
+	// A Cancelled Ticket is finished too.
+	f.setState(t, 3, store.Cancelled)
+	if _, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, Map: "acme-1"}); err != nil {
+		t.Fatalf("a finished Map writes its Spec: %v", err)
 	}
 }

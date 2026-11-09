@@ -1,8 +1,11 @@
 // "New requirement" and "New Map": the left pane's buttons, each with the
 // same modal, one free-text box. It submits to the filtered Project, or
 // the only one; with several and none filtered, the modal asks which.
+// "Write the Spec", in a finished Map's header, opens the New requirement
+// modal prefilled from the Map and submits it with the Map.
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
+import { projectOf } from "../api/api";
 import type { ApiError, ProjectRow, SpecAcknowledgement } from "../api/types";
 
 export interface NewRequirementProps {
@@ -22,6 +25,8 @@ interface Kind {
   noun: string;
   placeholder: string;
   creates: string;
+  // text prefills the text box.
+  text?: string;
   submit(api: Api, project: string, text: string): Promise<{ spec: SpecAcknowledgement }>;
 }
 
@@ -51,6 +56,28 @@ export function NewMap(props: NewRequirementProps) {
   return <NewSpec kind={MAP} {...props} />;
 }
 
+export interface WriteTheSpecProps {
+  api: Api;
+  // map is the finished Map, with its Destination.
+  map: { id: string; title: string; destination: string };
+  onSubmitted(r: { spec: SpecAcknowledgement }): void;
+}
+
+// WriteTheSpec makes a Requirement from a finished Map, with no grilling
+// Stage: its text starts as the Map's title, a link to it and its
+// Destination.
+export function WriteTheSpec({ api, map, onSubmitted }: WriteTheSpecProps) {
+  const kind: Kind = {
+    ...REQUIREMENT,
+    button: "Write the Spec",
+    className: "btn",
+    creates: "Creates a Spec and its Spec and Tickets Stages, from the Map's decisions. A Factory picks up Spec.",
+    text: [map.title, `From the Map [${map.id}](${map.id}).`, map.destination].filter(Boolean).join("\n\n") + "\n",
+    submit: (api, project, text) => api.submitRequirement(project, text, map.id),
+  };
+  return <NewSpec kind={kind} api={api} projects={[]} project={projectOf(map.id)} onSubmitted={onSubmitted} />;
+}
+
 function NewSpec({ kind, api, projects, project, onSubmitted }: NewRequirementProps & { kind: Kind }) {
   const [open, setOpen] = useState(false);
   return (
@@ -76,7 +103,7 @@ function NewSpec({ kind, api, projects, project, onSubmitted }: NewRequirementPr
 }
 
 function Modal({ kind, api, projects, project, onClose, onSubmitted }: NewRequirementProps & { kind: Kind; onClose(): void }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(kind.text ?? "");
   const [chosen, setChosen] = useState(project ?? projects[0]?.key ?? "");
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);

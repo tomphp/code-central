@@ -232,3 +232,79 @@ describe("the Map view", () => {
     expect(within(pane).getByRole("region", { name: "Not yet specified" })).toHaveTextContent("Nothing written yet.");
   });
 });
+
+describe("Write the Spec", () => {
+  const open = async (fake: FakeApi) => {
+    renderApp(fake, "/?view=inbox&list=requirements&requirement=acme-1");
+    return within(detail()).findByRole("region", { name: "Map" });
+  };
+  // A finished Map: every Ticket Done or Cancelled.
+  const finished = (fake: FakeApi) =>
+    aMap(fake, [
+      { title: "Charting: Offline mode", label: "wayfinder:chart", state: "Done" }, // acme-2
+      { title: "Which store", label: "wayfinder:grilling", state: "Done", blockedBy: ["acme-2"] }, // acme-3
+      { title: "Dropped", label: "wayfinder:task", state: "Cancelled" }, // acme-4
+    ]);
+
+  it("isn't in the header while the Map has unfinished Tickets", async () => {
+    const fake = new FakeApi();
+    offlineMode(fake);
+    const pane = await open(fake);
+    expect(within(pane).queryByRole("button", { name: "Write the Spec" })).toBeNull();
+  });
+
+  it("opens the New Requirement dialog prefilled from the Map, submits it with the Map and selects the new Requirement", async () => {
+    const fake = new FakeApi();
+    finished(fake);
+    const pane = await open(fake);
+
+    await userEvent.click(within(pane).getByRole("button", { name: "Write the Spec" }));
+    const modal = screen.getByRole("dialog", { name: "Write the Spec" });
+    const text = within(modal).getByRole<HTMLTextAreaElement>("textbox", { name: "Requirement" });
+    expect(text.value).toBe("Offline mode\n\nFrom the Map [acme-1](acme-1).\n\nThe app works on a plane.\n");
+    expect(within(modal).queryByRole("combobox")).toBeNull();
+    await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
+
+    expect(fake.calls).toContain("submitRequirement");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(params().get("requirement")).toBe("acme-5"));
+    const spec = await fake.getSpec("acme", "acme-5");
+    expect(spec.tags).toEqual({ map: "acme-1" });
+    expect(spec.requirement?.map).toBe("acme-1");
+    expect(spec.requirement?.stages.map((s) => s.name)).toEqual(["spec", "tickets"]);
+    expect(await within(detail()).findByRole("region", { name: "Requirement" })).toBeInTheDocument();
+  });
+
+  it("links the Requirements made from the Map in its header", async () => {
+    const fake = new FakeApi();
+    finished(fake);
+    await fake.submitRequirement("acme", "Offline mode", "acme-1"); // acme-5
+    const pane = await open(fake);
+
+    const made = within(pane).getByRole("link", { name: "acme-5" });
+    expect(made.closest("p")).toHaveTextContent("Requirements from this Map: acme-5");
+    await userEvent.click(made);
+    expect(params().get("requirement")).toBe("acme-5");
+    expect(await within(detail()).findByRole("region", { name: "Requirement" })).toBeInTheDocument();
+  });
+
+  it("shows a Requirement made from the Map with its grilling segment done, labelled Map and linking to the Map", async () => {
+    const fake = new FakeApi();
+    finished(fake);
+    await fake.submitRequirement("acme", "Offline mode", "acme-1"); // acme-5, Stages acme-6 and acme-7
+    renderApp(fake, "/?view=inbox&list=requirements&requirement=acme-5");
+
+    const pane = await within(detail()).findByRole("region", { name: "Requirement" });
+    const strip = within(pane).getByRole("list", { name: "Stages" });
+    const segs = within(strip).getAllByRole("listitem");
+    expect(segs.map((s) => s.textContent)).toEqual(["Map", "Spec", "Tickets", "Build"]);
+    expect(segs[0].dataset.progress).toBe("done");
+    expect(await within(pane).findByText("Waiting for a Factory to claim Spec. Nothing needs you yet.")).toBeInTheDocument();
+    // In the list, the row's strip is a picture inside the row's link.
+    expect(within(row("acme-5")).getByRole("list", { name: "Stages" })).toHaveTextContent("MapSpecTickets");
+
+    await userEvent.click(within(segs[0]).getByRole("link", { name: "Map" }));
+    expect(params().get("requirement")).toBe("acme-1");
+    expect(await within(detail()).findByRole("region", { name: "Map" })).toBeInTheDocument();
+  });
+});

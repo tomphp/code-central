@@ -1,6 +1,8 @@
 // The Requirement pane, above the shared Ticket pane: the header (ID,
-// title, submitted time), the clickable Stage strip, what it waits for,
+// title, submitted time), the clickable Stage strip (its Map segment
+// linking to the Map it was made from, if any), what it waits for,
 // and under Build its implementation Tickets with their States.
+import type { MouseEvent } from "react";
 import type { NeedsMeReason, SpecDetail } from "../api/types";
 import { ago } from "../format";
 import { RowLatestEvent } from "../LatestEvent";
@@ -14,9 +16,11 @@ export interface RequirementPaneProps {
   // ticket is the selected Ticket.
   ticket?: string;
   select(ticket: string): void;
+  // specLink links another Spec, such as the Map it was made from.
+  specLink(spec: string): { href: string; onClick(e: MouseEvent): void };
 }
 
-export function RequirementPane({ spec, reasons, now, ticket, select }: RequirementPaneProps) {
+export function RequirementPane({ spec, reasons, now, ticket, select, specLink }: RequirementPaneProps) {
   const p = progress(spec.requirement, spec.tickets, reasons);
   const note = waitingNote(p);
   return (
@@ -26,6 +30,7 @@ export function RequirementPane({ spec, reasons, now, ticket, select }: Requirem
       <Strip
         p={p}
         current={ticket}
+        mapLink={specLink}
         onPick={(s) => {
           const t = s.ticket ?? (p.build.find((t) => reasons.has(t.id)) ?? p.build[0])?.id;
           if (t) select(t);

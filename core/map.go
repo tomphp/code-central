@@ -102,6 +102,9 @@ type MapView struct {
 	NeedsYou int `json:"needs_you"`
 	// CanWriteSpec is whether it has no unfinished Tickets.
 	CanWriteSpec bool `json:"can_write_spec"`
+	// Requirements are the Specs whose map Tag names this Map: the
+	// Requirements Write the Spec made from it, in creation order.
+	Requirements []string `json:"requirements"`
 }
 
 // isMap reports whether a Spec's Labels mark it as a Map.
@@ -113,7 +116,13 @@ func (c *Core) mapView(r store.Reader, key string, s store.Spec, tickets []store
 	if !isMap(s.Labels) {
 		return nil
 	}
-	v := &MapView{CanWriteSpec: true}
+	id := DisplayID(key, s.Number)
+	v := &MapView{CanWriteSpec: true, Requirements: []string{}}
+	for _, sp := range r.Specs(key) {
+		if sp.Tags[MapTag] == id {
+			v.Requirements = append(v.Requirements, DisplayID(key, sp.Number))
+		}
+	}
 	for _, t := range tickets {
 		if reason, _ := c.reasonOf(r, key, t); reason != "" {
 			v.NeedsYou++

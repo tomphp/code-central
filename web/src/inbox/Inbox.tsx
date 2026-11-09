@@ -78,6 +78,9 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, require
     "aria-current": loc.requirement === id ? ("true" as const) : undefined,
   });
 
+  // specLink opens another Spec, a Map or Requirement, from the selected one.
+  const specLink = (id: string) => ({ href: hrefFor({ ...loc, requirement: id, ticket: undefined }), onClick: go({ requirement: id, ticket: undefined }) });
+
   // Only an active Project has a Project Options link: an Archived one takes no writes.
   const projectFilter = (p: ProjectRow) => (
     <ProjectFilter
@@ -197,9 +200,25 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, require
           (requirementError ? (
             <p className="empty">{requirementError}</p>
           ) : requirement ? (
-            <RequirementPane spec={requirement} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
+            <RequirementPane
+              spec={requirement}
+              reasons={reasons}
+              now={now}
+              ticket={loc.ticket}
+              select={(id) => navigate({ ticket: id })}
+              specLink={specLink}
+            />
           ) : map ? (
-            <MapPane api={api} spec={map} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
+            <MapPane
+              api={api}
+              spec={map}
+              reasons={reasons}
+              now={now}
+              ticket={loc.ticket}
+              select={(id) => navigate({ ticket: id })}
+              specLink={specLink}
+              written={(id) => navigate({ list: "requirements", state: undefined, requirement: id, ticket: undefined })}
+            />
           ) : (
             <p className="empty">Loading…</p>
           ))}

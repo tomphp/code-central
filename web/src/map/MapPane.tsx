@@ -1,14 +1,16 @@
 // The Map view, in the pane a Requirement's view uses and above the
 // shared Ticket pane: the header (ID, title, submitted time, the Map's
-// count and its Destination), then the Map's Tickets as a left-to-right
+// count, its Destination, Write the Spec once the Map is finished and links
+// to the Requirements made from it), then the Map's Tickets as a left-to-right
 // graph with Blockers as edges and the fog of what isn't specified yet on
 // the right, beside its collapsible Decisions so far and Out of scope.
-import { useId, useState } from "react";
+import { useId, useState, type MouseEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import type { MapView, NeedsMeReason, SpecDetail, TicketRow } from "../api/types";
 import { ago } from "../format";
 import { Markdown } from "../Markdown";
+import { WriteTheSpec } from "../requirement/NewRequirement";
 import { useAct } from "../ticket/useAct";
 import { FOG, isFrontier, layoutMap, NODE, nodeProgress } from "./graph";
 import { mapCount } from "./MapRow";
@@ -22,9 +24,13 @@ export interface MapPaneProps {
   // ticket is the selected Ticket.
   ticket?: string;
   select(ticket: string): void;
+  // specLink links another Spec: a Requirement made from the Map.
+  specLink(spec: string): { href: string; onClick(e: MouseEvent): void };
+  // written is called with the Requirement Write the Spec made.
+  written(spec: string): void;
 }
 
-export function MapPane({ api, spec, reasons, now, ticket, select }: MapPaneProps) {
+export function MapPane({ api, spec, reasons, now, ticket, select, specLink, written }: MapPaneProps) {
   const [fogOpen, setFogOpen] = useState(false);
   const { busy, error, run } = useAct();
   const layout = layoutMap(spec.tickets);
@@ -42,6 +48,24 @@ export function MapPane({ api, spec, reasons, now, ticket, select }: MapPaneProp
       <div aria-label="Destination" className="map-destination">
         {destination ? <Markdown>{destination}</Markdown> : <p className="muted">No Destination yet.</p>}
       </div>
+      {spec.map.can_write_spec && (
+        <div className="map-actions">
+          <WriteTheSpec api={api} map={{ id: spec.id, title: spec.title, destination }} onSubmitted={(r) => written(r.spec.id)} />
+        </div>
+      )}
+      {spec.map.requirements.length > 0 && (
+        <p className="small map-requirements">
+          Requirements from this Map:{" "}
+          {spec.map.requirements.map((id, i) => (
+            <span key={id}>
+              {i > 0 && ", "}
+              <a className="tid" {...specLink(id)}>
+                {id}
+              </a>
+            </span>
+          ))}
+        </p>
+      )}
       {error && (
         <p role="alert" className="warning">
           {error}

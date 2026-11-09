@@ -3,6 +3,10 @@
 // Requirement's implementation Tickets and what Needs Me says needs the human.
 import { FINISHED, type NeedsMeReason, type NeedsMeView, type RequirementView, type StageName, type TicketRow } from "../api/types";
 
+// MAP_TITLE names the segment a Requirement made from a Map has in
+// place of its grilling Stage.
+export const MAP_TITLE = "Map";
+
 export const STAGE_TITLE: Record<StageName | "build", string> = {
   grilling: "Grilling",
   spec: "Spec",
@@ -21,11 +25,14 @@ export interface Segment {
   progress: SegmentProgress;
   // ticket is the Stage Ticket; Build has none of its own.
   ticket?: string;
+  // map is the Map a Requirement was made from, on the segment that stands
+  // in for its grilling Stage.
+  map?: string;
   reason?: NeedsMeReason;
 }
 
 export interface Progress {
-  segments: Segment[]; // grilling, spec, tickets, build
+  segments: Segment[]; // grilling (or its Map), spec, tickets, build
   // current is the first segment not done, or Build once all are.
   current: Segment;
   // build is the implementation Tickets, Cancelled ones included.
@@ -91,6 +98,8 @@ export function progress(req: RequirementView, tickets: TicketRow[], reasons: Ma
             : "waiting";
   const buildSeg: Segment = { stage: "build", name: STAGE_TITLE.build, progress: buildProgress, ...(buildNeeds[0] && { reason: reasons.get(buildNeeds[0].id) }) };
   segments.push(buildSeg);
+  // A Requirement made from a Map has no grilling Stage: the Map did that.
+  if (req.map) segments.unshift({ stage: "grilling", name: MAP_TITLE, progress: "done", map: req.map });
   const needs = [
     ...segments.filter((s) => s.ticket && s.reason).map((s) => ({ ticket: s.ticket!, reason: s.reason!, stage: s.stage as StageName })),
     ...buildNeeds.map((t) => ({ ticket: t.id, reason: reasons.get(t.id)! })),

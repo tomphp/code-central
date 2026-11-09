@@ -18,7 +18,8 @@
 // A Spec read derives what the service derives from its Tickets: the
 // State summary, finished, and a Requirement's requirement block
 // (a Stage's Needs Me reason is Needs Me's, as set by setNeedsMe).
-// submitRequirement writes a Spec and its three Stage Tickets, and
+// submitRequirement writes a Spec and its three Stage Tickets (only the
+// spec and tickets Stages, and a map Tag, when written from a Map), and
 // submitMap a Map's Spec and its Charting Ticket; a Map's read derives its
 // Map block, and its Tickets' rows their node type.
 //
@@ -639,14 +640,15 @@ export class FakeApi implements Api {
     );
   }
 
-  async submitRequirement(project: string, text: string): Promise<SubmitRequirementResult> {
+  async submitRequirement(project: string, text: string, map?: string): Promise<SubmitRequirementResult> {
     this.calls.push("submitRequirement");
     this.writable(project);
     const title = text.trim().split("\n")[0].trim();
     if (!title) throw new ApiError(422, "invalid", "a Requirement needs text; its first line becomes the Spec's title", "text");
-    const spec = this.addSpec(project, { title, body: text });
+    const from = map && this.finishedMap(project, map);
+    const spec = this.addSpec(project, { title, body: text, ...(from && { tags: { map: from } }) });
     const stages: TicketView[] = [];
-    for (const s of STAGES) {
+    for (const s of from ? STAGES.slice(1) : STAGES) {
       const prev = stages.at(-1);
       stages.push(
         this.addTicket(project, {
@@ -654,7 +656,10 @@ export class FakeApi implements Api {
           state: "Ready",
           spec: { id: spec.id, title },
           labels: [`stage:${s.name}`],
-          description: `The ${s.title} Stage of [${spec.id}](${spec.id}).\n`,
+          description:
+            from && s.name === "spec"
+              ? `Write the Spec for the Requirement in Spec [${spec.id}](${spec.id}), from its text and the Map [${from}](${from}): its Decisions so far and the resolution comments they link.\n`
+              : `The ${s.title} Stage of [${spec.id}](${spec.id}).\n`,
           blocked_by: prev ? [prev.id] : [],
           blockers: prev ? [{ id: prev.id, title: prev.title, state: prev.state }] : [],
           blocked: !!prev,
@@ -664,6 +669,24 @@ export class FakeApi implements Api {
       );
     }
     return { spec: acknowledgeSpecCreate(spec), stages: stages.map(acknowledgeTicketCreate) };
+  }
+
+  // finishedMap is the ID of the Map submitRequirement's map names, which
+  // must be a Map with no unfinished Tickets.
+  private finishedMap(project: string, map: string): string {
+    const id = `${project}-${map.slice(map.lastIndexOf("-") + 1)}`;
+    const s = this.specs.get(id);
+    if (!s) throw new ApiError(404, "not_found", `there is no Spec ${id}`);
+    if (!s.labels.includes(MAP_LABEL)) throw new ApiError(422, "invalid", `${id} isn't a Map: a Map is a Spec labelled ${MAP_LABEL}`, "map");
+    const open = this.ticketsOf(id).filter((t) => !FINISHED.includes(t.state));
+    if (open.length) {
+      throw new ApiError(
+        409,
+        "action_not_allowed",
+        `Map ${id} still has unfinished Tickets, so its Spec can't be written until every one is Done or Cancelled: ${open.map((t) => `${t.id} (${t.state})`).join(", ")}`,
+      );
+    }
+    return id;
   }
 
   async submitMap(project: string, text: string): Promise<SubmitMapResult> {
@@ -948,6 +971,7 @@ export class FakeApi implements Api {
           total: wayfinder.length,
           needs_you: tickets.filter(reason).length,
           can_write_spec: tickets.every((t) => FINISHED.includes(t.state)),
+          requirements: [...this.specs.values()].filter((s) => s.tags.map === spec).map((s) => s.id),
         },
       };
     }
@@ -963,6 +987,7 @@ export class FakeApi implements Api {
       state_summary,
       finished,
       requirement: {
+        ...(this.specs.get(spec)?.tags.map && { map: this.specs.get(spec)!.tags.map }),
         stages: stages.map((t) => ({ name: stageOf(t)!, ticket: t.id, state: t.state, ...(reason(t) && { needs_me_reason: reason(t) }) })),
         build: { done: build.filter((t) => t.state === "Done").length, total: build.length },
         waiting_for_factory: current ? claimable(current) : build.some(claimable) && !held,

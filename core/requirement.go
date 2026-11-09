@@ -37,13 +37,16 @@ func checkStageLabels(field string, labels []string) error {
 // free text, whose first line becomes the Spec's title.
 type SubmitRequirementInput struct {
 	Text string `json:"text"`
+	// Map is the finished Map the Requirement is written from, if any
+	// (Write the Spec): its Decisions take the grilling Stage's place.
+	Map Ref `json:"map,omitempty"`
 	// Full asks for the Spec and Stage Tickets in place of their
 	// Acknowledgements.
 	Full bool `json:"full,omitempty"`
 }
 
-// SubmitRequirementResult is the new Requirement: its Spec and its three
-// Stage Tickets, in order, each acknowledged, or with full each the record.
+// SubmitRequirementResult is the new Requirement: its Spec and its Stage
+// Tickets (three, or two when made from a Map), in order, each acknowledged, or with full each the record.
 type SubmitRequirementResult struct {
 	Spec   Written[SpecView]     `json:"spec"`
 	Stages []Written[TicketView] `json:"stages"`
@@ -58,8 +61,17 @@ var stageTickets = map[string]struct{ title, description string }{
 	"tickets":  {"Tickets", "Slice the Spec [%[1]s](%[1]s) into implementation Tickets.\n"},
 }
 
-// SubmitRequirement is submit_requirement(text). It writes as human
-// whoever calls, all four records or none.
+// MapTag is the Tag on a Requirement made from a Map, whose value is the
+// Map's ID.
+const MapTag = "map"
+
+// mapSpecDescription is the spec Stage's description on a Requirement made
+// from a Map, given the Spec's ID and the Map's.
+const mapSpecDescription = "Write the Spec for the Requirement in Spec [%[1]s](%[1]s), from its text and the Map [%[2]s](%[2]s): its Decisions so far and the resolution comments they link.\n"
+
+// SubmitRequirement is submit_requirement(text, map?). It writes as human
+// whoever calls, all its records or none. With map, the Requirement has
+// only the spec and tickets Stages, and its map Tag names the Map.
 func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequirementInput) (SubmitRequirementResult, error) {
 	title := titleLine(in.Text)
 	if title == "" {
@@ -71,26 +83,43 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 		if err := writable(w, key); err != nil {
 			return err
 		}
+		stages, mapID := Stages, ""
+		if in.Map != "" {
+			m, err := finishedMap(w, key, in.Map)
+			if err != nil {
+				return err
+			}
+			stages, mapID = Stages[1:], DisplayID(key, m.Number)
+		}
 		now := c.now()
 		specN = w.NextNumber(key)
-		im := store.Import{Specs: []store.Spec{{Number: specN, Title: title, Created: now, Updated: now, Body: in.Text}}}
+		sp := store.Spec{Number: specN, Title: title, Created: now, Updated: now, Body: in.Text}
+		if mapID != "" {
+			sp.Tags = map[string]string{MapTag: mapID}
+		}
+		im := store.Import{Specs: []store.Spec{sp}}
 		specID := DisplayID(key, specN)
-		for i, stage := range Stages {
+		for i, stage := range stages {
 			n := specN + 1 + i
 			var blockedBy []int
 			if i > 0 {
 				blockedBy = []int{n - 1}
 			}
+			description := fmt.Sprintf(stageTickets[stage].description, specID)
+			if stage == "spec" && mapID != "" {
+				description = fmt.Sprintf(mapSpecDescription, specID, mapID)
+			}
 			im.Tickets = append(im.Tickets, store.Ticket{
 				Number: n, Title: stageTickets[stage].title + ": " + title, State: store.Ready, Spec: specN,
 				Labels: []string{StageLabel(stage)}, BlockedBy: blockedBy, Created: now, Updated: now,
-				Description: fmt.Sprintf(stageTickets[stage].description, specID),
+				Description: description,
 				Moves:       []store.Move{{To: store.Ready, Actor: string(Human), Time: now, Via: "submit_requirement"}},
 			})
 			stageNs = append(stageNs, n)
 		}
 		return w.PutImport(key, im)
 	})
+
 	if err != nil {
 		return SubmitRequirementResult{}, err
 	}
@@ -114,6 +143,31 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 	return res, err
 }
 
+// finishedMap reads the Map ref names as submit_requirement's map, which
+// must be labelled wayfinder:map and have no unfinished Tickets.
+func finishedMap(r store.Reader, key string, ref Ref) (store.Spec, error) {
+	m, err := resolveSpec(r, key, "submit_requirement", "map", ref)
+	if err != nil {
+		return store.Spec{}, err
+	}
+	id := DisplayID(key, m.Number)
+	if !isMap(m.Labels) {
+		return store.Spec{}, invalid("map", "%s isn't a Map: a Map is a Spec labelled %s", id, MapLabel)
+	}
+	var open []string
+	for _, t := range specTickets(r, key, m.Number) {
+		if !finished(t.State) {
+			open = append(open, fmt.Sprintf("%s (%s)", DisplayID(key, t.Number), t.State))
+		}
+	}
+	if len(open) > 0 {
+		return store.Spec{}, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf(
+			"Map %s still has unfinished Tickets, so its Spec can't be written until every one is Done or Cancelled: %s",
+			id, strings.Join(open, ", "))}
+	}
+	return m, nil
+}
+
 // titleLine is the text's first non-blank line, without any
 // Markdown heading marks; empty when the text is blank.
 func titleLine(text string) string {
@@ -130,6 +184,9 @@ func titleLine(text string) string {
 // when the Spec is a Requirement: it has at least one Stage Ticket.
 // Nothing in it is stored.
 type RequirementView struct {
+	// Map is the Map the Requirement was made from, from its map Tag; it
+	// then has no grilling Stage.
+	Map string `json:"map,omitempty"`
 	// Stages are the Stage Tickets in Stage order.
 	Stages []StageView `json:"stages"`
 	// Build is how far the implementation Tickets have got.
@@ -166,9 +223,9 @@ func StageOf(labels []string) string {
 	return ""
 }
 
-// requirementView is the requirement block for a Spec with these Tickets
+// requirementView is the requirement block for Spec s with these Tickets
 // (in claim order), or nil when none of them is a Stage Ticket.
-func (c *Core) requirementView(r store.Reader, key string, tickets []store.Ticket) *RequirementView {
+func (c *Core) requirementView(r store.Reader, key string, s store.Spec, tickets []store.Ticket) *RequirementView {
 	var stages, build []store.Ticket
 	for _, t := range tickets {
 		if StageOf(t.Labels) != "" {
@@ -189,7 +246,7 @@ func (c *Core) requirementView(r store.Reader, key string, tickets []store.Ticke
 		reason, _ := c.reasonOf(r, key, t)
 		return t.State == store.Ready && !blocked(r, key, t) && reason == ""
 	}
-	v := &RequirementView{Stages: []StageView{}}
+	v := &RequirementView{Map: s.Tags[MapTag], Stages: []StageView{}}
 	current := -1
 	for i, t := range stages {
 		reason, _ := c.reasonOf(r, key, t)

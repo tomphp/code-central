@@ -156,6 +156,9 @@ func TestTheSpecGuideReplacesTheBodyInTheSpecTemplate(t *testing.T) {
 		// to one, not the whole grilling Ticket.
 		"resolution comment", "`get_ticket` and `parts`", "only when the comment points to one",
 		"test seams", "key decisions", "out of scope",
+		// A Requirement made from a Map has no grilling Stage: it works from
+		// the Map instead.
+		"no grilling Stage", "`map` Tag", "Decisions so far", "resolution comments they link",
 	)
 }
 
