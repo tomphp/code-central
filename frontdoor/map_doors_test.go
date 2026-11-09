@@ -78,3 +78,43 @@ func TestEveryDoorReadsAMap(t *testing.T) {
 		t.Fatalf("a plain Spec has no map block: %v", plain)
 	}
 }
+
+// Write the Spec (code-central-226): every door takes submit_requirement's
+// map, refuses an unfinished Map, and reads what it makes.
+func TestEveryDoorWritesTheSpecFromAMap(t *testing.T) {
+	srv := newServer(t, submittedMap)
+	s := connect(t, srv, "acme")
+	text := "Offline mode\n\nFrom the Map."
+	mcpRejected(t, s, "submit_requirement", map[string]any{"text": text, "map": "acme-4"}, core.ActionNotAllowed)
+	httpRejected(t, srv, httpCall{"POST", "/api/p/acme/submit_requirement", `{"text":"Offline mode","map":"acme-4"}`}, core.ActionNotAllowed)
+	cliRejected(t, srv, []string{"submit-requirement", "--text", text, "--map", "acme-4"}, core.ActionNotAllowed)
+	must(t, func() error {
+		_, err := srv.Core.Move(core.WithActor(context.Background(), core.Human), "acme", core.MoveInput{Ticket: "5", ToState: "Cancelled"})
+		return err
+	})
+	written := map[string]map[string]any{
+		"mcp":  mcpOK(t, s, "submit_requirement", map[string]any{"text": text, "map": "acme-4", "full": true}),
+		"http": httpOK(t, srv, httpCall{"POST", "/api/p/acme/submit_requirement", `{"text":"Offline mode","map":"acme-4","full":true}`}),
+		"cli":  cliOK(t, srv, []string{"submit-requirement", "--text", text, "--map", "acme-4", "--full"}),
+	}
+	for door, out := range written {
+		t.Run(door, func(t *testing.T) {
+			sp, _ := out["spec"].(map[string]any)
+			if tags, _ := sp["tags"].(map[string]any); tags["map"] != "acme-4" {
+				t.Fatalf("spec %v", sp)
+			}
+			stages, _ := out["stages"].([]any)
+			if len(stages) != 2 {
+				t.Fatalf("stages %v", out["stages"])
+			}
+			labels("stage:spec")(t, stages[0].(map[string]any))
+			labels("stage:tickets")(t, stages[1].(map[string]any))
+		})
+	}
+	m, _ := mcpOK(t, s, "get_spec", map[string]any{"spec": "acme-4"})["map"].(map[string]any)
+	if reqs, _ := m["requirements"].([]any); len(reqs) != 3 {
+		t.Fatalf("map %v", m)
+	}
+	req, _ := cliOK(t, srv, []string{"get-spec", "acme-6"})["requirement"].(map[string]any)
+	field("map", "acme-4")(t, req)
+}

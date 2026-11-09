@@ -74,6 +74,12 @@ export function readLocation(search: string): UiLocation {
   };
 }
 
+// Link is an in-app link: its href, and a click that navigates in place.
+export interface Link {
+  href: string;
+  onClick(e: MouseEvent): void;
+}
+
 export function hrefFor(loc: UiLocation): string {
   if (loc.view === "options") {
     const from = returnViewOf(loc);

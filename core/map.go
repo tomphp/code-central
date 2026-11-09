@@ -105,6 +105,9 @@ type MapView struct {
 	Guided bool `json:"guided"`
 	// CanWriteSpec is whether it has no unfinished Tickets.
 	CanWriteSpec bool `json:"can_write_spec"`
+	// Requirements are the Specs whose map Tag names this Map: the
+	// Requirements Write the Spec made from it, in creation order.
+	Requirements []string `json:"requirements"`
 }
 
 // GuidedTag is the Tag that marks a Map as guided when its value is
@@ -123,7 +126,13 @@ func (c *Core) mapView(r store.Reader, key string, s store.Spec, tickets []store
 	if !isMap(s.Labels) {
 		return nil
 	}
-	v := &MapView{Guided: s.Tags[GuidedTag] == GuidedOn, CanWriteSpec: true}
+	id := DisplayID(key, s.Number)
+	v := &MapView{Guided: s.Tags[GuidedTag] == GuidedOn, CanWriteSpec: true, Requirements: []string{}}
+	for _, sp := range r.Specs(key) {
+		if sp.Tags[MapTag] == id {
+			v.Requirements = append(v.Requirements, DisplayID(key, sp.Number))
+		}
+	}
 	for _, t := range tickets {
 		if reason, _ := c.reasonOf(r, key, t); reason != "" {
 			v.NeedsYou++

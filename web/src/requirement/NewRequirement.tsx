@@ -2,6 +2,8 @@
 // open the same modal, one free-text box. A new Requirement or Map goes to
 // the filtered Project, or the only one; with several and none filtered,
 // the modal asks which. A Prototype goes on the Spec whose view it is on.
+// "Write the Spec", in a finished Map's header, opens the New requirement
+// modal prefilled from the Map and submits it with the Map.
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
@@ -25,6 +27,8 @@ interface Kind<R> {
   noun: string;
   placeholder: string;
   creates: string;
+  // text prefills the text box.
+  text?: string;
   submit(api: Api, project: string, text: string): Promise<R>;
 }
 
@@ -62,6 +66,28 @@ export function NewRequirement(props: NewRequirementProps) {
 
 export function NewMap(props: NewRequirementProps) {
   return <NewFromText kind={MAP} {...props} />;
+}
+
+export interface WriteTheSpecProps {
+  api: Api;
+  // map is the finished Map, with its Destination.
+  map: { id: string; title: string; destination: string };
+  onSubmitted(r: { spec: SpecAcknowledgement }): void;
+}
+
+// WriteTheSpec makes a Requirement from a finished Map, with no grilling
+// Stage: its text starts as the Map's title, a link to it and its
+// Destination.
+export function WriteTheSpec({ api, map, onSubmitted }: WriteTheSpecProps) {
+  const kind: Kind<{ spec: SpecAcknowledgement }> = {
+    ...REQUIREMENT,
+    button: "Write the Spec",
+    className: "btn",
+    creates: "Creates a Spec and its Spec and Tickets Stages, from the Map's decisions. A Factory picks up Spec.",
+    text: [map.title, `From the Map [${map.id}](${map.id}).`, map.destination].filter(Boolean).join("\n\n") + "\n",
+    submit: (api, project, text) => api.submitRequirement(project, text, map.id),
+  };
+  return <NewFromText kind={kind} api={api} projects={[]} project={projectOf(map.id)} onSubmitted={onSubmitted} />;
 }
 
 export interface NewPrototypeProps {
@@ -108,7 +134,7 @@ function NewFromText<R>({ kind, api, projects, project, onSubmitted }: NewFromTe
 }
 
 function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFromTextProps<R> & { onClose(): void }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(kind.text ?? "");
   const [chosen, setChosen] = useState(project ?? projects[0]?.key ?? "");
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);

@@ -1,6 +1,6 @@
 # Code Central
 
-Code Central is one service that holds a Project's Specs and Tickets. Agents work them through a fixed workflow: a Requirement goes through the grilling, spec and tickets Stages, then becomes implementation Tickets, and the human answers Rounds and accepts the work in the UI along the way. When the destination isn't clear yet, the human starts a Map with **New Map** instead, and agents find the way to it one decision at a time. On any Spec, **New Prototype** asks for a cheap, throwaway artifact to try before a decision is made. You run it on your own machine, and every repository you set up as a Project talks to it.
+Code Central is one service that holds a Project's Specs and Tickets. Agents work them through a fixed workflow: a Requirement goes through the grilling, spec and tickets Stages, then becomes implementation Tickets, and the human answers Rounds and accepts the work in the UI along the way. When the destination isn't clear yet, the human starts a Map with **New Map** instead, and agents find the way to it one decision at a time. Once every decision is made, **Write the Spec** turns the Map into a Requirement that skips grilling, since the Map's decisions already did that work. On any Spec, **New Prototype** asks for a cheap, throwaway artifact to try before a decision is made. You run it on your own machine, and every repository you set up as a Project talks to it.
 
 ## The guides
 

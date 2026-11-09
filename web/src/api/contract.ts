@@ -572,11 +572,47 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         "Offline mode\nWorks on a plane.\n\n## Destination\n\n## Notes\n\n## Decisions so far\n\n## Not yet specified\n\n## Out of scope\n",
       );
       expect(s.requirement).toBeUndefined();
-      expect(s.map).toEqual({ decided: 0, total: 1, needs_you: 0, guided: false, can_write_spec: false });
+      expect(s.map).toEqual({ decided: 0, total: 1, needs_you: 0, guided: false, can_write_spec: false, requirements: [] });
       expect(s.tickets.map((t) => [t.id, t.node_type])).toEqual([[r.charting.id, "chart"]]);
 
       await d.api.act("acme", r.charting.id, "move", { to_state: "Done" });
-      expect((await d.api.getSpec("acme", r.spec.id)).map).toEqual({ decided: 1, total: 1, needs_you: 0, guided: false, can_write_spec: true });
+      expect((await d.api.getSpec("acme", r.spec.id)).map).toEqual({ decided: 1, total: 1, needs_you: 0, guided: false, can_write_spec: true, requirements: [] });
+    });
+
+    it("writes the Spec from a finished Map: a Requirement with only the spec and tickets Stages, tagged with the Map", async () => {
+      await d.createProject("acme", "Acme");
+      const plain = await d.api.submitRequirement("acme", "Not a Map");
+      const m = await d.api.submitMap("acme", "Offline mode");
+      const notMap = await d.api.submitRequirement("acme", "Offline mode", plain.spec.id).catch((e) => e);
+      expect(notMap).toMatchObject({ status: 422, code: "invalid", field: "map" });
+      const open = await d.api.submitRequirement("acme", "Offline mode", m.spec.id).catch((e) => e);
+      expect(open).toBeInstanceOf(ApiError);
+      expect(open).toMatchObject({ status: 409, code: "action_not_allowed" });
+      expect(open.message).toContain(`${m.charting.id} (Ready)`);
+
+      await d.api.act("acme", m.charting.id, "move", { to_state: "Done" });
+      const r = await d.api.submitRequirement("acme", "Offline mode\nFrom the Map.", m.spec.id);
+      expect(r.stages).toHaveLength(2);
+      wantAcknowledgement(r.stages[0], r.stages[0].id, "Ready");
+      expect(r.stages[0].changed).toEqual(["title", "state", "spec", "labels", "description", "moves", "claimable"]);
+      const [spec, tickets] = await Promise.all(r.stages.map((t) => d.api.getTicket("acme", t.id)));
+      expect([spec.labels, tickets.labels, tickets.blocked_by]).toEqual([["stage:spec"], ["stage:tickets"], [spec.id]]);
+      expect(spec.description).toContain(m.spec.id);
+      expect(spec.description).toContain("Decisions so far");
+
+      const s = await d.api.getSpec("acme", r.spec.id);
+      expect(s.tags).toEqual({ map: m.spec.id });
+      expect(s.requirement).toEqual({
+        map: m.spec.id,
+        stages: [
+          { name: "spec", ticket: spec.id, state: "Ready" },
+          { name: "tickets", ticket: tickets.id, state: "Ready" },
+        ],
+        build: { done: 0, total: 0 },
+        waiting_for_factory: true,
+      });
+      expect((await d.api.getSpec("acme", m.spec.id)).map?.requirements).toEqual([r.spec.id]);
+      expect((await d.api.getSpec("acme", plain.spec.id)).requirement?.map).toBeUndefined();
     });
 
     it("guides a Map only while its guided Tag is on", async () => {
@@ -607,7 +643,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const r = await d.api.submitMap("acme", "Offline mode");
 
       const maps = await d.api.findSpecs("acme", { labels: ["wayfinder:map"] });
-      expect(maps.map((s) => [s.id, s.map])).toEqual([[r.spec.id, { decided: 0, total: 1, needs_you: 0, guided: false, can_write_spec: false }]]);
+      expect(maps.map((s) => [s.id, s.map])).toEqual([[r.spec.id, { decided: 0, total: 1, needs_you: 0, guided: false, can_write_spec: false, requirements: [] }]]);
       expect((await d.api.findSpecs("acme")).filter((s) => s.id !== r.spec.id).every((s) => s.map === undefined)).toBe(true);
       const rows = await d.api.findTickets("acme");
       expect(rows.find((t) => t.id === plain)?.node_type).toBeUndefined();

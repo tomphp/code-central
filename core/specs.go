@@ -112,7 +112,7 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 			Created: sv.Created, Updated: sv.Updated, Link: sv.Link,
 		}
 		v.StateSummary, v.Finished = summarise(tickets)
-		v.Requirement = c.requirementView(r, key, tickets)
+		v.Requirement = c.requirementView(r, key, s, tickets)
 		v.Map = c.mapView(r, key, s, tickets)
 		if in.lighter() {
 			v.Outline = Outline(s.Body)
@@ -203,7 +203,7 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 			if done && !in.Finished {
 				continue
 			}
-			req := c.requirementView(r, key, tickets)
+			req := c.requirementView(r, key, s, tickets)
 			if in.Requirements && req == nil {
 				continue
 			}

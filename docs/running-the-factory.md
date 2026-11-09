@@ -299,6 +299,8 @@ acme-shop-12 claimed (map-grilling): "Which store?" in Spec acme-shop-8; worktre
 
 Any Ticket on the Map that is Ready, In Progress, Needs Answer, Answered, Failed, In Review or Accepted holds it, so you are never asked two things about one Map at once; a research Ticket running in the background doesn't. The Factory starts nothing while it is paused for an outage or draining. Untick **Guided** to remove the Tag and hand the Map back to your **Start** buttons.
 
+Once every Ticket on the Map is Done or Cancelled, the Map view's header has **Write the Spec**. It opens the **New requirement** dialog with the Map's title, a link to the Map and its Destination already filled in. Edit the text if you like, then click **Submit requirement**. Code Central creates a new Requirement with only the spec and tickets Stages, and its spec Stage is Ready straight away. The Factory claims it within a poll like any spec Stage, and the agent works from the Map's Decisions so far and the resolution comments they link, in place of a grilling Ticket. The Requirement's strip shows a done **Map** segment where Grilling would be, linking back to the Map. The Map stays as the record, and its header links each Requirement written from it. From a terminal, `code-central submit-requirement --map <map> --text "…"` does the same.
+
 When a Map's Ticket asks you a Round or finishes into In Review, it waits on you in **Needs Me** and Focus Mode as its own entry, not folded into a row as a Stage Ticket is. Its row reads `↳ Map: Dark mode` under its title, and its Focus Item reads *Map: Dark mode*. A Prototype also carries a **Prototype** badge, and on a plain Spec its row names that Spec instead.
 
 ## How accepted work lands

@@ -74,8 +74,10 @@ export interface Api {
   // findSpecs leaves out finished Specs unless the filter asks for them.
   findSpecs(project: string, filter?: FindSpecsFilter): Promise<SpecRow[]>;
   // submitRequirement creates a Requirement from the human's text: its
-  // Spec and three Stage Tickets, Grilling ready for a Factory.
-  submitRequirement(project: string, text: string): Promise<SubmitRequirementResult>;
+  // Spec and three Stage Tickets, Grilling ready for a Factory. With map,
+  // a finished Map, it writes the Spec from that Map: only the Spec and
+  // Tickets Stages, Spec ready, and the Spec's map Tag names the Map.
+  submitRequirement(project: string, text: string, map?: string): Promise<SubmitRequirementResult>;
   // submitMap creates a Map from the human's text: its Spec, with the
   // Map's empty sections, and a Charting Ticket ready for a Factory.
   submitMap(project: string, text: string): Promise<SubmitMapResult>;

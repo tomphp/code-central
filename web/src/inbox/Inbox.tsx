@@ -75,9 +75,10 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
     "data-id": id,
     "aria-current": !loc.requirement && loc.ticket === id ? ("true" as const) : undefined,
   });
+  // specLink opens a Spec, a Requirement or Map, on its default Ticket.
+  const specLink = (id: string) => ({ href: hrefFor({ ...loc, requirement: id, ticket: undefined }), onClick: go({ requirement: id, ticket: undefined }) });
   const requirementLink = (id: string) => ({
-    href: hrefFor({ ...loc, requirement: id, ticket: undefined }),
-    onClick: go({ requirement: id, ticket: undefined }),
+    ...specLink(id),
     "data-id": id,
     "aria-current": loc.requirement === id ? ("true" as const) : undefined,
   });
@@ -201,9 +202,26 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
           (requirementError ? (
             <p className="empty">{requirementError}</p>
           ) : requirement ? (
-            <RequirementPane api={api} spec={requirement} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
+            <RequirementPane
+              api={api}
+              spec={requirement}
+              reasons={reasons}
+              now={now}
+              ticket={loc.ticket}
+              select={(id) => navigate({ ticket: id })}
+              specLink={specLink}
+            />
           ) : map ? (
-            <MapPane api={api} spec={map} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
+            <MapPane
+              api={api}
+              spec={map}
+              reasons={reasons}
+              now={now}
+              ticket={loc.ticket}
+              select={(id) => navigate({ ticket: id })}
+              specLink={specLink}
+              written={(id) => navigate({ list: "requirements", state: undefined, requirement: id, ticket: undefined })}
+            />
           ) : spec ? (
             <SpecPane api={api} spec={spec} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
           ) : (

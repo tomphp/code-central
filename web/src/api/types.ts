@@ -143,6 +143,9 @@ export type StageName = "grilling" | "spec" | "tickets";
 // A Spec read's requirement block, present only on a Requirement (a Spec
 // with Stage Tickets). Nothing in it is stored.
 export interface RequirementView {
+  // map is the Map the Requirement was made from (Write the Spec), which
+  // then has no grilling Stage.
+  map?: string;
   stages: StageView[];
   build: { done: number; total: number };
   waiting_for_factory: boolean;
@@ -169,6 +172,9 @@ export interface MapView {
   guided: boolean;
   // can_write_spec is whether it has no unfinished Tickets.
   can_write_spec: boolean;
+  // requirements are the Specs Write the Spec made from it: those whose
+  // map Tag names it.
+  requirements: string[];
 }
 
 // GUIDED_TAG marks a Map as guided when its value is GUIDED_ON; a missing
@@ -232,7 +238,7 @@ export interface FindSpecsFilter {
 }
 
 // submit_requirement's result (ADR 0009): the acknowledgements of the
-// new Spec and its three Stage Tickets, in order.
+// new Spec and its Stage Tickets, in order: three, or two from a Map.
 export interface SubmitRequirementResult {
   spec: SpecAcknowledgement;
   stages: TicketAcknowledgement[];

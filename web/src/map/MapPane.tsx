@@ -1,15 +1,18 @@
 // The Map view, in the pane a Requirement's view uses and above the
 // shared Ticket pane: the header (ID, title, submitted time, the Map's
-// count, the Guided toggle, New Prototype and its Destination), then the Map's Tickets as a left-to-right
-// graph with Blockers as edges and the fog of what isn't specified yet on
-// the right, beside its collapsible Decisions so far and Out of scope.
+// count, the Guided toggle, New Prototype, Write the Spec once the Map is
+// finished, its Destination and links to the Requirements made from it),
+// then the Map's Tickets as a left-to-right graph with Blockers as edges and
+// the fog of what isn't specified yet on the right, beside its collapsible
+// Decisions so far and Out of scope.
 import { useId, useState } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import { GUIDED_ON, GUIDED_TAG, type MapView, type NeedsMeReason, type SpecDetail, type TicketRow } from "../api/types";
 import { ago } from "../format";
 import { Markdown } from "../Markdown";
-import { NewPrototype } from "../requirement/NewRequirement";
+import { NewPrototype, WriteTheSpec } from "../requirement/NewRequirement";
+import type { Link } from "../url";
 import { useAct } from "../ticket/useAct";
 import { FOG, isFrontier, layoutMap, NODE, nodeProgress } from "./graph";
 import { mapCount } from "./MapRow";
@@ -23,9 +26,13 @@ export interface MapPaneProps {
   // ticket is the selected Ticket.
   ticket?: string;
   select(ticket: string): void;
+  // specLink links another Spec: a Requirement made from the Map.
+  specLink(spec: string): Link;
+  // written is called with the Requirement Write the Spec made.
+  written(spec: string): void;
 }
 
-export function MapPane({ api, spec, reasons, now, ticket, select }: MapPaneProps) {
+export function MapPane({ api, spec, reasons, now, ticket, select, specLink, written }: MapPaneProps) {
   const [fogOpen, setFogOpen] = useState(false);
   const { busy, error, run } = useAct();
   const layout = layoutMap(spec.tickets);
@@ -49,10 +56,26 @@ export function MapPane({ api, spec, reasons, now, ticket, select }: MapPaneProp
       </label>
       <div className="spec-actions">
         <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {spec.map.can_write_spec && (
+          <WriteTheSpec api={api} map={{ id: spec.id, title: spec.title, destination }} onSubmitted={(r) => written(r.spec.id)} />
+        )}
       </div>
       <div aria-label="Destination" className="map-destination">
         {destination ? <Markdown>{destination}</Markdown> : <p className="muted">No Destination yet.</p>}
       </div>
+      {spec.map.requirements.length > 0 && (
+        <p className="small map-requirements">
+          Requirements from this Map:{" "}
+          {spec.map.requirements.map((id, i) => (
+            <span key={id}>
+              {i > 0 && ", "}
+              <a className="tid" {...specLink(id)}>
+                {id}
+              </a>
+            </span>
+          ))}
+        </p>
+      )}
       {error && (
         <p role="alert" className="warning">
           {error}

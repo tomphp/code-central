@@ -1,11 +1,12 @@
 // The Requirement pane, above the shared Ticket pane: the header (ID,
-// title, submitted time, New Prototype), the clickable Stage strip, what
-// it waits for, and under Build its implementation Tickets with their
-// States.
+// title, submitted time, New Prototype), the clickable Stage strip (its
+// Map segment linking to the Map it was made from, if any), what it waits
+// for, and under Build its implementation Tickets with their States.
 import type { Api } from "../api/api";
 import type { NeedsMeReason, SpecDetail } from "../api/types";
 import { ago } from "../format";
 import { TicketList } from "../spec/TicketList";
+import type { Link } from "../url";
 import { NewPrototype } from "./NewRequirement";
 import { progress, waitingNote } from "./progress";
 import { Strip } from "./Strip";
@@ -18,9 +19,11 @@ export interface RequirementPaneProps {
   // ticket is the selected Ticket.
   ticket?: string;
   select(ticket: string): void;
+  // specLink links another Spec, such as the Map it was made from.
+  specLink(spec: string): Link;
 }
 
-export function RequirementPane({ api, spec, reasons, now, ticket, select }: RequirementPaneProps) {
+export function RequirementPane({ api, spec, reasons, now, ticket, select, specLink }: RequirementPaneProps) {
   const p = progress(spec.requirement, spec.tickets, reasons);
   const note = waitingNote(p);
   return (
@@ -33,6 +36,7 @@ export function RequirementPane({ api, spec, reasons, now, ticket, select }: Req
       <Strip
         p={p}
         current={ticket}
+        mapLink={specLink}
         onPick={(s) => {
           const t = s.ticket ?? (p.build.find((t) => reasons.has(t.id)) ?? p.build[0])?.id;
           if (t) select(t);
