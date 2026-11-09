@@ -4,7 +4,7 @@ This guide sets a repository up as a Project, so that agents can reach its Specs
 
 ## Before you start
 
-1. **Build and install `code-central`, and run the service.** Follow [Running Code Central as a service](running-as-a-service.md). Check that the service answers:
+1. **Install `code-central` and `code-central-factory`, and run the service.** Follow [Running Code Central as a service](running-as-a-service.md): download a release's archive for your OS and CPU and put both binaries on your PATH, or build them from source. Check that the service answers:
 
    ```console
    $ curl -sI http://localhost:7733/api/workflow

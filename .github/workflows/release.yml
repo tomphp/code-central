@@ -1,0 +1,166 @@
+# Releases the commit CI just passed on main, when there is something to
+# release: cog works out the next version from the conventional commits
+# since the latest tag and this pushes that tag only (no bump commit, no
+# CHANGELOG.md; see docs/adr/0014). Then it builds both binaries for each
+# OS and CPU and publishes them on a GitHub Release. One workflow, because
+# a tag pushed with GITHUB_TOKEN triggers no other workflow.
+name: Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+# Releases run one at a time, so two can't race for the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# bash -eo pipefail, so a failed download fails its step by name.
+defaults:
+  run:
+    shell: bash
+
+env:
+  # The cog whose output the tag job reads; checked against 7.0.0: a
+  # dry run prints the next version, or "No conventional commits …" when
+  # nothing is bumpable, and exits 0 either way. It skips non-conforming
+  # commits rather than refusing them.
+  COG_VERSION: 7.0.0
+
+jobs:
+  tag:
+    name: tag
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+      notes: ${{ steps.notes.outputs.notes }}
+    steps:
+      # The exact commit CI tested, not whatever main is by now, with every
+      # tag so cog can find the latest.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Install cog
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/cocogitto/cocogitto/releases/download/$COG_VERSION/cocogitto-$COG_VERSION-x86_64-unknown-linux-musl.tar.gz" \
+            | tar -xz --strip-components=1 -C "$HOME/.local/bin" x86_64-unknown-linux-musl/cog
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Tags only when the dry run names a version; "nothing to bump" is
+      # its message, and anything else fails the run. A run for an older
+      # commit, whose CI finished after a newer one's, releases nothing:
+      # the newer commit's release already covers it.
+      - name: Bump and push the tag
+        id: bump
+        run: |
+          latest=$(git tag --list 'v*' --sort=-v:refname | head -n 1)
+          if ! git merge-base --is-ancestor "$latest" HEAD; then
+            echo "No release: $latest is on a newer commit than this one." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          next=$(cog bump --auto --dry-run)
+          if printf '%s\n' "$next" | grep -q '^No conventional commits'; then
+            echo "No release: no feat, fix, perf or breaking change since $latest." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if ! printf '%s\n' "$next" | grep -Eqx 'v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "cog bump --auto --dry-run printed something unexpected:"
+            printf '%s\n' "$next"
+            exit 1
+          fi
+          cog bump --auto
+          git tag --points-at HEAD | grep -qx "$next"
+          git push origin "refs/tags/$next"
+          echo "tag=$next" >> "$GITHUB_OUTPUT"
+          echo "Released \`$next\`." >> "$GITHUB_STEP_SUMMARY"
+
+      # cog lists any non-conforming commit on stderr; only stdout is the
+      # notes.
+      - name: Release notes
+        id: notes
+        if: steps.bump.outputs.tag != ''
+        run: |
+          {
+            echo 'notes<<COG_NOTES_EOF'
+            cog changelog --at "${{ steps.bump.outputs.tag }}"
+            echo 'COG_NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build and publish
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TAG: ${{ needs.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # Once, into web/dist, which every target embeds (-tags webdist).
+      - name: Vite build
+        working-directory: web
+        run: npm ci && npm run build
+
+      # Each target's two binaries in one archive:
+      # code-central_<tag>_<os>_<arch>.tar.gz, or .zip with .exe binaries
+      # on Windows.
+      - name: Cross-compile and pack
+        env:
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os=${target%/*}
+            arch=${target#*/}
+            exe=
+            if [ "$os" = windows ]; then exe=.exe; fi
+            out="build/${os}_${arch}"
+            GOOS=$os GOARCH=$arch go build -tags webdist -trimpath \
+              -ldflags "-s -w -X github.com/tomoram/code-central/cli.Version=$TAG" \
+              -o "$out/code-central$exe" ./cmd/code-central
+            GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w" \
+              -o "$out/code-central-factory$exe" ./cmd/code-central-factory
+            name="code-central_${TAG}_${os}_${arch}"
+            if [ "$os" = windows ]; then
+              (cd "$out" && zip -q "$GITHUB_WORKSPACE/dist/$name.zip" code-central.exe code-central-factory.exe)
+            else
+              tar -czf "dist/$name.tar.gz" -C "$out" code-central code-central-factory
+            fi
+          done
+          (cd dist && sha256sum -- *.tar.gz *.zip > checksums.txt)
+          cat dist/checksums.txt
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.TAG }}
+          body: ${{ needs.tag.outputs.notes }}
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt

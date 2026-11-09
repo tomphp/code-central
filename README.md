@@ -13,4 +13,4 @@ Read them in this order:
 
 ## Running the service
 
-[Running Code Central as a service](docs/running-as-a-service.md) covers installing, upgrading and downgrading the service, its versions, and the Options you set in the UI.
+[Running Code Central as a service](docs/running-as-a-service.md) covers installing (download the archive for your OS and CPU from [GitHub Releases](https://github.com/tomphp/code-central/releases), or build from source), upgrading and downgrading the service, its versions, and the Options you set in the UI.

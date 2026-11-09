@@ -18,7 +18,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
 ## Working a Requirement
 
-1. **Start the Factory in the repository.** `make build` builds `bin/code-central-factory` next to `bin/code-central`. Put it on your `PATH` beside `code-central`, as in [Running Code Central as a service](running-as-a-service.md). Then, in a terminal you can leave open:
+1. **Start the Factory in the repository.** `code-central-factory` comes in the same release archive as `code-central` (or `make build` builds it next to it, from source). Put it on your `PATH` beside `code-central`, as in [Running Code Central as a service](running-as-a-service.md). Then, in a terminal you can leave open:
 
    ```console
    $ cd ~/src/acme-shop
