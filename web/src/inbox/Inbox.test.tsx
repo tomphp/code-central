@@ -469,6 +469,62 @@ describe("the sidebar's top row: + New and Focus", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
+  describe("by keyboard", () => {
+    const item = (name: string) => within(screen.getByRole("menu")).getByRole("menuitem", { name });
+
+    it("opens with ↓ on the first item, and moves with the arrows, wrapping at either end", async () => {
+      renderApp(world());
+      (await findMenuButton()).focus();
+      await userEvent.keyboard("{ArrowDown}");
+      expect(menuButton()).toHaveAttribute("aria-expanded", "true");
+      expect(item("Requirement")).toHaveFocus();
+
+      await userEvent.keyboard("{ArrowDown}");
+      expect(item("Map")).toHaveFocus();
+      await userEvent.keyboard("{ArrowDown}");
+      expect(item("Requirement")).toHaveFocus();
+      await userEvent.keyboard("{ArrowUp}");
+      expect(item("Map")).toHaveFocus();
+      await userEvent.keyboard("{ArrowUp}");
+      expect(item("Requirement")).toHaveFocus();
+    });
+
+    it.each([["{Enter}"], [" "]])("opens with %s on the first item", async (key) => {
+      renderApp(world());
+      (await findMenuButton()).focus();
+      await userEvent.keyboard(key);
+      expect(item("Requirement")).toHaveFocus();
+    });
+
+    it.each([["{Enter}"], [" "]])("picks the focused item with %s: the menu closes and its dialog opens", async (key) => {
+      renderApp(world());
+      (await findMenuButton()).focus();
+      await userEvent.keyboard("{ArrowDown}{ArrowDown}");
+      await userEvent.keyboard(key);
+      expect(screen.queryByRole("menu")).toBeNull();
+      expect(menuButton()).toHaveAttribute("aria-expanded", "false");
+      expect(screen.getByRole("dialog", { name: "New Map" })).toBeVisible();
+    });
+
+    it("closes on Esc and returns focus to ▾", async () => {
+      renderApp(world());
+      (await findMenuButton()).focus();
+      await userEvent.keyboard("{ArrowDown}{ArrowDown}{Escape}");
+      expect(screen.queryByRole("menu")).toBeNull();
+      expect(menuButton()).toHaveAttribute("aria-expanded", "false");
+      expect(menuButton()).toHaveFocus();
+    });
+
+    it("closes when Tab leaves the menu", async () => {
+      renderApp(world());
+      (await findMenuButton()).focus();
+      await userEvent.keyboard("{ArrowDown}");
+      await userEvent.tab();
+      expect(screen.queryByRole("menu")).toBeNull();
+      expect(menuButton()).toHaveAttribute("aria-expanded", "false");
+    });
+  });
+
   it("enters Focus Mode from Focus", async () => {
     renderApp(world());
     await userEvent.click(await within(nav()).findByRole("button", { name: "Focus" }));
