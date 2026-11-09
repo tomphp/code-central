@@ -11,7 +11,8 @@ import (
 // fakeRepo is an in-memory repo for testing landing and the sweep
 // without git: commits are names with parents, refs point at them, and
 // what only real git can tell (a merge's conflicts, a dirty worktree, a
-// broken remote) is set by the test. gitRepo's own tests run real git.
+// broken remote) is set by the test. The tests through factorytest
+// run gitRepo against real git.
 type fakeRepo struct {
 	mu      sync.Mutex
 	parents map[string][]string // commit -> its parents

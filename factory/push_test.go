@@ -79,3 +79,20 @@ func TestAPushRemoteThatGoesMissingHoldsLandingButNotClaiming(t *testing.T) {
 	r.WaitForOutput(`warning: nothing lands until this is fixed: Push names the remote "nowhere", which this repository doesn't have`)
 	h.WaitForState(ready, store.InProgress)
 }
+
+func TestUnderBranchAndPushAnAcceptedTicketsBranchReachesABareRemote(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	remote := h.AddRemote("origin")
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
+
+	r := h.Start()
+	r.WaitForOutput(id + ": pushed " + id + " to origin")
+	if got := remote.Git("rev-parse", "refs/heads/"+id); got != commit {
+		t.Errorf("the remote's %s is at %q, want the finish commit %s", id, got, commit)
+	}
+	if out := remote.Git("branch", "--list", "main"); out != "" {
+		t.Errorf("the base was pushed under Branch: %q", out)
+	}
+}

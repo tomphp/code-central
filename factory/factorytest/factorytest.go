@@ -154,20 +154,18 @@ func New(t testing.TB) *Harness {
 	gitPath, err := realGit()
 	must(t, err)
 	h.env = map[string]string{
-		"PATH":                h.Bin + string(os.PathListSeparator) + filepath.Dir(gitPath),
-		"HOME":                h.Home,
-		"CODE_CENTRAL_URL":    h.URL,
-		"GIT_CONFIG_NOSYSTEM": "1",
+		"PATH":             h.Bin + string(os.PathListSeparator) + filepath.Dir(gitPath),
+		"HOME":             h.Home,
+		"CODE_CENTRAL_URL": h.URL,
 		// An empty template: git init writes no sample hooks to remove.
-		"GIT_TEMPLATE_DIR":    template,
-		"GIT_AUTHOR_NAME":     "Factory Test",
-		"GIT_AUTHOR_EMAIL":    "factory@example.com",
-		"GIT_COMMITTER_NAME":  "Factory Test",
-		"GIT_COMMITTER_EMAIL": "factory@example.com",
-		"TMPDIR":              os.TempDir(),
-		"TEMP":                os.TempDir(),
-		"TMP":                 os.TempDir(),
-		fakeEnv:               h.data,
+		"GIT_TEMPLATE_DIR": template,
+		"TMPDIR":           os.TempDir(),
+		"TEMP":             os.TempDir(),
+		"TMP":              os.TempDir(),
+		fakeEnv:            h.data,
+	}
+	for k, v := range gitIdentity {
+		h.env[k] = v
 	}
 	h.install("claude")
 
@@ -182,6 +180,16 @@ func New(t testing.TB) *Harness {
 
 // project is the Project Key of every Harness.
 const project = "acme"
+
+// gitIdentity is every git's environment in the harness: no system
+// config, and a fixed author and committer.
+var gitIdentity = map[string]string{
+	"GIT_CONFIG_NOSYSTEM": "1",
+	"GIT_AUTHOR_NAME":     "Factory Test",
+	"GIT_AUTHOR_EMAIL":    "factory@example.com",
+	"GIT_COMMITTER_NAME":  "Factory Test",
+	"GIT_COMMITTER_EMAIL": "factory@example.com",
+}
 
 // seedDir holds seedRepo's repo; Main removes it.
 var seedDir string
@@ -211,9 +219,10 @@ var seedRepo = sync.OnceValues(func() (string, error) {
 	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"add", ".mcp.json"}, {"commit", "-q", "-m", "Set up Code Central"}} {
 		cmd := exec.Command(git, args...)
 		cmd.Dir = repo
-		cmd.Env = []string{"HOME=" + seedDir, "GIT_CONFIG_NOSYSTEM=1", "GIT_TEMPLATE_DIR=" + template,
-			"GIT_AUTHOR_NAME=Factory Test", "GIT_AUTHOR_EMAIL=factory@example.com",
-			"GIT_COMMITTER_NAME=Factory Test", "GIT_COMMITTER_EMAIL=factory@example.com"}
+		cmd.Env = []string{"HOME=" + seedDir, "GIT_TEMPLATE_DIR=" + template}
+		for k, v := range gitIdentity {
+			cmd.Env = append(cmd.Env, k+"="+v)
+		}
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return "", fmt.Errorf("git %s: %v\n%s", strings.Join(args, " "), err, out)
 		}
