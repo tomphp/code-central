@@ -128,6 +128,21 @@ func TestWritesWithFullReturnTheRecordOnEveryDoor(t *testing.T) {
 	}
 }
 
+// TestEveryToolWithFullIsAWrite keeps a tool that offers full from
+// missing the two tests above: its case must check its call with full.
+func TestEveryToolWithFullIsAWrite(t *testing.T) {
+	s := connect(t, newServer(t), "acme")
+	for tool, err := range s.Tools(t.Context(), nil) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		schema, _ := json.Marshal(tool.InputSchema)
+		if strings.Contains(string(schema), `"full"`) && !slices.Contains(writes(), tool.Name) {
+			t.Errorf("tool %s offers full but its case has no full check", tool.Name)
+		}
+	}
+}
+
 func TestTheWriteToolsOfferFull(t *testing.T) {
 	s := connect(t, newServer(t), "acme")
 	for tool, err := range s.Tools(t.Context(), nil) {
