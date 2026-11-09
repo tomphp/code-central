@@ -143,7 +143,7 @@ Unknown keys or a bad value in `settings.yaml` stop the service and name the fil
 
 ## Options
 
-Preferences you change while Code Central runs are **Options**, not settings. Set them in the UI: click **Options** at the top of the Inbox's left pane, or in Focus Mode's header. Each choice saves the moment you make it, every open browser follows it at once, and **Back to the Inbox** or **Back to Focus Mode** returns you to where you were.
+Preferences you change while Code Central runs are **Options**, not settings. Set them in the UI: click **Options** in the **Admin** section of the Inbox's left pane. Each choice saves the moment you make it, every open browser follows it at once, and **Back to the Inbox** returns you to where you were.
 
 The one Option so far is *Focus Mode, when nothing needs you*: **All clear** (the default) or **Activity Dashboard**.
 
@@ -155,7 +155,7 @@ The service keeps Options in its store, in `options.yaml` beside `store.yaml`, s
 
 ## Usage
 
-**Usage** shows what agents have consumed: the Code Central calls they made, how full their sessions' context got, and the tokens they used each day, in one Project or in all of them, over the last 7, 30 or 90 days. Open it with **Usage** at the top of the Inbox's left pane, or in Focus Mode's header. It opens on **All Projects** and **Last 7 days**; the **Projects** picker lists every Project, Archived ones marked `(Archived)`, and the **Range** picker offers 7, 30 and 90 days. Both go in the address (`/?view=usage&project=acme&days=30`), so a reload or a bookmark keeps them, and **Back to the Inbox** or **Back to Focus Mode** returns you to where you were. A day is a day in the service's local time, and "the last 7 days" is today and the 6 days before it.
+**Usage** shows what agents have consumed: the Code Central calls they made, how full their sessions' context got, and the tokens they used each day, in one Project or in all of them, over the last 7, 30 or 90 days. Open it with **Usage** in the **Admin** section of the Inbox's left pane. It opens on **All Projects** and **Last 7 days**; the **Projects** picker lists every Project, Archived ones marked `(Archived)`, and the **Range** picker offers 7, 30 and 90 days. Both go in the address (`/?view=usage&project=acme&days=30`), so a reload or a bookmark keeps them, and **Back to the Inbox** returns you to where you were. A day is a day in the service's local time, and "the last 7 days" is today and the 6 days before it.
 
 The **Code Central calls** table has one row per MCP operation: its calls, the total and average size of the requests (the arguments' JSON) and of the responses (the text the agent was given, as `bytes=` in [the service log](#the-service-log)), and how many the service rejected. Sizes are in B, KB and MB, with the exact figure on hover. Click a column's header to sort by it, and again to reverse it. Only agents' MCP calls are counted, rejected ones included: not calls to a Project that doesn't exist, and never the HTTP API's, so neither the UI nor the Factory adds to it. Usage loads when you open it and when you change the Project or range; it doesn't follow the live feed.
 

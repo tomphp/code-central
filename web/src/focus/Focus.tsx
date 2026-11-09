@@ -17,8 +17,6 @@ import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
 import { QuestionAnswer } from "../panels/round/QuestionAnswer";
 import { PrototypeBadge } from "../ticket/PrototypeBadge";
-import { OptionsLink } from "../options/OptionsLink";
-import { UsageLink } from "../usage/UsageLink";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { ActivityDashboard } from "./ActivityDashboard";
 import { focusQueue, type FocusItem } from "./queue";
@@ -88,8 +86,6 @@ export function Focus({ api, now, version, data, focusClear, loc, navigate }: Fo
           </span>
         )}
         {screen && !screen.clear && <span className="focus-left">{screen.remaining} left</span>}
-        <UsageLink loc={loc} navigate={navigate} className="focus-usage" />
-        <OptionsLink loc={loc} navigate={navigate} />
         <button className="btn focus-exit" onClick={() => navigate({ view: "inbox" })}>
           Exit
         </button>
