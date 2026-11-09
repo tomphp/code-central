@@ -51,7 +51,7 @@ const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 const item = () => within(focus()).findByRole("article", { name: "Focus Item" });
 const question = (title: string) => within(focus()).findByRole("heading", { name: title });
 const box = () => within(focus()).getByRole("textbox");
-const actions = (fake: FakeApi) => fake.calls.filter((c) => !["listProjects", "needsMe", "findTickets", "findSpecs", "getSpec", "getTicket"].includes(c));
+const actions = (fake: FakeApi) => fake.actions();
 const stored = async (fake: FakeApi, id = "acme-1") => (await fake.getTicket("acme", id)).rounds[1].questions;
 
 // change reseeds Needs Me and sends the notice the service would.

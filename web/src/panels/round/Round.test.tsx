@@ -47,7 +47,7 @@ function renderPanel(fake: FakeApi, round = 2) {
 
 const question = (panel: HTMLElement, title: string) => within(panel).getByRole("group", { name: new RegExp(title) });
 const box = (q: HTMLElement) => within(q).getByRole("textbox");
-const actions = (fake: FakeApi) => fake.calls.filter((c) => !["listProjects", "needsMe", "findTickets", "findSpecs", "getSpec", "getTicket"].includes(c));
+const actions = (fake: FakeApi) => fake.actions();
 const stored = async (fake: FakeApi) => (await fake.getTicket("acme", "acme-1")).rounds[1].questions;
 
 describe("the Round panel", () => {

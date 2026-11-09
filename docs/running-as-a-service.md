@@ -95,6 +95,14 @@ The port is 7733, and every repository's `.mcp.json` says `${CODE_CENTRAL_URL:-h
 
 Unknown keys or a bad value in `settings.yaml` stop the service and name the file.
 
+## Options
+
+Preferences you change while Code Central runs are **Options**, not settings. Set them in the UI: click **Options** at the top of the Inbox's left pane, or in Focus Mode's header. Each choice saves the moment you make it, every open browser follows it at once, and **Back to the Inbox** or **Back to Focus Mode** returns you to where you were.
+
+The one Option so far is *Focus Mode, when nothing needs you*: **All clear** (the default) or **Activity Dashboard**.
+
+The service keeps Options in its store, in `options.yaml` beside `store.yaml`, so they survive a restart and a cleared browser. There is no file until you first change one, and no MCP tool or CLI command changes them. `settings.yaml` is still the place for what the service needs at startup, such as the port.
+
 ## Reaching it from Docker: `--bind`
 
 By default the service listens only on `127.0.0.1` and `::1`. Docker Desktop and Docker Sandboxes (`sbx policy allow network localhost:7733`) reach that through `host.docker.internal` or their proxy. Plain Linux Docker can't, so `--bind <ip>` adds one more address, such as the Docker bridge IP:

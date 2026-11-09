@@ -58,7 +58,7 @@ function change(fake: FakeApi, groups: Parameters<FakeApi["setNeedsMe"]>[0], id:
   act(() => fake.emit({ type: "ticket.changed", project: id.split("-")[0], id }));
 }
 
-const actions = (fake: FakeApi) => fake.calls.filter((c) => !["listProjects", "needsMe", "findTickets", "findSpecs", "getSpec", "getTicket"].includes(c));
+const actions = (fake: FakeApi) => fake.actions();
 
 describe("Skip", () => {
   it("sits next to Answer and Dismiss on a Question Focus Item", async () => {

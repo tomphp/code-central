@@ -71,6 +71,8 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     unarchiveProject: (project) => call("POST", `${p(project)}/unarchive_project`, {}),
     renameProject: (project, display_name) => call("POST", `${p(project)}/rename_project`, { display_name }),
     unlink: (project, target) => call("POST", `${p(project)}/unlink`, { target }),
+    options: () => call("GET", "/api/options"),
+    setOptions: (change) => call("POST", "/api/set_options", change),
     subscribe: (h) =>
       follow(doFetch, base + "/api/events", retryMs, {
         onOpen: h.onOpen,

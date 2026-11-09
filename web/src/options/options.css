@@ -1,0 +1,14 @@
+/* The Options view: one readable column of Options. Its styles hang off
+   the layout's own classes, so none of them reach the other views. */
+.options { min-height: 100vh; display: flex; flex-direction: column; }
+.options-head { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
+.options-head h1 { font-size: 18px; margin: 0; }
+.options-back { margin-left: auto; }
+.options-body { width: 100%; max-width: 640px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; }
+.options-body .warning { margin: 0; font-size: 14px; }
+.option h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; }
+.option-choices { display: flex; flex-direction: column; gap: 8px; }
+.option-choice { border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+.option-choice:has(input:checked) { border-color: var(--accent); }
+.option-choice label { font-weight: 600; cursor: pointer; }
+.option-choice-hint { margin: 4px 0 0 24px; font-size: 13px; }

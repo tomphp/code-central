@@ -20,6 +20,9 @@
 // (a Stage's Needs Me reason is Needs Me's, as set by setNeedsMe).
 // submitRequirement writes a Spec and its three Stage Tickets.
 //
+// The Options start at their defaults; setOptions validates as the
+// service does, and sends options.changed only when something changed.
+//
 // postSessionEvents stands in for a Factory's POST /api/session-events: the
 // events go to the newest Claim with that session ID. Each Claim view
 // carries its latest Session Event, and each row its live Claim's, worked
@@ -39,7 +42,9 @@ import {
 import { fakeActions } from "./fakeActions";
 import {
   ApiError,
+  DEFAULT_OPTIONS,
   FINISHED,
+  FOCUS_CLEARS,
   type ChangeEvent,
   type FindSpecsFilter,
   type FindTicketsFilter,
@@ -50,6 +55,7 @@ import {
   type NeedsMeReason,
   type NeedsMeRow,
   type NeedsMeView,
+  type Options,
   type ProjectRow,
   type ProjectView,
   type RequirementView,
@@ -125,10 +131,20 @@ interface FakeFollower {
   after: number;
 }
 
+// READS are the Api's reads, by name, which actions leaves out.
+const READS: ReadonlySet<string> = new Set<keyof Api>([
+  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript",
+]);
+
 export class FakeApi implements Api {
   now = new Date("2026-11-07T09:00:00Z");
   // calls records each read and action by name, for tests that check a refetch.
   calls: string[] = [];
+
+  // actions is calls without the reads: the writes made, in order.
+  actions(): string[] {
+    return this.calls.filter((c) => !READS.has(c));
+  }
   private projects = new Map<string, FakeProject>();
   private tickets = new Map<string, TicketView>();
   private specs = new Map<string, SpecView>();
@@ -137,6 +153,7 @@ export class FakeApi implements Api {
   // transcripts is each Claim's Transcript, keyed by Ticket ID and Claim number.
   private transcripts = new Map<string, FakeTranscript>();
   private followers = new Set<FakeFollower>();
+  private opts: Options = { ...DEFAULT_OPTIONS };
 
   // ---- seeding ----
 
@@ -520,6 +537,30 @@ export class FakeApi implements Api {
     if (this.rows().find((r) => r.id === t.id)?.reason === "closed_externally") this.dropNeedsMe(t.id);
     const v = this.updateTicket(t.id, { link: { ...t.link, detached: true } });
     return { kind: "ticket", id: v.id, title: v.title, state: v.state, link: v.link! };
+  }
+
+  async options(): Promise<Options> {
+    this.calls.push("options");
+    return { ...this.opts };
+  }
+
+  async setOptions(change: Partial<Options>): Promise<Options> {
+    this.calls.push("setOptions");
+    for (const name of Object.keys(change)) {
+      if (!(name in DEFAULT_OPTIONS)) {
+        throw new ApiError(422, "invalid", `unknown field "${name}"; "${name}" is not an Option (the Options are: ${Object.keys(DEFAULT_OPTIONS).join(", ")})`, name);
+      }
+    }
+    const { focus_clear } = change;
+    if (focus_clear !== undefined && !FOCUS_CLEARS.includes(focus_clear)) {
+      throw new ApiError(422, "invalid", `focus_clear "${focus_clear}" is not an Option's value; allowed: ${FOCUS_CLEARS.join(", ")}`, "focus_clear");
+    }
+    const next = { ...this.opts, ...change };
+    if (next.focus_clear !== this.opts.focus_clear) {
+      this.opts = next;
+      this.emit({ type: "options.changed" });
+    }
+    return { ...this.opts };
   }
 
   // ---- internals ----

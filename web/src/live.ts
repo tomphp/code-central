@@ -7,6 +7,7 @@ import {
   STATES,
   type ApiError,
   type NeedsMeView,
+  type Options,
   type ProjectRow,
   type SpecDetail,
   type SpecRow,
@@ -79,6 +80,14 @@ export async function loadInbox(api: Api): Promise<InboxData> {
 
 export function useInboxData(api: Api, version: number) {
   return useFetch(() => loadInbox(api), [api, version]);
+}
+
+// useOptions reads the Options apart from the Inbox data, so a failed
+// read of one never holds back the other. options.changed bumps the
+// version like every notice, so an open view follows a change made
+// elsewhere.
+export function useOptions(api: Api, version: number) {
+  return useFetch<Options>(() => api.options(), [api, version]);
 }
 
 export function useSpec(api: Api, project: string | undefined, id: string | undefined, version: number) {

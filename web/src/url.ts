@@ -1,7 +1,9 @@
 // What the UI shows lives in the URL:
 // ?view=inbox&project=<key>&state=<State>&list=requirements&requirement=<spec id>&ticket=<id>,
-// or ?view=focus&project=<key> for Focus Mode, which keeps only project.
-// view is the layout (anything but focus is the inbox); project, state and
+// or ?view=focus&project=<key> for Focus Mode, which keeps only project,
+// or ?view=options&from=<inbox|focus>&... for the Options view, which keeps
+// the parameters of the view it came from, to return to it.
+// view is the layout (anything else is the inbox); project, state and
 // list are the left pane's filters (no state and no list = Needs Me;
 // list=requirements is the Requirements view); requirement is the selected
 // Requirement's Spec ID and ticket the selected Ticket's display ID (within
@@ -9,11 +11,13 @@
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { STATES, type State } from "./api/types";
 
-export type View = "inbox" | "focus";
+export type View = "inbox" | "focus" | "options";
 export type List = "requirements";
 
 export interface UiLocation {
   view: View;
+  // from is the view the Options view returns to: the Inbox unless Focus Mode.
+  from?: "inbox" | "focus";
   project?: string;
   state?: State;
   list?: List;
@@ -23,6 +27,11 @@ export interface UiLocation {
 
 export function readLocation(search: string): UiLocation {
   const q = new URLSearchParams(search);
+  if (q.get("view") === "options") {
+    const from = q.get("from") === "focus" ? "focus" : "inbox";
+    q.set("view", from);
+    return { ...readLocation(`?${q}`), view: "options", from };
+  }
   if (q.get("view") === "focus") return { view: "focus", project: q.get("project") || undefined };
   const state = q.get("state") as State | null;
   return {
@@ -36,6 +45,12 @@ export function readLocation(search: string): UiLocation {
 }
 
 export function hrefFor(loc: UiLocation): string {
+  if (loc.view === "options") {
+    const from = loc.from ?? "inbox";
+    const back = new URLSearchParams(hrefFor({ ...loc, view: from }));
+    back.delete("view");
+    return `?${new URLSearchParams({ view: "options", from })}${back.size ? `&${back}` : ""}`;
+  }
   const q = new URLSearchParams({ view: loc.view });
   if (loc.project) q.set("project", loc.project);
   if (loc.view === "focus") return `?${q}`;
