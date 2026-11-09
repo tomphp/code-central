@@ -12,7 +12,7 @@ The Factory is a program you leave running in a terminal. It claims the Project'
 | starts the Stage's skill in a session of its own, in a worktree of its own | answer each Round in the UI |
 | resumes the session when you answer its Round | review each finished Ticket, and accept or reject it |
 | under Merge, merges an accepted implementation Ticket's branch into the base, pushes the base with Push on, and lands it | under Branch, merge each accepted Ticket's branch into the base |
-| under Branch, lands an accepted Ticket once you have merged its branch | stop the Factory |
+| under Branch, pushes an accepted Ticket's branch with Push on, and lands the Ticket once you have merged its branch | stop the Factory |
 
 Compared with working by hand, you type no prompts and run no sessions, and you don't land; under Merge you don't merge either.
 
@@ -312,3 +312,26 @@ acme-shop-5: can't land yet: couldn't push main to origin
 > It stays Accepted and the Factory tries again on every poll.
 
 On every poll it tries again: it finds the work already in the base, checks whether the remote's base (its `origin/main` remote-tracking ref) holds it, and pushes again if not. A remote that has moved ahead is left for you to sort out: pull it into your base, and the next push goes through. An In Review Ticket you merge by hand lands under the same rule, only once the base with it in is pushed.
+
+Under **Branch + Push**, once you accept a Ticket the Factory runs `git push <remote> <branch>`, so you can merge the branch on the host. It pushes only accepted work: a Ticket In Review is never pushed, so work you reject never leaves your machine. The Ticket stays Accepted until you merge the branch into the base, as under Branch:
+
+```text
+acme-shop-5: pushed acme-shop-5 to origin
+acme-shop-5: Accepted under the Branch Landing Method: merge acme-shop-5 into main and the Factory lands it
+```
+
+Before pushing, it checks the branch's remote-tracking ref (`origin/acme-shop-5`): when that already holds the Ticket's commit, there's nothing to push. When the push fails, the Ticket stays Accepted and the Factory comments once for each distinct reason, quoting git, and tries again on every poll:
+
+```text
+acme-shop-5: can't push yet: couldn't push acme-shop-5 to origin
+```
+
+> The Factory can't push this Ticket's branch yet: couldn't push acme-shop-5 to origin:
+>
+> ```
+> fatal: unable to access 'https://example.com/acme-shop.git/': Could not resolve host: example.com
+> ```
+>
+> It stays Accepted and the Factory tries again on every poll.
+
+A branch you merge into the base by hand lands as under Branch, whether or not it was pushed. If you merge it on the host instead, pull the base, and the Factory lands it on its next poll.
