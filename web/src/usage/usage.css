@@ -1,5 +1,5 @@
-/* Usage: its pickers in the header, the Code Central calls table, and
-   Context Size's tables.
+/* Usage: its pickers in the header, the Code Central calls table,
+   Context Size's tables, and an open session's line chart.
    Its styles hang off the layout's own classes, so none of them reach
    the other views. */
 .usage { min-height: 100vh; display: flex; flex-direction: column; }
@@ -21,3 +21,23 @@
 .usage-table th[aria-sort="descending"] .usage-sort::after { content: " ▼"; }
 .usage-subhead { font-size: 13.5px; font-weight: 600; margin: 18px 0 8px; }
 .usage-session { font-family: ui-monospace, monospace; font-size: 12.5px; overflow-wrap: anywhere; }
+.usage-session a { color: inherit; }
+.usage-open { background: var(--surface-2); }
+.usage-chart { margin-top: 18px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; }
+.usage-chart-head { display: flex; align-items: baseline; gap: 12px; font-size: 13px; }
+.usage-chart-head .usage-subhead { margin: 0; font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+.usage-chart-close { margin-left: auto; }
+.usage-chart .warning, .usage-chart .muted { font-size: 13px; }
+.line-chart { position: relative; margin-top: 10px; }
+.line-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.line-chart-grid line { stroke: var(--border); }
+.line-chart-grid text, .line-chart-axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.line-chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.line-chart-point { fill: var(--bg); stroke: var(--accent); stroke-width: 2; cursor: pointer; }
+.line-chart-point:focus-visible { outline: none; stroke: var(--text); stroke-width: 3; }
+.line-chart-point.active { fill: var(--accent); }
+.line-chart-tip { position: absolute; transform: translate(-50%, calc(-100% - 12px)); pointer-events: none; z-index: 1; min-width: 170px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); font-size: 12.5px; white-space: nowrap; }
+.line-chart-tip dl { display: grid; grid-template-columns: auto auto; gap: 2px 14px; margin: 6px 0 0; }
+.line-chart-tip dl div { display: contents; }
+.line-chart-tip dt { color: var(--muted); }
+.line-chart-tip dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }

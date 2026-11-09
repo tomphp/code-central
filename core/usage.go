@@ -180,6 +180,55 @@ func (c *Core) Usage(_ context.Context, in UsageInput) (UsageView, error) {
 	}, nil
 }
 
+// UsageSessionInput is one session's read: its Project, its session ID,
+// and its subagent, "" for the main session.
+type UsageSessionInput struct {
+	Project string
+	Session string
+	Agent   string
+}
+
+// UsageSessionView is one session's responses, oldest first, for its
+// line chart.
+type UsageSessionView struct {
+	Responses []UsageSessionResponse `json:"responses"`
+}
+
+// UsageSessionResponse is one of a session's model responses: when it
+// came, its Context Size and its four token counts.
+type UsageSessionResponse struct {
+	Time        time.Time `json:"time"`
+	ContextSize int       `json:"context_size"`
+	usage.Tokens
+}
+
+// UsageSession reads one session's responses over every day Usage keeps,
+// whatever range the rest of Usage reads. An unknown Project is
+// not_found; an unknown session has no responses.
+func (c *Core) UsageSession(_ context.Context, in UsageSessionInput) (UsageSessionView, error) {
+	if in.Project == "" {
+		return UsageSessionView{}, invalid("project", "project is required")
+	}
+	if in.Session == "" {
+		return UsageSessionView{}, invalid("session", "session is required")
+	}
+	if !c.projectExists(in.Project) {
+		return UsageSessionView{}, &Error{Code: NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
+	}
+	var mine []usage.Response
+	for _, r := range c.usage.Read(in.Project, UsageDays[len(UsageDays)-1]).Responses {
+		if r.SessionID == in.Session && r.Agent == in.Agent {
+			mine = append(mine, r)
+		}
+	}
+	slices.SortStableFunc(mine, func(a, b usage.Response) int { return a.Time.Compare(b.Time) })
+	out := UsageSessionView{Responses: []UsageSessionResponse{}}
+	for _, r := range mine {
+		out.Responses = append(out.Responses, UsageSessionResponse{Time: r.Time, ContextSize: r.ContextSize(), Tokens: r.Tokens})
+	}
+	return out, nil
+}
+
 // RecentSessions is how many sessions a Usage read lists.
 const RecentSessions = 50
 

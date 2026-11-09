@@ -100,6 +100,8 @@ import {
   type UsageOperation,
   type UsageResponse,
   type UsageSession,
+  type UsageSessionFilter,
+  type UsageSessionView,
   type UsageView,
 } from "./types";
 
@@ -256,7 +258,7 @@ interface FakeFollower {
 
 // READS are the Api's reads, by name, which actions leaves out.
 const READS: ReadonlySet<string> = new Set<keyof Api>([
-  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript", "usage",
+  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript", "usage", "usageSession",
 ]);
 
 export class FakeApi implements Api {
@@ -785,6 +787,29 @@ export class FakeApi implements Api {
       .sort((a, b) => b.calls - a.calls || (a.op < b.op ? -1 : 1));
     const sessions = usageSessions(this.usageResponses.filter(inRange));
     return { operations, kinds: usageKinds(sessions), sessions: sessions.slice(0, RECENT_SESSIONS), days: [] };
+  }
+
+  async usageSession({ project, session, agent }: UsageSessionFilter): Promise<UsageSessionView> {
+    this.calls.push("usageSession");
+    if (!this.projects.has(project)) throw new ApiError(404, "not_found", `no Project "${project}"`);
+    // Every day Usage keeps, whatever range the rest of Usage reads.
+    const today = localDay(this.now);
+    const kept = (r: FakeUsageRecord) => {
+      const ago = today - localDay(new Date(r.time));
+      return ago >= 0 && ago < USAGE_DAYS[USAGE_DAYS.length - 1];
+    };
+    const responses = this.usageResponses
+      .filter((r) => r.project === project && r.session_id === session && (r.agent ?? "") === (agent ?? "") && kept(r))
+      .sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
+      .map((r) => ({
+        time: r.time,
+        context_size: contextSize(r),
+        input_tokens: r.input_tokens,
+        cache_write_tokens: r.cache_write_tokens,
+        cache_read_tokens: r.cache_read_tokens,
+        output_tokens: r.output_tokens,
+      }));
+    return { responses };
   }
 
   // ---- internals ----

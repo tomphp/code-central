@@ -894,6 +894,43 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(all.operations).toEqual([]);
     });
 
+    it("reads one session's responses back in order, with each one's Context Size and token counts", async () => {
+      await d.createProject("acme", "Acme");
+      const impl = await d.createTicket("acme", "Build it", "Ready");
+      await d.claim("acme", impl, "sess-impl");
+      const base = Date.parse((await d.api.getTicket("acme", impl)).claims[0].started);
+      const at = (s: number) => new Date(base + s * 1000).toISOString();
+      const resp = (s: number, write: number, read: number, agent?: string): UsageResponse => ({
+        time: at(s),
+        ...(agent ? { agent } : {}),
+        kind: agent ? "review" : "implementation",
+        input_tokens: 5,
+        cache_write_tokens: write,
+        cache_read_tokens: read,
+        output_tokens: 7,
+      });
+      await d.postUsage("sess-impl", [resp(3, 1_000, 60_000), resp(1, 20_000, 0), resp(2, 9_000, 0, "toolu_a")]);
+      await d.postUsage("sess-impl", [resp(4, 500, 9_000, "toolu_a")]);
+
+      const read = async (agent?: string) =>
+        (await d.api.usageSession({ project: "acme", session: "sess-impl", ...(agent ? { agent } : {}) })).responses.map((r) => ({ ...r, time: Date.parse(r.time) }));
+      const want = (s: number, write: number, read: number) => ({
+        time: Date.parse(at(s)),
+        context_size: 5 + write + read,
+        input_tokens: 5,
+        cache_write_tokens: write,
+        cache_read_tokens: read,
+        output_tokens: 7,
+      });
+      expect(await read()).toEqual([want(1, 20_000, 0), want(3, 1_000, 60_000)]);
+      expect(await read("toolu_a")).toEqual([want(2, 9_000, 0), want(4, 500, 9_000)]);
+      expect(await d.api.usageSession({ project: "acme", session: "nobody" })).toEqual({ responses: [] });
+
+      const unknown = await d.api.usageSession({ project: "nope", session: "sess-impl" }).catch((e) => e);
+      expect(unknown).toBeInstanceOf(ApiError);
+      expect(unknown).toMatchObject({ status: 404, code: "not_found" });
+    });
+
     it("refuses Usage for an unknown Project and any range but 7, 30 or 90 days", async () => {
       const unknown = await d.api.usage({ project: "nope" }).catch((e) => e);
       expect(unknown).toBeInstanceOf(ApiError);

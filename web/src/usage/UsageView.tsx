@@ -2,15 +2,26 @@
 // Project, or in all of them, over the last 7, 30 or 90 days: the Code
 // Central calls table, one row per MCP operation, sortable by each
 // column; and Context Size, each kind of session's peaks and the recent
-// sessions, each linking to its Ticket. It loads when opened and whenever
-// its scope or range changes, never live. Back returns to the view it was
-// opened from.
-import { useState } from "react";
+// sessions, each linking to its Ticket and opening its Context Size,
+// response by response, on a line chart. It loads when opened and
+// whenever its scope, range or session changes, never live. Back returns
+// to the view it was opened from.
+import { useEffect, useRef, useState } from "react";
 import type { Api } from "../api/api";
-import { USAGE_DAYS, type ProjectRow, type UsageDays, type UsageKind, type UsageOperation, type UsageSession } from "../api/types";
+import {
+  USAGE_DAYS,
+  type ProjectRow,
+  type UsageDays,
+  type UsageKind,
+  type UsageOperation,
+  type UsageSession,
+  type UsageSessionFilter,
+  type UsageSessionResponse,
+} from "../api/types";
 import { bytes, count } from "../format";
 import { useFetch } from "../live";
 import { clickTo, hrefFor, type UiLocation } from "../url";
+import { LineChart } from "./LineChart";
 import "./usage.css";
 
 export interface UsageViewProps {
@@ -31,6 +42,10 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
   const empty = data && !data.operations.length && !data.kinds.length && !data.sessions.length;
   const over = `in ${scopeName} over the last ${days} days`;
   const projectName = (key: string) => projects.find((p) => p.key === key)?.display_name ?? key;
+  // The open session, keyed so another session starts from nothing.
+  const session = loc.session && (
+    <SessionChart key={`${loc.session.project} ${loc.session.session} ${loc.session.agent ?? ""}`} api={api} session={loc.session} navigate={navigate} />
+  );
 
   return (
     <main aria-label="Usage" className="usage">
@@ -69,6 +84,7 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
           </p>
         )}
         {empty && <p className="muted">No usage yet {over}.</p>}
+        {empty && session}
         {data && !empty && (
           <>
             <section aria-labelledby="usage-calls">
@@ -80,10 +96,14 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
               {data.sessions.length ? (
                 <>
                   <KindsTable kinds={data.kinds} />
-                  <SessionsTable sessions={data.sessions} projectName={projectName} navigate={navigate} />
+                  {session}
+                  <SessionsTable sessions={data.sessions} open={loc.session} projectName={projectName} navigate={navigate} />
                 </>
               ) : (
-                <p className="muted">No sessions {over}. Only sessions the Factory runs are counted.</p>
+                <>
+                  <p className="muted">No sessions {over}. Only sessions the Factory runs are counted.</p>
+                  {session}
+                </>
               )}
             </section>
           </>
@@ -206,13 +226,16 @@ function KindsTable({ kinds }: { kinds: UsageKind[] }) {
 
 interface SessionsTableProps {
   sessions: UsageSession[];
+  // open is the session open on the line chart, if any.
+  open?: UsageSessionFilter;
   projectName(key: string): string;
   navigate(patch: Partial<UiLocation>): void;
 }
 
 // SessionsTable is the recent sessions, newest first, each a Claim's
-// main session or one of its subagents, its Ticket a link to that Ticket.
-function SessionsTable({ sessions, projectName, navigate }: SessionsTableProps) {
+// main session or one of its subagents, its Ticket a link to that Ticket
+// and its session a link that opens its line chart.
+function SessionsTable({ sessions, open, projectName, navigate }: SessionsTableProps) {
   return (
     <>
       <h3 className="usage-subhead">Recent sessions</h3>
@@ -232,8 +255,10 @@ function SessionsTable({ sessions, projectName, navigate }: SessionsTableProps) 
         <tbody>
           {sessions.map((s) => {
             const to: Partial<UiLocation> = { view: "inbox", project: s.project, ticket: s.ticket };
+            const chart: Partial<UiLocation> = { session: { project: s.project, session: s.session_id, ...(s.agent ? { agent: s.agent } : {}) } };
+            const isOpen = open?.project === s.project && open.session === s.session_id && (open.agent ?? "") === (s.agent ?? "");
             return (
-              <tr key={`${s.session_id} ${s.agent ?? ""}`}>
+              <tr key={`${s.session_id} ${s.agent ?? ""}`} className={isOpen ? "usage-open" : undefined}>
                 <th scope="row">
                   <a href={hrefFor({ view: "inbox", ...to })} onClick={clickTo(navigate, to)}>
                     {s.ticket}
@@ -241,7 +266,15 @@ function SessionsTable({ sessions, projectName, navigate }: SessionsTableProps) 
                 </th>
                 <td>{projectName(s.project)}</td>
                 <td className="num">{s.claim}</td>
-                <td className="usage-session">{s.agent ? `${s.session_id} · ${s.agent}` : s.session_id}</td>
+                <td className="usage-session">
+                  <a
+                    href={hrefFor({ view: "usage", session: chart.session })}
+                    aria-current={isOpen ? "true" : undefined}
+                    onClick={clickTo(navigate, chart)}
+                  >
+                    {sessionName(s.session_id, s.agent)}
+                  </a>
+                </td>
                 <td>{s.kind}</td>
                 <td title={s.started}>{started(s.started)}</td>
                 <Tokens n={s.peak} />
@@ -259,4 +292,84 @@ function SessionsTable({ sessions, projectName, navigate }: SessionsTableProps) 
 // puts it: "9 Nov, 14:25".
 function started(at: string): string {
   return new Date(at).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+// sessionName is a session's ID, with its subagent's after it.
+function sessionName(session: string, agent?: string): string {
+  return agent ? `${session} · ${agent}` : session;
+}
+
+interface SessionChartProps {
+  api: Api;
+  session: UsageSessionFilter;
+  navigate(patch: Partial<UiLocation>): void;
+}
+
+// SessionChart is one session's Context Size, response by response, as
+// a line chart, each point's exact figures on hover. It reads every day
+// Usage keeps, whatever the range, and closes to Usage as it was.
+function SessionChart({ api, session, navigate }: SessionChartProps) {
+  const read = useFetch(() => api.usageSession(session), [api, session.project, session.session, session.agent]);
+  const ref = useRef<HTMLElement>(null);
+  // Opened from a row far down the recent sessions, bring it into view.
+  useEffect(() => ref.current?.scrollIntoView?.({ block: "nearest" }), []);
+  const responses = read.data?.responses;
+  const name = `Session ${sessionName(session.session, session.agent)}`;
+  const peak = Math.max(0, ...(responses ?? []).map((r) => r.context_size));
+
+  return (
+    <section ref={ref} aria-label={name} className="usage-chart">
+      <header className="usage-chart-head">
+        <h3 className="usage-subhead">{name}</h3>
+        {responses?.length ? (
+          <span className="muted">
+            {count(responses.length)} {responses.length === 1 ? "response" : "responses"} · peak {count(peak)} tokens
+          </span>
+        ) : null}
+        <button className="btn usage-chart-close" onClick={() => navigate({ session: undefined })}>
+          Close session
+        </button>
+      </header>
+      {read.error && (
+        <p role="alert" className="warning">
+          {read.error.message}
+        </p>
+      )}
+      {responses && !responses.length && <p className="muted">No responses for this session in the last {USAGE_DAYS[USAGE_DAYS.length - 1]} days.</p>}
+      {responses && responses.length > 0 && (
+        <LineChart
+          label="Context Size per response"
+          xLabel="Response"
+          values={responses.map((r) => r.context_size)}
+          pointLabel={(i) => `Response ${i + 1}: ${count(responses[i].context_size)} tokens`}
+          tip={(i) => <ResponseFigures n={i + 1} r={responses[i]} />}
+        />
+      )}
+    </section>
+  );
+}
+
+// ResponseFigures is one response's exact figures: when it came, its
+// Context Size and its four token counts.
+function ResponseFigures({ n, r }: { n: number; r: UsageSessionResponse }) {
+  const rows: [string, string][] = [
+    ["Context Size", `${count(r.context_size)} tokens`],
+    ["Input", count(r.input_tokens)],
+    ["Cache write", count(r.cache_write_tokens)],
+    ["Cache read", count(r.cache_read_tokens)],
+    ["Output", count(r.output_tokens)],
+  ];
+  return (
+    <>
+      <strong>Response {n}</strong> <span className="muted">{started(r.time)}</span>
+      <dl>
+        {rows.map(([label, figure]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{figure}</dd>
+          </div>
+        ))}
+      </dl>
+    </>
+  );
 }

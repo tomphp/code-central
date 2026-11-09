@@ -548,3 +548,29 @@ export interface UsageView {
   sessions: UsageSession[];
   days: UsageDay[];
 }
+
+// UsageSessionFilter is one session's read: its Project, its session ID,
+// and its subagent, left out for the main session.
+export interface UsageSessionFilter {
+  project: string;
+  session: string;
+  agent?: string;
+}
+
+// UsageSessionResponse is one of a session's model responses: when it
+// came, its Context Size (input, cache write and cache read) and its four
+// token counts.
+export interface UsageSessionResponse {
+  time: string;
+  context_size: number;
+  input_tokens: number;
+  cache_write_tokens: number;
+  cache_read_tokens: number;
+  output_tokens: number;
+}
+
+// UsageSessionView is GET /api/usage/session: one session's responses,
+// oldest first, over every day Usage keeps.
+export interface UsageSessionView {
+  responses: UsageSessionResponse[];
+}
