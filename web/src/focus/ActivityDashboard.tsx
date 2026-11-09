@@ -3,21 +3,43 @@
 // Progress, and the In Progress Tickets are listed below them. It reads
 // only the Inbox data Focus Mode already has, scoped as Focus Mode is,
 // with Archived Projects left out.
-import { numberOf } from "../api/api";
+//
+// A block pulses when its count changes. An entry pulses when a
+// ticket.changed notice names its Ticket, which includes each new Session
+// Event, and once when it joins the list after the dashboard first shows.
+import { useEffect, useState } from "react";
+import { numberOf, type Api } from "../api/api";
 import type { State } from "../api/types";
 import { RowLatestEvent } from "../LatestEvent";
 import type { InboxData, ProjectTicket } from "../live";
 import { STAGE_TITLE, stageOf } from "../requirement/progress";
 import { clickTo, hrefFor, type UiLocation } from "../url";
+import { usePulse } from "./pulse";
 
 export interface ActivityDashboardProps {
+  api: Api;
   now: Date;
   data: InboxData;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function ActivityDashboard({ now, data, loc, navigate }: ActivityDashboardProps) {
+export function ActivityDashboard({ api, now, data, loc, navigate }: ActivityDashboardProps) {
+  // changes counts the ticket.changed notices for each Ticket since the
+  // dashboard showed: the version number alone doesn't say which Ticket
+  // changed, so the dashboard follows the live feed itself.
+  const [changes, setChanges] = useState<Record<string, number>>({});
+  useEffect(
+    () =>
+      api.subscribe({
+        onEvent: (e) => e.type === "ticket.changed" && setChanges((c) => ({ ...c, [e.id]: (c[e.id] ?? 0) + 1 })),
+      }),
+    [api],
+  );
+  // shown is whether the dashboard has shown yet: an entry that mounts
+  // after that has joined the list, and pulses once.
+  const [shown, setShown] = useState(false);
+  useEffect(() => setShown(true), []);
   const archived = new Set(data.projects.filter((p) => p.archived).map((p) => p.key));
   const tickets = data.tickets.filter((t) => (!loc.project || t.project === loc.project) && !archived.has(t.project));
   // Every Ticket in the State counts, Stage and blocked Tickets included,
@@ -37,7 +59,16 @@ export function ActivityDashboard({ now, data, loc, navigate }: ActivityDashboar
       {inProgress.length ? (
         <ul aria-label="In Progress" className="dashboard-list">
           {inProgress.map((t) => (
-            <InProgressEntry key={t.id} now={now} data={data} ticket={t} loc={loc} navigate={navigate} />
+            <InProgressEntry
+              key={t.id}
+              now={now}
+              data={data}
+              ticket={t}
+              changes={changes[t.id] ?? 0}
+              joined={shown}
+              loc={loc}
+              navigate={navigate}
+            />
           ))}
         </ul>
       ) : (
@@ -48,9 +79,11 @@ export function ActivityDashboard({ now, data, loc, navigate }: ActivityDashboar
 }
 
 // StateCount is one State's block: its count in big type, its State name under it.
+// It pulses when the count differs from the one it last showed.
 function StateCount({ state, count }: { state: State; count: number }) {
+  const { className: pulse, ...pulsing } = usePulse(count);
   return (
-    <div role="group" aria-label={state} className={`dashboard-block state-${state.replace(" ", "-").toLowerCase()}`}>
+    <div role="group" aria-label={state} className={`dashboard-block state-${state.replace(" ", "-").toLowerCase()} ${pulse}`} {...pulsing}>
       <span className="dashboard-count" data-testid="count">
         {count}
       </span>
@@ -61,13 +94,21 @@ function StateCount({ state, count }: { state: State; count: number }) {
 
 // InProgressEntry is one In Progress Ticket. It opens in the Inbox as a
 // Focus Item's "Open in Inbox" does: a Stage Ticket in its Requirement,
-// with it selected.
-function InProgressEntry({ now, data, ticket: t, loc, navigate }: ActivityDashboardProps & { ticket: ProjectTicket }) {
+// with it selected. It pulses each time changes goes up, and on mounting
+// if it joined the list.
+interface InProgressEntryProps extends Omit<ActivityDashboardProps, "api"> {
+  ticket: ProjectTicket;
+  changes: number;
+  joined: boolean;
+}
+
+function InProgressEntry({ now, data, ticket: t, changes, joined, loc, navigate }: InProgressEntryProps) {
+  const { className: pulse, ...pulsing } = usePulse(changes, joined);
   const stage = stageOf(t);
   const requirement = stage && data.requirements.find((s) => s.id === t.spec);
   const inbox = { view: "inbox" as const, project: loc.project, requirement: stage && t.spec, ticket: t.id };
   return (
-    <li className="dashboard-entry">
+    <li className={`dashboard-entry ${pulse}`} {...pulsing}>
       <a href={hrefFor(inbox)} onClick={clickTo(navigate, inbox)}>
         <span className="dashboard-entry-top">
           <span className="tid">{t.id}</span>

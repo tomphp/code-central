@@ -228,3 +228,90 @@ describe("the In Progress list", () => {
     expect(window.location.search).toBe("?view=inbox&requirement=acme-10&ticket=acme-11");
   });
 });
+
+// pulsing is whether el shows it is pulsing.
+const pulsing = (el: HTMLElement) => el.getAttribute("data-pulsing") === "true";
+const block = (d: HTMLElement, state: string) => within(d).getByRole("group", { name: state });
+const entry = (d: HTMLElement, id: string) => within(inProgress(d)).getByText(id).closest("li") as HTMLElement;
+
+describe("pulses", () => {
+  it("pulse neither block nor entry on first show", async () => {
+    const fake = busy();
+    await dashboardOn(fake);
+    renderApp(fake);
+    const d = await dashboard();
+    expect(pulsing(block(d, "Ready"))).toBe(false);
+    expect(pulsing(block(d, "In Progress"))).toBe(false);
+    expect(entries(d).filter(pulsing)).toEqual([]);
+  });
+
+  it("pulse a block when its count changes, and not the other", async () => {
+    const fake = busy();
+    await dashboardOn(fake);
+    renderApp(fake);
+    const d = await dashboard();
+
+    act(() => void fake.updateTicket("beta-1", { state: "Done" }));
+    await waitFor(() => expect(count(d, "Ready")).toBe("1"));
+    expect(pulsing(block(d, "Ready"))).toBe(true);
+    expect(pulsing(block(d, "In Progress"))).toBe(false);
+  });
+
+  it("pulse only the entry whose Ticket a notice names, and no block when the counts stay the same", async () => {
+    const fake = busy();
+    await dashboardOn(fake);
+    renderApp(fake);
+    const d = await dashboard();
+
+    act(() => fake.postSessionEvents("s-busy", [{ time: fake.now.toISOString(), kind: "text", text: "Writing the test first." }]));
+    await within(d).findByText("Writing the test first. · just now");
+    expect(entries(d).filter(pulsing)).toEqual([entry(d, "acme-12")]);
+    expect(pulsing(block(d, "Ready"))).toBe(false);
+    expect(pulsing(block(d, "In Progress"))).toBe(false);
+  });
+
+  it("pulse an entry on a notice that changes nothing it shows", async () => {
+    const fake = busy();
+    await dashboardOn(fake);
+    renderApp(fake);
+    const d = await dashboard();
+
+    act(() => fake.emit({ type: "ticket.changed", project: "beta", id: "beta-2" }));
+    await waitFor(() => expect(pulsing(entry(d, "beta-2"))).toBe(true));
+    expect(entries(d).filter(pulsing)).toEqual([entry(d, "beta-2")]);
+  });
+
+  it("pulse an entry once when it joins the list", async () => {
+    const fake = busy();
+    await dashboardOn(fake);
+    renderApp(fake);
+    const d = await dashboard();
+
+    act(() => void fake.updateTicket("acme-1", { state: "In Progress" }));
+    await within(d).findByText("Login form");
+    expect(entries(d).filter(pulsing)).toEqual([entry(d, "acme-1")]);
+    expect(pulsing(block(d, "In Progress"))).toBe(true);
+  });
+
+  it("pulse the first entry to join an empty list", async () => {
+    const fake = world();
+    await dashboardOn(fake);
+    renderApp(fake, "/?view=focus&project=beta");
+    const d = await dashboard();
+
+    act(() => void fake.updateTicket("beta-1", { state: "In Progress" }));
+    await within(d).findByText("Beta export");
+    expect(pulsing(entry(d, "beta-1"))).toBe(true);
+  });
+
+  it("let a pulse end", async () => {
+    const fake = busy();
+    await dashboardOn(fake);
+    renderApp(fake);
+    const d = await dashboard();
+
+    act(() => fake.emit({ type: "ticket.changed", project: "beta", id: "beta-2" }));
+    await waitFor(() => expect(pulsing(entry(d, "beta-2"))).toBe(true));
+    await waitFor(() => expect(pulsing(entry(d, "beta-2"))).toBe(false));
+  });
+});
