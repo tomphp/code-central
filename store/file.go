@@ -161,6 +161,7 @@ func (s *FileStore) checkFormat() error {
 	return nil
 }
 
+// loadOptions reads options.yaml, if there is one, over the defaults.
 func (s *FileStore) loadOptions() error {
 	const rel = "options.yaml"
 	data, err := os.ReadFile(filepath.Join(s.dir, rel))

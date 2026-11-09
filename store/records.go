@@ -148,7 +148,6 @@ var (
 	ticketEditFields = []string{"title", "description", "spec", "external_state", "detached"}
 )
 
-// loadOptions reads options.yaml, if there is one, over the defaults.
 func decodeSpec(data []byte, n int) (Spec, *LoadError) {
 	front, body, ok := splitFrontmatter(data)
 	if !ok {

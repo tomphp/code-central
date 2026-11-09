@@ -35,8 +35,8 @@
 // Map: the fake's types and limits, then FakeApi in parts marked
 // "// ---- <part> ----": seeding, for actions' fake behaviour, the live
 // feed, the Api's reads and writes, and internals; then the
-// acknowledgements a write returns. To read one part, list the marks with
-// grep -n -- '// ----' and read between two with sed -n.
+// acknowledgements a write returns. grep -n '^ *// ---- ' lists the
+// marks, to sed -n the part between two.
 import {
   numberOf,
   type Api,

@@ -6,6 +6,8 @@
 // it records its arguments, follows a Script (print stream-json, call the
 // code-central CLI in-process, write a file, run git, exit) and needs
 // nothing built. There is no shell, so it runs the same on every OS.
+// script.go holds the Script's Steps and the Calls read back; fake.go
+// holds the fakes themselves.
 //
 // A test package that uses it calls Main from its TestMain:
 //
@@ -320,6 +322,28 @@ func (h *Harness) RemoveClaude() { must(h.t, os.Remove(filepath.Join(h.Bin, "cla
 func (h *Harness) ShimClaude() {
 	h.RemoveClaude()
 	must(h.t, os.WriteFile(filepath.Join(h.Bin, "claude.cmd"), []byte("@echo off\r\nnode \"%~dp0\\node_modules\\@anthropic-ai\\claude-code\\cli.js\" %*\r\n"), 0o755))
+}
+
+// HoldSession starts a process, outside the Factory, whose command line
+// names session, as another claude driving that session would. It runs
+// until the returned func or the end of the test.
+func (h *Harness) HoldSession(session string) (release func()) {
+	h.t.Helper()
+	self, err := os.Executable()
+	must(h.t, err)
+	cmd := exec.Command(self)
+	cmd.Args = []string{holdName, "--resume", session}
+	cmd.Env = append(os.Environ(), fakeEnv+"="+h.data)
+	must(h.t, cmd.Start())
+	var once sync.Once
+	release = func() {
+		once.Do(func() {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		})
+	}
+	h.t.Cleanup(release)
+	return release
 }
 
 // fakeGit is what the fake git reads from the data folder.

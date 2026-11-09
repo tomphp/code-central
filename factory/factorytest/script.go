@@ -7,10 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/tomoram/code-central/core"
 )
@@ -60,28 +58,6 @@ func (h *Harness) Continue(ticket string) {
 		_, err := os.Stat(filepath.Join(h.data, "continue", ticket))
 		return os.IsNotExist(err)
 	})
-}
-
-// HoldSession starts a process, outside the Factory, whose command line
-// names session, as another claude driving that session would. It runs
-// until the returned func or the end of the test.
-func (h *Harness) HoldSession(session string) (release func()) {
-	h.t.Helper()
-	self, err := os.Executable()
-	must(h.t, err)
-	cmd := exec.Command(self)
-	cmd.Args = []string{holdName, "--resume", session}
-	cmd.Env = append(os.Environ(), fakeEnv+"="+h.data)
-	must(h.t, cmd.Start())
-	var once sync.Once
-	release = func() {
-		once.Do(func() {
-			_ = cmd.Process.Kill()
-			_ = cmd.Wait()
-		})
-	}
-	h.t.Cleanup(release)
-	return release
 }
 
 // Signals is the signals runs of ticket got while in a Wait step, in
