@@ -60,7 +60,11 @@ func Main(m *testing.M) {
 	if data := os.Getenv(fakeEnv); data != "" {
 		os.Exit(runFake(data, os.Args))
 	}
-	os.Exit(m.Run())
+	code := m.Run()
+	if seedDir != "" {
+		os.RemoveAll(seedDir)
+	}
+	os.Exit(code)
 }
 
 func runFake(data string, args []string) int {
@@ -133,7 +137,7 @@ func New(t testing.TB) *Harness {
 	h := &Harness{
 		t:       t,
 		Server:  codecentraltest.NewServer(t),
-		Project: "acme",
+		Project: project,
 		Repo:    filepath.Join(root, "work", "repo"),
 		Home:    filepath.Join(root, "home"),
 		Bin:     filepath.Join(root, "bin"),
@@ -142,7 +146,8 @@ func New(t testing.TB) *Harness {
 		Clock:   clock.NewFake(time.Now()),
 		refused: map[string]int64{},
 	}
-	for _, d := range []string{h.Repo, h.Home, h.Bin, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
+	template := filepath.Join(root, "git-template")
+	for _, d := range []string{h.Home, h.Bin, template, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
 		must(t, os.MkdirAll(d, 0o755))
 	}
 	h.URL = h.startProxy()
@@ -153,6 +158,8 @@ func New(t testing.TB) *Harness {
 		"HOME":                h.Home,
 		"CODE_CENTRAL_URL":    h.URL,
 		"GIT_CONFIG_NOSYSTEM": "1",
+		// An empty template: git init writes no sample hooks to remove.
+		"GIT_TEMPLATE_DIR":    template,
 		"GIT_AUTHOR_NAME":     "Factory Test",
 		"GIT_AUTHOR_EMAIL":    "factory@example.com",
 		"GIT_COMMITTER_NAME":  "Factory Test",
@@ -167,13 +174,52 @@ func New(t testing.TB) *Harness {
 	if _, err := h.Server.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: h.Project}); err != nil {
 		t.Fatal(err)
 	}
-	mcp := `{"mcpServers":{"code-central":{"type":"http","url":"${CODE_CENTRAL_URL:-http://localhost:7733}/p/` + h.Project + `/mcp"}}}` + "\n"
-	h.Git("init", "-q", "-b", "main")
-	must(t, os.WriteFile(filepath.Join(h.Repo, ".mcp.json"), []byte(mcp), 0o644))
-	h.Git("add", ".mcp.json")
-	h.Git("commit", "-q", "-m", "Set up Code Central")
+	seed, err := seedRepo()
+	must(t, err)
+	must(t, os.CopyFS(h.Repo, os.DirFS(seed)))
 	return h
 }
+
+// project is the Project Key of every Harness.
+const project = "acme"
+
+// seedDir holds seedRepo's repo; Main removes it.
+var seedDir string
+
+// seedRepo is a repo on branch main whose one commit holds a .mcp.json
+// naming the Project. It is made once per test binary and each
+// Harness copies it, which costs no git processes.
+var seedRepo = sync.OnceValues(func() (string, error) {
+	git, err := realGit()
+	if err != nil {
+		return "", err
+	}
+	if seedDir, err = os.MkdirTemp("", "factorytest-seed"); err != nil {
+		return "", err
+	}
+	repo := filepath.Join(seedDir, "repo")
+	template := filepath.Join(seedDir, "git-template")
+	for _, d := range []string{repo, template} {
+		if err := os.Mkdir(d, 0o755); err != nil {
+			return "", err
+		}
+	}
+	mcp := `{"mcpServers":{"code-central":{"type":"http","url":"${CODE_CENTRAL_URL:-http://localhost:7733}/p/` + project + `/mcp"}}}` + "\n"
+	if err := os.WriteFile(filepath.Join(repo, ".mcp.json"), []byte(mcp), 0o644); err != nil {
+		return "", err
+	}
+	for _, args := range [][]string{{"init", "-q", "-b", "main"}, {"add", ".mcp.json"}, {"commit", "-q", "-m", "Set up Code Central"}} {
+		cmd := exec.Command(git, args...)
+		cmd.Dir = repo
+		cmd.Env = []string{"HOME=" + seedDir, "GIT_CONFIG_NOSYSTEM=1", "GIT_TEMPLATE_DIR=" + template,
+			"GIT_AUTHOR_NAME=Factory Test", "GIT_AUTHOR_EMAIL=factory@example.com",
+			"GIT_COMMITTER_NAME=Factory Test", "GIT_COMMITTER_EMAIL=factory@example.com"}
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return "", fmt.Errorf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+	return repo, nil
+})
 
 // startProxy starts the proxy in front of Server and returns its URL.
 // While the harness is down it drops every connection, as a stopped Code
