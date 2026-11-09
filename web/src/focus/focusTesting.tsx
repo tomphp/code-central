@@ -13,6 +13,11 @@ export function renderApp(fake: FakeApi, url = "/?view=focus") {
 // focus is Focus Mode's main region.
 export const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 
+// without is fake's Needs Me with the Ticket id taken out.
+export function without(fake: FakeApi, id: string) {
+  return fake.needsMeGroups.map((g) => ({ ...g, tickets: g.tickets.filter((r) => r.id !== id) })).filter((g) => g.tickets.length);
+}
+
 // change reseeds Needs Me and sends the notice the service would.
 export function change(fake: FakeApi, groups: Parameters<FakeApi["setNeedsMe"]>[0], id = "acme-1") {
   fake.setNeedsMe(groups);

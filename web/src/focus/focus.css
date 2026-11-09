@@ -41,9 +41,9 @@
 .focus-skip { margin: 12px 0 0; }
 .focus-skip .btn, .focus-clear .btn { font-size: 17px; padding: 8px 18px; }
 .focus-clear .btn { margin-top: 20px; }
-/* A brief note, under the header, when the item on screen was dealt with
-   elsewhere. */
-.focus-elsewhere { margin: 16px auto 0; padding: 6px 14px; border-radius: 6px; background: var(--border); color: var(--muted); font-size: 16px; }
+/* A brief note, under the header: the item on screen was dealt with
+   elsewhere, or a Requirement or Map was added. */
+.focus-note { margin: 16px auto 0; padding: 6px 14px; border-radius: 6px; background: var(--border); color: var(--muted); font-size: 16px; }
 /* The Activity Dashboard, in place of All clear: two State blocks side by
    side, each with its number in big type, and the In Progress Tickets
    below them, filling the body. */
