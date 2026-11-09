@@ -277,7 +277,7 @@ type Options struct {
 
 // DefaultOptions are the Options of a store that has never had any
 // written.
-func DefaultOptions() Options { return Options{FocusClear: FocusActivityDashboard} }
+func DefaultOptions() Options { return Options{FocusClear: FocusClears[0]} }
 
 // FocusClearNames is the FocusClears as strings, for messages and the
 // schema.

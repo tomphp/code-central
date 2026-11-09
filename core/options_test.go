@@ -78,6 +78,15 @@ func TestSetOptionsIsTheHumans(t *testing.T) {
 func TestSetOptionsChangesAndPublishesOneNotice(t *testing.T) {
 	c, writes, notices := countingCore(t)
 
+	// The default on a fresh store changes nothing.
+	if got, err := c.SetOptions(human, core.SetOptionsInput{FocusClear: focus(store.FocusActivityDashboard)}); err != nil || got.FocusClear != store.FocusActivityDashboard {
+		t.Fatalf("set_options to the default: %+v, %v", got, err)
+	}
+	noNotice(t, notices)
+	if *writes != 0 {
+		t.Fatalf("setting the default wrote: %d writes", *writes)
+	}
+
 	o, err := c.SetOptions(human, core.SetOptionsInput{FocusClear: focus(store.FocusAllClear)})
 	if err != nil || o.FocusClear != store.FocusAllClear {
 		t.Fatalf("set_options: %+v, %v", o, err)

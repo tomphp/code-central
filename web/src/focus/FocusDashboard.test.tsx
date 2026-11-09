@@ -59,6 +59,7 @@ describe("where the Activity Dashboard shows", () => {
     renderApp(fake);
     expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
     expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
+    expect(screen.queryByText("Code Central isn't reachable")).toBeNull();
   });
 
   it("switches live between the dashboard and All clear on options.changed, with no reload", async () => {

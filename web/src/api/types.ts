@@ -502,7 +502,7 @@ export interface Options {
 }
 
 // DEFAULT_OPTIONS are the Options a fresh store reads.
-export const DEFAULT_OPTIONS: Options = { focus_clear: "activity_dashboard" };
+export const DEFAULT_OPTIONS: Options = { focus_clear: FOCUS_CLEARS[0] };
 
 
 // ---- Usage (Spec code-central-201) ----

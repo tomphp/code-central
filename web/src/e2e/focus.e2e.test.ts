@@ -5,7 +5,8 @@
 // with no reload, the human answers each Question there in order, the
 // agent's background `code-central wait` exits 0, and Focus Mode moves on
 // to the Answered Focus Item, then back to the dashboard once the agent
-// picks the answers up.
+// picks the answers up, and to All clear once the human chooses it over
+// the API.
 // Browser set-up as in round.e2e.test.ts.
 import { spawn } from "node:child_process";
 import { chromium, type Browser } from "playwright-core";
@@ -116,5 +117,17 @@ describe("end-to-end: the human answers a live Round in Focus Mode", () => {
     expect(await entry.count()).toBe(1);
     await entry.getByText(id, { exact: true }).waitFor();
     await entry.getByText("Login form").waitFor();
+
+    // The human chooses All clear over the API: the open Focus Mode
+    // switches to it live.
+    const res = await fetch(`${svc.url}/api/set_options`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Code-Central-Actor": "human" },
+      body: JSON.stringify({ focus_clear: "all_clear" }),
+    });
+    expect(res.ok).toBe(true);
+    await focus.getByRole("region", { name: "All clear" }).waitFor();
+    await focus.getByText("Nothing needs you.").waitFor();
+    expect(await dashboard.count()).toBe(0);
   }, 30_000);
 });

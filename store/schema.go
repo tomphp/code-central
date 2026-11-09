@@ -33,7 +33,7 @@ func Schema() string {
 	for _, s := range States {
 		states = append(states, string(s))
 	}
-	values("  options focus_clear (default activity_dashboard)", FocusClearNames())
+	values(fmt.Sprintf("  options focus_clear (default %s)", DefaultOptions().FocusClear), FocusClearNames())
 	values("  project landing.method (no landing: merge, push false, remote origin)", landingMethodNames())
 	values("  ticket state, moves[].from, moves[].to", states)
 	values("  rounds[].questions[].status", []string{string(QuestionOpen), string(QuestionAnswered), string(QuestionDismissed)})

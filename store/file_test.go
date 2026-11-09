@@ -326,6 +326,15 @@ func TestAnOptionsFileKeepsAnExplicitAllClear(t *testing.T) {
 	})
 }
 
+func TestAnOptionsFileOutsideItsSetNamesTheValuesDefaultFirst(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "store.yaml"), fmt.Sprintf("format: %d\n", store.Format))
+	writeFile(t, filepath.Join(dir, "options.yaml"), "focus_clear: dashboard\n")
+	if _, err := store.Open(dir); err == nil || !strings.Contains(err.Error(), "activity_dashboard or all_clear") {
+		t.Fatalf("err = %v, want the values listed default first", err)
+	}
+}
+
 func TestADefaultLandingMethodLeavesProjectYAMLUnchanged(t *testing.T) {
 	dir := t.TempDir()
 	s := openFile(t, dir)
