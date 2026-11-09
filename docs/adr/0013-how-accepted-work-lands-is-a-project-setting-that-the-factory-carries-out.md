@@ -13,4 +13,4 @@ Branch keeps the Accepted State, so Blockers still clear only on land. Under Mer
 
 ## Consequences
 
-A Project stored without a Landing Method reads as Merge with Push off and remote `origin`, so existing Projects keep today's behaviour with no migration of their files. The Factory reads the setting on every poll, so a change applies to every Ticket still waiting to land. A failed push leaves the Ticket Accepted with a comment, and the Factory retries it; it never pulls, rebases or force-pushes. A Pull Request method, which comes later, fits beside these and implies Push.
+A Project stored without a Landing Method reads as Merge with Push off and remote `origin`, so existing Projects keep today's behaviour with no migration of their files. The Factory reads the setting on every poll, so a change applies to every Ticket still waiting to land. A failed push leaves the Ticket where it is, Accepted or, if the human merged it by hand, In Review, with a comment, and the Factory retries it; it never pulls, rebases or force-pushes. A Pull Request method, which comes later, fits beside these and implies Push.

@@ -14,8 +14,9 @@ func mergeAndPush(h *factorytest.Harness, remote string) {
 	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: remote})
 }
 
-// factoryComments counts tk's comments from the Factory.
-func factoryComments(tk core.TicketView) int {
+// cantLandYetComments counts tk's comments saying the Factory can't land
+// it yet.
+func cantLandYetComments(tk core.TicketView) int {
 	n := 0
 	for _, c := range tk.Comments {
 		if strings.Contains(c.Body, "The Factory can't land this yet") {
@@ -62,7 +63,7 @@ func TestUnderMergeAndPushAFailedPushIsCommentedOnceAndRetried(t *testing.T) {
 	if got := h.Git("log", "-1", "--format=%s", merge); got != "Merge "+id+": Add a feature" {
 		t.Errorf("main's tip is %q, want the Factory's merge", got)
 	}
-	if n := factoryComments(tk); n != 1 || !commented(tk, "couldn't push main to origin", "It stays Accepted") {
+	if n := cantLandYetComments(tk); n != 1 || !commented(tk, "couldn't push main to origin", "It stays Accepted") {
 		t.Errorf("want one comment quoting the failed push, got %+v", tk.Comments)
 	}
 	r.WaitForOutput(id + ": can't land yet: couldn't push main to origin")
@@ -73,7 +74,7 @@ func TestUnderMergeAndPushAFailedPushIsCommentedOnceAndRetried(t *testing.T) {
 	if got := remote.Git("rev-parse", "main"); got != merge {
 		t.Errorf("the remote's main is at %q, want the merge %s", got, merge)
 	}
-	if n := factoryComments(h.Ticket(id)); n != 1 {
+	if n := cantLandYetComments(h.Ticket(id)); n != 1 {
 		t.Errorf("want still one comment, got %d", n)
 	}
 }

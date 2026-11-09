@@ -219,8 +219,8 @@ type factory struct {
 	// poll's own.
 	leftOnBranch map[string]bool
 
-	// warnedRemote is the Push remotes found missing, already warned of;
-	// the poll's own.
+	// warnedRemote is the Push remotes found missing, already warned of
+	// and not back since; the poll's own.
 	warnedRemote map[string]bool
 
 	// restarted is the saved Claims a stop cut off, to resume as cut off

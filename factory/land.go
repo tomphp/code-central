@@ -14,10 +14,10 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// landingMethod reads the Project's Landing Method, which the human can
+// landing reads the Project's Landing Method, with its Push option, which the human can
 // change at any time, so it is read again on every poll. ok is false when
 // it can't be read, and then nothing lands this poll.
-func (f *factory) landingMethod(ctx context.Context) (landing core.LandingView, ok bool) {
+func (f *factory) landing(ctx context.Context) (landing core.LandingView, ok bool) {
 	p, err := f.client.GetProject(ctx, f.project)
 	if err != nil {
 		if ctx.Err() == nil {
@@ -45,6 +45,8 @@ func (f *factory) missingRemote(landing core.LandingView) string {
 func (f *factory) remoteReady(landing core.LandingView) bool {
 	why := f.missingRemote(landing)
 	if why == "" {
+		// Back again: should it go missing later, that is warned of too.
+		delete(f.warnedRemote, landing.Remote)
 		return true
 	}
 	if !f.warnedRemote[landing.Remote] {
@@ -56,8 +58,8 @@ func (f *factory) remoteReady(landing core.LandingView) bool {
 
 // land lands Accepted Tickets one at a time, oldest accept first (ADR
 // 0006), by the Project's Landing Method, and detects merges made by
-// hand. Under Merge the Factory merges each into the base, pushing the
-// base first with Push on; under Branch it leaves each for the human to
+// hand. Under Merge the Factory merges each into the base and, with Push
+// on, pushes the base before landing it; under Branch it leaves each for the human to
 // merge, and lands it once merged. The Factory never accepts: only the
 // human moves a Ticket to Accepted.
 func (f *factory) land(ctx context.Context, landing core.LandingView) {
@@ -116,7 +118,8 @@ func (f *factory) workOf(tk core.TicketView) (commit, what string, err error) {
 }
 
 // detectHandMerges lands In Review Tickets whose finish commit is in the
-// base: the human merged them. (land sees to Accepted ones.) A Ticket merged while in any other State
+// base: the human merged them. Under Merge + Push it lands each only once
+// the base is pushed. (land sees to Accepted ones.) A Ticket merged while in any other State
 // gets a warning line, once.
 func (f *factory) detectHandMerges(ctx context.Context, landing core.LandingView) {
 	for _, tk := range f.landable(ctx, mergeableStates...) {
@@ -229,7 +232,7 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, landing 
 // tk where it is, commented, when the push fails.
 func (f *factory) landPushed(ctx context.Context, tk core.TicketView, landing core.LandingView, commit string) {
 	if landing.Method == store.LandingMerge && landing.Push {
-		pushed, why := f.pushBase(landing.Remote, commit)
+		pushed, why := f.pushBase(ctx, landing.Remote, commit)
 		if why != "" {
 			f.cantLandYet(ctx, tk, why)
 			return
@@ -246,11 +249,12 @@ func (f *factory) landPushed(ctx context.Context, tk core.TicketView, landing co
 // Factory needs no state of its own. It never forces, so a remote that
 // has moved ahead is left as it is. It returns whether it pushed, or why
 // the push failed.
-func (f *factory) pushBase(remote, commit string) (pushed bool, why string) {
+func (f *factory) pushBase(ctx context.Context, remote, commit string) (pushed bool, why string) {
 	if _, err := f.gitOut(f.repo, "merge-base", "--is-ancestor", commit, "refs/remotes/"+remote+"/"+f.base); err == nil {
 		return false, ""
 	}
-	cmd := exec.Command(f.git, "push", remote, f.base)
+	// A stop kills it, so a push that hangs doesn't hold up the Factory.
+	cmd := exec.CommandContext(ctx, f.git, "push", remote, f.base)
 	cmd.Dir = f.repo
 	// A prompt for credentials would wait forever: nobody answers it.
 	cmd.Env = append(slices.Clone(f.e.Environ), "GIT_TERMINAL_PROMPT=0")
