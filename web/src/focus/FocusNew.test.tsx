@@ -2,11 +2,11 @@
 // same split as the sidebar's sits in the header beside Exit, plain, on
 // every Focus screen; submitting from it closes the modal and leaves Focus
 // Mode where it was.
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeApi } from "../api/fake";
-import { focus, renderApp } from "./focusTesting";
+import { change, focus, renderApp } from "./focusTesting";
 
 // world has acme-1 Failed, then acme-2 In Review, in that Needs Me order,
 // with beta active and old archived.
@@ -35,6 +35,30 @@ const headerButtons = async () =>
     .getAllByRole("button")
     .map((b) => b.textContent);
 const skip = async () => userEvent.click(await within(focus()).findByRole("button", { name: "Skip" }));
+
+// added opens the modal for kind from + New ▾ and submits it.
+async function added(kind: "Requirement" | "Map") {
+  if (kind === "Requirement") {
+    await userEvent.click(await newButton());
+    await submit("New requirement", "Submit requirement");
+  } else {
+    await userEvent.click(menuButton());
+    await userEvent.click(item("Map"));
+    await submit("New Map", "Submit map");
+  }
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+}
+
+const note = () => within(focus()).queryByRole("status");
+const without = (fake: FakeApi, id: string) => fake.needsMeGroups.map((g) => ({ ...g, tickets: g.tickets.filter((r) => r.id !== id) })).filter((g) => g.tickets.length);
+
+// later moves FakeApi's clock and the timers on by ms, once React has
+// run the effects that start them.
+async function later(fake: FakeApi, ms: number) {
+  await act(() => new Promise((r) => setImmediate(r)));
+  fake.now = new Date(fake.now.getTime() + ms);
+  act(() => vi.advanceTimersByTime(ms));
+}
 
 // submit types text into the open dialog and submits it.
 async function submit(dialog: string, button: string, text = "Offline mode") {
@@ -260,6 +284,155 @@ describe("+ New ▾ in Focus Mode's header", () => {
       await userEvent.click(await newButton());
       const select = within(screen.getByRole("dialog")).getByRole("combobox", { name: "Project" });
       expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["Acme", "Beta"]);
+    });
+  });
+
+  describe("the added note", () => {
+    beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true, advanceTimeDelta: 1 }));
+    afterEach(() => vi.useRealTimers());
+
+    it.each([["Requirement"], ["Map"]] as const)("reads %s added after a submit, and goes after 4 s", async (kind) => {
+      const fake = world();
+      renderApp(fake);
+      await heading("Flaky build");
+      await added(kind);
+
+      expect(await within(focus()).findByRole("status")).toHaveTextContent(`${kind} added`);
+      await later(fake, 3900);
+      expect(note()).toHaveTextContent(`${kind} added`);
+      await later(fake, 100);
+      expect(note()).toBeNull();
+    });
+
+    it("sits where Dealt with elsewhere does, and looks like it", async () => {
+      const fake = world();
+      renderApp(fake);
+      await heading("Flaky build");
+      change(fake, without(fake, "acme-1"), "acme-1");
+      const elsewhere = await within(focus()).findByRole("status");
+      expect(elsewhere).toHaveTextContent("Dealt with elsewhere");
+      const where = (el: HTMLElement) => [el.parentElement, el.previousElementSibling, el.className];
+      const before = where(elsewhere);
+
+      await added("Requirement");
+      const mine = await within(focus()).findByText("Requirement added");
+      expect(where(mine)).toEqual(before);
+    });
+
+    it("shows on All clear", async () => {
+      const fake = world();
+      fake.setNeedsMe([]);
+      renderApp(fake);
+      await within(focus()).findByRole("region", { name: "All clear" });
+      await added("Requirement");
+      expect(await within(focus()).findByRole("status")).toHaveTextContent("Requirement added");
+    });
+
+    it("shows on the Activity Dashboard", async () => {
+      const fake = world();
+      fake.setNeedsMe([]);
+      await fake.setOptions({ focus_clear: "activity_dashboard" });
+      renderApp(fake);
+      await within(focus()).findByRole("region", { name: "Activity Dashboard" });
+      await added("Map");
+      expect(await within(focus()).findByRole("status")).toHaveTextContent("Map added");
+    });
+
+    it("shows on You skipped N", async () => {
+      renderApp(world());
+      await heading("Flaky build");
+      await skip();
+      await heading("Login page");
+      await skip();
+      await within(focus()).findByText("You skipped 2, go through them again?");
+      await added("Requirement");
+      expect(await within(focus()).findByRole("status")).toHaveTextContent("Requirement added");
+    });
+
+    it("shows on Loading…", async () => {
+      const fake = world();
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      const needsMe = fake.needsMe.bind(fake);
+      vi.spyOn(fake, "needsMe").mockImplementation(async () => {
+        await gate;
+        return needsMe();
+      });
+      renderApp(fake, "/?view=focus&project=acme");
+      await added("Requirement");
+      expect(within(focus()).getByText("Loading…")).toBeInTheDocument();
+      expect(note()).toHaveTextContent("Requirement added");
+      release();
+    });
+
+    it("stays when the item on screen changes, until its own 4 s are up", async () => {
+      const fake = world();
+      renderApp(fake);
+      await heading("Flaky build");
+      await added("Requirement");
+      await later(fake, 2000);
+      await skip();
+      await heading("Login page");
+      expect(note()).toHaveTextContent("Requirement added");
+      await later(fake, 2000);
+      expect(note()).toBeNull();
+    });
+
+    it("replaces Dealt with elsewhere, and starts its own 4 s", async () => {
+      const fake = world();
+      renderApp(fake);
+      await heading("Flaky build");
+      change(fake, without(fake, "acme-1"), "acme-1");
+      expect(await within(focus()).findByRole("status")).toHaveTextContent("Dealt with elsewhere");
+      await later(fake, 3000);
+
+      await added("Map");
+      expect(within(focus()).getAllByRole("status").map((n) => n.textContent)).toEqual(["Map added"]);
+      await later(fake, 3000);
+      expect(note()).toHaveTextContent("Map added");
+      await later(fake, 1000);
+      expect(note()).toBeNull();
+    });
+
+    it("is replaced by Dealt with elsewhere, which starts its own 4 s", async () => {
+      const fake = world();
+      renderApp(fake);
+      await heading("Flaky build");
+      await added("Requirement");
+      await later(fake, 3000);
+
+      change(fake, without(fake, "acme-1"), "acme-1");
+      await heading("Login page");
+      await within(focus()).findByText("Dealt with elsewhere");
+      expect(within(focus()).getAllByRole("status").map((n) => n.textContent)).toEqual(["Dealt with elsewhere"]);
+      await later(fake, 3000);
+      expect(note()).toHaveTextContent("Dealt with elsewhere");
+      await later(fake, 1000);
+      expect(note()).toBeNull();
+    });
+
+    it("isn't replaced when the last item goes elsewhere to All clear, which shows no Dealt with elsewhere", async () => {
+      const fake = world();
+      fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason === "failed"));
+      renderApp(fake);
+      await heading("Flaky build");
+      await added("Requirement");
+      change(fake, [], "acme-1");
+      await within(focus()).findByRole("region", { name: "All clear" });
+      expect(note()).toHaveTextContent("Requirement added");
+    });
+
+    it("isn't shown when the submit is refused", async () => {
+      const fake = world();
+      fake.submitRequirement = async () => {
+        throw new Error("the Project is archived");
+      };
+      renderApp(fake);
+      await heading("Flaky build");
+      await userEvent.click(await newButton());
+      const modal = await submit("New requirement", "Submit requirement");
+      await within(modal).findByText("the Project is archived");
+      expect(note()).toBeNull();
     });
   });
 });

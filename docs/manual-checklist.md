@@ -47,6 +47,7 @@ Run this by hand once v1 is built (`make build`). These paths can't be automated
 - [ ] Open a Map with a few Tickets and Blockers in a narrow and a wide window, in light and dark themes: the graph reads left to right with arrows from each Blocker, every node's type, title and State fit, the progress colours read clearly, the fog node sits dim at the right edge, and the graph scrolls sideways rather than squashing when the pane is narrow. **Decisions so far** and **Out of scope** sit beside the graph, or under it when there's no room.
 - [ ] On a Requirement, a Map and a plain Spec (opened from its name in the Ticket panel), in light and dark themes: **New Prototype** sits under the title, its dialog submits, and the new Prototype opens in the Ticket panel.
 - [ ] With a Map's Ticket and a Prototype in Needs Me, in light and dark themes: each is its own row with `↳ Map: …` (or the plain Spec's title), and the **Prototype** badge reads clearly beside the title, in the row and on its Focus Item.
+- [ ] In Focus Mode, with a few items skipped, submit a Requirement and a Map from **+ New ▾** in the header: the Focus Item stays, the skipped list is kept, a "Requirement added" or "Map added" note shows under the header and goes after about 4 seconds, and with Focus Mode filtered to a Project, the dialog preselects it. The ▾ menu's keyboard behaviour works as in the sidebar (↓ opens on the first item, ↑ and ↓ wrap, Esc returns to ▾, Tab closes), and in light and dark themes the button looks plain beside **Exit**.
 
 ## Real Claude Code
 

@@ -7,7 +7,9 @@
 // The panels and the Question form get an Api whose writes (act, and
 // unlink) first record that the item on screen was acted on, so an item that leaves after the
 // human's own action moves on silently, and one that leaves otherwise
-// moves on with a brief "Dealt with elsewhere" note.
+// moves on with a brief "Dealt with elsewhere" note. Submitting from
+// + New ▾ shows a brief "Requirement added" or "Map added" note instead;
+// there's only ever one note, the latest.
 import { useEffect, useMemo, useState } from "react";
 import type { Api } from "../api/api";
 import type { FocusClear, TicketView } from "../api/types";
@@ -44,28 +46,32 @@ export function Focus({ api, now, version, data, focusClear, loc, navigate }: Fo
   // actedOn is the key of the item on screen once the human acts on it
   // here, until a refusal takes it back.
   const [actedOn, setActedOn] = useState<string>();
-  const [elsewhere, setElsewhere] = useState(false);
+  const [note, setNote] = useState<Note>();
   const ticket = useTicket(api, onScreen?.row.project, onScreen?.row.id, version);
   const acted = !!onScreen && actedOn === onScreen.key;
   const screen = data && focusQueue({ needsMe: data.needsMe, project: loc.project, onScreen, ticket: ticket.data, skipped, acted });
   const item = screen?.item;
   // What's shown becomes what's on screen, so a later read keeps it there.
-  // Moving on shows the note only when the item left without the human;
-  // a Round becoming its first Question, once read, isn't moving on, so
-  // it keeps the note.
+  // Moving on shows "Dealt with elsewhere" only when the item left without
+  // the human, and only over a next item, so All clear stays calm; moving
+  // on otherwise ends it, but not an "added" note. A Round becoming its
+  // first Question, once read, isn't moving on, so it keeps the note.
   useEffect(() => {
     if (!screen || item?.key === onScreen?.key) return;
     const roundRead = !!onScreen?.roundKey && !onScreen.question && onScreen.roundKey === item?.roundKey;
     setOnScreen(item);
     setActedOn(undefined);
-    if (!roundRead) setElsewhere(screen.elsewhere);
+    if (roundRead) return;
+    if (screen.elsewhere && item) setNote({ text: "Dealt with elsewhere", elsewhere: true });
+    else setNote((n) => (n?.elsewhere ? undefined : n));
   }, [screen, item, onScreen]);
-  // The note is brief: it goes after NOTE_MS, or when the human moves on.
+  // The note is brief: it goes after NOTE_MS, and a newer note starts its
+  // own NOTE_MS.
   useEffect(() => {
-    if (!elsewhere) return;
-    const timer = setTimeout(() => setElsewhere(false), NOTE_MS);
+    if (!note) return;
+    const timer = setTimeout(() => setNote(undefined), NOTE_MS);
     return () => clearTimeout(timer);
-  }, [elsewhere]);
+  }, [note]);
   const itemKey = item?.key;
   const itemApi = useMemo(
     () =>
@@ -87,18 +93,24 @@ export function Focus({ api, now, version, data, focusClear, loc, navigate }: Fo
           </span>
         )}
         {screen && !screen.clear && <span className="focus-left">{screen.remaining} left</span>}
-        {/* Submitting goes nowhere: whatever is on screen stays, skips and all. */}
+        {/* Submitting goes nowhere: whatever is on screen stays, skips and
+            all, with a note on every screen. */}
         <div className="focus-new">
-          <NewSplit variant="plain" api={api} projects={data?.projects.filter((p) => !p.archived) ?? []} project={loc.project} onSubmitted={() => {}} />
+          <NewSplit
+            variant="plain"
+            api={api}
+            projects={data?.projects.filter((p) => !p.archived) ?? []}
+            project={loc.project}
+            onSubmitted={({ kind }) => setNote({ text: `${kind} added` })}
+          />
         </div>
         <button className="btn" onClick={() => navigate({ view: "inbox" })}>
           Exit
         </button>
       </header>
-      {/* Only over the next item: All clear stays calm, with nothing else on it. */}
-      {elsewhere && item && (
-        <p role="status" className="focus-elsewhere">
-          Dealt with elsewhere
+      {note && (
+        <p role="status" className="focus-note">
+          {note.text}
         </p>
       )}
       {!screen ? (
@@ -136,7 +148,14 @@ export function Focus({ api, now, version, data, focusClear, loc, navigate }: Fo
   );
 }
 
-// NOTE_MS is how long the "Dealt with elsewhere" note stays.
+// Note is the brief note under the header; elsewhere marks "Dealt with
+// elsewhere", which moving on ends.
+interface Note {
+  text: string;
+  elsewhere?: boolean;
+}
+
+// NOTE_MS is how long a note stays.
 const NOTE_MS = 4000;
 
 // WRITES are the Api calls a panel or the Question form makes to act on
