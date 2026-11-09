@@ -148,11 +148,7 @@ func TestAnImportSendsOneProjectChangeNotice(t *testing.T) {
 	default:
 		t.Fatal("no notice after the import")
 	}
-	select {
-	case e := <-notices:
-		t.Fatalf("a second notice %+v", e)
-	default:
-	}
+	noNotice(t, notices)
 }
 
 func TestAnImportIntoAnUnknownProjectIsRefused(t *testing.T) {
