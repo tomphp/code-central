@@ -214,6 +214,15 @@ type factory struct {
 	// that can't land, already warned of; the poll's own.
 	warnedMerged map[string]bool
 
+	// leftOnBranch is "<ticket>@<commit>" of Accepted Tickets left for the
+	// human to merge under the Branch Landing Method, already said; the
+	// poll's own.
+	leftOnBranch map[string]bool
+
+	// warnedRemote is the Push remotes found missing, already warned of
+	// and not back since; the poll's own.
+	warnedRemote map[string]bool
+
 	// restarted is the saved Claims a stop cut off, to resume as cut off
 	// once a slot is free; the poll's own.
 	restarted []claim
@@ -235,7 +244,7 @@ type factory struct {
 
 // start makes every start-up check, refusing with the reason.
 func start(e Env, o options) (*factory, error) {
-	f := &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}}
+	f := &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, warnedRemote: map[string]bool{}}
 	git, ok := e.lookPath("git")
 	if !ok {
 		return nil, errors.New("git isn't on PATH")
@@ -285,6 +294,12 @@ func start(e Env, o options) (*factory, error) {
 		every = eventBatchEvery
 	}
 	f.events = newSender(f.client, every)
+	// A Project that can't be read yet is checked on every poll instead.
+	if p, err := f.client.GetProject(context.Background(), project); err == nil {
+		if why := f.missingRemote(p.Landing); why != "" {
+			return nil, errors.New(why)
+		}
+	}
 	statePath, err := e.home().State("code-central-factory", project+".json")
 	if err != nil {
 		return nil, fmt.Errorf("can't find the state folder: %w", err)

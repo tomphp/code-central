@@ -17,7 +17,7 @@ import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
 import { QuestionAnswer } from "../panels/round/QuestionAnswer";
 import { OptionsLink } from "../options/OptionsLink";
-import { linkTo, type UiLocation } from "../url";
+import { clickTo, hrefFor, type UiLocation } from "../url";
 import { ActivityDashboard } from "./ActivityDashboard";
 import { focusQueue, type FocusItem } from "./queue";
 import "./focus.css";
@@ -181,7 +181,8 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate, 
   const Panel = panelFor(row.reason, ticket?.state)?.Component;
   const waited = duration(now, row.since);
   // A Stage Ticket opens in its Requirement, with it selected.
-  const inbox = linkTo({ view: "inbox", project: loc.project, requirement: row.requirement?.stage && row.requirement.spec, ticket: row.id }, navigate);
+  const inbox = { view: "inbox" as const, project: loc.project, requirement: row.requirement?.stage && row.requirement.spec, ticket: row.id };
+  const open = clickTo(navigate, inbox);
   const skipButton = (
     <button type="button" className="btn" onClick={skip}>
       Skip
@@ -232,7 +233,7 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate, 
         </>
       )}
       <p className="focus-open">
-        <a {...inbox}>
+        <a href={hrefFor(inbox)} onClick={open}>
           Open in Inbox
         </a>
       </p>

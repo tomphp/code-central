@@ -4,16 +4,17 @@ This guide takes one Requirement through every Stage with `code-central-factory`
 
 The run started from a freshly set up `acme-shop`, so its IDs start at `acme-shop-1` again. If you've already worked the Requirement by hand, yours will be higher.
 
-The Factory is a program you leave running in a terminal. It claims the Project's Ready Tickets, runs one `claude -p` session per Claim, and resumes a session when you answer its Round. Once you accept an implementation Ticket, it merges the branch into the base and lands it. What's left to you is what a Factory never does:
+The Factory is a program you leave running in a terminal. It claims the Project's Ready Tickets, runs one `claude -p` session per Claim, and resumes a session when you answer its Round. Once you accept an implementation Ticket, it lands it by the Project's Landing Method: under **Merge**, the default, it merges the branch into the base and lands it; under **Branch** it leaves the branch for you to merge, and lands the Ticket once you have (see [How accepted work lands](#how-accepted-work-lands)). What's left to you is what a Factory never does:
 
 | The Factory | You |
 | --- | --- |
 | claims each Stage's Ticket, and each implementation Ticket once its Blockers are Done | submit the Requirement |
 | starts the Stage's skill in a session of its own, in a worktree of its own | answer each Round in the UI |
 | resumes the session when you answer its Round | review each finished Ticket, and accept or reject it |
-| merges an accepted implementation Ticket's branch into the base, and lands it | stop the Factory |
+| under Merge, merges an accepted implementation Ticket's branch into the base, pushes the base with Push on, and lands it | under Branch, merge each accepted Ticket's branch into the base |
+| under Branch, lands an accepted Ticket once you have merged its branch | stop the Factory |
 
-Compared with working by hand, you type no prompts and run no sessions, and you don't merge or land.
+Compared with working by hand, you type no prompts and run no sessions, and you don't land; under Merge you don't merge either.
 
 ## Working a Requirement
 
@@ -197,7 +198,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
     4 files changed, 80 insertions(+)
    ```
 
-   Then click **Accept**. You don't merge or land: within a poll, the Factory merges the branch into `main`, lands the Ticket, removes its worktree, and claims `acme-shop-6`, which was waiting on it:
+   Then click **Accept**. This run uses the default Landing Method, Merge, so you don't merge or land: within a poll, the Factory merges the branch into `main`, lands the Ticket, removes its worktree, and claims `acme-shop-6`, which was waiting on it:
 
    ```text
    acme-shop-5: landed on main at f90edae47659
@@ -242,3 +243,72 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    With turns running, it prints `draining: waiting on …` and exits once they finish, or stops them at a second Ctrl-C, as in step 1.
 
    Check: the Factory has exited, and the Requirement is still *Finished*.
+
+## How accepted work lands
+
+Each Project has a **Landing Method**, which you set on its **Project Options** page, from the three-dots menu on the Project. The Factory reads it again on every poll, before it lands anything, so a change applies from its next poll to every Ticket still waiting to land, with no restart.
+
+- **Merge** ("Merge into base"), the default, is what step 7 shows. The Factory merges an accepted Ticket's branch into the base and lands it. When the branch conflicts with the base it sends the Ticket back to Ready; when it can't move the base it leaves the Ticket Accepted with a comment and tries again on every poll. It keeps an Accepted Ticket's worktree until the Ticket lands, since a Ticket sent back is worked in it again.
+- **Branch** ("Leave as a branch") leaves the merging to you. The Factory never merges an Accepted Ticket and never sends it back for conflicts: a conflict in a branch you merge is yours to resolve. Within a poll of your **Accept**, it says so once and removes the Ticket's worktree, keeping its branch, so you can check the branch out:
+
+  ```text
+  acme-shop-5: Accepted under the Branch Landing Method: merge acme-shop-5 into main and the Factory lands it
+  acme-shop-5: Accepted: removed its worktree /Users/you/src/acme-shop.worktrees/acme-shop-5
+  ```
+
+  A worktree with uncommitted changes is left where it is, with a warning line. The Ticket stays Accepted, so a Ticket it blocks isn't claimed yet. Merge the branch into the base yourself, and on its next poll the Factory sees the Ticket's finish commit (or, with none, its branch's tip) in the base and lands it at that commit:
+
+  ```console
+  $ git merge --no-ff acme-shop-5
+  ```
+
+  ```text
+  acme-shop-5: merged into main by hand
+  acme-shop-5: landed on main at 188e2297b82e
+  ```
+
+  The Factory recognises a merge only when the commit itself is in the base. After a squash or rebase merge it isn't, so land the Ticket yourself: **Land** on its panel, with the commit that put the work into the base.
+
+Switching from Branch to Merge merges, on the next poll, every Accepted Ticket you haven't merged yet. Switching from Merge to Branch leaves every Accepted Ticket the Factory hasn't merged yet for you.
+
+Under either method, you can still merge an In Review Ticket's branch yourself, and the Factory lands it.
+
+### Push
+
+Either Landing Method has a **Push** option, also on the Project Options page, which names a git remote (`origin` by default). The Factory checks that its repository has that remote, with `git remote get-url`. It refuses to start when it doesn't:
+
+```console
+$ code-central-factory
+code-central-factory: refusing to start: Push names the remote "upstream", which this repository doesn't have: add it with `git remote add`, or change it on the Project's Project Options page in Code Central
+```
+
+If you change the setting to a missing remote while the Factory runs, it warns once and lands nothing, not even a Ticket you merged by hand, until you add the remote or change the setting back. It goes on claiming and resuming work meanwhile:
+
+```text
+warning: nothing lands until this is fixed: Push names the remote "upstream", which this repository doesn't have: add it with `git remote add`, or change it on the Project's Project Options page in Code Central
+```
+
+Under **Merge + Push**, after merging a Ticket into the base the Factory runs `git push <remote> <base>`, and lands the Ticket only once the push succeeds, so Done means the work is on the remote:
+
+```text
+acme-shop-5: pushed main to origin
+acme-shop-5: landed on main at f90edae47659
+```
+
+Pushing the base sends everything on it, so commits of your own on the base that you haven't pushed go to the remote too.
+
+The Factory never pulls, rebases or force-pushes. When the push fails, say because the remote is unreachable or has moved ahead of your base, the Ticket stays Accepted, with the base already merged, and the Factory comments once, quoting git:
+
+```text
+acme-shop-5: can't land yet: couldn't push main to origin
+```
+
+> The Factory can't land this yet: couldn't push main to origin:
+>
+> ```
+> fatal: unable to access 'https://example.com/acme-shop.git/': Could not resolve host: example.com
+> ```
+>
+> It stays Accepted and the Factory tries again on every poll.
+
+On every poll it tries again: it finds the work already in the base, checks whether the remote's base (its `origin/main` remote-tracking ref) holds it, and pushes again if not. A remote that has moved ahead is left for you to sort out: pull it into your base, and the next push goes through. An In Review Ticket you merge by hand lands under the same rule, only once the base with it in is pushed.

@@ -1,7 +1,8 @@
 // The left pane's Projects: active ones as filters, each with a menu that
-// renames (story 92) or archives it, and Archived ones in a collapsed
-// group at the bottom, each with a menu that unarchives it (ticket 39).
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+// renames (story 92), opens its Project Options page or archives it, and
+// Archived ones in a collapsed group at the bottom, each with a menu that
+// unarchives it (ticket 39).
+import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 import type { Api } from "../api/api";
 import type { ApiError, ProjectRow } from "../api/types";
 
@@ -10,10 +11,12 @@ export interface ProjectFilterProps {
   project: ProjectRow;
   on: boolean;
   onSelect(): void;
+  // projectOptions links to the Project's Project Options page.
+  projectOptions?: { href: string; onClick(e: MouseEvent): void };
 }
 
 // ProjectFilter is one Project's row: the filter button, then its menu.
-export function ProjectFilter({ api, project: p, on, onSelect }: ProjectFilterProps) {
+export function ProjectFilter({ api, project: p, on, onSelect, projectOptions }: ProjectFilterProps) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
   // name is the rename box's text while the human is renaming.
@@ -89,6 +92,18 @@ export function ProjectFilter({ api, project: p, on, onSelect }: ProjectFilterPr
               >
                 Rename
               </button>
+              {projectOptions && (
+                <a
+                  role="menuitem"
+                  href={projectOptions.href}
+                  onClick={(e) => {
+                    setOpen(false);
+                    projectOptions.onClick(e);
+                  }}
+                >
+                  Options
+                </a>
+              )}
               <button
                 role="menuitem"
                 disabled={!!blocked}

@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, ExternalState, HeldSessionEvent, SessionEvent, State, TicketAcknowledgement } from "./types";
+import type { ChangeEvent, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement } from "./types";
 import { ApiError } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -186,6 +186,26 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(blank).toMatchObject({ status: 422, code: "invalid", field: "display_name" });
       const unknown = await d.api.renameProject("nope", "X").catch((e) => e);
       expect(unknown).toMatchObject({ status: 404, code: "unknown_project" });
+    });
+
+    it("sets a Project's Landing Method, trimming the remote and refusing an empty one under Push", async () => {
+      await d.createProject("acme", "Acme");
+      const v = await d.api.setLandingMethod("acme", { method: "branch", push: true, remote: " upstream " });
+      expect(v).toMatchObject({ key: "acme", landing: { method: "branch", push: true, remote: "upstream" } });
+      expect((await d.api.listProjects())[0].landing).toEqual({ method: "branch", push: true, remote: "upstream" });
+
+      // Without Push, an empty remote reads as origin.
+      expect((await d.api.setLandingMethod("acme", { method: "merge", push: false, remote: "" })).landing).toEqual({
+        method: "merge",
+        push: false,
+        remote: "origin",
+      });
+
+      const empty = await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: " " }).catch((e) => e);
+      expect(empty).toMatchObject({ status: 422, code: "invalid", field: "remote" });
+      expect(empty.message).toContain("Push needs a git remote");
+      const method = await d.api.setLandingMethod("acme", { method: "squash" as LandingMethod, push: false, remote: "origin" }).catch((e) => e);
+      expect(method).toMatchObject({ status: 422, code: "invalid", field: "method" });
     });
 
     it("gets one Ticket in full, with its Needs Me reason", async () => {

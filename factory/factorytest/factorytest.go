@@ -432,6 +432,53 @@ func (h *Harness) Accept(ticket string) {
 	must(h.t, err)
 }
 
+// SetLandingMethod sets the Project's Landing Method as the human.
+func (h *Harness) SetLandingMethod(in core.SetLandingMethodInput) {
+	h.t.Helper()
+	_, err := h.Human().SetLandingMethod(context.Background(), h.Project, in)
+	must(h.t, err)
+}
+
+// Remote is a bare repository added as a named remote of the harness's
+// repo.
+type Remote struct {
+	h *Harness
+	// Name is the remote's name in the repo.
+	Name string
+	// Path is the bare repository.
+	Path string
+}
+
+// AddRemote makes a bare repository and adds it to the repo as the
+// remote name, with nothing pushed to it yet.
+func (h *Harness) AddRemote(name string) *Remote {
+	h.t.Helper()
+	path := filepath.Join(filepath.Dir(filepath.Dir(h.Repo)), "remotes", name+".git")
+	must(h.t, os.MkdirAll(path, 0o755))
+	h.GitIn(path, "init", "-q", "--bare", "-b", "main")
+	h.Git("remote", "add", name, path)
+	return &Remote{h: h, Name: name, Path: path}
+}
+
+// Git runs the real git in the bare repository and returns its trimmed
+// output.
+func (r *Remote) Git(args ...string) string {
+	r.h.t.Helper()
+	return r.h.GitIn(r.Path, args...)
+}
+
+// Break makes every push to the remote fail, until Restore.
+func (r *Remote) Break() {
+	r.h.t.Helper()
+	must(r.h.t, os.Rename(r.Path, r.Path+".broken"))
+}
+
+// Restore undoes Break.
+func (r *Remote) Restore() {
+	r.h.t.Helper()
+	must(r.h.t, os.Rename(r.Path+".broken", r.Path))
+}
+
 // CommitOn commits file with content on branch, made from main when it
 // doesn't exist, and returns the commit. The repo is left on main.
 func (h *Harness) CommitOn(branch, file, content string) string {

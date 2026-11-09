@@ -8,7 +8,7 @@ import type { State } from "../api/types";
 import { RowLatestEvent } from "../LatestEvent";
 import type { InboxData, ProjectTicket } from "../live";
 import { STAGE_TITLE, stageOf } from "../requirement/progress";
-import { linkTo, type UiLocation } from "../url";
+import { clickTo, hrefFor, type UiLocation } from "../url";
 
 export interface ActivityDashboardProps {
   now: Date;
@@ -65,10 +65,10 @@ function StateCount({ state, count }: { state: State; count: number }) {
 function InProgressEntry({ now, data, ticket: t, loc, navigate }: ActivityDashboardProps & { ticket: ProjectTicket }) {
   const stage = stageOf(t);
   const requirement = stage && data.requirements.find((s) => s.id === t.spec);
-  const inbox = linkTo({ view: "inbox", project: loc.project, requirement: stage && t.spec, ticket: t.id }, navigate);
+  const inbox = { view: "inbox" as const, project: loc.project, requirement: stage && t.spec, ticket: t.id };
   return (
     <li className="dashboard-entry">
-      <a {...inbox}>
+      <a href={hrefFor(inbox)} onClick={clickTo(navigate, inbox)}>
         <span className="dashboard-entry-top">
           <span className="tid">{t.id}</span>
           <span className="dashboard-entry-title">{t.title}</span>

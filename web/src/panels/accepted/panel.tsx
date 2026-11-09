@@ -1,7 +1,8 @@
 // The Accepted panel (ADR 0006): the human has accepted the work and it
 // waits to land in the base. It shows the branch and head commit, then
 // Land, which asks for the commit that put the work into the base, and
-// Cancel.
+// Cancel. Under the Branch Landing Method the Ticket is To merge, and the
+// panel tells the human to merge the branch themselves.
 import { useState } from "react";
 import "../../api/actions/land";
 import "../../api/actions/cancel";
@@ -13,6 +14,7 @@ export function AcceptedPanel({ api, project, ticket: t }: PanelProps) {
   const [commit, setCommit] = useState("");
   const { busy, error, run } = useAct();
   const canLand = commit.trim() !== "" && !busy;
+  const toMerge = t.needs_me_reason === "to_merge";
 
   return (
     <section aria-label="Accepted" className="panel accepted-panel">
@@ -33,6 +35,12 @@ export function AcceptedPanel({ api, project, ticket: t }: PanelProps) {
           "It is Done once it is merged into the base and landed."
         )}
       </p>
+      {toMerge && (
+        <p className="small">
+          The Factory leaves the branch for you: merge {t.branch ? <code>{t.branch}</code> : "it"} into the base and the Factory lands it, or
+          Land it yourself with the commit.
+        </p>
+      )}
       {error && (
         <p role="alert" className="warning">
           {error}
@@ -59,4 +67,4 @@ export function AcceptedPanel({ api, project, ticket: t }: PanelProps) {
   );
 }
 
-export const panel: PanelDef = { reasons: ["accepted_not_landed"], states: ["Accepted"], Component: AcceptedPanel };
+export const panel: PanelDef = { reasons: ["to_merge", "accepted_not_landed"], states: ["Accepted"], Component: AcceptedPanel };

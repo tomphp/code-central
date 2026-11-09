@@ -138,10 +138,11 @@ func (c *Core) longSince(t store.Ticket) *time.Time {
 }
 
 // notLandedSince is when t moved to Accepted, when it has been Accepted
-// for more than NotLandedAfter, else nil. It needs no Claim or Factory:
-// only the time since the accept counts.
-func (c *Core) notLandedSince(t store.Ticket) *time.Time {
-	if t.State != store.Accepted {
+// for more than NotLandedAfter in Project p under the Merge Landing
+// Method, else nil. It needs no Claim or Factory: only the time since the
+// accept counts. Under Branch, Accepted work is To merge at once instead.
+func (c *Core) notLandedSince(p store.Project, t store.Ticket) *time.Time {
+	if t.State != store.Accepted || p.Landing.Method == store.LandingBranch {
 		return nil
 	}
 	accepted := entered(t)
@@ -151,18 +152,18 @@ func (c *Core) notLandedSince(t store.Ticket) *time.Time {
 	return &accepted
 }
 
-// timedReason is the Needs Me reason time passing gives t, and since
-// when, or "": Silent Claim, else Long Claim, while In Progress, and
-// Accepted but not landed. Silent takes precedence over Long here, for
-// reads and for the watch alike.
-func (c *Core) timedReason(t store.Ticket) (NeedsMeReason, time.Time) {
+// timedReason is the Needs Me reason time passing gives t in Project p,
+// and since when, or "": Silent Claim, else Long Claim, while In
+// Progress, and Accepted but not landed. Silent takes precedence over
+// Long here, for reads and for the watch alike.
+func (c *Core) timedReason(p store.Project, t store.Ticket) (NeedsMeReason, time.Time) {
 	if s := c.silentSince(t); s != nil {
 		return ReasonSilentClaim, *s
 	}
 	if s := c.longSince(t); s != nil {
 		return ReasonLongClaim, *s
 	}
-	if s := c.notLandedSince(t); s != nil {
+	if s := c.notLandedSince(p, t); s != nil {
 		return ReasonAcceptedNotLanded, *s
 	}
 	return "", time.Time{}
@@ -195,7 +196,7 @@ func (c *Core) timedReasonChanges() []markKey {
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			for _, t := range r.Tickets(p.Key) {
-				reason, _ := c.timedReason(t)
+				reason, _ := c.timedReason(p, t)
 				if reason == "" {
 					continue
 				}
