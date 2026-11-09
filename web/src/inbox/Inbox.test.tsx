@@ -445,6 +445,8 @@ describe("the sidebar's top row: + New and Focus", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(params().get("list")).toBe("requirements");
     expect(params().get("requirement")).toBe("acme-5");
+    // The note is Focus Mode's: the sidebar navigates instead.
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("closes the menu on Esc and on a click outside it", async () => {

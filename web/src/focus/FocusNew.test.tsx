@@ -1,12 +1,12 @@
 // + New ▾ in Focus Mode: the real App against FakeApi, at ?view=focus. The
 // same split as the sidebar's sits in the header beside Exit, plain, on
 // every Focus screen; submitting from it closes the modal and leaves Focus
-// Mode where it was.
+// Mode where it was, with a brief "Requirement added" or "Map added" note.
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeApi } from "../api/fake";
-import { change, focus, renderApp } from "./focusTesting";
+import { change, focus, renderApp, without } from "./focusTesting";
 
 // world has acme-1 Failed, then acme-2 In Review, in that Needs Me order,
 // with beta active and old archived.
@@ -50,7 +50,6 @@ async function added(kind: "Requirement" | "Map") {
 }
 
 const note = () => within(focus()).queryByRole("status");
-const without = (fake: FakeApi, id: string) => fake.needsMeGroups.map((g) => ({ ...g, tickets: g.tickets.filter((r) => r.id !== id) })).filter((g) => g.tickets.length);
 
 // later moves FakeApi's clock and the timers on by ms, once React has
 // run the effects that start them.
@@ -311,12 +310,12 @@ describe("+ New ▾ in Focus Mode's header", () => {
       change(fake, without(fake, "acme-1"), "acme-1");
       const elsewhere = await within(focus()).findByRole("status");
       expect(elsewhere).toHaveTextContent("Dealt with elsewhere");
-      const where = (el: HTMLElement) => [el.parentElement, el.previousElementSibling, el.className];
-      const before = where(elsewhere);
+      const placement = (el: HTMLElement) => [el.parentElement, el.previousElementSibling, el.className];
+      const elsewherePlacement = placement(elsewhere);
 
       await added("Requirement");
-      const mine = await within(focus()).findByText("Requirement added");
-      expect(where(mine)).toEqual(before);
+      const addedNote = await within(focus()).findByText("Requirement added");
+      expect(placement(addedNote)).toEqual(elsewherePlacement);
     });
 
     it("shows on All clear", async () => {

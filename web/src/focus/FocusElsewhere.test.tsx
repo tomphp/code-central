@@ -7,7 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
-import { change, focus, renderApp } from "./focusTesting";
+import { change, focus, renderApp, without } from "./focusTesting";
 import type { RoundView } from "../api/types";
 
 // world has acme-1 waiting on Round 1 (Questions 1 and 2 open), then
@@ -46,7 +46,6 @@ function tickets() {
 
 const heading = (name: string) => within(focus()).findByRole("heading", { name });
 const note = () => within(focus()).queryByText("Dealt with elsewhere");
-const without = (fake: FakeApi, id: string) => fake.needsMeGroups.map((g) => ({ ...g, tickets: g.tickets.filter((r) => r.id !== id) })).filter((g) => g.tickets.length);
 
 describe("dealt with elsewhere", () => {
   it("moves on with a brief note when the Ticket on screen leaves its reason in Needs Me", async () => {
