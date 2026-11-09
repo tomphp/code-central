@@ -40,7 +40,7 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
     case "in_review":
       return r.summary || "Finished";
     case "to_merge":
-      return r.branch ? `Accepted ${ago(now, r.since)}: merge ${r.branch} into the base` : `Accepted ${ago(now, r.since)}: merge its branch into the base`;
+      return `Accepted ${ago(now, r.since)}: merge ${r.branch ?? "its branch"} into the base`;
     case "accepted_not_landed":
       return `Accepted ${ago(now, r.since)}, not landed`;
     case "blocked_by_cancelled":

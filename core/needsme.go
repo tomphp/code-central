@@ -231,7 +231,7 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 	case store.Answered:
 		return ReasonAnswered, entered(t)
 	case store.InProgress, store.Accepted:
-		p, _ := r.Project(key)
+		p, _ := r.Project(key) // t is in it, so it exists
 		if t.State == store.Accepted && p.Landing.Method == store.LandingBranch {
 			return ReasonToMerge, entered(t)
 		}

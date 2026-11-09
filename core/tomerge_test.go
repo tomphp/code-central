@@ -1,7 +1,6 @@
 package core_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -99,25 +98,12 @@ func TestTheWatchNeverRaisesAcceptedNotLandedUnderBranch(t *testing.T) {
 	f.accepted(t)
 	f.setLanding(t, store.LandingBranch)
 
-	ticks := make(chan time.Time)
-	changes := make(chan string, 10)
-	watchCtx, stop := context.WithCancel(ctx)
-	done := make(chan struct{})
-	go func() {
-		f.core.WatchTimedReasons(watchCtx, ticks, func(_, id string) { changes <- id })
-		close(done)
-	}()
-	defer func() { stop(); <-done }()
-	tick := func() int {
-		ticks <- f.clock.Now()
-		ticks <- f.clock.Now() // the second send returns once the first tick is handled
-		return len(changes)
-	}
+	tick := watch(t, f)
 
 	tick()
 	f.clock.Advance(core.NotLandedAfter + time.Second)
-	if n := tick(); n != 0 {
-		t.Fatalf("%d notices, want none: a Branch Project's Accepted work is never not landed", n)
+	if got := tick(); len(got) != 0 {
+		t.Fatalf("got %v, want none: a Branch Project's Accepted work is never not landed", got)
 	}
 	wantReason(t, f.get(t, "2"), core.ReasonToMerge)
 }

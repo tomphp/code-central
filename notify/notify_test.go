@@ -80,6 +80,14 @@ func (f *fixture) failure(project, ticket string) {
 		WhatBroke: "tests", Why: "flaky", WhatToFix: "fix", WhereWorkStands: "branch"}))
 }
 
+// accepted finishes ticket in project on its own branch and accepts it.
+func (f *fixture) accepted(project, ticket string) {
+	f.t.Helper()
+	claim := f.claim(project, ticket)
+	must(f.t)(f.core.Finish(ctx, project, core.FinishInput{Ticket: core.Ref(ticket), ClaimID: claim, Summary: "done", Branch: project + "-" + ticket, Commit: "abc"}))
+	must(f.t)(f.core.Accept(core.WithActor(ctx, core.Human), project, core.TicketInput{Ticket: core.Ref(ticket)}))
+}
+
 // closeWindow waits for notify to be holding events (Silent tick plus
 // window timer) and moves the clock past the window.
 func (f *fixture) closeWindow() {
@@ -205,9 +213,7 @@ func TestAcceptedButNotLandedNeverNotifies(t *testing.T) {
 	f := newFixture(t)
 	f.project("acme", 2)
 	f.start()
-	claim := f.claim("acme", "2")
-	must(t)(f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: claim, Summary: "done", Branch: "acme-2", Commit: "abc"}))
-	must(t)(f.core.Accept(core.WithActor(ctx, core.Human), "acme", core.TicketInput{Ticket: "2"}))
+	f.accepted("acme", "2")
 	f.clock.BlockUntil(1)
 	f.clock.Advance(core.NotLandedAfter + notify.Tick)
 	f.clock.BlockUntil(1)
@@ -220,12 +226,9 @@ func TestAcceptedButNotLandedNeverNotifies(t *testing.T) {
 func TestToMergeNeverNotifies(t *testing.T) {
 	f := newFixture(t)
 	f.project("acme", 2)
-	human := core.WithActor(ctx, core.Human)
-	must(t)(f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingBranch}))
+	must(t)(f.core.SetLandingMethod(core.WithActor(ctx, core.Human), "acme", core.SetLandingMethodInput{Method: store.LandingBranch}))
 	f.start()
-	claim := f.claim("acme", "2")
-	must(t)(f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: claim, Summary: "done", Branch: "acme-2", Commit: "abc"}))
-	must(t)(f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"}))
+	f.accepted("acme", "2")
 	f.clock.BlockUntil(1)
 	f.clock.Advance(notify.Tick)
 	f.round("acme", "3")
