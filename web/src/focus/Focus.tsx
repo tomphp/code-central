@@ -16,6 +16,7 @@ import { useTicket, type InboxData } from "../live";
 import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
 import { QuestionAnswer } from "../panels/round/QuestionAnswer";
+import { NewSplit } from "../requirement/NewSplit";
 import { PrototypeBadge } from "../ticket/PrototypeBadge";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { ActivityDashboard } from "./ActivityDashboard";
@@ -86,7 +87,11 @@ export function Focus({ api, now, version, data, focusClear, loc, navigate }: Fo
           </span>
         )}
         {screen && !screen.clear && <span className="focus-left">{screen.remaining} left</span>}
-        <button className="btn focus-exit" onClick={() => navigate({ view: "inbox" })}>
+        {/* Submitting goes nowhere: whatever is on screen stays, skips and all. */}
+        <div className="focus-new">
+          <NewSplit variant="plain" api={api} projects={data?.projects.filter((p) => !p.archived) ?? []} project={loc.project} onSubmitted={() => {}} />
+        </div>
+        <button className="btn" onClick={() => navigate({ view: "inbox" })}>
           Exit
         </button>
       </header>
