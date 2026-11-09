@@ -42,6 +42,17 @@ func readUsage(t *testing.T, srv *codecentraltest.Server, query string) usageRea
 	return u
 }
 
+// acmeServer starts a test service with the one Project acme.
+func acmeServer(t *testing.T, opts ...codecentraltest.Option) *codecentraltest.Server {
+	t.Helper()
+	srv := codecentraltest.NewServer(t, opts...)
+	must(t, func() error {
+		_, err := srv.Core.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
+		return err
+	})
+	return srv
+}
+
 // operation is the row for op, failing the test when there is none.
 func operation(t *testing.T, u usageRead, op string) core.UsageOperation {
 	t.Helper()
@@ -159,9 +170,7 @@ func TestUsageRejectsAnUnknownProjectAndAnyOtherRange(t *testing.T) {
 // the same local day and the next UTC day starts at 10:00 local.
 func TestUsageCountsTheLastDaysInTheServicesLocalTime(t *testing.T) {
 	loc := time.FixedZone("AEST", 10*60*60)
-	srv := codecentraltest.NewServer(t, codecentraltest.WithLocation(loc))
-	ctx := context.Background()
-	must(t, func() error { _, err := srv.Core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); return err })
+	srv := acmeServer(t, codecentraltest.WithLocation(loc))
 	call := time.Date(2026, 1, 5, 23, 30, 0, 0, loc)
 	srv.Clock.Set(call)
 	mcpOK(t, connect(t, srv, "acme"), "find_tickets", map[string]any{})
@@ -201,13 +210,10 @@ func TestUsageCountsTheLastDaysInTheServicesLocalTime(t *testing.T) {
 
 func TestUsageSurvivesARestart(t *testing.T) {
 	dir := t.TempDir()
-	first := codecentraltest.NewServer(t, codecentraltest.WithUsageDir(dir))
-	ctx := context.Background()
-	must(t, func() error { _, err := first.Core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); return err })
+	first := acmeServer(t, codecentraltest.WithUsageDir(dir))
 	mcpOK(t, connect(t, first, "acme"), "find_tickets", map[string]any{})
 
-	second := codecentraltest.NewServer(t, codecentraltest.WithUsageDir(dir))
-	must(t, func() error { _, err := second.Core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); return err })
+	second := acmeServer(t, codecentraltest.WithUsageDir(dir))
 	if got := operation(t, readUsage(t, second, "?project=acme"), "find_tickets"); got.Calls != 1 {
 		t.Fatalf("row %+v after a restart, want 1 call", got)
 	}
@@ -215,9 +221,7 @@ func TestUsageSurvivesARestart(t *testing.T) {
 
 func TestUsageSkipsALineItCannotReadAndSaysSoInTheLog(t *testing.T) {
 	log := &syncBuffer{}
-	srv := codecentraltest.NewServer(t, codecentraltest.WithLog(log))
-	ctx := context.Background()
-	must(t, func() error { _, err := srv.Core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); return err })
+	srv := acmeServer(t, codecentraltest.WithLog(log))
 	mcpOK(t, connect(t, srv, "acme"), "find_tickets", map[string]any{})
 	file := filepath.Join(srv.UsageDir, "projects", "acme", "usage", codecentraltest.Start.Format(time.DateOnly)+".jsonl")
 	f, err := os.OpenFile(file, os.O_WRONLY|os.O_APPEND, 0)
@@ -238,9 +242,7 @@ func TestUsageSkipsALineItCannotReadAndSaysSoInTheLog(t *testing.T) {
 
 func TestAFailedUsageAppendStillAnswersTheCall(t *testing.T) {
 	log := &syncBuffer{}
-	srv := codecentraltest.NewServer(t, codecentraltest.WithLog(log))
-	ctx := context.Background()
-	must(t, func() error { _, err := srv.Core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); return err })
+	srv := acmeServer(t, codecentraltest.WithLog(log))
 	// A file where the usage folder should be, so no append can succeed,
 	// on every OS (a read-only folder still takes writes on Windows).
 	if err := os.MkdirAll(filepath.Join(srv.UsageDir, "projects", "acme"), 0o755); err != nil {
