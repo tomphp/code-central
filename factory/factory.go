@@ -214,6 +214,11 @@ type factory struct {
 	// that can't land, already warned of; the poll's own.
 	warnedMerged map[string]bool
 
+	// leftOnBranch is "<ticket>@<commit>" of Accepted Tickets left for the
+	// human to merge under the Branch Landing Method, already said; the
+	// poll's own.
+	leftOnBranch map[string]bool
+
 	// restarted is the saved Claims a stop cut off, to resume as cut off
 	// once a slot is free; the poll's own.
 	restarted []claim
@@ -235,7 +240,7 @@ type factory struct {
 
 // start makes every start-up check, refusing with the reason.
 func start(e Env, o options) (*factory, error) {
-	f := &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}}
+	f := &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}}
 	git, ok := e.lookPath("git")
 	if !ok {
 		return nil, errors.New("git isn't on PATH")

@@ -14,23 +14,80 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
+// landingMethod reads the Project's Landing Method, which the human can
+// change at any time, so it is read again on every poll. ok is false when
+// it can't be read, and then nothing lands this poll.
+func (f *factory) landingMethod(ctx context.Context) (method store.LandingMethod, ok bool) {
+	p, err := f.client.GetProject(ctx, f.project)
+	if err != nil {
+		if ctx.Err() == nil {
+			f.printf("warning: can't read the Project's Landing Method, so nothing lands this poll: %v", err)
+		}
+		return "", false
+	}
+	return p.Landing.Method, true
+}
+
 // land lands Accepted Tickets one at a time, oldest accept first (ADR
-// 0006), and detects merges made by hand. The Factory never accepts:
-// only the human moves a Ticket to Accepted.
-func (f *factory) land(ctx context.Context) {
+// 0006), by the Project's Landing Method, and detects merges made by
+// hand. Under Merge the Factory merges each into the base; under Branch
+// it leaves each for the human to merge, and lands it once merged. The
+// Factory never accepts: only the human moves a Ticket to Accepted.
+func (f *factory) land(ctx context.Context, method store.LandingMethod) {
 	accepted := f.landable(ctx, store.Accepted)
 	sort.SliceStable(accepted, func(i, j int) bool { return acceptedAt(accepted[i]).Before(acceptedAt(accepted[j])) })
 	for _, tk := range accepted {
 		if f.halted(ctx) || f.paused() {
 			return
 		}
-		f.landAccepted(ctx, tk)
+		if method == store.LandingBranch {
+			f.landMergedBranch(ctx, tk)
+		} else {
+			f.landAccepted(ctx, tk)
+		}
 	}
 	f.detectHandMerges(ctx)
 }
 
+// landMergedBranch lands an Accepted Ticket under the Branch Landing
+// Method once its work is in the base: the human merged it. Until then it
+// is left as it is, with a line saying so once: never merged, never sent
+// back.
+func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView) {
+	work, what := workOf(tk)
+	head, err := f.gitOut(f.repo, "rev-parse", "--verify", "-q", work+"^{commit}")
+	if err == nil && f.inBase(head) {
+		f.printf("%s: merged into %s by hand", tk.ID, f.base)
+		f.landAt(ctx, tk, head)
+		return
+	}
+	key := tk.ID + "@" + head
+	if f.leftOnBranch[key] {
+		return
+	}
+	f.leftOnBranch[key] = true
+	if err != nil {
+		f.printf("warning: %s is Accepted under the Branch Landing Method, but %s isn't in this repository", tk.ID, what)
+		return
+	}
+	merge := tk.Branch
+	if merge == "" {
+		merge = short(head)
+	}
+	f.printf("%s: Accepted under the Branch Landing Method: merge %s into %s and the Factory lands it", tk.ID, merge, f.base)
+}
+
+// workOf is the work the human reviewed: the finish commit, or with none,
+// the branch's tip; and how to name it.
+func workOf(tk core.TicketView) (ref, what string) {
+	if tk.Commit != "" {
+		return tk.Commit, "its commit " + tk.Commit
+	}
+	return "refs/heads/" + tk.Branch, "its branch " + tk.Branch
+}
+
 // detectHandMerges lands In Review Tickets whose finish commit is in the
-// base: the human merged them. A Ticket merged while in any other State
+// base: the human merged them. (Accepted ones are land's.) A Ticket merged while in any other State
 // gets a warning line, once.
 func (f *factory) detectHandMerges(ctx context.Context) {
 	for _, tk := range f.landable(ctx, mergeableStates...) {
@@ -107,12 +164,7 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView) {
 		f.cantLandYet(ctx, tk, fmt.Sprintf("the base, %s, isn't a branch, so the Factory can't move it.", f.base))
 		return
 	}
-	// The finish commit is the work the human reviewed; with none, the
-	// branch's tip.
-	work, what := tk.Commit, "its commit "+tk.Commit
-	if work == "" {
-		work, what = "refs/heads/"+tk.Branch, "its branch "+tk.Branch
-	}
+	work, what := workOf(tk)
 	head, err := f.gitOut(f.repo, "rev-parse", "--verify", "-q", work+"^{commit}")
 	if err != nil {
 		f.cantLandYet(ctx, tk, what+" isn't in this repository.")
