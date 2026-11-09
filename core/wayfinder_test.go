@@ -2,6 +2,7 @@ package core_test
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -237,4 +238,41 @@ func TestThePrototypeGuideBuildsTriesAndFinishesWithNoBranch(t *testing.T) {
 		"resolution comment", "what was learned", "which decision it informs",
 		"Give no `branch`",
 	)
+}
+
+// The "Prototype this" handoff (Spec 213, ticket 224).
+
+// questioningGuides are the Guides that ask the human Questions and so hand
+// a Question to a Prototype when the answer starts with "Prototype this".
+var questioningGuides = []string{"grilling", "map-chart", "map-grilling"}
+
+func TestTheQuestioningGuidesHandAQuestionToAPrototype(t *testing.T) {
+	f := newFixture(t)
+	for _, name := range questioningGuides {
+		wantAll(t, name, guide(t, f, name),
+			"starts with \"Prototype this\"",
+			"`create_ticket` with the `prototype` Label on the same Spec",
+			"the Question and the human's note as its description",
+			"`approve` it to `Ready`",
+			"`add_blocker` so the Prototype blocks this Ticket",
+			"`give_up` with a note naming the Prototype",
+			// Its redo carries on from the Prototype.
+			"a Done Prototype blocks this Ticket", "carry on from it",
+		)
+	}
+}
+
+func TestNoOtherGuideHandsAQuestionToAPrototype(t *testing.T) {
+	f := newFixture(t)
+	for _, name := range core.GuideNames {
+		if slices.Contains(questioningGuides, name) {
+			continue
+		}
+		g := guide(t, f, name)
+		for _, p := range []string{"Prototype this", "a Done Prototype blocks this Ticket"} {
+			if strings.Contains(g, p) {
+				t.Errorf("the %s guide says %q", name, p)
+			}
+		}
+	}
 }

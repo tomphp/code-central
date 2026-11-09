@@ -276,6 +276,8 @@ Its first prompt tells the session to commit on that branch only, with no push a
 
 Because it finishes with no branch, accepting a Prototype makes it Done straight away, whatever the Landing Method: nothing is merged, pushed or landed. The worktree stays through Needs Answer and In Review, and the Factory removes it once the Prototype is Done or Cancelled. It never deletes the `prototype/` branch, so `git switch prototype/acme-shop-10` brings the Prototype back.
 
+A Prototype can also come from a Round. Answer a Question from the grilling Stage, Charting or a Map's grilling Ticket with **Prototype this**, a button on each Question that fills the answer with `Prototype this: ` for your note. The session creates a Ready Prototype on the same Spec from the Question and your note, makes it block the asking Ticket, and gives up. The Factory claims the Prototype as above. Once you accept it, the asking Ticket is unblocked, and the Factory claims it again as a redo, which carries on from the Prototype's resolution comment.
+
 A Map's **research** Ticket (`wayfinder:research`) runs in the background with `/research`, in a worktree of its own on a local branch `research/<ticket>`, just as a Prototype does:
 
 ```text

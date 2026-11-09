@@ -18,10 +18,18 @@ Every question goes to the human as a Round with `post_round`, never in the term
 
 The In Review gate replaces any step that would stop to check with the user: the human reviews the decision when you finish, instead of checking with the user along the way. So a Round is for a real open question only, never to confirm a summary.
 
+## Prototype this
+
+When an answer starts with "Prototype this", hand that Question to a Prototype:
+
+1. `create_ticket` with the `prototype` Label on the same Spec, titled "Prototype: " and the Question's title, with the Question and the human's note as its description, then `approve` it to `Ready`.
+2. `add_blocker` so the Prototype blocks this Ticket.
+3. `give_up` with a note naming the Prototype.
+
 ## Finishing
 
 When the resolution comment is posted, `finish` with a summary that states the decision and points at the resolution comment. Give no `branch` or `commit`. The Ticket goes to In Review; stop working it.
 
 ## A redo
 
-If this Ticket has earlier Claims, it is a redo. Before anything else, read why the last one ended: the latest rejection comment, Failure Report or give-up note, and any send-back note. Then build on what the earlier Claims left: their Rounds and answers stand unless the human said otherwise, so don't ask again what is already answered. Read them with `get_ticket` and `parts: ["rounds"]`. Replace this Ticket's entry in Decisions so far rather than adding a second, and post a new resolution comment. In the new finish summary, answer each point of the rejection or note.
+If this Ticket has earlier Claims, it is a redo. Before anything else, read why the last one ended: the latest rejection comment, Failure Report or give-up note, and any send-back note. Then build on what the earlier Claims left: their Rounds and answers stand unless the human said otherwise, so don't ask again what is already answered. Read them with `get_ticket` and `parts: ["rounds"]`. Replace this Ticket's entry in Decisions so far rather than adding a second, and post a new resolution comment. In the new finish summary, answer each point of the rejection or note. If a Done Prototype blocks this Ticket, read its resolution comment and carry on from it.

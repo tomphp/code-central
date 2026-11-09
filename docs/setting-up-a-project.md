@@ -35,6 +35,8 @@ This guide sets a repository up as a Project, so that agents can reach its Specs
    | a Map's research (`wayfinder:research`) | `/research`, on a local `research/<ticket>` branch |
    | a Prototype (`prototype`) | `/prototype`, on a local `prototype/<ticket>` branch |
 
+   The grilling Stage, Charting and a Map's grilling Ticket hand a Question answered **Prototype this** to a new Prototype, then pick up again as a redo once it is Done: see [Prototypes](working-with-claude-code.md#prototypes).
+
 > [!WARNING]
 > **Don't run `/setup-matt-pocock-skills` in a Project.** `code-central init` already writes `docs/agents/` and a pointer to it in `CLAUDE.md`, which tell the skills that Specs and Tickets live in Code Central. The setup skill would point them at GitHub issues or a `.scratch/` folder instead.
 

@@ -30,12 +30,12 @@ const (
 // guideBudgets are each Stage Guide's ceiling in bytes, trouble rules
 // included, by Stage.
 var guideBudgets = map[string]int{
-	"grilling":       3800,
+	"grilling":       4200,
 	"spec":           3300,
 	"tickets":        3500,
 	"implementation": 3300,
-	"map-chart":      3600,
-	"map-grilling":   3600,
+	"map-chart":      4000,
+	"map-grilling":   4000,
 	"map-research":   3300,
 	"map-task":       3000,
 	"prototype":      3300,
