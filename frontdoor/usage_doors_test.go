@@ -223,7 +223,7 @@ func TestUsageSkipsALineItCannotReadAndSaysSoInTheLog(t *testing.T) {
 	log := &syncBuffer{}
 	srv := acmeServer(t, codecentraltest.WithLog(log))
 	mcpOK(t, connect(t, srv, "acme"), "find_tickets", map[string]any{})
-	file := filepath.Join(srv.UsageDir, "projects", "acme", "usage", codecentraltest.Start.Format(time.DateOnly)+".jsonl")
+	file := usageFile(srv, codecentraltest.Start)
 	f, err := os.OpenFile(file, os.O_WRONLY|os.O_APPEND, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -266,6 +266,7 @@ func usageFile(srv *codecentraltest.Server, day time.Time) string {
 	return filepath.Join(srv.UsageDir, "projects", "acme", "usage", day.Format(time.DateOnly)+".jsonl")
 }
 
+// exists says whether there is a file at path.
 func exists(t *testing.T, path string) bool {
 	t.Helper()
 	_, err := os.Stat(path)
