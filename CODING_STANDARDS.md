@@ -21,3 +21,7 @@ When a second test needs the same setup (a test server, an SSE opener, a world f
 ## Comments match their neighbours
 
 Each file opens with a comment on what it's for, and each exported or non-obvious declaration gets a short one stating what it is or why. Match the density and voice of the surrounding code. When the diff changes behaviour, the comments, ADRs and glossary entries that describe it change in the same commit.
+
+## Commit messages are conventional commits
+
+Every commit on the branch since the latest tag follows the convention in `CLAUDE.md`'s Commits section: `type(scope)!: subject`, with the type that says what the change does to a user. A user-facing feature is `feat` and a bug fix is `fix`, because they release; docs, tests, refactors, build and CI changes don't, so they must not be `feat` or `fix`. A breaking change is marked with `!` or a `BREAKING CHANGE:` footer. Merge commits are exempt. The hook and CI's `cog check` catch a malformed message; review checks that the type is the right one.

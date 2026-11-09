@@ -1,0 +1,17 @@
+# The commit convention, read by cocogitto (cog): the commit-msg hook in
+# .githooks/ and the CI check both use this file. A version comes from
+# the commits since the latest tag (v1.0.0 is the baseline); a release
+# pushes that tag only. See docs/adr/0014.
+tag_prefix = "v"
+# The bump makes a tag only, never a commit on main, and no CHANGELOG.md.
+disable_bump_commit = true
+disable_changelog = true
+# The Factory's landing merges and `Merge main into …` commits are exempt.
+ignore_merge_commits = true
+
+# cog's default types are all accepted, with its default bumps (feat the
+# minor, fix the patch, `!` or BREAKING CHANGE: the major); CLAUDE.md's
+# Commits section lists them. perf also bumps the patch here. cog requires
+# a changelog_title on a type it's given, though no changelog is written.
+[commit_types]
+perf = { changelog_title = "Performance Improvements", bump_patch = true }

@@ -3,7 +3,8 @@
 # make (its 10-second budget would trip on a cold runner, and each step
 # gets its own log). Every step runs under bash, so the
 # commands are identical on every OS and a red run on one OS is a real
-# platform difference.
+# platform difference. A separate job checks the commit messages since
+# the latest tag.
 name: CI
 
 on:
@@ -22,6 +23,24 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # Every commit since the latest tag follows Conventional Commits, as
+  # cog.toml defines them: this catches a message that bypassed the
+  # commit-msg hook. A separate job, so it neither gates nor is gated by
+  # the tests. Full history, so cog can find the tag.
+  commits:
+    name: conventional commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: cog check
+        uses: cocogitto/cocogitto-action@v3
+        with:
+          check-latest-tag-only: true
+
   test:
     name: test (${{ matrix.os }})
     strategy:
