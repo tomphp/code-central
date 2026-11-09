@@ -38,6 +38,8 @@ type SpecDetail struct {
 	Tickets      []TicketRow  `json:"tickets,omitzero"`
 	// Requirement is set only when the Spec is a Requirement.
 	Requirement *RequirementView `json:"requirement,omitempty"`
+	// Map is set only when the Spec is a Map.
+	Map *MapView `json:"map,omitempty"`
 }
 
 // GetSpecInput is get_spec's input. With neither Parts nor Sections, the
@@ -72,6 +74,8 @@ type SpecRow struct {
 	Link         *LinkView         `json:"link,omitempty"`
 	// Requirement is set only when the Spec is a Requirement.
 	Requirement *RequirementView `json:"requirement,omitempty"`
+	// Map is set only when the Spec is a Map.
+	Map *MapView `json:"map,omitempty"`
 }
 
 // FindSpecsInput is find_specs' filters; every filter given must match.
@@ -109,6 +113,7 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 		}
 		v.StateSummary, v.Finished = summarise(tickets)
 		v.Requirement = c.requirementView(r, key, tickets)
+		v.Map = c.mapView(r, key, s, tickets)
 		if in.lighter() {
 			v.Outline = Outline(s.Body)
 		}
@@ -128,7 +133,7 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 		if parts[PartTickets] {
 			v.Tickets = []TicketRow{}
 			for _, t := range tickets {
-				v.Tickets = append(v.Tickets, c.ticketRow(r, key, t))
+				v.Tickets = append(v.Tickets, c.ticketRow(r, key, t, isMap(s.Labels)))
 			}
 		}
 		return nil
@@ -204,7 +209,7 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 			rows = append(rows, SpecRow{
 				ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
 				StateSummary: summary, Finished: done, Updated: s.Updated, Link: linkView(s.Link),
-				Requirement: req,
+				Requirement: req, Map: c.mapView(r, key, s, tickets),
 			})
 		}
 		return nil

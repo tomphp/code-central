@@ -133,6 +133,25 @@ export interface StageView {
   needs_me_reason?: NeedsMeReason;
 }
 
+// A Spec read's Map block, present only on a Map (a Spec labelled
+// wayfinder:map). Nothing in it is stored.
+export interface MapView {
+  // decided is the Map's Wayfinder Tickets that are Done.
+  decided: number;
+  // total is its Wayfinder Tickets that aren't Cancelled.
+  total: number;
+  // needs_you is its Tickets with a Needs Me reason, Prototypes included.
+  needs_you: number;
+  // can_write_spec is whether it has no unfinished Tickets.
+  can_write_spec: boolean;
+}
+
+// A Map Ticket's type, from its reserved Label; "ticket" when it has none.
+export type NodeType = "chart" | "grilling" | "research" | "task" | "prototype" | "ticket";
+
+// MAP_LABEL marks a Spec as a Map.
+export const MAP_LABEL = "wayfinder:map";
+
 // A Spec as get_spec and submit_requirement return it.
 export interface SpecView {
   id: string;
@@ -150,12 +169,13 @@ export interface SpecView {
 export type StateSummary = Partial<Record<State, number>>;
 
 // get_spec: the Spec, its Tickets (finished ones too) in claim order, and
-// its requirement block when it is a Requirement.
+// its requirement block when it is a Requirement, or Map block when a Map.
 export interface SpecDetail extends SpecView {
   state_summary: StateSummary;
   finished: boolean;
   tickets: TicketRow[];
   requirement?: RequirementView;
+  map?: MapView;
 }
 
 // One find_specs result.
@@ -169,11 +189,14 @@ export interface SpecRow {
   updated: string;
   link?: LinkView;
   requirement?: RequirementView;
+  map?: MapView;
 }
 
 export interface FindSpecsFilter {
   // requirements keeps only Requirements.
   requirements?: boolean;
+  // labels keeps only Specs with every one of these Labels.
+  labels?: string[];
   // finished includes finished Specs, which are otherwise left out.
   finished?: boolean;
 }
@@ -183,6 +206,13 @@ export interface FindSpecsFilter {
 export interface SubmitRequirementResult {
   spec: SpecAcknowledgement;
   stages: TicketAcknowledgement[];
+}
+
+// submit_map's result: the acknowledgements of the new Map's Spec and its
+// Charting Ticket.
+export interface SubmitMapResult {
+  spec: SpecAcknowledgement;
+  charting: TicketAcknowledgement;
 }
 
 export interface NeedsMeGroup {
@@ -204,6 +234,8 @@ export interface TicketRow {
   blocked: boolean;
   updated: string;
   link?: LinkView;
+  // node_type is the Ticket's type on a Map; left out on any other Spec.
+  node_type?: NodeType;
   // latest_event is the latest Session Event of the Ticket's live Claim;
   // left out when there is none.
   latest_event?: LatestEvent;

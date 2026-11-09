@@ -26,6 +26,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
   const focusClear = (!options.error && options.data?.focus_clear) || DEFAULT_OPTIONS.focus_clear;
   const spec = useSpec(api, loc.requirement && projectOf(loc.requirement), loc.requirement, version);
   const requirement = spec.data?.id === loc.requirement && spec.data?.requirement ? { ...spec.data, requirement: spec.data.requirement } : undefined;
+  const map = spec.data?.id === loc.requirement && spec.data?.map ? { ...spec.data, map: spec.data.map } : undefined;
   const reasons = reasonsOf(inbox.data?.needsMe);
   // Within a Requirement with no Ticket chosen, the pane opens on its default one.
   const selected =
@@ -66,6 +67,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
             loc={{ ...loc, ticket: selected }}
             navigate={navigate}
             requirement={requirement}
+            map={map}
             requirementError={spec.error && spec.data?.id !== loc.requirement ? spec.error.message : undefined}
             ticket={ticket.data}
             ticketError={ticket.error && ticket.data?.id !== selected ? ticket.error.message : undefined}
