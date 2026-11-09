@@ -107,11 +107,11 @@ func (f *factory) drain(ctx context.Context) {
 // resumes first, then saved Claims a stop cut off, then new claims.
 func (f *factory) poll(ctx context.Context) {
 	answered := f.reconcile(ctx)
-	method, ok := f.landingMethod(ctx)
-	if ok && !f.paused() && !f.halted(ctx) {
-		f.land(ctx, method)
+	landing, ok := f.landing(ctx)
+	if ok && !f.paused() && !f.halted(ctx) && f.remoteReady(landing) {
+		f.land(ctx, landing)
 	}
-	f.sweep(ctx, method)
+	f.sweep(ctx, landing.Method)
 	if f.halted(ctx) {
 		return
 	}
