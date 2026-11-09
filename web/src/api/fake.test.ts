@@ -123,6 +123,7 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       fake.recordCall(key, { op, request_bytes: bytes(JSON.stringify(args)), response_bytes: bytes(text), error });
       return { text, error };
     },
+    postUsage: async (session_id, responses) => fake.postUsage(session_id, responses),
     // ticket 110
     dropTranscriptStreams: () => fake.dropTranscriptStreams(),
     close: async () => {},

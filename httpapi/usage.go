@@ -28,3 +28,22 @@ func usageRead(c *core.Core, r *http.Request) (any, error) {
 	}
 	return c.Usage(r.Context(), in)
 }
+
+// PostUsagePath is where a Factory posts its sessions' model responses'
+// token usage (Spec code-central-201). Like Session Events it is not one
+// of core's operations, and always answers 204, even for an unknown
+// session or a body it can't read, so a Factory never fails on it.
+const PostUsagePath = "POST /api/usage"
+
+func postUsage(c *core.Core) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			SessionID string               `json:"session_id"`
+			Responses []core.UsageResponse `json:"responses"`
+		}
+		if decodeBody(r, &in) == nil {
+			c.PostUsage(r.Context(), in.SessionID, in.Responses)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

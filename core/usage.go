@@ -12,9 +12,10 @@ import (
 )
 
 // Usage (Spec code-central-201) is what agents have consumed: the MCP
-// calls Code Central records itself, read back as figures. It is not one
-// of core's operations: the HTTP API serves the read alone, and nothing
-// over MCP or the CLI.
+// calls Code Central records itself and the model responses' token usage
+// a Factory posts, read back as figures. It is not one of core's
+// operations: the HTTP API serves the post and the read alone, and
+// nothing over MCP or the CLI.
 
 // UsageDays are the ranges a Usage read takes, in local days; the first
 // is the default.
@@ -47,6 +48,45 @@ func (c *Core) projectExists(key string) bool {
 	return found
 }
 
+// UsageResponse is one model response's token usage, as a Factory posts
+// it: when it came, the subagent it was for ("" for the main session),
+// the kind of session, and its four token counts.
+type UsageResponse struct {
+	Time  time.Time `json:"time"`
+	Agent string    `json:"agent,omitempty"`
+	Kind  string    `json:"kind"`
+	usage.Tokens
+}
+
+// PostUsage is POST /api/usage {session_id, responses}: it records the
+// responses under the newest Claim with that session ID, live or ended,
+// as Session Events are filed, and counts as a ping. With no such Claim
+// they are dropped. A response with no time is dated now. It never fails.
+func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []UsageResponse) {
+	if sessionID == "" {
+		return
+	}
+	c.Ping(ctx, sessionID)
+	if len(responses) == 0 || c.usage == nil {
+		return
+	}
+	k, _, ok := c.newestClaim(sessionID)
+	if !ok {
+		return
+	}
+	rs := make([]usage.Response, len(responses))
+	for i, r := range responses {
+		if r.Time.IsZero() {
+			r.Time = c.now()
+		}
+		rs[i] = usage.Response{
+			Time: r.Time, Ticket: DisplayID(k.project, k.ticket), Claim: k.claim,
+			SessionID: sessionID, Agent: r.Agent, Kind: r.Kind, Tokens: r.Tokens,
+		}
+	}
+	c.usage.RecordResponses(k.project, rs)
+}
+
 // UsageInput is a Usage read: one Project, or every Project (Archived
 // ones too) when Project is "", over the last Days local days.
 type UsageInput struct {
@@ -55,8 +95,7 @@ type UsageInput struct {
 	Days int
 }
 
-// UsageView is Usage as the read returns it. Kinds, Sessions and Days
-// stay empty until the Factory posts token usage.
+// UsageView is Usage as the read returns it. Days stays empty for now.
 type UsageView struct {
 	Operations []UsageOperation `json:"operations"`
 	Kinds      []UsageKind      `json:"kinds"`
@@ -77,7 +116,9 @@ type UsageOperation struct {
 	Errors               int    `json:"errors"`
 }
 
-// UsageKind is one kind of session's Context Size figures.
+// UsageKind is one kind of session's Context Size figures: how many
+// sessions there were, and the average and largest of their peaks. The
+// average is rounded to the nearest token.
 type UsageKind struct {
 	Kind        string `json:"kind"`
 	Sessions    int    `json:"sessions"`
@@ -86,7 +127,9 @@ type UsageKind struct {
 }
 
 // UsageSession is one recent session: a Claim's main session, or a
-// subagent of it (Agent).
+// subagent of it (Agent), with the Project, Ticket, Claim and kind of its
+// latest response. Started is its first response's time, Peak the largest
+// Context Size among its responses.
 type UsageSession struct {
 	Project   string    `json:"project"`
 	Ticket    string    `json:"ticket"`
@@ -127,12 +170,86 @@ func (c *Core) Usage(_ context.Context, in UsageInput) (UsageView, error) {
 		return UsageView{}, &Error{Code: NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
 	}
 	recs := c.usage.Read(in.Project, in.Days)
+	sessions := usageSessions(recs.Responses)
+	recent := sessions[:min(len(sessions), RecentSessions)]
 	return UsageView{
 		Operations: operations(recs.Calls),
-		Kinds:      []UsageKind{},
-		Sessions:   []UsageSession{},
+		Kinds:      kinds(sessions),
+		Sessions:   recent,
 		Days:       []UsageDay{},
 	}, nil
+}
+
+// RecentSessions is how many sessions a Usage read lists.
+const RecentSessions = 50
+
+// usageSessions are the sessions the responses belong to, newest first.
+// A session is its session ID plus its agent, so each subagent is one of
+// its own, and a session resumed under a newer Claim stays one session.
+func usageSessions(responses []usage.Response) []UsageSession {
+	type key struct{ session, agent string }
+	byKey := map[key]*UsageSession{}
+	latest := map[key]time.Time{}
+	for _, r := range responses {
+		k := key{r.SessionID, r.Agent}
+		s := byKey[k]
+		if s == nil {
+			s = &UsageSession{SessionID: r.SessionID, Agent: r.Agent, Started: r.Time}
+			byKey[k] = s
+		}
+		s.Responses++
+		s.Peak = max(s.Peak, r.ContextSize())
+		if r.Time.Before(s.Started) {
+			s.Started = r.Time
+		}
+		if last, ok := latest[k]; !ok || !r.Time.Before(last) {
+			latest[k] = r.Time
+			s.Project, s.Ticket, s.Claim, s.Kind = r.Project, r.Ticket, r.Claim, r.Kind
+		}
+	}
+	sessions := []UsageSession{}
+	for _, s := range byKey {
+		sessions = append(sessions, *s)
+	}
+	slices.SortFunc(sessions, func(a, b UsageSession) int {
+		return cmp.Or(b.Started.Compare(a.Started), cmp.Compare(a.SessionID, b.SessionID), cmp.Compare(a.Agent, b.Agent))
+	})
+	return sessions
+}
+
+// kindOrder is the order kinds are listed in, as the Context Report
+// lists them; any other kind follows, by name.
+var kindOrder = []string{"grilling", "spec", "tickets", "implementation", "review", "subagent"}
+
+// kinds is each kind of session's Context Size figures, in kindOrder.
+func kinds(sessions []UsageSession) []UsageKind {
+	byKind := map[string]*UsageKind{}
+	total := map[string]int{}
+	for _, s := range sessions {
+		k := byKind[s.Kind]
+		if k == nil {
+			k = &UsageKind{Kind: s.Kind}
+			byKind[s.Kind] = k
+		}
+		k.Sessions++
+		k.LargestPeak = max(k.LargestPeak, s.Peak)
+		total[s.Kind] += s.Peak
+	}
+	rows := []UsageKind{}
+	for _, k := range byKind {
+		k.AveragePeak = average(total[k.Kind], k.Sessions)
+		rows = append(rows, *k)
+	}
+	rank := func(kind string) int {
+		if i := slices.Index(kindOrder, kind); i >= 0 {
+			return i
+		}
+		return len(kindOrder)
+	}
+	slices.SortFunc(rows, func(a, b UsageKind) int {
+		return cmp.Or(cmp.Compare(rank(a.Kind), rank(b.Kind)), cmp.Compare(a.Kind, b.Kind))
+	})
+	return rows
 }
 
 // operations is the operations table: one row per op, most called

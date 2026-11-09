@@ -2,12 +2,14 @@
 // check what the human sees and does: opening it from the Inbox's and
 // Focus Mode's headers and going Back, the address keeping the scope and
 // range, the scope and range pickers, the Code Central calls table and
-// its sorting, the empty state, and loading only when opened or changed.
+// its sorting, the Context Size table and the recent sessions with their
+// Ticket links, the empty states, and loading only when opened or changed.
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
+import type { UsageResponse } from "../api/types";
 
 function world() {
   const fake = new FakeApi();
@@ -232,5 +234,114 @@ describe("the Code Central calls table", () => {
   it("says so for All Projects too", async () => {
     renderApp(world(), "/?view=usage");
     expect(await within(usage()).findByText("No usage yet in All Projects over the last 7 days.")).toBeInTheDocument();
+  });
+});
+
+describe("Context Size", () => {
+  // claimed claims a new Ticket in project for session, returning its ID.
+  function claimed(fake: FakeApi, project: string, title: string, session: string): string {
+    const at = fake.now.toISOString();
+    return fake.addTicket(project, { title, state: "In Progress", claims: [{ number: 1, session_id: session, started: at, last_activity: at }] }).id;
+  }
+  // response is one model response, minutes after the fake's now, reading
+  // context tokens in all.
+  function response(fake: FakeApi, minutes: number, kind: string, context: number, agent?: string): UsageResponse {
+    const time = new Date(fake.now.getTime() + minutes * 60_000).toISOString();
+    return { time, ...(agent ? { agent } : {}), kind, input_tokens: 4, cache_write_tokens: 1_000, cache_read_tokens: context - 1_004, output_tokens: 50 };
+  }
+  function seeded() {
+    const fake = world();
+    const impl = claimed(fake, "acme", "Build it", "sess-impl"); // acme-2
+    const spec = claimed(fake, "beta", "Write it", "sess-spec"); // beta-1
+    fake.postUsage("sess-impl", [
+      response(fake, 1, "implementation", 40_000),
+      response(fake, 2, "implementation", 123_456),
+      response(fake, 3, "review", 21_000, "toolu_review"),
+    ]);
+    fake.postUsage("sess-spec", [response(fake, 4, "spec", 80_000)]);
+    return { fake, impl, spec };
+  }
+
+  const kindsTable = () => within(usage()).getByRole("table", { name: "Context Size by kind" });
+  const sessionsTable = () => within(usage()).getByRole("table", { name: "Recent sessions" });
+  const rows = (table: HTMLElement) =>
+    within(table)
+      .getAllByRole("row")
+      .slice(1)
+      .map((r) => within(r).getAllByRole("cell").map((c) => c.textContent));
+
+  it("shows each kind's sessions, average and largest peak, with thousands separators and the exact figure on hover", async () => {
+    renderApp(seeded().fake, "/?view=usage");
+    await waitFor(() => expect(within(usage()).getByRole("table", { name: "Context Size by kind" })).toBeInTheDocument());
+    expect(within(kindsTable()).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Kind", "Sessions", "Average peak", "Largest peak"]);
+    expect(within(kindsTable()).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["spec", "implementation", "review"]);
+    expect(rows(kindsTable())).toEqual([
+      ["1", "80,000", "80,000"],
+      ["1", "123,456", "123,456"],
+      ["1", "21,000", "21,000"],
+    ]);
+    expect(within(kindsTable()).getAllByText("123,456")[0]).toHaveAttribute("title", "123,456 tokens");
+  });
+
+  it("lists the recent sessions newest first, each subagent a session of its own", async () => {
+    const { fake, impl, spec } = seeded();
+    renderApp(fake, "/?view=usage");
+    await waitFor(() => expect(within(usage()).getByRole("table", { name: "Recent sessions" })).toBeInTheDocument());
+    expect(within(sessionsTable()).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+      "Ticket",
+      "Project",
+      "Claim",
+      "Session",
+      "Kind",
+      "Started",
+      "Peak Context Size",
+      "Responses",
+    ]);
+    const sessions = within(sessionsTable()).getAllByRole("row").slice(1);
+    expect(sessions.map((r) => within(r).getByRole("link").textContent)).toEqual([spec, impl, impl]);
+    expect(sessions.map((r) => within(r).getAllByRole("cell").map((c) => c.textContent))).toEqual([
+      ["Beta", "1", "sess-spec", "spec", expect.any(String), "80,000", "1"],
+      ["Acme", "1", "sess-impl · toolu_review", "review", expect.any(String), "21,000", "1"],
+      ["Acme", "1", "sess-impl", "implementation", expect.any(String), "123,456", "2"],
+    ]);
+    expect(within(sessions[2]).getByText("123,456")).toHaveAttribute("title", "123,456 tokens");
+  });
+
+  it("opens a session's Ticket from its link", async () => {
+    const { fake, impl } = seeded();
+    renderApp(fake, "/?view=usage&days=30");
+    await waitFor(() => expect(within(usage()).getByRole("table", { name: "Recent sessions" })).toBeInTheDocument());
+    const link = within(sessionsTable()).getAllByRole("link", { name: impl })[0];
+    expect(link).toHaveAttribute("href", `?view=inbox&project=acme&ticket=${impl}`);
+
+    await userEvent.click(link);
+    expect(window.location.search).toBe(`?view=inbox&project=acme&ticket=${impl}`);
+    expect(await screen.findByRole("heading", { name: "Build it" })).toBeInTheDocument();
+  });
+
+  it("follows the scope", async () => {
+    const { fake, spec } = seeded();
+    renderApp(fake, "/?view=usage&project=beta");
+    await waitFor(() => expect(within(usage()).getByRole("table", { name: "Recent sessions" })).toBeInTheDocument());
+    expect(within(sessionsTable()).getAllByRole("link").map((l) => l.textContent)).toEqual([spec]);
+    expect(within(kindsTable()).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["spec"]);
+  });
+
+  it("says there are no sessions when there are calls but no token usage", async () => {
+    const fake = world();
+    calls(fake, "acme", "claim", 1, { request: 10, response: 100 });
+    renderApp(fake, "/?view=usage");
+    await waitFor(() => expect(ops()).toEqual(["claim"]));
+    expect(within(usage()).getByText("No sessions in All Projects over the last 7 days. Only sessions the Factory runs are counted.")).toBeInTheDocument();
+    expect(within(usage()).queryByRole("table", { name: "Recent sessions" })).toBeNull();
+    expect(within(usage()).queryByText(/No usage yet/)).toBeNull();
+  });
+
+  it("says there are no calls when there is token usage but no calls", async () => {
+    renderApp(seeded().fake, "/?view=usage");
+    expect(await within(usage()).findByText("No Code Central calls in All Projects over the last 7 days.")).toBeInTheDocument();
+    expect(within(usage()).queryByRole("table", { name: "Code Central calls" })).toBeNull();
+    expect(within(usage()).getByRole("table", { name: "Context Size by kind" })).toBeInTheDocument();
+    expect(within(usage()).queryByText(/No usage yet/)).toBeNull();
   });
 });
