@@ -101,6 +101,11 @@ type NeedsMeRow struct {
 	Link *LinkView `json:"link,omitempty"`
 	// Requirement is set when the Ticket's Spec is a Requirement.
 	Requirement *NeedsMeRequirement `json:"requirement,omitempty"`
+	// Spec is the Spec a Map Ticket or Prototype is on, as its context,
+	// set when its Spec isn't a Requirement (Spec 213).
+	Spec *NeedsMeSpec `json:"spec,omitempty"`
+	// Prototype is set on a Ticket labelled prototype, for its badge.
+	Prototype bool `json:"prototype,omitempty"`
 }
 
 // NeedsMeRequirement is the Requirement a Needs Me row's Ticket is on:
@@ -120,6 +125,28 @@ func needsMeRequirement(r store.Reader, key string, t store.Ticket) *NeedsMeRequ
 	}
 	sp, _ := r.Spec(key, t.Spec)
 	return &NeedsMeRequirement{Spec: DisplayID(key, t.Spec), Title: sp.Title, Stage: StageOf(t.Labels)}
+}
+
+// NeedsMeSpec is the Spec a Needs Me row's Map Ticket or Prototype is on:
+// its Spec ID and title, and whether it is a Map.
+type NeedsMeSpec struct {
+	Spec  string `json:"spec"`
+	Title string `json:"title"`
+	Map   bool   `json:"map,omitempty"`
+}
+
+// needsMeSpec is the Spec t is on when t is on a Map, or is a Map Ticket
+// or a Prototype, and its Spec isn't a Requirement; nil otherwise.
+func needsMeSpec(r store.Reader, key string, t store.Ticket, req *NeedsMeRequirement) *NeedsMeSpec {
+	if req != nil {
+		return nil
+	}
+	sp, _ := r.Spec(key, t.Spec)
+	isMap := slices.Contains(sp.Labels, MapLabel)
+	if !isMap && !slices.ContainsFunc(t.Labels, isWayfinderType) {
+		return nil
+	}
+	return &NeedsMeSpec{Spec: DisplayID(key, t.Spec), Title: sp.Title, Map: isMap}
 }
 
 // RoundSummary is a Round's number and how many of its Questions are open.
@@ -178,7 +205,11 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 	if reason == "" {
 		return NeedsMeRow{}, false
 	}
-	row := NeedsMeRow{Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link), Requirement: needsMeRequirement(r, key, t)}
+	req := needsMeRequirement(r, key, t)
+	row := NeedsMeRow{
+		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link),
+		Requirement: req, Spec: needsMeSpec(r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
+	}
 	switch reason {
 	case ReasonNeedsAnswer:
 		if n := len(t.Rounds); n > 0 {

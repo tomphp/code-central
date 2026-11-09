@@ -208,3 +208,47 @@ describe("live arrivals", () => {
     expect(within(focus()).queryByText("All clear")).toBeNull();
   });
 });
+
+describe("a Map Ticket or Prototype Focus Item", () => {
+  // acme-2 is a Prototype on the Map acme-1, acme-3 a Map grilling Ticket
+  // on it and acme-5 a Prototype on the plain Spec acme-4, all In Review.
+  function wayfinding() {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    const map = fake.addSpec("acme", { title: "Find the way", labels: ["wayfinder:map"] }); // acme-1
+    const onMap = { id: map.id, title: map.title };
+    fake.addTicket("acme", { title: "Prototype: the graph", state: "In Review", spec: onMap, labels: ["prototype"] }); // acme-2
+    fake.addTicket("acme", { title: "Which store", state: "In Review", spec: onMap, labels: ["wayfinder:grilling"] }); // acme-3
+    const plain = fake.addSpec("acme", { title: "Login" }); // acme-4
+    fake.addTicket("acme", { title: "Prototype: the form", state: "In Review", spec: { id: plain.id, title: plain.title }, labels: ["prototype"] }); // acme-5
+    return fake;
+  }
+
+  it("shows its Map's name and a Prototype badge, and opens in the Inbox as itself", async () => {
+    const fake = wayfinding();
+    fake.setNeedsMe([{ reason: "in_review", tickets: [{ id: "acme-2" }] }]);
+    renderApp(fake);
+    const it = await item();
+    expect(within(it).getByText("Map: Find the way")).toHaveClass("focus-requirement");
+    expect(within(it).getByText("Prototype")).toHaveClass("label", "prototype-badge");
+    expect(within(it).getByRole("link", { name: "Open in Inbox" })).toHaveAttribute("href", "?view=inbox&ticket=acme-2");
+  });
+
+  it("shows no badge on a Map Ticket that isn't a Prototype", async () => {
+    const fake = wayfinding();
+    fake.setNeedsMe([{ reason: "in_review", tickets: [{ id: "acme-3" }] }]);
+    renderApp(fake);
+    const it = await item();
+    expect(within(it).getByText("Map: Find the way")).toBeInTheDocument();
+    expect(within(it).queryByText("Prototype")).toBeNull();
+  });
+
+  it("names the plain Spec a Prototype is on", async () => {
+    const fake = wayfinding();
+    fake.setNeedsMe([{ reason: "in_review", tickets: [{ id: "acme-5" }] }]);
+    renderApp(fake);
+    const it = await item();
+    expect(within(it).getByText("Spec: Login")).toBeInTheDocument();
+    expect(within(it).getByText("Prototype")).toBeInTheDocument();
+  });
+});

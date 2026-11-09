@@ -278,12 +278,15 @@ export class FakeApi implements Api {
       tickets: g.tickets.map((r) => {
         const t = this.tickets.get(r.id);
         const requirement = t && this.requirementOf(t);
+        const spec = t && !requirement ? this.needsMeSpecOf(t) : undefined;
         return {
           project: this.projectOf(r.id),
           title: t?.title ?? r.id,
           state: t?.state ?? "In Progress",
           since: this.now.toISOString(),
           ...(requirement && { requirement }),
+          ...(spec && { spec }),
+          ...(t?.labels.includes("prototype") && { prototype: true }),
           ...r,
           reason: g.reason,
         };
@@ -715,6 +718,16 @@ export class FakeApi implements Api {
     if (!this.ticketsOf(t.spec.id).some((s) => stageOf(s))) return undefined;
     const stage = stageOf(t);
     return { spec: t.spec.id, title: this.specs.get(t.spec.id)?.title ?? t.spec.title, ...(stage && { stage }) };
+  }
+
+  // needsMeSpecOf is a Needs Me row's spec field, for a Ticket whose Spec
+  // isn't a Requirement: set when the Ticket is on a Map, or is a Map
+  // Ticket or a Prototype.
+  private needsMeSpecOf(t: TicketView): NeedsMeRow["spec"] {
+    const s = this.specs.get(t.spec.id);
+    const map = !!s?.labels.includes("wayfinder:map");
+    if (!map && !t.labels.some((l) => l === "prototype" || /^wayfinder:(chart|grilling|research|task)$/.test(l))) return undefined;
+    return { spec: t.spec.id, title: s?.title ?? t.spec.title, ...(map && { map }) };
   }
 
   // derive is what a Spec read works out from the Spec's Tickets.

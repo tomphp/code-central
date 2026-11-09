@@ -262,6 +262,8 @@ acme-shop-9 claimed (map-chart): "Charting: Dark mode" in Spec acme-shop-8; work
 
 The Factory leaves a Prototype (`prototype`) and a Map's research Ticket (`wayfinder:research`) unclaimed for now, and claims the Tickets after them. A Ticket with any of these Labels is never run as an implementation Ticket.
 
+When a Map's Ticket asks you a Round or finishes into In Review, it waits on you in **Needs Me** and Focus Mode as its own entry, not folded into a row as a Stage Ticket is. Its row reads `↳ Map: Dark mode` under its title, and its Focus Item reads *Map: Dark mode*. A Prototype also carries a **Prototype** badge, and on a plain Spec its row names that Spec instead.
+
 ## How accepted work lands
 
 Each Project has a **Landing Method**, which you set on its **Project Options** page, from the three-dots menu on the Project. The Factory reads it again on every poll, before it lands anything, so a change applies from its next poll to every Ticket still waiting to land, with no restart.

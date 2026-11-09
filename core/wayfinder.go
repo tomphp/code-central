@@ -53,6 +53,13 @@ func typeGuide(l string) (guide string, ok bool) {
 	return "", false
 }
 
+// isWayfinderType reports whether l gives a Ticket a Map Ticket type or
+// makes it a Prototype.
+func isWayfinderType(l string) bool {
+	g, ok := typeGuide(l)
+	return ok && (g == PrototypeLabel || strings.HasPrefix(g, mapGuidePrefix))
+}
+
 // isTypeLabel reports whether l is a reserved type Label.
 func isTypeLabel(l string) bool {
 	_, ok := typeGuide(l)
