@@ -42,7 +42,8 @@ Run this by hand once v1 is built (`make build`). These paths can't be automated
 ## The UI
 
 - [ ] Open the Options view from the Inbox and from Focus Mode, choose **Activity Dashboard**, and with the Options view open in a second browser, watch it follow the change. Restart the service: the choice is kept, and `options.yaml` sits beside `store.yaml`.
-- [ ] With **Activity Dashboard** chosen and Focus Mode open in a second browser, Focus Mode switches from All clear to the dashboard without a reload. Its Ready and In Progress counts match the Inbox's State views with their folded Stage Tickets added, and while a real Session runs, its entry's latest event line keeps up. When something needs you, the dashboard gives way to the Focus Item.
+- [ ] With Focus Mode open in a second browser, choose **Activity Dashboard** in the first: Focus Mode switches from All clear to the dashboard without a reload. Its Ready and In Progress counts match the Inbox's State views with their folded Stage Tickets added, and while a real Session runs, its entry's latest event line keeps up. When something needs you, the dashboard gives way to the Focus Item.
+- [ ] With the dashboard showing, while a real Session runs, its entry pulses (a short scale-and-glow) as its events arrive, at most about every 5 seconds, and a count block pulses only when its number changes. A Ticket that is claimed while you watch joins the list with one pulse. With the system's reduce-motion setting on, the pulse is a brief brightness flash with no scaling.
 
 ## Real Claude Code
 

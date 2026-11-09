@@ -100,7 +100,7 @@ export function Focus({ api, now, version, data, focusClear, loc, navigate }: Fo
       {!screen ? (
         <p className="focus-loading">Loading…</p>
       ) : screen.clear && focusClear === "activity_dashboard" ? (
-        <ActivityDashboard now={now} data={data} loc={loc} navigate={navigate} />
+        <ActivityDashboard api={api} now={now} data={data} loc={loc} navigate={navigate} />
       ) : screen.clear ? (
         <section aria-label="All clear" className="focus-clear">
           <h2>All clear</h2>

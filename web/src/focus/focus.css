@@ -58,3 +58,26 @@
 .dashboard-entry-title { font-weight: 600; flex: 1; min-width: 0; }
 .dashboard-entry-detail { font-size: 15px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dashboard-empty { margin: 0; text-align: center; color: var(--muted); font-size: 20px; }
+/* A pulse: a ~600 ms scale-and-glow in the element's State colour, when a
+   block's count changes or an entry's Ticket does. Its two animations are
+   the same; a new pulse swaps between them, so the browser restarts it.
+   Under reduced motion it is a brief brightness flash, with no scaling. */
+.dashboard-entry { --sc: var(--s-in-progress); border-radius: 10px; }
+.dashboard-pulse-0 { animation: dashboard-pulse-0 600ms ease-out; }
+.dashboard-pulse-1 { animation: dashboard-pulse-1 600ms ease-out; }
+@keyframes dashboard-pulse-0 {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
+  30% { transform: scale(1.03); box-shadow: 0 0 28px 6px var(--sc); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes dashboard-pulse-1 {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
+  30% { transform: scale(1.03); box-shadow: 0 0 28px 6px var(--sc); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-pulse-0 { animation-name: dashboard-flash-0; }
+  .dashboard-pulse-1 { animation-name: dashboard-flash-1; }
+  @keyframes dashboard-flash-0 { 30% { filter: brightness(1.4); } }
+  @keyframes dashboard-flash-1 { 30% { filter: brightness(1.4); } }
+}
