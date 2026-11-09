@@ -71,11 +71,10 @@ func oneSentence(s string) bool {
 	return s != "" && !strings.ContainsAny(s, "\r\n") && !sentenceBreak.MatchString(s)
 }
 
-func TestTheStageGuidesTroubleRulesStayWithinAbout700Bytes(t *testing.T) {
-	f := newFixture(t)
-	for _, stage := range core.GuideStages {
-		if n := len(troubleSection(t, stage, guide(t, f, stage))); n > 800 {
-			t.Errorf("the %s guide's trouble rules are %d bytes, over the 0.7KB budget", stage, n)
+func TestTheStageGuidesTroubleRulesStayWithin800Bytes(t *testing.T) {
+	for stage, s := range troubleSections(t) {
+		if n := len(s); n > 800 {
+			t.Errorf("the %s guide's trouble rules are %d bytes, over the 800 budget", stage, n)
 		}
 	}
 }

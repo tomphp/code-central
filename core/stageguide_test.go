@@ -225,26 +225,32 @@ func TestAClaimOfNothingCarriesNoGuide(t *testing.T) {
 	}
 }
 
-// troubleSection is the guide's section on what to do when the agent
-// can't carry on: from its heading to the next section or the end.
-func troubleSection(t *testing.T, stage, g string) string {
+// troubleSections are each Stage Guide's section on what to do when the
+// agent can't carry on, by Stage: from its heading to the next section or
+// the end.
+func troubleSections(t *testing.T) map[string]string {
 	t.Helper()
 	const heading = "## When you can't carry on"
-	i := strings.Index(g, heading)
-	if i < 0 {
-		t.Fatalf("the %s guide has no %q section", stage, heading)
+	f := newFixture(t)
+	out := map[string]string{}
+	for _, stage := range core.GuideStages {
+		g := guide(t, f, stage)
+		i := strings.Index(g, heading)
+		if i < 0 {
+			t.Fatalf("the %s guide has no %q section", stage, heading)
+		}
+		s := g[i:]
+		if j := strings.Index(s[len(heading):], "\n## "); j >= 0 {
+			s = s[:len(heading)+j+1]
+		}
+		out[stage] = s
 	}
-	s := g[i:]
-	if j := strings.Index(s[len(heading):], "\n## "); j >= 0 {
-		s = s[:len(heading)+j+1]
-	}
-	return s
+	return out
 }
 
 func TestEveryGuideSaysWhatToDoWhenTheAgentCantCarryOn(t *testing.T) {
-	f := newFixture(t)
-	for _, stage := range core.GuideStages {
-		wantAll(t, stage, troubleSection(t, stage, guide(t, f, stage)),
+	for stage, s := range troubleSections(t) {
+		wantAll(t, stage, s,
 			// The three exits, with report_failure's four fields and
 			// give_up's note on where the work stands.
 			"`post_round`",
@@ -252,17 +258,16 @@ func TestEveryGuideSaysWhatToDoWhenTheAgentCantCarryOn(t *testing.T) {
 			"`give_up`", "where the work stands",
 			"Never leave a claimed Ticket without one of these or `finish`",
 			"`stale_claim`", "stop at once",
-			"`claim` the Ticket again with your `session_id`",
+			"`claim` the Ticket again with your `session_id`", "tell the human",
 			"A send-back with no note means the cause in the last Failure Report still stands",
 		)
 	}
 }
 
 func TestGetWorkflowsTroubleRulesAreTheStageGuidesText(t *testing.T) {
-	f := newFixture(t)
 	prose := workflow(t).Prose
-	for _, stage := range core.GuideStages {
-		if s := troubleSection(t, stage, guide(t, f, stage)); !strings.Contains(prose, s) {
+	for stage, s := range troubleSections(t) {
+		if !strings.Contains(prose, s) {
 			t.Errorf("get_workflow's prose doesn't carry the %s guide's trouble rules:\n%s", stage, s)
 		}
 	}

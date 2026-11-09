@@ -12,7 +12,8 @@ import (
 // The published workflow: what an agent session is taught by the server
 // rather than by copies in a repository. The MCP instructions reach every
 // session; a Claim's Stage Guide has what working it needs; get_workflow
-// holds the whole workflow; each write's next step arrives when it matters. A core test keeps all of it within its context budget.
+// holds the whole workflow; each write's next step arrives when it
+// matters. A core test keeps all of it within its context budget.
 
 // Instructions are the MCP server instructions every session receives.
 const Instructions = "Code Central holds this Project's work: Specs, and the Tickets that deliver them, " +

@@ -45,7 +45,7 @@ One of the three fixed steps that turn a Requirement's text into implementation 
 _Avoid_: Phase, step, definition Ticket
 
 **Stage Guide**:
-Code Central's instructions telling an agent what a Stage must produce and how to finish it. Implementation Tickets get one too.
+Code Central's instructions telling an agent what a Stage must produce, how to finish it and what to do when it can't carry on. Implementation Tickets get one too.
 _Avoid_: Prompt, playbook, skill
 
 **State**:
