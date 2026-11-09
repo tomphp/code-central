@@ -11,7 +11,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"regexp"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -278,14 +281,20 @@ func ref(desc string) map[string]any {
 //
 // The library's own Host check is off: the shared middleware guards this
 // route along with the HTTP API.
-func Register(mux *http.ServeMux, c *core.Core) {
+//
+// log, when not nil, gets one line per tool call with the size of the
+// text the agent is given (see logCall).
+func Register(mux *http.ServeMux, c *core.Core, log io.Writer) {
+	if log == nil {
+		log = io.Discard
+	}
 	h := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
-		return newServer(c, r.PathValue("key"))
+		return newServer(c, r.PathValue("key"), log)
 	}, &sdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true, DisableLocalhostProtection: true})
 	mux.Handle("/p/{key}/mcp", h)
 }
 
-func newServer(c *core.Core, key string) *sdk.Server {
+func newServer(c *core.Core, key string, log io.Writer) *sdk.Server {
 	s := sdk.NewServer(&sdk.Implementation{Name: "code-central", Version: "v1"}, &sdk.ServerOptions{Instructions: core.Instructions})
 	for _, op := range core.Operations {
 		t, ok := tools[op.Name]
@@ -295,26 +304,81 @@ func newServer(c *core.Core, key string) *sdk.Server {
 		s.AddTool(&sdk.Tool{Name: op.Name, Description: t.description, InputSchema: t.schema},
 			func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
 				v, err := t.call(core.WithActor(ctx, core.Agent), c, key, req.Params.Arguments)
-				return result(v, err)
+				res, text, code, err := result(v, err)
+				if err == nil {
+					logCall(log, op.Name, key, req.Params.Arguments, text, code)
+				}
+				return res, err
 			})
 	}
 	return s
 }
 
 // result is a successful value as JSON text, or a core error as JSON text
-// with isError set. Any other error is a bug inside the service.
-func result(v any, err error) (*sdk.CallToolResult, error) {
-	isError := false
+// with isError set and its code returned. Any other error is a bug inside
+// the service.
+func result(v any, err error) (*sdk.CallToolResult, []byte, core.Code, error) {
+	var code core.Code
 	if err != nil {
 		var e *core.Error
 		if !errors.As(err, &e) {
 			e = &core.Error{Code: "internal", Message: err.Error()}
 		}
-		v, isError = e, true
+		v, code = e, e.Code
 	}
 	b, merr := json.Marshal(v)
 	if merr != nil {
-		return nil, merr
+		return nil, nil, "", merr
 	}
-	return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: string(b)}}, IsError: isError}, nil
+	res := &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: string(b)}}, IsError: code != ""}
+	return res, b, code, nil
 }
+
+// logCall writes a tool call's line to the service log:
+//
+//	code-central serve: mcp get_ticket project=acme id=acme-2 bytes=1234
+//
+// bytes is the length of the text the agent is given, the context the
+// call loads. id is the Ticket or Spec the call names, or else the one it
+// returns, and is left out when there is neither; a rejected call ends
+// with error=<code>.
+func logCall(log io.Writer, op, key string, args, text []byte, code core.Code) {
+	line := fmt.Sprintf("code-central serve: mcp %s project=%s", op, key)
+	if id := callID(key, args, text); id != "" {
+		line += " id=" + id
+	}
+	line += fmt.Sprintf(" bytes=%d", len(text))
+	if code != "" {
+		line += " error=" + string(code)
+	}
+	fmt.Fprintln(log, line)
+}
+
+// callID is the ID a call's arguments name (ticket, spec or target), as
+// <key>-<n>, or else the ID its result holds, or "".
+func callID(key string, args, text []byte) string {
+	var in struct{ Ticket, Spec, Target core.Ref }
+	_ = json.Unmarshal(args, &in)
+	for _, r := range []core.Ref{in.Ticket, in.Spec, in.Target} {
+		if r == "" {
+			continue
+		}
+		if bareNumber.MatchString(string(r)) {
+			return key + "-" + string(r)
+		}
+		return string(r)
+	}
+	var out struct {
+		ID     string `json:"id"`
+		Ticket *struct {
+			ID string `json:"id"`
+		} `json:"ticket"`
+	}
+	_ = json.Unmarshal(text, &out)
+	if out.ID == "" && out.Ticket != nil {
+		return out.Ticket.ID
+	}
+	return out.ID
+}
+
+var bareNumber = regexp.MustCompile(`^[0-9]+$`)

@@ -4,6 +4,7 @@
 package frontdoor
 
 import (
+	"io"
 	"net/http"
 
 	"github.com/tomoram/code-central/core"
@@ -11,12 +12,13 @@ import (
 	"github.com/tomoram/code-central/mcp"
 )
 
-// Handler returns the service's handler. ui may be nil; bindHosts are
-// extra addresses (from --bind) the Guard accepts as Host and Origin.
-func Handler(c *core.Core, ui http.Handler, bindHosts ...string) http.Handler {
+// Handler returns the service's handler. ui may be nil; log, when not
+// nil, gets a line per MCP tool call; bindHosts are extra addresses (from
+// --bind) the Guard accepts as Host and Origin.
+func Handler(c *core.Core, ui http.Handler, log io.Writer, bindHosts ...string) http.Handler {
 	mux := http.NewServeMux()
 	httpapi.Register(mux, c)
-	mcp.Register(mux, c)
+	mcp.Register(mux, c, log)
 	if ui != nil {
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet && r.Method != http.MethodHead {
