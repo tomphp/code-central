@@ -108,8 +108,9 @@ var Operations = []Op{
 	{Name: "land", Audience: AgentAndHuman, Write: true},
 	{Name: "get_stage_guide", Audience: AgentAndHuman},
 
-	// Maps (Spec code-central-213).
+	// Maps and Prototypes (Spec code-central-213).
 	{Name: "submit_map", Audience: AgentAndHuman, Write: true},
+	{Name: "submit_prototype", Audience: AgentAndHuman, Write: true},
 
 	// Options, the human's global preferences (Spec code-central-160).
 	// HTTP only: no MCP tool and no CLI command.

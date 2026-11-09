@@ -29,44 +29,44 @@ func find(list []gitWorktree, path string) (gitWorktree, bool) {
 	return gitWorktree{}, false
 }
 
-// implementationWorktree gives implementation Ticket id its worktree at
-// wt on branch id: reused when it is there, else added on the existing
+// branchWorktree gives a Ticket its worktree at wt on branch, its
+// workBranch: reused when it is there, else added on the existing
 // branch, else on a new branch from the base's tip. Anything else at wt,
-// or branch id checked out elsewhere, is a failure, and nothing is
+// or branch checked out elsewhere, is a failure, and nothing is
 // touched.
-func (f *factory) implementationWorktree(id, wt string) error {
+func (f *factory) branchWorktree(branch, wt string) error {
 	list, err := f.repository.worktrees()
 	if err != nil {
 		return err
 	}
 	if w, ok := find(list, wt); ok {
-		if w.branch == id {
+		if w.branch == branch {
 			return nil
 		}
-		return f.wrongWorktree(wt, w, "on branch "+id)
+		return f.wrongWorktree(wt, w, "on branch "+branch)
 	}
 	if _, err := os.Stat(wt); err == nil {
 		return f.strayDirectory(wt)
 	}
-	if _, err := f.gitOut(f.repo, "rev-parse", "--verify", "-q", "refs/heads/"+id); err == nil {
+	if _, err := f.gitOut(f.repo, "rev-parse", "--verify", "-q", "refs/heads/"+branch); err == nil {
 		for _, w := range list {
-			if w.branch == id {
-				return f.branchElsewhere(id, wt, w.path)
+			if w.branch == branch {
+				return f.branchElsewhere(branch, wt, w.path)
 			}
 		}
-		_, err := f.gitOut(f.repo, "worktree", "add", "-q", wt, id)
+		_, err := f.gitOut(f.repo, "worktree", "add", "-q", wt, branch)
 		return err
 	}
-	_, err = f.gitOut(f.repo, "worktree", "add", "-q", "-b", id, wt, f.base)
+	_, err = f.gitOut(f.repo, "worktree", "add", "-q", "-b", branch, wt, f.base)
 	return err
 }
 
-// stageWorktree gives Stage Ticket id its worktree at wt: detached at the
+// stageWorktree gives a Stage Ticket its worktree at wt: detached at the
 // base's tip, added when it isn't there and moved to the current tip when
 // it is. A dirty one is left as it is, as a failure: the Stage wrote files
 // it shouldn't have. Anything at wt but a detached worktree is a failure
 // too, and nothing is touched.
-func (f *factory) stageWorktree(id, wt string) error {
+func (f *factory) stageWorktree(wt string) error {
 	list, err := f.repository.worktrees()
 	if err != nil {
 		return err

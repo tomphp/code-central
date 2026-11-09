@@ -247,28 +247,3 @@ func TestEachMapTicketStartsItsSkillWithItsGuideInADetachedWorktree(t *testing.T
 		}
 	}
 }
-
-func TestAPrototypeAndAMapResearchTicketAreLeftUnclaimed(t *testing.T) {
-	t.Parallel()
-	h := factorytest.New(t)
-	prototype := h.LabelledTicket("prototype", "Prototype: the theme picker")
-	research := h.LabelledTicket("wayfinder:research", "Which colour libraries exist?")
-	later := h.ReadyTicket("Add a button") // claimed after them in claim order
-
-	h.Start()
-	h.WaitForState(later, store.InReview)
-
-	for _, c := range h.Calls() {
-		if c.Ticket != later {
-			t.Errorf("claude ran for %s: %q", c.Ticket, c.Prompt)
-		}
-	}
-	for _, id := range []string{prototype, research} {
-		if tk := h.Ticket(id); tk.State != store.Ready || len(tk.Claims) != 0 {
-			t.Errorf("%s is %s with %d Claims, want Ready and never claimed", id, tk.State, len(tk.Claims))
-		}
-		if _, err := os.Stat(h.Worktree(id)); !os.IsNotExist(err) {
-			t.Errorf("%s got a worktree: %v", id, err)
-		}
-	}
-}

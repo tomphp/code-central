@@ -63,6 +63,7 @@ export function TicketDetail({ api, project, ticket: t, now }: TicketDetailProps
       </div>
       {t.link && !t.link.detached && <LinkedNote key={t.id} api={api} project={project} ticket={t} />}
       {t.description ? <Markdown>{t.description}</Markdown> : <p className="muted">No description.</p>}
+      {t.tags.prototype !== undefined && <PrototypeAt tag={t.tags.prototype} />}
       {t.blockers.length > 0 && (
         <p className="muted small">
           Blocked by{" "}
@@ -109,6 +110,26 @@ export function TicketDetail({ api, project, ticket: t, now }: TicketDetailProps
       <MoveControl key={`${t.id} ${t.state}`} api={api} project={project} ticket={t} />
       <History ticket={t} now={now} />
     </article>
+  );
+}
+
+// PrototypeAt is where a Prototype is, from the prototype Tag its agent
+// sets as "<branch>@<commit> <worktree path>": the branch has no @ or
+// space, and the path is everything after the first space. A Tag that
+// doesn't parse is shown as it is.
+function PrototypeAt({ tag }: { tag: string }) {
+  const m = /^([^@\s]+)@(\S+) (.+)$/.exec(tag);
+  return (
+    <p className="muted small">
+      Prototype at{" "}
+      {m ? (
+        <>
+          <code>{m[3]}</code> on <code>{m[1]}</code> (<code>{m[2]}</code>)
+        </>
+      ) : (
+        <code>{tag}</code>
+      )}
+    </p>
   );
 }
 

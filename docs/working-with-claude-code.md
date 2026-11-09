@@ -13,6 +13,7 @@ Each Stage works the same way. You type the Stage's skill as a slash command, fo
 | a Map's Charting (`wayfinder:chart`) | `/wayfinder` |
 | a Map's grilling (`wayfinder:grilling`) | `/grilling` |
 | a Map's task (`wayfinder:task`) | no skill: ask the session to claim it |
+| a Prototype (`prototype`) | `/prototype` |
 
 Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only start when you type them: asked in plain words to "write the Spec", the session does the work without the skill and skips its process. `/grilling` can also start from a plain request to grill you, but typing it is surer.
 
@@ -246,3 +247,31 @@ Choose between the two ways:
 
 - **Claimed**, as in [Working a Requirement](#working-a-requirement): the questions and your answers are kept as Rounds on the Ticket, the session finishes the Stage, and the next Stage can start. You can answer from the UI or Focus Mode, away from the terminal.
 - **Unclaimed**: quicker for thinking a Requirement through at the terminal, but the decisions live only in that session. The grilling Ticket is still Ready, so the Stage still has to be worked, by you claiming it as above or by a Factory.
+
+## Prototypes
+
+A Prototype is a cheap, throwaway artifact for you to try, so a decision can be made: a Ticket labelled `prototype`, on any Spec. Submit one from a terminal, naming the Spec:
+
+```console
+$ code-central submit-prototype acme-shop-1 --text "A price badge on the product card
+
+Does a badge read better than plain text?"
+{
+  "id": "acme-shop-10",
+…
+  "title": "Prototype: A price badge on the product card",
+  "state": "Ready",
+…
+}
+```
+
+To build it by hand, make it a worktree on a local branch `prototype/<ticket>` from the base, and work it there with `/prototype`:
+
+```console
+$ git worktree add -b prototype/acme-shop-10 ../acme-shop.worktrees/acme-shop-10 main
+$ cd ../acme-shop.worktrees/acme-shop-10
+$ claude
+> /prototype acme-shop-10
+```
+
+The `prototype` Guide has the session commit on that branch only, never push it, set a `prototype` Tag to `<branch>@<commit> <worktree path>`, and post a Round whose first Question, "Try it", says what to run and where to look. The Ticket panel shows the Tag as *Prototype at `<path>` on `<branch>` (`<commit>`)*. Answer the Round, and the session posts a resolution comment, what was learned and which decision it informs, and finishes with no branch. Accepting the Prototype makes it Done straight away: there is nothing to merge or land. Remove the worktree once you're done with it; the branch keeps the Prototype.
