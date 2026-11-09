@@ -72,12 +72,12 @@ func TestNewStoreGetsTheCurrentFormat(t *testing.T) {
 
 func TestUnknownFormatRefusesToOpen(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 7\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), fmt.Sprintf("format: %d\n", store.Format+1))
 	_, err := store.Open(dir)
 	if err == nil {
 		t.Fatal("opened a store with an unknown format")
 	}
-	if !strings.Contains(err.Error(), "format 7") || !strings.Contains(err.Error(), "store.yaml") {
+	if !strings.Contains(err.Error(), fmt.Sprintf("format %d", store.Format+1)) || !strings.Contains(err.Error(), "store.yaml") {
 		t.Fatalf("error doesn't name the format: %v", err)
 	}
 }
@@ -313,6 +313,25 @@ func TestAnOptionsFileWithNoKeysReadsAsTheDefaults(t *testing.T) {
 	})
 }
 
+func TestADefaultLandingMethodLeavesProjectYAMLUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	s := openFile(t, dir)
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC), Mode: store.ModeCommitted})
+	})
+	const plain = "key: acme\ndisplay_name: Acme\ncreated: 2026-11-07T09:30:00Z\nmode: committed\n"
+	if got := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")); got != plain {
+		t.Fatalf("project.yaml = %q", got)
+	}
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC), Mode: store.ModeCommitted,
+			Landing: store.Landing{Method: store.LandingBranch, Push: true, Remote: "origin"}})
+	})
+	if got, want := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")), plain+"landing:\n  method: branch\n  push: true\n  remote: origin\n"; got != want {
+		t.Fatalf("project.yaml = %q, want %q", got, want)
+	}
+}
+
 func listFiles(t *testing.T, dir string) []string {
 	t.Helper()
 	var out []string
@@ -342,6 +361,8 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 		{"bad archived time", "projects/acme/project.yaml", project + "archived: true\n", "archived"},
 		{"bad mode", "projects/acme/project.yaml", strings.Replace(project, "mode: committed", "mode: shared", 1), "mode"},
 		{"unknown project field", "projects/acme/project.yaml", project + "path: /src\n", "path"},
+		{"landing method outside its set", "projects/acme/project.yaml", project + "landing:\n  method: squash\n  push: false\n  remote: origin\n", "landing.method"},
+		{"unknown landing field", "projects/acme/project.yaml", project + "landing:\n  method: merge\n  push: false\n  remote: origin\n  force: true\n", "landing.force"},
 		{"spec without frontmatter", "projects/acme/specs/3.md", "# just markdown\n", "frontmatter"},
 		{"spec id mismatch", "projects/acme/specs/3.md", "---\nid: 4\ntitle: S\nlabels: []\ntags: {}\ncreated: 2026-11-07T09:30:00Z\nupdated: 2026-11-07T09:30:00Z\n---\nbody\n", "id"},
 		{"unknown previous field", "projects/acme/tickets/2.yaml", ticket + "edits:\n  - number: 1\n    actor: agent\n    time: 2026-11-07T09:30:00Z\n    previous:\n      colour: red\n", "edits[0].previous.colour"},

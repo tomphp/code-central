@@ -175,6 +175,14 @@ type projectFile struct {
 	Created     string `yaml:"created"`
 	Mode        string `yaml:"mode"`
 	Archived    string `yaml:"archived,omitempty"`
+	// Landing is left out while it is the default.
+	Landing *landingFile `yaml:"landing,omitempty"`
+}
+
+type landingFile struct {
+	Method string `yaml:"method"`
+	Push   bool   `yaml:"push"`
+	Remote string `yaml:"remote"`
 }
 
 type specFront struct {
@@ -336,6 +344,12 @@ func (s *FileStore) loadProject(key string) error {
 	if pf.Archived != "" {
 		if p.Archived, err = parseTime(pf.Archived); err != nil {
 			return &LoadError{File: rel, Field: "archived", Msg: err.Error()}
+		}
+	}
+	if l := pf.Landing; l != nil {
+		p.Landing = Landing{Method: LandingMethod(l.Method), Push: l.Push, Remote: l.Remote}
+		if !p.Landing.Method.Valid() {
+			return &LoadError{File: rel, Field: "landing.method", Msg: fmt.Sprintf("unknown landing method %q (%s)", l.Method, strings.Join(LandingMethodNames(), " or "))}
 		}
 	}
 	s.setProject(p)
@@ -614,7 +628,7 @@ func encode(record any, project string) (string, []byte, error) {
 	switch r := record.(type) {
 	case Project:
 		rel = filepath.Join("projects", r.Key, "project.yaml")
-		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived)})
+		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing)})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear)})
@@ -716,6 +730,15 @@ func splitFrontmatter(data []byte) (front, body []byte, ok bool) {
 }
 
 func formatTime(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
+
+// encodeLanding leaves the default Landing out of project.yaml, so a
+// Project that never had one set keeps the file it always had.
+func encodeLanding(l Landing) *landingFile {
+	if l = l.orDefault(); l == DefaultLanding() {
+		return nil
+	}
+	return &landingFile{Method: string(l.Method), Push: l.Push, Remote: l.Remote}
+}
 
 // formatOptionalTime leaves a zero time out of the file.
 func formatOptionalTime(t time.Time) string {

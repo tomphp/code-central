@@ -233,6 +233,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.RenameProject(human, "acme", core.RenameProjectInput{DisplayName: "Acme"})
 		return err
 	},
+	"set_landing_method": func(f fixture) error {
+		_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingBranch})
+		return err
+	},
 	"archive_project": func(f fixture) error {
 		_, err := f.core.ArchiveProject(human, "acme")
 		return err

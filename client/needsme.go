@@ -32,3 +32,9 @@ func (c *Client) RenameProject(ctx context.Context, key string, in core.RenamePr
 	var out core.ProjectView
 	return out, c.do(ctx, "POST", "/api/p/"+url.PathEscape(key)+"/rename_project", in, &out)
 }
+
+// SetLandingMethod is the human's set_landing_method.
+func (c *Client) SetLandingMethod(ctx context.Context, key string, in core.SetLandingMethodInput) (core.ProjectView, error) {
+	var out core.ProjectView
+	return out, c.do(ctx, "POST", "/api/p/"+url.PathEscape(key)+"/set_landing_method", in, &out)
+}

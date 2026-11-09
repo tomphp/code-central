@@ -298,6 +298,7 @@ func Run(t *testing.T, f Factory) {
 	runImport(t, f)
 	runLinks(t, f)
 	runOptions(t, f)
+	runLanding(t, f)
 }
 
 func seedProject(t *testing.T, s store.Store) {
