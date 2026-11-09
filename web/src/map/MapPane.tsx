@@ -1,6 +1,6 @@
 // The Map view, in the pane a Requirement's view uses and above the
 // shared Ticket pane: the header (ID, title, submitted time, the Map's
-// count, the Guided toggle and its Destination), then the Map's Tickets as a left-to-right
+// count, the Guided toggle, New Prototype and its Destination), then the Map's Tickets as a left-to-right
 // graph with Blockers as edges and the fog of what isn't specified yet on
 // the right, beside its collapsible Decisions so far and Out of scope.
 import { useId, useState } from "react";
@@ -9,6 +9,7 @@ import { projectOf } from "../api/api";
 import { GUIDED_ON, GUIDED_TAG, type MapView, type NeedsMeReason, type SpecDetail, type TicketRow } from "../api/types";
 import { ago } from "../format";
 import { Markdown } from "../Markdown";
+import { NewPrototype } from "../requirement/NewRequirement";
 import { useAct } from "../ticket/useAct";
 import { FOG, isFrontier, layoutMap, NODE, nodeProgress } from "./graph";
 import { mapCount } from "./MapRow";
@@ -46,6 +47,9 @@ export function MapPane({ api, spec, reasons, now, ticket, select }: MapPaneProp
       <label className="map-guided" title="The Factory starts the next decision whenever the Map is idle">
         <input type="checkbox" checked={spec.map.guided} disabled={busy} onChange={(e) => setGuided(e.target.checked)} /> Guided
       </label>
+      <div className="spec-actions">
+        <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
+      </div>
       <div aria-label="Destination" className="map-destination">
         {destination ? <Markdown>{destination}</Markdown> : <p className="muted">No Destination yet.</p>}
       </div>

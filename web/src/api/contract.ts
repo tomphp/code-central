@@ -640,6 +640,36 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(e).toMatchObject({ status: 409, code: "action_not_allowed" });
     });
 
+    // ---- Prototypes (code-central-221, code-central-223) ----
+    it("submits a Prototype on a Spec as one Ready prototype Ticket, titled by the text's first line", async () => {
+      await d.createProject("acme", "Acme");
+      const r = await d.api.submitRequirement("acme", "Dark mode");
+      const ack = await d.api.submitPrototype("acme", r.spec.id, "A theme picker\nWould a picker beat a toggle?");
+      wantAcknowledgement(ack, ack.id, "Ready", ["title", "state", "spec", "labels", "description", "moves", "claimable"]);
+
+      const t = await d.api.getTicket("acme", ack.id);
+      expect(t).toMatchObject({
+        title: "Prototype: A theme picker",
+        description: "A theme picker\nWould a picker beat a toggle?",
+        state: "Ready",
+        spec: { id: r.spec.id },
+        labels: ["prototype"],
+        claimable: true,
+      });
+      expect(t.moves).toMatchObject([{ to: "Ready", actor: "human", via: "submit_prototype" }]);
+      expect((await d.api.getSpec("acme", r.spec.id)).tickets.map((t) => t.id)).toContain(ack.id);
+    });
+
+    it("refuses a Prototype with no text, or on no Spec", async () => {
+      await d.createProject("acme", "Acme");
+      const r = await d.api.submitMap("acme", "Offline mode");
+      const blank = await d.api.submitPrototype("acme", r.spec.id, "  \n ").catch((e) => e);
+      expect(blank).toBeInstanceOf(ApiError);
+      expect(blank).toMatchObject({ status: 422, code: "invalid", field: "text" });
+      const nowhere = await d.api.submitPrototype("acme", "acme-99", "A theme picker").catch((e) => e);
+      expect(nowhere).toMatchObject({ status: 422, code: "invalid", field: "spec" });
+    });
+
     // ---- the Integration contract (ticket 42) ----
     it("reads a linked Ticket closed externally, and unlinks it", async () => {
       await d.createProject("acme", "Acme");

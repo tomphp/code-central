@@ -17,6 +17,9 @@ export interface TicketPaneProps {
   project: string;
   ticket: TicketView;
   now: Date;
+  // openSpec opens the Ticket's Spec, where the view can show it; without
+  // it the Spec is named only.
+  openSpec?(spec: string): void;
 }
 
 export function TicketPane(props: TicketPaneProps) {
@@ -44,16 +47,20 @@ export type TicketDetailProps = TicketPaneProps;
 // Labels, description, Blockers, Claim activity with each Claim's Live
 // section, move, and a collapsed history of moves, comments and edits
 // merged by time.
-export function TicketDetail({ api, project, ticket: t, now }: TicketDetailProps) {
+export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketDetailProps) {
   const claims = [...t.claims].sort((a, b) => b.number - a.number);
+  const specName = `${t.spec.id} ${t.spec.title}`;
   return (
     <article aria-label="Ticket details" className="ticket-body">
       <div className="meta">
-        {t.spec.id && (
-          <span>
-            {t.spec.id} {t.spec.title}
-          </span>
-        )}
+        {t.spec.id &&
+          (openSpec ? (
+            <button className="link" onClick={() => openSpec(t.spec.id)}>
+              {specName}
+            </button>
+          ) : (
+            <span>{specName}</span>
+          ))}
         {t.labels.map((l) => (
           <span key={l} className="label">
             {l}

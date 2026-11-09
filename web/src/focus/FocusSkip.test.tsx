@@ -49,11 +49,11 @@ const heading = (name: string) => within(focus()).findByRole("heading", { name }
 const skip = async () => userEvent.click(await within(focus()).findByRole("button", { name: "Skip" }));
 
 describe("Skip", () => {
-  it("sits next to Answer and Dismiss on a Question Focus Item", async () => {
+  it("sits next to Answer, Dismiss and Prototype this on a Question Focus Item", async () => {
     renderApp(world());
     await heading("Which colour?");
     const buttons = within(focus()).getByRole("button", { name: "Answer" }).parentElement!;
-    expect(within(buttons).getAllByRole("button").map((b) => b.textContent)).toEqual(["Answer", "Dismiss", "Skip"]);
+    expect(within(buttons).getAllByRole("button").map((b) => b.textContent)).toEqual(["Answer", "Dismiss", "Prototype this", "Skip"]);
   });
 
   it("sits with a Ticket Focus Item's panel buttons", async () => {
