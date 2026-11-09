@@ -246,3 +246,43 @@ func TestTheFrontierFollowsDoneAndCancelledBlockersThroughBlocked(t *testing.T) 
 		t.Fatalf("a Done Blocker clears and a Cancelled one doesn't: frontier %q", got)
 	}
 }
+
+// A Map's Ticket rows carry their Blockers, the edges of the Map view;
+// rows off a Map leave them out.
+func TestEachTicketRowOnAMapCarriesItsBlockers(t *testing.T) {
+	f := newFixture(t)
+	f.mapWith(t,
+		core.CreateTicketInput{Title: "First", Labels: []string{"wayfinder:grilling"}},  // acme-3
+		core.CreateTicketInput{Title: "Second", Labels: []string{"wayfinder:research"}}, // acme-4
+		core.CreateTicketInput{Title: "Both", Labels: []string{"wayfinder:task"}},       // acme-5
+	)
+	f.addBlocker(t, "acme-4", "acme-3")
+	f.addBlocker(t, "acme-5", "acme-3")
+	f.addBlocker(t, "acme-5", "acme-4")
+	f.spec(t, "acme", "Login")                                                                                    // acme-6
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-6", Title: "Form"})                                    // acme-7
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-6", Title: "Submit", BlockedBy: []core.Ref{"acme-7"}}) // acme-8
+	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][]string{}
+	for _, row := range sp.Tickets {
+		got[row.ID] = row.BlockedBy
+	}
+	want := map[string][]string{"acme-2": nil, "acme-3": nil, "acme-4": {"acme-3"}, "acme-5": {"acme-3", "acme-4"}}
+	for id, w := range want {
+		if !slices.Equal(got[id], w) {
+			t.Fatalf("%s blocked_by %q, want %q", id, got[id], w)
+		}
+	}
+	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if row.ID == "acme-8" && row.BlockedBy != nil {
+			t.Fatalf("a Ticket on a plain Spec leaves its Blockers out: %+v", row)
+		}
+	}
+}

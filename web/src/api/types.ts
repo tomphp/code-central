@@ -249,6 +249,9 @@ export interface TicketRow {
   link?: LinkView;
   // node_type is the Ticket's type on a Map; left out on any other Spec.
   node_type?: NodeType;
+  // blocked_by is the Ticket's Blockers on a Map, the Map view's edges;
+  // left out on any other Spec.
+  blocked_by?: string[];
   // latest_event is the latest Session Event of the Ticket's live Claim;
   // left out when there is none.
   latest_event?: LatestEvent;

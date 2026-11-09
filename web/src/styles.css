@@ -235,4 +235,33 @@ a.link-badge:hover { text-decoration: underline; }
 .impl-list button.link[aria-current="true"] { font-weight: 600; }
 .loud-state { color: var(--rc); }
 .reason-requirements { --rc: var(--accent); }
+
+/* The Map view: its Destination, the graph of its Tickets in the strip's progress colours, the fog node, and its sections beside the graph */
+.map-destination { font-size: 13px; margin: 6px 0; }
+.map-destination .markdown > :first-child { margin-top: 0; }
+.map-body { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; margin: 8px 0; }
+.map-graph { flex: 0 0 auto; max-width: 100%; overflow: auto; }
+.map-graph svg { display: block; }
+.map-edge { fill: none; stroke: var(--muted); stroke-width: 1.2; }
+.map-arrow { fill: var(--muted); }
+.map-node { box-sizing: border-box; height: 100%; display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--border); border-radius: 6px; font-size: 12px; overflow: hidden; }
+.map-node-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.map-node-type { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.map-node .map-node-title { color: var(--text); text-align: left; font-size: 12px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.map-node .map-node-title[aria-current="true"] { font-weight: 600; }
+.map-node.progress-done { border-top-color: var(--r-review); }
+.map-node.progress-running { border-top-color: var(--accent); }
+.map-node.progress-queued { border-top-style: dashed; border-top-color: var(--accent); }
+.map-node.progress-needs { border-top-color: var(--rc); }
+.map-node.progress-needs .state { color: var(--rc); }
+.map-node.progress-waiting { color: var(--muted); }
+.map-node.cancelled { opacity: .55; }
+.map-node.cancelled .map-node-title { text-decoration: line-through; }
+.map-start { align-self: flex-start; padding: 1px 10px; font-size: 11.5px; margin-top: auto; }
+.map-fog { box-sizing: border-box; width: 100%; height: 100%; border: 1px dashed var(--border); border-radius: 22px; background: var(--surface-2); color: var(--muted); font: 12px system-ui; cursor: pointer; opacity: .7; }
+.map-fog:hover, .map-fog[aria-expanded="true"] { opacity: 1; }
+.map-side { flex: 1 1 12rem; font-size: 12.5px; }
+.map-details { margin: 0 0 8px; }
+.map-details summary { cursor: pointer; font-weight: 600; }
+.map-fog-text h3 { font-size: 13px; margin: 0 0 4px; }
 .req-chip { color: var(--accent); }

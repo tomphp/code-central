@@ -177,6 +177,9 @@ type TicketRow struct {
 	// NodeType is the Ticket's type on a Map (see NodeType); left out for
 	// a Ticket on any other Spec.
 	NodeType string `json:"node_type,omitempty"`
+	// BlockedBy is the Ticket's Blockers on a Map, the Map view's edges;
+	// left out for a Ticket on any other Spec.
+	BlockedBy []string `json:"blocked_by,omitempty"`
 	// LatestEvent is the latest Session Event of the Ticket's live Claim,
 	// shown short; left out when there is none.
 	LatestEvent *LatestEvent `json:"latest_event,omitempty"`
@@ -456,6 +459,7 @@ func (c *Core) ticketRow(r store.Reader, key string, t store.Ticket, onMap bool)
 	}
 	if onMap {
 		row.NodeType = NodeType(t.Labels)
+		row.BlockedBy = displayIDs(key, t.BlockedBy)
 	}
 	if cl, ok := liveClaim(t); ok {
 		row.LatestEvent = c.latestEvent(key, t.Number, cl.Number)

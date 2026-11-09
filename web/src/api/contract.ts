@@ -599,6 +599,32 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(rows.find((t) => t.id === r.charting.id)?.node_type).toBe("chart");
     });
 
+    it("gives a Map's Ticket rows their Blockers, the Map view's edges, and no other row", async () => {
+      await d.createProject("acme", "Acme");
+      const a = await d.createTicket("acme", "Not on a Map", "Ready");
+      const b = await d.createTicket("acme", "Nor this", "Ready");
+      await d.addBlocker("acme", b, a);
+      const r = await d.api.submitMap("acme", "Offline mode");
+      await d.addBlocker("acme", r.charting.id, a);
+
+      const s = await d.api.getSpec("acme", r.spec.id);
+      expect(s.tickets.map((t) => [t.id, t.blocked_by])).toEqual([[r.charting.id, [a]]]);
+      const rows = await d.api.findTickets("acme");
+      expect(rows.find((t) => t.id === b)?.blocked_by).toBeUndefined();
+      expect(rows.find((t) => t.id === r.charting.id)?.blocked_by).toEqual([a]);
+    });
+
+    it("approves a Draft Ticket to Ready, and refuses one that isn't Draft", async () => {
+      await d.createProject("acme", "Acme");
+      const draft = await d.createTicket("acme", "A", "Draft");
+      const ready = await d.createTicket("acme", "B", "Ready");
+
+      wantAcknowledgement(await d.api.act("acme", draft, "approve", {}), draft, "Ready", ["state", "moves"]);
+      expect((await d.api.getTicket("acme", draft)).moves.at(-1)).toMatchObject({ from: "Draft", to: "Ready", actor: "human" });
+      const e = await d.api.act("acme", ready, "approve", {}).catch((e) => e);
+      expect(e).toMatchObject({ status: 409, code: "action_not_allowed" });
+    });
+
     // ---- the Integration contract (ticket 42) ----
     it("reads a linked Ticket closed externally, and unlinks it", async () => {
       await d.createProject("acme", "Acme");
