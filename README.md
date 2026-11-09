@@ -7,6 +7,7 @@ Code Central is one service that holds a Project's Specs and Tickets. Agents wor
 Read them in this order:
 
 1. [Setting up a Project](docs/setting-up-a-project.md): what to install first, then setting a brand new or an existing repository up as a Project, and the cases where `init` behaves differently: a repository you don't own, a second clone or worktree, re-running it after an upgrade, and agents in a sandbox or container.
+2. [Working with Claude Code](docs/working-with-claude-code.md): taking one Requirement through every Stage by hand, in a Claude Code session you start, until its implementation lands.
 
 ## Running the service
 
