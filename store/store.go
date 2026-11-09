@@ -196,6 +196,41 @@ type Ticket struct {
 	Edits          []Edit
 }
 
+// FocusClear is what Focus Mode shows when nothing needs the human.
+type FocusClear string
+
+// The two things Focus Mode can show when nothing needs the human.
+const (
+	FocusAllClear          FocusClear = "all_clear"
+	FocusActivityDashboard FocusClear = "activity_dashboard"
+)
+
+// FocusClears lists every FocusClear, the default first.
+var FocusClears = []FocusClear{FocusAllClear, FocusActivityDashboard}
+
+// Valid reports whether f is one of the FocusClears.
+func (f FocusClear) Valid() bool { return slices.Contains(FocusClears, f) }
+
+// Options are the human's global preferences, set from the UI's Options
+// view. They are the store's one record that belongs to no Project.
+type Options struct {
+	FocusClear FocusClear
+}
+
+// DefaultOptions are the Options of a store that has never had any
+// written.
+func DefaultOptions() Options { return Options{FocusClear: FocusAllClear} }
+
+// focusClearNames is the FocusClears as strings, for messages and the
+// schema.
+func focusClearNames() []string {
+	var out []string
+	for _, f := range FocusClears {
+		out = append(out, string(f))
+	}
+	return out
+}
+
 // Reader reads from memory. Records returned are copies.
 type Reader interface {
 	Project(key string) (Project, bool)
@@ -208,6 +243,8 @@ type Reader interface {
 	// NextNumber is the highest Spec or Ticket number in the project plus
 	// one. It is derived, never stored, so numbers are never reused.
 	NextNumber(project string) int
+	// Options is always a whole value: the defaults until any are written.
+	Options() Options
 }
 
 // Writer is a Reader that can also write one record.
@@ -220,6 +257,8 @@ type Writer interface {
 	// and they all land together or none does. It counts as the update's
 	// one write.
 	PutImport(project string, im Import) error
+	// PutOptions replaces the Options whole. It touches no Project.
+	PutOptions(Options) error
 }
 
 // Import is a batch of new Specs and Tickets written all or nothing.
@@ -257,6 +296,8 @@ var (
 	ErrUnknownProject = errors.New("store: unknown project")
 	// ErrExists means an Import named a Spec or Ticket number already in use.
 	ErrExists = errors.New("store: an import may only add new records")
+	// ErrInvalidOption means an Option written was outside its set.
+	ErrInvalidOption = errors.New("store: an Option's value is outside its set")
 )
 
 func (s Spec) clone() Spec {

@@ -124,6 +124,9 @@ func (s *FileStore) load() error {
 	if err := s.checkFormat(); err != nil {
 		return err
 	}
+	if err := s.loadOptions(); err != nil {
+		return err
+	}
 	entries, err := os.ReadDir(filepath.Join(s.dir, "projects"))
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -158,6 +161,12 @@ func (s *FileStore) checkFormat() error {
 
 type storeFile struct {
 	Format int `yaml:"format"`
+}
+
+// optionsFile is options.yaml, the human's global Options. The file and
+// every key are optional: what's left out takes its default.
+type optionsFile struct {
+	FocusClear string `yaml:"focus_clear,omitempty"`
 }
 
 type projectFile struct {
@@ -276,6 +285,31 @@ var (
 	specEditFields   = []string{"title", "body", "external_state", "detached"}
 	ticketEditFields = []string{"title", "description", "spec", "external_state", "detached"}
 )
+
+// loadOptions reads options.yaml, if there is one, over the defaults.
+func (s *FileStore) loadOptions() error {
+	const rel = "options.yaml"
+	data, err := os.ReadFile(filepath.Join(s.dir, rel))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return &LoadError{File: rel, Field: "file", Msg: err.Error()}
+	}
+	var f optionsFile
+	if field, err := decodeStrict(data, &f); err != nil {
+		return &LoadError{File: rel, Field: field, Msg: err.Error()}
+	}
+	o := DefaultOptions()
+	if f.FocusClear != "" {
+		o.FocusClear = FocusClear(f.FocusClear)
+	}
+	if !o.FocusClear.Valid() {
+		return &LoadError{File: rel, Field: "focus_clear", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusClear, strings.Join(focusClearNames(), " or "))}
+	}
+	s.options = o
+	return nil
+}
 
 var numbered = regexp.MustCompile(`^[1-9][0-9]*$`)
 
@@ -581,6 +615,9 @@ func encode(record any, project string) (string, []byte, error) {
 	case Project:
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived)})
+	case Options:
+		rel = "options.yaml"
+		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear)})
 	case Spec:
 		rel = filepath.Join("projects", project, "specs", strconv.Itoa(r.Number)+".md")
 		var front []byte
