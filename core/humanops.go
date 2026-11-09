@@ -72,6 +72,48 @@ func (c *Core) RenameProject(ctx context.Context, key string, in RenameProjectIn
 	return v, err
 }
 
+// SetLandingMethodInput is the human's set_landing_method(method, push,
+// remote).
+type SetLandingMethodInput struct {
+	Method store.LandingMethod `json:"method"`
+	Push   bool                `json:"push"`
+	Remote string              `json:"remote"`
+}
+
+// SetLandingMethod is the human's set_landing_method: how the Project's
+// accepted work lands. Code Central never sees git, so whether the remote
+// exists is the Factory's check.
+func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMethodInput) (ProjectView, error) {
+	if err := humanOnly(ctx, "set_landing_method"); err != nil {
+		return ProjectView{}, err
+	}
+	if !in.Method.Valid() {
+		return ProjectView{}, invalid("method", "Landing Method %q is neither %q nor %q", in.Method, store.LandingMerge, store.LandingBranch)
+	}
+	l := store.Landing{Method: in.Method, Push: in.Push, Remote: strings.TrimSpace(in.Remote)}
+	if l.Remote == "" {
+		if l.Push {
+			return ProjectView{}, invalid("remote", "Push needs a git remote to push to, such as %q", store.DefaultLandingRemote)
+		}
+		l.Remote = store.DefaultLandingRemote
+	}
+	var v ProjectView
+	err := c.store.Update(func(w store.Writer) error {
+		if err := writable(w, key); err != nil {
+			return err
+		}
+		p, _ := w.Project(key)
+		if p.Landing == l {
+			v = projectView(p)
+			return nil
+		}
+		p.Landing = l
+		v = projectView(p)
+		return w.PutProject(p)
+	})
+	return v, err
+}
+
 // ProjectRow is one list_projects row: the Project and how many of its
 // Tickets need the human.
 type ProjectRow struct {

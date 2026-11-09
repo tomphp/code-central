@@ -16,6 +16,10 @@ _Avoid_: Deleted, closed, inactive
 The short, permanent name that identifies a Project to anything connecting to Code Central.
 _Avoid_: Slug, Project ID
 
+**Project Options**:
+The page where the human sets a Project's settings, such as its Landing Method. Unlike an Option, what it sets belongs to one Project.
+_Avoid_: Project settings, preferences, config
+
 **Factory**:
 A program outside Code Central that claims Tickets and runs agents on them to deliver work.
 _Avoid_: Controller, runner, orchestrator
@@ -55,6 +59,14 @@ _Avoid_: Closed, archived, complete
 **Land**:
 For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing.
 _Avoid_: Merge, ship, deliver, complete
+
+**Landing Method**:
+A Project's choice of how accepted work reaches its base. It is Merge (the Factory merges the branch into the base) or Branch (the Factory leaves the branch for the human to merge, and lands the Ticket when it sees the merge). Pull Request comes later.
+_Avoid_: Completion option, delivery mode, finish mode
+
+**Push**:
+A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch.
+_Avoid_: Publish, sync
 
 **Blocker**:
 A Ticket in the same Project that must reach Done before another Ticket can be claimed.

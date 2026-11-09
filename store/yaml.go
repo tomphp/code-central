@@ -102,6 +102,9 @@ func decodeNode(n *yaml.Node, v reflect.Value, path string) (string, error) {
 			}
 		}
 		return "", nil
+	case v.Kind() == reflect.Pointer && v.Type().Elem().Kind() == reflect.Struct:
+		v.Set(reflect.New(v.Type().Elem()))
+		return decodeNode(n, v.Elem(), path)
 	case v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Struct:
 		if n.Kind != yaml.SequenceNode {
 			return orFile(path), errors.New("must be a list")

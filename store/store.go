@@ -58,6 +58,64 @@ type Project struct {
 	Mode        Mode
 	// Archived is when the human archived the Project; zero while it isn't.
 	Archived time.Time
+	// Landing is how the Project's accepted work lands. A Project stored
+	// without one reads as DefaultLanding.
+	Landing Landing
+}
+
+// LandingMethod is how accepted work reaches a Project's base.
+type LandingMethod string
+
+// The Landing Methods.
+const (
+	// LandingMerge: the Factory merges the branch into the base.
+	LandingMerge LandingMethod = "merge"
+	// LandingBranch: the Factory leaves the branch for the human to merge.
+	LandingBranch LandingMethod = "branch"
+)
+
+// LandingMethods lists every LandingMethod, the default first.
+var LandingMethods = []LandingMethod{LandingMerge, LandingBranch}
+
+// Valid reports whether m is one of the LandingMethods.
+func (m LandingMethod) Valid() bool { return slices.Contains(LandingMethods, m) }
+
+// landingMethodNames is the LandingMethods as strings, for messages and
+// the schema.
+func landingMethodNames() []string {
+	var out []string
+	for _, m := range LandingMethods {
+		out = append(out, string(m))
+	}
+	return out
+}
+
+// Landing is a Project's Landing Method with its Push option: whether
+// the Factory pushes the work to Remote.
+type Landing struct {
+	Method LandingMethod
+	Push   bool
+	Remote string
+}
+
+// DefaultLandingRemote is the remote Push uses when none is named.
+const DefaultLandingRemote = "origin"
+
+// DefaultLanding is the Landing of a Project that has never had one set:
+// Merge, Push off, remote origin.
+func DefaultLanding() Landing {
+	return Landing{Method: LandingMerge, Remote: DefaultLandingRemote}
+}
+
+// orDefault fills in what l leaves empty from DefaultLanding.
+func (l Landing) orDefault() Landing {
+	if l.Method == "" {
+		l.Method = LandingMerge
+	}
+	if l.Remote == "" {
+		l.Remote = DefaultLandingRemote
+	}
+	return l
 }
 
 // Spec is a description of work, stored as Markdown with YAML frontmatter.

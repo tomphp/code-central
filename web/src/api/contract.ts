@@ -93,6 +93,10 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ["acme", "Acme Corp", 1, false],
         ["beta", "Beta", 0, false],
       ]);
+      expect(rows.map((r) => r.landing)).toEqual([
+        { method: "merge", push: false, remote: "origin" },
+        { method: "merge", push: false, remote: "origin" },
+      ]);
     });
 
     it("reads Needs Me: empty, then grouped with each row's detail", async () => {

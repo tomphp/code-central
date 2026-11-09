@@ -83,6 +83,8 @@ var Operations = []Op{
 	{Name: "list_projects", Audience: HumanOnly},
 	{Name: "move", Audience: HumanOnly, Write: true},
 	{Name: "rename_project", Audience: HumanOnly, Write: true},
+	// The Landing Method (code-central-173).
+	{Name: "set_landing_method", Audience: HumanOnly, Write: true},
 
 	// The Integration contract (ticket 42).
 	{Name: "create_linked_spec", Audience: IntegrationOnly, Write: true},

@@ -58,6 +58,15 @@ type ProjectView struct {
 	Archived    bool       `json:"archived"`
 	// ArchivedAt is when the human archived the Project, while it is.
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+	// Landing is how the Project's accepted work lands, always filled in.
+	Landing LandingView `json:"landing"`
+}
+
+// LandingView is a Project's Landing Method with its Push option.
+type LandingView struct {
+	Method store.LandingMethod `json:"method"`
+	Push   bool                `json:"push"`
+	Remote string              `json:"remote"`
 }
 
 // SpecView is a Spec as every read returns it, and as its writes return
@@ -440,7 +449,8 @@ func claimOrder(a, b store.Ticket) int {
 func finished(s store.State) bool { return s == store.Done || s == store.Cancelled }
 
 func projectView(p store.Project) ProjectView {
-	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode}
+	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
+		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at
