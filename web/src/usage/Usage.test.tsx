@@ -8,7 +8,8 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
-import { FakeApi, type FakeUsageResponse } from "../api/fake";
+import { FakeApi } from "../api/fake";
+import type { UsageResponse } from "../api/types";
 
 function world() {
   const fake = new FakeApi();
@@ -244,7 +245,7 @@ describe("Context Size", () => {
   }
   // response is one model response, minutes after the fake's now, reading
   // context tokens in all.
-  function response(fake: FakeApi, minutes: number, kind: string, context: number, agent?: string): FakeUsageResponse {
+  function response(fake: FakeApi, minutes: number, kind: string, context: number, agent?: string): UsageResponse {
     const time = new Date(fake.now.getTime() + minutes * 60_000).toISOString();
     return { time, ...(agent ? { agent } : {}), kind, input_tokens: 4, cache_write_tokens: 1_000, cache_read_tokens: context - 1_004, output_tokens: 50 };
   }

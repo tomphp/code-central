@@ -92,6 +92,7 @@ import {
   type UsageFilter,
   type UsageKind,
   type UsageOperation,
+  type UsageResponse,
   type UsageSession,
   type UsageView,
 } from "./types";
@@ -107,20 +108,8 @@ interface FakeUsageCall {
   error?: string;
 }
 
-// A FakeUsageResponse is one model response's token usage as a Factory
-// posts it; agent is left out for the main session.
-export interface FakeUsageResponse {
-  time: string;
-  agent?: string;
-  kind: string;
-  input_tokens: number;
-  cache_write_tokens: number;
-  cache_read_tokens: number;
-  output_tokens: number;
-}
-
 // A FakeUsageRecord is a posted response as the service records it, under its Claim.
-interface FakeUsageRecord extends FakeUsageResponse {
+interface FakeUsageRecord extends UsageResponse {
   project: string;
   ticket: string;
   claim: number;
@@ -144,7 +133,7 @@ function average(total: number, n: number): number {
 }
 
 // contextSize is how many tokens a response read: input, cache write and cache read.
-function contextSize(r: FakeUsageResponse): number {
+function contextSize(r: UsageResponse): number {
   return r.input_tokens + r.cache_write_tokens + r.cache_read_tokens;
 }
 
@@ -394,7 +383,7 @@ export class FakeApi implements Api {
   // with that session ID, live or ended, as a Factory's POST /api/usage
   // would. It counts as activity on the session's live Claims. With no
   // such Claim the responses are dropped.
-  postUsage(sessionId: string, responses: FakeUsageResponse[]) {
+  postUsage(sessionId: string, responses: UsageResponse[]) {
     const newest = this.pingSession(sessionId);
     if (!newest) return;
     const claim = { project: this.projectOf(newest.t.id), ticket: newest.t.id, claim: newest.number, session_id: sessionId };

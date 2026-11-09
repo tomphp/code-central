@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/tomoram/code-central/store"
@@ -205,7 +204,7 @@ func usageSessions(responses []usage.Response) []UsageSession {
 		}
 		if last, ok := latest[k]; !ok || !r.Time.Before(last) {
 			latest[k] = r.Time
-			s.Project, s.Ticket, s.Claim, s.Kind = projectOf(r.Ticket), r.Ticket, r.Claim, r.Kind
+			s.Project, s.Ticket, s.Claim, s.Kind = r.Project, r.Ticket, r.Claim, r.Kind
 		}
 	}
 	sessions := []UsageSession{}
@@ -216,12 +215,6 @@ func usageSessions(responses []usage.Response) []UsageSession {
 		return cmp.Or(b.Started.Compare(a.Started), cmp.Compare(a.SessionID, b.SessionID), cmp.Compare(a.Agent, b.Agent))
 	})
 	return sessions
-}
-
-// projectOf is the Project key of a Ticket's display ID: all before its
-// last hyphen, since a key may hold hyphens but a number can't.
-func projectOf(ticket string) string {
-	return ticket[:max(strings.LastIndex(ticket, "-"), 0)]
 }
 
 // kindOrder is the order kinds are listed in, as the Context Report

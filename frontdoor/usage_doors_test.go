@@ -21,21 +21,13 @@ import (
 // table. These drive MCP and the HTTP API of the running service and
 // assert only what the read returns.
 
-// usageRead is GET /api/usage's answer.
-type usageRead struct {
-	Operations []core.UsageOperation `json:"operations"`
-	Kinds      []any                 `json:"kinds"`
-	Sessions   []any                 `json:"sessions"`
-	Days       []any                 `json:"days"`
-}
-
-func readUsage(t *testing.T, srv *codecentraltest.Server, query string) usageRead {
+func readUsage(t *testing.T, srv *codecentraltest.Server, query string) core.UsageView {
 	t.Helper()
 	status, b := httpDo(t, srv, httpCall{method: "GET", path: "/api/usage" + query})
 	if status != http.StatusOK {
 		t.Fatalf("GET /api/usage%s: status %d: %s", query, status, b)
 	}
-	var u usageRead
+	var u core.UsageView
 	if err := json.Unmarshal(b, &u); err != nil {
 		t.Fatalf("not the usage shape: %v: %s", err, b)
 	}
@@ -54,7 +46,7 @@ func acmeServer(t *testing.T, opts ...codecentraltest.Option) *codecentraltest.S
 }
 
 // operation is the row for op, failing the test when there is none.
-func operation(t *testing.T, u usageRead, op string) core.UsageOperation {
+func operation(t *testing.T, u core.UsageView, op string) core.UsageOperation {
 	t.Helper()
 	for _, row := range u.Operations {
 		if row.Op == op {
@@ -128,7 +120,7 @@ func TestUsageReadsOneProjectOrAllOfThemArchivedOnesToo(t *testing.T) {
 	ctx := core.WithActor(context.Background(), core.Human)
 	must(t, func() error { _, err := srv.Core.ArchiveProject(ctx, "other"); return err })
 
-	ops := func(u usageRead) map[string]int {
+	ops := func(u core.UsageView) map[string]int {
 		m := map[string]int{}
 		for _, row := range u.Operations {
 			m[row.Op] = row.Calls

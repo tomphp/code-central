@@ -51,19 +51,6 @@ func postResponses(t *testing.T, srv *codecentraltest.Server, session string, rs
 	postUsage(t, srv, fmt.Sprintf(`{"session_id":%q,"responses":[%s]}`, session, strings.Join(items, ",")))
 }
 
-func readUsageView(t *testing.T, srv *codecentraltest.Server, query string) core.UsageView {
-	t.Helper()
-	status, b := httpDo(t, srv, httpCall{method: "GET", path: "/api/usage" + query})
-	if status != http.StatusOK {
-		t.Fatalf("GET /api/usage%s: status %d: %s", query, status, b)
-	}
-	var u core.UsageView
-	if err := json.Unmarshal(b, &u); err != nil {
-		t.Fatalf("not the usage shape: %v: %s", err, b)
-	}
-	return u
-}
-
 // claim claims key's next Ready Ticket for session.
 func claim(t *testing.T, srv *codecentraltest.Server, key, session string) core.ClaimResult {
 	t.Helper()
@@ -95,7 +82,7 @@ func TestPostingUsageAlwaysAnswers204AndDropsWhatItCannotFile(t *testing.T) {
 	} {
 		postUsage(t, srv, body)
 	}
-	if u := readUsageView(t, srv, ""); len(u.Kinds)+len(u.Sessions) != 0 {
+	if u := readUsage(t, srv, ""); len(u.Kinds)+len(u.Sessions) != 0 {
 		t.Fatalf("kinds %+v and sessions %+v, want none", u.Kinds, u.Sessions)
 	}
 }
@@ -117,7 +104,7 @@ func TestPostedUsageGoesToTheNewestClaimWithThatSession(t *testing.T) {
 	claim(t, srv, "acme", "s1") // acme-2, resumed in the same session
 	postResponses(t, srv, "s1", response{time: at(2), kind: "implementation", input: 10, write: 500, read: 3000})
 
-	got := readUsageView(t, srv, "").Sessions
+	got := readUsage(t, srv, "").Sessions
 	want := []core.UsageSession{{
 		Project: "acme", Ticket: "acme-2", Claim: 1, SessionID: "s1", Kind: "implementation",
 		Started: at(1), Peak: 3510, Responses: 2,
@@ -162,7 +149,7 @@ func TestContextSizeByKindWithSubagentsAsSessionsOfTheirOwn(t *testing.T) {
 	)
 	postResponses(t, srv, "spec", response{time: at(8), kind: "spec", input: 2, write: 30_000, read: 0})
 
-	u := readUsageView(t, srv, "")
+	u := readUsage(t, srv, "")
 	want := []core.UsageKind{
 		{Kind: "spec", Sessions: 1, AveragePeak: 30_002, LargestPeak: 30_002},
 		{Kind: "implementation", Sessions: 1, AveragePeak: 61_005, LargestPeak: 61_005},
@@ -209,7 +196,7 @@ func TestRecentSessionsAreTheNewest50(t *testing.T) {
 	}
 	postResponses(t, srv, "s1", rs...)
 
-	u := readUsageView(t, srv, "")
+	u := readUsage(t, srv, "")
 	if len(u.Sessions) != 50 || u.Sessions[0].Agent != "agent-59" || u.Sessions[49].Agent != "agent-10" {
 		t.Fatalf("%d sessions from %+v, want agent-59 back to agent-10", len(u.Sessions), u.Sessions[0])
 	}
@@ -239,7 +226,7 @@ func TestContextSizeForOneProjectOrAllOfThemOverTheRange(t *testing.T) {
 
 	sessions := func(query string) []string {
 		var out []string
-		for _, s := range readUsageView(t, srv, query).Sessions {
+		for _, s := range readUsage(t, srv, query).Sessions {
 			out = append(out, s.Ticket+"/"+s.Kind)
 		}
 		return out
@@ -254,32 +241,19 @@ func TestContextSizeForOneProjectOrAllOfThemOverTheRange(t *testing.T) {
 		t.Errorf("other over 30 days: %v", got)
 	}
 	want := []core.UsageKind{{Kind: "implementation", Sessions: 2, AveragePeak: 200, LargestPeak: 300}}
-	if got := readUsageView(t, srv, "").Kinds; !reflect.DeepEqual(got, want) {
+	if got := readUsage(t, srv, "").Kinds; !reflect.DeepEqual(got, want) {
 		t.Errorf("all kinds %+v, want %+v", got, want)
 	}
 }
 
 func TestPostedUsageSurvivesARestart(t *testing.T) {
 	dir := t.TempDir()
-	first := newServerOn(t, dir)
+	first := newServerWith(t, []codecentraltest.Option{codecentraltest.WithUsageDir(dir)})
 	claim(t, first, "acme", "s1")
 	postResponses(t, first, "s1", response{time: at(1), kind: "implementation", input: 42})
 
-	second := newServerOn(t, dir)
-	if got := readUsageView(t, second, "?project=acme").Sessions; len(got) != 1 || got[0].Peak != 42 {
+	second := newServerWith(t, []codecentraltest.Option{codecentraltest.WithUsageDir(dir)})
+	if got := readUsage(t, second, "?project=acme").Sessions; len(got) != 1 || got[0].Peak != 42 {
 		t.Fatalf("sessions %+v after a restart, want the one with peak 42", got)
 	}
-}
-
-// newServerOn is newServer keeping Usage under dir.
-func newServerOn(t *testing.T, dir string) *codecentraltest.Server {
-	t.Helper()
-	srv := acmeServer(t, codecentraltest.WithUsageDir(dir))
-	ctx := context.Background()
-	must(t, func() error { _, err := srv.Core.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "S"}); return err })
-	must(t, func() error {
-		_, err := srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "T", State: "Ready"})
-		return err
-	})
-	return srv
 }

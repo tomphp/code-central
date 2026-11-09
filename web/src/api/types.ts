@@ -495,6 +495,18 @@ export interface UsageDay {
   }[];
 }
 
+// UsageResponse is one model response's token usage as a Factory posts
+// it to POST /api/usage; agent is left out for the main session.
+export interface UsageResponse {
+  time: string;
+  agent?: string;
+  kind: string;
+  input_tokens: number;
+  cache_write_tokens: number;
+  cache_read_tokens: number;
+  output_tokens: number;
+}
+
 // UsageView is GET /api/usage: kinds and sessions come from the token
 // usage a Factory posts, sessions newest first and at most 50. Days stays
 // empty for now.

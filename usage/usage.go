@@ -43,7 +43,9 @@ type Call struct {
 // Response is one model response's token usage in a Claim's session, as
 // a Factory posted it: a model_response record.
 type Response struct {
-	Time time.Time `json:"time"`
+	// Project is the Project whose file holds the record, set on read.
+	Project string    `json:"-"`
+	Time    time.Time `json:"time"`
 	// Ticket is the Claim's Ticket's display ID, and Claim its number.
 	Ticket    string `json:"ticket"`
 	Claim     int    `json:"claim"`
@@ -178,7 +180,7 @@ func (r *Recorder) Read(project string, days int) Records {
 	for i := days - 1; i >= 0; i-- {
 		d := day(today.AddDate(0, 0, -i))
 		for _, p := range projects {
-			r.readFile(filepath.Join(r.projectDir(p), d+".jsonl"), &out)
+			r.readFile(p, filepath.Join(r.projectDir(p), d+".jsonl"), &out)
 		}
 	}
 	return out
@@ -199,9 +201,9 @@ func (r *Recorder) projects() []string {
 	return slices.Sorted(slices.Values(keys))
 }
 
-// readFile adds path's records to out, skipping and counting any line
+// readFile adds path's records, project's, to out, skipping and counting any line
 // that doesn't parse. A missing file holds no records.
-func (r *Recorder) readFile(path string, out *Records) {
+func (r *Recorder) readFile(project, path string, out *Records) {
 	f, err := os.Open(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return
@@ -228,6 +230,9 @@ func (r *Recorder) readFile(path string, out *Records) {
 			out.Calls, err = appendRecord(out.Calls, sc.Bytes())
 		case typeResponse:
 			out.Responses, err = appendRecord(out.Responses, sc.Bytes())
+			if err == nil {
+				out.Responses[len(out.Responses)-1].Project = project
+			}
 		default:
 			// A type this build doesn't know, from a newer one: not an error.
 		}

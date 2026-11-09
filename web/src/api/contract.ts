@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement } from "./types";
+import type { ChangeEvent, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
 import { ApiError } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -47,23 +47,11 @@ export interface Driver {
   // postUsage posts a session's model responses' token usage as a Factory
   // would (Spec code-central-201): they go to the newest Claim with that
   // session ID.
-  postUsage(sessionId: string, responses: UsagePost[]): Promise<void>;
+  postUsage(sessionId: string, responses: UsageResponse[]): Promise<void>;
   // dropTranscriptStreams drops every open Transcript stream, as a flaky
   // connection would; each reconnects by itself (ticket 110).
   dropTranscriptStreams(): void;
   close(): Promise<void>;
-}
-
-// UsagePost is one model response's token usage as a Factory posts it;
-// agent is left out for the main session.
-export interface UsagePost {
-  time: string;
-  agent?: string;
-  kind: string;
-  input_tokens: number;
-  cache_write_tokens: number;
-  cache_read_tokens: number;
-  output_tokens: number;
 }
 
 export interface FailureReportBody {
@@ -813,7 +801,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       // The service's now, from the Claim, so the responses fall in range.
       const base = Date.parse((await d.api.getTicket("acme", impl)).claims[0].started);
       const at = (s: number) => new Date(base + s * 1000).toISOString();
-      const resp = (s: number, kind: string, input: number, write: number, read: number, agent?: string): UsagePost => ({
+      const resp = (s: number, kind: string, input: number, write: number, read: number, agent?: string): UsageResponse => ({
         time: at(s),
         ...(agent ? { agent } : {}),
         kind,
