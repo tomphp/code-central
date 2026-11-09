@@ -279,6 +279,40 @@ func TestEachWriteLeavesOnlyItsOneFile(t *testing.T) {
 	}
 }
 
+func TestOptionsAreOneFileAtTheStoreRoot(t *testing.T) {
+	dir := t.TempDir()
+	s := openFile(t, dir)
+	before := listFiles(t, dir)
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutOptions(store.Options{FocusClear: store.FocusActivityDashboard})
+	})
+	var added []string
+	for _, f := range listFiles(t, dir) {
+		if !slices.Contains(before, f) {
+			added = append(added, f)
+		}
+	}
+	if !slices.Equal(added, []string{"options.yaml"}) {
+		t.Fatalf("files added by an options write: %v", added)
+	}
+	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: activity_dashboard\n" {
+		t.Fatalf("options.yaml = %q", got)
+	}
+}
+
+func TestAnOptionsFileWithNoKeysReadsAsTheDefaults(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "store.yaml"), fmt.Sprintf("format: %d\n", store.Format))
+	writeFile(t, filepath.Join(dir, "options.yaml"), "{}\n")
+	s := openFile(t, dir)
+	s.View(func(r store.Reader) error {
+		if o := r.Options(); o.FocusClear != store.FocusAllClear {
+			t.Fatalf("options = %+v, want the defaults", o)
+		}
+		return nil
+	})
+}
+
 func listFiles(t *testing.T, dir string) []string {
 	t.Helper()
 	var out []string
@@ -316,6 +350,8 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 		{"bad external state", "projects/acme/tickets/2.yaml", ticket + "link:\n  integration: github\n  id: \"12\"\n  external_state: gone\n", "link.external_state"},
 		{"link without id", "projects/acme/tickets/2.yaml", ticket + "link:\n  integration: github\n  external_state: open\n", "link.id"},
 		{"badly named ticket file", "projects/acme/tickets/two.yaml", ticket, "file name"},
+		{"unknown option", "options.yaml", "focus_clear: all_clear\ntheme: dark\n", "theme"},
+		{"focus_clear outside its set", "options.yaml", "focus_clear: dashboard\n", "focus_clear"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

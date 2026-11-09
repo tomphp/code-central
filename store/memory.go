@@ -12,6 +12,7 @@ import (
 type index struct {
 	mu       sync.RWMutex
 	projects map[string]*projectData
+	options  Options
 	// persist, when set, makes a record durable before memory changes.
 	persist func(record any, project string) error
 }
@@ -22,7 +23,9 @@ type projectData struct {
 	tickets map[int]Ticket
 }
 
-func newIndex() *index { return &index{projects: map[string]*projectData{}} }
+func newIndex() *index {
+	return &index{projects: map[string]*projectData{}, options: DefaultOptions()}
+}
 
 // NewMemory returns the in-memory fake store.
 func NewMemory() Store { return newIndex() }
@@ -117,6 +120,8 @@ func (r reader) NextNumber(project string) int {
 	return high + 1
 }
 
+func (r reader) Options() Options { return r.x.options }
+
 type writer struct {
 	reader
 	wrote bool
@@ -126,7 +131,9 @@ func (w *writer) begin(record any, project string) error {
 	if w.wrote {
 		return ErrSecondWrite
 	}
-	if _, ok := record.(Project); !ok {
+	switch record.(type) {
+	case Project, Options:
+	default:
 		if _, ok := w.x.projects[project]; !ok {
 			return ErrUnknownProject
 		}
@@ -198,6 +205,17 @@ func (w *writer) PutImport(project string, im Import) error {
 	for _, t := range im.Tickets {
 		p.tickets[t.Number] = t
 	}
+	return nil
+}
+
+func (w *writer) PutOptions(o Options) error {
+	if field := o.badField(); field != "" {
+		return fmt.Errorf("store: options: %s: %w", field, ErrInvalidOption)
+	}
+	if err := w.begin(o, ""); err != nil {
+		return err
+	}
+	w.x.options = o
 	return nil
 }
 

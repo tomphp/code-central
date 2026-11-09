@@ -20,6 +20,7 @@ func Schema() string {
 		b.WriteString("\n")
 	}
 	file("store.yaml", storeFile{})
+	file("options.yaml (optional): the global Options; a key left out takes its default", optionsFile{})
 	file("projects/<key>/project.yaml", projectFile{})
 	file("projects/<key>/specs/<n>.md: YAML frontmatter between --- lines, then the Markdown body", specFront{})
 	file("projects/<key>/tickets/<n>.yaml", ticketFile{})
@@ -32,6 +33,11 @@ func Schema() string {
 	for _, s := range States {
 		states = append(states, string(s))
 	}
+	var focusClears []string
+	for _, f := range FocusClears {
+		focusClears = append(focusClears, string(f))
+	}
+	values("  options focus_clear (default all_clear)", focusClears)
 	values("  ticket state, moves[].from, moves[].to", states)
 	values("  rounds[].questions[].status", []string{string(QuestionOpen), string(QuestionAnswered), string(QuestionDismissed)})
 	var external []string

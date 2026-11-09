@@ -108,6 +108,14 @@ _Avoid_: Zen mode, queue view
 One thing in Needs Me the human can decide alone: one open Question, or one waiting Ticket.
 _Avoid_: Action, card, task
 
+**Activity Dashboard**:
+What Focus Mode shows instead of All clear when nothing needs the human and the human has chosen it. It shows how many Tickets are Ready and In Progress, and lists the In Progress Tickets.
+_Avoid_: Status board, overview, monitor
+
+**Option**:
+A global preference the human sets from the UI's Options view, kept by Code Central and applied at once.
+_Avoid_: Setting (that word stays for `settings.yaml`), preference, config
+
 **Notification**:
 An interruption sent to the human when an agent is stopped and waiting on them, as distinct from the Needs Me count.
 _Avoid_: Alert, ping

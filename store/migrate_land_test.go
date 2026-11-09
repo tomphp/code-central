@@ -42,8 +42,8 @@ edits: []
 	writeFile(t, filepath.Join(dir, "projects/acme/tickets/2.yaml"), ticket)
 
 	s := openFile(t, dir)
-	if m := s.Migrated(); m == nil || m.From != 4 || m.To != 5 {
-		t.Fatalf("migrated = %+v, want a migration from format 4 to 5", m)
+	if m := s.Migrated(); m == nil || m.From != 4 || m.To != store.Format {
+		t.Fatalf("migrated = %+v, want a migration from format 4 to the current format", m)
 	}
 	if got := readFile(t, filepath.Join(dir, "projects/acme/tickets/2.yaml")); got != ticket {
 		t.Fatalf("the Ticket file changed:\n%s", got)
