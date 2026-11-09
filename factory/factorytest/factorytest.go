@@ -432,6 +432,13 @@ func (h *Harness) Accept(ticket string) {
 	must(h.t, err)
 }
 
+// SetLandingMethod sets the Project's Landing Method as the human.
+func (h *Harness) SetLandingMethod(in core.SetLandingMethodInput) {
+	h.t.Helper()
+	_, err := h.Human().SetLandingMethod(context.Background(), h.Project, in)
+	must(h.t, err)
+}
+
 // CommitOn commits file with content on branch, made from main when it
 // doesn't exist, and returns the commit. The repo is left on main.
 func (h *Harness) CommitOn(branch, file, content string) string {
