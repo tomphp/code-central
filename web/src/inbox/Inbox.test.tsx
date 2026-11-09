@@ -475,3 +475,47 @@ describe("the sidebar's top row: + New and Focus", () => {
     expect(params().get("view")).toBe("focus");
   });
 });
+
+describe("the Admin section", () => {
+  const follows = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
+
+  it("keeps the title row to the heading, with no Usage or Options links", () => {
+    renderApp(world());
+    const title = within(nav()).getByRole("heading", { level: 1, name: "Code Central" });
+    expect(within(title.parentElement!).queryByRole("link")).toBeNull();
+  });
+
+  it("follows View's last State filter and precedes the Archived Projects", async () => {
+    const fake = world();
+    fake.addProject("old", "Old", { archived: true });
+    renderApp(fake);
+    const admin = within(nav()).getByRole("heading", { level: 2, name: "Admin" });
+    const lastState = within(nav()).getByRole("button", { name: /^Cancelled/ });
+    const archived = await within(nav()).findByText(/^Archived/);
+    expect(follows(admin, lastState)).toBe(true);
+    expect(follows(archived, admin)).toBe(true);
+
+    const usage = within(nav()).getByRole("link", { name: "Usage" });
+    const options = within(nav()).getByRole("link", { name: "Options" });
+    expect(follows(usage, admin)).toBe(true);
+    expect(follows(options, usage)).toBe(true);
+    expect(follows(archived, options)).toBe(true);
+  });
+
+  it("links Usage and Options with real addresses that return to the Inbox", () => {
+    renderApp(world(), "/?view=inbox&project=acme&state=Ready");
+    expect(within(nav()).getByRole("link", { name: "Usage" })).toHaveAttribute("href", "?view=usage&back=view%3Dinbox%26project%3Dacme%26state%3DReady");
+    expect(within(nav()).getByRole("link", { name: "Options" })).toHaveAttribute("href", "?view=options&from=inbox&project=acme&state=Ready");
+    expect(within(nav()).getByRole("link", { name: "Usage" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("opens Usage and Options", async () => {
+    renderApp(world());
+    await userEvent.click(within(nav()).getByRole("link", { name: "Usage" }));
+    expect(screen.getByRole("main", { name: "Usage" })).toBeInTheDocument();
+
+    act(() => window.history.back());
+    await userEvent.click(within(await screen.findByRole("navigation", { name: "Filters" })).getByRole("link", { name: "Options" }));
+    expect(screen.getByRole("main", { name: "Options" })).toBeInTheDocument();
+  });
+});
