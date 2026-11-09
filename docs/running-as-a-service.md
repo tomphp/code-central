@@ -4,13 +4,35 @@ Agents can only reach Code Central while `code-central serve` is running. The us
 
 ## Install
 
+Download the archive for your OS and CPU from [GitHub Releases](https://github.com/tomphp/code-central/releases), with the release's `checksums.txt`. Each archive holds both binaries, `code-central` and `code-central-factory` (`.exe` on Windows), and is named `code-central_<tag>_<os>_<arch>`: `.tar.gz` for `linux` and `darwin`, `.zip` for `windows`, on `amd64` or `arm64`. Verify it, unpack it and put both binaries on your PATH:
+
+```sh
+sha256sum --ignore-missing -c checksums.txt     # older macOS: shasum -a 256 --ignore-missing -c checksums.txt
+tar -xzf code-central_v1.1.0_darwin_arm64.tar.gz
+mv code-central code-central-factory ~/bin/   # anywhere on PATH
+code-central service install                  # [--store <dir>] [--bind <ip>]
+```
+
+On Windows, check the `.zip` with `Get-FileHash` against its line in `checksums.txt`, unpack it with Explorer or `Expand-Archive`, and move both `.exe` files into a folder on your PATH.
+
+The binaries aren't signed:
+
+- **macOS:** Gatekeeper stops a binary that came from a browser download. Clear the quarantine flag once: `xattr -d com.apple.quarantine ~/bin/code-central ~/bin/code-central-factory`. An archive fetched with `curl` has no flag to clear.
+- **Windows:** SmartScreen may warn about an unrecognised app the first time you run it. Choose **More info**, then **Run anyway**.
+
+### Building from source
+
+With Go and Node installed, in a clone of the repository:
+
 ```sh
 make build
-cp bin/code-central ~/bin/            # or symlink it; anywhere on PATH
-code-central service install          # [--store <dir>] [--bind <ip>]
+cp bin/code-central bin/code-central-factory ~/bin/   # or symlink them; anywhere on PATH
+code-central service install
 ```
 
 `make build` also turns on the repository's `commit-msg` hook in that clone, which refuses commits until cocogitto is installed; see the Commits section of [CLAUDE.md](../CLAUDE.md).
+
+### What `service install` does
 
 - **macOS:** writes the launchd agent `~/Library/LaunchAgents/com.github.tomoram.code-central.plist` and loads it. Logs go to `~/Library/Logs/code-central.log`.
 - **Linux:** writes the systemd user unit `~/.config/systemd/user/code-central.service` (or under `$XDG_CONFIG_HOME`), enables it and starts it. Logs: `journalctl --user -u code-central`.
@@ -22,10 +44,14 @@ The service starts at login and restarts after a crash. The unit records the bin
 
 ## Upgrading
 
+Download, verify and unpack the new release's archive as in [Install](#install), replace both binaries on your PATH, then restart the service:
+
 ```sh
-make build && cp bin/code-central ~/bin/
+mv code-central code-central-factory ~/bin/
 code-central service restart
 ```
+
+Building from source instead: `make build && cp bin/code-central bin/code-central-factory ~/bin/`, then `code-central service restart`. The release notes on each GitHub Release list its features, fixes and breaking changes.
 
 `service restart` restarts the installed service. The service never watches for its binary being replaced, so the restart is what picks up the new version. A restart loses nothing: Claims, Rounds and all other state live in the store, the service finishes in-flight writes before it stops (on Windows `/End` terminates it instead, which loses nothing either, because every write is flushed before it is acknowledged), and `code-central wait` retries until the service is back. Keep restarts short, because Claude Code marks an MCP server failed after about 31 seconds.
 
@@ -53,7 +79,7 @@ launchctl bootout gui/$(id -u)/com.github.tomoram.code-central   # macOS; Linux:
 cd ~/.local/share                      # or wherever your store lives (CODE_CENTRAL_STORE, --store)
 mv code-central code-central.upgraded  # keep it until you're sure
 mv code-central.format-<n>.bak code-central
-cp <old build>/code-central ~/bin/     # the binary that understands format <n>
+cp <old release>/code-central ~/bin/   # the binary that understands format <n>
 code-central service install           # rewrites the unit and starts the old version
 ```
 
@@ -70,7 +96,7 @@ Running it again rewrites the files it generated without asking, and asks before
 
 ## Versions
 
-`make build` stamps `git describe --tags --always --dirty` as the version. `code-central --version` prints it, and the service sends it in the `X-Code-Central-Version` response header.
+A release's binary is stamped with its tag, such as `v1.1.0`, and `make build` stamps `git describe --tags --always --dirty`, such as `v1.1.0-3-g0cf9d18-dirty`. `code-central --version` prints it, and the service sends it in the `X-Code-Central-Version` response header.
 
 A client sends its own version in the `X-Code-Central-Client-Version` request header. The CLI sends it on every request, and any HTTP client may. MCP calls can't carry a header from the CLI, so an MCP client sends it as a top-level `client_version` field instead, which every operation accepts without listing it and which wins over the header. When the service rejects a request for an unknown field, the error says whether the versions are the likely cause:
 
