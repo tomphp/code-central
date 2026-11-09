@@ -459,7 +459,8 @@ export interface UsageOperation {
   errors: number;
 }
 
-// UsageKind is one kind of session's Context Size figures.
+// UsageKind is one kind of session's Context Size figures: its sessions,
+// and the average (to the nearest token) and largest of their peaks.
 export interface UsageKind {
   kind: string;
   sessions: number;
@@ -467,7 +468,9 @@ export interface UsageKind {
   largest_peak: number;
 }
 
-// UsageSession is one recent session, a Claim's main session or one of its subagents.
+// UsageSession is one recent session, a Claim's main session or one of its
+// subagents (agent), with the Claim and kind of its latest response; peak
+// is its largest Context Size and started its first response's time.
 export interface UsageSession {
   project: string;
   ticket: string;
@@ -492,8 +495,9 @@ export interface UsageDay {
   }[];
 }
 
-// UsageView is GET /api/usage. Kinds, sessions and days stay empty until
-// the Factory posts token usage.
+// UsageView is GET /api/usage: kinds and sessions come from the token
+// usage a Factory posts, sessions newest first and at most 50. Days stays
+// empty for now.
 export interface UsageView {
   operations: UsageOperation[];
   kinds: UsageKind[];

@@ -1,14 +1,16 @@
 // Usage (Spec code-central-201): what agents have consumed in one
-// Project, or in all of them, over the last 7, 30 or 90 days. For now it
-// is the Code Central calls table: one row per MCP operation, sortable by
-// each column. It loads when opened and whenever its scope or range
-// changes, never live. Back returns to the view it was opened from.
+// Project, or in all of them, over the last 7, 30 or 90 days: the Code
+// Central calls table, one row per MCP operation, sortable by each
+// column; and Context Size, each kind of session's peaks and the recent
+// sessions, each linking to its Ticket. It loads when opened and whenever
+// its scope or range changes, never live. Back returns to the view it was
+// opened from.
 import { useState } from "react";
 import type { Api } from "../api/api";
-import { USAGE_DAYS, type ProjectRow, type UsageDays, type UsageOperation } from "../api/types";
+import { USAGE_DAYS, type ProjectRow, type UsageDays, type UsageKind, type UsageOperation, type UsageSession } from "../api/types";
 import { bytes, count } from "../format";
 import { useFetch } from "../live";
-import type { UiLocation } from "../url";
+import { clickTo, hrefFor, type UiLocation } from "../url";
 import "./usage.css";
 
 export interface UsageViewProps {
@@ -25,7 +27,10 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
   const back = loc.back?.view === "focus" ? "focus" : "inbox";
   const scopeName = loc.project ? (projects.find((p) => p.key === loc.project)?.display_name ?? loc.project) : "All Projects";
   // Rows answer the current scope and range only once they've loaded.
-  const operations = usage.data?.operations;
+  const data = usage.data;
+  const empty = data && !data.operations.length && !data.kinds.length && !data.sessions.length;
+  const over = `in ${scopeName} over the last ${days} days`;
+  const projectName = (key: string) => projects.find((p) => p.key === key)?.display_name ?? key;
 
   return (
     <main aria-label="Usage" className="usage">
@@ -63,17 +68,26 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
             {usage.error.message}
           </p>
         )}
-        <section aria-labelledby="usage-calls">
-          <h2 id="usage-calls">Code Central calls</h2>
-          {operations &&
-            (operations.length ? (
-              <CallsTable operations={operations} />
-            ) : (
-              <p className="muted">
-                No usage yet in {scopeName} over the last {days} days.
-              </p>
-            ))}
-        </section>
+        {empty && <p className="muted">No usage yet {over}.</p>}
+        {data && !empty && (
+          <>
+            <section aria-labelledby="usage-calls">
+              <h2 id="usage-calls">Code Central calls</h2>
+              {data.operations.length ? <CallsTable operations={data.operations} /> : <p className="muted">No Code Central calls {over}.</p>}
+            </section>
+            <section aria-labelledby="usage-context">
+              <h2 id="usage-context">Context Size</h2>
+              {data.sessions.length ? (
+                <>
+                  <KindsTable kinds={data.kinds} />
+                  <SessionsTable sessions={data.sessions} projectName={projectName} navigate={navigate} />
+                </>
+              ) : (
+                <p className="muted">No sessions {over}. Only sessions the Factory runs are counted.</p>
+              )}
+            </section>
+          </>
+        )}
       </div>
     </main>
   );
@@ -151,4 +165,98 @@ function CallsTable({ operations }: { operations: UsageOperation[] }) {
       </tbody>
     </table>
   );
+}
+
+// Tokens is a token count's cell, with thousands separators and the
+// exact figure, in tokens, on hover.
+function Tokens({ n }: { n: number }) {
+  return (
+    <td className="num" title={`${count(n)} tokens`}>
+      {count(n)}
+    </td>
+  );
+}
+
+// KindsTable is Context Size by kind of session: how many sessions there
+// were, and the average and largest of their peaks.
+function KindsTable({ kinds }: { kinds: UsageKind[] }) {
+  return (
+    <table aria-label="Context Size by kind" className="usage-table">
+      <thead>
+        <tr>
+          <th scope="col">Kind</th>
+          <th scope="col" className="num">Sessions</th>
+          <th scope="col" className="num">Average peak</th>
+          <th scope="col" className="num">Largest peak</th>
+        </tr>
+      </thead>
+      <tbody>
+        {kinds.map((k) => (
+          <tr key={k.kind}>
+            <th scope="row">{k.kind}</th>
+            <td className="num">{count(k.sessions)}</td>
+            <Tokens n={k.average_peak} />
+            <Tokens n={k.largest_peak} />
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+interface SessionsTableProps {
+  sessions: UsageSession[];
+  projectName(key: string): string;
+  navigate(patch: Partial<UiLocation>): void;
+}
+
+// SessionsTable is the recent sessions, newest first, each a Claim's
+// main session or one of its subagents, its Ticket a link to that Ticket.
+function SessionsTable({ sessions, projectName, navigate }: SessionsTableProps) {
+  return (
+    <>
+      <h3 className="usage-subhead">Recent sessions</h3>
+      <table aria-label="Recent sessions" className="usage-table">
+        <thead>
+          <tr>
+            <th scope="col">Ticket</th>
+            <th scope="col">Project</th>
+            <th scope="col" className="num">Claim</th>
+            <th scope="col">Session</th>
+            <th scope="col">Kind</th>
+            <th scope="col">Started</th>
+            <th scope="col" className="num">Peak Context Size</th>
+            <th scope="col" className="num">Responses</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sessions.map((s) => {
+            const to: Partial<UiLocation> = { view: "inbox", project: s.project, ticket: s.ticket };
+            return (
+              <tr key={`${s.session_id} ${s.agent ?? ""}`}>
+                <th scope="row">
+                  <a href={hrefFor({ view: "inbox", ...to })} onClick={clickTo(navigate, to)}>
+                    {s.ticket}
+                  </a>
+                </th>
+                <td>{projectName(s.project)}</td>
+                <td className="num">{s.claim}</td>
+                <td className="usage-session">{s.agent ? `${s.session_id} · ${s.agent}` : s.session_id}</td>
+                <td>{s.kind}</td>
+                <td title={s.started}>{started(s.started)}</td>
+                <Tokens n={s.peak} />
+                <td className="num">{count(s.responses)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+// started is a session's start in local time, as short as the locale
+// puts it: "9 Nov, 14:25".
+function started(at: string): string {
+  return new Date(at).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }

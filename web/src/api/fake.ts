@@ -21,8 +21,10 @@
 // submitRequirement writes a Spec and its three Stage Tickets.
 //
 // recordCall stands in for an agent's MCP call, which the service records
-// as Usage itself; usage reads the calls back as the service does: over
-// the last days local days, for one Project or all of them.
+// as Usage itself, and postUsage for a Factory's POST /api/usage, filed
+// under the newest Claim with its session ID; usage reads them back as the
+// service does: over the last days local days, for one Project or all of
+// them.
 //
 // The Options start at their defaults; setOptions validates as the
 // service does, and sends options.changed only when something changed.
@@ -88,7 +90,9 @@ import {
   type Transcript,
   USAGE_DAYS,
   type UsageFilter,
+  type UsageKind,
   type UsageOperation,
+  type UsageSession,
   type UsageView,
 } from "./types";
 
@@ -103,6 +107,32 @@ interface FakeUsageCall {
   error?: string;
 }
 
+// A FakeUsageResponse is one model response's token usage as a Factory
+// posts it; agent is left out for the main session.
+export interface FakeUsageResponse {
+  time: string;
+  agent?: string;
+  kind: string;
+  input_tokens: number;
+  cache_write_tokens: number;
+  cache_read_tokens: number;
+  output_tokens: number;
+}
+
+// A FakeUsageRecord is a posted response as the service records it, under its Claim.
+interface FakeUsageRecord extends FakeUsageResponse {
+  project: string;
+  ticket: string;
+  claim: number;
+  session_id: string;
+}
+
+// KIND_ORDER is the order Usage lists kinds of session in; any other kind follows, by name.
+const KIND_ORDER = ["grilling", "spec", "tickets", "implementation", "review", "subagent"];
+
+// RECENT_SESSIONS is how many sessions a Usage read lists.
+const RECENT_SESSIONS = 50;
+
 // localDay numbers t's day in the local time zone, as the service dates Usage.
 function localDay(t: Date): number {
   return Math.round(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()) / 86_400_000);
@@ -111,6 +141,54 @@ function localDay(t: Date): number {
 // average is total / n rounded to the nearest whole number, halves up, as the service rounds.
 function average(total: number, n: number): number {
   return Math.floor((2 * total + n) / (2 * n));
+}
+
+// contextSize is how many tokens a response read: input, cache write and cache read.
+function contextSize(r: FakeUsageResponse): number {
+  return r.input_tokens + r.cache_write_tokens + r.cache_read_tokens;
+}
+
+// usageSessions are the sessions the responses belong to, newest first, as
+// the service works them out: a session is its session ID plus its agent,
+// with the Claim and kind of its latest response.
+function usageSessions(responses: FakeUsageRecord[]): UsageSession[] {
+  const byKey = new Map<string, { s: UsageSession; latest: number }>();
+  for (const r of responses) {
+    const key = `${r.session_id}\u0000${r.agent ?? ""}`;
+    const t = Date.parse(r.time);
+    let e = byKey.get(key);
+    if (!e) {
+      e = { s: { project: "", ticket: "", claim: 0, session_id: r.session_id, ...(r.agent ? { agent: r.agent } : {}), kind: "", started: r.time, peak: 0, responses: 0 }, latest: -Infinity };
+      byKey.set(key, e);
+    }
+    e.s.responses++;
+    e.s.peak = Math.max(e.s.peak, contextSize(r));
+    if (t < Date.parse(e.s.started)) e.s.started = r.time;
+    if (t >= e.latest) {
+      e.latest = t;
+      Object.assign(e.s, { project: r.project, ticket: r.ticket, claim: r.claim, kind: r.kind });
+    }
+  }
+  const by = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  return [...byKey.values()]
+    .map((e) => e.s)
+    .sort((a, b) => Date.parse(b.started) - Date.parse(a.started) || by(a.session_id, b.session_id) || by(a.agent ?? "", b.agent ?? ""));
+}
+
+// usageKinds is each kind of session's Context Size figures, in KIND_ORDER.
+function usageKinds(sessions: UsageSession[]): UsageKind[] {
+  const byKind = new Map<string, { k: UsageKind; total: number }>();
+  for (const s of sessions) {
+    const e = byKind.get(s.kind) ?? { k: { kind: s.kind, sessions: 0, average_peak: 0, largest_peak: 0 }, total: 0 };
+    e.k.sessions++;
+    e.k.largest_peak = Math.max(e.k.largest_peak, s.peak);
+    e.total += s.peak;
+    byKind.set(s.kind, e);
+  }
+  const rank = (kind: string) => (KIND_ORDER.includes(kind) ? KIND_ORDER.indexOf(kind) : KIND_ORDER.length);
+  return [...byKind.values()]
+    .map((e) => ({ ...e.k, average_peak: average(e.total, e.k.sessions) }))
+    .sort((a, b) => rank(a.kind) - rank(b.kind) || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0));
 }
 
 // Every action's fake behaviour registers itself from ./actions/.
@@ -192,6 +270,7 @@ export class FakeApi implements Api {
   private followers = new Set<FakeFollower>();
   private opts: Options = { ...DEFAULT_OPTIONS };
   private usageCalls: FakeUsageCall[] = [];
+  private usageResponses: FakeUsageRecord[] = [];
 
   // ---- seeding ----
 
@@ -297,15 +376,7 @@ export class FakeApi implements Api {
   // ticket.changed (unthrottled: the fake holds data, not timing). With
   // no such Claim the events are dropped.
   postSessionEvents(sessionId: string, events: SessionEvent[]) {
-    if (!sessionId) return;
-    let newest: { t: TicketView; number: number; started: string } | undefined;
-    for (const t of this.tickets.values()) {
-      for (const c of t.claims) {
-        if (c.session_id !== sessionId) continue;
-        if (!c.ended) c.last_activity = this.now.toISOString();
-        if (!newest || c.started > newest.started) newest = { t, number: c.number, started: c.started };
-      }
-    }
+    const newest = this.pingSession(sessionId);
     if (!newest || !events.length) return;
     const k = transcriptKey(newest.t.id, newest.number);
     const tr = this.transcripts.get(k) ?? { events: [], lastSeq: 0, tail: false };
@@ -317,6 +388,32 @@ export class FakeApi implements Api {
     this.transcripts.set(k, tr);
     for (const f of this.followers) this.deliver(f);
     this.emit({ type: "ticket.changed", project: this.projectOf(newest.t.id), id: newest.t.id });
+  }
+
+  // postUsage records a session's model responses under the newest Claim
+  // with that session ID, live or ended, as a Factory's POST /api/usage
+  // would. It counts as activity on the session's live Claims. With no
+  // such Claim the responses are dropped.
+  postUsage(sessionId: string, responses: FakeUsageResponse[]) {
+    const newest = this.pingSession(sessionId);
+    if (!newest) return;
+    const claim = { project: this.projectOf(newest.t.id), ticket: newest.t.id, claim: newest.number, session_id: sessionId };
+    for (const r of structuredClone(responses)) this.usageResponses.push({ ...r, ...claim });
+  }
+
+  // pingSession marks activity on a session's live Claims, as a ping
+  // does, and returns its newest Claim, live or ended.
+  private pingSession(sessionId: string): { t: TicketView; number: number; started: string } | undefined {
+    if (!sessionId) return undefined;
+    let newest: { t: TicketView; number: number; started: string } | undefined;
+    for (const t of this.tickets.values()) {
+      for (const c of t.claims) {
+        if (c.session_id !== sessionId) continue;
+        if (!c.ended) c.last_activity = this.now.toISOString();
+        if (!newest || c.started > newest.started) newest = { t, number: c.number, started: c.started };
+      }
+    }
+    return newest;
   }
 
   // dropTranscriptStreams drops every connected Transcript stream, as a
@@ -633,10 +730,13 @@ export class FakeApi implements Api {
     if (!USAGE_DAYS.includes(days)) throw new ApiError(422, "invalid", `days must be 7, 30 or 90, not ${days}`, "days");
     if (filter.project && !this.projects.has(filter.project)) throw new ApiError(404, "not_found", `no Project "${filter.project}"`);
     const today = localDay(this.now);
+    const inRange = (r: { project: string; time: string }) => {
+      const ago = today - localDay(new Date(r.time));
+      return (!filter.project || r.project === filter.project) && ago >= 0 && ago < days;
+    };
     const rows = new Map<string, UsageOperation>();
     for (const c of this.usageCalls) {
-      const ago = today - localDay(new Date(c.time));
-      if ((filter.project && c.project !== filter.project) || ago < 0 || ago >= days) continue;
+      if (!inRange(c)) continue;
       const row = rows.get(c.op) ?? { op: c.op, calls: 0, request_bytes: 0, average_request_bytes: 0, response_bytes: 0, average_response_bytes: 0, errors: 0 };
       row.calls++;
       row.request_bytes += c.request_bytes;
@@ -647,7 +747,8 @@ export class FakeApi implements Api {
     const operations = [...rows.values()]
       .map((r) => ({ ...r, average_request_bytes: average(r.request_bytes, r.calls), average_response_bytes: average(r.response_bytes, r.calls) }))
       .sort((a, b) => b.calls - a.calls || (a.op < b.op ? -1 : 1));
-    return { operations, kinds: [], sessions: [], days: [] };
+    const sessions = usageSessions(this.usageResponses.filter(inRange));
+    return { operations, kinds: usageKinds(sessions), sessions: sessions.slice(0, RECENT_SESSIONS), days: [] };
   }
 
   // ---- internals ----

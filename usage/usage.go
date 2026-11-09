@@ -40,18 +40,55 @@ type Call struct {
 	Error string `json:"error,omitempty"`
 }
 
+// Response is one model response's token usage in a Claim's session, as
+// a Factory posted it: a model_response record.
+type Response struct {
+	Time time.Time `json:"time"`
+	// Ticket is the Claim's Ticket's display ID, and Claim its number.
+	Ticket    string `json:"ticket"`
+	Claim     int    `json:"claim"`
+	SessionID string `json:"session_id"`
+	// Agent is the subagent the response was for, "" for the main session.
+	Agent string `json:"agent,omitempty"`
+	// Kind is the kind of session, as the Factory named it.
+	Kind string `json:"kind"`
+	Tokens
+}
+
+// Tokens are a model response's four token counts.
+type Tokens struct {
+	InputTokens      int `json:"input_tokens"`
+	CacheWriteTokens int `json:"cache_write_tokens"`
+	CacheReadTokens  int `json:"cache_read_tokens"`
+	OutputTokens     int `json:"output_tokens"`
+}
+
+// ContextSize is how many tokens the model read for the response: how
+// full the session's context window was.
+func (t Tokens) ContextSize() int { return t.InputTokens + t.CacheWriteTokens + t.CacheReadTokens }
+
 // Records are the records a read found, oldest file first.
 type Records struct {
-	Calls []Call
+	Calls     []Call
+	Responses []Response
 }
 
 // The record types, each line's "type".
-const typeCall = "mcp_call"
+const (
+	typeCall     = "mcp_call"
+	typeResponse = "model_response"
+)
 
-// record is one line of a file: its type, then that type's fields.
-type record struct {
+// callLine and responseLine are each record type's line of a file: its
+// type, then the record's fields.
+type callLine struct {
 	Type string `json:"type"`
 	Call
+}
+
+type responseLine struct {
+	Type string `json:"type"`
+	Response
 }
 
 // Recorder appends and reads usage records. Its zero value is not
@@ -84,15 +121,28 @@ func (r *Recorder) RecordCall(project string, c Call) {
 	if r == nil {
 		return
 	}
-	if err := r.append(project, c.Time, record{typeCall, c}); err != nil {
+	if err := r.append(project, c.Time, callLine{typeCall, c}); err != nil {
 		fmt.Fprintf(r.log, "code-central serve: usage: dropped an %s record for %s: %v\n", typeCall, project, err)
+	}
+}
+
+// RecordResponses appends each of rs to project's file for its day. A
+// failure is logged and drops only that record.
+func (r *Recorder) RecordResponses(project string, rs []Response) {
+	if r == nil {
+		return
+	}
+	for _, resp := range rs {
+		if err := r.append(project, resp.Time, responseLine{typeResponse, resp}); err != nil {
+			fmt.Fprintf(r.log, "code-central serve: usage: dropped a %s record for %s: %v\n", typeResponse, project, err)
+		}
 	}
 }
 
 // append writes v as one line to the end of project's file for t's day,
 // opened for appending. There is no fsync: a crash may lose the last
 // records, which usage can afford.
-func (r *Recorder) append(project string, t time.Time, v record) error {
+func (r *Recorder) append(project string, t time.Time, v any) error {
 	line, err := json.Marshal(v)
 	if err != nil {
 		return err
@@ -165,16 +215,24 @@ func (r *Recorder) readFile(path string, out *Records) {
 	sc := bufio.NewScanner(f)
 	sc.Buffer(nil, 1<<20)
 	for sc.Scan() {
-		var rec record
-		if err := json.Unmarshal(sc.Bytes(), &rec); err != nil {
+		var line struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(sc.Bytes(), &line); err != nil {
 			skipped++
 			continue
 		}
-		switch rec.Type {
+		var err error
+		switch line.Type {
 		case typeCall:
-			out.Calls = append(out.Calls, rec.Call)
+			out.Calls, err = appendRecord(out.Calls, sc.Bytes())
+		case typeResponse:
+			out.Responses, err = appendRecord(out.Responses, sc.Bytes())
 		default:
 			// A type this build doesn't know, from a newer one: not an error.
+		}
+		if err != nil {
+			skipped++
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -183,6 +241,15 @@ func (r *Recorder) readFile(path string, out *Records) {
 	if skipped > 0 {
 		fmt.Fprintf(r.log, "code-central serve: usage: skipped %d unreadable line(s) in %s\n", skipped, path)
 	}
+}
+
+// appendRecord adds the record line holds to recs.
+func appendRecord[T any](recs []T, line []byte) ([]T, error) {
+	var rec T
+	if err := json.Unmarshal(line, &rec); err != nil {
+		return recs, err
+	}
+	return append(recs, rec), nil
 }
 
 func (r *Recorder) projectDir(project string) string {
