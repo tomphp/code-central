@@ -40,11 +40,7 @@ func (c *Core) SetOptions(ctx context.Context, in SetOptionsInput) (OptionsView,
 		return OptionsView{}, err
 	}
 	if in.FocusClear != nil && !in.FocusClear.Valid() {
-		var allowed []string
-		for _, f := range store.FocusClears {
-			allowed = append(allowed, string(f))
-		}
-		return OptionsView{}, invalid("focus_clear", "focus_clear %q is not an Option's value; allowed: %s", *in.FocusClear, strings.Join(allowed, ", "))
+		return OptionsView{}, invalid("focus_clear", "focus_clear %q is not an Option's value; allowed: %s", *in.FocusClear, strings.Join(store.FocusClearNames(), ", "))
 	}
 	var v OptionsView
 	err := c.store.Update(func(w store.Writer) error {
@@ -61,6 +57,9 @@ func (c *Core) SetOptions(ctx context.Context, in SetOptionsInput) (OptionsView,
 	})
 	return v, err
 }
+
+// OptionNames is every Option there is, for the refusal of an unknown one.
+var OptionNames = []string{"focus_clear"}
 
 func optionsView(o store.Options) OptionsView {
 	return OptionsView{FocusClear: o.FocusClear}

@@ -1,7 +1,6 @@
 package httpapi_test
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +11,6 @@ import (
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/httpapi"
-	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -69,7 +67,7 @@ func TestSetOptionsIsRefusedForAnAgent(t *testing.T) {
 func TestSetOptionsRefusesBadInput(t *testing.T) {
 	h := asHuman(newHandler(t))
 	for _, c := range []struct{ name, body, field, mentions string }{
-		{"unknown Option", `{"colour":"red"}`, "colour", "colour"},
+		{"unknown Option", `{"colour":"red"}`, "colour", "the Options are: focus_clear"},
 		{"value outside its set", `{"focus_clear":"fireworks"}`, "focus_clear", "activity_dashboard"},
 		{"wrong type", `{"focus_clear":3}`, "focus_clear", "focus_clear"},
 	} {
@@ -91,14 +89,7 @@ func TestSetOptionsRefusesBadInput(t *testing.T) {
 }
 
 func TestEventsCarryOptionsChangedWithNoProjectOrID(t *testing.T) {
-	mux := http.NewServeMux()
-	httpapi.Register(mux, core.New(store.NewMemory(), clock.NewFake(time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)), &ids.Sequence{}))
-	hs := httptest.NewServer(mux)
-	defer hs.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	r := sseStream(t, ctx, hs.URL)
+	mux, r := liveFeed(t)
 	h := asHuman(mux)
 	do(h, "POST", "/api/set_options", `{"focus_clear":"activity_dashboard"}`)
 	do(h, "POST", "/api/set_options", `{"focus_clear":"activity_dashboard"}`) // no change, no event

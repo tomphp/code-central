@@ -31,6 +31,17 @@ func (w countingWriter) PutOptions(o store.Options) error {
 	return w.Writer.PutOptions(o)
 }
 
+// countingCore is a Core over a memory store that counts its Options
+// writes, with a subscription to its notices.
+func countingCore(t *testing.T) (*core.Core, *int, <-chan events.Event) {
+	t.Helper()
+	writes := new(int)
+	c := core.New(countingStore{store.NewMemory(), writes}, clock.NewFake(t0), &ids.Sequence{})
+	notices, stop := c.Events().Subscribe()
+	t.Cleanup(stop)
+	return c, writes, notices
+}
+
 func focus(f store.FocusClear) *store.FocusClear { return &f }
 
 // noNotice fails if a notice is waiting.
@@ -65,11 +76,7 @@ func TestSetOptionsIsTheHumans(t *testing.T) {
 }
 
 func TestSetOptionsChangesAndPublishesOneNotice(t *testing.T) {
-	writes := 0
-	s := countingStore{store.NewMemory(), &writes}
-	c := core.New(s, clock.NewFake(t0), &ids.Sequence{})
-	notices, stop := c.Events().Subscribe()
-	defer stop()
+	c, writes, notices := countingCore(t)
 
 	o, err := c.SetOptions(human, core.SetOptionsInput{FocusClear: focus(store.FocusActivityDashboard)})
 	if err != nil || o.FocusClear != store.FocusActivityDashboard {
@@ -79,8 +86,8 @@ func TestSetOptionsChangesAndPublishesOneNotice(t *testing.T) {
 		t.Fatalf("got %+v, want a bare options.changed", got)
 	}
 	noNotice(t, notices)
-	if writes != 1 {
-		t.Fatalf("%d writes, want 1", writes)
+	if *writes != 1 {
+		t.Fatalf("%d writes, want 1", *writes)
 	}
 	if got, _ := c.GetOptions(ctx); got != o {
 		t.Fatalf("get_options after set: %+v, want %+v", got, o)
@@ -93,17 +100,13 @@ func TestSetOptionsChangesAndPublishesOneNotice(t *testing.T) {
 		}
 	}
 	noNotice(t, notices)
-	if writes != 1 {
-		t.Fatalf("a no-op set_options wrote: %d writes", writes)
+	if *writes != 1 {
+		t.Fatalf("a no-op set_options wrote: %d writes", *writes)
 	}
 }
 
 func TestSetOptionsValidatesBeforeWriting(t *testing.T) {
-	writes := 0
-	s := countingStore{store.NewMemory(), &writes}
-	c := core.New(s, clock.NewFake(t0), &ids.Sequence{})
-	notices, stop := c.Events().Subscribe()
-	defer stop()
+	c, writes, notices := countingCore(t)
 
 	_, err := c.SetOptions(human, core.SetOptionsInput{FocusClear: focus("fireworks")})
 	wantCode(t, err, core.Invalid, "focus_clear")
@@ -113,8 +116,8 @@ func TestSetOptionsValidatesBeforeWriting(t *testing.T) {
 		}
 	}
 	noNotice(t, notices)
-	if writes != 0 {
-		t.Fatalf("a refused set_options wrote: %d writes", writes)
+	if *writes != 0 {
+		t.Fatalf("a refused set_options wrote: %d writes", *writes)
 	}
 }
 

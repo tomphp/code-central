@@ -68,16 +68,23 @@ func nextEvent(t *testing.T, r *bufio.Reader) (string, string) {
 	}
 }
 
-func TestEventsStreamsEveryChangeNoticeAsSSE(t *testing.T) {
+// liveFeed serves the HTTP API on a real server, opens its live feed,
+// and returns the API's handler with the feed positioned after its
+// opening comment.
+func liveFeed(t *testing.T) (http.Handler, *bufio.Reader) {
+	t.Helper()
 	c := core.New(store.NewMemory(), clock.NewFake(time.Date(2026, 11, 7, 9, 0, 0, 0, time.UTC)), &ids.Sequence{})
 	mux := http.NewServeMux()
 	httpapi.Register(mux, c)
 	hs := httptest.NewServer(mux)
-	defer hs.Close()
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	t.Cleanup(hs.Close)
+	t.Cleanup(cancel) // runs first, ending the stream so Close doesn't wait on it
+	return mux, sseStream(t, ctx, hs.URL)
+}
 
-	r := sseStream(t, ctx, hs.URL)
+func TestEventsStreamsEveryChangeNoticeAsSSE(t *testing.T) {
+	mux, r := liveFeed(t)
 	do(mux, "POST", "/api/projects/create_project", `{"key":"acme"}`)
 	do(mux, "POST", "/api/p/acme/create_spec", `{"title":"S"}`)
 	do(mux, "POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"A"}`)

@@ -221,9 +221,9 @@ type Options struct {
 // written.
 func DefaultOptions() Options { return Options{FocusClear: FocusAllClear} }
 
-// focusClearNames is the FocusClears as strings, for messages and the
+// FocusClearNames is the FocusClears as strings, for messages and the
 // schema.
-func focusClearNames() []string {
+func FocusClearNames() []string {
 	var out []string
 	for _, f := range FocusClears {
 		out = append(out, string(f))
