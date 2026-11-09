@@ -70,6 +70,7 @@ func wantError(t *testing.T, r result, code core.Code) core.Error {
 }
 
 func TestCreateAndReadSpecsAndTickets(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	if _, err := srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
@@ -102,6 +103,7 @@ func TestCreateAndReadSpecsAndTickets(t *testing.T) {
 }
 
 func TestProjectFlagBeatsEnvironment(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "other"}
@@ -115,6 +117,7 @@ func TestProjectFlagBeatsEnvironment(t *testing.T) {
 }
 
 func TestErrorsAreJSONOnStderrWithExitTwo(t *testing.T) {
+	t.Parallel()
 	srv := codecentraltest.NewServer(t)
 	srv.Client.CreateProject(context.Background(), core.CreateProjectInput{Key: "acme"})
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "acme"}
@@ -128,6 +131,7 @@ func TestErrorsAreJSONOnStderrWithExitTwo(t *testing.T) {
 }
 
 func TestUsageErrorsExitOne(t *testing.T) {
+	t.Parallel()
 	env := map[string]string{"CODE_CENTRAL_URL": "http://127.0.0.1:1"}
 	for _, args := range [][]string{
 		{"frobnicate"},
@@ -142,6 +146,7 @@ func TestUsageErrorsExitOne(t *testing.T) {
 }
 
 func TestServiceUnavailableNamesHowToStartIt(t *testing.T) {
+	t.Parallel()
 	url := "http://" + freeAddr(t)
 	r := run(t, map[string]string{"CODE_CENTRAL_URL": url, "CODE_CENTRAL_PROJECT": "acme"}, "", "get-ticket", "1")
 	e := wantError(t, r, core.ServiceUnavailable)
@@ -153,6 +158,7 @@ func TestServiceUnavailableNamesHowToStartIt(t *testing.T) {
 }
 
 func TestDefaultURL(t *testing.T) {
+	t.Parallel()
 	if client.DefaultURL != "http://localhost:7733" {
 		t.Fatal(client.DefaultURL)
 	}
@@ -224,6 +230,7 @@ func (s *serving) stop(t *testing.T) {
 }
 
 func TestATicketSurvivesARestart(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	s, failed := startServe(t, dir)
 	if failed != nil {
@@ -259,6 +266,7 @@ func TestATicketSurvivesARestart(t *testing.T) {
 }
 
 func TestServeRefusesATakenPort(t *testing.T) {
+	t.Parallel()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -277,6 +285,7 @@ func TestServeRefusesATakenPort(t *testing.T) {
 // one already open elsewhere) stops it with exit 1 before it listens.
 // Why a store can't be opened is the store's to test.
 func TestServeStopsBeforeListeningWhenItCannotOpenTheStore(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	held, err := store.Open(dir)
 	if err != nil {

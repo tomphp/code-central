@@ -76,6 +76,7 @@ type waitOutput struct {
 }
 
 func TestWaitExitsZeroWhenTheTicketIsAnswered(t *testing.T) {
+	t.Parallel()
 	srv := asking(t)
 	done := startWait(srv.URL, clock.NewFake(codecentraltest.Start), "acme-2")
 	srv.Clock.BlockUntil(1) // the long-poll is holding
@@ -93,6 +94,7 @@ func TestWaitExitsZeroWhenTheTicketIsAnswered(t *testing.T) {
 }
 
 func TestWaitKeepsHoldingAcrossLongPollTimeouts(t *testing.T) {
+	t.Parallel()
 	srv := asking(t)
 	done := startWait(srv.URL, clock.NewFake(codecentraltest.Start), "acme-2")
 	for range 3 {
@@ -112,6 +114,7 @@ func TestWaitKeepsHoldingAcrossLongPollTimeouts(t *testing.T) {
 }
 
 func TestWaitExitsThreeWhenTheTicketLeftForAnotherState(t *testing.T) {
+	t.Parallel()
 	srv := asking(t)
 	answer(t, srv)
 	ctx := context.Background()
@@ -157,6 +160,7 @@ func flaky(t *testing.T, target string, n int32) (string, *atomic.Int32) {
 }
 
 func TestWaitRetriesThroughConnectionErrors(t *testing.T) {
+	t.Parallel()
 	srv := asking(t)
 	front, seen := flaky(t, srv.URL, 2)
 	cliClock := clock.NewFake(codecentraltest.Start)
@@ -176,6 +180,7 @@ func TestWaitRetriesThroughConnectionErrors(t *testing.T) {
 }
 
 func TestWaitUsageAndErrors(t *testing.T) {
+	t.Parallel()
 	srv := asking(t)
 	env := map[string]string{"CODE_CENTRAL_URL": srv.URL, "CODE_CENTRAL_PROJECT": "acme"}
 	if r := run(t, env, "", "wait"); r.code != 1 {

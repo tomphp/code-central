@@ -90,6 +90,7 @@ func serveNotifying(t *testing.T, storeDir string, env map[string]string, args .
 }
 
 func TestServeSendsTheStartupSummaryWhenNeedsMeIsNotEmpty(t *testing.T) {
+	t.Parallel()
 	sent, r, bound := serveNotifying(t, storeInReview(t), nil)
 	if r.code != 0 {
 		t.Fatalf("serve exited %d: %s", r.code, r.stderr)
@@ -102,6 +103,7 @@ func TestServeSendsTheStartupSummaryWhenNeedsMeIsNotEmpty(t *testing.T) {
 }
 
 func TestServeNoNotifyTurnsNotificationsOffForOneRun(t *testing.T) {
+	t.Parallel()
 	sent, r, _ := serveNotifying(t, storeInReview(t), nil, "--no-notify")
 	if r.code != 0 || len(sent) != 0 {
 		t.Fatalf("exit %d, sent %+v: %s", r.code, sent, r.stderr)
@@ -124,6 +126,7 @@ func writeSettings(t *testing.T, body string) (map[string]string, string) {
 }
 
 func TestTheNotificationsSettingTurnsThemOff(t *testing.T) {
+	t.Parallel()
 	env, _ := writeSettings(t, "notifications: off\n")
 	sent, r, _ := serveNotifying(t, storeInReview(t), env)
 	if r.code != 0 || len(sent) != 0 {
@@ -137,6 +140,7 @@ func TestTheNotificationsSettingTurnsThemOff(t *testing.T) {
 }
 
 func TestServeRefusesABadSettingNamingTheFile(t *testing.T) {
+	t.Parallel()
 	env, path := writeSettings(t, "notifications: sometimes\n")
 	_, r, _ := serveNotifying(t, t.TempDir(), env)
 	if r.code != 1 || !strings.Contains(r.stderr, path) || !strings.Contains(r.stderr, "notifications") {

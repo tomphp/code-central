@@ -162,6 +162,7 @@ func wantCalls(t *testing.T, got []string, want ...string) {
 }
 
 func TestServiceInstallWritesALaunchdAgentOnMacOS(t *testing.T) {
+	t.Parallel()
 	h := newHost(t, "darwin")
 	r := h.run(nil, "service", "install")
 	if r.code != 0 {
@@ -194,6 +195,7 @@ func TestServiceInstallWritesALaunchdAgentOnMacOS(t *testing.T) {
 }
 
 func TestServiceInstallAgainRewritesTheUnitAndRestarts(t *testing.T) {
+	t.Parallel()
 	h := newHost(t, "darwin")
 	plist := filepath.Join(h.home, "Library", "LaunchAgents", "com.github.tomoram.code-central.plist")
 	os.MkdirAll(filepath.Dir(plist), 0o755)
@@ -213,6 +215,7 @@ func TestServiceInstallAgainRewritesTheUnitAndRestarts(t *testing.T) {
 }
 
 func TestServiceInstallWritesASystemdUserUnitOnLinux(t *testing.T) {
+	t.Parallel()
 	h := newHost(t, "linux")
 	store := filepath.Join(h.dir, "my store")
 	if r := h.run(nil, "service", "install", "--store", store); r.code != 0 {
@@ -236,6 +239,7 @@ func TestServiceInstallWritesASystemdUserUnitOnLinux(t *testing.T) {
 }
 
 func TestSystemdUnitHonoursXDGConfigHome(t *testing.T) {
+	t.Parallel()
 	h := newHost(t, "linux")
 	cfg := t.TempDir()
 	if r := h.run(map[string]string{"XDG_CONFIG_HOME": cfg}, "service", "install"); r.code != 0 {
@@ -245,6 +249,7 @@ func TestSystemdUnitHonoursXDGConfigHome(t *testing.T) {
 }
 
 func TestWithNoHOMEServiceInstallUsesTheProfileFolder(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ goos, unit string }{
 		{"darwin", filepath.Join("Library", "LaunchAgents", "com.github.tomoram.code-central.plist")},
 		{"linux", filepath.Join(".config", "systemd", "user", "code-central.service")},
@@ -265,6 +270,7 @@ func TestWithNoHOMEServiceInstallUsesTheProfileFolder(t *testing.T) {
 }
 
 func TestWithNoHomeAtAllServiceInstallNamesEveryOption(t *testing.T) {
+	t.Parallel()
 	h := newHost(t, "linux")
 	r := h.run(map[string]string{"HOME": ""}, "service", "install")
 	if want := "set XDG_CONFIG_HOME or HOME, or give this account a profile folder (%USERPROFILE% on Windows)"; r.code != 1 || !strings.Contains(r.stderr, want) {
@@ -278,6 +284,7 @@ func TestWithNoHomeAtAllServiceInstallNamesEveryOption(t *testing.T) {
 }
 
 func TestServiceRestartRestartsTheInstalledService(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ goos, want string }{
 		{"darwin", fmt.Sprintf("launchctl kickstart -k gui/%d/com.github.tomoram.code-central", os.Getuid())},
 		{"linux", "systemctl --user restart code-central.service"},
@@ -298,6 +305,7 @@ func TestServiceRestartRestartsTheInstalledService(t *testing.T) {
 }
 
 func TestServiceRestartWithNothingInstalledSaysHowToInstall(t *testing.T) {
+	t.Parallel()
 	h := newHost(t, "darwin")
 	r := h.run(nil, "service", "restart")
 	if r.code != 1 || !strings.Contains(r.stderr, "code-central service install") || len(h.calls) != 0 {
@@ -306,6 +314,7 @@ func TestServiceRestartWithNothingInstalledSaysHowToInstall(t *testing.T) {
 }
 
 func TestServiceReportsAFailedRunner(t *testing.T) {
+	t.Parallel()
 	h := newHost(t, "linux")
 	h.failCall = "systemctl --user restart"
 	r := h.run(nil, "service", "install")
@@ -315,6 +324,7 @@ func TestServiceReportsAFailedRunner(t *testing.T) {
 }
 
 func TestServiceRefusesOtherSystemsAndBadArguments(t *testing.T) {
+	t.Parallel()
 	h := newHost(t, "freebsd")
 	if r := h.run(nil, "service", "install"); r.code != 1 || !strings.Contains(r.stderr, "Windows (Task Scheduler), not freebsd") {
 		t.Fatalf("freebsd: exit %d, stderr %q", r.code, r.stderr)
@@ -331,6 +341,7 @@ func TestServiceRefusesOtherSystemsAndBadArguments(t *testing.T) {
 }
 
 func TestServiceInstallRegistersAScheduledTaskOnWindows(t *testing.T) {
+	t.Parallel()
 	h := newHost(t, "windows")
 	store := filepath.Join(h.dir, "my store")
 	r := h.run(nil, "service", "install", "--store", store, "--bind", "172.17.0.1")
@@ -374,6 +385,7 @@ func windowsQuoted(p string) string {
 }
 
 func TestServiceInstallAgainReplacesTheScheduledTask(t *testing.T) {
+	t.Parallel()
 	h := newHost(t, "windows")
 	os.MkdirAll(filepath.Dir(h.taskXML()), 0o755)
 	os.WriteFile(h.taskXML(), []byte("an older task"), 0o644)
@@ -400,6 +412,7 @@ func TestServiceInstallAgainReplacesTheScheduledTask(t *testing.T) {
 }
 
 func TestScheduledTaskRefusesAPathTaskSchedulerWouldExpand(t *testing.T) {
+	t.Parallel()
 	h := newHost(t, "windows")
 	r := h.run(nil, "service", "install", "--store", filepath.Join(h.dir, "100%PATH%"))
 	if r.code == 0 || !strings.Contains(r.stderr, "Task Scheduler would expand its %") || len(h.calls) != 0 {
@@ -408,6 +421,7 @@ func TestScheduledTaskRefusesAPathTaskSchedulerWouldExpand(t *testing.T) {
 }
 
 func TestScheduledTaskWithNoUSERNAMESaysSo(t *testing.T) {
+	t.Parallel()
 	h := newHost(t, "windows")
 	r := h.run(map[string]string{"USERNAME": ""}, "service", "install")
 	if r.code == 0 || !strings.Contains(r.stderr, "USERNAME isn't set") || len(h.calls) != 0 {
@@ -416,6 +430,7 @@ func TestScheduledTaskWithNoUSERNAMESaysSo(t *testing.T) {
 }
 
 func TestWindowsArgRoundTripsThroughTheCommandLine(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct{ in, want string }{
 		{`C:\Users\ada\bin\code-central.exe`, `C:\Users\ada\bin\code-central.exe`},
 		{`C:\my store`, `"C:\my store"`},
