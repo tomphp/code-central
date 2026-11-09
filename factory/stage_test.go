@@ -248,12 +248,11 @@ func TestEachMapTicketStartsItsSkillWithItsGuideInADetachedWorktree(t *testing.T
 	}
 }
 
-func TestAPrototypeAndAMapResearchTicketAreLeftUnclaimed(t *testing.T) {
+func TestAMapResearchTicketIsLeftUnclaimed(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	prototype := h.LabelledTicket("prototype", "Prototype: the theme picker")
 	research := h.LabelledTicket("wayfinder:research", "Which colour libraries exist?")
-	later := h.ReadyTicket("Add a button") // claimed after them in claim order
+	later := h.ReadyTicket("Add a button") // claimed after it in claim order
 
 	h.Start()
 	h.WaitForState(later, store.InReview)
@@ -263,12 +262,10 @@ func TestAPrototypeAndAMapResearchTicketAreLeftUnclaimed(t *testing.T) {
 			t.Errorf("claude ran for %s: %q", c.Ticket, c.Prompt)
 		}
 	}
-	for _, id := range []string{prototype, research} {
-		if tk := h.Ticket(id); tk.State != store.Ready || len(tk.Claims) != 0 {
-			t.Errorf("%s is %s with %d Claims, want Ready and never claimed", id, tk.State, len(tk.Claims))
-		}
-		if _, err := os.Stat(h.Worktree(id)); !os.IsNotExist(err) {
-			t.Errorf("%s got a worktree: %v", id, err)
-		}
+	if tk := h.Ticket(research); tk.State != store.Ready || len(tk.Claims) != 0 {
+		t.Errorf("%s is %s with %d Claims, want Ready and never claimed", research, tk.State, len(tk.Claims))
+	}
+	if _, err := os.Stat(h.Worktree(research)); !os.IsNotExist(err) {
+		t.Errorf("%s got a worktree: %v", research, err)
 	}
 }

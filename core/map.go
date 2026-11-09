@@ -41,7 +41,7 @@ const chartingDescription = "Chart the Map [%[1]s](%[1]s): settle its destinatio
 // SubmitMap is submit_map(text). It writes as human whoever calls, both
 // records or neither.
 func (c *Core) SubmitMap(_ context.Context, key string, in SubmitMapInput) (SubmitMapResult, error) {
-	title := specTitle(in.Text)
+	title := titleLine(in.Text)
 	if title == "" {
 		return SubmitMapResult{}, invalid("text", "a Map needs text; its first line becomes the Spec's title")
 	}
