@@ -11,7 +11,7 @@ The Factory is a program you leave running in a terminal. It claims the Project'
 | claims each Stage's Ticket, and each implementation Ticket once its Blockers are Done | submit the Requirement |
 | starts the Stage's skill in a session of its own, in a worktree of its own | answer each Round in the UI |
 | resumes the session when you answer its Round | review each finished Ticket, and accept or reject it |
-| under Merge, merges an accepted implementation Ticket's branch into the base, and lands it | under Branch, merge each accepted Ticket's branch into the base |
+| under Merge, merges an accepted implementation Ticket's branch into the base, pushes the base with Push on, and lands it | under Branch, merge each accepted Ticket's branch into the base |
 | under Branch, lands an accepted Ticket once you have merged its branch | stop the Factory |
 
 Compared with working by hand, you type no prompts and run no sessions, and you don't land; under Merge you don't merge either.
@@ -272,3 +272,43 @@ Each Project has a **Landing Method**, which you set on its **Project Options** 
 Switching from Branch to Merge merges, on the next poll, every Accepted Ticket you haven't merged yet. Switching from Merge to Branch leaves every Accepted Ticket the Factory hasn't merged yet for you.
 
 Under either method, you can still merge an In Review Ticket's branch yourself, and the Factory lands it.
+
+### Push
+
+Either Landing Method has a **Push** option, also on the Project Options page, which names a git remote (`origin` by default). The Factory checks that its repository has that remote, with `git remote get-url`. It refuses to start when it doesn't:
+
+```console
+$ code-central-factory
+code-central-factory: refusing to start: Push names the remote "upstream", which this repository doesn't have: add it with `git remote add`, or change it on the Project's Project Options page in Code Central
+```
+
+If you change the setting to a missing remote while the Factory runs, it warns once and lands nothing, not even a Ticket you merged by hand, until you add the remote or change the setting back. It goes on claiming and resuming work meanwhile:
+
+```text
+warning: nothing lands until this is fixed: Push names the remote "upstream", which this repository doesn't have: add it with `git remote add`, or change it on the Project's Project Options page in Code Central
+```
+
+Under **Merge + Push**, after merging a Ticket into the base the Factory runs `git push <remote> <base>`, and lands the Ticket only once the push succeeds, so Done means the work is on the remote:
+
+```text
+acme-shop-5: pushed main to origin
+acme-shop-5: landed on main at f90edae47659
+```
+
+Pushing the base sends everything on it, so commits of your own on the base that you haven't pushed go to the remote too.
+
+The Factory never pulls, rebases or force-pushes. When the push fails, say because the remote is unreachable or has moved ahead of your base, the Ticket stays Accepted, with the base already merged, and the Factory comments once, quoting git:
+
+```text
+acme-shop-5: can't land yet: couldn't push main to origin
+```
+
+> The Factory can't land this yet: couldn't push main to origin:
+>
+> ```
+> fatal: unable to access 'https://example.com/acme-shop.git/': Could not resolve host: example.com
+> ```
+>
+> It stays Accepted and the Factory tries again on every poll.
+
+On every poll it tries again: it finds the work already in the base, checks whether the remote's base (its `origin/main` remote-tracking ref) holds it, and pushes again if not. A remote that has moved ahead is left for you to sort out: pull it into your base, and the next push goes through. An In Review Ticket you merge by hand lands under the same rule, only once the base with it in is pushed.
