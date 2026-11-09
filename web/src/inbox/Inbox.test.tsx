@@ -381,8 +381,9 @@ describe("Map Tickets and Prototypes in Needs Me", () => {
   });
 });
 
-describe("the + New button and Focus", () => {
+describe("the sidebar's top row: + New and Focus", () => {
   const menuButton = () => within(nav()).getByRole("button", { name: "More to create" });
+  const findMenuButton = () => within(nav()).findByRole("button", { name: "More to create" });
 
   it("shows + New, its ▾ and Focus at the top of the sidebar", async () => {
     renderApp(world());
@@ -404,7 +405,7 @@ describe("the + New button and Focus", () => {
 
   it("opens a menu of Requirement and Map from ▾, each with its hint", async () => {
     renderApp(world());
-    await userEvent.click(await within(nav()).findByRole("button", { name: "More to create" }));
+    await userEvent.click(await findMenuButton());
     expect(menuButton()).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("menu", { name: "More to create" })).toBeVisible();
     const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
@@ -423,7 +424,7 @@ describe("the + New button and Focus", () => {
   ])("opens %s's dialog from the menu, which stays visible once the menu closes, and submits to the new Spec", async (item, dialog, submit, call) => {
     const fake = world();
     renderApp(fake, "/?project=acme");
-    await userEvent.click(await within(nav()).findByRole("button", { name: "More to create" }));
+    await userEvent.click(await findMenuButton());
     await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: item }));
 
     expect(screen.queryByRole("menu")).toBeNull();
@@ -441,7 +442,7 @@ describe("the + New button and Focus", () => {
 
   it("closes the menu on Esc and on a click outside it", async () => {
     renderApp(world());
-    await userEvent.click(await within(nav()).findByRole("button", { name: "More to create" }));
+    await userEvent.click(await findMenuButton());
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).toBeNull();
     expect(menuButton()).toHaveAttribute("aria-expanded", "false");
@@ -452,9 +453,18 @@ describe("the + New button and Focus", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
+  it("closes the menu when + New is clicked instead", async () => {
+    renderApp(world());
+    await userEvent.click(await findMenuButton());
+    await userEvent.click(within(nav()).getByRole("button", { name: "New requirement" }));
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(menuButton()).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("dialog", { name: "New requirement" })).toBeVisible();
+  });
+
   it("toggles the menu shut from ▾", async () => {
     renderApp(world());
-    await userEvent.click(await within(nav()).findByRole("button", { name: "More to create" }));
+    await userEvent.click(await findMenuButton());
     await userEvent.click(menuButton());
     expect(screen.queryByRole("menu")).toBeNull();
   });

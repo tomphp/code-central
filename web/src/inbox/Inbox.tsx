@@ -22,7 +22,7 @@ import { SpecPane } from "../spec/SpecPane";
 import { TicketPane } from "../ticket/TicketDetail";
 import { OptionsLink } from "../options/OptionsLink";
 import { UsageLink } from "../usage/UsageLink";
-import { NewButton } from "./NewButton";
+import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 
@@ -105,14 +105,14 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
           <UsageLink loc={loc} navigate={navigate} />
           <OptionsLink loc={loc} navigate={navigate} />
         </div>
-        <NewButton
+        <SidebarTop
           newProps={{
             api,
             projects: projects.filter((p) => !p.archived),
             project: loc.project,
             onSubmitted: (r) => navigate({ list: "requirements", state: undefined, requirement: r.spec.id, ticket: undefined }),
           }}
-          onFocus={() => navigate({ view: "focus" })}
+          onFocusMode={() => navigate({ view: "focus" })}
         />
         <FilterButton on={!loc.project} label="All Projects" count={totalCount} loud onClick={() => navigate({ project: undefined })} />
         {projects.filter((p) => !p.archived).map(projectFilter)}

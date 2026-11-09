@@ -5,20 +5,26 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { NewMap, NewRequirement, type NewRequirementProps } from "../requirement/NewRequirement";
 
-export interface NewButtonProps {
-  // newProps are what New requirement and New Map need, but the trigger.
+export interface SidebarTopProps {
+  // newProps are what New requirement and New Map need, all but the
+  // trigger, which SidebarTop renders.
   newProps: Omit<NewRequirementProps, "trigger">;
-  onFocus(): void;
+  onFocusMode(): void;
 }
 
-export function NewButton({ newProps, onFocus }: NewButtonProps) {
+// SidebarTop is the sidebar's top row: + New, its ▾ menu and ◎ Focus.
+export function SidebarTop({ newProps, onFocusMode }: SidebarTopProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const more = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   const moreId = useId();
 
+  // A click anywhere but the ▾ (which toggles) and the menu closes it,
+  // + New and Focus included.
   useEffect(() => {
     if (!open) return;
-    const away = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const inside = (t: Node) => more.current?.contains(t) || menu.current?.contains(t);
+    const away = (e: MouseEvent) => !inside(e.target as Node) && setOpen(false);
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", away);
     document.addEventListener("keydown", esc);
@@ -35,7 +41,7 @@ export function NewButton({ newProps, onFocus }: NewButtonProps) {
   };
 
   return (
-    <div className="new-row" ref={ref}>
+    <div className="new-row">
       <div className="new-split">
         <NewRequirement
           {...newProps}
@@ -47,6 +53,7 @@ export function NewButton({ newProps, onFocus }: NewButtonProps) {
         />
         <button
           id={moreId}
+          ref={more}
           className="btn primary new-more"
           aria-label="More to create"
           aria-haspopup="menu"
@@ -56,10 +63,10 @@ export function NewButton({ newProps, onFocus }: NewButtonProps) {
           ▾
         </button>
       </div>
-      <button className="btn" onClick={onFocus}>
+      <button className="btn" onClick={onFocusMode}>
         <span aria-hidden="true">◎</span> Focus
       </button>
-      <div role="menu" aria-labelledby={moreId} className="new-menu" hidden={!open}>
+      <div role="menu" aria-labelledby={moreId} className="new-menu" ref={menu} hidden={!open}>
         <NewRequirement {...newProps} trigger={(show) => <MenuItem icon="+" label="Requirement" hint="Grilled into a Spec and Tickets" onClick={pick(show)} />} />
         <NewMap {...newProps} trigger={(show) => <MenuItem icon="◇" label="Map" hint="Charts the decisions to get somewhere" onClick={pick(show)} />} />
       </div>
