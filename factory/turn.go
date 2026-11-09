@@ -104,7 +104,7 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, args []str
 	f.turnsDone.Add(1)
 	go func() {
 		defer f.turnsDone.Done()
-		end := readTurn(cmd, stdout, dir, newUsageReader(f.stage(c), f.e.Now), func(e core.SessionEvent) {
+		end := readTurn(cmd, stdout, dir, newUsageReader(f.claimInfo(c).stage, f.e.Now), func(e core.SessionEvent) {
 			f.events.add(c.SessionID, e)
 			if f.o.verbose && e.Kind == eventToolCall {
 				f.printf("%s: %s", c.Ticket, e.Text)

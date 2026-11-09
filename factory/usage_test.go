@@ -29,6 +29,14 @@ func usageSessions(u core.UsageView, session string) []usageSession {
 	return out
 }
 
+// wantUsageSessions checks that u's sessions of session are want.
+func wantUsageSessions(t *testing.T, u core.UsageView, session string, want []usageSession) {
+	t.Helper()
+	if got := usageSessions(u, session); !slices.Equal(got, want) {
+		t.Errorf("Usage sessions\n got %+v\nwant %+v", got, want)
+	}
+}
+
 // waitForUsage waits for Usage to hold n responses in all, and returns it.
 func waitForUsage(h *factorytest.Harness, n int) core.UsageView {
 	var u core.UsageView
@@ -70,9 +78,7 @@ func TestEachModelResponsesTokenUsageIsPostedOnceUnderItsKind(t *testing.T) {
 		{Ticket: id, Agent: "toolu_explore", Kind: "subagent", Claim: 1, Peak: 60, Responses: 2},
 		{Ticket: id, Agent: "toolu_review", Kind: "review", Claim: 1, Peak: 1000, Responses: 1},
 	}
-	if got := usageSessions(u, session); !slices.Equal(got, want) {
-		t.Errorf("Usage sessions\n got %+v\nwant %+v", got, want)
-	}
+	wantUsageSessions(t, u, session, want)
 	var kinds []string
 	for _, k := range u.Kinds {
 		kinds = append(kinds, k.Kind)
@@ -107,9 +113,7 @@ func TestAResumedSessionAddsToTheSameUsageSession(t *testing.T) {
 
 	u := waitForUsage(h, 2)
 	want := []usageSession{{Ticket: id, Kind: "implementation", Claim: 1, Peak: 300, Responses: 2}}
-	if got := usageSessions(u, h.Ticket(id).Claims[0].SessionID); !slices.Equal(got, want) {
-		t.Errorf("Usage sessions\n got %+v\nwant %+v", got, want)
-	}
+	wantUsageSessions(t, u, h.Ticket(id).Claims[0].SessionID, want)
 }
 
 func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedUsageHoldsNothingUp(t *testing.T) {
@@ -134,9 +138,7 @@ func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedUsageHoldsNothi
 	// The batch posted while down is dropped, never retried.
 	u := waitForUsage(h, 2)
 	want := []usageSession{{Ticket: id, Kind: "implementation", Claim: 1, Peak: 300, Responses: 2}}
-	if got := usageSessions(u, h.Ticket(id).Claims[0].SessionID); !slices.Equal(got, want) {
-		t.Errorf("Usage sessions\n got %+v\nwant %+v", got, want)
-	}
+	wantUsageSessions(t, u, h.Ticket(id).Claims[0].SessionID, want)
 	if strings.Contains(r.Stdout()+r.Stderr(), "/api/usage") {
 		t.Errorf("a failed post was reported; want it dropped quietly:\n%s%s", r.Stdout(), r.Stderr())
 	}

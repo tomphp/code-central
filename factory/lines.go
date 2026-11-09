@@ -37,10 +37,6 @@ func (f *factory) about(c claim) string {
 	return fmt.Sprintf("(%s): %q", i.stage, i.title)
 }
 
-// stage is the Stage Guide's name c's Ticket was started with, as the
-// lines say it: the kind of c's main session in Usage.
-func (f *factory) stage(c claim) string { return f.claimInfo(c).stage }
-
 // claimInfo is what the lines say of c's Ticket; with nothing noted, its
 // stage is implementation.
 func (f *factory) claimInfo(c claim) claimInfo {

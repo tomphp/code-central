@@ -48,7 +48,7 @@ type Env struct {
 	// doubling with each outage in a row; zero means a minute.
 	Backoff time.Duration
 	// EventBatchEvery is how often waiting Session Events and token usage
-	// are posted; zero means eventBatchEvery.
+	// are posted; zero means postEvery.
 	EventBatchEvery time.Duration
 	// Signals is the stop signals the Factory gets: the first Ctrl-C
 	// (os.Interrupt) drains; a second, SIGTERM or SIGHUP stops the turns
@@ -162,7 +162,7 @@ func Run(ctx context.Context, args []string, e Env) int {
 	f.restart(ctx)
 	f.loop(ctx)
 	// Stopping or draining makes one last flush of each, side by side, so
-	// a hung Code Central holds up the stop one eventPostTimeout at most.
+	// a hung Code Central holds up the stop one postTimeout at most.
 	var flushed sync.WaitGroup
 	for _, close := range []func(){f.events.close, f.usage.close} {
 		flushed.Go(close)
@@ -315,7 +315,7 @@ func start(e Env, o options) (*factory, error) {
 	f.client = client.New(cli.ServiceURL(e.getenv))
 	every := e.EventBatchEvery
 	if every <= 0 {
-		every = eventBatchEvery
+		every = postEvery
 	}
 	f.events = newSender(f.client.PostSessionEvents, every)
 	f.usage = newSender(f.client.PostUsage, every)
