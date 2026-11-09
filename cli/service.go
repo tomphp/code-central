@@ -182,7 +182,7 @@ func serviceManagerFor(e Env) (serviceManager, error) {
 		if d := e.Getenv("USERDOMAIN"); d != "" {
 			user = d + `\` + user
 		}
-		shortcut, err := e.home().StartMenu(notify.ShortcutName)
+		shortcut, err := notify.ShortcutPath(e.home())
 		if err != nil {
 			return serviceManager{}, err
 		}

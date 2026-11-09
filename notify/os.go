@@ -18,13 +18,15 @@ import (
 	"github.com/tomoram/code-central/home"
 )
 
-// AppID is the AUMID Windows toasts show as. service install writes
-// ShortcutName into the Start menu carrying it, which is what makes
+// AppID is the AUMID Windows toasts show as. service install writes the
+// Start-menu shortcut at ShortcutPath carrying it, which is what makes
 // Windows show the toasts as Code Central.
-const (
-	AppID        = "CodeCentral.Service"
-	ShortcutName = "Code Central.lnk"
-)
+const AppID = "CodeCentral.Service"
+
+// ShortcutPath is where the Start-menu shortcut carrying AppID lives.
+func ShortcutPath(l home.Lookup) (string, error) {
+	return l.StartMenu("Code Central.lnk")
+}
 
 // powerShellAppID is Windows PowerShell's own AUMID: toasts fall back to
 // it, shown as Windows PowerShell, when the shortcut isn't there.
@@ -45,14 +47,14 @@ type tools interface {
 	has(name string) bool
 	// help is a command's --help output, or "" if it fails.
 	help(name string) string
-	// hasShortcut reports whether ShortcutName is in the Start menu.
+	// hasShortcut reports whether the shortcut at ShortcutPath is there.
 	hasShortcut() bool
 }
 
 type systemTools struct{}
 
 func (systemTools) hasShortcut() bool {
-	p, err := home.Lookup{Getenv: os.Getenv, UserHomeDir: os.UserHomeDir}.StartMenu(ShortcutName)
+	p, err := ShortcutPath(home.Lookup{Getenv: os.Getenv, UserHomeDir: os.UserHomeDir})
 	if err != nil {
 		return false
 	}

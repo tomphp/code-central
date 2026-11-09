@@ -1,3 +1,5 @@
+// The Start-menu shortcut service install writes on Windows, so toasts
+// show as Code Central.
 package cli
 
 import (
@@ -55,17 +57,18 @@ func shortcutFile(target, appID string) []byte {
 	// A PropertyStoreDataBlock holding one serialized property storage:
 	// the System.AppUserModel property set's ID (5), a VT_LPWSTR.
 	id := utf16z(appID)
+	idLen := len(id) / 2 // in UTF-16 units, with the NUL
 	for len(id)%4 != 0 {
 		id = append(id, 0)
 	}
-	value := 4 + 4 + 1 + 2 + 2 + 4 + len(id)
-	storage := 4 + 4 + 16 + value + 4
-	le([]uint32{uint32(8 + storage + 4), 0xa0000009, uint32(storage), 0x53505331})
+	valueSize := 4 + 4 + 1 + 2 + 2 + 4 + len(id)
+	storageSize := 4 + 4 + 16 + valueSize + 4
+	le([]uint32{uint32(8 + storageSize + 4), 0xa0000009, uint32(storageSize), 0x53505331})
 	b.Write([]byte{0x55, 0x28, 0x4c, 0x9f, 0x79, 0x9f, 0x39, 0x4b, 0xa8, 0xd0, 0xe1, 0xd4, 0x2d, 0xe1, 0xd5, 0xf3}) // PKEY_AppUserModel_ID's set
-	le([]uint32{uint32(value), 5})
+	le([]uint32{uint32(valueSize), 5})
 	b.WriteByte(0)
 	le([]uint16{0x1f, 0})
-	le(uint32(len(utf16.Encode([]rune(appID))) + 1))
+	le(uint32(idLen))
 	b.Write(id)
 	le(uint32(0)) // no more values
 	le(uint32(0)) // no more storages
