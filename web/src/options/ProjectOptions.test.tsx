@@ -122,7 +122,7 @@ describe("Project Options", () => {
     fake.addProject("old", "Old App", { archived: true });
     renderApp(fake);
     await userEvent.click(await within(nav()).findByRole("button", { name: "Menu for Old App", hidden: true }));
-    expect(within(screen.getByRole("menu", { hidden: true })).queryByRole("menuitem", { name: "Options", hidden: true })).toBeNull();
+    expect(within(screen.getByRole("menu", { name: "Menu for Old App", hidden: true })).queryByRole("menuitem", { name: "Options", hidden: true })).toBeNull();
   });
 
   it("shows an Archived Project's options read-only, by its URL", async () => {

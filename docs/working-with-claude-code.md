@@ -38,7 +38,7 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
 
    If it isn't there, go back to step 4 of [A brand new repository](setting-up-a-project.md#a-brand-new-repository). Keep this session open for every step below.
 
-2. **Submit a Requirement from the UI.** Open <http://localhost:7733>, click **New requirement**, type the Requirement's text and click **Submit requirement**. If you have more than one Project, choose `acme-shop` in the dialog. The first line becomes the working title:
+2. **Submit a Requirement from the UI.** Open <http://localhost:7733>, click **+ New**, type the Requirement's text and click **Submit requirement**. If you have more than one Project, choose `acme-shop` in the dialog. The first line becomes the working title:
 
    ```text
    Format prices for display
@@ -50,7 +50,7 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
 
    From a terminal, `code-central submit-requirement --text "…"` submits a Requirement too.
 
-   **New Map**, beside **New requirement**, opens the same dialog to start a Map instead: a destination you'll find the way to one decision at a time, before there is a Requirement to grill. Type where you want to get to and click **Submit map**. Code Central creates the Map, a Spec labelled `wayfinder:map` whose body is your text followed by the empty sections `Destination`, `Notes`, `Decisions so far`, `Not yet specified` and `Out of scope`, and one Ready Charting Ticket for an agent to claim. In the **Requirements** view the Map's row shows how many of its decisions are made, such as *0/1 decided*, in place of the Stage strip, and adds *· 1 needs you* when one of its Tickets does. From a terminal, `code-central submit-map` does the same. Here it is in a new Project:
+   **Map**, in the **▾** menu beside **+ New**, opens the same dialog to start a Map instead: a destination you'll find the way to one decision at a time, before there is a Requirement to grill. Type where you want to get to and click **Submit map**. Code Central creates the Map, a Spec labelled `wayfinder:map` whose body is your text followed by the empty sections `Destination`, `Notes`, `Decisions so far`, `Not yet specified` and `Out of scope`, and one Ready Charting Ticket for an agent to claim. In the **Requirements** view the Map's row shows how many of its decisions are made, such as *0/1 decided*, in place of the Stage strip, and adds *· 1 needs you* when one of its Tickets does. From a terminal, `code-central submit-map` does the same. Here it is in a new Project:
 
    ```console
    $ code-central submit-map --text "Offline checkout

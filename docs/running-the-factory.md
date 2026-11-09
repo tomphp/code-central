@@ -52,7 +52,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Check: the Factory is still running, and its only line is `base: main`.
 
-2. **Submit the Requirement from the UI.** Open <http://localhost:7733>, click **New requirement**, type the same Requirement's text and click **Submit requirement**:
+2. **Submit the Requirement from the UI.** Open <http://localhost:7733>, click **+ New**, type the same Requirement's text and click **Submit requirement**:
 
    ```text
    Format prices for display
@@ -70,7 +70,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Check: `acme-shop-2` is In Progress, and the Requirement's row reads *Grilling: a Factory is on it*. Nothing needs you yet.
 
-   **New Map**, beside **New requirement**, starts a Map from the same dialog instead. Its one Ready Ticket, *Charting: …*, is claimed within a poll like a grilling Ticket, in a read-only Stage worktree, and grills you on the Map's destination through Rounds. The Map's row in the **Requirements** view counts its decisions, such as *0/1 decided*, in place of the Stage strip.
+   **Map**, in the **▾** menu beside **+ New**, starts a Map from the same dialog instead. Its one Ready Ticket, *Charting: …*, is claimed within a poll like a grilling Ticket, in a read-only Stage worktree, and grills you on the Map's destination through Rounds. The Map's row in the **Requirements** view counts its decisions, such as *0/1 decided*, in place of the Stage strip.
 
 3. **Watch the session in the Claim's Live section.** In the Ticket detail, under the description, each Claim has a line and a **Live** section. The line says when the Claim started, its last activity, the latest thing its session did and the session's ID. While the Ticket is In Progress, Live is open and follows the session's Transcript as it goes: the Factory's own lines, marked `FACTORY`, each tool call on one line with its result collapsed beneath it, and the agent's text:
 

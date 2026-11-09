@@ -58,6 +58,6 @@ describe("Renaming a Project", () => {
     fake.addProject("old", "Old App", { archived: true });
     renderApp(fake);
     await userEvent.click(await within(nav()).findByRole("button", { name: "Menu for Old App", hidden: true }));
-    expect(within(screen.getByRole("menu", { hidden: true })).queryByRole("menuitem", { name: "Rename", hidden: true })).toBeNull();
+    expect(within(screen.getByRole("menu", { name: "Menu for Old App", hidden: true })).queryByRole("menuitem", { name: "Rename", hidden: true })).toBeNull();
   });
 });
