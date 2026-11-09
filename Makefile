@@ -5,7 +5,7 @@ TEST_BUDGET := 10
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test typecheck vitest e2e build web clean hooks
+.PHONY: test typecheck vitest e2e build web clean hooks context-report
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
@@ -67,3 +67,10 @@ e2e: build
 
 clean:
 	go run ./internal/clean bin web/dist
+
+# Prints the Context Report from Claude Code's session logs of this
+# repository; flags go in ARGS, for example
+# ARGS="-baseline internal/contextreport/baseline.json -since <time>".
+# docs/context-report.md explains it.
+context-report:
+	go run ./internal/contextreport $(ARGS)

@@ -104,6 +104,10 @@ _Avoid_: Log entry, message, activity
 The Session Events of one Claim, in order, as Code Central holds them. It may be only the tail of the session.
 _Avoid_: Log, conversation, stream
 
+**Context Report**:
+What agents load into context, measured from Claude Code's own session logs on the machine (not Transcripts): the size of tool results per Stage, tool and operation, the largest results, the Specs and Tickets read more than once, and signs that a cut went too far, each with its change against a saved baseline.
+_Avoid_: Token report, usage report
+
 **Actor**:
 Who made a change: the human, an agent, or an Integration.
 _Avoid_: User, caller
