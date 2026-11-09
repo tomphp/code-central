@@ -1,3 +1,5 @@
+// Printing a report, with each figure's change against a baseline.
+
 package main
 
 import (
@@ -10,8 +12,8 @@ import (
 
 // printer writes a report, and with a baseline each figure's change
 // against it. Figures are compared per session, so windows with
-// different numbers of sessions compare fairly; a Stage with no
-// sessions in the report has nothing to compare beyond that.
+// different numbers of sessions compare fairly; a kind with no sessions
+// in the report has nothing to compare, and says so.
 type printer struct {
 	tw   *tabwriter.Writer
 	base *Report
@@ -25,22 +27,26 @@ func write(out io.Writer, r Report, base *Report) error {
 		p.line("Baseline: %s", span(*base))
 	}
 
-	p.line("\nTool results per session, by Stage")
-	p.row("STAGE", "SESSIONS", "TOTAL", "PER SESSION", p.column())
-	for _, name := range stageNames(r, base) {
-		now, was := stage(r, name), p.baseStage(name)
+	p.line("\nTool results per session, by kind of session")
+	p.row("KIND", "SESSIONS", "TOTAL", "PER SESSION", p.column())
+	for _, name := range kindNames(r, base) {
+		now, was := kind(r, name), p.baseKind(name)
 		if now.Sessions == 0 {
-			p.row(name, "0", "", "", fmt.Sprintf("no sessions (was %s per session)", size(perSession(was.Bytes, was))))
+			p.row(name, "0", "", "", fmt.Sprintf("no sessions (was %s per session)", size(per(was.Bytes, was.Sessions))))
 			continue
 		}
-		p.row(name, fmt.Sprint(now.Sessions), size(float64(now.Bytes)), size(perSession(now.Bytes, now)), p.change(perSession(now.Bytes, now), perSession(was.Bytes, was), size))
+		p.row(name, fmt.Sprint(now.Sessions), size(float64(now.Bytes)), size(per(now.Bytes, now.Sessions)), p.against(per(now.Bytes, now.Sessions), per(was.Bytes, was.Sessions), size))
 	}
-	p.figures("Tools, per session, by Stage (Code Central's operations are listed next)", r, func(s Stage) []Figure { return s.Tools })
-	p.figures("Code Central operations, per session, by Stage", r, func(s Stage) []Figure { return s.Operations })
+	p.figures("Tools, per session, by kind of session (Code Central's operations are listed next)", r, func(k Kind) []Figure { return k.Tools })
+	p.figures("Code Central operations, per session, by kind of session", r, func(k Kind) []Figure { return k.Operations })
 
 	p.line("\nLargest tool results")
 	for _, res := range r.Largest {
-		p.row(size(float64(res.Bytes)), res.Stage, res.Ticket, strings.TrimPrefix(res.Tool, codeCentral), res.Input, p.largestChange(res))
+		tool := res.Tool
+		if op, ok := operation(tool); ok {
+			tool = op
+		}
+		p.row(size(float64(res.Bytes)), res.Kind, res.Ticket, tool, res.Input, p.largestChange(res))
 	}
 
 	p.line("\nSpecs and Tickets read more than once")
@@ -52,46 +58,52 @@ func write(out io.Writer, r Report, base *Report) error {
 	if base != nil {
 		was = *base
 	}
-	p.row("Reads again within a session", count(perReport(r.WithinSession, r)), p.change(perReport(r.WithinSession, r), perReport(was.WithinSession, was), count))
-	p.row("Reads again across sessions", count(perReport(r.AcrossSessions, r)), p.change(perReport(r.AcrossSessions, r), perReport(was.AcrossSessions, was), count))
+	p.row("Reads again within a session", count(per(r.WithinSession, r.Sessions)), p.against(per(r.WithinSession, r.Sessions), per(was.WithinSession, was.Sessions), count))
+	p.row("Reads again across sessions", count(per(r.AcrossSessions, r.Sessions)), p.against(per(r.AcrossSessions, r.Sessions), per(was.AcrossSessions, was.Sessions), count))
 
-	p.line("\nSigns a cut went too far, per session, by Stage")
-	p.row("STAGE", "READS CALLED AGAIN FOR MORE", p.column(), "ROUNDS", p.column(), "QUESTIONS", p.column())
-	for _, now := range r.Stages {
-		was := p.baseStage(now.Name)
-		cells := []string{now.Name}
-		for _, f := range []func(Stage) int{
-			func(s Stage) int { return s.Widenings },
-			func(s Stage) int { return s.Rounds },
-			func(s Stage) int { return s.Questions },
+	p.line("\nSigns a cut went too far, per session, by kind of session")
+	p.row("KIND", "WIDER READS", p.column(), "ROUNDS", p.column(), "QUESTIONS", p.column())
+	for _, name := range kindNames(r, base) {
+		now, was := kind(r, name), p.baseKind(name)
+		if now.Sessions == 0 {
+			p.row(name, "no sessions", "", "", "", "", "")
+			continue
+		}
+		cells := []string{name}
+		for _, f := range []func(Kind) int{
+			func(k Kind) int { return k.WiderReads },
+			func(k Kind) int { return k.Rounds },
+			func(k Kind) int { return k.Questions },
 		} {
-			cells = append(cells, count(perSession(f(now), now)), p.change(perSession(f(now), now), perSession(f(was), was), count))
+			cells = append(cells, count(per(f(now), now.Sessions)), p.against(per(f(now), now.Sessions), per(f(was), was.Sessions), count))
 		}
 		p.row(cells...)
 	}
-	if len(r.Widenings) > 0 {
-		p.line("\nReads called again for more")
+	if len(r.WiderReads) > 0 {
+		p.line("\nWider reads: reads called again for more")
 	}
-	for _, w := range r.Widenings {
-		p.row(w.Ticket, w.Stage, w.Operation+" "+w.ID, w.From, "then "+w.To)
+	for _, w := range r.WiderReads {
+		p.row(w.Ticket, w.Kind, w.Operation+" "+w.ID, w.From, "then "+w.To)
 	}
 	return p.tw.Flush()
 }
 
-// figures prints each of the report's Stages' tools or operations,
+// figures prints the tools or operations of each of the report's kinds,
 // listing those only the baseline has after the report's own.
-func (p printer) figures(title string, r Report, list func(Stage) []Figure) {
+func (p printer) figures(title string, r Report, list func(Kind) []Figure) {
 	p.line("\n%s", title)
-	for _, now := range r.Stages {
-		was := p.baseStage(now.Name)
+	for _, now := range r.Kinds {
+		was := p.baseKind(now.Name)
 		nowFigures, wasFigures := list(now), list(was)
 		if len(nowFigures) == 0 && len(wasFigures) == 0 {
 			continue
 		}
-		p.line("%s", now.Name)
-		for _, f := range union(nowFigures, wasFigures) {
-			n, w := find(nowFigures, f), find(wasFigures, f)
-			p.row("  "+f, count(perSession(n.Calls, now))+" calls", size(perSession(n.Bytes, now)), p.change(perSession(n.Bytes, now), perSession(w.Bytes, was), size))
+		p.row(now.Name, "CALLS", p.column(), "SIZE", p.column())
+		for _, name := range union(nowFigures, wasFigures) {
+			n, w := find(nowFigures, name), find(wasFigures, name)
+			p.row("  "+name,
+				count(per(n.Calls, now.Sessions)), p.against(per(n.Calls, now.Sessions), per(w.Calls, was.Sessions), count),
+				size(per(n.Bytes, now.Sessions)), p.against(per(n.Bytes, now.Sessions), per(w.Bytes, was.Sessions), size))
 		}
 	}
 }
@@ -112,22 +124,23 @@ func (p printer) column() string {
 	return "CHANGE"
 }
 
-func (p printer) baseStage(name string) Stage {
+func (p printer) baseKind(name string) Kind {
 	if p.base == nil {
-		return Stage{}
+		return Kind{}
 	}
-	return stage(*p.base, name)
+	return kind(*p.base, name)
 }
 
-// change is now's change from was: unchanged, a percentage with was, or
-// new when the baseline had none. It is empty without a baseline.
-func (p printer) change(now, was float64, format func(float64) string) string {
+// against is now's change from was, or empty without a baseline.
+func (p printer) against(now, was float64, format func(float64) string) string {
 	if p.base == nil {
 		return ""
 	}
 	return change(now, was, format)
 }
 
+// change is now's change from was: unchanged, a percentage with was, or
+// new when was is zero.
 func change(now, was float64, format func(float64) string) string {
 	switch {
 	case format(now) == format(was):
@@ -156,30 +169,30 @@ func span(r Report) string {
 	return fmt.Sprintf("%d sessions started from %s to %s", r.Sessions, r.From.UTC().Format(time.RFC3339), r.To.UTC().Format(time.RFC3339))
 }
 
-// stageNames is the report's Stages, then any only the baseline has,
-// which the Stage table lists as having no sessions.
-func stageNames(r Report, base *Report) []string {
+// kindNames is the report's kinds, then any only the baseline has,
+// which are listed as having no sessions.
+func kindNames(r Report, base *Report) []string {
 	var names []string
-	for _, s := range r.Stages {
-		names = append(names, s.Name)
+	for _, k := range r.Kinds {
+		names = append(names, k.Name)
 	}
 	if base != nil {
-		for _, s := range base.Stages {
-			if stage(r, s.Name).Name == "" {
-				names = append(names, s.Name)
+		for _, k := range base.Kinds {
+			if kind(r, k.Name).Name == "" {
+				names = append(names, k.Name)
 			}
 		}
 	}
 	return names
 }
 
-func stage(r Report, name string) Stage {
-	for _, s := range r.Stages {
-		if s.Name == name {
-			return s
+func kind(r Report, name string) Kind {
+	for _, k := range r.Kinds {
+		if k.Name == name {
+			return k
 		}
 	}
-	return Stage{}
+	return Kind{}
 }
 
 func union(now, was []Figure) []string {
@@ -204,18 +217,12 @@ func find(figures []Figure, name string) Figure {
 	return Figure{}
 }
 
-func perSession(n int, s Stage) float64 {
-	if s.Sessions == 0 {
+// per is n per session, or zero when there are none.
+func per(n, sessions int) float64 {
+	if sessions == 0 {
 		return 0
 	}
-	return float64(n) / float64(s.Sessions)
-}
-
-func perReport(n int, r Report) float64 {
-	if r.Sessions == 0 {
-		return 0
-	}
-	return float64(n) / float64(r.Sessions)
+	return float64(n) / float64(sessions)
 }
 
 // size formats bytes as B, KB or MB.

@@ -14,8 +14,8 @@ import (
 // The fixture logs in testdata/projects are for a repository at /r/acme:
 // an implementation session of acme-2 with a review subagent and another
 // subagent, a grilling session of acme-3 that asks a Round, and three
-// sessions the report leaves out (interactive, after the window, and
-// another repository's).
+// sessions the report leaves out (interactive, after the window, and one
+// of the repository /r/acme-other, whose folder starts the same).
 const fixtures = "testdata/projects"
 
 func window(t *testing.T) Window {
@@ -27,14 +27,25 @@ func window(t *testing.T) Window {
 	return Window{Until: until}
 }
 
-func TestLoadReadsTheRepositorysFactorySessionsInTheWindow(t *testing.T) {
+// load reads the fixture sessions in the window.
+func load(t *testing.T) []Session {
+	t.Helper()
 	sessions, err := Load(fixtures, "/r/acme", window(t))
 	if err != nil {
 		t.Fatal(err)
 	}
+	return sessions
+}
+
+func build(t *testing.T) Report {
+	t.Helper()
+	return Build(load(t), 3)
+}
+
+func TestLoadReadsTheRepositorysFactorySessionsInTheWindow(t *testing.T) {
 	var got []string
-	for _, s := range sessions {
-		got = append(got, s.Ticket+" "+s.Stage+" "+s.ID)
+	for _, s := range load(t) {
+		got = append(got, s.Ticket+" "+s.Kind+" "+s.ID)
 	}
 	want := []string{
 		"acme-2 implementation s1",
@@ -48,12 +59,8 @@ func TestLoadReadsTheRepositorysFactorySessionsInTheWindow(t *testing.T) {
 }
 
 func TestLoadMeasuresEachToolResult(t *testing.T) {
-	sessions, err := Load(fixtures, "/r/acme", window(t))
-	if err != nil {
-		t.Fatal(err)
-	}
 	var got []string
-	for _, c := range sessions[0].Calls {
+	for _, c := range load(t)[0].Calls {
 		got = append(got, c.Tool+" "+strconv.Itoa(c.Bytes))
 	}
 	want := []string{
@@ -68,18 +75,9 @@ func TestLoadMeasuresEachToolResult(t *testing.T) {
 	}
 }
 
-func build(t *testing.T) Report {
-	t.Helper()
-	sessions, err := Load(fixtures, "/r/acme", window(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return Build(sessions, 3)
-}
-
-func TestBuildTotalsToolResultsPerStageToolAndOperation(t *testing.T) {
+func TestBuildTotalsToolResultsPerKindToolAndOperation(t *testing.T) {
 	r := build(t)
-	want := []Stage{
+	want := []Kind{
 		{
 			Name: "grilling", Sessions: 1, Bytes: 310,
 			Tools:      []Figure{{Name: "Code Central", Calls: 2, Bytes: 310}},
@@ -90,7 +88,7 @@ func TestBuildTotalsToolResultsPerStageToolAndOperation(t *testing.T) {
 			Name: "implementation", Sessions: 1, Bytes: 860,
 			Tools:      []Figure{{Name: "Bash", Calls: 1, Bytes: 500}, {Name: "Code Central", Calls: 3, Bytes: 360}, {Name: "ToolSearch", Calls: 1, Bytes: 0}},
 			Operations: []Figure{{Name: "get_spec", Calls: 2, Bytes: 320}, {Name: "get_ticket", Calls: 1, Bytes: 40}},
-			Widenings:  1,
+			WiderReads: 1,
 		},
 		{
 			Name: "review", Sessions: 1, Bytes: 140,
@@ -102,8 +100,8 @@ func TestBuildTotalsToolResultsPerStageToolAndOperation(t *testing.T) {
 			Tools: []Figure{{Name: "Read", Calls: 1, Bytes: 60}},
 		},
 	}
-	if !reflect.DeepEqual(r.Stages, want) {
-		t.Errorf("stages =\n%+v\nwant\n%+v", r.Stages, want)
+	if !reflect.DeepEqual(r.Kinds, want) {
+		t.Errorf("kinds =\n%+v\nwant\n%+v", r.Kinds, want)
 	}
 	if r.Sessions != 4 {
 		t.Errorf("sessions = %d, want 4", r.Sessions)
@@ -113,9 +111,9 @@ func TestBuildTotalsToolResultsPerStageToolAndOperation(t *testing.T) {
 func TestBuildListsTheLargestToolResultsWithAShortInput(t *testing.T) {
 	r := build(t)
 	want := []Result{
-		{Stage: "implementation", Ticket: "acme-2", Tool: "Bash", Input: "cat store/file.go", Bytes: 500},
-		{Stage: "implementation", Ticket: "acme-2", Tool: "mcp__code-central__get_spec", Input: `{"spec":"1"}`, Bytes: 300},
-		{Stage: "grilling", Ticket: "acme-3", Tool: "mcp__code-central__get_spec", Input: `{"spec":"acme-1"}`, Bytes: 300},
+		{Kind: "implementation", Ticket: "acme-2", Tool: "Bash", Input: "cat store/file.go", Bytes: 500},
+		{Kind: "implementation", Ticket: "acme-2", Tool: "mcp__code-central__get_spec", Input: `{"spec":"1"}`, Bytes: 300},
+		{Kind: "grilling", Ticket: "acme-3", Tool: "mcp__code-central__get_spec", Input: `{"spec":"acme-1"}`, Bytes: 300},
 	}
 	if !reflect.DeepEqual(r.Largest, want) {
 		t.Errorf("largest =\n%+v\nwant\n%+v", r.Largest, want)
@@ -138,29 +136,47 @@ func TestBuildListsSpecsAndTicketsReadMoreThanOnce(t *testing.T) {
 
 func TestBuildFindsAReadCalledAgainForMore(t *testing.T) {
 	r := build(t)
-	want := []Widening{{
-		Stage: "implementation", Ticket: "acme-2", Operation: "get_spec", ID: "acme-1",
+	want := []WiderRead{{
+		Kind: "implementation", Ticket: "acme-2", Operation: "get_spec", ID: "acme-1",
 		From: `{"sections":["Testing Decisions"],"spec":"acme-1"}`, To: `{"spec":"1"}`,
 	}}
-	if !reflect.DeepEqual(r.Widenings, want) {
-		t.Errorf("widenings =\n%+v\nwant\n%+v", r.Widenings, want)
+	if !reflect.DeepEqual(r.WiderReads, want) {
+		t.Errorf("wider reads =\n%+v\nwant\n%+v", r.WiderReads, want)
 	}
 }
 
-func TestReadsWithNoMoreThanBeforeArentWidenings(t *testing.T) {
-	read := func(input map[string]any) Call {
-		return Call{Tool: "mcp__code-central__get_spec", Input: input}
+func TestOnlyReadsForMoreThanBeforeAreWiderReads(t *testing.T) {
+	read := func(op string, input map[string]any) Call {
+		return Call{Tool: codeCentral + op, Input: input}
 	}
-	sessions := []Session{{Ticket: "acme-2", Stage: "implementation", Calls: []Call{
-		read(map[string]any{"spec": "acme-1"}),
-		read(map[string]any{"spec": "acme-1", "sections": []any{"Goal"}}),
-		read(map[string]any{"spec": "acme-1", "parts": []any{"tickets"}}),
-		read(map[string]any{"spec": "acme-9", "parts": []any{"tickets"}}),
-		read(map[string]any{"spec": "acme-9", "parts": []any{"body"}}),
+	spec := func(input map[string]any) Call { return read("get_spec", input) }
+	sessions := []Session{{Ticket: "acme-2", Kind: "implementation", Calls: []Call{
+		// Not wider: the whole Spec covers any part or section of it, and
+		// one section then the tickets asks for no more of the body.
+		spec(map[string]any{"spec": "acme-1"}),
+		spec(map[string]any{"spec": "acme-1", "sections": []any{"Goal"}}),
+		spec(map[string]any{"spec": "acme-1", "parts": []any{"tickets"}}),
+		spec(map[string]any{"spec": "acme-3", "sections": []any{"Goal"}}),
+		spec(map[string]any{"spec": "acme-3", "parts": []any{"tickets"}}),
+		// Wider: the body after only the tickets.
+		spec(map[string]any{"spec": "acme-9", "parts": []any{"tickets"}}),
+		spec(map[string]any{"spec": "acme-9", "parts": []any{"body"}}),
+		// Wider: any part of a Ticket after its default, and full.
+		read("get_ticket", map[string]any{"ticket": "acme-2"}),
+		read("get_ticket", map[string]any{"ticket": "acme-2", "parts": []any{"rounds"}}),
+		read("get_ticket", map[string]any{"ticket": "acme-2", "full": true}),
 	}}}
-	r := Build(sessions, 3)
-	if len(r.Widenings) != 1 || r.Widenings[0].ID != "acme-9" {
-		t.Errorf("widenings = %+v, want only acme-9's parts tickets then body", r.Widenings)
+	var got []string
+	for _, w := range Build(sessions, 10).WiderReads {
+		got = append(got, w.Operation+" "+w.ID+" "+w.To)
+	}
+	want := []string{
+		`get_spec acme-9 {"parts":["body"],"spec":"acme-9"}`,
+		`get_ticket acme-2 {"parts":["rounds"],"ticket":"acme-2"}`,
+		`get_ticket acme-2 {"full":true,"ticket":"acme-2"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("wider reads = %q, want %q", got, want)
 	}
 }
 
@@ -201,7 +217,7 @@ func TestRunSavesABaselineAndPrintsTheChangeAgainstIt(t *testing.T) {
 		}
 	}
 
-	// Without the grilling session, its Stage has no sessions to compare,
+	// Without the grilling session, its kind has no sessions to compare,
 	// and the re-reads across sessions fall by a third.
 	out.Reset()
 	if err := run([]string{"-projects", fixtures, "-repo", "/r/acme", "-until", "2026-01-02T10:59:00Z", "-top", "3", "-baseline", file}, &out); err != nil {
@@ -213,7 +229,7 @@ func TestRunSavesABaselineAndPrintsTheChangeAgainstIt(t *testing.T) {
 		}
 	}
 	if strings.Contains(out.String(), "post_round") {
-		t.Errorf("report lists the operations of a Stage with no sessions:\n%s", out.String())
+		t.Errorf("report lists the operations of a kind with no sessions:\n%s", out.String())
 	}
 }
 
@@ -225,7 +241,7 @@ func TestCountKeepsSmallFiguresVisible(t *testing.T) {
 	}
 }
 
-func TestChange(t *testing.T) {
+func TestChangeIsAPercentageOfTheBaselinesFigure(t *testing.T) {
 	for _, c := range []struct {
 		now, was float64
 		want     string

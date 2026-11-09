@@ -2,7 +2,7 @@
   "sessions": 204,
   "from": "2026-11-08T15:21:46.083Z",
   "to": "2026-11-09T10:06:53.016Z",
-  "stages": [
+  "kinds": [
     {
       "name": "grilling",
       "sessions": 11,
@@ -348,7 +348,7 @@
           "bytes": 49626
         }
       ],
-      "widenings": 1
+      "wider_reads": 1
     },
     {
       "name": "subagent",
@@ -380,140 +380,140 @@
   ],
   "largest": [
     {
-      "stage": "review",
+      "kind": "review",
       "ticket": "code-central-110",
       "tool": "Read",
       "input": "…ode-central-110/eeefdafe-aa2e-40b9-9c58-e087dbdf962b/tool-results/b4oon60v5.txt",
       "bytes": 47276
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-141",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-120\"}",
       "bytes": 45152
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-143",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-120\"}",
       "bytes": 45137
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-142",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-120\"}",
       "bytes": 45080
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-140",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-120\"}",
       "bytes": 45064
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-139",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-120\"}",
       "bytes": 45005
     },
     {
-      "stage": "tickets",
+      "kind": "tickets",
       "ticket": "code-central-123",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-120\"}",
       "bytes": 43706
     },
     {
-      "stage": "spec",
+      "kind": "spec",
       "ticket": "code-central-122",
       "tool": "mcp__code-central__edit_spec",
       "input": "{\"body\":\"## Problem Statement\\n\\nA review of every agent session on this reposi…",
       "bytes": 42609
     },
     {
-      "stage": "review",
+      "kind": "review",
       "ticket": "code-central-136",
       "tool": "Read",
       "input": "…ode-central-136/f04dbd37-1420-4d36-85fc-6ae67480fb75/tool-results/b1pnv2cuw.txt",
       "bytes": 38022
     },
     {
-      "stage": "review",
+      "kind": "review",
       "ticket": "code-central-105",
       "tool": "Read",
       "input": "…ode-central-105/dc16fec5-ac0c-4fc6-80fd-5788f2246a88/tool-results/b3gpi90gq.txt",
       "bytes": 34212
     },
     {
-      "stage": "review",
+      "kind": "review",
       "ticket": "code-central-151",
       "tool": "Read",
       "input": "…ode-central-151/69aa2217-9d23-40b0-9371-d0abe540159f/tool-results/bsqri44by.txt",
       "bytes": 34165
     },
     {
-      "stage": "review",
+      "kind": "review",
       "ticket": "code-central-97",
       "tool": "Read",
       "input": "…code-central-97/6cf4627e-b96b-43bb-a902-59e73c539e67/tool-results/bcc3f7fnm.txt",
       "bytes": 34141
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-153",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-124\"}",
       "bytes": 32770
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-147",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-124\"}",
       "bytes": 32647
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-148",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-124\"}",
       "bytes": 32647
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-151",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-124\"}",
       "bytes": 32643
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-149",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-124\"}",
       "bytes": 32611
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-150",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-124\"}",
       "bytes": 32611
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-146",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-124\"}",
       "bytes": 32518
     },
     {
-      "stage": "implementation",
+      "kind": "implementation",
       "ticket": "code-central-152",
       "tool": "mcp__code-central__get_spec",
       "input": "{\"spec\":\"code-central-124\"}",
@@ -780,9 +780,9 @@
   ],
   "within_session": 1,
   "across_sessions": 128,
-  "widenings": [
+  "wider_reads": [
     {
-      "stage": "review",
+      "kind": "review",
       "ticket": "code-central-184",
       "operation": "get_spec",
       "id": "code-central-179",

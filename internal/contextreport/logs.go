@@ -1,3 +1,5 @@
+// Reading Claude Code's session logs into Sessions and their tool calls.
+
 package main
 
 import (
@@ -14,13 +16,14 @@ import (
 )
 
 // Session is one agent's log: a Factory session, or a subagent one
-// started. Its Ticket and Stage come from the Factory's first prompt; a
-// subagent takes its parent's Ticket and Started time, and its Stage is
-// review for the code-review subagents and subagent for any other.
+// started. Its Ticket comes from the Factory's first prompt, and its kind
+// is the Stage, or implementation, its Stage Guide names. A subagent
+// takes its parent's Ticket and Started time, and its kind is review for
+// the code-review subagents and subagent for any other.
 type Session struct {
 	ID      string
 	Ticket  string
-	Stage   string
+	Kind    string
 	Started time.Time
 	// Cwd is the folder the session ran in, cut from short inputs so
 	// the same file reads the same in every worktree.
@@ -54,18 +57,18 @@ var (
 // is at repo, and their subagents, from Claude Code's projects folder.
 // Claude Code names a session's folder after the path it ran in, so the
 // repository's folders are the main checkout's and its worktrees'
-// (repo.worktrees/<ticket>), which share the main checkout's name as a
-// prefix. Sessions without a Stage Guide in their first prompt (run by
-// hand, outside the Factory) are left out.
+// (repo.worktrees/<ticket>). Sessions without a Stage Guide in their
+// first prompt (run by hand, outside the Factory) are left out.
 func Load(projects, repo string, w Window) ([]Session, error) {
 	entries, err := os.ReadDir(projects)
 	if err != nil {
 		return nil, err
 	}
-	prefix := projectDir(repo)
+	main := projectDir(repo)
+	worktrees := projectDir(repo + ".worktrees/")
 	var sessions []Session
 	for _, e := range entries {
-		if !e.IsDir() || (e.Name() != prefix && !strings.HasPrefix(e.Name(), prefix+"-")) {
+		if !e.IsDir() || (e.Name() != main && !strings.HasPrefix(e.Name(), worktrees)) {
 			continue
 		}
 		logs, err := filepath.Glob(filepath.Join(projects, e.Name(), "*.jsonl"))
@@ -77,7 +80,7 @@ func Load(projects, repo string, w Window) ([]Session, error) {
 			if err != nil {
 				return nil, err
 			}
-			if s.Ticket == "" || s.Stage == "" || !w.contains(s.Started) {
+			if s.Ticket == "" || s.Kind == "" || !w.contains(s.Started) {
 				continue
 			}
 			sessions = append(sessions, s)
@@ -129,9 +132,9 @@ func readSubagents(dir string, parent Session) ([]Session, error) {
 				return nil, err
 			}
 		}
-		s.Ticket, s.Started, s.Stage = parent.Ticket, parent.Started, "subagent"
+		s.Ticket, s.Started, s.Kind = parent.Ticket, parent.Started, "subagent"
 		if strings.HasPrefix(meta.Description, "Spec review") || strings.HasPrefix(meta.Description, "Standards review") {
-			s.Stage = "review"
+			s.Kind = "review"
 		}
 		sessions = append(sessions, s)
 	}
@@ -161,7 +164,7 @@ type block struct {
 }
 
 // readLog reads one session log: when it started, its first prompt's
-// Ticket and Stage, and its tool calls in order with their results'
+// Ticket and kind, and its tool calls in order with their results'
 // sizes. A call logged twice counts once.
 func readLog(file string) (Session, error) {
 	f, err := os.Open(file)
@@ -182,9 +185,11 @@ func readLog(file string) (Session, error) {
 				return Session{}, jerr
 			}
 			if s.Started.IsZero() && rec.Timestamp != "" {
-				if s.Started, err = time.Parse(time.RFC3339, rec.Timestamp); err != nil {
-					return Session{}, err
+				started, terr := time.Parse(time.RFC3339, rec.Timestamp)
+				if terr != nil {
+					return Session{}, terr
 				}
+				s.Started = started
 			}
 			if s.Cwd == "" {
 				s.Cwd = rec.Cwd
@@ -198,7 +203,7 @@ func readLog(file string) (Session, error) {
 						s.Ticket = m[1]
 					}
 					if m := stageGuide.FindStringSubmatch(text); m != nil {
-						s.Stage = m[1]
+						s.Kind = m[1]
 					}
 				}
 				for _, b := range blocks {

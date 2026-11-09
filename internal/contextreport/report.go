@@ -1,3 +1,5 @@
+// The report's figures, worked out from the sessions' tool calls.
+
 package main
 
 import (
@@ -17,7 +19,7 @@ type Report struct {
 	Sessions int       `json:"sessions"`
 	From     time.Time `json:"from"`
 	To       time.Time `json:"to"`
-	Stages   []Stage   `json:"stages"`
+	Kinds    []Kind    `json:"kinds"`
 	// Largest is the largest tool results, largest first.
 	Largest []Result `json:"largest"`
 	// ReReads is the Specs and Tickets read more than once, most read
@@ -27,16 +29,18 @@ type Report struct {
 	ReReads        []ReRead `json:"re_reads"`
 	WithinSession  int      `json:"within_session"`
 	AcrossSessions int      `json:"across_sessions"`
-	// Widenings is the reads called again for more, in session order.
-	Widenings []Widening `json:"widenings"`
+	// WiderReads is the reads called again for more, in session order.
+	WiderReads []WiderRead `json:"wider_reads"`
 }
 
-// Stage is one Stage's figures over its sessions. Tools counts every
-// Code Central operation as the one tool Code Central, and Operations
-// breaks it down. Rounds and Questions count post_round calls and their
-// Questions, and Widenings the reads called again for more: both signs
-// that a cut left out something an agent needed.
-type Stage struct {
+// Kind is the figures of one kind of session: a Stage (grilling, spec
+// or tickets), implementation, review (the code-review subagents) or
+// subagent (any other). Tools counts every Code Central operation as the
+// one tool Code Central, and Operations breaks it down. Rounds and
+// Questions count post_round calls and their Questions, and WiderReads
+// the reads called again for more: both signs that a cut left out
+// something an agent needed.
+type Kind struct {
 	Name       string   `json:"name"`
 	Sessions   int      `json:"sessions"`
 	Bytes      int      `json:"bytes"`
@@ -44,7 +48,7 @@ type Stage struct {
 	Operations []Figure `json:"operations,omitempty"`
 	Rounds     int      `json:"rounds,omitempty"`
 	Questions  int      `json:"questions,omitempty"`
-	Widenings  int      `json:"widenings,omitempty"`
+	WiderReads int      `json:"wider_reads,omitempty"`
 }
 
 // Figure is a tool's or an operation's calls and the bytes of their
@@ -57,7 +61,7 @@ type Figure struct {
 
 // Result is one tool result, with a short form of its call's input.
 type Result struct {
-	Stage  string `json:"stage"`
+	Kind   string `json:"kind"`
 	Ticket string `json:"ticket"`
 	Tool   string `json:"tool"`
 	Input  string `json:"input"`
@@ -66,7 +70,7 @@ type Result struct {
 
 // ReRead is a Spec or Ticket read more than once with get_spec or
 // get_ticket: its reads, the sessions that read it, and those sessions'
-// Tickets and Stages.
+// Tickets and kinds.
 type ReRead struct {
 	ID       string   `json:"id"`
 	Reads    int      `json:"reads"`
@@ -74,11 +78,11 @@ type ReRead struct {
 	Readers  []string `json:"readers"`
 }
 
-// Widening is a get_spec or get_ticket called again in the same session
-// for something the earlier calls for that ID didn't fetch: more parts,
-// more sections, or full.
-type Widening struct {
-	Stage     string `json:"stage"`
+// WiderRead is a get_spec or get_ticket called again in the same
+// session for something the earlier calls for that ID didn't fetch:
+// more parts, more sections, or full.
+type WiderRead struct {
+	Kind      string `json:"kind"`
 	Ticket    string `json:"ticket"`
 	Operation string `json:"operation"`
 	ID        string `json:"id"`
@@ -89,15 +93,15 @@ type Widening struct {
 // codeCentral prefixes the tool name of every Code Central operation.
 const codeCentral = "mcp__code-central__"
 
-// stageOrder is the order Stages are listed in: the Factory's, then the
-// subagents'. Any other Stage follows, by name.
-var stageOrder = []string{"grilling", "spec", "tickets", "implementation", "review", "subagent"}
+// kindOrder is the order kinds are listed in: the Factory's, then the
+// subagents'. Any other kind follows, by name.
+var kindOrder = []string{"grilling", "spec", "tickets", "implementation", "review", "subagent"}
 
 // Build works out the report's figures from the sessions, listing the
-// top largest results, re-read IDs and widenings.
+// top largest results, re-read IDs and wider reads.
 func Build(sessions []Session, top int) Report {
 	r := Report{Sessions: len(sessions)}
-	stages := map[string]*Stage{}
+	kinds := map[string]*Kind{}
 	tools := map[string]map[string]*Figure{}
 	ops := map[string]map[string]*Figure{}
 	type read struct {
@@ -114,34 +118,37 @@ func Build(sessions []Session, top int) Report {
 		if s.Started.After(r.To) {
 			r.To = s.Started
 		}
-		st := stages[s.Stage]
-		if st == nil {
-			st = &Stage{Name: s.Stage}
-			stages[s.Stage] = st
-			tools[s.Stage] = map[string]*Figure{}
-			ops[s.Stage] = map[string]*Figure{}
+		k := kinds[s.Kind]
+		if k == nil {
+			k = &Kind{Name: s.Kind}
+			kinds[s.Kind] = k
+			tools[s.Kind] = map[string]*Figure{}
+			ops[s.Kind] = map[string]*Figure{}
 		}
-		st.Sessions++
+		k.Sessions++
 		scopes := map[string]map[string]bool{}
 		firsts := map[string]string{}
 		for _, c := range s.Calls {
-			st.Bytes += c.Bytes
+			k.Bytes += c.Bytes
 			tool := c.Tool
-			if op, ok := strings.CutPrefix(c.Tool, codeCentral); ok {
+			op, isOperation := operation(c.Tool)
+			if isOperation {
 				tool = "Code Central"
-				add(ops[s.Stage], op, c.Bytes)
+				add(ops[s.Kind], op, c.Bytes)
 			}
-			add(tools[s.Stage], tool, c.Bytes)
-			r.Largest = append(r.Largest, Result{Stage: s.Stage, Ticket: s.Ticket, Tool: c.Tool, Input: shortInput(c, s.Cwd), Bytes: c.Bytes})
+			add(tools[s.Kind], tool, c.Bytes)
+			r.Largest = append(r.Largest, Result{Kind: s.Kind, Ticket: s.Ticket, Tool: c.Tool, Input: shortInput(c, s.Cwd), Bytes: c.Bytes})
 
-			switch c.Tool {
-			case codeCentral + "post_round":
-				st.Rounds++
+			if !isOperation {
+				continue
+			}
+			switch op {
+			case "post_round":
+				k.Rounds++
 				questions, _ := c.Input["questions"].([]any)
-				st.Questions += len(questions)
-			case codeCentral + "get_spec", codeCentral + "get_ticket":
-				op := strings.TrimPrefix(c.Tool, codeCentral)
-				id := readID(c, s.Ticket)
+				k.Questions += len(questions)
+			case "get_spec", "get_ticket":
+				id := readID(op, c.Input, s.Ticket)
 				if id == "" {
 					continue
 				}
@@ -152,16 +159,16 @@ func Build(sessions []Session, top int) Report {
 				}
 				rd.reads++
 				rd.sessions[i] = true
-				rd.readers[s.Ticket+" "+s.Stage] = true
+				rd.readers[s.Ticket+" "+s.Kind] = true
 
 				key := op + " " + id
-				scope := readScope(c)
+				scope := readScope(op, c.Input)
 				if seen, ok := scopes[key]; !ok {
 					scopes[key] = scope
 					firsts[key] = shortInput(c, s.Cwd)
 				} else if !covered(scope, seen) {
-					st.Widenings++
-					r.Widenings = append(r.Widenings, Widening{Stage: s.Stage, Ticket: s.Ticket, Operation: op, ID: id, From: firsts[key], To: shortInput(c, s.Cwd)})
+					k.WiderReads++
+					r.WiderReads = append(r.WiderReads, WiderRead{Kind: s.Kind, Ticket: s.Ticket, Operation: op, ID: id, From: firsts[key], To: shortInput(c, s.Cwd)})
 					for e := range scope {
 						seen[e] = true
 					}
@@ -170,21 +177,21 @@ func Build(sessions []Session, top int) Report {
 		}
 	}
 
-	for name, st := range stages {
-		st.Tools = figures(tools[name])
-		st.Operations = figures(ops[name])
-		r.Stages = append(r.Stages, *st)
+	for name, k := range kinds {
+		k.Tools = figures(tools[name])
+		k.Operations = figures(ops[name])
+		r.Kinds = append(r.Kinds, *k)
 	}
-	sort.Slice(r.Stages, func(i, j int) bool {
-		a, b := stageRank(r.Stages[i].Name), stageRank(r.Stages[j].Name)
+	sort.Slice(r.Kinds, func(i, j int) bool {
+		a, b := kindRank(r.Kinds[i].Name), kindRank(r.Kinds[j].Name)
 		if a != b {
 			return a < b
 		}
-		return r.Stages[i].Name < r.Stages[j].Name
+		return r.Kinds[i].Name < r.Kinds[j].Name
 	})
 
 	sort.SliceStable(r.Largest, func(i, j int) bool { return r.Largest[i].Bytes > r.Largest[j].Bytes })
-	r.Largest = first(r.Largest, top)
+	r.Largest = atMost(r.Largest, top)
 
 	for id, rd := range reads {
 		r.WithinSession += rd.reads - len(rd.sessions)
@@ -205,8 +212,8 @@ func Build(sessions []Session, top int) Report {
 		}
 		return r.ReReads[i].ID < r.ReReads[j].ID
 	})
-	r.ReReads = first(r.ReReads, top)
-	r.Widenings = first(r.Widenings, top)
+	r.ReReads = atMost(r.ReReads, top)
+	r.WiderReads = atMost(r.WiderReads, top)
 	return r
 }
 
@@ -235,16 +242,22 @@ func figures(m map[string]*Figure) []Figure {
 	return list
 }
 
-func stageRank(name string) int {
-	for i, s := range stageOrder {
+func kindRank(name string) int {
+	for i, s := range kindOrder {
 		if s == name {
 			return i
 		}
 	}
-	return len(stageOrder)
+	return len(kindOrder)
 }
 
-func first[T any](list []T, n int) []T {
+// operation is the Code Central operation a tool calls, if it is one.
+func operation(tool string) (string, bool) {
+	return strings.CutPrefix(tool, codeCentral)
+}
+
+// atMost is the first n of list, or all of it when it is shorter.
+func atMost[T any](list []T, n int) []T {
 	if len(list) > n {
 		return list[:n]
 	}
@@ -255,9 +268,9 @@ var digits = regexp.MustCompile(`^[0-9]+$`)
 
 // readID is the Spec or Ticket a get_spec or get_ticket call reads, as
 // <key>-<n>. A bare number takes the key of the session's Ticket.
-func readID(c Call, ticket string) string {
+func readID(op string, input map[string]any, ticket string) string {
 	var id string
-	switch v := c.Input[strings.TrimPrefix(strings.TrimPrefix(c.Tool, codeCentral), "get_")].(type) {
+	switch v := input[strings.TrimPrefix(op, "get_")].(type) {
 	case string:
 		id = v
 	case float64:
@@ -271,33 +284,61 @@ func readID(c Call, ticket string) string {
 	return id
 }
 
-// readScope is what a read fetches: each of its parts (every part when
-// it names none), each of its sections (the whole body when it names
-// none), and full when it asks for it.
-func readScope(c Call) map[string]bool {
+// defaultParts is the parts each read fetches when it names none.
+// get_ticket has no parts yet, so its default is a part of its own,
+// which any part it gains later is more than.
+var defaultParts = map[string][]string{
+	"get_spec": {"body", "tickets", "edits"},
+}
+
+// readScope is what a read fetches: each of its parts (its default parts
+// when it names none), each of the body's sections it names (or the
+// whole body), and full when it asks for it.
+func readScope(op string, input map[string]any) map[string]bool {
 	scope := map[string]bool{}
-	list := func(name string) {
-		values, _ := c.Input[name+"s"].([]any)
-		if len(values) == 0 {
-			scope[name+":*"] = true
+	var parts []string
+	for _, p := range listInput(input, "parts") {
+		parts = append(parts, strings.ToLower(p))
+	}
+	if len(parts) == 0 {
+		parts = defaultParts[op]
+	}
+	if len(parts) == 0 {
+		scope["part:default"] = true
+	}
+	for _, p := range parts {
+		if p != "body" {
+			scope["part:"+p] = true
+			continue
 		}
-		for _, v := range values {
-			scope[name+":"+strings.ToLower(fmt.Sprint(v))] = true
+		sections := listInput(input, "sections")
+		if len(sections) == 0 {
+			scope["section:*"] = true
+		}
+		for _, section := range sections {
+			scope["section:"+strings.ToLower(section)] = true
 		}
 	}
-	list("part")
-	list("section")
-	if full, _ := c.Input["full"].(bool); full {
+	if full, _ := input["full"].(bool); full {
 		scope["full"] = true
 	}
 	return scope
 }
 
-// covered reports whether every element of scope was already fetched.
+func listInput(input map[string]any, name string) []string {
+	values, _ := input[name].([]any)
+	var list []string
+	for _, v := range values {
+		list = append(list, fmt.Sprint(v))
+	}
+	return list
+}
+
+// covered reports whether every element of scope was already fetched,
+// where the whole body covers any of its sections.
 func covered(scope, seen map[string]bool) bool {
 	for e := range scope {
-		kind, _, _ := strings.Cut(e, ":")
-		if !seen[e] && !seen[kind+":*"] {
+		if !seen[e] && !(strings.HasPrefix(e, "section:") && seen["section:*"]) {
 			return false
 		}
 	}

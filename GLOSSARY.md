@@ -105,7 +105,7 @@ The Session Events of one Claim, in order, as Code Central holds them. It may be
 _Avoid_: Log, conversation, stream
 
 **Context Report**:
-What agents load into context, measured from Claude Code's own session logs on the machine (not Transcripts): the size of tool results per Stage, tool and operation, the largest results, the Specs and Tickets read more than once, and signs that a cut went too far, each with its change against a saved baseline.
+What agents load into context, measured from Claude Code's own session logs on the machine (not Transcripts): the size of tool results per kind of session (each Stage, implementation, and the review and other subagents), tool and operation, the largest results, the Specs and Tickets read more than once, and signs that a cut went too far, each with its change against a saved baseline.
 _Avoid_: Token report, usage report
 
 **Actor**:

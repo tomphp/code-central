@@ -1,6 +1,7 @@
 // Command contextreport reports what agents load into context, from
-// Claude Code's session logs: for each Stage, the size of the tool
-// results its sessions read, per tool and per Code Central operation;
+// Claude Code's session logs: for each kind of session (each Stage,
+// implementation, and the review and other subagents), the size of the
+// tool results its sessions read, per tool and per Code Central operation;
 // the largest results; the Specs and Tickets read more than once; and
 // signs that a cut went too far. With -save it writes the figures to a
 // baseline file, and with -baseline it prints each figure's change
@@ -40,7 +41,7 @@ func run(args []string, out io.Writer) error {
 	repo := flags.String("repo", "", "the main checkout whose sessions to read (default this repository's)")
 	since := flags.String("since", "", "only sessions started at or after this RFC 3339 time")
 	until := flags.String("until", "", "only sessions started before this RFC 3339 time")
-	top := flags.Int("top", 20, "how many of the largest results, re-read IDs and widened reads to list")
+	top := flags.Int("top", 20, "how many of the largest results, re-read IDs and wider reads to list")
 	save := flags.String("save", "", "write the figures to this file, as a baseline")
 	baseline := flags.String("baseline", "", "print each figure's change against this baseline")
 	if err := flags.Parse(args); err != nil {
