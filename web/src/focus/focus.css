@@ -3,8 +3,10 @@
 .focus { min-height: 100vh; display: flex; flex-direction: column; font-size: 18px; }
 .focus-head { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
 .focus-project { font-weight: 600; }
-/* Exit sits at the header's far end. */
-.focus-exit { margin-left: auto; }
+/* + New ▾ and Exit sit together at the header's far end. The ▾'s menu
+   lines up with the split's right edge, so it doesn't run off screen. */
+.focus-new { position: relative; margin-left: auto; }
+.focus-new .new-menu { left: auto; min-width: 16rem; }
 .focus-loading { margin: auto; color: var(--muted); }
 .focus-clear { margin: auto; text-align: center; padding-bottom: 10vh; }
 .focus-clear h2 { font-size: 40px; font-weight: 600; margin: 0 0 8px; }
