@@ -165,7 +165,7 @@ The service records each call as one line of JSON in `projects/<key>/usage/<YYYY
 {"type":"mcp_call","time":"2026-11-09T14:01:43Z","op":"get_ticket","id":"acme-2","request_bytes":12,"response_bytes":1534}
 ```
 
-A record that can't be written, or a line that can't be read, is noted in the service log and skipped; it never fails an agent's call or a read. Usage keeps 90 days ([ADR 0016](adr/0016-usage-records-are-append-only-json-lines-files-per-project-per-day-kept-90-days.md)).
+A record that can't be written, or a line that can't be read, is noted in the service log and skipped; it never fails an agent's call or a read. Usage keeps 90 days: the service deletes each file whose day is more than 90 days before today when it starts, and again with the first record of each new day, logging any file it can't delete ([ADR 0016](adr/0016-usage-records-are-append-only-json-lines-files-per-project-per-day-kept-90-days.md)).
 
 Scripts can read it over the HTTP API: `GET /api/usage?project=<key>&days=<7|30|90>`. Leave out `project` for all Projects, Archived ones included; `days` defaults to 7. An unknown Project is `not_found`, and any other `days` is `invalid`. The answer's `operations` are the table's rows; its `kinds`, `sessions` and `days` are for token usage, which comes later, and are empty for now.
 
