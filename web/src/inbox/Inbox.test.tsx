@@ -397,6 +397,12 @@ describe("the sidebar's top row: + New and Focus", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
+  it("shows + New and its ▾ as primary", async () => {
+    renderApp(world());
+    expect(await within(nav()).findByRole("button", { name: "New requirement" })).toHaveClass("primary");
+    expect(menuButton()).toHaveClass("primary");
+  });
+
   it("opens the New requirement dialog from + New", async () => {
     renderApp(world());
     await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
