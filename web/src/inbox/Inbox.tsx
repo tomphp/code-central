@@ -14,6 +14,7 @@ import { isStage, needsMeCount, progress, reasonsOf } from "../requirement/progr
 import { RequirementPane } from "../requirement/RequirementPane";
 import { RequirementRow } from "../requirement/RequirementRow";
 import { TicketPane } from "../ticket/TicketDetail";
+import { OptionsLink } from "../options/OptionsLink";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
 import { hrefFor, opensInPlace, type UiLocation } from "../url";
 
@@ -74,7 +75,10 @@ export function Inbox({ api, now, data, loc, navigate, requirement, requirementE
   return (
     <div className="inbox">
       <nav aria-label="Filters" className="inbox-nav">
-        <h1>Code Central</h1>
+        <div className="inbox-title">
+          <h1>Code Central</h1>
+          <OptionsLink loc={loc} navigate={navigate} />
+        </div>
         <NewRequirement
           api={api}
           projects={projects.filter((p) => !p.archived)}

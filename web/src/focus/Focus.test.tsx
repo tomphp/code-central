@@ -97,14 +97,23 @@ describe("All clear", () => {
     expect(await within(focus()).findByText("All clear")).toBeInTheDocument();
   });
 
-  it("shows All clear with Nothing needs you and Exit, and nothing else, when nothing needs the human", async () => {
+  it("shows All clear with Nothing needs you, Options and Exit, and nothing else, when nothing needs the human", async () => {
     const fake = world();
     fake.setNeedsMe([]);
     renderApp(fake, "/?view=focus");
     const clear = await within(focus()).findByRole("region", { name: "All clear" });
     expect(clear).toHaveTextContent(/^All clearNothing needs you\.$/);
     expect(within(focus()).getAllByRole("button").map((b) => b.textContent)).toEqual(["Exit"]);
-    expect(within(focus()).queryAllByRole("link")).toEqual([]);
+    expect(within(focus()).getAllByRole("link").map((a) => a.textContent)).toEqual(["Options"]);
+  });
+
+  it("shows All clear when the Options can't be read, with no error banner over it", async () => {
+    const fake = world();
+    fake.setNeedsMe([]);
+    vi.spyOn(fake, "options").mockRejectedValue(new ApiError(0, "service_unavailable", "Code Central isn't reachable"));
+    renderApp(fake, "/?view=focus");
+    expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
+    expect(screen.queryByText("Code Central isn't reachable")).toBeNull();
   });
 
   it("is not All clear while something in scope needs the human, and becomes All clear when it goes", async () => {

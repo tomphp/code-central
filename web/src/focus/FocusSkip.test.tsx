@@ -58,7 +58,6 @@ function change(fake: FakeApi, groups: Parameters<FakeApi["setNeedsMe"]>[0], id:
   act(() => fake.emit({ type: "ticket.changed", project: id.split("-")[0], id }));
 }
 
-const actions = (fake: FakeApi) => fake.calls.filter((c) => !["listProjects", "needsMe", "findTickets", "findSpecs", "getSpec", "getTicket"].includes(c));
 
 describe("Skip", () => {
   it("sits next to Answer and Dismiss on a Question Focus Item", async () => {
@@ -84,7 +83,7 @@ describe("Skip", () => {
 
     expect(await heading("Login page")).toBeInTheDocument();
     expect(within(focus()).getByText("2 left")).toBeInTheDocument();
-    expect(actions(fake)).toEqual([]);
+    expect(fake.actions()).toEqual([]);
   });
 
   it("goes on to the Round's next open Question, and only the skipped one goes to the back of the whole queue", async () => {
@@ -202,7 +201,7 @@ describe("skips", () => {
 
     expect(window.location.search).toBe("?view=focus");
     expect(localStorage.length).toBe(0);
-    expect(actions(fake)).toEqual([]);
+    expect(fake.actions()).toEqual([]);
   });
 
   it("are forgotten on leaving Focus Mode", async () => {

@@ -412,4 +412,21 @@ export class ApiError extends Error {
 export type ChangeEvent =
   | { type: "ticket.changed"; project: string; id: string }
   | { type: "spec.changed"; project: string; id: string }
-  | { type: "project.changed"; project: string };
+  | { type: "project.changed"; project: string }
+  // options.changed is about no Project: the Options changed.
+  | { type: "options.changed" };
+
+// FocusClear is what Focus Mode shows when nothing needs the human.
+export const FOCUS_CLEARS = ["all_clear", "activity_dashboard"] as const;
+export type FocusClear = (typeof FOCUS_CLEARS)[number];
+
+// Options are the human's global preferences, kept by the service
+// (GET /api/options), each at its default until the human changes it.
+export interface Options {
+  focus_clear: FocusClear;
+}
+
+// DEFAULT_OPTIONS are the Options a fresh store reads, and what the UI
+// uses while they load or when they can't be read.
+export const DEFAULT_OPTIONS: Options = { focus_clear: "all_clear" };
+

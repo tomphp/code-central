@@ -51,7 +51,6 @@ const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 const item = () => within(focus()).findByRole("article", { name: "Focus Item" });
 const question = (title: string) => within(focus()).findByRole("heading", { name: title });
 const box = () => within(focus()).getByRole("textbox");
-const actions = (fake: FakeApi) => fake.calls.filter((c) => !["listProjects", "needsMe", "findTickets", "findSpecs", "getSpec", "getTicket"].includes(c));
 const stored = async (fake: FakeApi, id = "acme-1") => (await fake.getTicket("acme", id)).rounds[1].questions;
 
 // change reseeds Needs Me and sends the notice the service would.
@@ -91,7 +90,7 @@ describe("a Question Focus Item", () => {
     await question("Which colour?");
     expect(box()).toHaveValue("Blue");
     expect(within(focus()).getByText(/Recommended answer, a draft: nothing is saved until you answer/)).toBeInTheDocument();
-    expect(actions(fake)).toEqual([]);
+    expect(fake.actions()).toEqual([]);
   });
 
   it("labels a Stage Ticket's Question with its Requirement and Stage", async () => {
@@ -124,7 +123,7 @@ describe("answering in Focus Mode", () => {
     expect(within(focus()).getByText("Question 3 of 3 · Round 2")).toBeInTheDocument();
     expect(within(focus()).getByText("2 left")).toBeInTheDocument();
     expect(box()).toHaveValue("");
-    expect(actions(fake)).toEqual(["answer"]);
+    expect(fake.actions()).toEqual(["answer"]);
     expect((await stored(fake))[0]).toMatchObject({ status: "answered", answer: "Blue" });
   });
 
@@ -135,7 +134,7 @@ describe("answering in Focus Mode", () => {
     await userEvent.click(within(focus()).getByRole("button", { name: "Dismiss" }));
 
     expect(await question("Which size?")).toBeInTheDocument();
-    expect(actions(fake)).toEqual(["dismiss_question"]);
+    expect(fake.actions()).toEqual(["dismiss_question"]);
     expect((await stored(fake))[0].status).toBe("dismissed");
   });
 
@@ -154,7 +153,7 @@ describe("answering in Focus Mode", () => {
     fireEvent.keyDown(box(), { key: "Enter", ctrlKey: true });
     expect(await within(focus()).findByRole("region", { name: "Resume or release" })).toBeInTheDocument();
     expect((await stored(fake))[2]).toMatchObject({ status: "answered", answer: "M" });
-    expect(actions(fake)).toEqual(["answer", "answer"]);
+    expect(fake.actions()).toEqual(["answer", "answer"]);
   });
 
   it("sends nothing on a plain Enter, nor on Cmd+Enter in an empty box", async () => {
@@ -166,7 +165,7 @@ describe("answering in Focus Mode", () => {
     fireEvent.keyDown(box(), { key: "Enter", metaKey: true });
     await userEvent.type(box(), "M{Enter}");
     expect(box()).toHaveValue("M\n");
-    expect(actions(fake)).toEqual([]);
+    expect(fake.actions()).toEqual([]);
   });
 
   it("leaves the Inbox's Round panel without Cmd+Enter", async () => {
@@ -176,7 +175,7 @@ describe("answering in Focus Mode", () => {
     const colour = within(panel).getByRole("group", { name: /Which colour\?/ });
     fireEvent.keyDown(within(colour).getByRole("textbox"), { key: "Enter", metaKey: true });
     fireEvent.keyDown(within(colour).getByRole("textbox"), { key: "Enter", ctrlKey: true });
-    expect(actions(fake)).toEqual([]);
+    expect(fake.actions()).toEqual([]);
   });
 
   it("goes on, after the Round's last Question, to the Ticket as an Answered Focus Item in its Needs Me place", async () => {
