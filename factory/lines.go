@@ -33,13 +33,24 @@ func (f *factory) noteTicket(c claim, tk core.TicketView) {
 
 // about is "(<stage>): "<title>"", naming c's Ticket in a line.
 func (f *factory) about(c claim) string {
+	i := f.claimInfo(c)
+	return fmt.Sprintf("(%s): %q", i.stage, i.title)
+}
+
+// stage is the Stage Guide's name c's Ticket was started with, as the
+// lines say it: the kind of c's main session in Usage.
+func (f *factory) stage(c claim) string { return f.claimInfo(c).stage }
+
+// claimInfo is what the lines say of c's Ticket; with nothing noted, its
+// stage is implementation.
+func (f *factory) claimInfo(c claim) claimInfo {
 	f.mu.Lock()
 	i, ok := f.info[c.ClaimID]
 	f.mu.Unlock()
 	if !ok {
 		i.stage = core.ImplementationStage
 	}
-	return fmt.Sprintf("(%s): %q", i.stage, i.title)
+	return i
 }
 
 // claimf prints a line about the held Claim c and queues it as a factory

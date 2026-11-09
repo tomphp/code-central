@@ -89,6 +89,8 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Click **Live** to close it, or to open it on a Claim that has ended. Every Ticket the Factory works has one, for every Stage and every implementation Ticket. To enter a session yourself, run the Claim's Resume Command (the `resume:` part of the Factory's line) in its worktree. Don't do it while the Factory has a turn running on it: the two would write into one session.
 
+   The Factory also posts each model response's token usage to the service, so its sessions appear in [Usage](running-as-a-service.md#usage)'s Context Size and token figures. The main session counts under its Stage (`grilling`, `spec`, `tickets`) or `implementation`; each subagent is a session of its own, counted as `review` when its Agent call is described `Spec review …` or `Standards review …` and as `subagent` otherwise. A session resumed after you answer a Round adds to the same Usage session. Sessions you run by hand post nothing, so they aren't counted there, though their Code Central calls are. Like the Transcript, posting never holds up or fails a turn: a post the service can't take, such as an older service's `404`, is dropped.
+
    Check: the Live section shows the session's calls as they happen.
 
 4. **Answer the grilling Round in the UI.** The session posts its Questions as a Round, not in a terminal:

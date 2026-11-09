@@ -8,7 +8,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/core"
 )
 
@@ -29,51 +28,54 @@ const (
 const (
 	// toolResultMax is the most bytes of a tool result's text posted.
 	toolResultMax = 4 << 10
-	// eventQueueMax is the most events waiting to be posted; when it is
-	// full the oldest are dropped.
+	// eventQueueMax is the most events, or model responses, waiting to
+	// be posted; when it is full the oldest are dropped.
 	eventQueueMax = 1000
-	// eventBatchEvery is how often waiting events are posted.
+	// eventBatchEvery is how often waiting events and responses are
+	// posted.
 	eventBatchEvery = time.Second
-	// eventBatchMax is how many waiting events make a post at once.
+	// eventBatchMax is how many waiting events or responses make a post
+	// at once.
 	eventBatchMax = 100
 	// eventPostTimeout bounds each post, the last flush's too.
 	eventPostTimeout = 2 * time.Second
 )
 
-// sessionEvent is a Session Event waiting to be posted for a session.
-type sessionEvent struct {
+// queued is an item waiting to be posted for a session.
+type queued[T any] struct {
 	session string
-	event   core.SessionEvent
+	item    T
 }
 
-// sender is the Factory's one poster of Session Events. It posts what is
-// waiting every eventBatchEvery, or sooner once eventBatchMax are waiting,
-// one post per session in the order they came, so each session's order
-// holds. every is eventBatchEvery unless a test shortens it.
-type sender struct {
-	client *client.Client
-	every  time.Duration
+// sender is one of the Factory's posters, of Session Events or of token
+// usage. It posts what is waiting every eventBatchEvery, or sooner once
+// eventBatchMax are waiting, one post per session in the order they
+// came, so each session's order holds. every is eventBatchEvery unless a
+// test shortens it.
+type sender[T any] struct {
+	post  func(ctx context.Context, session string, items []T) error
+	every time.Duration
 
 	mu      sync.Mutex
-	waiting []sessionEvent
+	waiting []queued[T]
 	full    chan struct{} // signalled when eventBatchMax are waiting
 	stop    chan struct{}
 	done    chan struct{}
 }
 
-func newSender(c *client.Client, every time.Duration) *sender {
-	return &sender{client: c, every: every, full: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
+func newSender[T any](post func(context.Context, string, []T) error, every time.Duration) *sender[T] {
+	return &sender[T]{post: post, every: every, full: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
 }
 
-// add queues e for session, dropping the oldest waiting event when the
+// add queues item for session, dropping the oldest waiting item when the
 // queue is full. It never blocks on a post.
-func (s *sender) add(session string, e core.SessionEvent) {
+func (s *sender[T]) add(session string, item T) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if len(s.waiting) >= eventQueueMax {
 		s.waiting = s.waiting[1:]
 	}
-	s.waiting = append(s.waiting, sessionEvent{session, e})
+	s.waiting = append(s.waiting, queued[T]{session, item})
 	if len(s.waiting) >= eventBatchMax {
 		select {
 		case s.full <- struct{}{}:
@@ -83,7 +85,7 @@ func (s *sender) add(session string, e core.SessionEvent) {
 }
 
 // run posts batches until close.
-func (s *sender) run() {
+func (s *sender[T]) run() {
 	defer close(s.done)
 	tick := time.NewTicker(s.every)
 	defer tick.Stop()
@@ -104,30 +106,30 @@ func (s *sender) run() {
 }
 
 // close makes one last flush and stops the sender.
-func (s *sender) close() {
+func (s *sender[T]) close() {
 	close(s.stop)
 	<-s.done
 }
 
-// flush posts every waiting event, one post per session, each with
-// eventPostTimeout within ctx. A post that fails is dropped, never
-// retried.
-func (s *sender) flush(ctx context.Context) {
+// flush posts every waiting item, one post per session, each with
+// eventPostTimeout within ctx. A post that fails, an older Code
+// Central's 404 included, is dropped, never retried.
+func (s *sender[T]) flush(ctx context.Context) {
 	s.mu.Lock()
 	waiting := s.waiting
 	s.waiting = nil
 	s.mu.Unlock()
 	var sessions []string
-	bySession := map[string][]core.SessionEvent{}
+	bySession := map[string][]T{}
 	for _, w := range waiting {
 		if _, ok := bySession[w.session]; !ok {
 			sessions = append(sessions, w.session)
 		}
-		bySession[w.session] = append(bySession[w.session], w.event)
+		bySession[w.session] = append(bySession[w.session], w.item)
 	}
 	for _, session := range sessions {
 		ctx, cancel := context.WithTimeout(ctx, eventPostTimeout)
-		_ = s.client.PostSessionEvents(ctx, session, bySession[session])
+		_ = s.post(ctx, session, bySession[session])
 		cancel()
 	}
 }
