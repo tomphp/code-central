@@ -150,6 +150,9 @@ func TestTheSpecGuideReplacesTheBodyInTheSpecTemplate(t *testing.T) {
 		"Testing Decisions", "Out of Scope", "Further Notes",
 		"Create no Spec", "add no Label",
 		"grilling Ticket's Rounds and resolution",
+		// It reads the resolution comment, and a Round only when that points
+		// to one, not the whole grilling Ticket.
+		"resolution comment", "`get_ticket` and `parts`", "only when the comment points to one",
 		"test seams", "key decisions", "out of scope",
 	)
 }
@@ -161,6 +164,8 @@ func TestTheTicketsGuideCreatesReadyTicketsBlockedByItself(t *testing.T) {
 		"numbered breakdown", "blocking edges",
 		"`edit_ticket`", "`cancel`", "Replacements", "never adds a second batch",
 		"writing them", // new terms and ADRs go to an implementation Ticket
+		// It reads the sections it slices from, not the whole Spec.
+		"`get_spec` and `sections`", "read the rest only when",
 	)
 }
 
