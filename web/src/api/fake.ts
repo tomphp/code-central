@@ -95,13 +95,15 @@ import {
   type TicketView,
   type Transcript,
   USAGE_DAYS,
+  USAGE_KEPT_DAYS,
+  sessionKey,
   type UsageFilter,
   type UsageKind,
   type UsageOperation,
   type UsageResponse,
   type UsageSession,
-  type UsageSessionFilter,
-  type UsageSessionView,
+  type SessionUsageFilter,
+  type SessionUsageView,
   type UsageView,
 } from "./types";
 
@@ -258,7 +260,7 @@ interface FakeFollower {
 
 // READS are the Api's reads, by name, which actions leaves out.
 const READS: ReadonlySet<string> = new Set<keyof Api>([
-  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript", "usage", "usageSession",
+  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript", "usage", "sessionUsage",
 ]);
 
 export class FakeApi implements Api {
@@ -767,11 +769,7 @@ export class FakeApi implements Api {
     const days = filter.days ?? USAGE_DAYS[0];
     if (!USAGE_DAYS.includes(days)) throw new ApiError(422, "invalid", `days must be 7, 30 or 90, not ${days}`, "days");
     if (filter.project && !this.projects.has(filter.project)) throw new ApiError(404, "not_found", `no Project "${filter.project}"`);
-    const today = localDay(this.now);
-    const inRange = (r: { project: string; time: string }) => {
-      const ago = today - localDay(new Date(r.time));
-      return (!filter.project || r.project === filter.project) && ago >= 0 && ago < days;
-    };
+    const inRange = (r: { project: string; time: string }) => (!filter.project || r.project === filter.project) && this.withinDays(r.time, days);
     const rows = new Map<string, UsageOperation>();
     for (const c of this.usageCalls) {
       if (!inRange(c)) continue;
@@ -789,17 +787,13 @@ export class FakeApi implements Api {
     return { operations, kinds: usageKinds(sessions), sessions: sessions.slice(0, RECENT_SESSIONS), days: [] };
   }
 
-  async usageSession({ project, session, agent }: UsageSessionFilter): Promise<UsageSessionView> {
-    this.calls.push("usageSession");
+  async sessionUsage({ project, session, agent }: SessionUsageFilter): Promise<SessionUsageView> {
+    this.calls.push("sessionUsage");
     if (!this.projects.has(project)) throw new ApiError(404, "not_found", `no Project "${project}"`);
-    // Every day Usage keeps, whatever range the rest of Usage reads.
-    const today = localDay(this.now);
-    const kept = (r: FakeUsageRecord) => {
-      const ago = today - localDay(new Date(r.time));
-      return ago >= 0 && ago < USAGE_DAYS[USAGE_DAYS.length - 1];
-    };
+    const key = sessionKey({ project, session, agent });
     const responses = this.usageResponses
-      .filter((r) => r.project === project && r.session_id === session && (r.agent ?? "") === (agent ?? "") && kept(r))
+      // Every day Usage keeps, whatever range the rest of Usage reads.
+      .filter((r) => sessionKey({ project: r.project, session: r.session_id, agent: r.agent }) === key && this.withinDays(r.time, USAGE_KEPT_DAYS + 1))
       .sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
       .map((r) => ({
         time: r.time,
@@ -813,6 +807,12 @@ export class FakeApi implements Api {
   }
 
   // ---- internals ----
+
+  // withinDays reports whether time falls on today or the days-1 local days before it.
+  private withinDays(time: string, days: number): boolean {
+    const ago = localDay(this.now) - localDay(new Date(time));
+    return ago >= 0 && ago < days;
+  }
 
   // allSpecs is a Project's seeded Specs, then any Spec only a Ticket
   // names, in ID order.

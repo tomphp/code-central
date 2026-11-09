@@ -9,14 +9,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "../api/api";
 import {
+  sessionKey,
   USAGE_DAYS,
+  USAGE_KEPT_DAYS,
   type ProjectRow,
   type UsageDays,
   type UsageKind,
   type UsageOperation,
   type UsageSession,
-  type UsageSessionFilter,
-  type UsageSessionResponse,
+  type SessionUsageFilter,
+  type SessionUsageResponse,
 } from "../api/types";
 import { bytes, count } from "../format";
 import { useFetch } from "../live";
@@ -42,10 +44,6 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
   const empty = data && !data.operations.length && !data.kinds.length && !data.sessions.length;
   const over = `in ${scopeName} over the last ${days} days`;
   const projectName = (key: string) => projects.find((p) => p.key === key)?.display_name ?? key;
-  // The open session, keyed so another session starts from nothing.
-  const session = loc.session && (
-    <SessionChart key={`${loc.session.project} ${loc.session.session} ${loc.session.agent ?? ""}`} api={api} session={loc.session} navigate={navigate} />
-  );
 
   return (
     <main aria-label="Usage" className="usage">
@@ -84,7 +82,9 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
           </p>
         )}
         {empty && <p className="muted">No usage yet {over}.</p>}
-        {empty && session}
+        {/* The open session, above the rest so it shows whatever they hold,
+            keyed so another session starts from nothing. */}
+        {loc.session && <SessionChart key={sessionKey(loc.session)} api={api} session={loc.session} navigate={navigate} />}
         {data && !empty && (
           <>
             <section aria-labelledby="usage-calls">
@@ -96,14 +96,10 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
               {data.sessions.length ? (
                 <>
                   <KindsTable kinds={data.kinds} />
-                  {session}
-                  <SessionsTable sessions={data.sessions} open={loc.session} projectName={projectName} navigate={navigate} />
+                  <SessionsTable sessions={data.sessions} here={loc} projectName={projectName} navigate={navigate} />
                 </>
               ) : (
-                <>
-                  <p className="muted">No sessions {over}. Only sessions the Factory runs are counted.</p>
-                  {session}
-                </>
+                <p className="muted">No sessions {over}. Only sessions the Factory runs are counted.</p>
               )}
             </section>
           </>
@@ -226,8 +222,8 @@ function KindsTable({ kinds }: { kinds: UsageKind[] }) {
 
 interface SessionsTableProps {
   sessions: UsageSession[];
-  // open is the session open on the line chart, if any.
-  open?: UsageSessionFilter;
+  // here is Usage's address, the session open on the line chart among it.
+  here: UiLocation;
   projectName(key: string): string;
   navigate(patch: Partial<UiLocation>): void;
 }
@@ -235,7 +231,7 @@ interface SessionsTableProps {
 // SessionsTable is the recent sessions, newest first, each a Claim's
 // main session or one of its subagents, its Ticket a link to that Ticket
 // and its session a link that opens its line chart.
-function SessionsTable({ sessions, open, projectName, navigate }: SessionsTableProps) {
+function SessionsTable({ sessions, here, projectName, navigate }: SessionsTableProps) {
   return (
     <>
       <h3 className="usage-subhead">Recent sessions</h3>
@@ -255,8 +251,9 @@ function SessionsTable({ sessions, open, projectName, navigate }: SessionsTableP
         <tbody>
           {sessions.map((s) => {
             const to: Partial<UiLocation> = { view: "inbox", project: s.project, ticket: s.ticket };
-            const chart: Partial<UiLocation> = { session: { project: s.project, session: s.session_id, ...(s.agent ? { agent: s.agent } : {}) } };
-            const isOpen = open?.project === s.project && open.session === s.session_id && (open.agent ?? "") === (s.agent ?? "");
+            const session: SessionUsageFilter = { project: s.project, session: s.session_id, ...(s.agent ? { agent: s.agent } : {}) };
+            const sessionTo: Partial<UiLocation> = { session };
+            const isOpen = here.session !== undefined && sessionKey(here.session) === sessionKey(session);
             return (
               <tr key={`${s.session_id} ${s.agent ?? ""}`} className={isOpen ? "usage-open" : undefined}>
                 <th scope="row">
@@ -268,9 +265,9 @@ function SessionsTable({ sessions, open, projectName, navigate }: SessionsTableP
                 <td className="num">{s.claim}</td>
                 <td className="usage-session">
                   <a
-                    href={hrefFor({ view: "usage", session: chart.session })}
+                    href={hrefFor({ ...here, ...sessionTo })}
                     aria-current={isOpen ? "true" : undefined}
-                    onClick={clickTo(navigate, chart)}
+                    onClick={clickTo(navigate, sessionTo)}
                   >
                     {sessionName(s.session_id, s.agent)}
                   </a>
@@ -301,7 +298,7 @@ function sessionName(session: string, agent?: string): string {
 
 interface SessionChartProps {
   api: Api;
-  session: UsageSessionFilter;
+  session: SessionUsageFilter;
   navigate(patch: Partial<UiLocation>): void;
 }
 
@@ -309,7 +306,7 @@ interface SessionChartProps {
 // a line chart, each point's exact figures on hover. It reads every day
 // Usage keeps, whatever the range, and closes to Usage as it was.
 function SessionChart({ api, session, navigate }: SessionChartProps) {
-  const read = useFetch(() => api.usageSession(session), [api, session.project, session.session, session.agent]);
+  const read = useFetch(() => api.sessionUsage(session), [api, session.project, session.session, session.agent]);
   const ref = useRef<HTMLElement>(null);
   // Opened from a row far down the recent sessions, bring it into view.
   useEffect(() => ref.current?.scrollIntoView?.({ block: "nearest" }), []);
@@ -335,7 +332,7 @@ function SessionChart({ api, session, navigate }: SessionChartProps) {
           {read.error.message}
         </p>
       )}
-      {responses && !responses.length && <p className="muted">No responses for this session in the last {USAGE_DAYS[USAGE_DAYS.length - 1]} days.</p>}
+      {responses && !responses.length && <p className="muted">No responses for this session in the last {USAGE_KEPT_DAYS} days.</p>}
       {responses && responses.length > 0 && (
         <LineChart
           label="Context Size per response"
@@ -351,7 +348,7 @@ function SessionChart({ api, session, navigate }: SessionChartProps) {
 
 // ResponseFigures is one response's exact figures: when it came, its
 // Context Size and its four token counts.
-function ResponseFigures({ n, r }: { n: number; r: UsageSessionResponse }) {
+function ResponseFigures({ n, r }: { n: number; r: SessionUsageResponse }) {
   const rows: [string, string][] = [
     ["Context Size", `${count(r.context_size)} tokens`],
     ["Input", count(r.input_tokens)],

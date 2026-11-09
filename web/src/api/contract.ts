@@ -913,7 +913,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.postUsage("sess-impl", [resp(4, 500, 9_000, "toolu_a")]);
 
       const read = async (agent?: string) =>
-        (await d.api.usageSession({ project: "acme", session: "sess-impl", ...(agent ? { agent } : {}) })).responses.map((r) => ({ ...r, time: Date.parse(r.time) }));
+        (await d.api.sessionUsage({ project: "acme", session: "sess-impl", ...(agent ? { agent } : {}) })).responses.map((r) => ({ ...r, time: Date.parse(r.time) }));
       const want = (s: number, write: number, read: number) => ({
         time: Date.parse(at(s)),
         context_size: 5 + write + read,
@@ -924,9 +924,9 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       });
       expect(await read()).toEqual([want(1, 20_000, 0), want(3, 1_000, 60_000)]);
       expect(await read("toolu_a")).toEqual([want(2, 9_000, 0), want(4, 500, 9_000)]);
-      expect(await d.api.usageSession({ project: "acme", session: "nobody" })).toEqual({ responses: [] });
+      expect(await d.api.sessionUsage({ project: "acme", session: "nobody" })).toEqual({ responses: [] });
 
-      const unknown = await d.api.usageSession({ project: "nope", session: "sess-impl" }).catch((e) => e);
+      const unknown = await d.api.sessionUsage({ project: "nope", session: "sess-impl" }).catch((e) => e);
       expect(unknown).toBeInstanceOf(ApiError);
       expect(unknown).toMatchObject({ status: 404, code: "not_found" });
     });

@@ -83,7 +83,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       const qs = q.toString();
       return call("GET", `/api/usage${qs ? `?${qs}` : ""}`);
     },
-    usageSession: ({ project, session, agent }) => {
+    sessionUsage: ({ project, session, agent }) => {
       const q = new URLSearchParams({ project, session });
       if (agent) q.set("agent", agent);
       return call("GET", `/api/usage/session?${q}`);

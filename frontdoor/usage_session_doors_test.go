@@ -16,13 +16,13 @@ import (
 // for its line chart.
 
 // readSession reads GET /api/usage/session with query.
-func readSession(t *testing.T, srv *codecentraltest.Server, query string) core.UsageSessionView {
+func readSession(t *testing.T, srv *codecentraltest.Server, query string) core.SessionUsageView {
 	t.Helper()
 	status, b := httpDo(t, srv, httpCall{method: "GET", path: "/api/usage/session" + query})
 	if status != http.StatusOK {
 		t.Fatalf("GET /api/usage/session%s: status %d: %s", query, status, b)
 	}
-	var v core.UsageSessionView
+	var v core.SessionUsageView
 	if err := json.Unmarshal(b, &v); err != nil {
 		t.Fatalf("not the session shape: %v: %s", err, b)
 	}
@@ -30,7 +30,7 @@ func readSession(t *testing.T, srv *codecentraltest.Server, query string) core.U
 }
 
 // sizes is each response's Context Size, in order.
-func sizes(v core.UsageSessionView) []int {
+func sizes(v core.SessionUsageView) []int {
 	out := []int{}
 	for _, r := range v.Responses {
 		out = append(out, r.ContextSize)
@@ -53,7 +53,7 @@ func TestASessionsResponsesReadBackInOrderWithTheirContextSize(t *testing.T) {
 	)
 
 	main := readSession(t, srv, "?project=acme&session=s1")
-	want := []core.UsageSessionResponse{
+	want := []core.SessionUsageResponse{
 		{Time: at(-24 * 60), ContextSize: 20_005, Tokens: usage.Tokens{InputTokens: 5, CacheWriteTokens: 20_000, OutputTokens: 2_000}},
 		{Time: at(3), ContextSize: 61_005, Tokens: usage.Tokens{InputTokens: 5, CacheWriteTokens: 1_000, CacheReadTokens: 60_000, OutputTokens: 6_100}},
 		{Time: at(5), ContextSize: 61_307, Tokens: usage.Tokens{InputTokens: 7, CacheWriteTokens: 300, CacheReadTokens: 61_000, OutputTokens: 6_130}},

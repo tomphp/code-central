@@ -471,6 +471,9 @@ export const DEFAULT_OPTIONS: Options = { focus_clear: "all_clear" };
 // USAGE_DAYS are the ranges Usage reads, in local days; the first is the default.
 export const USAGE_DAYS = [7, 30, 90] as const;
 export type UsageDays = (typeof USAGE_DAYS)[number];
+// USAGE_KEPT_DAYS is how many days before today Usage keeps records: a
+// session's read covers today and those days.
+export const USAGE_KEPT_DAYS = 90;
 
 // UsageFilter is a Usage read: one Project, or all of them (Archived
 // ones too) when project is left out, over the last days local days.
@@ -549,18 +552,23 @@ export interface UsageView {
   days: UsageDay[];
 }
 
-// UsageSessionFilter is one session's read: its Project, its session ID,
+// SessionUsageFilter is one session's read: its Project, its session ID,
 // and its subagent, left out for the main session.
-export interface UsageSessionFilter {
+export interface SessionUsageFilter {
   project: string;
   session: string;
   agent?: string;
 }
 
-// UsageSessionResponse is one of a session's model responses: when it
+// sessionKey names one session, the same for every filter that reads it.
+export function sessionKey({ project, session, agent }: SessionUsageFilter): string {
+  return `${project}\u0000${session}\u0000${agent ?? ""}`;
+}
+
+// SessionUsageResponse is one of a session's model responses: when it
 // came, its Context Size (input, cache write and cache read) and its four
 // token counts.
-export interface UsageSessionResponse {
+export interface SessionUsageResponse {
   time: string;
   context_size: number;
   input_tokens: number;
@@ -569,8 +577,8 @@ export interface UsageSessionResponse {
   output_tokens: number;
 }
 
-// UsageSessionView is GET /api/usage/session: one session's responses,
+// SessionUsageView is GET /api/usage/session: one session's responses,
 // oldest first, over every day Usage keeps.
-export interface UsageSessionView {
-  responses: UsageSessionResponse[];
+export interface SessionUsageView {
+  responses: SessionUsageResponse[];
 }

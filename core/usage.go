@@ -180,51 +180,52 @@ func (c *Core) Usage(_ context.Context, in UsageInput) (UsageView, error) {
 	}, nil
 }
 
-// UsageSessionInput is one session's read: its Project, its session ID,
+// SessionUsageInput is one session's read: its Project, its session ID,
 // and its subagent, "" for the main session.
-type UsageSessionInput struct {
+type SessionUsageInput struct {
 	Project string
 	Session string
 	Agent   string
 }
 
-// UsageSessionView is one session's responses, oldest first, for its
+// SessionUsageView is one session's responses, oldest first, for its
 // line chart.
-type UsageSessionView struct {
-	Responses []UsageSessionResponse `json:"responses"`
+type SessionUsageView struct {
+	Responses []SessionUsageResponse `json:"responses"`
 }
 
-// UsageSessionResponse is one of a session's model responses: when it
+// SessionUsageResponse is one of a session's model responses: when it
 // came, its Context Size and its four token counts.
-type UsageSessionResponse struct {
+type SessionUsageResponse struct {
 	Time        time.Time `json:"time"`
 	ContextSize int       `json:"context_size"`
 	usage.Tokens
 }
 
-// UsageSession reads one session's responses over every day Usage keeps,
-// whatever range the rest of Usage reads. An unknown Project is
+// SessionUsage reads one session's responses over every day Usage keeps
+// (today and the usage.KeepDays before it), whatever range the rest of
+// Usage reads. An unknown Project is
 // not_found; an unknown session has no responses.
-func (c *Core) UsageSession(_ context.Context, in UsageSessionInput) (UsageSessionView, error) {
+func (c *Core) SessionUsage(_ context.Context, in SessionUsageInput) (SessionUsageView, error) {
 	if in.Project == "" {
-		return UsageSessionView{}, invalid("project", "project is required")
+		return SessionUsageView{}, invalid("project", "project is required")
 	}
 	if in.Session == "" {
-		return UsageSessionView{}, invalid("session", "session is required")
+		return SessionUsageView{}, invalid("session", "session is required")
 	}
 	if !c.projectExists(in.Project) {
-		return UsageSessionView{}, &Error{Code: NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
+		return SessionUsageView{}, &Error{Code: NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
 	}
 	var mine []usage.Response
-	for _, r := range c.usage.Read(in.Project, UsageDays[len(UsageDays)-1]).Responses {
+	for _, r := range c.usage.Read(in.Project, usage.KeepDays+1).Responses {
 		if r.SessionID == in.Session && r.Agent == in.Agent {
 			mine = append(mine, r)
 		}
 	}
 	slices.SortStableFunc(mine, func(a, b usage.Response) int { return a.Time.Compare(b.Time) })
-	out := UsageSessionView{Responses: []UsageSessionResponse{}}
+	out := SessionUsageView{Responses: []SessionUsageResponse{}}
 	for _, r := range mine {
-		out.Responses = append(out.Responses, UsageSessionResponse{Time: r.Time, ContextSize: r.ContextSize(), Tokens: r.Tokens})
+		out.Responses = append(out.Responses, SessionUsageResponse{Time: r.Time, ContextSize: r.ContextSize(), Tokens: r.Tokens})
 	}
 	return out, nil
 }

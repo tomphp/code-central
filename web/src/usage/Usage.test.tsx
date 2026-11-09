@@ -237,18 +237,20 @@ describe("the Code Central calls table", () => {
   });
 });
 
+// claimed claims a new Ticket in project for session, returning its ID.
+function claimed(fake: FakeApi, project: string, title: string, session: string): string {
+  const at = fake.now.toISOString();
+  return fake.addTicket(project, { title, state: "In Progress", claims: [{ number: 1, session_id: session, started: at, last_activity: at }] }).id;
+}
+
+// response is one model response, minutes after the fake's now, reading
+// context tokens in all.
+function response(fake: FakeApi, minutes: number, kind: string, context: number, agent?: string): UsageResponse {
+  const time = new Date(fake.now.getTime() + minutes * 60_000).toISOString();
+  return { time, ...(agent ? { agent } : {}), kind, input_tokens: 4, cache_write_tokens: 1_000, cache_read_tokens: context - 1_004, output_tokens: 50 };
+}
+
 describe("Context Size", () => {
-  // claimed claims a new Ticket in project for session, returning its ID.
-  function claimed(fake: FakeApi, project: string, title: string, session: string): string {
-    const at = fake.now.toISOString();
-    return fake.addTicket(project, { title, state: "In Progress", claims: [{ number: 1, session_id: session, started: at, last_activity: at }] }).id;
-  }
-  // response is one model response, minutes after the fake's now, reading
-  // context tokens in all.
-  function response(fake: FakeApi, minutes: number, kind: string, context: number, agent?: string): UsageResponse {
-    const time = new Date(fake.now.getTime() + minutes * 60_000).toISOString();
-    return { time, ...(agent ? { agent } : {}), kind, input_tokens: 4, cache_write_tokens: 1_000, cache_read_tokens: context - 1_004, output_tokens: 50 };
-  }
   function seeded() {
     const fake = world();
     const impl = claimed(fake, "acme", "Build it", "sess-impl"); // acme-2
@@ -347,20 +349,15 @@ describe("Context Size", () => {
 });
 
 describe("a session's Context Size", () => {
-  function claimed(fake: FakeApi, project: string, title: string, session: string): string {
-    const at = fake.now.toISOString();
-    return fake.addTicket(project, { title, state: "In Progress", claims: [{ number: 1, session_id: session, started: at, last_activity: at }] }).id;
-  }
-  // response is one model response, minutes after the fake's now, reading
-  // context tokens in all.
-  function response(fake: FakeApi, minutes: number, context: number, agent?: string): UsageResponse {
-    const time = new Date(fake.now.getTime() + minutes * 60_000).toISOString();
-    return { time, ...(agent ? { agent } : {}), kind: agent ? "review" : "implementation", input_tokens: 4, cache_write_tokens: 1_000, cache_read_tokens: context - 1_004, output_tokens: 1_250 };
-  }
   function seeded() {
     const fake = world();
     claimed(fake, "acme", "Build it", "sess-impl");
-    fake.postUsage("sess-impl", [response(fake, 1, 40_000), response(fake, 2, 123_456), response(fake, 3, 21_000, "toolu_review"), response(fake, 4, 98_765)]);
+    fake.postUsage("sess-impl", [
+      response(fake, 1, "implementation", 40_000),
+      response(fake, 2, "implementation", 123_456),
+      response(fake, 3, "review", 21_000, "toolu_review"),
+      response(fake, 4, "implementation", 98_765),
+    ]);
     return fake;
   }
 
@@ -397,7 +394,10 @@ describe("a session's Context Size", () => {
   it("opens a subagent's session with its agent in the address", async () => {
     renderApp(seeded(), "/?view=usage&days=30");
     await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
-    await userEvent.click(within(sessionsTable()).getByRole("link", { name: "sess-impl · toolu_review" }));
+    const link = within(sessionsTable()).getByRole("link", { name: "sess-impl · toolu_review" });
+    // The link keeps the range too, for a new tab or a copied link.
+    expect(link).toHaveAttribute("href", "?view=usage&days=30&session_project=acme&session=sess-impl&agent=toolu_review");
+    await userEvent.click(link);
     expect(window.location.search).toBe("?view=usage&days=30&session_project=acme&session=sess-impl&agent=toolu_review");
     await waitFor(() => expect(points()).toHaveLength(1));
     expect(panel()).toHaveAccessibleName("Session sess-impl · toolu_review");
@@ -409,7 +409,17 @@ describe("a session's Context Size", () => {
     renderApp(fake, "/?view=usage&project=beta&session_project=acme&session=sess-impl");
     await waitFor(() => expect(points()).toHaveLength(3));
     expect(scope()).toHaveValue("beta");
-    expect(fake.calls.filter((c) => c === "usageSession")).toHaveLength(1);
+    expect(fake.calls.filter((c) => c === "sessionUsage")).toHaveLength(1);
+  });
+
+  it("shows the session even when the rest of Usage can't be read", async () => {
+    const fake = seeded();
+    fake.usage = async () => {
+      throw new Error("Usage is down");
+    };
+    renderApp(fake, "/?view=usage&session_project=acme&session=sess-impl");
+    expect(await within(usage()).findByRole("alert")).toHaveTextContent("Usage is down");
+    await waitFor(() => expect(points()).toHaveLength(3));
   });
 
   it("shows a point's exact figures on hover, with thousands separators", async () => {
@@ -424,7 +434,7 @@ describe("a session's Context Size", () => {
     expect(tip).toHaveTextContent("Input4");
     expect(tip).toHaveTextContent("Cache write1,000");
     expect(tip).toHaveTextContent("Cache read122,452");
-    expect(tip).toHaveTextContent("Output1,250");
+    expect(tip).toHaveTextContent("Output50");
 
     await userEvent.unhover(points()[1]);
     expect(within(panel()).queryByRole("tooltip")).toBeNull();
@@ -462,7 +472,7 @@ describe("a session's Context Size", () => {
 
   it("says when a session has no responses", async () => {
     renderApp(seeded(), "/?view=usage&session_project=acme&session=sess-gone");
-    expect(await within(await within(usage()).findByRole("region", { name: "Session sess-gone" })).findByText("No responses for this session in the last 90 days.")).toBeInTheDocument();
+    expect(await within(usage()).findByText("No responses for this session in the last 90 days.")).toBeInTheDocument();
     expect(within(panel()).queryByRole("img")).toBeNull();
   });
 });

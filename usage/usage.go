@@ -80,9 +80,9 @@ type Records struct {
 	Responses []Response
 }
 
-// keepDays is how many days before today a file is kept: one whose day is
+// KeepDays is how many days before today a file is kept: one whose day is
 // earlier than that is deleted.
-const keepDays = 90
+const KeepDays = 90
 
 // The record types, each line's "type".
 const (
@@ -121,7 +121,7 @@ type Recorder struct {
 // New returns a Recorder keeping its files under dir (the store's
 // directory), dating each record by its day in loc, reading "today" from
 // clk, and writing failures and skipped lines to log. It deletes the
-// files older than keepDays days before it returns.
+// files older than KeepDays days before it returns.
 func New(dir string, clk clock.Clock, loc *time.Location, log io.Writer) *Recorder {
 	if log == nil {
 		log = io.Discard
@@ -203,13 +203,13 @@ func (r *Recorder) Read(project string, days int) Records {
 	return out
 }
 
-// prune deletes every Project's files whose day is more than keepDays days
+// prune deletes every Project's files whose day is more than KeepDays days
 // before today, with mu held or before the Recorder is shared. A file it
 // can't delete is logged and left for the next day.
 func (r *Recorder) prune() {
 	today := r.today()
 	r.prunedOn = day(today)
-	oldest := day(today.AddDate(0, 0, -keepDays))
+	oldest := day(today.AddDate(0, 0, -KeepDays))
 	for _, p := range r.projects() {
 		dir := r.projectDir(p)
 		entries, err := os.ReadDir(dir)

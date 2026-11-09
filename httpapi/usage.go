@@ -29,18 +29,18 @@ func usageRead(c *core.Core, r *http.Request) (any, error) {
 	return c.Usage(r.Context(), in)
 }
 
-// UsageSessionPath reads one session's responses, for its line chart
+// SessionUsagePath reads one session's responses, for its line chart
 // (Spec code-central-201):
 // GET /api/usage/session?project=<key>&session=<id>&agent=<id>, agent
 // left out for a main session.
-const UsageSessionPath = "GET /api/usage/session"
+const SessionUsagePath = "GET /api/usage/session"
 
-func usageSessionRead(c *core.Core, r *http.Request) (any, error) {
+func sessionUsageRead(c *core.Core, r *http.Request) (any, error) {
 	q := r.URL.Query()
 	if err := onlyParams(q, "project", "session", "agent"); err != nil {
 		return nil, err
 	}
-	return c.UsageSession(r.Context(), core.UsageSessionInput{Project: q.Get("project"), Session: q.Get("session"), Agent: q.Get("agent")})
+	return c.SessionUsage(r.Context(), core.SessionUsageInput{Project: q.Get("project"), Session: q.Get("session"), Agent: q.Get("agent")})
 }
 
 // PostUsagePath is where a Factory posts its sessions' model responses'

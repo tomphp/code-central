@@ -15,7 +15,7 @@
 // Requirement's Spec ID and ticket the selected Ticket's display ID (within
 // the Requirement, when one is selected).
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
-import { STATES, USAGE_DAYS, type State, type UsageDays, type UsageSessionFilter } from "./api/types";
+import { STATES, USAGE_DAYS, type State, type UsageDays, type SessionUsageFilter } from "./api/types";
 
 export type View = "inbox" | "focus" | "options" | "project-options" | "usage";
 // A ReturnView is a view the Options view and Usage return to.
@@ -34,7 +34,7 @@ export interface UiLocation {
   // days is Usage's range; none is the default, 7.
   days?: UsageDays;
   // session is the session Usage has open on its line chart.
-  session?: UsageSessionFilter;
+  session?: SessionUsageFilter;
   // back is where Usage returns to, a ReturnView with its parameters.
   back?: UiLocation;
 }
