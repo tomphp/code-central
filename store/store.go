@@ -80,9 +80,9 @@ var LandingMethods = []LandingMethod{LandingMerge, LandingBranch}
 // Valid reports whether m is one of the LandingMethods.
 func (m LandingMethod) Valid() bool { return slices.Contains(LandingMethods, m) }
 
-// LandingMethodNames is the LandingMethods as strings, for messages and
+// landingMethodNames is the LandingMethods as strings, for messages and
 // the schema.
-func LandingMethodNames() []string {
+func landingMethodNames() []string {
 	var out []string
 	for _, m := range LandingMethods {
 		out = append(out, string(m))

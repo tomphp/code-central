@@ -46,6 +46,7 @@ import {
   type HeldSessionEvent,
   type LatestEvent,
   type LinkedRow,
+  type Landing,
   type Mode,
   type NeedsMeReason,
   type NeedsMeRow,
@@ -81,6 +82,7 @@ interface FakeProject {
   mode: Mode;
   archived: boolean;
   archived_at?: string;
+  landing: Landing;
   next: number;
 }
 
@@ -148,6 +150,7 @@ export class FakeApi implements Api {
       mode: "committed",
       archived: opts.archived ?? false,
       ...(opts.archived ? { archived_at: this.now.toISOString() } : {}),
+      landing: { method: "merge", push: false, remote: "origin" },
       next: 1,
     });
     this.emit({ type: "project.changed", project: key });

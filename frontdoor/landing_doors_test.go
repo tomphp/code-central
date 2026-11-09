@@ -2,14 +2,12 @@ package frontdoor_test
 
 import (
 	"context"
-	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
-	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/httpapi"
 )
 
@@ -59,18 +57,9 @@ func TestASetLandingMethodIsReadBackByEveryProjectRead(t *testing.T) {
 
 func TestSetLandingMethodIsRejectedForAnAgent(t *testing.T) {
 	srv := newServer(t)
-	req, err := http.NewRequest("POST", srv.URL+"/api/p/acme/set_landing_method", strings.NewReader(`{"method":"branch"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set(frontdoor.ActorHeader, string(core.Agent))
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != httpapi.Status(core.ActionNotAllowed) {
-		t.Fatalf("status %d, want %d", resp.StatusCode, httpapi.Status(core.ActionNotAllowed))
+	status, b := httpDoAs(t, srv, core.Agent, setLandingMethod(`{"method":"branch"}`))
+	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) {
+		t.Fatalf("status %d, want %d for %s", status, httpapi.Status(core.ActionNotAllowed), e.Code)
 	}
 	landing(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "merge", false, "origin")
 }
@@ -105,6 +94,7 @@ func TestAnArchivedProjectRejectsSetLandingMethod(t *testing.T) {
 	httpRejected(t, srv, httpCall{"POST", "/api/p/nope/set_landing_method", `{"method":"branch"}`}, core.UnknownProject)
 }
 
+// Every store write sends a notice, so none means nothing was written.
 func TestTheSameLandingMethodWritesNothingAndAChangeSendsANotice(t *testing.T) {
 	srv := newServer(t)
 	notices, stop := srv.Core.Events().Subscribe()

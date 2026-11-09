@@ -682,15 +682,21 @@ func TestMCPAndTheCLIAlwaysWriteAsTheAgent(t *testing.T) {
 
 func httpDo(t *testing.T, srv *codecentraltest.Server, c httpCall) (int, []byte) {
 	t.Helper()
-	req, err := http.NewRequest(c.method, srv.URL+c.path, strings.NewReader(c.body))
-	if err != nil {
-		t.Fatal(err)
-	}
 	// The suite calls the HTTP API as the UI does, as the human, except
 	// for an Integration's operations (ticket 42).
 	actor := core.Human
 	if strings.Contains(c.path, "/integration/") {
 		actor = core.Integration
+	}
+	return httpDoAs(t, srv, actor, c)
+}
+
+// httpDoAs calls the HTTP API as the given Actor.
+func httpDoAs(t *testing.T, srv *codecentraltest.Server, actor core.Actor, c httpCall) (int, []byte) {
+	t.Helper()
+	req, err := http.NewRequest(c.method, srv.URL+c.path, strings.NewReader(c.body))
+	if err != nil {
+		t.Fatal(err)
 	}
 	req.Header.Set(frontdoor.ActorHeader, string(actor))
 	resp, err := http.DefaultClient.Do(req)

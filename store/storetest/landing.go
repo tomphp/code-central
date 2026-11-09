@@ -15,7 +15,7 @@ func runLanding(t *testing.T, f Factory) {
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {
 				p, _ := r.Project("acme")
-				if want := (store.Landing{Method: store.LandingMerge, Remote: "origin"}); p.Landing != want {
+				if want := store.DefaultLanding(); p.Landing != want {
 					t.Fatalf("landing = %+v, want %+v", p.Landing, want)
 				}
 			})

@@ -32,6 +32,16 @@ export type NeedsMeReason =
 // A Project's mode: where init puts its files.
 export type Mode = "committed" | "local";
 
+// A Landing Method: how a Project's accepted work reaches its base.
+export type LandingMethod = "merge" | "branch";
+
+// A Project's Landing Method with its Push option and the remote it uses.
+export interface Landing {
+  method: LandingMethod;
+  push: boolean;
+  remote: string;
+}
+
 export interface ProjectView {
   key: string;
   display_name: string;
@@ -40,6 +50,8 @@ export interface ProjectView {
   archived: boolean;
   // archived_at is when the human archived the Project, while it is.
   archived_at?: string;
+  // landing is always filled in: merge, push off, origin by default.
+  landing: Landing;
 }
 
 export interface ProjectRow extends ProjectView {

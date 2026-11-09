@@ -84,9 +84,8 @@ type SetLandingMethodInput struct {
 // accepted work lands. Code Central never sees git, so whether the remote
 // exists is the Factory's check.
 func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMethodInput) (ProjectView, error) {
-	if a := ActorOf(ctx); a != Human {
-		return ProjectView{}, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf(
-			"set_landing_method is a human action; this request is made as %s", a)}
+	if err := humanOnly(ctx, "set_landing_method"); err != nil {
+		return ProjectView{}, err
 	}
 	if !in.Method.Valid() {
 		return ProjectView{}, invalid("method", "Landing Method %q is neither %q nor %q", in.Method, store.LandingMerge, store.LandingBranch)

@@ -35,7 +35,7 @@ func TestTheRealChainMigratesAFormat6StoreToTheLandingMethodFormat(t *testing.T)
 	}
 	s.View(func(r store.Reader) error {
 		p, _ := r.Project("acme")
-		if want := (store.Landing{Method: store.LandingMerge, Remote: "origin"}); p.Landing != want {
+		if want := store.DefaultLanding(); p.Landing != want {
 			t.Errorf("landing after migrating = %+v, want %+v", p.Landing, want)
 		}
 		return nil
