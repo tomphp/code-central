@@ -5,7 +5,7 @@
 import type { Api } from "../api/api";
 import type { NeedsMeReason, SpecDetail } from "../api/types";
 import { ago } from "../format";
-import { RowLatestEvent } from "../LatestEvent";
+import { TicketList } from "../spec/TicketList";
 import { NewPrototype } from "./NewRequirement";
 import { progress, waitingNote } from "./progress";
 import { Strip } from "./Strip";
@@ -39,22 +39,7 @@ export function RequirementPane({ api, spec, reasons, now, ticket, select }: Req
         }}
       />
       {note && <p className="panel muted waiting">{note}</p>}
-      {p.build.length > 0 && (
-        <ul className="impl-list" aria-label="Build">
-          {p.build.map((t) => {
-            const reason = reasons.get(t.id);
-            return (
-              <li key={t.id}>
-                <button className="link" aria-current={t.id === ticket ? "true" : undefined} onClick={() => select(t.id)}>
-                  <span className="tid">{t.id}</span> {t.title}
-                </button>{" "}
-                <span className={["state", reason && `reason-${reason} loud-state`].filter(Boolean).join(" ")}>{t.state}</span>
-                <RowLatestEvent row={t} now={now} />
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      {p.build.length > 0 && <TicketList label="Build" tickets={p.build} reasons={reasons} now={now} ticket={ticket} select={select} />}
     </section>
   );
 }

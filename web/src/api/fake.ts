@@ -603,7 +603,7 @@ export class FakeApi implements Api {
   async getSpec(project: string, spec: string): Promise<SpecDetail> {
     this.calls.push("getSpec");
     this.project(project);
-    const id = `${project}-${spec.slice(spec.lastIndexOf("-") + 1)}`;
+    const id = this.specId(project, spec);
     const s = this.allSpecs(project).find((s) => s.id === id);
     if (!s) throw new ApiError(404, "not_found", `there is no Spec ${id}`);
     const { state_summary, finished, requirement, map } = this.derive(id);
@@ -691,7 +691,7 @@ export class FakeApi implements Api {
     this.writable(project);
     const title = specTitle(text);
     if (!title) throw new ApiError(422, "invalid", "a Prototype needs text; its first line becomes the Ticket's title", "text");
-    const id = `${project}-${spec.slice(spec.lastIndexOf("-") + 1)}`;
+    const id = this.specId(project, spec);
     const on = this.allSpecs(project).find((s) => s.id === id);
     if (!on) throw new ApiError(422, "invalid", `there is no Spec ${id}`, "spec");
     const prototype = this.addTicket(project, {
@@ -711,7 +711,7 @@ export class FakeApi implements Api {
   async specQuestions(project: string, spec: string): Promise<SpecQuestions> {
     this.calls.push("specQuestions");
     this.project(project);
-    const id = `${project}-${spec.slice(spec.lastIndexOf("-") + 1)}`;
+    const id = this.specId(project, spec);
     const of = [...this.tickets.values()].filter((t) => t.spec.id === id);
     if (!of.length) throw new ApiError(404, "not_found", `there is no Spec ${id}`);
     return structuredClone({
@@ -1013,6 +1013,11 @@ export class FakeApi implements Api {
 
   private projectOf(id: string) {
     return id.slice(0, id.lastIndexOf("-"));
+  }
+
+  // specId is the display ID of spec, given as an ID or a number, in project.
+  private specId(project: string, spec: string) {
+    return `${project}-${spec.slice(spec.lastIndexOf("-") + 1)}`;
   }
 
   private project(key: string) {

@@ -4,8 +4,8 @@
 import type { Api } from "../api/api";
 import type { NeedsMeReason, SpecDetail } from "../api/types";
 import { ago } from "../format";
-import { RowLatestEvent } from "../LatestEvent";
 import { NewPrototype } from "../requirement/NewRequirement";
+import { TicketList } from "./TicketList";
 
 export interface SpecPaneProps {
   api: Api;
@@ -28,20 +28,7 @@ export function SpecPane({ api, spec, reasons, now, ticket, select }: SpecPanePr
       {spec.tickets.length === 0 ? (
         <p className="muted">No Tickets yet.</p>
       ) : (
-        <ul className="impl-list" aria-label="Tickets">
-          {spec.tickets.map((t) => {
-            const reason = reasons.get(t.id);
-            return (
-              <li key={t.id}>
-                <button className="link" aria-current={t.id === ticket ? "true" : undefined} onClick={() => select(t.id)}>
-                  <span className="tid">{t.id}</span> {t.title}
-                </button>{" "}
-                <span className={["state", reason && `reason-${reason} loud-state`].filter(Boolean).join(" ")}>{t.state}</span>
-                <RowLatestEvent row={t} now={now} />
-              </li>
-            );
-          })}
-        </ul>
+        <TicketList label="Tickets" tickets={spec.tickets} reasons={reasons} now={now} ticket={ticket} select={select} />
       )}
     </section>
   );

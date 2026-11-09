@@ -48,6 +48,10 @@ _Avoid_: Next steps, backlog
 The UI's view of a Map: its Destination, **New Prototype**, its Tickets as a left-to-right graph with Blockers as edges and **Start** on each frontier Ticket, a fog node at the right edge for what is not yet specified, and its Decisions so far and Out of scope beside the graph.
 _Avoid_: Map board, roadmap
 
+**Spec view**:
+The UI's view of a plain Spec, one that is neither a Requirement nor a Map: its title, **New Prototype** and its Tickets with their States. It opens from the Spec's name in the Ticket panel.
+_Avoid_: Spec page, Spec board
+
 **Charting**:
 The first Ticket of a Map, which names its destination with the human and creates the first decision Tickets and their Blockers.
 _Avoid_: Planning, setup

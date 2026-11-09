@@ -49,18 +49,17 @@ export type TicketDetailProps = TicketPaneProps;
 // merged by time.
 export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketDetailProps) {
   const claims = [...t.claims].sort((a, b) => b.number - a.number);
+  const specName = `${t.spec.id} ${t.spec.title}`;
   return (
     <article aria-label="Ticket details" className="ticket-body">
       <div className="meta">
         {t.spec.id &&
           (openSpec ? (
             <button className="link" onClick={() => openSpec(t.spec.id)}>
-              {t.spec.id} {t.spec.title}
+              {specName}
             </button>
           ) : (
-            <span>
-              {t.spec.id} {t.spec.title}
-            </span>
+            <span>{specName}</span>
           ))}
         {t.labels.map((l) => (
           <span key={l} className="label">

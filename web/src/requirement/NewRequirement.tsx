@@ -57,11 +57,11 @@ const prototypeOn = (spec: string): Kind<TicketAcknowledgement> => ({
 });
 
 export function NewRequirement(props: NewRequirementProps) {
-  return <NewSpec kind={REQUIREMENT} {...props} />;
+  return <NewFromText kind={REQUIREMENT} {...props} />;
 }
 
 export function NewMap(props: NewRequirementProps) {
-  return <NewSpec kind={MAP} {...props} />;
+  return <NewFromText kind={MAP} {...props} />;
 }
 
 export interface NewPrototypeProps {
@@ -72,10 +72,10 @@ export interface NewPrototypeProps {
 }
 
 export function NewPrototype({ api, spec, onSubmitted }: NewPrototypeProps) {
-  return <NewSpec kind={prototypeOn(spec)} api={api} projects={[]} project={projectOf(spec)} onSubmitted={onSubmitted} />;
+  return <NewFromText kind={prototypeOn(spec)} api={api} projects={[]} project={projectOf(spec)} onSubmitted={onSubmitted} />;
 }
 
-interface NewSpecProps<R> {
+interface NewFromTextProps<R> {
   kind: Kind<R>;
   api: Api;
   projects: ProjectRow[];
@@ -83,7 +83,7 @@ interface NewSpecProps<R> {
   onSubmitted(r: R): void;
 }
 
-function NewSpec<R>({ kind, api, projects, project, onSubmitted }: NewSpecProps<R>) {
+function NewFromText<R>({ kind, api, projects, project, onSubmitted }: NewFromTextProps<R>) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -107,7 +107,7 @@ function NewSpec<R>({ kind, api, projects, project, onSubmitted }: NewSpecProps<
   );
 }
 
-function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewSpecProps<R> & { onClose(): void }) {
+function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFromTextProps<R> & { onClose(): void }) {
   const [text, setText] = useState("");
   const [chosen, setChosen] = useState(project ?? projects[0]?.key ?? "");
   const [error, setError] = useState<string>();
