@@ -556,7 +556,7 @@ export class FakeApi implements Api {
       throw new ApiError(422, "invalid", `focus_clear "${focus_clear}" is not an Option's value; allowed: ${FOCUS_CLEARS.join(", ")}`, "focus_clear");
     }
     const next = { ...this.opts, ...change };
-    if (next.focus_clear !== this.opts.focus_clear) {
+    if (Object.keys(DEFAULT_OPTIONS).some((k) => next[k as keyof Options] !== this.opts[k as keyof Options])) {
       this.opts = next;
       this.emit({ type: "options.changed" });
     }

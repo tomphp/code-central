@@ -47,7 +47,6 @@ function renderPanel(fake: FakeApi, round = 2) {
 
 const question = (panel: HTMLElement, title: string) => within(panel).getByRole("group", { name: new RegExp(title) });
 const box = (q: HTMLElement) => within(q).getByRole("textbox");
-const actions = (fake: FakeApi) => fake.actions();
 const stored = async (fake: FakeApi) => (await fake.getTicket("acme", "acme-1")).rounds[1].questions;
 
 describe("the Round panel", () => {
@@ -69,7 +68,7 @@ describe("the Round panel", () => {
     expect(within(size).getByRole("button", { name: "Answer" })).toBeDisabled();
 
     expect(within(panel).getByText("2 of 2 open")).toBeInTheDocument();
-    expect(actions(fake)).toEqual([]);
+    expect(fake.actions()).toEqual([]);
   });
 
   it("renders a Question's body as Markdown, keeping its title plain and its recommendation raw in the box", async () => {
@@ -95,7 +94,7 @@ describe("the Round panel", () => {
     await userEvent.click(within(colour).getByRole("button", { name: "Answer" }));
 
     await waitFor(() => expect(within(question(panel, "Which colour?")).getByText("Answered")).toBeInTheDocument());
-    expect(actions(fake)).toEqual(["answer"]);
+    expect(fake.actions()).toEqual(["answer"]);
     expect((await stored(fake))[0]).toMatchObject({ status: "answered", answer: "Red" });
     expect(within(panel).getByText("1 of 2 open")).toBeInTheDocument();
 
@@ -114,7 +113,7 @@ describe("the Round panel", () => {
     await userEvent.click(within(question(panel, "Which size?")).getByRole("button", { name: "Dismiss" }));
 
     await waitFor(() => expect(within(question(panel, "Which size?")).getByText("Dismissed")).toBeInTheDocument());
-    expect(actions(fake)).toEqual(["dismiss_question"]);
+    expect(fake.actions()).toEqual(["dismiss_question"]);
     expect((await stored(fake))[1].status).toBe("dismissed");
     expect((await stored(fake))[0].status).toBe("open");
   });
@@ -125,7 +124,7 @@ describe("the Round panel", () => {
     await userEvent.click(within(panel).getByRole("button", { name: "Accept all recommended" }));
 
     await waitFor(() => expect(within(panel).getByText("1 of 3 open")).toBeInTheDocument());
-    expect(actions(fake)).toEqual(["accept_recommended"]);
+    expect(fake.actions()).toEqual(["accept_recommended"]);
     expect((await stored(fake)).map((q) => [q.status, q.answer])).toEqual([
       ["answered", "Blue"],
       ["open", undefined],

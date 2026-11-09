@@ -4,7 +4,7 @@ import { Focus } from "./focus/Focus";
 import { Inbox } from "./inbox/Inbox";
 import { DEFAULT_OPTIONS } from "./api/types";
 import { useInboxData, useLiveVersion, useOptions, useSpec, useTicket } from "./live";
-import { Options } from "./options/Options";
+import { OptionsView } from "./options/OptionsView";
 import { defaultTicket, needsMeCount, progress, reasonsOf } from "./requirement/progress";
 import { useNeedsMeTitle } from "./title";
 import { useUiLocation } from "./url";
@@ -20,8 +20,8 @@ export function App({ api, now = () => new Date() }: AppProps) {
   const version = useLiveVersion(api);
   const inbox = useInboxData(api, version);
   const options = useOptions(api, version);
-  // While the Options load, or when they can't be read, Focus Mode shows All clear.
-  const focusClear = options.data?.focus_clear ?? DEFAULT_OPTIONS.focus_clear;
+  // While the Options load, or when the last read failed, Focus Mode shows All clear.
+  const focusClear = (!options.error && options.data?.focus_clear) || DEFAULT_OPTIONS.focus_clear;
   const spec = useSpec(api, loc.requirement && projectOf(loc.requirement), loc.requirement, version);
   const requirement = spec.data?.id === loc.requirement && spec.data?.requirement ? { ...spec.data, requirement: spec.data.requirement } : undefined;
   const reasons = reasonsOf(inbox.data?.needsMe);
@@ -43,7 +43,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
         </>
       );
     case "options":
-      return <Options api={api} options={options} loc={loc} navigate={navigate} />;
+      return <OptionsView api={api} options={options} loc={loc} navigate={navigate} />;
     case "inbox":
       return (
         <>

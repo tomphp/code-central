@@ -1,7 +1,7 @@
 // OptionsLink opens the Options view from a view's header, remembering
 // that view so leaving Options returns to it.
 import type { MouseEvent } from "react";
-import { hrefFor, opensInPlace, type UiLocation } from "../url";
+import { hrefFor, opensInPlace, returnViewOf, type UiLocation } from "../url";
 
 export interface OptionsLinkProps {
   loc: UiLocation;
@@ -10,7 +10,7 @@ export interface OptionsLinkProps {
 }
 
 export function OptionsLink({ loc, navigate, className }: OptionsLinkProps) {
-  const to = { view: "options" as const, from: loc.view === "focus" ? ("focus" as const) : ("inbox" as const) };
+  const to = { view: "options" as const, from: returnViewOf(loc) };
   const open = (e: MouseEvent) => {
     if (!opensInPlace(e)) return;
     e.preventDefault();

@@ -12,12 +12,14 @@ import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { STATES, type State } from "./api/types";
 
 export type View = "inbox" | "focus" | "options";
+// A ReturnView is a view the Options view returns to.
+export type ReturnView = Exclude<View, "options">;
 export type List = "requirements";
 
 export interface UiLocation {
   view: View;
-  // from is the view the Options view returns to: the Inbox unless Focus Mode.
-  from?: "inbox" | "focus";
+  // from is the view the Options view returns to; returnViewOf reads it.
+  from?: ReturnView;
   project?: string;
   state?: State;
   list?: List;
@@ -28,7 +30,7 @@ export interface UiLocation {
 export function readLocation(search: string): UiLocation {
   const q = new URLSearchParams(search);
   if (q.get("view") === "options") {
-    const from = q.get("from") === "focus" ? "focus" : "inbox";
+    const from = returnViewOf({ view: "options", from: q.get("from") as ReturnView });
     q.set("view", from);
     return { ...readLocation(`?${q}`), view: "options", from };
   }
@@ -46,7 +48,7 @@ export function readLocation(search: string): UiLocation {
 
 export function hrefFor(loc: UiLocation): string {
   if (loc.view === "options") {
-    const from = loc.from ?? "inbox";
+    const from = returnViewOf(loc);
     const back = new URLSearchParams(hrefFor({ ...loc, view: from }));
     back.delete("view");
     return `?${new URLSearchParams({ view: "options", from })}${back.size ? `&${back}` : ""}`;
@@ -59,6 +61,13 @@ export function hrefFor(loc: UiLocation): string {
   if (loc.requirement) q.set("requirement", loc.requirement);
   if (loc.ticket) q.set("ticket", loc.ticket);
   return `?${q}`;
+}
+
+// returnViewOf is the view to return to from loc: from the Options view,
+// the one it came from, the Inbox unless Focus Mode; from any other, itself.
+export function returnViewOf(loc: UiLocation): ReturnView {
+  const view = loc.view === "options" ? loc.from : loc.view;
+  return view === "focus" ? "focus" : "inbox";
 }
 
 // useUiLocation reads the URL and returns a navigate that pushes a change
