@@ -62,6 +62,12 @@ func (h *fakeHost) taskXML() string {
 	return filepath.Join(h.home, ".local", "state", "code-central", "code-central-task.xml")
 }
 
+// shortcut is where service install writes the toasts' Start-menu
+// shortcut on Windows.
+func (h *fakeHost) shortcut() string {
+	return filepath.Join(h.home, "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs", "Code Central.lnk")
+}
+
 // wantTaskStarted checks install's schtasks calls: register (replacing
 // any task of the same name), end it (allowed to fail), run it.
 func (h *fakeHost) wantTaskStarted() {
@@ -107,6 +113,9 @@ func (h *fakeHost) run(env map[string]string, args ...string) result {
 	}
 	if _, ok := env["USERNAME"]; !ok && h.goos == "windows" {
 		env["USERNAME"], env["USERDOMAIN"] = "ada", "LOVELACE-PC"
+	}
+	if _, ok := env["APPDATA"]; !ok && h.goos == "windows" {
+		env["APPDATA"] = filepath.Join(h.home, "AppData", "Roaming")
 	}
 	var out, errOut bytes.Buffer
 	code := cli.Run(context.Background(), args, cli.Env{
@@ -347,6 +356,9 @@ func TestServiceInstallRegistersAScheduledTaskOnWindows(t *testing.T) {
 		}
 	}
 	h.wantTaskStarted()
+	if target, appID := readShortcut(t, h.shortcut()); target != h.bin || appID != "CodeCentral.Service" {
+		t.Fatalf("shortcut to %q as %q; want to %q as CodeCentral.Service", target, appID, h.bin)
+	}
 	if !strings.Contains(r.stdout, h.bin) {
 		t.Fatalf("stdout %q doesn't name the binary", r.stdout)
 	}
@@ -365,6 +377,8 @@ func TestServiceInstallAgainReplacesTheScheduledTask(t *testing.T) {
 	h := newHost(t, "windows")
 	os.MkdirAll(filepath.Dir(h.taskXML()), 0o755)
 	os.WriteFile(h.taskXML(), []byte("an older task"), 0o644)
+	os.MkdirAll(filepath.Dir(h.shortcut()), 0o755)
+	os.WriteFile(h.shortcut(), []byte("an older shortcut"), 0o644)
 	// Ending a task that isn't running fails; install carries on.
 	h.failCall = "schtasks /End"
 	if r := h.run(nil, "service", "install"); r.code != 0 {
@@ -372,6 +386,9 @@ func TestServiceInstallAgainReplacesTheScheduledTask(t *testing.T) {
 	}
 	if got := h.read(h.taskXML()); strings.Contains(got, "an older task") {
 		t.Fatalf("task not rewritten:\n%s", got)
+	}
+	if _, appID := readShortcut(t, h.shortcut()); appID != "CodeCentral.Service" {
+		t.Fatalf("shortcut not rewritten: AUMID %q", appID)
 	}
 	h.wantTaskStarted()
 
@@ -411,4 +428,79 @@ func TestWindowsArgRoundTripsThroughTheCommandLine(t *testing.T) {
 			t.Errorf("WindowsArg(%q) = %s, want %s", tc.in, got, tc.want)
 		}
 	}
+}
+
+// readShortcut reads a Shell Link (.lnk) file as Windows does
+// ([MS-SHLLINK]): the target's path from its LinkInfo, and the AUMID
+// (System.AppUserModel.ID) from its property store.
+func readShortcut(t *testing.T, path string) (target, appID string) {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("shortcut not written: %v", err)
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("malformed shortcut: %v", r)
+		}
+	}()
+	u16 := func(i int) int { return int(binary.LittleEndian.Uint16(b[i:])) }
+	u32 := func(i int) int { return int(binary.LittleEndian.Uint32(b[i:])) }
+	str := func(i, n int) string { // n UTF-16 code units at i
+		u := make([]uint16, n)
+		for k := range u {
+			u[k] = uint16(u16(i + 2*k))
+		}
+		return string(utf16.Decode(u))
+	}
+	strz := func(i int) string { // a NUL-terminated UTF-16 string at i
+		n := 0
+		for u16(i+2*n) != 0 {
+			n++
+		}
+		return str(i, n)
+	}
+	shellLink := []byte{0x01, 0x14, 0x02, 0, 0, 0, 0, 0, 0xc0, 0, 0, 0, 0, 0, 0, 0x46}
+	if u32(0) != 0x4c || !bytes.Equal(b[4:20], shellLink) {
+		t.Fatalf("not a Shell Link header: % x", b[:20])
+	}
+	flags := u32(20)
+	off := 0x4c
+	if flags&0x1 != 0 { // HasLinkTargetIDList
+		off += 2 + u16(off)
+	}
+	if flags&0x2 != 0 { // HasLinkInfo, with its Unicode path (header 0x24)
+		if u32(off+4) >= 0x24 {
+			target = strz(off + u32(off+28))
+		}
+		off += u32(off)
+	}
+	if flags&0x80 == 0 {
+		t.Fatal("not IsUnicode")
+	}
+	for _, f := range []int{0x4, 0x8, 0x10, 0x20, 0x40} { // the StringData
+		if flags&f != 0 {
+			off += 2 + 2*u16(off)
+		}
+	}
+	appModel := []byte{0x55, 0x28, 0x4c, 0x9f, 0x79, 0x9f, 0x39, 0x4b, 0xa8, 0xd0, 0xe1, 0xd4, 0x2d, 0xe1, 0xd5, 0xf3}
+	for u32(off) >= 4 { // the ExtraData blocks, up to the terminal block
+		if u32(off+4) == 0xa0000009 { // a PropertyStoreDataBlock
+			for p := off + 8; u32(p) != 0; p += u32(p) {
+				if u32(p+4) != 0x53505331 {
+					t.Fatalf("property storage version %x", u32(p+4))
+				}
+				for q := p + 24; u32(q) != 0; q += u32(q) {
+					if bytes.Equal(b[p+8:p+24], appModel) && u32(q+4) == 5 && u16(q+9) == 0x1f { // VT_LPWSTR
+						appID = str(q+17, u32(q+13)-1)
+					}
+				}
+			}
+		}
+		off += u32(off)
+	}
+	if off+4 != len(b) {
+		t.Fatalf("%d bytes after the terminal block", len(b)-off-4)
+	}
+	return target, appID
 }
