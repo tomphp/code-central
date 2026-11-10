@@ -156,6 +156,10 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ci-passed { color: var(--r-review); border-color: var(--r-review); }
 .ci-failed, .ci-cancelled, .ci-timed-out { color: var(--r-failed); border-color: var(--r-failed); }
 .ci-running, .ci-queued { color: var(--s-in-progress); border-color: var(--s-in-progress); }
+/* CI badges on rows, and the Spec view's sums of them (code-central-259). */
+.ci-badge { white-space: nowrap; }
+.impl-list .ci-badge { margin-left: 6px; }
+.ci-sums { display: flex; gap: 6px; align-items: center; margin: 8px 0; }
 .ci-runs { list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
 .ci-run { margin-bottom: 6px; }
 .ci-run .label { margin-left: 6px; }

@@ -1,11 +1,13 @@
 // The Requirement pane, above the shared Ticket pane: the header (ID,
 // title, submitted time, New Prototype), the clickable Stage strip (its
 // Map segment linking to the Map it was made from, if any), what it waits
-// for, and under Build its implementation Tickets with their States.
+// for, and under Build the sums of its implementation Tickets' CI badges
+// and those Tickets with their States.
 import type { Api } from "../api/api";
 import type { NeedsMeReason, SpecDetail } from "../api/types";
 import { ago } from "../format";
 import { TicketList } from "../spec/TicketList";
+import { CISums } from "../ticket/CIBadge";
 import type { Link } from "../url";
 import { NewPrototype } from "./NewRequirement";
 import { progress, waitingNote } from "./progress";
@@ -43,6 +45,7 @@ export function RequirementPane({ api, spec, reasons, now, ticket, select, specL
         }}
       />
       {note && <p className="panel muted waiting">{note}</p>}
+      <CISums tickets={p.build} />
       {p.build.length > 0 && <TicketList label="Build" tickets={p.build} reasons={reasons} now={now} ticket={ticket} select={select} />}
     </section>
   );

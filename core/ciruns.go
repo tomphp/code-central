@@ -139,19 +139,13 @@ func ciRunView(key string, r store.CIRun) CIRunView {
 
 // ticketCI is a Ticket's latest pushed commit, its CI result and every CI
 // Run tracked against it, newest pushed commit's first; all empty for a
-// Ticket never pushed while CI Tracking was on. A pushed commit whose
-// runs have all been pruned has no CI result: none is running.
+// Ticket never pushed while CI Tracking was on.
 func ticketCI(r store.Reader, key string, t store.Ticket, now time.Time) (*PushedCommitView, CIResult, []CIRunView) {
-	if len(t.PushedCommits) == 0 {
+	mine, ok := ticketRuns(r, key, t, now)
+	if !ok {
 		return nil, "", nil
 	}
 	latest := t.PushedCommits[len(t.PushedCommits)-1]
-	var mine []store.CIRun
-	for _, run := range keptCIRuns(r.CIRuns(key), now) {
-		if run.Ticket == t.Number {
-			mine = append(mine, run)
-		}
-	}
 	// The latest pushed commit's runs first, then each older one's.
 	order := func(commit string) int {
 		return len(t.PushedCommits) - 1 - slices.IndexFunc(t.PushedCommits, func(p store.PushedCommit) bool { return p.Commit == commit })
@@ -161,12 +155,43 @@ func ticketCI(r store.Reader, key string, t store.Ticket, now time.Time) (*Pushe
 	for _, run := range mine {
 		runs = append(runs, ciRunView(key, run))
 	}
-	pushed := &PushedCommitView{Commit: latest.Commit, Pushed: latest.Pushed}
-	allPruned := now.Sub(latest.Pushed) > ciKeep && !slices.ContainsFunc(mine, func(run store.CIRun) bool { return run.Commit == latest.Commit })
-	if allPruned {
-		return pushed, "", runs
+	return &PushedCommitView{Commit: latest.Commit, Pushed: latest.Pushed}, latestCIResult(latest, mine, now), runs
+}
+
+// ticketCIResult is t's CI result alone, for its rows' badges: "" for a
+// Ticket never pushed while CI Tracking was on.
+func ticketCIResult(r store.Reader, key string, t store.Ticket, now time.Time) CIResult {
+	mine, ok := ticketRuns(r, key, t, now)
+	if !ok {
+		return ""
 	}
-	return pushed, ciResultOf(latest.Commit, mine), runs
+	return latestCIResult(t.PushedCommits[len(t.PushedCommits)-1], mine, now)
+}
+
+// latestCIResult is the CI result of a Ticket's latest pushed commit from
+// its runs. A pushed commit whose runs have all been pruned has no CI
+// result: none is running.
+func latestCIResult(latest store.PushedCommit, runs []store.CIRun, now time.Time) CIResult {
+	if now.Sub(latest.Pushed) > ciKeep && !slices.ContainsFunc(runs, func(run store.CIRun) bool { return run.Commit == latest.Commit }) {
+		return ""
+	}
+	return ciResultOf(latest.Commit, runs)
+}
+
+// ticketRuns is every CI Run tracked against t and kept at now, and
+// whether t has a pushed commit at all; the Project's runs are read only
+// when it has.
+func ticketRuns(r store.Reader, key string, t store.Ticket, now time.Time) ([]store.CIRun, bool) {
+	if len(t.PushedCommits) == 0 {
+		return nil, false
+	}
+	var mine []store.CIRun
+	for _, run := range keptCIRuns(r.CIRuns(key), now) {
+		if run.Ticket == t.Number {
+			mine = append(mine, run)
+		}
+	}
+	return mine, true
 }
 
 // ciResultOf is the CI result of commit from runs: running while any of
