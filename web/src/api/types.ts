@@ -152,9 +152,9 @@ export interface CIRunView {
 // CI_VIEW_DAYS is how far back the CI view lists finished runs.
 export const CI_VIEW_DAYS = 7;
 
-// CIFilter is a CI view read: one Project, or every active Project with
+// CIOverviewFilter is a CI view read: one Project, or every active Project with
 // CI Tracking on when project is left out.
-export interface CIFilter {
+export interface CIOverviewFilter {
   project?: string;
 }
 

@@ -177,6 +177,10 @@ What agents load into context, measured from Claude Code's own session logs on t
 It is not Usage: it reads Claude Code's logs on the machine, while Usage records what Code Central and the Factory see.
 _Avoid_: Token report, usage report
 
+**CI view**:
+The view of the CI Runs in a Project, or in all Projects with CI Tracking on: the CI Watchers' statuses, then the runs still going and those finished in the last 7 days.
+_Avoid_: CI dashboard, build monitor
+
 **Usage**:
 The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used.
 _Avoid_: Analytics dashboard, stats, metrics

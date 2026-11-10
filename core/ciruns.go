@@ -162,7 +162,8 @@ func ticketCI(r store.Reader, key string, t store.Ticket, now time.Time) (*Pushe
 		runs = append(runs, ciRunView(key, run))
 	}
 	pushed := &PushedCommitView{Commit: latest.Commit, Pushed: latest.Pushed}
-	if now.Sub(latest.Pushed) > ciKeep && !slices.ContainsFunc(mine, func(run store.CIRun) bool { return run.Commit == latest.Commit }) {
+	allPruned := now.Sub(latest.Pushed) > ciKeep && !slices.ContainsFunc(mine, func(run store.CIRun) bool { return run.Commit == latest.Commit })
+	if allPruned {
 		return pushed, "", runs
 	}
 	return pushed, ciResultOf(latest.Commit, mine), runs

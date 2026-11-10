@@ -93,13 +93,13 @@ func init() {
 	}
 }
 
-// CIRunsPath reads the CI view (code-central-258):
+// CIOverviewPath reads the CI view (code-central-258):
 // GET /api/ci?project=<key>. Leaving out project reads every active
 // Project with CI Tracking on. Like Usage it is not one of core's
 // operations, so it sits outside Routes.
-const CIRunsPath = "GET /api/ci"
+const CIOverviewPath = "GET /api/ci"
 
-func ciRunsRead(c *core.Core, r *http.Request) (any, error) {
+func ciOverviewRead(c *core.Core, r *http.Request) (any, error) {
 	q := r.URL.Query()
 	if err := onlyParams(q, "project"); err != nil {
 		return nil, err

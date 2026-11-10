@@ -68,7 +68,7 @@ interface CIBodyProps {
 // CIBody is one scope's CI Watchers and runs. The rows of its first read
 // don't pulse; a run that joins later pulses once.
 function CIBody({ api, now, version, project, projectName, navigate }: CIBodyProps) {
-  const ci = useFetch(() => api.ci({ project }), [api, project, version]);
+  const ci = useFetch(() => api.ciOverview({ project }), [api, project, version]);
   const data = ci.data;
   const first = useRef<Set<string>>(undefined);
   if (data && !first.current) first.current = new Set(data.runs.map(runKey));

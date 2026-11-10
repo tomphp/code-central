@@ -100,22 +100,28 @@ export function hrefFor(loc: UiLocation): string {
   }
   const q = new URLSearchParams({ view: loc.view });
   if (loc.project) q.set("project", loc.project);
-  if (loc.view === "usage" || loc.view === "ci") {
-    if (loc.view === "usage" && loc.days && loc.days !== USAGE_DAYS[0]) q.set("days", String(loc.days));
-    if (loc.view === "usage" && loc.session) {
+  if (loc.view === "usage") {
+    if (loc.days && loc.days !== USAGE_DAYS[0]) q.set("days", String(loc.days));
+    if (loc.session) {
       q.set("session_project", loc.session.project);
       q.set("session", loc.session.session);
       if (loc.session.agent) q.set("agent", loc.session.agent);
     }
-    const back = loc.back ? hrefFor(loc.back) : INBOX;
-    if (back !== INBOX) q.set("back", back.slice(1));
-    return `?${q}`;
+    return withBack(q, loc);
   }
+  if (loc.view === "ci") return withBack(q, loc);
   if (loc.view !== "inbox") return `?${q}`;
   if (loc.state) q.set("state", loc.state);
   if (loc.list) q.set("list", loc.list);
   if (loc.requirement) q.set("requirement", loc.requirement);
   if (loc.ticket) q.set("ticket", loc.ticket);
+  return `?${q}`;
+}
+
+// withBack is q's address with loc's back, left out for the Inbox.
+function withBack(q: URLSearchParams, loc: UiLocation): string {
+  const back = loc.back ? hrefFor(loc.back) : INBOX;
+  if (back !== INBOX) q.set("back", back.slice(1));
   return `?${q}`;
 }
 

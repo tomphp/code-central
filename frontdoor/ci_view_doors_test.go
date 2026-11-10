@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -53,11 +54,11 @@ func finished(id int64, workflow string, started, finished time.Duration, conclu
 	return run
 }
 
-// runKeys are the views' runs as project/id/attempt.
+// runKeys are the view's runs as project/workflow#attempt.
 func runKeys(v core.CIOverview) []string {
 	out := []string{}
 	for _, r := range v.Runs {
-		out = append(out, r.Project+"/"+r.Workflow+"#"+string(rune('0'+r.Attempt)))
+		out = append(out, r.Project+"/"+r.Workflow+"#"+strconv.Itoa(r.Attempt))
 	}
 	return out
 }
@@ -213,15 +214,22 @@ func TestReportedRunsSendTheCIViewAChangeNotice(t *testing.T) {
 	ruled := started(1, "ci.yml", 0)
 	ruled.Ticket, ruled.Rule = "", "acme-4"
 	reportRuns(t, srv, ruled)
+	awaitNotice(t, sub, "ci.changed on acme", func(e events.Event) bool { return e.Type == events.CIChanged && e.Project == "acme" })
+}
+
+// awaitNotice waits up to 5 seconds for a notice on sub that matches,
+// failing the test, naming want, when none comes.
+func awaitNotice(t *testing.T, sub <-chan events.Event, want string, matches func(events.Event) bool) {
+	t.Helper()
 	deadline := time.After(5 * time.Second)
 	for {
 		select {
 		case e := <-sub:
-			if e.Type == events.CIChanged && e.Project == "acme" {
+			if matches(e) {
 				return
 			}
 		case <-deadline:
-			t.Fatal("no ci.changed notice for the reported run")
+			t.Fatalf("no %s notice", want)
 		}
 	}
 }

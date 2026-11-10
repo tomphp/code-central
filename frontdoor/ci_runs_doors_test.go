@@ -295,17 +295,7 @@ func TestReportedRunsSendTheirTicketAChangeNotice(t *testing.T) {
 	sub, stop := srv.Core.Events().Subscribe()
 	defer stop()
 	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CIQueued, ""))
-	deadline := time.After(5 * time.Second)
-	for {
-		select {
-		case e := <-sub:
-			if e.Type == events.TicketChanged && e.ID == "acme-3" {
-				return
-			}
-		case <-deadline:
-			t.Fatal("no ticket.changed notice on acme-3 for the reported run")
-		}
-	}
+	awaitNotice(t, sub, "ticket.changed on acme-3", func(e events.Event) bool { return e.Type == events.TicketChanged && e.ID == "acme-3" })
 }
 
 func TestGetCIWatchHasThePushedCommitsStillWaiting(t *testing.T) {

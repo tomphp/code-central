@@ -448,7 +448,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       });
       await d.reportCIRuns("acme", [run(1, "ci.yml", -3, -2), run(2, "lint.yml", -4), run(3, "nightly.yml", -2), run(1, "ci.yml", -1, 0, 2)]);
 
-      const acme = await d.api.ci({ project: "acme" });
+      const acme = await d.api.ciOverview({ project: "acme" });
       expect(acme.projects).toEqual([{ project: "acme", tracking: true, repository: "acme/web", watcher: { state: "not_reported" } }]);
       expect(acme.runs.map((r) => [r.project, r.workflow, r.attempt, r.ignored])).toEqual([
         ["acme", "nightly.yml", 1, true],
@@ -458,14 +458,14 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(acme.runs[2]).toMatchObject({ ticket: id, commit: "abc123", conclusion: "success", url: "https://github.com/acme/web/actions/runs/1" });
 
       // All Projects is every active Project with CI Tracking on.
-      const all = await d.api.ci();
+      const all = await d.api.ciOverview();
       expect(all.projects.map((p) => p.project)).toEqual(["acme"]);
       expect(all.runs).toEqual(acme.runs);
-      expect(await d.api.ci({ project: "quiet" })).toEqual({
+      expect(await d.api.ciOverview({ project: "quiet" })).toEqual({
         projects: [{ project: "quiet", tracking: false, repository: "", watcher: { state: "not_reported" } }],
         runs: [],
       });
-      const unknown = await d.api.ci({ project: "nope" }).catch((e) => e);
+      const unknown = await d.api.ciOverview({ project: "nope" }).catch((e) => e);
       expect(unknown.code).toBe("not_found");
     });
 

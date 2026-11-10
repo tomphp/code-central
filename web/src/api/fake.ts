@@ -77,7 +77,7 @@ import {
   type CIRule,
   type CIRunView,
   type CIRunRow,
-  type CIFilter,
+  type CIOverviewFilter,
   type CIOverview,
   CI_VIEW_DAYS,
   type CIRuleChange,
@@ -323,7 +323,7 @@ interface FakeFollower {
 
 // READS are the Api's reads, by name, which actions leaves out.
 const READS: ReadonlySet<string> = new Set<keyof Api>([
-  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript", "usage", "sessionUsage", "ci",
+  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript", "usage", "sessionUsage", "ciOverview",
 ]);
 
 export class FakeApi implements Api {
@@ -1115,11 +1115,11 @@ export class FakeApi implements Api {
     return { ...this.opts };
   }
 
-  // ci reads the CI view as core's CIOverview does: each run's latest
+  // ciOverview reads the CI view as core's CIOverview does: each run's latest
   // attempt, unfinished ones first, newest started first, then those
   // finished in the last CI_VIEW_DAYS days, newest finished first.
-  async ci(filter: CIFilter = {}): Promise<CIOverview> {
-    this.calls.push("ci");
+  async ciOverview(filter: CIOverviewFilter = {}): Promise<CIOverview> {
+    this.calls.push("ciOverview");
     if (filter.project && !this.projects.has(filter.project)) throw new ApiError(404, "not_found", `no Project "${filter.project}"`);
     const projects = filter.project ? [this.project(filter.project)] : [...this.projects.values()].filter((p) => p.ci.tracking && !p.archived);
     const ended = (r: CIRunView) => (r.status === "completed" ? (r.finished ?? r.started) : undefined);
