@@ -156,13 +156,25 @@ func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
 // result, or none once the pushed commit's runs are pruned, keeps it
 // blocking. ciGated reads the Project's CI Runs only for a Ticket
 // Accepted with a pushed commit, and blockerViews asks only in a Project
-// with the option on.
+// with the option on. A push from before bt was last Ready, as when it
+// was sent back and accepted again but not yet pushed, isn't its work,
+// so it has no CI result here and keeps blocking.
 func (b blockRule) gatedCIResult(bt store.Ticket) CIResult {
 	pushed, runs, ok := ciGated(b.r, b.p, bt, b.now)
-	if !ok {
+	if !ok || pushed.Pushed.Before(lastReady(bt)) {
 		return ""
 	}
 	return latestCIResult(pushed, runs, b.now)
+}
+
+// lastReady is when t last moved to Ready, or zero if it never has.
+func lastReady(t store.Ticket) time.Time {
+	for _, m := range slices.Backward(t.Moves) {
+		if m.To == store.Ready {
+			return m.Time
+		}
+	}
+	return time.Time{}
 }
 
 // blockedError rejects claiming a blocked Ticket, naming its Blockers,

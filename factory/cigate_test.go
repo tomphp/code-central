@@ -43,8 +43,15 @@ func gatedHarness(t *testing.T) (*factorytest.Harness, *factorytest.Remote, *fac
 // tracked against ticket, with its status and conclusion.
 func reportRun(t *testing.T, h *factorytest.Harness, id int64, ticket, commit string, status store.CIRunStatus, conclusion store.CIConclusion) {
 	t.Helper()
+	reportAttempt(t, h, id, 1, ticket, commit, status, conclusion)
+}
+
+// reportAttempt reports, as the CI Watcher, attempt of run id of ci.yml
+// on commit tracked against ticket, with its status and conclusion.
+func reportAttempt(t *testing.T, h *factorytest.Harness, id int64, attempt int, ticket, commit string, status store.CIRunStatus, conclusion store.CIConclusion) {
+	t.Helper()
 	started := h.Clock.Now()
-	run := core.CIRunView{ID: id, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
+	run := core.CIRunView{ID: id, Attempt: attempt, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
 		Status: status, Conclusion: conclusion, Started: &started, URL: "https://github.com/acme/web/actions/runs/1", Jobs: []core.CIJobView{}, Ticket: ticket}
 	if _, err := h.Server.Client.ReportCIRuns(context.Background(), h.Project, core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {
 		t.Fatal(err)
