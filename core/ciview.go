@@ -53,7 +53,8 @@ type CIRunRow struct {
 // CIOverview reads the CI view. One Project's read has that Project,
 // Archived or with CI Tracking off; All Projects has every active Project
 // with CI Tracking on. An unknown Project is not_found. With Running, the
-// runs are only those runningForTicket admits.
+// runs are only the unfinished ones counting towards a Ticket's CI result,
+// newest started first.
 func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, error) {
 	out := CIOverview{Projects: []CIProjectStatus{}, Runs: []CIRunRow{}}
 	now := c.now()
