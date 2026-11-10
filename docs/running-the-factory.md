@@ -410,6 +410,15 @@ acme-shop-5: landed on main at 9c41d07a2b18
 
 There is no State for waiting on CI: the Ticket stays Accepted, so a Ticket it blocks isn't claimed until its CI has passed and it lands. Waiting doesn't hold up the rest: the Factory goes on merging and pushing other accepted Tickets meanwhile, and each lands on its own pushed commit's CI result, not on a later push's. An In Review Ticket you merge by hand waits the same way, In Review.
 
+While its CI is running, an Accepted Ticket waiting on it doesn't show in Needs Me, however long CI takes. When no word of its CI comes for 10 minutes after its push, it shows in Needs Me as **CI unavailable**, so a broken CI Watcher doesn't hold up the work unseen. Its detail says which cause applies: the CI Watcher isn't Watching (with its error, which the CI section of Project Options also shows), or the CI Watcher is Watching but no CI Runs have been reported for the pushed commit, say because no workflow runs on the base or all that do are Ignored workflows:
+
+```text
+CI Watcher not Watching: gh is logged out · 9c41d07 pushed 12m ago
+No CI Runs reported for 9c41d07 pushed 12m ago
+```
+
+It leaves Needs Me once runs are reported or the CI Watcher is Watching again, or when the gate lifts.
+
 When the CI result is failed, the Ticket stays Accepted, and the Factory says so once:
 
 ```text

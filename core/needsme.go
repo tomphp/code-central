@@ -31,6 +31,10 @@ const (
 	// ReasonToMerge is a Ticket Accepted under the Branch Landing Method
 	// (code-central-175): the human merges its branch, at once.
 	ReasonToMerge NeedsMeReason = "to_merge"
+	// ReasonCIUnavailable is a Ticket the CI gate has held for
+	// CIUnavailableAfter since its push with no word of its CI
+	// (code-central-262).
+	ReasonCIUnavailable NeedsMeReason = "ci_unavailable"
 	// ReasonAcceptedNotLanded is a Ticket Accepted for more than
 	// NotLandedAfter (ticket 72): its work hasn't reached the base.
 	ReasonAcceptedNotLanded  NeedsMeReason = "accepted_not_landed"
@@ -51,7 +55,8 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonInReview, "In Review: finished work waits to be accepted or rejected"},
 	{ReasonCIFailed, "CI failed: Accepted, and its pushed commit's CI result is failed; the human chooses a failure option, such as Land anyway"},
 	{ReasonToMerge, "To merge: Accepted under the Branch Landing Method; merge its branch into the base"},
-	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted for more than 10 minutes without landing in the base"},
+	{ReasonCIUnavailable, "CI unavailable: waiting on CI for 10 minutes or more since its push, while the CI Watcher isn't Watching or no CI Runs have been reported for its pushed commit"},
+	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted for more than 10 minutes without landing in the base, unless it waits on CI that is running"},
 	{ReasonBlockedByCancelled, "Blocked by a Cancelled Ticket with no Replacements"},
 	{ReasonClosedExternally, "Closed externally: its linked item was closed, deleted or left its Integration's query; cancel it, mark it Done or unlink it"},
 }
@@ -80,7 +85,8 @@ type NeedsMeGroup struct {
 // the last activity (Silent Claim, so the quiet time is now minus it),
 // the last move (Long Claim),
 // the Failure Report, the finish, the first failed CI Run finishing (CI
-// failed), the accept (To merge, and Accepted but not landed),
+// failed), the accept (To merge, and Accepted but not landed), the push
+// (CI unavailable),
 // or the Blocker's cancel. Only the
 // detail field for its reason is set.
 type NeedsMeRow struct {
@@ -100,6 +106,9 @@ type NeedsMeRow struct {
 	Branch string `json:"branch,omitempty"`
 	// CIFailure is what failed on the pushed commit (CI failed).
 	CIFailure *CIFailureSummary `json:"ci_failure,omitempty"`
+	// CIUnavailable says which: the CI Watcher not Watching, or no CI
+	// Runs for its pushed commit (CI unavailable).
+	CIUnavailable *CIUnavailableView `json:"ci_unavailable,omitempty"`
 	// Blocker is the Cancelled Blocker (blocked by a Cancelled Ticket).
 	Blocker *BlockerView `json:"blocker,omitempty"`
 	// Link is the Ticket's Link, whatever the reason: the row's badge, and
@@ -219,7 +228,7 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 	row := NeedsMeRow{
 		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link),
 		Requirement: req, Spec: needsMeSpec(r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
-		CIResult: ticketCIResult(r, key, t),
+		CIResult: ticketCIResult(r, key, t, c.now()),
 	}
 	switch reason {
 	case ReasonNeedsAnswer:
@@ -240,10 +249,13 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 	case ReasonInReview:
 		row.Summary = firstLine(finishSummary(t))
 	case ReasonCIFailed:
-		f, _, _ := ciFailure(r, key, t)
+		f, _, _ := ciFailure(r, key, t, c.now())
 		row.CIFailure = &f
 	case ReasonToMerge:
 		row.Branch = t.Branch
+	case ReasonCIUnavailable:
+		p, _ := r.Project(key)
+		_, row.CIUnavailable = c.ciWaitingOn(r, p, t)
 	case ReasonBlockedByCancelled:
 		b, _ := cancelledBlocker(r, key, t)
 		row.Blocker = &b
@@ -277,13 +289,13 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 		return ReasonAnswered, entered(t)
 	case store.InProgress, store.Accepted:
 		p, _ := r.Project(key) // t is in it, so it exists
-		if _, since, ok := ciFailure(r, key, t); ok {
+		if _, since, ok := ciFailure(r, key, t, c.now()); ok {
 			return ReasonCIFailed, since
 		}
 		if t.State == store.Accepted && p.Landing.Method == store.LandingBranch {
 			return ReasonToMerge, entered(t)
 		}
-		if reason, since := c.timedReason(p, t); reason != "" {
+		if reason, since := c.timedReason(r, p, t); reason != "" {
 			return reason, since
 		}
 	case store.Failed:

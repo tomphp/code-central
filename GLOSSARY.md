@@ -109,7 +109,7 @@ The pluggable part of CI Tracking that talks to one CI system, through its own c
 _Avoid_: Integration, connector
 
 **CI Watcher**:
-The separate process, started and supervised by Code Central, that watches one Project's CI through its CI Provider and reports what it sees over the HTTP API. Before CI Tracking turns on, Code Central runs it once in its **check mode**, which checks it can reach the repository through `gh` and answers with what is wrong and its fix, if anything is. Its status, **Watching** or an error with its fix, shows in the CI section of Project Options; going into an error sends one Notification. The service starts one per Project with CI Tracking on, stops it when CI Tracking is turned off or the Project is archived, and restarts one that crashes with backoff, reporting it as crashed, restarted N times.
+The separate process, started and supervised by Code Central, that watches one Project's CI through its CI Provider and reports what it sees over the HTTP API. Before CI Tracking turns on, Code Central runs it once in its **check mode**, which checks it can reach the repository through `gh` and answers with what is wrong and its fix, if anything is. Its status, **Watching** or an error with its fix, shows in the CI section of Project Options; going into an error sends one Notification. Rate-limited by GitHub, it is still Watching, until the time it may call again, and sends no Notification. The service starts one per Project with CI Tracking on, stops it when CI Tracking is turned off or the Project is archived, and restarts one that crashes with backoff, reporting it as crashed, restarted N times.
 _Avoid_: CI daemon, CI Integration
 
 **Pushed commit**:
@@ -117,7 +117,7 @@ The commit the Factory pushed for a Ticket, which it reports on the Ticket: the 
 _Avoid_: Push SHA
 
 **CI Run**:
-One workflow run the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired.
+One workflow run the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. Kept for 30 days after it finishes.
 _Avoid_: Job, build, pipeline
 
 **CI result**:
@@ -180,6 +180,10 @@ _Avoid_: Log, conversation, stream
 What agents load into context, measured from Claude Code's own session logs on the machine (not Transcripts): the size of tool results per kind of session (each Stage, implementation, and the review and other subagents), tool and operation, the largest results, the Specs and Tickets read more than once, and signs that a cut went too far, each with its change against a saved baseline.
 It is not Usage: it reads Claude Code's logs on the machine, while Usage records what Code Central and the Factory see.
 _Avoid_: Token report, usage report
+
+**CI view**:
+The view of the CI Runs in a Project, or in all Projects with CI Tracking on: the CI Watchers' statuses, then the runs still going and those finished in the last 7 days.
+_Avoid_: CI dashboard, build monitor
 
 **Usage**:
 The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used.

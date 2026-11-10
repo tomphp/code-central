@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
 	"github.com/tomoram/code-central/store"
@@ -44,7 +43,7 @@ func gatedHarness(t *testing.T) (*factorytest.Harness, *factorytest.Remote, *fac
 // tracked against ticket, with its status and conclusion.
 func reportRun(t *testing.T, h *factorytest.Harness, id int64, ticket, commit string, status store.CIRunStatus, conclusion store.CIConclusion) {
 	t.Helper()
-	started := codecentraltest.Start
+	started := h.Clock.Now()
 	run := core.CIRunView{ID: id, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
 		Status: status, Conclusion: conclusion, Started: &started, URL: "https://github.com/acme/web/actions/runs/1", Jobs: []core.CIJobView{}, Ticket: ticket}
 	if _, err := h.Server.Client.ReportCIRuns(context.Background(), h.Project, core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {

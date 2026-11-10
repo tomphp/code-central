@@ -27,6 +27,7 @@ export type NeedsMeReason =
   | "in_review"
   | "ci_failed"
   | "to_merge"
+  | "ci_unavailable"
   | "accepted_not_landed"
   | "blocked_by_cancelled"
   | "closed_externally";
@@ -86,6 +87,9 @@ export interface CIWatcherStatus {
   problem?: CIProblem;
   message?: string;
   fix?: string;
+  // rate_limited_until is when GitHub lets a rate-limited CI Watcher call
+  // it again; it is still watching meanwhile, not in error.
+  rate_limited_until?: string;
   // since is when it went into this state.
   since?: string;
 }
@@ -146,6 +150,39 @@ export interface CIRunView {
   ticket?: string;
   rule?: string;
   ignored: boolean;
+}
+
+// ---- The CI view (code-central-258) ----
+
+// CI_VIEW_DAYS is how far back the CI view lists finished runs.
+export const CI_VIEW_DAYS = 7;
+
+// CIOverviewFilter is a CI view read: one Project, or every active Project with
+// CI Tracking on when project is left out.
+export interface CIOverviewFilter {
+  project?: string;
+}
+
+// A Project's CI Tracking and its CI Watcher's status, heading the CI view.
+export interface CIProjectStatus {
+  project: string;
+  tracking: boolean;
+  repository: string;
+  watcher: CIWatcherStatus;
+}
+
+// One CI Run in the CI view, with its Project; a re-run lists its latest
+// attempt only.
+export interface CIRunRow extends CIRunView {
+  project: string;
+}
+
+// The CI view: the CI Watchers' statuses, then the runs, in-progress
+// ones first, newest started first, then those finished in the last
+// CI_VIEW_DAYS days, newest finished first.
+export interface CIOverview {
+  projects: CIProjectStatus[];
+  runs: CIRunRow[];
 }
 
 export interface ProjectView {
@@ -220,6 +257,8 @@ export interface NeedsMeRow {
   branch?: string;
   // ci_failure is what failed on the pushed commit (ci_failed).
   ci_failure?: CIFailureSummary;
+  // ci_unavailable says why no word of its CI has come (ci_unavailable).
+  ci_unavailable?: CIUnavailable;
   blocker?: BlockerView;
   link?: LinkView;
   // Set when the Ticket's Spec is a Requirement.
@@ -244,6 +283,16 @@ export interface CIFailureSummary {
 // A failure option the human may choose for a CI failed Ticket, named for
 // its action (code-central-261).
 export type CIFailureOption = "land_anyway";
+
+// Why a Ticket is CI unavailable: the CI Watcher isn't Watching (with
+// its error's message, if it has one), or no CI Runs have been reported
+// for its pushed commit.
+export interface CIUnavailable {
+  cause: "ci_watcher_not_watching" | "no_ci_runs";
+  commit: string;
+  pushed: string;
+  message?: string;
+}
 
 // The Spec a Needs Me row's Map Ticket or Prototype is on; map is set
 // when it is a Map.
@@ -629,6 +678,8 @@ export type ChangeEvent =
   | { type: "ticket.changed"; project: string; id: string }
   | { type: "spec.changed"; project: string; id: string }
   | { type: "project.changed"; project: string }
+  // ci.changed is a Project's CI Runs changing.
+  | { type: "ci.changed"; project: string }
   // options.changed is about no Project: the Options changed.
   | { type: "options.changed" };
 

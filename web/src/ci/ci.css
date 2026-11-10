@@ -1,0 +1,25 @@
+/* The CI view: its picker in the header, the CI Watchers' statuses and
+   the runs table. Its styles hang off the layout's own classes, so none
+   of them reach the other views; the status badges are the Ticket
+   panel's CI section's. */
+.ci { min-height: 100vh; display: flex; flex-direction: column; }
+.ci-head { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
+.ci-head h1 { font-size: 18px; margin: 0; }
+.ci-head label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.ci-picker-label { color: var(--muted); }
+.ci-back { margin-left: auto; }
+.ci-body { width: 100%; max-width: 1100px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; }
+.ci-body .warning, .ci-body .muted { font-size: 14px; }
+.ci-watchers p { margin: 0 0 4px; font-size: 14px; }
+.ci-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.ci-table th, .ci-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+.ci-table tbody th { font-weight: 500; }
+.ci-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.ci-table .label { margin-left: 6px; }
+.ci-row.ignored, .ci-row.ignored a, .ci-row.ignored .ci-status { color: var(--muted); border-color: var(--border); }
+/* A run that changes pulses: a brief background flash, restarted by
+   swapping between two identical animations (focus/pulse.ts). */
+.ci-row.dashboard-pulse-0 { animation: ci-pulse-0 600ms ease-out; }
+.ci-row.dashboard-pulse-1 { animation: ci-pulse-1 600ms ease-out; }
+@keyframes ci-pulse-0 { 30% { background: var(--surface-2); } }
+@keyframes ci-pulse-1 { 30% { background: var(--surface-2); } }
