@@ -8,8 +8,10 @@
 // the dashboard also read the running CI Runs, again on every live-feed
 // change (code-central-277). The block opens the CI view. Those runs are
 // listed below the In Progress list, newest started first, or "No CI
-// Runs running"; an entry opens its Ticket in the Inbox and carries the
-// run's GitHub link (code-central-278).
+// Runs running": each entry shows the run's workflow, Ticket, Project in
+// All Projects, branch, short commit and how long it has been going,
+// opens its Ticket in the Inbox and carries the run's GitHub link
+// (code-central-278).
 //
 // A block pulses when its count changes. An entry pulses when a
 // ticket.changed notice names its Ticket, which includes each new Session
@@ -24,7 +26,7 @@ import { STAGE_TITLE, stageOf } from "../requirement/progress";
 import { CILink } from "../ci/CILink";
 import { RunGitHubLink, runDuration } from "../ci/CIView";
 import { CIBadge } from "../ticket/CIBadge";
-import { runName, shortCommit } from "../ticket/CISection";
+import { runName, runStatus, shortCommit } from "../ticket/CISection";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { usePulse } from "./pulse";
 
@@ -174,18 +176,19 @@ interface CIRunEntryProps extends Omit<ActivityDashboardProps, "api" | "version"
 
 function CIRunEntry({ now, data, run, joined, loc, navigate }: CIRunEntryProps) {
   const pulse = usePulse("dashboard-ci-entry", `${run.status} ${run.attempt}`, joined);
-  const ticket = data.tickets.find((t) => t.project === run.project && t.id === run.ticket);
-  const inbox = inboxFor(run.ticket ?? "", ticket, loc);
+  // The service lists only runs tracked against a Ticket.
+  const inbox = inboxFor(data, run.project, run.ticket!, loc);
   return (
     <li aria-label={runName(run)} {...pulse}>
       <a href={hrefFor(inbox)} onClick={clickTo(navigate, inbox)}>
         <span className="dashboard-entry-top">
           <span className="tid">{run.ticket}</span>
           <span className="dashboard-entry-title">{runName(run)}</span>
-          {!loc.project && <span className="muted">{data.projects.find((p) => p.key === run.project)?.display_name ?? run.project}</span>}
+          {!loc.project && <span className="muted">{projectName(data, run.project)}</span>}
         </span>
         <span className="dashboard-entry-detail">
-          {run.branch} · <code>{shortCommit(run.commit)}</code> · running {runDuration(run, now)}
+          {run.branch} · <code>{shortCommit(run.commit)}</code> · {runStatus(run)}
+          {run.started && ` ${runDuration(run, now)}`}
         </span>
       </a>
       <RunGitHubLink run={run} className="dashboard-ci-github" />
@@ -196,10 +199,14 @@ function CIRunEntry({ now, data, run, joined, loc, navigate }: CIRunEntryProps) 
 // inboxFor is where a Ticket opens in the Inbox from the dashboard, as a
 // Focus Item's "Open in Inbox" does: a Stage Ticket in its Requirement,
 // with it selected, in Focus Mode's Project scope.
-// t is the Ticket id names, when the Inbox data holds it.
-function inboxFor(id: string, t: ProjectTicket | undefined, loc: UiLocation): UiLocation {
+// A Ticket the Inbox data doesn't hold yet opens on its own.
+function inboxFor(data: InboxData, project: string, id: string, loc: UiLocation): UiLocation {
+  const t = data.tickets.find((t) => t.project === project && t.id === id);
   return { view: "inbox", project: loc.project, requirement: t && stageOf(t) && t.spec, ticket: id };
 }
+
+// projectName is a Project's display name, or its key until the Inbox data holds it.
+const projectName = (data: InboxData, key: string) => data.projects.find((p) => p.key === key)?.display_name ?? key;
 
 // InProgressEntry is one In Progress Ticket. It opens in the Inbox by
 // inboxFor. It pulses each time changes goes up, and on mounting
@@ -214,7 +221,7 @@ function InProgressEntry({ now, data, ticket: t, changes, joined, loc, navigate 
   const pulse = usePulse("dashboard-entry", changes, joined);
   const stage = stageOf(t);
   const requirement = stage && data.requirements.find((s) => s.id === t.spec);
-  const inbox = inboxFor(t.id, t, loc);
+  const inbox = inboxFor(data, t.project, t.id, loc);
   return (
     <li {...pulse}>
       <a href={hrefFor(inbox)} onClick={clickTo(navigate, inbox)}>
@@ -222,7 +229,7 @@ function InProgressEntry({ now, data, ticket: t, changes, joined, loc, navigate 
           <span className="tid">{t.id}</span>
           <span className="dashboard-entry-title">{t.title}</span>
           <CIBadge result={t.ci_result} />
-          {!loc.project && <span className="muted">{data.projects.find((p) => p.key === t.project)?.display_name ?? t.project}</span>}
+          {!loc.project && <span className="muted">{projectName(data, t.project)}</span>}
         </span>
         {stage && (
           <span className="dashboard-entry-detail">

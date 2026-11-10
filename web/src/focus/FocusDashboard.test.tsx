@@ -537,6 +537,16 @@ describe("the CI Running list", () => {
     expect(ciEntry(d, "lint.yml")).toHaveTextContent(/^acme-4lint.ymlAcmeacme-4 · abc1234 · running 2m 0sView on GitHub$/);
   });
 
+  it("says a queued run is queued, and leaves out the duration of one not started", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 2, "ci.yml", { status: "queued" }), ciRun(fake, 1, "lint.yml", { status: "queued", started: undefined })]);
+    renderApp(fake, "/?view=focus&project=acme");
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    expect(ciEntry(d, "ci.yml")).toHaveTextContent(/^acme-4ci.ymlacme-4 · abc123 · queued 2m 0sView on GitHub$/);
+    expect(ciEntry(d, "lint.yml")).toHaveTextContent(/^acme-4lint.ymlacme-4 · abc123 · queuedView on GitHub$/);
+  });
+
   it("leaves out the Project when scoped to one", async () => {
     const fake = await ciWorld();
     await fake.reportCIRuns("acme", [ciRun(fake, 3, "ci.yml", { name: "CI" })]);
@@ -600,6 +610,20 @@ describe("the CI Running list", () => {
 
     await act(() => fake.reportPushedCommit("acme", "acme-4", "def456"));
     expect(await within(d).findByText("No CI Runs running")).toBeInTheDocument();
+  });
+
+  it("drops a run whose workflow becomes Ignored at its next report", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml"), ciRun(fake, 2, "lint.yml")]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+
+    await act(async () => {
+      await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["lint.yml"] });
+      await fake.reportCIRuns("acme", [ciRun(fake, 2, "lint.yml")]);
+    });
+    await waitFor(() => expect(ciEntries(d).map((e) => e.getAttribute("aria-label"))).toEqual(["ci.yml"]));
   });
 
   it("shows a failed read's error in its place", async () => {
