@@ -10,8 +10,8 @@ import (
 )
 
 // Token usage (Spec code-central-201). The Factory reads each model
-// response's usage from a turn's stream-json and posts it to Code
-// Central's POST /api/usage, by the Session Events rules: the same
+// response's usage and model (Spec code-central-266) from a turn's
+// stream-json and posts them to Code Central's POST /api/usage, by the Session Events rules: the same
 // sender, so a post that fails, or an older Code Central's 404, is
 // dropped and a turn is never slowed or failed.
 
@@ -56,9 +56,8 @@ func newUsageReader(kind string, now func() time.Time) *usageReader {
 // read gives msg's model response, dated when it is read and with its
 // model unless that is syntheticModel, the first time its message ID
 // comes: claude prints a response with several content blocks as several
-// lines, each with the same ID and usage. It
-// also remembers msg's Agent calls, so their subagents' responses get
-// their kind.
+// lines, each with the same ID and usage. It also remembers msg's Agent
+// calls, so their subagents' responses get their kind.
 func (u *usageReader) read(msg streamMessage) (core.UsageResponse, bool) {
 	if msg.Type != "assistant" {
 		return core.UsageResponse{}, false

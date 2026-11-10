@@ -34,16 +34,9 @@ func usageSessions(u core.UsageView, session string) []usageSession {
 // wantUsageSessions checks that u's sessions of session are want.
 func wantUsageSessions(t *testing.T, u core.UsageView, session string, want []usageSession) {
 	t.Helper()
-	if got := usageSessions(u, session); !slices.EqualFunc(got, want, sameUsageSession) {
+	if got := usageSessions(u, session); !reflect.DeepEqual(got, want) {
 		t.Errorf("Usage sessions\n got %+v\nwant %+v", got, want)
 	}
-}
-
-// sameUsageSession is whether a and b are the same, models and all.
-func sameUsageSession(a, b usageSession) bool {
-	models := slices.Equal(a.Models, b.Models)
-	a.Models, b.Models = nil, nil
-	return models && reflect.DeepEqual(a, b)
 }
 
 // waitForUsage waits for Usage to hold n responses in all, and returns it.
@@ -83,9 +76,9 @@ func TestEachModelResponsesTokenUsageIsPostedOnceUnderItsKind(t *testing.T) {
 
 	u := waitForUsage(h, 5)
 	want := []usageSession{
-		{Ticket: id, Kind: "spec", Claim: 1, Peak: 800, Responses: 2},
-		{Ticket: id, Agent: "toolu_explore", Kind: "subagent", Claim: 1, Peak: 60, Responses: 2},
-		{Ticket: id, Agent: "toolu_review", Kind: "review", Claim: 1, Peak: 1000, Responses: 1},
+		{Ticket: id, Kind: "spec", Claim: 1, Peak: 800, Responses: 2, Models: []string{}},
+		{Ticket: id, Agent: "toolu_explore", Kind: "subagent", Claim: 1, Peak: 60, Responses: 2, Models: []string{}},
+		{Ticket: id, Agent: "toolu_review", Kind: "review", Claim: 1, Peak: 1000, Responses: 1, Models: []string{}},
 	}
 	wantUsageSessions(t, u, session, want)
 	var kinds []string
@@ -147,11 +140,6 @@ func TestASyntheticResponseIsPostedWithItsTokensButNoModel(t *testing.T) {
 		{Ticket: id, Agent: "toolu_plain", Kind: "subagent", Claim: 1, Peak: 60, Responses: 1, Models: []string{}},
 	}
 	wantUsageSessions(t, u, h.Ticket(id).Claims[0].SessionID, want)
-	for _, s := range u.Sessions {
-		if s.Models == nil {
-			t.Errorf("session %s %q has no models list; want an empty one", s.SessionID, s.Agent)
-		}
-	}
 }
 
 func TestAResumedSessionAddsToTheSameUsageSession(t *testing.T) {
@@ -178,7 +166,7 @@ func TestAResumedSessionAddsToTheSameUsageSession(t *testing.T) {
 	h.WaitForState(id, store.InReview)
 
 	u := waitForUsage(h, 2)
-	want := []usageSession{{Ticket: id, Kind: "implementation", Claim: 1, Peak: 300, Responses: 2}}
+	want := []usageSession{{Ticket: id, Kind: "implementation", Claim: 1, Peak: 300, Responses: 2, Models: []string{}}}
 	wantUsageSessions(t, u, h.Ticket(id).Claims[0].SessionID, want)
 }
 
@@ -203,7 +191,7 @@ func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedUsageHoldsNothi
 
 	// The batch posted while down is dropped, never retried.
 	u := waitForUsage(h, 2)
-	want := []usageSession{{Ticket: id, Kind: "implementation", Claim: 1, Peak: 300, Responses: 2}}
+	want := []usageSession{{Ticket: id, Kind: "implementation", Claim: 1, Peak: 300, Responses: 2, Models: []string{}}}
 	wantUsageSessions(t, u, h.Ticket(id).Claims[0].SessionID, want)
 	if strings.Contains(r.Stdout()+r.Stderr(), "/api/usage") {
 		t.Errorf("a failed post was reported; want it dropped quietly:\n%s%s", r.Stdout(), r.Stderr())
