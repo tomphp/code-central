@@ -109,7 +109,9 @@ func (w *watching) lastRun(spec string) *time.Time {
 }
 
 // at is minutes after the test clock's start.
-func at(minutes int) time.Time { return codecentraltest.Start.Add(time.Duration(minutes) * time.Minute) }
+func at(minutes int) time.Time {
+	return codecentraltest.Start.Add(time.Duration(minutes) * time.Minute)
+}
 
 func TestAFailureARuleMatchesOpensAFixTicketOnItsSpec(t *testing.T) {
 	w := newWatching(t)
@@ -170,7 +172,10 @@ func TestAPassingRunOrAnotherWorkflowOrBranchDoesntFireARule(t *testing.T) {
 func TestAFailingLandCommitLinksItsTicketAndSpec(t *testing.T) {
 	w := newWatching(t)
 	ctx := context.Background()
-	must(t, func() error { _, err := w.srv.Core.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"}); return err })
+	must(t, func() error {
+		_, err := w.srv.Core.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"})
+		return err
+	})
 	must(t, func() error {
 		_, err := w.srv.Core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: store.Ready})
 		return err
@@ -183,7 +188,10 @@ func TestAFailingLandCommitLinksItsTicketAndSpec(t *testing.T) {
 		_, err := w.srv.Core.Finish(ctx, "acme", core.FinishInput{Ticket: "2", ClaimID: res.ClaimID, Summary: "Done.", Branch: "acme-2", Commit: "aaa000"})
 		return err
 	})
-	must(t, func() error { _, err := w.srv.Client.Land(ctx, "acme", core.LandInput{Ticket: "acme-2", Commit: "land99"}); return err })
+	must(t, func() error {
+		_, err := w.srv.Client.Land(ctx, "acme", core.LandInput{Ticket: "acme-2", Commit: "land99"})
+		return err
+	})
 	spec := w.rule("any", "main", store.Ready)
 	w.branchAnswer("main", branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "land99", conclude: "failure", finished: 5})
 	w.jobsAnswer(21, 1, [2]string{"test", "failure"})
