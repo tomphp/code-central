@@ -158,3 +158,32 @@ func writeAtomic(dir, name string, b []byte) error {
 	}
 	return err
 }
+
+// IssuePath is the gh api path that reads repository's issue n.
+func IssuePath(repository string, n int) string {
+	return fmt.Sprintf("repos/%s/issues/%d", repository, n)
+}
+
+// DeletedIssue is GitHub's answer to reading repository's issue n once it
+// is deleted: 410 Gone, as gh api --include prints it.
+func DeletedIssue(repository string, n int) Answer {
+	return Answer{
+		Args:   []string{"api", IssuePath(repository, n)},
+		Stdout: "HTTP/2.0 410 Gone\r\nContent-Type: application/json; charset=utf-8\r\n\r\n" + `{"message":"This issue was deleted","status":"410"}`,
+		Stderr: "gh: This issue was deleted (HTTP 410)\n",
+		Exit:   1,
+	}
+}
+
+// TransferredIssue is GitHub's answer to reading repository's issue n
+// once it is transferred to the repository to as its issue m: gh follows
+// GitHub's redirect, so it is the issue in to.
+func TransferredIssue(repository string, n int, to string, m int) Answer {
+	b, _ := json.Marshal(map[string]any{
+		"number": m, "state": "open", "title": fmt.Sprintf("Issue %d", n), "body": "",
+		"html_url":       fmt.Sprintf("https://github.com/%s/issues/%d", to, m),
+		"repository_url": "https://api.github.com/repos/" + to,
+		"labels":         []any{},
+	})
+	return Answer{Args: []string{"api", IssuePath(repository, n)}, Stdout: "HTTP/2.0 200 OK\r\nContent-Type: application/json; charset=utf-8\r\n\r\n" + string(b)}
+}
