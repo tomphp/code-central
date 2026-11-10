@@ -12,6 +12,7 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   ci_unavailable: "CI unavailable",
   accepted_not_landed: "Accepted but not landed",
   blocked_by_cancelled: "Blocked by a Cancelled Ticket",
+  new_issue: "New issue",
   closed_externally: "Closed externally",
 };
 
@@ -51,6 +52,8 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
       return `Accepted ${ago(now, r.since)}, not landed`;
     case "blocked_by_cancelled":
       return r.blocker ? `Blocked by ${r.blocker.id} ${r.blocker.title}, Cancelled with no Replacement` : "Blocked by a Cancelled Ticket";
+    case "new_issue":
+      return r.link ? `${r.link.integration} ${r.link.id} came in ${ago(now, r.since)}` : `Came in ${ago(now, r.since)}`;
     case "closed_externally":
       return `${externalDetail(r)} · still ${r.state}`;
   }

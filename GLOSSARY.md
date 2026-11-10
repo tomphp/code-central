@@ -322,19 +322,27 @@ A Project's long-lived Spec that its Incoming Issues arrive on, titled like "Git
 _Avoid_: Inbox Spec, triage Spec
 
 **Incoming Issue**:
-A linked Draft Ticket on the Issues Spec, mirroring one GitHub issue that hasn't been triaged yet. GitHub owns its definition.
+A linked Draft or Ready Ticket on the Issues Spec whose Link isn't detached, mirroring one GitHub issue. GitHub owns its definition, and the triage actions are offered on it.
 _Avoid_: Issue Ticket, imported issue
 
 **New issue**:
-The Needs Me reason of an Incoming Issue that arrived while New issues need me was on and that the human hasn't triaged yet.
+The Needs Me reason of an Incoming Issue awaiting triage: it arrived while New issues need me was on, the human hasn't triaged it yet, and it isn't closed externally, which takes over.
 _Avoid_: Untriaged, new Ticket
+
+**Awaiting triage**:
+Whether an Incoming Issue still waits for the human's first triage action. Code Central sets it on an Incoming Issue that arrives while New issues need me is on, and a triage action clears it for good.
+_Avoid_: Unread, pending
+
+**Triage action**:
+What the human may do with an Incoming Issue: Keep as Draft, To Requirement or Won't fix. Each is offered on every Incoming Issue, awaiting triage or not, in its Ticket panel, and on a New issue's row and Focus Item.
+_Avoid_: Triage option, disposition
 
 **New issues need me**:
 A GitHub Issues setting, off by default: when on, each new Incoming Issue also shows in Needs Me and Focus Mode under New issue until the human triages it.
 _Avoid_: Notify on new issues
 
 **Keep as Draft**:
-The human's triage action that leaves an Incoming Issue a Draft and takes it out of Needs Me for good, writing nothing to GitHub.
+The human's triage action that leaves an Incoming Issue as it is, a Draft as it arrived, and clears its awaiting triage, taking it out of Needs Me for good, writing nothing to GitHub.
 _Avoid_: Park, snooze
 
 **To Requirement**:

@@ -12,6 +12,7 @@ import { LinkBadge } from "./LinkBadge";
 import { Live } from "./Live";
 import { useAct } from "./useAct";
 import { CISection } from "./CISection";
+import { Triage } from "./Triage";
 
 export interface TicketPaneProps {
   api: Api;
@@ -45,11 +46,12 @@ export function TicketPane(props: TicketPaneProps) {
 export type TicketDetailProps = TicketPaneProps;
 
 // TicketDetail is everything about a Ticket below its action panel: Spec,
-// Labels, description, Blockers (with a gated one's CI result, and whether
-// it no longer blocks), its CI section when it has CI Runs (in the
-// action panel instead while CI failed), Claim activity with each Claim's Live
-// section, move, and a collapsed history of moves, comments and edits
-// merged by time.
+// Labels, an Incoming Issue's triage actions (in the action panel instead
+// while it is a New issue), description, Blockers (with a gated one's CI
+// result, and whether it no longer blocks), its CI section when it has CI
+// Runs (in the action panel instead while CI failed), Claim activity with
+// each Claim's Live section, move, and a collapsed history of moves,
+// comments and edits merged by time.
 export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketDetailProps) {
   const claims = [...t.claims].sort((a, b) => b.number - a.number);
   const specName = `${t.spec.id} ${t.spec.title}`;
@@ -72,6 +74,9 @@ export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketD
         {t.link && <LinkBadge link={t.link} />}
       </div>
       {t.link && !t.link.detached && <LinkedNote key={t.id} api={api} project={project} ticket={t} />}
+      {/* A New issue's triage actions are its action panel, so they
+          aren't shown here too. */}
+      {t.triage_actions && t.needs_me_reason !== "new_issue" && <Triage api={api} project={project} ticket={t} />}
       {t.description ? <Markdown>{t.description}</Markdown> : <p className="muted">No description.</p>}
       {t.tags.prototype !== undefined && <PrototypeAt tag={t.tags.prototype} />}
       {t.blockers.length > 0 && (

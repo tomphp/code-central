@@ -347,6 +347,21 @@ While GitHub Issues is on, the service runs the Project's **Issue Watcher**, the
 
 The service stops the Issue Watcher when you turn GitHub Issues off, when you archive the Project and when the service itself stops.
 
+### Triaging Incoming Issues
+
+An Incoming Issue is a Draft (or Ready) Ticket on the Issues Spec, linked to its issue: its panel's GitHub badge opens the issue, and its title and description are GitHub's. Its Ticket panel has a **Triage** section with the triage actions, whether or not New issues need me is on:
+
+- **Keep as Draft** leaves it on the Issues Spec as it is, a Draft as it came in, and writes nothing to GitHub. With New issues need me on, it also takes the issue out of Needs Me for good: closing and reopening the issue, editing it, or turning New issues need me off and on never brings it back.
+
+With **New issues need me** on, each issue that comes in waits in Needs Me under **New issue**, after Blocked by a Cancelled Ticket and before Closed externally, longest-waiting first. Its row names the issue and when it came in:
+
+```
+acme-api-14  Login is broken
+github acme/acme-api#7 came in 5m ago
+```
+
+Its action panel, in the Inbox and as its Focus Item in Focus Mode, links to the issue and offers the triage actions, so you can triage new issues one at a time. Choosing one moves Focus Mode on to the next item. An issue that comes in while New issues need me is off isn't a New issue, even after you turn it on: triage it from its Ticket panel. An issue closed on GitHub before you triage it shows as **Closed externally** instead, and once you unlink it, it is no longer an Incoming Issue.
+
 ## When `init` behaves differently
 
 ### A repository you don't own: `init --local`
