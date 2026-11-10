@@ -84,7 +84,7 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       const t = await fake.getTicket(_key, id);
       fake.updateTicket(id, {
         blocked_by: [...t.blocked_by, blocker],
-        blockers: [...t.blockers, { id: blocker, title: b.title, state: b.state }],
+        blockers: [...t.blockers, { id: blocker, title: b.title, state: b.state, cleared: false }],
         blocked: true,
       });
     },

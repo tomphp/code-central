@@ -282,11 +282,12 @@ export interface BlockerView {
   title: string;
   state: State;
   via?: string;
-  // ci_result is the Blocker's CI result while the CI gate holds it, and
-  // cleared is whether it no longer blocks though it isn't Done (under
-  // Unblock on push).
+  // ci_result is the Blocker's CI result while the CI gate holds it,
+  // whether or not Unblock on push is on.
   ci_result?: CIResult;
-  cleared?: boolean;
+  // cleared is whether the Blocker no longer blocks though it isn't Done,
+  // which only Unblock on push does.
+  cleared: boolean;
 }
 
 export interface NeedsMeRow {

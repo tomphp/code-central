@@ -960,7 +960,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(t).toMatchObject({ state: "Cancelled", replacements: [] });
       expect(t.moves.at(-1)).toMatchObject({ from: "Ready", to: "Cancelled", actor: "human" });
       const dep = await d.api.getTicket("acme", b);
-      expect(dep).toMatchObject({ blocked: true, blockers: [{ id: a, title: "A", state: "Cancelled" }] });
+      expect(dep).toMatchObject({ blocked: true, blockers: [{ id: a, title: "A", state: "Cancelled", cleared: false }] });
     });
 
     it("moves to any State but Needs Answer and Failed", async () => {

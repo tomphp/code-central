@@ -2,6 +2,7 @@ package frontdoor_test
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -54,14 +55,19 @@ func TestWithUnblockOnPushOffTheRefusalStillNamesAGatedBlockersCIResult(t *testi
 	}
 }
 
-// blockerOf is acme-4's only Blocker, as get_ticket gives it over HTTP.
+// blockerOf is acme-4's only Blocker, as get_ticket gives it over HTTP,
+// checked to be the same over MCP.
 func blockerOf(t *testing.T, srv *codecentraltest.Server) map[string]any {
 	t.Helper()
-	list, _ := httpOK(t, srv, httpCall{"GET", "/api/p/acme/tickets/4", ""})["blockers"].([]any)
-	if len(list) != 1 {
-		t.Fatalf("blockers %v, want acme-3 alone", list)
+	overHTTP, _ := httpOK(t, srv, httpCall{"GET", "/api/p/acme/tickets/4", ""})["blockers"].([]any)
+	overMCP, _ := mcpOK(t, connect(t, srv, "acme"), "get_ticket", map[string]any{"ticket": "acme-4"})["blockers"].([]any)
+	if len(overHTTP) != 1 {
+		t.Fatalf("blockers %v, want acme-3 alone", overHTTP)
 	}
-	b, _ := list[0].(map[string]any)
+	if !reflect.DeepEqual(overHTTP, overMCP) {
+		t.Fatalf("blockers over MCP %v, want them as over HTTP, %v", overMCP, overHTTP)
+	}
+	b, _ := overHTTP[0].(map[string]any)
 	return b
 }
 

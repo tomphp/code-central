@@ -868,7 +868,7 @@ export class FakeApi implements Api {
               ? `Write the Spec for the Requirement in Spec [${spec.id}](${spec.id}), from its text and the Map [${from}](${from}): its Decisions so far and the resolution comments they link.\n`
               : `The ${s.title} Stage of [${spec.id}](${spec.id}).\n`,
           blocked_by: prev ? [prev.id] : [],
-          blockers: prev ? [{ id: prev.id, title: prev.title, state: prev.state }] : [],
+          blockers: prev ? [{ id: prev.id, title: prev.title, state: prev.state, cleared: false }] : [],
           blocked: !!prev,
           claimable: !prev,
           moves: [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_requirement" }],

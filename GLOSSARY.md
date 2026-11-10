@@ -153,7 +153,7 @@ The git remote a Landing Method's Push sends work to, `origin` unless the human 
 _Avoid_: Upstream, origin (for the concept)
 
 **Blocker**:
-A Ticket in the same Project that must reach Done before another Ticket can be claimed, or, under Unblock on push, must be Accepted with a pushed commit whose CI result isn't failed.
+A Ticket in the same Project that must reach Done before another Ticket can be claimed, or, under Unblock on push, must be Accepted with a pushed commit whose CI result isn't failed. A Blocker that no longer blocks though it isn't Done is cleared, shown as "no longer blocking".
 _Avoid_: Dependency
 
 **Replacement**:
