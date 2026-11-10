@@ -7,6 +7,7 @@ import type { NeedsMeReason, SpecDetail } from "../api/types";
 import { ago } from "../format";
 import { NewPrototype } from "../requirement/NewRequirement";
 import { CISums } from "../ticket/CIBadge";
+import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
 import { TicketList } from "./TicketList";
 
@@ -27,6 +28,7 @@ export function SpecPane({ api, spec, reasons, now, ticket, select }: SpecPanePr
       <h2>{spec.title}</h2>
       <div className="spec-actions">
         <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
       </div>
       <CISums tickets={spec.tickets} />

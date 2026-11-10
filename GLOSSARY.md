@@ -366,7 +366,7 @@ The human's triage action that Cancels an Incoming Issue, with an optional reaso
 _Avoid_: Reject, decline
 
 **Status label**:
-The one `code-central:` label Code Central keeps on a linked GitHub issue to show where its work stands, such as `code-central:draft` on an Incoming Issue not yet triaged off the Issues Spec or `code-central:wont-fix` after Won't fix. The Issue Watcher creates it in the repository if it is missing.
+The one `code-central:` label Code Central keeps on a linked GitHub issue to show where its work stands, such as `code-central:draft` on an Incoming Issue not yet triaged off the Issues Spec, `code-central:requirement` after To Requirement or `code-central:wont-fix` after Won't fix. The Issue Watcher creates it in the repository if it is missing.
 _Avoid_: Tag, state label
 
 **Write-back**:

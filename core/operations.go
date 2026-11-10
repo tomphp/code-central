@@ -150,7 +150,8 @@ var Operations = []Op{
 	// Write-backs and Won't fix (code-central-289).
 	{Name: "report_issue_written", Audience: IntegrationOnly, Write: true},
 	{Name: "wont_fix", Audience: HumanOnly, Write: true},
-
+	// To Requirement and the outbound Link (code-central-290).
+	{Name: "to_requirement", Audience: HumanOnly, Write: true},
 	// The Model Choice (Spec code-central-301).
 	{Name: "get_model_choice", Audience: FactoryOnly},
 	{Name: "report_model_choice", Audience: FactoryOnly, Write: true},

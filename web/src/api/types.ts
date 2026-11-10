@@ -35,10 +35,10 @@ export type NeedsMeReason =
 
 // A triage action the human may take on an Incoming Issue (Spec
 // code-central-279), each an operation's name.
-export type TriageAction = "keep_as_draft" | "wont_fix";
+export type TriageAction = "keep_as_draft" | "to_requirement" | "wont_fix";
 
 // TRIAGE_ACTIONS are the triage actions, in the order they are offered.
-export const TRIAGE_ACTIONS: TriageAction[] = ["keep_as_draft", "wont_fix"];
+export const TRIAGE_ACTIONS: TriageAction[] = ["keep_as_draft", "to_requirement", "wont_fix"];
 
 // A Project's mode: where init puts its files.
 export type Mode = "committed" | "local";
@@ -265,6 +265,9 @@ export interface LinkView {
   url?: string;
   external_state: ExternalState;
   detached: boolean;
+  // outbound marks a Link that doesn't own the item's definition: Code
+  // Central owns it and only writes to the external item (To Requirement).
+  outbound: boolean;
 }
 
 // set_tags' and remove_tags' result: the Spec or Ticket with its Labels

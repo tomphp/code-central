@@ -8,6 +8,7 @@ import type { NeedsMeReason, SpecDetail } from "../api/types";
 import { ago } from "../format";
 import { TicketList } from "../spec/TicketList";
 import { CISums } from "../ticket/CIBadge";
+import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
 import type { Link } from "../url";
 import { NewPrototype } from "./NewRequirement";
@@ -35,6 +36,7 @@ export function RequirementPane({ api, spec, reasons, now, ticket, select, specL
       <h2>{spec.title}</h2>
       <div className="spec-actions">
         <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
       </div>
       <Strip

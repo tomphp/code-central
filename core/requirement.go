@@ -78,8 +78,7 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 	if title == "" {
 		return SubmitRequirementResult{}, invalid("text", "a Requirement needs text; its first line becomes the Spec's title")
 	}
-	var specN int
-	var stageNs []int
+	var res SubmitRequirementResult
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -92,56 +91,71 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 			}
 			stages, mapID = Stages[1:], DisplayID(key, m.Number)
 		}
-		now := c.now()
-		specN = w.NextNumber(key)
-		sp := store.Spec{Number: specN, Title: title, Created: now, Updated: now, Body: in.Text}
+		sp := store.Spec{Title: title, Body: in.Text}
 		if mapID != "" {
 			sp.Tags = map[string]string{MapTag: mapID}
 		}
-		im := store.Import{Specs: []store.Spec{sp}}
-		specID := DisplayID(key, specN)
-		for i, stage := range stages {
-			n := specN + 1 + i
-			var blockedBy []int
-			if i > 0 {
-				blockedBy = []int{n - 1}
-			}
-			description := fmt.Sprintf(stageTickets[stage].description, specID)
-			if stage == "spec" && mapID != "" {
-				description = fmt.Sprintf(mapSpecDescription, specID, mapID)
-			}
-			im.Tickets = append(im.Tickets, store.Ticket{
-				Number: n, Title: stageTickets[stage].title + ": " + title, State: store.Ready, Spec: specN,
-				Labels: []string{StageLabel(stage)}, BlockedBy: blockedBy, Created: now, Updated: now,
-				Description: description,
-				Moves:       []store.Move{{To: store.Ready, Actor: string(Human), Time: now, Via: "submit_requirement"}},
-			})
-			stageNs = append(stageNs, n)
-		}
-		return w.PutImport(key, im)
-	})
-
-	if err != nil {
-		return SubmitRequirementResult{}, err
-	}
-	var res SubmitRequirementResult
-	err = c.store.View(func(r store.Reader) error {
-		s, _ := r.Spec(key, specN)
-		var err error
-		if res.Spec, err = acknowledgeCreate(specView(key, store.Spec{}), specView(key, s), in.Full); err != nil {
+		im, specN, stageNs := c.requirementImport(w, key, sp, stages, mapID)
+		if err := w.PutImport(key, im); err != nil {
 			return err
 		}
-		for _, n := range stageNs {
-			t, _ := r.Ticket(key, n)
-			stage, err := acknowledgeCreate(c.ticketView(r, key, store.Ticket{}), c.ticketView(r, key, t), in.Full)
-			if err != nil {
-				return err
-			}
-			res.Stages = append(res.Stages, stage)
-		}
-		return nil
+		var err error
+		res, err = c.requirementResult(w, key, specN, stageNs, in.Full)
+		return err
 	})
 	return res, err
+}
+
+// requirementImport is the staged write of Spec sp, given its title,
+// body, Tags and Link, as a Requirement with these Stages, with the
+// Spec's number and its Stage Tickets'. mapID is the Map it is made
+// from, if any.
+func (c *Core) requirementImport(r store.Reader, key string, sp store.Spec, stages []string, mapID string) (store.Import, int, []int) {
+	now := c.now()
+	specN := r.NextNumber(key)
+	sp.Number, sp.Created, sp.Updated = specN, now, now
+	im := store.Import{Specs: []store.Spec{sp}}
+	specID := DisplayID(key, specN)
+	var stageNs []int
+	for i, stage := range stages {
+		n := specN + 1 + i
+		var blockedBy []int
+		if i > 0 {
+			blockedBy = []int{n - 1}
+		}
+		description := fmt.Sprintf(stageTickets[stage].description, specID)
+		if stage == "spec" && mapID != "" {
+			description = fmt.Sprintf(mapSpecDescription, specID, mapID)
+		}
+		im.Tickets = append(im.Tickets, store.Ticket{
+			Number: n, Title: stageTickets[stage].title + ": " + sp.Title, State: store.Ready, Spec: specN,
+			Labels: []string{StageLabel(stage)}, BlockedBy: blockedBy, Created: now, Updated: now,
+			Description: description,
+			Moves:       []store.Move{{To: store.Ready, Actor: string(Human), Time: now, Via: "submit_requirement"}},
+		})
+		stageNs = append(stageNs, n)
+	}
+	return im, specN, stageNs
+}
+
+// requirementResult acknowledges the Requirement requirementImport wrote,
+// or with full gives its records.
+func (c *Core) requirementResult(r store.Reader, key string, specN int, stageNs []int, full bool) (SubmitRequirementResult, error) {
+	var res SubmitRequirementResult
+	s, _ := r.Spec(key, specN)
+	var err error
+	if res.Spec, err = acknowledgeCreate(specView(key, store.Spec{}), specView(key, s), full); err != nil {
+		return res, err
+	}
+	for _, n := range stageNs {
+		t, _ := r.Ticket(key, n)
+		stage, err := acknowledgeCreate(c.ticketView(r, key, store.Ticket{}), c.ticketView(r, key, t), full)
+		if err != nil {
+			return res, err
+		}
+		res.Stages = append(res.Stages, stage)
+	}
+	return res, nil
 }
 
 // finishedMap reads the Map ref names as submit_requirement's map, which

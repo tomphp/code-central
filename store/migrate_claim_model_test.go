@@ -8,13 +8,13 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Format 18 (code-central-309) added the model and effort a Claim's
-// latest turn ran with. The real chain migrates a format-17 store, whose
+// Format 19 (code-central-309) added the model and effort a Claim's
+// latest turn ran with. The real chain migrates a format-18 store, whose
 // Claims have neither, copying every file unchanged; a Claim from before
 // reads as having run on Claude Code's default.
-func TestTheRealChainMigratesAFormat17StoreToTheClaimModelFormat(t *testing.T) {
+func TestTheRealChainMigratesAFormat18StoreToTheClaimModelFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 17\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 18\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/tickets/2.yaml"),
@@ -22,9 +22,9 @@ func TestTheRealChainMigratesAFormat17StoreToTheClaimModelFormat(t *testing.T) {
 	before := snapshot(t, dir)
 
 	s := openFile(t, dir)
-	bak := filepath.Join(filepath.Dir(dir), "code-central.format-17.bak")
-	if m := s.Migrated(); m == nil || *m != (store.Migration{From: 17, To: store.Format, Backup: bak}) {
-		t.Fatalf("migrated = %+v, want a migration from format 17 with its backup", m)
+	bak := filepath.Join(filepath.Dir(dir), "code-central.format-18.bak")
+	if m := s.Migrated(); m == nil || *m != (store.Migration{From: 18, To: store.Format, Backup: bak}) {
+		t.Fatalf("migrated = %+v, want a migration from format 18 with its backup", m)
 	}
 	after := snapshot(t, dir)
 	for rel, content := range before {

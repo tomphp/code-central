@@ -9,14 +9,15 @@ import (
 	"strconv"
 )
 
-// Import is the one bulk write (ADR 0003), used by an Import and by a
-// submitted Requirement. Under the write lock, every
-// new file is written and fsynced into staging/<import-id>/; then a
-// manifest naming each file's final path is written and fsynced; then
-// each file is renamed into place; then the staging folder, manifest and
-// all, is deleted. Memory changes after that. At startup a manifest left
-// behind is rolled forward, and a staging folder with no manifest is
-// deleted, so a crash at any point leaves all of the Import or none.
+// Import is the one bulk write (ADR 0003), used by an Import, by a
+// submitted Requirement and by To Requirement, which also rewrites the
+// Incoming Issue it Cancels. Under the write lock, every file is written
+// and fsynced into staging/<import-id>/; then a manifest naming each
+// file's final path is written and fsynced; then each file is renamed
+// into place; then the staging folder, manifest and all, is deleted.
+// Memory changes after that. At startup a manifest left behind is rolled
+// forward, and a staging folder with no manifest is deleted, so a crash
+// at any point leaves all of the Import or none.
 
 const (
 	stagingDir   = "staging"
@@ -42,6 +43,9 @@ func (s *FileStore) writeImport(project string, im Import) error {
 		records = append(records, sp)
 	}
 	for _, t := range im.Tickets {
+		records = append(records, t)
+	}
+	for _, t := range im.Rewritten {
 		records = append(records, t)
 	}
 	step := 0

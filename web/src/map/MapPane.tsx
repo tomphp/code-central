@@ -13,6 +13,7 @@ import { ago } from "../format";
 import { Markdown } from "../Markdown";
 import { NewPrototype, WriteTheSpec } from "../requirement/NewRequirement";
 import type { Link } from "../url";
+import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
 import { useAct } from "../ticket/useAct";
 import { FOG, isFrontier, layoutMap, NODE, nodeProgress } from "./graph";
@@ -57,6 +58,7 @@ export function MapPane({ api, spec, reasons, now, ticket, select, specLink, wri
       </label>
       <div className="spec-actions">
         <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
         {spec.map.can_write_spec && (
           <WriteTheSpec api={api} map={{ id: spec.id, title: spec.title, destination }} onSubmitted={(r) => written(r.spec.id)} />

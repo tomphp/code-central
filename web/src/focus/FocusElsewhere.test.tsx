@@ -141,7 +141,7 @@ describe("the human's own action", () => {
 
   it("moves a Ticket item on with no note after Unlink, a write that isn't a Ticket action", async () => {
     const fake = tickets();
-    const link = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7", external_state: "closed", detached: false } as const;
+    const link = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7", external_state: "closed", detached: false, outbound: false } as const;
     const t = fake.addTicket("acme", { title: "Closed upstream", state: "Ready", link }); // acme-4
     fake.setNeedsMe([{ reason: "closed_externally", tickets: [{ id: t.id, link: t.link }] }, ...fake.needsMeGroups]);
     renderApp(fake);

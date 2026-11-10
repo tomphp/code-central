@@ -4,7 +4,7 @@
 // agent requests over its HTTP API. The service finds the fake gh built
 // in CODE_CENTRAL_FAKE_GH_BIN first on its PATH, never the real one.
 import { spawn } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 
@@ -32,7 +32,30 @@ export interface Service {
   // letGHTriage makes the fake gh answer reading repository as GitHub
   // does for one with issues on, which gh's login can triage.
   letGHTriage(repository: string): Promise<void>;
+  // scriptGH replaces the fake gh's Script with answers, each answering
+  // the calls whose args start with its args.
+  scriptGH(answers: GHAnswer[]): Promise<void>;
+  // ghCalls is every call of the fake gh so far, oldest first, as its
+  // args.
+  ghCalls(): Promise<string[][]>;
   stop(): Promise<void>;
+}
+
+// GHAnswer is how the fake gh answers a call (internal/fakegh's Answer).
+export interface GHAnswer {
+  args: string[];
+  stdout?: string;
+  stderr?: string;
+  exit?: number;
+}
+
+// triageRepository is the fake gh's answer to reading repository as GitHub
+// gives it for one with issues on, which gh's login can triage.
+export function triageRepository(repository: string): GHAnswer {
+  return {
+    args: ["api", `repos/${repository}`],
+    stdout: JSON.stringify({ full_name: repository, has_issues: true, permissions: { admin: false, maintain: false, push: false, triage: true, pull: true } }),
+  };
 }
 
 // fakeGH puts the fake gh, as gh, in a folder of its own under dir, and
@@ -81,16 +104,13 @@ export async function serve(): Promise<Service> {
           { args: ["auth", "status"], exit: 1, stderr: "You are not logged into any GitHub hosts. To log in, run: gh auth login\n" },
         ]),
       ),
-    letGHTriage: (repository) =>
-      writeFile(
-        join(gh.data, "answers.json"),
-        JSON.stringify([
-          {
-            args: ["api", `repos/${repository}`],
-            stdout: JSON.stringify({ full_name: repository, has_issues: true, permissions: { admin: false, maintain: false, push: false, triage: true, pull: true } }),
-          },
-        ]),
-      ),
+    letGHTriage: (repository) => writeFile(join(gh.data, "answers.json"), JSON.stringify([triageRepository(repository)])),
+    scriptGH: (answers) => writeFile(join(gh.data, "answers.json"), JSON.stringify(answers)),
+    ghCalls: async () => {
+      const dir = join(gh.data, "calls");
+      const names = (await readdir(dir).catch(() => [])).sort();
+      return Promise.all(names.map(async (n) => JSON.parse(await readFile(join(dir, n), "utf8")).args as string[]));
+    },
     stop: async () => {
       const exited = new Promise((r) => proc.on("exit", r));
       proc.kill("SIGTERM");

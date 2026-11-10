@@ -46,6 +46,7 @@ projects/<key>/specs/<n>.md: YAML frontmatter between --- lines, then the Markdo
       url: string (optional)
       external_state: string
       detached: bool (optional)
+      outbound: bool (optional)
       written: []string (optional)
   created: string
   updated: string
@@ -69,6 +70,7 @@ projects/<key>/tickets/<n>.yaml
       url: string (optional)
       external_state: string
       detached: bool (optional)
+      outbound: bool (optional)
       written: []string (optional)
   awaiting_triage: bool (optional)
   created: string
@@ -90,8 +92,6 @@ projects/<key>/tickets/<n>.yaml
       session_id: string (optional)
       working_dir: string (optional)
       resume_command: string (optional)
-      model: string (optional)
-      effort: string (optional)
       started: string
       ended: string (optional)
       ended_by: string (optional)
