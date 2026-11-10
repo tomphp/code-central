@@ -38,8 +38,9 @@
 // Issues check likewise, refused by seedIssuesCheck, and creates the
 // Issues Spec the first time it turns GitHub Issues on.
 // addIncomingIssue plays the Integration's create_linked_ticket, marking
-// a New issue as the service does, and keep_as_draft and wont_fix clear
-// it.
+// a New issue as the service does, and keep_as_draft, to_requirement and
+// wont_fix clear it; to_requirement writes a Requirement whose Spec has
+// an outbound Link.
 //
 // reportPushedCommit and reportCIRuns work a Ticket's CI result out as
 // the service does, with its failure options while it is CI failed;
@@ -84,6 +85,8 @@ import {
   type HeldSessionEvent,
   type LatestEvent,
   type LinkedRow,
+  type LinkView,
+  type TriageAction,
   type CIConclusion,
   type CIFailureOption,
   type CIResult,
@@ -647,7 +650,7 @@ export class FakeApi implements Api {
     const t = this.addTicket(project, {
       title,
       spec: { id: spec, title: this.specs.get(spec)?.title ?? "" },
-      link: { ...link, external_state: "open", detached: false },
+      link: { ...link, external_state: "open", detached: false, outbound: false },
       ...(incoming && { triage_actions: [...TRIAGE_ACTIONS] }),
       ...(awaiting && { awaiting_triage: true }),
     });
@@ -680,20 +683,48 @@ export class FakeApi implements Api {
   // comment, clearing its awaiting triage and taking it out of Needs Me,
   // refused on anything else, as core's WontFix is.
   wontFix(t: TicketView, reason?: string): TicketView {
-    if (!t.triage_actions?.includes("wont_fix")) {
+    return this.triageCancel(t, "wont_fix", reason, {});
+  }
+
+  // toRequirement makes an Incoming Issue a Requirement, as core's
+  // ToRequirement does: the issue's title as a heading, then its
+  // description, then the context under its own heading, on a Spec with
+  // an outbound Link to the issue; the Incoming Issue's Link is detached,
+  // and it is Cancelled with the grilling Stage as its Replacement.
+  toRequirement(t: TicketView, context?: string): TicketView {
+    const link = this.incoming(t, "to_requirement");
+    const extra = context?.trim();
+    const parts = [`# ${t.title}`, t.description.trim(), ...(extra ? ["## Context", extra] : [])].filter(Boolean);
+    const { stages } = this.addRequirement(this.projectOf(t.id), { title: t.title, body: parts.join("\n\n") + "\n", link: { ...link, outbound: true } });
+    return this.triageCancel(t, "to_requirement", extra, { replacements: [stages[0].id], link: { ...link, detached: true } });
+  }
+
+  // incoming is t's Link, refusing the triage action via unless t is an
+  // Incoming Issue.
+  private incoming(t: TicketView, via: TriageAction): LinkView {
+    if (!t.link || !t.triage_actions?.includes(via)) {
       const why = t.link?.detached
         ? `${t.id} was unlinked from ${t.link.integration} ${t.link.id}, so it is no longer an Incoming Issue to triage`
         : `${t.id} is not an Incoming Issue: only a linked Ticket on the Project's Issues Spec is triaged`;
       throw new ApiError(409, "action_not_allowed", why);
     }
+    return t.link;
+  }
+
+  // triageCancel Cancels an Incoming Issue via the triage action, with
+  // comment as its comment and patch applied, clearing its awaiting
+  // triage and taking it out of Needs Me, refused on anything else.
+  private triageCancel(t: TicketView, via: TriageAction, comment: string | undefined, patch: Partial<TicketView>): TicketView {
+    this.incoming(t, via);
     const at = this.now.toISOString();
-    const body = reason?.trim();
+    const body = comment?.trim();
     this.dropNeedsMe(t.id);
     const { awaiting_triage: _a, triage_actions: _t, ...rest } = this.tickets.get(t.id)!;
     this.tickets.set(t.id, rest);
     return this.updateTicket(t.id, {
+      ...patch,
       state: "Cancelled",
-      moves: [...t.moves, { from: t.state, to: "Cancelled", actor: "human", time: at, via: "wont_fix" }],
+      moves: [...t.moves, { from: t.state, to: "Cancelled", actor: "human", time: at, via }],
       comments: body ? [...t.comments, { number: t.comments.length + 1, actor: "human", time: at, body }] : t.comments,
     });
   }
@@ -920,7 +951,15 @@ export class FakeApi implements Api {
     const title = text.trim().split("\n")[0].trim();
     if (!title) throw new ApiError(422, "invalid", "a Requirement needs text; its first line becomes the Spec's title", "text");
     const from = map && this.finishedMap(project, map);
-    const spec = this.addSpec(project, { title, body: text, ...(from && { tags: { map: from } }) });
+    const { spec, stages } = this.addRequirement(project, { title, body: text, ...(from && { tags: { map: from } }) }, from);
+    return { spec: acknowledgeSpecCreate(spec), stages: stages.map(acknowledgeTicketCreate) };
+  }
+
+  // addRequirement writes Spec seed as a Requirement with its Stage
+  // Tickets: only the spec and tickets Stages when written from Map from.
+  private addRequirement(project: string, seed: SeedSpec, from?: string): { spec: SpecView; stages: TicketView[] } {
+    const spec = this.addSpec(project, seed);
+    const title = seed.title;
     const stages: TicketView[] = [];
     for (const s of from ? STAGES.slice(1) : STAGES) {
       const prev = stages.at(-1);
@@ -942,7 +981,7 @@ export class FakeApi implements Api {
         }),
       );
     }
-    return { spec: acknowledgeSpecCreate(spec), stages: stages.map(acknowledgeTicketCreate) };
+    return { spec, stages };
   }
 
   // finishedMap is the ID of the Map submitRequirement's map names, which

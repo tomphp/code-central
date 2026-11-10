@@ -10,7 +10,7 @@ import { rowDetail } from "../format";
 import { TicketDetail } from "./TicketDetail";
 
 const URL = "https://github.com/acme/web/issues/7";
-const link: LinkView = { integration: "github", id: "acme/web#7", url: URL, external_state: "open", detached: false };
+const link: LinkView = { integration: "github", id: "acme/web#7", url: URL, external_state: "open", detached: false, outbound: false };
 
 function world(l: LinkView = link) {
   const fake = new FakeApi();

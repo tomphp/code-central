@@ -1,5 +1,6 @@
 // Open in GitHub (Spec code-central-279): every linked Spec's and
-// Ticket's panel links to its external item, as its Link's URL, against
+// Ticket's panel links to its external item, as its Link's URL, beside
+// its Link badge, which marks an outbound Link (code-central-290), against
 // FakeApi.
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
@@ -11,7 +12,7 @@ import { SpecPane } from "../spec/SpecPane";
 import { TicketDetail } from "./TicketDetail";
 
 const URL = "https://github.com/acme/web/issues/7";
-const link: LinkView = { integration: "github", id: "acme/web#7", url: URL, external_state: "open", detached: false };
+const link: LinkView = { integration: "github", id: "acme/web#7", url: URL, external_state: "open", detached: false, outbound: false };
 
 function world() {
   const fake = new FakeApi();
@@ -98,5 +99,26 @@ describe("Open in GitHub", () => {
       expectOpenInGitHub(pane);
       cleanup();
     }
+  });
+});
+
+describe("the Link badge on a Spec's pane", () => {
+  it("marks the outbound Link of a Requirement made by To Requirement", async () => {
+    const fake = world();
+    const on = await fake.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false });
+    const issue = fake.addIncomingIssue("acme", on.github_issues.spec!, "Login is broken", { integration: "github", id: "acme/web#7", url: URL });
+    const grilling = (await fake.getTicket("acme", (await fake.act("acme", issue.id, "to_requirement", {})).id)).replacements[0];
+    const pane = specPane(fake, await fake.getSpec("acme", (await fake.getTicket("acme", grilling)).spec.id));
+    expect(within(pane).getByRole("link", { name: "github acme/web#7 (outbound)" })).toHaveAttribute("href", URL);
+    expectOpenInGitHub(pane);
+  });
+
+  it("shows an owned Link plainly, and none on an unlinked Spec", async () => {
+    const fake = world();
+    const linked = fake.addSpec("acme", { title: "Linked", link });
+    expect(within(specPane(fake, await fake.getSpec("acme", linked.id))).getByRole("link", { name: "github acme/web#7" })).toBeInTheDocument();
+    cleanup();
+    const plain = fake.addSpec("acme", { title: "Local" });
+    expect(within(specPane(fake, await fake.getSpec("acme", plain.id))).queryByText(/github/)).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
-// New issue, Keep as Draft (code-central-287) and Won't fix
-// (code-central-289) against FakeApi: a New issue's row in Needs Me, its
+// New issue, Keep as Draft (code-central-287), Won't fix
+// (code-central-289) and To Requirement (code-central-290) against
+// FakeApi: a New issue's row in Needs Me, its
 // Focus Item, its action panel, and the triage actions in the Ticket
 // panel of every Incoming Issue.
 import { render, screen, within } from "@testing-library/react";
@@ -113,7 +114,71 @@ describe("Won't fix on a New issue", () => {
   });
 });
 
+// toRequirement opens To Requirement's context box in within, types
+// context into it, if any, and confirms it.
+async function toRequirement(within_: HTMLElement, context = "") {
+  await userEvent.click(within(within_).getByRole("button", { name: "To Requirement…" }));
+  const form = within(within_).getByRole("form", { name: "To Requirement" });
+  if (context) await userEvent.type(within(form).getByRole("textbox", { name: /Context/ }), context);
+  await userEvent.click(within(form).getByRole("button", { name: "To Requirement" }));
+}
+
+// requirementOf is the Requirement To Requirement made of acme-2: its
+// Spec, through the grilling Stage that replaced it.
+async function requirementOf(fake: FakeApi) {
+  const t = await fake.getTicket("acme", "acme-2");
+  const grilling = await fake.getTicket("acme", t.replacements[0]);
+  return fake.getSpec("acme", grilling.spec.id);
+}
+
+describe("To Requirement on a New issue", () => {
+  it("makes a Requirement of it with the context, Cancelling it, out of Needs Me", async () => {
+    const fake = await world();
+    const p = await renderPanel(fake);
+    await toRequirement(p, "Seen on every login.");
+    expect(fake.calls).toContain("to_requirement");
+    const t = await fake.getTicket("acme", "acme-2");
+    expect(t).toMatchObject({ state: "Cancelled", link: { detached: true } });
+    expect(t.moves.at(-1)).toMatchObject({ to: "Cancelled", via: "to_requirement" });
+    expect(t.triage_actions).toBeUndefined();
+    expect((await fake.needsMe()).count).toBe(0);
+    const sp = await requirementOf(fake);
+    expect(sp).toMatchObject({ title: "Login is broken", body: "# Login is broken\n\n## Context\n\nSeen on every login.\n" });
+    expect(sp.link).toMatchObject({ id: "acme/web#7", outbound: true, detached: false });
+  });
+
+  it("needs no context", async () => {
+    const fake = await world();
+    await toRequirement(await renderPanel(fake));
+    expect((await requirementOf(fake)).body).toBe("# Login is broken\n");
+    expect((await fake.getTicket("acme", "acme-2")).comments).toEqual([]);
+  });
+
+  it("can be backed out of before confirming", async () => {
+    const fake = await world();
+    const p = await renderPanel(fake);
+    await userEvent.click(within(p).getByRole("button", { name: "To Requirement…" }));
+    expect(within(p).queryByRole("button", { name: "Won't fix…" })).toBeNull();
+    await userEvent.click(within(p).getByRole("button", { name: "Back" }));
+    expect(within(p).queryByRole("form", { name: "To Requirement" })).toBeNull();
+    expect(within(p).getByRole("button", { name: "Won't fix…" })).toBeInTheDocument();
+    expect(fake.calls).not.toContain("to_requirement");
+  });
+});
+
 describe("a New issue in Focus Mode", () => {
+  it("offers To Requirement with its context box, and moves on", async () => {
+    const fake = await world();
+    fake.addTicket("acme", { title: "Next up", state: "Draft" }); // acme-3
+    fake.setNeedsMe([...fake.needsMeGroups, { reason: "closed_externally", tickets: [{ id: "acme-3" }] }]);
+    renderApp(fake);
+    const item = await within(focus()).findByRole("region", { name: "New issue" });
+    await toRequirement(item, "Urgent.");
+    expect((await fake.getTicket("acme", "acme-2")).comments.at(-1)?.body).toBe("Urgent.");
+    change(fake, without(fake, "acme-2"), "acme-2");
+    expect(await within(focus()).findByRole("heading", { name: "Next up" })).toBeInTheDocument();
+  });
+
   it("offers Won't fix with its reason box, and moves on", async () => {
     const fake = await world();
     fake.addTicket("acme", { title: "Next up", state: "Draft" }); // acme-3
@@ -129,7 +194,7 @@ describe("a New issue in Focus Mode", () => {
 
   it("is a Focus Item with its panel, and Keep as Draft moves on", async () => {
     const fake = await world();
-    const closed = { ...ISSUE, id: "acme/web#8", external_state: "closed", detached: false } as const;
+    const closed = { ...ISSUE, id: "acme/web#8", external_state: "closed", detached: false, outbound: false } as const;
     const t = fake.addTicket("acme", { title: "Gone upstream", state: "Draft", link: closed }); // acme-3
     fake.setNeedsMe([...fake.needsMeGroups, { reason: "closed_externally", tickets: [{ id: t.id, link: t.link }] }]);
     renderApp(fake);
@@ -158,6 +223,14 @@ describe("the triage actions in the Ticket panel", () => {
     const t = await fake.getTicket("acme", "acme-2");
     expect(t.state).toBe("Cancelled");
     expect(t.comments.at(-1)?.body).toBe("Duplicate of #3.");
+  });
+
+  it("include To Requirement with its context box", async () => {
+    const fake = await world(false);
+    const d = await renderDetail(fake);
+    await toRequirement(within(d).getByRole("region", { name: "Triage" }), "From the support queue.");
+    expect((await fake.getTicket("acme", "acme-2")).state).toBe("Cancelled");
+    expect((await requirementOf(fake)).body).toContain("## Context\n\nFrom the support queue.\n");
   });
 
   it("show Won't fix's refusal", async () => {

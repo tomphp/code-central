@@ -353,18 +353,20 @@ While an Incoming Issue waits for triage, it follows its issue on GitHub on each
 
 ### What Code Central writes to an issue
 
-Code Central works out from each Ticket's state what its issue should show, and the Issue Watcher makes it so on its next check. Each linked issue carries one **status label**, which the Issue Watcher creates in the repository if it is missing, taking any other `code-central:` label off the issue:
+Code Central works out from each Ticket's and Spec's state what its issue should show, and the Issue Watcher makes it so on its next check. Each linked issue carries one **status label**, which the Issue Watcher creates in the repository if it is missing, taking any other `code-central:` label off the issue:
 
 - `code-central:draft` on an Incoming Issue, kept as a Draft or not yet triaged;
+- `code-central:requirement` on one you turned To Requirement, while the Requirement's Stages aren't all Done;
 - `code-central:wont-fix` on one you chose Won't fix for, which is also closed as not planned.
 
-Each comment it posts ends with a link back to the Ticket in Code Central, and is posted exactly once: not again after the Issue Watcher or the service restarts, even if it stopped between posting it and recording it, and not again after you turn GitHub Issues off and on. Anything that comes due while GitHub Issues is off is written once you turn it back on. Your Rounds and their answers, Failure Reports, Transcripts, Claims and comments on a Ticket are never written to GitHub. Unlinking a Ticket stops every write to its issue.
+Each comment it posts ends with a link back to the Ticket or Requirement in Code Central, and is posted exactly once: not again after the Issue Watcher or the service restarts, even if it stopped between posting it and recording it, and not again after you turn GitHub Issues off and on. Anything that comes due while GitHub Issues is off is written once you turn it back on. Your Rounds and their answers, Failure Reports, Transcripts, Claims and comments on a Ticket are never written to GitHub. Unlinking a Ticket or a Requirement stops every write to its issue.
 
 ### Triaging Incoming Issues
 
 An Incoming Issue is a Draft (or Ready) Ticket on the Issues Spec, linked to its issue: its panel's GitHub badge and **Open in GitHub** link open the issue, and its title and description are GitHub's. Its Ticket panel has a **Triage** section with the triage actions, whether or not New issues need me is on:
 
 - **Keep as Draft** leaves it on the Issues Spec as it is, a Draft as it came in, and writes nothing to GitHub. With New issues need me on, it also takes the issue out of Needs Me for good: closing and reopening the issue, editing it, or turning New issues need me off and on never brings it back.
+- **To Requirement** opens a box for optional context, then turns the issue into a [Requirement](running-the-factory.md), with its three Stages, whose text is the issue's title as a heading, then its description, then your context under a **Context** heading. The issue's link moves to the Requirement, whose badge reads **github acme/acme-api#7 (outbound)**: from then on Code Central owns its text, so the Stages and you edit it as any Requirement, and edits to the issue on GitHub no longer come in. Code Central only writes to the issue: the Issue Watcher posts your context on it and changes its label to `code-central:requirement`. The Incoming Issue is Cancelled, with the grilling Stage as its Replacement, and keeps its badge, unlinked, and its **Open in GitHub** link, for history.
 - **Won't fix** opens a box for an optional reason, then Cancels the Incoming Issue, keeping the reason as its comment, and takes it out of Needs Me. The Issue Watcher then posts the reason on the issue, changes its label to `code-central:wont-fix` and closes it as not planned. With no reason, it only relabels and closes the issue.
 
 With **New issues need me** on, each issue that comes in waits in Needs Me under **New issue**, after Blocked by a Cancelled Ticket and before Closed externally, longest-waiting first. Its row names the issue and when it came in:

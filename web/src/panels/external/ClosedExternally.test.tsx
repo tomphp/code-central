@@ -17,7 +17,7 @@ function world(external: ExternalState = "closed") {
   const t = fake.addTicket("acme", {
     title: "Issue",
     state: "Ready",
-    link: { integration: "github", id: "acme/web#7", url: URL, external_state: external, detached: false },
+    link: { integration: "github", id: "acme/web#7", url: URL, external_state: external, detached: false, outbound: false },
   }); // acme-1
   fake.setNeedsMe([{ reason: "closed_externally", tickets: [{ id: t.id, link: t.link }] }]);
   return fake;

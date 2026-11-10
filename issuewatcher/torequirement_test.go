@@ -12,11 +12,11 @@ import (
 // returning the Requirement's Spec.
 func (w *watching) toRequirement(ticket, context string) string {
 	w.t.Helper()
-	res, err := w.srv.Core.ToRequirement(human, "acme", core.ToRequirementInput{Ticket: core.Ref(ticket), Context: context, Full: true})
-	if err != nil {
+	if _, err := w.srv.Core.ToRequirement(human, "acme", core.ToRequirementInput{Ticket: core.Ref(ticket), Context: context}); err != nil {
 		w.t.Fatal(err)
 	}
-	return res.Spec.Record.ID
+	rows := w.linked()
+	return rows[len(rows)-1].ID
 }
 
 // To Requirement with context posts the context once, with the marker

@@ -20,19 +20,12 @@ func init() {
 	cases["to_requirement"] = opCase{
 		setup: newIssue,
 		ok:    call{http: toRequirement("5", `{"context":"Seen on every login."}`)},
-		check: func(t *testing.T, out map[string]any) {
-			ticketAcknowledgement("acme-5", "Cancelled", "state", "replacements", "comments", "moves", "needs_me_reason", "link", "awaiting_triage", "triage_actions")(t, out["ticket"].(map[string]any))
-			acknowledgement("acme-6", "title", "body", "link")(t, out["spec"].(map[string]any))
-			if stages, _ := out["stages"].([]any); len(stages) != 3 {
-				t.Fatalf("stages %v", out["stages"])
-			}
-		},
+		check: ticketAcknowledgement("acme-5", "Cancelled", "state", "replacements", "comments", "moves", "needs_me_reason", "link", "awaiting_triage", "triage_actions"),
 		full: func(t *testing.T, out map[string]any) {
-			tk := out["ticket"].(map[string]any)
-			field("state", "Cancelled")(t, tk)
-			sp := out["spec"].(map[string]any)
-			field("id", "acme-6")(t, sp)
-			boolField(t, sp["link"].(map[string]any), "outbound", true)
+			field("state", "Cancelled")(t, out)
+			if got := strs(out["replacements"]); !slices.Equal(got, []string{"acme-7"}) {
+				t.Fatalf("replacements = %v, want the grilling Stage, acme-7", out["replacements"])
+			}
 		},
 		bad:  call{http: toRequirement("2", `{}`)},
 		code: core.ActionNotAllowed,

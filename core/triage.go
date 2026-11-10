@@ -100,15 +100,8 @@ func (c *Core) KeepAsDraft(ctx context.Context, key string, in TicketInput) (Wri
 type ToRequirementInput struct {
 	Ticket  Ref    `json:"ticket"`
 	Context string `json:"context,omitempty"`
-	// Full asks for the records in place of the Acknowledgements.
+	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
-}
-
-// ToRequirementResult is the Incoming Issue To Requirement Cancelled, and
-// the Requirement it became.
-type ToRequirementResult struct {
-	Ticket Written[TicketView] `json:"ticket"`
-	SubmitRequirementResult
 }
 
 // contextHeading heads the human's context in a Requirement made by To
@@ -135,12 +128,13 @@ func requirementText(t store.Ticket, extra string) string {
 // written; detaches the Incoming Issue's Link; and Cancels it with the
 // grilling Stage as its Replacement, the context as its comment, and its
 // awaiting triage cleared. Its Move to Cancelled is via to_requirement,
-// so the context comment is due on the issue (writeback.go).
-func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementInput) (ToRequirementResult, error) {
+// so the context comment is due on the issue (writeback.go). Its result
+// is the Incoming Issue's, whose Replacement leads to the Requirement.
+func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementInput) (Written[TicketView], error) {
 	if err := humanOnly(ctx, OptionToRequirement); err != nil {
-		return ToRequirementResult{}, err
+		return Written[TicketView]{}, err
 	}
-	var res ToRequirementResult
+	var res Written[TicketView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -162,7 +156,7 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 		extra := strings.TrimSpace(in.Context)
 		link := t.Link
 		link.Outbound, link.Written = true, slices.Clone(t.Link.Written)
-		im, specN, stageNs := c.requirementImport(w, key, store.Spec{Title: t.Title, Body: requirementText(t, extra), Link: link}, Stages, "")
+		im, _, stageNs := c.requirementImport(w, key, store.Spec{Title: t.Title, Body: requirementText(t, extra), Link: link}, Stages, "")
 
 		// The grilling Stage is new and waits on nothing, so as the
 		// Replacement it can't make a cycle.
@@ -182,10 +176,7 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 		if err := w.PutImport(key, im); err != nil {
 			return err
 		}
-		if res.SubmitRequirementResult, err = c.requirementResult(w, key, specN, stageNs, in.Full); err != nil {
-			return err
-		}
-		res.Ticket, err = acknowledge(before, c.ticketView(w, key, t), in.Full)
+		res, err = acknowledge(before, c.ticketView(w, key, t), in.Full)
 		return err
 	})
 	return res, err
