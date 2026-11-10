@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, CIProvider, CIWatcherReport, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
+import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
 import { ApiError } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -60,6 +60,11 @@ export interface Driver {
   // reportCIWatcherStatus reports the CI Watcher's status as the CI
   // Watcher does on each poll (code-central-253).
   reportCIWatcherStatus(key: string, status: CIWatcherReport): Promise<void>;
+  // reportPushedCommit reports the commit a Factory pushed for an
+  // Accepted Ticket, and reportCIRuns the CI Runs the CI Watcher saw
+  // (code-central-256).
+  reportPushedCommit(key: string, id: string, commit: string): Promise<void>;
+  reportCIRuns(key: string, runs: Omit<CIRunView, "ignored">[]): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -356,6 +361,63 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
       expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "not_reported" });
+    });
+
+    it("tracks a pushed Ticket's CI Runs and works its CI result out", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
+      await d.api.act("acme", id, "accept", {});
+      await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
+
+      // Only an Accepted or In Review Ticket is pushed.
+      const ready = await d.createTicket("acme", "Not yet", "Ready");
+      const early = await d.reportPushedCommit("acme", ready, "abc123").catch((e) => e);
+      expect(String(early.code ?? early.message)).toContain("action_not_allowed");
+
+      // With CI Tracking off, a push isn't tracked, and no runs are taken.
+      await d.reportPushedCommit("acme", id, "abc123");
+      expect(await d.api.getTicket("acme", id)).not.toHaveProperty("pushed_commit");
+
+      const off = await d.reportCIRuns("acme", []).catch((e) => e);
+      expect(String(off.code ?? off.message)).toContain("action_not_allowed");
+
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"] });
+      await d.reportPushedCommit("acme", id, "abc123");
+      const pushed = await d.api.getTicket("acme", id);
+      expect(pushed).toMatchObject({ pushed_commit: { commit: "abc123" }, ci_result: "running" });
+      expect(pushed).not.toHaveProperty("ci_runs");
+
+      const run = (n: number, workflow: string, status: CIRunView["status"], conclusion?: CIRunView["conclusion"]) => ({
+        id: n,
+        attempt: 1,
+        workflow,
+        name: workflow,
+        branch: "main",
+        commit: "abc123",
+        status,
+        ...(conclusion && { conclusion }),
+        url: `https://github.com/acme/web/actions/runs/${n}`,
+        jobs: [{ name: "test", ...(conclusion && { conclusion }), url: `https://github.com/acme/web/actions/runs/${n}/job/1` }],
+        ticket: id,
+      });
+      const concluded = await d.reportCIRuns("acme", [{ ...run(1, "ci.yml", "in_progress"), conclusion: "success" }]).catch((e) => e);
+      expect(String(concluded.code ?? concluded.message)).toContain("invalid");
+      await d.reportCIRuns("acme", [run(1, "ci.yml", "in_progress"), run(2, "nightly.yml", "completed", "failure")]);
+      const running = await d.api.getTicket("acme", id);
+      expect(running.ci_result).toBe("running");
+      expect(running.ci_runs).toEqual([
+        { ...run(1, "ci.yml", "in_progress"), ignored: false },
+        { ...run(2, "nightly.yml", "completed", "failure"), ignored: true },
+      ]);
+
+      await d.reportCIRuns("acme", [run(1, "ci.yml", "completed", "success")]);
+      const passed = await d.api.getTicket("acme", id);
+      expect(passed.ci_result).toBe("passed");
+      expect(passed.ci_runs?.map((r) => [r.id, r.status])).toEqual([
+        [1, "completed"],
+        [2, "completed"],
+      ]);
     });
 
     it("gets one Ticket in full, with its Needs Me reason", async () => {

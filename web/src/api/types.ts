@@ -101,6 +101,52 @@ export interface CISettings extends CITrackingChange {
   watcher: CIWatcherStatus;
 }
 
+// A Ticket's CI result (code-central-256), from the runs of its latest
+// pushed commit that aren't ignored: running while any is unfinished or
+// none is reported, failed if any concluded failure, cancelled or timed
+// out, passed otherwise.
+export type CIResult = "running" | "passed" | "failed";
+
+// Where a CI Run stands, and how a finished run or job ended.
+export type CIRunStatus = "queued" | "in_progress" | "completed";
+export type CIConclusion = "success" | "failure" | "cancelled" | "timed_out" | "skipped" | "neutral";
+
+// A commit the Factory pushed for a Ticket while CI Tracking was on.
+export interface PushedCommitView {
+  commit: string;
+  pushed: string;
+}
+
+// One job of a CI Run; its conclusion is left out until it ends.
+export interface CIJobView {
+  name: string;
+  conclusion?: CIConclusion;
+  url: string;
+}
+
+// One attempt of one workflow run, as the CI Watcher reported it, tracked
+// against a Ticket or a CI Rule's Spec. An ignored run is of an Ignored
+// workflow, and never counts towards a CI result.
+export interface CIRunView {
+  id: number;
+  attempt: number;
+  // workflow is the workflow file's base name, such as ci.yml; name is
+  // the name it shows.
+  workflow: string;
+  name: string;
+  branch: string;
+  commit: string;
+  status: CIRunStatus;
+  conclusion?: CIConclusion;
+  started?: string;
+  finished?: string;
+  url: string;
+  jobs: CIJobView[];
+  ticket?: string;
+  rule?: string;
+  ignored: boolean;
+}
+
 export interface ProjectView {
   key: string;
   display_name: string;
@@ -479,6 +525,13 @@ export interface TicketView {
   // finish naming them gave them. Work with a branch is Accepted, then lands.
   branch?: string;
   commit?: string;
+  // pushed_commit is the latest commit the Factory pushed while CI
+  // Tracking was on, and ci_result its CI result; ci_runs are every CI Run
+  // tracked against the Ticket, the latest pushed commit's first. All are
+  // left out while it has none (code-central-256).
+  pushed_commit?: PushedCommitView;
+  ci_result?: CIResult;
+  ci_runs?: CIRunView[];
   claims: ClaimView[];
   rounds: RoundView[];
   failure_reports: FailureReportView[];
@@ -496,7 +549,7 @@ export interface TicketView {
 // a TicketAcknowledgement's changed lists them in.
 export const TICKET_FIELDS = [
   "id", "title", "state", "spec", "labels", "tags", "blocked_by", "blockers", "replacements",
-  "created", "updated", "description", "branch", "commit", "claims", "rounds", "failure_reports",
+  "created", "updated", "description", "branch", "commit", "pushed_commit", "ci_result", "ci_runs", "claims", "rounds", "failure_reports",
   "comments", "moves", "edits", "blocked", "claimable", "silent_since", "needs_me_reason", "link",
 ] as const satisfies readonly (keyof TicketView)[];
 

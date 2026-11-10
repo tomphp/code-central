@@ -150,6 +150,17 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ticket-body .claims > li { margin-bottom: 4px; }
 /* The latest Session Event, shown short and faintly. */
 .latest-event { color: var(--muted); }
+/* A Ticket's CI section (code-central-256): ignored runs greyed. */
+.ci-section h3 { font-size: 13px; margin: 14px 0 6px; }
+.ci-result, .ci-status { font-size: 11px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
+.ci-passed { color: var(--r-review); border-color: var(--r-review); }
+.ci-failed, .ci-cancelled, .ci-timed-out { color: var(--r-failed); border-color: var(--r-failed); }
+.ci-running, .ci-queued { color: var(--s-in-progress); border-color: var(--s-in-progress); }
+.ci-runs { list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
+.ci-run { margin-bottom: 6px; }
+.ci-run .label { margin-left: 6px; }
+.ci-run.ignored, .ci-run.ignored a, .ci-run.ignored .ci-status { color: var(--muted); border-color: var(--border); }
+.ci-jobs { list-style: none; padding-left: 14px; margin: 2px 0; }
 /* A Claim's Live section: its Transcript, following the newest event (ticket 111). */
 .ticket-body .live > summary { margin: 4px 0; }
 .transcript { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 13px; }

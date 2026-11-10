@@ -24,7 +24,8 @@ func (f *factory) landAndSweep(ctx context.Context) {
 }
 
 // landing reads the Project's Landing Method, with its Push option, which the human can
-// change at any time, so it is read again on every poll. ok is false when
+// change at any time, so it is read again on every poll, with whether CI
+// Tracking is on. ok is false when
 // it can't be read, and then nothing lands this poll.
 func (f *factory) landing(ctx context.Context) (landing core.LandingView, ok bool) {
 	p, err := f.client.GetProject(ctx, f.project)
@@ -34,6 +35,7 @@ func (f *factory) landing(ctx context.Context) (landing core.LandingView, ok boo
 		}
 		return core.LandingView{}, false
 	}
+	f.tracksCI = p.CI.Tracking
 	return p.Landing, true
 }
 
@@ -145,6 +147,9 @@ func (f *factory) pushBranch(ctx context.Context, tk core.TicketView, remote, co
 	}
 	if pushed {
 		f.printf("%s: pushed %s to %s", tk.ID, tk.Branch, remote)
+		// Only a push made now: one made before CI Tracking was turned on
+		// isn't tracked.
+		f.reportPushed(ctx, tk, remote, tk.Branch, commit)
 	}
 }
 
@@ -282,8 +287,33 @@ func (f *factory) landPushed(ctx context.Context, tk core.TicketView, landing co
 		if pushed {
 			f.printf("%s: pushed %s to %s", tk.ID, f.base, landing.Remote)
 		}
+		f.reportPushed(ctx, tk, landing.Remote, f.base, commit)
 	}
 	f.landAt(ctx, tk, commit)
+}
+
+// reportPushed reports, while CI Tracking is on, the commit the remote's
+// branch now holds as tk's pushed commit: the one CI runs on. Without a
+// remote-tracking ref to read, it is pushed, the commit just pushed. It
+// is reported once, when it isn't tk's pushed commit already.
+func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, remote, branch, pushed string) {
+	if !f.tracksCI {
+		return
+	}
+	commit, err := f.repository.commit("refs/remotes/" + remote + "/" + branch)
+	if err != nil {
+		commit = pushed
+	}
+	if tk.PushedCommit != nil && tk.PushedCommit.Commit == commit {
+		return
+	}
+	if _, err := f.client.ReportPushedCommit(ctx, f.project, core.ReportPushedCommitInput{Ticket: core.Ref(tk.ID), Commit: commit}); err != nil {
+		if ctx.Err() == nil {
+			f.printf("%s: report_pushed_commit: %v", tk.ID, err)
+		}
+		return
+	}
+	f.printf("%s: CI tracks %s at %s", tk.ID, branch, short(commit))
 }
 
 // pushBase pushes the base to remote unless the remote's base already

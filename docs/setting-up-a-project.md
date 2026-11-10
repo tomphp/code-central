@@ -231,14 +231,24 @@ Run `gh auth login` as the user the service runs as.
 
 [Finding `gh`](running-as-a-service.md#finding-gh) says where Code Central looks for `gh`, and how the **gh path** Option points it somewhere else.
 
-While CI Tracking is on, the CI section shows the **CI Watcher**'s status below Save. The CI Watcher is the process that watches the Project's CI. Every 2 minutes it checks again that `gh` is installed and logged in, and can read the repository:
+While CI Tracking is on, the CI section shows the **CI Watcher**'s status below Save. The CI Watcher is the process that watches the Project's CI. On every check it makes sure again that `gh` is installed and logged in, and can read the repository, then asks GitHub about the runs of each pushed commit still waiting on CI. It checks every 30 seconds while a pushed commit waits, and every 2 minutes otherwise:
 
 - **Watching acme/acme-api.**: it can reach GitHub.
 - **Error**: it can't. The status says what is wrong and how to fix it, as a refused Save does. You get one Notification when it goes into an error, not one per check. Once you fix the cause, the next check brings it back to Watching by itself, with nothing to restart. Changing the **gh path** Option counts too: the CI Watcher reads it on every check.
 - **Error** saying **The CI Watcher crashed, restarted 3 times**: the CI Watcher process keeps exiting. The service reports this one, with the last line the CI Watcher wrote, and restarts it by itself, waiting longer after each crash, up to 5 minutes. Its output is in [the service log](running-as-a-service.md#the-service-log). It stays shown until the CI Watcher has run for 10 minutes without crashing, and you get one Notification when it starts crashing, not one per restart.
 - **Starting; it hasn't reported yet.**: the CI Watcher hasn't checked since the service started or CI Tracking was turned on. The service starts it with itself and when you turn CI Tracking on, and it checks straight away, so this lasts moments. Changing the repository starts it here again.
 
-Turning CI Tracking off keeps the repository and Ignored workflows for the next time you turn it on. For now the CI section only records these settings: the Factory lands accepted work the same way with CI Tracking on or off.
+Turning CI Tracking off keeps the repository and Ignored workflows for the next time you turn it on.
+
+While CI Tracking and Push are both on, each push the Factory makes for a Ticket is tracked: under **Merge + Push**, the base it pushes after merging the Ticket; under **Branch + Push**, the Ticket's branch, pushed when you accept it. That commit is the Ticket's **pushed commit**. Only pushes made while CI Tracking is on are tracked. The CI Watcher finds the workflow runs GitHub started for it, and the Ticket's panel gains a **CI** section once it has any: the Ticket's **CI result**, then each workflow run with its status, its jobs and links to them on GitHub. The CI result is:
+
+- **running** while any of the pushed commit's runs hasn't finished, or before any has started;
+- **failed** if any run failed, was cancelled or timed out;
+- **passed** otherwise. A skipped or neutral run counts as passed.
+
+Runs of Ignored workflows are listed greyed and marked **ignored**, and never count towards the CI result. When a Ticket is pushed again, say after it is sent back and accepted again, the newer push gives the CI result, and the earlier push's runs are kept under **Earlier pushes**.
+
+For now CI only shows: the Factory lands accepted work the same way with CI Tracking on or off.
 
 ### CI Rules
 

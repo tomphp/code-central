@@ -102,6 +102,13 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
     reportCIWatcherStatus: async (key, status) => {
       await agent(`/api/p/${key}/report_ci_watcher_status`, status);
     },
+    // code-central-256: as the Factory and the CI Watcher
+    reportPushedCommit: async (key, id, commit) => {
+      await agent(`/api/p/${key}/tickets/${id.split("-").pop()}/report_pushed_commit`, { commit });
+    },
+    reportCIRuns: async (key, runs) => {
+      await agent(`/api/p/${key}/report_ci_runs`, { runs });
+    },
     logOutOfGH: svc.logOutOfGH,
     dropTranscriptStreams: () => {
       for (const cut of streams) cut.abort();

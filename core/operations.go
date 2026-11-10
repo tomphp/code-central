@@ -130,6 +130,9 @@ var Operations = []Op{
 	// The CI Watcher's own (code-central-253).
 	{Name: "get_ci_watch", Audience: FactoryOnly},
 	{Name: "report_ci_watcher_status", Audience: FactoryOnly, Write: true},
+	// Tracking a pushed Ticket's CI Runs (code-central-256).
+	{Name: "report_pushed_commit", Audience: FactoryOnly, Write: true},
+	{Name: "report_ci_runs", Audience: FactoryOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

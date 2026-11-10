@@ -63,17 +63,25 @@ func (w *watching) start(path ...string) {
 // state, and returns it.
 func (w *watching) status(state core.CIWatcherState) core.CIWatcherView {
 	w.t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		p, err := w.srv.Client.GetProject(context.Background(), "acme")
-		if err != nil {
+	var p core.ProjectView
+	w.waitFor("CI Watcher status "+string(state), func() bool {
+		var err error
+		if p, err = w.srv.Client.GetProject(context.Background(), "acme"); err != nil {
 			w.t.Fatal(err)
 		}
-		if p.CI.Watcher.State == state {
-			return p.CI.Watcher
-		}
+		return p.CI.Watcher.State == state
+	})
+	return p.CI.Watcher
+}
+
+// waitFor waits up to 10 seconds for cond, failing the test naming what
+// it waited for.
+func (w *watching) waitFor(what string, cond func() bool) {
+	w.t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for !cond() {
 		if time.Now().After(deadline) {
-			w.t.Fatalf("CI Watcher status %+v, want %s", p.CI.Watcher, state)
+			w.t.Fatalf("timed out waiting for %s", what)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

@@ -153,9 +153,13 @@ type CIWatch struct {
 	IgnoredWorkflows []string         `json:"ignored_workflows"`
 	Rules            []CIRuleView     `json:"rules"`
 	GHPath           string           `json:"gh_path"`
+	// Waiting are the pushed commits still waiting on a final CI result,
+	// or newly pushed, oldest push first: the CI Watcher lists their runs.
+	Waiting []CIWaitingCommit `json:"waiting"`
 }
 
-// GetCIWatch is the CI Watcher's get_ci_watch.
+// GetCIWatch is the CI Watcher's get_ci_watch. With CI Tracking off,
+// nothing waits.
 func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 	var out CIWatch
 	err := c.store.View(func(r store.Reader) error {
@@ -165,7 +169,10 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 		}
 		v := ciView(key, p.CI, CIWatcherView{})
 		out = CIWatch{Project: key, Tracking: v.Tracking, Provider: v.Provider, Repository: v.Repository,
-			IgnoredWorkflows: v.IgnoredWorkflows, Rules: v.Rules, GHPath: r.Options().GHPath}
+			IgnoredWorkflows: v.IgnoredWorkflows, Rules: v.Rules, GHPath: r.Options().GHPath, Waiting: []CIWaitingCommit{}}
+		if p.CI.Tracking {
+			out.Waiting = ciWaiting(r, key, c.now())
+		}
 		return nil
 	})
 	return out, err

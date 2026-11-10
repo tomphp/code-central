@@ -44,3 +44,13 @@ func (c *Client) GetCIWatch(ctx context.Context, key string) (core.CIWatch, erro
 func (c *Client) ReportCIWatcherStatus(ctx context.Context, key string, in core.ReportCIWatcherStatusInput) (core.Written[core.ProjectView], error) {
 	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_ci_watcher_status", in, in.Full)
 }
+
+// ReportPushedCommit is the Factory's report_pushed_commit.
+func (c *Client) ReportPushedCommit(ctx context.Context, key string, in core.ReportPushedCommitInput) (core.Written[core.TicketView], error) {
+	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "report_pushed_commit"), in, in.Full)
+}
+
+// ReportCIRuns is the CI Watcher's report_ci_runs.
+func (c *Client) ReportCIRuns(ctx context.Context, key string, in core.ReportCIRunsInput) (core.Written[core.CIRunsView], error) {
+	return write[core.CIRunsView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_ci_runs", in, in.Full)
+}
