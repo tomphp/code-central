@@ -72,10 +72,7 @@ func Check(ctx context.Context, in core.CICheckInput, env gh.Env) core.WatcherCh
 	r, err := p.CheckAccess(ctx)
 	var limit *gh.RateLimitError
 	if errors.As(err, &limit) {
-		r = core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: limit.Error(), Fix: "Try again in a few minutes."}
-		if until := limit.Until(time.Now()); !until.IsZero() {
-			r.Fix = "Try again after " + until.Local().Format(time.Kitchen) + ", when GitHub's rate limit ends."
-		}
+		r = limit.CheckResult(time.Now())
 	}
 	return r
 }

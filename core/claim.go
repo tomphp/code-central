@@ -85,7 +85,8 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		t, found, err := claimTarget(w, key, in)
+		rule := c.blockRule(w, key)
+		t, found, err := claimTarget(rule, in)
 		if err != nil || !found {
 			return err
 		}
@@ -98,8 +99,8 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 			res = c.claimResult(w, key, t, live.ID)
 			return nil
 		}
-		if t.State == store.Ready && blocked(w, key, t) {
-			return blockedError(w, key, t, ActorOf(ctx))
+		if t.State == store.Ready && rule.blocked(t) {
+			return rule.blockedError(t, ActorOf(ctx))
 		}
 		now := c.now()
 		cl := store.Claim{Number: len(t.Claims) + 1, SessionID: in.SessionID, Started: now}
@@ -139,7 +140,8 @@ func heldError(key string, t store.Ticket, live *store.Claim, sessionID string, 
 
 // claimTarget is the named Ticket, or the first claimable one (in the
 // Spec, if given) in claim order. found is false when nothing is claimable.
-func claimTarget(r store.Reader, key string, in ClaimInput) (t store.Ticket, found bool, err error) {
+func claimTarget(rule blockRule, in ClaimInput) (t store.Ticket, found bool, err error) {
+	r, key := rule.r, rule.p.Key
 	if in.Ticket != "" {
 		t, err := resolveTicket(r, key, "claim", "ticket", in.Ticket)
 		if err != nil {
@@ -160,7 +162,7 @@ func claimTarget(r store.Reader, key string, in ClaimInput) (t store.Ticket, fou
 	tickets := r.Tickets(key)
 	slices.SortStableFunc(tickets, claimOrder)
 	for _, t := range tickets {
-		if t.State == store.Ready && !blocked(r, key, t) && (specN == 0 || t.Spec == specN) {
+		if t.State == store.Ready && !rule.blocked(t) && (specN == 0 || t.Spec == specN) {
 			return t, true, nil
 		}
 	}

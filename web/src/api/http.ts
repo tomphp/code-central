@@ -75,6 +75,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     renameProject: (project, display_name) => call("POST", `${p(project)}/rename_project`, { display_name }),
     setLandingMethod: (project, landing) => call("POST", `${p(project)}/set_landing_method`, landing),
     setCITracking: (project, ci) => call("POST", `${p(project)}/set_ci_tracking`, { ...ci, full: true }),
+    setGitHubIssues: (project, settings) => call("POST", `${p(project)}/set_github_issues`, { ...settings, full: true }),
     addCIRule: (project, rule) => call("POST", `${p(project)}/add_ci_rule`, { ...rule, full: true }),
     editCIRule: (project, spec, rule) => call("POST", `${p(project)}/edit_ci_rule`, { ...rule, spec, full: true }),
     removeCIRule: (project, spec) => call("POST", `${p(project)}/remove_ci_rule`, { spec, full: true }),

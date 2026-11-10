@@ -238,6 +238,9 @@ func (s *FileStore) loadProject(key string) error {
 			p.CI.Rules = append(p.CI.Rules, rule)
 		}
 	}
+	if g := pf.GitHubIssues; g != nil {
+		p.GitHubIssues = GitHubIssues{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
+	}
 	s.setProject(p)
 	if err := s.loadCIRuns(key); err != nil {
 		return err

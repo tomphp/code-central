@@ -110,6 +110,7 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
       await agent(`/api/p/${key}/report_ci_runs`, { runs });
     },
     logOutOfGH: svc.logOutOfGH,
+    letGHTriage: svc.letGHTriage,
     dropTranscriptStreams: () => {
       for (const cut of streams) cut.abort();
       streams.clear();

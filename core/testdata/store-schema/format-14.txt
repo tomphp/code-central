@@ -27,7 +27,12 @@ projects/<key>/project.yaml
           branch: string
           state: string
           created: string
-      unblock_on_push: bool (optional)
+  github_issues: mapping (optional)
+      on: bool
+      repository: string (optional)
+      label: string (optional)
+      new_issues_need_me: bool (optional)
+      spec: int (optional)
 
 projects/<key>/specs/<n>.md: YAML frontmatter between --- lines, then the Markdown body
   id: int

@@ -64,6 +64,9 @@ type Project struct {
 	// CI is the Project's CI settings. A Project stored without them reads
 	// as DefaultCI: CI Tracking off.
 	CI CI
+	// GitHubIssues is the Project's GitHub Issues settings. A Project
+	// stored without them reads as the zero GitHubIssues: off.
+	GitHubIssues GitHubIssues
 }
 
 // LandingMethod is how accepted work reaches a Project's base.
@@ -199,6 +202,19 @@ func (c CI) orDefault() CI {
 		c.Provider = CIGitHubActions
 	}
 	return c
+}
+
+// GitHubIssues is a Project's GitHub Issues settings (Spec
+// code-central-279): whether it is on, the repository (owner/name) its
+// issues come from, the filter label (empty for every issue), whether New
+// issues need me, and the number of its Issues Spec, 0 until GitHub
+// Issues is first turned on.
+type GitHubIssues struct {
+	On              bool
+	Repository      string
+	Label           string
+	NewIssuesNeedMe bool
+	Spec            int
 }
 
 // Spec is a description of work, stored as Markdown with YAML frontmatter.

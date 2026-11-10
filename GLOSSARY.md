@@ -17,7 +17,7 @@ The short, permanent name that identifies a Project to anything connecting to Co
 _Avoid_: Slug, Project ID
 
 **Project Options**:
-The page where the human sets a Project's settings, such as its Landing Method and CI Tracking. Unlike an Option, what it sets belongs to one Project.
+The page where the human sets a Project's settings, such as its Landing Method, CI Tracking and GitHub Issues. Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
 
 **Factory**:
@@ -66,7 +66,7 @@ _Avoid_: Planning, setup
 
 **Ticket**:
 A unit of work within a Spec. Every Ticket belongs to exactly one Spec.
-_Avoid_: Issue, task, card
+_Avoid_: Issue (that word means only GitHub's item, which an Incoming Issue mirrors), task, card
 
 **Prototype**:
 A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to try and react to, so a decision can be made. Its work never lands. A Question answered "Prototype this" in a grilling or Charting Round becomes one, which blocks the asking Ticket until it is Done.
@@ -109,7 +109,7 @@ The pluggable part of CI Tracking that talks to one CI system, through its own c
 _Avoid_: Integration, connector
 
 **Watcher**:
-A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through `gh` and reporting over the HTTP API. Each kind is run while its Project setting is on, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification. The CI Watcher is the only kind so far.
+A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through `gh` and reporting over the HTTP API. Each kind is run while its Project setting is on, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification. The kinds are the CI Watcher and the Issue Watcher.
 _Avoid_: Daemon, poller
 
 **CI Watcher**:
@@ -298,9 +298,49 @@ A one-way, one-off migration of work into Code Central, after which Code Central
 _Avoid_: Sync, Integration
 
 **Integration**:
-A plugin with an ongoing link to an external ticketing system, which owns the definition of the work it links while Code Central owns its delivery. CI Tracking is not an Integration: it owns no work, and only reports on CI.
+A plugin with an ongoing link to an external ticketing system, which owns the definition of the work it links while Code Central owns its delivery. GitHub Issues is the first, run by the Issue Watcher. CI Tracking is not an Integration: it owns no work, and only reports on CI.
 _Avoid_: Import, connector, sync
 
 **Link**:
-The connection between a Spec or Ticket and the external item it mirrors through an Integration.
+The connection between a Spec or Ticket and the external item it mirrors through an Integration. A Link is owned, the external system owning the item's definition, or an Outbound Link, Code Central owning it.
 _Avoid_: Mapping, sync, reference
+
+**GitHub Issues**:
+A Project's opt-in, off by default, to link its GitHub repository's issues through an Integration. The human turns it on in the GitHub Issues section of Project Options, naming the repository, an optional filter label, and whether New issues need me; turning it on first checks `gh` can triage the repository's issues, and the first time creates the Issues Spec. Turning it off leaves every Link as it is. It is the first Integration.
+_Avoid_: Issue sync, GitHub integration
+
+**Issue Watcher**:
+The kind of Watcher that polls one Project's GitHub issues through `gh`, writing as the `integration` Actor, and posts Code Central's progress back to the issues. Before GitHub Issues turns on, Code Central runs it once in its check mode, which checks `gh` is found and logged in, can read the repository, the repository has issues on, and the login can triage them, answering with what is wrong and its fix.
+_Avoid_: Issue daemon, syncer
+
+**Issues Spec**:
+A Project's long-lived Spec that its Incoming Issues arrive on, titled like "GitHub Issues: owner/repo", with no Link and no Stages. It is created the first time GitHub Issues is turned on, and its title follows the repository unless the human retitles it.
+_Avoid_: Inbox Spec, triage Spec
+
+**Incoming Issue**:
+A linked Draft Ticket on the Issues Spec, mirroring one GitHub issue that hasn't been triaged yet. GitHub owns its definition.
+_Avoid_: Issue Ticket, imported issue
+
+**New issue**:
+The Needs Me reason of an Incoming Issue that arrived while New issues need me was on and that the human hasn't triaged yet.
+_Avoid_: Untriaged, new Ticket
+
+**New issues need me**:
+A GitHub Issues setting, off by default: when on, each new Incoming Issue also shows in Needs Me and Focus Mode under New issue until the human triages it.
+_Avoid_: Notify on new issues
+
+**Keep as Draft**:
+The human's triage action that leaves an Incoming Issue a Draft and takes it out of Needs Me for good, writing nothing to GitHub.
+_Avoid_: Park, snooze
+
+**To Requirement**:
+The human's triage action that makes a Requirement from an Incoming Issue, its title, then its body, then the human's optional extra context, moves the issue's Link to the Requirement's Spec as an Outbound Link, and Cancels the Incoming Issue with the grilling Stage Ticket as its Replacement.
+_Avoid_: Promote, accept
+
+**Won't fix**:
+The human's triage action that Cancels an Incoming Issue, with an optional reason, and closes its GitHub issue as not planned, posting the reason as a comment.
+_Avoid_: Reject, decline
+
+**Outbound Link**:
+A Link on which Code Central owns the definition and only writes to the external item, never reading its edits. To Requirement turns an Incoming Issue's Link into one on the Requirement's Spec.
+_Avoid_: One-way sync, write-only link

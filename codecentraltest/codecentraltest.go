@@ -44,12 +44,13 @@ const Version = "dev"
 type Option func(*options)
 
 type options struct {
-	version  string
-	log      io.Writer
-	usageDir string
-	location *time.Location
-	start    time.Time
-	ciCheck  core.CICheck
+	version     string
+	log         io.Writer
+	usageDir    string
+	location    *time.Location
+	start       time.Time
+	ciCheck     core.CICheck
+	issuesCheck core.IssuesCheck
 }
 
 // WithVersion makes the server report version in its version header.
@@ -76,6 +77,12 @@ func WithStart(t time.Time) Option { return func(o *options) { o.start = t } }
 // CI Tracking is turned on; without it, nothing is checked.
 func WithCICheck(check core.CICheck) Option { return func(o *options) { o.ciCheck = check } }
 
+// WithIssuesCheck makes check the server's Issue Watcher check mode, run
+// when GitHub Issues is turned on; without it, nothing is checked.
+func WithIssuesCheck(check core.IssuesCheck) Option {
+	return func(o *options) { o.issuesCheck = check }
+}
+
 // NewServer starts a test service, stopped when t ends.
 func NewServer(t testing.TB, opts ...Option) *Server {
 	t.Helper()
@@ -91,6 +98,7 @@ func NewServer(t testing.TB, opts ...Option) *Server {
 	c := core.New(s, clk, &ids.Sequence{})
 	c.SetUsage(usage.New(o.usageDir, clk, o.location, o.log))
 	c.SetCICheck(o.ciCheck)
+	c.SetIssuesCheck(o.issuesCheck)
 	hs := httptest.NewServer(frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), o.log), o.version))
 	t.Cleanup(hs.Close)
 	return &Server{URL: hs.URL, Client: client.New(hs.URL), Clock: clk, Core: c, Store: s, UsageDir: o.usageDir}
