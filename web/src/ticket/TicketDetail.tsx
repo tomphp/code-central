@@ -12,6 +12,7 @@ import { LinkBadge } from "./LinkBadge";
 import { Live } from "./Live";
 import { useAct } from "./useAct";
 import { CISection } from "./CISection";
+import { Triage } from "./Triage";
 
 export interface TicketPaneProps {
   api: Api;
@@ -45,7 +46,8 @@ export function TicketPane(props: TicketPaneProps) {
 export type TicketDetailProps = TicketPaneProps;
 
 // TicketDetail is everything about a Ticket below its action panel: Spec,
-// Labels, description, Blockers, its CI section when it has CI Runs (in the
+// Labels, an Incoming Issue's triage actions (in the action panel instead
+// while it is a New issue), description, Blockers, its CI section when it has CI Runs (in the
 // action panel instead while CI failed), Claim activity with each Claim's Live
 // section, move, and a collapsed history of moves, comments and edits
 // merged by time.
@@ -71,6 +73,9 @@ export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketD
         {t.link && <LinkBadge link={t.link} />}
       </div>
       {t.link && !t.link.detached && <LinkedNote key={t.id} api={api} project={project} ticket={t} />}
+      {/* A New issue's triage actions are its action panel, so they
+          aren't shown here too. */}
+      {t.triage_actions && t.needs_me_reason !== "new_issue" && <Triage api={api} project={project} ticket={t} />}
       {t.description ? <Markdown>{t.description}</Markdown> : <p className="muted">No description.</p>}
       {t.tags.prototype !== undefined && <PrototypeAt tag={t.tags.prototype} />}
       {t.blockers.length > 0 && (

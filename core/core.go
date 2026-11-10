@@ -190,6 +190,13 @@ type TicketView struct {
 	NeedsMeReason NeedsMeReason `json:"needs_me_reason,omitempty"`
 	// Link is set on a linked Ticket (ticket 42).
 	Link *LinkView `json:"link,omitempty"`
+	// AwaitingTriage is set on an Incoming Issue that came in while New
+	// issues need me was on and that the human hasn't triaged yet.
+	AwaitingTriage bool `json:"awaiting_triage,omitempty"`
+	// TriageActions are the triage actions, each an operation's name, the
+	// human may take on an Incoming Issue; left out on any other Ticket.
+	// Computed on read.
+	TriageActions []string `json:"triage_actions,omitzero"`
 }
 
 // TicketRow is one find_tickets result.
@@ -558,6 +565,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = c.reasonOf(r, key, t)
+	v.AwaitingTriage, v.TriageActions = t.AwaitingTriage, ticketTriageActions(r, key, t)
 	return v
 }
 

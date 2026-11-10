@@ -335,9 +335,13 @@ type Ticket struct {
 	BlockedBy    []int
 	Replacements []int
 	Link         Link
-	Created      time.Time
-	Updated      time.Time
-	Description  string
+	// AwaitingTriage is set by Code Central on an Incoming Issue created
+	// while New issues need me is on (Spec code-central-279), and cleared
+	// when the human triages it; never set again once cleared.
+	AwaitingTriage bool
+	Created        time.Time
+	Updated        time.Time
+	Description    string
 	// Branch and Commit are what the last finish naming them gave: the
 	// work's branch and its head commit. Free-form, never parsed.
 	Branch string

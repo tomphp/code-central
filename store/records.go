@@ -89,6 +89,7 @@ type ticketFile struct {
 	BlockedBy      []int               `yaml:"blocked_by"`
 	Replacements   []int               `yaml:"replacements"`
 	Link           *linkFile           `yaml:"link,omitempty"`
+	AwaitingTriage bool                `yaml:"awaiting_triage,omitempty"`
 	Created        string              `yaml:"created"`
 	Updated        string              `yaml:"updated"`
 	Description    string              `yaml:"description"`
@@ -261,7 +262,7 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	}
 	t := Ticket{
 		Number: n, Title: f.Title, State: State(f.State), Spec: f.Spec, Labels: f.Labels, Tags: f.Tags,
-		BlockedBy: f.BlockedBy, Replacements: f.Replacements, Description: f.Description,
+		BlockedBy: f.BlockedBy, Replacements: f.Replacements, AwaitingTriage: f.AwaitingTriage, Description: f.Description,
 		Branch: f.Branch, Commit: f.Commit,
 	}
 	if t.Title == "" {
@@ -484,7 +485,7 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", project, "tickets", strconv.Itoa(r.Number)+".yaml")
 		f := ticketFile{
 			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
-			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: encodeLink(r.Link),
+			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: encodeLink(r.Link), AwaitingTriage: r.AwaitingTriage,
 			Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
 			Branch: r.Branch, Commit: r.Commit,
 			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},

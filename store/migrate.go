@@ -51,6 +51,7 @@ var migrations = []MigrationStep{
 	{From: 11, Name: "add the human's Land anyway on a pushed commit"},
 	{From: 12, Name: "add the human's Re-run request on a pushed commit"},
 	{From: 13, Name: "add a Project's GitHub Issues settings"},
+	{From: 14, Name: "add a Ticket's awaiting triage"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

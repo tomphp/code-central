@@ -36,6 +36,9 @@ export interface Driver {
   // linkTicket creates a Draft Ticket linked to an external item as an
   // Integration would, and records its external state (ticket 42).
   linkTicket(key: string, title: string, link: { integration: string; id: string; url: string }, external: ExternalState): Promise<string>;
+  // incomingIssue creates a Draft Ticket on spec linked to a GitHub issue,
+  // as the Issue Watcher's create_linked_ticket does (code-central-287).
+  incomingIssue(key: string, spec: string, title: string, link: { integration: string; id: string; url: string }): Promise<string>;
   // postSessionEvents posts a session's Session Events as a Factory would
   // (ticket 109): they go to the newest Claim with that session ID.
   postSessionEvents(sessionId: string, events: SessionEvent[]): Promise<void>;
@@ -1231,6 +1234,51 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const plain = await d.createTicket("acme", "Local", "Draft");
       const err = await d.api.unlink("acme", plain).catch((e) => e);
       expect(err).toMatchObject({ status: 422, code: "invalid", field: "target" });
+    });
+
+    // ---- New issue and Keep as Draft (code-central-287) ----
+    it("shows a New issue in Needs Me until the human keeps it as a Draft", async () => {
+      await d.createProject("acme", "Acme");
+      await d.letGHTriage("acme/web");
+      const on = await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: true });
+      const spec = on.github_issues.spec!;
+      const gh = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7" };
+      const id = await d.incomingIssue("acme", spec, "Login is broken", gh);
+      const link = { ...gh, external_state: "open", detached: false };
+
+      expect(await d.api.getTicket("acme", id)).toMatchObject({ state: "Draft", link, awaiting_triage: true, triage_actions: ["keep_as_draft"], needs_me_reason: "new_issue" });
+      const nm = await d.api.needsMe();
+      expect(nm.groups.map((g) => g.reason)).toEqual(["new_issue"]);
+      expect(nm.groups[0].tickets[0]).toMatchObject({ id, reason: "new_issue", link });
+
+      wantAcknowledgement(await d.api.act("acme", id, "keep_as_draft", {}), id, "Draft", ["needs_me_reason", "awaiting_triage"]);
+      const kept = await d.api.getTicket("acme", id);
+      expect(kept).toMatchObject({ state: "Draft", triage_actions: ["keep_as_draft"] });
+      expect(kept.awaiting_triage).toBeUndefined();
+      expect(kept.needs_me_reason).toBeUndefined();
+      expect((await d.api.needsMe()).count).toBe(0);
+
+      const plain = await d.createTicket("acme", "Local", "Draft");
+      const refused = await d.api.act("acme", plain, "keep_as_draft", {}).catch((e) => e);
+      expect(refused).toBeInstanceOf(ApiError);
+      expect(refused).toMatchObject({ status: 409, code: "action_not_allowed" });
+      expect(refused.message).toContain("not an Incoming Issue");
+    });
+
+    it("offers the triage actions on an Incoming Issue that came in with New issues need me off", async () => {
+      await d.createProject("acme", "Acme");
+      await d.letGHTriage("acme/web");
+      const on = await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false });
+      const id = await d.incomingIssue("acme", on.github_issues.spec!, "Typo", { integration: "github", id: "acme/web#8", url: "https://github.com/acme/web/issues/8" });
+      const t = await d.api.getTicket("acme", id);
+      expect(t).toMatchObject({ triage_actions: ["keep_as_draft"] });
+      expect(t.awaiting_triage).toBeUndefined();
+      expect(t.needs_me_reason).toBeUndefined();
+      expect((await d.api.needsMe()).count).toBe(0);
+
+      // Unlinked, it is no longer an Incoming Issue.
+      await d.api.unlink("acme", id);
+      expect((await d.api.getTicket("acme", id)).triage_actions).toBeUndefined();
     });
 
     // ---- the latest Session Event (ticket 109) ----

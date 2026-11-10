@@ -159,7 +159,9 @@ type CreateLinkedTicketInput struct {
 }
 
 // CreateLinkedTicket is the integration's create_linked_ticket(spec,
-// title, description, state, link, full?).
+// title, description, state, link, full?). On the Project's Issues Spec
+// while New issues need me is on, Code Central marks the Ticket awaiting
+// triage (Spec code-central-279).
 func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLinkedTicketInput) (Written[TicketView], error) {
 	if err := requireActor(ctx, "create_linked_ticket", Integration); err != nil {
 		return Written[TicketView]{}, err
@@ -195,7 +197,8 @@ func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLink
 			return invalid("link.id", "%s %s is already linked to Ticket %s", l.Integration, l.ID, id)
 		}
 		now := c.now()
-		t := store.Ticket{Number: w.NextNumber(key), Title: in.Title, State: state, Spec: specN, Link: l, Created: now, Updated: now, Description: in.Description}
+		t := store.Ticket{Number: w.NextNumber(key), Title: in.Title, State: state, Spec: specN, Link: l, Created: now, Updated: now, Description: in.Description,
+			AwaitingTriage: awaitsTriage(w, key, specN)}
 		if err := w.PutTicket(key, t); err != nil {
 			return err
 		}

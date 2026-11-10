@@ -142,6 +142,8 @@ var Operations = []Op{
 
 	// GitHub Issues (Spec code-central-279).
 	{Name: "set_github_issues", Audience: HumanOnly, Write: true},
+	// New issue and the triage actions (code-central-287).
+	{Name: "keep_as_draft", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.
