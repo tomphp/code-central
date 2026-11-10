@@ -86,6 +86,9 @@ export interface CIWatcherStatus {
   problem?: CIProblem;
   message?: string;
   fix?: string;
+  // rate_limited_until is when GitHub lets a rate-limited CI Watcher call
+  // it again; it is still watching meanwhile, not in error.
+  rate_limited_until?: string;
   // since is when it went into this state.
   since?: string;
 }

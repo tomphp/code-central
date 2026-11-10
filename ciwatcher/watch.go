@@ -6,6 +6,7 @@ package ciwatcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -15,10 +16,13 @@ import (
 )
 
 // Interval is how long the CI Watcher waits between polls while nothing
-// waits on CI, and WaitingInterval while a pushed commit does.
+// waits on CI, and WaitingInterval while a pushed commit does. Rate-limited
+// with no reset time, it doubles its interval each poll, up to
+// MaxRateLimitInterval.
 const (
-	Interval        = 2 * time.Minute
-	WaitingInterval = 30 * time.Second
+	Interval             = 2 * time.Minute
+	WaitingInterval      = 30 * time.Second
+	MaxRateLimitInterval = 10 * time.Minute
 )
 
 // Client is what the CI Watcher calls on Code Central; *client.Client is
@@ -54,6 +58,11 @@ func WatchArgs(project string) []string { return []string{Command, "--project", 
 // lists the runs of each pushed commit still waiting, and reports those
 // that changed. It polls every WaitingInterval while a pushed commit
 // waits, and every Interval otherwise.
+//
+// When the CI Provider rate-limits it, it makes no more calls until the
+// reset time the provider gave, or with none, doubles its interval up to
+// MaxRateLimitInterval; it reports Watching with when it calls again, as
+// being rate-limited isn't an error.
 func Watch(ctx context.Context, cfg Config) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -64,10 +73,28 @@ func Watch(ctx context.Context, cfg Config) error {
 		}()
 	}
 	w := &watcher{Config: cfg, reported: map[runKey]time.Time{}}
+	// backoff is the doubled interval while rate-limited with no reset
+	// time; zero once a poll isn't rate-limited.
+	var backoff time.Duration
 	for {
+		res := w.poll(ctx)
 		every := Interval
-		if w.poll(ctx) {
+		if res.waiting {
 			every = WaitingInterval
+		}
+		var until time.Time
+		if res.limit != nil {
+			now := cfg.Clock.Now()
+			if until = res.limit.Until(now); !until.After(now) {
+				backoff = min(max(backoff, every)*2, MaxRateLimitInterval)
+				until = now.Add(backoff)
+			}
+			every = until.Sub(now)
+		} else {
+			backoff = 0
+		}
+		if res.reachable {
+			w.report(ctx, core.ReportCIWatcherStatusInput{State: core.CIWatcherWatching, RateLimitedUntil: until})
 		}
 		select {
 		case <-ctx.Done():
@@ -93,48 +120,74 @@ type runKey struct {
 	attempt int
 }
 
-// poll is one poll; it reports whether a pushed commit waits on CI.
-func (w *watcher) poll(ctx context.Context) (waiting bool) {
+// pollResult is how a poll went.
+type pollResult struct {
+	// waiting is whether a pushed commit waits on CI.
+	waiting bool
+	// reachable is whether the CI Provider could be reached, so the loop
+	// reports Watching; a poll that finds an error reports it itself.
+	reachable bool
+	// limit is the CI Provider's rate limit, if it refused a call for it.
+	limit *RateLimitError
+}
+
+// poll is one poll.
+func (w *watcher) poll(ctx context.Context) (res pollResult) {
 	watch, err := w.Client.GetCIWatch(ctx, w.Project)
 	if err != nil {
 		w.logf("get_ci_watch: %v", err)
-		return false
+		return res
 	}
 	if !watch.Tracking {
-		return false
+		return res
 	}
-	waiting = len(watch.Waiting) > 0
-	r := Check(ctx, core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, GHPath: watch.GHPath}, w.Env)
+	res.waiting = len(watch.Waiting) > 0
+	p, bad := provider(core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, GHPath: watch.GHPath}, w.Env)
+	var r core.CICheckResult
+	if bad != nil {
+		r = *bad
+	} else {
+		r, err = p.CheckAccess(ctx)
+	}
 	if ctx.Err() != nil {
 		// Stopped mid-poll: what failed is the stop, not GitHub.
-		return waiting
+		return res
 	}
-	in := core.ReportCIWatcherStatusInput{State: core.CIWatcherWatching}
 	if r.Problem != "" {
-		in = core.ReportCIWatcherStatusInput{State: core.CIWatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix}
+		w.report(ctx, core.ReportCIWatcherStatusInput{State: core.CIWatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+		return res
 	}
+	if err == nil {
+		err = w.reportRuns(ctx, p, watch.Waiting)
+	}
+	if ctx.Err() != nil {
+		return res
+	}
+	res.reachable = true
+	errors.As(err, &res.limit)
+	return res
+}
+
+// report reports the CI Watcher's status.
+func (w *watcher) report(ctx context.Context, in core.ReportCIWatcherStatusInput) {
 	if _, err := w.Client.ReportCIWatcherStatus(ctx, w.Project, in); err != nil && ctx.Err() == nil {
 		w.logf("report_ci_watcher_status: %v", err)
 	}
-	if r.Problem != "" {
-		return waiting
-	}
-	p, err := NewProvider(watch.Provider, watch.Repository, watch.GHPath, w.Env)
-	if err != nil {
-		w.logf("%v", err)
-		return waiting
-	}
-	w.reportRuns(ctx, p, watch.Waiting)
-	return waiting
 }
 
 // reportRuns lists the runs of each waiting pushed commit, fetches the
 // jobs of those that changed, and reports them tracked against the
-// commit's Ticket.
-func (w *watcher) reportRuns(ctx context.Context, p Provider, waiting []core.CIWaitingCommit) {
+// commit's Ticket. A rate limit stops it calling the CI Provider: it
+// reports what changed so far and returns the *RateLimitError.
+func (w *watcher) reportRuns(ctx context.Context, p Provider, waiting []core.CIWaitingCommit) error {
 	var changed []Run
+	var limit *RateLimitError
+list:
 	for _, c := range waiting {
 		runs, err := p.RunsForCommit(ctx, c.Commit)
+		if errors.As(err, &limit) {
+			break
+		}
 		if err != nil {
 			if ctx.Err() == nil {
 				w.logf("%s: listing the runs of %s: %v", c.Ticket, c.Commit, err)
@@ -146,6 +199,9 @@ func (w *watcher) reportRuns(ctx context.Context, p Provider, waiting []core.CIW
 				continue
 			}
 			jobs, err := p.Jobs(ctx, run.ID, run.Attempt)
+			if errors.As(err, &limit) {
+				break list
+			}
 			if err != nil {
 				if ctx.Err() == nil {
 					w.logf("%s: listing the jobs of run %d: %v", c.Ticket, run.ID, err)
@@ -156,6 +212,16 @@ func (w *watcher) reportRuns(ctx context.Context, p Provider, waiting []core.CIW
 			changed = append(changed, run)
 		}
 	}
+	w.reportChanged(ctx, changed)
+	if limit != nil {
+		return limit
+	}
+	return nil
+}
+
+// reportChanged reports the runs that changed, remembering each Code
+// Central took.
+func (w *watcher) reportChanged(ctx context.Context, changed []Run) {
 	if len(changed) == 0 {
 		return
 	}

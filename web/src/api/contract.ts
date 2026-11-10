@@ -355,6 +355,15 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       });
       await d.reportCIWatcherStatus("acme", { state: "watching" });
       expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "watching", since: expect.any(String) });
+      // Rate-limited is still Watching, until a time.
+      await d.reportCIWatcherStatus("acme", { state: "watching", rate_limited_until: "2026-01-05T10:15:00Z" });
+      expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "watching", rate_limited_until: "2026-01-05T10:15:00Z", since: expect.any(String) });
+      const limitedError = await d
+        .reportCIWatcherStatus("acme", { state: "error", message: "no", rate_limited_until: "2026-01-05T10:15:00Z" })
+        .catch((e) => e);
+      expect(String(limitedError.code ?? limitedError.message)).toContain("invalid");
+      await d.reportCIWatcherStatus("acme", { state: "watching" });
+      expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "watching", since: expect.any(String) });
       // Only the service reports a crash.
       const crashed = await d.reportCIWatcherStatus("acme", { state: "error", problem: "crashed", message: "crashed" }).catch((e) => e);
       expect(String(crashed.code ?? crashed.message)).toContain("invalid");
