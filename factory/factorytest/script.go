@@ -149,21 +149,23 @@ func ToolUse(tool, input string) Step {
 }
 
 // Response prints a stream-json assistant message that is one content
-// block of the model response id, carrying the response's usage, as
-// claude prints each block of a response. parent is the Agent call a
-// subagent's response runs under, "" for the main session's.
-func Response(id, parent string, input, cacheWrite, cacheRead, output int) Step {
-	msg := map[string]any{
-		"type": "assistant",
-		"message": map[string]any{
-			"id": id, "role": "assistant",
-			"content": []map[string]string{{"type": "thinking", "thinking": "Responding."}},
-			"usage": map[string]int{
-				"input_tokens": input, "cache_creation_input_tokens": cacheWrite,
-				"cache_read_input_tokens": cacheRead, "output_tokens": output,
-			},
+// block of the model response id, carrying the response's model and
+// usage, as claude prints each block of a response. parent is the Agent
+// call a subagent's response runs under, "" for the main session's;
+// model is left out of the message when "".
+func Response(id, parent, model string, input, cacheWrite, cacheRead, output int) Step {
+	message := map[string]any{
+		"id": id, "role": "assistant",
+		"content": []map[string]string{{"type": "thinking", "thinking": "Responding."}},
+		"usage": map[string]int{
+			"input_tokens": input, "cache_creation_input_tokens": cacheWrite,
+			"cache_read_input_tokens": cacheRead, "output_tokens": output,
 		},
 	}
+	if model != "" {
+		message["model"] = model
+	}
+	msg := map[string]any{"type": "assistant", "message": message}
 	if parent != "" {
 		msg["parent_tool_use_id"] = parent
 	}

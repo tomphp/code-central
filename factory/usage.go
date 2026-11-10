@@ -22,6 +22,11 @@ const (
 	kindSubagent = "subagent"
 )
 
+// syntheticModel is the model claude names on a response it made up
+// itself, such as an API error's, rather than one a model gave. It is
+// never posted as a model.
+const syntheticModel = "<synthetic>"
+
 // reviewPrefixes start the description of an Agent call that is a review,
 // as the Context Report reads them.
 var reviewPrefixes = []string{"Spec review", "Standards review"}
@@ -48,9 +53,10 @@ func newUsageReader(kind string, now func() time.Time) *usageReader {
 	return &usageReader{kind: kind, now: now, seen: map[string]bool{}, agents: map[string]string{}}
 }
 
-// read gives msg's model response, dated when it is read, the first
-// time its message ID comes: claude prints a response with several
-// content blocks as several lines, each with the same ID and usage. It
+// read gives msg's model response, dated when it is read and with its
+// model unless that is syntheticModel, the first time its message ID
+// comes: claude prints a response with several content blocks as several
+// lines, each with the same ID and usage. It
 // also remembers msg's Agent calls, so their subagents' responses get
 // their kind.
 func (u *usageReader) read(msg streamMessage) (core.UsageResponse, bool) {
@@ -71,10 +77,15 @@ func (u *usageReader) read(msg streamMessage) (core.UsageResponse, bool) {
 		return core.UsageResponse{}, false
 	}
 	u.seen[m.ID] = true
+	model := m.Model
+	if model == syntheticModel {
+		model = ""
+	}
 	return core.UsageResponse{
 		Time:  u.now(),
 		Agent: msg.ParentToolUseID,
 		Kind:  u.kindOf(msg.ParentToolUseID),
+		Model: model,
 		Tokens: usage.Tokens{
 			InputTokens:      m.Usage.InputTokens,
 			CacheWriteTokens: m.Usage.CacheCreationInputTokens,

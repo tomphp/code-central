@@ -133,8 +133,10 @@ type streamMessage struct {
 	// empty for the main session's.
 	ParentToolUseID string `json:"parent_tool_use_id"`
 	Message         struct {
-		// ID and Usage are an assistant message's model response's.
+		// ID, Model and Usage are an assistant message's model
+		// response's.
 		ID      string       `json:"id"`
+		Model   string       `json:"model"`
 		Usage   *streamUsage `json:"usage"`
 		Content []struct {
 			Type  string          `json:"type"`

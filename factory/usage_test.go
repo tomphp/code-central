@@ -1,6 +1,7 @@
 package factory_test
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -15,6 +16,7 @@ type usageSession struct {
 	Ticket, Agent, Kind string
 	Claim, Peak         int
 	Responses           int
+	Models              []string
 }
 
 // usageSessions are the Usage sessions of session, by agent.
@@ -22,7 +24,7 @@ func usageSessions(u core.UsageView, session string) []usageSession {
 	var out []usageSession
 	for _, s := range u.Sessions {
 		if s.SessionID == session {
-			out = append(out, usageSession{s.Ticket, s.Agent, s.Kind, s.Claim, s.Peak, s.Responses})
+			out = append(out, usageSession{s.Ticket, s.Agent, s.Kind, s.Claim, s.Peak, s.Responses, s.Models})
 		}
 	}
 	slices.SortFunc(out, func(a, b usageSession) int { return strings.Compare(a.Agent, b.Agent) })
@@ -32,9 +34,16 @@ func usageSessions(u core.UsageView, session string) []usageSession {
 // wantUsageSessions checks that u's sessions of session are want.
 func wantUsageSessions(t *testing.T, u core.UsageView, session string, want []usageSession) {
 	t.Helper()
-	if got := usageSessions(u, session); !slices.Equal(got, want) {
+	if got := usageSessions(u, session); !slices.EqualFunc(got, want, sameUsageSession) {
 		t.Errorf("Usage sessions\n got %+v\nwant %+v", got, want)
 	}
+}
+
+// sameUsageSession is whether a and b are the same, models and all.
+func sameUsageSession(a, b usageSession) bool {
+	models := slices.Equal(a.Models, b.Models)
+	a.Models, b.Models = nil, nil
+	return models && reflect.DeepEqual(a, b)
 }
 
 // waitForUsage waits for Usage to hold n responses in all, and returns it.
@@ -57,14 +66,14 @@ func TestEachModelResponsesTokenUsageIsPostedOnceUnderItsKind(t *testing.T) {
 	id := h.StageTicket("spec", "Spec: Paint the shed")
 	h.Script(id,
 		// One response in two content blocks, each line carrying its usage.
-		factorytest.Response("msg_1", "", 100, 200, 300, 10),
-		factorytest.Response("msg_1", "", 100, 200, 300, 10),
+		factorytest.Response("msg_1", "", "", 100, 200, 300, 10),
+		factorytest.Response("msg_1", "", "", 100, 200, 300, 10),
 		factorytest.AgentCall("toolu_review", "Spec review of the branch"),
 		factorytest.AgentCall("toolu_explore", "Find the paint"),
-		factorytest.Response("msg_r1", "toolu_review", 1000, 0, 0, 5),
-		factorytest.Response("msg_e1", "toolu_explore", 50, 0, 0, 5),
-		factorytest.Response("msg_e2", "toolu_explore", 60, 0, 0, 5),
-		factorytest.Response("msg_2", "", 100, 0, 700, 20),
+		factorytest.Response("msg_r1", "toolu_review", "", 1000, 0, 0, 5),
+		factorytest.Response("msg_e1", "toolu_explore", "", 50, 0, 0, 5),
+		factorytest.Response("msg_e2", "toolu_explore", "", 60, 0, 0, 5),
+		factorytest.Response("msg_2", "", "", 100, 0, 700, 20),
 		factorytest.Finish("Done."),
 		factorytest.Result("success"),
 	)
@@ -88,12 +97,69 @@ func TestEachModelResponsesTokenUsageIsPostedOnceUnderItsKind(t *testing.T) {
 	}
 }
 
+func TestEachUsageSessionListsTheModelsOfItsResponsesInOrderOfFirstUse(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("Paint with two brushes")
+	h.Script(id,
+		// One response in two content blocks counts its model once.
+		factorytest.Response("msg_1", "", "claude-opus-5-5", 100, 0, 0, 10),
+		factorytest.Response("msg_1", "", "claude-opus-5-5", 100, 0, 0, 10),
+		factorytest.AgentCall("toolu_explore", "Find the paint"),
+		factorytest.Response("msg_e1", "toolu_explore", "claude-haiku-5-5", 50, 0, 0, 5),
+		factorytest.Response("msg_2", "", "claude-sonnet-5-5", 200, 0, 0, 10),
+		factorytest.Response("msg_3", "", "claude-opus-5-5", 300, 0, 0, 10),
+		factorytest.Finish("Done."),
+		factorytest.Result("success"),
+	)
+	h.Start()
+	h.WaitForState(id, store.InReview)
+
+	u := waitForUsage(h, 4)
+	want := []usageSession{
+		{Ticket: id, Kind: "implementation", Claim: 1, Peak: 300, Responses: 3, Models: []string{"claude-opus-5-5", "claude-sonnet-5-5"}},
+		{Ticket: id, Agent: "toolu_explore", Kind: "subagent", Claim: 1, Peak: 50, Responses: 1, Models: []string{"claude-haiku-5-5"}},
+	}
+	wantUsageSessions(t, u, h.Ticket(id).Claims[0].SessionID, want)
+}
+
+func TestASyntheticResponseIsPostedWithItsTokensButNoModel(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("Paint after a hiccup")
+	h.Script(id,
+		factorytest.Response("msg_1", "", "claude-opus-5-5", 100, 0, 0, 10),
+		factorytest.Response("msg_synthetic", "", "<synthetic>", 900, 0, 0, 0),
+		factorytest.AgentCall("toolu_explore", "Find the paint"),
+		factorytest.Response("msg_e1", "toolu_explore", "<synthetic>", 50, 0, 0, 0),
+		factorytest.AgentCall("toolu_plain", "Stir the paint"),
+		factorytest.Response("msg_p1", "toolu_plain", "", 60, 0, 0, 5),
+		factorytest.Finish("Done."),
+		factorytest.Result("success"),
+	)
+	h.Start()
+	h.WaitForState(id, store.InReview)
+
+	u := waitForUsage(h, 4)
+	want := []usageSession{
+		{Ticket: id, Kind: "implementation", Claim: 1, Peak: 900, Responses: 2, Models: []string{"claude-opus-5-5"}},
+		{Ticket: id, Agent: "toolu_explore", Kind: "subagent", Claim: 1, Peak: 50, Responses: 1, Models: []string{}},
+		{Ticket: id, Agent: "toolu_plain", Kind: "subagent", Claim: 1, Peak: 60, Responses: 1, Models: []string{}},
+	}
+	wantUsageSessions(t, u, h.Ticket(id).Claims[0].SessionID, want)
+	for _, s := range u.Sessions {
+		if s.Models == nil {
+			t.Errorf("session %s %q has no models list; want an empty one", s.SessionID, s.Agent)
+		}
+	}
+}
+
 func TestAResumedSessionAddsToTheSameUsageSession(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Ask first")
 	h.Script(id,
-		factorytest.Response("msg_first", "", 100, 0, 0, 10),
+		factorytest.Response("msg_first", "", "", 100, 0, 0, 10),
 		factorytest.PostRound("Which colour?"),
 		factorytest.Result("success"),
 	)
@@ -103,7 +169,7 @@ func TestAResumedSessionAddsToTheSameUsageSession(t *testing.T) {
 	waitForUsage(h, 1)
 
 	h.Script(id,
-		factorytest.Response("msg_second", "", 300, 0, 0, 10),
+		factorytest.Response("msg_second", "", "", 300, 0, 0, 10),
 		factorytest.Finish("Done."),
 		factorytest.Result("success"),
 	)
@@ -121,9 +187,9 @@ func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedUsageHoldsNothi
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Paint through an outage")
 	h.Script(id,
-		factorytest.Response("msg_before", "", 100, 0, 0, 1), factorytest.Wait(),
-		factorytest.Response("msg_during", "", 200, 0, 0, 1), factorytest.Wait(),
-		factorytest.Response("msg_after", "", 300, 0, 0, 1), factorytest.Finish("Done."), factorytest.Result("success"))
+		factorytest.Response("msg_before", "", "", 100, 0, 0, 1), factorytest.Wait(),
+		factorytest.Response("msg_during", "", "", 200, 0, 0, 1), factorytest.Wait(),
+		factorytest.Response("msg_after", "", "", 300, 0, 0, 1), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
 	waitForUsage(h, 1)
 
