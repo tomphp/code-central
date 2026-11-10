@@ -146,8 +146,8 @@ var cases = map[string]opCase{
 			field("id", "acme-3")(t, tk)
 			// claim's Ticket is get_ticket's default, which counts the
 			// session fields it leaves out (code-central-320).
-			if lo := tk["left_out"].(map[string]any); lo["claim_sessions"] != float64(1) {
-				t.Fatalf("left_out %v, want claim_sessions 1", lo)
+			if lo := tk["left_out"].(map[string]any); lo["claims"] != float64(1) {
+				t.Fatalf("left_out %v, want claims 1", lo)
 			}
 		},
 		bad: call{

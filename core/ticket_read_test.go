@@ -274,9 +274,9 @@ func TestTheSpecStageReadsTheGrillingTicketsAnswersAndResolution(t *testing.T) {
 // a Done Blocker's title and the Claims' session fields, which parts:
 // [claims] returns in full.
 
-// sessioned is acme-2 claimed, then blocked by acme-3 (Done) and acme-4 (Ready),
+// claimedThenBlocked is acme-2 claimed, then blocked by acme-3 (Done) and acme-4 (Ready),
 // its Claim by s1 with a working dir, a resume command and a Session Event.
-func (f fixture) sessioned(t *testing.T) {
+func (f fixture) claimedThenBlocked(t *testing.T) {
 	t.Helper()
 	f.work(t, store.Ready, store.Ready, store.Ready)
 	f.move(t, "3", store.Done)
@@ -293,7 +293,7 @@ func (f fixture) sessioned(t *testing.T) {
 
 func TestGetTicketByDefaultShowsADoneBlockerAsItsIDAndStateOnly(t *testing.T) {
 	f := newFixture(t)
-	f.sessioned(t)
+	f.claimedThenBlocked(t)
 	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2"})
 	want := []any{
 		map[string]any{"id": "acme-3", "state": "Done"},
@@ -306,7 +306,7 @@ func TestGetTicketByDefaultShowsADoneBlockerAsItsIDAndStateOnly(t *testing.T) {
 
 func TestGetTicketByDefaultLeavesOutTheClaimsSessionFieldsAndCountsThem(t *testing.T) {
 	f := newFixture(t)
-	f.sessioned(t)
+	f.claimedThenBlocked(t)
 	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2"})
 	c := v["claims"].([]any)[0].(map[string]any)
 	for _, k := range []string{"working_dir", "resume_command", "latest_event"} {
@@ -317,7 +317,7 @@ func TestGetTicketByDefaultLeavesOutTheClaimsSessionFieldsAndCountsThem(t *testi
 	if c["session_id"] != "s1" {
 		t.Errorf("claim session_id %v, want s1", c["session_id"])
 	}
-	if want := map[string]any{"claim_sessions": float64(1), "moves": float64(1)}; !reflect.DeepEqual(v["left_out"], want) {
+	if want := map[string]any{"claims": float64(1), "moves": float64(1)}; !reflect.DeepEqual(v["left_out"], want) {
 		t.Fatalf("left_out %v, want %v", v["left_out"], want)
 	}
 	// claim returns the same.
@@ -330,7 +330,7 @@ func TestGetTicketByDefaultLeavesOutTheClaimsSessionFieldsAndCountsThem(t *testi
 
 func TestGetTicketWithTheClaimsPartReturnsThemInFull(t *testing.T) {
 	f := newFixture(t)
-	f.sessioned(t)
+	f.claimedThenBlocked(t)
 	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2", Parts: []string{"claims"}})
 	c := v["claims"].([]any)[0].(map[string]any)
 	if c["working_dir"] != "/work/acme-2" || c["resume_command"] != "claude --resume s1" {
@@ -339,8 +339,8 @@ func TestGetTicketWithTheClaimsPartReturnsThemInFull(t *testing.T) {
 	if e, _ := c["latest_event"].(map[string]any); e["text"] != "Bash: go test ./..." {
 		t.Fatalf("latest_event %v", c["latest_event"])
 	}
-	if _, ok := v["left_out"].(map[string]any)["claim_sessions"]; ok {
-		t.Fatalf("left_out %v counts claim_sessions", v["left_out"])
+	if _, ok := v["left_out"].(map[string]any)["claims"]; ok {
+		t.Fatalf("left_out %v counts claims", v["left_out"])
 	}
 	if b := v["blockers"].([]any)[0].(map[string]any); b["title"] != "Tb" {
 		t.Fatalf("Done Blocker %v, want its title", b)

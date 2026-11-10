@@ -12,3 +12,7 @@ Every comment stays in the default because comments carry what a redo needs: rej
 ## Consequences
 
 The HTTP API keeps returning the whole Ticket when no `part` is named, because the web UI and the Factory read every part (the Factory reads moves to time landings); the client's `GetTicket` with no parts is that whole Ticket, and the CLI names the default parts itself. A write with `full` still returns the whole Ticket. The workflow's step 2 and the Stage Guides say which reads need `parts`, and the context report counts a read of `rounds`, `moves` or `edits` after the default as a wider read.
+
+## Amendment: the default is brief (code-central-320)
+
+The default read and `claim`'s Ticket also leave out fields an agent working the Ticket doesn't use: a Done Blocker shows only its ID and State, and each Claim leaves out its `working_dir`, `resume_command` and `latest_event`, which are for the human and the UI. `left_out` counts the Claims that had any under `claims`, so `parts: ["claims"]`, like any read that names parts, returns them in full. The HTTP API is unchanged, and the CLI applies the same brief view to its default read.

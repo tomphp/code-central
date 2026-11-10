@@ -59,8 +59,8 @@ func TestLatestEventThroughEveryDoor(t *testing.T) {
 				if got, ok := out["claims"].([]any)[0].(map[string]any)["latest_event"]; ok {
 					t.Fatalf("the default read has latest_event %v", got)
 				}
-				if lo := out["left_out"].(map[string]any); lo["claim_sessions"] != float64(1) {
-					t.Fatalf("left_out %v, want claim_sessions 1", lo)
+				if lo := out["left_out"].(map[string]any); lo["claims"] != float64(1) {
+					t.Fatalf("left_out %v, want claims 1", lo)
 				}
 			},
 			calls: []map[string]any{

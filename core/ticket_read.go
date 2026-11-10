@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/json"
 	"maps"
 	"slices"
 	"strings"
@@ -10,7 +9,7 @@ import (
 )
 
 // GetTicketInput is get_ticket's input. With no Parts, the read is the
-// default: DefaultTicketParts (ADR 0015).
+// default: DefaultTicketParts, brief (ADR 0015, code-central-320).
 type GetTicketInput struct {
 	Ticket Ref `json:"ticket"`
 	// Parts are any of TicketParts: the read returns the Ticket's other
@@ -34,7 +33,8 @@ var TicketParts = []string{PartClaims, PartFailureReports, PartComments, PartRou
 // DefaultTicketParts is what get_ticket and claim return of a Ticket when
 // no parts are named: how each Claim ended, every Failure Report and every
 // comment, which carry the rejection, give-up and send-back notes a redo
-// needs. Rounds, moves and edits are left out (ADR 0015).
+// needs. Rounds, moves and edits are left out (ADR 0015), and the view is
+// Brief.
 var DefaultTicketParts = []string{PartClaims, PartFailureReports, PartComments}
 
 // parts is the set of parts the read returns.
@@ -66,12 +66,7 @@ func (v TicketView) only(parts map[string]bool) TicketView {
 		if parts[part] {
 			return false
 		}
-		if n > 0 {
-			if v.LeftOut == nil {
-				v.LeftOut = map[string]int{}
-			}
-			v.LeftOut[part] = n
-		}
+		v.countLeftOut(part, n)
 		return true
 	}
 	if leave(PartClaims, len(v.Claims)) {
@@ -104,15 +99,11 @@ func defaultView(v TicketView) TicketView {
 	return v.only(parts).Brief()
 }
 
-// LeftOutClaimSessions is the left_out count of Claims a default read
-// shows without their session fields.
-const LeftOutClaimSessions = "claim_sessions"
-
 // Brief is the view without what an agent working the Ticket doesn't use
 // (code-central-320): each Done Blocker is its ID and State only, and each
 // Claim leaves out its working dir, resume command and latest Session
 // Event, which are for the human and the UI. LeftOut counts the Claims
-// that had any; parts: [claims] returns them in full.
+// that had any under claims, which parts: [claims] returns in full.
 func (v TicketView) Brief() TicketView {
 	if v.Blockers != nil {
 		v.Blockers = slices.Clone(v.Blockers)
@@ -130,25 +121,20 @@ func (v TicketView) Brief() TicketView {
 			}
 			c.WorkingDir, c.ResumeCommand, c.LatestEvent = "", "", nil
 		}
-		if n > 0 {
-			v.LeftOut = maps.Clone(v.LeftOut)
-			if v.LeftOut == nil {
-				v.LeftOut = map[string]int{}
-			}
-			v.LeftOut[LeftOutClaimSessions] = n
-		}
+		v.countLeftOut(PartClaims, n)
 	}
 	return v
 }
 
-// MarshalJSON shows a brief Blocker as its ID and State only.
-func (b BlockerView) MarshalJSON() ([]byte, error) {
-	if b.brief {
-		return json.Marshal(struct {
-			ID    string      `json:"id"`
-			State store.State `json:"state"`
-		}{b.ID, b.State})
+// countLeftOut counts n of part in LeftOut, when there are any; it never
+// writes to the map v was given.
+func (v *TicketView) countLeftOut(part string, n int) {
+	if n == 0 {
+		return
 	}
-	type plain BlockerView
-	return json.Marshal(plain(b))
+	v.LeftOut = maps.Clone(v.LeftOut)
+	if v.LeftOut == nil {
+		v.LeftOut = map[string]int{}
+	}
+	v.LeftOut[part] = n
 }
