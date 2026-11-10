@@ -105,6 +105,16 @@ func init() {
 		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.LandAnyway(r.Context(), r.PathValue("key"), in)
 	}
+
+	Routes["new_fix_ticket"] = "POST /api/p/{key}/tickets/{n}/new_fix_ticket"
+
+	handlers["new_fix_ticket"] = func(c *core.Core, r *http.Request) (any, error) {
+		in, err := pathBody(r, func(in *core.NewFixTicketInput) *core.Ref { return &in.Ticket })
+		if err != nil {
+			return nil, err
+		}
+		return c.NewFixTicket(r.Context(), r.PathValue("key"), in)
+	}
 }
 
 // CIOverviewPath reads the CI view (code-central-258):

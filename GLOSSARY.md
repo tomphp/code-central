@@ -217,6 +217,14 @@ _Avoid_: Build broken, red
 The failure option by which the human accepts a CI failed Ticket's failed CI result, for its pushed commit only, so the Factory lands it on its next poll. Offered under Merge + Push only: under Branch + Push the human's merge decides.
 _Avoid_: Override, force land
 
+**Send back to fix**:
+The failure option by which the human sends a CI failed Ticket back to Ready with a note naming the failed run and jobs, so the next Claim fixes it on the same branch; its re-accept's newer pushed commit has its own CI result. Offered under Merge + Push and Branch + Push.
+_Avoid_: Revert, reject
+
+**New fix Ticket**:
+The failure option by which the human opens a Ready Ticket on a CI failed Ticket's Spec, carrying the note, and accepts the failed CI result as Land anyway does, so the failed Ticket lands and the fix goes on top. Offered under Merge + Push and Branch + Push.
+_Avoid_: Follow-up ticket, hotfix
+
 **CI unavailable**:
 The Needs Me reason of a Ticket that has waited 10 minutes or more on CI since its push, while the CI Watcher isn't watching or no CI Runs have been reported for its pushed commit.
 _Avoid_: CI down, CI stuck
