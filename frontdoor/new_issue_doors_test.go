@@ -77,8 +77,8 @@ func TestANewIncomingIssueWaitsInNeedsMeAsNewIssue(t *testing.T) {
 	tk := ticket5(t, srv)
 	field("needs_me_reason", "new_issue")(t, tk)
 	boolField(t, tk, "awaiting_triage", true)
-	if got := tk["triage_actions"]; !slices.Equal(strs(got), []string{"keep_as_draft"}) {
-		t.Fatalf("triage_actions = %v, want keep_as_draft", got)
+	if got := tk["triage_actions"]; !slices.Equal(strs(got), triageActions) {
+		t.Fatalf("triage_actions = %v, want %v", got, triageActions)
 	}
 }
 
@@ -100,8 +100,8 @@ func TestWithNewIssuesNeedMeOffAnIncomingIssueIsNotANewIssue(t *testing.T) {
 	tk := ticket5(t, srv)
 	boolField(t, tk, "awaiting_triage", false)
 	// It is still an Incoming Issue, so the human may still triage it.
-	if got := tk["triage_actions"]; !slices.Equal(strs(got), []string{"keep_as_draft"}) {
-		t.Fatalf("triage_actions = %v, want keep_as_draft", got)
+	if got := tk["triage_actions"]; !slices.Equal(strs(got), triageActions) {
+		t.Fatalf("triage_actions = %v, want %v", got, triageActions)
 	}
 	// Turning New issues need me on later doesn't make it new.
 	issuesOn(true)(t, srv)
@@ -173,8 +173,8 @@ func TestKeepAsDraftTakesANewIssueOutOfNeedsMeForGood(t *testing.T) {
 	}
 	// It stays an Incoming Issue, so it is still offered, and keeping it
 	// again changes nothing.
-	if got := tk["triage_actions"]; !slices.Equal(strs(got), []string{"keep_as_draft"}) {
-		t.Fatalf("triage_actions = %v, want keep_as_draft", got)
+	if got := tk["triage_actions"]; !slices.Equal(strs(got), triageActions) {
+		t.Fatalf("triage_actions = %v, want %v", got, triageActions)
 	}
 	acknowledgement("acme-5")(t, httpOK(t, srv, keepAsDraft("5")))
 	// Closed and reopened, edited, or New issues need me turned off and
@@ -191,8 +191,8 @@ func TestKeepAsDraftTakesANewIssueOutOfNeedsMeForGood(t *testing.T) {
 
 func TestKeepAsDraftIsRefusedOnAnythingButAnIncomingIssue(t *testing.T) {
 	srv := newServer(t, newIssue)
-	incomingIssue(t, srv, "acme-1", "8") // acme-6, linked but on another Spec
-	incomingIssue(t, srv, "acme-4", "9") // acme-7, detached below
+	incomingIssue(t, srv, "acme-1", "8")  // acme-6, linked but on another Spec
+	incomingIssue(t, srv, "acme-4", "9")  // acme-7, detached below
 	incomingIssue(t, srv, "acme-4", "10") // acme-8, cancelled below
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/unlink", `{"target":"acme-7"}`})
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/8/move", `{"to_state":"Cancelled"}`})
@@ -220,6 +220,10 @@ func TestKeepAsDraftIsRejectedForAnAgent(t *testing.T) {
 		t.Fatalf("reason %q, want still New issue", row.Reason)
 	}
 }
+
+// triageActions are the triage actions offered on every Incoming Issue,
+// in order.
+var triageActions = []string{"keep_as_draft", "wont_fix"}
 
 // strs is a JSON array of strings.
 func strs(v any) []string {

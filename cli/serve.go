@@ -176,6 +176,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	for _, l := range listeners {
 		bound = append(bound, l.Addr().String())
 	}
+	c.SetUIURL(uiURL(bound[0]))
 	// Serve returns once every Watcher has stopped, so none outlives
 	// it; one that does, if the service is killed, exits when the pipe
 	// that is its stdin closes.

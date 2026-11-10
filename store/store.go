@@ -591,6 +591,7 @@ func (s Spec) clone() Spec {
 	s.Labels = slices.Clone(s.Labels)
 	s.Tags = maps.Clone(s.Tags)
 	s.Edits = cloneEdits(s.Edits)
+	s.Link.Written = slices.Clone(s.Link.Written)
 	return s
 }
 
@@ -609,6 +610,7 @@ func (t Ticket) clone() Ticket {
 	t.Comments = slices.Clone(t.Comments)
 	t.Moves = slices.Clone(t.Moves)
 	t.Edits = cloneEdits(t.Edits)
+	t.Link.Written = slices.Clone(t.Link.Written)
 	return t
 }
 

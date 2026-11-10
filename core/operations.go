@@ -147,6 +147,9 @@ var Operations = []Op{
 	{Name: "report_issue_watcher_status", Audience: IntegrationOnly, Write: true},
 	// New issue and the triage actions (code-central-287).
 	{Name: "keep_as_draft", Audience: HumanOnly, Write: true},
+	// Write-backs and Won't fix (code-central-289).
+	{Name: "report_issue_written", Audience: IntegrationOnly, Write: true},
+	{Name: "wont_fix", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

@@ -382,7 +382,8 @@ func (c *Core) Unlink(ctx context.Context, key string, in UnlinkInput) (LinkedRo
 
 // updateLink applies fn to the Link of the linked Spec or Ticket ref
 // names (they share one counter). fn returns the edit's previous values,
-// nil when nothing changed.
+// nil when nothing changed, and empty for a change kept out of the edit
+// history.
 func (c *Core) updateLink(ctx context.Context, key string, ref Ref, fn func(l *store.Link) (map[string]string, error)) (LinkedRow, error) {
 	var row LinkedRow
 	err := c.store.Update(func(w store.Writer) error {
@@ -403,7 +404,8 @@ func (c *Core) updateLink(ctx context.Context, key string, ref Ref, fn func(l *s
 			if err != nil {
 				return err
 			}
-			if c.recordEdit(ctx, &s.Edits, prev) {
+			if prev != nil {
+				c.recordEdit(ctx, &s.Edits, prev)
 				s.Updated = c.now()
 				if err := w.PutSpec(key, s); err != nil {
 					return err
@@ -420,7 +422,8 @@ func (c *Core) updateLink(ctx context.Context, key string, ref Ref, fn func(l *s
 			if err != nil {
 				return err
 			}
-			if c.recordEdit(ctx, &t.Edits, prev) {
+			if prev != nil {
+				c.recordEdit(ctx, &t.Edits, prev)
 				t.Updated = c.now()
 				if err := w.PutTicket(key, t); err != nil {
 					return err

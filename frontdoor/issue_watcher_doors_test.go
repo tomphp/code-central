@@ -90,14 +90,17 @@ func TestGetIssueWatchSaysWhenGitHubIssuesIsOff(t *testing.T) {
 	}
 }
 
-// noIncomingIssues checks get_issue_watch's out lists no Incoming Issues,
-// and takes them out of it, leaving the settings to compare.
+// noIncomingIssues checks get_issue_watch's out lists no Incoming Issues
+// and no writes due, and takes them out of it, leaving the settings to
+// compare.
 func noIncomingIssues(t *testing.T, out map[string]any) {
 	t.Helper()
-	if issues, ok := out["issues"].([]any); !ok || len(issues) != 0 {
-		t.Fatalf("get_issue_watch issues = %v, want none", out["issues"])
+	for _, list := range []string{"issues", "writes"} {
+		if items, ok := out[list].([]any); !ok || len(items) != 0 {
+			t.Fatalf("get_issue_watch %s = %v, want none", list, out[list])
+		}
+		delete(out, list)
 	}
-	delete(out, "issues")
 }
 
 // createIncomingIssue creates a Draft Ticket on spec linked to acme/web's

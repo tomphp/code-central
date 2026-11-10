@@ -22,15 +22,22 @@ type issue struct {
 	Title       string  `json:"title"`
 	Body        *string `json:"body"`
 	HTMLURL     string  `json:"html_url"`
+	State       string  `json:"state"`
+	Labels      []label `json:"labels"`
 	PullRequest *struct {
 		URL string `json:"url"`
 	} `json:"pull_request,omitempty"`
 }
 
+// label is a label on an issue.
+type label struct {
+	Name string `json:"name"`
+}
+
 // openIssue is acme/web's open issue n, with a body.
 func openIssue(n int) issue {
 	body := fmt.Sprintf("Body %d", n)
-	return issue{Number: n, Title: fmt.Sprintf("Issue %d", n), Body: &body, HTMLURL: fmt.Sprintf("https://github.com/acme/web/issues/%d", n)}
+	return issue{Number: n, Title: fmt.Sprintf("Issue %d", n), Body: &body, HTMLURL: fmt.Sprintf("https://github.com/acme/web/issues/%d", n), State: "open"}
 }
 
 // pullRequest is acme/web's open pull request n, as the issues list
@@ -66,16 +73,22 @@ func (w *watching) openIssues(label string, page int, issues ...issue) {
 	w.h.Answer(fakegh.Answer{Args: []string{"api", issuesPath(label, page)}, Stdout: string(b)})
 }
 
-// incoming is acme's Incoming Issues as get_issue_watch lists them, each
-// as its Link's ID, URL, title and description.
-func (w *watching) incoming() []string {
+// watch is acme's get_issue_watch.
+func (w *watching) watch() core.IssueWatch {
 	w.t.Helper()
 	watch, err := w.srv.Core.GetIssueWatch(context.Background(), "acme")
 	if err != nil {
 		w.t.Fatal(err)
 	}
+	return watch
+}
+
+// incoming is acme's Incoming Issues as get_issue_watch lists them, each
+// as its Link's ID, URL, title and description.
+func (w *watching) incoming() []string {
+	w.t.Helper()
 	var out []string
-	for _, i := range watch.Issues {
+	for _, i := range w.watch().Issues {
 		if i.Link.Integration != "github" {
 			w.t.Fatalf("Incoming Issue %s linked by %q, want github", i.Ticket, i.Link.Integration)
 		}
