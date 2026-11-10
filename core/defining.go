@@ -274,7 +274,13 @@ func (c *Core) SetTags(_ context.Context, key string, in SetTagsInput) (TargetVi
 			return TargetView{}, invalid("tags", "Tag %q needs a non-empty, single-line value", k)
 		}
 	}
-	return c.updateTarget(key, in.Target, func(_ bool, _ *[]string, tags map[string]string) error {
+	return c.updateTargetIn(key, in.Target, func(r store.Reader, onSpec bool, _ *[]string, tags map[string]string) error {
+		// On a Ticket, effort sets its Model Choice, so it is checked.
+		if effort, ok := in.Tags[EffortTag]; ok && !onSpec {
+			if err := checkEffort(r, key, "tags", effort); err != nil {
+				return err
+			}
+		}
 		maps.Copy(tags, in.Tags)
 		return nil
 	})
@@ -302,6 +308,13 @@ func (c *Core) RemoveTags(_ context.Context, key string, in RemoveTagsInput) (Ta
 // counter) and applies fn to its Labels and Tags. It is written only
 // when they changed. Label and Tag changes aren't recorded in edits.
 func (c *Core) updateTarget(key string, ref Ref, fn func(onSpec bool, labels *[]string, tags map[string]string) error) (TargetView, error) {
+	return c.updateTargetIn(key, ref, func(_ store.Reader, onSpec bool, labels *[]string, tags map[string]string) error {
+		return fn(onSpec, labels, tags)
+	})
+}
+
+// updateTargetIn is updateTarget with fn given the store too.
+func (c *Core) updateTargetIn(key string, ref Ref, fn func(r store.Reader, onSpec bool, labels *[]string, tags map[string]string) error) (TargetView, error) {
 	var v TargetView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
@@ -316,7 +329,7 @@ func (c *Core) updateTarget(key string, ref Ref, fn func(onSpec bool, labels *[]
 			if *tags == nil {
 				*tags = map[string]string{}
 			}
-			if err := fn(onSpec, labels, *tags); err != nil {
+			if err := fn(w, onSpec, labels, *tags); err != nil {
 				return false, err
 			}
 			return !slices.Equal(oldL, *labels) || !maps.Equal(oldT, *tags), nil

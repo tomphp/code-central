@@ -20,7 +20,7 @@ function seeded() {
     description: "Login fails after the session expires.",
     claims: [
       { number: 1, session_id: "s-old", started: at(fake, 300), last_activity: at(fake, 250), ended: at(fake, 240), ended_by: "release" },
-      { number: 2, session_id: "s-new", started: at(fake, 60), last_activity: at(fake, 2) },
+      { number: 2, session_id: "s-new", model: "opus", effort: "high", started: at(fake, 60), last_activity: at(fake, 2) },
     ],
     moves: [
       { from: "Draft", to: "Ready", actor: "agent", time: at(fake, 400) },
@@ -67,9 +67,25 @@ describe("the Ticket detail", () => {
     const { fake, t } = seeded();
     const rows = within(within(renderDetail(fake, t)).getByRole("list", { name: "Claims" })).getAllByRole("listitem");
     expect(rows.map((r) => claimLine(r).textContent)).toEqual([
-      "Claim 2 · started 1h ago · last activity 2m ago · session s-new",
-      "Claim 1 · started 5h ago · last activity 4h ago · ended by release 4h ago · session s-old",
+      "Claim 2 · started 1h ago · last activity 2m ago · model opus · effort high · session s-new",
+      "Claim 1 · started 5h ago · last activity 4h ago · ended by release 4h ago · model Claude Code's default · effort Claude Code's default · session s-old",
     ]);
+  });
+
+  it("shows the model and effort each Claim's latest turn ran with, or Claude Code's default", () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    const t = fake.addTicket("acme", {
+      title: "Tune it",
+      state: "In Progress",
+      claims: [
+        { number: 1, started: at(fake, 90), last_activity: at(fake, 80), ended: at(fake, 80), ended_by: "give_up", effort: "low" },
+        { number: 2, started: at(fake, 60), last_activity: at(fake, 2), model: "claude-opus-5-5" },
+      ],
+    });
+    const rows = within(within(renderDetail(fake, t)).getByRole("list", { name: "Claims" })).getAllByRole("listitem");
+    expect(claimLine(rows[0])).toHaveTextContent("model claude-opus-5-5 · effort Claude Code's default");
+    expect(claimLine(rows[1])).toHaveTextContent("model Claude Code's default · effort low");
   });
 
   it("adds a Claim's latest Session Event and how long ago it was after its last activity", async () => {
@@ -79,7 +95,7 @@ describe("the Ticket detail", () => {
       { time: at(fake, 3), kind: "tool_result", tool_use_id: "tu-1", text: "ok" },
     ]);
     const rows = within(within(renderDetail(fake, await fake.getTicket("acme", t.id))).getByRole("list", { name: "Claims" })).getAllByRole("listitem");
-    expect(claimLine(rows[0])).toHaveTextContent(/^Claim 2 · started 1h ago · last activity just now · Bash result · 3m ago · session s-new$/);
+    expect(claimLine(rows[0])).toHaveTextContent(/^Claim 2 · started 1h ago · last activity just now · Bash result · 3m ago · model opus · effort high · session s-new$/);
     expect(within(rows[0]).getByText("Bash result · 3m ago")).toHaveClass("latest-event");
     expect(rows[1]).not.toHaveTextContent("Bash");
   });

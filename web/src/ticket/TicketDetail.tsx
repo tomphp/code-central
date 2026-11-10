@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { Api } from "../api/api";
 import { moveTargets } from "../api/actions/move";
 import type { EditView, State, TicketView } from "../api/types";
-import { ago, REASON_LABEL } from "../format";
+import { ago, CLAUDE_CODE_DEFAULT, REASON_LABEL } from "../format";
 import { Markdown } from "../Markdown";
 import { ActionPanel } from "../panels/ActionPanel";
 import { LatestEventLine } from "../LatestEvent";
@@ -115,6 +115,8 @@ export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketD
                     · ended{c.ended_by && <> by {c.ended_by}</>} {ago(now, c.ended)}
                   </>
                 )}
+                {" "}
+                · model {c.model || CLAUDE_CODE_DEFAULT} · effort {c.effort || CLAUDE_CODE_DEFAULT}
                 {c.session_id && <> · session {c.session_id}</>}
               </div>
               <Live

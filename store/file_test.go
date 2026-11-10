@@ -124,7 +124,7 @@ func TestFilesAreWrittenInFixedFieldOrder(t *testing.T) {
 			Created: t0, Updated: t0.Add(90 * time.Second), Description: "Build it.\nWell.\n",
 			Branch: "acme-2", Commit: "abc123",
 			Moves:  []store.Move{{From: store.Accepted, To: store.Done, Actor: "agent", Time: t0, Via: "merge", Commit: "def456"}},
-			Claims: []store.Claim{{Number: 1, ID: "ABC", SessionID: "s1", WorkingDir: "/work/acme 2", ResumeCommand: "claude --resume s1 && echo 'back'", Started: t0, Ended: t0.Add(time.Minute), EndedBy: "finish"}},
+			Claims: []store.Claim{{Number: 1, ID: "ABC", SessionID: "s1", WorkingDir: "/work/acme 2", ResumeCommand: "claude --resume s1 && echo 'back'", Model: "opus", Effort: "high", Started: t0, Ended: t0.Add(time.Minute), EndedBy: "finish"}},
 			Rounds: []store.Round{{Number: 1, Claim: 1, SessionID: "s1", Posted: t0, Questions: []store.Question{
 				{Number: 1, Title: "Which DB?", Body: "Postgres\nor SQLite?\n", Recommended: "SQLite", Status: store.QuestionAnswered, Answer: "SQLite\nfor now.\n", Closed: t0.Add(30 * time.Second)},
 			}}},
@@ -184,6 +184,8 @@ claims:
     session_id: s1
     working_dir: /work/acme 2
     resume_command: claude --resume s1 && echo 'back'
+    model: opus
+    effort: high
     started: 2026-11-07T09:30:00Z
     ended: 2026-11-07T09:31:00Z
     ended_by: finish

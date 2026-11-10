@@ -27,6 +27,9 @@ type ClaimResult struct {
 	ClaimID    string          `json:"claim_id,omitempty"`
 	Ticket     *TicketView     `json:"ticket"`
 	StageGuide *StageGuideView `json:"stage_guide,omitempty"`
+	// ModelChoice is the model and effort the Claim's first turn runs
+	// with, as far as Code Central sets them.
+	ModelChoice *ModelChoice `json:"model_choice,omitempty"`
 }
 
 // FinishInput is finish's input.
@@ -124,7 +127,8 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 func (c *Core) claimResult(r store.Reader, key string, t store.Ticket, id string) ClaimResult {
 	v := defaultView(c.ticketView(r, key, t))
 	g := stageGuide(GuideName(t.Labels))
-	return ClaimResult{ClaimID: id, Ticket: &v, StageGuide: &g}
+	mc := modelChoice(t)
+	return ClaimResult{ClaimID: id, Ticket: &v, StageGuide: &g, ModelChoice: &mc}
 }
 
 // heldError is claim's action_not_allowed on a named Ticket whose live

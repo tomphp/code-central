@@ -360,7 +360,8 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		f.reportFailure(ctx, c, fl)
 		return true
 	}
-	f.startTurn(ctx, c, wt, append(f.startArgs(c), firstPrompt(c, stage, wt, guide)))
+	tm := f.withFlags(res.ModelChoice)
+	f.startTurn(ctx, c, wt, tm, append(f.startArgs(c, tm), firstPrompt(c, stage, wt, guide)))
 	return true
 }
 
@@ -373,6 +374,11 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 	}
 	if pid, ok := f.sessionHolder(c.SessionID); ok {
 		f.claimf(c, "%s: session %s is held by pid %d: waiting a poll before resuming", c.Ticket, c.SessionID, pid)
+		return
+	}
+	// Before the answers are picked up, so a failure leaves it Answered.
+	tm, ok := f.resumeModel(ctx, c)
+	if !ok {
 		return
 	}
 	res, err := f.client.PickUpAnswers(ctx, f.project, core.PickUpAnswersInput{Ticket: core.Ref(c.Ticket), ClaimID: c.ClaimID})
@@ -388,7 +394,7 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 	if decided != "" {
 		prompt += "\n" + decided + "\n"
 	}
-	f.startTurn(ctx, c, f.worktree(c.Ticket), append(f.resumeArgs(c), prompt))
+	f.startTurn(ctx, c, f.worktree(c.Ticket), tm, append(f.resumeArgs(c, tm), prompt))
 }
 
 // sessionHolder looks through the process list for a process other than

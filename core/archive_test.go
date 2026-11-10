@@ -273,6 +273,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "acme-2", Commit: "abc123"})
 		return err
 	},
+	"report_model_choice": func(f fixture) error {
+		_, err := f.core.ReportModelChoice(ctx, "acme", core.ReportModelChoiceInput{Ticket: "acme-2", ClaimID: "claim-1", Model: "opus"})
+		return err
+	},
 	"keep_as_draft": func(f fixture) error {
 		_, err := f.core.KeepAsDraft(human, "acme", core.TicketInput{Ticket: "acme-2"})
 		return err

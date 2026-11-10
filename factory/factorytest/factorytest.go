@@ -102,6 +102,7 @@ type Harness struct {
 	// behind a proxy that SetDown can take down.
 	URL       string
 	down      atomic.Bool
+	failing   atomic.Value // string: a path suffix the proxy fails
 	refusedMu sync.Mutex
 	refused   map[string]int64 // requests refused while down, by path
 	data      string           // scripts/ and calls/
@@ -223,6 +224,12 @@ func (h *Harness) startProxy() string {
 	must(h.t, err)
 	rp := httputil.NewSingleHostReverseProxy(target)
 	ps := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if suffix, _ := h.failing.Load().(string); suffix != "" && strings.HasSuffix(r.URL.Path, suffix) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprint(w, `{"code":"internal","message":"failing for the test"}`)
+			return
+		}
 		if !h.down.Load() {
 			rp.ServeHTTP(w, r)
 			return
@@ -241,6 +248,11 @@ func (h *Harness) startProxy() string {
 // SetDown takes Code Central down for the Factory and its sessions, or
 // brings it back up. The harness's own reads still reach it.
 func (h *Harness) SetDown(down bool) { h.down.Store(down) }
+
+// SetFailing makes Code Central fail the Factory's and its sessions'
+// requests to every path ending in suffix, such as "/model-choice", or
+// stops failing them given "".
+func (h *Harness) SetFailing(suffix string) { h.failing.Store(suffix) }
 
 // Refused is how many requests to path, such as "/api/session-events",
 // were refused while Code Central was down.
