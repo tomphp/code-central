@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -39,6 +40,20 @@ type BlockerView struct {
 	// longer blocks though it isn't Done (code-central-299).
 	CIResult CIResult `json:"ci_result,omitempty"`
 	Cleared  bool     `json:"cleared"`
+	// brief shows the Blocker as its ID and State only (TicketView.Brief).
+	brief bool
+}
+
+// MarshalJSON shows a brief Blocker as its ID and State only.
+func (b BlockerView) MarshalJSON() ([]byte, error) {
+	if b.brief {
+		return json.Marshal(struct {
+			ID    string      `json:"id"`
+			State store.State `json:"state"`
+		}{b.ID, b.State})
+	}
+	type plain BlockerView
+	return json.Marshal(plain(b))
 }
 
 // AddBlocker is add_blocker(ticket, blocker). A link already there

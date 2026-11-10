@@ -412,7 +412,11 @@ func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (Tick
 		if err != nil {
 			return err
 		}
-		v = c.ticketView(r, key, t).only(parts)
+		if v = c.ticketView(r, key, t); len(in.Parts) == 0 {
+			v = defaultView(v)
+		} else {
+			v = v.only(parts)
+		}
 		if in.WithModelChoice {
 			mc := modelChoice(p, t)
 			v.ModelChoice = &mc

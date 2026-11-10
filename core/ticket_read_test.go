@@ -269,3 +269,80 @@ func TestTheSpecStageReadsTheGrillingTicketsAnswersAndResolution(t *testing.T) {
 		t.Fatalf("question %+v", q)
 	}
 }
+
+// An agent's default read leaves out what it doesn't use (code-central-320):
+// a Done Blocker's title and the Claims' session fields, which parts:
+// [claims] returns in full.
+
+// claimedThenBlocked is acme-2 claimed, then blocked by acme-3 (Done) and acme-4 (Ready),
+// its Claim by s1 with a working dir, a resume command and a Session Event.
+func (f fixture) claimedThenBlocked(t *testing.T) {
+	t.Helper()
+	f.work(t, store.Ready, store.Ready, store.Ready)
+	f.move(t, "3", store.Done)
+	if _, err := f.core.Claim(ctx, "acme", core.ClaimInput{Ticket: "acme-2", SessionID: "s1", WorkingDir: str("/work/acme-2"), ResumeCommand: str("claude --resume s1")}); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	for _, b := range []core.Ref{"3", "4"} {
+		if _, err := f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "2", Blocker: b}); err != nil {
+			t.Fatalf("add_blocker %s: %v", b, err)
+		}
+	}
+	f.core.PostSessionEvents(ctx, "s1", []core.SessionEvent{{Time: f.clock.Now(), Kind: "tool_call", Text: "Bash: go test ./..."}})
+}
+
+func TestGetTicketByDefaultShowsADoneBlockerAsItsIDAndStateOnly(t *testing.T) {
+	f := newFixture(t)
+	f.claimedThenBlocked(t)
+	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2"})
+	want := []any{
+		map[string]any{"id": "acme-3", "state": "Done"},
+		map[string]any{"id": "acme-4", "title": "Tc", "state": "Ready", "cleared": false},
+	}
+	if !reflect.DeepEqual(v["blockers"], want) {
+		t.Fatalf("blockers %v, want %v", v["blockers"], want)
+	}
+}
+
+func TestGetTicketByDefaultLeavesOutTheClaimsSessionFieldsAndCountsThem(t *testing.T) {
+	f := newFixture(t)
+	f.claimedThenBlocked(t)
+	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2"})
+	c := v["claims"].([]any)[0].(map[string]any)
+	for _, k := range []string{"working_dir", "resume_command", "latest_event"} {
+		if _, ok := c[k]; ok {
+			t.Errorf("claim has %s: %v", k, c)
+		}
+	}
+	if c["session_id"] != "s1" {
+		t.Errorf("claim session_id %v, want s1", c["session_id"])
+	}
+	if want := map[string]any{"claims": float64(1), "moves": float64(1)}; !reflect.DeepEqual(v["left_out"], want) {
+		t.Fatalf("left_out %v, want %v", v["left_out"], want)
+	}
+	// claim returns the same.
+	f.clock.Advance(time.Minute)
+	res := f.claim(t, core.ClaimInput{Ticket: "acme-2", SessionID: "s1"})
+	if got := asJSON(t, res.Ticket); !reflect.DeepEqual(got["claims"], v["claims"]) {
+		t.Fatalf("claim's claims %v, want %v", got["claims"], v["claims"])
+	}
+}
+
+func TestGetTicketWithTheClaimsPartReturnsThemInFull(t *testing.T) {
+	f := newFixture(t)
+	f.claimedThenBlocked(t)
+	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2", Parts: []string{"claims"}})
+	c := v["claims"].([]any)[0].(map[string]any)
+	if c["working_dir"] != "/work/acme-2" || c["resume_command"] != "claude --resume s1" {
+		t.Fatalf("claim %v", c)
+	}
+	if e, _ := c["latest_event"].(map[string]any); e["text"] != "Bash: go test ./..." {
+		t.Fatalf("latest_event %v", c["latest_event"])
+	}
+	if _, ok := v["left_out"].(map[string]any)["claims"]; ok {
+		t.Fatalf("left_out %v counts claims", v["left_out"])
+	}
+	if b := v["blockers"].([]any)[0].(map[string]any); b["title"] != "Tb" {
+		t.Fatalf("Done Blocker %v, want its title", b)
+	}
+}

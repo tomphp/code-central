@@ -1,12 +1,15 @@
 package core
 
 import (
+	"maps"
 	"slices"
 	"strings"
+
+	"github.com/tomoram/code-central/store"
 )
 
 // GetTicketInput is get_ticket's input. With no Parts, the read is the
-// default: DefaultTicketParts (ADR 0015).
+// default: DefaultTicketParts, brief (ADR 0015, code-central-320).
 type GetTicketInput struct {
 	Ticket Ref `json:"ticket"`
 	// Parts are any of TicketParts: the read returns the Ticket's other
@@ -34,7 +37,8 @@ var TicketParts = []string{PartClaims, PartFailureReports, PartComments, PartRou
 // DefaultTicketParts is what get_ticket and claim return of a Ticket when
 // no parts are named: how each Claim ended, every Failure Report and every
 // comment, which carry the rejection, give-up and send-back notes a redo
-// needs. Rounds, moves and edits are left out (ADR 0015).
+// needs. Rounds, moves and edits are left out (ADR 0015), and the view is
+// Brief.
 var DefaultTicketParts = []string{PartClaims, PartFailureReports, PartComments}
 
 // parts is the set of parts the read returns.
@@ -66,12 +70,7 @@ func (v TicketView) only(parts map[string]bool) TicketView {
 		if parts[part] {
 			return false
 		}
-		if n > 0 {
-			if v.LeftOut == nil {
-				v.LeftOut = map[string]int{}
-			}
-			v.LeftOut[part] = n
-		}
+		v.countLeftOut(part, n)
 		return true
 	}
 	if leave(PartClaims, len(v.Claims)) {
@@ -101,5 +100,45 @@ func defaultView(v TicketView) TicketView {
 	for _, p := range DefaultTicketParts {
 		parts[p] = true
 	}
-	return v.only(parts)
+	return v.only(parts).Brief()
+}
+
+// Brief is the view without what an agent working the Ticket doesn't use
+// (code-central-320): each Done Blocker is its ID and State only, and each
+// Claim leaves out its working dir, resume command and latest Session
+// Event, which are for the human and the UI. LeftOut counts the Claims
+// that had any under claims, which parts: [claims] returns in full.
+func (v TicketView) Brief() TicketView {
+	if v.Blockers != nil {
+		v.Blockers = slices.Clone(v.Blockers)
+		for i := range v.Blockers {
+			v.Blockers[i].brief = v.Blockers[i].State == store.Done
+		}
+	}
+	if v.Claims != nil {
+		v.Claims = slices.Clone(v.Claims)
+		n := 0
+		for i := range v.Claims {
+			c := &v.Claims[i]
+			if c.WorkingDir != "" || c.ResumeCommand != "" || c.LatestEvent != nil {
+				n++
+			}
+			c.WorkingDir, c.ResumeCommand, c.LatestEvent = "", "", nil
+		}
+		v.countLeftOut(PartClaims, n)
+	}
+	return v
+}
+
+// countLeftOut counts n of part in LeftOut, when there are any; it never
+// writes to the map v was given.
+func (v *TicketView) countLeftOut(part string, n int) {
+	if n == 0 {
+		return
+	}
+	v.LeftOut = maps.Clone(v.LeftOut)
+	if v.LeftOut == nil {
+		v.LeftOut = map[string]int{}
+	}
+	v.LeftOut[part] = n
 }
