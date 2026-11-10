@@ -94,8 +94,9 @@ type ticketFile struct {
 }
 
 type pushedCommitFile struct {
-	Commit string `yaml:"commit"`
-	Pushed string `yaml:"pushed"`
+	Commit     string `yaml:"commit"`
+	Pushed     string `yaml:"pushed"`
+	LandAnyway string `yaml:"land_anyway,omitempty"`
 }
 
 // ciRunsFile is projects/<key>/ci-runs.yaml, the Project's CI Runs.
@@ -273,6 +274,11 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		}
 		if p.Pushed, err = parseTime(pc.Pushed); err != nil {
 			return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].pushed", i), Msg: err.Error()}
+		}
+		if pc.LandAnyway != "" {
+			if p.LandAnyway, err = parseTime(pc.LandAnyway); err != nil {
+				return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].land_anyway", i), Msg: err.Error()}
+			}
 		}
 		t.PushedCommits = append(t.PushedCommits, p)
 	}
@@ -459,7 +465,11 @@ func encode(record any, project string) (string, []byte, error) {
 			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
 		}
 		for _, pc := range r.PushedCommits {
-			f.PushedCommits = append(f.PushedCommits, pushedCommitFile{Commit: pc.Commit, Pushed: formatTime(pc.Pushed)})
+			pf := pushedCommitFile{Commit: pc.Commit, Pushed: formatTime(pc.Pushed)}
+			if !pc.LandAnyway.IsZero() {
+				pf.LandAnyway = formatTime(pc.LandAnyway)
+			}
+			f.PushedCommits = append(f.PushedCommits, pf)
 		}
 		for _, c := range r.Claims {
 			cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Started: formatTime(c.Started), EndedBy: c.EndedBy}

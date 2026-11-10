@@ -94,6 +94,27 @@ func TestUnderMergeAndPushWithCITrackingAFailedCIResultDoesNotLand(t *testing.T)
 	r.WaitForOutput(id + ": CI failed at " + pushed[:12])
 }
 
+// Land anyway (code-central-261): the human accepts the failed CI
+// result, and the Factory lands the Ticket at its pushed commit on its
+// next poll.
+func TestAfterLandAnywayAFailedTicketLandsOnTheNextPoll(t *testing.T) {
+	t.Parallel()
+	h, _, r := gatedHarness(t)
+	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
+	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CIFailure)
+	stillAccepted(t, h, r, id, "with a failed CI result")
+
+	if _, err := h.Server.Core.LandAnyway(core.WithActor(context.Background(), core.Human), h.Project, core.TicketInput{Ticket: core.Ref(id)}); err != nil {
+		t.Fatal(err)
+	}
+	r.Poll()
+	tk := h.WaitForState(id, store.Done)
+	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != pushed {
+		t.Errorf("landed with %q, want the pushed commit %s", m.Commit, pushed)
+	}
+	r.WaitForOutput(id + ": landing anyway at " + pushed[:12])
+}
+
 func TestATicketBlockedByAGatedTicketStaysBlockedUntilItLands(t *testing.T) {
 	t.Parallel()
 	h, _, r := gatedHarness(t)

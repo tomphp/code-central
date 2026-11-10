@@ -1,6 +1,7 @@
 // Package notify sends OS Notifications when an agent is stopped and
 // waiting on the human: a new Round, a new Failure Report, a Claim
-// turning Silent, a Claim turning Long (once per Claim), or a Project's
+// turning Silent, a Claim turning Long (once per Claim), a Ticket going
+// to CI failed (once per pushed commit), or a Project's
 // CI Watcher going into an error (once each time, not once per poll).
 // It listens to core's change notices and also looks at every Ticket on its own timer, as the spec has it: serve's
 // core.WatchTimedReasons does publish a notice when a Claim turns Silent, but
@@ -72,6 +73,7 @@ const (
 	silentClaim
 	longClaim
 	ciWatcherError
+	ciFailed
 )
 
 // reasons is each reason's wording: the one-event title (%s is the
@@ -83,6 +85,7 @@ var reasons = [...]struct{ title, one, many string }{
 	longClaim:   {"%s has a Long Claim", "Long Claim", "Long Claims"},
 	// %s is the Project's key.
 	ciWatcherError: {"%s's CI Watcher is in error", "CI Watcher error", "CI Watcher errors"},
+	ciFailed:       {"%s's CI failed", "CI failure", "CI failures"},
 }
 
 // event is one thing to notify. A CI Watcher error is about a Project,
@@ -201,6 +204,9 @@ func (w *watcher) observe(t core.AttentionTicket) {
 	}
 	if t.SilentClaim != 0 && t.SilentClaim != was.SilentClaim {
 		w.pending = append(w.pending, event{silentClaim, t})
+	}
+	if t.CIFailed != "" && t.CIFailed != was.CIFailed {
+		w.pending = append(w.pending, event{ciFailed, t})
 	}
 	if k := (longKey{t.ID, t.LongClaim}); t.LongClaim != 0 && !w.long[k] {
 		w.long[k] = true

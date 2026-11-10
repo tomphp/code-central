@@ -7,6 +7,7 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   long_claim: "Long Claim",
   failed: "Failed",
   in_review: "In Review",
+  ci_failed: "CI failed",
   to_merge: "To merge",
   accepted_not_landed: "Accepted but not landed",
   blocked_by_cancelled: "Blocked by a Cancelled Ticket",
@@ -39,6 +40,8 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
       return r.failure.reports > 1 ? `${r.failure.headline} · failed ${r.failure.reports}×` : r.failure.headline;
     case "in_review":
       return r.summary || "Finished";
+    case "ci_failed":
+      return r.ci_failure ? `CI failed at ${r.ci_failure.commit.slice(0, 7)}: ${r.ci_failure.workflows.join(", ")}` : "CI failed";
     case "to_merge":
       return `Accepted ${ago(now, r.since)}: merge ${r.branch ?? "its branch"} into the base`;
     case "accepted_not_landed":

@@ -330,11 +330,17 @@ func (f *factory) pushedBase(tk core.TicketView, remote, commit string) bool {
 }
 
 // landOnCI lands a Ticket the CI gate holds at its pushed commit once
-// its CI result is passed. Until then it stays where it is, with a line
-// for each CI result it waits on.
+// its CI result is passed, or once the human chose Land anyway on a
+// failed one. Until then it stays where it is, with a line for each CI
+// result it waits on.
 func (f *factory) landOnCI(ctx context.Context, tk core.TicketView) {
 	pushed := tk.PushedCommit.Commit
 	if tk.CIResult == core.CIPassed {
+		f.landAt(ctx, tk, pushed)
+		return
+	}
+	if tk.CIResult == core.CIFailed && tk.LandAnyway {
+		f.printf("%s: landing anyway at %s, as you chose, though its CI failed", tk.ID, short(pushed))
 		f.landAt(ctx, tk, pushed)
 		return
 	}

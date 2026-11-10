@@ -36,6 +36,10 @@
 // changes what it watches while on, as the service does: it passes
 // unless seedCICheck has given it a refusal.
 //
+// reportPushedCommit and reportCIRuns work a Ticket's CI result out as
+// the service does, with its failure options while it is CI failed;
+// land_anyway records the human's choice on the latest pushed commit.
+//
 // postSessionEvents stands in for a Factory's POST /api/session-events: the
 // events go to the newest Claim with that session ID. Each Claim view
 // carries its latest Session Event, and each row its live Claim's, worked
@@ -73,6 +77,7 @@ import {
   type LatestEvent,
   type LinkedRow,
   type CIConclusion,
+  type CIFailureOption,
   type CIResult,
   type CIRule,
   type CIRunView,
@@ -337,6 +342,9 @@ export class FakeApi implements Api {
   // ciRuns each Project's CI Runs (code-central-256).
   private pushedCommits = new Map<string, PushedCommitView[]>();
   private ciRuns = new Map<string, CIRunView[]>();
+  // landedAnyway is each "<ticket>@<commit>" the human chose Land anyway
+  // for (code-central-261).
+  private landedAnyway = new Set<string>();
   private specs = new Map<string, SpecView>();
   private groups: { reason: NeedsMeReason; tickets: NeedsMeRow[] }[] = [];
   private subs = new Set<EventHandlers>();
@@ -564,6 +572,21 @@ export class FakeApi implements Api {
   // ticketsIn is every Ticket in a Project, as views.
   ticketsIn(project: string): TicketView[] {
     return [...this.tickets.values()].filter((t) => this.projectOf(t.id) === project).map((t) => this.view(t));
+  }
+
+  // landAnyway records the human's Land anyway on t's latest pushed
+  // commit, refused unless t is offered it, as core's LandAnyway is, and
+  // takes t out of Needs Me.
+  landAnyway(t: TicketView): TicketView {
+    const key = this.projectOf(t.id);
+    const latest = this.pushedCommits.get(t.id)?.at(-1);
+    if (t.land_anyway && t.state === "Accepted") return this.view(t);
+    if (!latest || !t.ci_failure_options?.includes("land_anyway")) {
+      throw new ApiError(409, "action_not_allowed", `${t.id} isn't offered Land anyway: it needs a failed CI result, Accepted under Merge`);
+    }
+    this.landedAnyway.add(`${t.id}@${latest.commit}`);
+    this.dropNeedsMe(t.id);
+    return this.trackCI(key, t);
   }
 
   // dropNeedsMe takes a Ticket out of Needs Me, as an action that resolves
@@ -880,6 +903,8 @@ export class FakeApi implements Api {
     if (JSON.stringify(p.landing) !== JSON.stringify(l)) {
       p.landing = l;
       this.emit({ type: "project.changed", project: key });
+      // The failure options a CI failed Ticket is offered follow it.
+      for (const t of this.ticketsIn(key)) if (t.pushed_commit) this.trackCI(key, t);
     }
     return this.projectView(p);
   }
@@ -1021,10 +1046,10 @@ export class FakeApi implements Api {
 
   // trackCI works t's pushed commit, CI Runs and CI result out, as core's
   // ticketCI does on read.
-  private trackCI(key: string, t: TicketView) {
+  private trackCI(key: string, t: TicketView): TicketView {
     const pushed = this.pushedCommits.get(t.id) ?? [];
     const latest = pushed.at(-1);
-    if (!latest) return;
+    if (!latest) return this.view(t);
     const order = (commit: string) => pushed.length - 1 - pushed.findIndex((c) => c.commit === commit);
     const mine = (this.ciRuns.get(key) ?? []).filter((r) => r.ticket === t.id).sort((a, b) => order(a.commit) - order(b.commit));
     const counted = new Map<number, CIRunView>();
@@ -1039,7 +1064,20 @@ export class FakeApi implements Api {
         : finished.some((r) => r.conclusion !== undefined && FAILED_CONCLUSIONS.includes(r.conclusion))
           ? "failed"
           : "passed";
-    this.updateTicket(t.id, { pushed_commit: latest, ci_result, ...(mine.length > 0 && { ci_runs: structuredClone(mine) }) });
+    // CI failed: Accepted, failed, and the human hasn't chosen Land anyway;
+    // Land anyway is offered only under Merge.
+    const land_anyway = this.landedAnyway.has(`${t.id}@${latest.commit}`);
+    const ciFailed = t.state === "Accepted" && ci_result === "failed" && !land_anyway;
+    const options: CIFailureOption[] = this.project(key).landing.method === "merge" ? ["land_anyway"] : [];
+    const { land_anyway: _l, ci_failure_options: _o, ...rest } = this.tickets.get(t.id)!;
+    this.tickets.set(t.id, rest);
+    return this.updateTicket(t.id, {
+      pushed_commit: latest,
+      ci_result,
+      ...(mine.length > 0 && { ci_runs: structuredClone(mine) }),
+      ...(land_anyway && { land_anyway }),
+      ...(ciFailed && { ci_failure_options: options }),
+    });
   }
 
   private setCI(p: FakeProject, ci: CISettings) {

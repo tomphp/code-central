@@ -92,3 +92,17 @@ func init() {
 		return c.ReportCIRuns(r.Context(), r.PathValue("key"), in)
 	}
 }
+
+// CI failed's failure options (code-central-261): the human's.
+func init() {
+	Routes["land_anyway"] = "POST /api/p/{key}/tickets/{n}/land_anyway"
+
+	handlers["land_anyway"] = func(c *core.Core, r *http.Request) (any, error) {
+		var in core.TicketInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.LandAnyway(r.Context(), r.PathValue("key"), in)
+	}
+}

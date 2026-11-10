@@ -25,6 +25,9 @@ const (
 	ReasonLongClaim   NeedsMeReason = "long_claim"
 	ReasonFailed      NeedsMeReason = "failed"
 	ReasonInReview    NeedsMeReason = "in_review"
+	// ReasonCIFailed is an Accepted Ticket whose CI result is failed and
+	// that the human hasn't dealt with (code-central-261).
+	ReasonCIFailed NeedsMeReason = "ci_failed"
 	// ReasonToMerge is a Ticket Accepted under the Branch Landing Method
 	// (code-central-175): the human merges its branch, at once.
 	ReasonToMerge NeedsMeReason = "to_merge"
@@ -46,6 +49,7 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonLongClaim, "Long Claim: In Progress and active, but no move (claim or pick_up_answers) for more than 60 minutes"},
 	{ReasonFailed, "Failed: a Failure Report waits for the human"},
 	{ReasonInReview, "In Review: finished work waits to be accepted or rejected"},
+	{ReasonCIFailed, "CI failed: Accepted, and its pushed commit's CI result is failed; the human chooses a failure option, such as Land anyway"},
 	{ReasonToMerge, "To merge: Accepted under the Branch Landing Method; merge its branch into the base"},
 	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted for more than 10 minutes without landing in the base"},
 	{ReasonBlockedByCancelled, "Blocked by a Cancelled Ticket with no Replacements"},
@@ -75,8 +79,8 @@ type NeedsMeGroup struct {
 // Since is when it started waiting: the Round posted, the last answer,
 // the last activity (Silent Claim, so the quiet time is now minus it),
 // the last move (Long Claim),
-// the Failure Report, the finish, the accept (To merge, and Accepted but
-// not landed),
+// the Failure Report, the finish, the first failed CI Run finishing (CI
+// failed), the accept (To merge, and Accepted but not landed),
 // or the Blocker's cancel. Only the
 // detail field for its reason is set.
 type NeedsMeRow struct {
@@ -94,6 +98,8 @@ type NeedsMeRow struct {
 	Summary string `json:"summary,omitempty"`
 	// Branch is the Ticket's branch, for the human to merge (To merge).
 	Branch string `json:"branch,omitempty"`
+	// CIFailure is what failed on the pushed commit (CI failed).
+	CIFailure *CIFailureSummary `json:"ci_failure,omitempty"`
 	// Blocker is the Cancelled Blocker (blocked by a Cancelled Ticket).
 	Blocker *BlockerView `json:"blocker,omitempty"`
 	// Link is the Ticket's Link, whatever the reason: the row's badge, and
@@ -233,6 +239,9 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 		}
 	case ReasonInReview:
 		row.Summary = firstLine(finishSummary(t))
+	case ReasonCIFailed:
+		f, _, _ := ciFailure(r, key, t)
+		row.CIFailure = &f
 	case ReasonToMerge:
 		row.Branch = t.Branch
 	case ReasonBlockedByCancelled:
@@ -268,6 +277,9 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 		return ReasonAnswered, entered(t)
 	case store.InProgress, store.Accepted:
 		p, _ := r.Project(key) // t is in it, so it exists
+		if _, since, ok := ciFailure(r, key, t); ok {
+			return ReasonCIFailed, since
+		}
 		if t.State == store.Accepted && p.Landing.Method == store.LandingBranch {
 			return ReasonToMerge, entered(t)
 		}

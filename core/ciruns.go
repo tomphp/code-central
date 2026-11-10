@@ -164,15 +164,7 @@ func ticketRuns(r store.Reader, key string, t store.Ticket) ([]store.CIRun, bool
 // skipped and neutral counting as passed. A re-run's latest attempt
 // replaces its earlier ones.
 func ciResultOf(commit string, runs []store.CIRun) CIResult {
-	latest := map[int64]store.CIRun{}
-	for _, run := range runs {
-		if run.Commit != commit || run.Ignored {
-			continue
-		}
-		if have, ok := latest[run.ID]; !ok || run.Attempt > have.Attempt {
-			latest[run.ID] = run
-		}
-	}
+	latest := countedRuns(commit, runs)
 	if len(latest) == 0 {
 		return CIRunning
 	}
@@ -189,6 +181,21 @@ func ciResultOf(commit string, runs []store.CIRun) CIResult {
 		return CIFailed
 	}
 	return CIPassed
+}
+
+// countedRuns are the runs of commit that count towards its CI result,
+// by run ID: those that aren't ignored, each at its latest attempt.
+func countedRuns(commit string, runs []store.CIRun) map[int64]store.CIRun {
+	latest := map[int64]store.CIRun{}
+	for _, run := range runs {
+		if run.Commit != commit || run.Ignored {
+			continue
+		}
+		if have, ok := latest[run.ID]; !ok || run.Attempt > have.Attempt {
+			latest[run.ID] = run
+		}
+	}
+	return latest
 }
 
 // ReportPushedCommitInput is the Factory's report_pushed_commit(ticket,

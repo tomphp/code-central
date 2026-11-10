@@ -416,6 +416,15 @@ When the CI result is failed, the Ticket stays Accepted, and the Factory says so
 acme-shop-5: CI failed at 9c41d07a2b18, so it stays Accepted
 ```
 
+It shows in Needs Me as **CI failed**, with one Notification, until you choose what to do. Its panel, in the Inbox and in Focus Mode, shows its CI section and the failure options. **Land anyway** accepts the failure, say a flake unrelated to the work, and the Factory lands the Ticket at its pushed commit on its next poll:
+
+```text
+acme-shop-5: landing anyway at 9c41d07a2b18, as you chose, though its CI failed
+acme-shop-5: landed on main at 9c41d07a2b18
+```
+
+Land anyway holds for that pushed commit only: if the Ticket is pushed again, the new push's CI result decides.
+
 The gate holds only while Merge, Push and CI Tracking are all on. Turning CI Tracking off, turning Push off, or switching to Leave as a branch lifts it, and the Factory lands every Ticket waiting on CI on its next poll.
 
-Under **Branch + Push**, CI only informs you: the Factory lands the Ticket when it sees your merge, whatever its CI result, so merging stays your decision.
+Under **Branch + Push**, CI only informs you: the Factory lands the Ticket when it sees your merge, whatever its CI result, so merging stays your decision. A failed CI result still shows the Ticket in Needs Me as **CI failed**, but without Land anyway: merging the branch is how you land it anyway.

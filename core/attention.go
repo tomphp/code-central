@@ -10,8 +10,8 @@ import (
 
 // Attention is the read behind OS Notifications (package notify): for
 // each Ticket, what notify compares between looks to spot a new Round, a
-// new Failure Report or a Claim turning Silent or Long, and whether the Ticket is
-// in Needs Me.
+// new Failure Report, a Claim turning Silent or Long or a Ticket going to
+// CI failed, and whether the Ticket is in Needs Me.
 
 // AttentionTicket is one Ticket as notify watches it.
 type AttentionTicket struct {
@@ -25,7 +25,9 @@ type AttentionTicket struct {
 	SilentClaim int
 	// LongClaim is the number of the live Claim while it is Long, else 0.
 	LongClaim int
-	NeedsMe   bool
+	// CIFailed is the pushed commit while the Ticket is CI failed, else "".
+	CIFailed string
+	NeedsMe  bool
 }
 
 // Attention returns every Ticket in every Project.
@@ -73,6 +75,9 @@ func (c *Core) attention(r store.Reader, key string, t store.Ticket) AttentionTi
 		case ReasonLongClaim:
 			a.LongClaim = cl.Number
 		}
+	}
+	if reason == ReasonCIFailed {
+		a.CIFailed = t.PushedCommits[len(t.PushedCommits)-1].Commit
 	}
 	a.NeedsMe = reason != ""
 	return a
