@@ -187,6 +187,7 @@ For each Project with CI Tracking on, the service runs a **CI Watcher**: a secon
 - **It starts** with the service, for every Project with CI Tracking on, and when you turn CI Tracking on.
 - **It stops** when you turn CI Tracking off, when you archive the Project, and when the service stops.
 - **It is restarted** if it crashes: after 1 second, then 2, 4 and so on, up to 5 minutes between tries, and back to 1 second once it has run for 10 minutes. While it crashes, the CI section of Project Options says **The CI Watcher crashed, restarted N times**, with the last line it wrote, and you get one Notification.
+- **It backs off** when GitHub rate-limits it: it makes no calls until the reset time GitHub gives, or, with none, waits twice as long each time, up to 10 minutes. The CI section shows it still Watching, rate-limited until then, and you get no Notification.
 - **It leaves nothing behind.** Its stdin is a pipe from the service, and it exits when that pipe closes. So it ends with the service however the service ends: `code-central service restart`, Ctrl-C, a stopped Windows scheduled task, which doesn't end the service's children itself, or the service being killed.
 
 It writes to [the service log](#the-service-log), beside a line for each start, stop and crash:

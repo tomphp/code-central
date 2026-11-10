@@ -260,6 +260,22 @@ describe("Project Options", () => {
       expect(within(ci()).getByRole("region", { name: "CI Watcher" })).not.toHaveTextContent("gh auth login");
     });
 
+    it("shows until when GitHub rate-limits the CI Watcher, which is Watching, not an error", async () => {
+      const fake = new FakeApi();
+      fake.addProject("acme", "Acme");
+      await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      await fake.reportCIWatcherStatus("acme", { state: "watching", rate_limited_until: "2026-01-05T10:15:00Z" });
+      renderApp(fake, "/?view=project-options&project=acme");
+      const watcher = await within(await screen.findByRole("group", { name: "CI" })).findByRole("region", { name: "CI Watcher" });
+      expect(watcher).toHaveTextContent("CI Watcher: Watching acme/web");
+      expect(watcher).toHaveTextContent("GitHub is rate-limiting it until");
+      expect(watcher.querySelector("time")).toHaveAttribute("datetime", "2026-01-05T10:15:00Z");
+      expect(watcher.querySelector(".warning")).toBeNull();
+
+      await fake.reportCIWatcherStatus("acme", { state: "watching" });
+      await waitFor(() => expect(within(ci()).getByRole("region", { name: "CI Watcher" })).not.toHaveTextContent("rate-limiting"));
+    });
+
     it("shows a crashing CI Watcher's restarts and last line, which the service restarts by itself", async () => {
       const fake = new FakeApi();
       fake.addProject("acme", "Acme");

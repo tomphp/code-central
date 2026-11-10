@@ -44,7 +44,7 @@ func TestTheCheckAsksGHForItsLoginThenTheRepository(t *testing.T) {
 	for _, c := range h.Calls() {
 		got = append(got, c.Args)
 	}
-	want := [][]string{{"auth", "status", "--hostname", "github.com"}, {"api", "repos/acme/web", "--jq", ".full_name"}}
+	want := [][]string{{"auth", "status", "--hostname", "github.com"}, {"api", "repos/acme/web", "--jq", ".full_name", "--include"}}
 	if !slices.EqualFunc(got, want, slices.Equal) {
 		t.Fatalf("gh calls = %q, want %q", got, want)
 	}
@@ -160,5 +160,18 @@ func TestGHThatDoesntRunFailsTheCheck(t *testing.T) {
 	r := ciwatcher.Check(ctx, in, ciwatcher.Env{Environ: h.Environ(h.Bin), InstallPlaces: []string{}})
 	if r.Problem != core.CICheckFailed || !strings.Contains(r.Reason, "didn't run") {
 		t.Fatalf("check = %+v, want the check failed as gh didn't run", r)
+	}
+}
+
+// A rate-limited check can't tell whether the repository can be read, so
+// it fails, saying to try again.
+func TestARateLimitedCheckFailsSayingToTryAgain(t *testing.T) {
+	h := ciwatchertest.New(t)
+	h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web"}, Exit: 1,
+		Stdout: "HTTP/2.0 429 Too Many Requests\r\nRetry-After: 60\r\n\r\n{\"message\":\"You have exceeded a secondary rate limit.\"}",
+		Stderr: "gh: You have exceeded a secondary rate limit. (HTTP 429)\n"})
+	r := check(h, "", []string{h.Bin})
+	if r.Problem != core.CICheckFailed || !strings.Contains(r.Reason, "secondary rate limit") || !strings.Contains(r.Fix, "Try again after") {
+		t.Fatalf("check = %+v, want a failed check saying when to try again", r)
 	}
 }

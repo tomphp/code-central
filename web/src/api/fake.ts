@@ -918,8 +918,14 @@ export class FakeApi implements Api {
     const p = this.writable(key);
     if (!p.ci.tracking) throw new ApiError(403, "action_not_allowed", `CI Tracking is off on ${key}, so it has no CI Watcher`);
     if (status.problem === "crashed") throw new ApiError(422, "invalid", `"crashed" isn't a CI problem`, "problem");
+    if (status.state === "error" && status.rate_limited_until)
+      throw new ApiError(422, "invalid", "only a Watching CI Watcher is rate-limited; an error has its own fix", "rate_limited_until");
     const watcher: CIWatcherStatus =
-      status.state === "error" ? { state: "error", problem: status.problem, message: status.message, fix: status.fix } : { state: status.state };
+      status.state === "error"
+        ? { state: "error", problem: status.problem, message: status.message, fix: status.fix }
+        : status.rate_limited_until
+          ? { state: status.state, rate_limited_until: status.rate_limited_until }
+          : { state: status.state };
     const { since: _, ...was } = p.ci.watcher;
     if (JSON.stringify(was) === JSON.stringify(watcher)) return;
     watcher.since = was.state === watcher.state ? p.ci.watcher.since : this.now.toISOString();

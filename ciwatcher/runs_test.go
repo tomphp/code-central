@@ -117,7 +117,7 @@ func (w *watching) ciResult(ticket string, want core.CIResult) core.TicketView {
 func (w *watching) listed(part string) int {
 	n := 0
 	for _, c := range w.h.Calls() {
-		if len(c.Args) == 2 && c.Args[0] == "api" && strings.Contains(c.Args[1], part) {
+		if len(c.Args) >= 2 && c.Args[0] == "api" && strings.Contains(c.Args[1], part) {
 			n++
 		}
 	}
