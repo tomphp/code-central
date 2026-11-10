@@ -5,9 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -164,27 +162,13 @@ func TestReportModelChoiceOnAnEndedClaimIsStale(t *testing.T) {
 }
 
 func TestAClaimsModelAndEffortSurviveAReload(t *testing.T) {
-	dir := t.TempDir()
-	s, err := store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := fixture{core: core.New(s, clock.NewFake(t0), &ids.Sequence{}), clock: clock.NewFake(t0), store: s}
-	f.readyTicket(t)
-	res := f.claim(t, core.ClaimInput{Ticket: "acme-2"})
-	if _, err := f.core.ReportModelChoice(ctx, "acme", core.ReportModelChoiceInput{Ticket: "acme-2", ClaimID: res.ClaimID, Model: "opus", Effort: "xhigh"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	s, err = store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	again := core.New(s, clock.NewFake(t0), &ids.Sequence{})
+	again := reloaded(t, func(f fixture) {
+		f.readyTicket(t)
+		res := f.claim(t, core.ClaimInput{Ticket: "acme-2"})
+		if _, err := f.core.ReportModelChoice(ctx, "acme", core.ReportModelChoiceInput{Ticket: "acme-2", ClaimID: res.ClaimID, Model: "opus", Effort: "xhigh"}); err != nil {
+			t.Fatal(err)
+		}
+	}).core
 	tk, err := again.GetTicket(ctx, "acme", whole("acme-2"))
 	if err != nil {
 		t.Fatal(err)

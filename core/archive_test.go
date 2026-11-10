@@ -245,6 +245,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetModels(human, "acme", core.SetModelsInput{Default: core.ModelRowView{Model: "opus"}})
 		return err
 	},
+	"report_models": func(f fixture) error {
+		_, err := f.core.ReportModels(ctx, "acme", core.ReportModelsInput{EffortLevels: []string{"low"}})
+		return err
+	},
 	"set_github_issues": func(f fixture) error {
 		_, err := f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repository: "acme/web"})
 		return err

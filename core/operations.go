@@ -157,6 +157,8 @@ var Operations = []Op{
 	{Name: "report_model_choice", Audience: FactoryOnly, Write: true},
 	// The Models section of Project Options (Spec code-central-301).
 	{Name: "set_models", Audience: HumanOnly, Write: true},
+	// The Reported Models (code-central-311).
+	{Name: "report_models", Audience: FactoryOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

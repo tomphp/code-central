@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
+import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeldSessionEvent, LandingMethod, ModelsReport, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
 import { ApiError, TRIAGE_ACTIONS } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -57,6 +57,9 @@ export interface Driver {
   // reportPushRemote reports the Push remote's URL as a Factory does when
   // it starts (code-central-251).
   reportPushRemote(key: string, url: string): Promise<void>;
+  // reportModels reports what the Factory's claude accepts, with its
+  // flags, as a Factory does when it starts (code-central-311).
+  reportModels(key: string, report: ModelsReport): Promise<void>;
   // logOutOfGH makes the gh the service finds logged out, so the CI check
   // refuses turning CI Tracking on (code-central-252).
   logOutOfGH(): Promise<void>;
@@ -314,6 +317,30 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       // The rows are replaced whole.
       const cleared = await d.api.setModels("acme", { default: unset, kinds: [] });
       expect(cleared.models).toEqual({ default: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
+    });
+
+    it("keeps the Factory's report of what its claude accepts, and checks effort against its levels", async () => {
+      await d.createProject("acme", "Acme");
+      const none = { effort_levels: ["low", "medium", "high", "xhigh", "max"], aliases: [], model_ids: [], model_flag: "", effort_flag: "" };
+      expect((await d.api.listProjects())[0].reported_models).toEqual(none);
+
+      await d.reportModels("acme", { effort_levels: ["low", "high", "turbo"], aliases: ["opus", "sonnet"], model_flag: "opus", effort_flag: "" });
+      const kept = (await d.api.listProjects())[0].reported_models;
+      expect(kept).toMatchObject({ effort_levels: ["low", "high", "turbo"], aliases: ["opus", "sonnet"], model_ids: [], model_flag: "opus", effort_flag: "" });
+      expect(kept.reported).toEqual(expect.any(String));
+
+      // Found nothing, the kept levels and aliases stay; the flags are replaced.
+      await d.reportModels("acme", { effort_levels: [], aliases: [], model_flag: "", effort_flag: "high" });
+      expect((await d.api.listProjects())[0].reported_models).toMatchObject({ effort_levels: ["low", "high", "turbo"], aliases: ["opus", "sonnet"], model_flag: "", effort_flag: "high" });
+
+      const max = await d.api.setModels("acme", { default: { model: "", effort: "max" }, kinds: [] }).catch((e) => e);
+      expect(max).toMatchObject({ status: 422, code: "invalid", field: "default.effort" });
+      expect(max.message).toContain("low, high, turbo");
+      expect((await d.api.setModels("acme", { default: { model: "", effort: "turbo" }, kinds: [] })).models.default.effort).toBe("turbo");
+
+      const twoLines = await d.reportModels("acme", { effort_levels: [], aliases: ["opus\nsonnet"], model_flag: "", effort_flag: "" }).catch((e) => e);
+      expect(twoLines).toBeInstanceOf(Error);
+      expect((await d.api.listProjects())[0].reported_models.aliases).toEqual(["opus", "sonnet"]);
     });
 
     it("creates the Issues Spec the first time GitHub Issues is turned on, retitled with the repository", async () => {

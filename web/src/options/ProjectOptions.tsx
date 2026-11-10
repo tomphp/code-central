@@ -3,22 +3,21 @@
 // Rules, GitHub Issues, and Models.
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
-import {
-  EFFORT_LEVELS,
-  type ApiError,
-  type CIProvider,
-  type CIRule,
-  type CIRuleChange,
-  type CISettings,
-  type CIWatcherStatus,
-  type GitHubIssuesChange,
-  type GitHubIssuesSettings,
-  type IssueWatcherStatus,
-  type Landing,
-  type LandingMethod,
-  type ModelRow,
-  type Models,
-  type ProjectRow,
+import type {
+  ApiError,
+  CIProvider,
+  CIRule,
+  CIRuleChange,
+  CISettings,
+  CIWatcherStatus,
+  GitHubIssuesChange,
+  GitHubIssuesSettings,
+  IssueWatcherStatus,
+  Landing,
+  LandingMethod,
+  ModelRow,
+  Models,
+  ProjectRow,
 } from "../api/types";
 import { CLAUDE_CODE_DEFAULT } from "../format";
 import { clickTo, hrefFor, type UiLocation } from "../url";
@@ -494,10 +493,10 @@ function GitHubIssuesSection({ api, project }: { api: Api; project: ProjectRow }
 
 // ModelsSection is the Project's Models (Spec code-central-301): the
 // model and effort for the Project default, then for each kind of work.
-// Each row's model is free text, empty for Default, and its effort one of
-// the valid levels or Default; Default shows what it inherits. Save
-// replaces the rows whole. Like the other sections it follows the Project
-// as read.
+// Each row's model is free text, empty for Default, suggesting the
+// aliases and model IDs the Factory reported, and its effort one of the
+// valid levels or Default; Default shows what it inherits. Save replaces
+// the rows whole. Like the other sections it follows the Project as read.
 function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
   const stored = JSON.stringify(project.models);
   const [draft, setDraft] = useState<Models>(project.models);
@@ -527,10 +526,16 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
     );
   };
   const changed = JSON.stringify(draft) !== stored;
+  const reported = project.reported_models;
+  const suggestions = [...new Set([...reported.aliases, ...reported.model_ids])];
   // A kind's row inherits the Project default as typed; the Project
-  // default inherits Claude Code's default.
-  const inherited = (kind: string | undefined, value: keyof ModelRow) =>
-    `Default (${(kind !== undefined && draft.default[value].trim()) || CLAUDE_CODE_DEFAULT})`;
+  // default inherits the Factory's flag, if it reported one, and else
+  // Claude Code's default.
+  const flags: ModelRow = { model: reported.model_flag, effort: reported.effort_flag };
+  const inherited = (kind: string | undefined, value: keyof ModelRow) => {
+    const def = kind !== undefined && draft.default[value].trim();
+    return `Default (${def || (flags[value] ? `Factory flag: ${flags[value]}` : CLAUDE_CODE_DEFAULT)})`;
+  };
   // Each row has its kind (none for the Project default), its name in
   // the pickers' labels, and the prefix of its fields in a refusal.
   const rows: { kind?: string; name: string; header: string; field: string; row: ModelRow }[] = [
@@ -558,12 +563,14 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
           </thead>
           <tbody>
             {rows.map(({ kind, name, header, field, row }) => {
-              const levels = row.effort && !EFFORT_LEVELS.includes(row.effort) ? [...EFFORT_LEVELS, row.effort] : EFFORT_LEVELS;
+              const valid = reported.effort_levels;
+              const levels = row.effort && !valid.includes(row.effort) ? [...valid, row.effort] : valid;
               return (
                 <tr key={header}>
                   <th scope="row">{header}</th>
                   <td>
                     <input
+                      list={suggestions.length ? `${id}-models` : undefined}
                       aria-label={`Model for ${name}`}
                       value={row.model}
                       placeholder={inherited(kind, "model")}
@@ -586,6 +593,13 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
             })}
           </tbody>
         </table>
+        {suggestions.length > 0 && (
+          <datalist id={`${id}-models`}>
+            {suggestions.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
+        )}
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>

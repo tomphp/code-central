@@ -39,6 +39,18 @@ type projectFile struct {
 	GitHubIssues *githubIssuesFile `yaml:"github_issues,omitempty"`
 	// Models is left out while it sets nothing.
 	Models *modelsFile `yaml:"models,omitempty"`
+	// ReportedModels is left out while it holds nothing.
+	ReportedModels *reportedModelsFile `yaml:"reported_models,omitempty"`
+}
+
+// reportedModelsFile is what the Factory reported its claude accepts.
+type reportedModelsFile struct {
+	EffortLevels []string `yaml:"effort_levels,omitempty"`
+	Aliases      []string `yaml:"aliases,omitempty"`
+	ModelIDs     []string `yaml:"model_ids,omitempty"`
+	ModelFlag    string   `yaml:"model_flag,omitempty"`
+	EffortFlag   string   `yaml:"effort_flag,omitempty"`
+	Reported     string   `yaml:"reported,omitempty"`
 }
 
 // modelsFile is a Project's Models rows; a row that sets nothing is left
@@ -496,7 +508,8 @@ func encode(record any, project string) (string, []byte, error) {
 	case Project:
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
-			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models)})
+			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models),
+			ReportedModels: encodeReportedModels(r.ReportedModels)})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), GHPath: r.GHPath})
@@ -687,6 +700,48 @@ func decodeModels(f modelsFile) (Models, string, error) {
 		return slices.Index(ModelKinds, a.Kind) - slices.Index(ModelKinds, b.Kind)
 	})
 	return m, "", nil
+}
+
+// encodeReportedModels leaves the Reported Models out of project.yaml
+// while they hold nothing.
+func encodeReportedModels(r ReportedModels) *reportedModelsFile {
+	if r.IsZero() {
+		return nil
+	}
+	return &reportedModelsFile{EffortLevels: r.EffortLevels, Aliases: r.Aliases, ModelIDs: r.ModelIDs,
+		ModelFlag: r.ModelFlag, EffortFlag: r.EffortFlag, Reported: formatOptionalTime(r.Reported)}
+}
+
+// decodeReportedModels checks f as load does: every value is one line,
+// not blank, and reported a timestamp. It returns the offending field,
+// relative to reported_models, with the error.
+func decodeReportedModels(f reportedModelsFile) (ReportedModels, string, error) {
+	r := ReportedModels{EffortLevels: f.EffortLevels, Aliases: f.Aliases, ModelIDs: f.ModelIDs, ModelFlag: f.ModelFlag, EffortFlag: f.EffortFlag}
+	lists := []struct {
+		field  string
+		values []string
+	}{{"effort_levels", f.EffortLevels}, {"aliases", f.Aliases}, {"model_ids", f.ModelIDs}}
+	for _, l := range lists {
+		for i, v := range l.values {
+			if v == "" || !singleLine(v) {
+				return ReportedModels{}, fmt.Sprintf("%s[%d]", l.field, i), errors.New("each is one line, not blank")
+			}
+		}
+	}
+	switch {
+	case !singleLine(f.ModelFlag):
+		return ReportedModels{}, "model_flag", errors.New("a flag is empty, or one line that isn't blank")
+	case !singleLine(f.EffortFlag):
+		return ReportedModels{}, "effort_flag", errors.New("a flag is empty, or one line that isn't blank")
+	}
+	if f.Reported != "" {
+		t, err := parseTime(f.Reported)
+		if err != nil {
+			return ReportedModels{}, "reported", err
+		}
+		r.Reported = t
+	}
+	return r, "", nil
 }
 
 // singleLine reports whether an optional value is empty, or one line

@@ -1,8 +1,9 @@
 // The Models section of Project Options (code-central-310): the Project
 // default row, then a row per kind of work, each with a model picker
-// (free text, empty for Default) and an effort picker (the valid levels,
-// plus Default); Default says what it inherits; a rejected effort shows
-// the error. Against FakeApi.
+// (free text, empty for Default, suggesting the Reported Models' aliases
+// and model IDs) and an effort picker (the valid levels, plus Default);
+// Default says what it inherits; a rejected effort shows the error.
+// Against FakeApi.
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -19,9 +20,16 @@ const KINDS = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-
 const page = () => screen.getByRole("main", { name: "Project Options" });
 const models = () => within(page()).getByRole("group", { name: "Models" });
 const findModels = async () => within(await screen.findByRole("main", { name: "Project Options" })).findByRole("group", { name: "Models" });
-const model = (row: string) => within(models()).getByRole("textbox", { name: `Model for ${row}` });
+// A model picker is a textbox, or a combobox once it suggests models.
+const model = (row: string) => within(models()).getByLabelText(`Model for ${row}`);
 const effort = (row: string) => within(models()).getByRole("combobox", { name: `Effort for ${row}` });
 const options = (select: HTMLElement) => within(select).getAllByRole("option").map((o) => o.textContent);
+// suggested is what a model picker's list suggests, none without a list.
+const suggested = (input: HTMLElement) => {
+  const list = input.getAttribute("list");
+  return list ? Array.from(document.getElementById(list)?.querySelectorAll("option") ?? [], (o) => o.value) : [];
+};
+const report = { effort_levels: [], aliases: [], model_flag: "", effort_flag: "" };
 const save = () => userEvent.click(within(models()).getByRole("button", { name: "Save" }));
 const unset = { model: "", effort: "" };
 const fresh = (fake: FakeApi) => {
@@ -69,6 +77,55 @@ describe("the Models section", () => {
     expect(options(effort("spec")).slice(1)).toEqual(["low", "medium", "high", "xhigh", "max"]);
   });
 
+  it("offers the effort levels the Factory reported, once it has", async () => {
+    const fake = fresh(new FakeApi());
+    await fake.reportModels("acme", { ...report, effort_levels: ["low", "high", "turbo"] });
+    renderApp(fake);
+
+    await findModels();
+    expect(options(effort("the Project default")).slice(1)).toEqual(["low", "high", "turbo"]);
+    expect(options(effort("spec")).slice(1)).toEqual(["low", "high", "turbo"]);
+  });
+
+  it("suggests no models before any report: Default and free text only", async () => {
+    const fake = fresh(new FakeApi());
+    renderApp(fake);
+
+    await findModels();
+    for (const row of ["the Project default", ...KINDS]) expect(suggested(model(row))).toEqual([]);
+  });
+
+  it("suggests the reported aliases and model IDs in every model picker", async () => {
+    const fake = fresh(new FakeApi());
+    await fake.reportModels("acme", { ...report, aliases: ["fable", "opus", "sonnet"] });
+    fake.seedModelIDs("acme", ["claude-opus-5-5", "opus"]);
+    renderApp(fake);
+
+    await findModels();
+    for (const row of ["the Project default", ...KINDS]) {
+      expect(suggested(model(row))).toEqual(["fable", "opus", "sonnet", "claude-opus-5-5"]);
+    }
+    // Free text still goes.
+    await userEvent.type(model("spec"), "my-own-model");
+    await save();
+    await within(models()).findByRole("status");
+    expect((await fake.listProjects())[0].models.kinds.find((k) => k.kind === "spec")?.model).toBe("my-own-model");
+  });
+
+  it("shows the Factory's reported flags as what the Project default's Default inherits", async () => {
+    const fake = fresh(new FakeApi());
+    await fake.reportModels("acme", { ...report, model_flag: "sonnet", effort_flag: "high" });
+    renderApp(fake);
+
+    await findModels();
+    expect(model("the Project default")).toHaveAttribute("placeholder", "Default (Factory flag: sonnet)");
+    expect(options(effort("the Project default"))[0]).toBe("Default (Factory flag: high)");
+    // A kind's row inherits through the Project default.
+    expect(model("spec")).toHaveAttribute("placeholder", "Default (Factory flag: sonnet)");
+    await userEvent.type(model("the Project default"), "opus");
+    expect(model("spec")).toHaveAttribute("placeholder", "Default (opus)");
+  });
+
   it("saves the rows whole, a model as typed and an effort as picked, and back to Default", async () => {
     const fake = fresh(new FakeApi());
     renderApp(fake);
@@ -99,7 +156,7 @@ describe("the Models section", () => {
     const fake = fresh(new FakeApi());
     await fake.setModels("acme", { default: unset, kinds: [{ kind: "spec", model: "", effort: "max" }] });
     // A later report dropped max, so saving the row again is refused.
-    fake.seedEffortLevels(["low", "medium", "high"]);
+    await fake.reportModels("acme", { ...report, effort_levels: ["low", "medium", "high"] });
     renderApp(fake);
 
     await findModels();

@@ -70,6 +70,9 @@ type Project struct {
 	// Models is the Project's Models rows. A Project stored without them
 	// sets no model or effort.
 	Models Models
+	// ReportedModels is what the Factory last reported its claude accepts.
+	// A Project stored without them has had no report.
+	ReportedModels ReportedModels
 }
 
 // LandingMethod is how accepted work reaches a Project's base.
@@ -263,6 +266,25 @@ func (m Models) Kind(kind string) ModelRow {
 		}
 	}
 	return ModelRow{}
+}
+
+// ReportedModels are the effort levels, model aliases and model IDs a
+// Project's claude was reported to accept, with the Factory's own
+// --model and --effort flags (Spec code-central-301), all plain strings.
+type ReportedModels struct {
+	EffortLevels []string
+	Aliases      []string
+	ModelIDs     []string
+	// ModelFlag and EffortFlag are the Factory's flags, empty when unset.
+	ModelFlag  string
+	EffortFlag string
+	// Reported is when the Factory last reported, zero before any report.
+	Reported time.Time
+}
+
+// IsZero reports whether r holds nothing.
+func (r ReportedModels) IsZero() bool {
+	return len(r.EffortLevels) == 0 && len(r.Aliases) == 0 && len(r.ModelIDs) == 0 && r.ModelFlag == "" && r.EffortFlag == "" && r.Reported.IsZero()
 }
 
 // Spec is a description of work, stored as Markdown with YAML frontmatter.

@@ -30,6 +30,28 @@ func newFixture(t *testing.T) fixture {
 
 var ctx = context.Background()
 
+// reloaded runs setup on a fixture over a file store, closes the store,
+// and returns a fixture over the store opened again from its files,
+// closed at the test's end.
+func reloaded(t *testing.T, setup func(f fixture)) fixture {
+	t.Helper()
+	dir := t.TempDir()
+	s, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setup(fixture{core: core.New(s, clock.NewFake(t0), &ids.Sequence{}), clock: clock.NewFake(t0), store: s})
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if s, err = store.Open(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	clk := clock.NewFake(t0)
+	return fixture{core: core.New(s, clk, &ids.Sequence{}), clock: clk, store: s}
+}
+
 func (f fixture) project(t *testing.T, key string) core.ProjectView {
 	t.Helper()
 	p, err := f.core.CreateProject(ctx, core.CreateProjectInput{Key: key})

@@ -26,7 +26,8 @@ func (f *factory) landAndSweep(ctx context.Context) {
 // landing reads the Project's Landing Method, with its Push option, which the human can
 // change at any time, so it is read again on every poll, with whether CI
 // Tracking is on. ok is false when
-// it can't be read, and then nothing lands this poll.
+// it can't be read, and then nothing lands this poll. A poll that reads it
+// also makes the report of what claude accepts, until one is taken.
 func (f *factory) landing(ctx context.Context) (landing core.LandingView, ok bool) {
 	p, err := f.client.GetProject(ctx, f.project)
 	if err != nil {
@@ -36,6 +37,9 @@ func (f *factory) landing(ctx context.Context) (landing core.LandingView, ok boo
 		return core.LandingView{}, false
 	}
 	f.tracksCI = p.CI.Tracking
+	if !f.modelsReported {
+		f.modelsReported = f.reportModels(ctx)
+	}
 	return p.Landing, true
 }
 

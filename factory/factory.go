@@ -248,6 +248,12 @@ type factory struct {
 	// left the remote's base holding, whose report as the Ticket's pushed
 	// commit failed, to report next poll; the poll's own.
 	unreported map[string]string
+	// accepts is what claude --help said claude accepts, read at startup.
+	accepts claudeAccepts
+	// modelsReported is whether Code Central has taken the report of
+	// accepts; until it has, each poll that reads the Project tries.
+	modelsReported bool
+
 	// tracksCI is whether the Project's CI Tracking is on, read with the
 	// Landing Method on every poll: while it is, each push for a Ticket
 	// is reported as its pushed commit.
@@ -333,11 +339,19 @@ func start(e Env, o options) (*factory, error) {
 	f.events = newSender(f.client.PostSessionEvents, every)
 	f.usage = newSender(f.client.PostUsage, every)
 	// A Project that can't be read yet is checked on every poll instead.
-	if p, err := f.client.GetProject(context.Background(), project); err == nil {
+	p, readErr := f.client.GetProject(context.Background(), project)
+	if readErr == nil {
 		if why := f.missingRemote(p.Landing); why != "" {
 			return nil, errors.New(why)
 		}
+	}
+	f.accepts = f.readClaudeHelp()
+	if err := f.checkEffortFlag(); err != nil {
+		return nil, err
+	}
+	if readErr == nil {
 		f.reportPushRemote(p.Landing.Remote)
+		f.modelsReported = f.reportModels(context.Background())
 	}
 	statePath, err := e.home().State("code-central-factory", project+".json")
 	if err != nil {
