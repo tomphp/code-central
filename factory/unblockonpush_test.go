@@ -2,7 +2,9 @@ package factory_test
 
 import (
 	"context"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
@@ -151,5 +153,146 @@ func TestUnblockOnPushChangesNothingWithoutTheCIGate(t *testing.T) {
 			r.Poll()
 			h.WaitForState(dep, store.InProgress)
 		})
+	}
+}
+
+// Each failure option resolves the hold its own way (code-central-300).
+
+// failedBlocker is a gated Ticket whose CI failed, and a dependant that
+// is Ready and blocked by it, with Unblock on push on. The Blocker shows
+// in Needs Me as CI failed with all four failure options.
+func failedBlocker(t *testing.T) (h *factorytest.Harness, r *factorytest.Running, id, pushed, dep string) {
+	t.Helper()
+	h, _, r = gatedHarness(t)
+	unblockOnPush(t, h)
+	id, pushed = gated(t, h, r, "Add a feature", "feature.txt")
+	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CIFailure)
+	dep = dependant(t, h, "Build on the feature", id)
+	stillBlocked(t, h, r, dep, id, "with its CI failed")
+	if reason := h.Ticket(id).NeedsMeReason; reason != core.ReasonCIFailed {
+		t.Fatalf("%s is in Needs Me as %q, want %q", id, reason, core.ReasonCIFailed)
+	}
+	want := []string{core.OptionRerunCI, core.OptionLandAnyway, core.OptionSendBack, core.OptionNewFixTicket}
+	if got := h.Ticket(id).CIFailureOptions; !slices.Equal(got, want) {
+		t.Fatalf("%s offers %v, want all four failure options %v", id, got, want)
+	}
+	return h, r, id, pushed, dep
+}
+
+// stillBlocked fails unless dep is Ready and blocked by blocker after a
+// poll.
+func stillBlocked(t *testing.T, h *factorytest.Harness, r *factorytest.Running, dep, blocker, why string) {
+	t.Helper()
+	r.Poll()
+	if tk := h.Ticket(dep); !tk.Blocked || tk.Claimable || tk.State != store.Ready {
+		t.Fatalf("%s is %s, blocked %v, claimable %v: want it Ready and blocked by %s %s", dep, tk.State, tk.Blocked, tk.Claimable, blocker, why)
+	}
+}
+
+// claimable fails unless dep is claimable.
+func claimable(t *testing.T, h *factorytest.Harness, dep, why string) {
+	t.Helper()
+	if tk := h.Ticket(dep); tk.Blocked || !tk.Claimable {
+		t.Fatalf("%s is blocked %v, claimable %v: want it claimable %s", dep, tk.Blocked, tk.Claimable, why)
+	}
+}
+
+func TestUnderUnblockOnPushRerunFailedJobsClearsTheBlockerAgain(t *testing.T) {
+	t.Parallel()
+	h, r, id, pushed, dep := failedBlocker(t)
+
+	if _, err := h.Server.Core.RerunCI(core.WithActor(context.Background(), core.Human), h.Project, core.TicketInput{Ticket: core.Ref(id)}); err != nil {
+		t.Fatal(err)
+	}
+	claimable(t, h, dep, "while the Re-run request is pending")
+	reportAttempt(t, h, 1, 2, id, pushed, store.CIInProgress, "")
+	claimable(t, h, dep, "while the re-run is running")
+	r.Poll()
+	h.WaitForState(dep, store.InProgress)
+	stillAccepted(t, h, r, id, "while its re-run runs")
+
+	reportAttempt(t, h, 1, 2, id, pushed, store.CICompleted, store.CISuccess)
+	r.Poll()
+	h.WaitForState(id, store.Done)
+}
+
+func TestUnderUnblockOnPushLandAnywayClearsTheBlockerOnceItLands(t *testing.T) {
+	t.Parallel()
+	h, r, id, _, dep := failedBlocker(t)
+
+	if _, err := h.Server.Core.LandAnyway(core.WithActor(context.Background(), core.Human), h.Project, core.TicketInput{Ticket: core.Ref(id)}); err != nil {
+		t.Fatal(err)
+	}
+	if tk := h.Ticket(dep); !tk.Blocked {
+		t.Fatalf("%s is unblocked by Land anyway on its own, want it blocked until %s lands", dep, id)
+	}
+	r.Poll()
+	h.WaitForState(id, store.Done)
+	r.Poll()
+	h.WaitForState(dep, store.InProgress)
+}
+
+func TestUnderUnblockOnPushNewFixTicketClearsTheBlockerOnceItLands(t *testing.T) {
+	t.Parallel()
+	h, r, id, _, dep := failedBlocker(t)
+
+	res, err := h.Server.Core.NewFixTicket(core.WithActor(context.Background(), core.Human), h.Project, core.NewFixTicketInput{Ticket: core.Ref(id), Note: "Fix test."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.Script(res.ID, factorytest.Wait())
+	if tk := h.Ticket(dep); !tk.Blocked {
+		t.Fatalf("%s is unblocked by New fix Ticket on its own, want it blocked until %s lands", dep, id)
+	}
+	r.Poll()
+	h.WaitForState(id, store.Done)
+	r.Poll()
+	h.WaitForState(dep, store.InProgress)
+}
+
+func TestUnderUnblockOnPushASentBackBlockerBlocksUntilItsNewPushsCIRuns(t *testing.T) {
+	t.Parallel()
+	h, _, r := gatedHarness(t)
+	unblockOnPush(t, h)
+	id, failed := sentBackCIFailure(t, h, r)
+	h.Server.Clock.Advance(time.Minute) // fixing it takes time
+	dep := dependant(t, h, "Build on the feature", id)
+	stillBlocked(t, h, r, dep, id, "while it is sent back")
+	h.WaitForState(id, store.InReview)
+	stillBlocked(t, h, r, dep, id, "while it is In Review again")
+
+	// An older push going green, say a late re-run, doesn't clear it:
+	// only its new push counts.
+	reportAttempt(t, h, 1, 2, id, failed, store.CICompleted, store.CISuccess)
+	h.Accept(id)
+	if tk := h.Ticket(dep); !tk.Blocked {
+		t.Fatalf("%s is unblocked by %s's older green push, want it blocked until its new push", dep, id)
+	}
+
+	r.Poll()
+	h.WaitFor(id+"'s newer pushed commit", func() bool {
+		pc := h.Ticket(id).PushedCommit
+		return pc != nil && pc.Commit != failed
+	})
+	if tk := h.Ticket(id); tk.CIResult != core.CIRunning {
+		t.Fatalf("%s's CI result is %q, want its new push's running", id, tk.CIResult)
+	}
+	r.Poll()
+	h.WaitForState(dep, store.InProgress)
+	stillAccepted(t, h, r, id, "while its new push's CI runs")
+}
+
+func TestUnderUnblockOnPushAGatedBlockerWithNoWordOfItsCIIsStillCIUnavailable(t *testing.T) {
+	t.Parallel()
+	h, _, r := gatedHarness(t)
+	unblockOnPush(t, h)
+	id, _ := gated(t, h, r, "Add a feature", "feature.txt")
+	dep := dependant(t, h, "Build on the feature", id)
+	r.Poll()
+	h.WaitForState(dep, store.InProgress)
+
+	h.Server.Clock.Advance(core.CIUnavailableAfter)
+	if reason := h.Ticket(id).NeedsMeReason; reason != core.ReasonCIUnavailable {
+		t.Fatalf("%s is in Needs Me as %q, want %q though %s has moved on", id, reason, core.ReasonCIUnavailable, dep)
 	}
 }

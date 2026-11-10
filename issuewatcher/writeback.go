@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"slices"
 	"strconv"
@@ -22,19 +23,14 @@ import (
 // labelColour is the colour a status label is created with.
 const labelColour = "ededed"
 
-// ghLabel is a label as GitHub gives it on an issue.
-type ghLabel struct {
-	Name string `json:"name"`
-}
-
 // ghComment is what the Issue Watcher reads of a comment on an issue.
 type ghComment struct {
 	Body string `json:"body"`
 }
 
-// issueOf is the repository and number of the issue the Link ID id names,
-// owner/repo#n.
-func issueOf(id string) (repository string, n int, err error) {
+// splitLinkID is the repository and number of the issue the Link ID id
+// names, owner/repo#n.
+func splitLinkID(id string) (repository string, n int, err error) {
 	repository, num, ok := strings.Cut(id, "#")
 	if n, err = strconv.Atoi(num); !ok || err != nil || n <= 0 {
 		return "", 0, fmt.Errorf("the Link ID %q doesn't name an issue as owner/repo#number", id)
@@ -42,14 +38,18 @@ func issueOf(id string) (repository string, n int, err error) {
 	return repository, n, nil
 }
 
-// writeBack carries out each of watch's due writes. listed are the issues
-// this poll listed, by Link ID, so an open issue isn't read again. It
+// writeBack carries out each of watch's due writes. listed are the open
+// issues this poll listed, so an open issue isn't read again. It
 // returns GitHub's rate limit, if it refused a call for it; anything else
 // that goes wrong for an issue is logged, and its writes are tried again
 // on the next poll.
-func (cfg Config) writeBack(ctx context.Context, watch core.IssueWatch, prog string, listed map[string]ghIssue) *gh.RateLimitError {
+func (cfg Config) writeBack(ctx context.Context, watch core.IssueWatch, prog string, listed []ghIssue) *gh.RateLimitError {
+	open := map[string]ghIssue{}
+	for _, i := range listed {
+		open[LinkID(watch.Repository, i.Number)] = i
+	}
 	for _, w := range watch.Writes {
-		err := cfg.writeIssue(ctx, prog, w, listed)
+		err := cfg.writeIssue(ctx, prog, w, open)
 		var limit *gh.RateLimitError
 		switch {
 		case errors.As(err, &limit):
@@ -64,9 +64,10 @@ func (cfg Config) writeBack(ctx context.Context, watch core.IssueWatch, prog str
 }
 
 // writeIssue carries out w's due writes on its issue: its comments, then
-// its label, then closing it.
-func (cfg Config) writeIssue(ctx context.Context, prog string, w core.IssueWrites, listed map[string]ghIssue) error {
-	repository, n, err := issueOf(w.Link.ID)
+// its label, then closing it. open are the repository's open issues, by
+// Link ID.
+func (cfg Config) writeIssue(ctx context.Context, prog string, w core.IssueWrites, open map[string]ghIssue) error {
+	repository, n, err := splitLinkID(w.Link.ID)
 	if err != nil {
 		return err
 	}
@@ -77,9 +78,9 @@ func (cfg Config) writeIssue(ctx context.Context, prog string, w core.IssueWrite
 	if w.Label == "" && w.Close == "" {
 		return nil
 	}
-	issue, ok := listed[w.Link.ID]
+	issue, ok := open[w.Link.ID]
 	if !ok {
-		if issue, err = cfg.readIssue(ctx, prog, path); err != nil {
+		if issue, err = cfg.fetchIssue(ctx, prog, path); err != nil {
 			return err
 		}
 	}
@@ -145,8 +146,8 @@ func (cfg Config) comments(ctx context.Context, prog, path string) ([]ghComment,
 	}
 }
 
-// readIssue reads the issue at path, for one this poll didn't list.
-func (cfg Config) readIssue(ctx context.Context, prog, path string) (ghIssue, error) {
+// fetchIssue reads the issue at path, for one this poll didn't list.
+func (cfg Config) fetchIssue(ctx context.Context, prog, path string) (ghIssue, error) {
 	body, msg, err := gh.API(ctx, cfg.Env, prog, path)
 	if err != nil {
 		return ghIssue{}, apiError("reading the issue", msg, err)
@@ -172,7 +173,7 @@ func (cfg Config) setLabel(ctx context.Context, prog, repository, path, label st
 	}
 	for _, l := range labels {
 		if l.Name != label && strings.HasPrefix(l.Name, core.StatusLabelPrefix) {
-			if _, msg, err := gh.API(ctx, cfg.Env, prog, path+"/labels/"+url.PathEscape(l.Name), "--method", "DELETE"); err != nil && !errors.Is(err, gh.ErrNotFound) {
+			if _, msg, err := gh.API(ctx, cfg.Env, prog, path+"/labels/"+url.PathEscape(l.Name), "--method", "DELETE"); err != nil && !notFound(err) {
 				return apiError("removing the label "+l.Name, msg, err)
 			}
 		}
@@ -186,7 +187,7 @@ func (cfg Config) createLabel(ctx context.Context, prog, repository, label strin
 	if err == nil {
 		return nil
 	}
-	if !errors.Is(err, gh.ErrNotFound) {
+	if !notFound(err) {
 		return apiError("reading the label "+label, msg, err)
 	}
 	if _, msg, err := gh.API(ctx, cfg.Env, prog, "repos/"+repository+"/labels", "--method", "POST",
@@ -203,4 +204,10 @@ func apiError(what, msg string, err error) error {
 		return fmt.Errorf("%s: %w: %s", what, err, msg)
 	}
 	return fmt.Errorf("%s: %w", what, err)
+}
+
+// notFound reports whether err is GitHub answering 404 Not Found.
+func notFound(err error) bool {
+	var status *gh.StatusError
+	return errors.As(err, &status) && status.Status == http.StatusNotFound
 }

@@ -56,25 +56,38 @@ func Check(ctx context.Context, in core.IssuesCheckInput, env gh.Env) core.Watch
 	return r
 }
 
-// checkAccess is Check, as each poll runs it too, with the gh it found:
+// access is what a passing check found: the gh it runs, and the
+// repository's name as GitHub gives it, which follows a rename.
+type access struct {
+	prog       string
+	repository string
+}
+
+// checkAccess is Check, as each poll runs it too, with what it found:
 // GitHub rate-limiting a call is a *gh.RateLimitError, not a problem.
-func checkAccess(ctx context.Context, in core.IssuesCheckInput, env gh.Env) (prog string, r core.WatcherCheckResult, err error) {
+func checkAccess(ctx context.Context, in core.IssuesCheckInput, env gh.Env) (a access, r core.WatcherCheckResult, err error) {
 	prog, missing := gh.Find(in.GHPath, env)
 	if missing != nil {
-		return "", *missing, nil
+		return access{}, *missing, nil
 	}
+	a = access{prog: prog, repository: in.Repository}
 	r, err = gh.CheckLogin(ctx, env, prog)
 	if r.Problem == "" && err == nil {
-		r, err = checkRepository(ctx, env, prog, in.Repository)
+		var name string
+		name, r, err = checkRepository(ctx, env, prog, in.Repository)
+		if name != "" {
+			a.repository = name
+		}
 	}
-	return prog, r, err
+	return a, r, err
 }
 
 // ghRepository is what the check reads of a repository from GitHub's
 // REST API: whether it has issues on, and what gh's login may do there,
 // which GitHub leaves out for a login with no role on it.
 type ghRepository struct {
-	HasIssues   bool `json:"has_issues"`
+	FullName    string `json:"full_name"`
+	HasIssues   bool   `json:"has_issues"`
 	Permissions *struct {
 		Admin    bool `json:"admin"`
 		Maintain bool `json:"maintain"`
@@ -90,34 +103,35 @@ func (r ghRepository) canTriage() bool {
 }
 
 // checkRepository reads repository through prog, gh, and checks its issues
-// are on and gh's login can triage them. GitHub rate-limiting the read is
-// a *gh.RateLimitError, not a problem.
-func checkRepository(ctx context.Context, env gh.Env, prog, repository string) (core.WatcherCheckResult, error) {
+// are on and gh's login can triage them. It returns the repository's name
+// as GitHub gives it, once it could read it. GitHub rate-limiting the
+// read is a *gh.RateLimitError, not a problem.
+func checkRepository(ctx context.Context, env gh.Env, prog, repository string) (string, core.WatcherCheckResult, error) {
 	body, msg, err := gh.API(ctx, env, prog, "repos/"+repository)
 	if err != nil {
 		var limit *gh.RateLimitError
 		if errors.As(err, &limit) {
-			return core.WatcherCheckResult{}, limit
+			return "", core.WatcherCheckResult{}, limit
 		}
 		if r, ran := gh.DidntRun(prog, err); !ran {
-			return r, nil
+			return "", r, nil
 		}
-		return core.WatcherCheckResult{Problem: core.ProblemRepositoryUnreadable, Reason: fmt.Sprintf("gh can't read the repository %s: %s", repository, msg),
+		return "", core.WatcherCheckResult{Problem: core.ProblemRepositoryUnreadable, Reason: fmt.Sprintf("gh can't read the repository %s: %s", repository, msg),
 			Fix: "Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it."}, nil
 	}
 	var repo ghRepository
 	if err := json.Unmarshal(body, &repo); err != nil {
-		return core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: fmt.Sprintf("GitHub's answer for the repository %s can't be read: %v", repository, err),
+		return "", core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: fmt.Sprintf("GitHub's answer for the repository %s can't be read: %v", repository, err),
 			Fix: "Check gh works for the user the service runs as, then turn GitHub Issues on again."}, nil
 	}
 	switch {
 	case !repo.HasIssues:
-		return core.WatcherCheckResult{Problem: core.ProblemIssuesDisabled, Reason: fmt.Sprintf("The repository %s has its issues turned off.", repository),
+		return repo.FullName, core.WatcherCheckResult{Problem: core.ProblemIssuesDisabled, Reason: fmt.Sprintf("The repository %s has its issues turned off.", repository),
 			Fix: "Turn Issues on in the repository's Settings on GitHub, under Features, or name the repository whose issues to bring in."}, nil
 	case !repo.canTriage():
-		return core.WatcherCheckResult{Problem: core.ProblemNoTriage,
+		return repo.FullName, core.WatcherCheckResult{Problem: core.ProblemNoTriage,
 			Reason: fmt.Sprintf("The account gh is logged in as can't triage the issues of %s: Code Central labels and closes them, which needs triage permission or more.", repository),
 			Fix:    "Give the account gh is logged in as triage permission or more on the repository, or log gh in as an account that has it."}, nil
 	}
-	return core.WatcherCheckResult{}, nil
+	return repo.FullName, core.WatcherCheckResult{}, nil
 }

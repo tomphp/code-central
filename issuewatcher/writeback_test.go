@@ -71,9 +71,9 @@ func (w *watching) commentsOn(n int, bodies ...string) {
 	w.h.Answer(fakegh.Answer{Args: []string{"api", fmt.Sprintf("repos/acme/web/issues/%d/comments?page=1&per_page=100", n)}, Stdout: string(b)})
 }
 
-// arrived starts the Issue Watcher with issues open, waits for them to
+// arrivedFirst starts the Issue Watcher with issues open, waits for them to
 // arrive, and returns the first one's Ticket.
-func (w *watching) arrived(issues ...issue) string {
+func (w *watching) arrivedFirst(issues ...issue) string {
 	w.t.Helper()
 	w.openIssues("", 1, issues...)
 	w.start(w.h.Bin)
@@ -104,7 +104,7 @@ func (w *watching) writesDue() []core.IssueWrites {
 func TestAnIncomingIssueIsLabelledDraftCreatingTheLabel(t *testing.T) {
 	w := newWatching(t)
 	w.missingLabel("code-central:draft")
-	w.arrived(labelled(1))
+	w.arrivedFirst(labelled(1))
 	from := len(w.h.Calls())
 	w.polled()
 	w.wantWrites(from,
@@ -116,7 +116,7 @@ func TestAnIncomingIssueIsLabelledDraftCreatingTheLabel(t *testing.T) {
 // label is left alone, and other status labels are taken off.
 func TestOnlyTheLabelThatDiffersIsChanged(t *testing.T) {
 	w := newWatching(t)
-	w.arrived(labelled(1, "bug", "code-central:draft"), labelled(2, "code-central:wont-fix", "bug"))
+	w.arrivedFirst(labelled(1, "bug", "code-central:draft"), labelled(2, "code-central:wont-fix", "bug"))
 	from := len(w.h.Calls())
 	w.polled()
 	w.wantWrites(from,
@@ -129,7 +129,7 @@ func TestOnlyTheLabelThatDiffersIsChanged(t *testing.T) {
 // then nothing more is due, so the next poll writes nothing.
 func TestWontFixWithAReasonCommentsLabelsAndClosesAsNotPlanned(t *testing.T) {
 	w := newWatching(t)
-	ticket := w.arrived(labelled(1, "code-central:draft"))
+	ticket := w.arrivedFirst(labelled(1, "code-central:draft"))
 	w.wontFix(ticket, "Works as intended.")
 	from := len(w.h.Calls())
 	w.polled()
@@ -150,7 +150,7 @@ func TestWontFixWithAReasonCommentsLabelsAndClosesAsNotPlanned(t *testing.T) {
 // Won't fix with no reason only labels and closes the issue.
 func TestWontFixWithoutAReasonOnlyCloses(t *testing.T) {
 	w := newWatching(t)
-	ticket := w.arrived(labelled(1, "code-central:draft"))
+	ticket := w.arrivedFirst(labelled(1, "code-central:draft"))
 	w.wontFix(ticket, "")
 	from := len(w.h.Calls())
 	w.polled()
@@ -165,7 +165,7 @@ func TestWontFixWithoutAReasonOnlyCloses(t *testing.T) {
 // Watcher only reports it written.
 func TestACommentAlreadyOnTheIssueIsReportedNotPostedAgain(t *testing.T) {
 	w := newWatching(t)
-	ticket := w.arrived(labelled(1, "code-central:wont-fix"))
+	ticket := w.arrivedFirst(labelled(1, "code-central:wont-fix"))
 	w.wontFix(ticket, "Works as intended.")
 	w.commentsOn(1, "Me too.", core.IssueMarker(ticket, "wont-fix")+"\nWorks as intended.")
 	from := len(w.h.Calls())
@@ -179,7 +179,7 @@ func TestACommentAlreadyOnTheIssueIsReportedNotPostedAgain(t *testing.T) {
 // A restarted Issue Watcher keeps no state, and posts nothing twice.
 func TestARestartedIssueWatcherPostsNothingTwice(t *testing.T) {
 	w := newWatching(t)
-	ticket := w.arrived(labelled(1, "code-central:draft"))
+	ticket := w.arrivedFirst(labelled(1, "code-central:draft"))
 	w.wontFix(ticket, "Works as intended.")
 	from := len(w.h.Calls())
 	w.polled()
@@ -197,7 +197,7 @@ func TestARestartedIssueWatcherPostsNothingTwice(t *testing.T) {
 // turned back on.
 func TestWritesDueWhileGitHubIssuesWasOffAreMadeWhenItIsBackOn(t *testing.T) {
 	w := newWatching(t)
-	ticket := w.arrived(labelled(1, "code-central:draft"))
+	ticket := w.arrivedFirst(labelled(1, "code-central:draft"))
 	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: false, Repository: "acme/web"}); err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestWritesDueWhileGitHubIssuesWasOffAreMadeWhenItIsBackOn(t *testing.T) {
 // before its label and closing are compared with it.
 func TestAnIssueNotListedIsReadForItsLabelsAndState(t *testing.T) {
 	w := newWatching(t)
-	ticket := w.arrived(labelled(1, "code-central:draft"))
+	ticket := w.arrivedFirst(labelled(1, "code-central:draft"))
 	w.wontFix(ticket, "")
 	w.openIssues("", 1)
 	w.h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web/issues/1"},
