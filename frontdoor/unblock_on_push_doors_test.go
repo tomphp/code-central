@@ -53,3 +53,43 @@ func TestWithUnblockOnPushOffTheRefusalStillNamesAGatedBlockersCIResult(t *testi
 		t.Fatalf("message %q, want it to name acme-3 as Accepted with its CI failed", e.Message)
 	}
 }
+
+// blockerOf is acme-4's only Blocker, as get_ticket gives it over HTTP.
+func blockerOf(t *testing.T, srv *codecentraltest.Server) map[string]any {
+	t.Helper()
+	list, _ := httpOK(t, srv, httpCall{"GET", "/api/p/acme/tickets/4", ""})["blockers"].([]any)
+	if len(list) != 1 {
+		t.Fatalf("blockers %v, want acme-3 alone", list)
+	}
+	b, _ := list[0].(map[string]any)
+	return b
+}
+
+func TestGetTicketShowsAGatedBlockerWhoseCIRunsAsCleared(t *testing.T) {
+	srv := newServer(t, pushedAccepted, unblockOnPushWithADependant)
+	if b := blockerOf(t, srv); b["id"] != "acme-3" || b["state"] != "Accepted" || b["ci_result"] != "running" || b["cleared"] != true {
+		t.Fatalf("blocker %v, want acme-3 Accepted with its CI running, cleared", b)
+	}
+}
+
+func TestGetTicketShowsAGatedBlockerWhoseCIFailedAsNotCleared(t *testing.T) {
+	srv := newServer(t, failedCI, unblockOnPushWithADependant)
+	if b := blockerOf(t, srv); b["ci_result"] != "failed" || b["cleared"] != false {
+		t.Fatalf("blocker %v, want acme-3 with its CI failed, not cleared", b)
+	}
+}
+
+func TestWithUnblockOnPushOffGetTicketShowsAGatedBlockersCIResultButNotCleared(t *testing.T) {
+	srv := newServer(t, pushedAccepted, unblockOnPushWithADependant)
+	httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web","ignored_workflows":["nightly.yml"],"unblock_on_push":false}`))
+	if b := blockerOf(t, srv); b["ci_result"] != "running" || b["cleared"] != false {
+		t.Fatalf("blocker %v, want acme-3 with its CI running, not cleared", b)
+	}
+}
+
+func TestABlockerTheCIGateDoesntHoldHasNoCIResult(t *testing.T) {
+	srv := newServer(t, unblockOnPushWithADependant)
+	if b := blockerOf(t, srv); b["ci_result"] != nil || b["cleared"] != false {
+		t.Fatalf("blocker %v, want no ci_result and not cleared", b)
+	}
+}

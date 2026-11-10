@@ -113,3 +113,34 @@ func TestACIRunReportThatLeavesTheCIResultAloneSendsNoNoticeToDependants(t *test
 		}
 	}
 }
+
+// A dependant's Blockers show a gated Blocker's CI result whichever way
+// Unblock on push is set (code-central-299), so its change notices it.
+func TestWithUnblockOnPushOffADependantIsNoticedWhenItsBlockersCIResultChanges(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
+	f.addBlocker(t, "acme-2", "acme-3")
+	f.gatedBlocker(t, 3)
+	err := f.store.Update(func(w store.Writer) error {
+		p, _ := w.Project("acme")
+		p.CI.UnblockOnPush = false
+		return w.PutProject(p)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	notices, stop := f.core.Events().Subscribe()
+	defer stop()
+	f.reportRun(t, "acme-3", store.CICompleted, store.CISuccess)
+	got := map[events.Event]bool{}
+	for len(notices) > 0 {
+		got[<-notices] = true
+	}
+	if !got[events.Event{Type: events.TicketChanged, Project: "acme", ID: "acme-2"}] {
+		t.Fatalf("notices %v, want ticket.changed for acme-2, whose Blocker's CI result changed", got)
+	}
+	if b := f.get(t, "acme-2").Blockers[0]; b.CIResult != core.CIPassed || b.Cleared {
+		t.Fatalf("blocker %+v, want acme-3 with its CI passed, not cleared", b)
+	}
+}

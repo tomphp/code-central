@@ -45,7 +45,8 @@ export function TicketPane(props: TicketPaneProps) {
 export type TicketDetailProps = TicketPaneProps;
 
 // TicketDetail is everything about a Ticket below its action panel: Spec,
-// Labels, description, Blockers, its CI section when it has CI Runs (in the
+// Labels, description, Blockers (with a gated one's CI result, and whether
+// it no longer blocks), its CI section when it has CI Runs (in the
 // action panel instead while CI failed), Claim activity with each Claim's Live
 // section, move, and a collapsed history of moves, comments and edits
 // merged by time.
@@ -79,7 +80,9 @@ export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketD
           {t.blockers.map((b, i) => (
             <span key={b.id}>
               {i > 0 && ", "}
-              {b.id} {b.title} ({b.state})
+              {b.id} {b.title} ({b.state}
+              {b.ci_result && <> · CI {b.ci_result}</>}
+              {b.cleared && <> · no longer blocking</>})
             </span>
           ))}
         </p>
