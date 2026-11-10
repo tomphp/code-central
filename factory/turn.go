@@ -64,7 +64,7 @@ func (f *factory) resumeArgs(c claim, mc turnChoice) []string {
 
 // turnFlags are the flags every start and resume passes: the output
 // format, the permission mode, the turn's model and effort when set, and
-// the Claim's allowed tools.
+// the Claim's allowed tools and its system prompt.
 func (f *factory) turnFlags(c claim, mc turnChoice) []string {
 	args := []string{"--output-format", "stream-json", "--verbose"}
 	if f.o.bypass {
@@ -80,6 +80,9 @@ func (f *factory) turnFlags(c claim, mc turnChoice) []string {
 	}
 	if len(c.AllowedTools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(c.AllowedTools, ","))
+	}
+	if c.SystemPrompt != "" {
+		args = append(args, "--append-system-prompt", c.SystemPrompt)
 	}
 	return args
 }

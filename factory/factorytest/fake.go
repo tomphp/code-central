@@ -90,11 +90,14 @@ func runFakeClaude(data string, args []string) int {
 	if len(args) > 0 {
 		c.Prompt = args[len(args)-1]
 	}
-	if m := ticketLine.FindStringSubmatch(c.Prompt); m != nil {
-		c.Ticket = m[1]
-	}
-	if m := claimLine.FindStringSubmatch(c.Prompt); m != nil {
-		c.Claim = m[1]
+	c.SystemPrompt, _ = c.Flag("--append-system-prompt")
+	for _, text := range []string{c.SystemPrompt, c.Prompt} {
+		if m := ticketLine.FindStringSubmatch(text); m != nil {
+			c.Ticket = m[1]
+		}
+		if m := claimLine.FindStringSubmatch(text); m != nil {
+			c.Claim = m[1]
+		}
 	}
 	if s, ok := c.Flag("--session-id"); ok {
 		c.Session = s

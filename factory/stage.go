@@ -87,16 +87,27 @@ func workBranch(guide, ticket string) string {
 // mapResearch is the guide of a Map's research Ticket.
 const mapResearch = "map-research"
 
-// firstPrompt is the prompt that starts a Claim's first turn: the guide's
-// skill as a slash command, the Ticket and Claim, how the Factory runs
-// it in its worktree wt, and the guide from the claim. stage is the
-// guide's name.
-func firstPrompt(c claim, stage, wt string, g core.StageGuideView) string {
+// firstPrompt is the prompt that starts a Claim's first turn: the
+// guide's skill as a slash command with the Ticket's ID alone as its
+// arguments, since Claude Code repeats a skill's arguments in the expanded
+// skill. A guide that starts no skill is pointed at the system prompt
+// (systemPrompt), which holds everything else.
+func firstPrompt(c claim, stage string) string {
+	if sk := stageSkills[stage]; sk.skill != "" {
+		return fmt.Sprintf("/%s %s", sk.skill, c.Ticket)
+	}
+	return fmt.Sprintf("Work Ticket %s, as the Factory's instructions and its Stage Guide in your system prompt say.", c.Ticket)
+}
+
+// systemPrompt is what every turn of a Claim adds to claude's system
+// prompt: the Ticket and Claim, how the Factory runs it in its worktree
+// wt, and the guide from the claim. stage is the guide's name. Claude Code
+// records the system prompt at a session's first request and reuses it on
+// every resume until the session is compacted, so it reaches the agent
+// once, and again after a compaction since every turn passes it.
+func systemPrompt(c claim, stage, wt string, g core.StageGuideView) string {
 	var b strings.Builder
 	sk := stageSkills[stage]
-	if sk.skill != "" {
-		fmt.Fprintf(&b, "/%s %s\n\n", sk.skill, c.Ticket)
-	}
 	fmt.Fprintf(&b, "Ticket: %s\nClaim: %s\n\n", c.Ticket, c.ClaimID)
 	claimed := fmt.Sprintf("The Factory has already claimed this Ticket for you: Claim %s is yours, so don't call claim, and pass %s as claim_id on every write that needs it.", c.ClaimID, c.ClaimID)
 	switch branch := workBranch(stage, c.Ticket); stage {
@@ -116,6 +127,6 @@ func firstPrompt(c claim, stage, wt string, g core.StageGuideView) string {
 		}
 		fmt.Fprintf(&b, "You are running under code-central-factory, in a detached, read-only worktree at the base's tip, for %s. %s Finish the Ticket when it is done. %s writes nothing to the repository: no files, no commits and no branches.", what, claimed, writer)
 	}
-	fmt.Fprintf(&b, "\n\nThe Stage Guide for %s follows: what this Ticket must produce and how to finish it. If you lose it, after compaction say, read it again with get_stage_guide, stage %q.\n\n%s", g.Stage, g.Stage, g.Guide)
+	fmt.Fprintf(&b, "\n\nThe Stage Guide for %s follows: what this Ticket must produce and how to finish it.\n\n%s", g.Stage, g.Guide)
 	return b.String()
 }

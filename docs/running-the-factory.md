@@ -69,6 +69,8 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Each Claim gets a worktree of its own under `~/src/acme-shop.worktrees`, named after the Ticket. A Stage's worktree is read-only and detached at the base's tip; the Stages write to Code Central, not to the repository.
 
+   The session's prompt is the Stage's skill and the Ticket, `/grilling acme-shop-2`. The rest of what the session needs, its Ticket and Claim, how the Factory runs it and the Stage Guide, goes once into its system prompt (`--append-system-prompt`), which every resume passes again so a session keeps it after a compaction.
+
    Check: `acme-shop-2` is In Progress, and the Requirement's row reads *Grilling: a Factory is on it*. Nothing needs you yet.
 
    **Map**, in the **▾** menu beside **+ New**, starts a Map from the same dialog instead. Its one Ready Ticket, *Charting: …*, is claimed within a poll like a grilling Ticket, in a read-only Stage worktree, and grills you on the Map's destination through Rounds. The Map's row in the **Requirements** view counts its decisions, such as *0/1 decided*, in place of the Stage strip. The same **+ New ▾** is in Focus Mode's header, beside **Exit**, and submitting there keeps you in Focus Mode, on the item you were on, with a brief "Requirement added" or "Map added" note.
@@ -322,7 +324,7 @@ A Map's Tickets each carry a Wayfinder Label, and the Factory claims them like a
 | `wayfinder:chart` | `map-chart` | `/wayfinder` |
 | `wayfinder:grilling` | `map-grilling` | `/grilling`, with `/domain-modeling` alongside |
 | `wayfinder:research` | `map-research` | `/research` |
-| `wayfinder:task` | `map-task` | none: the prompt is the Guide alone |
+| `wayfinder:task` | `map-task` | none: the session starts from the Guide alone |
 | `prototype` | `prototype` | `/prototype` |
 
 A Map's Charting, grilling and task Tickets each run in a read-only worktree detached at the base's tip, as a Stage does, and write to Code Central, not to the repository. Each one's line names its Guide in place of the Stage:
@@ -337,7 +339,7 @@ A **Prototype** is a Ticket labelled `prototype`, on any Spec. Ask for one with 
 acme-shop-10 claimed (prototype): "Prototype: A theme picker in the header" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-10; resume: claude --resume …
 ```
 
-Its first prompt tells the session to commit on that branch only, with no push and no PR, to record where the Prototype is in a `prototype` Tag (`prototype/acme-shop-10@1a2b3c4 /Users/you/src/acme-shop.worktrees/acme-shop-10`), to open its first Round with a "Try it" Question, and to finish with no branch. The Ticket panel shows the Tag as *Prototype at `/Users/you/src/acme-shop.worktrees/acme-shop-10` on `prototype/acme-shop-10` (`1a2b3c4`)*, so you can try it in that worktree while you answer.
+Its system prompt tells the session to commit on that branch only, with no push and no PR, to record where the Prototype is in a `prototype` Tag (`prototype/acme-shop-10@1a2b3c4 /Users/you/src/acme-shop.worktrees/acme-shop-10`), to open its first Round with a "Try it" Question, and to finish with no branch. The Ticket panel shows the Tag as *Prototype at `/Users/you/src/acme-shop.worktrees/acme-shop-10` on `prototype/acme-shop-10` (`1a2b3c4`)*, so you can try it in that worktree while you answer.
 
 Because it finishes with no branch, accepting a Prototype makes it Done straight away, whatever the Landing Method: nothing is merged, pushed or landed. The worktree stays through Needs Answer and In Review, and the Factory removes it once the Prototype is Done or Cancelled. It never deletes the `prototype/` branch, so `git switch prototype/acme-shop-10` brings the Prototype back.
 
@@ -349,7 +351,7 @@ A Map's **research** Ticket (`wayfinder:research`) runs in the background with `
 acme-shop-11 claimed (map-research): "Which colour libraries exist?" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-11; resume: claude --resume …
 ```
 
-Its first prompt tells the session to commit its findings on that branch only, with no push and no PR, to record where they are in a `research` Tag (`research/acme-shop-11@9f8e7d6`), and to finish with no branch. Accepting it makes it Done straight away, whatever the Landing Method, with nothing merged, pushed or landed. The Factory removes its worktree once it is Done or Cancelled and never deletes the `research/` branch, so `git show research/acme-shop-11` still finds the findings.
+Its system prompt tells the session to commit its findings on that branch only, with no push and no PR, to record where they are in a `research` Tag (`research/acme-shop-11@9f8e7d6`), and to finish with no branch. Accepting it makes it Done straight away, whatever the Landing Method, with nothing merged, pushed or landed. The Factory removes its worktree once it is Done or Cancelled and never deletes the `research/` branch, so `git show research/acme-shop-11` still finds the findings.
 
 A Ticket with any of these Labels is never run as an implementation Ticket.
 

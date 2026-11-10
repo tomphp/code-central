@@ -50,6 +50,9 @@ func TestAnAnsweredClaimIsPickedUpAndItsSessionResumedWithTheAnswers(t *testing.
 	if m, _ := c.Flag("--model"); m != "opus" {
 		t.Errorf("--model %q, want opus", m)
 	}
+	if c.SystemPrompt == "" || c.SystemPrompt != first.SystemPrompt {
+		t.Errorf("system prompt %q, want the first turn's %q, so it survives a compaction", c.SystemPrompt, first.SystemPrompt)
+	}
 	if !strings.Contains(c.Prompt, "Carry on from the answers") || !strings.Contains(c.Prompt, "Blue") {
 		t.Errorf("prompt %q: want it to carry on from the answers, giving them", c.Prompt)
 	}

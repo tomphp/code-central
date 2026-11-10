@@ -19,6 +19,10 @@ type claim struct {
 	ClaimID      string   `json:"claim_id"`
 	SessionID    string   `json:"session_id"`
 	AllowedTools []string `json:"allowed_tools"`
+	// SystemPrompt is what every turn adds to claude's system prompt
+	// (systemPrompt); empty for a Claim started before the Factory added
+	// one, whose first prompt holds it instead.
+	SystemPrompt string `json:"system_prompt,omitempty"`
 	// Denials is the Round the Factory posted for the calls its last turn
 	// had denied, while it waits for answers; nil otherwise.
 	Denials *denialRound `json:"denials,omitempty"`
