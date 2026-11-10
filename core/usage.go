@@ -239,13 +239,13 @@ const RecentSessions = 50
 // A session is its session ID plus its agent, so each subagent is one of
 // its own, and a session resumed under a newer Claim stays one session.
 // The responses are taken oldest first, whatever order they were read in,
-// so each session's models are in order of first use.
+// so each session starts at its first, takes its Claim and kind from its
+// latest, and lists its models in order of first use.
 func usageSessions(responses []usage.Response) []UsageSession {
 	responses = slices.Clone(responses)
 	slices.SortStableFunc(responses, func(a, b usage.Response) int { return a.Time.Compare(b.Time) })
 	type key struct{ session, agent string }
 	byKey := map[key]*UsageSession{}
-	latest := map[key]time.Time{}
 	for _, r := range responses {
 		k := key{r.SessionID, r.Agent}
 		s := byKey[k]
@@ -258,13 +258,7 @@ func usageSessions(responses []usage.Response) []UsageSession {
 		if r.Model != "" && !slices.Contains(s.Models, r.Model) {
 			s.Models = append(s.Models, r.Model)
 		}
-		if r.Time.Before(s.Started) {
-			s.Started = r.Time
-		}
-		if last, ok := latest[k]; !ok || !r.Time.Before(last) {
-			latest[k] = r.Time
-			s.Project, s.Ticket, s.Claim, s.Kind = r.Project, r.Ticket, r.Claim, r.Kind
-		}
+		s.Project, s.Ticket, s.Claim, s.Kind = r.Project, r.Ticket, r.Claim, r.Kind
 	}
 	sessions := []UsageSession{}
 	for _, s := range byKey {

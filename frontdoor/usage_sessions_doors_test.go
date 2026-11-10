@@ -71,6 +71,23 @@ func claim(t *testing.T, srv *codecentraltest.Server, key, session string) core.
 	return res
 }
 
+// resume finishes first, acme-3, makes acme-2 Ready and claims it a
+// minute later in session, as a session resumed under a newer Claim.
+func resume(t *testing.T, srv *codecentraltest.Server, session string, first core.ClaimResult) {
+	t.Helper()
+	ctx := context.Background()
+	must(t, func() error {
+		_, err := srv.Core.Finish(ctx, "acme", core.FinishInput{Ticket: "3", ClaimID: first.ClaimID, Summary: "done"})
+		return err
+	})
+	must(t, func() error {
+		_, err := srv.Core.Approve(core.WithActor(ctx, core.Human), "acme", core.TicketInput{Ticket: "2"})
+		return err
+	})
+	srv.Clock.Advance(time.Minute)
+	claim(t, srv, "acme", session)
+}
+
 // at is a time on the test server's first day, minutes after it starts.
 func at(minutes int) time.Time {
 	return codecentraltest.Start.Add(time.Duration(minutes) * time.Minute)
@@ -99,17 +116,7 @@ func TestPostedUsageGoesToTheNewestClaimWithThatSession(t *testing.T) {
 	srv := newServer(t)
 	first := claim(t, srv, "acme", "s1") // acme-3
 	postResponses(t, srv, "s1", response{time: at(1), kind: "implementation", input: 10, write: 1000, read: 0})
-	ctx := context.Background()
-	must(t, func() error {
-		_, err := srv.Core.Finish(ctx, "acme", core.FinishInput{Ticket: "3", ClaimID: first.ClaimID, Summary: "done"})
-		return err
-	})
-	must(t, func() error {
-		_, err := srv.Core.Approve(core.WithActor(ctx, core.Human), "acme", core.TicketInput{Ticket: "2"})
-		return err
-	})
-	srv.Clock.Advance(time.Minute)
-	claim(t, srv, "acme", "s1") // acme-2, resumed in the same session
+	resume(t, srv, "s1", first) // acme-2
 	postResponses(t, srv, "s1", response{time: at(2), kind: "implementation", input: 10, write: 500, read: 3000})
 
 	got := readUsage(t, srv, "").Sessions
@@ -258,12 +265,16 @@ func TestPostedUsageSurvivesARestart(t *testing.T) {
 	dir := t.TempDir()
 	first := newServerWith(t, []codecentraltest.Option{codecentraltest.WithUsageDir(dir)})
 	claim(t, first, "acme", "s1")
-	postResponses(t, first, "s1", response{time: at(1), kind: "implementation", model: "claude-opus-4-7", input: 42})
+	postResponses(t, first, "s1",
+		response{time: at(1), kind: "implementation", model: "claude-opus-4-7", input: 42},
+		// As every line written before responses named their model.
+		response{time: at(2), agent: "toolu_a", kind: "review", input: 7},
+	)
 
 	second := newServerWith(t, []codecentraltest.Option{codecentraltest.WithUsageDir(dir)})
 	got := readUsage(t, second, "?project=acme").Sessions
-	if len(got) != 1 || got[0].Peak != 42 || !reflect.DeepEqual(got[0].Models, []string{"claude-opus-4-7"}) {
-		t.Fatalf("sessions %+v after a restart, want the one with peak 42 on claude-opus-4-7", got)
+	if len(got) != 2 || got[1].Peak != 42 || !reflect.DeepEqual(got[1].Models, []string{"claude-opus-4-7"}) || !reflect.DeepEqual(got[0].Models, []string{}) {
+		t.Fatalf("sessions %+v after a restart, want the one with peak 42 on claude-opus-4-7 and a subagent with no model", got)
 	}
 }
 
@@ -302,18 +313,7 @@ func TestASessionListsItsModelsInOrderOfFirstUse(t *testing.T) {
 
 func TestAResumedSessionListsTheModelsOfEveryClaim(t *testing.T) {
 	srv := newServer(t)
-	first := claim(t, srv, "acme", "s1") // acme-3
-	ctx := context.Background()
-	must(t, func() error {
-		_, err := srv.Core.Finish(ctx, "acme", core.FinishInput{Ticket: "3", ClaimID: first.ClaimID, Summary: "done"})
-		return err
-	})
-	must(t, func() error {
-		_, err := srv.Core.Approve(core.WithActor(ctx, core.Human), "acme", core.TicketInput{Ticket: "2"})
-		return err
-	})
-	srv.Clock.Advance(time.Minute)
-	claim(t, srv, "acme", "s1") // acme-2, resumed in the same session
+	resume(t, srv, "s1", claim(t, srv, "acme", "s1")) // acme-3, then acme-2
 	postResponses(t, srv, "s1", response{time: at(2), kind: "implementation", model: "claude-sonnet-4-6", input: 10})
 	// Filed under the newest Claim too, but used before it.
 	postResponses(t, srv, "s1", response{time: at(1), kind: "implementation", model: "claude-opus-4-7", input: 10})
