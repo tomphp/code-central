@@ -27,16 +27,8 @@ func write(out io.Writer, r Report, base *Report) error {
 		p.line("Baseline: %s", span(*base))
 	}
 
-	p.line("\nTool results per session, by kind of session")
-	p.row("KIND", "SESSIONS", "TOTAL", "PER SESSION", p.column())
-	for _, name := range kindNames(r, base) {
-		now, was := kind(r, name), p.baseKind(name)
-		if now.Sessions == 0 {
-			p.row(name, "0", "", "", fmt.Sprintf("no sessions (was %s per session)", size(per(was.Bytes, was.Sessions))))
-			continue
-		}
-		p.row(name, fmt.Sprint(now.Sessions), size(float64(now.Bytes)), size(per(now.Bytes, now.Sessions)), p.against(per(now.Bytes, now.Sessions), per(was.Bytes, was.Sessions), size))
-	}
+	p.sizes("Tool results per session, by kind of session", r, func(k Kind) int { return k.Bytes })
+	p.sizes("First turn per session, by kind of session", r, func(k Kind) int { return k.FirstTurn })
 	p.figures("Tools, per session, by kind of session (Code Central's operations are listed next)", r, func(k Kind) []Figure { return k.Tools })
 	p.figures("Code Central operations, per session, by kind of session", r, func(k Kind) []Figure { return k.Operations })
 
@@ -86,6 +78,21 @@ func write(out io.Writer, r Report, base *Report) error {
 		p.row(w.Ticket, w.Kind, w.Operation+" "+w.ID, w.From, "then "+w.To)
 	}
 	return p.tw.Flush()
+}
+
+// sizes prints a size of each of the report's kinds, and those only the
+// baseline has, in total and per session.
+func (p printer) sizes(title string, r Report, bytes func(Kind) int) {
+	p.line("\n%s", title)
+	p.row("KIND", "SESSIONS", "TOTAL", "PER SESSION", p.column())
+	for _, name := range kindNames(r, p.base) {
+		now, was := kind(r, name), p.baseKind(name)
+		if now.Sessions == 0 {
+			p.row(name, "0", "", "", fmt.Sprintf("no sessions (was %s per session)", size(per(bytes(was), was.Sessions))))
+			continue
+		}
+		p.row(name, fmt.Sprint(now.Sessions), size(float64(bytes(now))), size(per(bytes(now), now.Sessions)), p.against(per(bytes(now), now.Sessions), per(bytes(was), was.Sessions), size))
+	}
 }
 
 // figures prints the tools or operations of each of the report's kinds,

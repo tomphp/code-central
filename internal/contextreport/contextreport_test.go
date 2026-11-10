@@ -58,6 +58,39 @@ func TestLoadReadsTheRepositorysFactorySessionsInTheWindow(t *testing.T) {
 	}
 }
 
+func TestLoadReadsTheTicketAndStageFromTheSystemPromptTheFactoryAdds(t *testing.T) {
+	since, _ := time.Parse(time.RFC3339, "2026-01-04T00:00:00Z")
+	sessions, err := Load(fixtures, "/r/acme", Window{Since: since, Until: since.Add(24 * time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("loaded %d sessions, want the one of acme-5", len(sessions))
+	}
+	s := sessions[0]
+	if got := s.Ticket + " " + s.Kind + " " + s.ID; got != "acme-5 spec s5" {
+		t.Errorf("session = %q, want %q", got, "acme-5 spec s5")
+	}
+	// The skill's command and its expansion, then the Factory's part of
+	// the first system prompt; not the rest of it, nor a later one.
+	command := "<command-name>/to-spec</command-name>\n<command-args>acme-5</command-args>"
+	skill := "Turn the conversation into a Spec.\n\nARGUMENTS: acme-5"
+	factory := "Ticket: acme-5\nClaim: C5\n\nYou are running under code-central-factory.\n\nThe Stage Guide for spec follows: what this Ticket must produce and how to finish it.\n\n# Stage Guide: spec"
+	if want := len(command) + len(skill) + len(factory); s.FirstTurn != want {
+		t.Errorf("first turn = %dB, want %dB", s.FirstTurn, want)
+	}
+}
+
+func TestLoadMeasuresTheFirstTurnOfASessionWhosePromptHoldsTheStageGuide(t *testing.T) {
+	var got []int
+	for _, s := range load(t) {
+		got = append(got, s.FirstTurn)
+	}
+	if want := []int{201, 38, 15, 183}; !reflect.DeepEqual(got, want) {
+		t.Errorf("first turns = %v, want %v", got, want)
+	}
+}
+
 func TestLoadMeasuresEachToolResult(t *testing.T) {
 	var got []string
 	for _, c := range load(t)[0].Calls {
@@ -82,22 +115,24 @@ func TestBuildTotalsToolResultsPerKindToolAndOperation(t *testing.T) {
 			Name: "grilling", Sessions: 1, Bytes: 310,
 			Tools:      []Figure{{Name: "Code Central", Calls: 2, Bytes: 310}},
 			Operations: []Figure{{Name: "get_spec", Calls: 1, Bytes: 300}, {Name: "post_round", Calls: 1, Bytes: 10}},
-			Rounds:     1, Questions: 2,
+			Rounds:     1, Questions: 2, FirstTurn: 183,
 		},
 		{
 			Name: "implementation", Sessions: 1, Bytes: 860,
 			Tools:      []Figure{{Name: "Bash", Calls: 1, Bytes: 500}, {Name: "Code Central", Calls: 3, Bytes: 360}, {Name: "ToolSearch", Calls: 1, Bytes: 0}},
 			Operations: []Figure{{Name: "get_spec", Calls: 2, Bytes: 320}, {Name: "get_ticket", Calls: 1, Bytes: 40}},
-			WiderReads: 1,
+			WiderReads: 1, FirstTurn: 201,
 		},
 		{
 			Name: "review", Sessions: 1, Bytes: 140,
 			Tools:      []Figure{{Name: "Bash", Calls: 1, Bytes: 100}, {Name: "Code Central", Calls: 1, Bytes: 40}},
 			Operations: []Figure{{Name: "get_ticket", Calls: 1, Bytes: 40}},
+			FirstTurn:  38,
 		},
 		{
 			Name: "subagent", Sessions: 1, Bytes: 60,
-			Tools: []Figure{{Name: "Read", Calls: 1, Bytes: 60}},
+			Tools:     []Figure{{Name: "Read", Calls: 1, Bytes: 60}},
+			FirstTurn: 15,
 		},
 	}
 	if !reflect.DeepEqual(r.Kinds, want) {
@@ -151,11 +186,11 @@ func TestOnlyReadsForMoreThanBeforeAreWiderReads(t *testing.T) {
 	}
 	spec := func(input map[string]any) Call { return read("get_spec", input) }
 	sessions := []Session{{Ticket: "acme-2", Kind: "implementation", Calls: []Call{
-		// Not wider: the whole Spec covers any part or section of it, and
-		// one section then the tickets asks for no more of the body.
+		// Not wider: the whole Spec covers any part or section of it.
 		spec(map[string]any{"spec": "acme-1"}),
 		spec(map[string]any{"spec": "acme-1", "sections": []any{"Goal"}}),
 		spec(map[string]any{"spec": "acme-1", "parts": []any{"tickets"}}),
+		// Wider: the tickets after sections alone, which read only the body.
 		spec(map[string]any{"spec": "acme-3", "sections": []any{"Goal"}}),
 		spec(map[string]any{"spec": "acme-3", "parts": []any{"tickets"}}),
 		// Wider: the body after only the tickets.
@@ -173,6 +208,7 @@ func TestOnlyReadsForMoreThanBeforeAreWiderReads(t *testing.T) {
 		got = append(got, w.Operation+" "+w.ID+" "+w.To)
 	}
 	want := []string{
+		`get_spec acme-3 {"parts":["tickets"],"spec":"acme-3"}`,
 		`get_spec acme-9 {"parts":["body"],"spec":"acme-9"}`,
 		`get_ticket acme-2 {"parts":["rounds"],"ticket":"acme-2"}`,
 		`get_ticket acme-2 {"full":true,"ticket":"acme-2"}`,
@@ -213,7 +249,7 @@ func TestRunSavesABaselineAndPrintsTheChangeAgainstIt(t *testing.T) {
 	if err := run(append(args, "-baseline", file), &out); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"implementation", "860B", "Code Central", "get_spec", "cat store/file.go", "acme-1", "Testing Decisions", "unchanged"} {
+	for _, want := range []string{"implementation", "860B", "Code Central", "get_spec", "cat store/file.go", "acme-1", "Testing Decisions", "First turn per session", "201B", "unchanged"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report doesn't contain %q:\n%s", want, out.String())
 		}

@@ -16,15 +16,20 @@ import (
 )
 
 // Session is one agent's log: a Factory session, or a subagent one
-// started. Its Ticket comes from the Factory's first prompt, and its kind
-// is the Stage, or implementation, its Stage Guide names. A subagent
-// takes its parent's Ticket and Started time, and its kind is review for
-// the code-review subagents and subagent for any other.
+// started. Its Ticket comes from the Factory's first prompt, or the part
+// of the first system prompt the Factory adds, and its kind is the Stage,
+// or implementation, its Stage Guide there names. A subagent takes its
+// parent's Ticket and Started time, and its kind is review for the
+// code-review subagents and subagent for any other.
 type Session struct {
 	ID      string
 	Ticket  string
 	Kind    string
 	Started time.Time
+	// FirstTurn is the bytes of text the session starts with: its
+	// prompts before the first response, and the Factory's part of the
+	// system prompt.
+	FirstTurn int
 	// Cwd is the folder the session ran in, cut from short inputs so
 	// the same file reads the same in every worktree.
 	Cwd   string
@@ -51,6 +56,9 @@ func (w Window) contains(t time.Time) bool {
 var (
 	ticketLine = regexp.MustCompile(`(?m)^Ticket: (\S+)$`)
 	stageGuide = regexp.MustCompile(`The Stage Guide for (\S+) follows`)
+	// commandArgs is a skill's arguments in the prompt that runs it,
+	// which the Factory keeps to the Ticket's ID.
+	commandArgs = regexp.MustCompile(`<command-args>(\S+)</command-args>`)
 )
 
 // Load reads the Factory sessions of the repository whose main checkout
@@ -58,7 +66,8 @@ var (
 // Claude Code names a session's folder after the path it ran in, so the
 // repository's folders are the main checkout's and its worktrees'
 // (repo.worktrees/<ticket>). Sessions without a Stage Guide in their
-// first prompt (run by hand, outside the Factory) are left out.
+// first prompt or system prompt (run by hand, outside the Factory) are
+// left out.
 func Load(projects, repo string, w Window) ([]Session, error) {
 	entries, err := os.ReadDir(projects)
 	if err != nil {
@@ -141,7 +150,9 @@ func readSubagents(dir string, parent Session) ([]Session, error) {
 	return sessions, nil
 }
 
-// record is the part of a log line the report reads.
+// record is the part of a log line the report reads. Claude Code records
+// the system prompt as a prompt_snapshot attachment, where the Factory's
+// part of it, the Ticket and Stage Guide, is one of SystemPrompt's texts.
 type record struct {
 	Type      string `json:"type"`
 	Timestamp string `json:"timestamp"`
@@ -149,6 +160,10 @@ type record struct {
 	Message   struct {
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
+	Attachment struct {
+		Type         string   `json:"type"`
+		SystemPrompt []string `json:"systemPrompt"`
+	} `json:"attachment"`
 }
 
 // block is one block of a message's content: text, a tool call or a
@@ -163,9 +178,10 @@ type block struct {
 	Content   json.RawMessage `json:"content"`
 }
 
-// readLog reads one session log: when it started, its first prompt's
-// Ticket and kind, and its tool calls in order with their results'
-// sizes. A call logged twice counts once.
+// readLog reads one session log: when it started, its Ticket and kind
+// from its first prompt or its first system prompt, the size of its
+// first turn, and its tool calls in order with their results' sizes. A
+// call logged twice counts once.
 func readLog(file string) (Session, error) {
 	f, err := os.Open(file)
 	if err != nil {
@@ -175,7 +191,22 @@ func readLog(file string) (Session, error) {
 	s := Session{ID: strings.TrimSuffix(filepath.Base(file), ".jsonl")}
 	calls := map[string]int{}
 	sizes := map[string]int{}
-	prompted := false
+	prompted, snapshot, responded := false, false, false
+	// identify takes the Ticket and kind from text, unless an earlier
+	// text gave them. The Ticket is its Ticket: line, or else a skill's
+	// arguments.
+	identify := func(text string) {
+		if s.Ticket == "" {
+			if m := ticketLine.FindStringSubmatch(text); m != nil {
+				s.Ticket = m[1]
+			} else if m := commandArgs.FindStringSubmatch(text); m != nil {
+				s.Ticket = m[1]
+			}
+		}
+		if m := stageGuide.FindStringSubmatch(text); m != nil && s.Kind == "" {
+			s.Kind = m[1]
+		}
+	}
 	r := bufio.NewReader(f)
 	for {
 		line, err := r.ReadBytes('\n')
@@ -196,15 +227,24 @@ func readLog(file string) (Session, error) {
 			}
 			blocks, text := content(rec.Message.Content)
 			switch rec.Type {
+			case "attachment":
+				if rec.Attachment.Type != "prompt_snapshot" || snapshot {
+					break
+				}
+				snapshot = true
+				for _, text := range rec.Attachment.SystemPrompt {
+					if stageGuide.MatchString(text) {
+						identify(text)
+						s.FirstTurn += len(text)
+					}
+				}
 			case "user":
 				if !prompted && text != "" {
 					prompted = true
-					if m := ticketLine.FindStringSubmatch(text); m != nil {
-						s.Ticket = m[1]
-					}
-					if m := stageGuide.FindStringSubmatch(text); m != nil {
-						s.Kind = m[1]
-					}
+					identify(text)
+				}
+				if !responded {
+					s.FirstTurn += len(text)
 				}
 				for _, b := range blocks {
 					if b.Type == "tool_result" {
@@ -213,6 +253,7 @@ func readLog(file string) (Session, error) {
 					}
 				}
 			case "assistant":
+				responded = true
 				for _, b := range blocks {
 					if _, seen := calls[b.ID]; b.Type == "tool_use" && !seen {
 						calls[b.ID] = len(s.Calls)

@@ -1,0 +1,7 @@
+{"type":"queue-operation","operation":"enqueue","timestamp":"2026-01-04T09:00:00Z","content":"/to-spec acme-5"}
+{"type":"user","timestamp":"2026-01-04T09:00:00Z","cwd":"/r/acme.worktrees/acme-5","message":{"role":"user","content":"<command-name>/to-spec</command-name>\n<command-args>acme-5</command-args>"}}
+{"type":"user","isMeta":true,"timestamp":"2026-01-04T09:00:00Z","message":{"role":"user","content":[{"type":"text","text":"Turn the conversation into a Spec.\n\nARGUMENTS: acme-5"}]}}
+{"type":"attachment","timestamp":"2026-01-04T09:00:00Z","attachment":{"type":"prompt_snapshot","systemPrompt":["You are Claude Code.","Ticket: acme-5\nClaim: C5\n\nYou are running under code-central-factory.\n\nThe Stage Guide for spec follows: what this Ticket must produce and how to finish it.\n\n# Stage Guide: spec"]}}
+{"type":"assistant","timestamp":"2026-01-04T09:00:01Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"v1","name":"mcp__code-central__get_ticket","input":{"ticket":"acme-5"}}]}}
+{"type":"user","timestamp":"2026-01-04T09:00:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"v1","content":[{"type":"text","text":"xxxxxxxxxx"}]}]}}
+{"type":"attachment","timestamp":"2026-01-04T09:00:03Z","attachment":{"type":"prompt_snapshot","systemPrompt":["You are Claude Code.","Ticket: acme-9\nClaim: C9\n\nThe Stage Guide for tickets follows: a later snapshot, not the first."]}}

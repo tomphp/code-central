@@ -34,24 +34,25 @@ func TestAMapResearchTicketStartsTheResearchSkillInItsOwnWorktreeOnALocalResearc
 
 	c := h.Calls()[0]
 	branch := "research/" + id
-	if want := "/research " + id + "\n\nTicket: " + id + "\n"; !strings.HasPrefix(c.Prompt, want) {
-		t.Errorf("prompt %q doesn't start %q", c.Prompt, want)
+	if want := "/research " + id; c.Prompt != want {
+		t.Errorf("prompt %q, want %q", c.Prompt, want)
 	}
 	for _, want := range []string{
 		guide(t, h, "map-research"),
-		`get_stage_guide, stage "map-research"`,
+		"Ticket: " + id + "\nClaim: " + c.Claim + "\n",
+		"The Stage Guide for map-research follows",
 		"The Factory has already claimed this Ticket for you: Claim " + c.Claim + " is yours",
 		"in this Ticket's own worktree, " + h.Worktree(id) + ", on the local branch " + branch + ".",
 		"Commit on this branch only, with no push and no PR.",
 		"Record the research Tag as `" + branch + "@<commit>`",
 		"finish with no branch",
 	} {
-		if !strings.Contains(c.Prompt, want) {
-			t.Errorf("prompt %q doesn't say %q", c.Prompt, want)
+		if !strings.Contains(c.SystemPrompt, want) {
+			t.Errorf("system prompt %q doesn't say %q", c.SystemPrompt, want)
 		}
 	}
-	if strings.Contains(c.Prompt, "/implement") || strings.Contains(c.Prompt, guide(t, h, core.ImplementationStage)) {
-		t.Errorf("prompt %q runs it as implementation", c.Prompt)
+	if strings.Contains(c.SystemPrompt, guide(t, h, core.ImplementationStage)) {
+		t.Errorf("system prompt %q runs it as implementation", c.SystemPrompt)
 	}
 	if c.Dir != h.Worktree(id) {
 		t.Errorf("claude ran in %s, want the worktree %s", c.Dir, h.Worktree(id))

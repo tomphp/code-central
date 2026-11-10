@@ -130,9 +130,16 @@ func TestGetSpecWithSectionsCutsTheBody(t *testing.T) {
 	if want := "## Solution\n\nDo it.\n\n### Detail\n\nSmall print.\n\n## Testing Decisions\n\nSeams."; out["body"] != want {
 		t.Fatalf("body %q, want %q", out["body"], want)
 	}
-	// Without parts, every part comes back, with the outline.
-	if _, ok := out["tickets"]; !ok || out["edits"] == nil || !reflect.DeepEqual(out["outline"], specOutline) {
-		t.Fatalf("sections without parts %v", out)
+	// Without parts, only the body comes back, with the outline (ticket 318).
+	want := append(slices.Clone(always), "body")
+	slices.Sort(want)
+	if got := keys(out); !slices.Equal(got, want) || !reflect.DeepEqual(out["outline"], specOutline) {
+		t.Fatalf("sections without parts: keys %v, want %v; outline %v", got, want, out["outline"])
+	}
+	// An explicit parts still wins.
+	out = f.readSpec(t, core.GetSpecInput{Spec: "acme-1", Parts: []string{"body", "tickets"}, Sections: []string{"Solution"}})
+	if len(out["tickets"].([]any)) != 2 || out["edits"] != nil || out["body"] != "## Solution\n\nDo it.\n\n### Detail\n\nSmall print." {
+		t.Fatalf("sections with parts body and tickets %v", out)
 	}
 	out = f.readSpec(t, core.GetSpecInput{Spec: "acme-1", Parts: []string{"body"}, Sections: []string{"Detail"}})
 	if out["body"] != "### Detail\n\nSmall print." || out["tickets"] != nil || out["edits"] != nil {

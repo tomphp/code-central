@@ -69,6 +69,8 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Each Claim gets a worktree of its own under `~/src/acme-shop.worktrees`, named after the Ticket. A Stage's worktree is read-only and detached at the base's tip; the Stages write to Code Central, not to the repository.
 
+   The session's prompt is the Stage's skill and the Ticket, `/grilling acme-shop-2`. The rest of what the session needs, its Ticket and Claim, how the Factory runs it and the Stage Guide, goes once into its system prompt (`--append-system-prompt`), which every resume passes again so a session keeps it after a compaction.
+
    Check: `acme-shop-2` is In Progress, and the Requirement's row reads *Grilling: a Factory is on it*. Nothing needs you yet.
 
    **Map**, in the **▾** menu beside **+ New**, starts a Map from the same dialog instead. Its one Ready Ticket, *Charting: …*, is claimed within a poll like a grilling Ticket, in a read-only Stage worktree, and grills you on the Map's destination through Rounds. The Map's row in the **Requirements** view counts its decisions, such as *0/1 decided*, in place of the Stage strip. The same **+ New ▾** is in Focus Mode's header, beside **Exit**, and submitting there keeps you in Focus Mode, on the item you were on, with a brief "Requirement added" or "Map added" note.
@@ -259,17 +261,19 @@ Before every turn, a first turn or a resume after answers, after a cut-off or af
 4. the Factory's `--model` or `--effort` flag;
 5. Claude Code's own default: the Factory passes no flag.
 
-Set tiers 2 and 3 in the [Models section of Project Options](setting-up-a-project.md#choosing-models-for-each-kind-of-work): a Project default row, and a row for each kind of work. A Ticket's kind of work comes from its Labels: `grilling`, `spec` or `tickets` for a Stage, `map-chart`, `map-grilling`, `map-research` or `map-task` for a Map Ticket, `prototype` for a Prototype, and `implementation` for any other Ticket. Override them for one Ticket with its Tags, from an agent with `set_tags`, or by hand:
+Set tiers 2 and 3 in the [Models section of Project Options](setting-up-a-project.md#choosing-models-for-each-kind-of-work): a Project default row, and a row for each kind of work. A Ticket's kind of work comes from its Labels: `grilling`, `spec` or `tickets` for a Stage, `map-chart`, `map-grilling`, `map-research` or `map-task` for a Map Ticket, `prototype` for a Prototype, and `implementation` for any other Ticket. Override them for one Ticket with its Tags, from the Ticket panel, from an agent with `set_tags`, or by hand:
 
 ```sh
 code-central set-tags acme-shop-5 model=opus effort=high
 ```
 
+The Ticket panel shows the model and effort the Ticket's next turn runs with, each with where it comes from: `opus (Ticket Tag)`, `opus (the Project's implementation row)`, `opus (Project default)`, `sonnet (Factory flag)` for the flag the Factory reported it was started with, or `Claude Code's default`. Below each is its picker. The **Model Tag** suggests the aliases and model IDs the Factory reported and takes any other name: **Set** writes the `model` Tag and **Clear** removes it. The **Effort Tag** offers the valid levels: picking one writes the `effort` Tag, and picking **Project's settings** removes it. Without its Tags the Ticket goes back to its Project's settings. The panel follows the Ticket's Tags, the Models rows and the Factory's reports as they change.
+
 `effort` must be one of the valid levels: `low`, `medium`, `high`, `xhigh` and `max` until a Factory has reported its `claude`'s, below, and then those. `set_tags` rejects anything else and lists them. `model` takes any name `claude --model` takes. On a Spec, `model` and `effort` are ordinary Tags with no effect.
 
 ### What `claude` accepts
 
-When it starts, the Factory runs `claude --help` and reads the effort levels from the `--effort` option's list, `(low, medium, high, xhigh, max)` in Claude Code 2.1.311, and the model aliases from the names quoted in the `--model` option's text, such as `'fable'`, `'opus'` and `'sonnet'`. It reports them to Code Central with its own `--model` and `--effort` flags. Code Central keeps them as the Project's Reported Models: from then on the valid effort levels are the reported ones, and the [Models section](setting-up-a-project.md#choosing-models-for-each-kind-of-work) offers them. A row or Tag already set to a level a later report drops is kept as it is. If the Project can't be read when the Factory starts, it reports on the first poll that can read it.
+When it starts, the Factory runs `claude --help` and reads the effort levels from the `--effort` option's list, `(low, medium, high, xhigh, max)` in Claude Code 2.1.311, and the model aliases from the names quoted in the `--model` option's text, such as `'fable'`, `'opus'` and `'sonnet'`. It reports them to Code Central with its own `--model` and `--effort` flags. Code Central keeps them as the Project's Reported Models: from then on the valid effort levels are the reported ones, and the [Models section](setting-up-a-project.md#choosing-models-for-each-kind-of-work) offers them. A row or Tag already set to a level a later report drops is kept as it is. If the Project can't be read when the Factory starts, it reports on the first poll that can read it. As each session's usage arrives, Code Central also adds to the Reported Models any model ID it names that they don't have yet, such as `claude-opus-5-5`; model IDs are never removed.
 
 An `--effort` that isn't one of the levels `claude --help` lists stops the Factory at the start:
 
@@ -291,6 +295,26 @@ What it can't read is reported as nothing, which leaves the levels and aliases a
 
 The choice is worked out afresh each turn, so a Tag or Models row changed while a Ticket waits on a Round applies when it resumes, with no Factory restart. Each Claim in the Ticket's Claims records the model and effort its latest turn ran with, or Claude Code's default. Only the sessions the Factory starts are affected: subagents they start, such as code-review's reviewers, keep their own agent definitions' models.
 
+### A model or effort `claude` won't take
+
+A bad model or effort never quietly wastes a Claim or runs at the wrong effort: either one fails the Claim, and the Ticket goes to Failed with a Failure Report that names the value, where it was set and what to change. Where it was set is one of the Ticket's `model` or `effort` Tag, the Project's Models row for its kind of work (named), the Project's default Models row, or the Factory's `--model` flag.
+
+`claude` ignores an `--effort` it doesn't accept and runs at its default, so before every turn the Factory checks the turn's effort against the levels it read from `claude --help`. An effort that fails starts no turn. This catches a Tag or Models row set while other levels were valid, which a later report dropped. When the Factory couldn't read the levels, it checks nothing. Say the Ticket's `effort` Tag is `xhigh` and this `claude` lists `(low, medium, high)`:
+
+```console
+acme-shop-5: Failed: The effort `xhigh`, set by the Ticket's `effort` Tag, isn't one this Factory's claude accepts (low, medium, high), so no turn was started.
+```
+
+The Failure Report's *What to fix* reads: Set the Ticket's `effort` Tag to one that claude accepts (low, medium, high), or remove it (in the Ticket panel, or with `set_tags` or `remove_tags`), then send the Ticket back.
+
+A model `claude` rejects ends the turn with the API error `model_not_found`. Unlike an outage it doesn't pause the Factory, and unlike an expired login it doesn't stop it: the Claim fails and the Factory carries on. Say the Project's Models row for implementation sets `opus-9`:
+
+```console
+acme-shop-5: Failed: claude rejected the model `opus-9`, set by the Project's Models row for implementation (model_not_found).
+```
+
+Its *What to fix* reads: In Project Options, set the model in the Models row for implementation to one that claude accepts, or to Default, then send the Ticket back. Its *Why* quotes what `claude` said.
+
 ## Map Tickets and Prototypes
 
 A Map's Tickets each carry a Wayfinder Label, and the Factory claims them like a Stage's Ticket, by the skill its Label names. A Prototype is claimed by its skill too:
@@ -300,7 +324,7 @@ A Map's Tickets each carry a Wayfinder Label, and the Factory claims them like a
 | `wayfinder:chart` | `map-chart` | `/wayfinder` |
 | `wayfinder:grilling` | `map-grilling` | `/grilling`, with `/domain-modeling` alongside |
 | `wayfinder:research` | `map-research` | `/research` |
-| `wayfinder:task` | `map-task` | none: the prompt is the Guide alone |
+| `wayfinder:task` | `map-task` | none: the session starts from the Guide alone |
 | `prototype` | `prototype` | `/prototype` |
 
 A Map's Charting, grilling and task Tickets each run in a read-only worktree detached at the base's tip, as a Stage does, and write to Code Central, not to the repository. Each one's line names its Guide in place of the Stage:
@@ -315,7 +339,7 @@ A **Prototype** is a Ticket labelled `prototype`, on any Spec. Ask for one with 
 acme-shop-10 claimed (prototype): "Prototype: A theme picker in the header" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-10; resume: claude --resume …
 ```
 
-Its first prompt tells the session to commit on that branch only, with no push and no PR, to record where the Prototype is in a `prototype` Tag (`prototype/acme-shop-10@1a2b3c4 /Users/you/src/acme-shop.worktrees/acme-shop-10`), to open its first Round with a "Try it" Question, and to finish with no branch. The Ticket panel shows the Tag as *Prototype at `/Users/you/src/acme-shop.worktrees/acme-shop-10` on `prototype/acme-shop-10` (`1a2b3c4`)*, so you can try it in that worktree while you answer.
+Its system prompt tells the session to commit on that branch only, with no push and no PR, to record where the Prototype is in a `prototype` Tag (`prototype/acme-shop-10@1a2b3c4 /Users/you/src/acme-shop.worktrees/acme-shop-10`), to open its first Round with a "Try it" Question, and to finish with no branch. The Ticket panel shows the Tag as *Prototype at `/Users/you/src/acme-shop.worktrees/acme-shop-10` on `prototype/acme-shop-10` (`1a2b3c4`)*, so you can try it in that worktree while you answer.
 
 Because it finishes with no branch, accepting a Prototype makes it Done straight away, whatever the Landing Method: nothing is merged, pushed or landed. The worktree stays through Needs Answer and In Review, and the Factory removes it once the Prototype is Done or Cancelled. It never deletes the `prototype/` branch, so `git switch prototype/acme-shop-10` brings the Prototype back.
 
@@ -327,7 +351,7 @@ A Map's **research** Ticket (`wayfinder:research`) runs in the background with `
 acme-shop-11 claimed (map-research): "Which colour libraries exist?" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-11; resume: claude --resume …
 ```
 
-Its first prompt tells the session to commit its findings on that branch only, with no push and no PR, to record where they are in a `research` Tag (`research/acme-shop-11@9f8e7d6`), and to finish with no branch. Accepting it makes it Done straight away, whatever the Landing Method, with nothing merged, pushed or landed. The Factory removes its worktree once it is Done or Cancelled and never deletes the `research/` branch, so `git show research/acme-shop-11` still finds the findings.
+Its system prompt tells the session to commit its findings on that branch only, with no push and no PR, to record where they are in a `research` Tag (`research/acme-shop-11@9f8e7d6`), and to finish with no branch. Accepting it makes it Done straight away, whatever the Landing Method, with nothing merged, pushed or landed. The Factory removes its worktree once it is Done or Cancelled and never deletes the `research/` branch, so `git show research/acme-shop-11` still finds the findings.
 
 A Ticket with any of these Labels is never run as an implementation Ticket.
 

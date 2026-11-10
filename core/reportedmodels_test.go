@@ -170,3 +170,72 @@ func TestReportedModelsSurviveAReload(t *testing.T) {
 	_, err = c.SetModels(human, "acme", core.SetModelsInput{Default: row("", "max")})
 	wantCode(t, err, core.Invalid, "default.effort")
 }
+
+// postModels posts one response per model as sess-1's usage.
+func (f fixture) postModels(models ...string) {
+	rs := make([]core.UsageResponse, len(models))
+	for i, m := range models {
+		rs[i] = core.UsageResponse{Kind: "implementation", Model: m}
+	}
+	f.core.PostUsage(ctx, "sess-1", rs)
+}
+
+func TestPostingUsageAddsEachUnseenModelIDToTheReportedModels(t *testing.T) {
+	f := newFixture(t)
+	f.readyTicket(t)
+	f.claim(t, core.ClaimInput{SessionID: "sess-1"})
+
+	f.postModels("claude-opus-5-5", "<synthetic>", "", "claude-haiku-5-5", "claude-opus-5-5")
+	f.postModels("claude-haiku-5-5", " claude-sonnet-5-5 ")
+	p, _ := f.core.GetProject(ctx, "acme")
+	if want := []string{"claude-opus-5-5", "claude-haiku-5-5", "claude-sonnet-5-5"}; !slices.Equal(p.ReportedModels.ModelIDs, want) {
+		t.Errorf("model IDs = %v, want %v", p.ReportedModels.ModelIDs, want)
+	}
+
+	// A later report keeps them.
+	p = f.reportModels(t, core.ReportModelsInput{EffortLevels: []string{"low"}, Aliases: []string{"opus"}})
+	if want := []string{"claude-opus-5-5", "claude-haiku-5-5", "claude-sonnet-5-5"}; !slices.Equal(p.ReportedModels.ModelIDs, want) {
+		t.Errorf("after report_models, model IDs = %v, want %v", p.ReportedModels.ModelIDs, want)
+	}
+}
+
+func TestUsageFromAnUnknownSessionAddsNoModelIDs(t *testing.T) {
+	f := newFixture(t)
+	f.readyTicket(t)
+	f.core.PostUsage(ctx, "nobody", []core.UsageResponse{{Kind: "implementation", Model: "claude-opus-5-5"}})
+	if p, _ := f.core.GetProject(ctx, "acme"); len(p.ReportedModels.ModelIDs) != 0 {
+		t.Errorf("model IDs = %v, want none", p.ReportedModels.ModelIDs)
+	}
+}
+
+func TestAnUnseenModelIDSendsTheProjectsNoticeAndASeenOneDoesNot(t *testing.T) {
+	f := newFixture(t)
+	f.readyTicket(t)
+	f.claim(t, core.ClaimInput{SessionID: "sess-1"})
+	notices, stop := f.core.Events().Subscribe()
+	defer stop()
+
+	f.postModels("claude-opus-5-5")
+	if got := <-notices; got != (events.Event{Type: events.ProjectChanged, Project: "acme"}) {
+		t.Fatalf("got %+v, want the Project's notice", got)
+	}
+	noNotice(t, notices)
+
+	f.postModels("claude-opus-5-5", "<synthetic>")
+	noNotice(t, notices)
+}
+
+func TestModelIDsFromUsageSurviveAReload(t *testing.T) {
+	c := reloaded(t, func(f fixture) {
+		f.readyTicket(t)
+		f.claim(t, core.ClaimInput{SessionID: "sess-1"})
+		f.postModels("claude-opus-5-5")
+	}).core
+	p, err := c.GetProject(ctx, "acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"claude-opus-5-5"}; !slices.Equal(p.ReportedModels.ModelIDs, want) {
+		t.Errorf("model IDs = %v, want %v", p.ReportedModels.ModelIDs, want)
+	}
+}

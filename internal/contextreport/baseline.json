@@ -82,7 +82,8 @@
         }
       ],
       "rounds": 14,
-      "questions": 91
+      "questions": 91,
+      "first_turn": 98336
     },
     {
       "name": "spec",
@@ -143,7 +144,8 @@
         }
       ],
       "rounds": 1,
-      "questions": 3
+      "questions": 3,
+      "first_turn": 95663
     },
     {
       "name": "tickets",
@@ -207,7 +209,8 @@
           "calls": 1,
           "bytes": 1408
         }
-      ]
+      ],
+      "first_turn": 128388
     },
     {
       "name": "implementation",
@@ -303,7 +306,8 @@
         }
       ],
       "rounds": 2,
-      "questions": 2
+      "questions": 2,
+      "first_turn": 433929
     },
     {
       "name": "review",
@@ -348,7 +352,8 @@
           "bytes": 49626
         }
       ],
-      "wider_reads": 1
+      "wider_reads": 1,
+      "first_turn": 251124
     },
     {
       "name": "subagent",
@@ -375,7 +380,8 @@
           "calls": 1,
           "bytes": 34
         }
-      ]
+      ],
+      "first_turn": 7155
     }
   ],
   "largest": [

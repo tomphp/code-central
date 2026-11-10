@@ -343,6 +343,30 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.listProjects())[0].reported_models.aliases).toEqual(["opus", "sonnet"]);
     });
 
+    it("reads a Ticket with the model and effort its next turn runs with, each with its source, and checks an effort Tag", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Pick a colour", "Ready");
+      expect((await d.api.getTicket("acme", id)).model_choice).toEqual({ model: { source: "none" }, effort: { source: "none" } });
+
+      await d.api.setModels("acme", { default: { model: "sonnet", effort: "low" }, kinds: [{ kind: "implementation", model: "opus", effort: "" }] });
+      expect((await d.api.getTicket("acme", id)).model_choice).toEqual({
+        model: { value: "opus", source: "project_kind", kind: "implementation" },
+        effort: { value: "low", source: "project_default" },
+      });
+
+      await d.api.setTags("acme", id, { effort: "max" });
+      expect((await d.api.getTicket("acme", id)).model_choice?.effort).toEqual({ value: "max", source: "ticket_tag" });
+      const bad = await d.api.setTags("acme", id, { effort: "extreme" }).catch((e) => e);
+      expect(bad).toBeInstanceOf(ApiError);
+      expect(bad).toMatchObject({ status: 422, code: "invalid", field: "tags" });
+      expect(bad.message).toContain("low, medium, high, xhigh, max");
+      await d.api.removeTags("acme", id, ["effort"]);
+      expect((await d.api.getTicket("acme", id)).model_choice?.effort).toEqual({ value: "low", source: "project_default" });
+
+      // Agents' get_ticket leaves it out.
+      expect((await d.mcpCall("acme", "get_ticket", { ticket: id })).text).not.toContain("model_choice");
+    });
+
     it("creates the Issues Spec the first time GitHub Issues is turned on, retitled with the repository", async () => {
       await d.createProject("acme", "Acme");
       await d.letGHTriage("acme/web");

@@ -36,10 +36,10 @@ type Report struct {
 // Kind is the figures of one kind of session: a Stage (grilling, spec
 // or tickets), implementation, review (the code-review subagents) or
 // subagent (any other). Tools counts every Code Central operation as the
-// one tool Code Central, and Operations breaks it down. Rounds and
-// Questions count post_round calls and their Questions, and WiderReads
-// the reads called again for more: both signs that a cut left out
-// something an agent needed.
+// one tool Code Central, and Operations breaks it down. FirstTurn totals
+// the sessions' first turns. Rounds and Questions count post_round calls
+// and their Questions, and WiderReads the reads called again for more:
+// both signs that a cut left out something an agent needed.
 type Kind struct {
 	Name       string   `json:"name"`
 	Sessions   int      `json:"sessions"`
@@ -49,6 +49,7 @@ type Kind struct {
 	Rounds     int      `json:"rounds,omitempty"`
 	Questions  int      `json:"questions,omitempty"`
 	WiderReads int      `json:"wider_reads,omitempty"`
+	FirstTurn  int      `json:"first_turn,omitempty"`
 }
 
 // Figure is a tool's or an operation's calls and the bytes of their
@@ -126,6 +127,7 @@ func Build(sessions []Session, top int) Report {
 			ops[s.Kind] = map[string]*Figure{}
 		}
 		k.Sessions++
+		k.FirstTurn += s.FirstTurn
 		scopes := map[string]map[string]bool{}
 		firsts := map[string]string{}
 		for _, c := range s.Calls {
@@ -291,15 +293,20 @@ var defaultParts = map[string][]string{
 }
 
 // readScope is what a read fetches: each of its parts (its default parts
-// when it names none), each of the body's sections it names (or the
-// whole body), and full when it asks for it.
+// when it names none, or only the body when a get_spec names sections),
+// each of the body's sections it names (or the whole body), and full when
+// it asks for it. The sections rule mirrors core's GetSpecInput.parts.
 func readScope(op string, input map[string]any) map[string]bool {
 	scope := map[string]bool{}
 	var parts []string
 	for _, p := range listInput(input, "parts") {
 		parts = append(parts, strings.ToLower(p))
 	}
-	if len(parts) == 0 {
+	switch {
+	case len(parts) > 0:
+	case op == "get_spec" && len(listInput(input, "sections")) > 0:
+		parts = []string{"body"}
+	default:
 		parts = defaultParts[op]
 	}
 	if len(parts) == 0 {

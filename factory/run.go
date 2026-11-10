@@ -111,7 +111,7 @@ func (f *factory) poll(ctx context.Context) {
 	if f.halted(ctx) {
 		return
 	}
-	if f.paused() {
+	if f.paused() && !f.endIdlePause() {
 		for _, c := range f.duePausedResumes(f.o.parallel - f.running()) {
 			if !f.resumeCutOff(ctx, c) && f.live(c.ClaimID) {
 				f.requeueCutOff(c)
@@ -147,6 +147,7 @@ func (f *factory) slotFree(ctx context.Context) bool {
 type turn struct {
 	claim   claim
 	dir     string
+	choice  turnChoice // the model and effort it was started with
 	started time.Time
 	proc    *os.Process
 	done    chan struct{} // closed once the turn has ended and been read
@@ -337,12 +338,13 @@ func (f *factory) claimNext(ctx context.Context) bool {
 	id := res.Ticket.ID
 	stage := core.GuideName(res.Ticket.Labels)
 	guide := f.stageGuide(ctx, res.StageGuide, stage)
+	wt := f.worktree(id)
 	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}}
+	c.SystemPrompt = systemPrompt(c, stage, wt, guide)
 	f.noteTicket(c, *res.Ticket)
 	if err := f.addClaim(c); err != nil {
 		f.claimf(c, "%s: can't write the state file: %v", id, err)
 	}
-	wt := f.worktree(id)
 	if _, err := f.client.SetSession(ctx, f.project, core.SetSessionInput{Ticket: core.Ref(id), ClaimID: res.ClaimID, SessionID: session, WorkingDir: &wt, ResumeCommand: &resume}); err != nil {
 		f.claimf(c, "%s: set_session: %v", id, err)
 	}
@@ -360,8 +362,8 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		f.reportFailure(ctx, c, fl)
 		return true
 	}
-	mc := f.withFlags(res.ModelChoice)
-	f.startTurn(ctx, c, wt, mc, append(f.startArgs(c, mc), firstPrompt(c, stage, wt, guide)))
+	mc := f.withFlags(stage, res.ModelChoice)
+	f.startTurn(ctx, c, wt, mc, append(f.startArgs(c, mc), firstPrompt(c, stage)))
 	return true
 }
 

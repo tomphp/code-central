@@ -12,8 +12,8 @@ import (
 // A Project's Reported Models (Spec code-central-301): the Factory reports
 // at startup the effort levels and model aliases its claude accepts, with
 // its own --model and --effort flags, with report_models. Code Central
-// keeps them, checks effort against the levels, and the Models pickers
-// offer them.
+// keeps them, with the model IDs the Factory's posted usage names,
+// checks effort against the levels, and the Models pickers offer them.
 
 // ReportedModelsView is a Project's Reported Models as every Project read
 // returns them.
@@ -123,4 +123,51 @@ func reportedList(field string, vs []string) ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+// syntheticModel is the model claude names on a response it made up,
+// which no session can run with.
+const syntheticModel = "<synthetic>"
+
+// addModelIDs adds to key's Reported Models each model the responses name
+// that it hasn't seen, skipping syntheticModel, so the pickers offer the
+// models past sessions ran with. It writes, and so sends the Project's
+// notice, only when one is new; an archived Project is left alone. Like
+// PostUsage, it never fails.
+func (c *Core) addModelIDs(key string, responses []UsageResponse) {
+	var seen []string
+	_ = c.store.View(func(r store.Reader) error {
+		if p, ok := r.Project(key); ok {
+			seen = p.ReportedModels.ModelIDs
+		}
+		return nil
+	})
+	if len(unseenModelIDs(seen, responses)) == 0 {
+		return
+	}
+	_ = c.store.Update(func(w store.Writer) error {
+		if err := writable(w, key); err != nil {
+			return err
+		}
+		p, _ := w.Project(key)
+		unseen := unseenModelIDs(p.ReportedModels.ModelIDs, responses)
+		if len(unseen) == 0 {
+			return nil
+		}
+		p.ReportedModels.ModelIDs = append(slices.Clip(p.ReportedModels.ModelIDs), unseen...)
+		return w.PutProject(p)
+	})
+}
+
+// unseenModelIDs are the models the responses name that aren't in seen,
+// in order of first use, without blanks or syntheticModel.
+func unseenModelIDs(seen []string, responses []UsageResponse) []string {
+	var out []string
+	for _, r := range responses {
+		m := strings.TrimSpace(r.Model)
+		if m != "" && m != syntheticModel && !strings.ContainsAny(m, "\r\n") && !slices.Contains(seen, m) && !slices.Contains(out, m) {
+			out = append(out, m)
+		}
+	}
+	return out
 }

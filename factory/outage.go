@@ -38,11 +38,19 @@ var outageErrors = map[string]bool{
 // the human can fix.
 const authFailed = "authentication_failed"
 
+// modelNotFound is the API error of a model claude rejects: the turn's
+// model, not the service or the Factory, is at fault, so its Claim fails.
+const modelNotFound = "model_not_found"
+
 // apiError is the API error the turn ended on, from its messages or its
-// result's terminal reason.
+// result's terminal reason. An api_error with status 404 is a model
+// claude rejects, even with no message saying so.
 func (t turnEnd) apiError() string {
 	if t.APIError != "" {
 		return t.APIError
+	}
+	if t.Result != nil && t.Result.TerminalReason == "api_error" && t.Result.APIErrorStatus == 404 {
+		return modelNotFound
 	}
 	if t.Result != nil && (outageErrors[t.Result.TerminalReason] || t.Result.TerminalReason == authFailed) {
 		return t.Result.TerminalReason
@@ -111,6 +119,22 @@ func (f *factory) turnWentWell(t *turn) {
 		return
 	}
 	p.backoff, p.until = 0, f.e.Now()
+}
+
+// endIdlePause ends the pause when no turn is running and nothing is cut
+// off, as when every cut-off Claim has ended: no resume is left to find
+// the service back, so claiming carries on, and finds out. It reports
+// whether it ended the pause.
+func (f *factory) endIdlePause() bool {
+	running := f.running()
+	f.pauseMu.Lock()
+	defer f.pauseMu.Unlock()
+	if f.pause == nil || running > 0 || len(f.pause.cutOff) > 0 {
+		return false
+	}
+	f.pause = nil
+	f.printf("nothing is cut off any more: carrying on")
+	return true
 }
 
 // paused reports whether the Factory is paused for an outage.

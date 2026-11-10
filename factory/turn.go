@@ -23,6 +23,7 @@ type result struct {
 	Subtype           string   `json:"subtype"`
 	IsError           bool     `json:"is_error"`
 	TerminalReason    string   `json:"terminal_reason"`
+	APIErrorStatus    int      `json:"api_error_status"`
 	PermissionDenials []denial `json:"permission_denials"`
 	Result            string   `json:"result"`
 }
@@ -33,8 +34,9 @@ type turnEnd struct {
 	ExitCode int
 	Result   *result
 	LastText string
-	// APIError is the API error the turn ended on, such as "rate_limit"
-	// or "authentication_failed"; empty when there was none.
+	// APIError is the API error the turn ended on, such as "rate_limit",
+	// "authentication_failed" or "model_not_found"; empty when there was
+	// none.
 	APIError string
 }
 
@@ -62,7 +64,7 @@ func (f *factory) resumeArgs(c claim, mc turnChoice) []string {
 
 // turnFlags are the flags every start and resume passes: the output
 // format, the permission mode, the turn's model and effort when set, and
-// the Claim's allowed tools.
+// the Claim's allowed tools and its system prompt.
 func (f *factory) turnFlags(c claim, mc turnChoice) []string {
 	args := []string{"--output-format", "stream-json", "--verbose"}
 	if f.o.bypass {
@@ -79,12 +81,19 @@ func (f *factory) turnFlags(c claim, mc turnChoice) []string {
 	if len(c.AllowedTools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(c.AllowedTools, ","))
 	}
+	if c.SystemPrompt != "" {
+		args = append(args, "--append-system-prompt", c.SystemPrompt)
+	}
 	return args
 }
 
 // startTurn runs `claude args...` in dir for c, taking a slot until it
-// ends. args start the turn with mc, which is recorded on the Claim.
+// ends. args start the turn with mc, which is recorded on the Claim. An
+// effort claude doesn't accept fails the Claim instead.
 func (f *factory) startTurn(ctx context.Context, c claim, dir string, mc turnChoice, args []string) {
+	if !f.effortAccepted(ctx, c, dir, mc) {
+		return
+	}
 	// Before the turn starts, which may end the Claim before a report
 	// after it could land.
 	f.reportChoice(ctx, c, mc)
@@ -103,7 +112,7 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, mc turnCho
 		f.claimf(c, "%s: can't start claude: %v", c.Ticket, err)
 		return
 	}
-	t := &turn{claim: c, dir: dir, proc: cmd.Process, started: f.e.Now(), done: make(chan struct{})}
+	t := &turn{claim: c, dir: dir, choice: mc, proc: cmd.Process, started: f.e.Now(), done: make(chan struct{})}
 	f.mu.Lock()
 	f.turns[c.ClaimID] = t
 	f.mu.Unlock()
