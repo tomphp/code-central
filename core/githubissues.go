@@ -25,10 +25,12 @@ type GitHubIssuesView struct {
 	// Spec is the Issues Spec's ID, left out until GitHub Issues is first
 	// turned on.
 	Spec string `json:"spec,omitempty"`
+	// Watcher is the Issue Watcher's status, as it last reported it.
+	Watcher WatcherView `json:"watcher"`
 }
 
-func githubIssuesView(key string, g store.GitHubIssues) GitHubIssuesView {
-	v := GitHubIssuesView{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe}
+func githubIssuesView(key string, g store.GitHubIssues, watcher WatcherView) GitHubIssuesView {
+	v := GitHubIssuesView{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Watcher: watcher}
 	if g.Spec != 0 {
 		v.Spec = DisplayID(key, g.Spec)
 	}

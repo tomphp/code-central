@@ -28,3 +28,21 @@ func init() {
 		return c.KeepAsDraft(r.Context(), r.PathValue("key"), in)
 	}
 }
+
+// The Issue Watcher's own (code-central-285): the read it polls and its
+// status.
+func init() {
+	Routes["get_issue_watch"] = "GET /api/p/{key}/integration/issue-watch"
+	Routes["report_issue_watcher_status"] = "POST /api/p/{key}/integration/report_issue_watcher_status"
+
+	handlers["get_issue_watch"] = func(c *core.Core, r *http.Request) (any, error) {
+		return c.GetIssueWatch(r.Context(), r.PathValue("key"))
+	}
+	handlers["report_issue_watcher_status"] = func(c *core.Core, r *http.Request) (any, error) {
+		var in core.ReportWatcherStatusInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.ReportIssueWatcherStatus(r.Context(), r.PathValue("key"), in)
+	}
+}

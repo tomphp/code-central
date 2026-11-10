@@ -404,6 +404,34 @@ func TestACIWatcherErrorThatClearedBeforeNotifyLookedStillNotifies(t *testing.T)
 	f.wantNothing()
 }
 
+// issueWatcher reports the status of key's Issue Watcher, as the
+// integration Actor, turning GitHub Issues on first if it is off.
+func (f *fixture) issueWatcher(key string, in core.ReportWatcherStatusInput) {
+	f.t.Helper()
+	p := must(f.t)(f.core.GetProject(ctx, key)).(core.ProjectView)
+	if !p.GitHubIssues.On {
+		must(f.t)(f.core.SetGitHubIssues(core.WithActor(ctx, core.Human), key, core.SetGitHubIssuesInput{On: true, Repository: "acme/web"}))
+	}
+	must(f.t)(f.core.ReportIssueWatcherStatus(core.WithActor(ctx, core.Integration), key, in))
+}
+
+// The Issue Watcher's errors notify as the CI Watcher's do, once each
+// time it goes into one, named as the Issue Watcher's; being
+// rate-limited is Watching, so it sends none.
+func TestAnIssueWatcherGoingIntoAnErrorNotifiesOnceAndARateLimitNever(t *testing.T) {
+	f := newFixture(t)
+	f.project("acme", 0)
+	f.start()
+	f.issueWatcher("acme", core.ReportWatcherStatusInput{State: core.WatcherWatching})
+	f.issueWatcher("acme", core.ReportWatcherStatusInput{State: core.WatcherWatching, RateLimitedUntil: t0.Add(time.Hour)})
+	inError := core.ReportWatcherStatusInput{State: core.WatcherError, Problem: core.ProblemNoTriage, Message: "gh can't triage acme/web", Fix: "Give it triage."}
+	f.issueWatcher("acme", inError)
+	f.issueWatcher("acme", inError)
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme's Issue Watcher is in error", Body: "gh can't triage acme/web", URL: base + "/?view=project-options&project=acme"})
+	f.wantNothing()
+}
+
 // pushed turns CI Tracking and Merge + Push on for project and reports
 // commit as ticket's pushed commit; ticket must be Accepted.
 func (f *fixture) pushed(project, ticket, commit string) {

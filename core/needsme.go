@@ -261,7 +261,7 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 		p, _ := r.Project(key)
 		_, row.CIUnavailable = c.ciWaitingOn(r, p, t)
 	case ReasonBlockedByCancelled:
-		b, _ := cancelledBlocker(r, key, t)
+		b, _ := cancelledBlocker(c.blockRule(r, key), t)
 		row.Blocker = &b
 	}
 	return row, true
@@ -307,7 +307,7 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 	case store.InReview:
 		return ReasonInReview, entered(t)
 	}
-	if b, ok := cancelledBlocker(r, key, t); ok {
+	if b, ok := cancelledBlocker(c.blockRule(r, key), t); ok {
 		return ReasonBlockedByCancelled, cancelledAt(r, key, b)
 	}
 	if since, ok := closedExternally(t); ok {
@@ -332,8 +332,8 @@ func entered(t store.Ticket) time.Time {
 
 // cancelledBlocker is the first open Blocker of t that is Cancelled with
 // no Replacements left to follow.
-func cancelledBlocker(r store.Reader, key string, t store.Ticket) (BlockerView, bool) {
-	for _, b := range openBlockers(r, key, t) {
+func cancelledBlocker(rule blockRule, t store.Ticket) (BlockerView, bool) {
+	for _, b := range rule.openBlockers(t) {
 		if b.State == store.Cancelled {
 			return b, true
 		}

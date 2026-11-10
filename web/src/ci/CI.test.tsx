@@ -23,7 +23,7 @@ function world() {
 // tracked turns CI Tracking on for key, watching repository, with
 // nightly.yml ignored.
 async function tracked(fake: FakeApi, key: string, repository = `${key}/web`) {
-  await fake.setCITracking(key, { tracking: true, provider: "github_actions", repository, ignored_workflows: ["nightly.yml"] });
+  await fake.setCITracking(key, { tracking: true, provider: "github_actions", repository, ignored_workflows: ["nightly.yml"], unblock_on_push: false });
 }
 
 // at is the fake's now moved by minutes.

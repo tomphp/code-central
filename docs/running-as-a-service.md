@@ -198,6 +198,15 @@ code-central serve: the CI Watcher for acme crashed; restarting it in 1s
 code-central serve: stopped the CI Watcher for acme
 ```
 
+### The Issue Watcher
+
+For each Project with [GitHub Issues](setting-up-a-project.md#linking-github-issues) on, the service runs an **Issue Watcher** the same way: the hidden `code-central issue-watcher --project <key>` subcommand, which reaches GitHub through `gh` and writes to the service over the HTTP API as the `integration` Actor. It starts, stops, restarts, backs off and leaves nothing behind just as the CI Watcher does, with GitHub Issues in place of CI Tracking, and shows its status in the GitHub Issues section of Project Options. It runs whether or not the Factory does. Its lines in the service log name it:
+
+```text
+code-central serve: started the Issue Watcher for acme (pid 41023)
+code-central serve: stopped the Issue Watcher for acme
+```
+
 ## Usage
 
 **Usage** shows what agents have consumed: the Code Central calls they made, how full their sessions' context got, and the tokens they used each day, in one Project or in all of them, over the last 7, 30 or 90 days. Open it with **Usage** in the **Admin** section of the Inbox's left pane. It opens on **All Projects** and **Last 7 days**; the **Projects** picker lists every Project, Archived ones marked `(Archived)`, and the **Range** picker offers 7, 30 and 90 days. Both go in the address (`/?view=usage&project=acme&days=30`), so a reload or a bookmark keeps them, and **Back to the Inbox** returns you to where you were. A day is a day in the service's local time, and "the last 7 days" is today and the 6 days before it.

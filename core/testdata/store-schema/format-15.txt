@@ -27,6 +27,7 @@ projects/<key>/project.yaml
           branch: string
           state: string
           created: string
+      unblock_on_push: bool (optional)
   github_issues: mapping (optional)
       on: bool
       repository: string (optional)
@@ -67,7 +68,6 @@ projects/<key>/tickets/<n>.yaml
       url: string (optional)
       external_state: string
       detached: bool (optional)
-  awaiting_triage: bool (optional)
   created: string
   updated: string
   description: string

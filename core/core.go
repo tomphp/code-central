@@ -494,7 +494,7 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 func (c *Core) ticketRow(r store.Reader, key string, t store.Ticket, onMap bool) TicketRow {
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
-		Labels: orEmpty(t.Labels), Blocked: blocked(r, key, t), Updated: t.Updated, Link: linkView(t.Link),
+		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Updated: t.Updated, Link: linkView(t.Link),
 		CIResult: ticketCIResult(r, key, t, c.now()),
 	}
 	if onMap {
@@ -519,7 +519,7 @@ func finished(s store.State) bool { return s == store.Done || s == store.Cancell
 func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
 		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}, CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
-		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues)}
+		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key}))}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at
@@ -536,17 +536,18 @@ func specView(key string, s store.Spec) SpecView {
 
 func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView {
 	sp, _ := r.Spec(key, t.Spec)
+	rule := c.blockRule(r, key)
 	v := TicketView{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State,
 		Spec:   SpecRef{ID: DisplayID(key, t.Spec), Title: sp.Title},
 		Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags),
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
-		Blockers: blockerViews(r, key, t),
+		Blockers: rule.blockerViews(t),
 		Created:  t.Created, Updated: t.Updated, Description: t.Description,
 		Branch: t.Branch, Commit: t.Commit,
 		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), FailureReports: failureReportViews(t.FailureReports),
 		Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
-		Blocked: blocked(r, key, t), Link: linkView(t.Link),
+		Blocked: rule.blocked(t), Link: linkView(t.Link),
 	}
 	for _, cl := range t.Claims {
 		cv := ClaimView{Number: cl.Number, SessionID: cl.SessionID, WorkingDir: cl.WorkingDir, ResumeCommand: cl.ResumeCommand, Started: cl.Started, LastActivity: c.claimActivity(t, cl), EndedBy: cl.EndedBy,

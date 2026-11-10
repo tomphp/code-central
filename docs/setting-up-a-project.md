@@ -221,6 +221,7 @@ To change it, open the UI, click **⋯** beside the Project in the left pane, an
 - **CI Provider**: **GitHub Actions**, the only one for now. Code Central uses your existing `gh` login and stores no GitHub token.
 - **GitHub repository**: the repository to watch, as `owner/name`, such as `acme/acme-api`. CI Tracking can't be on without one: Save says so, as it does for anything that isn't `owner/name`. When the Factory starts, it reports the URL of the Push remote (the Landing Method's Remote, `origin` unless you changed it), leaving out any login an HTTPS URL carries. If that URL is GitHub's, over HTTPS or SSH, the field is filled in from it, with a note naming the URL; change it if CI runs somewhere else, such as a fork.
 - **Ignored workflows**: workflow file names, such as `nightly.yml, preview.yml`, separated by commas. Their runs won't count towards a Ticket's CI result. Name the file, not its path: `ci.yml`, not `.github/workflows/ci.yml`.
+- **Unblock on push**: off unless you turn it on. Its hint reads "Lets Tickets blocked by a pushed Ticket start while that Ticket's CI runs or has passed, instead of waiting for it to land. It has effect only under Merge + Push with CI Tracking on." You can turn it on while CI Tracking is off, ready for when it is on; changing only this option runs no check.
 
 **Save** applies the settings, and every open UI tab shows them. Turning CI Tracking on is checked first: Code Central checks that `gh`, the GitHub CLI, is installed and logged in, and can read the repository. If any of these fails, Save refuses, and the CI section says what is wrong and how to fix it, for example:
 
@@ -239,7 +240,7 @@ While CI Tracking is on, the CI section shows the **CI Watcher**'s status below 
 - **Error** saying **The CI Watcher crashed, restarted 3 times**: the CI Watcher process keeps exiting. The service reports this one, with the last line the CI Watcher wrote, and restarts it by itself, waiting longer after each crash, up to 5 minutes. Its output is in [the service log](running-as-a-service.md#the-service-log). It stays shown until the CI Watcher has run for 10 minutes without crashing, and you get one Notification when it starts crashing, not one per restart.
 - **Starting; it hasn't reported yet.**: the CI Watcher hasn't checked since the service started or CI Tracking was turned on. The service starts it with itself and when you turn CI Tracking on, and it checks straight away, so this lasts moments. Changing the repository starts it here again.
 
-Turning CI Tracking off keeps the repository and Ignored workflows for the next time you turn it on.
+Turning CI Tracking off keeps the repository, Ignored workflows and Unblock on push for the next time you turn it on.
 
 While CI Tracking and Push are both on, each push the Factory makes for a Ticket is tracked: under **Merge + Push**, the base it pushes after merging the Ticket; under **Branch + Push**, the Ticket's branch, pushed when you accept it. That commit is the Ticket's **pushed commit**. Only pushes made while CI Tracking is on are tracked. The CI Watcher finds the workflow runs GitHub started for it, and the Ticket's panel gains a **CI** section once it has any: the Ticket's **CI result**, then each workflow run with its status, its jobs and links to them on GitHub. The CI result is:
 
@@ -251,7 +252,7 @@ Runs of Ignored workflows are listed greyed and marked **ignored**, and never co
 
 A Ticket with a CI result also shows it as a badge, **CI running**, **CI passed** or **CI failed**, on its row in the Spec view, in Needs Me and in the Activity Dashboard. The Activity Dashboard's **CI Running** block also counts the CI Runs still going that count towards a Ticket's CI result, and opens the CI view; its CI Running list below the In Progress Tickets lists those runs, each with its GitHub link. Above its Tickets, the Spec view sums their badges, such as **1 failed** and **3 passed**, so you can see a Spec's CI health at a glance.
 
-Under **Merge + Push**, CI Tracking gates landing: the Factory pushes an accepted Ticket and leaves it Accepted until its CI result is passed, then lands it, so Done means on the remote and green. A failed CI result puts the Ticket in Needs Me as **CI failed**, where you can **Re-run failed jobs**, **Land anyway**, **Send back to fix** or open a **New fix Ticket**. Under **Branch + Push** the CI result only informs you, though you can still re-run the failed jobs or fix it before you merge, and the Factory lands the Ticket when it sees your merge. [With CI Tracking](running-the-factory.md#with-ci-tracking) in Running the Factory shows how.
+Under **Merge + Push**, CI Tracking gates landing: the Factory pushes an accepted Ticket and leaves it Accepted until its CI result is passed, then lands it, so Done means on the remote and green. A Ticket it blocks waits until it lands, unless **Unblock on push** is on: then it waits only until the Ticket is pushed, and is held again if the CI result turns failed, while the Ticket itself still lands only on passed. A failed CI result puts the Ticket in Needs Me as **CI failed**, where you can **Re-run failed jobs**, **Land anyway**, **Send back to fix** or open a **New fix Ticket**. Under **Branch + Push** the CI result only informs you, though you can still re-run the failed jobs or fix it before you merge, and the Factory lands the Ticket when it sees your merge. [With CI Tracking](running-the-factory.md#with-ci-tracking) in Running the Factory shows how.
 
 ### The CI view
 
@@ -310,7 +311,7 @@ The last line is there when the failing commit is where a Ticket landed, such as
 - **Filter label**: one GitHub label, such as `code-central`. Only issues carrying it come in. Leave it empty to bring in every open issue.
 - **New issues need me**: off by default. When on, each new issue also shows in Needs Me and Focus Mode until you triage it.
 
-For now, Save only records these settings and creates the Issues Spec: no issues come in yet.
+For now, the Issue Watcher only checks it can reach the repository: no issues come in yet.
 
 **Save** applies the settings, and every open UI tab shows them. Turning GitHub Issues on is checked first: Code Central checks that `gh` is installed and logged in, can read the repository, that the repository has its issues turned on, and that the account `gh` is logged in as can triage them, which labelling and closing issues needs. If any of these fails, Save refuses, GitHub Issues stays off, and the section says what is wrong and how to fix it, for example:
 
@@ -335,6 +336,16 @@ Incoming Issues arrive on acme-api-12.
 ```
 
 It is an ordinary Spec, with no Stages. Turning GitHub Issues off and on again reuses it, and changing the repository retitles it unless you renamed it. Turning GitHub Issues off keeps the repository, label and New issues need me for the next time you turn it on, and leaves every linked Spec and Ticket as it is.
+
+While GitHub Issues is on, the service runs the Project's **Issue Watcher**, the process that links its issues, whether or not the Factory is running. The GitHub Issues section shows its status below Save. Every 2 minutes it makes sure again that `gh` is installed and logged in, can read the repository, that the repository has its issues turned on, and that the login can triage them. Its status reads as the CI Watcher's does:
+
+- **Issue Watcher: Watching acme/acme-api.**: it can reach the repository's issues.
+- **Watching acme/acme-api.** with **GitHub is rate-limiting it until 10:15**: GitHub has refused its calls for its rate limit. It makes no calls until the time GitHub gave, then carries on by itself. When GitHub gives no time, it waits twice as long as it last did, up to 10 minutes. This isn't an error, and sends no Notification.
+- **Issue Watcher: Error.**: it can't, with what is wrong and how to fix it, as a refused Save says it. You get one Notification when it goes into an error, not one per check, and once you fix the cause, the next check brings it back to Watching by itself. It reads the **gh path** Option on every check.
+- **Error** saying **The Issue Watcher crashed, restarted 3 times**: the Issue Watcher process keeps exiting. The service restarts it by itself, waiting longer after each crash, up to 5 minutes, and shows the last line it wrote; its output is in [the service log](running-as-a-service.md#the-service-log). You get one Notification when it starts crashing, not one per restart.
+- **Issue Watcher: Starting; it hasn't reported yet.**: it hasn't checked since the service started or GitHub Issues was turned on. Changing the repository starts it here again.
+
+The service stops the Issue Watcher when you turn GitHub Issues off, when you archive the Project and when the service itself stops.
 
 ### Triaging Incoming Issues
 

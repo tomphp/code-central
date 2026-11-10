@@ -129,10 +129,10 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 			m.From, m.To, m.Backup)
 	}
 
-	// The CI Watcher runs as the service's own executable.
+	// The Watchers run as the service's own executable.
 	self, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("cannot find the service's own executable, which runs the CI Watcher: %w", err)
+		return fmt.Errorf("cannot find the service's own executable, which runs the Watchers: %w", err)
 	}
 
 	addrs := e.ServeAddrs
@@ -190,7 +190,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 			defer close(supervised)
 			ticker := time.NewTicker(time.Minute)
 			defer ticker.Stop()
-			watchers.Supervise(superviseCtx, watchers.Supervision{Projects: c, Kinds: []watchers.Kind{ciwatcher.Kind}, Program: self, Clock: clk, Tick: ticker.C, Log: e.Stderr,
+			watchers.Supervise(superviseCtx, watchers.Supervision{Projects: c, Kinds: []watchers.Kind{ciwatcher.Kind, issuewatcher.Kind}, Program: self, Clock: clk, Tick: ticker.C, Log: e.Stderr,
 				Environ: append(os.Environ(), "CODE_CENTRAL_URL=http://"+bound[0])})
 		}()
 		if e.Notifier != nil && local.Notifications == "on" && !o.noNotify {

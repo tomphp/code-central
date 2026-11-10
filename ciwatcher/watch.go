@@ -20,11 +20,10 @@ import (
 // Interval is how long the CI Watcher waits between polls while nothing
 // waits on CI, and WaitingInterval while a pushed commit does. Rate-limited
 // with no reset time, it doubles its interval each poll, up to
-// MaxRateLimitInterval.
+// watchers.MaxRateLimitInterval.
 const (
-	Interval             = 2 * time.Minute
-	WaitingInterval      = 30 * time.Second
-	MaxRateLimitInterval = 10 * time.Minute
+	Interval        = 2 * time.Minute
+	WaitingInterval = 30 * time.Second
 )
 
 // Client is what the CI Watcher calls on Code Central; *client.Client is
@@ -72,32 +71,20 @@ func WatchArgs(project string) []string { return []string{Command, "--project", 
 //
 // When the CI Provider rate-limits it, it makes no more calls until the
 // reset time the provider gave, or with none, doubles its interval up to
-// MaxRateLimitInterval; it reports Watching with when it calls again, as
+// watchers.MaxRateLimitInterval; it reports Watching with when it calls again, as
 // being rate-limited isn't an error.
 func Watch(ctx context.Context, cfg Config) error {
 	ctx, cancel := watchers.UntilStdinCloses(ctx, cfg.Stdin)
 	defer cancel()
 	w := &watcher{Config: cfg, reported: map[runKey]time.Time{}, rerunAsked: map[rerunKey]bool{}, fired: map[runKey]bool{}}
-	// backoff is the doubled interval while rate-limited with no reset
-	// time; zero once a poll isn't rate-limited.
-	var backoff time.Duration
+	var pace watchers.Pace
 	for {
 		res := w.poll(ctx)
 		every := Interval
 		if res.waiting {
 			every = WaitingInterval
 		}
-		var until time.Time
-		if res.limit != nil {
-			now := cfg.Clock.Now()
-			if until = res.limit.Until(now); !until.After(now) {
-				backoff = min(max(backoff, every)*2, MaxRateLimitInterval)
-				until = now.Add(backoff)
-			}
-			every = until.Sub(now)
-		} else {
-			backoff = 0
-		}
+		every, until := pace.Next(cfg.Clock.Now(), every, res.limit)
 		if res.reachable {
 			w.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherWatching, RateLimitedUntil: until})
 		}

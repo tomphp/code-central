@@ -9,8 +9,10 @@ import type {
   CIRule,
   CIRuleChange,
   CISettings,
+  CIWatcherStatus,
   GitHubIssuesChange,
   GitHubIssuesSettings,
+  IssueWatcherStatus,
   Landing,
   LandingMethod,
   ProjectRow,
@@ -160,6 +162,7 @@ interface CIDraft {
   provider: CIProvider;
   repository: string;
   ignored: string;
+  unblockOnPush: boolean;
 }
 
 // ciDraft is the form for ci as stored, its repository prefilled from a
@@ -170,6 +173,7 @@ function ciDraft(ci: CISettings): CIDraft {
     provider: ci.provider,
     repository: ci.repository || githubRepository(ci.push_remote_url) || "",
     ignored: ci.ignored_workflows.join(", "),
+    unblockOnPush: ci.unblock_on_push,
   };
 }
 
@@ -177,8 +181,8 @@ function ciDraft(ci: CISettings): CIDraft {
 const workflowNames = (ignored: string) => ignored.split(/[\s,]+/).filter(Boolean);
 
 // CISection is the Project's CI settings: CI Tracking, its CI Provider,
-// the GitHub repository it watches and the Ignored workflows. Like the
-// Landing Method it follows the Project as read.
+// the GitHub repository it watches, the Ignored workflows and Unblock on
+// push. Like the Landing Method it follows the Project as read.
 function CISection({ api, project }: { api: Api; project: ProjectRow }) {
   const stored = ciDraft(project.ci);
   const prefilled = !project.ci.repository && stored.repository !== "";
@@ -186,8 +190,11 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
   const [error, setError] = useState<ApiError>();
   const [saved, setSaved] = useState(false);
   const id = useId();
-  const { tracking, provider, repository, ignored } = stored;
-  useEffect(() => setDraft({ tracking, provider, repository, ignored }), [tracking, provider, repository, ignored]);
+  const { tracking, provider, repository, ignored, unblockOnPush } = stored;
+  useEffect(
+    () => setDraft({ tracking, provider, repository, ignored, unblockOnPush }),
+    [tracking, provider, repository, ignored, unblockOnPush],
+  );
 
   const edit = (patch: Partial<CIDraft>) => {
     setDraft((d) => ({ ...d, ...patch }));
@@ -197,7 +204,13 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
   const save = (e: FormEvent) => {
     e.preventDefault();
     setError(undefined);
-    const change = { tracking: draft.tracking, provider: draft.provider, repository: draft.repository, ignored_workflows: workflowNames(draft.ignored) };
+    const change = {
+      tracking: draft.tracking,
+      provider: draft.provider,
+      repository: draft.repository,
+      ignored_workflows: workflowNames(draft.ignored),
+      unblock_on_push: draft.unblockOnPush,
+    };
     api.setCITracking(project.key, change).then(
       (v) => {
         setDraft(ciDraft(v.ci));
@@ -210,7 +223,8 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
     draft.tracking !== tracking ||
     draft.provider !== provider ||
     draft.repository !== repository ||
-    workflowNames(draft.ignored).join(",") !== workflowNames(ignored).join(",");
+    workflowNames(draft.ignored).join(",") !== workflowNames(ignored).join(",") ||
+    draft.unblockOnPush !== unblockOnPush;
   const invalid = (field: string) => (error?.field === field ? { "aria-invalid": true, "aria-describedby": `${id}-error` } : undefined);
 
   return (
@@ -269,6 +283,21 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
         <p className="project-options-hint" id={`${id}-ignored`}>
           Workflow file names, such as nightly.yml, separated by commas: their runs never count towards a Ticket&apos;s CI result.
         </p>
+        <div className="project-options-choice">
+          <label>
+            <input
+              type="checkbox"
+              checked={draft.unblockOnPush}
+              onChange={(e) => edit({ unblockOnPush: e.target.checked })}
+              aria-describedby={`${id}-unblock`}
+            />{" "}
+            Unblock on push
+          </label>
+          <p className="project-options-hint" id={`${id}-unblock`}>
+            Lets Tickets blocked by a pushed Ticket start while that Ticket&apos;s CI runs or has passed, instead of waiting for it to land.
+            It has effect only under Merge + Push with CI Tracking on.
+          </p>
+        </div>
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>
@@ -281,22 +310,27 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
           )}
         </div>
       </form>
-      {project.ci.tracking && <CIWatcher ci={project.ci} />}
+      {project.ci.tracking && <WatcherStatus name="CI Watcher" repository={project.ci.repository} watcher={project.ci.watcher} />}
       <CIRules api={api} project={project} />
     </fieldset>
   );
 }
 
-// CIWatcher is the CI Watcher's status, as it last reported it: Watching,
+// WatcherStatus is a Watcher's status, as it last reported it: Watching,
 // with until when GitHub rate-limits it (code-central-260), or an error
 // with its fix (code-central-253), or, as the service reports it, crashed
 // and being restarted (code-central-255). It follows the Project as read,
-// so it changes as the CI Watcher reports.
-function CIWatcher({ ci }: { ci: CISettings }) {
-  const { watcher } = ci;
+// so it changes as the Watcher reports. The CI section shows the CI
+// Watcher's, and the GitHub Issues section the Issue Watcher's
+// (code-central-285).
+function WatcherStatus({ name, repository, watcher }: { name: string; repository: string; watcher: CIWatcherStatus | IssueWatcherStatus }) {
   return (
-    <section className="project-options-watcher" aria-label="CI Watcher">
-      {watcher.state === "watching" && <p>CI Watcher: Watching {ci.repository}.</p>}
+    <section className="project-options-watcher" aria-label={name}>
+      {watcher.state === "watching" && (
+        <p>
+          {name}: Watching {repository}.
+        </p>
+      )}
       {watcher.state === "watching" && watcher.rate_limited_until && (
         <p className="muted">
           GitHub is rate-limiting it until{" "}
@@ -306,10 +340,10 @@ function CIWatcher({ ci }: { ci: CISettings }) {
           , so it waits until then, and carries on by itself.
         </p>
       )}
-      {watcher.state === "not_reported" && <p className="muted">CI Watcher: Starting; it hasn&apos;t reported yet.</p>}
+      {watcher.state === "not_reported" && <p className="muted">{name}: Starting; it hasn&apos;t reported yet.</p>}
       {watcher.state === "error" && (
         <p className="warning">
-          CI Watcher: Error. {watcher.message}
+          {name}: Error. {watcher.message}
           {watcher.fix && (
             <>
               <br />
@@ -337,8 +371,9 @@ function issuesDraft(g: GitHubIssuesSettings, pushRemoteURL: string): GitHubIssu
 // GitHubIssuesSection is the Project's GitHub Issues settings (Spec
 // code-central-279): the switch, the GitHub repository its issues come
 // from, the filter label and New issues need me. Turning it on runs the
-// Issue Watcher's check, whose refusal shows in place with its fix. Like
-// the other sections it follows the Project as read.
+// Issue Watcher's check, whose refusal shows in place with its fix; while
+// it is on, the Issue Watcher's status shows below. Like the other
+// sections it follows the Project as read.
 function GitHubIssuesSection({ api, project }: { api: Api; project: ProjectRow }) {
   const stored = issuesDraft(project.github_issues, project.ci.push_remote_url);
   const prefilled = !project.github_issues.repository && stored.repository !== "";
@@ -431,7 +466,7 @@ function GitHubIssuesSection({ api, project }: { api: Api; project: ProjectRow }
             Each new Incoming Issue also shows in Needs Me and Focus Mode until you triage it.
           </p>
         </div>
-        <p className="project-options-hint">For now the settings are only recorded: no issues come in yet.</p>
+        <p className="project-options-hint">For now the Issue Watcher only checks it can reach the repository: no issues come in yet.</p>
         {spec && <p className="muted">Incoming Issues arrive on {spec}.</p>}
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
@@ -445,6 +480,9 @@ function GitHubIssuesSection({ api, project }: { api: Api; project: ProjectRow }
           )}
         </div>
       </form>
+      {project.github_issues.on && (
+        <WatcherStatus name="Issue Watcher" repository={project.github_issues.repository} watcher={project.github_issues.watcher} />
+      )}
     </fieldset>
   );
 }
