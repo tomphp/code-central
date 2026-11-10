@@ -62,7 +62,7 @@ func init() {
 		return c.GetCIWatch(r.Context(), r.PathValue("key"))
 	}
 	handlers["report_ci_watcher_status"] = func(c *core.Core, r *http.Request) (any, error) {
-		var in core.ReportCIWatcherStatusInput
+		var in core.ReportWatcherStatusInput
 		if err := decodeBody(r, &in); err != nil {
 			return nil, err
 		}

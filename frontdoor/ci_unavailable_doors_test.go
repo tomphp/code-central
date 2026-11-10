@@ -40,7 +40,7 @@ func wantNotInNeedsMe(t *testing.T, srv *codecentraltest.Server, when string) {
 	}
 }
 
-func watcherReports(t *testing.T, srv *codecentraltest.Server, in core.ReportCIWatcherStatusInput) {
+func watcherReports(t *testing.T, srv *codecentraltest.Server, in core.ReportWatcherStatusInput) {
 	t.Helper()
 	must(t, func() error {
 		_, err := srv.Client.ReportCIWatcherStatus(context.Background(), "acme", in)
@@ -49,8 +49,8 @@ func watcherReports(t *testing.T, srv *codecentraltest.Server, in core.ReportCIW
 }
 
 var (
-	watching   = core.ReportCIWatcherStatusInput{State: core.CIWatcherWatching}
-	loggedOut  = core.ReportCIWatcherStatusInput{State: core.CIWatcherError, Problem: core.CILoggedOut, Message: "gh is logged out", Fix: "Run gh auth login."}
+	watching   = core.ReportWatcherStatusInput{State: core.WatcherWatching}
+	loggedOut  = core.ReportWatcherStatusInput{State: core.WatcherError, Problem: core.ProblemLoggedOut, Message: "gh is logged out", Fix: "Run gh auth login."}
 	runningRun = ciRun(1, "ci.yml", "abc123", store.CIInProgress, "")
 )
 

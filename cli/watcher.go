@@ -8,6 +8,7 @@ import (
 	"github.com/tomoram/code-central/ciwatcher"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -44,12 +45,12 @@ func runCIWatcher(ctx context.Context, e Env, args []string) error {
 	case !*check && *project == "":
 		return usagef("the CI Watcher needs --project, or --check")
 	case !*check:
-		return ciwatcher.Watch(ctx, ciwatcher.Config{Client: newClient(e), Project: *project, Env: ciwatcher.Env{Environ: os.Environ()},
+		return ciwatcher.Watch(ctx, ciwatcher.Config{Client: newClient(e), Project: *project, Env: gh.Env{Environ: os.Environ()},
 			Clock: clock.System{}, Stdin: e.Stdin, Log: e.Stderr})
 	case in.Repository == "":
 		return usagef("--check needs --repository")
 	}
 	in.Provider = store.CIProvider(*provider)
-	r := ciwatcher.Check(ctx, in, ciwatcher.Env{Environ: os.Environ()})
+	r := ciwatcher.Check(ctx, in, gh.Env{Environ: os.Environ()})
 	return json.NewEncoder(e.Stdout).Encode(r)
 }

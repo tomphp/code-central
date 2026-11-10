@@ -17,3 +17,5 @@ A CI Watcher that exits without being stopped has crashed. The service restarts 
 ## Consequences
 
 The CI Watcher's status lives in the service's memory: a restarted service has none until its CI Watchers report again, and never shows a stale Watching. The service reads which Projects should have one on each Project change, and every minute in case it missed one. A CI Watcher that ignores its closed stdin is killed after 10 seconds when the service stops it; that wait holds up no other Project's CI Watcher, and a Project turned back on meanwhile gets its new one once the old one has exited. Supervision is tested on every OS in CI, Windows included, through the real binary: the CI Watcher is gone after the service is stopped or killed.
+
+The supervision is not the CI Watcher's own: the service runs every kind of Watcher this way, by kind per Project, and keeps each one's status by kind. The CI Watcher is the only kind so far.

@@ -199,7 +199,7 @@ func (w *watching) waitingPoll() {
 func TestTheCIWatcherPollsEvery30SecondsWhileAPushedCommitWaitsAnd2MinutesOtherwise(t *testing.T) {
 	w := newWatching(t)
 	w.start(w.h.Bin)
-	w.status(core.CIWatcherWatching)
+	w.status(core.WatcherWatching)
 
 	// Nothing waits: 30 seconds on, the loop still waits.
 	w.srv.Clock.BlockUntil(1)

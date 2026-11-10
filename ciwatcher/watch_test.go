@@ -13,6 +13,7 @@ import (
 	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/internal/fakegh"
 )
 
@@ -54,14 +55,14 @@ func (w *watching) start(path ...string) {
 	go func() {
 		w.done <- ciwatcher.Watch(ctx, ciwatcher.Config{
 			Client: w.srv.Client, Project: "acme", Clock: w.srv.Clock, Stdin: r, Log: io.Discard,
-			Env: ciwatcher.Env{Environ: w.h.Environ(path...), InstallPlaces: []string{}},
+			Env: gh.Env{Environ: w.h.Environ(path...), InstallPlaces: []string{}},
 		})
 	}()
 }
 
 // status waits for the CI Watcher's status in acme's Project read to be
 // state, and returns it.
-func (w *watching) status(state core.CIWatcherState) core.CIWatcherView {
+func (w *watching) status(state core.WatcherState) core.WatcherView {
 	w.t.Helper()
 	var p core.ProjectView
 	w.waitFor("CI Watcher status "+string(state), func() bool {
@@ -97,7 +98,7 @@ func (w *watching) nextPoll() {
 func TestTheCIWatcherReportsWatchingWhenItCanReachGitHub(t *testing.T) {
 	w := newWatching(t)
 	w.start(w.h.Bin)
-	if got := w.status(core.CIWatcherWatching); got.Message != "" || got.Fix != "" {
+	if got := w.status(core.WatcherWatching); got.Message != "" || got.Fix != "" {
 		t.Fatalf("status %+v, want watching with no message", got)
 	}
 }
@@ -106,31 +107,31 @@ func TestALoggedOutGHIsAnErrorUntilItLogsIn(t *testing.T) {
 	w := newWatching(t)
 	w.h.LoggedOut()
 	w.start(w.h.Bin)
-	got := w.status(core.CIWatcherError)
-	if got.Problem != core.CILoggedOut || !strings.Contains(got.Message, "not logged into") || !strings.Contains(got.Fix, "gh auth login") {
+	got := w.status(core.WatcherError)
+	if got.Problem != core.ProblemLoggedOut || !strings.Contains(got.Message, "not logged into") || !strings.Contains(got.Fix, "gh auth login") {
 		t.Fatalf("status %+v, want logged out with gh auth login", got)
 	}
 
 	// It retries each poll, still in error, and recovers by itself.
 	w.nextPoll()
 	w.nextPoll()
-	w.status(core.CIWatcherError)
+	w.status(core.WatcherError)
 	w.h.Answer(fakegh.Answer{Args: []string{"auth", "status"}})
 	w.nextPoll()
-	w.status(core.CIWatcherWatching)
+	w.status(core.WatcherWatching)
 }
 
 func TestAnUnreadableRepositoryIsAnErrorUntilItCanBeRead(t *testing.T) {
 	w := newWatching(t)
 	w.h.Unreadable("acme/web")
 	w.start(w.h.Bin)
-	got := w.status(core.CIWatcherError)
-	if got.Problem != core.CIRepositoryUnreadable || !strings.Contains(got.Message, "acme/web") || !strings.Contains(got.Fix, "owner/name") {
+	got := w.status(core.WatcherError)
+	if got.Problem != core.ProblemRepositoryUnreadable || !strings.Contains(got.Message, "acme/web") || !strings.Contains(got.Fix, "owner/name") {
 		t.Fatalf("status %+v, want the repository unreadable, naming it", got)
 	}
 	w.h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web"}, Stdout: "acme/web\n"})
 	w.nextPoll()
-	w.status(core.CIWatcherWatching)
+	w.status(core.WatcherWatching)
 }
 
 // The gh path Option is read on every poll, so setting it fixes a
@@ -138,8 +139,8 @@ func TestAnUnreadableRepositoryIsAnErrorUntilItCanBeRead(t *testing.T) {
 func TestAMissingGHIsAnErrorUntilTheGHPathOptionFindsIt(t *testing.T) {
 	w := newWatching(t)
 	w.start(t.TempDir())
-	got := w.status(core.CIWatcherError)
-	if got.Problem != core.CIGHMissing || !strings.Contains(got.Fix, "https://cli.github.com") {
+	got := w.status(core.WatcherError)
+	if got.Problem != core.ProblemGHMissing || !strings.Contains(got.Fix, "https://cli.github.com") {
 		t.Fatalf("status %+v, want gh missing with how to install it", got)
 	}
 	human := core.WithActor(context.Background(), core.Human)
@@ -148,13 +149,13 @@ func TestAMissingGHIsAnErrorUntilTheGHPathOptionFindsIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	w.nextPoll()
-	w.status(core.CIWatcherWatching)
+	w.status(core.WatcherWatching)
 }
 
 func TestTheCIWatcherExitsWhenItsStdinCloses(t *testing.T) {
 	w := newWatching(t)
 	w.start(w.h.Bin)
-	w.status(core.CIWatcherWatching)
+	w.status(core.WatcherWatching)
 	w.stdin.Close()
 	select {
 	case err := <-w.done:
@@ -190,7 +191,7 @@ func TestTheCIWatcherSubcommandWatchesAndExitsWhenItsStdinCloses(t *testing.T) {
 		cmd.Process.Kill()
 		<-done
 	})
-	w.status(core.CIWatcherWatching)
+	w.status(core.WatcherWatching)
 	stdin.Close()
 	select {
 	case <-done:

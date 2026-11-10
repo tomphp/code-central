@@ -67,7 +67,7 @@ func (c *Core) ciWaitingOn(r store.Reader, p store.Project, t store.Ticket) (wai
 		return true, nil
 	}
 	view := &CIUnavailableView{Commit: pushed.Commit, Pushed: pushed.Pushed}
-	if w := c.ciWatchers.view(p.Key); w.State != CIWatcherWatching {
+	if w := c.watchers.view(watcherKey{WatcherCI, p.Key}); w.State != WatcherWatching {
 		view.Cause, view.Message = CIWatcherNotWatching, w.Message
 		return true, view
 	}

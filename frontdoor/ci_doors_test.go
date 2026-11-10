@@ -219,10 +219,10 @@ func TestTheSamePushRemoteURLWritesNothing(t *testing.T) {
 type ciChecks struct {
 	mu     sync.Mutex
 	calls  []core.CICheckInput
-	result core.CICheckResult
+	result core.WatcherCheckResult
 }
 
-func (c *ciChecks) check(_ context.Context, in core.CICheckInput) core.CICheckResult {
+func (c *ciChecks) check(_ context.Context, in core.CICheckInput) core.WatcherCheckResult {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.calls = append(c.calls, in)
@@ -255,13 +255,13 @@ func TestTurningCITrackingOnRunsTheCheckWithTheGHPathOption(t *testing.T) {
 }
 
 func TestAFailedCICheckRefusesTurningCITrackingOnWithItsFix(t *testing.T) {
-	for _, problem := range []core.CIProblem{core.CIGHMissing, core.CILoggedOut, core.CIRepositoryUnreadable, core.CICheckFailed} {
+	for _, problem := range []core.WatcherProblem{core.ProblemGHMissing, core.ProblemLoggedOut, core.ProblemRepositoryUnreadable, core.ProblemCheckFailed} {
 		t.Run(string(problem), func(t *testing.T) {
-			checks := &ciChecks{result: core.CICheckResult{Problem: problem, Reason: "gh says no", Fix: "Run gh auth login."}}
+			checks := &ciChecks{result: core.WatcherCheckResult{Problem: problem, Reason: "gh says no", Fix: "Run gh auth login."}}
 			srv := newCICheckServer(t, checks)
 			e := httpRejected(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web"}`), core.Invalid)
 			field := "tracking"
-			if problem == core.CIRepositoryUnreadable {
+			if problem == core.ProblemRepositoryUnreadable {
 				field = "repository"
 			}
 			if e.Field != field || e.Message != "gh says no" || e.Fix != "Run gh auth login." {
@@ -290,7 +290,7 @@ func TestOnlyTurningCITrackingOnOrChangingItsRepositoryRunsTheCheck(t *testing.T
 	}
 
 	// Turning off runs no check, even when the check would fail.
-	checks.result = core.CICheckResult{Problem: core.CILoggedOut, Reason: "logged out", Fix: "Run gh auth login."}
+	checks.result = core.WatcherCheckResult{Problem: core.ProblemLoggedOut, Reason: "logged out", Fix: "Run gh auth login."}
 	ciSettings(t, httpOK(t, srv, setCITracking(`{"tracking":false,"repository":"acme/site","full":true}`)), false, "acme/site", nil, "")
 	if n := len(checks.ran()); n != 2 {
 		t.Fatalf("turning off ran a check: %d checks", n)

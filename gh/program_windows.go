@@ -1,6 +1,6 @@
 // How a program is found on Windows.
 
-package ciwatcher
+package gh
 
 import "os"
 

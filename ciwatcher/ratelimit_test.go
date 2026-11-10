@@ -40,7 +40,7 @@ func runsOf(commit string) []string {
 // rate-limited until until.
 func (w *watching) rateLimitedUntil(until time.Time) {
 	w.t.Helper()
-	var got core.CIWatcherView
+	var got core.WatcherView
 	w.waitFor(fmt.Sprintf("rate-limited until %s", until), func() bool {
 		p, err := w.srv.Client.GetProject(context.Background(), "acme")
 		if err != nil {
@@ -49,7 +49,7 @@ func (w *watching) rateLimitedUntil(until time.Time) {
 		got = p.CI.Watcher
 		return got.RateLimitedUntil.Equal(until)
 	})
-	if got.State != core.CIWatcherWatching || got.Message != "" {
+	if got.State != core.WatcherWatching || got.Message != "" {
 		w.t.Fatalf("status %+v, want Watching, rate-limited", got)
 	}
 }
@@ -58,7 +58,7 @@ func (w *watching) rateLimitedUntil(until time.Time) {
 // sends no Notification.
 func (w *watching) noErrors() {
 	w.t.Helper()
-	for _, a := range w.srv.Core.CIWatcherAttention(context.Background()) {
+	for _, a := range w.srv.Core.WatcherAttention(context.Background()) {
 		if a.Errors != 0 {
 			w.t.Fatalf("CI Watcher attention %+v, want no errors", a)
 		}
