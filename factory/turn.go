@@ -51,30 +51,30 @@ func (t turnEnd) String() string {
 }
 
 // startArgs are a new session's flags.
-func (f *factory) startArgs(c claim, tm turnModel) []string {
-	return append([]string{"-p", "--session-id", c.SessionID}, f.turnFlags(c, tm)...)
+func (f *factory) startArgs(c claim, mc turnChoice) []string {
+	return append([]string{"-p", "--session-id", c.SessionID}, f.turnFlags(c, mc)...)
 }
 
 // resumeArgs are the flags that resume c's session.
-func (f *factory) resumeArgs(c claim, tm turnModel) []string {
-	return append([]string{"-p", "--resume", c.SessionID}, f.turnFlags(c, tm)...)
+func (f *factory) resumeArgs(c claim, mc turnChoice) []string {
+	return append([]string{"-p", "--resume", c.SessionID}, f.turnFlags(c, mc)...)
 }
 
 // turnFlags are the flags every start and resume passes: the output
 // format, the permission mode, the turn's model and effort when set, and
 // the Claim's allowed tools.
-func (f *factory) turnFlags(c claim, tm turnModel) []string {
+func (f *factory) turnFlags(c claim, mc turnChoice) []string {
 	args := []string{"--output-format", "stream-json", "--verbose"}
 	if f.o.bypass {
 		args = append(args, "--permission-mode", "bypassPermissions")
 	} else {
 		args = append(args, "--permission-mode", "auto", "--permission-prompts", "none")
 	}
-	if tm.model != "" {
-		args = append(args, "--model", tm.model)
+	if mc.model != "" {
+		args = append(args, "--model", mc.model)
 	}
-	if tm.effort != "" {
-		args = append(args, "--effort", tm.effort)
+	if mc.effort != "" {
+		args = append(args, "--effort", mc.effort)
 	}
 	if len(c.AllowedTools) > 0 {
 		args = append(args, "--allowedTools", strings.Join(c.AllowedTools, ","))
@@ -83,11 +83,11 @@ func (f *factory) turnFlags(c claim, tm turnModel) []string {
 }
 
 // startTurn runs `claude args...` in dir for c, taking a slot until it
-// ends. args start the turn with tm, which is recorded on the Claim.
-func (f *factory) startTurn(ctx context.Context, c claim, dir string, tm turnModel, args []string) {
+// ends. args start the turn with mc, which is recorded on the Claim.
+func (f *factory) startTurn(ctx context.Context, c claim, dir string, mc turnChoice, args []string) {
 	// Before the turn starts, which may end the Claim before a report
 	// after it could land.
-	f.reportModel(ctx, c, tm)
+	f.reportChoice(ctx, c, mc)
 	cmd := exec.Command(f.claude, args...)
 	cmd.Dir = dir
 	cmd.Env = f.e.Environ

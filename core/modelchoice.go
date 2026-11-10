@@ -118,8 +118,10 @@ type ReportModelChoiceInput struct {
 // model and effort on the live Claim, overwriting the previous turn's.
 func (c *Core) ReportModelChoice(_ context.Context, key string, in ReportModelChoiceInput) (Written[TicketView], error) {
 	model, effort := strings.TrimSpace(in.Model), strings.TrimSpace(in.Effort)
-	if strings.ContainsAny(model, "\r\n") || strings.ContainsAny(effort, "\r\n") {
-		return Written[TicketView]{}, invalid("model", "a model and an effort are single-line")
+	for field, v := range map[string]string{"model": model, "effort": effort} {
+		if strings.ContainsAny(v, "\r\n") {
+			return Written[TicketView]{}, invalid(field, "a %s is single-line", field)
+		}
 	}
 	return c.updateTicket(key, "report_model_choice", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
 		cl, err := holder(t, key, in.ClaimID)

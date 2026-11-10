@@ -12,10 +12,10 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// setTags sets tags on ticket, as an agent or the human would.
+// setTags sets tags on ticket, as the human.
 func setTags(t *testing.T, h *factorytest.Harness, ticket string, tags map[string]string) {
 	t.Helper()
-	if _, err := h.Server.Client.SetTags(context.Background(), h.Project, core.SetTagsInput{Target: core.Ref(ticket), Tags: tags}); err != nil {
+	if _, err := h.Human().SetTags(context.Background(), h.Project, core.SetTagsInput{Target: core.Ref(ticket), Tags: tags}); err != nil {
 		t.Fatal(err)
 	}
 }

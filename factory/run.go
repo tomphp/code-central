@@ -360,8 +360,8 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		f.reportFailure(ctx, c, fl)
 		return true
 	}
-	tm := f.withFlags(res.ModelChoice)
-	f.startTurn(ctx, c, wt, tm, append(f.startArgs(c, tm), firstPrompt(c, stage, wt, guide)))
+	mc := f.withFlags(res.ModelChoice)
+	f.startTurn(ctx, c, wt, mc, append(f.startArgs(c, mc), firstPrompt(c, stage, wt, guide)))
 	return true
 }
 
@@ -377,7 +377,7 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 		return
 	}
 	// Before the answers are picked up, so a failure leaves it Answered.
-	tm, ok := f.resumeModel(ctx, c)
+	mc, ok := f.resumeChoice(ctx, c)
 	if !ok {
 		return
 	}
@@ -394,7 +394,7 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 	if decided != "" {
 		prompt += "\n" + decided + "\n"
 	}
-	f.startTurn(ctx, c, f.worktree(c.Ticket), tm, append(f.resumeArgs(c, tm), prompt))
+	f.startTurn(ctx, c, f.worktree(c.Ticket), mc, append(f.resumeArgs(c, mc), prompt))
 }
 
 // sessionHolder looks through the process list for a process other than

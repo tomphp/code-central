@@ -33,10 +33,12 @@ func (f fixture) modelChoice(t *testing.T, ticket string) core.ModelChoice {
 	return mc
 }
 
+// none is a Model Choice that sets neither model nor effort.
+var none = core.ModelChoice{Model: core.ChoiceValue{Source: core.SourceNone}, Effort: core.ChoiceValue{Source: core.SourceNone}}
+
 func TestWithNoTagsTheModelChoiceSetsNothing(t *testing.T) {
 	f := newFixture(t)
 	f.readyTicket(t)
-	none := core.ModelChoice{Model: core.ChoiceValue{Source: core.SourceNone}, Effort: core.ChoiceValue{Source: core.SourceNone}}
 	if mc := f.modelChoice(t, "acme-2"); mc != none {
 		t.Errorf("model choice = %+v, want nothing set", mc)
 	}
@@ -105,7 +107,6 @@ func TestModelAndEffortTagsOnASpecAreOrdinaryTags(t *testing.T) {
 	f := newFixture(t)
 	f.readyTicket(t)
 	f.setTags(t, "acme-1", map[string]string{"model": "opus", "effort": "anything"})
-	none := core.ModelChoice{Model: core.ChoiceValue{Source: core.SourceNone}, Effort: core.ChoiceValue{Source: core.SourceNone}}
 	if mc := f.modelChoice(t, "acme-2"); mc != none {
 		t.Errorf("model choice = %+v, want the Spec's Tags to have no effect", mc)
 	}
