@@ -112,19 +112,19 @@ const failed = (c?: CIConclusion) => c !== undefined && FAILED.includes(c);
 // fixNote is the note Send back to fix and New fix Ticket start from: each
 // failed run of the latest pushed commit, linked, with its failed jobs'
 // names. No logs: the next agent reads them with gh.
-export function fixNote(t: TicketView): string {
+function fixNote(t: TicketView): string {
   const latest = t.pushed_commit?.commit ?? "";
   const runs = new Map<number, CIRunView>();
   for (const r of t.ci_runs ?? []) {
     if (r.commit !== latest || r.ignored) continue;
     if ((runs.get(r.id)?.attempt ?? 0) < r.attempt) runs.set(r.id, r);
   }
-  const bad = [...runs.values()].filter((r) => failed(r.conclusion));
-  const lines = bad.map((r) => {
+  const failedRuns = [...runs.values()].filter((r) => failed(r.conclusion));
+  const lines = failedRuns.map((r) => {
     const jobs = r.jobs.filter((j) => failed(j.conclusion)).map((j) => j.name).sort();
     return `- [${runName(r)}](${r.url}) (${r.workflow})${jobs.length > 0 ? `: failed jobs ${jobs.join(", ")}` : ""}`;
   });
-  const logs = bad.map((r) => `\`gh run view ${r.id} --log-failed\``).join(", ");
+  const logs = failedRuns.map((r) => `\`gh run view ${r.id} --log-failed\``).join(", ");
   return [`CI failed at ${shortCommit(latest)}:`, lines.join("\n"), ...(logs ? [`Read the failed jobs' logs with ${logs}.`] : [])].join("\n\n");
 }
 
@@ -137,7 +137,7 @@ function CIFailureOptions({ api, project, ticket: t }: { api: Api; project: stri
   const { busy, error, run } = useAct();
   const [note, setNote] = useState(() => fixNote(t));
   if (t.land_anyway && t.ci_result === "failed") {
-    return <p className="small ci-options">You accepted its failed CI result, so it lands as though CI had passed.</p>;
+    return <p className="small ci-options">You accepted its failed CI result, so CI no longer holds it back.</p>;
   }
   const options = t.ci_failure_options;
   if (!options) return null;

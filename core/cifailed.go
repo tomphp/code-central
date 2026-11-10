@@ -92,6 +92,13 @@ func latestPushed(t store.Ticket) store.PushedCommit {
 	return t.PushedCommits[len(t.PushedCommits)-1]
 }
 
+// acceptFailedCI records the human's acceptance of t's latest pushed
+// commit's failed CI result at now, as Land anyway and New fix Ticket
+// both do; t must have a pushed commit.
+func acceptFailedCI(t *store.Ticket, now time.Time) {
+	t.PushedCommits[len(t.PushedCommits)-1].LandAnyway = now
+}
+
 // choseLandAnyway reports whether the human chose Land anyway for t's
 // latest pushed commit.
 func choseLandAnyway(t store.Ticket) bool {
@@ -114,7 +121,7 @@ func (c *Core) LandAnyway(ctx context.Context, key string, in TicketInput) (Writ
 		if !slices.Contains(ciFailureOptions(r, key, *t, c.now()), OptionLandAnyway) {
 			return false, &Error{Code: ActionNotAllowed, Message: whyNotLandAnyway(r, key, *t, c.now())}
 		}
-		t.PushedCommits[len(t.PushedCommits)-1].LandAnyway = c.now()
+		acceptFailedCI(t, c.now())
 		return true, nil
 	})
 }
@@ -155,9 +162,9 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 	if strings.TrimSpace(in.Note) == "" {
 		return Written[TicketView]{}, invalid("note", "a fix Ticket needs a note saying what failed, such as the failed CI run's link and its failed jobs")
 	}
-	offered := func(r store.Reader, t store.Ticket) error {
+	refuseUnlessOffered := func(r store.Reader, t store.Ticket) error {
 		if !slices.Contains(ciFailureOptions(r, key, t, c.now()), OptionNewFixTicket) {
-			return &Error{Code: ActionNotAllowed, Message: whyNotFix(key, t)}
+			return &Error{Code: ActionNotAllowed, Message: whyNotNewFixTicket(key, t)}
 		}
 		return nil
 	}
@@ -171,7 +178,7 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 		if err != nil {
 			return err
 		}
-		if err := offered(w, t); err != nil {
+		if err := refuseUnlessOffered(w, t); err != nil {
 			return err
 		}
 		now := c.now()
@@ -192,11 +199,11 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 		return Written[TicketView]{}, err
 	}
 	_, err = c.updateTicketIn(key, "new_fix_ticket", in.Ticket, true, func(r store.Reader, t *store.Ticket) (bool, error) {
-		if err := offered(r, *t); err != nil {
+		if err := refuseUnlessOffered(r, *t); err != nil {
 			return false, err
 		}
 		now := c.now()
-		t.PushedCommits[len(t.PushedCommits)-1].LandAnyway = now
+		acceptFailedCI(t, now)
 		addComment(t, ActorOf(ctx), now, 0, fmt.Sprintf("New fix Ticket: %s fixes this CI failure forward, and %s lands anyway.", fix, failed))
 		return true, nil
 	})
@@ -206,8 +213,8 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 	return v, nil
 }
 
-// whyNotFix says why t isn't offered New fix Ticket.
-func whyNotFix(key string, t store.Ticket) string {
+// whyNotNewFixTicket says why t isn't offered New fix Ticket.
+func whyNotNewFixTicket(key string, t store.Ticket) string {
 	id := DisplayID(key, t.Number)
 	if t.State != store.Accepted {
 		return fmt.Sprintf("%s is %s: only an Accepted Ticket whose CI failed gets a fix Ticket", id, t.State)

@@ -2,6 +2,7 @@ package frontdoor_test
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -39,7 +40,10 @@ func sendBack(n, note string) httpCall {
 	return httpCall{"POST", "/api/p/acme/tickets/" + n + "/send_back", `{"note":` + quote(note) + `}`}
 }
 
-func quote(s string) string { return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"` }
+func quote(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
 
 func TestACIFailedTicketIsOfferedBothFixesUnderMergeAndBranch(t *testing.T) {
 	for method, want := range map[string][]string{
