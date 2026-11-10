@@ -137,7 +137,10 @@ func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
 			seen[m] = true
 			bt, _ := b.r.Ticket(key, m)
 			v := BlockerView{ID: DisplayID(key, m), Title: bt.Title, State: bt.State}
-			v.ci, v.cleared = b.gate(bt)
+			if b.p.CI.UnblockOnPush {
+				v.ci = b.gatedCIResult(bt)
+				v.cleared = v.ci == CIRunning || v.ci == CIPassed
+			}
 			if m != n {
 				v.Via = DisplayID(key, n)
 			}
@@ -147,29 +150,32 @@ func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
 	return out
 }
 
-// gate is bt's CI result while the CI gate holds it, and whether that
-// clears it under Unblock on push: a result running (no runs reported
-// and a pending Re-run request among them) or passed. A failed result,
-// or none once the pushed commit's runs are pruned, keeps it blocking.
-// The Project's CI Runs are read only for a Blocker Accepted with a
-// pushed commit, in a Project with the option on.
-func (b blockRule) gate(bt store.Ticket) (CIResult, bool) {
-	if !b.p.CI.UnblockOnPush || bt.State != store.Accepted || len(bt.PushedCommits) == 0 {
-		return "", false
-	}
+// gatedCIResult is bt's CI result while the CI gate holds it, else "".
+// Under Unblock on push a result running (which includes no runs
+// reported, or a pending Re-run request) or passed clears bt; a failed
+// result, or none once the pushed commit's runs are pruned, keeps it
+// blocking. ciGated reads the Project's CI Runs only for a Ticket
+// Accepted with a pushed commit, and blockerViews asks only in a Project
+// with the option on.
+func (b blockRule) gatedCIResult(bt store.Ticket) CIResult {
 	pushed, runs, ok := ciGated(b.r, b.p, bt, b.now)
 	if !ok {
-		return "", false
+		return ""
 	}
-	res := latestCIResult(pushed, runs, b.now)
-	return res, res == CIRunning || res == CIPassed
+	return latestCIResult(pushed, runs, b.now)
 }
 
 // blockedError rejects claiming a blocked Ticket, naming its Blockers,
-// with the CI result of one the CI gate holds.
+// with the CI result of one the CI gate holds, whether or not Unblock on
+// push is on.
 func (b blockRule) blockedError(t store.Ticket, actor Actor) error {
 	var names []string
 	for _, v := range b.openBlockers(t) {
+		if v.ci == "" && v.State == store.Accepted {
+			n, _ := Ref(v.ID).number(b.p.Key, "blocker")
+			bt, _ := b.r.Ticket(b.p.Key, n)
+			v.ci = b.gatedCIResult(bt)
+		}
 		s := fmt.Sprintf("%s (%s", v.ID, v.State)
 		if v.State == store.Cancelled {
 			s += ", with no Replacements"

@@ -222,13 +222,18 @@ func ticketRuns(r store.Reader, key string, t store.Ticket, now time.Time) ([]st
 	if len(t.PushedCommits) == 0 {
 		return nil, false
 	}
+	return runsOf(keptCIRuns(r.CIRuns(key), now), t.Number), true
+}
+
+// runsOf are the runs tracked against Ticket n.
+func runsOf(runs []store.CIRun, n int) []store.CIRun {
 	var mine []store.CIRun
-	for _, run := range keptCIRuns(r.CIRuns(key), now) {
-		if run.Ticket == t.Number {
+	for _, run := range runs {
+		if run.Ticket == n {
 			mine = append(mine, run)
 		}
 	}
-	return mine, true
+	return mine
 }
 
 // countsFor reports whether run counts towards commit's CI result: one
@@ -339,9 +344,9 @@ type CIRunsView struct {
 // keyed by its run ID and attempt, marking runs of Ignored workflows
 // ignored, and prunes the runs finished more than ciKeep ago. It needs
 // CI Tracking on. Every Ticket whose runs changed gets a change notice,
-// as the Project gets ci.changed, so the UI updates live; so do the
-// unfinished Tickets it blocks when its CI result changed, since that can
-// clear or hold them under Unblock on push.
+// as the Project gets ci.changed, so the UI updates live; under Unblock
+// on push, so do the unfinished Tickets it blocks when its CI result
+// changed, since that can clear or hold them.
 func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput) (Written[CIRunsView], error) {
 	var reported CIRunsView
 	changed := map[int]bool{}
@@ -385,8 +390,10 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 		if !wrote && !pruned {
 			return nil
 		}
-		for n := range c.ciResultsChanged(w, key, changed, kept, runs) {
-			changed[n] = true
+		if p.CI.UnblockOnPush {
+			for _, n := range c.dependantsOfChangedCIResults(w, key, changed, kept, runs) {
+				changed[n] = true
+			}
 		}
 		return w.PutCIRuns(key, runs)
 	})
@@ -409,18 +416,12 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 	return Written[CIRunsView]{Acknowledgement: ack}, nil
 }
 
-// ciResultsChanged are the unfinished dependants, followed through
-// Replacements, of each Ticket in tickets whose CI result differs between
-// the runs before and after.
-func (c *Core) ciResultsChanged(r store.Reader, key string, tickets map[int]bool, before, after []store.CIRun) map[int]bool {
+// dependantsOfChangedCIResults are the unfinished Tickets waiting,
+// through Replacements, on a Ticket in tickets whose CI result differs
+// between the kept runs before and after.
+func (c *Core) dependantsOfChangedCIResults(r store.Reader, key string, tickets map[int]bool, before, after []store.CIRun) []int {
 	resultOf := func(t store.Ticket, runs []store.CIRun) CIResult {
-		var mine []store.CIRun
-		for _, run := range runs {
-			if run.Ticket == t.Number {
-				mine = append(mine, run)
-			}
-		}
-		return latestCIResult(t.PushedCommits[len(t.PushedCommits)-1], mine, c.now())
+		return latestCIResult(t.PushedCommits[len(t.PushedCommits)-1], runsOf(runs, t.Number), c.now())
 	}
 	var moved []int
 	for n := range tickets {
@@ -428,13 +429,13 @@ func (c *Core) ciResultsChanged(r store.Reader, key string, tickets map[int]bool
 			moved = append(moved, n)
 		}
 	}
-	out := map[int]bool{}
 	if len(moved) == 0 {
-		return out
+		return nil
 	}
+	var out []int
 	for _, d := range r.Tickets(key) {
 		if !finished(d.State) && slices.ContainsFunc(waitsOn(r, key, d.Number), func(n int) bool { return slices.Contains(moved, n) }) {
-			out[d.Number] = true
+			out = append(out, d.Number)
 		}
 	}
 	return out

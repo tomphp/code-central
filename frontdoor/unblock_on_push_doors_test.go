@@ -13,9 +13,9 @@ import (
 // blocking while its CI result is running or passed, and a failed result
 // holds its dependants again, which claim names.
 
-// dependantOf3 turns Unblock on push on and adds acme-4, Ready and
+// unblockOnPushWithADependant turns Unblock on push on and adds acme-4, Ready and
 // blocked by acme-3.
-func dependantOf3(t *testing.T, srv *codecentraltest.Server) {
+func unblockOnPushWithADependant(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web","ignored_workflows":["nightly.yml"],"unblock_on_push":true}`))
 	ctx := context.Background()
@@ -30,7 +30,7 @@ func dependantOf3(t *testing.T, srv *codecentraltest.Server) {
 }
 
 func TestClaimingATicketHeldByACIFailedBlockerIsRefusedNamingItsCIResult(t *testing.T) {
-	srv := newServer(t, failedCI, dependantOf3)
+	srv := newServer(t, failedCI, unblockOnPushWithADependant)
 	e := httpRejected(t, srv, httpCall{"POST", "/api/p/acme/claim", `{"ticket":"acme-4","session_id":"sess-1"}`}, core.ActionNotAllowed)
 	if !strings.Contains(e.Message, "acme-3 (Accepted, CI failed)") {
 		t.Fatalf("message %q, want it to name acme-3 as Accepted with its CI failed", e.Message)
@@ -38,9 +38,18 @@ func TestClaimingATicketHeldByACIFailedBlockerIsRefusedNamingItsCIResult(t *test
 }
 
 func TestATicketHeldByABlockerWhoseCIRunsCanBeClaimed(t *testing.T) {
-	srv := newServer(t, pushedAccepted, dependantOf3)
+	srv := newServer(t, pushedAccepted, unblockOnPushWithADependant)
 	out := httpOK(t, srv, httpCall{"POST", "/api/p/acme/claim", `{"ticket":"acme-4","session_id":"sess-1"}`})
 	if tk, _ := out["ticket"].(map[string]any); tk["id"] != "acme-4" || tk["state"] != "In Progress" {
 		t.Fatalf("claimed %v, want acme-4 claimed while acme-3's CI runs", out)
+	}
+}
+
+func TestWithUnblockOnPushOffTheRefusalStillNamesAGatedBlockersCIResult(t *testing.T) {
+	srv := newServer(t, failedCI, unblockOnPushWithADependant)
+	httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web","ignored_workflows":["nightly.yml"],"unblock_on_push":false}`))
+	e := httpRejected(t, srv, httpCall{"POST", "/api/p/acme/claim", `{"ticket":"acme-4","session_id":"sess-1"}`}, core.ActionNotAllowed)
+	if !strings.Contains(e.Message, "acme-3 (Accepted, CI failed)") {
+		t.Fatalf("message %q, want it to name acme-3 as Accepted with its CI failed", e.Message)
 	}
 }
