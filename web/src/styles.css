@@ -103,13 +103,11 @@ a.filter { text-decoration: none; }
 .project-options-choice { margin: 8px 0; }
 .project-options-hint { margin: 2px 0 0 1.6rem; font-size: 13px; color: var(--muted); }
 .project-options-remote { display: block; margin: 8px 0 0 1.6rem; }
-.project-options-remote input { font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
-.project-options-remote input[aria-invalid="true"] { border-color: var(--danger); }
+.project-options-remote input, .project-options-field input, .project-options-field select { font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.project-options-remote input[aria-invalid="true"], .project-options-field input[aria-invalid="true"] { border-color: var(--danger); }
 .project-options form + form { margin-top: 16px; }
 .project-options-field { display: block; margin: 12px 0 0; }
-.project-options-field input, .project-options-field select { font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 .project-options-field input { min-width: 16rem; }
-.project-options-field input[aria-invalid="true"] { border-color: var(--danger); }
 .project-options-field + .project-options-hint { margin-left: 0; }
 .project-options-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .project-options-section .warning { margin: 10px 0 0; }

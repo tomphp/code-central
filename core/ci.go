@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	neturl "net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -102,7 +103,19 @@ func (c *Core) ReportPushRemote(_ context.Context, key string, in ReportPushRemo
 	if url == "" {
 		return Written[ProjectView]{}, invalid("url", "report_push_remote needs the Push remote's URL")
 	}
-	return c.updateCI(key, in.Full, func(p *store.CI) { p.PushRemoteURL = url })
+	return c.updateCI(key, in.Full, func(p *store.CI) { p.PushRemoteURL = withoutLogin(url) })
+}
+
+// withoutLogin is an HTTP(S) remote URL without the login it may carry,
+// such as a token, which Code Central never keeps. An SSH URL's user
+// (git@) is no secret, and stays.
+func withoutLogin(url string) string {
+	u, err := neturl.Parse(url)
+	if err != nil || u.User == nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return url
+	}
+	u.User = nil
+	return u.String()
 }
 
 // updateCI changes a Project's CI settings with change, writing nothing

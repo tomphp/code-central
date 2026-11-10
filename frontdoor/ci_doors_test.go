@@ -186,6 +186,15 @@ func TestTheFactoryReportsThePushRemoteURL(t *testing.T) {
 	}
 }
 
+// A Push remote URL may carry a login; Code Central keeps none.
+func TestAPushRemoteURLIsStoredWithoutItsLogin(t *testing.T) {
+	srv := newServer(t)
+	httpOK(t, srv, reportPushRemote(`{"url":"https://someone:ghp_secret@github.com/acme/web.git"}`))
+	ciSettings(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), false, "", nil, "https://github.com/acme/web.git")
+	httpOK(t, srv, reportPushRemote(`{"url":"ssh://git@github.com/acme/web.git"}`))
+	ciSettings(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), false, "", nil, "ssh://git@github.com/acme/web.git")
+}
+
 func TestTheSamePushRemoteURLWritesNothing(t *testing.T) {
 	srv := newServer(t)
 	httpOK(t, srv, reportPushRemote(`{"url":"git@github.com:acme/web.git"}`))

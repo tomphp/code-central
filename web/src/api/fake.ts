@@ -852,9 +852,10 @@ export class FakeApi implements Api {
   }
 
   // reportPushRemote is the Factory's report of its Push remote's URL,
-  // made when it starts.
+  // made when it starts, kept without an HTTP(S) URL's login.
   async reportPushRemote(key: string, url: string): Promise<void> {
-    this.setCI(this.writable(key), { ...this.project(key).ci, push_remote_url: url.trim() });
+    const push_remote_url = url.trim().replace(/^(https?:\/\/)[^@/]+@/, "$1");
+    this.setCI(this.writable(key), { ...this.project(key).ci, push_remote_url });
   }
 
   private setCI(p: FakeProject, ci: CISettings) {
