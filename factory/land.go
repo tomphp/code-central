@@ -276,9 +276,17 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, landing 
 
 // landPushed lands tk at commit, which is in the base. Under Merge with
 // Push on, it first makes sure the remote's base holds commit, and leaves
-// tk where it is, commented, when the push fails.
+// tk where it is, commented, when the push fails. With CI Tracking on as
+// well, the gate holds: tk lands only at its pushed commit once that
+// commit's CI result is passed (ADR 0019).
 func (f *factory) landPushed(ctx context.Context, tk core.TicketView, landing core.LandingView, commit string) {
 	if landing.Method == store.LandingMerge && landing.Push {
+		if f.tracksCI && tk.PushedCommit != nil && f.repository.isAncestor(commit, tk.PushedCommit.Commit) {
+			// Pushed already: what the remote's base holds now may be a
+			// later Ticket's push, which mustn't replace tk's own.
+			f.landOnCI(ctx, tk)
+			return
+		}
 		pushed, why := f.pushBase(ctx, landing.Remote, commit)
 		if why != "" {
 			f.cantLandYet(ctx, tk, why)
@@ -287,33 +295,60 @@ func (f *factory) landPushed(ctx context.Context, tk core.TicketView, landing co
 		if pushed {
 			f.printf("%s: pushed %s to %s", tk.ID, f.base, landing.Remote)
 		}
-		f.reportPushed(ctx, tk, landing.Remote, f.base, commit)
+		if f.reportPushed(ctx, tk, landing.Remote, f.base, commit) {
+			// Its CI result is read on a later poll.
+			return
+		}
 	}
 	f.landAt(ctx, tk, commit)
+}
+
+// landOnCI lands a Ticket the gate holds at its pushed commit once its
+// CI result is passed. Until then it stays where it is, with a line for
+// each CI result it waits on.
+func (f *factory) landOnCI(ctx context.Context, tk core.TicketView) {
+	pushed := tk.PushedCommit.Commit
+	if tk.CIResult == core.CIPassed {
+		f.landAt(ctx, tk, pushed)
+		return
+	}
+	key := tk.ID + "@" + pushed + "@" + string(tk.CIResult)
+	if f.waitingOnCI[key] {
+		return
+	}
+	f.waitingOnCI[key] = true
+	if tk.CIResult == core.CIFailed {
+		f.printf("%s: CI failed at %s, so it stays %s", tk.ID, short(pushed), tk.State)
+		return
+	}
+	f.printf("%s: waiting on CI at %s before it lands", tk.ID, short(pushed))
 }
 
 // reportPushed reports, while CI Tracking is on, the commit the remote's
 // branch now holds as tk's pushed commit: the one CI runs on. Without a
 // remote-tracking ref to read, it is pushed, the commit just pushed. It
-// is reported once, when it isn't tk's pushed commit already.
-func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, remote, branch, pushed string) {
+// is reported once, when it isn't tk's pushed commit already. It returns
+// whether CI tracks tk, so the gate holds it, even when the report
+// failed: it is retried next poll.
+func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, remote, branch, pushed string) (tracked bool) {
 	if !f.tracksCI {
-		return
+		return false
 	}
 	commit, err := f.repository.commit("refs/remotes/" + remote + "/" + branch)
 	if err != nil {
 		commit = pushed
 	}
 	if tk.PushedCommit != nil && tk.PushedCommit.Commit == commit {
-		return
+		return true
 	}
 	if _, err := f.client.ReportPushedCommit(ctx, f.project, core.ReportPushedCommitInput{Ticket: core.Ref(tk.ID), Commit: commit}); err != nil {
 		if ctx.Err() == nil {
 			f.printf("%s: report_pushed_commit: %v", tk.ID, err)
 		}
-		return
+		return true
 	}
 	f.printf("%s: CI tracks %s at %s", tk.ID, branch, short(commit))
+	return true
 }
 
 // pushBase pushes the base to remote unless the remote's base already

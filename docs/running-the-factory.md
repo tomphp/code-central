@@ -395,10 +395,27 @@ acme-shop-5: can't push yet: couldn't push acme-shop-5 to origin
 
 A branch you merge into the base by hand lands as under Branch, whether or not it was pushed. If you merge it on the host instead, pull the base, and the Factory lands it on its next poll.
 
-With [CI Tracking](setting-up-a-project.md#watching-ci) on as well, the Factory reports each push it makes for a Ticket as the Ticket's pushed commit, once, before landing it: the base's commit on the remote under Merge + Push, the branch's under Branch + Push. The CI Watcher then follows the runs GitHub starts for it:
+### With CI Tracking
+
+With [CI Tracking](setting-up-a-project.md#watching-ci) on as well, the Factory reports each push it makes for a Ticket as the Ticket's pushed commit, once: the base's commit on the remote under Merge + Push, the branch's under Branch + Push. The CI Watcher then follows the runs GitHub starts for it.
+
+Under **Merge + Push**, CI gates landing, so Done means on the remote and green. The Factory merges, pushes and reports the pushed commit, and leaves the Ticket Accepted. On every later poll it reads the Ticket's CI result, and once it is passed, lands the Ticket at its pushed commit:
 
 ```text
 acme-shop-5: pushed main to origin
 acme-shop-5: CI tracks main at 9c41d07a2b18
+acme-shop-5: waiting on CI at 9c41d07a2b18 before it lands
 acme-shop-5: landed on main at 9c41d07a2b18
 ```
+
+There is no State for waiting on CI: the Ticket stays Accepted, so a Ticket it blocks isn't claimed until its CI has passed and it lands. Waiting doesn't hold up the rest: the Factory goes on merging and pushing other accepted Tickets meanwhile, and each lands on its own pushed commit's CI result, not on a later push's. An In Review Ticket you merge by hand waits the same way, In Review.
+
+When the CI result is failed, the Ticket stays Accepted, and the Factory says so once:
+
+```text
+acme-shop-5: CI failed at 9c41d07a2b18, so it stays Accepted
+```
+
+The gate holds only while Merge, Push and CI Tracking are all on. Turning CI Tracking off, turning Push off, or switching to Leave as a branch lifts it, and the Factory lands every Ticket waiting on CI on its next poll.
+
+Under **Branch + Push**, CI only informs you: the Factory lands the Ticket when it sees your merge, whatever its CI result, so merging stays your decision.

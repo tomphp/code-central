@@ -89,7 +89,7 @@ A Ticket that is Done or Cancelled, or a Spec that has Tickets and all of them a
 _Avoid_: Closed, archived, complete
 
 **Land**:
-For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing.
+For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing. Under Merge + Push with CI Tracking on, a Ticket lands only once its pushed commit's CI result is passed, so Done means on the remote and green.
 _Avoid_: Merge, ship, deliver, complete
 
 **Landing Method**:
@@ -97,7 +97,7 @@ A Project's choice of how accepted work reaches its base. It is Merge (the Facto
 _Avoid_: Completion option, delivery mode, finish mode
 
 **Push**:
-A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch.
+A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands only once the push succeeds, and with CI Tracking on, only once its CI result is passed as well.
 _Avoid_: Publish, sync
 
 **CI Tracking**:
