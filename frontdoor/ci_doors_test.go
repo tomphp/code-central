@@ -20,13 +20,14 @@ import (
 // only; report_push_remote is the Factory's, over HTTP only.
 func init() {
 	cases["set_ci_tracking"] = opCase{
-		ok: call{http: setCITracking(`{"tracking":true,"repository":" acme/web ","ignored_workflows":[" nightly.yml ",""]}`)},
+		ok: call{http: setCITracking(`{"tracking":true,"repository":" acme/web ","ignored_workflows":[" nightly.yml ",""],"unblock_on_push":true}`)},
 		check: func(t *testing.T, out map[string]any) {
 			acknowledgement("acme", "ci")(t, out)
 		},
 		full: func(t *testing.T, out map[string]any) {
 			field("key", "acme")(t, out)
 			ciSettings(t, out, true, "acme/web", []string{"nightly.yml"}, "")
+			unblockOnPush(t, out, true)
 		},
 		bad:  call{http: setCITracking(`{"tracking":true}`)},
 		code: core.Invalid,
@@ -67,12 +68,42 @@ func ciSettings(t *testing.T, project map[string]any, tracking bool, repository 
 	}
 }
 
+// unblockOnPush checks a Project's ci.unblock_on_push.
+func unblockOnPush(t *testing.T, project map[string]any, want bool) {
+	t.Helper()
+	c, _ := project["ci"].(map[string]any)
+	if got, ok := c["unblock_on_push"].(bool); !ok || got != want {
+		t.Fatalf("ci.unblock_on_push = %v, want %v", c["unblock_on_push"], want)
+	}
+}
+
 func TestEveryProjectReadCarriesCITrackingOff(t *testing.T) {
 	srv := newServer(t)
-	ciSettings(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), false, "", nil, "")
+	project := httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})
+	ciSettings(t, project, false, "", nil, "")
+	unblockOnPush(t, project, false)
 	for _, row := range httpOK(t, srv, httpCall{"GET", "/api/projects", ""})["rows"].([]any) {
 		ciSettings(t, row.(map[string]any), false, "", nil, "")
+		unblockOnPush(t, row.(map[string]any), false)
 	}
+}
+
+func TestUnblockOnPushIsReadBackByEveryProjectReadAndOutlivesCITracking(t *testing.T) {
+	srv := newServer(t)
+	httpOK(t, srv, setCITracking(`{"tracking":false,"unblock_on_push":true}`))
+	unblockOnPush(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), true)
+	httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web","unblock_on_push":true}`))
+	rows := httpOK(t, srv, httpCall{"GET", "/api/projects", ""})["rows"].([]any)
+	unblockOnPush(t, rows[0].(map[string]any), true)
+	unblockOnPush(t, rows[1].(map[string]any), false)
+
+	// Turning CI Tracking off keeps it, as it keeps the repository.
+	off := httpOK(t, srv, setCITracking(`{"tracking":false,"repository":"acme/web","unblock_on_push":true,"full":true}`))
+	ciSettings(t, off, false, "acme/web", nil, "")
+	unblockOnPush(t, off, true)
+
+	// set_ci_tracking replaces the CI settings whole.
+	unblockOnPush(t, httpOK(t, srv, setCITracking(`{"tracking":false,"repository":"acme/web","full":true}`)), false)
 }
 
 func TestSetCITrackingIsReadBackByEveryProjectRead(t *testing.T) {
@@ -281,8 +312,9 @@ func TestOnlyTurningCITrackingOnOrChangingItsRepositoryRunsTheCheck(t *testing.T
 	}
 	httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web"}`))
 	httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web","ignored_workflows":["nightly.yml"]}`))
+	httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web","ignored_workflows":["nightly.yml"],"unblock_on_push":true}`))
 	if n := len(checks.ran()); n != 1 {
-		t.Fatalf("turning on, then changing only Ignored workflows, ran %d checks, want 1", n)
+		t.Fatalf("turning on, then changing only Ignored workflows and Unblock on push, ran %d checks, want 1", n)
 	}
 	httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/site"}`))
 	if got := checks.ran(); len(got) != 2 || got[1].Repository != "acme/site" {

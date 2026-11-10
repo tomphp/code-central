@@ -309,7 +309,7 @@ describe("pulses", () => {
 async function ciWorld() {
   const fake = world();
   await fake.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
-  await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"] });
+  await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"], unblock_on_push: false });
   fake.addTicket("acme", { title: "Theme toggle", state: "In Review" }); // acme-4
   await fake.reportPushedCommit("acme", "acme-4", "abc123");
   return fake;
@@ -378,9 +378,9 @@ describe("the CI Running block", () => {
   it("isn't there when the only Project with CI Tracking on is Archived", async () => {
     const fake = await ciWorld();
     fake.addProject("old", "Old");
-    await fake.setCITracking("old", { tracking: true, provider: "github_actions", repository: "old/web", ignored_workflows: [] });
+    await fake.setCITracking("old", { tracking: true, provider: "github_actions", repository: "old/web", ignored_workflows: [], unblock_on_push: false });
     await fake.archiveProject("old");
-    await fake.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+    await fake.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
     renderApp(fake);
     const d = await dashboard();
     expect(within(d).queryByRole("group", { name: "CI Running" })).toBeNull();
@@ -620,7 +620,7 @@ describe("the CI Running list", () => {
     await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
 
     await act(async () => {
-      await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["lint.yml"] });
+      await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["lint.yml"], unblock_on_push: false });
       await fake.reportCIRuns("acme", [ciRun(fake, 2, "lint.yml")]);
     });
     await waitFor(() => expect(ciEntries(d).map((e) => e.getAttribute("aria-label"))).toEqual(["ci.yml"]));

@@ -57,6 +57,10 @@ export interface CITrackingChange {
   repository: string;
   // ignored_workflows are workflow file names, such as ci.yml.
   ignored_workflows: string[];
+  // unblock_on_push lets a Ticket the CI gate holds stop blocking while
+  // its pushed commit's CI runs or has passed. It may be on while CI
+  // Tracking is off.
+  unblock_on_push: boolean;
 }
 
 // A CI Rule as the human adds or edits it: when workflow fails on branch,

@@ -385,6 +385,7 @@ export class FakeApi implements Api {
         provider: "github_actions",
         repository: "",
         ignored_workflows: [],
+        unblock_on_push: false,
         push_remote_url: "",
         rules: [],
         watcher: { state: "not_reported" },
@@ -1029,7 +1030,15 @@ export class FakeApi implements Api {
     }
     // Turning CI Tracking off forgets the CI Watcher's status.
     const watcher = change.tracking ? p.ci.watcher : { state: "not_reported" as const };
-    this.setCI(p, { ...p.ci, tracking: change.tracking, provider, repository, ignored_workflows: ignored, watcher });
+    this.setCI(p, {
+      ...p.ci,
+      tracking: change.tracking,
+      provider,
+      repository,
+      ignored_workflows: ignored,
+      unblock_on_push: change.unblock_on_push,
+      watcher,
+    });
     return this.projectView(p);
   }
 
