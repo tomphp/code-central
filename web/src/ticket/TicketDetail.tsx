@@ -47,10 +47,10 @@ export type TicketDetailProps = TicketPaneProps;
 
 // TicketDetail is everything about a Ticket below its action panel: Spec,
 // Labels, an Incoming Issue's triage actions (in the action panel instead
-// while it is a New issue), description, Blockers, its CI section when it has CI Runs (in the
-// action panel instead while CI failed), Claim activity with each Claim's Live
-// section, move, and a collapsed history of moves, comments and edits
-// merged by time.
+// while it is a New issue), description, Blockers, its CI section when it
+// has CI Runs (in the action panel instead while CI failed), Claim
+// activity with each Claim's Live section, move, and a collapsed history
+// of moves, comments and edits merged by time.
 export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketDetailProps) {
   const claims = [...t.claims].sort((a, b) => b.number - a.number);
   const specName = `${t.spec.id} ${t.spec.title}`;

@@ -33,7 +33,7 @@ func issuesSpec(r store.Reader, key string) int {
 // on.
 func awaitsTriage(r store.Reader, key string, spec int) bool {
 	p, _ := r.Project(key)
-	return p.GitHubIssues.NewIssuesNeedMe && p.GitHubIssues.Spec != 0 && spec == p.GitHubIssues.Spec
+	return p.GitHubIssues.NewIssuesNeedMe && spec == issuesSpec(r, key)
 }
 
 // whyNotIncoming says why t isn't an Incoming Issue, "" when it is.

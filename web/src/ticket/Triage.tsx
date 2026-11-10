@@ -33,7 +33,7 @@ export function Triage(props: { api: Api; project: string; ticket: TicketView })
   return (
     <section aria-label="Triage">
       <p className="muted small">
-        An Incoming Issue from GitHub Issues. Keep as Draft leaves it here as a Draft{props.ticket.awaiting_triage && ", out of Needs Me"}, and
+        An Incoming Issue from GitHub Issues. Keep as Draft leaves it here as it is{props.ticket.awaiting_triage && ", out of Needs Me"}, and
         writes nothing to GitHub.
       </p>
       <TriageActions {...props} />

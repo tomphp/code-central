@@ -340,7 +340,7 @@ It is an ordinary Spec, with no Stages. Turning GitHub Issues off and on again r
 
 An Incoming Issue is a Draft (or Ready) Ticket on the Issues Spec, linked to its issue: its panel's GitHub badge opens the issue, and its title and description are GitHub's. Its Ticket panel has a **Triage** section with the triage actions, whether or not New issues need me is on:
 
-- **Keep as Draft** leaves it on the Issues Spec as a Draft, and writes nothing to GitHub. With New issues need me on, it also takes the issue out of Needs Me for good: closing and reopening the issue, editing it, or turning New issues need me off and on never brings it back.
+- **Keep as Draft** leaves it on the Issues Spec as it is, a Draft as it came in, and writes nothing to GitHub. With New issues need me on, it also takes the issue out of Needs Me for good: closing and reopening the issue, editing it, or turning New issues need me off and on never brings it back.
 
 With **New issues need me** on, each issue that comes in waits in Needs Me under **New issue**, after Blocked by a Cancelled Ticket and before Closed externally, longest-waiting first. Its row names the issue and when it came in:
 

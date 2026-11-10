@@ -10,7 +10,7 @@ export function NewIssue({ api, project, ticket: t }: PanelProps) {
     <section aria-label="New issue" className="panel">
       <p>
         {t.link && <LinkBadge link={t.link} />} came in from GitHub Issues and waits for you to triage it. Keep as Draft
-        leaves it here as a Draft, out of Needs Me, and writes nothing to GitHub.
+        leaves it here as it is, out of Needs Me, and writes nothing to GitHub.
       </p>
       <TriageActions api={api} project={project} ticket={t} />
     </section>

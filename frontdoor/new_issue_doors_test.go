@@ -2,6 +2,7 @@ package frontdoor_test
 
 import (
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -38,7 +39,7 @@ func keepAsDraft(n string) httpCall {
 func issuesOn(needMe bool) func(*testing.T, *codecentraltest.Server) {
 	return func(t *testing.T, srv *codecentraltest.Server) {
 		t.Helper()
-		body := `{"on":true,"repository":"acme/web","new_issues_need_me":` + map[bool]string{true: "true", false: "false"}[needMe] + `}`
+		body := `{"on":true,"repository":"acme/web","new_issues_need_me":` + strconv.FormatBool(needMe) + `}`
 		httpOK(t, srv, setGitHubIssues(body))
 	}
 }
