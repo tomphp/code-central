@@ -418,6 +418,14 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         [1, "completed"],
         [2, "completed"],
       ]);
+
+      // The rows the Spec view and the Activity Dashboard read carry it
+      // too, for their badges; a Ticket never pushed has none.
+      const rows = await d.api.findTickets("acme", { state: ["Accepted", "Ready"] });
+      expect(rows.find((r) => r.id === id)?.ci_result).toBe("passed");
+      expect(rows.find((r) => r.id === ready)).not.toHaveProperty("ci_result");
+      const spec = await d.api.getSpec("acme", passed.spec.id);
+      expect(spec.tickets.find((r) => r.id === id)?.ci_result).toBe("passed");
     });
 
     it("gets one Ticket in full, with its Needs Me reason", async () => {

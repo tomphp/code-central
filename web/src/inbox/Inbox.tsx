@@ -10,6 +10,7 @@ import { projectOf } from "../api/api";
 import { FINISHED, STATES, type MapView, type NeedsMeReason, type NeedsMeRow, type ProjectRow, type SpecDetail, type State, type TicketView } from "../api/types";
 import { duration, REASON_LABEL, rowDetail } from "../format";
 import { RowLatestEvent } from "../LatestEvent";
+import { CIBadge } from "../ticket/CIBadge";
 import { LinkBadge } from "../ticket/LinkBadge";
 import { PrototypeBadge } from "../ticket/PrototypeBadge";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
@@ -289,6 +290,7 @@ function NeedsMeLink({ row, now, link }: { row: NeedsMeRow; now: Date; link: Row
         <span className="row-title">{row.title}</span>
         {row.prototype && <PrototypeBadge />}
         {row.link && <LinkBadge link={row.link} plain />}
+        <CIBadge result={row.ci_result} />
         <span className="muted small">{duration(now, row.since)}</span>
       </span>
       <span className="row-detail">

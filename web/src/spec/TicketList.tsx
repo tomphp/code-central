@@ -1,8 +1,9 @@
 // A Spec's Tickets as a list in its view: each one's ID and title to
-// select it, its State, loud when it needs the human, and its live
-// Claim's latest Session Event.
+// select it, its State, loud when it needs the human, its CI badge, and
+// its live Claim's latest Session Event.
 import type { NeedsMeReason, TicketRow } from "../api/types";
 import { RowLatestEvent } from "../LatestEvent";
+import { CIBadge } from "../ticket/CIBadge";
 
 export interface TicketListProps {
   // label names the list.
@@ -26,6 +27,7 @@ export function TicketList({ label, tickets, reasons, now, ticket, select }: Tic
               <span className="tid">{t.id}</span> {t.title}
             </button>{" "}
             <span className={["state", reason && `reason-${reason} loud-state`].filter(Boolean).join(" ")}>{t.state}</span>
+            <CIBadge result={t.ci_result} />
             <RowLatestEvent row={t} now={now} />
           </li>
         );

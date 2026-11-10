@@ -7,12 +7,14 @@
 // A block pulses when its count changes. An entry pulses when a
 // ticket.changed notice names its Ticket, which includes each new Session
 // Event, and once when it joins the list after the dashboard first shows.
+// An entry shows its Ticket's CI badge when it has a CI result.
 import { useEffect, useState } from "react";
 import { numberOf, type Api } from "../api/api";
 import type { State } from "../api/types";
 import { RowLatestEvent } from "../LatestEvent";
 import type { InboxData, ProjectTicket } from "../live";
 import { STAGE_TITLE, stageOf } from "../requirement/progress";
+import { CIBadge } from "../ticket/CIBadge";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { usePulse } from "./pulse";
 
@@ -113,6 +115,7 @@ function InProgressEntry({ now, data, ticket: t, changes, joined, loc, navigate 
         <span className="dashboard-entry-top">
           <span className="tid">{t.id}</span>
           <span className="dashboard-entry-title">{t.title}</span>
+          <CIBadge result={t.ci_result} />
           {!loc.project && <span className="muted">{data.projects.find((p) => p.key === t.project)?.display_name ?? t.project}</span>}
         </span>
         {stage && (

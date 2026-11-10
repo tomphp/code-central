@@ -198,6 +198,10 @@ type TicketRow struct {
 	// LatestEvent is the latest Session Event of the Ticket's live Claim,
 	// shown short; left out when there is none.
 	LatestEvent *LatestEvent `json:"latest_event,omitempty"`
+	// CIResult is the CI result of the Ticket's latest pushed commit, for
+	// its row's badge; left out for a Ticket never pushed while CI
+	// Tracking was on.
+	CIResult CIResult `json:"ci_result,omitempty"`
 }
 
 // CreateProjectInput is create_project's input.
@@ -471,6 +475,7 @@ func (c *Core) ticketRow(r store.Reader, key string, t store.Ticket, onMap bool)
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: blocked(r, key, t), Updated: t.Updated, Link: linkView(t.Link),
+		CIResult: ticketCIResult(r, key, t),
 	}
 	if onMap {
 		row.NodeType = NodeType(t.Labels)
