@@ -129,7 +129,10 @@ function CIFailureOptions({ api, project, ticket: t }: { api: Api; project: stri
           </p>
         </>
       ) : (
-        <p className="small">This Project lands by Branch, so your merge decides: merge the branch to land it whatever its CI result.</p>
+        <p className="small">
+          This Project lands by Branch, so your merge decides: merge {t.branch ? <code>{t.branch}</code> : "the branch"} into the base to land it
+          whatever its CI result.
+        </p>
       )}
     </div>
   );

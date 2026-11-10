@@ -23,17 +23,6 @@ describe("end-to-end: the human lands a CI failed Ticket anyway from Focus Mode"
     await svc?.stop();
   });
 
-  // human makes one POST as the human, as the UI does.
-  async function human(path: string, body: unknown) {
-    const res = await fetch(svc.url + path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Code-Central-Actor": "human" },
-      body: JSON.stringify(body),
-    });
-    const v = await res.json();
-    if (!res.ok) throw new Error(`${path}: ${JSON.stringify(v)}`);
-    return v;
-  }
 
   it("a pushed Ticket's CI fails, Focus Mode shows it live, and the human lands it anyway", async () => {
     const page = await browser.newPage();
@@ -45,9 +34,9 @@ describe("end-to-end: the human lands a CI failed Ticket anyway from Focus Mode"
     const n = id.split("-").pop();
     const { claim_id } = await svc.agent("/api/p/acme/claim", { ticket: id, session_id: "e2e-session" });
     await svc.agent(`/api/p/acme/tickets/${n}/finish`, { claim_id, summary: "Done.", branch: id, commit: "abc" });
-    await human(`/api/p/acme/tickets/${n}/accept`, {});
-    await human("/api/p/acme/set_landing_method", { method: "merge", push: true, remote: "origin" });
-    await human("/api/p/acme/set_ci_tracking", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+    await svc.human(`/api/p/acme/tickets/${n}/accept`, {});
+    await svc.human("/api/p/acme/set_landing_method", { method: "merge", push: true, remote: "origin" });
+    await svc.human("/api/p/acme/set_ci_tracking", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
 
     // The human has Focus Mode open before anything needs them.
     await page.goto(svc.url + "/?view=focus");
@@ -80,7 +69,9 @@ describe("end-to-end: the human lands a CI failed Ticket anyway from Focus Mode"
     const panel = item.getByRole("region", { name: "CI failed" });
     await panel.waitFor();
     await item.getByText("CI failed", { exact: true }).first().waitFor();
-    expect(await item.getByText(id, { exact: true }).count()).toBe(1);
+    expect(await item.locator(".focus-ticket").textContent()).toBe(id);
+    // The Accepted panel's Land and Cancel stay below the failure options.
+    await item.getByRole("region", { name: "Accepted" }).getByRole("button", { name: "Cancel" }).waitFor();
     const ci = panel.getByRole("region", { name: "CI" });
     expect(await ci.getByRole("link", { name: "CI" }).getAttribute("href")).toBe("https://github.com/acme/web/actions/runs/1");
     await ci.getByRole("link", { name: "test" }).waitFor();

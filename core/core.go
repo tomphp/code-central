@@ -547,7 +547,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit})
 	}
 	v.PushedCommit, v.CIResult, v.CIRuns = ticketCI(r, key, t)
-	v.LandAnyway, v.CIFailureOptions = landAnyway(t), ciFailureOptions(r, key, t)
+	v.LandAnyway, v.CIFailureOptions = choseLandAnyway(t), ciFailureOptions(r, key, t)
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = c.reasonOf(r, key, t)

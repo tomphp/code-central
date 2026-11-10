@@ -66,19 +66,11 @@ func TestNeedsMeRowsCarryTheCIResult(t *testing.T) {
 	})
 	row := func() core.NeedsMeRow {
 		t.Helper()
-		v, err := srv.Client.NeedsMe(context.Background())
-		if err != nil {
-			t.Fatal(err)
+		r, ok := needsMeRowOf(t, srv, "acme-3")
+		if !ok {
+			t.Fatal("acme-3 isn't in Needs Me")
 		}
-		for _, g := range v.Groups {
-			for _, r := range g.Tickets {
-				if r.ID == "acme-3" {
-					return r
-				}
-			}
-		}
-		t.Fatalf("acme-3 isn't in Needs Me: %+v", v)
-		return core.NeedsMeRow{}
+		return r
 	}
 	if got := row().CIResult; got != "" {
 		t.Fatalf("before its push, ci_result %q, want none", got)

@@ -78,10 +78,17 @@ describe("the CI failed panel", () => {
     expect(within(p).queryByRole("button", { name: "Land anyway" })).toBeNull();
   });
 
+  it("keeps the Accepted panel's Land and Cancel below it", async () => {
+    const p = await pane(await world());
+    const accepted = within(p).getByRole("region", { name: "Accepted" });
+    expect(within(accepted).getByRole("button", { name: "Land" })).toBeInTheDocument();
+    expect(within(accepted).getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+  });
+
   it("doesn't offer Land anyway under Branch, where the human's merge decides", async () => {
     const p = await pane(await world("branch"));
     const options = within(p).getByRole("group", { name: "Failure options" });
-    expect(options).toHaveTextContent("your merge decides");
+    expect(options).toHaveTextContent("your merge decides: merge acme-1 into the base");
     expect(within(p).queryByRole("button", { name: "Land anyway" })).toBeNull();
   });
 

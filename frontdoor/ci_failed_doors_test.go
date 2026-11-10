@@ -50,10 +50,11 @@ func failedCI(t *testing.T, srv *codecentraltest.Server) {
 	reportRuns(t, srv, failed, ciRun(2, "lint.yml", "abc123", store.CICompleted, store.CISuccess))
 }
 
-// needsMeRowOf is id's Needs Me row, if it has one.
+// needsMeRowOf is id's Needs Me row, as the HTTP API gives it, if it has
+// one.
 func needsMeRowOf(t *testing.T, srv *codecentraltest.Server, id string) (core.NeedsMeRow, bool) {
 	t.Helper()
-	v, err := srv.Core.NeedsMe(context.Background())
+	v, err := srv.Client.NeedsMe(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -35,7 +35,7 @@ func ciFailure(r store.Reader, key string, t store.Ticket) (s CIFailureSummary, 
 	if t.State != store.Accepted || len(t.PushedCommits) == 0 {
 		return CIFailureSummary{}, time.Time{}, false
 	}
-	latest := t.PushedCommits[len(t.PushedCommits)-1]
+	latest := latestPushed(t)
 	if !latest.LandAnyway.IsZero() {
 		return CIFailureSummary{}, time.Time{}, false
 	}
@@ -75,11 +75,16 @@ func ciFailureOptions(r store.Reader, key string, t store.Ticket) []string {
 	return []string{OptionLandAnyway}
 }
 
-// landAnyway reports whether the human chose Land anyway for t's latest
-// pushed commit.
-func landAnyway(t store.Ticket) bool {
-	n := len(t.PushedCommits)
-	return n > 0 && !t.PushedCommits[n-1].LandAnyway.IsZero()
+// latestPushed is t's latest pushed commit, the one its CI result comes
+// from; t must have one.
+func latestPushed(t store.Ticket) store.PushedCommit {
+	return t.PushedCommits[len(t.PushedCommits)-1]
+}
+
+// choseLandAnyway reports whether the human chose Land anyway for t's
+// latest pushed commit.
+func choseLandAnyway(t store.Ticket) bool {
+	return len(t.PushedCommits) > 0 && !latestPushed(t).LandAnyway.IsZero()
 }
 
 // LandAnyway is the human's land_anyway(ticket): it accepts the failed CI
@@ -92,7 +97,7 @@ func (c *Core) LandAnyway(ctx context.Context, key string, in TicketInput) (Writ
 		return Written[TicketView]{}, err
 	}
 	return c.updateTicketIn(key, "land_anyway", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
-		if landAnyway(*t) && t.State == store.Accepted {
+		if choseLandAnyway(*t) && t.State == store.Accepted {
 			return false, nil
 		}
 		if !slices.Contains(ciFailureOptions(r, key, *t), OptionLandAnyway) {

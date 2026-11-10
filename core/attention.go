@@ -25,9 +25,10 @@ type AttentionTicket struct {
 	SilentClaim int
 	// LongClaim is the number of the live Claim while it is Long, else 0.
 	LongClaim int
-	// CIFailed is the pushed commit while the Ticket is CI failed, else "".
-	CIFailed string
-	NeedsMe  bool
+	// CIFailedCommit is the pushed commit while the Ticket is CI failed,
+	// else "".
+	CIFailedCommit string
+	NeedsMe        bool
 }
 
 // Attention returns every Ticket in every Project.
@@ -77,7 +78,7 @@ func (c *Core) attention(r store.Reader, key string, t store.Ticket) AttentionTi
 		}
 	}
 	if reason == ReasonCIFailed {
-		a.CIFailed = t.PushedCommits[len(t.PushedCommits)-1].Commit
+		a.CIFailedCommit = latestPushed(t).Commit
 	}
 	a.NeedsMe = reason != ""
 	return a

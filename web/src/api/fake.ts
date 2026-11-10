@@ -1389,6 +1389,9 @@ export class FakeApi implements Api {
     }
     if (reason) v.needs_me_reason = reason;
     else delete v.needs_me_reason;
+    // Only an Accepted Ticket is CI failed, as the service works it out on
+    // every read.
+    if (v.state !== "Accepted") delete v.ci_failure_options;
     return v;
   }
 }

@@ -205,7 +205,7 @@ func (w *watcher) observe(t core.AttentionTicket) {
 	if t.SilentClaim != 0 && t.SilentClaim != was.SilentClaim {
 		w.pending = append(w.pending, event{silentClaim, t})
 	}
-	if t.CIFailed != "" && t.CIFailed != was.CIFailed {
+	if t.CIFailedCommit != "" && t.CIFailedCommit != was.CIFailedCommit {
 		w.pending = append(w.pending, event{ciFailed, t})
 	}
 	if k := (longKey{t.ID, t.LongClaim}); t.LongClaim != 0 && !w.long[k] {
