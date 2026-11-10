@@ -43,6 +43,9 @@ type Core struct {
 	issuesCheck IssuesCheck
 	// watchers holds each Project's Watchers' statuses, in memory only.
 	watchers *watchers
+	// uiURL is the UI's address, which a comment written to an issue
+	// links back to; empty links relative to the UI.
+	uiURL string
 }
 
 // New returns a Core persisting through s, telling time with clk and

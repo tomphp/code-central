@@ -8,7 +8,7 @@ import (
 
 // The Issue Watcher's own operations (Spec code-central-279):
 // get_issue_watch, the one read it polls, and
-// report_issue_watcher_status. Unlike the CI Watcher, it writes as the
+// report_issue_watcher_status; report_issue_written is in writeback.go. Unlike the CI Watcher, it writes as the
 // integration Actor, and its status report is accepted from that Actor
 // only. Its status is kept with every kind of Watcher's, in watcher.go.
 
@@ -28,6 +28,9 @@ type IssueWatch struct {
 	// Issues are the Incoming Issues, in number order, so the Issue
 	// Watcher sees which issues it has and which have changed.
 	Issues []IncomingIssue `json:"issues"`
+	// Writes are the items whose issues have GitHub writes due, in number
+	// order (writeback.go).
+	Writes []IssueWrites `json:"writes"`
 }
 
 // IncomingIssue is a Ticket on the Issues Spec that isn't finished and
@@ -48,13 +51,19 @@ func (c *Core) GetIssueWatch(_ context.Context, key string) (IssueWatch, error) 
 			return unknownProject(key)
 		}
 		g := githubIssuesView(key, p.GitHubIssues, WatcherView{})
-		out = IssueWatch{Project: key, On: g.On, Repository: g.Repository, Label: g.Label, GHPath: r.Options().GHPath, Spec: g.Spec, Issues: []IncomingIssue{}}
+		out = IssueWatch{Project: key, On: g.On, Repository: g.Repository, Label: g.Label, GHPath: r.Options().GHPath, Spec: g.Spec, Issues: []IncomingIssue{}, Writes: []IssueWrites{}}
 		if p.GitHubIssues.Spec == 0 {
 			return nil
 		}
 		for _, t := range r.Tickets(key) {
-			if t.Spec == p.GitHubIssues.Spec && t.Link.Owned() && !finished(t.State) {
+			if t.Spec != p.GitHubIssues.Spec {
+				continue
+			}
+			if t.Link.Owned() && !finished(t.State) {
 				out.Issues = append(out.Issues, IncomingIssue{Ticket: DisplayID(key, t.Number), Link: *linkView(t.Link), Title: t.Title, Description: t.Description})
+			}
+			if w, ok := c.ticketIssueWrites(key, t); ok {
+				out.Writes = append(out.Writes, w)
 			}
 		}
 		return nil

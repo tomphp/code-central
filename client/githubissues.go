@@ -25,3 +25,10 @@ func (c *Client) GetIssueWatch(ctx context.Context, key string) (core.IssueWatch
 func (c *Client) ReportIssueWatcherStatus(ctx context.Context, key string, in core.ReportWatcherStatusInput) (core.Written[core.ProjectView], error) {
 	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/integration/report_issue_watcher_status", in, in.Full)
 }
+
+// ReportIssueWritten is the Issue Watcher's report_issue_written; set
+// Actor to integration.
+func (c *Client) ReportIssueWritten(ctx context.Context, key string, in core.ReportIssueWrittenInput) (core.LinkedRow, error) {
+	var out core.LinkedRow
+	return out, c.do(ctx, "POST", "/api/p/"+url.PathEscape(key)+"/integration/report_issue_written", in, &out)
+}

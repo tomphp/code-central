@@ -99,7 +99,10 @@ func NewServer(t testing.TB, opts ...Option) *Server {
 	c.SetUsage(usage.New(o.usageDir, clk, o.location, o.log))
 	c.SetCICheck(o.ciCheck)
 	c.SetIssuesCheck(o.issuesCheck)
-	hs := httptest.NewServer(frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), o.log), o.version))
+	hs := httptest.NewUnstartedServer(frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), o.log), o.version))
+	// Before serving, so a comment written to an issue links back here.
+	c.SetUIURL("http://" + hs.Listener.Addr().String())
+	hs.Start()
 	t.Cleanup(hs.Close)
 	return &Server{URL: hs.URL, Client: client.New(hs.URL), Clock: clk, Core: c, Store: s, UsageDir: o.usageDir}
 }

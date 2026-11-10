@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/tomoram/code-central/store"
@@ -15,12 +16,14 @@ import (
 // actions are the human's, offered on every Incoming Issue, awaiting
 // triage or not.
 
-// OptionKeepAsDraft is the triage action keep_as_draft.
-const OptionKeepAsDraft = "keep_as_draft"
+// The triage actions, each an operation's name.
+const (
+	OptionKeepAsDraft = "keep_as_draft"
+	OptionWontFix     = "wont_fix"
+)
 
-// triageActions are the triage actions, each an operation's name, in the
-// order they are offered.
-var triageActions = []string{OptionKeepAsDraft}
+// triageActions are the triage actions in the order they are offered.
+var triageActions = []string{OptionKeepAsDraft, OptionWontFix}
 
 // issuesSpec is the number of key's Issues Spec, 0 when it has none.
 func issuesSpec(r store.Reader, key string) int {
@@ -85,6 +88,44 @@ func (c *Core) KeepAsDraft(ctx context.Context, key string, in TicketInput) (Wri
 		}
 		if !t.AwaitingTriage {
 			return false, nil
+		}
+		t.AwaitingTriage = false
+		return true, nil
+	})
+}
+
+// WontFixInput is the human's wont_fix(ticket, reason?).
+type WontFixInput struct {
+	Ticket Ref    `json:"ticket"`
+	Reason string `json:"reason,omitempty"`
+	// Full asks for the Ticket in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
+}
+
+// WontFix is the human's wont_fix(ticket, reason?): it Cancels an
+// Incoming Issue as cancel does, with the reason as its comment, and
+// clears its awaiting triage. Its Move to Cancelled is via wont_fix, so
+// closing its issue as not planned is due, with the reason, if given, as
+// the wont-fix comment (writeback.go). Its Link stays attached.
+func (c *Core) WontFix(ctx context.Context, key string, in WontFixInput) (Written[TicketView], error) {
+	if err := humanOnly(ctx, OptionWontFix); err != nil {
+		return Written[TicketView]{}, err
+	}
+	return c.updateTicketIn(key, OptionWontFix, in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+		if why := whyNotIncoming(r, key, *t); why != "" {
+			return false, &Error{Code: ActionNotAllowed, Message: why}
+		}
+		before := *t
+		now := c.now()
+		if err := transition(ctx, t, key, "cancel", "", now); err != nil {
+			return false, err
+		}
+		if err := checkReplacements(r, key, before, nil); err != nil {
+			return false, err
+		}
+		t.Moves[len(t.Moves)-1].Via = OptionWontFix
+		if reason := strings.TrimSpace(in.Reason); reason != "" {
+			addComment(t, Human, now, 0, reason)
 		}
 		t.AwaitingTriage = false
 		return true, nil
