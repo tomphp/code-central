@@ -13,41 +13,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/store"
 )
-
-// Env is everything the CI Watcher touches outside itself, so tests can
-// run it in-process.
-type Env struct {
-	// Environ is the environment: it is read for PATH and ProgramFiles,
-	// and given to gh.
-	Environ []string
-	// InstallPlaces are the folders gh is looked for in when it isn't on
-	// PATH; nil means DefaultInstallPlaces.
-	InstallPlaces []string
-}
-
-func (e Env) getenv(key string) string {
-	for i := len(e.Environ) - 1; i >= 0; i-- {
-		if k, v, ok := strings.Cut(e.Environ[i], "="); ok && k == key {
-			return v
-		}
-	}
-	return ""
-}
 
 // Provider is a CI Provider: everything the CI Watcher knows about one
 // CI service sits behind it.
 type Provider interface {
 	// CheckAccess checks the CI Watcher can watch the repository: a
 	// result with no Problem when it can, else what is wrong and its fix.
-	// The CI Provider rate-limiting it is a *RateLimitError, as from
+	// The CI Provider rate-limiting it is a *gh.RateLimitError, as from
 	// every method: not a problem, just a wait.
-	CheckAccess(ctx context.Context) (core.CICheckResult, error)
+	CheckAccess(ctx context.Context) (core.WatcherCheckResult, error)
 	// RunsForCommit lists the workflow runs started for commit, with
 	// their statuses and conclusions mapped to Code Central's and no jobs.
 	RunsForCommit(ctx context.Context, commit string) ([]Run, error)
@@ -72,7 +52,7 @@ type Run struct {
 
 // NewProvider is the CI Provider provider for repository, finding gh
 // with ghPath, the gh path Option.
-func NewProvider(provider store.CIProvider, repository, ghPath string, env Env) (Provider, error) {
+func NewProvider(provider store.CIProvider, repository, ghPath string, env gh.Env) (Provider, error) {
 	switch provider {
 	case store.CIGitHubActions:
 		return &GitHubActions{Repository: repository, GHPath: ghPath, Env: env}, nil
@@ -84,15 +64,15 @@ func NewProvider(provider store.CIProvider, repository, ghPath string, env Env) 
 // Check is the check mode: whether the CI Watcher can watch in's
 // repository through its CI Provider. Being rate-limited fails the check,
 // as there is no knowing yet whether the repository can be read.
-func Check(ctx context.Context, in core.CICheckInput, env Env) core.CICheckResult {
+func Check(ctx context.Context, in core.CICheckInput, env gh.Env) core.WatcherCheckResult {
 	p, bad := provider(in, env)
 	if bad != nil {
 		return *bad
 	}
 	r, err := p.CheckAccess(ctx)
-	var limit *RateLimitError
+	var limit *gh.RateLimitError
 	if errors.As(err, &limit) {
-		r = core.CICheckResult{Problem: core.CICheckFailed, Reason: limit.Error(), Fix: "Try again in a few minutes."}
+		r = core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: limit.Error(), Fix: "Try again in a few minutes."}
 		if until := limit.Until(time.Now()); !until.IsZero() {
 			r.Fix = "Try again after " + until.Local().Format(time.Kitchen) + ", when GitHub's rate limit ends."
 		}
@@ -101,10 +81,10 @@ func Check(ctx context.Context, in core.CICheckInput, env Env) core.CICheckResul
 }
 
 // provider is in's CI Provider, or the problem with it.
-func provider(in core.CICheckInput, env Env) (Provider, *core.CICheckResult) {
+func provider(in core.CICheckInput, env gh.Env) (Provider, *core.WatcherCheckResult) {
 	p, err := NewProvider(in.Provider, in.Repository, in.GHPath, env)
 	if err != nil {
-		return nil, &core.CICheckResult{Problem: core.CICheckFailed, Reason: err.Error(), Fix: "Choose GitHub Actions as the CI Provider."}
+		return nil, &core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: err.Error(), Fix: "Choose GitHub Actions as the CI Provider."}
 	}
 	return p, nil
 }

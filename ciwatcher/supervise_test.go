@@ -11,6 +11,7 @@ import (
 	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/watchers"
 )
 
 // supervising is a real Code Central and the service's supervision of
@@ -59,8 +60,8 @@ func (s *supervising) start(program string) {
 	s.stop = cancel
 	go func() {
 		defer close(s.done)
-		ciwatcher.Supervise(ctx, ciwatcher.Supervision{
-			Projects: s.srv.Core, Program: program, Clock: s.srv.Clock, Log: s.log,
+		watchers.Supervise(ctx, watchers.Supervision{
+			Projects: s.srv.Core, Kinds: []watchers.Kind{ciwatcher.Kind}, Program: program, Clock: s.srv.Clock, Log: s.log,
 			Environ: append(s.h.Environ(s.h.Bin), "CODE_CENTRAL_URL="+s.srv.URL),
 		})
 	}()
@@ -71,9 +72,9 @@ func (s *supervising) start(program string) {
 }
 
 // status waits for key's CI Watcher status to be state, and returns it.
-func (s *supervising) status(key string, state core.CIWatcherState) core.CIWatcherView {
+func (s *supervising) status(key string, state core.WatcherState) core.WatcherView {
 	s.t.Helper()
-	var got core.CIWatcherView
+	var got core.WatcherView
 	codecentraltest.Eventually(s.t, func() bool {
 		p, err := s.srv.Client.GetProject(context.Background(), key)
 		if err != nil {
@@ -106,8 +107,8 @@ func (s *supervising) crashRuns(n int) {
 func (s *supervising) crashed(restarts string) {
 	s.t.Helper()
 	s.srv.Clock.BlockUntil(1)
-	got := s.status("acme", core.CIWatcherError)
-	if got.Problem != core.CICrashed || !strings.Contains(got.Message, "crashed, restarted "+restarts) ||
+	got := s.status("acme", core.WatcherError)
+	if got.Problem != core.ProblemCrashed || !strings.Contains(got.Message, "crashed, restarted "+restarts) ||
 		!strings.Contains(got.Message, "panic: the CI Watcher broke on purpose") || !strings.Contains(got.Fix, "service's log") {
 		s.t.Fatalf("status %+v, want crashed, restarted %s, with its last line on stderr", got, restarts)
 	}
@@ -130,12 +131,12 @@ func TestTheServiceStartsACIWatcherForEachProjectWithCITrackingOn(t *testing.T) 
 	s.project("acme", true)
 	s.project("beta", false)
 	s.start(s.h.CodeCentral)
-	s.status("acme", core.CIWatcherWatching)
+	s.status("acme", core.WatcherWatching)
 	s.logged("started the CI Watcher for acme", 1)
 
 	// Turning CI Tracking on starts one.
 	s.tracking("beta", true)
-	s.status("beta", core.CIWatcherWatching)
+	s.status("beta", core.WatcherWatching)
 	s.logged("started the CI Watcher for beta", 1)
 	if strings.Count(s.log.String(), "started the CI Watcher for acme") != 1 {
 		t.Fatalf("acme's CI Watcher started again:\n%s", s.log)
@@ -146,21 +147,21 @@ func TestTurningCITrackingOffStopsItsCIWatcher(t *testing.T) {
 	s := newSupervising(t)
 	s.project("acme", true)
 	s.start(s.h.CodeCentral)
-	s.status("acme", core.CIWatcherWatching)
+	s.status("acme", core.WatcherWatching)
 	s.tracking("acme", false)
 	s.logged("stopped the CI Watcher for acme", 1)
 
 	// And on again starts a new one.
 	s.tracking("acme", true)
 	s.logged("started the CI Watcher for acme", 2)
-	s.status("acme", core.CIWatcherWatching)
+	s.status("acme", core.WatcherWatching)
 }
 
 func TestArchivingAProjectStopsItsCIWatcher(t *testing.T) {
 	s := newSupervising(t)
 	s.project("acme", true)
 	s.start(s.h.CodeCentral)
-	s.status("acme", core.CIWatcherWatching)
+	s.status("acme", core.WatcherWatching)
 	if _, err := s.srv.Core.ArchiveProject(human, "acme"); err != nil {
 		t.Fatal(err)
 	}
@@ -177,8 +178,8 @@ func TestStoppingTheServiceStopsEveryCIWatcher(t *testing.T) {
 	s.project("acme", true)
 	s.project("beta", true)
 	s.start(s.h.CodeCentral)
-	s.status("acme", core.CIWatcherWatching)
-	s.status("beta", core.CIWatcherWatching)
+	s.status("acme", core.WatcherWatching)
+	s.status("beta", core.WatcherWatching)
 	s.stop()
 	select {
 	case <-s.done:
@@ -206,7 +207,7 @@ func TestACrashingCIWatcherIsRestartedWithBackoff(t *testing.T) {
 		s.restartsAfter(d, i+2)
 		s.crashed(fmt.Sprintf("%d times", i+2))
 	}
-	if got := s.srv.Core.CIWatcherAttention(context.Background()); len(got) != 1 || got[0].Errors != 1 {
+	if got := s.srv.Core.WatcherAttention(context.Background()); len(got) != 1 || got[0].Errors != 1 {
 		t.Fatalf("CI Watcher attention %+v, want one error, for one Notification", got)
 	}
 }

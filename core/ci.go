@@ -31,7 +31,7 @@ type CIView struct {
 	// Rules are the CI Rules, in the order they were added.
 	Rules []CIRuleView `json:"rules"`
 	// Watcher is the CI Watcher's status, as it last reported it.
-	Watcher CIWatcherView `json:"watcher"`
+	Watcher WatcherView `json:"watcher"`
 }
 
 // CIRuleView is one CI Rule: when Workflow fails on Branch, open a Ticket
@@ -45,7 +45,7 @@ type CIRuleView struct {
 	Created  time.Time   `json:"created"`
 }
 
-func ciView(key string, c store.CI, watcher CIWatcherView) CIView {
+func ciView(key string, c store.CI, watcher WatcherView) CIView {
 	v := CIView{Tracking: c.Tracking, Provider: c.Provider, Repository: c.Repository,
 		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}, Watcher: watcher}
 	for _, r := range c.Rules {
@@ -112,30 +112,12 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 		ci.PushRemoteURL, ci.Rules = p.PushRemoteURL, p.Rules
 		// What the CI Watcher said was about the old settings.
 		if !ci.Tracking || ci.Provider != p.Provider || ci.Repository != p.Repository {
-			c.ciWatchers.reset(key)
+			c.watchers.reset(watcherKey{WatcherCI, key})
 		}
 		*p = ci
 		return nil
 	})
 }
-
-// CIProblem names why the CI Watcher can't watch a repository.
-type CIProblem string
-
-// The CI problems, each with its own fix.
-const (
-	// CIGHMissing is gh, the GitHub CLI, found nowhere Code Central looks.
-	CIGHMissing CIProblem = "gh_missing"
-	// CILoggedOut is gh with no login: gh auth status fails.
-	CILoggedOut CIProblem = "logged_out"
-	// CIRepositoryUnreadable is a repository gh's login can't read.
-	CIRepositoryUnreadable CIProblem = "repository_unreadable"
-	// CICheckFailed is a check that didn't run to an answer.
-	CICheckFailed CIProblem = "check_failed"
-	// CICrashed is a CI Watcher that exited without being stopped. The
-	// service reports it, never the CI Watcher.
-	CICrashed CIProblem = "crashed"
-)
 
 // CICheckInput is what the CI Watcher's check mode checks: that it can
 // watch the repository through the CI Provider, finding gh with the gh
@@ -146,18 +128,10 @@ type CICheckInput struct {
 	GHPath     string           `json:"gh_path,omitempty"`
 }
 
-// CICheckResult is the check mode's answer: no Problem when the CI
-// Watcher can watch the repository, else what is wrong and its fix.
-type CICheckResult struct {
-	Problem CIProblem `json:"problem,omitempty"`
-	Reason  string    `json:"reason,omitempty"`
-	Fix     string    `json:"fix,omitempty"`
-}
-
 // CICheck runs the CI Watcher once in its check mode. The service makes
 // no external calls itself (ADR 0002, ADR 0004), so the check runs in the
 // CI Watcher's process.
-type CICheck func(ctx context.Context, in CICheckInput) CICheckResult
+type CICheck func(ctx context.Context, in CICheckInput) WatcherCheckResult
 
 // SetCICheck makes c run check when CI Tracking is turned on. Call it
 // before serving; without it, nothing is checked.
@@ -189,7 +163,7 @@ func (c *Core) checkCI(ctx context.Context, key string, ci store.CI) error {
 		return nil
 	}
 	field := "tracking"
-	if res.Problem == CIRepositoryUnreadable {
+	if res.Problem == ProblemRepositoryUnreadable {
 		field = "repository"
 	}
 	return &Error{Code: Invalid, Field: field, Message: res.Reason, Fix: res.Fix}

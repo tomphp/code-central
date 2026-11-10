@@ -2,7 +2,7 @@
 
 // How a program is found on Unix.
 
-package ciwatcher
+package gh
 
 import "os"
 

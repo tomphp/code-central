@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/gh"
 )
 
 // Command is the hidden subcommand the CI Watcher runs as.
@@ -34,7 +35,7 @@ const checkLimit = time.Minute
 // executable, run once in the CI Watcher's check mode with environ, the
 // service's environment, so gh is found on the service's PATH.
 func Checker(program string, environ []string) core.CICheck {
-	return func(ctx context.Context, in core.CICheckInput) core.CICheckResult {
+	return func(ctx context.Context, in core.CICheckInput) core.WatcherCheckResult {
 		ctx, cancel := context.WithTimeout(ctx, checkLimit)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, program, CheckArgs(in)...)
@@ -42,15 +43,15 @@ func Checker(program string, environ []string) core.CICheck {
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 		err := cmd.Run()
-		var r core.CICheckResult
+		var r core.WatcherCheckResult
 		if err == nil {
 			err = json.Unmarshal(stdout.Bytes(), &r)
 		}
 		if err != nil {
-			if line := firstLine(stderr.String()); line != "" {
+			if line := gh.FirstLine(stderr.String()); line != "" {
 				err = fmt.Errorf("%w: %s", err, line)
 			}
-			return core.CICheckResult{Problem: core.CICheckFailed, Reason: fmt.Sprintf("The CI Watcher's check didn't finish: %v", err),
+			return core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: fmt.Sprintf("The CI Watcher's check didn't finish: %v", err),
 				Fix: "Check the service's log, then turn CI Tracking on again."}
 		}
 		return r

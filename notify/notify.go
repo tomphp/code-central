@@ -2,7 +2,8 @@
 // waiting on the human: a new Round, a new Failure Report, a Claim
 // turning Silent, a Claim turning Long (once per Claim), a Ticket going
 // to CI failed (once per pushed commit), or a Project's
-// CI Watcher going into an error (once each time, not once per poll).
+// Watcher, such as its CI Watcher, going into an error (once each time,
+// not once per poll).
 // It listens to core's change notices and also looks at every Ticket on its own timer, as the spec has it: serve's
 // core.WatchTimedReasons does publish a notice when a Claim turns Silent, but
 // the events bus drops notices for a slow subscriber, and the timer is
@@ -15,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
@@ -50,7 +52,7 @@ type Source interface {
 	Events() *events.Bus
 	Attention(context.Context) []core.AttentionTicket
 	AttentionOf(ctx context.Context, project, id string) (core.AttentionTicket, bool)
-	CIWatcherAttention(context.Context) []core.CIWatcherAttention
+	WatcherAttention(context.Context) []core.WatcherAttention
 }
 
 // Config wires notify.
@@ -72,7 +74,7 @@ const (
 	newFailure
 	silentClaim
 	longClaim
-	ciWatcherError
+	watcherError
 	ciFailed
 )
 
@@ -83,17 +85,19 @@ var reasons = [...]struct{ title, one, many string }{
 	newFailure:  {"%s has a new Failure Report", "failure", "failures"},
 	silentClaim: {"%s has a Silent Claim", "Silent Claim", "Silent Claims"},
 	longClaim:   {"%s has a Long Claim", "Long Claim", "Long Claims"},
-	// %s is the Project's key.
-	ciWatcherError: {"%s's CI Watcher is in error", "CI Watcher error", "CI Watcher errors"},
-	ciFailed:       {"%s's CI failed", "CI failure", "CI failures"},
+	// %s is the Project's key, then the kind of Watcher's name; a summary
+	// counts it after that name, as in "1 CI Watcher error".
+	watcherError: {"%s's %s is in error", "error", "errors"},
+	ciFailed:     {"%s's CI failed", "CI failure", "CI failures"},
 }
 
-// event is one thing to notify. A CI Watcher error is about a Project,
-// not a Ticket: its ticket carries only the Project and, as its title,
-// the error's message.
+// event is one thing to notify. A Watcher error is about a Project, not
+// a Ticket: its ticket carries only the Project and, as its title, the
+// error's message, and watcher is its kind.
 type event struct {
-	reason reason
-	ticket core.AttentionTicket
+	reason  reason
+	ticket  core.AttentionTicket
+	watcher core.WatcherKind
 }
 
 // Start takes its first look at every Ticket, sends the startup summary if
@@ -103,7 +107,7 @@ func Start(ctx context.Context, cfg Config) {
 	if cfg.Log == nil {
 		cfg.Log = io.Discard
 	}
-	w := &watcher{cfg: cfg, known: map[string]core.AttentionTicket{}, long: map[longKey]bool{}, ciErrors: map[string]int{}}
+	w := &watcher{cfg: cfg, known: map[string]core.AttentionTicket{}, long: map[longKey]bool{}, watcherErrors: map[watcherKey]int{}}
 	// Subscribe before the first look so no change falls between them.
 	notices, stop := cfg.Source.Events().Subscribe()
 	all := cfg.Source.Attention(ctx)
@@ -113,8 +117,8 @@ func Start(ctx context.Context, cfg Config) {
 			w.long[longKey{t.ID, t.LongClaim}] = true
 		}
 	}
-	for _, a := range cfg.Source.CIWatcherAttention(ctx) {
-		w.ciErrors[a.Project] = a.Errors
+	for _, a := range cfg.Source.WatcherAttention(ctx) {
+		w.watcherErrors[watcherKey{a.Kind, a.Project}] = a.Errors
 	}
 	w.startup(all)
 	go func() {
@@ -130,9 +134,15 @@ type watcher struct {
 	// long is every Claim already counted as Long: one Notification each,
 	// however often it stops and starts being Long.
 	long map[longKey]bool
-	// ciErrors is how often each Project's CI Watcher had gone into an
-	// error at the last look.
-	ciErrors map[string]int
+	// watcherErrors is how often each Project's Watcher of each kind had
+	// gone into an error at the last look.
+	watcherErrors map[watcherKey]int
+}
+
+// watcherKey names one Project's Watcher of one kind.
+type watcherKey struct {
+	kind    core.WatcherKind
+	project string
 }
 
 // longKey names one Claim by its Ticket's display ID and its number.
@@ -157,7 +167,7 @@ func (w *watcher) run(ctx context.Context, notices <-chan events.Event) {
 			for _, t := range w.cfg.Source.Attention(ctx) {
 				w.observe(t)
 			}
-			w.observeCIWatchers(ctx)
+			w.observeWatchers(ctx)
 			tick = w.cfg.Clock.After(Tick)
 		case <-window:
 			// Every notice published before the window closed is already
@@ -181,7 +191,7 @@ func (w *watcher) run(ctx context.Context, notices <-chan events.Event) {
 
 func (w *watcher) notice(ctx context.Context, e events.Event) {
 	if e.Type == events.ProjectChanged {
-		w.observeCIWatchers(ctx)
+		w.observeWatchers(ctx)
 		return
 	}
 	if e.Type != events.TicketChanged {
@@ -197,31 +207,32 @@ func (w *watcher) observe(t core.AttentionTicket) {
 	was := w.known[t.ID]
 	w.known[t.ID] = t
 	for range t.Rounds - was.Rounds {
-		w.pending = append(w.pending, event{newRound, t})
+		w.pending = append(w.pending, event{reason: newRound, ticket: t})
 	}
 	for range t.FailureReports - was.FailureReports {
-		w.pending = append(w.pending, event{newFailure, t})
+		w.pending = append(w.pending, event{reason: newFailure, ticket: t})
 	}
 	if t.SilentClaim != 0 && t.SilentClaim != was.SilentClaim {
-		w.pending = append(w.pending, event{silentClaim, t})
+		w.pending = append(w.pending, event{reason: silentClaim, ticket: t})
 	}
 	if t.CIFailedCommit != "" && t.CIFailedCommit != was.CIFailedCommit {
-		w.pending = append(w.pending, event{ciFailed, t})
+		w.pending = append(w.pending, event{reason: ciFailed, ticket: t})
 	}
 	if k := (longKey{t.ID, t.LongClaim}); t.LongClaim != 0 && !w.long[k] {
 		w.long[k] = true
-		w.pending = append(w.pending, event{longClaim, t})
+		w.pending = append(w.pending, event{reason: longClaim, ticket: t})
 	}
 }
 
-// observeCIWatchers gathers each CI Watcher that has gone into an error
-// since the last look: one event, however often it has.
-func (w *watcher) observeCIWatchers(ctx context.Context) {
-	for _, a := range w.cfg.Source.CIWatcherAttention(ctx) {
-		was := w.ciErrors[a.Project]
-		w.ciErrors[a.Project] = a.Errors
+// observeWatchers gathers each Watcher that has gone into an error since
+// the last look: one event, however often it has.
+func (w *watcher) observeWatchers(ctx context.Context) {
+	for _, a := range w.cfg.Source.WatcherAttention(ctx) {
+		k := watcherKey{a.Kind, a.Project}
+		was := w.watcherErrors[k]
+		w.watcherErrors[k] = a.Errors
 		if a.Errors > was {
-			w.pending = append(w.pending, event{ciWatcherError, core.AttentionTicket{Project: a.Project, Title: a.LastError}})
+			w.pending = append(w.pending, event{reason: watcherError, ticket: core.AttentionTicket{Project: a.Project, Title: a.LastError}, watcher: a.Kind})
 		}
 	}
 }
@@ -247,9 +258,9 @@ func (w *watcher) send(n Notification) {
 }
 
 func (w *watcher) single(e event) Notification {
-	if e.reason == ciWatcherError {
+	if e.reason == watcherError {
 		return Notification{
-			Title: fmt.Sprintf(reasons[e.reason].title, e.ticket.Project), Body: e.ticket.Title,
+			Title: fmt.Sprintf(reasons[e.reason].title, e.ticket.Project, e.watcher.Name()), Body: e.ticket.Title,
 			URL: w.cfg.BaseURL + "/?view=project-options&project=" + url.QueryEscape(e.ticket.Project),
 		}
 	}
@@ -261,14 +272,23 @@ func (w *watcher) single(e event) Notification {
 
 func (w *watcher) summary(es []event) Notification {
 	var counts [len(reasons)]int
+	watchers := map[core.WatcherKind]int{}
 	var projects []string
 	for _, e := range es {
 		counts[e.reason]++
+		if e.reason == watcherError {
+			watchers[e.watcher]++
+		}
 		projects = append(projects, e.ticket.Project)
 	}
 	var parts []string
 	for r, words := range reasons {
-		if n := counts[r]; n > 0 {
+		if r == int(watcherError) {
+			for _, kind := range slices.Sorted(maps.Keys(watchers)) {
+				name := kind.Name() + " "
+				parts = append(parts, plural(watchers[kind], name+words.one, name+words.many))
+			}
+		} else if n := counts[r]; n > 0 {
 			parts = append(parts, plural(n, words.one, words.many))
 		}
 	}

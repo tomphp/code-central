@@ -13,6 +13,8 @@ import (
 
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/watchers"
 )
 
 // Interval is how long the CI Watcher waits between polls while nothing
@@ -29,7 +31,7 @@ const (
 // one.
 type Client interface {
 	GetCIWatch(ctx context.Context, key string) (core.CIWatch, error)
-	ReportCIWatcherStatus(ctx context.Context, key string, in core.ReportCIWatcherStatusInput) (core.Written[core.ProjectView], error)
+	ReportCIWatcherStatus(ctx context.Context, key string, in core.ReportWatcherStatusInput) (core.Written[core.ProjectView], error)
 	ReportCIRuns(ctx context.Context, key string, in core.ReportCIRunsInput) (core.Written[core.CIRunsView], error)
 	FindTickets(ctx context.Context, key string, in core.FindTicketsInput) ([]core.TicketRow, error)
 	CreateTicket(ctx context.Context, key string, in core.CreateTicketInput) (core.Written[core.TicketView], error)
@@ -40,7 +42,7 @@ type Client interface {
 type Config struct {
 	Client  Client
 	Project string
-	Env     Env
+	Env     gh.Env
 	Clock   clock.Clock
 	// Stdin is a pipe from the service: the CI Watcher exits when it
 	// closes, as a stopped Windows scheduled task doesn't kill its
@@ -49,6 +51,9 @@ type Config struct {
 	// Log receives what goes wrong reaching Code Central.
 	Log io.Writer
 }
+
+// Kind is the CI Watcher as the service's supervision runs it.
+var Kind = watchers.Kind{Kind: core.WatcherCI, Args: WatchArgs}
 
 // WatchArgs are the arguments that run program's CI Watcher in its watch
 // mode for project, after the program itself.
@@ -70,14 +75,8 @@ func WatchArgs(project string) []string { return []string{Command, "--project", 
 // MaxRateLimitInterval; it reports Watching with when it calls again, as
 // being rate-limited isn't an error.
 func Watch(ctx context.Context, cfg Config) error {
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := watchers.UntilStdinCloses(ctx, cfg.Stdin)
 	defer cancel()
-	if cfg.Stdin != nil {
-		go func() {
-			io.Copy(io.Discard, cfg.Stdin)
-			cancel()
-		}()
-	}
 	w := &watcher{Config: cfg, reported: map[runKey]time.Time{}, rerunAsked: map[rerunKey]bool{}, fired: map[runKey]bool{}}
 	// backoff is the doubled interval while rate-limited with no reset
 	// time; zero once a poll isn't rate-limited.
@@ -100,7 +99,7 @@ func Watch(ctx context.Context, cfg Config) error {
 			backoff = 0
 		}
 		if res.reachable {
-			w.report(ctx, core.ReportCIWatcherStatusInput{State: core.CIWatcherWatching, RateLimitedUntil: until})
+			w.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherWatching, RateLimitedUntil: until})
 		}
 		select {
 		case <-ctx.Done():
@@ -149,7 +148,7 @@ type pollResult struct {
 	// reports Watching; a poll that finds an error reports it itself.
 	reachable bool
 	// limit is the CI Provider's rate limit, if it refused a call for it.
-	limit *RateLimitError
+	limit *gh.RateLimitError
 }
 
 // poll is one poll.
@@ -164,7 +163,7 @@ func (w *watcher) poll(ctx context.Context) (res pollResult) {
 	}
 	res.waiting = len(watch.Waiting) > 0
 	p, bad := provider(core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, GHPath: watch.GHPath}, w.Env)
-	var r core.CICheckResult
+	var r core.WatcherCheckResult
 	if bad != nil {
 		r = *bad
 	} else {
@@ -175,7 +174,7 @@ func (w *watcher) poll(ctx context.Context) (res pollResult) {
 		return res
 	}
 	if r.Problem != "" {
-		w.report(ctx, core.ReportCIWatcherStatusInput{State: core.CIWatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+		w.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
 		return res
 	}
 	if err == nil {
@@ -196,7 +195,7 @@ func (w *watcher) poll(ctx context.Context) (res pollResult) {
 }
 
 // report reports the CI Watcher's status.
-func (w *watcher) report(ctx context.Context, in core.ReportCIWatcherStatusInput) {
+func (w *watcher) report(ctx context.Context, in core.ReportWatcherStatusInput) {
 	if _, err := w.Client.ReportCIWatcherStatus(ctx, w.Project, in); err != nil && ctx.Err() == nil {
 		w.logf("report_ci_watcher_status: %v", err)
 	}
@@ -212,7 +211,7 @@ func (w *watcher) rerunFailed(ctx context.Context, p Provider, reruns []core.CIR
 			continue
 		}
 		err := p.RerunFailedJobs(ctx, r.ID)
-		var limit *RateLimitError
+		var limit *gh.RateLimitError
 		if errors.As(err, &limit) {
 			return limit
 		}
@@ -230,10 +229,10 @@ func (w *watcher) rerunFailed(ctx context.Context, p Provider, reruns []core.CIR
 // reportRuns lists the runs of each waiting pushed commit, fetches the
 // jobs of those that changed, and reports them tracked against the
 // commit's Ticket. A rate limit stops it calling the CI Provider: it
-// reports what changed so far and returns the *RateLimitError.
+// reports what changed so far and returns the *gh.RateLimitError.
 func (w *watcher) reportRuns(ctx context.Context, p Provider, waiting []core.CIWaitingCommit) error {
 	var changed []Run
-	var limit *RateLimitError
+	var limit *gh.RateLimitError
 list:
 	for _, c := range waiting {
 		runs, err := p.RunsForCommit(ctx, c.Commit)

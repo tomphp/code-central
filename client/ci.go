@@ -41,7 +41,7 @@ func (c *Client) GetCIWatch(ctx context.Context, key string) (core.CIWatch, erro
 }
 
 // ReportCIWatcherStatus is the CI Watcher's report_ci_watcher_status.
-func (c *Client) ReportCIWatcherStatus(ctx context.Context, key string, in core.ReportCIWatcherStatusInput) (core.Written[core.ProjectView], error) {
+func (c *Client) ReportCIWatcherStatus(ctx context.Context, key string, in core.ReportWatcherStatusInput) (core.Written[core.ProjectView], error) {
 	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_ci_watcher_status", in, in.Full)
 }
 

@@ -1,29 +1,21 @@
 // GitHub Actions, the only CI Provider: the CI Watcher reaches GitHub
-// through gh, the GitHub CLI, and its own login, so Code Central stores
-// no GitHub token.
+// through gh, the GitHub CLI, and its own login (package gh), so Code
+// Central stores no GitHub token.
 
 package ciwatcher
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/textproto"
 	"net/url"
-	"os"
-	"os/exec"
 	"path"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/gh"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -34,150 +26,32 @@ type GitHubActions struct {
 	// GHPath is the gh path Option: gh itself, or the folder it is in;
 	// "" finds it on PATH, then in the install places.
 	GHPath string
-	Env    Env
-}
-
-// DefaultInstallPlaces are where gh's installers put it: Homebrew on
-// Apple silicon and Intel Macs, Homebrew on Linux, and the Windows
-// installer under %ProgramFiles%.
-func DefaultInstallPlaces(getenv func(string) string) []string {
-	places := []string{"/opt/homebrew/bin", "/usr/local/bin", "/home/linuxbrew/.linuxbrew/bin"}
-	if pf := getenv("ProgramFiles"); pf != "" {
-		places = append(places, filepath.Join(pf, "GitHub CLI"))
-	}
-	return places
-}
-
-// ghMissing is the problem of a gh found nowhere it was looked for.
-func ghMissing(reason string) core.CICheckResult {
-	return core.CICheckResult{Problem: core.CIGHMissing, Reason: reason,
-		Fix: "Install gh, the GitHub CLI (https://cli.github.com), or set the gh path Option to where it is."}
-}
-
-// FindGH finds gh: the gh path Option if set, else on PATH, else in the
-// install places. Not finding it is the gh missing problem.
-func (g *GitHubActions) FindGH() (string, *core.CICheckResult) {
-	if g.GHPath != "" {
-		if gh, ok := isProgram(g.GHPath); ok {
-			return gh, nil
-		}
-		if gh, ok := ghIn(g.GHPath); ok {
-			return gh, nil
-		}
-		r := ghMissing(fmt.Sprintf("The gh path Option is %s, but gh isn't there.", g.GHPath))
-		r.Fix = "Set the gh path Option to where gh is, or clear it to find gh on the service's PATH."
-		return "", &r
-	}
-	for _, dir := range filepath.SplitList(g.Env.getenv("PATH")) {
-		if gh, ok := ghIn(dir); ok {
-			return gh, nil
-		}
-	}
-	places := g.Env.InstallPlaces
-	if places == nil {
-		places = DefaultInstallPlaces(g.Env.getenv)
-	}
-	for _, dir := range places {
-		if gh, ok := ghIn(dir); ok {
-			return gh, nil
-		}
-	}
-	r := ghMissing(fmt.Sprintf("gh, the GitHub CLI, isn't on the service's PATH or in %s.", strings.Join(places, ", ")))
-	return "", &r
-}
-
-// ghIn is gh in the folder dir, if it is there.
-func ghIn(dir string) (string, bool) {
-	if dir == "" {
-		return "", false
-	}
-	return isProgram(filepath.Join(dir, "gh"+exeSuffix))
-}
-
-// isProgram reports whether path is a program that can be run.
-func isProgram(path string) (string, bool) {
-	fi, err := os.Stat(path)
-	return path, err == nil && !fi.IsDir() && executable(fi)
+	Env    gh.Env
 }
 
 // CheckAccess finds gh, checks its login with gh auth status, and reads
-// the repository. GitHub rate-limiting the read is a *RateLimitError, not
-// a problem.
-func (g *GitHubActions) CheckAccess(ctx context.Context) (core.CICheckResult, error) {
-	gh, missing := g.FindGH()
+// the repository. GitHub rate-limiting the read is a *gh.RateLimitError,
+// not a problem.
+func (g *GitHubActions) CheckAccess(ctx context.Context) (core.WatcherCheckResult, error) {
+	prog, missing := gh.Find(g.GHPath, g.Env)
 	if missing != nil {
 		return *missing, nil
 	}
-	if out, err := g.run(ctx, gh, "auth", "status", "--hostname", "github.com"); err != nil {
-		if r, ran := didntRun(gh, err); !ran {
-			return r, nil
-		}
-		// gh auth status calls GitHub too, and says so when that is
-		// rate-limited, with no reset time.
-		if strings.Contains(strings.ToLower(out), "rate limit") {
-			return core.CICheckResult{}, &RateLimitError{Message: rateLimitLine(out)}
-		}
-		return core.CICheckResult{Problem: core.CILoggedOut, Reason: "gh isn't logged in to GitHub: " + firstLine(out),
-			Fix: "Run `gh auth login` as the user the service runs as."}, nil
+	if r, err := gh.CheckLogin(ctx, g.Env, prog); r.Problem != "" || err != nil {
+		return r, err
 	}
-	if _, msg, err := g.callAPI(ctx, gh, "repos/"+g.Repository, "--jq", ".full_name"); err != nil {
-		var limit *RateLimitError
+	if _, msg, err := gh.API(ctx, g.Env, prog, "repos/"+g.Repository, "--jq", ".full_name"); err != nil {
+		var limit *gh.RateLimitError
 		if errors.As(err, &limit) {
-			return core.CICheckResult{}, limit
+			return core.WatcherCheckResult{}, limit
 		}
-		if r, ran := didntRun(gh, err); !ran {
+		if r, ran := gh.DidntRun(prog, err); !ran {
 			return r, nil
 		}
-		return core.CICheckResult{Problem: core.CIRepositoryUnreadable, Reason: fmt.Sprintf("gh can't read the repository %s: %s", g.Repository, msg),
+		return core.WatcherCheckResult{Problem: core.ProblemRepositoryUnreadable, Reason: fmt.Sprintf("gh can't read the repository %s: %s", g.Repository, msg),
 			Fix: "Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it."}, nil
 	}
-	return core.CICheckResult{}, nil
-}
-
-// run runs gh with args, never prompting, and returns its output:
-// stderr's when it fails, as gh writes its errors there.
-func (g *GitHubActions) run(ctx context.Context, gh string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, gh, args...)
-	cmd.Env = append(append([]string{}, g.Env.Environ...), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err := cmd.Run()
-	out := stdout.String()
-	if err != nil && strings.TrimSpace(stderr.String()) != "" {
-		out = stderr.String()
-	}
-	return out, err
-}
-
-// rateLimitLine is the line of out that names the rate limit.
-func rateLimitLine(out string) string {
-	for _, l := range strings.Split(out, "\n") {
-		if strings.Contains(strings.ToLower(l), "rate limit") {
-			return strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "-X "))
-		}
-	}
-	return firstLine(out)
-}
-
-// didntRun is the check failing because gh didn't run at all, rather
-// than running and saying no; ran is true when it did run.
-func didntRun(gh string, err error) (r core.CICheckResult, ran bool) {
-	var exit *exec.ExitError
-	if errors.As(err, &exit) && exit.Exited() {
-		return r, true
-	}
-	return core.CICheckResult{Problem: core.CICheckFailed, Reason: fmt.Sprintf("gh at %s didn't run: %v", gh, err),
-		Fix: "Check gh runs for the user the service runs as, or set the gh path Option to one that does."}, false
-}
-
-// firstLine is s's first line with text on it, trimmed.
-func firstLine(s string) string {
-	for _, l := range strings.Split(s, "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			return l
-		}
-	}
-	return ""
+	return core.WatcherCheckResult{}, nil
 }
 
 // ghRun is a workflow run as GitHub's REST API gives it.
@@ -277,12 +151,12 @@ func (g *GitHubActions) Jobs(ctx context.Context, id int64, attempt int) ([]core
 // RerunFailedJobs asks GitHub to re-run the failed jobs of a run, which
 // starts its next attempt.
 func (g *GitHubActions) RerunFailedJobs(ctx context.Context, id int64) error {
-	gh, missing := g.FindGH()
+	prog, missing := gh.Find(g.GHPath, g.Env)
 	if missing != nil {
 		return errors.New(missing.Reason)
 	}
 	path := fmt.Sprintf("repos/%s/actions/runs/%d/rerun-failed-jobs", g.Repository, id)
-	if _, msg, err := g.callAPI(ctx, gh, path, "--method", "POST"); err != nil {
+	if _, msg, err := gh.API(ctx, g.Env, prog, path, "--method", "POST"); err != nil {
 		return fmt.Errorf("gh api %s: %w: %s", path, err, msg)
 	}
 	return nil
@@ -290,11 +164,11 @@ func (g *GitHubActions) RerunFailedJobs(ctx context.Context, id int64) error {
 
 // api reads path from GitHub's REST API through gh into out.
 func (g *GitHubActions) api(ctx context.Context, path string, out any) error {
-	gh, missing := g.FindGH()
+	prog, missing := gh.Find(g.GHPath, g.Env)
 	if missing != nil {
 		return errors.New(missing.Reason)
 	}
-	body, msg, err := g.callAPI(ctx, gh, path)
+	body, msg, err := gh.API(ctx, g.Env, prog, path)
 	if err != nil {
 		return fmt.Errorf("gh api %s: %w: %s", path, err, msg)
 	}
@@ -302,97 +176,6 @@ func (g *GitHubActions) api(ctx context.Context, path string, out any) error {
 		return fmt.Errorf("gh api %s: %v", path, err)
 	}
 	return nil
-}
-
-// callAPI runs gh api path with args, never prompting, and with --include,
-// so the response's headers say when a rate limit ends. It returns the
-// response's body and, when it fails, the first line gh wrote to stderr;
-// GitHub refusing it for a rate limit is a *RateLimitError.
-func (g *GitHubActions) callAPI(ctx context.Context, gh, path string, args ...string) (body []byte, msg string, err error) {
-	cmd := exec.CommandContext(ctx, gh, append(append([]string{"api", path}, args...), "--include")...)
-	cmd.Env = append(append([]string{}, g.Env.Environ...), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err = cmd.Run()
-	status, header, body := response(stdout.Bytes())
-	if err == nil {
-		return body, "", nil
-	}
-	msg = firstLine(stderr.String())
-	if limit := rateLimit(status, header, msg); limit != nil {
-		return nil, msg, limit
-	}
-	return nil, msg, err
-}
-
-// response splits what gh api --include prints into the status, the
-// headers and the body. Output with no status line is all body.
-func response(out []byte) (status int, header http.Header, body []byte) {
-	if !bytes.HasPrefix(out, []byte("HTTP/")) {
-		return 0, http.Header{}, out
-	}
-	r := bufio.NewReader(bytes.NewReader(out))
-	tp := textproto.NewReader(r)
-	line, err := tp.ReadLine()
-	if err != nil {
-		return 0, http.Header{}, out
-	}
-	if _, code, ok := strings.Cut(line, " "); ok {
-		code, _, _ = strings.Cut(code, " ")
-		status, _ = strconv.Atoi(code)
-	}
-	h, err := tp.ReadMIMEHeader()
-	if err != nil && !errors.Is(err, io.EOF) {
-		return status, http.Header{}, out
-	}
-	body, _ = io.ReadAll(r)
-	return status, http.Header(h), body
-}
-
-// RateLimitError is GitHub refusing a call for its rate limit.
-type RateLimitError struct {
-	// Reset is when GitHub said the limit ends, and RetryAfter how long
-	// it said to wait; both are zero when it said neither.
-	Reset      time.Time
-	RetryAfter time.Duration
-	// Message is what gh said.
-	Message string
-}
-
-func (e *RateLimitError) Error() string { return "GitHub is rate-limiting gh: " + e.Message }
-
-// Until is when the CI Watcher may call GitHub again, from now; zero
-// when GitHub didn't say.
-func (e *RateLimitError) Until(now time.Time) time.Time {
-	if e.RetryAfter > 0 {
-		return now.Add(e.RetryAfter)
-	}
-	return e.Reset
-}
-
-// rateLimit is the rate limit a failed call's answer says GitHub refused
-// it for, or nil: a 403 or 429 with no requests remaining, or one saying
-// how long to wait, or a message naming a rate limit, as GitHub's
-// secondary rate limits may give with neither.
-func rateLimit(status int, header http.Header, msg string) *RateLimitError {
-	if status != 0 && status != http.StatusForbidden && status != http.StatusTooManyRequests {
-		return nil
-	}
-	limit := &RateLimitError{Message: msg}
-	limited := strings.Contains(strings.ToLower(msg), "rate limit")
-	if secs, err := strconv.Atoi(header.Get("Retry-After")); err == nil && secs > 0 {
-		limit.RetryAfter, limited = time.Duration(secs)*time.Second, true
-	}
-	if header.Get("X-Ratelimit-Remaining") == "0" {
-		limited = true
-		if reset, err := strconv.ParseInt(header.Get("X-Ratelimit-Reset"), 10, 64); err == nil && reset > 0 {
-			limit.Reset = time.Unix(reset, 0).UTC()
-		}
-	}
-	if !limited {
-		return nil
-	}
-	return limit
 }
 
 // workflowName is a workflow's file base name from the run's workflow

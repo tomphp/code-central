@@ -87,7 +87,7 @@ func TestTheCIViewListsInProgressRunsFirstThenTheLastSevenDaysFinished(t *testin
 		t.Fatalf("row %+v, want everything the CI Watcher reported of it", r)
 	}
 	if len(v.Projects) != 1 || v.Projects[0].Project != "acme" || !v.Projects[0].Tracking || v.Projects[0].Repository != "acme/web" ||
-		v.Projects[0].Watcher.State != core.CIWatcherNotReported {
+		v.Projects[0].Watcher.State != core.WatcherNotReported {
 		t.Fatalf("projects %+v, want acme's CI Watcher, not reported yet", v.Projects)
 	}
 }
@@ -120,7 +120,7 @@ func TestTheCIViewForAllProjectsHasEveryActiveProjectWithCITrackingOn(t *testing
 		return err
 	})
 	must(t, func() error {
-		_, err := srv.Client.ReportCIWatcherStatus(context.Background(), "other", core.ReportCIWatcherStatusInput{State: core.CIWatcherWatching})
+		_, err := srv.Client.ReportCIWatcherStatus(context.Background(), "other", core.ReportWatcherStatusInput{State: core.WatcherWatching})
 		return err
 	})
 	must(t, func() error {

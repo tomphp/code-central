@@ -21,6 +21,7 @@ import (
 	"github.com/tomoram/code-central/notify"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/usage"
+	"github.com/tomoram/code-central/watchers"
 	"github.com/tomoram/code-central/web"
 )
 
@@ -173,7 +174,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	for _, l := range listeners {
 		bound = append(bound, l.Addr().String())
 	}
-	// Serve returns once every CI Watcher has stopped, so none outlives
+	// Serve returns once every Watcher has stopped, so none outlives
 	// it; one that does, if the service is killed, exits when the pipe
 	// that is its stdin closes.
 	superviseCtx, stopSupervising := context.WithCancel(ctx)
@@ -185,9 +186,9 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	return serveOn(ctx, listeners, handler, func() {
 		go func() {
 			defer close(supervised)
-			ciTicker := time.NewTicker(time.Minute)
-			defer ciTicker.Stop()
-			ciwatcher.Supervise(superviseCtx, ciwatcher.Supervision{Projects: c, Program: self, Clock: clk, Tick: ciTicker.C, Log: e.Stderr,
+			ticker := time.NewTicker(time.Minute)
+			defer ticker.Stop()
+			watchers.Supervise(superviseCtx, watchers.Supervision{Projects: c, Kinds: []watchers.Kind{ciwatcher.Kind}, Program: self, Clock: clk, Tick: ticker.C, Log: e.Stderr,
 				Environ: append(os.Environ(), "CODE_CENTRAL_URL=http://"+bound[0])})
 		}()
 		if e.Notifier != nil && local.Notifications == "on" && !o.noNotify {

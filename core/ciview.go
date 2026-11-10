@@ -38,10 +38,10 @@ type CIOverview struct {
 // CIProjectStatus is one Project's CI Tracking and its CI Watcher's
 // status, as the CI view heads its runs with them.
 type CIProjectStatus struct {
-	Project    string        `json:"project"`
-	Tracking   bool          `json:"tracking"`
-	Repository string        `json:"repository"`
-	Watcher    CIWatcherView `json:"watcher"`
+	Project    string      `json:"project"`
+	Tracking   bool        `json:"tracking"`
+	Repository string      `json:"repository"`
+	Watcher    WatcherView `json:"watcher"`
 }
 
 // CIRunRow is one CI Run in the CI view, with its Project.
@@ -79,7 +79,7 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 			}
 		}
 		for _, p := range projects {
-			out.Projects = append(out.Projects, CIProjectStatus{Project: p.Key, Tracking: p.CI.Tracking, Repository: p.CI.Repository, Watcher: c.ciWatchers.view(p.Key)})
+			out.Projects = append(out.Projects, CIProjectStatus{Project: p.Key, Tracking: p.CI.Tracking, Repository: p.CI.Repository, Watcher: c.watchers.view(watcherKey{WatcherCI, p.Key})})
 			for _, run := range latestAttempts(keptCIRuns(r.CIRuns(p.Key), now)) {
 				if in.Running {
 					if runningForTicket(r, p.Key, run) {

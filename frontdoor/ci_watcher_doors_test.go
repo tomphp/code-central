@@ -245,12 +245,12 @@ func TestTheCIWatcherCantReportItsOwnCrash(t *testing.T) {
 
 // A crash streak stays shown, with one Notification, even when the
 // restarted CI Watcher reports Watching before crashing again, until it
-// has run CIWatcherSteadyAfter from its restart.
+// has run WatcherSteadyAfter from its restart.
 func TestACrashStaysShownUntilTheCIWatcherHasRunSteadily(t *testing.T) {
 	srv := newServer(t, ciTrackingOn)
 	ctx := context.Background()
 	crash := func(restarts int) {
-		srv.Core.ReportCIWatcherCrash(ctx, "acme", core.CIWatcherCrash{Restarts: restarts, LastLine: "panic: boom",
+		srv.Core.ReportWatcherCrash(ctx, core.WatcherCI, "acme", core.WatcherCrash{Restarts: restarts, LastLine: "panic: boom",
 			RestartAt: srv.Clock.Now().Add(time.Second)})
 	}
 	crashed := "The CI Watcher crashed, restarted 2 times; the last line it wrote: panic: boom"
@@ -263,11 +263,11 @@ func TestACrashStaysShownUntilTheCIWatcherHasRunSteadily(t *testing.T) {
 	srv.Clock.Advance(time.Second)
 	httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching"}`))
 	ciWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "error", crashed, fix)
-	if got := srv.Core.CIWatcherAttention(ctx); len(got) != 1 || got[0].Errors != 1 {
+	if got := srv.Core.WatcherAttention(ctx); len(got) != 1 || got[0].Errors != 1 {
 		t.Fatalf("CI Watcher attention %+v, want one error, for one Notification", got)
 	}
 
-	srv.Clock.Advance(core.CIWatcherSteadyAfter - time.Millisecond)
+	srv.Clock.Advance(core.WatcherSteadyAfter - time.Millisecond)
 	httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching"}`))
 	ciWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "error", crashed, fix)
 	srv.Clock.Advance(time.Millisecond)
@@ -276,7 +276,7 @@ func TestACrashStaysShownUntilTheCIWatcherHasRunSteadily(t *testing.T) {
 
 	// A crash after that is a new streak, with its own Notification.
 	crash(1)
-	if got := srv.Core.CIWatcherAttention(ctx); got[0].Errors != 2 {
+	if got := srv.Core.WatcherAttention(ctx); got[0].Errors != 2 {
 		t.Fatalf("CI Watcher attention %+v, want a second error", got)
 	}
 }
@@ -286,9 +286,9 @@ func TestACrashStaysShownUntilTheCIWatcherHasRunSteadily(t *testing.T) {
 func TestTurningCITrackingOffEndsACrashStreak(t *testing.T) {
 	srv := newServer(t, ciTrackingOn)
 	ctx := context.Background()
-	srv.Core.ReportCIWatcherCrash(ctx, "acme", core.CIWatcherCrash{Restarts: 1, RestartAt: srv.Clock.Now()})
+	srv.Core.ReportWatcherCrash(ctx, core.WatcherCI, "acme", core.WatcherCrash{Restarts: 1, RestartAt: srv.Clock.Now()})
 	httpOK(t, srv, setCITracking(`{"tracking":false,"repository":"acme/web"}`))
-	srv.Core.ReportCIWatcherCrash(ctx, "acme", core.CIWatcherCrash{Restarts: 2, RestartAt: srv.Clock.Now()})
+	srv.Core.ReportWatcherCrash(ctx, core.WatcherCI, "acme", core.WatcherCrash{Restarts: 2, RestartAt: srv.Clock.Now()})
 	ciWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "not_reported", "", "")
 	ciTrackingOn(t, srv)
 	httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching"}`))
@@ -306,7 +306,7 @@ func TestARateLimitedCIWatcherIsWatchingUntilATimeAndNotAnError(t *testing.T) {
 	if got := out["ci"].(map[string]any)["watcher"].(map[string]any)["rate_limited_until"]; got != until.Format(time.RFC3339) {
 		t.Fatalf("rate_limited_until = %v, want %s", got, until.Format(time.RFC3339))
 	}
-	if got := srv.Core.CIWatcherAttention(ctx); len(got) != 1 || got[0].Errors != 0 {
+	if got := srv.Core.WatcherAttention(ctx); len(got) != 1 || got[0].Errors != 0 {
 		t.Fatalf("CI Watcher attention %+v, want no errors, so no Notification", got)
 	}
 
