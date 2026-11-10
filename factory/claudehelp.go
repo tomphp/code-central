@@ -49,14 +49,18 @@ func (f *factory) readClaudeHelp() claudeAccepts {
 	return a
 }
 
+// takesEffort reports whether claude accepts effort, "" being no
+// --effort at all. Without levels it can't say, so it takes any.
+func (a claudeAccepts) takesEffort(effort string) bool {
+	return effort == "" || len(a.levels) == 0 || slices.Contains(a.levels, effort)
+}
+
 // checkEffortFlag refuses an --effort outside the levels claude accepts.
-// Without levels it can't say, so it takes any.
 func (f *factory) checkEffortFlag() error {
-	levels := f.accepts.levels
-	if f.o.effort == "" || len(levels) == 0 || slices.Contains(levels, f.o.effort) {
+	if f.accepts.takesEffort(f.o.effort) {
 		return nil
 	}
-	return fmt.Errorf("--effort %q isn't an effort level claude accepts: use one of %s", f.o.effort, strings.Join(levels, ", "))
+	return fmt.Errorf("--effort %q isn't an effort level claude accepts: use one of %s", f.o.effort, strings.Join(f.accepts.levels, ", "))
 }
 
 // reportModels reports what claude accepts with the Factory's flags. It

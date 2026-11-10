@@ -291,6 +291,26 @@ What it can't read is reported as nothing, which leaves the levels and aliases a
 
 The choice is worked out afresh each turn, so a Tag or Models row changed while a Ticket waits on a Round applies when it resumes, with no Factory restart. Each Claim in the Ticket's Claims records the model and effort its latest turn ran with, or Claude Code's default. Only the sessions the Factory starts are affected: subagents they start, such as code-review's reviewers, keep their own agent definitions' models.
 
+### A model or effort `claude` won't take
+
+A bad model or effort never quietly wastes a Claim or runs at the wrong effort: either one fails the Claim, and the Ticket goes to Failed with a Failure Report that names the value, where it was set and what to change. Where it was set is one of the Ticket's `model` or `effort` Tag, the Project's Models row for its kind of work (named), the Project's default Models row, or the Factory's `--model` flag.
+
+`claude` ignores an `--effort` it doesn't accept and runs at its default, so before every turn the Factory checks the turn's effort against the levels it read from `claude --help`. An effort that fails starts no turn. This catches a Tag or Models row set while other levels were valid, which a later report dropped. When the Factory couldn't read the levels, it checks nothing. Say the Ticket's `effort` Tag is `xhigh` and this `claude` lists `(low, medium, high)`:
+
+```console
+acme-shop-5: Failed: The effort `xhigh`, set by the Ticket's `effort` Tag, isn't one this Factory's claude accepts (low, medium, high), so no turn was started.
+```
+
+The Failure Report's *What to fix* reads: Set the Ticket's `effort` Tag to one that claude accepts (low, medium, high), or remove it (in the Ticket panel, or with `set_tags` or `remove_tags`), then send the Ticket back.
+
+A model `claude` rejects ends the turn with the API error `model_not_found`. Unlike an outage it doesn't pause the Factory, and unlike an expired login it doesn't stop it: the Claim fails and the Factory carries on. Say the Project's Models row for implementation sets `opus-9`:
+
+```console
+acme-shop-5: Failed: claude rejected the model `opus-9`, set by the Project's Models row for implementation (model_not_found).
+```
+
+Its *What to fix* reads: In Project Options, set the model in the Models row for implementation to one that claude accepts, or to Default, then send the Ticket back. Its *Why* quotes what `claude` said.
+
 ## Map Tickets and Prototypes
 
 A Map's Tickets each carry a Wayfinder Label, and the Factory claims them like a Stage's Ticket, by the skill its Label names. A Prototype is claimed by its skill too:

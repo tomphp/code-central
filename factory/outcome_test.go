@@ -173,6 +173,24 @@ func TestAnOutagePausesClaimingAndResumingAndSaysWhatItIsWaitingOn(t *testing.T)
 	r.WaitForOutput("waiting on rate_limit")
 }
 
+func TestAPauseWithNothingLeftCutOffEndsAndClaimingCarriesOn(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	cut := h.ReadyTicket("Cut off")
+	h.Script(cut, factorytest.APIError("rate_limit"), factorytest.Result("success"), factorytest.Exit(1))
+	r := h.Start()
+	r.WaitForOutput("waiting on rate_limit")
+
+	// Its Claim ends while cut off, so no resume will test the service.
+	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(cut), Reason: "Not needed."}); err != nil {
+		t.Fatal(err)
+	}
+	next := h.ReadyTicket("Next")
+	r.Poll()
+	h.WaitForState(next, store.InReview)
+	r.WaitForOutput("nothing is cut off any more: carrying on")
+}
+
 func TestACutOffTurnIsResumedWithBackoffUntilTheOutageIsOver(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
