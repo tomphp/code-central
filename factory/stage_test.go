@@ -55,7 +55,7 @@ func TestEachSessionStartsItsStagesSkillWithItsStageGuide(t *testing.T) {
 	}
 }
 
-func TestEachPromptSaysTheTicketIsAlreadyClaimedAndNotToCallClaim(t *testing.T) {
+func TestEachSystemPromptSaysTheTicketIsAlreadyClaimedAndNotToCallClaim(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	ids := map[string]string{ // stage -> Ticket

@@ -193,10 +193,15 @@ func readLog(file string) (Session, error) {
 	sizes := map[string]int{}
 	prompted, snapshot, responded := false, false, false
 	// identify takes the Ticket and kind from text, unless an earlier
-	// text gave them.
+	// text gave them. The Ticket is its Ticket: line, or else a skill's
+	// arguments.
 	identify := func(text string) {
-		if m := ticketLine.FindStringSubmatch(text); m != nil && s.Ticket == "" {
-			s.Ticket = m[1]
+		if s.Ticket == "" {
+			if m := ticketLine.FindStringSubmatch(text); m != nil {
+				s.Ticket = m[1]
+			} else if m := commandArgs.FindStringSubmatch(text); m != nil {
+				s.Ticket = m[1]
+			}
 		}
 		if m := stageGuide.FindStringSubmatch(text); m != nil && s.Kind == "" {
 			s.Kind = m[1]
@@ -237,9 +242,6 @@ func readLog(file string) (Session, error) {
 				if !prompted && text != "" {
 					prompted = true
 					identify(text)
-					if m := commandArgs.FindStringSubmatch(text); m != nil && s.Ticket == "" {
-						s.Ticket = m[1]
-					}
 				}
 				if !responded {
 					s.FirstTurn += len(text)

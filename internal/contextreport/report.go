@@ -37,10 +37,9 @@ type Report struct {
 // or tickets), implementation, review (the code-review subagents) or
 // subagent (any other). Tools counts every Code Central operation as the
 // one tool Code Central, and Operations breaks it down. FirstTurn totals
-// the sessions' first turns. Rounds and
-// Questions count post_round calls and their Questions, and WiderReads
-// the reads called again for more: both signs that a cut left out
-// something an agent needed.
+// the sessions' first turns. Rounds and Questions count post_round calls
+// and their Questions, and WiderReads the reads called again for more:
+// both signs that a cut left out something an agent needed.
 type Kind struct {
 	Name       string   `json:"name"`
 	Sessions   int      `json:"sessions"`
