@@ -105,6 +105,8 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       }
       return t.id;
     },
+    // code-central-287
+    incomingIssue: async (key, spec, title, link) => fake.addIncomingIssue(key, spec, title, link).id,
     // code-central-251
     reportPushRemote: async (key, url) => fake.reportPushRemote(key, url),
     reportCIWatcherStatus: async (key, status) => fake.reportCIWatcherStatus(key, status),

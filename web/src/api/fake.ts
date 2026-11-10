@@ -37,6 +37,8 @@
 // unless seedCICheck has given it a refusal. setGitHubIssues runs the
 // Issues check likewise, refused by seedIssuesCheck, and creates the
 // Issues Spec the first time it turns GitHub Issues on.
+// addIncomingIssue plays the Integration's create_linked_ticket, marking
+// a New issue as the service does, and keep_as_draft clears it.
 //
 // reportPushedCommit and reportCIRuns work a Ticket's CI result out as
 // the service does, with its failure options while it is CI failed;
@@ -629,6 +631,47 @@ export class FakeApi implements Api {
     this.landedAnyway.add(`${t.id}@${latest.commit}`);
     this.dropNeedsMe(t.id);
     return this.trackCI(key, t);
+  }
+
+  // addIncomingIssue is the Integration's create_linked_ticket on spec,
+  // in Draft: on the Issues Spec it is an Incoming Issue, offered the
+  // triage actions, and with New issues need me on it awaits triage and
+  // joins Needs Me as a New issue, just before any closed externally
+  // group, as core's CreateLinkedTicket and Needs Me do.
+  addIncomingIssue(project: string, spec: string, title: string, link: { integration: string; id: string; url: string }): TicketView {
+    const issues = this.project(project).github_issues;
+    const incoming = spec === issues.spec;
+    const awaiting = incoming && issues.new_issues_need_me;
+    const t = this.addTicket(project, {
+      title,
+      spec: { id: spec, title: this.specs.get(spec)?.title ?? "" },
+      link: { ...link, external_state: "open", detached: false },
+      ...(incoming && { triage_actions: ["keep_as_draft"] }),
+      ...(awaiting && { awaiting_triage: true }),
+    });
+    if (awaiting) {
+      const groups: { reason: NeedsMeReason; tickets: SeedRow[] }[] = this.needsMeGroups;
+      const row = { id: t.id, link: t.link, since: t.created };
+      const group = groups.find((g) => g.reason === "new_issue");
+      const closed = groups.findIndex((g) => g.reason === "closed_externally");
+      if (group) group.tickets.push(row);
+      else groups.splice(closed < 0 ? groups.length : closed, 0, { reason: "new_issue", tickets: [row] });
+      this.setNeedsMe(groups);
+    }
+    return t;
+  }
+
+  // keepAsDraft clears an Incoming Issue's awaiting triage and takes it
+  // out of Needs Me, refused on anything else, as core's KeepAsDraft is.
+  keepAsDraft(t: TicketView): TicketView {
+    if (!t.triage_actions?.includes("keep_as_draft")) {
+      throw new ApiError(409, "action_not_allowed", `${t.id} is not an Incoming Issue: only a linked Ticket on the Project's Issues Spec is triaged`);
+    }
+    if (!t.awaiting_triage) return this.view(t);
+    this.dropNeedsMe(t.id);
+    const { awaiting_triage: _a, ...rest } = this.tickets.get(t.id)!;
+    this.tickets.set(t.id, rest);
+    return this.updateTicket(t.id, {});
   }
 
   // rerunCI records a Re-run request for each failed run of t's latest
@@ -1280,13 +1323,17 @@ export class FakeApi implements Api {
   }
 
   // unlink detaches a seeded Ticket's Link, taking it out of Needs Me if it
-  // was there as closed externally (the only reason a Link gives).
+  // was there for its Link (closed externally or New issue); detached, it
+  // is no longer an Incoming Issue, so it is offered no triage action.
   async unlink(project: string, target: string): Promise<LinkedRow> {
     this.calls.push("unlink");
     const t = this.ticket(project, target);
     this.writable(project);
     if (!t.link) throw new ApiError(422, "invalid", `${t.id} is not linked`, "target");
-    if (this.rows().find((r) => r.id === t.id)?.reason === "closed_externally") this.dropNeedsMe(t.id);
+    const reason = this.rows().find((r) => r.id === t.id)?.reason;
+    if (reason === "closed_externally" || reason === "new_issue") this.dropNeedsMe(t.id);
+    const { triage_actions: _t, ...rest } = this.tickets.get(t.id)!;
+    this.tickets.set(t.id, rest);
     const v = this.updateTicket(t.id, { link: { ...t.link, detached: true } });
     return { kind: "ticket", id: v.id, title: v.title, state: v.state, link: v.link! };
   }

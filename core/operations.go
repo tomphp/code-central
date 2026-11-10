@@ -145,6 +145,8 @@ var Operations = []Op{
 	// The Issue Watcher's own (code-central-285).
 	{Name: "get_issue_watch", Audience: IntegrationOnly},
 	{Name: "report_issue_watcher_status", Audience: IntegrationOnly, Write: true},
+	// New issue and the triage actions (code-central-287).
+	{Name: "keep_as_draft", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.
