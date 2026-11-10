@@ -160,6 +160,8 @@ type claimFile struct {
 	SessionID     string `yaml:"session_id,omitempty"`
 	WorkingDir    string `yaml:"working_dir,omitempty"`
 	ResumeCommand string `yaml:"resume_command,omitempty"`
+	Model         string `yaml:"model,omitempty"`
+	Effort        string `yaml:"effort,omitempty"`
 	Started       string `yaml:"started"`
 	Ended         string `yaml:"ended,omitempty"`
 	EndedBy       string `yaml:"ended_by,omitempty"`
@@ -310,7 +312,7 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		t.PushedCommits = append(t.PushedCommits, p)
 	}
 	for i, c := range f.Claims {
-		cl := Claim{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, EndedBy: c.EndedBy}
+		cl := Claim{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, EndedBy: c.EndedBy}
 		field := fmt.Sprintf("claims[%d]", i)
 		if cl.ID == "" {
 			return Ticket{}, &LoadError{Field: field + ".id", Msg: "required"}
@@ -506,7 +508,7 @@ func encode(record any, project string) (string, []byte, error) {
 			f.PushedCommits = append(f.PushedCommits, pf)
 		}
 		for _, c := range r.Claims {
-			cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Started: formatTime(c.Started), EndedBy: c.EndedBy}
+			cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, Started: formatTime(c.Started), EndedBy: c.EndedBy}
 			if !c.Ended.IsZero() {
 				cf.Ended = formatTime(c.Ended)
 			}

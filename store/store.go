@@ -271,9 +271,13 @@ type Claim struct {
 	// human gets back into the Claim's session.
 	WorkingDir    string
 	ResumeCommand string
-	Started       time.Time
-	Ended         time.Time // zero while the Claim is live
-	EndedBy       string    // the action that ended it
+	// Model and Effort are what the Claim's latest turn ran with, empty
+	// meaning Claude Code's default.
+	Model   string
+	Effort  string
+	Started time.Time
+	Ended   time.Time // zero while the Claim is live
+	EndedBy string    // the action that ended it
 }
 
 // FailureReport is one numbered, permanent report of why an agent with

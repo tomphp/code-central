@@ -17,8 +17,20 @@ The short, permanent name that identifies a Project to anything connecting to Co
 _Avoid_: Slug, Project ID
 
 **Project Options**:
-The page where the human sets a Project's settings, such as its Landing Method, CI Tracking and GitHub Issues. Unlike an Option, what it sets belongs to one Project.
+The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues and Models. Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
+
+**Models**:
+The section of Project Options where the human sets a model and effort for the Project default and for each kind of work (a Ticket's Stage Guide name).
+_Avoid_: Model config, AI settings
+
+**Model Choice**:
+The model and effort a Factory session's turn runs with, worked out at every start and resume from, highest first: the Ticket's `model` or `effort` Tag, the Project's Models row for its kind of work, the Project default row, the Factory's `--model` or `--effort` flag, and Claude Code's own default. Model and effort are each worked out on their own.
+_Avoid_: Model selection, model config
+
+**Reported Models**:
+The effort levels, model aliases and model IDs reported as accepted by the Project's `claude`, along with the Factory's own flags. Code Central keeps them across restarts and offers them in the model and effort pickers.
+_Avoid_: Available models, model catalogue
 
 **Factory**:
 A program outside Code Central that claims Tickets and runs agents on them to deliver work.
@@ -294,7 +306,7 @@ A Ticket's type on a Map, as Spec reads show it: its Wayfinder Label's type (`ch
 _Avoid_: Ticket kind
 
 **Tag**:
-A free-form key and value on a Spec or Ticket, with no meaning to Code Central's workflow; the Factory reads the `guided` Tag on a Map, and the read side the `prototype`, `research` and `map` Tags.
+A free-form key and value on a Spec or Ticket, with no meaning to Code Central's workflow; the Factory reads the `guided` Tag on a Map and the `model` and `effort` Tags on a Ticket, and the read side the `prototype`, `research` and `map` Tags. `effort` is the one Tag whose value Code Central checks: on a Ticket it must be a valid effort level.
 _Avoid_: Label, attribute, property
 
 **Import**:

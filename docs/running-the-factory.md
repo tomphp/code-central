@@ -43,7 +43,8 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    | --- | --- |
    | `--parallel <n>` | The most `claude` turns running at once. The default is 3. |
    | `--base <branch>` | The branch work starts from, and the one it merges into when it lands. The default is the branch checked out when you start it, here `main`. |
-   | `--model <model>` | The model passed to every session it starts or resumes, such as `--model opus`. The default is Claude Code's own. |
+   | `--model <model>` | The model for every session it starts or resumes, such as `--model opus`, unless the Ticket sets one. The default is Claude Code's own. See [Model and effort](#model-and-effort). |
+   | `--effort <level>` | The effort for every session it starts or resumes, such as `--effort high`, unless the Ticket sets one. The default is Claude Code's own. |
    | `--bypass-permissions` | Runs every session in `bypassPermissions` mode, with no permission checks. It prints a warning line at the start. |
 
    Without `--bypass-permissions`, every session runs in auto mode with no permission prompts. Anything auto mode won't allow is denied and the turn carries on without it. If a turn ends on denied calls, the Factory posts a Round asking you about each one, and answering it lets the session try again. Allow rules for the repository go in its committed `.claude/settings.json`.
@@ -247,6 +248,26 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    With turns running, it prints `draining: waiting on …` and exits once they finish, or stops them at a second Ctrl-C, as in step 1.
 
    Check: the Factory has exited, and the Requirement is still *Finished*.
+
+## Model and effort
+
+Before every turn, a first turn or a resume after answers, after a cut-off or after a restart, the Factory works out the model and effort the turn runs with. Each is worked out on its own, highest first:
+
+1. the Ticket's `model` or `effort` Tag;
+2. the Project's Models row for the Ticket's kind of work, its Stage Guide name;
+3. the Project's default Models row;
+4. the Factory's `--model` or `--effort` flag;
+5. Claude Code's own default: the Factory passes no flag.
+
+Tiers 2 and 3 arrive with the Models section of Project Options; until then a Ticket's Tags and the Factory's flags decide. Set the Tags from an agent with `set_tags`, or by hand:
+
+```sh
+code-central set-tags acme-shop-5 model=opus effort=high
+```
+
+`effort` must be one of `low`, `medium`, `high`, `xhigh` and `max`; `set_tags` rejects anything else and lists them. `model` takes any name `claude --model` takes. On a Spec, `model` and `effort` are ordinary Tags with no effect.
+
+The choice is worked out afresh each turn, so a Tag changed while a Ticket waits on a Round applies when it resumes. Each Claim in the Ticket's Claims records the model and effort its latest turn ran with, or Claude Code's default. Only the sessions the Factory starts are affected: subagents they start, such as code-review's reviewers, keep their own agent definitions' models.
 
 ## Map Tickets and Prototypes
 

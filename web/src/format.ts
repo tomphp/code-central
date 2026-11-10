@@ -104,3 +104,7 @@ export function count(n: number): string {
 function oneDecimal(x: number): string {
   return String(Math.round(x * 10) / 10);
 }
+
+// CLAUDE_CODE_DEFAULT stands for a model or effort left unset, so the
+// session ran on Claude Code's own default.
+export const CLAUDE_CODE_DEFAULT = "Claude Code's default";

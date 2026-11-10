@@ -97,6 +97,7 @@ type options struct {
 	poll     time.Duration
 	bypass   bool
 	model    string
+	effort   string
 	base     string
 	project  string
 	verbose  bool
@@ -109,7 +110,8 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.IntVar(&o.parallel, "parallel", 3, "the most claude turns running at once (at least 1)")
 	fs.DurationVar(&o.poll, "poll", 30*time.Second, "how often to look for work (at least 5s)")
 	fs.BoolVar(&o.bypass, "bypass-permissions", false, "run every session in bypassPermissions mode")
-	fs.StringVar(&o.model, "model", "", "the model passed to every start and resume")
+	fs.StringVar(&o.model, "model", "", "the model for every start and resume a Ticket's model Tag doesn't set")
+	fs.StringVar(&o.effort, "effort", "", "the effort for every start and resume a Ticket's effort Tag doesn't set")
 	fs.StringVar(&o.base, "base", "", "the branch work starts from (default: the branch checked out)")
 	fs.BoolVar(&o.verbose, "verbose", false, "print a line for each tool call the agents make")
 	fs.StringVar(&o.project, "project", "", "Project Key (default $CODE_CENTRAL_PROJECT, else the nearest .mcp.json)")

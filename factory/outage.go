@@ -159,7 +159,8 @@ func (f *factory) dropCutOff(claimID string) {
 }
 
 // resumeCutOff resumes c's session, which an outage or a stop cut off,
-// unless another process holds it.
+// unless another process holds it or its Model Choice can't be read. It
+// reports whether it resumed.
 func (f *factory) resumeCutOff(ctx context.Context, c claim) bool {
 	if !f.live(c.ClaimID) {
 		return false
@@ -168,8 +169,12 @@ func (f *factory) resumeCutOff(ctx context.Context, c claim) bool {
 		f.claimf(c, "%s: session %s is held by pid %d: waiting a poll before resuming", c.Ticket, c.SessionID, pid)
 		return false
 	}
+	mc, ok := f.resumeChoice(ctx, c)
+	if !ok {
+		return false
+	}
 	f.claimf(c, "%s resumed %s after being cut off", c.Ticket, f.about(c))
-	f.startTurn(ctx, c, f.worktree(c.Ticket), append(f.resumeArgs(c), cutOffPrompt(c)))
+	f.startTurn(ctx, c, f.worktree(c.Ticket), mc, append(f.resumeArgs(c, mc), cutOffPrompt(c)))
 	return true
 }
 

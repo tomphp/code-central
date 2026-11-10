@@ -548,6 +548,10 @@ export interface ClaimView {
   // As the holder last set them; left out when unset, never a default.
   working_dir?: string;
   resume_command?: string;
+  // What the Claim's latest turn ran with; left out for Claude Code's
+  // default.
+  model?: string;
+  effort?: string;
   started: string;
   last_activity: string;
   ended?: string;
