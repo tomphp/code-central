@@ -280,7 +280,7 @@ Fix ci.yml failing on main
 - The commit landed acme-api-37, on Spec acme-api-30.
 ```
 
-The last line is there when the failing commit is where a Ticket landed, such as one you merged by hand. A rule doesn't pile Tickets up: while its Spec has a Ticket that isn't Done or Cancelled, a further failure only adds a comment to that Ticket, linking the new run and naming its failed jobs. Nor does it double up on a Ticket's own CI: a run on a commit the Factory pushed for a Ticket counts towards that Ticket's CI result and never fires a rule. A run that fires a rule is tracked against it.
+The last line is there when the failing commit is where a Ticket landed, such as one you merged by hand. A rule doesn't pile Tickets up: while its Spec has a Ticket that isn't Done or Cancelled, a further failure only adds a comment to that Ticket, linking the new run and naming its failed jobs. Nor does it double up on a Ticket's own CI: a run on a commit the Factory pushed for a Ticket counts towards that Ticket's CI result and never fires a rule. A run fires one rule: when a rule names its workflow and an `any` rule watches the same branch, the rule naming it fires. A run that fires a rule is tracked against it.
 
 ## When `init` behaves differently
 

@@ -192,14 +192,11 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 		out = CIWatch{Project: key, Tracking: v.Tracking, Provider: v.Provider, Repository: v.Repository,
 			IgnoredWorkflows: v.IgnoredWorkflows, Rules: []CIWatchRule{}, GHPath: r.Options().GHPath,
 			Waiting: []CIWaitingCommit{}, Pushed: []CITicketCommit{}, Landed: []CITicketCommit{}}
-		runs := r.CIRuns(key)
+		last := ciRulesLastRuns(r.CIRuns(key))
 		for i, rule := range v.Rules {
 			w := CIWatchRule{CIRuleView: rule}
-			for _, run := range runs {
-				if run.Rule == p.CI.Rules[i].Spec && !run.Finished.IsZero() && (w.LastRun == nil || run.Finished.After(*w.LastRun)) {
-					at := run.Finished
-					w.LastRun = &at
-				}
+			if at, ok := last[p.CI.Rules[i].Spec]; ok {
+				w.LastRun = &at
 			}
 			out.Rules = append(out.Rules, w)
 		}
@@ -210,6 +207,18 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 		return nil
 	})
 	return out, err
+}
+
+// ciRulesLastRuns is when the latest finished run tracked against each
+// CI Rule finished, by the number of the rule's Spec.
+func ciRulesLastRuns(runs []store.CIRun) map[int]time.Time {
+	last := map[int]time.Time{}
+	for _, run := range runs {
+		if run.Rule != 0 && run.Finished.After(last[run.Rule]) {
+			last[run.Rule] = run.Finished
+		}
+	}
+	return last
 }
 
 // ciTicketCommits is every commit pushed for a Ticket, and every commit a

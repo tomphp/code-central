@@ -49,7 +49,7 @@ func (w *watching) branchAnswer(branch string, runs ...branchRun) {
 	w.t.Helper()
 	var items []string
 	for _, r := range runs {
-		at := codecentraltest.Start.Add(time.Duration(r.finished) * time.Minute).Format(time.RFC3339)
+		at := at(r.finished).Format(time.RFC3339)
 		items = append(items, fmt.Sprintf(`{"id":%d,"run_attempt":1,"name":"Build %s","path":".github/workflows/%s","head_branch":%q,"head_sha":%q,`+
 			`"status":"completed","conclusion":%q,"run_started_at":"2026-01-05T08:00:00Z","updated_at":%q,"html_url":"https://github.com/acme/web/actions/runs/%d"}`,
 			r.id, r.workflow, r.workflow, r.branch, r.commit, r.conclude, at, r.id))
@@ -303,5 +303,27 @@ func TestAnIgnoredWorkflowFiresOnlyARuleNamingIt(t *testing.T) {
 	tks := w.fixTickets(nightlyRule)
 	if len(tks) != 1 || tks[0].State != store.Draft {
 		t.Fatalf("Tickets on %s = %+v, want one Draft fix Ticket", nightlyRule, tks)
+	}
+}
+
+func TestARestartedCIWatcherDoesntFireOnARunAgain(t *testing.T) {
+	w := newWatching(t)
+	spec := w.rule("ci.yml", "main", store.Ready)
+	w.branchAnswer("main", branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "fff111", conclude: "failure", finished: 5})
+	w.jobsAnswer(21, 1, [2]string{"test", "failure"})
+	w.start(w.h.Bin)
+	w.rulePoll()
+	w.stdin.Close()
+	if err := <-w.done; err != nil {
+		t.Fatal(err)
+	}
+
+	// The new CI Watcher remembers nothing: the rule's last run keeps it
+	// from firing on run 21 again.
+	w.start(w.h.Bin)
+	w.rulePoll()
+	tks := w.fixTickets(spec)
+	if len(tks) != 1 || len(tks[0].Comments) != 0 {
+		t.Fatalf("after a restart, Tickets on %s = %+v, want the one fix Ticket with no comment", spec, tks)
 	}
 }

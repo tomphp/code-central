@@ -136,6 +136,10 @@ _Avoid_: Excluded workflows, skipped workflows
 A Project's standing rule, "when workflow X fails on branch Y, open a Ticket to fix it", whose Tickets go on a long-lived Spec of its own, as Draft or Ready.
 _Avoid_: Trigger, watch, alert
 
+**Fix Ticket**:
+An ordinary implementation Ticket opened to fix a failed CI Run: by a CI Rule on its Spec, linking the run and naming its failed jobs, or by the human's New fix Ticket for a CI failed Ticket. While a CI Rule's fix Ticket is unfinished, further failures only comment on it.
+_Avoid_: CI Ticket, failure Ticket
+
 **Push remote**:
 The git remote a Landing Method's Push sends work to, `origin` unless the human names another. The Factory reports its URL when it starts, from which the CI section of Project Options fills in the GitHub repository.
 _Avoid_: Upstream, origin (for the concept)

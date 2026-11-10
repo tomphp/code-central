@@ -31,20 +31,19 @@ func (w *watcher) fireRules(ctx context.Context, p Provider, watch core.CIWatch)
 		pushed[c.Commit] = true
 	}
 	var branches []string
+	onBranch := map[string][]core.CIWatchRule{}
 	for _, r := range watch.Rules {
-		if !slices.Contains(branches, r.Branch) {
+		if onBranch[r.Branch] == nil {
 			branches = append(branches, r.Branch)
 		}
+		onBranch[r.Branch] = append(onBranch[r.Branch], r)
 	}
 	for _, branch := range branches {
-		var rules []core.CIWatchRule
-		var since time.Time
-		for _, r := range watch.Rules {
-			if r.Branch == branch {
-				if s := ruleSince(r); len(rules) == 0 || s.Before(since) {
-					since = s
-				}
-				rules = append(rules, r)
+		rules := onBranch[branch]
+		since := ruleSince(rules[0])
+		for _, r := range rules[1:] {
+			if s := ruleSince(r); s.Before(since) {
+				since = s
 			}
 		}
 		runs, err := p.CompletedRunsOnBranch(ctx, branch, since)

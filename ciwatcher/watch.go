@@ -56,8 +56,8 @@ func WatchArgs(project string) []string { return []string{Command, "--project", 
 // next, so fixing the cause brings it back to Watching by itself. It then
 // lists the runs of each pushed commit still waiting, and reports those
 // that changed, and fires the CI Rules for failures on their branches.
-// It polls every WaitingInterval while a pushed commit
-// waits, and every Interval otherwise.
+// It polls every WaitingInterval while a pushed commit waits, and every
+// Interval otherwise.
 func Watch(ctx context.Context, cfg Config) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
