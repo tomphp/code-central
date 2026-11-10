@@ -1,11 +1,9 @@
 package ciwatcher_test
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -22,7 +20,7 @@ type supervising struct {
 	t   *testing.T
 	h   *ciwatchertest.Harness
 	srv *codecentraltest.Server
-	log *syncBuffer
+	log *codecentraltest.SyncBuffer
 	// stop stops the service's supervision, and done closes once every
 	// CI Watcher has stopped.
 	stop func()
@@ -31,7 +29,7 @@ type supervising struct {
 
 func newSupervising(t *testing.T) *supervising {
 	t.Helper()
-	return &supervising{t: t, h: ciwatchertest.New(t), srv: codecentraltest.NewServer(t), log: &syncBuffer{}}
+	return &supervising{t: t, h: ciwatchertest.New(t), srv: codecentraltest.NewServer(t), log: &codecentraltest.SyncBuffer{}}
 }
 
 var human = core.WithActor(context.Background(), core.Human)
@@ -76,7 +74,7 @@ func (s *supervising) start(program string) {
 func (s *supervising) status(key string, state core.CIWatcherState) core.CIWatcherView {
 	s.t.Helper()
 	var got core.CIWatcherView
-	s.eventually(func() bool {
+	codecentraltest.Eventually(s.t, func() bool {
 		p, err := s.srv.Client.GetProject(context.Background(), key)
 		if err != nil {
 			s.t.Fatal(err)
@@ -90,14 +88,14 @@ func (s *supervising) status(key string, state core.CIWatcherState) core.CIWatch
 // logged waits for the service's log to say line n times.
 func (s *supervising) logged(line string, n int) {
 	s.t.Helper()
-	s.eventually(func() bool { return strings.Count(s.log.String(), line) >= n },
+	codecentraltest.Eventually(s.t, func() bool { return strings.Count(s.log.String(), line) >= n },
 		"the service's log said %q fewer than %d times:\n%s", line, n, s.log)
 }
 
 // crashRuns waits for the crashing CI Watcher to have started n times.
 func (s *supervising) crashRuns(n int) {
 	s.t.Helper()
-	s.eventually(func() bool { return s.h.CrashRuns() >= n }, "the crashing CI Watcher didn't start %d times", n)
+	codecentraltest.Eventually(s.t, func() bool { return s.h.CrashRuns() >= n }, "the crashing CI Watcher didn't start %d times", n)
 	if got := s.h.CrashRuns(); got != n {
 		s.t.Fatalf("the crashing CI Watcher started %d times, want %d", got, n)
 	}
@@ -125,17 +123,6 @@ func (s *supervising) restartsAfter(d time.Duration, runs int) {
 	}
 	s.srv.Clock.Advance(time.Millisecond)
 	s.crashRuns(runs)
-}
-
-func (s *supervising) eventually(ok func() bool, format string, args ...any) {
-	s.t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for !ok() {
-		if time.Now().After(deadline) {
-			s.t.Fatalf(format, args...)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
 }
 
 func TestTheServiceStartsACIWatcherForEachProjectWithCITrackingOn(t *testing.T) {
@@ -256,22 +243,4 @@ func TestACIWatcherStoppedWhileWaitingToRestartIsNotRestarted(t *testing.T) {
 	if s.h.CrashRuns() != 1 {
 		t.Fatal("a CI Watcher was restarted after CI Tracking was turned off")
 	}
-}
-
-// syncBuffer is the service's log, written from several goroutines.
-type syncBuffer struct {
-	mu sync.Mutex
-	b  bytes.Buffer
-}
-
-func (b *syncBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.b.Write(p)
-}
-
-func (b *syncBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.b.String()
 }

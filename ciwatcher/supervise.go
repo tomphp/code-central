@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/clock"
+	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
 )
 
@@ -23,7 +24,7 @@ import (
 const (
 	FirstBackoff = time.Second
 	MaxBackoff   = 5 * time.Minute
-	ResetAfter   = 10 * time.Minute
+	ResetAfter   = core.CIWatcherSteadyAfter
 )
 
 // stopLimit bounds how long a CI Watcher has to exit once its stdin
@@ -36,9 +37,8 @@ type Projects interface {
 	// CIWatchedProjects is the key of every Project that should have a
 	// CI Watcher.
 	CIWatchedProjects(ctx context.Context) []string
-	// ReportCIWatcherCrash reports that key's CI Watcher crashed and is
-	// being restarted for the restarts-th time.
-	ReportCIWatcherCrash(ctx context.Context, key string, restarts int, lastLine string)
+	// ReportCIWatcherCrash reports that key's CI Watcher crashed.
+	ReportCIWatcherCrash(ctx context.Context, key string, crash core.CIWatcherCrash)
 	// Events carries project.changed, on which the CI Watchers are
 	// started and stopped.
 	Events() *events.Bus
@@ -63,11 +63,15 @@ type Supervision struct {
 
 // Supervise runs a CI Watcher for each Project CIWatchedProjects names,
 // starting and stopping them as it changes, until ctx ends; then it
-// stops every one and returns once they have exited.
+// stops every one and returns once they have exited. Stopping one never
+// holds up the others: a Project's new CI Watcher waits for its old one
+// to exit instead.
 func Supervise(ctx context.Context, cfg Supervision) {
 	notices, stop := cfg.Projects.Events().Subscribe()
 	defer stop()
 	running := map[string]*supervised{}
+	// stopping holds each Project's CI Watcher that is still exiting.
+	stopping := map[string]*supervised{}
 	defer func() {
 		for _, w := range running {
 			w.cancel()
@@ -75,19 +79,29 @@ func Supervise(ctx context.Context, cfg Supervision) {
 		for _, w := range running {
 			<-w.done
 		}
+		for _, w := range stopping {
+			<-w.done
+		}
 	}()
 	for {
+		for key, w := range stopping {
+			select {
+			case <-w.done:
+				delete(stopping, key)
+			default:
+			}
+		}
 		want := map[string]bool{}
 		for _, key := range cfg.Projects.CIWatchedProjects(ctx) {
 			want[key] = true
 			if running[key] == nil {
-				running[key] = cfg.supervise(ctx, key)
+				running[key] = cfg.supervise(ctx, key, stopping[key])
 			}
 		}
 		for key, w := range running {
 			if !want[key] {
 				w.cancel()
-				<-w.done
+				stopping[key] = w
 				delete(running, key)
 			}
 		}
@@ -113,13 +127,17 @@ type supervised struct {
 	done   chan struct{}
 }
 
-// supervise runs key's CI Watcher, restarting it with backoff each time
-// it exits without being stopped.
-func (cfg Supervision) supervise(ctx context.Context, key string) *supervised {
+// supervise runs key's CI Watcher once prev, its last one if it is still
+// exiting, has, restarting it with backoff each time it exits without
+// being stopped.
+func (cfg Supervision) supervise(ctx context.Context, key string, prev *supervised) *supervised {
 	ctx, cancel := context.WithCancel(ctx)
 	w := &supervised{cancel: cancel, done: make(chan struct{})}
 	go func() {
 		defer close(w.done)
+		if prev != nil {
+			<-prev.done
+		}
 		defer cfg.logf("stopped the CI Watcher for %s", key)
 		backoff, restarts := FirstBackoff, 0
 		for {
@@ -133,7 +151,8 @@ func (cfg Supervision) supervise(ctx context.Context, key string) *supervised {
 			}
 			restarts++
 			cfg.logf("the CI Watcher for %s crashed; restarting it in %v", key, backoff)
-			cfg.Projects.ReportCIWatcherCrash(ctx, key, restarts, lastLine)
+			cfg.Projects.ReportCIWatcherCrash(ctx, key, core.CIWatcherCrash{Restarts: restarts, LastLine: lastLine,
+				RestartAt: cfg.Clock.Now().Add(backoff)})
 			select {
 			case <-ctx.Done():
 				return
@@ -172,6 +191,8 @@ func (cfg Supervision) run(ctx context.Context, key string) string {
 		}
 	case <-ctx.Done():
 		stdin.Close()
+		// Real time, not cfg.Clock: a kill is a last resort that must
+		// not wait on a test's fake clock.
 		select {
 		case <-exited:
 		case <-time.After(stopLimit):
@@ -182,6 +203,7 @@ func (cfg Supervision) run(ctx context.Context, key string) string {
 	return last.String()
 }
 
+// logf writes one line to the service's log.
 func (cfg Supervision) logf(format string, args ...any) {
 	if cfg.Log != nil {
 		fmt.Fprintf(cfg.Log, "code-central serve: "+format+"\n", args...)
@@ -197,6 +219,7 @@ type lastLine struct {
 	last    string
 }
 
+// Write keeps p's last line and passes p on.
 func (l *lastLine) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	lines := strings.Split(l.partial+string(p), "\n")

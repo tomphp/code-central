@@ -350,6 +350,9 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       });
       await d.reportCIWatcherStatus("acme", { state: "watching" });
       expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "watching", since: expect.any(String) });
+      // Only the service reports a crash.
+      const crashed = await d.reportCIWatcherStatus("acme", { state: "error", problem: "crashed", message: "crashed" }).catch((e) => e);
+      expect(String(crashed.code ?? crashed.message)).toContain("invalid");
 
       await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
       expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "not_reported" });

@@ -8,7 +8,8 @@ import (
 	"regexp"
 	"strconv"
 	"testing"
-	"time"
+
+	"github.com/tomoram/code-central/codecentraltest"
 )
 
 // started is serve's log line for a CI Watcher it started, with its pid.
@@ -41,7 +42,7 @@ func TestTheServiceSupervisesItsCIWatcher(t *testing.T) {
 
 	// Turning it off stops it.
 	tracking(false)
-	eventually(t, func() bool { return !alive(pid) }, "the CI Watcher kept running after CI Tracking was turned off")
+	codecentraltest.Eventually(t, func() bool { return !alive(pid) }, "the CI Watcher kept running after CI Tracking was turned off")
 
 	// Stopping the service stops it.
 	tracking(true)
@@ -65,7 +66,7 @@ func TestTheServiceSupervisesItsCIWatcher(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-second.exited
-	eventually(t, func() bool { return !alive(pid) }, "the CI Watcher outlived the killed service")
+	codecentraltest.Eventually(t, func() bool { return !alive(pid) }, "the CI Watcher outlived the killed service")
 }
 
 // watcherPID waits for p's log to say it started acme's n-th CI Watcher,
@@ -73,7 +74,7 @@ func TestTheServiceSupervisesItsCIWatcher(t *testing.T) {
 func watcherPID(t *testing.T, p *process, n int) int {
 	t.Helper()
 	var pid int
-	eventually(t, func() bool {
+	codecentraltest.Eventually(t, func() bool {
 		m := started.FindAllStringSubmatch(p.stderr.String(), -1)
 		if len(m) < n {
 			return false
@@ -90,8 +91,7 @@ func watcherPID(t *testing.T, p *process, n int) int {
 // watcherState waits for acme's CI Watcher status to be state.
 func (s *service) watcherState(t *testing.T, state string) {
 	t.Helper()
-	var got string
-	eventually(t, func() bool {
+	codecentraltest.Eventually(t, func() bool {
 		resp, err := http.Get(s.url + "/api/projects/acme")
 		if err != nil {
 			t.Fatal(err)
@@ -105,19 +105,6 @@ func (s *service) watcherState(t *testing.T, state string) {
 			} `json:"ci"`
 		}
 		json.NewDecoder(resp.Body).Decode(&p)
-		got = p.CI.Watcher.State
-		return got == state
-	}, "the CI Watcher's status isn't "+state)
+		return p.CI.Watcher.State == state
+	}, "the CI Watcher's status isn't %s", state)
 }
-
-func eventually(t *testing.T, ok func() bool, msg string) {
-	t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
-	for !ok() {
-		if time.Now().After(deadline) {
-			t.Fatal(msg)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-}
-

@@ -264,12 +264,7 @@ describe("Project Options", () => {
       const fake = new FakeApi();
       fake.addProject("acme", "Acme");
       await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
-      await fake.reportCIWatcherStatus("acme", {
-        state: "error",
-        problem: "crashed",
-        message: "The CI Watcher crashed, restarted 3 times; the last line it wrote: panic: boom",
-        fix: "Code Central restarts it by itself, waiting longer after each crash, up to 5 minutes. Its output is in the service's log.",
-      });
+      fake.seedCIWatcherCrash("acme", 3, "panic: boom");
       renderApp(fake, "/?view=project-options&project=acme");
 
       const watcher = await within(await screen.findByRole("group", { name: "CI" })).findByRole("region", { name: "CI Watcher" });

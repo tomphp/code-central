@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tomoram/code-central/codecentraltest"
 )
 
 // process is one `code-central serve` the test stops and starts itself.
@@ -20,7 +22,7 @@ type process struct {
 	addr   string
 	exited chan error
 	// stderr is what serve has written to stderr so far, its log.
-	stderr *syncBuffer
+	stderr *codecentraltest.SyncBuffer
 }
 
 // startServe runs serve on store, listening on listen (never 7733).
@@ -35,7 +37,7 @@ func startServeBin(t *testing.T, binary, store, listen string) (*process, string
 	cmd := exec.Command(binary, "serve", "--store", store, "--no-notify")
 	startInOwnGroup(cmd)
 	cmd.Env = append(os.Environ(), "CODE_CENTRAL_LISTEN="+listen)
-	stderr := &syncBuffer{}
+	stderr := &codecentraltest.SyncBuffer{}
 	cmd.Stderr = stderr
 	// Once serve exits, Wait stops copying its output, which a child it
 	// left behind, such as a CI Watcher, would hold open.
