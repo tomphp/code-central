@@ -82,8 +82,10 @@ export async function serve(): Promise<Service> {
       const exited = new Promise((r) => proc.on("exit", r));
       proc.kill("SIGTERM");
       await exited;
-      await rm(store, { recursive: true, force: true });
-      await rm(ghDir, { recursive: true, force: true });
+      // On Windows, a gh the service ran may still hold its files for a
+      // moment after the service exits, so rm retries while they're locked.
+      await rm(store, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      await rm(ghDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     },
   };
 }
