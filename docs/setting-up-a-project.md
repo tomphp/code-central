@@ -357,7 +357,17 @@ Code Central works out from each Ticket's and Spec's state what its issue should
 
 - `code-central:draft` on an Incoming Issue, kept as a Draft or not yet triaged;
 - `code-central:requirement` on one you turned To Requirement, while the Requirement's Stages aren't all Done;
-- `code-central:wont-fix` on one you chose Won't fix for, which is also closed as not planned.
+- `code-central:building` once its Stages are all Done, while its implementation Tickets are built;
+- `code-central:done` once the Requirement is Finished with at least one implementation Ticket Done, and the issue is closed as completed;
+- `code-central:wont-fix` on one you chose Won't fix for, or whose Requirement is Finished with nothing landed, which is also closed as not planned.
+
+As a Requirement from an issue goes on, the Issue Watcher posts each step on the issue, in order:
+
+- your context, if you gave To Requirement any;
+- the grilling's resolution once the grilling Stage is Done: the latest comment its agent made on the Stage Ticket, never its finish summary;
+- the Requirement's text as the spec Stage left it, once that Stage is Done;
+- each implementation Ticket as it lands, with its title and the commit that put it into the base, such as `Landed **Fix the login** (acme-api-21) in 4f1c2ab.`. A Ticket Accepted but not yet landed isn't posted, and under Merge + Push with CI Tracking a Ticket is Done only once it is on the remote and green;
+- once the Requirement is Finished, what landed, each Ticket with its commit, and the issue is closed as completed. If nothing landed, the issue is closed as not planned with no comment.
 
 Each comment it posts ends with a link back to the Ticket or Requirement in Code Central, and is posted exactly once: not again after the Issue Watcher or the service restarts, even if it stopped between posting it and recording it, and not again after you turn GitHub Issues off and on. Anything that comes due while GitHub Issues is off is written once you turn it back on. Your Rounds and their answers, Failure Reports, Transcripts, Claims and comments on a Ticket are never written to GitHub. Unlinking a Ticket or a Requirement stops every write to its issue.
 

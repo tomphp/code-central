@@ -354,11 +354,11 @@ The human's triage action that Cancels an Incoming Issue, with an optional reaso
 _Avoid_: Reject, decline
 
 **Status label**:
-The one `code-central:` label Code Central keeps on a linked GitHub issue to show where its work stands, such as `code-central:draft` on an Incoming Issue not yet triaged off the Issues Spec, `code-central:requirement` after To Requirement or `code-central:wont-fix` after Won't fix. The Issue Watcher creates it in the repository if it is missing.
+The one `code-central:` label Code Central keeps on a linked GitHub issue to show where its work stands, such as `code-central:draft` on an Incoming Issue not yet triaged off the Issues Spec, `code-central:requirement` after To Requirement, `code-central:building` once the Requirement's Stages are Done, `code-central:done` once its Spec is Finished with something landed, or `code-central:wont-fix` after Won't fix or once its Spec is Finished with nothing landed. The Issue Watcher creates it in the repository if it is missing.
 _Avoid_: Tag, state label
 
 **Write-back**:
-What Code Central writes to a linked GitHub issue: its comments, its Status label and closing it. Code Central works out from the work's state what is due on each issue, never from events, and the Issue Watcher makes it so, posting each comment exactly once. Nothing is ever written from Rounds, answers, Failure Reports, Transcripts or Claims.
+What Code Central writes to a linked GitHub issue: its comments, such as a Requirement's grilling resolution, its Spec's body and each Ticket as it lands, its Status label and closing it. Code Central works out from the work's state what is due on each issue, never from events, and the Issue Watcher makes it so, posting each comment exactly once. Nothing is ever written from Rounds, answers, Failure Reports, Transcripts or Claims.
 _Avoid_: Sync, mirroring
 
 **Outbound Link**:
