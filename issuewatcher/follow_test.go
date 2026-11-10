@@ -14,9 +14,16 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// readIssue is acme/web's issue n as GitHub gives it when it is read on
+// answerIssue scripts GitHub's answer to reading acme/web's issue n on
 // its own: in state, open or closed, with labels.
-func (w *watching) readIssue(n int, state string, labels ...string) {
+func (w *watching) answerIssue(n int, state string, labels ...string) {
+	w.t.Helper()
+	w.answerIssueIn("acme/web", "acme/web", n, state, labels...)
+}
+
+// answerIssueIn is answerIssue for reading repository's issue n, which
+// GitHub gives as in the repository in.
+func (w *watching) answerIssueIn(repository, in string, n int, state string, labels ...string) {
 	w.t.Helper()
 	i := openIssue(n)
 	ls := []map[string]string{}
@@ -25,12 +32,12 @@ func (w *watching) readIssue(n int, state string, labels ...string) {
 	}
 	b, err := json.Marshal(map[string]any{
 		"number": n, "state": state, "title": i.Title, "body": i.Body, "html_url": i.HTMLURL,
-		"repository_url": "https://api.github.com/repos/acme/web", "labels": ls,
+		"repository_url": "https://api.github.com/repos/" + in, "labels": ls,
 	})
 	if err != nil {
 		w.t.Fatal(err)
 	}
-	w.h.Answer(fakegh.Answer{Args: []string{"api", fakegh.IssuePath("acme/web", n)}, Stdout: string(b)})
+	w.h.Answer(fakegh.Answer{Args: []string{"api", fakegh.IssuePath(repository, n)}, Stdout: string(b)})
 }
 
 // arrived starts the Issue Watcher with openIssue's ns open, and waits
@@ -138,7 +145,7 @@ func TestAClosedIssueIsClosedExternallyUntilItIsReopened(t *testing.T) {
 	id := w.ticketOf(1).ID
 
 	w.openIssues("", 1, openIssue(2))
-	w.readIssue(1, "closed")
+	w.answerIssue(1, "closed")
 	w.polled()
 	wantExternal(t, w, 1, store.ExternalClosed)
 	wantExternal(t, w, 2, store.ExternalOpen)
@@ -174,8 +181,7 @@ func TestATransferredIssueIsOutOfScope(t *testing.T) {
 	w.arrived("", 1, 2)
 	w.openIssues("", 1)
 	w.h.Answer(fakegh.TransferredIssue("acme/web", 1, "acme/api", 7))
-	w.h.Answer(fakegh.Answer{Args: []string{"api", fakegh.IssuePath("acme/web", 2)}, Exit: 1,
-		Stdout: "HTTP/2.0 404 Not Found\r\n\r\n{\"message\":\"Not Found\"}", Stderr: "gh: Not Found (HTTP 404)\n"})
+	w.h.Answer(fakegh.HiddenIssue("acme/web", 2))
 	w.polled()
 	wantExternal(t, w, 1, store.ExternalOutOfScope)
 	wantExternal(t, w, 2, store.ExternalOutOfScope)
@@ -192,9 +198,9 @@ func TestAnIssueThatLosesTheFilterLabelIsOutOfScopeUntilItHasItAgain(t *testing.
 	w.arrived("Bug", 1, 2)
 
 	w.openIssues("Bug", 1, openIssue(2))
-	w.readIssue(1, "open", "enhancement")
+	w.answerIssue(1, "open", "enhancement")
 	// GitHub's label names match whatever their case.
-	w.readIssue(2, "open", "bug")
+	w.answerIssue(2, "open", "bug")
 	w.polled()
 	wantExternal(t, w, 1, store.ExternalOutOfScope)
 	wantExternal(t, w, 2, store.ExternalOpen)
@@ -211,16 +217,27 @@ func TestARateLimitedIssueReadWaitsForTheResetTime(t *testing.T) {
 	w.arrived("", 1)
 	reset := w.srv.Clock.Now().Add(15 * time.Minute)
 	w.openIssues("", 1)
-	w.h.Answer(fakegh.Answer{Args: []string{"api", fakegh.IssuePath("acme/web", 1)}, Exit: 1,
-		Stdout: fmt.Sprintf("HTTP/2.0 403 Forbidden\r\nX-Ratelimit-Remaining: 0\r\nX-Ratelimit-Reset: %d\r\n\r\n{}", reset.Unix()),
-		Stderr: "gh: API rate limit exceeded for user ID 1. (HTTP 403)\n"})
+	w.rateLimitedOn(fakegh.IssuePath("acme/web", 1), "X-Ratelimit-Remaining: 0", fmt.Sprintf("X-Ratelimit-Reset: %d", reset.Unix()))
 	w.nextPoll()
 	w.rateLimitedUntil(reset)
 	wantExternal(t, w, 1, store.ExternalOpen)
 
-	w.readIssue(1, "closed")
+	w.answerIssue(1, "closed")
 	w.srv.Clock.BlockUntil(1)
 	w.srv.Clock.Advance(15 * time.Minute)
 	w.rateLimitedUntil(time.Time{})
+	wantExternal(t, w, 1, store.ExternalClosed)
+}
+
+// A renamed repository's closed issue is closed, not transferred: GitHub
+// gives the repository's new name, as it does for its issues.
+func TestARenamedRepositorysClosedIssueIsClosedNotTransferred(t *testing.T) {
+	w := newWatching(t)
+	w.arrived("", 1)
+	w.h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web"},
+		Stdout: `{"full_name":"acme/website","has_issues":true,"permissions":` + triage + `}`})
+	w.openIssues("", 1)
+	w.answerIssueIn("acme/website", "acme/website", 1, "closed")
+	w.polled()
 	wantExternal(t, w, 1, store.ExternalClosed)
 }

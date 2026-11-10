@@ -98,7 +98,7 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *gh.RateLimit
 	if !watch.On {
 		return false, nil
 	}
-	prog, r, err := checkAccess(ctx, core.IssuesCheckInput{Repository: watch.Repository, GHPath: watch.GHPath}, cfg.Env)
+	a, r, err := checkAccess(ctx, core.IssuesCheckInput{Repository: watch.Repository, GHPath: watch.GHPath}, cfg.Env)
 	if ctx.Err() != nil {
 		// Stopped mid-poll: what failed is the stop, not GitHub.
 		return false, nil
@@ -113,7 +113,7 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *gh.RateLimit
 	if watch.Spec == "" {
 		return true, nil
 	}
-	issues, err := openIssues(ctx, cfg.Env, prog, watch.Repository, watch.Label)
+	issues, err := openIssues(ctx, cfg.Env, a.prog, watch.Repository, watch.Label)
 	if err != nil {
 		if errors.As(err, &limit) {
 			return true, limit
@@ -124,7 +124,7 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *gh.RateLimit
 		return true, nil
 	}
 	cfg.arrive(ctx, watch, issues)
-	return true, cfg.follow(ctx, watch, prog, issues)
+	return true, cfg.follow(ctx, watch, a, issues)
 }
 
 // report reports the Issue Watcher's status.

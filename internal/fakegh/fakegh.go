@@ -187,3 +187,14 @@ func TransferredIssue(repository string, n int, to string, m int) Answer {
 	})
 	return Answer{Args: []string{"api", IssuePath(repository, n)}, Stdout: "HTTP/2.0 200 OK\r\nContent-Type: application/json; charset=utf-8\r\n\r\n" + string(b)}
 }
+
+// HiddenIssue is GitHub's answer to reading repository's issue n once it
+// is transferred to a repository gh's login can't read: 404 Not Found.
+func HiddenIssue(repository string, n int) Answer {
+	return Answer{
+		Args:   []string{"api", IssuePath(repository, n)},
+		Stdout: "HTTP/2.0 404 Not Found\r\nContent-Type: application/json; charset=utf-8\r\n\r\n" + `{"message":"Not Found","status":"404"}`,
+		Stderr: "gh: Not Found (HTTP 404)\n",
+		Exit:   1,
+	}
+}

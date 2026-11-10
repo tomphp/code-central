@@ -265,9 +265,7 @@ func TestADetachedLinkStopsAnIssueComingInAgain(t *testing.T) {
 func TestARateLimitedIssueListWaitsForTheResetTime(t *testing.T) {
 	w := newWatching(t)
 	reset := w.srv.Clock.Now().Add(15 * time.Minute)
-	w.h.Answer(fakegh.Answer{Args: []string{"api", issuesPath("", 1)}, Exit: 1,
-		Stdout: fmt.Sprintf("HTTP/2.0 403 Forbidden\r\nX-Ratelimit-Remaining: 0\r\nX-Ratelimit-Reset: %d\r\n\r\n{}", reset.Unix()),
-		Stderr: "gh: API rate limit exceeded for user ID 1. (HTTP 403)\n"})
+	w.rateLimitedOn(issuesPath("", 1), "X-Ratelimit-Remaining: 0", fmt.Sprintf("X-Ratelimit-Reset: %d", reset.Unix()))
 	w.start(w.h.Bin)
 	w.rateLimitedUntil(reset)
 
