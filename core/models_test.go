@@ -6,10 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
-	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -163,24 +161,10 @@ func TestSetModelsAddsNoMoveEditOrCommentAndSendsTheProjectsNotice(t *testing.T)
 }
 
 func TestModelsSurviveAReload(t *testing.T) {
-	dir := t.TempDir()
-	s, err := store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := fixture{core: core.New(s, clock.NewFake(t0), &ids.Sequence{}), clock: clock.NewFake(t0), store: s}
-	f.project(t, "acme")
-	f.setModels(t, core.SetModelsInput{Default: row("opus", ""), Kinds: []core.KindModelsView{kind("map-research", "sonnet", "low"), kind("grilling", "", "max")}})
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	s, err = store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	p, err := core.New(s, clock.NewFake(t0), &ids.Sequence{}).GetProject(ctx, "acme")
+	p, err := reloaded(t, func(f fixture) {
+		f.project(t, "acme")
+		f.setModels(t, core.SetModelsInput{Default: row("opus", ""), Kinds: []core.KindModelsView{kind("map-research", "sonnet", "low"), kind("grilling", "", "max")}})
+	}).core.GetProject(ctx, "acme")
 	if err != nil {
 		t.Fatal(err)
 	}

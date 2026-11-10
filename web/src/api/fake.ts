@@ -1281,17 +1281,23 @@ export class FakeApi implements Api {
   // accepts, as the service keeps it: empty levels or aliases keep the
   // kept ones, the flags are always replaced, and model IDs stay.
   async reportModels(key: string, report: ModelsReport): Promise<void> {
-    const list = (vs: string[]) => [...new Set(vs.map((v) => v.trim()).filter((v) => v !== ""))];
+    const oneLine = (field: string, v: string) => {
+      if (/[\r\n]/.test(v)) throw new ApiError(422, "invalid", `"${v}" spans more than one line; each is one line`, field);
+      return v;
+    };
+    const list = (field: string, vs: string[]) => [...new Set(vs.map((v) => oneLine(field, v.trim())).filter((v) => v !== ""))];
+    const levels = list("effort_levels", report.effort_levels);
+    const aliases = list("aliases", report.aliases);
+    const model_flag = oneLine("model_flag", report.model_flag.trim());
+    const effort_flag = oneLine("effort_flag", report.effort_flag.trim());
     const p = this.writable(key);
-    const levels = list(report.effort_levels);
-    const aliases = list(report.aliases);
     const was = p.reported_models;
     p.reported_models = {
       ...was,
       effort_levels: levels.length ? levels : was.effort_levels,
       aliases: aliases.length ? aliases : was.aliases,
-      model_flag: report.model_flag.trim(),
-      effort_flag: report.effort_flag.trim(),
+      model_flag,
+      effort_flag,
       reported: this.now.toISOString(),
     };
     this.emit({ type: "project.changed", project: key });

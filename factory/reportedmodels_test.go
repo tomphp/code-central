@@ -67,6 +67,12 @@ Options:
 		"wide": "Options:\n" +
 			"  --effort <level>   Effort level for the current session (low, medium, high, xhigh, max)\n" +
 			"  --model <model>    Model for the current session. Provide an alias for the latest model (e.g. \"fable\", \"opus\", or \"sonnet\") or a model's full name.\n",
+		"labelled choices and curly quotes": "Options:\n" +
+			"  --effort <level>  Effort level (choices: \"low\", \"medium\", \"high\", \"xhigh\", \"max\")\n" +
+			"  --model <model>   An alias (“fable”, ‘opus’ or ‘sonnet’) or a full name\n",
+		"bars": "Options:\n" +
+			"  --model <model>   An alias ('fable', 'opus', 'sonnet')\n" +
+			"  --effort <level>  Effort level (low|medium|high|xhigh|max)\n",
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

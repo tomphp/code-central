@@ -287,12 +287,6 @@ func (r ReportedModels) IsZero() bool {
 	return len(r.EffortLevels) == 0 && len(r.Aliases) == 0 && len(r.ModelIDs) == 0 && r.ModelFlag == "" && r.EffortFlag == "" && r.Reported.IsZero()
 }
 
-// Equal reports whether r and o hold the same.
-func (r ReportedModels) Equal(o ReportedModels) bool {
-	return slices.Equal(r.EffortLevels, o.EffortLevels) && slices.Equal(r.Aliases, o.Aliases) && slices.Equal(r.ModelIDs, o.ModelIDs) &&
-		r.ModelFlag == o.ModelFlag && r.EffortFlag == o.EffortFlag && r.Reported.Equal(o.Reported)
-}
-
 // Spec is a description of work, stored as Markdown with YAML frontmatter.
 type Spec struct {
 	Number  int

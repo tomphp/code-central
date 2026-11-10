@@ -730,9 +730,9 @@ func decodeReportedModels(f reportedModelsFile) (ReportedModels, string, error) 
 	}
 	switch {
 	case !singleLine(f.ModelFlag):
-		return ReportedModels{}, "model_flag", errors.New("a flag is one line, not blank")
+		return ReportedModels{}, "model_flag", errors.New("a flag is empty, or one line that isn't blank")
 	case !singleLine(f.EffortFlag):
-		return ReportedModels{}, "effort_flag", errors.New("a flag is one line, not blank")
+		return ReportedModels{}, "effort_flag", errors.New("a flag is empty, or one line that isn't blank")
 	}
 	if f.Reported != "" {
 		t, err := parseTime(f.Reported)

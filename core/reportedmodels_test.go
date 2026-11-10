@@ -6,10 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
-	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -158,24 +156,10 @@ func TestReportModelsSendsTheProjectsNotice(t *testing.T) {
 }
 
 func TestReportedModelsSurviveAReload(t *testing.T) {
-	dir := t.TempDir()
-	s, err := store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := fixture{core: core.New(s, clock.NewFake(t0), &ids.Sequence{}), clock: clock.NewFake(t0), store: s}
-	f.project(t, "acme")
-	f.reportModels(t, core.ReportModelsInput{EffortLevels: []string{"low", "high"}, Aliases: []string{"opus", "sonnet"}, ModelFlag: "opus", EffortFlag: "high"})
-	if err := s.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	s, err = store.Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s.Close()
-	c := core.New(s, clock.NewFake(t0), &ids.Sequence{})
+	c := reloaded(t, func(f fixture) {
+		f.project(t, "acme")
+		f.reportModels(t, core.ReportModelsInput{EffortLevels: []string{"low", "high"}, Aliases: []string{"opus", "sonnet"}, ModelFlag: "opus", EffortFlag: "high"})
+	}).core
 	p, err := c.GetProject(ctx, "acme")
 	if err != nil {
 		t.Fatal(err)

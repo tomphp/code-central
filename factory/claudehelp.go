@@ -78,10 +78,12 @@ var (
 	optionLine = regexp.MustCompile(`^-{1,2}[A-Za-z]`)
 	// parenthesised is a parenthesised list in an option's text.
 	parenthesised = regexp.MustCompile(`\(([^()]*)\)`)
-	// quoted is a name in single or double quotes.
-	quoted = regexp.MustCompile(`'([^'\s]+)'|"([^"\s]+)"|‘([^’\s]+)’`)
-	// name is an effort level or a model alias.
-	name = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._\[\]-]*$`)
+	// quoted is a name in straight or curly, single or double quotes.
+	quoted = regexp.MustCompile(`['"‘“]([^'"’”\s]+)['"’”]`)
+	// listedName is an effort level or a model alias.
+	listedName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._\[\]-]*$`)
+	// listLabel leads a list, as in "(choices: …)" or "(one of: …)".
+	listLabel = regexp.MustCompile(`^[^,|:]*:\s*`)
 )
 
 // parseHelp reads the effort levels from the --effort option's
@@ -97,8 +99,8 @@ func parseHelp(help string) claudeAccepts {
 		}
 	}
 	for _, m := range quoted.FindAllStringSubmatch(optionText(help, "--model"), -1) {
-		alias := m[1] + m[2] + m[3]
-		if name.MatchString(alias) && !slices.Contains(a.aliases, alias) {
+		alias := m[1]
+		if listedName.MatchString(alias) && !slices.Contains(a.aliases, alias) {
 			a.aliases = append(a.aliases, alias)
 		}
 	}
@@ -141,14 +143,17 @@ func names(t, option string) bool {
 	return false
 }
 
-// listed is the names in a comma-separated list such as "low, medium, or
-// high", or nil when any item isn't a name.
+// listed is the names in a list separated by commas or bars, such as
+// "low, medium, or high", "choices: "low", "high"" or "low|high", or nil
+// when any item isn't a name.
 func listed(list string) []string {
 	var out []string
-	for item := range strings.SplitSeq(list, ",") {
+	list = listLabel.ReplaceAllString(strings.TrimSpace(list), "")
+	for item := range strings.FieldsFuncSeq(list, func(r rune) bool { return r == ',' || r == '|' }) {
 		item = strings.TrimSpace(item)
 		item = strings.TrimPrefix(strings.TrimPrefix(item, "or "), "and ")
-		if !name.MatchString(item) {
+		item = strings.Trim(item, `'"‘’“”`)
+		if !listedName.MatchString(item) {
 			return nil
 		}
 		out = append(out, item)

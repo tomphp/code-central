@@ -337,6 +337,10 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(max).toMatchObject({ status: 422, code: "invalid", field: "default.effort" });
       expect(max.message).toContain("low, high, turbo");
       expect((await d.api.setModels("acme", { default: { model: "", effort: "turbo" }, kinds: [] })).models.default.effort).toBe("turbo");
+
+      const twoLines = await d.reportModels("acme", { effort_levels: [], aliases: ["opus\nsonnet"], model_flag: "", effort_flag: "" }).catch((e) => e);
+      expect(twoLines).toBeInstanceOf(Error);
+      expect((await d.api.listProjects())[0].reported_models.aliases).toEqual(["opus", "sonnet"]);
     });
 
     it("creates the Issues Spec the first time GitHub Issues is turned on, retitled with the repository", async () => {
