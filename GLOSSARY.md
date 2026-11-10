@@ -17,7 +17,7 @@ The short, permanent name that identifies a Project to anything connecting to Co
 _Avoid_: Slug, Project ID
 
 **Project Options**:
-The page where the human sets a Project's settings, such as its Landing Method. Unlike an Option, what it sets belongs to one Project.
+The page where the human sets a Project's settings, such as its Landing Method and CI Tracking. Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
 
 **Factory**:
@@ -100,6 +100,42 @@ _Avoid_: Completion option, delivery mode, finish mode
 A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch.
 _Avoid_: Publish, sync
 
+**CI Tracking**:
+A Project's opt-in, off by default, to have Code Central watch the CI of what the Factory pushes, gate landing on it and run its CI Rules. The human turns it on in the CI section of Project Options, naming the GitHub repository to watch.
+_Avoid_: CI integration
+
+**CI Provider**:
+The pluggable part of CI Tracking that talks to one CI system, through its own command-line tool and login. GitHub Actions, through `gh`, is the only one.
+_Avoid_: Integration, connector
+
+**CI Watcher**:
+The separate process, started and supervised by Code Central, that watches one Project's CI through its CI Provider and reports what it sees over the HTTP API.
+_Avoid_: CI daemon, CI Integration
+
+**Pushed commit**:
+The commit the Factory pushed for a Ticket, which it reports on the Ticket: the base after merging under Merge with Push, or the Ticket's branch on accept under Branch with Push. Its CI Runs give the Ticket's CI result.
+_Avoid_: Push SHA
+
+**CI Run**:
+One workflow run the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired.
+_Avoid_: Job, build, pipeline
+
+**CI result**:
+A Ticket's running, passed or failed, worked out from the CI Runs of its latest pushed commit that aren't of Ignored workflows: running until they have all finished, failed if any failed, passed otherwise.
+_Avoid_: Build status
+
+**Ignored workflows**:
+A Project's list of workflow file names, such as `nightly.yml`, whose runs never count towards a CI result and never fire an "any workflow" CI Rule. They are still shown, marked ignored.
+_Avoid_: Excluded workflows, skipped workflows
+
+**CI Rule**:
+A Project's standing rule, "when workflow X fails on branch Y, open a Ticket to fix it", whose Tickets go on a long-lived Spec of its own, as Draft or Ready.
+_Avoid_: Trigger, watch, alert
+
+**Push remote**:
+The git remote a Landing Method's Push sends work to, `origin` unless the human names another. The Factory reports its URL when it starts, from which the CI section of Project Options fills in the GitHub repository.
+_Avoid_: Upstream, origin (for the concept)
+
 **Blocker**:
 A Ticket in the same Project that must reach Done before another Ticket can be claimed.
 _Avoid_: Dependency
@@ -161,6 +197,14 @@ _Avoid_: Inbox, blocked
 The Needs Me reason of an Accepted Ticket under the Branch Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge.
 _Avoid_: Ready to merge, awaiting merge
 
+**CI failed**:
+The Needs Me reason of an Accepted Ticket whose CI result is failed and that the human hasn't dealt with yet: send it back to fix, re-run the failed jobs, open a new fix Ticket, or land it anyway.
+_Avoid_: Build broken, red
+
+**CI unavailable**:
+The Needs Me reason of a Ticket that has waited 10 minutes or more on CI since its push, while the CI Watcher isn't watching or no CI Runs have been reported for its pushed commit.
+_Avoid_: CI down, CI stuck
+
 **Focus Mode**:
 A view showing the human one Focus Item at a time from Needs Me, moving to the next as each is dealt with or skipped.
 _Avoid_: Zen mode, queue view
@@ -176,6 +220,10 @@ _Avoid_: Status board, overview, monitor
 **Option**:
 A global preference the human sets from the UI's Options view, kept by Code Central and applied at once.
 _Avoid_: Setting (that word stays for `settings.yaml`), preference, config
+
+**gh path**:
+The Option naming where the `gh` command-line tool is, for when Code Central can't find it on its `PATH` or in the usual install places.
+_Avoid_: gh binary setting
 
 **Notification**:
 An interruption sent to the human when an agent is stopped and waiting on them, as distinct from the Needs Me count.
@@ -214,7 +262,7 @@ A one-way, one-off migration of work into Code Central, after which Code Central
 _Avoid_: Sync, Integration
 
 **Integration**:
-A plugin with an ongoing link to an external ticketing system, which owns the definition of the work it links while Code Central owns its delivery.
+A plugin with an ongoing link to an external ticketing system, which owns the definition of the work it links while Code Central owns its delivery. CI Tracking is not an Integration: it owns no work, and only reports on CI.
 _Avoid_: Import, connector, sync
 
 **Link**:

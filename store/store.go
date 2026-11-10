@@ -61,6 +61,9 @@ type Project struct {
 	// Landing is how the Project's accepted work lands. A Project stored
 	// without one reads as DefaultLanding.
 	Landing Landing
+	// CI is the Project's CI settings. A Project stored without them reads
+	// as DefaultCI: CI Tracking off.
+	CI CI
 }
 
 // LandingMethod is how accepted work reaches a Project's base.
@@ -116,6 +119,61 @@ func (l Landing) orDefault() Landing {
 		l.Remote = DefaultLandingRemote
 	}
 	return l
+}
+
+// CIProvider is the CI system a Project's CI Tracking watches.
+type CIProvider string
+
+// The CI Providers.
+const (
+	// CIGitHubActions is GitHub Actions, reached through the gh CLI.
+	CIGitHubActions CIProvider = "github_actions"
+)
+
+// CIProviders lists every CIProvider, the default first.
+var CIProviders = []CIProvider{CIGitHubActions}
+
+// Valid reports whether p is one of the CIProviders.
+func (p CIProvider) Valid() bool { return slices.Contains(CIProviders, p) }
+
+// ciProviderNames is the CIProviders as strings, for messages and the
+// schema.
+func ciProviderNames() []string {
+	var out []string
+	for _, p := range CIProviders {
+		out = append(out, string(p))
+	}
+	return out
+}
+
+// CI is a Project's CI settings: whether CI Tracking is on, the CI
+// Provider and the repository it watches, the Ignored workflows (each a
+// workflow file's base name, such as ci.yml), and the URL of the Push
+// remote the Factory last reported.
+type CI struct {
+	Tracking         bool
+	Provider         CIProvider
+	Repository       string
+	IgnoredWorkflows []string
+	PushRemoteURL    string
+}
+
+// DefaultCI is the CI of a Project that has never had any set: CI
+// Tracking off, on GitHub Actions, with nothing named.
+func DefaultCI() CI { return CI{Provider: CIGitHubActions} }
+
+// Equal reports whether c and d are the same settings.
+func (c CI) Equal(d CI) bool {
+	return c.Tracking == d.Tracking && c.Provider == d.Provider && c.Repository == d.Repository &&
+		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL
+}
+
+// orDefault fills in what c leaves empty from DefaultCI.
+func (c CI) orDefault() CI {
+	if c.Provider == "" {
+		c.Provider = CIGitHubActions
+	}
+	return c
 }
 
 // Spec is a description of work, stored as Markdown with YAML frontmatter.

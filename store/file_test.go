@@ -354,6 +354,27 @@ func TestADefaultLandingMethodLeavesProjectYAMLUnchanged(t *testing.T) {
 	}
 }
 
+func TestDefaultCISettingsLeaveProjectYAMLUnchanged(t *testing.T) {
+	dir := t.TempDir()
+	s := openFile(t, dir)
+	created := time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC)
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: created, Mode: store.ModeCommitted, CI: store.DefaultCI()})
+	})
+	const plain = "key: acme\ndisplay_name: Acme\ncreated: 2026-11-07T09:30:00Z\nmode: committed\n"
+	if got := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")); got != plain {
+		t.Fatalf("project.yaml = %q", got)
+	}
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: created, Mode: store.ModeCommitted,
+			CI: store.CI{Tracking: true, Repository: "acme/web", IgnoredWorkflows: []string{"nightly.yml"}}})
+	})
+	want := plain + "ci:\n  tracking: true\n  provider: github_actions\n  repository: acme/web\n  ignored_workflows:\n    - nightly.yml\n"
+	if got := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")); got != want {
+		t.Fatalf("project.yaml = %q, want %q", got, want)
+	}
+}
+
 func listFiles(t *testing.T, dir string) []string {
 	t.Helper()
 	var out []string
@@ -384,6 +405,8 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 		{"bad mode", "projects/acme/project.yaml", strings.Replace(project, "mode: committed", "mode: shared", 1), "mode"},
 		{"unknown project field", "projects/acme/project.yaml", project + "path: /src\n", "path"},
 		{"landing method outside its set", "projects/acme/project.yaml", project + "landing:\n  method: squash\n  push: false\n  remote: origin\n", "landing.method"},
+		{"ci provider outside its set", "projects/acme/project.yaml", project + "ci:\n  tracking: true\n  provider: circleci\n", "ci.provider"},
+		{"unknown ci field", "projects/acme/project.yaml", project + "ci:\n  tracking: true\n  provider: github_actions\n  token: x\n", "ci.token"},
 		{"unknown landing field", "projects/acme/project.yaml", project + "landing:\n  method: merge\n  push: false\n  remote: origin\n  force: true\n", "landing.force"},
 		{"spec without frontmatter", "projects/acme/specs/3.md", "# just markdown\n", "frontmatter"},
 		{"spec id mismatch", "projects/acme/specs/3.md", "---\nid: 4\ntitle: S\nlabels: []\ntags: {}\ncreated: 2026-11-07T09:30:00Z\nupdated: 2026-11-07T09:30:00Z\n---\nbody\n", "id"},

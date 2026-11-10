@@ -237,6 +237,14 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingBranch})
 		return err
 	},
+	"set_ci_tracking": func(f fixture) error {
+		_, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"})
+		return err
+	},
+	"report_push_remote": func(f fixture) error {
+		_, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git"})
+		return err
+	},
 	"archive_project": func(f fixture) error {
 		_, err := f.core.ArchiveProject(human, "acme")
 		return err

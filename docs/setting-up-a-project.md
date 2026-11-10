@@ -213,6 +213,17 @@ To change it, open the UI, click **⋯** beside the Project in the left pane, an
 
 **Save** applies the change to the Project in Code Central, and every open UI tab shows it. An Archived Project has no Options item, and its Project Options page is read-only until you unarchive it.
 
+## Watching CI
+
+**CI Tracking** has Code Central watch the CI of what the Factory pushes. It is off on every Project until you turn it on, and Agents have no tool or command to change it. Turn it on in the **CI** section of the same Project Options page:
+
+- **CI Tracking**: on or off.
+- **CI Provider**: **GitHub Actions**, the only one for now. Code Central uses your existing `gh` login and stores no GitHub token.
+- **GitHub repository**: the repository to watch, as `owner/name`, such as `acme/acme-api`. CI Tracking can't be on without one: Save says so, as it does for anything that isn't `owner/name`. When the Factory starts, it reports the URL of the Push remote (the Landing Method's Remote, `origin` unless you changed it), leaving out any login an HTTPS URL carries. If that URL is GitHub's, over HTTPS or SSH, the field is filled in from it, with a note naming the URL; change it if CI runs somewhere else, such as a fork.
+- **Ignored workflows**: workflow file names, such as `nightly.yml, preview.yml`, separated by commas. Their runs won't count towards a Ticket's CI result. Name the file, not its path: `ci.yml`, not `.github/workflows/ci.yml`.
+
+**Save** applies the settings, and every open UI tab shows them. Turning CI Tracking off keeps the repository and Ignored workflows for the next time you turn it on. For now the CI section only records these settings: the Factory lands accepted work the same way with CI Tracking on or off.
+
 ## When `init` behaves differently
 
 ### A repository you don't own: `init --local`

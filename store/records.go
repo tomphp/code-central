@@ -31,6 +31,16 @@ type projectFile struct {
 	Archived    string `yaml:"archived,omitempty"`
 	// Landing is left out while it is the default.
 	Landing *landingFile `yaml:"landing,omitempty"`
+	// CI is left out while it is the default.
+	CI *ciFile `yaml:"ci,omitempty"`
+}
+
+type ciFile struct {
+	Tracking         bool     `yaml:"tracking"`
+	Provider         string   `yaml:"provider"`
+	Repository       string   `yaml:"repository,omitempty"`
+	IgnoredWorkflows []string `yaml:"ignored_workflows,omitempty"`
+	PushRemoteURL    string   `yaml:"push_remote_url,omitempty"`
 }
 
 type landingFile struct {
@@ -333,7 +343,7 @@ func encode(record any, project string) (string, []byte, error) {
 	switch r := record.(type) {
 	case Project:
 		rel = filepath.Join("projects", r.Key, "project.yaml")
-		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing)})
+		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI)})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear)})
@@ -414,6 +424,16 @@ func encodeLanding(l Landing) *landingFile {
 		return nil
 	}
 	return &landingFile{Method: string(l.Method), Push: l.Push, Remote: l.Remote}
+}
+
+// encodeCI leaves the default CI out of project.yaml, so a Project that
+// never had CI settings keeps the file it always had.
+func encodeCI(c CI) *ciFile {
+	if c = c.orDefault(); c.Equal(DefaultCI()) {
+		return nil
+	}
+	return &ciFile{Tracking: c.Tracking, Provider: string(c.Provider), Repository: c.Repository,
+		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL}
 }
 
 // formatOptionalTime leaves a zero time out of the file.

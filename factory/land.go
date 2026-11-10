@@ -49,6 +49,20 @@ func (f *factory) missingRemote(landing core.LandingView) string {
 	return fmt.Sprintf("Push names the remote %q, which this repository doesn't have: add it with `git remote add`, or change it on the Project's Project Options page in Code Central", landing.Remote)
 }
 
+// reportPushRemote reports the URL of the Push remote, when the
+// repository has it, so the human's CI settings can offer its GitHub
+// repository. It is reported even with Push off: the remote is the one
+// Push would use.
+func (f *factory) reportPushRemote(remote string) {
+	url, err := f.gitOut(f.repo, "remote", "get-url", remote)
+	if err != nil {
+		return
+	}
+	if _, err := f.client.ReportPushRemote(context.Background(), f.project, core.ReportPushRemoteInput{URL: url}); err != nil {
+		f.printf("warning: can't report the Push remote's URL to Code Central: %v", err)
+	}
+}
+
 // remoteReady reports whether landing can go on this poll: it can't when
 // Push names a missing remote, and a warning says so once per remote.
 func (f *factory) remoteReady(landing core.LandingView) bool {
