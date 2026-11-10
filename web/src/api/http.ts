@@ -76,6 +76,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     setLandingMethod: (project, landing) => call("POST", `${p(project)}/set_landing_method`, landing),
     setCITracking: (project, ci) => call("POST", `${p(project)}/set_ci_tracking`, { ...ci, full: true }),
     // Only the settings themselves: a Project's read adds spec and watcher.
+    setModels: (project, models) => call("POST", `${p(project)}/set_models`, { default: models.default, kinds: models.kinds, full: true }),
     setGitHubIssues: (project, { on, repository, label, new_issues_need_me }) =>
       call("POST", `${p(project)}/set_github_issues`, { on, repository, label, new_issues_need_me, full: true }),
     addCIRule: (project, rule) => call("POST", `${p(project)}/add_ci_rule`, { ...rule, full: true }),

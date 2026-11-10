@@ -64,6 +64,20 @@ func TestTheFactorysFlagsFillWhatATicketsTagsLeaveUnset(t *testing.T) {
 	ranWith(t, h, modelOnly, callsFor(h, modelOnly)[0], "fable", "low")
 }
 
+func TestAKindsModelsRowReachesClaudeOverTheProjectDefaultAndTheFactorysFlags(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("Implement it")
+	in := core.SetModelsInput{Default: core.ModelRowView{Model: "opus", Effort: "medium"},
+		Kinds: []core.KindModelsView{{Kind: core.ImplementationStage, ModelRowView: core.ModelRowView{Effort: "xhigh"}}}}
+	if _, err := h.Human().SetModels(context.Background(), h.Project, in); err != nil {
+		t.Fatal(err)
+	}
+	h.Start("--model", "sonnet", "--effort", "low")
+	h.WaitForState(id, store.InReview)
+	ranWith(t, h, id, h.Calls()[0], "opus", "xhigh")
+}
+
 func TestWithNothingSetNoModelOrEffortIsPassed(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)

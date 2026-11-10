@@ -286,6 +286,36 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.listProjects())[0].github_issues).toEqual(kept.github_issues);
     });
 
+    it("sets a Project's Models, a row per kind of work, all at Default to begin with", async () => {
+      await d.createProject("acme", "Acme");
+      const kinds = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"];
+      const unset = { model: "", effort: "" };
+      expect((await d.api.listProjects())[0].models).toEqual({ default: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
+
+      const set = await d.api.setModels("acme", {
+        default: { model: " opus ", effort: "high" },
+        kinds: [{ kind: "implementation", model: "", effort: "xhigh" }],
+      });
+      expect(set.models.default).toEqual({ model: "opus", effort: "high" });
+      expect(set.models.kinds.map((k) => k.kind)).toEqual(kinds);
+      expect(set.models.kinds.at(-1)).toEqual({ kind: "implementation", model: "", effort: "xhigh" });
+      expect((await d.api.listProjects())[0].models).toEqual(set.models);
+
+      const effort = await d.api.setModels("acme", { default: unset, kinds: [{ kind: "spec", model: "", effort: "extreme" }] }).catch((e) => e);
+      expect(effort).toBeInstanceOf(ApiError);
+      expect(effort).toMatchObject({ status: 422, code: "invalid", field: "kinds.spec.effort" });
+      expect(effort.message).toContain("low, medium, high, xhigh, max");
+      const blank = await d.api.setModels("acme", { default: { model: " ", effort: "" }, kinds: [] }).catch((e) => e);
+      expect(blank).toMatchObject({ status: 422, code: "invalid", field: "default.model" });
+      const other = await d.api.setModels("acme", { default: unset, kinds: [{ kind: "review", model: "opus", effort: "" }] }).catch((e) => e);
+      expect(other).toMatchObject({ status: 422, code: "invalid", field: "kinds" });
+      expect((await d.api.listProjects())[0].models).toEqual(set.models);
+
+      // The rows are replaced whole.
+      const cleared = await d.api.setModels("acme", { default: unset, kinds: [] });
+      expect(cleared.models).toEqual({ default: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
+    });
+
     it("creates the Issues Spec the first time GitHub Issues is turned on, retitled with the repository", async () => {
       await d.createProject("acme", "Acme");
       await d.letGHTriage("acme/web");

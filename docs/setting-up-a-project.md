@@ -1,6 +1,6 @@
 # Setting up a Project
 
-This guide sets a repository up as a Project, so that agents can reach its Specs and Tickets in Code Central. It follows two made-up repositories to a Claude Code session that lists the `code-central` MCP server: `acme-shop`, started from an empty folder, and `acme-api`, which already has code and history. Then it shows where to choose how a Project's accepted work lands, and covers the cases where `init` behaves differently. The output shown is copied from a real run, cut with `…` where it is long.
+This guide sets a repository up as a Project, so that agents can reach its Specs and Tickets in Code Central. It follows two made-up repositories to a Claude Code session that lists the `code-central` MCP server: `acme-shop`, started from an empty folder, and `acme-api`, which already has code and history. Then it shows where to choose how a Project's accepted work lands and which models its sessions run, and covers the cases where `init` behaves differently. The output shown is copied from a real run, cut with `…` where it is long.
 
 ## Before you start
 
@@ -387,6 +387,21 @@ github acme/acme-api#7 came in 5m ago
 ```
 
 Its action panel, in the Inbox and as its Focus Item in Focus Mode, links to the issue and offers the triage actions, so you can triage new issues one at a time. Choosing one moves Focus Mode on to the next item. An issue that comes in while New issues need me is off isn't a New issue, even after you turn it on: triage it from its Ticket panel. An issue closed on GitHub before you triage it shows as **Closed externally** instead, and once you unlink it, it is no longer an Incoming Issue.
+
+## Choosing models for each kind of work
+
+The Factory runs every session with Claude Code's own default model and effort unless something says otherwise. To choose them per Project, open the **Models** section of the Project Options page, below GitHub Issues. It has a row for the **Project default**, then one for each kind of work, the Stage Guide a Ticket runs under:
+
+| Kind of work | Tickets |
+| --- | --- |
+| `grilling`, `spec`, `tickets` | A Requirement's Stages |
+| `map-chart`, `map-grilling`, `map-research`, `map-task` | A Map's Tickets |
+| `prototype` | Prototypes |
+| `implementation` | Every other Ticket |
+
+Each row has a **Model**, typed in as `claude --model` takes it, such as `opus` or `claude-opus-5-5`, and an **Effort**, one of `low`, `medium`, `high`, `xhigh` and `max`. Both start at **Default**: an empty Model, and the first Effort choice. Default says what it inherits: a kind's row inherits the Project default, as in `Default (opus)`, and the Project default shows `Default (Claude Code's default)`, though the Factory's own `--model` or `--effort` flag fills it if you started the Factory with one. For example, to run Opus everywhere but implement at `xhigh` effort, set the Project default's Model to `opus` and the implementation row's Effort to `xhigh`.
+
+**Save** replaces every row at once, and every open UI tab shows them. A model that is blank or spans more than one line, or an effort outside the valid levels, is refused, with the reason under the table. A Ticket's own `model` and `effort` Tags override its row; [Model and effort](running-the-factory.md#model-and-effort) gives the whole order. A change applies from each Ticket's next turn, so there is no need to restart the Factory.
 
 ## When `init` behaves differently
 

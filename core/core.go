@@ -80,6 +80,8 @@ type ProjectView struct {
 	// GitHubIssues is the Project's GitHub Issues settings, always filled
 	// in.
 	GitHubIssues GitHubIssuesView `json:"github_issues"`
+	// Models is the Project's Models rows, always filled in.
+	Models ModelsView `json:"models"`
 }
 
 // LandingView is a Project's Landing Method with its Push option.
@@ -526,7 +528,7 @@ func finished(s store.State) bool { return s == store.Done || s == store.Cancell
 func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
 		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}, CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
-		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key}))}
+		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models)}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at

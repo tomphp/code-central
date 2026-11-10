@@ -123,6 +123,13 @@ a.filter { text-decoration: none; }
 .project-options-field + .project-options-hint { margin-left: 0; }
 .project-options-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .project-options-section .warning { margin: 10px 0 0; }
+.project-options-models-hint { margin-left: 0; }
+.project-options-models { border-collapse: collapse; margin-top: 12px; width: 100%; }
+.project-options-models th, .project-options-models td { text-align: left; padding: 4px 8px 4px 0; font-size: 14px; }
+.project-options-models thead th { font-weight: 600; font-size: 13px; color: var(--muted); }
+.project-options-models tbody th { font-weight: 500; white-space: nowrap; }
+.project-options-models input, .project-options-models select { font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); width: 100%; box-sizing: border-box; }
+.project-options-models [aria-invalid="true"] { border-color: var(--danger); }
 .project-rename { flex-basis: 100%; display: flex; gap: 4px; margin: 2px 0 4px; }
 .project-rename input { flex: 1; min-width: 0; font: inherit; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 .archived-group { margin-top: auto; padding-top: 16px; }

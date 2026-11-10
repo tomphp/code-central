@@ -155,6 +155,8 @@ var Operations = []Op{
 	// The Model Choice (Spec code-central-301).
 	{Name: "get_model_choice", Audience: FactoryOnly},
 	{Name: "report_model_choice", Audience: FactoryOnly, Write: true},
+	// The Models section of Project Options (code-central-310).
+	{Name: "set_models", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

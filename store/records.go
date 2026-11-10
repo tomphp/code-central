@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -36,6 +37,26 @@ type projectFile struct {
 	CI *ciFile `yaml:"ci,omitempty"`
 	// GitHubIssues is left out while it is off with nothing set.
 	GitHubIssues *githubIssuesFile `yaml:"github_issues,omitempty"`
+	// Models is left out while it sets nothing.
+	Models *modelsFile `yaml:"models,omitempty"`
+}
+
+// modelsFile is a Project's Models rows; a row that sets nothing is left
+// out.
+type modelsFile struct {
+	Default *modelRowFile   `yaml:"default,omitempty"`
+	Kinds   []kindModelFile `yaml:"kinds,omitempty"`
+}
+
+type modelRowFile struct {
+	Model  string `yaml:"model,omitempty"`
+	Effort string `yaml:"effort,omitempty"`
+}
+
+type kindModelFile struct {
+	Kind   string `yaml:"kind"`
+	Model  string `yaml:"model,omitempty"`
+	Effort string `yaml:"effort,omitempty"`
 }
 
 type githubIssuesFile struct {
@@ -475,7 +496,7 @@ func encode(record any, project string) (string, []byte, error) {
 	case Project:
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
-			GitHubIssues: encodeGitHubIssues(r.GitHubIssues)})
+			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models)})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), GHPath: r.GHPath})
@@ -606,6 +627,72 @@ func encodeGitHubIssues(g GitHubIssues) *githubIssuesFile {
 		return nil
 	}
 	return &githubIssuesFile{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
+}
+
+// encodeModels leaves Models out of project.yaml while it sets nothing,
+// and each row that sets nothing out of Models.
+func encodeModels(m Models) *modelsFile {
+	if m.IsZero() {
+		return nil
+	}
+	f := &modelsFile{}
+	if m.Default != (ModelRow{}) {
+		f.Default = &modelRowFile{Model: m.Default.Model, Effort: m.Default.Effort}
+	}
+	for _, k := range m.Kinds {
+		f.Kinds = append(f.Kinds, kindModelFile{Kind: k.Kind, Model: k.Model, Effort: k.Effort})
+	}
+	return f
+}
+
+// decodeModels checks f's rows as load does: each names a kind of work
+// once, sets something, and holds single-line values. It returns the
+// offending field, relative to models, with the error.
+func decodeModels(f modelsFile) (Models, string, error) {
+	var m Models
+	row := func(field, model, effort string) (ModelRow, string, error) {
+		r := ModelRow{Model: model, Effort: effort}
+		switch {
+		case r == ModelRow{}:
+			return r, field, errors.New("a Models row sets a model or an effort; leave out one that sets neither")
+		case !singleLine(model):
+			return r, field + ".model", errors.New("a model is one line, not blank")
+		case !singleLine(effort):
+			return r, field + ".effort", errors.New("an effort is one line, not blank")
+		}
+		return r, "", nil
+	}
+	if d := f.Default; d != nil {
+		r, field, err := row("default", d.Model, d.Effort)
+		if err != nil {
+			return Models{}, field, err
+		}
+		m.Default = r
+	}
+	for i, k := range f.Kinds {
+		field := fmt.Sprintf("kinds[%d]", i)
+		if !slices.Contains(ModelKinds, k.Kind) {
+			return Models{}, field + ".kind", fmt.Errorf("unknown kind of work %q (%s)", k.Kind, strings.Join(ModelKinds, ", "))
+		}
+		if m.Kind(k.Kind) != (ModelRow{}) {
+			return Models{}, field + ".kind", fmt.Errorf("a second row for %q", k.Kind)
+		}
+		r, f, err := row(field, k.Model, k.Effort)
+		if err != nil {
+			return Models{}, f, err
+		}
+		m.Kinds = append(m.Kinds, KindModels{Kind: k.Kind, ModelRow: r})
+	}
+	slices.SortStableFunc(m.Kinds, func(a, b KindModels) int {
+		return slices.Index(ModelKinds, a.Kind) - slices.Index(ModelKinds, b.Kind)
+	})
+	return m, "", nil
+}
+
+// singleLine reports whether an optional value is empty, or one line
+// that isn't blank.
+func singleLine(v string) bool {
+	return v == "" || (strings.TrimSpace(v) != "" && !strings.ContainsAny(v, "\r\n"))
 }
 
 // formatOptionalTime leaves a zero time out of the file.

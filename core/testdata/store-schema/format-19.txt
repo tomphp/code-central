@@ -34,6 +34,14 @@ projects/<key>/project.yaml
       label: string (optional)
       new_issues_need_me: bool (optional)
       spec: int (optional)
+  models: mapping (optional)
+      default: mapping (optional)
+          model: string (optional)
+          effort: string (optional)
+      kinds: list of mappings (optional)
+          kind: string
+          model: string (optional)
+          effort: string (optional)
 
 projects/<key>/specs/<n>.md: YAML frontmatter between --- lines, then the Markdown body
   id: int
@@ -167,6 +175,7 @@ values
   options focus_clear (default activity_dashboard): activity_dashboard, all_clear
   project landing.method (no landing: merge, push false, remote origin): merge, branch
   project ci.provider (no ci: tracking off, github_actions): github_actions
+  project models.kinds[].kind: grilling, spec, tickets, map-chart, map-grilling, map-research, map-task, prototype, implementation
   ticket state, moves[].from, moves[].to: Draft, Ready, In Progress, Needs Answer, Answered, Failed, In Review, Accepted, Done, Cancelled
   ci run status: queued, in_progress, completed
   ci run conclusion, jobs[].conclusion (optional): success, failure, cancelled, timed_out, skipped, neutral
