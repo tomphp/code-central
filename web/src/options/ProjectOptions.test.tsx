@@ -260,6 +260,24 @@ describe("Project Options", () => {
       expect(within(ci()).getByRole("region", { name: "CI Watcher" })).not.toHaveTextContent("gh auth login");
     });
 
+    it("shows a crashing CI Watcher's restarts and last line, which the service restarts by itself", async () => {
+      const fake = new FakeApi();
+      fake.addProject("acme", "Acme");
+      await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      await fake.reportCIWatcherStatus("acme", {
+        state: "error",
+        problem: "crashed",
+        message: "The CI Watcher crashed, restarted 3 times; the last line it wrote: panic: boom",
+        fix: "Code Central restarts it by itself, waiting longer after each crash, up to 5 minutes. Its output is in the service's log.",
+      });
+      renderApp(fake, "/?view=project-options&project=acme");
+
+      const watcher = await within(await screen.findByRole("group", { name: "CI" })).findByRole("region", { name: "CI Watcher" });
+      expect(watcher).toHaveTextContent("crashed, restarted 3 times; the last line it wrote: panic: boom");
+      expect(watcher).toHaveTextContent("Code Central restarts it by itself");
+      expect(watcher).not.toHaveTextContent("tries again every 2 minutes");
+    });
+
     it("shows the service's refusal on its field", async () => {
       const fake = new FakeApi();
       fake.addProject("acme", "Acme");

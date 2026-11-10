@@ -3,7 +3,7 @@
 // Package e2e is the end-to-end tier: the real binary, a real store in a
 // temporary folder and real processes. Run it with `make e2e`, which
 // builds the binaries and passes them in CODE_CENTRAL_BIN and
-// CODE_CENTRAL_FACTORY_BIN.
+// CODE_CENTRAL_FACTORY_BIN, and the fake gh in CODE_CENTRAL_FAKE_GH_BIN.
 package e2e
 
 import (
@@ -24,7 +24,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-var bin, factoryBin string
+var bin, factoryBin, fakeGHBin string
 
 // TestMain finds the binaries, building any not passed in, and runs the
 // tests. Run by the Factory as claude, it is the fake claude instead.
@@ -34,6 +34,7 @@ func TestMain(m *testing.M) {
 	}
 	bin = os.Getenv("CODE_CENTRAL_BIN")
 	factoryBin = os.Getenv("CODE_CENTRAL_FACTORY_BIN")
+	fakeGHBin = os.Getenv("CODE_CENTRAL_FAKE_GH_BIN")
 	var dir string
 	build := func(pkg, name string) string {
 		if dir == "" {
@@ -55,6 +56,9 @@ func TestMain(m *testing.M) {
 	}
 	if factoryBin == "" {
 		factoryBin = build("../cmd/code-central-factory", "code-central-factory")
+	}
+	if fakeGHBin == "" {
+		fakeGHBin = build("../internal/fakegh/gh", "fake-gh")
 	}
 	code := m.Run()
 	if dir != "" {

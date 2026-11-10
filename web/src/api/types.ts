@@ -75,7 +75,7 @@ export interface CIRule extends CIRuleChange {
 }
 
 // Why the CI Watcher can't watch its repository, each with its own fix.
-export type CIProblem = "gh_missing" | "logged_out" | "repository_unreadable" | "check_failed";
+export type CIProblem = "gh_missing" | "logged_out" | "repository_unreadable" | "check_failed" | "crashed";
 
 // The CI Watcher's status as it last reported it (code-central-253):
 // not_reported until it has since the service started or CI Tracking was

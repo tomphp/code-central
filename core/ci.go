@@ -132,6 +132,9 @@ const (
 	CIRepositoryUnreadable CIProblem = "repository_unreadable"
 	// CICheckFailed is a check that didn't run to an answer.
 	CICheckFailed CIProblem = "check_failed"
+	// CICrashed is a CI Watcher that exited without being stopped. The
+	// service reports it, never the CI Watcher.
+	CICrashed CIProblem = "crashed"
 )
 
 // CICheckInput is what the CI Watcher's check mode checks: that it can

@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -220,4 +221,48 @@ func (w *ciWatchers) attention() []CIWatcherAttention {
 	}
 	slices.SortFunc(out, func(a, b CIWatcherAttention) int { return strings.Compare(a.Project, b.Project) })
 	return out
+}
+
+// CIWatchedProjects is the key of every Project the service runs a CI
+// Watcher for: CI Tracking on, and not archived.
+func (c *Core) CIWatchedProjects(context.Context) []string {
+	out := []string{}
+	c.store.View(func(r store.Reader) error {
+		for _, p := range r.Projects() {
+			if p.CI.Tracking && p.Archived.IsZero() {
+				out = append(out, p.Key)
+			}
+		}
+		return nil
+	})
+	return out
+}
+
+// ReportCIWatcherCrash is the service's own report that key's CI Watcher
+// crashed and is being restarted for the restarts-th time, with lastLine,
+// the last line it wrote to stderr. It has no door: the CI Watcher can't
+// report its own crash. Like any error it is counted, so the first crash
+// sends one Notification and the restarts after it don't. A Project no
+// longer watched is left alone.
+func (c *Core) ReportCIWatcherCrash(_ context.Context, key string, restarts int, lastLine string) {
+	times := "times"
+	if restarts == 1 {
+		times = "time"
+	}
+	msg := fmt.Sprintf("The CI Watcher crashed, restarted %d %s", restarts, times)
+	if lastLine = strings.TrimSpace(lastLine); lastLine != "" {
+		msg += "; the last line it wrote: " + lastLine
+	}
+	next := CIWatcherView{State: CIWatcherError, Problem: CICrashed, Message: msg,
+		Fix: "Code Central restarts it by itself, waiting longer after each crash, up to 5 minutes. Its output is in the service's log."}
+	changed := false
+	c.store.View(func(r store.Reader) error {
+		if p, ok := r.Project(key); ok && p.CI.Tracking && p.Archived.IsZero() {
+			changed = c.ciWatchers.set(key, next, c.now())
+		}
+		return nil
+	})
+	if changed {
+		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
+	}
 }
