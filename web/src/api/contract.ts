@@ -1261,14 +1261,14 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const id = await d.incomingIssue("acme", spec, "Login is broken", gh);
       const link = { ...gh, external_state: "open", detached: false };
 
-      expect(await d.api.getTicket("acme", id)).toMatchObject({ state: "Draft", link, awaiting_triage: true, triage_actions: ["keep_as_draft"], needs_me_reason: "new_issue" });
+      expect(await d.api.getTicket("acme", id)).toMatchObject({ state: "Draft", link, awaiting_triage: true, triage_actions: ["keep_as_draft", "wont_fix"], needs_me_reason: "new_issue" });
       const nm = await d.api.needsMe();
       expect(nm.groups.map((g) => g.reason)).toEqual(["new_issue"]);
       expect(nm.groups[0].tickets[0]).toMatchObject({ id, reason: "new_issue", link });
 
       wantAcknowledgement(await d.api.act("acme", id, "keep_as_draft", {}), id, "Draft", ["needs_me_reason", "awaiting_triage"]);
       const kept = await d.api.getTicket("acme", id);
-      expect(kept).toMatchObject({ state: "Draft", triage_actions: ["keep_as_draft"] });
+      expect(kept).toMatchObject({ state: "Draft", triage_actions: ["keep_as_draft", "wont_fix"] });
       expect(kept.awaiting_triage).toBeUndefined();
       expect(kept.needs_me_reason).toBeUndefined();
       expect((await d.api.needsMe()).count).toBe(0);
@@ -1286,7 +1286,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const on = await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false });
       const id = await d.incomingIssue("acme", on.github_issues.spec!, "Typo", { integration: "github", id: "acme/web#8", url: "https://github.com/acme/web/issues/8" });
       const t = await d.api.getTicket("acme", id);
-      expect(t).toMatchObject({ triage_actions: ["keep_as_draft"] });
+      expect(t).toMatchObject({ triage_actions: ["keep_as_draft", "wont_fix"] });
       expect(t.awaiting_triage).toBeUndefined();
       expect(t.needs_me_reason).toBeUndefined();
       expect((await d.api.needsMe()).count).toBe(0);
@@ -1294,6 +1294,29 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       // Unlinked, it is no longer an Incoming Issue.
       await d.api.unlink("acme", id);
       expect((await d.api.getTicket("acme", id)).triage_actions).toBeUndefined();
+    });
+
+    // ---- Won't fix (code-central-289) ----
+    it("Cancels an Incoming Issue on Won't fix, with the reason as its comment", async () => {
+      await d.createProject("acme", "Acme");
+      await d.letGHTriage("acme/web");
+      const on = await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: true });
+      const id = await d.incomingIssue("acme", on.github_issues.spec!, "Login is broken", { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7" });
+
+      wantAcknowledgement(await d.api.act("acme", id, "wont_fix", { reason: "Works as intended." }), id, "Cancelled", ["state", "needs_me_reason", "awaiting_triage", "triage_actions"]);
+      const t = await d.api.getTicket("acme", id);
+      expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Works as intended." });
+      expect(t.moves.at(-1)).toMatchObject({ to: "Cancelled", via: "wont_fix" });
+      expect(t.link).toMatchObject({ detached: false });
+      expect(t.awaiting_triage).toBeUndefined();
+      expect(t.triage_actions).toBeUndefined();
+      expect((await d.api.needsMe()).count).toBe(0);
+
+      const plain = await d.createTicket("acme", "Local", "Draft");
+      const refused = await d.api.act("acme", plain, "wont_fix", {}).catch((e) => e);
+      expect(refused).toBeInstanceOf(ApiError);
+      expect(refused).toMatchObject({ status: 409, code: "action_not_allowed" });
+      expect(refused.message).toContain("not an Incoming Issue");
     });
 
     // ---- the latest Session Event (ticket 109) ----

@@ -1,6 +1,7 @@
-// New issue and Keep as Draft (code-central-287) against FakeApi: a New
-// issue's row in Needs Me, its Focus Item, its action panel, and the
-// triage actions in the Ticket panel of every Incoming Issue.
+// New issue, Keep as Draft (code-central-287) and Won't fix
+// (code-central-289) against FakeApi: a New issue's row in Needs Me, its
+// Focus Item, its action panel, and the triage actions in the Ticket
+// panel of every Incoming Issue.
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -61,14 +62,70 @@ describe("a New issue in Needs Me", () => {
     await userEvent.click(within(p).getByRole("button", { name: "Keep as Draft" }));
     expect(fake.calls).toContain("keep_as_draft");
     const t = await fake.getTicket("acme", "acme-2");
-    expect(t).toMatchObject({ state: "Draft", triage_actions: ["keep_as_draft"] });
+    expect(t).toMatchObject({ state: "Draft", triage_actions: ["keep_as_draft", "wont_fix"] });
     expect(t.awaiting_triage).toBeUndefined();
     expect(t.needs_me_reason).toBeUndefined();
     expect((await fake.needsMe()).count).toBe(0);
   });
 });
 
+// wontFix opens Won't fix's reason box in within, types reason into it,
+// if any, and confirms it.
+async function wontFix(within_: HTMLElement, reason = "") {
+  await userEvent.click(within(within_).getByRole("button", { name: "Won't fix…" }));
+  const form = within(within_).getByRole("form", { name: "Won't fix" });
+  if (reason) await userEvent.type(within(form).getByRole("textbox", { name: /Reason/ }), reason);
+  await userEvent.click(within(form).getByRole("button", { name: "Won't fix" }));
+}
+
+describe("Won't fix on a New issue", () => {
+  it("Cancels it with the reason as its comment, out of Needs Me", async () => {
+    const fake = await world();
+    const p = await renderPanel(fake);
+    await wontFix(p, "Works as intended.");
+    expect(fake.calls).toContain("wont_fix");
+    const t = await fake.getTicket("acme", "acme-2");
+    expect(t).toMatchObject({ state: "Cancelled" });
+    expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Works as intended." });
+    expect(t.moves.at(-1)).toMatchObject({ to: "Cancelled", via: "wont_fix" });
+    expect(t.awaiting_triage).toBeUndefined();
+    expect(t.triage_actions).toBeUndefined();
+    expect((await fake.needsMe()).count).toBe(0);
+  });
+
+  it("needs no reason", async () => {
+    const fake = await world();
+    const p = await renderPanel(fake);
+    await wontFix(p);
+    const t = await fake.getTicket("acme", "acme-2");
+    expect(t.state).toBe("Cancelled");
+    expect(t.comments).toEqual([]);
+  });
+
+  it("can be backed out of before confirming", async () => {
+    const fake = await world();
+    const p = await renderPanel(fake);
+    await userEvent.click(within(p).getByRole("button", { name: "Won't fix…" }));
+    await userEvent.click(within(p).getByRole("button", { name: "Back" }));
+    expect(within(p).queryByRole("form", { name: "Won't fix" })).toBeNull();
+    expect(fake.calls).not.toContain("wont_fix");
+  });
+});
+
 describe("a New issue in Focus Mode", () => {
+  it("offers Won't fix with its reason box, and moves on", async () => {
+    const fake = await world();
+    fake.addTicket("acme", { title: "Next up", state: "Draft" }); // acme-3
+    const g = fake.needsMeGroups;
+    fake.setNeedsMe([...g, { reason: "closed_externally", tickets: [{ id: "acme-3" }] }]);
+    renderApp(fake);
+    const item = await within(focus()).findByRole("region", { name: "New issue" });
+    await wontFix(item, "Not planned.");
+    expect((await fake.getTicket("acme", "acme-2")).comments.at(-1)?.body).toBe("Not planned.");
+    change(fake, without(fake, "acme-2"), "acme-2");
+    expect(await within(focus()).findByRole("heading", { name: "Next up" })).toBeInTheDocument();
+  });
+
   it("is a Focus Item with its panel, and Keep as Draft moves on", async () => {
     const fake = await world();
     const closed = { ...ISSUE, id: "acme/web#8", external_state: "closed", detached: false } as const;
@@ -91,6 +148,23 @@ describe("the triage actions in the Ticket panel", () => {
     const triage = within(d).getByRole("region", { name: "Triage" });
     await userEvent.click(within(triage).getByRole("button", { name: "Keep as Draft" }));
     expect(fake.calls).toContain("keep_as_draft");
+  });
+
+  it("include Won't fix with its reason box", async () => {
+    const fake = await world(false);
+    const d = await renderDetail(fake);
+    await wontFix(within(d).getByRole("region", { name: "Triage" }), "Duplicate of #3.");
+    const t = await fake.getTicket("acme", "acme-2");
+    expect(t.state).toBe("Cancelled");
+    expect(t.comments.at(-1)?.body).toBe("Duplicate of #3.");
+  });
+
+  it("show Won't fix's refusal", async () => {
+    const fake = await world(false);
+    const d = await renderDetail(fake);
+    await fake.unlink("acme", "acme-2"); // the Ticket shown is stale
+    await wontFix(d);
+    expect(await within(d).findByRole("alert")).toHaveTextContent("not an Incoming Issue");
   });
 
   it("are not offered on any other Ticket", async () => {

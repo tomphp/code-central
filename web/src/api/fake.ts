@@ -38,7 +38,8 @@
 // Issues check likewise, refused by seedIssuesCheck, and creates the
 // Issues Spec the first time it turns GitHub Issues on.
 // addIncomingIssue plays the Integration's create_linked_ticket, marking
-// a New issue as the service does, and keep_as_draft clears it.
+// a New issue as the service does, and keep_as_draft and wont_fix clear
+// it.
 //
 // reportPushedCommit and reportCIRuns work a Ticket's CI result out as
 // the service does, with its failure options while it is CI failed;
@@ -71,6 +72,7 @@ import {
 import { fakeActions } from "./fakeActions";
 import {
   ApiError,
+  TRIAGE_ACTIONS,
   DEFAULT_OPTIONS,
   FINISHED,
   FOCUS_CLEARS,
@@ -646,7 +648,7 @@ export class FakeApi implements Api {
       title,
       spec: { id: spec, title: this.specs.get(spec)?.title ?? "" },
       link: { ...link, external_state: "open", detached: false },
-      ...(incoming && { triage_actions: ["keep_as_draft"] }),
+      ...(incoming && { triage_actions: [...TRIAGE_ACTIONS] }),
       ...(awaiting && { awaiting_triage: true }),
     });
     if (awaiting) {
@@ -672,6 +674,25 @@ export class FakeApi implements Api {
     const { awaiting_triage: _a, ...rest } = this.tickets.get(t.id)!;
     this.tickets.set(t.id, rest);
     return this.updateTicket(t.id, {});
+  }
+
+  // wontFix Cancels an Incoming Issue via wont_fix, with reason as its
+  // comment, clearing its awaiting triage and taking it out of Needs Me,
+  // refused on anything else, as core's WontFix is.
+  wontFix(t: TicketView, reason?: string): TicketView {
+    if (!t.triage_actions?.includes("wont_fix")) {
+      throw new ApiError(409, "action_not_allowed", `${t.id} is not an Incoming Issue: only a linked Ticket on the Project's Issues Spec is triaged`);
+    }
+    const at = this.now.toISOString();
+    const body = reason?.trim();
+    this.dropNeedsMe(t.id);
+    const { awaiting_triage: _a, triage_actions: _t, ...rest } = this.tickets.get(t.id)!;
+    this.tickets.set(t.id, rest);
+    return this.updateTicket(t.id, {
+      state: "Cancelled",
+      moves: [...t.moves, { from: t.state, to: "Cancelled", actor: "human", time: at, via: "wont_fix" }],
+      comments: body ? [...t.comments, { number: t.comments.length + 1, actor: "human", time: at, body }] : t.comments,
+    });
   }
 
   // rerunCI records a Re-run request for each failed run of t's latest

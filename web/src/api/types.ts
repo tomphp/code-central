@@ -35,7 +35,10 @@ export type NeedsMeReason =
 
 // A triage action the human may take on an Incoming Issue (Spec
 // code-central-279), each an operation's name.
-export type TriageAction = "keep_as_draft";
+export type TriageAction = "keep_as_draft" | "wont_fix";
+
+// TRIAGE_ACTIONS are the triage actions, in the order they are offered.
+export const TRIAGE_ACTIONS: TriageAction[] = ["keep_as_draft", "wont_fix"];
 
 // A Project's mode: where init puts its files.
 export type Mode = "committed" | "local";

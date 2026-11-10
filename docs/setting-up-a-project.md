@@ -349,11 +349,21 @@ The service stops the Issue Watcher when you turn GitHub Issues off, when you ar
 
 On each check, the Issue Watcher also brings in the repository's open issues, those with the filter label if you set one, oldest first. Every issue arrives once, including those already open when you turned GitHub Issues on, as a Draft Ticket on the Issues Spec with the issue's title and description. Pull requests never arrive. Each Incoming Issue is linked to its issue, with a badge such as **github acme/acme-api#42**, and its panel has an **Open in GitHub** link to the issue, as every linked Spec's and Ticket's does. An issue never arrives twice: not after the Issue Watcher or the service restarts, not after you turn GitHub Issues off and on again, and not after you unlink its Ticket.
 
+### What Code Central writes to an issue
+
+Code Central works out from each Ticket's state what its issue should show, and the Issue Watcher makes it so on its next check. Each linked issue carries one **status label**, which the Issue Watcher creates in the repository if it is missing, taking any other `code-central:` label off the issue:
+
+- `code-central:draft` on an Incoming Issue waiting for triage;
+- `code-central:wont-fix` on one you chose Won't fix for, which is also closed as not planned.
+
+Each comment it posts ends with a link back to the Ticket in Code Central, and is posted exactly once: not again after the Issue Watcher or the service restarts, even if it stopped between posting it and recording it, and not again after you turn GitHub Issues off and on. Anything that comes due while GitHub Issues is off is written once you turn it back on. Your Rounds and their answers, Failure Reports, Transcripts, Claims and comments on a Ticket are never written to GitHub. Unlinking a Ticket stops every write to its issue.
+
 ### Triaging Incoming Issues
 
 An Incoming Issue is a Draft (or Ready) Ticket on the Issues Spec, linked to its issue: its panel's GitHub badge and **Open in GitHub** link open the issue, and its title and description are GitHub's. Its Ticket panel has a **Triage** section with the triage actions, whether or not New issues need me is on:
 
 - **Keep as Draft** leaves it on the Issues Spec as it is, a Draft as it came in, and writes nothing to GitHub. With New issues need me on, it also takes the issue out of Needs Me for good: closing and reopening the issue, editing it, or turning New issues need me off and on never brings it back.
+- **Won't fix** opens a box for an optional reason, then Cancels the Incoming Issue, keeping the reason as its comment, and takes it out of Needs Me. The Issue Watcher then posts the reason on the issue, changes its label to `code-central:wont-fix` and closes it as not planned. With no reason, it only relabels and closes the issue.
 
 With **New issues need me** on, each issue that comes in waits in Needs Me under **New issue**, after Blocked by a Cancelled Ticket and before Closed externally, longest-waiting first. Its row names the issue and when it came in:
 
