@@ -259,11 +259,13 @@ Before every turn, a first turn or a resume after answers, after a cut-off or af
 4. the Factory's `--model` or `--effort` flag;
 5. Claude Code's own default: the Factory passes no flag.
 
-Set tiers 2 and 3 in the [Models section of Project Options](setting-up-a-project.md#choosing-models-for-each-kind-of-work): a Project default row, and a row for each kind of work. A Ticket's kind of work comes from its Labels: `grilling`, `spec` or `tickets` for a Stage, `map-chart`, `map-grilling`, `map-research` or `map-task` for a Map Ticket, `prototype` for a Prototype, and `implementation` for any other Ticket. Override them for one Ticket with its Tags, from an agent with `set_tags`, or by hand:
+Set tiers 2 and 3 in the [Models section of Project Options](setting-up-a-project.md#choosing-models-for-each-kind-of-work): a Project default row, and a row for each kind of work. A Ticket's kind of work comes from its Labels: `grilling`, `spec` or `tickets` for a Stage, `map-chart`, `map-grilling`, `map-research` or `map-task` for a Map Ticket, `prototype` for a Prototype, and `implementation` for any other Ticket. Override them for one Ticket with its Tags, from the Ticket panel, from an agent with `set_tags`, or by hand:
 
 ```sh
 code-central set-tags acme-shop-5 model=opus effort=high
 ```
+
+The Ticket panel shows the model and effort the Ticket's next turn runs with, each with where it comes from: `opus (Ticket Tag)`, `opus (the Project's implementation row)`, `opus (Project default)`, `sonnet (Factory flag)` for the flag the Factory reported it was started with, or `Claude Code's default`. Below each is its picker. The **Model Tag** suggests the aliases and model IDs the Factory reported and takes any other name: **Set** writes the `model` Tag and **Clear** removes it. The **Effort Tag** offers the valid levels: picking one writes the `effort` Tag, and picking **Project's settings** removes it. Without its Tags the Ticket goes back to its Project's settings. The panel follows the Ticket's Tags, the Models rows and the Factory's reports as they change.
 
 `effort` must be one of the valid levels: `low`, `medium`, `high`, `xhigh` and `max` until a Factory has reported its `claude`'s, below, and then those. `set_tags` rejects anything else and lists them. `model` takes any name `claude --model` takes. On a Spec, `model` and `effort` are ordinary Tags with no effect.
 

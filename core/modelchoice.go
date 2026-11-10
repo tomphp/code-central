@@ -38,10 +38,12 @@ const (
 )
 
 // ChoiceValue is one of a Model Choice's values with its source; Value is
-// empty when the source is none.
+// empty when the source is none. Kind names the kind of work whose
+// Models row set it, only when the source is project_kind.
 type ChoiceValue struct {
 	Value  string       `json:"value,omitempty"`
 	Source ChoiceSource `json:"source"`
+	Kind   string       `json:"kind,omitempty"`
 }
 
 // ModelChoice is the model and effort a Ticket's next turn runs with, as
@@ -56,21 +58,22 @@ type ModelChoice struct {
 // default row. It is worked out afresh for every turn, never kept per
 // Claim.
 func modelChoice(p store.Project, t store.Ticket) ModelChoice {
-	kind := p.Models.Kind(GuideName(t.Labels))
+	name := GuideName(t.Labels)
+	kind := p.Models.Kind(name)
 	return ModelChoice{
-		Model:  choose(t.Tags[ModelTag], kind.Model, p.Models.Default.Model),
-		Effort: choose(t.Tags[EffortTag], kind.Effort, p.Models.Default.Effort),
+		Model:  choose(t.Tags[ModelTag], name, kind.Model, p.Models.Default.Model),
+		Effort: choose(t.Tags[EffortTag], name, kind.Effort, p.Models.Default.Effort),
 	}
 }
 
-// choose is the first value set, from the Tag, the kind's row and the
-// default row, with its source.
-func choose(tag, kind, def string) ChoiceValue {
+// choose is the first value set, from the Tag, the row for the kind of
+// work named and the default row, with its source.
+func choose(tag, name, kind, def string) ChoiceValue {
 	switch {
 	case tag != "":
 		return ChoiceValue{Value: tag, Source: SourceTicketTag}
 	case kind != "":
-		return ChoiceValue{Value: kind, Source: SourceProjectKind}
+		return ChoiceValue{Value: kind, Source: SourceProjectKind, Kind: name}
 	case def != "":
 		return ChoiceValue{Value: def, Source: SourceProjectDefault}
 	}

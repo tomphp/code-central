@@ -79,12 +79,13 @@ var handlers = map[string]handlerFunc{
 			return nil, err
 		}
 		// With no part named, the HTTP API returns the whole Ticket: the
-		// UI and the Factory read every part.
+		// UI and the Factory read every part. It carries the Model Choice
+		// too, which the UI's Ticket panel shows.
 		parts := q["part"]
 		if len(parts) == 0 {
 			parts = core.TicketParts
 		}
-		return c.GetTicket(r.Context(), r.PathValue("key"), core.GetTicketInput{Ticket: core.Ref(r.PathValue("n")), Parts: parts})
+		return c.GetTicket(r.Context(), r.PathValue("key"), core.GetTicketInput{Ticket: core.Ref(r.PathValue("n")), Parts: parts, WithModelChoice: true})
 	},
 	"find_tickets": func(c *core.Core, r *http.Request) (any, error) {
 		q := r.URL.Query()

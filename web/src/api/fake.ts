@@ -38,7 +38,9 @@
 // Issues check likewise, refused by seedIssuesCheck, and creates the
 // Issues Spec the first time it turns GitHub Issues on. setModels
 // validates as the service does, effort against the Project's reported
-// levels, EFFORT_LEVELS until reportModels has given some.
+// levels, EFFORT_LEVELS until reportModels has given some, and setTags
+// checks a Ticket's effort Tag the same way. getTicket, the UI's read,
+// carries the Ticket's Model Choice, worked out as the service does.
 // addIncomingIssue plays the Integration's create_linked_ticket, marking
 // a New issue as the service does, and keep_as_draft, to_requirement and
 // wont_fix clear it; to_requirement writes a Requirement whose Spec has
@@ -75,6 +77,7 @@ import {
 import { fakeActions } from "./fakeActions";
 import {
   ApiError,
+  type ChoiceValue,
   DEFAULT_OPTIONS,
   TRIAGE_ACTIONS,
   FINISHED,
@@ -309,6 +312,28 @@ const WAYFINDER_TYPES = ["chart", "grilling", "research", "task"] as const;
 // KINDS_OF_WORK are the Stage Guide names, in the service's order: the
 // Models rows a Project has.
 const KINDS_OF_WORK: string[] = ["grilling", "spec", "tickets", ...WAYFINDER_TYPES.map((t) => `map-${t}`), "prototype", "implementation"];
+// kindOf is a Ticket's kind of work, its Stage Guide name, from its first
+// reserved type Label, as core's GuideName.
+const kindOf = (labels: string[]): string => {
+  for (const l of labels) {
+    if (l === "prototype") return l;
+    const [prefix, name] = [l.slice(0, l.indexOf(":") + 1), l.slice(l.indexOf(":") + 1)];
+    if (prefix === "wayfinder:" && (WAYFINDER_TYPES as readonly string[]).includes(name)) return `map-${name}`;
+    if (prefix === "stage:" && STAGES.some((s) => s.name === name)) return name;
+  }
+  return "implementation";
+};
+// choose is the first of a Model Choice value's tiers set, with its
+// source, as core's choose: the Tag, the row for the kind of work named,
+// then the default row.
+const choose = (tag: string | undefined, name: string, kind: string, def: string): ChoiceValue =>
+  tag
+    ? { value: tag, source: "ticket_tag" }
+    : kind
+      ? { value: kind, source: "project_kind", kind: name }
+      : def
+        ? { value: def, source: "project_default" }
+        : { source: "none" };
 const MAP_SECTIONS = ["Destination", "Notes", "Decisions so far", "Not yet specified", "Out of scope"];
 // specTitle is the text's first non-blank line without Markdown heading
 // marks, as core's specTitle.
@@ -922,9 +947,20 @@ export class FakeApi implements Api {
     return this.rowsOf(rows);
   }
 
+  // getTicket is the UI's read, so it carries the Model Choice.
   async getTicket(project: string, id: string): Promise<TicketView> {
     this.calls.push("getTicket");
-    return this.view(this.ticket(project, id));
+    const t = this.ticket(project, id);
+    const { models } = this.project(project);
+    const name = kindOf(t.labels);
+    const kind = models.kinds.find((k) => k.kind === name) ?? { model: "", effort: "" };
+    return {
+      ...this.view(t),
+      model_choice: {
+        model: choose(t.tags.model, name, kind.model, models.default.model),
+        effort: choose(t.tags.effort, name, kind.effort, models.default.effort),
+      },
+    };
   }
 
   async getSpec(project: string, spec: string): Promise<SpecDetail> {
@@ -1487,7 +1523,7 @@ export class FakeApi implements Api {
 
   async setTags(project: string, target: string, tags: Record<string, string>): Promise<TargetView> {
     this.calls.push("setTags");
-    return this.retag(project, target, (old) => ({ ...old, ...tags }));
+    return this.retag(project, target, (old) => ({ ...old, ...tags }), tags.effort);
   }
 
   async removeTags(project: string, target: string, keys: string[]): Promise<TargetView> {
@@ -1495,8 +1531,10 @@ export class FakeApi implements Api {
     return this.retag(project, target, (old) => Object.fromEntries(Object.entries(old).filter(([k]) => !keys.includes(k))));
   }
 
-  // retag replaces a Spec's or Ticket's Tags with change's.
-  private retag(project: string, target: string, change: (old: Record<string, string>) => Record<string, string>): TargetView {
+  // retag replaces a Spec's or Ticket's Tags with change's. On a Ticket,
+  // an effort being set sets its Model Choice, so it is checked against
+  // the valid levels.
+  private retag(project: string, target: string, change: (old: Record<string, string>) => Record<string, string>, effort?: string): TargetView {
     this.writable(project);
     const id = `${project}-${target.slice(target.lastIndexOf("-") + 1)}`;
     const s = this.specs.get(id);
@@ -1506,6 +1544,10 @@ export class FakeApi implements Api {
       return structuredClone({ id, kind: "spec", labels: s.labels, tags: s.tags });
     }
     const old = this.ticket(project, target);
+    const levels = this.project(project).reported_models.effort_levels;
+    if (effort !== undefined && !levels.includes(effort)) {
+      throw new ApiError(422, "invalid", `effort "${effort}" isn't a valid level; use one of ${levels.join(", ")}`, "tags");
+    }
     const t = this.updateTicket(old.id, { tags: change(old.tags) });
     return structuredClone({ id: t.id, kind: "ticket", labels: t.labels, tags: t.tags });
   }
@@ -1820,9 +1862,9 @@ export class FakeApi implements Api {
 // written is a write's acknowledgement, as the service derives it: the
 // fields, in the view's order, whose value differs between the views
 // before and after the write, except those unlisted.
-function written<V extends SpecView | TicketView>(fields: readonly (keyof V & string)[], before: V, after: V, unlisted: string[]) {
+function written<V extends SpecView | TicketView, F extends keyof V & string>(fields: readonly F[], before: V, after: V, unlisted: string[]) {
   const changed = fields.filter((f) => !unlisted.includes(f) && JSON.stringify(before[f]) !== JSON.stringify(after[f]));
-  const edit = changed.includes("edits") ? after.edits.at(-1)?.number : undefined;
+  const edit = (changed as string[]).includes("edits") ? after.edits.at(-1)?.number : undefined;
   return { id: after.id, updated: after.updated, changed, ...(edit && { edit }) };
 }
 
