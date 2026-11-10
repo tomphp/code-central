@@ -63,17 +63,22 @@ type UsageResponse struct {
 // PostUsage is POST /api/usage {session_id, responses}: it records the
 // responses under the newest Claim with that session ID, live or ended,
 // as Session Events are filed, and counts as a ping. With no such Claim
-// they are dropped. A response with no time is dated now. It never fails.
+// they are dropped. A response with no time is dated now. The models they
+// name join the Project's Reported Models. It never fails.
 func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []UsageResponse) {
 	if sessionID == "" {
 		return
 	}
 	c.Ping(ctx, sessionID)
-	if len(responses) == 0 || c.usage == nil {
+	if len(responses) == 0 {
 		return
 	}
 	k, _, ok := c.newestClaim(sessionID)
 	if !ok {
+		return
+	}
+	c.addModelIDs(k.project, responses)
+	if c.usage == nil {
 		return
 	}
 	rs := make([]usage.Response, len(responses))
