@@ -30,7 +30,7 @@ import type {
   SessionUsageFilter,
   SessionUsageView,
   TargetView,
-  UsageView, GitHubIssuesChange
+  UsageView, GitHubIssuesChange, Models
 } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
@@ -116,6 +116,10 @@ export interface Api {
   // Issues Spec, titled like "GitHub Issues: acme/web", which follows a
   // changed repository unless the human retitled it.
   setGitHubIssues(project: string, settings: GitHubIssuesChange): Promise<ProjectView>;
+  // setModels replaces the Project's Models rows whole: a kind left out
+  // is set to Default. A model is trimmed and can't be blank or span
+  // lines; an effort must be one of the valid levels.
+  setModels(project: string, models: Models): Promise<ProjectView>;
   // addCIRule adds a CI Rule and creates its Spec, titled like "CI: ci.yml
   // on main"; editCIRule changes the rule on Spec spec, and
   // removeCIRule removes it, leaving its Spec as the record. Workflow and

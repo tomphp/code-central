@@ -67,6 +67,9 @@ type Project struct {
 	// GitHubIssues is the Project's GitHub Issues settings. A Project
 	// stored without them reads as the zero GitHubIssues: off.
 	GitHubIssues GitHubIssues
+	// Models is the Project's Models rows. A Project stored without them
+	// sets no model or effort.
+	Models Models
 }
 
 // LandingMethod is how accepted work reaches a Project's base.
@@ -215,6 +218,51 @@ type GitHubIssues struct {
 	Label           string
 	NewIssuesNeedMe bool
 	Spec            int
+}
+
+// Models is a Project's Models rows (Spec code-central-301): the model
+// and effort for the Project default and for each kind of work, as plain
+// strings, each empty when the row leaves it unset.
+type Models struct {
+	Default ModelRow
+	// Kinds holds only the rows that set something, one per kind of work
+	// at most, in ModelKinds order.
+	Kinds []KindModels
+}
+
+// ModelRow is one Models row's model and effort, each empty when unset.
+type ModelRow struct {
+	Model  string
+	Effort string
+}
+
+// KindModels is the Models row for one kind of work, a Stage Guide name.
+type KindModels struct {
+	Kind string
+	ModelRow
+}
+
+// ModelKinds are the kinds of work a Models row may name: core's
+// GuideNames, which core's tests keep in step.
+var ModelKinds = []string{"grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"}
+
+// IsZero reports whether m sets nothing.
+func (m Models) IsZero() bool { return m.Default == (ModelRow{}) && len(m.Kinds) == 0 }
+
+// Equal reports whether m and n set the same rows.
+func (m Models) Equal(n Models) bool {
+	return m.Default == n.Default && slices.Equal(m.Kinds, n.Kinds)
+}
+
+// Kind is the row for the kind of work named kind, empty when it sets
+// nothing.
+func (m Models) Kind(kind string) ModelRow {
+	for _, k := range m.Kinds {
+		if k.Kind == kind {
+			return k.ModelRow
+		}
+	}
+	return ModelRow{}
 }
 
 // Spec is a description of work, stored as Markdown with YAML frontmatter.

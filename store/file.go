@@ -241,6 +241,12 @@ func (s *FileStore) loadProject(key string) error {
 	if g := pf.GitHubIssues; g != nil {
 		p.GitHubIssues = GitHubIssues{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
 	}
+	if m := pf.Models; m != nil {
+		var field string
+		if p.Models, field, err = decodeModels(*m); err != nil {
+			return &LoadError{File: rel, Field: "models." + field, Msg: err.Error()}
+		}
+	}
 	s.setProject(p)
 	if err := s.loadCIRuns(key); err != nil {
 		return err

@@ -259,7 +259,7 @@ Before every turn, a first turn or a resume after answers, after a cut-off or af
 4. the Factory's `--model` or `--effort` flag;
 5. Claude Code's own default: the Factory passes no flag.
 
-Tiers 2 and 3 arrive with the Models section of Project Options; until then a Ticket's Tags and the Factory's flags decide. Set the Tags from an agent with `set_tags`, or by hand:
+Set tiers 2 and 3 in the [Models section of Project Options](setting-up-a-project.md#choosing-models-for-each-kind-of-work): a Project default row, and a row for each kind of work. A Ticket's kind of work comes from its Labels: `grilling`, `spec` or `tickets` for a Stage, `map-chart`, `map-grilling`, `map-research` or `map-task` for a Map Ticket, `prototype` for a Prototype, and `implementation` for any other Ticket. Override them for one Ticket with its Tags, from an agent with `set_tags`, or by hand:
 
 ```sh
 code-central set-tags acme-shop-5 model=opus effort=high
@@ -267,7 +267,7 @@ code-central set-tags acme-shop-5 model=opus effort=high
 
 `effort` must be one of `low`, `medium`, `high`, `xhigh` and `max`; `set_tags` rejects anything else and lists them. `model` takes any name `claude --model` takes. On a Spec, `model` and `effort` are ordinary Tags with no effect.
 
-The choice is worked out afresh each turn, so a Tag changed while a Ticket waits on a Round applies when it resumes. Each Claim in the Ticket's Claims records the model and effort its latest turn ran with, or Claude Code's default. Only the sessions the Factory starts are affected: subagents they start, such as code-review's reviewers, keep their own agent definitions' models.
+The choice is worked out afresh each turn, so a Tag or Models row changed while a Ticket waits on a Round applies when it resumes, with no Factory restart. Each Claim in the Ticket's Claims records the model and effort its latest turn ran with, or Claude Code's default. Only the sessions the Factory starts are affected: subagents they start, such as code-review's reviewers, keep their own agent definitions' models.
 
 ## Map Tickets and Prototypes
 

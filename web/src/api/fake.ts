@@ -36,7 +36,9 @@
 // changes what it watches while on, as the service does: it passes
 // unless seedCICheck has given it a refusal. setGitHubIssues runs the
 // Issues check likewise, refused by seedIssuesCheck, and creates the
-// Issues Spec the first time it turns GitHub Issues on.
+// Issues Spec the first time it turns GitHub Issues on. setModels
+// validates as the service does, effort against EFFORT_LEVELS unless
+// seedEffortLevels has given others.
 // addIncomingIssue plays the Integration's create_linked_ticket, marking
 // a New issue as the service does, and keep_as_draft, to_requirement and
 // wont_fix clear it; to_requirement writes a Requirement whose Spec has
@@ -138,7 +140,10 @@ import {
   type Transcript,
   USAGE_DAYS,
   USAGE_KEPT_DAYS,
+  EFFORT_LEVELS,
   sessionKey,
+  type ModelRow,
+  type Models,
   type UsageDay,
   type UsageDayTokens,
   type UsageFilter,
@@ -277,6 +282,7 @@ interface FakeProject {
   landing: Landing;
   ci: CISettings;
   github_issues: GitHubIssuesSettings;
+  models: Models;
   next: number;
 }
 
@@ -297,6 +303,9 @@ const stageOf = (t: { labels: string[] }) => STAGES.find((s) => t.labels.include
 // The Map's Ticket types and its body's sections, as core's WayfinderTypes
 // and MapSections.
 const WAYFINDER_TYPES = ["chart", "grilling", "research", "task"] as const;
+// KINDS_OF_WORK are the Stage Guide names, in the service's order: the
+// Models rows a Project has.
+const KINDS_OF_WORK: string[] = ["grilling", "spec", "tickets", ...WAYFINDER_TYPES.map((t) => `map-${t}`), "prototype", "implementation"];
 const MAP_SECTIONS = ["Destination", "Notes", "Decisions so far", "Not yet specified", "Out of scope"];
 // specTitle is the text's first non-blank line without Markdown heading
 // marks, as core's specTitle.
@@ -375,6 +384,8 @@ export class FakeApi implements Api {
   private ciCheck?: { reason: string; fix: string; field?: "tracking" | "repository" };
   // issuesCheck is the refusal the Issues check answers with; none passes.
   private issuesCheck?: { reason: string; fix: string; field?: "on" | "repository" };
+  // effortLevels are the valid effort levels.
+  private effortLevels = EFFORT_LEVELS;
   private usageCalls: FakeUsageCall[] = [];
   private usageResponses: FakeUsageRecord[] = [];
 
@@ -400,6 +411,7 @@ export class FakeApi implements Api {
         watcher: { state: "not_reported" },
       },
       github_issues: { on: false, repository: "", label: "", new_issues_need_me: false, watcher: { state: "not_reported" } },
+      models: { default: { model: "", effort: "" }, kinds: KINDS_OF_WORK.map((kind) => ({ kind, model: "", effort: "" })) },
       next: 1,
     });
     this.emit({ type: "project.changed", project: key });
@@ -504,6 +516,12 @@ export class FakeApi implements Api {
   // repository's), or, with none, passed.
   seedIssuesCheck(refused?: { reason: string; fix: string; field?: "on" | "repository" }) {
     this.issuesCheck = refused;
+  }
+
+  // seedEffortLevels sets the valid effort levels setModels checks
+  // against, as a Factory's report of its claude's would.
+  seedEffortLevels(levels: string[]) {
+    this.effortLevels = levels;
   }
 
   // seedCIWatcherCrash shows key's CI Watcher as the service reports one
@@ -1123,6 +1141,41 @@ export class FakeApi implements Api {
       this.emit({ type: "project.changed", project: key });
       // The failure options a CI failed Ticket is offered follow it.
       for (const t of this.ticketsIn(key)) if (t.pushed_commit) this.trackCI(key, t);
+    }
+    return this.projectView(p);
+  }
+
+  async setModels(key: string, change: Models): Promise<ProjectView> {
+    this.calls.push("setModels");
+    const p = this.writable(key);
+    const row = (field: string, name: string, r: ModelRow): ModelRow => {
+      const model = r.model.trim();
+      if (r.model !== "" && model === "") {
+        throw new ApiError(422, "invalid", `${name}'s model is blank; leave it empty for Default`, `${field}.model`);
+      }
+      if (/[\r\n]/.test(model)) {
+        throw new ApiError(422, "invalid", `${name}'s model spans more than one line; a model is one line`, `${field}.model`);
+      }
+      if (r.effort !== "" && !this.effortLevels.includes(r.effort)) {
+        throw new ApiError(422, "invalid", `effort "${r.effort}" isn't a valid level; use one of ${this.effortLevels.join(", ")}`, `${field}.effort`);
+      }
+      return { model, effort: r.effort };
+    };
+    const kinds = new Map<string, ModelRow>();
+    for (const k of change.kinds) {
+      if (!KINDS_OF_WORK.includes(k.kind)) {
+        throw new ApiError(422, "invalid", `"${k.kind}" isn't a kind of work; the kinds are ${KINDS_OF_WORK.join(", ")}`, "kinds");
+      }
+      if (kinds.has(k.kind)) throw new ApiError(422, "invalid", `there are two rows for "${k.kind}"; give each kind of work one`, "kinds");
+      kinds.set(k.kind, row(`kinds.${k.kind}`, `the ${k.kind} row`, k));
+    }
+    const next: Models = {
+      default: row("default", "the Project default", change.default),
+      kinds: KINDS_OF_WORK.map((kind) => ({ kind, ...(kinds.get(kind) ?? { model: "", effort: "" }) })),
+    };
+    if (JSON.stringify(next) !== JSON.stringify(p.models)) {
+      p.models = next;
+      this.emit({ type: "project.changed", project: key });
     }
     return this.projectView(p);
   }

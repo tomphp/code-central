@@ -31,8 +31,10 @@ type ChoiceSource string
 // The sources Code Central works out. SourceNone leaves the value to the
 // Factory: its flag, or else Claude Code's default.
 const (
-	SourceTicketTag ChoiceSource = "ticket_tag"
-	SourceNone      ChoiceSource = "none"
+	SourceTicketTag      ChoiceSource = "ticket_tag"
+	SourceProjectKind    ChoiceSource = "project_kind"
+	SourceProjectDefault ChoiceSource = "project_default"
+	SourceNone           ChoiceSource = "none"
 )
 
 // ChoiceValue is one of a Model Choice's values with its source; Value is
@@ -49,17 +51,28 @@ type ModelChoice struct {
 	Effort ChoiceValue `json:"effort"`
 }
 
-// modelChoice works out t's Model Choice, highest tier first. It is
-// worked out afresh for every turn, never kept per Claim.
-func modelChoice(t store.Ticket) ModelChoice {
-	return ModelChoice{Model: choose(t, ModelTag), Effort: choose(t, EffortTag)}
+// modelChoice works out the Model Choice of t, on Project p, highest
+// tier first: t's Tag, p's Models row for t's kind of work, then p's
+// default row. It is worked out afresh for every turn, never kept per
+// Claim.
+func modelChoice(p store.Project, t store.Ticket) ModelChoice {
+	kind := p.Models.Kind(GuideName(t.Labels))
+	return ModelChoice{
+		Model:  choose(t.Tags[ModelTag], kind.Model, p.Models.Default.Model),
+		Effort: choose(t.Tags[EffortTag], kind.Effort, p.Models.Default.Effort),
+	}
 }
 
-// choose is the value of the Tag named tag on t, or the next tier down.
-// The Project's Models rows slot in between the Tag and none.
-func choose(t store.Ticket, tag string) ChoiceValue {
-	if v := t.Tags[tag]; v != "" {
-		return ChoiceValue{Value: v, Source: SourceTicketTag}
+// choose is the first value set, from the Tag, the kind's row and the
+// default row, with its source.
+func choose(tag, kind, def string) ChoiceValue {
+	switch {
+	case tag != "":
+		return ChoiceValue{Value: tag, Source: SourceTicketTag}
+	case kind != "":
+		return ChoiceValue{Value: kind, Source: SourceProjectKind}
+	case def != "":
+		return ChoiceValue{Value: def, Source: SourceProjectDefault}
 	}
 	return ChoiceValue{Source: SourceNone}
 }
@@ -89,14 +102,15 @@ type GetModelChoiceInput struct {
 func (c *Core) GetModelChoice(_ context.Context, key string, in GetModelChoiceInput) (ModelChoice, error) {
 	var mc ModelChoice
 	err := c.store.View(func(r store.Reader) error {
-		if _, ok := r.Project(key); !ok {
+		p, ok := r.Project(key)
+		if !ok {
 			return unknownProject(key)
 		}
 		t, err := resolveTicket(r, key, "get_model_choice", "ticket", in.Ticket)
 		if err != nil {
 			return err
 		}
-		mc = modelChoice(t)
+		mc = modelChoice(p, t)
 		return nil
 	})
 	return mc, err

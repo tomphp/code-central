@@ -37,6 +37,7 @@ func Schema() string {
 	values(fmt.Sprintf("  options focus_clear (default %s)", DefaultOptions().FocusClear), FocusClearNames())
 	values("  project landing.method (no landing: merge, push false, remote origin)", landingMethodNames())
 	values("  project ci.provider (no ci: tracking off, github_actions)", ciProviderNames())
+	values("  project models.kinds[].kind", ModelKinds)
 	values("  ticket state, moves[].from, moves[].to", states)
 	var statuses, conclusions []string
 	for _, s := range CIRunStatuses {

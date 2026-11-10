@@ -151,6 +151,29 @@ export interface GitHubIssuesSettings extends GitHubIssuesChange {
   watcher: IssueWatcherStatus;
 }
 
+// A Models row (Spec code-central-301): the model and effort it sets,
+// each "" for Default, which leaves it to the tier below.
+export interface ModelRow {
+  model: string;
+  effort: string;
+}
+
+// The Models row for one kind of work, a Stage Guide name.
+export interface KindModels extends ModelRow {
+  kind: string;
+}
+
+// A Project's Models: the Project default row, then a row for every kind
+// of work, in the guides' order.
+export interface Models {
+  default: ModelRow;
+  kinds: KindModels[];
+}
+
+// EFFORT_LEVELS are the valid effort levels until a Factory reports its
+// claude's.
+export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
+
 // A Ticket's CI result (code-central-256), from the runs of its latest
 // pushed commit that aren't ignored: running while any is unfinished or
 // none is reported, failed if any concluded failure, cancelled or timed
@@ -246,6 +269,8 @@ export interface ProjectView {
   ci: CISettings;
   // github_issues is always filled in: GitHub Issues off by default.
   github_issues: GitHubIssuesSettings;
+  // models is always filled in: every row at Default to begin with.
+  models: Models;
 }
 
 export interface ProjectRow extends ProjectView {

@@ -1,22 +1,26 @@
 // The Project Options page: one Project's settings, reached from its menu
 // in the left pane, a section each: the Landing Method, CI with its CI
-// Rules, and GitHub Issues.
+// Rules, GitHub Issues, and Models.
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
-import type {
-  ApiError,
-  CIProvider,
-  CIRule,
-  CIRuleChange,
-  CISettings,
-  CIWatcherStatus,
-  GitHubIssuesChange,
-  GitHubIssuesSettings,
-  IssueWatcherStatus,
-  Landing,
-  LandingMethod,
-  ProjectRow,
+import {
+  EFFORT_LEVELS,
+  type ApiError,
+  type CIProvider,
+  type CIRule,
+  type CIRuleChange,
+  type CISettings,
+  type CIWatcherStatus,
+  type GitHubIssuesChange,
+  type GitHubIssuesSettings,
+  type IssueWatcherStatus,
+  type Landing,
+  type LandingMethod,
+  type ModelRow,
+  type Models,
+  type ProjectRow,
 } from "../api/types";
+import { CLAUDE_CODE_DEFAULT } from "../format";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { githubRepository } from "./githubRepository";
 
@@ -47,6 +51,7 @@ export function ProjectOptions({ api, projects, project: key, navigate }: Projec
           <LandingMethodSection api={api} project={project} />
           <CISection api={api} project={project} />
           <GitHubIssuesSection api={api} project={project} />
+          <ModelsSection api={api} project={project} />
         </>
       )}
     </main>
@@ -483,6 +488,116 @@ function GitHubIssuesSection({ api, project }: { api: Api; project: ProjectRow }
       {project.github_issues.on && (
         <WatcherStatus name="Issue Watcher" repository={project.github_issues.repository} watcher={project.github_issues.watcher} />
       )}
+    </fieldset>
+  );
+}
+
+// ModelsSection is the Project's Models (Spec code-central-301): the
+// model and effort for the Project default, then for each kind of work.
+// Each row's model is free text, empty for Default, and its effort one of
+// the valid levels or Default; Default shows what it inherits. Save
+// replaces the rows whole. Like the other sections it follows the Project
+// as read.
+function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
+  const stored = JSON.stringify(project.models);
+  const [draft, setDraft] = useState<Models>(project.models);
+  const [error, setError] = useState<ApiError>();
+  const [saved, setSaved] = useState(false);
+  const id = useId();
+  useEffect(() => setDraft(JSON.parse(stored) as Models), [stored]);
+
+  const edit = (kind: string | undefined, patch: Partial<ModelRow>) => {
+    setDraft((d) =>
+      kind === undefined
+        ? { ...d, default: { ...d.default, ...patch } }
+        : { ...d, kinds: d.kinds.map((k) => (k.kind === kind ? { ...k, ...patch } : k)) },
+    );
+    setError(undefined);
+    setSaved(false);
+  };
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    setError(undefined);
+    api.setModels(project.key, draft).then(
+      (v) => {
+        setDraft(v.models);
+        setSaved(true);
+      },
+      (e: ApiError) => setError(e),
+    );
+  };
+  const changed = JSON.stringify(draft) !== stored;
+  // A kind's row inherits the Project default as typed; the Project
+  // default inherits Claude Code's default.
+  const inherited = (kind: string | undefined, value: keyof ModelRow) =>
+    `Default (${(kind !== undefined && draft.default[value].trim()) || CLAUDE_CODE_DEFAULT})`;
+  // Each row has its kind (none for the Project default), its name in
+  // the pickers' labels, and the prefix of its fields in a refusal.
+  const rows: { kind?: string; name: string; header: string; field: string; row: ModelRow }[] = [
+    { name: "the Project default", header: "Project default", field: "default", row: draft.default },
+    ...draft.kinds.map((k) => ({ kind: k.kind, name: k.kind, header: k.kind, field: `kinds.${k.kind}`, row: k })),
+  ];
+  const invalid = (field: string) => (error?.field === field ? { "aria-invalid": true, "aria-describedby": `${id}-error` } : undefined);
+
+  return (
+    <fieldset className="project-options-section" disabled={project.archived}>
+      <legend>Models</legend>
+      <p className="project-options-hint project-options-models-hint">
+        The model and effort the Factory&apos;s sessions run with, for each kind of work. A Ticket&apos;s model and effort Tags come first,
+        then its kind&apos;s row here, then the Project default; what is left at Default falls to the Factory&apos;s --model and --effort, and
+        then to Claude Code&apos;s default. A change applies from each Ticket&apos;s next turn.
+      </p>
+      <form onSubmit={save}>
+        <table className="project-options-models">
+          <thead>
+            <tr>
+              <th scope="col">Kind of work</th>
+              <th scope="col">Model</th>
+              <th scope="col">Effort</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ kind, name, header, field, row }) => {
+              const levels = row.effort && !EFFORT_LEVELS.includes(row.effort) ? [...EFFORT_LEVELS, row.effort] : EFFORT_LEVELS;
+              return (
+                <tr key={header}>
+                  <th scope="row">{header}</th>
+                  <td>
+                    <input
+                      aria-label={`Model for ${name}`}
+                      value={row.model}
+                      placeholder={inherited(kind, "model")}
+                      onChange={(e) => edit(kind, { model: e.target.value })}
+                      {...invalid(`${field}.model`)}
+                    />
+                  </td>
+                  <td>
+                    <select aria-label={`Effort for ${name}`} value={row.effort} onChange={(e) => edit(kind, { effort: e.target.value })} {...invalid(`${field}.effort`)}>
+                      <option value="">{inherited(kind, "effort")}</option>
+                      {levels.map((l) => (
+                        <option key={l} value={l}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {error && <Refusal id={`${id}-error`} error={error} />}
+        <div className="project-options-actions">
+          <button type="submit" className="btn primary" disabled={!changed}>
+            Save
+          </button>
+          {saved && !changed && (
+            <span role="status" className="muted">
+              Saved
+            </span>
+          )}
+        </div>
+      </form>
     </fieldset>
   );
 }
