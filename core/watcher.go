@@ -60,6 +60,10 @@ var watcherKinds = map[WatcherKind]watcherKind{
 // Name is the kind's glossary name, such as CI Watcher.
 func (k WatcherKind) Name() string { return watcherKinds[k].name }
 
+// Setting is the name of the Project setting that turns the kind on, such
+// as CI Tracking.
+func (k WatcherKind) Setting() string { return watcherKinds[k].setting }
+
 // WatcherProblem names why a Watcher can't watch what it watches.
 type WatcherProblem string
 

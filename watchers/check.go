@@ -22,8 +22,8 @@ const checkLimit = time.Minute
 // Watcher's check mode, in environ, the service's environment, so gh is
 // found on the service's PATH, and reads its result. A check that doesn't
 // finish is the check failed problem, naming kind, with the fix of
-// turning setting on again once the service's log is checked.
-func Check(ctx context.Context, program string, environ, args []string, kind core.WatcherKind, setting string) core.WatcherCheckResult {
+// turning its setting on again once the service's log is checked.
+func Check(ctx context.Context, program string, environ, args []string, kind core.WatcherKind) core.WatcherCheckResult {
 	ctx, cancel := context.WithTimeout(ctx, checkLimit)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, program, args...)
@@ -40,7 +40,7 @@ func Check(ctx context.Context, program string, environ, args []string, kind cor
 			err = fmt.Errorf("%w: %s", err, line)
 		}
 		return core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: fmt.Sprintf("The %s's check didn't finish: %v", kind.Name(), err),
-			Fix: "Check the service's log, then turn " + setting + " on again."}
+			Fix: "Check the service's log, then turn " + kind.Setting() + " on again."}
 	}
 	return r
 }

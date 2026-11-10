@@ -28,6 +28,6 @@ func CheckArgs(in core.CICheckInput) []string {
 // service's environment, so gh is found on the service's PATH.
 func Checker(program string, environ []string) core.CICheck {
 	return func(ctx context.Context, in core.CICheckInput) core.WatcherCheckResult {
-		return watchers.Check(ctx, program, environ, CheckArgs(in), core.WatcherCI, "CI Tracking")
+		return watchers.Check(ctx, program, environ, CheckArgs(in), core.WatcherCI)
 	}
 }

@@ -1082,9 +1082,11 @@ export class FakeApi implements Api {
       p.github_issues = next;
       this.emit({ type: "project.changed", project: key });
     }
-    // The Issues Spec's title follows the repository, unless the human retitled it.
+    // The Issues Spec's title follows the repository, unless the human
+    // retitled it: it still has the title the service gave it.
     const s = was.spec && this.specs.get(was.spec);
-    if (s && was.repository && repository && was.repository !== repository && s.title === issuesSpecTitle(was.repository)) {
+    const given = s && /^GitHub Issues: [A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(s.title);
+    if (s && given && repository && was.repository !== repository && s.title !== issuesSpecTitle(repository)) {
       s.edits.push({ number: s.edits.length + 1, actor: "human", time: this.now.toISOString(), previous: { title: s.title } });
       s.title = issuesSpecTitle(repository);
       s.updated = this.now.toISOString();

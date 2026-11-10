@@ -37,7 +37,7 @@ func CheckArgs(in core.IssuesCheckInput) []string {
 // the service's environment, so gh is found on the service's PATH.
 func Checker(program string, environ []string) core.IssuesCheck {
 	return func(ctx context.Context, in core.IssuesCheckInput) core.WatcherCheckResult {
-		return watchers.Check(ctx, program, environ, CheckArgs(in), core.WatcherIssues, "GitHub Issues")
+		return watchers.Check(ctx, program, environ, CheckArgs(in), core.WatcherIssues)
 	}
 }
 

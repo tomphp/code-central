@@ -5,6 +5,7 @@ import (
 	"errors"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -24,7 +25,14 @@ var ctx = context.Background()
 // own executable, with gh found on path. Its client is the human's.
 func serviceWith(t *testing.T, h *ciwatchertest.Harness, path ...string) *codecentraltest.Server {
 	t.Helper()
-	srv := codecentraltest.NewServer(t, codecentraltest.WithIssuesCheck(issuewatcher.Checker(h.CodeCentral, h.Environ(path...))))
+	return serviceRunning(t, h.CodeCentral, h.Environ(path...))
+}
+
+// serviceRunning is serviceWith with program, in environ, as the
+// service's own executable.
+func serviceRunning(t *testing.T, program string, environ []string) *codecentraltest.Server {
+	t.Helper()
+	srv := codecentraltest.NewServer(t, codecentraltest.WithIssuesCheck(issuewatcher.Checker(program, environ)))
 	if _, err := srv.Client.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +44,7 @@ func serviceWith(t *testing.T, h *ciwatchertest.Harness, path ...string) *codece
 // with issues on or off, on which gh's login has permissions.
 func repository(h *ciwatchertest.Harness, issues bool, permissions string) {
 	h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web"},
-		Stdout: `{"full_name":"acme/web","has_issues":` + map[bool]string{true: "true", false: "false"}[issues] + `,"permissions":` + permissions + `}`})
+		Stdout: `{"full_name":"acme/web","has_issues":` + strconv.FormatBool(issues) + `,"permissions":` + permissions + `}`})
 }
 
 const (
@@ -60,7 +68,7 @@ func refusal(t *testing.T, err error) *core.Error {
 	return e
 }
 
-// on is acme's GitHub Issues settings, as the HTTP API reads them.
+// settings is acme's GitHub Issues settings, as the HTTP API reads them.
 func settings(t *testing.T, srv *codecentraltest.Server) core.GitHubIssuesView {
 	t.Helper()
 	p, err := srv.Client.GetProject(ctx, "acme")
@@ -147,11 +155,7 @@ func TestAnAnswerTheCheckCantReadRefusesGitHubIssues(t *testing.T) {
 
 func TestACheckThatDoesntFinishRefusesGitHubIssues(t *testing.T) {
 	h := ciwatchertest.New(t)
-	srv := codecentraltest.NewServer(t, codecentraltest.WithIssuesCheck(issuewatcher.Checker(filepath.Join(t.TempDir(), "missing"), h.Environ(h.Bin))))
-	if _, err := srv.Client.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); err != nil {
-		t.Fatal(err)
-	}
-	srv.Client.Actor = core.Human
+	srv := serviceRunning(t, filepath.Join(t.TempDir(), "missing"), h.Environ(h.Bin))
 	if e := refusal(t, turnOn(srv)); !strings.Contains(e.Message, "Issue Watcher's check didn't finish") || !strings.Contains(e.Fix, "GitHub Issues") {
 		t.Fatalf("refusal %+v, want the check that didn't finish, with a fix", e)
 	}

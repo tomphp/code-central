@@ -158,6 +158,12 @@ func TestChangingTheRepositoryRetitlesTheIssuesSpec(t *testing.T) {
 	if s := issuesSpec(t, srv, 4); s["title"] != "GitHub Issues: acme/app" {
 		t.Fatalf("title %v, want it to follow the repository while off", s["title"])
 	}
+	// Off, the repository may be cleared; the next one still retitles it.
+	httpOK(t, srv, setGitHubIssues(`{"on":false,"repository":""}`))
+	httpOK(t, srv, setGitHubIssues(`{"on":true,"repository":"acme/api"}`))
+	if s := issuesSpec(t, srv, 4); s["title"] != "GitHub Issues: acme/api" {
+		t.Fatalf("title %v, want it to follow a repository set after clearing one", s["title"])
+	}
 }
 
 func TestChangingTheRepositoryKeepsTheHumansTitle(t *testing.T) {

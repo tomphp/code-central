@@ -98,8 +98,8 @@ func (c *Core) SetGitHubIssues(ctx context.Context, key string, in SetGitHubIssu
 	if err != nil {
 		return Written[ProjectView]{}, err
 	}
-	if was.Spec != 0 && was.Repository != g.Repository {
-		if err := c.followRepository(ctx, key, was.Spec, was.Repository, g.Repository); err != nil {
+	if was.Spec != 0 && was.Repository != g.Repository && g.Repository != "" {
+		if err := c.retitleIssuesSpec(ctx, key, was.Spec, g.Repository); err != nil {
 			return Written[ProjectView]{}, err
 		}
 	}
@@ -124,12 +124,14 @@ func (c *Core) createIssuesSpec(key, repository string) (int, error) {
 	return n, err
 }
 
-// followRepository retitles Issues Spec n from the old repository's title
-// to the new one's, unless the human has changed its title.
-func (c *Core) followRepository(ctx context.Context, key string, n int, old, repository string) error {
+// retitleIssuesSpec retitles Issues Spec n after repository, unless the
+// human has changed its title: it still has the title Code Central gave
+// it for some repository, which may since have been cleared.
+func (c *Core) retitleIssuesSpec(ctx context.Context, key string, n int, repository string) error {
 	return c.store.Update(func(w store.Writer) error {
 		s, ok := w.Spec(key, n)
-		if !ok || s.Title != issuesSpecTitle(old) || old == "" || repository == "" {
+		named, given := strings.CutPrefix(s.Title, issuesSpecTitle(""))
+		if !ok || !given || !repositoryPattern.MatchString(named) || s.Title == issuesSpecTitle(repository) {
 			return nil
 		}
 		s.Updated = c.now()
