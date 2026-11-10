@@ -33,7 +33,8 @@ type GiveUpInput struct {
 
 // SendBackInput is send_back's input. From Failed (the human's) the note
 // is optional, and a send-back with no note means nothing has changed.
-// From Accepted (any Actor's, ticket 72) the note is required.
+// From Accepted (the agent's on a conflict, ticket 72, or the human's to
+// fix a CI failure, code-central-264) the note is required.
 type SendBackInput struct {
 	Ticket Ref    `json:"ticket"`
 	Note   string `json:"note,omitempty"`
@@ -112,14 +113,15 @@ func (c *Core) GiveUp(ctx context.Context, key string, in GiveUpInput) (StopResu
 }
 
 // SendBack is send_back(ticket, note): the human's from Failed to Ready,
-// with an optional note, or any Actor's from Accepted to Ready (work
-// that can't land, such as a merge conflict), with the note required.
+// with an optional note, or from Accepted to Ready, with the note
+// required: the agent's for work that can't land, such as a merge
+// conflict, and the human's for work to fix, such as a CI failure.
 // The note is stored as a comment. The Ticket keeps its created time, so
 // it keeps its place near the front of the claim order.
 func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Written[TicketView], error) {
 	return c.actThen(ctx, key, in.Ticket, in.Full, "send_back", "", in.Note, func(t *store.Ticket) error {
 		if from := t.Moves[len(t.Moves)-1].From; from == store.Accepted && strings.TrimSpace(in.Note) == "" {
-			return invalid("note", "sending back Accepted work needs a note saying why it can't land, such as the base commit and the conflicting files")
+			return invalid("note", "sending back Accepted work needs a note saying why: the base commit and the conflicting files of a merge conflict, or the failed CI run's link and its failed jobs")
 		}
 		return nil
 	})
