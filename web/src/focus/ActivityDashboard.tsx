@@ -18,6 +18,7 @@ import type { State } from "../api/types";
 import { RowLatestEvent } from "../LatestEvent";
 import { useFetch, type InboxData, type ProjectTicket } from "../live";
 import { STAGE_TITLE, stageOf } from "../requirement/progress";
+import { CILink } from "../ci/CILink";
 import { CIBadge } from "../ticket/CIBadge";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { usePulse } from "./pulse";
@@ -50,8 +51,8 @@ export function ActivityDashboard({ api, now, version, data, loc, navigate }: Ac
   useEffect(() => setShown(true), []);
   const archived = new Set(data.projects.filter((p) => p.archived).map((p) => p.key));
   const ciTracked = data.projects.some((p) => !p.archived && p.ci.tracking && (!loc.project || p.key === loc.project));
-  const running = useFetch(ciTracked ? () => api.ciOverview({ project: loc.project, running: true }) : null, [api, loc.project, ciTracked, version]);
-  const ciRunning = running.data?.runs.length;
+  const ciRuns = useFetch(ciTracked ? () => api.ciOverview({ project: loc.project, running: true }) : null, [api, loc.project, ciTracked, version]);
+  const ciRunningCount = ciRuns.data?.runs.length;
   const tickets = data.tickets.filter((t) => (!loc.project || t.project === loc.project) && !archived.has(t.project));
   // Every Ticket in the State counts, Stage and blocked Tickets included,
   // so the In Progress count is the list's length.
@@ -67,7 +68,7 @@ export function ActivityDashboard({ api, now, version, data, loc, navigate }: Ac
         <StateCount state="Ready" count={inState("Ready").length} />
         <StateCount state="In Progress" count={inProgress.length} />
         {/* Keyed on whether the count is known yet, so the first read doesn't pulse. */}
-        {ciTracked && <CIRunningCount key={String(ciRunning === undefined)} count={ciRunning} loc={loc} navigate={navigate} />}
+        {ciTracked && <CIRunningCount key={String(ciRunningCount === undefined)} count={ciRunningCount} loc={loc} navigate={navigate} />}
       </div>
       {inProgress.length ? (
         <ul aria-label="In Progress" className="dashboard-list">
@@ -87,9 +88,9 @@ export function ActivityDashboard({ api, now, version, data, loc, navigate }: Ac
       ) : (
         <p className="dashboard-empty">Nothing in progress</p>
       )}
-      {ciTracked && running.error && (
+      {ciTracked && ciRuns.error && (
         <p role="alert" className="warning">
-          {running.error.message}
+          {ciRuns.error.message}
         </p>
       )}
     </section>
@@ -115,16 +116,15 @@ function StateCount({ state, count }: { state: State; count: number }) {
 // the CI view in Focus Mode's scope, with Back to Focus Mode, and pulses
 // when the count differs from the one it last showed.
 function CIRunningCount({ count, loc, navigate }: { count?: number } & Pick<ActivityDashboardProps, "loc" | "navigate">) {
-  const pulse = usePulse("dashboard-block state-ci-running", count);
-  const to: Partial<UiLocation> = { view: "ci", project: loc.project, back: loc };
+  const pulse = usePulse("dashboard-block ci-running", count);
   return (
     <div role="group" aria-label="CI Running" {...pulse}>
-      <a className="dashboard-block-link" href={hrefFor({ ...loc, ...to })} onClick={clickTo(navigate, to)}>
+      <CILink loc={loc} navigate={navigate} className="dashboard-block-link">
         <span className="dashboard-count" data-testid="count">
           {count ?? "–"}
         </span>
         <span className="dashboard-state">CI Running</span>
-      </a>
+      </CILink>
     </div>
   );
 }

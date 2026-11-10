@@ -430,6 +430,18 @@ describe("the CI Running block", () => {
     await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
   });
 
+  it("rereads the running runs on a ticket.changed notice", async () => {
+    const fake = await ciWorld();
+    const read = vi.spyOn(fake, "ciOverview");
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    const reads = read.mock.calls.length;
+
+    act(() => fake.emit({ type: "ticket.changed", project: "acme", id: "acme-4" }));
+    await waitFor(() => expect(read.mock.calls.length).toBeGreaterThan(reads));
+  });
+
   it("pulses when its count changes, but not on first show", async () => {
     const fake = await ciWorld();
     await fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml")]);
