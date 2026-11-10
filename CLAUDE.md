@@ -12,9 +12,11 @@ Uses the five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
-## Recipes
+## Finding your way
 
 Adding or changing an operation, or a store file: see `docs/agents/recipes.md`.
+
+To learn a Go API, read `go doc ./<pkg> <Name>` before the source.
 
 ## Checks
 

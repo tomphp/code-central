@@ -20,6 +20,15 @@
           }
         ],
         "matcher": "mcp__code-central__claim|mcp__code-central__set_session|mcp__code-central__post_round"
+      },
+      {
+        "hooks": [
+          {
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/narrow-reads.py",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash|Read"
       }
     ]
   }
