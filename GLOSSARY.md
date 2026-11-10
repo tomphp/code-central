@@ -133,7 +133,7 @@ What holds a pushed Ticket back from landing until its CI result is passed. It h
 _Avoid_: CI check, CI hold, waiting-on-CI State
 
 **Unblock on push**:
-A CI Tracking option, off by default, by which an Accepted Ticket whose pushed commit's CI result is running or passed no longer blocks, though it still lands only on a passed CI result. It has effect only while the CI gate holds.
+A CI Tracking option, off by default, by which an Accepted Ticket whose latest pushed commit, pushed since it was last sent back to Ready, has a CI result running or passed no longer blocks, though it still lands only on a passed CI result. It has effect only while the CI gate holds.
 _Avoid_: early unblock, skip CI gate, don't wait for CI
 
 **Ignored workflows**:

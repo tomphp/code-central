@@ -169,7 +169,7 @@ func failedBlocker(t *testing.T) (h *factorytest.Harness, r *factorytest.Running
 	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CIFailure)
 	dep = dependant(t, h, "Build on the feature", id)
 	stillBlocked(t, h, r, dep, id, "with its CI failed")
-	if reason := needsMeReason(t, h, id); reason != core.ReasonCIFailed {
+	if reason := h.Ticket(id).NeedsMeReason; reason != core.ReasonCIFailed {
 		t.Fatalf("%s is in Needs Me as %q, want %q", id, reason, core.ReasonCIFailed)
 	}
 	want := []string{core.OptionRerunCI, core.OptionLandAnyway, core.OptionSendBack, core.OptionNewFixTicket}
@@ -195,23 +195,6 @@ func claimable(t *testing.T, h *factorytest.Harness, dep, why string) {
 	if tk := h.Ticket(dep); tk.Blocked || !tk.Claimable {
 		t.Fatalf("%s is blocked %v, claimable %v: want it claimable %s", dep, tk.Blocked, tk.Claimable, why)
 	}
-}
-
-// needsMeReason is why ticket is in Needs Me, or "" when it isn't.
-func needsMeReason(t *testing.T, h *factorytest.Harness, ticket string) core.NeedsMeReason {
-	t.Helper()
-	nm, err := h.Human().NeedsMe(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, g := range nm.Groups {
-		for _, row := range g.Tickets {
-			if row.ID == ticket {
-				return row.Reason
-			}
-		}
-	}
-	return ""
 }
 
 func TestUnderUnblockOnPushRerunFailedJobsClearsTheBlockerAgain(t *testing.T) {
@@ -271,34 +254,10 @@ func TestUnderUnblockOnPushASentBackBlockerBlocksUntilItsNewPushsCIRuns(t *testi
 	t.Parallel()
 	h, _, r := gatedHarness(t)
 	unblockOnPush(t, h)
-	id := h.ReadyTicket("Add a feature")
-	h.Script(id,
-		factorytest.WriteFile("feature.txt", "feature\n"),
-		factorytest.Git("add", "feature.txt"),
-		factorytest.Git("commit", "-q", "-m", "Add a feature"),
-		factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Added.", "--branch", "{{ticket}}"),
-		factorytest.Result("success"))
-	r.Poll()
-	h.WaitForState(id, store.InReview)
-	h.Accept(id)
-	r.Poll()
-	r.WaitForOutput(id + ": CI tracks main at ")
-	failed := h.Ticket(id).PushedCommit.Commit
-	h.Server.Clock.Advance(time.Minute)
-	reportRun(t, h, 1, id, failed, store.CICompleted, store.CIFailure)
+	id, failed := sentBackCIFailure(t, h, r)
+	h.Server.Clock.Advance(time.Minute) // fixing it takes time
 	dep := dependant(t, h, "Build on the feature", id)
-	stillBlocked(t, h, r, dep, id, "with its CI failed")
-
-	if _, err := h.Human().SendBack(context.Background(), h.Project, core.SendBackInput{Ticket: core.Ref(id), Note: "Fix CI."}); err != nil {
-		t.Fatal(err)
-	}
-	h.Script(id,
-		factorytest.WriteFile("fix.txt", "fix\n"),
-		factorytest.Git("add", "fix.txt"),
-		factorytest.Git("commit", "-q", "-m", "Fix CI"),
-		factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Fixed.", "--branch", "{{ticket}}"),
-		factorytest.Result("success"))
-	r.Poll()
+	stillBlocked(t, h, r, dep, id, "while it is sent back")
 	h.WaitForState(id, store.InReview)
 	stillBlocked(t, h, r, dep, id, "while it is In Review again")
 
@@ -333,7 +292,7 @@ func TestUnderUnblockOnPushAGatedBlockerWithNoWordOfItsCIIsStillCIUnavailable(t 
 	h.WaitForState(dep, store.InProgress)
 
 	h.Server.Clock.Advance(core.CIUnavailableAfter)
-	if reason := needsMeReason(t, h, id); reason != core.ReasonCIUnavailable {
+	if reason := h.Ticket(id).NeedsMeReason; reason != core.ReasonCIUnavailable {
 		t.Fatalf("%s is in Needs Me as %q, want %q though %s has moved on", id, reason, core.ReasonCIUnavailable, dep)
 	}
 }
