@@ -182,3 +182,64 @@ func TestTheCIWatchersStatusPublishesOnlyWhenItChanges(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 	}
 }
+
+// Only the service reports a crash: the CI Watcher can't name it.
+func TestTheCIWatcherCantReportItsOwnCrash(t *testing.T) {
+	srv := newServer(t, ciTrackingOn)
+	e := httpRejected(t, srv, reportCIWatcherStatus(`{"state":"error","problem":"crashed","message":"crashed"}`), core.Invalid)
+	if e.Field != "problem" {
+		t.Fatalf("field %q, want problem", e.Field)
+	}
+}
+
+// A crash streak stays shown, with one Notification, even when the
+// restarted CI Watcher reports Watching before crashing again, until it
+// has run CIWatcherSteadyAfter from its restart.
+func TestACrashStaysShownUntilTheCIWatcherHasRunSteadily(t *testing.T) {
+	srv := newServer(t, ciTrackingOn)
+	ctx := context.Background()
+	crash := func(restarts int) {
+		srv.Core.ReportCIWatcherCrash(ctx, "acme", core.CIWatcherCrash{Restarts: restarts, LastLine: "panic: boom",
+			RestartAt: srv.Clock.Now().Add(time.Second)})
+	}
+	crashed := "The CI Watcher crashed, restarted 2 times; the last line it wrote: panic: boom"
+	fix := "Code Central restarts it by itself, waiting longer after each crash. Its output is in the service's log."
+
+	crash(1)
+	srv.Clock.Advance(time.Second)
+	httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching"}`))
+	crash(2)
+	srv.Clock.Advance(time.Second)
+	httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching"}`))
+	ciWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "error", crashed, fix)
+	if got := srv.Core.CIWatcherAttention(ctx); len(got) != 1 || got[0].Errors != 1 {
+		t.Fatalf("CI Watcher attention %+v, want one error, for one Notification", got)
+	}
+
+	srv.Clock.Advance(core.CIWatcherSteadyAfter - time.Millisecond)
+	httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching"}`))
+	ciWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "error", crashed, fix)
+	srv.Clock.Advance(time.Millisecond)
+	httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching"}`))
+	ciWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "watching", "", "")
+
+	// A crash after that is a new streak, with its own Notification.
+	crash(1)
+	if got := srv.Core.CIWatcherAttention(ctx); got[0].Errors != 2 {
+		t.Fatalf("CI Watcher attention %+v, want a second error", got)
+	}
+}
+
+// Turning CI Tracking off ends a crash streak, and stops the service
+// reporting one.
+func TestTurningCITrackingOffEndsACrashStreak(t *testing.T) {
+	srv := newServer(t, ciTrackingOn)
+	ctx := context.Background()
+	srv.Core.ReportCIWatcherCrash(ctx, "acme", core.CIWatcherCrash{Restarts: 1, RestartAt: srv.Clock.Now()})
+	httpOK(t, srv, setCITracking(`{"tracking":false,"repository":"acme/web"}`))
+	srv.Core.ReportCIWatcherCrash(ctx, "acme", core.CIWatcherCrash{Restarts: 2, RestartAt: srv.Clock.Now()})
+	ciWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "not_reported", "", "")
+	ciTrackingOn(t, srv)
+	httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching"}`))
+	ciWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "watching", "", "")
+}

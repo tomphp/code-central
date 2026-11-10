@@ -5,7 +5,8 @@
 // of API answers and records its calls; nothing is built and there is no
 // shell, so it runs the same on every OS. The test binary also runs as
 // code-central, the CLI, so a test can run the CI Watcher subcommand as
-// the service does, in its own process.
+// the service does, in its own process, and as a CI Watcher that crashes,
+// so a test can watch the service restart it.
 //
 // A test package that uses it calls Main from its TestMain:
 //
@@ -21,6 +22,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/internal/fakegh"
@@ -44,10 +46,44 @@ func runFake(data string, args []string) int {
 		return fakegh.Run(data, args[0], args[1:], os.Stdout, os.Stderr)
 	case "code-central":
 		return cli.Run(context.Background(), args[1:], cli.Env{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, Getenv: os.Getenv})
+	case crashingName:
+		return crash(data)
 	default:
 		fmt.Fprintf(os.Stderr, "ciwatchertest: %s=%s but run as %q, not a fake\n", fakeEnv, data, name)
 		return 70
 	}
+}
+
+// crashingName is the program name the test binary crashes under.
+const crashingName = "crashing-code-central"
+
+// The crashing CI Watcher's files in the data folder: a line in runs for
+// each run, and while hold exists, it waits before crashing.
+const (
+	crashRuns = "crash-runs"
+	crashHold = "crash-hold"
+)
+
+// crash is a CI Watcher that crashes: it counts its run, waits while
+// held, then writes two lines to stderr and exits 2, as a panic does.
+func crash(data string) int {
+	f, err := os.OpenFile(filepath.Join(data, crashRuns), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err == nil {
+		_, err = f.WriteString("run\n")
+		f.Close()
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "crashing CI Watcher:", err)
+		return 70
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(data, crashHold)); err != nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	fmt.Fprint(os.Stderr, "starting\npanic: the CI Watcher broke on purpose\n")
+	return 2
 }
 
 // exeSuffix ends the name of a program: .exe on Windows.
@@ -67,6 +103,9 @@ type Harness struct {
 	// CodeCentral is the test binary as code-central, in a folder of its
 	// own, as the service's executable.
 	CodeCentral string
+	// Crashing is a CI Watcher that crashes on every run, as the
+	// service's executable.
+	Crashing string
 }
 
 // New sets up a fake gh in Bin, with no Script: every call exits 0.
@@ -79,7 +118,32 @@ func New(t testing.TB) *Harness {
 	}
 	h.GH(h.Bin)
 	h.CodeCentral = h.install(filepath.Join(root, "program"), "code-central")
+	h.Crashing = h.install(filepath.Join(root, "program"), crashingName)
 	return h
+}
+
+// CrashRuns is how many times the crashing CI Watcher has started.
+func (h *Harness) CrashRuns() int {
+	h.t.Helper()
+	b, err := os.ReadFile(filepath.Join(h.data, crashRuns))
+	if os.IsNotExist(err) {
+		return 0
+	}
+	must(h.t, err)
+	return strings.Count(string(b), "\n")
+}
+
+// HoldCrashes makes the crashing CI Watcher run until ReleaseCrashes
+// before it crashes.
+func (h *Harness) HoldCrashes() {
+	h.t.Helper()
+	must(h.t, os.WriteFile(filepath.Join(h.data, crashHold), nil, 0o644))
+}
+
+// ReleaseCrashes lets a held crashing CI Watcher crash.
+func (h *Harness) ReleaseCrashes() {
+	h.t.Helper()
+	must(h.t, os.Remove(filepath.Join(h.data, crashHold)))
 }
 
 // GH puts a fake gh in dir, as gh's installer would, and returns its

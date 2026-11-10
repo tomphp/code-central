@@ -276,7 +276,8 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
 }
 
 // CIWatcher is the CI Watcher's status, as it last reported it: Watching,
-// or an error with its fix (code-central-253). It follows the Project as
+// or an error with its fix (code-central-253), or, as the service reports
+// it, crashed and being restarted (code-central-255). It follows the Project as
 // read, so it changes as the CI Watcher reports.
 function CIWatcher({ ci }: { ci: CISettings }) {
   const { watcher } = ci;
@@ -293,8 +294,12 @@ function CIWatcher({ ci }: { ci: CISettings }) {
               {watcher.fix}
             </>
           )}
-          <br />
-          It tries again every 2 minutes, and goes back to Watching once the cause is fixed.
+          {watcher.problem !== "crashed" && (
+            <>
+              <br />
+              It tries again every 2 minutes, and goes back to Watching once the cause is fixed.
+            </>
+          )}
         </p>
       )}
     </section>

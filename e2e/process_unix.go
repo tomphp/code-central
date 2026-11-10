@@ -7,6 +7,7 @@ package e2e
 import (
 	"os"
 	"os/exec"
+	"syscall"
 )
 
 // exeSuffix ends the name of a program.
@@ -20,3 +21,6 @@ func startInOwnGroup(*exec.Cmd) {}
 // interrupt sends p the stop launchd, systemd and a terminal's Ctrl-C
 // send: os.Interrupt.
 func interrupt(p *os.Process) error { return p.Signal(os.Interrupt) }
+
+// alive reports whether the process pid is still running.
+func alive(pid int) bool { return syscall.Kill(pid, 0) == nil }

@@ -1,10 +1,8 @@
 package frontdoor_test
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
@@ -14,27 +12,9 @@ import (
 // The service logs each MCP tool call's response size, so the context
 // Code Central's own operations load can be measured from the log.
 
-// syncBuffer is a log the server's goroutines write while the test reads.
-type syncBuffer struct {
-	mu sync.Mutex
-	b  bytes.Buffer
-}
-
-func (s *syncBuffer) Write(p []byte) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.b.Write(p)
-}
-
-func (s *syncBuffer) String() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.b.String()
-}
-
-func loggedServer(t *testing.T) (*codecentraltest.Server, *syncBuffer) {
+func loggedServer(t *testing.T) (*codecentraltest.Server, *codecentraltest.SyncBuffer) {
 	t.Helper()
-	log := &syncBuffer{}
+	log := &codecentraltest.SyncBuffer{}
 	srv := codecentraltest.NewServer(t, codecentraltest.WithLog(log))
 	ctx := context.Background()
 	must(t, func() error { _, err := srv.Core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}); return err })

@@ -180,6 +180,23 @@ Set **gh path** when `gh` is somewhere else. It is on the Options page, below th
 | `gh` isn't logged in | gh isn't logged in to GitHub: You are not logged into any GitHub hosts. To log in, run: gh auth login | Run `gh auth login` as the user the service runs as. |
 | The repository can't be read | gh can't read the repository acme/acme-api: gh: Not Found (HTTP 404) | Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it. |
 
+## The CI Watcher
+
+For each Project with CI Tracking on, the service runs a **CI Watcher**: a second `code-central` process, the hidden `code-central ci-watcher --project <key>` subcommand, started through the service's own executable, so it is always the same version and needs nothing else installed. It watches that Project's CI through `gh` and reports what it sees to the service over the HTTP API. You never start it yourself. See [ADR 0018](adr/0018-the-service-starts-and-supervises-a-ci-watcher-per-project.md) for why it is a process of its own.
+
+- **It starts** with the service, for every Project with CI Tracking on, and when you turn CI Tracking on.
+- **It stops** when you turn CI Tracking off, when you archive the Project, and when the service stops.
+- **It is restarted** if it crashes: after 1 second, then 2, 4 and so on, up to 5 minutes between tries, and back to 1 second once it has run for 10 minutes. While it crashes, the CI section of Project Options says **The CI Watcher crashed, restarted N times**, with the last line it wrote, and you get one Notification.
+- **It leaves nothing behind.** Its stdin is a pipe from the service, and it exits when that pipe closes. So it ends with the service however the service ends: `code-central service restart`, Ctrl-C, a stopped Windows scheduled task, which doesn't end the service's children itself, or the service being killed.
+
+It writes to [the service log](#the-service-log), beside a line for each start, stop and crash:
+
+```text
+code-central serve: started the CI Watcher for acme (pid 41022)
+code-central serve: the CI Watcher for acme crashed; restarting it in 1s
+code-central serve: stopped the CI Watcher for acme
+```
+
 ## Usage
 
 **Usage** shows what agents have consumed: the Code Central calls they made, how full their sessions' context got, and the tokens they used each day, in one Project or in all of them, over the last 7, 30 or 90 days. Open it with **Usage** in the **Admin** section of the Inbox's left pane. It opens on **All Projects** and **Last 7 days**; the **Projects** picker lists every Project, Archived ones marked `(Archived)`, and the **Range** picker offers 7, 30 and 90 days. Both go in the address (`/?view=usage&project=acme&days=30`), so a reload or a bookmark keeps them, and **Back to the Inbox** returns you to where you were. A day is a day in the service's local time, and "the last 7 days" is today and the 6 days before it.
