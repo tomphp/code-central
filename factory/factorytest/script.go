@@ -71,6 +71,38 @@ func (h *Harness) Signals(ticket string) []string {
 	return strings.Fields(string(b))
 }
 
+// DefaultHelp is what the fake claude's --help prints unless ClaudeHelp
+// says otherwise: the --effort and --model options as Claude Code
+// 2.1.311 prints them, among others.
+const DefaultHelp = `Usage: claude [options] [command] [prompt]
+
+Claude Code - starts an interactive session by default, use -p/--print for
+non-interactive output
+
+Arguments:
+  prompt                                Your prompt
+
+Options:
+  --effort <level>                      Effort level for the current session
+                                        (low, medium, high, xhigh, max)
+  -h, --help                            Display help for command
+  --model <model>                       Model for the current session. Provide
+                                        an alias for the latest model (e.g.
+                                        'fable', 'opus', or 'sonnet') or a
+                                        model's full name.
+  -p, --print                           Print response and exit (useful for
+                                        pipes).
+
+Commands:
+  mcp                                   Configure and manage MCP servers
+`
+
+// ClaudeHelp makes the fake claude's --help print help.
+func (h *Harness) ClaudeHelp(help string) {
+	h.t.Helper()
+	must(h.t, os.WriteFile(filepath.Join(h.data, "help.txt"), []byte(help), 0o644))
+}
+
 // CLI calls the code-central CLI.
 func CLI(args ...string) Step { return Step{CLI: args} }
 

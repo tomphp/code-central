@@ -77,9 +77,11 @@ func choose(tag, kind, def string) ChoiceValue {
 	return ChoiceValue{Source: SourceNone}
 }
 
-// effortLevels are the valid effort levels for a Project.
-func effortLevels(store.Reader, string) []string {
-	return seededEffortLevels
+// effortLevels are the valid effort levels for a Project: its Reported
+// Models' levels, or the seeded ones until a report has given some.
+func effortLevels(r store.Reader, key string) []string {
+	p, _ := r.Project(key)
+	return validLevels(p.ReportedModels)
 }
 
 // checkEffort rejects an effort outside the Project's valid levels, in

@@ -42,6 +42,13 @@ projects/<key>/project.yaml
           kind: string
           model: string (optional)
           effort: string (optional)
+  reported_models: mapping (optional)
+      effort_levels: []string (optional)
+      aliases: []string (optional)
+      model_ids: []string (optional)
+      model_flag: string (optional)
+      effort_flag: string (optional)
+      reported: string (optional)
 
 projects/<key>/specs/<n>.md: YAML frontmatter between --- lines, then the Markdown body
   id: int

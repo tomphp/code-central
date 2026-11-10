@@ -247,6 +247,12 @@ func (s *FileStore) loadProject(key string) error {
 			return &LoadError{File: rel, Field: "models." + field, Msg: err.Error()}
 		}
 	}
+	if m := pf.ReportedModels; m != nil {
+		var field string
+		if p.ReportedModels, field, err = decodeReportedModels(*m); err != nil {
+			return &LoadError{File: rel, Field: "reported_models." + field, Msg: err.Error()}
+		}
+	}
 	s.setProject(p)
 	if err := s.loadCIRuns(key); err != nil {
 		return err

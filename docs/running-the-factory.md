@@ -44,7 +44,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    | `--parallel <n>` | The most `claude` turns running at once. The default is 3. |
    | `--base <branch>` | The branch work starts from, and the one it merges into when it lands. The default is the branch checked out when you start it, here `main`. |
    | `--model <model>` | The model for every session it starts or resumes, such as `--model opus`, unless the Ticket sets one. The default is Claude Code's own. See [Model and effort](#model-and-effort). |
-   | `--effort <level>` | The effort for every session it starts or resumes, such as `--effort high`, unless the Ticket sets one. The default is Claude Code's own. |
+   | `--effort <level>` | The effort for every session it starts or resumes, such as `--effort high`, unless the Ticket sets one. The default is Claude Code's own. It must be a level `claude --help` lists; see [What `claude` accepts](#what-claude-accepts). |
    | `--bypass-permissions` | Runs every session in `bypassPermissions` mode, with no permission checks. It prints a warning line at the start. |
 
    Without `--bypass-permissions`, every session runs in auto mode with no permission prompts. Anything auto mode won't allow is denied and the turn carries on without it. If a turn ends on denied calls, the Factory posts a Round asking you about each one, and answering it lets the session try again. Allow rules for the repository go in its committed `.claude/settings.json`.
@@ -265,7 +265,29 @@ Set tiers 2 and 3 in the [Models section of Project Options](setting-up-a-projec
 code-central set-tags acme-shop-5 model=opus effort=high
 ```
 
-`effort` must be one of `low`, `medium`, `high`, `xhigh` and `max`; `set_tags` rejects anything else and lists them. `model` takes any name `claude --model` takes. On a Spec, `model` and `effort` are ordinary Tags with no effect.
+`effort` must be one of the valid levels: `low`, `medium`, `high`, `xhigh` and `max` until a Factory has reported its `claude`'s, below, and then those. `set_tags` rejects anything else and lists them. `model` takes any name `claude --model` takes. On a Spec, `model` and `effort` are ordinary Tags with no effect.
+
+### What `claude` accepts
+
+When it starts, the Factory runs `claude --help` and reads the effort levels from the `--effort` option's list, `(low, medium, high, xhigh, max)` in Claude Code 2.1.311, and the model aliases from the names quoted in the `--model` option's text, such as `'fable'`, `'opus'` and `'sonnet'`. It reports them to Code Central with its own `--model` and `--effort` flags. Code Central keeps them as the Project's Reported Models: from then on the valid effort levels are the reported ones, and the [Models section](setting-up-a-project.md#choosing-models-for-each-kind-of-work) offers them. A row or Tag already set to a level a later report drops is kept as it is. If the Project can't be read when the Factory starts, it reports on the first poll that can read it.
+
+An `--effort` that isn't one of the levels `claude --help` lists stops the Factory at the start:
+
+```console
+$ code-central-factory --effort extreme
+code-central-factory: refusing to start: --effort "extreme" isn't an effort level claude accepts: use one of low, medium, high, xhigh, max
+```
+
+If it can't read the levels or the aliases, say from a `claude` whose help reads differently, the Factory prints a warning and carries on, and `--effort` isn't checked:
+
+```console
+$ code-central-factory
+warning: can't read the effort levels from claude --help, so none are reported, and --effort isn't checked
+warning: can't read the model aliases from claude --help, so none are reported
+base: main
+```
+
+What it can't read is reported as nothing, which leaves the levels and aliases an earlier Factory reported as they were; the flags are always reported.
 
 The choice is worked out afresh each turn, so a Tag or Models row changed while a Ticket waits on a Round applies when it resumes, with no Factory restart. Each Claim in the Ticket's Claims records the model and effort its latest turn ran with, or Claude Code's default. Only the sessions the Factory starts are affected: subagents they start, such as code-review's reviewers, keep their own agent definitions' models.
 

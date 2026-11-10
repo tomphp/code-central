@@ -36,6 +36,9 @@ func (f *factory) landing(ctx context.Context) (landing core.LandingView, ok boo
 		return core.LandingView{}, false
 	}
 	f.tracksCI = p.CI.Tracking
+	if !f.modelsReported {
+		f.modelsReported = f.reportModels(ctx)
+	}
 	return p.Landing, true
 }
 

@@ -69,8 +69,22 @@ func runFakeGit(data string, args []string) int {
 	return 0
 }
 
-// runFakeClaude is the fake claude: claude [flags] <prompt>.
+// runFakeClaude is the fake claude: claude [flags] <prompt>, or claude
+// --help, which prints the help ClaudeHelp set, else DefaultHelp, and
+// isn't a Call.
 func runFakeClaude(data string, args []string) int {
+	if slices.Equal(args, []string{"--help"}) {
+		help, err := os.ReadFile(filepath.Join(data, "help.txt"))
+		if os.IsNotExist(err) {
+			help, err = []byte(DefaultHelp), nil
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "fake claude:", err)
+			return 70
+		}
+		os.Stdout.Write(help)
+		return 0
+	}
 	wd, _ := os.Getwd()
 	c := Call{Args: args, Dir: wd}
 	if len(args) > 0 {

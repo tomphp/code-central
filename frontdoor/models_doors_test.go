@@ -30,6 +30,31 @@ func init() {
 		bad:  call{http: setModels(`{"kinds":[{"kind":"implementation","effort":"extreme"}]}`)},
 		code: core.Invalid,
 	}
+	// report_models is the Factory's, over HTTP only (code-central-311).
+	cases["report_models"] = opCase{
+		ok: call{http: reportModels(`{"effort_levels":["low","high"],"aliases":["opus"],"model_flag":"opus","effort_flag":""}`)},
+		check: func(t *testing.T, out map[string]any) {
+			acknowledgement("acme", "reported_models")(t, out)
+		},
+		full: func(t *testing.T, out map[string]any) {
+			t.Helper()
+			r, _ := out["reported_models"].(map[string]any)
+			field("model_flag", "opus")(t, r)
+			field("effort_flag", "")(t, r)
+			if levels, _ := r["effort_levels"].([]any); len(levels) != 2 || levels[0] != "low" || levels[1] != "high" {
+				t.Fatalf("effort_levels = %v, want [low high]", r["effort_levels"])
+			}
+			if _, ok := r["reported"].(string); !ok {
+				t.Fatalf("reported = %v, want when it arrived", r["reported"])
+			}
+		},
+		bad:  call{http: reportModels(`{"aliases":["opus\nsonnet"]}`)},
+		code: core.Invalid,
+	}
+}
+
+func reportModels(body string) httpCall {
+	return httpCall{"POST", "/api/p/acme/report_models", body}
 }
 
 func setModels(body string) httpCall {

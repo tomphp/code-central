@@ -37,8 +37,8 @@
 // unless seedCICheck has given it a refusal. setGitHubIssues runs the
 // Issues check likewise, refused by seedIssuesCheck, and creates the
 // Issues Spec the first time it turns GitHub Issues on. setModels
-// validates as the service does, effort against EFFORT_LEVELS unless
-// seedEffortLevels has given others.
+// validates as the service does, effort against the Project's reported
+// levels, EFFORT_LEVELS until reportModels has given some.
 // addIncomingIssue plays the Integration's create_linked_ticket, marking
 // a New issue as the service does, and keep_as_draft, to_requirement and
 // wont_fix clear it; to_requirement writes a Requirement whose Spec has
@@ -144,6 +144,8 @@ import {
   sessionKey,
   type ModelRow,
   type Models,
+  type ModelsReport,
+  type ReportedModels,
   type UsageDay,
   type UsageDayTokens,
   type UsageFilter,
@@ -283,6 +285,7 @@ interface FakeProject {
   ci: CISettings;
   github_issues: GitHubIssuesSettings;
   models: Models;
+  reported_models: ReportedModels;
   next: number;
 }
 
@@ -384,8 +387,6 @@ export class FakeApi implements Api {
   private ciCheck?: { reason: string; fix: string; field?: "tracking" | "repository" };
   // issuesCheck is the refusal the Issues check answers with; none passes.
   private issuesCheck?: { reason: string; fix: string; field?: "on" | "repository" };
-  // effortLevels are the valid effort levels.
-  private effortLevels = EFFORT_LEVELS;
   private usageCalls: FakeUsageCall[] = [];
   private usageResponses: FakeUsageRecord[] = [];
 
@@ -412,6 +413,7 @@ export class FakeApi implements Api {
       },
       github_issues: { on: false, repository: "", label: "", new_issues_need_me: false, watcher: { state: "not_reported" } },
       models: { default: { model: "", effort: "" }, kinds: KINDS_OF_WORK.map((kind) => ({ kind, model: "", effort: "" })) },
+      reported_models: { effort_levels: [...EFFORT_LEVELS], aliases: [], model_ids: [], model_flag: "", effort_flag: "" },
       next: 1,
     });
     this.emit({ type: "project.changed", project: key });
@@ -518,10 +520,12 @@ export class FakeApi implements Api {
     this.issuesCheck = refused;
   }
 
-  // seedEffortLevels sets the valid effort levels setModels checks
-  // against, as a Factory's report of its claude's would.
-  seedEffortLevels(levels: string[]) {
-    this.effortLevels = levels;
+  // seedModelIDs adds model IDs to key's Reported Models, as the
+  // service collects them from usage.
+  seedModelIDs(key: string, ids: string[]) {
+    const r = this.project(key).reported_models;
+    r.model_ids = [...new Set([...r.model_ids, ...ids])];
+    this.emit({ type: "project.changed", project: key });
   }
 
   // seedCIWatcherCrash shows key's CI Watcher as the service reports one
@@ -1156,8 +1160,9 @@ export class FakeApi implements Api {
       if (/[\r\n]/.test(model)) {
         throw new ApiError(422, "invalid", `${name}'s model spans more than one line; a model is one line`, `${field}.model`);
       }
-      if (r.effort !== "" && !this.effortLevels.includes(r.effort)) {
-        throw new ApiError(422, "invalid", `effort "${r.effort}" isn't a valid level; use one of ${this.effortLevels.join(", ")}`, `${field}.effort`);
+      const levels = p.reported_models.effort_levels;
+      if (r.effort !== "" && !levels.includes(r.effort)) {
+        throw new ApiError(422, "invalid", `effort "${r.effort}" isn't a valid level; use one of ${levels.join(", ")}`, `${field}.effort`);
       }
       return { model, effort: r.effort };
     };
@@ -1270,6 +1275,26 @@ export class FakeApi implements Api {
   async reportPushRemote(key: string, url: string): Promise<void> {
     const push_remote_url = url.trim().replace(/^(https?:\/\/)[^@/]+@/, "$1");
     this.setCI(this.writable(key), { ...this.project(key).ci, push_remote_url });
+  }
+
+  // reportModels is the Factory's startup report of what its claude
+  // accepts, as the service keeps it: empty levels or aliases keep the
+  // kept ones, the flags are always replaced, and model IDs stay.
+  async reportModels(key: string, report: ModelsReport): Promise<void> {
+    const list = (vs: string[]) => [...new Set(vs.map((v) => v.trim()).filter((v) => v !== ""))];
+    const p = this.writable(key);
+    const levels = list(report.effort_levels);
+    const aliases = list(report.aliases);
+    const was = p.reported_models;
+    p.reported_models = {
+      ...was,
+      effort_levels: levels.length ? levels : was.effort_levels,
+      aliases: aliases.length ? aliases : was.aliases,
+      model_flag: report.model_flag.trim(),
+      effort_flag: report.effort_flag.trim(),
+      reported: this.now.toISOString(),
+    };
+    this.emit({ type: "project.changed", project: key });
   }
 
   async setGitHubIssues(key: string, change: GitHubIssuesChange): Promise<ProjectView> {

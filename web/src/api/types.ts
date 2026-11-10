@@ -174,6 +174,24 @@ export interface Models {
 // claude's.
 export const EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"];
 
+// ModelsReport is a Factory's startup report of what its claude accepts,
+// with its own --model and --effort flags, "" when unset.
+export interface ModelsReport {
+  effort_levels: string[];
+  aliases: string[];
+  model_flag: string;
+  effort_flag: string;
+}
+
+// A Project's Reported Models: what its Factory last reported, plus the
+// model IDs its sessions' usage has shown. effort_levels are the valid
+// levels: the reported ones, or EFFORT_LEVELS until a report gives some.
+// reported is when the Factory last reported, missing before any report.
+export interface ReportedModels extends ModelsReport {
+  model_ids: string[];
+  reported?: string;
+}
+
 // A Ticket's CI result (code-central-256), from the runs of its latest
 // pushed commit that aren't ignored: running while any is unfinished or
 // none is reported, failed if any concluded failure, cancelled or timed
@@ -271,6 +289,9 @@ export interface ProjectView {
   github_issues: GitHubIssuesSettings;
   // models is always filled in: every row at Default to begin with.
   models: Models;
+  // reported_models is always filled in: no aliases or model IDs, and
+  // the seeded effort levels, until a Factory reports.
+  reported_models: ReportedModels;
 }
 
 export interface ProjectRow extends ProjectView {
