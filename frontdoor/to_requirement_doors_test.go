@@ -248,3 +248,11 @@ func TestToRequirementIsRejectedForAnAgent(t *testing.T) {
 	}
 	field("state", "Draft")(t, ticket5(t, srv))
 }
+
+// The context stays due if the human moves the Incoming Issue on before
+// the Issue Watcher writes it.
+func TestTheContextStaysDueAfterTheIncomingIssueIsMovedOn(t *testing.T) {
+	srv := newServer(t, requirementFromIssue)
+	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/5/move", `{"to_state":"Draft"}`})
+	wantDue(t, writesDue(t, srv), "acme-6", "code-central:requirement", "", "context")
+}

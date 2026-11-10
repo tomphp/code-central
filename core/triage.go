@@ -160,18 +160,12 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 
 		// The grilling Stage is new and waits on nothing, so as the
 		// Replacement it can't make a cycle.
-		now := c.now()
-		if err := transition(ctx, &t, key, "cancel", "", now); err != nil {
+		if err := c.triageCancel(ctx, key, &t, OptionToRequirement, extra); err != nil {
 			return err
 		}
-		t.Moves[len(t.Moves)-1].Via = OptionToRequirement
 		t.Replacements = stageNs[:1]
-		if extra != "" {
-			addComment(&t, Human, now, 0, extra)
-		}
 		t.Link.Detached = true
-		t.AwaitingTriage = false
-		t.Updated = now
+		t.Updated = c.now()
 		im.Rewritten = []store.Ticket{t}
 		if err := w.PutImport(key, im); err != nil {
 			return err
@@ -180,6 +174,22 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 		return err
 	})
 	return res, err
+}
+
+// triageCancel Cancels t, an Incoming Issue, via the triage action via,
+// with comment, if any, as the human's comment, and clears its awaiting
+// triage.
+func (c *Core) triageCancel(ctx context.Context, key string, t *store.Ticket, via, comment string) error {
+	now := c.now()
+	if err := transition(ctx, t, key, "cancel", "", now); err != nil {
+		return err
+	}
+	t.Moves[len(t.Moves)-1].Via = via
+	if comment = strings.TrimSpace(comment); comment != "" {
+		addComment(t, Human, now, 0, comment)
+	}
+	t.AwaitingTriage = false
+	return nil
 }
 
 // WontFixInput is the human's wont_fix(ticket, reason?).
@@ -203,19 +213,9 @@ func (c *Core) WontFix(ctx context.Context, key string, in WontFixInput) (Writte
 		if why := whyNotIncoming(r, key, *t); why != "" {
 			return false, &Error{Code: ActionNotAllowed, Message: why}
 		}
-		before := *t
-		now := c.now()
-		if err := transition(ctx, t, key, "cancel", "", now); err != nil {
+		if err := checkReplacements(r, key, *t, nil); err != nil {
 			return false, err
 		}
-		if err := checkReplacements(r, key, before, nil); err != nil {
-			return false, err
-		}
-		t.Moves[len(t.Moves)-1].Via = OptionWontFix
-		if reason := strings.TrimSpace(in.Reason); reason != "" {
-			addComment(t, Human, now, 0, reason)
-		}
-		t.AwaitingTriage = false
-		return true, nil
+		return true, c.triageCancel(ctx, key, t, OptionWontFix, in.Reason)
 	})
 }

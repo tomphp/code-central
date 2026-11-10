@@ -10,18 +10,34 @@ import "../api/actions/wont_fix";
 import type { TicketView } from "../api/types";
 import { useAct } from "./useAct";
 
+// BOXES are the triage actions that open a box before confirming: the
+// box's label, the field its text is sent as, and what it says.
+const BOXES = {
+  to_requirement: {
+    title: "To Requirement",
+    field: "context",
+    label: "Context (optional), added to the Requirement and posted to the issue as a comment",
+    rows: 3,
+    note: "To Requirement makes a Requirement of the issue's title and body, Cancels this Ticket, and from then on only writes the work's progress to the issue.",
+  },
+  wont_fix: {
+    title: "Won't fix",
+    field: "reason",
+    label: "Reason (optional), posted to the issue as a comment",
+    rows: 2,
+    note: "Won't fix Cancels this Ticket and closes the issue on GitHub as not planned.",
+  },
+} as const;
+
+type BoxAction = keyof typeof BOXES;
+
 export function TriageActions({ api, project, ticket: t }: { api: Api; project: string; ticket: TicketView }) {
   const { busy, error, run } = useAct();
   // open is the triage action whose box is open, if any.
-  const [open, setOpen] = useState<"to_requirement" | "wont_fix">();
-  const [context, setContext] = useState("");
-  const [reason, setReason] = useState("");
+  const [open, setOpen] = useState<BoxAction>();
+  const [text, setText] = useState("");
   const actions = t.triage_actions ?? [];
-  const back = (
-    <button type="button" className="btn" disabled={busy} onClick={() => setOpen(undefined)}>
-      Back
-    </button>
-  );
+  const box = open && BOXES[open];
   return (
     <>
       <p className="actions">
@@ -30,61 +46,45 @@ export function TriageActions({ api, project, ticket: t }: { api: Api; project: 
             Keep as Draft
           </button>
         )}
-        {actions.includes("to_requirement") && !open && (
-          <button type="button" className="btn" disabled={busy} onClick={() => setOpen("to_requirement")}>
-            To Requirement…
-          </button>
-        )}
-        {actions.includes("wont_fix") && !open && (
-          <button type="button" className="btn" disabled={busy} onClick={() => setOpen("wont_fix")}>
-            Won't fix…
-          </button>
-        )}
+        {!open &&
+          (Object.keys(BOXES) as BoxAction[])
+            .filter((a) => actions.includes(a))
+            .map((a) => (
+              <button
+                key={a}
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={() => {
+                  setText("");
+                  setOpen(a);
+                }}
+              >
+                {BOXES[a].title}…
+              </button>
+            ))}
       </p>
-      {open === "to_requirement" && (
+      {open && box && (
         <form
-          aria-label="To Requirement"
+          aria-label={box.title}
           onSubmit={(e) => {
             e.preventDefault();
-            const c = context.trim();
-            run(() => api.act(project, t.id, "to_requirement", c ? { context: c } : {}));
+            const v = text.trim();
+            run(() => api.act(project, t.id, open, v ? { [box.field]: v } : {}));
           }}
         >
           <label>
-            <span className="small muted">Context (optional), added to the Requirement and posted to the issue as a comment</span>
-            <textarea rows={3} value={context} onChange={(e) => setContext(e.target.value)} />
+            <span className="small muted">{box.label}</span>
+            <textarea rows={box.rows} value={text} onChange={(e) => setText(e.target.value)} />
           </label>
-          <p className="small muted">
-            To Requirement makes a Requirement of the issue's title and body, Cancels this Ticket, and from then on only writes the work's progress to
-            the issue.
-          </p>
+          <p className="small muted">{box.note}</p>
           <p className="actions">
             <button type="submit" className="btn primary" disabled={busy}>
-              To Requirement
+              {box.title}
             </button>
-            {back}
-          </p>
-        </form>
-      )}
-      {open === "wont_fix" && (
-        <form
-          aria-label="Won't fix"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const r = reason.trim();
-            run(() => api.act(project, t.id, "wont_fix", r ? { reason: r } : {}));
-          }}
-        >
-          <label>
-            <span className="small muted">Reason (optional), posted to the issue as a comment</span>
-            <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
-          </label>
-          <p className="small muted">Won't fix Cancels this Ticket and closes the issue on GitHub as not planned.</p>
-          <p className="actions">
-            <button type="submit" className="btn primary" disabled={busy}>
-              Won't fix
+            <button type="button" className="btn" disabled={busy} onClick={() => setOpen(undefined)}>
+              Back
             </button>
-            {back}
           </p>
         </form>
       )}

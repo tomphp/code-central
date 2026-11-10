@@ -87,33 +87,38 @@ func IssueMarker(target, key string) string {
 // the link is relative to the UI.
 func (c *Core) SetUIURL(url string) { c.uiURL = strings.TrimRight(url, "/") }
 
+// The UI's query parameters that open the item a comment links back to:
+// a Ticket, or a Requirement in the Requirements list.
+const (
+	ticketLink      = "ticket="
+	requirementLink = "list=requirements&requirement="
+)
+
 // issueComment is the comment key on target, with text, as it is posted.
-// Its link back opens the Ticket, or with spec the Spec, in the UI.
-func (c *Core) issueComment(target string, spec bool, key, text string) IssueComment {
-	param := "ticket="
-	if spec {
-		param = "list=requirements&requirement="
-	}
-	link := fmt.Sprintf("[%s in Code Central](%s/?view=inbox&%s%s)", target, c.uiURL, param, url.QueryEscape(target))
+// Its link back opens target in the UI by open, ticketLink or
+// requirementLink.
+func (c *Core) issueComment(target, open, key, text string) IssueComment {
+	link := fmt.Sprintf("[%s in Code Central](%s/?view=inbox&%s%s)", target, c.uiURL, open, url.QueryEscape(target))
 	return IssueComment{Key: key, Body: IssueMarker(target, key) + "\n" + strings.TrimSpace(text) + "\n\n" + link}
 }
 
 // triageComment is the comment the human's triage action via gave when
-// it Cancelled t, if it did: empty when it gave none.
-func triageComment(t store.Ticket, via string) (comment string, ok bool) {
-	if t.State != store.Cancelled || len(t.Moves) == 0 {
-		return "", false
-	}
-	m := t.Moves[len(t.Moves)-1]
-	if m.To != store.Cancelled || m.Via != via {
-		return "", false
-	}
-	for _, cm := range slices.Backward(t.Comments) {
-		if cm.Time.Equal(m.Time) && cm.Actor == string(Human) {
-			return cm.Body, true
+// it Cancelled t, if it ever did: empty when it gave none. latest
+// reports whether that Cancel is still t's last Move.
+func triageComment(t store.Ticket, via string) (comment string, latest, ok bool) {
+	for i, m := range slices.Backward(t.Moves) {
+		if m.To != store.Cancelled || m.Via != via {
+			continue
 		}
+		latest = i == len(t.Moves)-1 && t.State == store.Cancelled
+		for _, cm := range slices.Backward(t.Comments) {
+			if cm.Time.Equal(m.Time) && cm.Actor == string(Human) {
+				return cm.Body, latest, true
+			}
+		}
+		return "", latest, true
 	}
-	return "", true
+	return "", false, false
 }
 
 // ticketIssueWrites is what is due on the issue t, a Ticket on key's
@@ -124,10 +129,10 @@ func (c *Core) ticketIssueWrites(key string, t store.Ticket) (w IssueWrites, ok 
 	}
 	id := DisplayID(key, t.Number)
 	w = IssueWrites{Target: id, Link: *linkView(t.Link), Comments: []IssueComment{}}
-	if reason, ok := triageComment(t, OptionWontFix); ok {
+	if reason, latest, _ := triageComment(t, OptionWontFix); latest {
 		w.Label, w.Close = LabelWontFix, CloseNotPlanned
 		if strings.TrimSpace(reason) != "" && !slices.Contains(t.Link.Written, CommentWontFix) {
-			w.Comments = append(w.Comments, c.issueComment(id, false, CommentWontFix, reason))
+			w.Comments = append(w.Comments, c.issueComment(id, ticketLink, CommentWontFix, reason))
 		}
 	} else if t.State == store.Draft || t.State == store.Ready {
 		w.Label = LabelDraft
@@ -147,7 +152,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w Issu
 	id := DisplayID(key, s.Number)
 	w = IssueWrites{Target: id, Link: *linkView(s.Link), Comments: []IssueComment{}}
 	if extra := requirementContext(r, key, s.Link); extra != "" && !slices.Contains(s.Link.Written, CommentContext) {
-		w.Comments = append(w.Comments, c.issueComment(id, true, CommentContext, extra))
+		w.Comments = append(w.Comments, c.issueComment(id, requirementLink, CommentContext, extra))
 	}
 	if slices.ContainsFunc(specTickets(r, key, s.Number), func(t store.Ticket) bool {
 		return StageOf(t.Labels) != "" && t.State != store.Done
@@ -159,13 +164,14 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w Issu
 
 // requirementContext is the context the human gave To Requirement for
 // the issue l links to: the comment to_requirement made on its Incoming
-// Issue, empty when it gave none.
+// Issue, empty when it gave none. It stays due if the Incoming Issue is
+// moved on later.
 func requirementContext(r store.Reader, key string, l store.Link) string {
 	for _, t := range r.Tickets(key) {
 		if t.Link.Integration != l.Integration || t.Link.ID != l.ID {
 			continue
 		}
-		if extra, ok := triageComment(t, OptionToRequirement); ok {
+		if extra, _, ok := triageComment(t, OptionToRequirement); ok {
 			return extra
 		}
 	}

@@ -14,9 +14,10 @@ import (
 // Incoming Issue it Cancels. Under the write lock, every file is written
 // and fsynced into staging/<import-id>/; then a manifest naming each
 // file's final path is written and fsynced; then each file is renamed
-// into place; then the staging folder, manifest and all, is deleted. Memory changes after that. At startup a manifest left
-// behind is rolled forward, and a staging folder with no manifest is
-// deleted, so a crash at any point leaves all of the Import or none.
+// into place; then the staging folder, manifest and all, is deleted.
+// Memory changes after that. At startup a manifest left behind is rolled
+// forward, and a staging folder with no manifest is deleted, so a crash
+// at any point leaves all of the Import or none.
 
 const (
 	stagingDir   = "staging"
