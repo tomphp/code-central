@@ -4,7 +4,7 @@
 
 Code Central stores the Landing Method on the Project, the human sets it over the HTTP API (`set_landing_method`, from the Project Options page), and every Project read returns it. Code Central uses it only to choose a Needs Me reason. It still never sees git: only the Factory merges, pushes and lands, so whether the remote exists is the Factory's check. Agents get no MCP tool or CLI command for it, and the rule that they never push or merge stays.
 
-Branch keeps the Accepted State, so Blockers still clear only on land. Under Merge + Push, Done means pushed: the Ticket lands only once the push has succeeded.
+Branch keeps the Accepted State, so Blockers still clear only on land. Under Merge + Push, Done means pushed: the Ticket lands only once the push has succeeded. With CI Tracking on as well, it lands only on a passed CI result ([ADR 0019](0019-under-merge-and-push-with-ci-tracking-a-ticket-lands-only-on-a-passed-ci-result.md)).
 
 ## Considered Options
 

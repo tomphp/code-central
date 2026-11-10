@@ -77,8 +77,8 @@ func TestUnderMergeAndPushTheFactoryReportsThePushedBaseAsTheTicketsPushedCommit
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	tk := h.WaitForState(id, store.Done)
 	r.WaitForOutput(id + ": CI tracks main at ")
+	tk := h.Ticket(id)
 	merge := h.Git("rev-parse", "main")
 	if tk.PushedCommit == nil || tk.PushedCommit.Commit != merge {
 		t.Fatalf("pushed commit %+v, want the pushed merge %s", tk.PushedCommit, merge)
