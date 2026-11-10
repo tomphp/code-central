@@ -8,7 +8,7 @@ The Factory is a program you leave running in a terminal. It claims the Project'
 
 | The Factory | You |
 | --- | --- |
-| claims each Stage's Ticket, and each implementation Ticket once its Blockers are Done | submit the Requirement |
+| claims each Stage's Ticket, and each implementation Ticket once its Blockers are Done (or, [under Unblock on push](#with-ci-tracking), pushed with CI that hasn't failed) | submit the Requirement |
 | starts the Stage's skill in a session of its own, in a worktree of its own | answer each Round in the UI |
 | resumes the session when you answer its Round | review each finished Ticket, and accept or reject it |
 | under Merge, merges an accepted implementation Ticket's branch into the base, pushes the base with Push on, and lands it | under Branch, merge each accepted Ticket's branch into the base |
@@ -408,7 +408,9 @@ acme-shop-5: waiting on CI at 9c41d07a2b18 before it lands
 acme-shop-5: landed on main at 9c41d07a2b18
 ```
 
-There is no State for waiting on CI: the Ticket stays Accepted, so a Ticket it blocks isn't claimed until its CI has passed and it lands. Waiting doesn't hold up the rest: the Factory goes on merging and pushing other accepted Tickets meanwhile, and each lands on its own pushed commit's CI result, not on a later push's. An In Review Ticket you merge by hand waits the same way, In Review.
+There is no State for waiting on CI: the Ticket stays Accepted, so a Ticket it blocks isn't claimed until its CI has passed and it lands, unless the Project has **Unblock on push** on (see below). Waiting doesn't hold up the rest: the Factory goes on merging and pushing other accepted Tickets meanwhile, and each lands on its own pushed commit's CI result, not on a later push's. An In Review Ticket you merge by hand waits the same way, In Review.
+
+With **Unblock on push** on in the CI section of Project Options, a pushed Ticket waiting Accepted on CI stops blocking as soon as it is pushed: while its CI result is running (including before any run is reported) or passed, the Factory claims the Tickets it blocks on its next poll and starts them from the base, which already holds the pushed work. The Ticket itself still lands only once its CI result is passed. If its CI result turns failed, it blocks again: a Ticket it blocks that is still Ready isn't claimed until you deal with the failure, and claiming one by hand is refused, naming the Blocker as `acme-shop-5 (Accepted, CI failed)`. A Ticket the Factory had already claimed carries on, since blocking only stops a claim. Only the latest pushed commit counts, so a Ticket sent back and accepted again clears only on its new push's CI. An In Review Ticket you merge by hand keeps blocking until it lands. Under Branch + Push, or once the gate lifts, the option changes nothing.
 
 While its CI is running, an Accepted Ticket waiting on it doesn't show in Needs Me, however long CI takes. When no word of its CI comes for 10 minutes after its push, it shows in Needs Me as **CI unavailable**, so a broken CI Watcher doesn't hold up the work unseen. Its detail says which cause applies: the CI Watcher isn't Watching (with its error, which the CI section of Project Options also shows), or the CI Watcher is Watching but no CI Runs have been reported for the pushed commit, say because no workflow runs on the base or all that do are Ignored workflows:
 

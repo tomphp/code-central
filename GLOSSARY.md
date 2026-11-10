@@ -129,8 +129,12 @@ A Ticket's running, passed or failed, worked out from the CI Runs of its latest 
 _Avoid_: Build status
 
 **CI gate**:
-What holds a pushed Ticket back from landing until its CI result is passed. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own.
+What holds a pushed Ticket back from landing until its CI result is passed. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own. Under Unblock on push the gate still holds landing, but no longer holds Blockers.
 _Avoid_: CI check, CI hold, waiting-on-CI State
+
+**Unblock on push**:
+A CI Tracking option, off by default, by which an Accepted Ticket whose pushed commit's CI result is running or passed no longer blocks, though it still lands only on a passed CI result. It has effect only while the CI gate holds.
+_Avoid_: early unblock, skip CI gate, don't wait for CI
 
 **Ignored workflows**:
 A Project's list of workflow file names, such as `nightly.yml`, whose runs never count towards a CI result and never fire an "any workflow" CI Rule. They are still shown, marked ignored.
@@ -149,7 +153,7 @@ The git remote a Landing Method's Push sends work to, `origin` unless the human 
 _Avoid_: Upstream, origin (for the concept)
 
 **Blocker**:
-A Ticket in the same Project that must reach Done before another Ticket can be claimed.
+A Ticket in the same Project that must reach Done before another Ticket can be claimed, or, under Unblock on push, must be Accepted with a pushed commit whose CI result isn't failed.
 _Avoid_: Dependency
 
 **Replacement**:
