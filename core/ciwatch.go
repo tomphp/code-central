@@ -151,11 +151,32 @@ type CIWatch struct {
 	Provider         store.CIProvider `json:"provider"`
 	Repository       string           `json:"repository"`
 	IgnoredWorkflows []string         `json:"ignored_workflows"`
-	Rules            []CIRuleView     `json:"rules"`
+	Rules            []CIWatchRule    `json:"rules"`
 	GHPath           string           `json:"gh_path"`
 	// Waiting are the pushed commits still waiting on a final CI result,
 	// or newly pushed, oldest push first: the CI Watcher lists their runs.
 	Waiting []CIWaitingCommit `json:"waiting"`
+	// Pushed is every commit pushed for a Ticket, whose runs never fire a
+	// CI Rule, and Landed every commit a Ticket landed at, which a fix
+	// Ticket links; both by Ticket.
+	Pushed []CITicketCommit `json:"pushed"`
+	Landed []CITicketCommit `json:"landed"`
+}
+
+// CIWatchRule is a CI Rule as the CI Watcher reads it: with when the
+// latest run tracked against it finished, so it fires the rule only for
+// runs finishing after that, and after the rule was created.
+type CIWatchRule struct {
+	CIRuleView
+	// LastRun is nil until a run is tracked against the rule.
+	LastRun *time.Time `json:"last_run,omitempty"`
+}
+
+// CITicketCommit is a commit pushed for, or landed by, a Ticket on Spec.
+type CITicketCommit struct {
+	Ticket string `json:"ticket"`
+	Spec   string `json:"spec"`
+	Commit string `json:"commit"`
 }
 
 // GetCIWatch is the CI Watcher's get_ci_watch. With CI Tracking off,
@@ -169,13 +190,44 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 		}
 		v := ciView(key, p.CI, CIWatcherView{})
 		out = CIWatch{Project: key, Tracking: v.Tracking, Provider: v.Provider, Repository: v.Repository,
-			IgnoredWorkflows: v.IgnoredWorkflows, Rules: v.Rules, GHPath: r.Options().GHPath, Waiting: []CIWaitingCommit{}}
+			IgnoredWorkflows: v.IgnoredWorkflows, Rules: []CIWatchRule{}, GHPath: r.Options().GHPath,
+			Waiting: []CIWaitingCommit{}, Pushed: []CITicketCommit{}, Landed: []CITicketCommit{}}
+		runs := r.CIRuns(key)
+		for i, rule := range v.Rules {
+			w := CIWatchRule{CIRuleView: rule}
+			for _, run := range runs {
+				if run.Rule == p.CI.Rules[i].Spec && !run.Finished.IsZero() && (w.LastRun == nil || run.Finished.After(*w.LastRun)) {
+					at := run.Finished
+					w.LastRun = &at
+				}
+			}
+			out.Rules = append(out.Rules, w)
+		}
 		if p.CI.Tracking {
 			out.Waiting = ciWaiting(r, key, c.now())
+			out.Pushed, out.Landed = ciTicketCommits(r, key)
 		}
 		return nil
 	})
 	return out, err
+}
+
+// ciTicketCommits is every commit pushed for a Ticket, and every commit a
+// Ticket landed at, in Ticket order.
+func ciTicketCommits(r store.Reader, key string) (pushed, landed []CITicketCommit) {
+	pushed, landed = []CITicketCommit{}, []CITicketCommit{}
+	for _, t := range r.Tickets(key) {
+		id, spec := DisplayID(key, t.Number), DisplayID(key, t.Spec)
+		for _, p := range t.PushedCommits {
+			pushed = append(pushed, CITicketCommit{Ticket: id, Spec: spec, Commit: p.Commit})
+		}
+		for _, m := range t.Moves {
+			if m.Commit != "" {
+				landed = append(landed, CITicketCommit{Ticket: id, Spec: spec, Commit: m.Commit})
+			}
+		}
+	}
+	return pushed, landed
 }
 
 // ReportCIWatcherStatusInput is the CI Watcher's

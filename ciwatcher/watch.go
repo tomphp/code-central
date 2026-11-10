@@ -27,6 +27,9 @@ type Client interface {
 	GetCIWatch(ctx context.Context, key string) (core.CIWatch, error)
 	ReportCIWatcherStatus(ctx context.Context, key string, in core.ReportCIWatcherStatusInput) (core.Written[core.ProjectView], error)
 	ReportCIRuns(ctx context.Context, key string, in core.ReportCIRunsInput) (core.Written[core.CIRunsView], error)
+	FindTickets(ctx context.Context, key string, in core.FindTicketsInput) ([]core.TicketRow, error)
+	CreateTicket(ctx context.Context, key string, in core.CreateTicketInput) (core.Written[core.TicketView], error)
+	Comment(ctx context.Context, key string, in core.CommentInput) (core.Written[core.TicketView], error)
 }
 
 // Config wires the watch mode.
@@ -52,7 +55,8 @@ func WatchArgs(project string) []string { return []string{Command, "--project", 
 // Watching or the error with its fix; a failed poll is retried on the
 // next, so fixing the cause brings it back to Watching by itself. It then
 // lists the runs of each pushed commit still waiting, and reports those
-// that changed. It polls every WaitingInterval while a pushed commit
+// that changed, and fires the CI Rules for failures on their branches.
+// It polls every WaitingInterval while a pushed commit
 // waits, and every Interval otherwise.
 func Watch(ctx context.Context, cfg Config) error {
 	ctx, cancel := context.WithCancel(ctx)
@@ -63,7 +67,7 @@ func Watch(ctx context.Context, cfg Config) error {
 			cancel()
 		}()
 	}
-	w := &watcher{Config: cfg, reported: map[runKey]time.Time{}}
+	w := &watcher{Config: cfg, reported: map[runKey]time.Time{}, fired: map[runKey]bool{}}
 	for {
 		every := Interval
 		if w.poll(ctx) {
@@ -85,6 +89,9 @@ type watcher struct {
 	// again. A restarted CI Watcher reports each once more, which
 	// changes nothing.
 	reported map[runKey]time.Time
+	// fired are the runs a CI Rule fired on, so a run whose report
+	// failed is reported again without firing again.
+	fired map[runKey]bool
 }
 
 // runKey names one attempt of one run.
@@ -125,6 +132,7 @@ func (w *watcher) poll(ctx context.Context) (waiting bool) {
 		return waiting
 	}
 	w.reportRuns(ctx, p, watch.Waiting)
+	w.fireRules(ctx, p, watch)
 	return waiting
 }
 

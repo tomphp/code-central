@@ -266,7 +266,21 @@ A **CI Rule** says "when this workflow fails on this branch, open a Ticket to fi
 ci.yml on main: opens Ready Tickets on acme-api-42      Edit  Remove
 ```
 
-**Edit** changes a rule in place, and its Spec's title changes to match unless you renamed the Spec. **Remove** removes the rule and keeps its Spec as the record of its Tickets. For now rules are only recorded: none opens a Ticket yet.
+**Edit** changes a rule in place, and its Spec's title changes to match unless you renamed the Spec. **Remove** removes the rule and keeps its Spec as the record of its Tickets. A rule takes effect from when you add it: runs that finished before then never fire it.
+
+When a run of the rule's workflow fails, is cancelled or times out on exactly its branch, the CI Watcher opens a fix Ticket on the rule's Spec, as Draft or Ready as the rule says. The Ticket is an ordinary implementation Ticket. Its title names the workflow and branch, and its description links the run and names the failed jobs:
+
+```text
+Fix ci.yml failing on main
+
+**CI** (`ci.yml`) failed on `main` at commit `9f3c2e1`, so the CI Rule on Spec acme-api-42 opened this Ticket to fix it.
+
+- Run: https://github.com/acme/api/actions/runs/7311
+- Failed jobs: [test](https://github.com/acme/api/actions/runs/7311/job/2)
+- The commit landed acme-api-37, on Spec acme-api-30.
+```
+
+The last line is there when the failing commit is where a Ticket landed, such as one you merged by hand. A rule doesn't pile Tickets up: while its Spec has a Ticket that isn't Done or Cancelled, a further failure only adds a comment to that Ticket, linking the new run and naming its failed jobs. Nor does it double up on a Ticket's own CI: a run on a commit the Factory pushed for a Ticket counts towards that Ticket's CI result and never fires a rule. A run that fires a rule is tracked against it.
 
 ## When `init` behaves differently
 
