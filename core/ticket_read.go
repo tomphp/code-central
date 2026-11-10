@@ -1,8 +1,12 @@
 package core
 
 import (
+	"encoding/json"
+	"maps"
 	"slices"
 	"strings"
+
+	"github.com/tomoram/code-central/store"
 )
 
 // GetTicketInput is get_ticket's input. With no Parts, the read is the
@@ -97,5 +101,54 @@ func defaultView(v TicketView) TicketView {
 	for _, p := range DefaultTicketParts {
 		parts[p] = true
 	}
-	return v.only(parts)
+	return v.only(parts).Brief()
+}
+
+// LeftOutClaimSessions is the left_out count of Claims a default read
+// shows without their session fields.
+const LeftOutClaimSessions = "claim_sessions"
+
+// Brief is the view without what an agent working the Ticket doesn't use
+// (code-central-320): each Done Blocker is its ID and State only, and each
+// Claim leaves out its working dir, resume command and latest Session
+// Event, which are for the human and the UI. LeftOut counts the Claims
+// that had any; parts: [claims] returns them in full.
+func (v TicketView) Brief() TicketView {
+	if v.Blockers != nil {
+		v.Blockers = slices.Clone(v.Blockers)
+		for i := range v.Blockers {
+			v.Blockers[i].brief = v.Blockers[i].State == store.Done
+		}
+	}
+	if v.Claims != nil {
+		v.Claims = slices.Clone(v.Claims)
+		n := 0
+		for i := range v.Claims {
+			c := &v.Claims[i]
+			if c.WorkingDir != "" || c.ResumeCommand != "" || c.LatestEvent != nil {
+				n++
+			}
+			c.WorkingDir, c.ResumeCommand, c.LatestEvent = "", "", nil
+		}
+		if n > 0 {
+			v.LeftOut = maps.Clone(v.LeftOut)
+			if v.LeftOut == nil {
+				v.LeftOut = map[string]int{}
+			}
+			v.LeftOut[LeftOutClaimSessions] = n
+		}
+	}
+	return v
+}
+
+// MarshalJSON shows a brief Blocker as its ID and State only.
+func (b BlockerView) MarshalJSON() ([]byte, error) {
+	if b.brief {
+		return json.Marshal(struct {
+			ID    string      `json:"id"`
+			State store.State `json:"state"`
+		}{b.ID, b.State})
+	}
+	type plain BlockerView
+	return json.Marshal(plain(b))
 }

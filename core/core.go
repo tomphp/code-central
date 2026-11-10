@@ -409,6 +409,9 @@ func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (Tick
 			return err
 		}
 		v = c.ticketView(r, key, t).only(parts)
+		if len(in.Parts) == 0 {
+			v = v.Brief()
+		}
 		return nil
 	})
 	return v, err

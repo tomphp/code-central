@@ -21,8 +21,8 @@ func wantResume(t *testing.T, c core.ClaimView, dir, command string) {
 func TestClaimRecordsTheWorkingDirAndResumeCommandAsGiven(t *testing.T) {
 	f := newFixture(t)
 	f.work(t, store.Ready)
-	res := f.claim(t, core.ClaimInput{SessionID: "s1", WorkingDir: str("/work/acme-2"), ResumeCommand: str("codex resume s1 --yolo")})
-	wantResume(t, res.Ticket.Claims[0], "/work/acme-2", "codex resume s1 --yolo")
+	f.claim(t, core.ClaimInput{SessionID: "s1", WorkingDir: str("/work/acme-2"), ResumeCommand: str("codex resume s1 --yolo")})
+	wantResume(t, f.get(t, "2").Claims[0], "/work/acme-2", "codex resume s1 --yolo")
 }
 
 func TestAClaimWithoutThemReadsBothEmptyNeverADefault(t *testing.T) {
@@ -64,9 +64,10 @@ func TestANewClaimStartsWithNoWorkingDirOrResumeCommand(t *testing.T) {
 	if _, err := f.core.GiveUp(ctx, "acme", core.GiveUpInput{Ticket: "2", ClaimID: "claim-1", Note: "stuck"}); err != nil {
 		t.Fatal(err)
 	}
-	res := f.claim(t, core.ClaimInput{Ticket: "2"})
-	wantResume(t, res.Ticket.Claims[0], "/a", "run it")
-	wantResume(t, res.Ticket.Claims[1], "", "")
+	f.claim(t, core.ClaimInput{Ticket: "2"})
+	v := f.get(t, "2")
+	wantResume(t, v.Claims[0], "/a", "run it")
+	wantResume(t, v.Claims[1], "", "")
 }
 
 func TestAFailureReportCopiesTheSessionWorkingDirAndResumeCommand(t *testing.T) {

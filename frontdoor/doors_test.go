@@ -144,9 +144,11 @@ var cases = map[string]opCase{
 			field("claim_id", "claim-1")(t, out)
 			tk := out["ticket"].(map[string]any)
 			field("id", "acme-3")(t, tk)
-			claim := tk["claims"].([]any)[0].(map[string]any)
-			field("working_dir", "/w/acme-3")(t, claim)
-			field("resume_command", "agent resume s1")(t, claim)
+			// claim's Ticket is get_ticket's default, which counts the
+			// session fields it leaves out (code-central-320).
+			if lo := tk["left_out"].(map[string]any); lo["claim_sessions"] != float64(1) {
+				t.Fatalf("left_out %v, want claim_sessions 1", lo)
+			}
 		},
 		bad: call{
 			mcp:  map[string]any{"spec": 1, "ticket": 3},

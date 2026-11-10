@@ -39,6 +39,8 @@ type BlockerView struct {
 	// longer blocks though it isn't Done (code-central-299).
 	CIResult CIResult `json:"ci_result,omitempty"`
 	Cleared  bool     `json:"cleared"`
+	// brief shows the Blocker as its ID and State only (see brief).
+	brief bool
 }
 
 // AddBlocker is add_blocker(ticket, blocker). A link already there

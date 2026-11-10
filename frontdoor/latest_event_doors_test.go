@@ -36,6 +36,8 @@ func TestLatestEventThroughEveryDoor(t *testing.T) {
 	reads := map[string]struct {
 		check func(*testing.T, map[string]any)
 		calls []map[string]any
+		// doors names the calls' doors, when not http, mcp and cli.
+		doors []string
 	}{
 		"get_ticket": {
 			check: func(t *testing.T, out map[string]any) {
@@ -46,9 +48,26 @@ func TestLatestEventThroughEveryDoor(t *testing.T) {
 			},
 			calls: []map[string]any{
 				httpOK(t, srv, httpCall{"GET", "/api/p/acme/tickets/3", ""}),
+				mcpOK(t, s, "get_ticket", map[string]any{"ticket": "acme-3", "parts": []string{"claims"}}),
+				cliOK(t, srv, []string{"get-ticket", "acme-3", "--part", "claims"}),
+			},
+		},
+		// An agent's default read leaves it out and counts it
+		// (code-central-320).
+		"get_ticket by default": {
+			check: func(t *testing.T, out map[string]any) {
+				if got, ok := out["claims"].([]any)[0].(map[string]any)["latest_event"]; ok {
+					t.Fatalf("the default read has latest_event %v", got)
+				}
+				if lo := out["left_out"].(map[string]any); lo["claim_sessions"] != float64(1) {
+					t.Fatalf("left_out %v, want claim_sessions 1", lo)
+				}
+			},
+			calls: []map[string]any{
 				mcpOK(t, s, "get_ticket", map[string]any{"ticket": "acme-3"}),
 				cliOK(t, srv, []string{"get-ticket", "acme-3"}),
 			},
+			doors: []string{"mcp", "cli"},
 		},
 		"get_ticket with none": {
 			check: func(t *testing.T, out map[string]any) {
@@ -80,8 +99,11 @@ func TestLatestEventThroughEveryDoor(t *testing.T) {
 			},
 		},
 	}
-	doors := []string{"http", "mcp", "cli"}
 	for name, r := range reads {
+		doors := r.doors
+		if doors == nil {
+			doors = []string{"http", "mcp", "cli"}
+		}
 		for i, out := range r.calls {
 			t.Run(name+"/"+doors[i], func(t *testing.T) { r.check(t, out) })
 		}

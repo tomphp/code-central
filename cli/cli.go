@@ -385,13 +385,17 @@ func runGetTicket(ctx context.Context, e Env, args []string) error {
 		return err
 	}
 	// The HTTP API returns the whole Ticket when no part is named, so the
-	// CLI names get_ticket's default parts itself.
-	if len(parts) == 0 {
+	// CLI names get_ticket's default parts itself, and briefs them.
+	brief := len(parts) == 0
+	if brief {
 		parts = core.DefaultTicketParts
 	}
 	v, err := sc.client.GetTicket(ctx, sc.project, core.Ref(pos[0]), parts...)
 	if err != nil {
 		return err
+	}
+	if brief {
+		v = v.Brief()
 	}
 	return printJSON(e, v)
 }
