@@ -1,8 +1,8 @@
 // The triage inbox: on the left, a top row of the split "+ New" button
 // (New requirement, with Requirement and Map in its ▾ menu) and "◎ Focus",
-// then Projects and Views, then an Admin section linking Usage and Options;
-// the list in the middle; the selected Requirement, Map or plain Spec and
-// Ticket on the right. A layout only: the data comes from live.ts and the
+// then Projects and Views, then an Admin section linking Usage, CI and
+// Options; the list in the middle; the selected Requirement, Map or plain
+// Spec and Ticket on the right. A layout only: the data comes from live.ts and the
 // Ticket pane is shared with any later view.
 import type { MouseEvent } from "react";
 import type { Api } from "../api/api";
@@ -23,6 +23,7 @@ import { SpecPane } from "../spec/SpecPane";
 import { TicketPane } from "../ticket/TicketDetail";
 import { OptionsLink } from "../options/OptionsLink";
 import { UsageLink } from "../usage/UsageLink";
+import { CILink } from "../ci/CILink";
 import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
 import { clickTo, hrefFor, type UiLocation } from "../url";
@@ -135,6 +136,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
         ))}
         <h2>Admin</h2>
         <UsageLink loc={loc} navigate={navigate} className="filter" />
+        <CILink loc={loc} navigate={navigate} className="filter" />
         <OptionsLink loc={loc} navigate={navigate} className="filter" />
         <ArchivedProjects count={archived.length}>
           {archived.map(projectFilter)}

@@ -117,7 +117,7 @@ The commit the Factory pushed for a Ticket, which it reports on the Ticket: the 
 _Avoid_: Push SHA
 
 **CI Run**:
-One workflow run the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired.
+One workflow run the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. Kept for 30 days after it finishes.
 _Avoid_: Job, build, pipeline
 
 **CI result**:
@@ -180,6 +180,10 @@ _Avoid_: Log, conversation, stream
 What agents load into context, measured from Claude Code's own session logs on the machine (not Transcripts): the size of tool results per kind of session (each Stage, implementation, and the review and other subagents), tool and operation, the largest results, the Specs and Tickets read more than once, and signs that a cut went too far, each with its change against a saved baseline.
 It is not Usage: it reads Claude Code's logs on the machine, while Usage records what Code Central and the Factory see.
 _Avoid_: Token report, usage report
+
+**CI view**:
+The view of the CI Runs in a Project, or in all Projects with CI Tracking on: the CI Watchers' statuses, then the runs still going and those finished in the last 7 days.
+_Avoid_: CI dashboard, build monitor
 
 **Usage**:
 The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used.

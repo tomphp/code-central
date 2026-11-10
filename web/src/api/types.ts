@@ -148,6 +148,39 @@ export interface CIRunView {
   ignored: boolean;
 }
 
+// ---- The CI view (code-central-258) ----
+
+// CI_VIEW_DAYS is how far back the CI view lists finished runs.
+export const CI_VIEW_DAYS = 7;
+
+// CIOverviewFilter is a CI view read: one Project, or every active Project with
+// CI Tracking on when project is left out.
+export interface CIOverviewFilter {
+  project?: string;
+}
+
+// A Project's CI Tracking and its CI Watcher's status, heading the CI view.
+export interface CIProjectStatus {
+  project: string;
+  tracking: boolean;
+  repository: string;
+  watcher: CIWatcherStatus;
+}
+
+// One CI Run in the CI view, with its Project; a re-run lists its latest
+// attempt only.
+export interface CIRunRow extends CIRunView {
+  project: string;
+}
+
+// The CI view: the CI Watchers' statuses, then the runs, in-progress
+// ones first, newest started first, then those finished in the last
+// CI_VIEW_DAYS days, newest finished first.
+export interface CIOverview {
+  projects: CIProjectStatus[];
+  runs: CIRunRow[];
+}
+
 export interface ProjectView {
   key: string;
   display_name: string;
@@ -622,6 +655,8 @@ export type ChangeEvent =
   | { type: "ticket.changed"; project: string; id: string }
   | { type: "spec.changed"; project: string; id: string }
   | { type: "project.changed"; project: string }
+  // ci.changed is a Project's CI Runs changing.
+  | { type: "ci.changed"; project: string }
   // options.changed is about no Project: the Options changed.
   | { type: "options.changed" };
 
