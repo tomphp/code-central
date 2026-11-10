@@ -6,7 +6,7 @@ import (
 	"github.com/tomoram/code-central/core"
 )
 
-// The Models section of Project Options (code-central-310): set_models is
+// The Models section of Project Options (Spec code-central-301): set_models is
 // the human's, so HTTP only.
 func init() {
 	cases["set_models"] = opCase{

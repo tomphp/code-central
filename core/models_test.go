@@ -36,7 +36,9 @@ func choice(model core.ChoiceValue, effort core.ChoiceValue) core.ModelChoice {
 	return core.ModelChoice{Model: model, Effort: effort}
 }
 
-func set(v string, s core.ChoiceSource) core.ChoiceValue { return core.ChoiceValue{Value: v, Source: s} }
+func set(v string, s core.ChoiceSource) core.ChoiceValue {
+	return core.ChoiceValue{Value: v, Source: s}
+}
 
 var unset = core.ChoiceValue{Source: core.SourceNone}
 

@@ -19,7 +19,7 @@ const KINDS = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-
 const page = () => screen.getByRole("main", { name: "Project Options" });
 const models = () => within(page()).getByRole("group", { name: "Models" });
 const findModels = async () => within(await screen.findByRole("main", { name: "Project Options" })).findByRole("group", { name: "Models" });
-const model = (row: string) => within(models()).getByRole("combobox", { name: `Model for ${row}` });
+const model = (row: string) => within(models()).getByRole("textbox", { name: `Model for ${row}` });
 const effort = (row: string) => within(models()).getByRole("combobox", { name: `Effort for ${row}` });
 const options = (select: HTMLElement) => within(select).getAllByRole("option").map((o) => o.textContent);
 const save = () => userEvent.click(within(models()).getByRole("button", { name: "Save" }));

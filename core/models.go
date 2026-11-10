@@ -64,7 +64,7 @@ func (c *Core) SetModels(ctx context.Context, key string, in SetModelsInput) (Wr
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		m, err := models(w, key, in)
+		m, err := checkedModels(w, key, in)
 		if err != nil {
 			return err
 		}
@@ -84,9 +84,9 @@ func (c *Core) SetModels(ctx context.Context, key string, in SetModelsInput) (Wr
 	return acknowledgeProject(before, after, in.Full, c.now())
 }
 
-// models checks in's rows and returns them as stored: only the rows that
+// checkedModels checks in's rows and returns them as stored: only the rows that
 // set something, in GuideNames order.
-func models(r store.Reader, key string, in SetModelsInput) (store.Models, error) {
+func checkedModels(r store.Reader, key string, in SetModelsInput) (store.Models, error) {
 	var m store.Models
 	var err error
 	if m.Default, err = modelRow(r, key, "default", "the Project default", in.Default); err != nil {

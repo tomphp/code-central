@@ -677,9 +677,9 @@ func decodeModels(f modelsFile) (Models, string, error) {
 		if m.Kind(k.Kind) != (ModelRow{}) {
 			return Models{}, field + ".kind", fmt.Errorf("a second row for %q", k.Kind)
 		}
-		r, f, err := row(field, k.Model, k.Effort)
+		r, bad, err := row(field, k.Model, k.Effort)
 		if err != nil {
-			return Models{}, f, err
+			return Models{}, bad, err
 		}
 		m.Kinds = append(m.Kinds, KindModels{Kind: k.Kind, ModelRow: r})
 	}

@@ -531,13 +531,13 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
   // default inherits Claude Code's default.
   const inherited = (kind: string | undefined, value: keyof ModelRow) =>
     `Default (${(kind !== undefined && draft.default[value].trim()) || CLAUDE_CODE_DEFAULT})`;
-  const rows: { kind?: string; name: string; header: string; row: ModelRow }[] = [
-    { name: "the Project default", header: "Project default", row: draft.default },
-    ...draft.kinds.map((k) => ({ kind: k.kind, name: k.kind, header: k.kind, row: k })),
+  // Each row has its kind (none for the Project default), its name in
+  // the pickers' labels, and the prefix of its fields in a refusal.
+  const rows: { kind?: string; name: string; header: string; field: string; row: ModelRow }[] = [
+    { name: "the Project default", header: "Project default", field: "default", row: draft.default },
+    ...draft.kinds.map((k) => ({ kind: k.kind, name: k.kind, header: k.kind, field: `kinds.${k.kind}`, row: k })),
   ];
-  const field = (kind: string | undefined, value: keyof ModelRow) => `${kind === undefined ? "default" : `kinds.${kind}`}.${value}`;
-  const invalid = (kind: string | undefined, value: keyof ModelRow) =>
-    error?.field === field(kind, value) ? { "aria-invalid": true, "aria-describedby": `${id}-error` } : undefined;
+  const invalid = (field: string) => (error?.field === field ? { "aria-invalid": true, "aria-describedby": `${id}-error` } : undefined);
 
   return (
     <fieldset className="project-options-section" disabled={project.archived}>
@@ -557,23 +557,22 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ kind, name, header, row }) => {
+            {rows.map(({ kind, name, header, field, row }) => {
               const levels = row.effort && !EFFORT_LEVELS.includes(row.effort) ? [...EFFORT_LEVELS, row.effort] : EFFORT_LEVELS;
               return (
                 <tr key={header}>
                   <th scope="row">{header}</th>
                   <td>
                     <input
-                      list={`${id}-models`}
                       aria-label={`Model for ${name}`}
                       value={row.model}
                       placeholder={inherited(kind, "model")}
                       onChange={(e) => edit(kind, { model: e.target.value })}
-                      {...invalid(kind, "model")}
+                      {...invalid(`${field}.model`)}
                     />
                   </td>
                   <td>
-                    <select aria-label={`Effort for ${name}`} value={row.effort} onChange={(e) => edit(kind, { effort: e.target.value })} {...invalid(kind, "effort")}>
+                    <select aria-label={`Effort for ${name}`} value={row.effort} onChange={(e) => edit(kind, { effort: e.target.value })} {...invalid(`${field}.effort`)}>
                       <option value="">{inherited(kind, "effort")}</option>
                       {levels.map((l) => (
                         <option key={l} value={l}>
@@ -587,7 +586,6 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
             })}
           </tbody>
         </table>
-        <datalist id={`${id}-models`} />
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>
