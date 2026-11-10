@@ -38,6 +38,11 @@ func set(v string, s core.ChoiceSource) core.ChoiceValue {
 	return core.ChoiceValue{Value: v, Source: s}
 }
 
+// fromKind is a value the Models row for the kind of work named set.
+func fromKind(v, name string) core.ChoiceValue {
+	return core.ChoiceValue{Value: v, Source: core.SourceProjectKind, Kind: name}
+}
+
 var unset = core.ChoiceValue{Source: core.SourceNone}
 
 // wantModels checks a Project's Models lists the default row, then every
@@ -208,7 +213,7 @@ func TestTheModelChoiceTakesTheRowForTheTicketsKindOfWork(t *testing.T) {
 	}
 	f.setModels(t, core.SetModelsInput{Default: row("opus", "high"), Kinds: kinds})
 	for i, g := range core.GuideNames {
-		want := choice(set("model-"+g, core.SourceProjectKind), set("high", core.SourceProjectDefault))
+		want := choice(fromKind("model-"+g, g), set("high", core.SourceProjectDefault))
 		if mc := f.modelChoice(t, core.DisplayID("acme", 10+i)); mc != want {
 			t.Errorf("a %s Ticket's model choice = %+v, want %+v", g, mc, want)
 		}
@@ -236,7 +241,7 @@ func TestTheModelChoiceWorksOutEachValueByTheOrderOfPrecedence(t *testing.T) {
 
 	// The kind's row beats the default, value by value.
 	f.setModels(t, core.SetModelsInput{Default: row("opus", "medium"), Kinds: []core.KindModelsView{kind("implementation", "", "xhigh")}})
-	if mc, want := f.modelChoice(t, "acme-2"), choice(set("opus", core.SourceProjectDefault), set("xhigh", core.SourceProjectKind)); mc != want {
+	if mc, want := f.modelChoice(t, "acme-2"), choice(set("opus", core.SourceProjectDefault), fromKind("xhigh", "implementation")); mc != want {
 		t.Errorf("with the kind's effort, model choice = %+v, want %+v", mc, want)
 	}
 
@@ -253,7 +258,7 @@ func TestTheModelChoiceWorksOutEachValueByTheOrderOfPrecedence(t *testing.T) {
 	// A change after the Claim applies to the next turn.
 	f.clock.Advance(time.Minute)
 	f.setModels(t, core.SetModelsInput{Kinds: []core.KindModelsView{kind("implementation", "fable", "")}})
-	if mc, want := f.modelChoice(t, "acme-2"), choice(set("fable", core.SourceProjectKind), set("low", core.SourceTicketTag)); mc != want {
+	if mc, want := f.modelChoice(t, "acme-2"), choice(fromKind("fable", "implementation"), set("low", core.SourceTicketTag)); mc != want {
 		t.Errorf("after a change, model choice = %+v, want %+v", mc, want)
 	}
 }

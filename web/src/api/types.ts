@@ -192,6 +192,27 @@ export interface ReportedModels extends ModelsReport {
   reported?: string;
 }
 
+// Which tier set a Model Choice value: the Ticket's Tag, the Project's
+// Models row for its kind of work, the Project default row, or none of
+// them, which leaves it to the Factory's flag or Claude Code's default.
+export type ChoiceSource = "ticket_tag" | "project_kind" | "project_default" | "none";
+
+// A Model Choice value with its source; value is missing when the
+// source is none. kind names the kind of work whose Models row set it,
+// only when the source is project_kind.
+export interface ChoiceValue {
+  value?: string;
+  source: ChoiceSource;
+  kind?: string;
+}
+
+// The model and effort a Ticket's next turn runs with, as far as Code
+// Central sets them, each worked out on its own.
+export interface ModelChoice {
+  model: ChoiceValue;
+  effort: ChoiceValue;
+}
+
 // A Ticket's CI result (code-central-256), from the runs of its latest
 // pushed commit that aren't ignored: running while any is unfinished or
 // none is reported, failed if any concluded failure, cancelled or timed
@@ -732,6 +753,10 @@ export interface TicketView {
   // left out on any other Ticket (code-central-287).
   awaiting_triage?: boolean;
   triage_actions?: TriageAction[];
+  // model_choice is the model and effort the Ticket's next turn runs
+  // with, each with its source; only the UI's read carries it (Spec
+  // code-central-301).
+  model_choice?: ModelChoice;
 }
 
 // TICKET_FIELDS are TicketView's fields in the service's order, the order

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { Api } from "../api/api";
 import { moveTargets } from "../api/actions/move";
-import type { EditView, State, TicketView } from "../api/types";
+import type { EditView, ReportedModels, State, TicketView } from "../api/types";
 import { ago, CLAUDE_CODE_DEFAULT, REASON_LABEL } from "../format";
 import { Markdown } from "../Markdown";
 import { ActionPanel } from "../panels/ActionPanel";
@@ -14,12 +14,16 @@ import { Live } from "./Live";
 import { useAct } from "./useAct";
 import { CISection } from "./CISection";
 import { Triage } from "./Triage";
+import { ModelChoice } from "./ModelChoice";
 
 export interface TicketPaneProps {
   api: Api;
   project: string;
   ticket: TicketView;
   now: Date;
+  // reported is the Project's Reported Models, once read: what the Model
+  // and effort pickers offer, and the Factory's flags.
+  reported?: ReportedModels;
   // openSpec opens the Ticket's Spec, where the view can show it; without
   // it the Spec is named only.
   openSpec?(spec: string): void;
@@ -49,11 +53,12 @@ export type TicketDetailProps = TicketPaneProps;
 // TicketDetail is everything about a Ticket below its action panel: Spec,
 // Labels, an Incoming Issue's triage actions (in the action panel instead
 // while it is a New issue), description, Blockers (with a gated one's CI
-// result, and whether it no longer blocks), its CI section when it has CI
-// Runs (in the action panel instead while CI failed), Claim activity with
+// result, and whether it no longer blocks), the model and effort its next
+// turn runs with and their pickers, its CI section when it has CI Runs
+// (in the action panel instead while CI failed), Claim activity with
 // each Claim's Live section, move, and a collapsed history of moves,
 // comments and edits merged by time.
-export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketDetailProps) {
+export function TicketDetail({ api, project, ticket: t, now, reported, openSpec }: TicketDetailProps) {
   const claims = [...t.claims].sort((a, b) => b.number - a.number);
   const specName = `${t.spec.id} ${t.spec.title}`;
   return (
@@ -94,6 +99,7 @@ export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketD
           ))}
         </p>
       )}
+      <ModelChoice api={api} project={project} ticket={t} reported={reported} />
       {/* A CI failed Ticket's CI section is its action panel, with the
           failure options, so it isn't shown here too. */}
       {t.needs_me_reason !== "ci_failed" && <CISection ticket={t} api={api} project={project} />}

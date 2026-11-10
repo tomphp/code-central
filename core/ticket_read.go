@@ -12,6 +12,10 @@ type GetTicketInput struct {
 	// Parts are any of TicketParts: the read returns the Ticket's other
 	// fields and only these parts.
 	Parts []string `json:"parts,omitempty"`
+	// WithModelChoice adds the Ticket's Model Choice, for the UI's read
+	// over HTTP. Agents' MCP get_ticket can't ask for it, to keep their
+	// context small.
+	WithModelChoice bool `json:"-"`
 }
 
 // The parts of a Ticket a read can ask for, with PartEdits.

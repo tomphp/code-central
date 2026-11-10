@@ -214,6 +214,13 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 a.link-badge:hover { text-decoration: underline; }
 .link-badge.detached { opacity: 0.6; }
 .linked-note { margin: 6px 0; }
+/* A Ticket's model and effort with their Tag pickers (code-central-313). */
+.model-choice { border: 0; padding: 0; margin: 10px 0; }
+.model-choice-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; }
+.model-choice-row > span { min-width: 16em; }
+.model-choice-row form { display: flex; gap: 6px; align-items: center; }
+.model-choice input, .model-choice select { font: inherit; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.model-choice .warning { margin: 4px 0 0; }
 
 /* The Prototype badge on a Needs Me row and a Focus Item (Spec 213). */
 .prototype-badge { color: var(--accent); border-color: var(--accent); white-space: nowrap; }

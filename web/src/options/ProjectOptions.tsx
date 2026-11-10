@@ -20,6 +20,7 @@ import type {
   ProjectRow,
 } from "../api/types";
 import { CLAUDE_CODE_DEFAULT } from "../format";
+import { effortOptions, modelSuggestions, ModelSuggestions } from "../modelPickers";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { githubRepository } from "./githubRepository";
 
@@ -527,7 +528,7 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
   };
   const changed = JSON.stringify(draft) !== stored;
   const reported = project.reported_models;
-  const suggestions = [...new Set([...reported.aliases, ...reported.model_ids])];
+  const suggestions = modelSuggestions(reported);
   // A kind's row inherits the Project default as typed; the Project
   // default inherits the Factory's flag, if it reported one, and else
   // Claude Code's default.
@@ -563,8 +564,7 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
           </thead>
           <tbody>
             {rows.map(({ kind, name, header, field, row }) => {
-              const valid = reported.effort_levels;
-              const levels = row.effort && !valid.includes(row.effort) ? [...valid, row.effort] : valid;
+              const levels = effortOptions(reported.effort_levels, row.effort);
               return (
                 <tr key={header}>
                   <th scope="row">{header}</th>
@@ -593,13 +593,7 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
             })}
           </tbody>
         </table>
-        {suggestions.length > 0 && (
-          <datalist id={`${id}-models`}>
-            {suggestions.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
-        )}
+        <ModelSuggestions id={`${id}-models`} suggestions={suggestions} />
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>

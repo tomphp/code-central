@@ -209,6 +209,9 @@ type TicketView struct {
 	// human may take on an Incoming Issue; left out on any other Ticket.
 	// Computed on read.
 	TriageActions []string `json:"triage_actions,omitzero"`
+	// ModelChoice is the model and effort the Ticket's next turn runs
+	// with, each with its source; only the UI's read carries it.
+	ModelChoice *ModelChoice `json:"model_choice,omitempty"`
 }
 
 // TicketRow is one find_tickets result.
@@ -401,7 +404,8 @@ func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (Tick
 	}
 	var v TicketView
 	err = c.store.View(func(r store.Reader) error {
-		if _, ok := r.Project(key); !ok {
+		p, ok := r.Project(key)
+		if !ok {
 			return unknownProject(key)
 		}
 		t, err := resolveTicket(r, key, "get_ticket", "ticket", in.Ticket)
@@ -409,6 +413,10 @@ func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (Tick
 			return err
 		}
 		v = c.ticketView(r, key, t).only(parts)
+		if in.WithModelChoice {
+			mc := modelChoice(p, t)
+			v.ModelChoice = &mc
+		}
 		return nil
 	})
 	return v, err
