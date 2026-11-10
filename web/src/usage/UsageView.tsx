@@ -253,6 +253,7 @@ function SessionsTable({ sessions, here, projectName, navigate }: SessionsTableP
             <th scope="col" className="num">Claim</th>
             <th scope="col">Session</th>
             <th scope="col">Kind</th>
+            <th scope="col">Model</th>
             <th scope="col">Started</th>
             <th scope="col" className="num">Peak Context Size</th>
             <th scope="col" className="num">Responses</th>
@@ -283,6 +284,7 @@ function SessionsTable({ sessions, here, projectName, navigate }: SessionsTableP
                   </a>
                 </td>
                 <td>{s.kind}</td>
+                <td>{s.models.length > 0 ? s.models.join(", ") : "—"}</td>
                 <td title={s.started}>{started(s.started)}</td>
                 <Tokens n={s.peak} />
                 <td className="num">{count(s.responses)}</td>

@@ -1379,9 +1379,9 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         output_tokens: 7,
       });
       await d.postUsage("sess-impl", [
-        resp(1, "implementation", 5, 20_000, 0),
-        resp(2, "implementation", 5, 1_000, 60_000),
-        resp(3, "review", 3, 9_000, 0, "toolu_a"),
+        { ...resp(2, "implementation", 5, 1_000, 60_000), model: "claude-sonnet-4-6" },
+        { ...resp(1, "implementation", 5, 20_000, 0), model: "claude-opus-4-7" },
+        { ...resp(3, "review", 3, 9_000, 0, "toolu_a"), model: "claude-haiku-4-5" },
         resp(4, "custom", 1, 100, 0, "toolu_b"),
       ]);
       await d.postUsage("sess-spec", [resp(5, "spec", 2, 30_000, 0)]);
@@ -1394,7 +1394,17 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         { kind: "review", sessions: 1, average_peak: 9_003, largest_peak: 9_003 },
         { kind: "custom", sessions: 1, average_peak: 101, largest_peak: 101 },
       ]);
-      const session = (project: string, ticket: string, session_id: string, kind: string, started: number, peak: number, responses: number, agent?: string) => ({
+      const session = (
+        project: string,
+        ticket: string,
+        session_id: string,
+        kind: string,
+        started: number,
+        peak: number,
+        responses: number,
+        models: string[],
+        agent?: string,
+      ) => ({
         project,
         ticket,
         claim: 1,
@@ -1404,13 +1414,15 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         started,
         peak,
         responses,
+        models,
       });
       const sessions = (u: typeof all) => u.sessions.map((s) => ({ ...s, started: Date.parse(s.started) }));
       expect(sessions(all)).toEqual([
-        session("beta", spec, "sess-spec", "spec", Date.parse(at(5)), 30_002, 1),
-        session("acme", impl, "sess-impl", "custom", Date.parse(at(4)), 101, 1, "toolu_b"),
-        session("acme", impl, "sess-impl", "review", Date.parse(at(3)), 9_003, 1, "toolu_a"),
-        session("acme", impl, "sess-impl", "implementation", Date.parse(at(1)), 61_005, 2),
+        session("beta", spec, "sess-spec", "spec", Date.parse(at(5)), 30_002, 1, []),
+        session("acme", impl, "sess-impl", "custom", Date.parse(at(4)), 101, 1, [], "toolu_b"),
+        session("acme", impl, "sess-impl", "review", Date.parse(at(3)), 9_003, 1, ["claude-haiku-4-5"], "toolu_a"),
+        // Posted out of order: the Opus response came first.
+        session("acme", impl, "sess-impl", "implementation", Date.parse(at(1)), 61_005, 2, ["claude-opus-4-7", "claude-sonnet-4-6"]),
       ]);
       expect(sessions(await d.api.usage({ project: "beta", days: 30 }))).toEqual([sessions(all)[0]]);
       expect((await d.api.usage({ project: "acme" })).kinds.map((k) => k.kind)).toEqual(["implementation", "review", "custom"]);

@@ -180,28 +180,24 @@ function contextSize(r: UsageResponse): number {
 
 // usageSessions are the sessions the responses belong to, newest first, as
 // the service works them out: a session is its session ID plus its agent,
-// with the Claim and kind of its latest response.
+// with the Claim and kind of its latest response, and its models in
+// order of first use, whatever order the responses were posted in.
 function usageSessions(responses: FakeUsageRecord[]): UsageSession[] {
-  const byKey = new Map<string, { s: UsageSession; latest: number }>();
-  for (const r of responses) {
+  const byKey = new Map<string, UsageSession>();
+  for (const r of [...responses].sort((a, b) => Date.parse(a.time) - Date.parse(b.time))) {
     const key = `${r.session_id}\u0000${r.agent ?? ""}`;
-    const t = Date.parse(r.time);
-    let e = byKey.get(key);
-    if (!e) {
-      e = { s: { project: "", ticket: "", claim: 0, session_id: r.session_id, ...(r.agent ? { agent: r.agent } : {}), kind: "", started: r.time, peak: 0, responses: 0 }, latest: -Infinity };
-      byKey.set(key, e);
+    let s = byKey.get(key);
+    if (!s) {
+      s = { project: "", ticket: "", claim: 0, session_id: r.session_id, ...(r.agent ? { agent: r.agent } : {}), kind: "", started: r.time, peak: 0, responses: 0, models: [] };
+      byKey.set(key, s);
     }
-    e.s.responses++;
-    e.s.peak = Math.max(e.s.peak, contextSize(r));
-    if (t < Date.parse(e.s.started)) e.s.started = r.time;
-    if (t >= e.latest) {
-      e.latest = t;
-      Object.assign(e.s, { project: r.project, ticket: r.ticket, claim: r.claim, kind: r.kind });
-    }
+    s.responses++;
+    s.peak = Math.max(s.peak, contextSize(r));
+    if (r.model && !s.models.includes(r.model)) s.models.push(r.model);
+    Object.assign(s, { project: r.project, ticket: r.ticket, claim: r.claim, kind: r.kind });
   }
   const by = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   return [...byKey.values()]
-    .map((e) => e.s)
     .sort((a, b) => Date.parse(b.started) - Date.parse(a.started) || by(a.session_id, b.session_id) || by(a.agent ?? "", b.agent ?? ""));
 }
 

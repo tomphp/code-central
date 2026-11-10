@@ -30,9 +30,10 @@ func postUsage(t *testing.T, srv *codecentraltest.Server, body string) {
 
 // response is one posted model response: its Context Size is
 // input + write + read, and its output, when left at 0, is a tenth of that.
+// A response with no model is posted without one.
 type response struct {
 	time                       time.Time
-	agent, kind                string
+	agent, kind, model         string
 	input, write, read, output int
 }
 
@@ -47,9 +48,13 @@ func postResponses(t *testing.T, srv *codecentraltest.Server, session string, rs
 		if r.agent != "" {
 			agent = fmt.Sprintf(`"agent":%q,`, r.agent)
 		}
+		model := ""
+		if r.model != "" {
+			model = fmt.Sprintf(`"model":%q,`, r.model)
+		}
 		items = append(items, fmt.Sprintf(
-			`{"time":%q,%s"kind":%q,"input_tokens":%d,"cache_write_tokens":%d,"cache_read_tokens":%d,"output_tokens":%d}`,
-			r.time.Format(time.RFC3339Nano), agent, r.kind, r.input, r.write, r.read, r.output))
+			`{"time":%q,%s"kind":%q,%s"input_tokens":%d,"cache_write_tokens":%d,"cache_read_tokens":%d,"output_tokens":%d}`,
+			r.time.Format(time.RFC3339Nano), agent, r.kind, model, r.input, r.write, r.read, r.output))
 	}
 	postUsage(t, srv, fmt.Sprintf(`{"session_id":%q,"responses":[%s]}`, session, strings.Join(items, ",")))
 }
@@ -64,6 +69,23 @@ func claim(t *testing.T, srv *codecentraltest.Server, key, session string) core.
 		return err
 	})
 	return res
+}
+
+// resume finishes first, acme-3, makes acme-2 Ready and claims it a
+// minute later in session, as a session resumed under a newer Claim.
+func resume(t *testing.T, srv *codecentraltest.Server, session string, first core.ClaimResult) {
+	t.Helper()
+	ctx := context.Background()
+	must(t, func() error {
+		_, err := srv.Core.Finish(ctx, "acme", core.FinishInput{Ticket: "3", ClaimID: first.ClaimID, Summary: "done"})
+		return err
+	})
+	must(t, func() error {
+		_, err := srv.Core.Approve(core.WithActor(ctx, core.Human), "acme", core.TicketInput{Ticket: "2"})
+		return err
+	})
+	srv.Clock.Advance(time.Minute)
+	claim(t, srv, "acme", session)
 }
 
 // at is a time on the test server's first day, minutes after it starts.
@@ -94,23 +116,13 @@ func TestPostedUsageGoesToTheNewestClaimWithThatSession(t *testing.T) {
 	srv := newServer(t)
 	first := claim(t, srv, "acme", "s1") // acme-3
 	postResponses(t, srv, "s1", response{time: at(1), kind: "implementation", input: 10, write: 1000, read: 0})
-	ctx := context.Background()
-	must(t, func() error {
-		_, err := srv.Core.Finish(ctx, "acme", core.FinishInput{Ticket: "3", ClaimID: first.ClaimID, Summary: "done"})
-		return err
-	})
-	must(t, func() error {
-		_, err := srv.Core.Approve(core.WithActor(ctx, core.Human), "acme", core.TicketInput{Ticket: "2"})
-		return err
-	})
-	srv.Clock.Advance(time.Minute)
-	claim(t, srv, "acme", "s1") // acme-2, resumed in the same session
+	resume(t, srv, "s1", first) // acme-2
 	postResponses(t, srv, "s1", response{time: at(2), kind: "implementation", input: 10, write: 500, read: 3000})
 
 	got := readUsage(t, srv, "").Sessions
 	want := []core.UsageSession{{
 		Project: "acme", Ticket: "acme-2", Claim: 1, SessionID: "s1", Kind: "implementation",
-		Started: at(1), Peak: 3510, Responses: 2,
+		Started: at(1), Peak: 3510, Responses: 2, Models: []string{},
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("sessions %+v, want %+v", got, want)
@@ -253,10 +265,72 @@ func TestPostedUsageSurvivesARestart(t *testing.T) {
 	dir := t.TempDir()
 	first := newServerWith(t, []codecentraltest.Option{codecentraltest.WithUsageDir(dir)})
 	claim(t, first, "acme", "s1")
-	postResponses(t, first, "s1", response{time: at(1), kind: "implementation", input: 42})
+	postResponses(t, first, "s1",
+		response{time: at(1), kind: "implementation", model: "claude-opus-4-7", input: 42},
+		// As every line written before responses named their model.
+		response{time: at(2), agent: "toolu_a", kind: "review", input: 7},
+	)
 
 	second := newServerWith(t, []codecentraltest.Option{codecentraltest.WithUsageDir(dir)})
-	if got := readUsage(t, second, "?project=acme").Sessions; len(got) != 1 || got[0].Peak != 42 {
-		t.Fatalf("sessions %+v after a restart, want the one with peak 42", got)
+	got := readUsage(t, second, "?project=acme").Sessions
+	if len(got) != 2 || got[1].Peak != 42 || !reflect.DeepEqual(got[1].Models, []string{"claude-opus-4-7"}) || !reflect.DeepEqual(got[0].Models, []string{}) {
+		t.Fatalf("sessions %+v after a restart, want the one with peak 42 on claude-opus-4-7 and a subagent with no model", got)
+	}
+}
+
+// Model column (Spec code-central-266): each posted response may name its
+// model, and each recent session lists its models in order of first use.
+
+func TestASessionListsItsModelsInOrderOfFirstUse(t *testing.T) {
+	srv := newServer(t)
+	claim(t, srv, "acme", "s1")
+	// Posted out of order: the Sonnet response came first.
+	postResponses(t, srv, "s1",
+		response{time: at(3), kind: "implementation", model: "claude-opus-4-7", input: 10},
+		response{time: at(4), kind: "implementation", model: "claude-sonnet-4-6", input: 10},
+		response{time: at(5), kind: "implementation", input: 10},
+	)
+	postResponses(t, srv, "s1",
+		response{time: at(1), kind: "implementation", model: "claude-sonnet-4-6", input: 10},
+		response{time: at(2), kind: "implementation", model: "claude-opus-4-7", input: 10},
+		response{time: at(3), agent: "toolu_a", kind: "review", model: "claude-haiku-4-5", input: 10},
+		response{time: at(4), agent: "toolu_b", kind: "subagent", input: 10},
+	)
+
+	got := map[string][]string{}
+	for _, s := range readUsage(t, srv, "").Sessions {
+		got[s.Agent] = s.Models
+	}
+	want := map[string][]string{
+		"":        {"claude-sonnet-4-6", "claude-opus-4-7"},
+		"toolu_a": {"claude-haiku-4-5"},
+		"toolu_b": {},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("models by agent %v, want %v", got, want)
+	}
+}
+
+func TestAResumedSessionListsTheModelsOfEveryClaim(t *testing.T) {
+	srv := newServer(t)
+	resume(t, srv, "s1", claim(t, srv, "acme", "s1")) // acme-3, then acme-2
+	postResponses(t, srv, "s1", response{time: at(2), kind: "implementation", model: "claude-sonnet-4-6", input: 10})
+	// Filed under the newest Claim too, but used before it.
+	postResponses(t, srv, "s1", response{time: at(1), kind: "implementation", model: "claude-opus-4-7", input: 10})
+
+	got := readUsage(t, srv, "").Sessions
+	if len(got) != 1 || !reflect.DeepEqual(got[0].Models, []string{"claude-opus-4-7", "claude-sonnet-4-6"}) {
+		t.Fatalf("sessions %+v, want one on claude-opus-4-7 then claude-sonnet-4-6", got)
+	}
+}
+
+func TestASessionWithNoModelsListsNone(t *testing.T) {
+	srv := newServer(t)
+	claim(t, srv, "acme", "s1")
+	postResponses(t, srv, "s1", response{time: at(1), kind: "implementation", input: 10})
+
+	_, b := httpDo(t, srv, httpCall{method: "GET", path: "/api/usage"})
+	if !strings.Contains(string(b), `"models":[]`) {
+		t.Fatalf("GET /api/usage %s, want \"models\":[]", b)
 	}
 }
