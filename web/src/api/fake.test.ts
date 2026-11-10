@@ -84,7 +84,7 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       const t = await fake.getTicket(_key, id);
       fake.updateTicket(id, {
         blocked_by: [...t.blocked_by, blocker],
-        blockers: [...t.blockers, { id: blocker, title: b.title, state: b.state }],
+        blockers: [...t.blockers, { id: blocker, title: b.title, state: b.state, cleared: false }],
         blocked: true,
       });
     },
@@ -105,6 +105,8 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       }
       return t.id;
     },
+    // code-central-287
+    incomingIssue: async (key, spec, title, link) => fake.addIncomingIssue(key, spec, title, link).id,
     // code-central-251
     reportPushRemote: async (key, url) => fake.reportPushRemote(key, url),
     reportCIWatcherStatus: async (key, status) => fake.reportCIWatcherStatus(key, status),

@@ -44,3 +44,35 @@ func runGitHubIssues(t *testing.T, f Factory) {
 		}
 	})
 }
+
+// runAwaitingTriage checks a Ticket's awaiting triage reads back after it
+// is written, and a Ticket written without it reads as not awaiting.
+func runAwaitingTriage(t *testing.T, f Factory) {
+	t.Run("a ticket's awaiting triage reads back after it is written", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		put(t, s, func(w store.Writer) error {
+			return w.PutSpec("acme", store.Spec{Number: 1, Title: "GitHub Issues: acme/web", Created: t0, Updated: t0})
+		})
+		put(t, s, func(w store.Writer) error {
+			return w.PutTicket("acme", store.Ticket{Number: 2, Title: "New", State: store.Draft, Spec: 1, AwaitingTriage: true, Created: t0, Updated: t0})
+		})
+		put(t, s, func(w store.Writer) error {
+			return w.PutTicket("acme", store.Ticket{Number: 3, Title: "Kept", State: store.Draft, Spec: 1, Created: t0, Updated: t0})
+		})
+		check := func(s store.Store) {
+			read(t, s, func(r store.Reader) {
+				if tk, _ := r.Ticket("acme", 2); !tk.AwaitingTriage {
+					t.Fatalf("acme-2 = %+v, want awaiting triage", tk)
+				}
+				if tk, _ := r.Ticket("acme", 3); tk.AwaitingTriage {
+					t.Fatalf("acme-3 = %+v, want not awaiting triage", tk)
+				}
+			})
+		}
+		check(s)
+		if f.Reopen != nil {
+			check(f.Reopen(t, s))
+		}
+	})
+}

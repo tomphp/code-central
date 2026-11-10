@@ -39,6 +39,9 @@ const (
 	// NotLandedAfter (ticket 72): its work hasn't reached the base.
 	ReasonAcceptedNotLanded  NeedsMeReason = "accepted_not_landed"
 	ReasonBlockedByCancelled NeedsMeReason = "blocked_by_cancelled"
+	// ReasonNewIssue is an Incoming Issue awaiting triage that isn't
+	// finished and isn't closed externally (code-central-287).
+	ReasonNewIssue NeedsMeReason = "new_issue"
 	// ReasonClosedExternally is a linked Ticket whose external item isn't
 	// open, whose Link isn't detached and that isn't finished (ticket 42).
 	ReasonClosedExternally NeedsMeReason = "closed_externally"
@@ -48,17 +51,18 @@ const (
 // for the published workflow.
 var needsMeReasons = []NeedsMeReasonView{
 	{ReasonNeedsAnswer, "Needs Answer: a Round waits for the human's answers"},
-	{ReasonAnswered, "Answered: the answers wait for the asking session to pick them up"},
-	{ReasonSilentClaim, "Silent Claim: In Progress with no activity for 30 minutes"},
-	{ReasonLongClaim, "Long Claim: In Progress and active, but no move (claim or pick_up_answers) for more than 60 minutes"},
+	{ReasonAnswered, "Answered: answers wait for the asking session to pick them up"},
+	{ReasonSilentClaim, "Silent Claim: In Progress, no activity for 30 minutes"},
+	{ReasonLongClaim, "Long Claim: In Progress and active, with no claim or pick_up_answers for over 60 minutes"},
 	{ReasonFailed, "Failed: a Failure Report waits for the human"},
 	{ReasonInReview, "In Review: finished work waits to be accepted or rejected"},
-	{ReasonCIFailed, "CI failed: Accepted, and its pushed commit's CI failed; the human chooses a failure option"},
-	{ReasonToMerge, "To merge: Accepted under the Branch Landing Method; merge its branch into the base"},
-	{ReasonCIUnavailable, "CI unavailable: waiting on CI 10 minutes or more since its push, with the CI Watcher not Watching or no CI Runs reported"},
-	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted for more than 10 minutes without landing in the base, unless it waits on CI that is running"},
+	{ReasonCIFailed, "CI failed: Accepted with its pushed commit's CI failed; the human picks a failure option"},
+	{ReasonToMerge, "To merge: Accepted under the Branch Landing Method; merge its branch to the base"},
+	{ReasonCIUnavailable, "CI unavailable: no word of its CI 10 minutes after its push (CI Watcher not Watching, or no CI Runs)"},
+	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted over 10 minutes and not in the base, unless its CI is running"},
 	{ReasonBlockedByCancelled, "Blocked by a Cancelled Ticket with no Replacements"},
-	{ReasonClosedExternally, "Closed externally: its linked item was closed, deleted or left its Integration's query; cancel it, mark it Done or unlink it"},
+	{ReasonNewIssue, "New issue: an Incoming Issue awaiting triage"},
+	{ReasonClosedExternally, "Closed externally: its linked item was closed, deleted or left its Integration's query; cancel, mark Done or unlink it"},
 }
 
 // groupIndex is a reason's place in the group order.
@@ -87,7 +91,7 @@ type NeedsMeGroup struct {
 // the Failure Report, the finish, the first failed CI Run finishing (CI
 // failed), the accept (To merge, and Accepted but not landed), the push
 // (CI unavailable),
-// or the Blocker's cancel. Only the
+// the Blocker's cancel, or the Ticket's creation (New issue). Only the
 // detail field for its reason is set.
 type NeedsMeRow struct {
 	Project string        `json:"project"`
@@ -308,6 +312,9 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 	}
 	if since, ok := closedExternally(t); ok {
 		return ReasonClosedExternally, since
+	}
+	if since, ok := newIssue(r, key, t); ok {
+		return ReasonNewIssue, since
 	}
 	return "", time.Time{}
 }

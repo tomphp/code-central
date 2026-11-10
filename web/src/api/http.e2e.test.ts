@@ -20,6 +20,17 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
   const api = createHttpApi({ baseUrl: svc.url, retryMs: 50, fetch: cuttable });
   // The driver plays the agents over the same HTTP API.
   const agent = svc.agent;
+  // integration is a write as the integration Actor (ticket 42).
+  const integration = async (path: string, body: unknown) => {
+    const res = await fetch(svc.url + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Code-Central-Actor": "integration" },
+      body: JSON.stringify(body),
+    });
+    const v = await res.json();
+    if (!res.ok) throw new Error(`${path}: ${JSON.stringify(v)}`);
+    return v;
+  };
   const specs = new Map<string, string>();
   return {
     api,
@@ -48,22 +59,15 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
     claim: async (key, id, session_id) => {
       await agent(`/api/p/${key}/claim`, { ticket: id, session_id });
     },
-    // ticket 42: as the integration Actor
+    // ticket 42
     linkTicket: async (key, title, link, external_state) => {
-      const as = async (path: string, body: unknown) => {
-        const res = await fetch(svc.url + path, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Code-Central-Actor": "integration" },
-          body: JSON.stringify(body),
-        });
-        const v = await res.json();
-        if (!res.ok) throw new Error(`${path}: ${JSON.stringify(v)}`);
-        return v;
-      };
-      const { id } = await as(`/api/p/${key}/integration/create_linked_ticket`, { spec: specs.get(key), title, link });
-      await as(`/api/p/${key}/integration/set_external_state`, { target: id, external_state });
+      const { id } = await integration(`/api/p/${key}/integration/create_linked_ticket`, { spec: specs.get(key), title, link });
+      await integration(`/api/p/${key}/integration/set_external_state`, { target: id, external_state });
       return id;
     },
+    // code-central-287
+    incomingIssue: async (key, spec, title, link) =>
+      (await integration(`/api/p/${key}/integration/create_linked_ticket`, { spec, title, link })).id,
     // ticket 109: as a Factory; the endpoint answers 204 with no body.
     postSessionEvents: async (session_id, events) => {
       const res = await fetch(svc.url + "/api/session-events", {

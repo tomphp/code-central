@@ -30,7 +30,12 @@ export type NeedsMeReason =
   | "ci_unavailable"
   | "accepted_not_landed"
   | "blocked_by_cancelled"
+  | "new_issue"
   | "closed_externally";
+
+// A triage action the human may take on an Incoming Issue (Spec
+// code-central-279), each an operation's name.
+export type TriageAction = "keep_as_draft";
 
 // A Project's mode: where init puts its files.
 export type Mode = "committed" | "local";
@@ -282,6 +287,12 @@ export interface BlockerView {
   title: string;
   state: State;
   via?: string;
+  // ci_result is the Blocker's CI result while the CI gate holds it,
+  // whether or not Unblock on push is on.
+  ci_result?: CIResult;
+  // cleared is whether the Blocker no longer blocks though it isn't Done,
+  // which only Unblock on push does.
+  cleared: boolean;
 }
 
 export interface NeedsMeRow {
@@ -659,6 +670,12 @@ export interface TicketView {
   silent_since?: string;
   needs_me_reason?: NeedsMeReason;
   link?: LinkView;
+  // awaiting_triage is set on an Incoming Issue that came in while New
+  // issues need me was on and that the human hasn't triaged yet;
+  // triage_actions are the triage actions offered on an Incoming Issue,
+  // left out on any other Ticket (code-central-287).
+  awaiting_triage?: boolean;
+  triage_actions?: TriageAction[];
 }
 
 // TICKET_FIELDS are TicketView's fields in the service's order, the order
@@ -667,6 +684,7 @@ export const TICKET_FIELDS = [
   "id", "title", "state", "spec", "labels", "tags", "blocked_by", "blockers", "replacements",
   "created", "updated", "description", "branch", "commit", "pushed_commit", "ci_result", "ci_runs", "land_anyway", "ci_failure_options", "claims", "rounds", "failure_reports",
   "comments", "moves", "edits", "blocked", "claimable", "silent_since", "needs_me_reason", "link",
+  "awaiting_triage", "triage_actions",
 ] as const satisfies readonly (keyof TicketView)[];
 
 // SPEC_FIELDS are SpecView's fields in the service's order, the order a

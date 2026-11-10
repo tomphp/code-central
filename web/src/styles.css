@@ -72,6 +72,7 @@ textarea { width: 100%; resize: vertical; }
 .reason-ci_unavailable { --rc: var(--r-landing); }
 .reason-accepted_not_landed { --rc: var(--r-landing); }
 .reason-blocked_by_cancelled { --rc: var(--r-blocked); }
+.reason-new_issue { --rc: var(--r-external); }
 .reason-closed_externally { --rc: var(--r-external); }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--rc, var(--r-answer)); flex: none; }
 .reason { font-size: 11px; color: var(--rc); display: inline-flex; gap: 4px; align-items: center; margin-left: 6px; }
