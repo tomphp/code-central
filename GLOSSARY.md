@@ -310,7 +310,7 @@ A Project's opt-in, off by default, to link its GitHub repository's issues throu
 _Avoid_: Issue sync, GitHub integration
 
 **Issue Watcher**:
-The kind of Watcher that polls one Project's GitHub issues through `gh`, writing as the `integration` Actor, and posts Code Central's progress back to the issues. Before GitHub Issues turns on, Code Central runs it once in its check mode, which checks `gh` is found and logged in, can read the repository, the repository has issues on, and the login can triage them, answering with what is wrong and its fix.
+The kind of Watcher that polls one Project's GitHub issues through `gh`, writing as the `integration` Actor, and posts Code Central's progress back to the issues. Before GitHub Issues turns on, Code Central runs it once in its check mode, which checks `gh` is found and logged in, can read the repository, the repository has issues on, and the login can triage them, answering with what is wrong and its fix. Its status, Watching or an error with its fix, shows in the GitHub Issues section of Project Options; going into an error sends one Notification, and being rate-limited is still Watching and sends none. The service starts one per Project with GitHub Issues on, whether or not the Factory runs, stops it when GitHub Issues is turned off or the Project is archived, and restarts one that crashes with backoff, reporting it as crashed, restarted N times.
 _Avoid_: Issue daemon, syncer
 
 **Issues Spec**:

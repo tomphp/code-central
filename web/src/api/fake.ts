@@ -1059,10 +1059,7 @@ export class FakeApi implements Api {
   async reportCIWatcherStatus(key: string, status: CIWatcherReport): Promise<void> {
     const p = this.writable(key);
     if (!p.ci.tracking) throw new ApiError(403, "action_not_allowed", `CI Tracking is off on ${key}, so it has no CI Watcher`);
-    if (status.problem === "crashed") throw new ApiError(422, "invalid", `"crashed" isn't a CI problem`, "problem");
-    if (status.state === "error" && status.rate_limited_until)
-      throw new ApiError(422, "invalid", "only a Watching CI Watcher is rate-limited; an error has its own fix", "rate_limited_until");
-    const watcher = this.nextWatcher(p.ci.watcher, status);
+    const watcher = this.nextWatcher(p.ci.watcher, status, "CI Watcher", "CI");
     if (watcher) this.setCI(p, { ...p.ci, watcher });
   }
 
@@ -1073,18 +1070,20 @@ export class FakeApi implements Api {
   async reportIssueWatcherStatus(key: string, status: IssueWatcherReport): Promise<void> {
     const p = this.writable(key);
     if (!p.github_issues.on) throw new ApiError(403, "action_not_allowed", `GitHub Issues is off on ${key}, so it has no Issue Watcher`);
-    if (status.problem === "crashed") throw new ApiError(422, "invalid", `"crashed" isn't a GitHub Issues problem`, "problem");
-    if (status.state === "error" && status.rate_limited_until)
-      throw new ApiError(422, "invalid", "only a Watching Issue Watcher is rate-limited; an error has its own fix", "rate_limited_until");
-    const watcher = this.nextWatcher(p.github_issues.watcher, status);
+    const watcher = this.nextWatcher(p.github_issues.watcher, status, "Issue Watcher", "GitHub Issues");
     if (!watcher) return;
     p.github_issues = { ...p.github_issues, watcher };
     this.emit({ type: "project.changed", project: key });
   }
 
   // nextWatcher is a Watcher's status after it reports status, keeping
-  // since while its state is the same; undefined when nothing changed.
-  private nextWatcher<W extends IssueWatcherStatus>(current: W, status: Omit<W, "since">): W | undefined {
+  // since while its state is the same; undefined when nothing changed. A
+  // crash, which only the service reports, and a rate-limited error are
+  // refused, naming the Watcher and what it watches.
+  private nextWatcher<W extends IssueWatcherStatus>(current: W, status: Omit<W, "since">, name: string, watches: string): W | undefined {
+    if (status.problem === "crashed") throw new ApiError(422, "invalid", `"crashed" isn't a ${watches} problem`, "problem");
+    if (status.state === "error" && status.rate_limited_until)
+      throw new ApiError(422, "invalid", `only a Watching ${name} is rate-limited; an error has its own fix`, "rate_limited_until");
     const watcher = (
       status.state === "error"
         ? { state: "error", problem: status.problem, message: status.message, fix: status.fix }

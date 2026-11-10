@@ -15,6 +15,7 @@ import (
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/watchers"
 )
 
 // rateLimited scripts GitHub's rate-limit answer to calls starting with
@@ -111,7 +112,7 @@ func TestWithoutAResetTimeTheCIWatchersIntervalDoublesUpTo10Minutes(t *testing.T
 	w.pushed("abc123")
 	w.rateLimited(runsOf("abc123"))
 	w.start(w.h.Bin)
-	waits := []time.Duration{time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute, ciwatcher.MaxRateLimitInterval, ciwatcher.MaxRateLimitInterval}
+	waits := []time.Duration{time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute, watchers.MaxRateLimitInterval, watchers.MaxRateLimitInterval}
 	for i, wait := range waits {
 		w.rateLimitedUntil(w.srv.Clock.Now().Add(wait))
 		if i == len(waits)-1 {

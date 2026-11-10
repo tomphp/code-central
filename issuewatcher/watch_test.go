@@ -88,9 +88,9 @@ func (w *watching) nextPoll() {
 	w.srv.Clock.Advance(issuewatcher.Interval)
 }
 
-// errors is how many times the Issue Watcher went into an error, each
-// one Notification.
-func (w *watching) errors() int {
+// errorCount is how many times the Issue Watcher went into an error,
+// each one Notification.
+func (w *watching) errorCount() int {
 	for _, a := range w.srv.Core.WatcherAttention(context.Background()) {
 		if a.Kind == core.WatcherIssues && a.Project == "acme" {
 			return a.Errors
@@ -157,7 +157,7 @@ func TestEachErrorIsReportedWithItsFixUntilItIsFixed(t *testing.T) {
 			w.nextPoll()
 			w.nextPoll()
 			w.status(core.WatcherError)
-			if n := w.errors(); n != 1 {
+			if n := w.errorCount(); n != 1 {
 				t.Fatalf("went into an error %d times, want once, for one Notification", n)
 			}
 			c.fix(w.h)
@@ -233,7 +233,7 @@ func TestARateLimitedIssueWatcherMakesNoGitHubCallsUntilTheResetTime(t *testing.
 	repository(w.h, true, triage)
 	w.srv.Clock.Advance(time.Second)
 	w.rateLimitedUntil(time.Time{})
-	if n := w.errors(); n != 0 {
+	if n := w.errorCount(); n != 0 {
 		t.Fatalf("went into an error %d times, want none: a rate limit sends no Notification", n)
 	}
 }
@@ -256,7 +256,7 @@ func TestWithoutAResetTimeTheIssueWatchersIntervalDoublesUpTo10Minutes(t *testin
 	w.rateLimitedUntil(time.Time{})
 	w.nextPoll()
 	w.status(core.WatcherWatching)
-	if n := w.errors(); n != 0 {
+	if n := w.errorCount(); n != 0 {
 		t.Fatalf("went into an error %d times, want none: a rate limit sends no Notification", n)
 	}
 }

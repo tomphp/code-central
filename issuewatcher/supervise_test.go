@@ -23,18 +23,15 @@ type supervising struct {
 	t   *testing.T
 	h   *ciwatchertest.Harness
 	srv *codecentraltest.Server
-	log *codecentraltest.SyncBuffer
-	// stop stops the service's supervision, and done closes once every
-	// Watcher has stopped.
-	stop func()
-	done chan struct{}
+	// Supervising is the supervision, once started.
+	*ciwatchertest.Supervising
 }
 
 func newSupervising(t *testing.T) *supervising {
 	t.Helper()
 	h := ciwatchertest.New(t)
 	repository(h, true, triage)
-	return &supervising{t: t, h: h, srv: codecentraltest.NewServer(t), log: &codecentraltest.SyncBuffer{}}
+	return &supervising{t: t, h: h, srv: codecentraltest.NewServer(t)}
 }
 
 // project creates key, with GitHub Issues on or off.
@@ -57,20 +54,7 @@ func (s *supervising) issues(key string, on bool) {
 // start supervises kinds, with program as the service's executable.
 func (s *supervising) start(program string, kinds ...watchers.Kind) {
 	s.t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	s.done = make(chan struct{})
-	s.stop = cancel
-	go func() {
-		defer close(s.done)
-		watchers.Supervise(ctx, watchers.Supervision{
-			Projects: s.srv.Core, Kinds: kinds, Program: program, Clock: s.srv.Clock, Log: s.log,
-			Environ: append(s.h.Environ(s.h.Bin), "CODE_CENTRAL_URL="+s.srv.URL),
-		})
-	}()
-	s.t.Cleanup(func() {
-		cancel()
-		<-s.done
-	})
+	s.Supervising = s.h.Supervise(s.srv, program, kinds...)
 }
 
 // status waits for key's Issue Watcher status to be state, and returns
@@ -89,13 +73,6 @@ func (s *supervising) status(key string, state core.WatcherState) core.WatcherVi
 	return got
 }
 
-// logged waits for the service's log to say line n times.
-func (s *supervising) logged(line string, n int) {
-	s.t.Helper()
-	codecentraltest.Eventually(s.t, func() bool { return strings.Count(s.log.String(), line) >= n },
-		"the service's log said %q fewer than %d times:\n%s", line, n, s.log)
-}
-
 // Both kinds run side by side: the Issue Watcher for each Project with
 // GitHub Issues on, whether or not CI Tracking is.
 func TestTheServiceStartsAnIssueWatcherForEachProjectWithGitHubIssuesOn(t *testing.T) {
@@ -104,13 +81,13 @@ func TestTheServiceStartsAnIssueWatcherForEachProjectWithGitHubIssuesOn(t *testi
 	s.project("beta", false)
 	s.start(s.h.CodeCentral, ciwatcher.Kind, issuewatcher.Kind)
 	s.status("acme", core.WatcherWatching)
-	s.logged("started the Issue Watcher for acme", 1)
+	s.Logged("started the Issue Watcher for acme", 1)
 
 	s.issues("beta", true)
 	s.status("beta", core.WatcherWatching)
-	s.logged("started the Issue Watcher for beta", 1)
-	if strings.Contains(s.log.String(), "CI Watcher") {
-		t.Fatalf("a CI Watcher started with CI Tracking off:\n%s", s.log)
+	s.Logged("started the Issue Watcher for beta", 1)
+	if strings.Contains(s.Log.String(), "CI Watcher") {
+		t.Fatalf("a CI Watcher started with CI Tracking off:\n%s", s.Log)
 	}
 }
 
@@ -120,11 +97,11 @@ func TestTurningGitHubIssuesOffStopsItsIssueWatcher(t *testing.T) {
 	s.start(s.h.CodeCentral, ciwatcher.Kind, issuewatcher.Kind)
 	s.status("acme", core.WatcherWatching)
 	s.issues("acme", false)
-	s.logged("stopped the Issue Watcher for acme", 1)
+	s.Logged("stopped the Issue Watcher for acme", 1)
 
 	// And on again starts a new one.
 	s.issues("acme", true)
-	s.logged("started the Issue Watcher for acme", 2)
+	s.Logged("started the Issue Watcher for acme", 2)
 	s.status("acme", core.WatcherWatching)
 }
 
@@ -136,12 +113,12 @@ func TestArchivingAProjectStopsItsIssueWatcher(t *testing.T) {
 	if _, err := s.srv.Core.ArchiveProject(human, "acme"); err != nil {
 		t.Fatal(err)
 	}
-	s.logged("stopped the Issue Watcher for acme", 1)
+	s.Logged("stopped the Issue Watcher for acme", 1)
 
 	if _, err := s.srv.Core.UnarchiveProject(human, "acme"); err != nil {
 		t.Fatal(err)
 	}
-	s.logged("started the Issue Watcher for acme", 2)
+	s.Logged("started the Issue Watcher for acme", 2)
 }
 
 func TestStoppingTheServiceStopsEveryIssueWatcher(t *testing.T) {
@@ -151,15 +128,15 @@ func TestStoppingTheServiceStopsEveryIssueWatcher(t *testing.T) {
 	s.start(s.h.CodeCentral, ciwatcher.Kind, issuewatcher.Kind)
 	s.status("acme", core.WatcherWatching)
 	s.status("beta", core.WatcherWatching)
-	s.stop()
+	s.Stop()
 	select {
-	case <-s.done:
+	case <-s.Done:
 	case <-time.After(10 * time.Second):
 		t.Fatal("supervision didn't end")
 	}
 	for _, key := range []string{"acme", "beta"} {
-		if !strings.Contains(s.log.String(), "stopped the Issue Watcher for "+key) {
-			t.Fatalf("%s's Issue Watcher wasn't stopped:\n%s", key, s.log)
+		if !strings.Contains(s.Log.String(), "stopped the Issue Watcher for "+key) {
+			t.Fatalf("%s's Issue Watcher wasn't stopped:\n%s", key, s.Log)
 		}
 	}
 }
