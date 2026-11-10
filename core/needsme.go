@@ -28,6 +28,10 @@ const (
 	// ReasonToMerge is a Ticket Accepted under the Branch Landing Method
 	// (code-central-175): the human merges its branch, at once.
 	ReasonToMerge NeedsMeReason = "to_merge"
+	// ReasonCIUnavailable is a Ticket the CI gate has held for
+	// CIUnavailableAfter since its push with no word of its CI
+	// (code-central-262).
+	ReasonCIUnavailable NeedsMeReason = "ci_unavailable"
 	// ReasonAcceptedNotLanded is a Ticket Accepted for more than
 	// NotLandedAfter (ticket 72): its work hasn't reached the base.
 	ReasonAcceptedNotLanded  NeedsMeReason = "accepted_not_landed"
@@ -47,6 +51,7 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonFailed, "Failed: a Failure Report waits for the human"},
 	{ReasonInReview, "In Review: finished work waits to be accepted or rejected"},
 	{ReasonToMerge, "To merge: Accepted under the Branch Landing Method; merge its branch into the base"},
+	{ReasonCIUnavailable, "CI unavailable: waiting on CI for 10 minutes or more since its push, while the CI Watcher isn't Watching or no CI Runs have been reported for its pushed commit"},
 	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted for more than 10 minutes without landing in the base"},
 	{ReasonBlockedByCancelled, "Blocked by a Cancelled Ticket with no Replacements"},
 	{ReasonClosedExternally, "Closed externally: its linked item was closed, deleted or left its Integration's query; cancel it, mark it Done or unlink it"},
@@ -76,7 +81,7 @@ type NeedsMeGroup struct {
 // the last activity (Silent Claim, so the quiet time is now minus it),
 // the last move (Long Claim),
 // the Failure Report, the finish, the accept (To merge, and Accepted but
-// not landed),
+// not landed), the push (CI unavailable),
 // or the Blocker's cancel. Only the
 // detail field for its reason is set.
 type NeedsMeRow struct {
@@ -94,6 +99,9 @@ type NeedsMeRow struct {
 	Summary string `json:"summary,omitempty"`
 	// Branch is the Ticket's branch, for the human to merge (To merge).
 	Branch string `json:"branch,omitempty"`
+	// CIUnavailable says which: the CI Watcher not Watching, or no CI
+	// Runs for its pushed commit (CI unavailable).
+	CIUnavailable *CIUnavailableView `json:"ci_unavailable,omitempty"`
 	// Blocker is the Cancelled Blocker (blocked by a Cancelled Ticket).
 	Blocker *BlockerView `json:"blocker,omitempty"`
 	// Link is the Ticket's Link, whatever the reason: the row's badge, and
@@ -235,6 +243,9 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 		row.Summary = firstLine(finishSummary(t))
 	case ReasonToMerge:
 		row.Branch = t.Branch
+	case ReasonCIUnavailable:
+		p, _ := r.Project(key)
+		_, row.CIUnavailable, _ = c.ciWaitingOn(r, p, t)
 	case ReasonBlockedByCancelled:
 		b, _ := cancelledBlocker(r, key, t)
 		row.Blocker = &b
@@ -271,7 +282,7 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 		if t.State == store.Accepted && p.Landing.Method == store.LandingBranch {
 			return ReasonToMerge, entered(t)
 		}
-		if reason, since := c.timedReason(p, t); reason != "" {
+		if reason, since := c.timedReason(r, p, t); reason != "" {
 			return reason, since
 		}
 	case store.Failed:

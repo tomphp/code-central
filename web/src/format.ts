@@ -8,6 +8,7 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   failed: "Failed",
   in_review: "In Review",
   to_merge: "To merge",
+  ci_unavailable: "CI unavailable",
   accepted_not_landed: "Accepted but not landed",
   blocked_by_cancelled: "Blocked by a Cancelled Ticket",
   closed_externally: "Closed externally",
@@ -41,6 +42,8 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
       return r.summary || "Finished";
     case "to_merge":
       return `Accepted ${ago(now, r.since)}: merge ${r.branch ?? "its branch"} into the base`;
+    case "ci_unavailable":
+      return ciUnavailableDetail(now, r);
     case "accepted_not_landed":
       return `Accepted ${ago(now, r.since)}, not landed`;
     case "blocked_by_cancelled":
@@ -48,6 +51,17 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
     case "closed_externally":
       return `${externalDetail(r)} · still ${r.state}`;
   }
+}
+
+// ciUnavailableDetail says why a CI unavailable row has had no word of
+// its CI since its push.
+function ciUnavailableDetail(now: Date, r: NeedsMeRow): string {
+  const u = r.ci_unavailable;
+  const pushed = `pushed ${ago(now, r.since)}`;
+  if (!u) return `CI unavailable · ${pushed}`;
+  const at = `${u.commit.slice(0, 7)} ${pushed}`;
+  if (u.cause === "no_ci_runs") return `No CI Runs reported for ${at}`;
+  return u.message ? `CI Watcher not Watching: ${u.message} · ${at}` : `CI Watcher not Watching · ${at}`;
 }
 
 // externalDetail says what happened to a closed-externally row's external item.

@@ -26,6 +26,7 @@ export type NeedsMeReason =
   | "failed"
   | "in_review"
   | "to_merge"
+  | "ci_unavailable"
   | "accepted_not_landed"
   | "blocked_by_cancelled"
   | "closed_externally";
@@ -217,6 +218,8 @@ export interface NeedsMeRow {
   summary?: string;
   // branch is the Ticket's branch, for the human to merge (to_merge).
   branch?: string;
+  // ci_unavailable says why no word of its CI has come (ci_unavailable).
+  ci_unavailable?: CIUnavailable;
   blocker?: BlockerView;
   link?: LinkView;
   // Set when the Ticket's Spec is a Requirement.
@@ -229,6 +232,15 @@ export interface NeedsMeRow {
   // ci_result is the Ticket's CI result, whatever the reason, for its
   // badge; left out for a Ticket never pushed while CI Tracking was on.
   ci_result?: CIResult;
+}
+
+// Why a Ticket is CI unavailable: the CI Watcher isn't Watching (with
+// its error's message, if it has one), or no CI Runs have been reported
+// for its pushed commit.
+export interface CIUnavailable {
+  cause: "ci_watcher_not_watching" | "no_ci_runs";
+  commit: string;
+  message?: string;
 }
 
 // The Spec a Needs Me row's Map Ticket or Prototype is on; map is set
