@@ -33,6 +33,8 @@ type ghIssue struct {
 	Title       string          `json:"title"`
 	Body        string          `json:"body"`
 	HTMLURL     string          `json:"html_url"`
+	State       string          `json:"state"`
+	Labels      []ghLabel       `json:"labels"`
 	PullRequest json.RawMessage `json:"pull_request"`
 }
 
@@ -71,29 +73,34 @@ func openIssues(ctx context.Context, env gh.Env, prog, repository, label string)
 // arrive brings in each of watch's repository's open issues that has no
 // Link in the Project, detached ones included, so an unlinked or triaged
 // issue never comes in again, as a Draft Ticket on the Issues Spec. It
-// returns GitHub's rate limit, if it refused a call for it; anything
-// else that goes wrong is logged and tried again on the next poll.
-func (cfg Config) arrive(ctx context.Context, watch core.IssueWatch, prog string) *gh.RateLimitError {
+// returns the open issues it listed, by Link ID, and GitHub's rate limit,
+// if it refused a call for it; anything else that goes wrong is logged
+// and tried again on the next poll.
+func (cfg Config) arrive(ctx context.Context, watch core.IssueWatch, prog string) (map[string]ghIssue, *gh.RateLimitError) {
 	if watch.Spec == "" {
-		return nil
+		return nil, nil
 	}
 	issues, err := openIssues(ctx, cfg.Env, prog, watch.Repository, watch.Label)
 	if err != nil {
 		var limit *gh.RateLimitError
 		if errors.As(err, &limit) {
-			return limit
+			return nil, limit
 		}
 		if ctx.Err() == nil {
 			cfg.logf("%v", err)
 		}
-		return nil
+		return nil, nil
+	}
+	listed := map[string]ghIssue{}
+	for _, i := range issues {
+		listed[LinkID(watch.Repository, i.Number)] = i
 	}
 	linked, err := cfg.Client.FindLinked(ctx, cfg.Project, core.FindLinkedInput{Integration: Integration})
 	if err != nil {
 		if ctx.Err() == nil {
 			cfg.logf("find_linked: %v", err)
 		}
-		return nil
+		return listed, nil
 	}
 	have := map[string]bool{}
 	for _, row := range linked {
@@ -110,10 +117,10 @@ func (cfg Config) arrive(ctx context.Context, watch core.IssueWatch, prog string
 		})
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil
+				return listed, nil
 			}
 			cfg.logf("create_linked_ticket for %s: %v", id, err)
 		}
 	}
-	return nil
+	return listed, nil
 }

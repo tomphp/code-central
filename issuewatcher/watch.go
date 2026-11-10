@@ -29,6 +29,8 @@ type Client interface {
 	ReportIssueWatcherStatus(ctx context.Context, key string, in core.ReportWatcherStatusInput) (core.Written[core.ProjectView], error)
 	FindLinked(ctx context.Context, key string, in core.FindLinkedInput) ([]core.LinkedRow, error)
 	CreateLinkedTicket(ctx context.Context, key string, in core.CreateLinkedTicketInput) (core.Written[core.TicketView], error)
+	SetExternalState(ctx context.Context, key string, in core.SetExternalStateInput) (core.LinkedRow, error)
+	ReportIssueWritten(ctx context.Context, key string, in core.ReportIssueWrittenInput) (core.LinkedRow, error)
 }
 
 // Config wires the watch mode.
@@ -54,8 +56,9 @@ func WatchArgs(project string) []string { return []string{Command, "--project", 
 
 // Watch polls until its stdin closes or ctx ends. Each poll reads
 // get_issue_watch, checks gh can reach the repository's issues, brings in
-// the open issues it hasn't yet (arrive), and reports Watching or the
-// error with its fix; a failed poll is retried
+// the open issues it hasn't yet (arrive), carries out the writes due on
+// linked issues (writeBack), and reports Watching or the error with its
+// fix; a failed poll is retried
 // on the next, so fixing the cause brings it back to Watching by itself.
 // It polls every Interval.
 //
@@ -107,7 +110,11 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *gh.RateLimit
 	if errors.As(err, &limit) {
 		return true, limit
 	}
-	return true, cfg.arrive(ctx, watch, prog)
+	listed, limit := cfg.arrive(ctx, watch, prog)
+	if limit != nil {
+		return true, limit
+	}
+	return true, cfg.writeBack(ctx, watch, prog, listed)
 }
 
 // report reports the Issue Watcher's status.

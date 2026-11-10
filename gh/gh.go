@@ -173,10 +173,14 @@ func FirstLine(s string) string {
 	return ""
 }
 
+// ErrNotFound is GitHub answering a call with 404 Not Found.
+var ErrNotFound = errors.New("not found")
+
 // API runs prog, gh, as gh api path with args, never prompting, and with
 // --include, so the response's headers say when a rate limit ends. It
 // returns the response's body and, when it fails, the first line gh wrote
-// to stderr; GitHub refusing it for a rate limit is a *RateLimitError.
+// to stderr; GitHub refusing it for a rate limit is a *RateLimitError,
+// and answering 404 is ErrNotFound.
 func API(ctx context.Context, env Env, prog, path string, args ...string) (body []byte, msg string, err error) {
 	cmd, stdout, stderr := command(ctx, env, prog, append(append([]string{"api", path}, args...), "--include")...)
 	err = cmd.Run()
@@ -187,6 +191,9 @@ func API(ctx context.Context, env Env, prog, path string, args ...string) (body 
 	msg = FirstLine(stderr.String())
 	if limit := rateLimit(status, header, msg); limit != nil {
 		return nil, msg, limit
+	}
+	if status == http.StatusNotFound {
+		return nil, msg, fmt.Errorf("%w: %w", ErrNotFound, err)
 	}
 	return nil, msg, err
 }

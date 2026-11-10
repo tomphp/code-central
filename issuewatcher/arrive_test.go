@@ -22,15 +22,22 @@ type issue struct {
 	Title       string  `json:"title"`
 	Body        *string `json:"body"`
 	HTMLURL     string  `json:"html_url"`
+	State       string  `json:"state"`
+	Labels      []label `json:"labels"`
 	PullRequest *struct {
 		URL string `json:"url"`
 	} `json:"pull_request,omitempty"`
 }
 
+// label is a label on an issue.
+type label struct {
+	Name string `json:"name"`
+}
+
 // openIssue is acme/web's open issue n, with a body.
 func openIssue(n int) issue {
 	body := fmt.Sprintf("Body %d", n)
-	return issue{Number: n, Title: fmt.Sprintf("Issue %d", n), Body: &body, HTMLURL: fmt.Sprintf("https://github.com/acme/web/issues/%d", n)}
+	return issue{Number: n, Title: fmt.Sprintf("Issue %d", n), Body: &body, HTMLURL: fmt.Sprintf("https://github.com/acme/web/issues/%d", n), State: "open"}
 }
 
 // pullRequest is acme/web's open pull request n, as the issues list
