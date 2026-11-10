@@ -1,6 +1,7 @@
 package core
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -14,9 +15,13 @@ import (
 // failed waits on the human in Needs Me until they choose one of the
 // failure options. Land anyway, the human's land_anyway, accepts the
 // failed CI result, and the Factory lands the Ticket on its next poll.
+// Re-run failed jobs, the human's rerun_ci (code-central-265), asks the
+// CI Watcher to re-run the failed runs, and the Ticket waits on CI again.
 
 // The failure options, each named for its operation.
 const (
+	// OptionRerunCI is rerun_ci, offered under both Push Landing Methods.
+	OptionRerunCI = "rerun_ci"
 	// OptionLandAnyway is land_anyway, offered only under Merge: under
 	// Branch the human's merge decides.
 	OptionLandAnyway = "land_anyway"
@@ -53,10 +58,7 @@ func ciFailure(r store.Reader, key string, t store.Ticket, now time.Time) (s CIF
 		return CIFailureSummary{}, time.Time{}, false
 	}
 	s = CIFailureSummary{Commit: latest.Commit, Workflows: []string{}}
-	for _, run := range countedRuns(latest.Commit, mine) {
-		if run.Status != store.CICompleted || !run.Conclusion.Failed() {
-			continue
-		}
+	for _, run := range failedRuns(latest.Commit, mine) {
 		s.Workflows = append(s.Workflows, run.Workflow)
 		if at := run.Finished; !at.IsZero() && (since.IsZero() || at.Before(since)) {
 			since = at
@@ -71,9 +73,9 @@ func ciFailure(r store.Reader, key string, t store.Ticket, now time.Time) (s CIF
 }
 
 // ciFailureOptions are the failure options the human may choose for t
-// while it is CI failed, nil otherwise: Land anyway under Merge only,
-// since under Branch the human's merge decides; Send back to fix and New
-// fix Ticket under both.
+// while it is CI failed, nil otherwise: Re-run failed jobs under both,
+// Land anyway under Merge only, since under Branch the human's merge
+// decides, and Send back to fix and New fix Ticket under both.
 func ciFailureOptions(r store.Reader, key string, t store.Ticket, now time.Time) []string {
 	if _, _, ok := ciFailure(r, key, t, now); !ok {
 		return nil
@@ -81,9 +83,9 @@ func ciFailureOptions(r store.Reader, key string, t store.Ticket, now time.Time)
 	fixes := []string{OptionSendBack, OptionNewFixTicket}
 	p, _ := r.Project(key)
 	if p.Landing.Method == store.LandingBranch {
-		return fixes
+		return append([]string{OptionRerunCI}, fixes...)
 	}
-	return append([]string{OptionLandAnyway}, fixes...)
+	return append([]string{OptionRerunCI, OptionLandAnyway}, fixes...)
 }
 
 // latestPushed is t's latest pushed commit, the one its CI result comes
@@ -136,6 +138,51 @@ func whyNotLandAnyway(r store.Reader, key string, t store.Ticket, now time.Time)
 		return fmt.Sprintf("%s has no failed CI result to land anyway", id)
 	}
 	return fmt.Sprintf("%s's Project lands by Branch, so your merge decides whether it lands, whatever its CI result", id)
+}
+
+// RerunCI is the human's rerun_ci(ticket): a Re-run request for each run
+// that failed on a CI failed Ticket's latest pushed commit, at its latest
+// attempt, recorded on that commit in place of any earlier request. The
+// Ticket's CI result reads running until the CI Watcher, which re-runs
+// the runs' failed jobs, reports each run's new attempt, which answers
+// the request, or the request lapses. Asking again while it waits
+// changes nothing.
+func (c *Core) RerunCI(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
+	if err := humanOnly(ctx, "rerun_ci"); err != nil {
+		return Written[TicketView]{}, err
+	}
+	return c.updateTicketIn(key, "rerun_ci", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+		mine, _ := ticketRuns(r, key, *t, c.now())
+		if rerunPending(*t, mine, c.now()) && t.State == store.Accepted {
+			return false, nil
+		}
+		if !slices.Contains(ciFailureOptions(r, key, *t, c.now()), OptionRerunCI) {
+			return false, &Error{Code: ActionNotAllowed, Message: whyNotRerun(r, key, *t, c.now())}
+		}
+		latest := &t.PushedCommits[len(t.PushedCommits)-1]
+		latest.Reruns = nil
+		for _, run := range failedRuns(latest.Commit, mine) {
+			latest.Reruns = append(latest.Reruns, store.CIRunAttempt{ID: run.ID, Attempt: run.Attempt})
+		}
+		slices.SortFunc(latest.Reruns, func(a, b store.CIRunAttempt) int { return cmp.Compare(a.ID, b.ID) })
+		latest.Rerun = c.now()
+		return true, nil
+	})
+}
+
+// rerunPending reports whether a Re-run request for t's latest pushed
+// commit waits on the CI Watcher, among t's runs at now.
+func rerunPending(t store.Ticket, runs []store.CIRun, now time.Time) bool {
+	return len(t.PushedCommits) > 0 && len(pendingReruns(latestPushed(t), runs, now)) > 0
+}
+
+// whyNotRerun says why t isn't offered Re-run failed jobs.
+func whyNotRerun(r store.Reader, key string, t store.Ticket, now time.Time) string {
+	id := DisplayID(key, t.Number)
+	if t.State != store.Accepted {
+		return fmt.Sprintf("%s is %s: only an Accepted Ticket whose CI failed has failed jobs to re-run", id, t.State)
+	}
+	return fmt.Sprintf("%s has no failed CI result to re-run", id)
 }
 
 // NewFixTicketInput is new_fix_ticket's input: the CI failed Ticket and

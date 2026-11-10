@@ -2,7 +2,8 @@
 // pane and the Focus Item both show the CI section with the failure
 // options, and Land anyway records the human's choice; Send back to fix
 // and New fix Ticket (code-central-264) carry a note prefilled with the
-// failed run's link and failed jobs.
+// failed run's link and failed jobs; and Re-run failed jobs
+// (code-central-265) puts the Ticket back to waiting on CI.
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -96,6 +97,38 @@ describe("the CI failed panel", () => {
     const options = within(p).getByRole("group", { name: "Failure options" });
     expect(options).toHaveTextContent("your merge decides: merge acme-1 into the base");
     expect(within(p).queryByRole("button", { name: "Land anyway" })).toBeNull();
+  });
+
+  it.each<LandingMethod>(["merge", "branch"])("re-runs the failed jobs under %s + Push: the Ticket waits on CI again", async (method) => {
+    const fake = await world(method);
+    const p = await pane(fake);
+    const options = within(p).getByRole("group", { name: "Failure options" });
+    await userEvent.click(within(options).getByRole("button", { name: "Re-run failed jobs" }));
+
+    expect(fake.actions()).toContain("rerun_ci");
+    const t = await fake.getTicket("acme", "acme-1");
+    expect(t).toMatchObject({ state: "Accepted", ci_result: "running" });
+    expect(t).not.toHaveProperty("ci_failure_options");
+    expect((await fake.needsMe()).count).toBe(0);
+    await waitFor(() => expect(within(p).queryByRole("region", { name: "CI failed" })).toBeNull());
+  });
+
+  it("is the Focus Item's panel, and Re-run failed jobs works from there", async () => {
+    const fake = await world();
+    renderAt(fake, "/?view=focus");
+    const item = await screen.findByRole("article", { name: "Focus Item" });
+    const panel = await within(item).findByRole("region", { name: "CI failed" });
+    await userEvent.click(within(panel).getByRole("button", { name: "Re-run failed jobs" }));
+    expect((await fake.getTicket("acme", "acme-1")).ci_result).toBe("running");
+  });
+
+  it("offers Re-run failed jobs on the Focus Item under Branch + Push", async () => {
+    const fake = await world("branch");
+    renderAt(fake, "/?view=focus");
+    const item = await screen.findByRole("article", { name: "Focus Item" });
+    const panel = await within(item).findByRole("region", { name: "CI failed" });
+    expect(within(panel).getByRole("button", { name: "Re-run failed jobs" })).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Land anyway" })).toBeNull();
   });
 
   it("is the Focus Item's panel, and Land anyway works from there", async () => {

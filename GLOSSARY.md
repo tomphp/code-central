@@ -217,6 +217,14 @@ _Avoid_: Build broken, red
 The failure option by which the human accepts a CI failed Ticket's failed CI result, for its pushed commit only, so the Factory lands it on its next poll. Offered under Merge + Push only: under Branch + Push the human's merge decides.
 _Avoid_: Override, force land
 
+**Re-run failed jobs**:
+The failure option by which the human asks the CI Watcher to re-run the failed jobs of a CI failed Ticket's failed CI Runs. It records a Re-run request on the pushed commit, and the Ticket's CI result reads running until the CI Watcher reports each run's new attempt. Offered under Merge + Push and Branch + Push.
+_Avoid_: Retry, rebuild
+
+**Re-run request**:
+What Re-run failed jobs records on a pushed commit: the failed CI Runs, each at the attempt that failed, for the CI Watcher to re-run. It is answered when the CI Watcher reports a later attempt of each, and lapses after 10 minutes unanswered, say when GitHub refuses the re-run, so the Ticket is CI failed again.
+_Avoid_: Rerun job, retry
+
 **Send back to fix**:
 The failure option by which the human sends a CI failed Ticket back to Ready with a note naming the failed run and jobs, so the next Claim fixes it on the same branch; its re-accept's newer pushed commit has its own CI result. Offered under Merge + Push and Branch + Push.
 _Avoid_: Revert, reject

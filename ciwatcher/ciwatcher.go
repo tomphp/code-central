@@ -56,6 +56,9 @@ type Provider interface {
 	CompletedRunsOnBranch(ctx context.Context, branch string, since time.Time) ([]Run, error)
 	// Jobs lists the jobs of one attempt of a run.
 	Jobs(ctx context.Context, id int64, attempt int) ([]core.CIJobView, error)
+	// RerunFailedJobs re-runs the failed jobs of a run, as its next
+	// attempt.
+	RerunFailedJobs(ctx context.Context, id int64) error
 }
 
 // Run is one workflow run as a CI Provider lists it: the CI Run to

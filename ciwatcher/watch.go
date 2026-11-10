@@ -57,9 +57,11 @@ func WatchArgs(project string) []string { return []string{Command, "--project", 
 // Watch polls until its stdin closes or ctx ends. Each poll reads
 // get_ci_watch, checks the CI Provider can be reached, and reports
 // Watching or the error with its fix; a failed poll is retried on the
-// next, so fixing the cause brings it back to Watching by itself. It then
-// lists the runs of each pushed commit still waiting, and reports those
-// that changed, and fires the CI Rules for failures on their branches.
+// next, so fixing the cause brings it back to Watching by itself. It
+// then carries out each Re-run request, re-running the run's failed
+// jobs, lists the runs of each pushed commit still waiting, and reports
+// those that changed, a re-run's new attempt among them, which answers
+// its request, and fires the CI Rules for failures on their branches.
 // It polls every WaitingInterval while a pushed commit waits, and every
 // Interval otherwise.
 //
@@ -76,7 +78,7 @@ func Watch(ctx context.Context, cfg Config) error {
 			cancel()
 		}()
 	}
-	w := &watcher{Config: cfg, reported: map[runKey]time.Time{}, fired: map[runKey]bool{}}
+	w := &watcher{Config: cfg, reported: map[runKey]time.Time{}, rerunAsked: map[rerunKey]bool{}, fired: map[runKey]bool{}}
 	// backoff is the doubled interval while rate-limited with no reset
 	// time; zero once a poll isn't rate-limited.
 	var backoff time.Duration
@@ -116,9 +118,21 @@ type watcher struct {
 	// again. A restarted CI Watcher reports each once more, which
 	// changes nothing.
 	reported map[runKey]time.Time
+	// rerunAsked is each Re-run request carried out, so it isn't asked
+	// for again while GitHub starts the next attempt. A restarted CI
+	// Watcher asks once more, which GitHub refuses for a run already
+	// re-running.
+	rerunAsked map[rerunKey]bool
 	// fired are the runs a CI Rule fired on, so a run whose report
 	// failed is reported again without firing again.
 	fired map[runKey]bool
+}
+
+// rerunKey names one Re-run request: the attempt that failed, and when
+// the human asked, so asking again after a request lapsed is carried out.
+type rerunKey struct {
+	runKey
+	requested time.Time
 }
 
 // runKey names one attempt of one run.
@@ -165,6 +179,9 @@ func (w *watcher) poll(ctx context.Context) (res pollResult) {
 		return res
 	}
 	if err == nil {
+		err = w.rerunFailed(ctx, p, watch.Reruns)
+	}
+	if err == nil {
 		err = w.reportRuns(ctx, p, watch.Waiting)
 	}
 	if err == nil {
@@ -183,6 +200,31 @@ func (w *watcher) report(ctx context.Context, in core.ReportCIWatcherStatusInput
 	if _, err := w.Client.ReportCIWatcherStatus(ctx, w.Project, in); err != nil && ctx.Err() == nil {
 		w.logf("report_ci_watcher_status: %v", err)
 	}
+}
+
+// rerunFailed carries out each Re-run request not yet carried out. One
+// GitHub refuses is logged and tried again next poll, until the request
+// lapses; a rate limit stops it and is returned.
+func (w *watcher) rerunFailed(ctx context.Context, p Provider, reruns []core.CIRerun) error {
+	for _, r := range reruns {
+		k := rerunKey{runKey{r.ID, r.Attempt}, r.Requested}
+		if w.rerunAsked[k] {
+			continue
+		}
+		err := p.RerunFailedJobs(ctx, r.ID)
+		var limit *RateLimitError
+		if errors.As(err, &limit) {
+			return limit
+		}
+		if err != nil {
+			if ctx.Err() == nil {
+				w.logf("%s: re-running the failed jobs of run %d: %v", r.Ticket, r.ID, err)
+			}
+			continue
+		}
+		w.rerunAsked[k] = true
+	}
+	return nil
 }
 
 // reportRuns lists the runs of each waiting pushed commit, fetches the

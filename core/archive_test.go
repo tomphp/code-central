@@ -269,6 +269,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.LandAnyway(human, "acme", core.TicketInput{Ticket: "acme-2"})
 		return err
 	},
+	"rerun_ci": func(f fixture) error {
+		_, err := f.core.RerunCI(human, "acme", core.TicketInput{Ticket: "acme-2"})
+		return err
+	},
 	"new_fix_ticket": func(f fixture) error {
 		_, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-2", Note: "Fix CI."})
 		return err

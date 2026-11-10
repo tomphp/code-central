@@ -159,11 +159,42 @@ type CIWatch struct {
 	// Waiting are the pushed commits still waiting on a final CI result,
 	// or newly pushed, oldest push first: the CI Watcher lists their runs.
 	Waiting []CIWaitingCommit `json:"waiting"`
+	// Reruns are the Re-run requests waiting on the CI Watcher: it
+	// re-runs each run's failed jobs, and a request clears once it
+	// reports the run's new attempt.
+	Reruns []CIRerun `json:"reruns"`
 	// Pushed is every commit pushed for a Ticket, whose runs never fire a
 	// CI Rule, and Landed every commit a Ticket landed at, which a fix
 	// Ticket links; both by Ticket.
 	Pushed []CITicketCommit `json:"pushed"`
 	Landed []CITicketCommit `json:"landed"`
+}
+
+// CIRerun is one Re-run request: a run that failed on a Ticket's pushed
+// commit, at the attempt that failed, and when the human asked.
+type CIRerun struct {
+	Ticket    string    `json:"ticket"`
+	Commit    string    `json:"commit"`
+	ID        int64     `json:"id"`
+	Attempt   int       `json:"attempt"`
+	Requested time.Time `json:"requested"`
+}
+
+// ciReruns is every Re-run request waiting at now, by Ticket, then run. A
+// Cancelled Ticket's are left out.
+func ciReruns(r store.Reader, key string, now time.Time) []CIRerun {
+	out := []CIRerun{}
+	for _, t := range r.Tickets(key) {
+		if len(t.PushedCommits) == 0 || t.State == store.Cancelled {
+			continue
+		}
+		latest := latestPushed(t)
+		mine, _ := ticketRuns(r, key, t, now)
+		for _, a := range pendingReruns(latest, mine, now) {
+			out = append(out, CIRerun{Ticket: DisplayID(key, t.Number), Commit: latest.Commit, ID: a.ID, Attempt: a.Attempt, Requested: latest.Rerun})
+		}
+	}
+	return out
 }
 
 // CIWatchRule is a CI Rule as the CI Watcher reads it: with when the
@@ -183,7 +214,7 @@ type CITicketCommit struct {
 }
 
 // GetCIWatch is the CI Watcher's get_ci_watch. With CI Tracking off,
-// nothing waits.
+// nothing waits and nothing is re-run.
 func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 	var out CIWatch
 	err := c.store.View(func(r store.Reader) error {
@@ -194,7 +225,7 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 		v := ciView(key, p.CI, CIWatcherView{})
 		out = CIWatch{Project: key, Tracking: v.Tracking, Provider: v.Provider, Repository: v.Repository,
 			IgnoredWorkflows: v.IgnoredWorkflows, Rules: []CIWatchRule{}, GHPath: r.Options().GHPath,
-			Waiting: []CIWaitingCommit{}, Pushed: []CITicketCommit{}, Landed: []CITicketCommit{}}
+			Waiting: []CIWaitingCommit{}, Reruns: []CIRerun{}, Pushed: []CITicketCommit{}, Landed: []CITicketCommit{}}
 		last := ciRulesLastRuns(r.CIRuns(key))
 		for i, rule := range v.Rules {
 			w := CIWatchRule{CIRuleView: rule}
@@ -204,7 +235,7 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 			out.Rules = append(out.Rules, w)
 		}
 		if p.CI.Tracking {
-			out.Waiting = ciWaiting(r, key, c.now())
+			out.Waiting, out.Reruns = ciWaiting(r, key, c.now()), ciReruns(r, key, c.now())
 			out.Pushed, out.Landed = ciTicketCommits(r, key)
 		}
 		return nil

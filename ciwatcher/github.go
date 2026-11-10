@@ -274,6 +274,20 @@ func (g *GitHubActions) Jobs(ctx context.Context, id int64, attempt int) ([]core
 	return jobs, nil
 }
 
+// RerunFailedJobs asks GitHub to re-run the failed jobs of a run, which
+// starts its next attempt.
+func (g *GitHubActions) RerunFailedJobs(ctx context.Context, id int64) error {
+	gh, missing := g.FindGH()
+	if missing != nil {
+		return errors.New(missing.Reason)
+	}
+	path := fmt.Sprintf("repos/%s/actions/runs/%d/rerun-failed-jobs", g.Repository, id)
+	if _, msg, err := g.callAPI(ctx, gh, path, "--method", "POST"); err != nil {
+		return fmt.Errorf("gh api %s: %w: %s", path, err, msg)
+	}
+	return nil
+}
+
 // api reads path from GitHub's REST API through gh into out.
 func (g *GitHubActions) api(ctx context.Context, path string, out any) error {
 	gh, missing := g.FindGH()

@@ -347,6 +347,18 @@ type PushedCommit struct {
 	// LandAnyway is when the human accepted this commit's failed CI
 	// result, so the Factory lands it (code-central-261); zero until then.
 	LandAnyway time.Time
+	// Rerun is when the human last asked for this commit's failed jobs to
+	// be re-run (code-central-265); zero until then. Reruns are the failed
+	// run attempts it asked for: each waits until the CI Watcher reports
+	// a later attempt of its run.
+	Rerun  time.Time
+	Reruns []CIRunAttempt
+}
+
+// CIRunAttempt names one attempt of one CI Run.
+type CIRunAttempt struct {
+	ID      int64
+	Attempt int
 }
 
 // CIRunStatus is where a CI Run stands, as Code Central has it.

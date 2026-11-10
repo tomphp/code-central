@@ -175,7 +175,44 @@ func latestCIResult(latest store.PushedCommit, runs []store.CIRun, now time.Time
 	if now.Sub(latest.Pushed) > ciKeep && !slices.ContainsFunc(runs, func(run store.CIRun) bool { return run.Commit == latest.Commit }) {
 		return ""
 	}
-	return ciResultOf(latest.Commit, runs)
+	return pushedCIResult(latest, runs, now)
+}
+
+// pushedCIResult is the CI result of a pushed commit from runs at now:
+// running while a Re-run request waits on the CI Watcher, else its runs'.
+func pushedCIResult(p store.PushedCommit, runs []store.CIRun, now time.Time) CIResult {
+	if len(pendingReruns(p, runs, now)) > 0 {
+		return CIRunning
+	}
+	return ciResultOf(p.Commit, runs)
+}
+
+// ciRerunLapse is how long a Re-run request waits for the run's new
+// attempt: one GitHub refuses, say for a run too old to re-run, lapses,
+// and the Ticket is CI failed again, with its failure options.
+const ciRerunLapse = 10 * time.Minute
+
+// pendingReruns are p's Re-run requests still waiting on the CI Watcher
+// at now: those whose run has no later attempt in runs, until the
+// request lapses. A request whose run has been pruned waits on nothing.
+func pendingReruns(p store.PushedCommit, runs []store.CIRun, now time.Time) []store.CIRunAttempt {
+	if now.Sub(p.Rerun) >= ciRerunLapse {
+		return nil
+	}
+	var out []store.CIRunAttempt
+	for _, a := range p.Reruns {
+		kept, answered := false, false
+		for _, run := range runs {
+			if run.ID == a.ID && run.Commit == p.Commit {
+				kept = kept || run.Attempt == a.Attempt
+				answered = answered || run.Attempt > a.Attempt
+			}
+		}
+		if kept && !answered {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // ticketRuns is every CI Run tracked against t and kept at now, and
@@ -221,6 +258,18 @@ func ciResultOf(commit string, runs []store.CIRun) CIResult {
 		return CIFailed
 	}
 	return CIPassed
+}
+
+// failedRuns are the runs of commit, counted towards its CI result, that
+// concluded failure, cancelled or timed out.
+func failedRuns(commit string, runs []store.CIRun) []store.CIRun {
+	var out []store.CIRun
+	for _, run := range countedRuns(commit, runs) {
+		if run.Status == store.CICompleted && run.Conclusion.Failed() {
+			out = append(out, run)
+		}
+	}
+	return out
 }
 
 // countedRuns are the runs of commit that count towards its CI result,
@@ -428,9 +477,9 @@ type CIWaitingCommit struct {
 }
 
 // ciWaiting is every Ticket's latest pushed commit whose CI result is
-// still running, or that was pushed in the last ciNewlyPushed, oldest
-// push first. A Cancelled Ticket's is left out, as is one pushed more
-// than ciWaitLimit ago.
+// still running, or that was pushed, or asked to be re-run, in the last
+// ciNewlyPushed, oldest push first. A Cancelled Ticket's is left out, as
+// is one pushed, or last asked to be re-run, more than ciWaitLimit ago.
 func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 	out := []CIWaitingCommit{}
 	runs := keptCIRuns(r.CIRuns(key), now)
@@ -439,8 +488,10 @@ func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 			continue
 		}
 		latest := t.PushedCommits[len(t.PushedCommits)-1]
-		if now.Sub(latest.Pushed) >= ciWaitLimit {
-			continue
+		// A Re-run request starts the wait again.
+		since := latest.Pushed
+		if latest.Rerun.After(since) {
+			since = latest.Rerun
 		}
 		var mine []store.CIRun
 		for _, run := range runs {
@@ -448,7 +499,10 @@ func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 				mine = append(mine, run)
 			}
 		}
-		if ciResultOf(latest.Commit, mine) == CIRunning || now.Sub(latest.Pushed) < ciNewlyPushed {
+		if now.Sub(since) >= ciWaitLimit {
+			continue
+		}
+		if pushedCIResult(latest, mine, now) == CIRunning || now.Sub(since) < ciNewlyPushed {
 			out = append(out, CIWaitingCommit{Ticket: DisplayID(key, t.Number), Commit: latest.Commit, Pushed: latest.Pushed})
 		}
 	}

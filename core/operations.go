@@ -135,6 +135,8 @@ var Operations = []Op{
 	{Name: "report_ci_runs", Audience: FactoryOnly, Write: true},
 	// CI failed and its failure options (code-central-261).
 	{Name: "land_anyway", Audience: HumanOnly, Write: true},
+	// Re-run failed jobs (code-central-265).
+	{Name: "rerun_ci", Audience: HumanOnly, Write: true},
 	// Send back to fix and New fix Ticket (code-central-264).
 	{Name: "new_fix_ticket", Audience: HumanOnly, Write: true},
 }
