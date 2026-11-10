@@ -25,6 +25,7 @@ export type NeedsMeReason =
   | "long_claim"
   | "failed"
   | "in_review"
+  | "ci_failed"
   | "to_merge"
   | "ci_unavailable"
   | "accepted_not_landed"
@@ -254,6 +255,8 @@ export interface NeedsMeRow {
   summary?: string;
   // branch is the Ticket's branch, for the human to merge (to_merge).
   branch?: string;
+  // ci_failure is what failed on the pushed commit (ci_failed).
+  ci_failure?: CIFailureSummary;
   // ci_unavailable says why no word of its CI has come (ci_unavailable).
   ci_unavailable?: CIUnavailable;
   blocker?: BlockerView;
@@ -269,6 +272,17 @@ export interface NeedsMeRow {
   // badge; left out for a Ticket never pushed while CI Tracking was on.
   ci_result?: CIResult;
 }
+
+// What failed on a CI failed Ticket's pushed commit: the commit and its
+// failed runs' workflow file names.
+export interface CIFailureSummary {
+  commit: string;
+  workflows: string[];
+}
+
+// A failure option the human may choose for a CI failed Ticket, named for
+// its action (code-central-261).
+export type CIFailureOption = "land_anyway";
 
 // Why a Ticket is CI unavailable: the CI Watcher isn't Watching (with
 // its error's message, if it has one), or no CI Runs have been reported
@@ -587,6 +601,12 @@ export interface TicketView {
   pushed_commit?: PushedCommitView;
   ci_result?: CIResult;
   ci_runs?: CIRunView[];
+  // land_anyway says the human accepted the latest pushed commit's failed
+  // CI result, so the Factory lands it; ci_failure_options are the
+  // failure options the human may choose while the Ticket is CI failed,
+  // left out otherwise (code-central-261).
+  land_anyway?: boolean;
+  ci_failure_options?: CIFailureOption[];
   claims: ClaimView[];
   rounds: RoundView[];
   failure_reports: FailureReportView[];
@@ -604,7 +624,7 @@ export interface TicketView {
 // a TicketAcknowledgement's changed lists them in.
 export const TICKET_FIELDS = [
   "id", "title", "state", "spec", "labels", "tags", "blocked_by", "blockers", "replacements",
-  "created", "updated", "description", "branch", "commit", "pushed_commit", "ci_result", "ci_runs", "claims", "rounds", "failure_reports",
+  "created", "updated", "description", "branch", "commit", "pushed_commit", "ci_result", "ci_runs", "land_anyway", "ci_failure_options", "claims", "rounds", "failure_reports",
   "comments", "moves", "edits", "blocked", "claimable", "silent_since", "needs_me_reason", "link",
 ] as const satisfies readonly (keyof TicketView)[];
 

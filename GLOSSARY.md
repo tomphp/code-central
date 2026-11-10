@@ -213,6 +213,10 @@ _Avoid_: Ready to merge, awaiting merge
 The Needs Me reason of an Accepted Ticket whose CI result is failed and that the human hasn't dealt with yet: send it back to fix, re-run the failed jobs, open a new fix Ticket, or land it anyway.
 _Avoid_: Build broken, red
 
+**Land anyway**:
+The failure option by which the human accepts a CI failed Ticket's failed CI result, for its pushed commit only, so the Factory lands it on its next poll. Offered under Merge + Push only: under Branch + Push the human's merge decides.
+_Avoid_: Override, force land
+
 **CI unavailable**:
 The Needs Me reason of a Ticket that has waited 10 minutes or more on CI since its push, while the CI Watcher isn't watching or no CI Runs have been reported for its pushed commit.
 _Avoid_: CI down, CI stuck

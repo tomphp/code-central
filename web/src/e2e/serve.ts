@@ -24,6 +24,8 @@ export interface Service {
   url: string;
   // agent makes one POST as an agent, as an MCP tool call or the CLI would.
   agent(path: string, body: unknown): Promise<any>;
+  // human makes one POST as the human, as the UI does.
+  human(path: string, body: unknown): Promise<any>;
   // logOutOfGH makes the fake gh answer gh auth status as a gh with no
   // login does.
   logOutOfGH(): Promise<void>;
@@ -67,16 +69,8 @@ export async function serve(): Promise<Service> {
   });
   return {
     url,
-    agent: async (path, body) => {
-      const res = await fetch(url + path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Code-Central-Actor": "agent" },
-        body: JSON.stringify(body),
-      });
-      const v = await res.json();
-      if (!res.ok) throw new Error(`${path}: ${JSON.stringify(v)}`);
-      return v;
-    },
+    agent: (path, body) => post(url, "agent", path, body),
+    human: (path, body) => post(url, "human", path, body),
     logOutOfGH: () =>
       writeFile(
         join(gh.data, "answers.json"),
@@ -92,4 +86,16 @@ export async function serve(): Promise<Service> {
       await rm(ghDir, { recursive: true, force: true });
     },
   };
+}
+
+// post makes one POST to the service as actor, failing on a refusal.
+async function post(url: string, actor: "agent" | "human", path: string, body: unknown): Promise<any> {
+  const res = await fetch(url + path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Code-Central-Actor": actor },
+    body: JSON.stringify(body),
+  });
+  const v = await res.json();
+  if (!res.ok) throw new Error(`${path}: ${JSON.stringify(v)}`);
+  return v;
 }

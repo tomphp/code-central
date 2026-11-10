@@ -155,15 +155,22 @@ type TicketView struct {
 	// while CI Tracking was on, and CIResult the CI result of its runs;
 	// both left out while it has none. CIRuns are every CI Run tracked
 	// against it, the latest pushed commit's first. Computed on read.
-	PushedCommit   *PushedCommitView   `json:"pushed_commit,omitempty"`
-	CIResult       CIResult            `json:"ci_result,omitempty"`
-	CIRuns         []CIRunView         `json:"ci_runs,omitempty"`
-	Claims         []ClaimView         `json:"claims,omitzero"`
-	Rounds         []RoundView         `json:"rounds,omitzero"`
-	FailureReports []FailureReportView `json:"failure_reports,omitzero"`
-	Comments       []CommentView       `json:"comments,omitzero"`
-	Moves          []MoveView          `json:"moves,omitzero"`
-	Edits          []EditView          `json:"edits,omitzero"`
+	PushedCommit *PushedCommitView `json:"pushed_commit,omitempty"`
+	CIResult     CIResult          `json:"ci_result,omitempty"`
+	CIRuns       []CIRunView       `json:"ci_runs,omitempty"`
+	// LandAnyway says the human accepted the latest pushed commit's
+	// failed CI result, so the Factory lands it (code-central-261).
+	LandAnyway bool `json:"land_anyway,omitempty"`
+	// CIFailureOptions are the failure options, each an operation's name,
+	// the human may choose while the Ticket is CI failed; left out
+	// otherwise, and empty when none applies. Computed on read.
+	CIFailureOptions []string            `json:"ci_failure_options,omitzero"`
+	Claims           []ClaimView         `json:"claims,omitzero"`
+	Rounds           []RoundView         `json:"rounds,omitzero"`
+	FailureReports   []FailureReportView `json:"failure_reports,omitzero"`
+	Comments         []CommentView       `json:"comments,omitzero"`
+	Moves            []MoveView          `json:"moves,omitzero"`
+	Edits            []EditView          `json:"edits,omitzero"`
 	// LeftOut counts each part a read left out that has anything, by
 	// part name.
 	LeftOut   map[string]int `json:"left_out,omitempty"`
@@ -540,6 +547,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit})
 	}
 	v.PushedCommit, v.CIResult, v.CIRuns = ticketCI(r, key, t, c.now())
+	v.LandAnyway, v.CIFailureOptions = choseLandAnyway(t), ciFailureOptions(r, key, t, c.now())
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = c.reasonOf(r, key, t)

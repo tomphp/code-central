@@ -66,7 +66,7 @@ func TestNeedsMeRowsCarryTheCIResult(t *testing.T) {
 	})
 	row := func() core.NeedsMeRow {
 		t.Helper()
-		r, ok := needsMeRowOf(t, srv)
+		r, ok := needsMeRowOf(t, srv, "acme-3")
 		if !ok {
 			t.Fatal("acme-3 isn't in Needs Me")
 		}

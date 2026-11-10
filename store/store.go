@@ -344,6 +344,9 @@ type Ticket struct {
 type PushedCommit struct {
 	Commit string
 	Pushed time.Time
+	// LandAnyway is when the human accepted this commit's failed CI
+	// result, so the Factory lands it (code-central-261); zero until then.
+	LandAnyway time.Time
 }
 
 // CIRunStatus is where a CI Run stands, as Code Central has it.

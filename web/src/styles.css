@@ -65,6 +65,7 @@ textarea { width: 100%; resize: vertical; }
 .reason-long_claim { --rc: var(--r-long); }
 .reason-failed { --rc: var(--r-failed); }
 .reason-in_review { --rc: var(--r-review); }
+.reason-ci_failed { --rc: var(--r-failed); }
 .reason-to_merge { --rc: var(--r-landing); }
 .reason-ci_unavailable { --rc: var(--r-landing); }
 .reason-accepted_not_landed { --rc: var(--r-landing); }
@@ -153,6 +154,7 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .latest-event { color: var(--muted); }
 /* A Ticket's CI section (code-central-256): ignored runs greyed. */
 .ci-section h3 { font-size: 13px; margin: 14px 0 6px; }
+.ci-options { margin-top: 8px; }
 .ci-result, .ci-status { font-size: 11px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
 .ci-passed { color: var(--r-review); border-color: var(--r-review); }
 .ci-failed, .ci-cancelled, .ci-timed-out { color: var(--r-failed); border-color: var(--r-failed); }

@@ -1,4 +1,4 @@
 package store
 
 // currentFormat is the newest format the real migration chain reaches.
-const currentFormat = 11
+const currentFormat = 12

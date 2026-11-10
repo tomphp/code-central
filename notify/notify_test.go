@@ -403,3 +403,62 @@ func TestACIWatcherErrorThatClearedBeforeNotifyLookedStillNotifies(t *testing.T)
 	f.want(notify.Notification{Title: "acme's CI Watcher is in error", Body: "gh isn't logged in", URL: base + "/?view=project-options&project=acme"})
 	f.wantNothing()
 }
+
+// pushed turns CI Tracking and Merge + Push on for project and reports
+// commit as ticket's pushed commit; ticket must be Accepted.
+func (f *fixture) pushed(project, ticket, commit string) {
+	f.t.Helper()
+	human := core.WithActor(ctx, core.Human)
+	if p := must(f.t)(f.core.GetProject(ctx, project)).(core.ProjectView); !p.CI.Tracking {
+		must(f.t)(f.core.SetCITracking(human, project, core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}))
+		must(f.t)(f.core.SetLandingMethod(human, project, core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin"}))
+	}
+	must(f.t)(f.core.ReportPushedCommit(ctx, project, core.ReportPushedCommitInput{Ticket: core.Ref(ticket), Commit: commit}))
+}
+
+// ciRun reports one run of ci.yml on commit, tracked against ticket, as
+// the CI Watcher.
+func (f *fixture) ciRun(project, ticket, commit string, id int64, status store.CIRunStatus, conclusion store.CIConclusion) {
+	f.t.Helper()
+	must(f.t)(f.core.ReportCIRuns(ctx, project, core.ReportCIRunsInput{Runs: []core.CIRunView{{ID: id, Attempt: 1, Workflow: "ci.yml",
+		Commit: commit, Status: status, Conclusion: conclusion, Ticket: project + "-" + ticket}}}))
+}
+
+func TestATicketGoingToCIFailedNotifiesOnce(t *testing.T) {
+	f := newFixture(t)
+	f.project("acme", 2)
+	f.accepted("acme", "2")
+	f.pushed("acme", "2", "abc123")
+	f.start()
+	f.ciRun("acme", "2", "abc123", 1, store.CIInProgress, "")
+	f.ciRun("acme", "2", "abc123", 1, store.CICompleted, store.CIFailure)
+	// Another failed run on the same commit is the same CI failed.
+	f.ciRun("acme", "2", "abc123", 2, store.CICompleted, store.CIFailure)
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme-2's CI failed", Body: "Task A", URL: base + "/?view=inbox&ticket=acme-2"})
+
+	// Nor does the tick's look say it again.
+	f.clock.Advance(notify.Tick)
+	f.round("acme", "3")
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme-3 has a new Round", Body: "Task B", URL: base + "/?view=inbox&ticket=acme-3"})
+	f.wantNothing()
+}
+
+// A Ticket already CI failed at startup goes into the startup summary
+// rather than notifying on its own.
+func TestATicketAlreadyCIFailedAtStartupIsInTheStartupSummary(t *testing.T) {
+	f := newFixture(t)
+	f.project("acme", 2)
+	f.accepted("acme", "2")
+	f.pushed("acme", "2", "abc123")
+	f.ciRun("acme", "2", "abc123", 1, store.CICompleted, store.CIFailure)
+	f.start()
+	f.want(notify.Notification{Title: "Code Central", Body: "1 Ticket needs you in acme", URL: base + "/?view=inbox"})
+	f.clock.BlockUntil(1)
+	f.clock.Advance(notify.Tick)
+	f.round("acme", "3")
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme-3 has a new Round", Body: "Task B", URL: base + "/?view=inbox&ticket=acme-3"})
+	f.wantNothing()
+}

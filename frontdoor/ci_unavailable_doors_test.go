@@ -15,29 +15,11 @@ import (
 // Watcher isn't Watching or no CI Runs have been reported for its pushed
 // commit, worked out on read through the test clock.
 
-// needsMeRowOf is acme-3's Needs Me row, or false when it isn't in Needs
-// Me.
-func needsMeRowOf(t *testing.T, srv *codecentraltest.Server) (core.NeedsMeRow, bool) {
-	t.Helper()
-	v, err := srv.Client.NeedsMe(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, g := range v.Groups {
-		for _, r := range g.Tickets {
-			if r.ID == "acme-3" {
-				return r, true
-			}
-		}
-	}
-	return core.NeedsMeRow{}, false
-}
-
 // wantCIUnavailable checks acme-3 is CI unavailable for cause since its
 // push at codecentraltest.Start.
 func wantCIUnavailable(t *testing.T, srv *codecentraltest.Server, cause core.CIUnavailableCause) core.NeedsMeRow {
 	t.Helper()
-	row, ok := needsMeRowOf(t, srv)
+	row, ok := needsMeRowOf(t, srv, "acme-3")
 	if !ok || row.Reason != core.ReasonCIUnavailable {
 		t.Fatalf("acme-3 in Needs Me %v as %+v, want ci_unavailable", ok, row)
 	}
@@ -53,7 +35,7 @@ func wantCIUnavailable(t *testing.T, srv *codecentraltest.Server, cause core.CIU
 // wantNotInNeedsMe checks acme-3 isn't in Needs Me at all.
 func wantNotInNeedsMe(t *testing.T, srv *codecentraltest.Server, when string) {
 	t.Helper()
-	if row, ok := needsMeRowOf(t, srv); ok {
+	if row, ok := needsMeRowOf(t, srv, "acme-3"); ok {
 		t.Fatalf("%s, acme-3 is in Needs Me as %+v, want it not there", when, row)
 	}
 }
@@ -141,7 +123,7 @@ func TestRunsForAnOlderPushedCommitAreNoCIRuns(t *testing.T) {
 	wantNotInNeedsMe(t, srv, "just after a newer push")
 
 	srv.Clock.Advance(core.CIUnavailableAfter)
-	row, _ := needsMeRowOf(t, srv)
+	row, _ := needsMeRowOf(t, srv, "acme-3")
 	if row.Reason != core.ReasonCIUnavailable || row.CIUnavailable.Cause != core.CINoRuns || row.CIUnavailable.Commit != "def456" {
 		t.Fatalf("10 minutes after the newer push, row %+v, want ci_unavailable, no CI Runs at def456", row)
 	}
@@ -169,7 +151,7 @@ func TestCIUnavailableClearsWhenTheGateLifts(t *testing.T) {
 			wantCIUnavailable(t, srv, core.CIWatcherNotWatching)
 
 			tc.lift(t, srv)
-			row, ok := needsMeRowOf(t, srv)
+			row, ok := needsMeRowOf(t, srv, "acme-3")
 			if ok && row.Reason == core.ReasonCIUnavailable {
 				t.Fatalf("with the gate lifted, acme-3 is still CI unavailable: %+v", row)
 			}
@@ -182,7 +164,7 @@ func TestAGatedTicketWhoseCIPassedIsNotCIUnavailable(t *testing.T) {
 	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CISuccess))
 	srv.Clock.Advance(core.NotLandedAfter + time.Minute)
 	// The Factory lands a passed Ticket; if it hasn't, it isn't landing.
-	row, _ := needsMeRowOf(t, srv)
+	row, _ := needsMeRowOf(t, srv, "acme-3")
 	if row.Reason != core.ReasonAcceptedNotLanded {
 		t.Fatalf("passed and still Accepted after 11 minutes, row %+v, want accepted_not_landed", row)
 	}
