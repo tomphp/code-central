@@ -203,6 +203,12 @@ func (w *writer) PutImport(project string, im Import) error {
 				return fmt.Errorf("%w: %s-%d", ErrExists, project, t.Number)
 			}
 		}
+		for _, t := range im.Rewritten {
+			if _, ok := p.tickets[t.Number]; !ok || seen[t.Number] {
+				return fmt.Errorf("%w: %s-%d", ErrNotExists, project, t.Number)
+			}
+			seen[t.Number] = true
+		}
 	}
 	if err := w.begin(im, project); err != nil {
 		return err
@@ -212,6 +218,9 @@ func (w *writer) PutImport(project string, im Import) error {
 		p.specs[s.Number] = s
 	}
 	for _, t := range im.Tickets {
+		p.tickets[t.Number] = t
+	}
+	for _, t := range im.Rewritten {
 		p.tickets[t.Number] = t
 	}
 	return nil

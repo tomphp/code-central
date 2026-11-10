@@ -1231,7 +1231,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       const gh = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7" };
       const id = await d.linkTicket("acme", "Issue", gh, "closed");
-      const link = { ...gh, external_state: "closed", detached: false };
+      const link = { ...gh, external_state: "closed", detached: false, outbound: false };
 
       expect(await d.api.getTicket("acme", id)).toMatchObject({ link, needs_me_reason: "closed_externally" });
       const nm = await d.api.needsMe();
@@ -1266,7 +1266,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
     it("shows a New issue in Needs Me until the human keeps it as a Draft", async () => {
       const { id, gh } = await incomingIssue(true, 7, "Login is broken");
-      const link = { ...gh, external_state: "open", detached: false };
+      const link = { ...gh, external_state: "open", detached: false, outbound: false };
 
       expect(await d.api.getTicket("acme", id)).toMatchObject({ state: "Draft", link, awaiting_triage: true, triage_actions: TRIAGE_ACTIONS, needs_me_reason: "new_issue" });
       const nm = await d.api.needsMe();
@@ -1326,6 +1326,34 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const unlinked = await d.api.act("acme", other, "wont_fix", {}).catch((e) => e);
       expect(unlinked).toMatchObject({ status: 409, code: "action_not_allowed" });
       expect(unlinked.message).toContain(`${other} was unlinked from github acme/web#8`);
+    });
+
+    // ---- To Requirement (code-central-290) ----
+    it("turns an Incoming Issue into a Requirement whose Spec has an outbound Link", async () => {
+      const { id, gh } = await incomingIssue(true, 7, "Login is broken");
+
+      const ack = await d.api.act("acme", id, "to_requirement", { context: "  Seen on every login.  " });
+      wantAcknowledgement(ack, id, "Cancelled", ["state", "replacements", "comments", "moves", "needs_me_reason", "link", "awaiting_triage", "triage_actions"]);
+      const t = await d.api.getTicket("acme", id);
+      expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Seen on every login." });
+      expect(t.moves.at(-1)).toMatchObject({ to: "Cancelled", via: "to_requirement" });
+      expect(t.link).toMatchObject({ ...gh, detached: true, outbound: false });
+      expect(t.awaiting_triage).toBeUndefined();
+      expect(t.triage_actions).toBeUndefined();
+      expect((await d.api.needsMe()).count).toBe(0);
+
+      const grilling = await d.api.getTicket("acme", t.replacements[0]);
+      expect(grilling.labels).toEqual(["stage:grilling"]);
+      const sp = await d.api.getSpec("acme", grilling.spec.id);
+      expect(sp).toMatchObject({ title: "Login is broken", body: "# Login is broken\n\n## Context\n\nSeen on every login.\n" });
+      expect(sp.link).toEqual({ ...gh, external_state: "open", detached: false, outbound: true });
+      expect(sp.requirement?.stages.map((s) => s.ticket)).toEqual([grilling.id, expect.any(String), expect.any(String)]);
+
+      const plain = await d.createTicket("acme", "Local", "Draft");
+      const refused = await d.api.act("acme", plain, "to_requirement", {}).catch((e) => e);
+      expect(refused).toBeInstanceOf(ApiError);
+      expect(refused).toMatchObject({ status: 409, code: "action_not_allowed" });
+      expect(refused.message).toContain("not an Incoming Issue");
     });
 
     // ---- the latest Session Event (ticket 109) ----

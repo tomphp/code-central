@@ -90,6 +90,46 @@ func runImport(t *testing.T, f Factory) {
 		}
 	})
 
+	t.Run("an import rewrites the existing Tickets it names along with its new records", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		put(t, s, func(w store.Writer) error {
+			return w.PutTicket("acme", store.Ticket{Number: 1, Title: "Old", State: store.Draft, Spec: 9, Created: t0, Updated: t0})
+		})
+		im := ImportBatch()
+		im.Rewritten = []store.Ticket{{Number: 1, Title: "Old", State: store.Cancelled, Spec: 9, Replacements: []int{3}, Created: t0, Updated: t0}}
+		put(t, s, func(w store.Writer) error { return w.PutImport("acme", im) })
+		check := func(s store.Store) {
+			read(t, s, func(r store.Reader) {
+				if tk, _ := r.Ticket("acme", 1); tk.State != store.Cancelled || len(tk.Replacements) != 1 {
+					t.Fatalf("ticket 1: %+v, want it rewritten", tk)
+				}
+				if n := len(r.Tickets("acme")); n != 4 {
+					t.Fatalf("%d tickets, want 4", n)
+				}
+			})
+		}
+		check(s)
+		if f.Reopen != nil {
+			check(f.Reopen(t, s))
+		}
+	})
+
+	t.Run("an import that would rewrite a missing Ticket writes nothing", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		im := ImportBatch()
+		im.Rewritten = []store.Ticket{{Number: 1, Title: "Missing", State: store.Draft, Spec: 9, Created: t0, Updated: t0}}
+		if err := s.Update(func(w store.Writer) error { return w.PutImport("acme", im) }); err == nil {
+			t.Fatal("an import rewriting a missing Ticket was allowed")
+		}
+		read(t, s, func(r store.Reader) {
+			if len(r.Specs("acme")) != 0 || len(r.Tickets("acme")) != 0 {
+				t.Fatal("the refused import wrote records")
+			}
+		})
+	})
+
 	t.Run("an import into an unknown project writes nothing", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)

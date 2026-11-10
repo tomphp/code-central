@@ -17,20 +17,23 @@ import (
 // operations are deliberately minimal: the first real Integration will
 // settle their signatures.
 
-// LinkView is a Spec's or Ticket's Link as reads show it.
+// LinkView is a Spec's or Ticket's Link as reads show it. Outbound marks
+// a Link that doesn't own the item's definition: Code Central owns it
+// and only writes to the external item.
 type LinkView struct {
 	Integration   string              `json:"integration"`
 	ID            string              `json:"id"`
 	URL           string              `json:"url,omitempty"`
 	ExternalState store.ExternalState `json:"external_state"`
 	Detached      bool                `json:"detached"`
+	Outbound      bool                `json:"outbound"`
 }
 
 func linkView(l store.Link) *LinkView {
 	if !l.Linked() {
 		return nil
 	}
-	return &LinkView{Integration: l.Integration, ID: l.ID, URL: l.URL, ExternalState: l.ExternalState, Detached: l.Detached}
+	return &LinkView{Integration: l.Integration, ID: l.ID, URL: l.URL, ExternalState: l.ExternalState, Detached: l.Detached, Outbound: l.Outbound}
 }
 
 // LinkInput is the Link an Integration creates an item with. The
@@ -73,7 +76,7 @@ func requireActor(ctx context.Context, op string, want Actor) error {
 }
 
 // definitionOwned refuses a definition write by anyone but the
-// integration Actor on an item whose Link isn't detached.
+// integration Actor on an item whose Link owns its definition.
 func definitionOwned(ctx context.Context, id string, l store.Link) error {
 	if a := ActorOf(ctx); l.Owned() && a != Integration {
 		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf(
@@ -219,7 +222,7 @@ type UpdateLinkedSpecInput struct {
 }
 
 // UpdateLinkedSpec is the integration's update_linked_spec(spec, title?,
-// body?, full?) on a Spec whose Link isn't detached, recorded in its
+// body?, full?) on a Spec whose Link owns its definition, recorded in its
 // edits.
 func (c *Core) UpdateLinkedSpec(ctx context.Context, key string, in UpdateLinkedSpecInput) (Written[SpecView], error) {
 	if err := requireActor(ctx, "update_linked_spec", Integration); err != nil {
@@ -270,8 +273,8 @@ type UpdateLinkedTicketInput struct {
 }
 
 // UpdateLinkedTicket is the integration's update_linked_ticket(ticket,
-// title?, description?, spec?, full?) on a Ticket whose Link isn't
-// detached, recorded in its edits.
+// title?, description?, spec?, full?) on a Ticket whose Link owns its
+// definition, recorded in its edits.
 func (c *Core) UpdateLinkedTicket(ctx context.Context, key string, in UpdateLinkedTicketInput) (Written[TicketView], error) {
 	if err := requireActor(ctx, "update_linked_ticket", Integration); err != nil {
 		return Written[TicketView]{}, err
@@ -309,6 +312,8 @@ func ownedByLink(id string, l store.Link) error {
 		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is not linked, so Code Central owns its definition", id)}
 	case l.Detached:
 		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s was unlinked from %s %s, so Code Central owns its definition now", id, l.Integration, l.ID)}
+	case l.Outbound:
+		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s's Link to %s %s is outbound, so Code Central owns its definition and only writes to %s", id, l.Integration, l.ID, l.Integration)}
 	}
 	return nil
 }
@@ -366,7 +371,8 @@ type UnlinkInput struct {
 
 // Unlink is the human's unlink(target): the Link is kept but detached,
 // so the definition becomes editable, it stops counting for Needs Me,
-// and lookups still find it. There is no re-link.
+// nothing more is written to the external item, and lookups still find
+// it. There is no re-link.
 func (c *Core) Unlink(ctx context.Context, key string, in UnlinkInput) (LinkedRow, error) {
 	if err := requireActor(ctx, "unlink", Human); err != nil {
 		return LinkedRow{}, err
@@ -453,9 +459,9 @@ type FindLinkedInput struct {
 }
 
 // FindLinked is find_linked(integration, id?): every Spec and Ticket in
-// the Project linked by that Integration, detached ones too, so an
-// Integration knows what it has already pulled in. Rows are in number
-// order.
+// the Project linked by that Integration, detached and outbound ones
+// too, so an Integration knows what it has already pulled in. Rows are
+// in number order.
 func (c *Core) FindLinked(_ context.Context, key string, in FindLinkedInput) ([]LinkedRow, error) {
 	if strings.TrimSpace(in.Integration) == "" {
 		return nil, invalid("integration", "name the Integration whose links to find")
@@ -493,8 +499,9 @@ func (c *Core) FindLinked(_ context.Context, key string, in FindLinkedInput) ([]
 }
 
 // closedExternally reports whether t is a linked Ticket whose external
-// item isn't open, whose Link isn't detached and that isn't finished,
-// and since when: its last external state change, or its creation.
+// item isn't open, whose Link owns its definition and that isn't
+// finished, and since when: its last external state change, or its
+// creation.
 func closedExternally(t store.Ticket) (time.Time, bool) {
 	if !t.Link.Owned() || t.Link.ExternalState == store.ExternalOpen || finished(t.State) {
 		return time.Time{}, false

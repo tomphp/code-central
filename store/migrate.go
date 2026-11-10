@@ -54,6 +54,7 @@ var migrations = []MigrationStep{
 	{From: 14, Name: "add a Project's Unblock on push"},
 	{From: 15, Name: "add a Ticket's awaiting triage"},
 	{From: 16, Name: "add the keys of the comments written for a Link"},
+	{From: 17, Name: "add a Link's outbound flag"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

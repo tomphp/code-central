@@ -223,7 +223,7 @@ func TestKeepAsDraftIsRejectedForAnAgent(t *testing.T) {
 
 // triageActions are the triage actions offered on every Incoming Issue,
 // in order.
-var triageActions = []string{"keep_as_draft", "wont_fix"}
+var triageActions = []string{"keep_as_draft", "to_requirement", "wont_fix"}
 
 // strs is a JSON array of strings.
 func strs(v any) []string {
