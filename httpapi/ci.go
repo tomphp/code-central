@@ -93,8 +93,8 @@ func init() {
 	}
 }
 
-// CI failed's failure options (code-central-261, code-central-265): the
-// human's.
+// CI failed's failure options (code-central-261, code-central-264,
+// code-central-265): the human's.
 func init() {
 	Routes["land_anyway"] = "POST /api/p/{key}/tickets/{n}/land_anyway"
 	Routes["rerun_ci"] = "POST /api/p/{key}/tickets/{n}/rerun_ci"
@@ -114,6 +114,16 @@ func init() {
 		}
 		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.RerunCI(r.Context(), r.PathValue("key"), in)
+	}
+
+	Routes["new_fix_ticket"] = "POST /api/p/{key}/tickets/{n}/new_fix_ticket"
+
+	handlers["new_fix_ticket"] = func(c *core.Core, r *http.Request) (any, error) {
+		in, err := pathBody(r, func(in *core.NewFixTicketInput) *core.Ref { return &in.Ticket })
+		if err != nil {
+			return nil, err
+		}
+		return c.NewFixTicket(r.Context(), r.PathValue("key"), in)
 	}
 }
 

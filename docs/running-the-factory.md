@@ -436,6 +436,11 @@ Land anyway holds for that pushed commit only: if the Ticket is pushed again, th
 
 **Re-run failed jobs**, for a failure that may be a flake, asks the CI Watcher to re-run each failed run's failed jobs. The Ticket leaves Needs Me and its CI result reads running at once; on its next poll the CI Watcher asks GitHub for the re-run, then reports each run's new attempt, and the Ticket lands if the new attempts pass. If one fails again, the Ticket is CI failed again, with another Notification. If GitHub refuses the re-run, say for a run too old to re-run, the request lapses after 10 minutes and the Ticket is CI failed again, so you can choose another option.
 
+The last two options fix the failure forward. Under Merge + Push the failed work is already on the remote's base, so neither reverts it. Both carry a note, prefilled with the failed run's link, its failed jobs' names and the `gh run view <run> --log-failed` command for their logs:
+
+- **Send back to fix** sends the Ticket back to Ready with the note. The next Claim works on the same branch, in the same worktree, and finishes it for you to review again. When you accept it, the Factory merges and pushes it again, and the new pushed commit's CI result decides; the old one's runs stay on the Ticket, folded under "Earlier pushes".
+- **New fix Ticket** opens a Ready Ticket on the same Spec, titled `Fix the CI failure of acme-shop-5: …`, with the note as its description, and accepts the failed CI result as Land anyway does: the Factory lands the failed Ticket on its next poll, and an agent picks up the fix Ticket. A comment on the failed Ticket names the fix Ticket.
+
 The gate holds only while Merge, Push and CI Tracking are all on. Turning CI Tracking off, turning Push off, or switching to Leave as a branch lifts it, and the Factory lands every Ticket waiting on CI on its next poll.
 
-Under **Branch + Push**, CI only informs you: the Factory lands the Ticket when it sees your merge, whatever its CI result, so merging stays your decision. A failed CI result still shows the Ticket in Needs Me as **CI failed**, with **Re-run failed jobs** but without Land anyway: merging the branch is how you land it anyway.
+Under **Branch + Push**, CI only informs you: the Factory lands the Ticket when it sees your merge, whatever its CI result, so merging stays your decision. A failed CI result still shows the Ticket in Needs Me as **CI failed**, with Re-run failed jobs, Send back to fix and New fix Ticket but without Land anyway: merging the branch is how you land it anyway.

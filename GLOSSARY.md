@@ -225,6 +225,14 @@ _Avoid_: Retry, rebuild
 What Re-run failed jobs records on a pushed commit: the failed CI Runs, each at the attempt that failed, for the CI Watcher to re-run. It is answered when the CI Watcher reports a later attempt of each, and lapses after 10 minutes unanswered, say when GitHub refuses the re-run, so the Ticket is CI failed again.
 _Avoid_: Rerun job, retry
 
+**Send back to fix**:
+The failure option by which the human sends a CI failed Ticket back to Ready with a note naming the failed run and jobs, so the next Claim fixes it on the same branch; its re-accept's newer pushed commit has its own CI result. Offered under Merge + Push and Branch + Push.
+_Avoid_: Revert, reject
+
+**New fix Ticket**:
+The failure option by which the human opens a Ready Ticket on a CI failed Ticket's Spec, carrying the note, and accepts the failed CI result as Land anyway does, so the failed Ticket lands and the fix goes on top. Offered under Merge + Push and Branch + Push.
+_Avoid_: Follow-up ticket, hotfix
+
 **CI unavailable**:
 The Needs Me reason of a Ticket that has waited 10 minutes or more on CI since its push, while the CI Watcher isn't watching or no CI Runs have been reported for its pushed commit.
 _Avoid_: CI down, CI stuck

@@ -251,7 +251,7 @@ Runs of Ignored workflows are listed greyed and marked **ignored**, and never co
 
 A Ticket with a CI result also shows it as a badge, **CI running**, **CI passed** or **CI failed**, on its row in the Spec view, in Needs Me and in the Activity Dashboard. Above its Tickets, the Spec view sums their badges, such as **1 failed** and **3 passed**, so you can see a Spec's CI health at a glance.
 
-Under **Merge + Push**, CI Tracking gates landing: the Factory pushes an accepted Ticket and leaves it Accepted until its CI result is passed, then lands it, so Done means on the remote and green. A failed CI result puts the Ticket in Needs Me as **CI failed**, where you can **Re-run failed jobs** or **Land anyway**. Under **Branch + Push** the CI result only informs you, though you can still re-run the failed jobs before you merge, and the Factory lands the Ticket when it sees your merge. [With CI Tracking](running-the-factory.md#with-ci-tracking) in Running the Factory shows how.
+Under **Merge + Push**, CI Tracking gates landing: the Factory pushes an accepted Ticket and leaves it Accepted until its CI result is passed, then lands it, so Done means on the remote and green. A failed CI result puts the Ticket in Needs Me as **CI failed**, where you can **Re-run failed jobs**, **Land anyway**, **Send back to fix** or open a **New fix Ticket**. Under **Branch + Push** the CI result only informs you, though you can still re-run the failed jobs or fix it before you merge, and the Factory lands the Ticket when it sees your merge. [With CI Tracking](running-the-factory.md#with-ci-tracking) in Running the Factory shows how.
 
 ### The CI view
 

@@ -236,3 +236,89 @@ func TestAnInReviewTicketMergedByHandWaitsOnCIInReview(t *testing.T) {
 		t.Errorf("landed with %q, want the pushed merge %s", tk.Moves[len(tk.Moves)-1].Commit, merge)
 	}
 }
+
+// Send back to fix (code-central-264): the human sends a CI failed Ticket
+// back, the next Claim fixes it on the same branch in the same worktree,
+// and its re-accept pushes a newer commit, whose CI result replaces the
+// failed one.
+func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *testing.T) {
+	t.Parallel()
+	h, remote, r := gatedHarness(t)
+	id := h.ReadyTicket("Add a feature")
+	h.Script(id,
+		factorytest.WriteFile("feature.txt", "feature\n"),
+		factorytest.Git("add", "feature.txt"),
+		factorytest.Git("commit", "-q", "-m", "Add a feature"),
+		factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Added.", "--branch", "{{ticket}}"),
+		factorytest.Result("success"))
+	r.Poll()
+	h.WaitForState(id, store.InReview)
+	h.Accept(id)
+	r.Poll()
+	r.WaitForOutput(id + ": CI tracks main at ")
+	failed := h.Ticket(id).PushedCommit.Commit
+	reportRun(t, h, 1, id, failed, store.CICompleted, store.CIFailure)
+	stillAccepted(t, h, r, id, "with a failed CI result")
+
+	note := "CI failed at " + failed[:12] + ": https://github.com/acme/web/actions/runs/1, failed jobs: test."
+	if _, err := h.Human().SendBack(context.Background(), h.Project, core.SendBackInput{Ticket: core.Ref(id), Note: note}); err != nil {
+		t.Fatal(err)
+	}
+	h.Script(id,
+		factorytest.NeedFile("feature.txt"),
+		factorytest.WriteFile("fix.txt", "fix\n"),
+		factorytest.Git("add", "fix.txt"),
+		factorytest.Git("commit", "-q", "-m", "Fix CI"),
+		factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Fixed.", "--branch", "{{ticket}}"),
+		factorytest.Result("success"))
+	r.Poll()
+	h.WaitForState(id, store.InReview)
+	if calls := h.Calls(); len(calls) != 2 || calls[1].Ticket != id || calls[1].Dir != h.Worktree(id) {
+		t.Fatalf("calls %+v, want the second Claim run in %s", calls, h.Worktree(id))
+	}
+	if got := h.Git("log", "-1", "--format=%s", id); got != "Fix CI" {
+		t.Fatalf("%s's tip is %q, want the fix on the same branch", id, got)
+	}
+
+	h.Accept(id)
+	r.Poll()
+	h.WaitFor(id+"'s newer pushed commit", func() bool {
+		pc := h.Ticket(id).PushedCommit
+		return pc != nil && pc.Commit != failed
+	})
+	tk := h.Ticket(id)
+	fixed := tk.PushedCommit.Commit
+	if tk.CIResult != core.CIRunning || remote.Git("rev-parse", "main") != fixed {
+		t.Fatalf("ci result %q, remote main %s: want the fix pushed as %s and its CI running", tk.CIResult, remote.Git("rev-parse", "main"), fixed)
+	}
+	stillAccepted(t, h, r, id, "while its new pushed commit's CI runs")
+
+	reportRun(t, h, 2, id, fixed, store.CICompleted, store.CISuccess)
+	r.Poll()
+	if tk := h.WaitForState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != fixed {
+		t.Errorf("landed with %q, want the new pushed commit %s", tk.Moves[len(tk.Moves)-1].Commit, fixed)
+	}
+}
+
+// New fix Ticket (code-central-264): a Ready Ticket on the same Spec
+// carries the failure, and the failed Ticket lands on the next poll.
+func TestAfterNewFixTicketTheFailedTicketLandsOnTheNextPoll(t *testing.T) {
+	t.Parallel()
+	h, _, r := gatedHarness(t)
+	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
+	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CIFailure)
+	stillAccepted(t, h, r, id, "with a failed CI result")
+
+	res, err := h.Server.Core.NewFixTicket(core.WithActor(context.Background(), core.Human), h.Project, core.NewFixTicketInput{Ticket: core.Ref(id), Note: "Fix test."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.Script(res.ID, factorytest.Wait())
+	r.Poll()
+	if tk := h.WaitForState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != pushed {
+		t.Errorf("landed with %q, want the pushed commit %s", tk.Moves[len(tk.Moves)-1].Commit, pushed)
+	}
+	if fix := h.Ticket(res.ID); fix.Spec.ID != h.Ticket(id).Spec.ID {
+		t.Errorf("fix Ticket on %s, want the failed Ticket's Spec", fix.Spec.ID)
+	}
+}

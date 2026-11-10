@@ -466,12 +466,12 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       };
       await d.reportCIRuns("acme", [run]);
       const failed = await d.api.getTicket("acme", id);
-      expect(failed).toMatchObject({ ci_result: "failed", ci_failure_options: ["rerun_ci", "land_anyway"] });
+      expect(failed).toMatchObject({ ci_result: "failed", ci_failure_options: ["rerun_ci", "land_anyway", "send_back", "new_fix_ticket"] });
       expect(failed).not.toHaveProperty("land_anyway");
 
       // Under Branch the human's merge decides: no Land anyway.
       await d.api.setLandingMethod("acme", { method: "branch", push: true, remote: "origin" });
-      expect((await d.api.getTicket("acme", id)).ci_failure_options).toEqual(["rerun_ci"]);
+      expect((await d.api.getTicket("acme", id)).ci_failure_options).toEqual(["rerun_ci", "send_back", "new_fix_ticket"]);
       const branch = await d.api.act("acme", id, "land_anyway", {}).catch((e) => e);
       expect(branch).toMatchObject({ status: 409, code: "action_not_allowed" });
 
@@ -510,7 +510,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ticket: id,
       };
       await d.reportCIRuns("acme", [run]);
-      expect(await d.api.getTicket("acme", id)).toMatchObject({ ci_result: "failed", ci_failure_options: ["rerun_ci"] });
+      expect(await d.api.getTicket("acme", id)).toMatchObject({ ci_result: "failed", ci_failure_options: ["rerun_ci", "send_back", "new_fix_ticket"] });
 
       const ack = await d.api.act("acme", id, "rerun_ci", {});
       wantAcknowledgement(ack, id, "Accepted", ["ci_result", "ci_failure_options"]);
@@ -523,6 +523,56 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.getTicket("acme", id)).ci_result).toBe("running");
       await d.reportCIRuns("acme", [{ ...run, attempt: 2, status: "completed", conclusion: "success" }]);
       expect((await d.api.getTicket("acme", id)).ci_result).toBe("passed");
+    });
+
+    it("sends a CI failed Ticket back to fix with a note, or opens a New fix Ticket and lands it anyway (code-central-264)", async () => {
+      await d.createProject("acme", "Acme");
+      const failedTicket = async (title: string, run: number) => {
+        const id = await d.createTicket("acme", title, "Ready");
+        await d.finish("acme", id, "Done.", { branch: id, commit: "abc123" });
+        await d.api.act("acme", id, "accept", {});
+        await d.reportPushedCommit("acme", id, `abc12${run}`);
+        await d.reportCIRuns("acme", [
+          {
+            id: run,
+            attempt: 1,
+            workflow: "ci.yml",
+            name: "CI",
+            branch: "main",
+            commit: `abc12${run}`,
+            status: "completed" as const,
+            conclusion: "failure" as const,
+            url: `https://github.com/acme/web/actions/runs/${run}`,
+            jobs: [],
+            ticket: id,
+          },
+        ]);
+        return id;
+      };
+      await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+
+      const back = await failedTicket("Login page", 1);
+      const noNote = await d.api.act("acme", back, "send_back", { note: " " }).catch((e) => e);
+      expect(noNote).toMatchObject({ status: 422, code: "invalid" });
+      const sent = await d.api.act("acme", back, "send_back", { note: "CI failed: runs/1" });
+      expect(sent).toMatchObject({ id: back, state: "Ready" });
+      const ready = await d.api.getTicket("acme", back);
+      expect(ready.comments.at(-1)).toMatchObject({ actor: "human", body: "CI failed: runs/1" });
+      expect(ready).not.toHaveProperty("ci_failure_options");
+
+      const fixed = await failedTicket("Sign-up page", 2);
+      const before = await d.api.getTicket("acme", fixed);
+      const ack = await d.api.act("acme", fixed, "new_fix_ticket", { note: "CI failed: runs/2" });
+      expect(ack).toMatchObject({ state: "Ready" });
+      expect(ack.id).not.toBe(fixed);
+      const fix = await d.api.getTicket("acme", ack.id);
+      expect(fix).toMatchObject({ state: "Ready", spec: before.spec, title: `Fix the CI failure of ${fixed}: Sign-up page` });
+      expect(fix.description).toContain("CI failed: runs/2");
+      const landing = await d.api.getTicket("acme", fixed);
+      expect(landing).toMatchObject({ state: "Accepted", land_anyway: true });
+      expect(landing).not.toHaveProperty("ci_failure_options");
+      expect(landing.comments.at(-1)?.body).toContain(ack.id);
     });
 
     it("reads the CI view: each run's latest attempt, unfinished first, for one Project or All Projects (code-central-258)", async () => {

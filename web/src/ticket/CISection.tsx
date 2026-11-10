@@ -3,9 +3,13 @@
 // link. The latest pushed commit's runs come first; an earlier push's
 // stay below, folded away. Ignored runs are greyed and marked ignored.
 // While the Ticket is CI failed it ends with the failure options
-// (code-central-261, code-central-265), when given the Api to act with.
+// (code-central-261, code-central-264, code-central-265), when given the
+// Api to act with.
+import { useState } from "react";
 import "../api/actions/land_anyway";
+import "../api/actions/new_fix_ticket";
 import "../api/actions/rerun_ci";
+import "../api/actions/send_back";
 import type { Api } from "../api/api";
 import type { CIConclusion, CIJobView, CIRunView, TicketView } from "../api/types";
 import { useAct } from "./useAct";
@@ -103,17 +107,45 @@ function CIRuns({ runs }: { runs: CIRunView[] }) {
   );
 }
 
+// FAILED is the conclusions that fail a run or job, as core counts them.
+const FAILED: CIConclusion[] = ["failure", "cancelled", "timed_out"];
+const failed = (c?: CIConclusion) => c !== undefined && FAILED.includes(c);
+
+// fixNote is the note Send back to fix and New fix Ticket start from: each
+// failed run of the latest pushed commit, linked, with its failed jobs'
+// names. No logs: the next agent reads them with gh.
+function fixNote(t: TicketView): string {
+  const latest = t.pushed_commit?.commit ?? "";
+  const runs = new Map<number, CIRunView>();
+  for (const r of t.ci_runs ?? []) {
+    if (r.commit !== latest || r.ignored) continue;
+    if ((runs.get(r.id)?.attempt ?? 0) < r.attempt) runs.set(r.id, r);
+  }
+  const failedRuns = [...runs.values()].filter((r) => failed(r.conclusion));
+  const lines = failedRuns.map((r) => {
+    const jobs = r.jobs.filter((j) => failed(j.conclusion)).map((j) => j.name).sort();
+    return `- [${runName(r)}](${r.url}) (${r.workflow})${jobs.length > 0 ? `: failed jobs ${jobs.join(", ")}` : ""}`;
+  });
+  const logs = failedRuns.map((r) => `\`gh run view ${r.id} --log-failed\``).join(", ");
+  return [`CI failed at ${shortCommit(latest)}:`, lines.join("\n"), ...(logs ? [`Read the failed jobs' logs with ${logs}.`] : [])].join("\n\n");
+}
+
 // CIFailureOptions are the failure options of a CI failed Ticket:
-// Re-run failed jobs under either Landing Method, and Land anyway under
-// Merge; under Branch the human's merge decides. Once the human chose
-// Land anyway it says the Factory lands it.
+// Re-run failed jobs under either Landing Method; Land anyway under
+// Merge, where under Branch the human's merge decides; then under both,
+// Send back to fix and New fix Ticket, which fix forward with
+// the note. Once the human accepted the failed result (Land anyway or
+// New fix Ticket, whose comment names the fix Ticket) it says so.
 function CIFailureOptions({ api, project, ticket: t }: { api: Api; project: string; ticket: TicketView }) {
   const { busy, error, run } = useAct();
+  const [note, setNote] = useState(() => fixNote(t));
   if (t.land_anyway && t.ci_result === "failed") {
-    return <p className="small ci-options">You chose Land anyway: the Factory lands it at its pushed commit on its next poll.</p>;
+    return <p className="small ci-options">You accepted its failed CI result, so CI no longer holds it back.</p>;
   }
   const options = t.ci_failure_options;
   if (!options) return null;
+  const fixes = options.includes("send_back") || options.includes("new_fix_ticket");
+  const noNote = !note.trim();
   return (
     <div role="group" aria-label="Failure options" className="ci-options">
       {error && (
@@ -145,6 +177,40 @@ function CIFailureOptions({ api, project, ticket: t }: { api: Api; project: stri
           This Project lands by Branch, so your merge decides: merge {t.branch ? <code>{t.branch}</code> : "the branch"} into the base to land it
           whatever its CI result.
         </p>
+      )}
+      {fixes && (
+        <>
+          <p className="small">
+            To fix it, send it back for the next agent to fix on its branch, or open a new fix Ticket on its Spec and let this one land. Either
+            way the fix goes on top: nothing is reverted.
+          </p>
+          <label className="ci-fix-note">
+            <span className="small muted">Note for the fix (required)</span>
+            <textarea rows={5} value={note} onChange={(e) => setNote(e.target.value)} />
+          </label>
+          <p className="ci-fixes">
+            {options.includes("send_back") && (
+              <button
+                type="button"
+                className="btn"
+                disabled={busy || noNote}
+                onClick={() => run(() => api.act(project, t.id, "send_back", { note: note.trim() }))}
+              >
+                Send back to fix
+              </button>
+            )}
+            {options.includes("new_fix_ticket") && (
+              <button
+                type="button"
+                className="btn"
+                disabled={busy || noNote}
+                onClick={() => run(() => api.act(project, t.id, "new_fix_ticket", { note: note.trim() }))}
+              >
+                New fix Ticket
+              </button>
+            )}
+          </p>
+        </>
       )}
     </div>
   );

@@ -78,7 +78,11 @@ var Workflow = []Action{
 	// An agent that can't land Accepted work (a merge conflict) sends it
 	// back for another agent to resolve (ticket 72).
 	{Name: "send_back", From: []store.State{store.Accepted}, To: store.Ready, Who: AgentActor,
-		Requires: "note (required), stored as a comment: why it can't land, such as the base commit and the conflicting files"},
+		Requires: "note (required): why it can't land, a merge conflict's base commit and files"},
+	// The human sends Accepted work whose CI failed back to fix it on its
+	// branch (code-central-264).
+	{Name: "send_back", From: []store.State{store.Accepted}, To: store.Ready, Who: HumanActor,
+		Requires: "note (required): what to fix, such as a failed CI run"},
 	{Name: "to_draft", From: []store.State{store.Failed}, To: store.Draft, Who: HumanActor},
 	{Name: "finish", From: []store.State{store.InProgress}, To: store.InReview, Who: Holder,
 		Requires: "summary (required): what was done, where (branch or commit), what to check",
@@ -92,7 +96,7 @@ var Workflow = []Action{
 	{Name: "reject", From: []store.State{store.InReview}, To: store.Ready, Who: HumanActor,
 		Requires: "comment (required)"},
 	{Name: "land", From: []store.State{store.Accepted, store.InReview}, To: store.Done, Who: AnyActor,
-		Requires: "commit (required): the commit that put the work into the base, recorded on the Move with via merge"},
+		Requires: "commit (required) that put the work into the base, recorded on the Move with via merge"},
 	{Name: "cancel", From: []store.State{store.Draft, store.Ready}, To: store.Cancelled, Who: AgentActor,
 		Requires: "replacements (required), reason (optional)"},
 	{Name: "cancel", From: unfinished, To: store.Cancelled, Who: HumanActor,

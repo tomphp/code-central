@@ -637,6 +637,35 @@ export class FakeApi implements Api {
     return [...counted.values()];
   }
 
+  // newFixTicket opens a Ready Ticket on t's Spec carrying note, and
+  // records on t the same acceptance as Land anyway, with a comment naming
+  // the fix Ticket, refused unless t is offered it, as core's NewFixTicket
+  // is. It returns the fix Ticket.
+  newFixTicket(t: TicketView, note: string | undefined): TicketView {
+    const key = this.projectOf(t.id);
+    const latest = this.pushedCommits.get(t.id)?.at(-1);
+    if (!note?.trim()) {
+      throw new ApiError(422, "invalid", "a fix Ticket needs a note saying what failed, such as the failed CI run's link and its failed jobs", "note");
+    }
+    if (!latest || !t.ci_failure_options?.includes("new_fix_ticket")) {
+      throw new ApiError(409, "action_not_allowed", `${t.id} has no failed CI result waiting on you to fix`);
+    }
+    const fix = this.addTicket(key, {
+      title: `Fix the CI failure of ${t.id}: ${t.title}`,
+      state: "Ready",
+      spec: t.spec,
+      claimable: true,
+      description: `${t.id}'s CI failed, and it lands anyway: fix the failure forward, on top of its work in the base.\n\n${note}`,
+    });
+    this.landedAnyway.add(`${t.id}@${latest.commit}`);
+    this.dropNeedsMe(t.id);
+    const at = this.now.toISOString();
+    const body = `New fix Ticket: ${fix.id} fixes this CI failure forward, and ${t.id} lands anyway.`;
+    this.updateTicket(t.id, { comments: [...t.comments, { number: t.comments.length + 1, actor: "human", time: at, body }] });
+    this.trackCI(key, this.ticket(key, t.id));
+    return fix;
+  }
+
   // dropNeedsMe takes a Ticket out of Needs Me, as an action that resolves
   // its reason would. It sends no notice (the action's update does).
   dropNeedsMe(id: string) {
@@ -899,7 +928,9 @@ export class FakeApi implements Api {
     const handler = fakeActions[action];
     if (!handler) throw new Error(`FakeApi: no fake behaviour for ${action}: add one under src/api/actions/`);
     const before = structuredClone(t);
-    return acknowledge(before, handler(this, t, body));
+    const after = handler(this, t, body);
+    // A handler that returns another Ticket created it (new_fix_ticket).
+    return after.id === t.id ? acknowledge(before, after) : acknowledgeTicketCreate(after);
   }
 
   async archiveProject(key: string): Promise<ProjectView> {
@@ -1117,11 +1148,12 @@ export class FakeApi implements Api {
           ? "failed"
           : "passed";
     // CI failed: Accepted, failed, and the human hasn't chosen Land anyway;
-    // Re-run failed jobs is offered under both Landing Methods, Land
-    // anyway only under Merge.
+    // Land anyway is offered only under Merge, Re-run failed jobs and the
+    // two fixes under both.
     const land_anyway = this.landedAnyway.has(`${t.id}@${latest.commit}`);
     const ciFailed = t.state === "Accepted" && ci_result === "failed" && !land_anyway;
-    const options: CIFailureOption[] = this.project(key).landing.method === "merge" ? ["rerun_ci", "land_anyway"] : ["rerun_ci"];
+    const fixes: CIFailureOption[] = ["send_back", "new_fix_ticket"];
+    const options: CIFailureOption[] = this.project(key).landing.method === "merge" ? ["rerun_ci", "land_anyway", ...fixes] : ["rerun_ci", ...fixes];
     const { land_anyway: _l, ci_failure_options: _o, ...rest } = this.tickets.get(t.id)!;
     this.tickets.set(t.id, rest);
     return this.updateTicket(t.id, {
