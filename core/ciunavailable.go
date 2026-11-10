@@ -1,6 +1,7 @@
 package core
 
 import (
+	"slices"
 	"time"
 
 	"github.com/tomoram/code-central/store"
@@ -20,19 +21,21 @@ const CIUnavailableAfter = 10 * time.Minute
 type CIUnavailableCause string
 
 const (
-	// CIWatcherNotWatching is a Project whose CI Watcher is in error or
-	// hasn't reported.
+	// CIWatcherNotWatching is the cause while the Project's CI Watcher is
+	// in error or hasn't reported.
 	CIWatcherNotWatching CIUnavailableCause = "ci_watcher_not_watching"
-	// CINoRuns is a pushed commit with no CI Runs reported, ignored ones
-	// aside, while the CI Watcher is Watching.
+	// CINoRuns is the cause while the CI Watcher is Watching but no CI
+	// Runs, ignored ones aside, are reported for the pushed commit.
 	CINoRuns CIUnavailableCause = "no_ci_runs"
 )
 
 // CIUnavailableView is a CI unavailable row's detail: the cause, the
-// pushed commit, and, while the CI Watcher is in error, its message.
+// pushed commit and when it was pushed, and, while the CI Watcher is in
+// error, its message.
 type CIUnavailableView struct {
 	Cause   CIUnavailableCause `json:"cause"`
 	Commit  string             `json:"commit"`
+	Pushed  time.Time          `json:"pushed"`
 	Message string             `json:"message,omitempty"`
 }
 
@@ -51,24 +54,25 @@ func ciGated(r store.Reader, p store.Project, t store.Ticket) (store.PushedCommi
 }
 
 // ciWaitingOn reports whether the CI gate holds t on a CI result still
-// running, which time passing doesn't make Accepted but not landed. With
-// unavailable set, it is also CI unavailable: its detail, and its push as
-// since when.
-func (c *Core) ciWaitingOn(r store.Reader, p store.Project, t store.Ticket) (waiting bool, unavailable *CIUnavailableView, since time.Time) {
+// running, which time passing doesn't make Accepted but not landed, and,
+// when it has also gone CIUnavailableAfter since its push with no word
+// of its CI, why it is CI unavailable.
+func (c *Core) ciWaitingOn(r store.Reader, p store.Project, t store.Ticket) (waiting bool, unavailable *CIUnavailableView) {
 	pushed, runs, ok := ciGated(r, p, t)
 	if !ok || ciResultOf(pushed.Commit, runs) != CIRunning {
-		return false, nil, time.Time{}
+		return false, nil
 	}
 	if c.now().Sub(pushed.Pushed) < CIUnavailableAfter {
-		return true, nil, time.Time{}
+		return true, nil
 	}
+	view := &CIUnavailableView{Commit: pushed.Commit, Pushed: pushed.Pushed}
 	if w := c.ciWatchers.view(p.Key); w.State != CIWatcherWatching {
-		return true, &CIUnavailableView{Cause: CIWatcherNotWatching, Commit: pushed.Commit, Message: w.Message}, pushed.Pushed
+		view.Cause, view.Message = CIWatcherNotWatching, w.Message
+		return true, view
 	}
-	for _, run := range runs {
-		if run.Commit == pushed.Commit && !run.Ignored {
-			return true, nil, time.Time{}
-		}
+	if slices.ContainsFunc(runs, func(run store.CIRun) bool { return countsFor(run, pushed.Commit) }) {
+		return true, nil
 	}
-	return true, &CIUnavailableView{Cause: CINoRuns, Commit: pushed.Commit}, pushed.Pushed
+	view.Cause = CINoRuns
+	return true, view
 }

@@ -158,6 +158,10 @@ func ticketRuns(r store.Reader, key string, t store.Ticket) ([]store.CIRun, bool
 	return mine, true
 }
 
+// countsFor reports whether run counts towards commit's CI result: one
+// of commit's runs that isn't ignored.
+func countsFor(run store.CIRun, commit string) bool { return run.Commit == commit && !run.Ignored }
+
 // ciResultOf is the CI result of commit from runs: running while any of
 // its runs that aren't ignored is unfinished, or none is reported; failed
 // if any concluded failure, cancelled or timed out; passed otherwise,
@@ -166,7 +170,7 @@ func ticketRuns(r store.Reader, key string, t store.Ticket) ([]store.CIRun, bool
 func ciResultOf(commit string, runs []store.CIRun) CIResult {
 	latest := map[int64]store.CIRun{}
 	for _, run := range runs {
-		if run.Commit != commit || run.Ignored {
+		if !countsFor(run, commit) {
 			continue
 		}
 		if have, ok := latest[run.ID]; !ok || run.Attempt > have.Attempt {

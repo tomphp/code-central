@@ -52,7 +52,7 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonInReview, "In Review: finished work waits to be accepted or rejected"},
 	{ReasonToMerge, "To merge: Accepted under the Branch Landing Method; merge its branch into the base"},
 	{ReasonCIUnavailable, "CI unavailable: waiting on CI for 10 minutes or more since its push, while the CI Watcher isn't Watching or no CI Runs have been reported for its pushed commit"},
-	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted for more than 10 minutes without landing in the base"},
+	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted for more than 10 minutes without landing in the base, unless it waits on CI that is running"},
 	{ReasonBlockedByCancelled, "Blocked by a Cancelled Ticket with no Replacements"},
 	{ReasonClosedExternally, "Closed externally: its linked item was closed, deleted or left its Integration's query; cancel it, mark it Done or unlink it"},
 }
@@ -245,7 +245,7 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 		row.Branch = t.Branch
 	case ReasonCIUnavailable:
 		p, _ := r.Project(key)
-		_, row.CIUnavailable, _ = c.ciWaitingOn(r, p, t)
+		_, row.CIUnavailable = c.ciWaitingOn(r, p, t)
 	case ReasonBlockedByCancelled:
 		b, _ := cancelledBlocker(r, key, t)
 		row.Blocker = &b

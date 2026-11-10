@@ -57,9 +57,8 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
 // its CI since its push.
 function ciUnavailableDetail(now: Date, r: NeedsMeRow): string {
   const u = r.ci_unavailable;
-  const pushed = `pushed ${ago(now, r.since)}`;
-  if (!u) return `CI unavailable · ${pushed}`;
-  const at = `${u.commit.slice(0, 7)} ${pushed}`;
+  if (!u) return `CI unavailable since ${ago(now, r.since)}`;
+  const at = `${u.commit.slice(0, 7)} pushed ${ago(now, u.pushed)}`;
   if (u.cause === "no_ci_runs") return `No CI Runs reported for ${at}`;
   return u.message ? `CI Watcher not Watching: ${u.message} · ${at}` : `CI Watcher not Watching · ${at}`;
 }

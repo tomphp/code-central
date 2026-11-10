@@ -20,13 +20,13 @@ describe("CI unavailable in Needs Me", () => {
       {
         reason: "ci_unavailable",
         tickets: [
-          { id: "acme-1", since: minutesAgo(fake, 12), ci_unavailable: { cause: "no_ci_runs", commit: "abc1234def" } },
+          { id: "acme-1", since: minutesAgo(fake, 12), ci_unavailable: { cause: "no_ci_runs", commit: "abc1234def", pushed: minutesAgo(fake, 12) } },
           {
             id: "acme-2",
             since: minutesAgo(fake, 15),
-            ci_unavailable: { cause: "ci_watcher_not_watching", commit: "fed4321cba", message: "gh is logged out" },
+            ci_unavailable: { cause: "ci_watcher_not_watching", commit: "fed4321cba", pushed: minutesAgo(fake, 15), message: "gh is logged out" },
           },
-          { id: "acme-3", since: minutesAgo(fake, 20), ci_unavailable: { cause: "ci_watcher_not_watching", commit: "0123456789" } },
+          { id: "acme-3", since: minutesAgo(fake, 20), ci_unavailable: { cause: "ci_watcher_not_watching", commit: "0123456789", pushed: minutesAgo(fake, 20) } },
         ],
       },
     ]);

@@ -165,8 +165,8 @@ func (c *Core) timedReason(r store.Reader, p store.Project, t store.Ticket) (Nee
 	if s := c.longSince(t); s != nil {
 		return ReasonLongClaim, *s
 	}
-	if waiting, unavailable, since := c.ciWaitingOn(r, p, t); unavailable != nil {
-		return ReasonCIUnavailable, since
+	if waiting, unavailable := c.ciWaitingOn(r, p, t); unavailable != nil {
+		return ReasonCIUnavailable, unavailable.Pushed
 	} else if waiting {
 		return "", time.Time{}
 	}
@@ -208,7 +208,7 @@ func (c *Core) timedReasonChanges() []markKey {
 					continue
 				}
 				k := markKey{p.Key, t.Number, 0}
-				if cl, ok := liveClaim(t); ok && reason != ReasonAcceptedNotLanded && reason != ReasonCIUnavailable {
+				if cl, ok := liveClaim(t); ok && (reason == ReasonSilentClaim || reason == ReasonLongClaim) {
 					k.claim = cl.Number
 				}
 				now[k] = reason

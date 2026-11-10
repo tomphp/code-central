@@ -240,6 +240,7 @@ export interface NeedsMeRow {
 export interface CIUnavailable {
   cause: "ci_watcher_not_watching" | "no_ci_runs";
   commit: string;
+  pushed: string;
   message?: string;
 }
 
