@@ -1,7 +1,9 @@
 package frontdoor_test
 
 import (
+	"fmt"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -72,6 +74,10 @@ func TestGetIssueWatchHasTheGitHubIssuesSettingsAndGHPath(t *testing.T) {
 
 	got := httpOK(t, srv, getIssueWatch("acme"))
 	want := map[string]any{"project": "acme", "on": true, "repository": "acme/web", "label": "triage", "gh_path": gh, "spec": "acme-4"}
+	if issues, ok := got["issues"].([]any); !ok || len(issues) != 0 {
+		t.Fatalf("get_issue_watch issues = %v, want none", got["issues"])
+	}
+	delete(got, "issues")
 	if !mapsEqual(got, want) {
 		t.Fatalf("get_issue_watch = %v, want %v", got, want)
 	}
@@ -81,8 +87,50 @@ func TestGetIssueWatchSaysWhenGitHubIssuesIsOff(t *testing.T) {
 	srv := newServer(t)
 	got := httpOK(t, srv, getIssueWatch("acme"))
 	want := map[string]any{"project": "acme", "on": false, "repository": "", "label": "", "gh_path": ""}
+	if issues, ok := got["issues"].([]any); !ok || len(issues) != 0 {
+		t.Fatalf("get_issue_watch issues = %v, want none", got["issues"])
+	}
+	delete(got, "issues")
 	if !mapsEqual(got, want) {
 		t.Fatalf("get_issue_watch = %v, want %v", got, want)
+	}
+}
+
+// createIncomingIssue creates a Draft Ticket on spec linked to acme/web's
+// issue n, as the Issue Watcher does, and returns its ID.
+func createIncomingIssue(t *testing.T, srv *codecentraltest.Server, spec string, n int) string {
+	t.Helper()
+	body := fmt.Sprintf(`{"spec":%q,"title":"Issue %d","description":"Body %d","full":true,"link":{"integration":"github","id":"acme/web#%d","url":"https://github.com/acme/web/issues/%d"}}`, spec, n, n, n, n)
+	return httpOK(t, srv, httpCall{"POST", "/api/p/acme/integration/create_linked_ticket", body})["id"].(string)
+}
+
+// get_issue_watch lists the Incoming Issues: the Tickets on the Issues
+// Spec that aren't finished and whose Link isn't detached, each with its
+// Link, title and description.
+func TestGetIssueWatchListsTheIncomingIssuesThatArentFinishedOrDetached(t *testing.T) {
+	srv := newServer(t, githubIssuesOn)
+	waiting := createIncomingIssue(t, srv, "acme-4", 1)
+	cancelled := createIncomingIssue(t, srv, "acme-4", 2)
+	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/" + cancelled + "/cancel", `{}`})
+	unlinked := createIncomingIssue(t, srv, "acme-4", 3)
+	httpOK(t, srv, httpCall{"POST", "/api/p/acme/unlink", `{"target":"` + unlinked + `"}`})
+	createIncomingIssue(t, srv, "1", 4) // on another Spec
+	ready := createIncomingIssue(t, srv, "acme-4", 5)
+	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/" + ready + "/approve", `{}`})
+
+	issues, _ := httpOK(t, srv, getIssueWatch("acme"))["issues"].([]any)
+	var got []string
+	for _, i := range issues {
+		i := i.(map[string]any)
+		l := i["link"].(map[string]any)
+		got = append(got, fmt.Sprintf("%s %s %s %s %s %s", i["ticket"], i["title"], i["description"], l["integration"], l["id"], l["url"]))
+	}
+	want := []string{
+		waiting + " Issue 1 Body 1 github acme/web#1 https://github.com/acme/web/issues/1",
+		ready + " Issue 5 Body 5 github acme/web#5 https://github.com/acme/web/issues/5",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("get_issue_watch issues = %q, want %q", got, want)
 	}
 }
 

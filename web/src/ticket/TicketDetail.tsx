@@ -9,6 +9,7 @@ import { Markdown } from "../Markdown";
 import { ActionPanel } from "../panels/ActionPanel";
 import { LatestEventLine } from "../LatestEvent";
 import { LinkBadge } from "./LinkBadge";
+import { OpenExternal } from "./OpenExternal";
 import { Live } from "./Live";
 import { useAct } from "./useAct";
 import { CISection } from "./CISection";
@@ -69,6 +70,7 @@ export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketD
           </span>
         ))}
         {t.link && <LinkBadge link={t.link} />}
+        <OpenExternal link={t.link} />
       </div>
       {t.link && !t.link.detached && <LinkedNote key={t.id} api={api} project={project} ticket={t} />}
       {t.description ? <Markdown>{t.description}</Markdown> : <p className="muted">No description.</p>}
