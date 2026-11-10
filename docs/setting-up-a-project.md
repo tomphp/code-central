@@ -221,6 +221,7 @@ To change it, open the UI, click **⋯** beside the Project in the left pane, an
 - **CI Provider**: **GitHub Actions**, the only one for now. Code Central uses your existing `gh` login and stores no GitHub token.
 - **GitHub repository**: the repository to watch, as `owner/name`, such as `acme/acme-api`. CI Tracking can't be on without one: Save says so, as it does for anything that isn't `owner/name`. When the Factory starts, it reports the URL of the Push remote (the Landing Method's Remote, `origin` unless you changed it), leaving out any login an HTTPS URL carries. If that URL is GitHub's, over HTTPS or SSH, the field is filled in from it, with a note naming the URL; change it if CI runs somewhere else, such as a fork.
 - **Ignored workflows**: workflow file names, such as `nightly.yml, preview.yml`, separated by commas. Their runs won't count towards a Ticket's CI result. Name the file, not its path: `ci.yml`, not `.github/workflows/ci.yml`.
+- **Unblock on push**: off unless you turn it on. Its hint reads "Lets Tickets blocked by a pushed Ticket start while that Ticket's CI runs or has passed, instead of waiting for it to land. It has effect only under Merge + Push with CI Tracking on." You can turn it on while CI Tracking is off, ready for when it is on; changing only this option runs no check.
 
 **Save** applies the settings, and every open UI tab shows them. Turning CI Tracking on is checked first: Code Central checks that `gh`, the GitHub CLI, is installed and logged in, and can read the repository. If any of these fails, Save refuses, and the CI section says what is wrong and how to fix it, for example:
 
@@ -239,7 +240,7 @@ While CI Tracking is on, the CI section shows the **CI Watcher**'s status below 
 - **Error** saying **The CI Watcher crashed, restarted 3 times**: the CI Watcher process keeps exiting. The service reports this one, with the last line the CI Watcher wrote, and restarts it by itself, waiting longer after each crash, up to 5 minutes. Its output is in [the service log](running-as-a-service.md#the-service-log). It stays shown until the CI Watcher has run for 10 minutes without crashing, and you get one Notification when it starts crashing, not one per restart.
 - **Starting; it hasn't reported yet.**: the CI Watcher hasn't checked since the service started or CI Tracking was turned on. The service starts it with itself and when you turn CI Tracking on, and it checks straight away, so this lasts moments. Changing the repository starts it here again.
 
-Turning CI Tracking off keeps the repository and Ignored workflows for the next time you turn it on.
+Turning CI Tracking off keeps the repository, Ignored workflows and Unblock on push for the next time you turn it on.
 
 While CI Tracking and Push are both on, each push the Factory makes for a Ticket is tracked: under **Merge + Push**, the base it pushes after merging the Ticket; under **Branch + Push**, the Ticket's branch, pushed when you accept it. That commit is the Ticket's **pushed commit**. Only pushes made while CI Tracking is on are tracked. The CI Watcher finds the workflow runs GitHub started for it, and the Ticket's panel gains a **CI** section once it has any: the Ticket's **CI result**, then each workflow run with its status, its jobs and links to them on GitHub. The CI result is:
 

@@ -30,7 +30,7 @@ func runCI(t *testing.T, f Factory) {
 	t.Run("a project's ci settings read back after they are written", func(t *testing.T) {
 		s := f.New(t)
 		want := store.CI{Tracking: true, Provider: store.CIGitHubActions, Repository: "acme/web",
-			IgnoredWorkflows: []string{"nightly.yml", "preview.yaml"}, PushRemoteURL: "git@github.com:acme/web.git",
+			IgnoredWorkflows: []string{"nightly.yml", "preview.yaml"}, PushRemoteURL: "git@github.com:acme/web.git", UnblockOnPush: true,
 			Rules: []store.CIRule{
 				{Spec: 4, Workflow: "ci.yml", Branch: "main", State: store.Ready, Created: t0},
 				{Spec: 7, Workflow: store.AnyWorkflow, Branch: "release/2.x", State: store.Draft, Created: t0.Add(time.Hour)},

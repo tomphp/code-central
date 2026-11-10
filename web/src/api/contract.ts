@@ -125,6 +125,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         provider: "github_actions",
         repository: "",
         ignored_workflows: [],
+        unblock_on_push: false,
         push_remote_url: "",
         rules: [],
         watcher: { state: "not_reported" },
@@ -245,7 +246,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       await d.logOutOfGH();
       const refused = await d.api
-        .setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] })
+        .setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false })
         .catch((e) => e);
       expect(refused).toBeInstanceOf(ApiError);
       expect(refused).toMatchObject({ status: 422, code: "invalid", field: "tracking" });
@@ -292,12 +293,14 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         provider: "github_actions",
         repository: " acme/web ",
         ignored_workflows: [" nightly.yml", "", "nightly.yml", "deploy.yaml"],
+        unblock_on_push: true,
       });
       const on = {
         tracking: true,
         provider: "github_actions",
         repository: "acme/web",
         ignored_workflows: ["nightly.yml", "deploy.yaml"],
+        unblock_on_push: true,
         push_remote_url: "git@github.com:acme/web.git",
         rules: [],
         watcher: { state: "not_reported" },
@@ -305,32 +308,35 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(v).toMatchObject({ key: "acme", ci: on });
       expect((await d.api.listProjects())[0].ci).toEqual(on);
 
-      const none = await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: " ", ignored_workflows: [] }).catch((e) => e);
+      const none = await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: " ", ignored_workflows: [], unblock_on_push: false }).catch((e) => e);
       expect(none).toMatchObject({ status: 422, code: "invalid", field: "repository" });
       expect(none.message).toContain("owner/name");
       const url = await d.api
-        .setCITracking("acme", { tracking: true, provider: "github_actions", repository: "https://github.com/acme/web", ignored_workflows: [] })
+        .setCITracking("acme", { tracking: true, provider: "github_actions", repository: "https://github.com/acme/web", ignored_workflows: [], unblock_on_push: false })
         .catch((e) => e);
       expect(url).toMatchObject({ status: 422, code: "invalid", field: "repository" });
       const path = await d.api
-        .setCITracking("acme", { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [".github/workflows/ci.yml"] })
+        .setCITracking("acme", { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [".github/workflows/ci.yml"], unblock_on_push: false })
         .catch((e) => e);
       expect(path).toMatchObject({ status: 422, code: "invalid", field: "ignored_workflows" });
       const provider = await d.api
-        .setCITracking("acme", { tracking: false, provider: "circleci" as CIProvider, repository: "", ignored_workflows: [] })
+        .setCITracking("acme", { tracking: false, provider: "circleci" as CIProvider, repository: "", ignored_workflows: [], unblock_on_push: false })
         .catch((e) => e);
       expect(provider).toMatchObject({ status: 422, code: "invalid", field: "provider" });
 
-      // Turning off runs no check, so a logged-out gh doesn't stop it.
+      // Turning off runs no check, so a logged-out gh doesn't stop it, and
+      // keeps Unblock on push.
       await d.logOutOfGH();
-      expect((await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [] })).ci.tracking).toBe(false);
+      const off = await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: true });
+      expect(off.ci).toMatchObject({ tracking: false, unblock_on_push: true });
 
       // Off, the repository may be empty.
-      expect((await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [] })).ci).toEqual({
+      expect((await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [], unblock_on_push: false })).ci).toEqual({
         tracking: false,
         provider: "github_actions",
         repository: "",
         ignored_workflows: [],
+        unblock_on_push: false,
         push_remote_url: "git@github.com:acme/web.git",
         rules: [],
         watcher: { state: "not_reported" },
@@ -342,7 +348,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const refused = await d.reportCIWatcherStatus("acme", { state: "watching" }).catch((e) => e);
       // The fake throws an ApiError; the service's driver, its JSON.
       expect(String(refused.code ?? refused.message)).toContain("action_not_allowed");
-      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
       expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "not_reported" });
 
       await d.reportCIWatcherStatus("acme", { state: "error", problem: "logged_out", message: "gh isn't logged in", fix: "Run gh auth login." });
@@ -368,7 +374,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const crashed = await d.reportCIWatcherStatus("acme", { state: "error", problem: "crashed", message: "crashed" }).catch((e) => e);
       expect(String(crashed.code ?? crashed.message)).toContain("invalid");
 
-      await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
       expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "not_reported" });
     });
 
@@ -391,7 +397,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const off = await d.reportCIRuns("acme", []).catch((e) => e);
       expect(String(off.code ?? off.message)).toContain("action_not_allowed");
 
-      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"] });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"], unblock_on_push: false });
       await d.reportPushedCommit("acme", id, "abc123");
       const pushed = await d.api.getTicket("acme", id);
       expect(pushed).toMatchObject({ pushed_commit: { commit: "abc123" }, ci_result: "running" });
@@ -443,7 +449,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
       await d.api.act("acme", id, "accept", {});
       await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
-      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
       await d.reportPushedCommit("acme", id, "abc123");
 
       // While CI is running there is nothing to land anyway.
@@ -490,7 +496,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
       await d.api.act("acme", id, "accept", {});
       await d.api.setLandingMethod("acme", { method: "branch", push: true, remote: "origin" });
-      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
       await d.reportPushedCommit("acme", id, "abc123");
 
       const running = await d.api.act("acme", id, "rerun_ci", {}).catch((e) => e);
@@ -550,7 +556,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         return id;
       };
       await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
-      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
 
       const back = await failedTicket("Login page", 1);
       const noNote = await d.api.act("acme", back, "send_back", { note: " " }).catch((e) => e);
@@ -582,7 +588,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.finish("acme", id, "Done.", { branch: id, commit: "abc123" });
       await d.api.act("acme", id, "accept", {});
       await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
-      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"] });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"], unblock_on_push: false });
       await d.reportPushedCommit("acme", id, "abc123");
       // The pushed commit's time is the service's now, which the runs' times follow.
       const pushed = Date.parse((await d.api.getTicket("acme", id)).pushed_commit!.pushed);
@@ -631,7 +637,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.finish("acme", id, "Done.", { branch: id, commit: "abc123" });
       await d.api.act("acme", id, "accept", {});
       await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
-      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"] });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"], unblock_on_push: false });
       const spec = (await d.api.addCIRule("acme", { workflow: "deploy.yml", branch: "main", state: "Draft" })).ci.rules[0].spec;
       await d.reportPushedCommit("acme", id, "old111");
       await d.reportPushedCommit("acme", id, "abc123");

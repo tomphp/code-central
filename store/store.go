@@ -149,7 +149,8 @@ func ciProviderNames() []string {
 // CI is a Project's CI settings: whether CI Tracking is on, the CI
 // Provider and the repository it watches, the Ignored workflows (each a
 // workflow file's base name, such as ci.yml), the URL of the Push
-// remote the Factory last reported, and the CI Rules.
+// remote the Factory last reported, the CI Rules, and whether Unblock on
+// push is on.
 type CI struct {
 	Tracking         bool
 	Provider         CIProvider
@@ -157,6 +158,9 @@ type CI struct {
 	IgnoredWorkflows []string
 	PushRemoteURL    string
 	Rules            []CIRule
+	// UnblockOnPush lets a Ticket the CI gate holds stop blocking while
+	// its pushed commit's CI runs or has passed.
+	UnblockOnPush bool
 }
 
 // AnyWorkflow is the workflow of a CI Rule that matches every workflow
@@ -188,7 +192,7 @@ func DefaultCI() CI { return CI{Provider: CIGitHubActions} }
 func (c CI) Equal(d CI) bool {
 	return c.Tracking == d.Tracking && c.Provider == d.Provider && c.Repository == d.Repository &&
 		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL &&
-		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal)
+		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal) && c.UnblockOnPush == d.UnblockOnPush
 }
 
 // orDefault fills in what c leaves empty from DefaultCI.

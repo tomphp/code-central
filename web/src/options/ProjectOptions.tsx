@@ -148,6 +148,7 @@ interface CIDraft {
   provider: CIProvider;
   repository: string;
   ignored: string;
+  unblockOnPush: boolean;
 }
 
 // ciDraft is the form for ci as stored, its repository prefilled from a
@@ -158,6 +159,7 @@ function ciDraft(ci: CISettings): CIDraft {
     provider: ci.provider,
     repository: ci.repository || githubRepository(ci.push_remote_url) || "",
     ignored: ci.ignored_workflows.join(", "),
+    unblockOnPush: ci.unblock_on_push,
   };
 }
 
@@ -165,8 +167,8 @@ function ciDraft(ci: CISettings): CIDraft {
 const workflowNames = (ignored: string) => ignored.split(/[\s,]+/).filter(Boolean);
 
 // CISection is the Project's CI settings: CI Tracking, its CI Provider,
-// the GitHub repository it watches and the Ignored workflows. Like the
-// Landing Method it follows the Project as read.
+// the GitHub repository it watches, the Ignored workflows and Unblock on
+// push. Like the Landing Method it follows the Project as read.
 function CISection({ api, project }: { api: Api; project: ProjectRow }) {
   const stored = ciDraft(project.ci);
   const prefilled = !project.ci.repository && stored.repository !== "";
@@ -174,8 +176,11 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
   const [error, setError] = useState<ApiError>();
   const [saved, setSaved] = useState(false);
   const id = useId();
-  const { tracking, provider, repository, ignored } = stored;
-  useEffect(() => setDraft({ tracking, provider, repository, ignored }), [tracking, provider, repository, ignored]);
+  const { tracking, provider, repository, ignored, unblockOnPush } = stored;
+  useEffect(
+    () => setDraft({ tracking, provider, repository, ignored, unblockOnPush }),
+    [tracking, provider, repository, ignored, unblockOnPush],
+  );
 
   const edit = (patch: Partial<CIDraft>) => {
     setDraft((d) => ({ ...d, ...patch }));
@@ -185,7 +190,13 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
   const save = (e: FormEvent) => {
     e.preventDefault();
     setError(undefined);
-    const change = { tracking: draft.tracking, provider: draft.provider, repository: draft.repository, ignored_workflows: workflowNames(draft.ignored) };
+    const change = {
+      tracking: draft.tracking,
+      provider: draft.provider,
+      repository: draft.repository,
+      ignored_workflows: workflowNames(draft.ignored),
+      unblock_on_push: draft.unblockOnPush,
+    };
     api.setCITracking(project.key, change).then(
       (v) => {
         setDraft(ciDraft(v.ci));
@@ -198,7 +209,8 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
     draft.tracking !== tracking ||
     draft.provider !== provider ||
     draft.repository !== repository ||
-    workflowNames(draft.ignored).join(",") !== workflowNames(ignored).join(",");
+    workflowNames(draft.ignored).join(",") !== workflowNames(ignored).join(",") ||
+    draft.unblockOnPush !== unblockOnPush;
   const invalid = (field: string) => (error?.field === field ? { "aria-invalid": true, "aria-describedby": `${id}-error` } : undefined);
 
   return (
@@ -257,6 +269,21 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
         <p className="project-options-hint" id={`${id}-ignored`}>
           Workflow file names, such as nightly.yml, separated by commas: their runs never count towards a Ticket&apos;s CI result.
         </p>
+        <div className="project-options-choice">
+          <label>
+            <input
+              type="checkbox"
+              checked={draft.unblockOnPush}
+              onChange={(e) => edit({ unblockOnPush: e.target.checked })}
+              aria-describedby={`${id}-unblock`}
+            />{" "}
+            Unblock on push
+          </label>
+          <p className="project-options-hint" id={`${id}-unblock`}>
+            Lets Tickets blocked by a pushed Ticket start while that Ticket&apos;s CI runs or has passed, instead of waiting for it to land.
+            It has effect only under Merge + Push with CI Tracking on.
+          </p>
+        </div>
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>
