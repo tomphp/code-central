@@ -6,7 +6,6 @@ package issuewatcher
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -26,14 +25,24 @@ func LinkID(repository string, n int) string { return fmt.Sprintf("%s#%d", repos
 // perPage is how many issues the Issue Watcher asks GitHub for a page.
 const perPage = 100
 
-// ghIssue is what the Issue Watcher reads of an item in GitHub's list of
-// a repository's issues, which has its pull requests too.
+// ghIssue is what the Issue Watcher reads of an issue, alone or in
+// GitHub's list of a repository's issues, which has its pull requests
+// too.
 type ghIssue struct {
-	Number      int             `json:"number"`
-	Title       string          `json:"title"`
-	Body        string          `json:"body"`
-	HTMLURL     string          `json:"html_url"`
-	PullRequest json.RawMessage `json:"pull_request"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	// State is open or closed.
+	State         string          `json:"state"`
+	HTMLURL       string          `json:"html_url"`
+	RepositoryURL string          `json:"repository_url"`
+	Labels        []ghLabel       `json:"labels"`
+	PullRequest   json.RawMessage `json:"pull_request"`
+}
+
+// ghLabel is a label on an issue.
+type ghLabel struct {
+	Name string `json:"name"`
 }
 
 // openIssues lists repository's open issues through prog, gh, oldest
@@ -68,32 +77,18 @@ func openIssues(ctx context.Context, env gh.Env, prog, repository, label string)
 	}
 }
 
-// arrive brings in each of watch's repository's open issues that has no
-// Link in the Project, detached ones included, so an unlinked or triaged
-// issue never comes in again, as a Draft Ticket on the Issues Spec. It
-// returns GitHub's rate limit, if it refused a call for it; anything
-// else that goes wrong is logged and tried again on the next poll.
-func (cfg Config) arrive(ctx context.Context, watch core.IssueWatch, prog string) *gh.RateLimitError {
-	if watch.Spec == "" {
-		return nil
-	}
-	issues, err := openIssues(ctx, cfg.Env, prog, watch.Repository, watch.Label)
-	if err != nil {
-		var limit *gh.RateLimitError
-		if errors.As(err, &limit) {
-			return limit
-		}
-		if ctx.Err() == nil {
-			cfg.logf("%v", err)
-		}
-		return nil
-	}
+// arrive brings in each of issues, watch's repository's open issues,
+// that has no Link in the Project, detached ones included, so an
+// unlinked or triaged issue never comes in again, as a Draft Ticket on
+// the Issues Spec. What goes wrong is logged and tried again on the next
+// poll.
+func (cfg Config) arrive(ctx context.Context, watch core.IssueWatch, issues []ghIssue) {
 	linked, err := cfg.Client.FindLinked(ctx, cfg.Project, core.FindLinkedInput{Integration: Integration})
 	if err != nil {
 		if ctx.Err() == nil {
 			cfg.logf("find_linked: %v", err)
 		}
-		return nil
+		return
 	}
 	have := map[string]bool{}
 	for _, row := range linked {
@@ -110,10 +105,9 @@ func (cfg Config) arrive(ctx context.Context, watch core.IssueWatch, prog string
 		})
 		if err != nil {
 			if ctx.Err() != nil {
-				return nil
+				return
 			}
 			cfg.logf("create_linked_ticket for %s: %v", id, err)
 		}
 	}
-	return nil
 }

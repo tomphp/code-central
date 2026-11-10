@@ -189,11 +189,17 @@ func TestAMissingGHIsAnErrorUntilTheGHPathOptionFindsIt(t *testing.T) {
 // them.
 func (w *watching) rateLimited(headers ...string) {
 	w.t.Helper()
+	w.rateLimitedOn("repos/acme/web", headers...)
+}
+
+// rateLimitedOn is rateLimited for the gh api call of path.
+func (w *watching) rateLimitedOn(path string, headers ...string) {
+	w.t.Helper()
 	head := "HTTP/2.0 403 Forbidden\r\nContent-Type: application/json; charset=utf-8\r\n"
 	for _, h := range headers {
 		head += h + "\r\n"
 	}
-	w.h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/web"}, Exit: 1,
+	w.h.Answer(fakegh.Answer{Args: []string{"api", path}, Exit: 1,
 		Stdout: head + "\r\n" + `{"message":"API rate limit exceeded for user ID 1.","status":"403"}`,
 		Stderr: "gh: API rate limit exceeded for user ID 1. (HTTP 403)\n"})
 }
