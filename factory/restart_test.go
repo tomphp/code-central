@@ -67,6 +67,9 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 	if s, _ := c.Flag("--resume"); s != first[answered].Session || !strings.Contains(c.Prompt, "Blue") {
 		t.Errorf("%s resumed with %q; want its session resumed with the answers", answered, c.Args)
 	}
+	if c.SystemPrompt == "" || c.SystemPrompt != first[answered].SystemPrompt {
+		t.Errorf("%s resumed with system prompt %q; want its first turn's, from the state file, %q", answered, c.SystemPrompt, first[answered].SystemPrompt)
+	}
 	if n := len(callsFor(h, cutOff)); n != 1 {
 		t.Fatalf("%s ran again before the Answered resume ended", cutOff)
 	}
@@ -81,6 +84,9 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 	c = lastCall(h, cutOff)
 	if s, _ := c.Flag("--resume"); s != first[cutOff].Session || c.Claim != first[cutOff].Claim || !strings.Contains(c.Prompt, "Your last turn was cut off; carry on.") {
 		t.Errorf("%s resumed with %q; want its session resumed as cut off under its Claim", cutOff, c.Args)
+	}
+	if c.SystemPrompt == "" || c.SystemPrompt != first[cutOff].SystemPrompt {
+		t.Errorf("%s resumed with system prompt %q; want its first turn's, from the state file, %q", cutOff, c.SystemPrompt, first[cutOff].SystemPrompt)
 	}
 
 	if s := h.Ticket(waiting).State; s != store.NeedsAnswer || len(callsFor(h, waiting)) != 1 {

@@ -337,12 +337,13 @@ func (f *factory) claimNext(ctx context.Context) bool {
 	id := res.Ticket.ID
 	stage := core.GuideName(res.Ticket.Labels)
 	guide := f.stageGuide(ctx, res.StageGuide, stage)
+	wt := f.worktree(id)
 	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}}
+	c.SystemPrompt = systemPrompt(c, stage, wt, guide)
 	f.noteTicket(c, *res.Ticket)
 	if err := f.addClaim(c); err != nil {
 		f.claimf(c, "%s: can't write the state file: %v", id, err)
 	}
-	wt := f.worktree(id)
 	if _, err := f.client.SetSession(ctx, f.project, core.SetSessionInput{Ticket: core.Ref(id), ClaimID: res.ClaimID, SessionID: session, WorkingDir: &wt, ResumeCommand: &resume}); err != nil {
 		f.claimf(c, "%s: set_session: %v", id, err)
 	}
@@ -361,7 +362,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		return true
 	}
 	mc := f.withFlags(res.ModelChoice)
-	f.startTurn(ctx, c, wt, mc, append(f.startArgs(c, mc), firstPrompt(c, stage, wt, guide)))
+	f.startTurn(ctx, c, wt, mc, append(f.startArgs(c, mc), firstPrompt(c, stage)))
 	return true
 }
 

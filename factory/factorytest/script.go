@@ -252,14 +252,18 @@ func (h *Harness) Script(ticket string, steps ...Step) {
 	must(h.t, os.WriteFile(filepath.Join(h.data, "scripts", ticket+".json"), b, 0o644))
 }
 
-// Call is one run of the fake claude.
+// Call is one run of the fake claude. Its Ticket and Claim are the
+// prompt's Ticket: and Claim: lines, or else its system prompt's.
 type Call struct {
-	Args    []string `json:"args"`
-	Dir     string   `json:"dir"`
-	Prompt  string   `json:"prompt"`
-	Ticket  string   `json:"ticket"`
-	Claim   string   `json:"claim"`
-	Session string   `json:"session"`
+	Args   []string `json:"args"`
+	Dir    string   `json:"dir"`
+	Prompt string   `json:"prompt"`
+	// SystemPrompt is what the run adds to the system prompt
+	// (--append-system-prompt), if anything.
+	SystemPrompt string `json:"system_prompt"`
+	Ticket       string `json:"ticket"`
+	Claim        string `json:"claim"`
+	Session      string `json:"session"`
 }
 
 // Flag is the value after flag in the call's args, and whether it is there.

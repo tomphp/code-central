@@ -36,7 +36,8 @@ type Report struct {
 // Kind is the figures of one kind of session: a Stage (grilling, spec
 // or tickets), implementation, review (the code-review subagents) or
 // subagent (any other). Tools counts every Code Central operation as the
-// one tool Code Central, and Operations breaks it down. Rounds and
+// one tool Code Central, and Operations breaks it down. FirstTurn totals
+// the sessions' first turns. Rounds and
 // Questions count post_round calls and their Questions, and WiderReads
 // the reads called again for more: both signs that a cut left out
 // something an agent needed.
@@ -49,6 +50,7 @@ type Kind struct {
 	Rounds     int      `json:"rounds,omitempty"`
 	Questions  int      `json:"questions,omitempty"`
 	WiderReads int      `json:"wider_reads,omitempty"`
+	FirstTurn  int      `json:"first_turn,omitempty"`
 }
 
 // Figure is a tool's or an operation's calls and the bytes of their
@@ -126,6 +128,7 @@ func Build(sessions []Session, top int) Report {
 			ops[s.Kind] = map[string]*Figure{}
 		}
 		k.Sessions++
+		k.FirstTurn += s.FirstTurn
 		scopes := map[string]map[string]bool{}
 		firsts := map[string]string{}
 		for _, c := range s.Calls {

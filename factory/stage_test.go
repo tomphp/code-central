@@ -37,20 +37,20 @@ func TestEachSessionStartsItsStagesSkillWithItsStageGuide(t *testing.T) {
 		h.WaitForState(id, store.InReview)
 	}
 
-	prompts := map[string]string{}
+	calls := map[string]factorytest.Call{}
 	for _, c := range h.Calls() {
-		prompts[c.Ticket] = c.Prompt
+		calls[c.Ticket] = c
 	}
 	for stage, id := range ids {
-		p := prompts[id]
-		if !strings.HasPrefix(p, skills[stage]+id) {
-			t.Errorf("%s: prompt %q doesn't start %s%s", stage, p, skills[stage], id)
+		c := calls[id]
+		if want := skills[stage] + id; c.Prompt != want {
+			t.Errorf("%s: prompt %q, want only the skill and the Ticket, %q", stage, c.Prompt, want)
 		}
-		if !strings.Contains(p, guide(t, h, stage)) {
-			t.Errorf("%s: prompt %q doesn't paste in its Stage Guide", stage, p)
+		if want := "Ticket: " + id + "\nClaim: " + c.Claim + "\n"; !strings.HasPrefix(c.SystemPrompt, want) {
+			t.Errorf("%s: system prompt %q doesn't start %q", stage, c.SystemPrompt, want)
 		}
-		if !strings.Contains(p, "get_stage_guide") {
-			t.Errorf("%s: prompt %q doesn't name get_stage_guide", stage, p)
+		if want := "The Stage Guide for " + stage + " follows: what this Ticket must produce and how to finish it.\n\n" + guide(t, h, stage); !strings.HasSuffix(c.SystemPrompt, want) {
+			t.Errorf("%s: system prompt %q doesn't end with its Stage Guide", stage, c.SystemPrompt)
 		}
 	}
 }
@@ -75,18 +75,18 @@ func TestEachPromptSaysTheTicketIsAlreadyClaimedAndNotToCallClaim(t *testing.T) 
 	for stage, id := range ids {
 		c := calls[id]
 		want := "The Factory has already claimed this Ticket for you: Claim " + c.Claim + " is yours, so don't call claim, and pass " + c.Claim + " as claim_id on every write that needs it."
-		if !strings.Contains(c.Prompt, want) {
-			t.Errorf("%s: prompt %q doesn't say %q", stage, c.Prompt, want)
+		if !strings.Contains(c.SystemPrompt, want) {
+			t.Errorf("%s: system prompt %q doesn't say %q", stage, c.SystemPrompt, want)
 		}
 	}
 	impl := calls[ids[core.ImplementationStage]]
-	if want := "in this Ticket's own worktree on branch " + impl.Ticket + ". The Factory has already claimed"; !strings.Contains(impl.Prompt, want) {
-		t.Errorf("implementation prompt %q doesn't say %q", impl.Prompt, want)
+	if want := "in this Ticket's own worktree on branch " + impl.Ticket + ". The Factory has already claimed"; !strings.Contains(impl.SystemPrompt, want) {
+		t.Errorf("implementation system prompt %q doesn't say %q", impl.SystemPrompt, want)
 	}
-	if want := "as claim_id on every write that needs it. Commit on this branch only, with no push and no PR, and finish the Ticket when it is done."; !strings.Contains(impl.Prompt, want) {
-		t.Errorf("implementation prompt %q doesn't say %q", impl.Prompt, want)
+	if want := "as claim_id on every write that needs it. Commit on this branch only, with no push and no PR, and finish the Ticket when it is done."; !strings.Contains(impl.SystemPrompt, want) {
+		t.Errorf("implementation system prompt %q doesn't say %q", impl.SystemPrompt, want)
 	}
-	spec := calls[ids["spec"]].Prompt
+	spec := calls[ids["spec"]].SystemPrompt
 	if strings.Contains(spec, "Stage under Claim") {
 		t.Errorf("Stage prompt %q still says to work the Stage under Claim", spec)
 	}
@@ -167,17 +167,14 @@ func TestTheGrillingStageStartsGrillingWithDomainModelingAndItsStageGuide(t *tes
 	h.WaitForState(id, store.InReview)
 
 	c := h.Calls()[0]
-	if !strings.HasPrefix(c.Prompt, "/grilling "+id) {
-		t.Errorf("prompt %q doesn't start /grilling %s", c.Prompt, id)
+	if c.Prompt != "/grilling "+id {
+		t.Errorf("prompt %q, want /grilling %s", c.Prompt, id)
 	}
-	if !strings.Contains(c.Prompt, "/domain-modeling") {
-		t.Errorf("prompt %q doesn't start domain-modeling too", c.Prompt)
+	if !strings.Contains(c.SystemPrompt, "Run /domain-modeling alongside /grilling") {
+		t.Errorf("system prompt %q doesn't start domain-modeling too", c.SystemPrompt)
 	}
-	if !strings.Contains(c.Prompt, guide(t, h, "grilling")) {
-		t.Errorf("prompt %q doesn't paste in the grilling Stage Guide", c.Prompt)
-	}
-	if !strings.Contains(c.Prompt, "get_stage_guide") {
-		t.Errorf("prompt %q doesn't name get_stage_guide", c.Prompt)
+	if !strings.Contains(c.SystemPrompt, guide(t, h, "grilling")) {
+		t.Errorf("system prompt %q doesn't paste in the grilling Stage Guide", c.SystemPrompt)
 	}
 }
 
@@ -200,30 +197,30 @@ func TestEachMapTicketStartsItsSkillWithItsGuideInADetachedWorktree(t *testing.T
 	for _, c := range h.Calls() {
 		calls[c.Ticket] = c
 	}
-	starts := map[string]string{
-		"map-chart":    "/wayfinder " + ids["map-chart"] + "\n\nTicket: " + ids["map-chart"] + "\n",
-		"map-grilling": "/grilling " + ids["map-grilling"] + "\n\nTicket: " + ids["map-grilling"] + "\n",
-		"map-task":     "Ticket: " + ids["map-task"] + "\n", // no skill: the guide alone
+	prompts := map[string]string{
+		"map-chart":    "/wayfinder " + ids["map-chart"],
+		"map-grilling": "/grilling " + ids["map-grilling"],
+		"map-task":     "Work Ticket " + ids["map-task"] + ", as the Factory's instructions and its Stage Guide in your system prompt say.", // no skill
 	}
 	for name, id := range ids {
 		c := calls[id]
-		if !strings.HasPrefix(c.Prompt, starts[name]) {
-			t.Errorf("%s: prompt %q doesn't start %q", name, c.Prompt, starts[name])
+		if c.Prompt != prompts[name] {
+			t.Errorf("%s: prompt %q, want %q", name, c.Prompt, prompts[name])
 		}
-		if !strings.Contains(c.Prompt, guide(t, h, name)) {
-			t.Errorf("%s: prompt %q doesn't paste in its guide", name, c.Prompt)
+		if !strings.Contains(c.SystemPrompt, guide(t, h, name)) {
+			t.Errorf("%s: system prompt %q doesn't paste in its guide", name, c.SystemPrompt)
 		}
-		if want := "in a detached, read-only worktree at the base's tip, for this " + name + " Ticket."; !strings.Contains(c.Prompt, want) {
-			t.Errorf("%s: prompt %q doesn't say %q", name, c.Prompt, want)
+		if want := "in a detached, read-only worktree at the base's tip, for this " + name + " Ticket."; !strings.Contains(c.SystemPrompt, want) {
+			t.Errorf("%s: system prompt %q doesn't say %q", name, c.SystemPrompt, want)
 		}
-		if want := "It writes nothing to the repository: no files, no commits and no branches."; !strings.Contains(c.Prompt, want) {
-			t.Errorf("%s: prompt %q doesn't say %q", name, c.Prompt, want)
+		if want := "It writes nothing to the repository: no files, no commits and no branches."; !strings.Contains(c.SystemPrompt, want) {
+			t.Errorf("%s: system prompt %q doesn't say %q", name, c.SystemPrompt, want)
 		}
-		if want := `get_stage_guide, stage "` + name + `"`; !strings.Contains(c.Prompt, want) {
-			t.Errorf("%s: prompt %q doesn't say %q", name, c.Prompt, want)
+		if want := "The Stage Guide for " + name + " follows"; !strings.Contains(c.SystemPrompt, want) {
+			t.Errorf("%s: system prompt %q doesn't say %q", name, c.SystemPrompt, want)
 		}
-		if strings.Contains(c.Prompt, "/implement") || strings.Contains(c.Prompt, guide(t, h, core.ImplementationStage)) {
-			t.Errorf("%s: prompt %q runs it as implementation", name, c.Prompt)
+		if strings.Contains(c.SystemPrompt, guide(t, h, core.ImplementationStage)) {
+			t.Errorf("%s: system prompt %q runs it as implementation", name, c.SystemPrompt)
 		}
 		if c.Dir != h.Worktree(id) {
 			t.Errorf("%s: claude ran in %s, want the worktree %s", name, c.Dir, h.Worktree(id))
@@ -238,12 +235,12 @@ func TestEachMapTicketStartsItsSkillWithItsGuideInADetachedWorktree(t *testing.T
 			t.Errorf("%s: made branch %q", name, b)
 		}
 	}
-	if p := calls[ids["map-grilling"]].Prompt; !strings.Contains(p, "Run /domain-modeling alongside /grilling") {
-		t.Errorf("map-grilling prompt %q doesn't start domain-modeling too", p)
+	if p := calls[ids["map-grilling"]].SystemPrompt; !strings.Contains(p, "Run /domain-modeling alongside /grilling") {
+		t.Errorf("map-grilling system prompt %q doesn't start domain-modeling too", p)
 	}
 	for _, name := range []string{"map-chart", "map-task"} {
-		if p := calls[ids[name]].Prompt; strings.Contains(p, "/domain-modeling") {
-			t.Errorf("%s prompt %q starts domain-modeling", name, p)
+		if p := calls[ids[name]].SystemPrompt; strings.Contains(p, "/domain-modeling") {
+			t.Errorf("%s system prompt %q starts domain-modeling", name, p)
 		}
 	}
 }

@@ -37,6 +37,16 @@ func write(out io.Writer, r Report, base *Report) error {
 		}
 		p.row(name, fmt.Sprint(now.Sessions), size(float64(now.Bytes)), size(per(now.Bytes, now.Sessions)), p.against(per(now.Bytes, now.Sessions), per(was.Bytes, was.Sessions), size))
 	}
+	p.line("\nFirst turn per session, by kind of session")
+	p.row("KIND", "PER SESSION", p.column())
+	for _, name := range kindNames(r, base) {
+		now, was := kind(r, name), p.baseKind(name)
+		if now.Sessions == 0 {
+			p.row(name, "no sessions", "")
+			continue
+		}
+		p.row(name, size(per(now.FirstTurn, now.Sessions)), p.against(per(now.FirstTurn, now.Sessions), per(was.FirstTurn, was.Sessions), size))
+	}
 	p.figures("Tools, per session, by kind of session (Code Central's operations are listed next)", r, func(k Kind) []Figure { return k.Tools })
 	p.figures("Code Central operations, per session, by kind of session", r, func(k Kind) []Figure { return k.Operations })
 
