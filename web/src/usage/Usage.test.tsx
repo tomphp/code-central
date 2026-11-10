@@ -253,11 +253,11 @@ describe("Context Size", () => {
     const impl = claimed(fake, "acme", "Build it", "sess-impl"); // acme-2
     const spec = claimed(fake, "beta", "Write it", "sess-spec"); // beta-1
     fake.postUsage("sess-impl", [
-      response(fake, 1, "implementation", 40_000),
-      response(fake, 2, "implementation", 123_456),
+      { ...response(fake, 1, "implementation", 40_000), model: "claude-sonnet-4-6" },
+      { ...response(fake, 2, "implementation", 123_456), model: "claude-opus-4-7" },
       response(fake, 3, "review", 21_000, "toolu_review"),
     ]);
-    fake.postUsage("sess-spec", [response(fake, 4, "spec", 80_000)]);
+    fake.postUsage("sess-spec", [{ ...response(fake, 4, "spec", 80_000), model: "claude-opus-4-7" }]);
     return { fake, impl, spec };
   }
 
@@ -292,6 +292,7 @@ describe("Context Size", () => {
       "Claim",
       "Session",
       "Kind",
+      "Model",
       "Started",
       "Peak Context Size",
       "Responses",
@@ -299,9 +300,9 @@ describe("Context Size", () => {
     const sessions = within(sessionsTable()).getAllByRole("row").slice(1);
     expect(sessions.map((r) => within(within(r).getByRole("rowheader")).getByRole("link").textContent)).toEqual([spec, impl, impl]);
     expect(sessions.map((r) => within(r).getAllByRole("cell").map((c) => c.textContent))).toEqual([
-      ["Beta", "1", "sess-spec", "spec", expect.any(String), "80,000", "1"],
-      ["Acme", "1", "sess-impl · toolu_review", "review", expect.any(String), "21,000", "1"],
-      ["Acme", "1", "sess-impl", "implementation", expect.any(String), "123,456", "2"],
+      ["Beta", "1", "sess-spec", "spec", "claude-opus-4-7", expect.any(String), "80,000", "1"],
+      ["Acme", "1", "sess-impl · toolu_review", "review", "—", expect.any(String), "21,000", "1"],
+      ["Acme", "1", "sess-impl", "implementation", "claude-sonnet-4-6, claude-opus-4-7", expect.any(String), "123,456", "2"],
     ]);
     expect(within(sessions[2]).getByText("123,456")).toHaveAttribute("title", "123,456 tokens");
   });

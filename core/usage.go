@@ -50,11 +50,13 @@ func (c *Core) projectExists(key string) bool {
 
 // UsageResponse is one model response's token usage, as a Factory posts
 // it: when it came, the subagent it was for ("" for the main session),
-// the kind of session, and its four token counts.
+// the kind of session, the model that gave it ("" when not posted), and
+// its four token counts.
 type UsageResponse struct {
 	Time  time.Time `json:"time"`
 	Agent string    `json:"agent,omitempty"`
 	Kind  string    `json:"kind"`
+	Model string    `json:"model,omitempty"`
 	usage.Tokens
 }
 
@@ -81,7 +83,7 @@ func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []Usag
 		}
 		rs[i] = usage.Response{
 			Time: r.Time, Ticket: DisplayID(k.project, k.ticket), Claim: k.claim,
-			SessionID: sessionID, Agent: r.Agent, Kind: r.Kind, Tokens: r.Tokens,
+			SessionID: sessionID, Agent: r.Agent, Kind: r.Kind, Model: r.Model, Tokens: r.Tokens,
 		}
 	}
 	c.usage.RecordResponses(k.project, rs)
@@ -129,7 +131,8 @@ type UsageKind struct {
 // UsageSession is one recent session: a Claim's main session, or a
 // subagent of it (Agent), with the Project, Ticket, Claim and kind of its
 // latest response. Started is its first response's time, Peak the largest
-// Context Size among its responses.
+// Context Size among its responses, and Models each distinct model its
+// responses name, in order of first use.
 type UsageSession struct {
 	Project   string    `json:"project"`
 	Ticket    string    `json:"ticket"`
@@ -140,6 +143,7 @@ type UsageSession struct {
 	Started   time.Time `json:"started"`
 	Peak      int       `json:"peak"`
 	Responses int       `json:"responses"`
+	Models    []string  `json:"models"`
 }
 
 // UsageDay is one local day's token usage, by kind of session: the kinds
@@ -234,7 +238,11 @@ const RecentSessions = 50
 // usageSessions are the sessions the responses belong to, newest first.
 // A session is its session ID plus its agent, so each subagent is one of
 // its own, and a session resumed under a newer Claim stays one session.
+// The responses are taken oldest first, whatever order they were read in,
+// so each session's models are in order of first use.
 func usageSessions(responses []usage.Response) []UsageSession {
+	responses = slices.Clone(responses)
+	slices.SortStableFunc(responses, func(a, b usage.Response) int { return a.Time.Compare(b.Time) })
 	type key struct{ session, agent string }
 	byKey := map[key]*UsageSession{}
 	latest := map[key]time.Time{}
@@ -242,11 +250,14 @@ func usageSessions(responses []usage.Response) []UsageSession {
 		k := key{r.SessionID, r.Agent}
 		s := byKey[k]
 		if s == nil {
-			s = &UsageSession{SessionID: r.SessionID, Agent: r.Agent, Started: r.Time}
+			s = &UsageSession{SessionID: r.SessionID, Agent: r.Agent, Started: r.Time, Models: []string{}}
 			byKey[k] = s
 		}
 		s.Responses++
 		s.Peak = max(s.Peak, r.ContextSize())
+		if r.Model != "" && !slices.Contains(s.Models, r.Model) {
+			s.Models = append(s.Models, r.Model)
+		}
 		if r.Time.Before(s.Started) {
 			s.Started = r.Time
 		}

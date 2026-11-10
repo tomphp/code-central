@@ -61,6 +61,9 @@ type Response struct {
 	Agent string `json:"agent,omitempty"`
 	// Kind is the kind of session, as the Factory named it.
 	Kind string `json:"kind"`
+	// Model is the model that gave the response, as Claude Code reported
+	// it; "" when the Factory didn't post one.
+	Model string `json:"model,omitempty"`
 	Tokens
 }
 

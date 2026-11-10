@@ -180,19 +180,21 @@ function contextSize(r: UsageResponse): number {
 
 // usageSessions are the sessions the responses belong to, newest first, as
 // the service works them out: a session is its session ID plus its agent,
-// with the Claim and kind of its latest response.
+// with the Claim and kind of its latest response, and its models in
+// order of first use, whatever order the responses were posted in.
 function usageSessions(responses: FakeUsageRecord[]): UsageSession[] {
   const byKey = new Map<string, { s: UsageSession; latest: number }>();
-  for (const r of responses) {
+  for (const r of [...responses].sort((a, b) => Date.parse(a.time) - Date.parse(b.time))) {
     const key = `${r.session_id}\u0000${r.agent ?? ""}`;
     const t = Date.parse(r.time);
     let e = byKey.get(key);
     if (!e) {
-      e = { s: { project: "", ticket: "", claim: 0, session_id: r.session_id, ...(r.agent ? { agent: r.agent } : {}), kind: "", started: r.time, peak: 0, responses: 0 }, latest: -Infinity };
+      e = { s: { project: "", ticket: "", claim: 0, session_id: r.session_id, ...(r.agent ? { agent: r.agent } : {}), kind: "", started: r.time, peak: 0, responses: 0, models: [] }, latest: -Infinity };
       byKey.set(key, e);
     }
     e.s.responses++;
     e.s.peak = Math.max(e.s.peak, contextSize(r));
+    if (r.model && !e.s.models.includes(r.model)) e.s.models.push(r.model);
     if (t < Date.parse(e.s.started)) e.s.started = r.time;
     if (t >= e.latest) {
       e.latest = t;

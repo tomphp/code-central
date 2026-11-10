@@ -740,7 +740,9 @@ export interface UsageKind {
 
 // UsageSession is one recent session, a Claim's main session or one of its
 // subagents (agent), with the Claim and kind of its latest response; peak
-// is its largest Context Size and started its first response's time.
+// is its largest Context Size, started its first response's time, and
+// models each distinct model its responses name, in order of first use
+// (empty when none does).
 export interface UsageSession {
   project: string;
   ticket: string;
@@ -751,6 +753,7 @@ export interface UsageSession {
   started: string;
   peak: number;
   responses: number;
+  models: string[];
 }
 
 // UsageDay is one local day's token usage (day is YYYY-MM-DD in the
@@ -771,11 +774,13 @@ export interface UsageDayTokens {
 }
 
 // UsageResponse is one model response's token usage as a Factory posts
-// it to POST /api/usage; agent is left out for the main session.
+// it to POST /api/usage; agent is left out for the main session, and
+// model when the Factory has none.
 export interface UsageResponse {
   time: string;
   agent?: string;
   kind: string;
+  model?: string;
   input_tokens: number;
   cache_write_tokens: number;
   cache_read_tokens: number;
