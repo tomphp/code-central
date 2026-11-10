@@ -186,7 +186,7 @@ It is not Usage: it reads Claude Code's logs on the machine, while Usage records
 _Avoid_: Token report, usage report
 
 **CI view**:
-The view of the CI Runs in a Project, or in all Projects with CI Tracking on: the CI Watchers' statuses, then the runs still going and those finished in the last 7 days.
+The view of the CI Runs in a Project, or in all Projects with CI Tracking on: the CI Watchers' statuses, then the runs still going and those finished in the last 7 days. Its read can also give only the CI Runs that count as running towards a Ticket's CI result.
 _Avoid_: CI dashboard, build monitor
 
 **Usage**:

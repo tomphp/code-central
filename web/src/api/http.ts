@@ -90,7 +90,12 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       const qs = q.toString();
       return call("GET", `/api/usage${qs ? `?${qs}` : ""}`);
     },
-    ciOverview: (filter = {}) => call("GET", `/api/ci${filter.project ? `?${new URLSearchParams({ project: filter.project })}` : ""}`),
+    ciOverview: (filter = {}) => {
+      const q = new URLSearchParams();
+      if (filter.project) q.set("project", filter.project);
+      if (filter.running) q.set("running", "true");
+      return call("GET", `/api/ci${q.toString() ? `?${q}` : ""}`);
+    },
     sessionUsage: ({ project, session, agent }) => {
       const q = new URLSearchParams({ project, session });
       if (agent) q.set("agent", agent);

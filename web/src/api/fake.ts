@@ -1237,7 +1237,9 @@ export class FakeApi implements Api {
 
   // ciOverview reads the CI view as core's CIOverview does: each run's latest
   // attempt, unfinished ones first, newest started first, then those
-  // finished in the last CI_VIEW_DAYS days, newest finished first.
+  // finished in the last CI_VIEW_DAYS days, newest finished first. With
+  // running, only the unfinished runs that count towards their Ticket's CI
+  // result: tracked against a Ticket, on its latest pushed commit, not ignored.
   async ciOverview(filter: CIOverviewFilter = {}): Promise<CIOverview> {
     this.calls.push("ciOverview");
     if (filter.project && !this.projects.has(filter.project)) throw new ApiError(404, "not_found", `no Project "${filter.project}"`);
@@ -1247,8 +1249,10 @@ export class FakeApi implements Api {
     const runs: CIRunRow[] = projects.flatMap((p) => {
       const all = this.ciRuns.get(p.key) ?? [];
       const latest = all.filter((r) => !all.some((o) => o.id === r.id && o.attempt > r.attempt));
+      const running = (r: CIRunView) =>
+        r.status !== "completed" && r.ticket !== undefined && !r.ignored && r.commit === this.pushedCommits.get(r.ticket)?.at(-1)?.commit;
       return latest
-        .filter((r) => r.status !== "completed" || (ended(r) !== undefined && Date.parse(ended(r)!) >= since))
+        .filter((r) => (filter.running ? running(r) : r.status !== "completed" || (ended(r) !== undefined && Date.parse(ended(r)!) >= since)))
         .map((r) => ({ ...structuredClone(r), project: p.key }));
     });
     const time = (at?: string) => (at ? Date.parse(at) : 0);

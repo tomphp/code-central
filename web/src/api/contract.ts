@@ -624,6 +624,56 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(unknown.code).toBe("not_found");
     });
 
+    it("reads the CI view's running runs: those counting towards a Ticket's CI result, newest started first (code-central-276)", async () => {
+      await d.createProject("acme", "Acme");
+      await d.createProject("quiet", "Quiet");
+      const id = await d.createTicket("acme", "Pick a colour", "Ready");
+      await d.finish("acme", id, "Done.", { branch: id, commit: "abc123" });
+      await d.api.act("acme", id, "accept", {});
+      await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"] });
+      const spec = (await d.api.addCIRule("acme", { workflow: "deploy.yml", branch: "main", state: "Draft" })).ci.rules[0].spec;
+      await d.reportPushedCommit("acme", id, "old111");
+      await d.reportPushedCommit("acme", id, "abc123");
+      const pushed = Date.parse((await d.api.getTicket("acme", id)).pushed_commit!.pushed);
+      const at = (minutes: number) => new Date(pushed + minutes * 60_000).toISOString();
+      const run = (n: number, workflow: string, started: number, status: "queued" | "in_progress" | "completed", more: Partial<CIRunView> = {}) => ({
+        id: n,
+        attempt: 1,
+        workflow,
+        name: workflow,
+        branch: "main",
+        commit: "abc123",
+        status,
+        ...(status === "completed" && { conclusion: "success" as const, finished: at(started + 1) }),
+        started: at(started),
+        url: `https://github.com/acme/web/actions/runs/${n}`,
+        jobs: [],
+        ticket: id,
+        ...more,
+      });
+      await d.reportCIRuns("acme", [
+        run(1, "ci.yml", -5, "in_progress"),
+        run(2, "queued.yml", -3, "queued"),
+        run(3, "lint.yml", -4, "completed"),
+        run(4, "nightly.yml", -2, "in_progress"),
+        run(5, "old.yml", -2, "in_progress", { commit: "old111" }),
+        run(6, "deploy.yml", -1, "in_progress", { ticket: undefined, rule: spec }),
+        run(7, "e2e.yml", -6, "in_progress"),
+        run(7, "e2e.yml", -1, "completed", { attempt: 2 }),
+      ]);
+
+      const acme = await d.api.ciOverview({ project: "acme", running: true });
+      expect(acme.projects.map((p) => [p.project, p.tracking, p.repository])).toEqual([["acme", true, "acme/web"]]);
+      expect(acme.runs.map((r) => [r.project, r.workflow, r.attempt])).toEqual([
+        ["acme", "queued.yml", 1],
+        ["acme", "ci.yml", 1],
+      ]);
+      expect((await d.api.ciOverview({ running: true })).runs).toEqual(acme.runs);
+      expect((await d.api.ciOverview({ project: "acme" })).runs).toHaveLength(7);
+      expect(await d.api.ciOverview({ project: "quiet", running: true })).toMatchObject({ runs: [] });
+    });
+
     it("gets one Ticket in full, with its Needs Me reason", async () => {
       await d.createProject("acme", "Acme");
       const id = await d.createTicket("acme", "Pick a colour", "Ready");

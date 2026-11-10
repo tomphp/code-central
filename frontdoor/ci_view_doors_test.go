@@ -233,3 +233,152 @@ func awaitNotice(t *testing.T, sub <-chan events.Event, want string, matches fun
 		}
 	}
 }
+
+// The CI view's running read (code-central-276): GET /api/ci?running=true
+// has only the CI Runs that count as running towards a Ticket's CI result.
+
+func TestTheRunningReadHasTheUnfinishedRunsCountingTowardsATicketsCIResult(t *testing.T) {
+	srv := newServer(t, pushedAccepted)
+	httpOK(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"main"}`))
+	queued := started(2, "queued.yml", 2*time.Minute)
+	queued.Status = store.CIQueued
+	ruled := started(5, "ci.yml", 5*time.Minute)
+	ruled.Ticket, ruled.Rule = "", "acme-4"
+	// A re-run's latest attempt replaces its earlier ones: one still
+	// going, the other finished.
+	rerunGoing := started(6, "rerun.yml", 6*time.Minute)
+	rerunGoing.Attempt = 2
+	rerunDone := finished(7, "redone.yml", 7*time.Minute, 8*time.Minute, store.CISuccess)
+	rerunDone.Attempt = 2
+	reportRuns(t, srv,
+		started(1, "ci.yml", time.Minute),
+		queued,
+		finished(3, "lint.yml", 3*time.Minute, 4*time.Minute, store.CISuccess),
+		started(4, "nightly.yml", 4*time.Minute),
+		ruled,
+		started(6, "rerun.yml", 0),
+		rerunGoing,
+		started(7, "redone.yml", 0),
+		rerunDone,
+	)
+
+	v := readCI(t, srv, "?running=true")
+	want := []string{"acme/rerun.yml#2", "acme/queued.yml#1", "acme/ci.yml#1"}
+	if got := runKeys(v); !slices.Equal(got, want) {
+		t.Fatalf("runs %v, want %v: queued and in progress, each at its latest attempt, no CI Rule's or Ignored workflow's run, newest started first", got, want)
+	}
+	if len(v.Projects) != 1 || v.Projects[0].Project != "acme" || !v.Projects[0].Tracking {
+		t.Fatalf("projects %+v, want acme's, as without running", v.Projects)
+	}
+	if got := runKeys(readCI(t, srv, "?running=true&project=acme")); !slices.Equal(got, want) {
+		t.Fatalf("acme's runs %v, want %v", got, want)
+	}
+	if got := runKeys(readCI(t, srv, "?running=false&project=acme")); len(got) != 7 {
+		t.Fatalf("runs %v, want every run's latest attempt without the filter", got)
+	}
+}
+
+func TestTheRunningReadLeavesOutRunsOnATicketsEarlierPushedCommit(t *testing.T) {
+	srv := newServer(t, pushedAccepted)
+	reportRuns(t, srv, started(1, "ci.yml", 0), ciRun(2, "old.yml", "fff999", store.CIInProgress, ""))
+	if got := runKeys(readCI(t, srv, "?running=true")); !slices.Equal(got, []string{"acme/ci.yml#1"}) {
+		t.Fatalf("runs %v, want only abc123's run: fff999 isn't acme-3's pushed commit", got)
+	}
+
+	pushCommit(t, srv, "def456")
+	if got := runKeys(readCI(t, srv, "?running=true")); len(got) != 0 {
+		t.Fatalf("runs %v, want abc123's run dropped once def456 is pushed", got)
+	}
+	reportRuns(t, srv, ciRun(3, "ci.yml", "def456", store.CIQueued, ""))
+	if got := runKeys(readCI(t, srv, "?running=true")); !slices.Equal(got, []string{"acme/ci.yml#1"}) || readCI(t, srv, "?running=true").Runs[0].ID != 3 {
+		t.Fatalf("runs %v, want def456's run", got)
+	}
+}
+
+func TestTheRunningReadLeavesOutRunsOfATicketWithNoPushedCommit(t *testing.T) {
+	srv := newServer(t, trackedAccepted)
+	reportRuns(t, srv, started(1, "ci.yml", 0))
+	if got := runKeys(readCI(t, srv, "?running=true")); len(got) != 0 {
+		t.Fatalf("runs %v, want none: acme-3 has no pushed commit", got)
+	}
+}
+
+func TestTheRunningReadForAllProjectsHasEveryActiveProjectWithCITrackingOn(t *testing.T) {
+	srv := newServer(t, pushedAccepted, pushedInOther)
+	reportRuns(t, srv, started(1, "ci.yml", 0))
+	going := ciRun(2, "e2e.yml", "fed321", store.CIInProgress, "")
+	going.Ticket, going.Started = "other-2", after(time.Minute)
+	must(t, func() error {
+		_, err := srv.Client.ReportCIRuns(context.Background(), "other", core.ReportCIRunsInput{Runs: []core.CIRunView{going}})
+		return err
+	})
+
+	if got := runKeys(readCI(t, srv, "?running=true")); !slices.Equal(got, []string{"other/e2e.yml#1", "acme/ci.yml#1"}) {
+		t.Fatalf("runs %v, want both Projects' runs, newest started first", got)
+	}
+	if got := runKeys(readCI(t, srv, "?project=other&running=true")); !slices.Equal(got, []string{"other/e2e.yml#1"}) {
+		t.Fatalf("other's runs %v, want its run alone", got)
+	}
+
+	// The Ticket's State doesn't matter: Done, its run still counts.
+	must(t, func() error {
+		_, err := srv.Client.Land(context.Background(), "other", core.LandInput{Ticket: "other-2", Commit: "fed321"})
+		return err
+	})
+	if got := runKeys(readCI(t, srv, "?project=other&running=true")); !slices.Equal(got, []string{"other/e2e.yml#1"}) {
+		t.Fatalf("other's runs %v, want its run, other-2 Done", got)
+	}
+	must(t, func() error {
+		_, err := srv.Core.ArchiveProject(core.WithActor(context.Background(), core.Human), "other")
+		return err
+	})
+	if got := runKeys(readCI(t, srv, "?running=true")); !slices.Equal(got, []string{"acme/ci.yml#1"}) {
+		t.Fatalf("runs %v, want other's left out once Archived", got)
+	}
+	httpOK(t, srv, setCITracking(`{"tracking":false}`))
+	if v := readCI(t, srv, "?running=true"); len(v.Runs) != 0 || len(v.Projects) != 0 {
+		t.Fatalf("view %+v, want nothing once acme's CI Tracking is off", v)
+	}
+}
+
+func TestTheRunningReadRefusesAValueOtherThanTrueOrFalse(t *testing.T) {
+	srv := newServer(t)
+	e := httpRejected(t, srv, httpCall{method: "GET", path: "/api/ci?running=yes"}, core.Invalid)
+	if e.Field != "running" {
+		t.Fatalf("field %q, want running", e.Field)
+	}
+}
+
+// pushedInOther turns CI Tracking and Merge + Push on for other, and
+// reports its Accepted Ticket other-2's pushed commit, fed321.
+func pushedInOther(t *testing.T, srv *codecentraltest.Server) {
+	t.Helper()
+	ctx := context.Background()
+	human := core.WithActor(ctx, core.Human)
+	httpOK(t, srv, httpCall{"POST", "/api/p/other/set_ci_tracking", `{"tracking":true,"repository":"acme/other"}`})
+	must(t, func() error {
+		_, err := srv.Core.SetLandingMethod(human, "other", core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin"})
+		return err
+	})
+	must(t, func() error {
+		_, err := srv.Core.CreateSpec(ctx, "other", core.CreateSpecInput{Title: "Search"})
+		return err
+	})
+	must(t, func() error {
+		_, err := srv.Core.CreateTicket(ctx, "other", core.CreateTicketInput{Spec: "1", Title: "Search box", State: "Ready"})
+		return err
+	})
+	claim, err := srv.Core.Claim(ctx, "other", core.ClaimInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	must(t, func() error {
+		_, err := srv.Core.Finish(ctx, "other", core.FinishInput{Ticket: "2", ClaimID: claim.ClaimID, Summary: "Done.", Branch: "other-2", Commit: "fed321"})
+		return err
+	})
+	must(t, func() error { _, err := srv.Core.Accept(human, "other", core.TicketInput{Ticket: "2"}); return err })
+	must(t, func() error {
+		_, err := srv.Client.ReportPushedCommit(ctx, "other", core.ReportPushedCommitInput{Ticket: "other-2", Commit: "fed321"})
+		return err
+	})
+}
