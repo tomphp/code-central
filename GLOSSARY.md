@@ -117,7 +117,7 @@ The commit the Factory pushed for a Ticket, which it reports on the Ticket: the 
 _Avoid_: Push SHA
 
 **CI Run**:
-One workflow run the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired.
+One workflow run the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. Kept for 30 days after it finishes.
 _Avoid_: Job, build, pipeline
 
 **CI result**:

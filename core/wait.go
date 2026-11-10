@@ -120,6 +120,11 @@ func (w *noticeWriter) PutOptions(o store.Options) error {
 	return w.put(w.Writer.PutOptions(o), events.Event{Type: events.OptionsChanged})
 }
 
+// PutCIRuns sends ci.changed, which names the Project only.
+func (w *noticeWriter) PutCIRuns(key string, runs []store.CIRun) error {
+	return w.put(w.Writer.PutCIRuns(key, runs), events.Event{Type: events.CIChanged, Project: key})
+}
+
 func (w *noticeWriter) put(err error, e events.Event) error {
 	if err == nil {
 		w.notice = &e

@@ -76,6 +76,10 @@ import {
   type CIResult,
   type CIRule,
   type CIRunView,
+  type CIRunRow,
+  type CIFilter,
+  type CIOverview,
+  CI_VIEW_DAYS,
   type CIRuleChange,
   type CISettings,
   type CIWatcherReport,
@@ -319,7 +323,7 @@ interface FakeFollower {
 
 // READS are the Api's reads, by name, which actions leaves out.
 const READS: ReadonlySet<string> = new Set<keyof Api>([
-  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript", "usage", "sessionUsage",
+  "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript", "usage", "sessionUsage", "ci",
 ]);
 
 export class FakeApi implements Api {
@@ -1010,6 +1014,7 @@ export class FakeApi implements Api {
       else all[at] = run;
     }
     this.ciRuns.set(key, all);
+    this.emit({ type: "ci.changed", project: key });
     for (const id of new Set(runs.map((r) => r.ticket).filter((t) => t !== undefined))) this.trackCI(key, this.ticket(key, id));
   }
 
@@ -1108,6 +1113,34 @@ export class FakeApi implements Api {
       this.emit({ type: "options.changed" });
     }
     return { ...this.opts };
+  }
+
+  // ci reads the CI view as core's CIOverview does: each run's latest
+  // attempt, unfinished ones first, newest started first, then those
+  // finished in the last CI_VIEW_DAYS days, newest finished first.
+  async ci(filter: CIFilter = {}): Promise<CIOverview> {
+    this.calls.push("ci");
+    if (filter.project && !this.projects.has(filter.project)) throw new ApiError(404, "not_found", `no Project "${filter.project}"`);
+    const projects = filter.project ? [this.project(filter.project)] : [...this.projects.values()].filter((p) => p.ci.tracking && !p.archived);
+    const ended = (r: CIRunView) => (r.status === "completed" ? (r.finished ?? r.started) : undefined);
+    const since = this.now.getTime() - CI_VIEW_DAYS * 24 * 60 * 60 * 1000;
+    const runs: CIRunRow[] = projects.flatMap((p) => {
+      const all = this.ciRuns.get(p.key) ?? [];
+      const latest = all.filter((r) => !all.some((o) => o.id === r.id && o.attempt > r.attempt));
+      return latest
+        .filter((r) => r.status !== "completed" || (ended(r) !== undefined && Date.parse(ended(r)!) >= since))
+        .map((r) => ({ ...structuredClone(r), project: p.key }));
+    });
+    const time = (at?: string) => (at ? Date.parse(at) : 0);
+    runs.sort((a, b) => {
+      const [x, y] = [ended(a), ended(b)];
+      if ((x === undefined) !== (y === undefined)) return x === undefined ? -1 : 1;
+      return x === undefined ? time(b.started) - time(a.started) : time(y) - time(x);
+    });
+    return {
+      projects: projects.map((p) => ({ project: p.key, tracking: p.ci.tracking, repository: p.ci.repository, watcher: structuredClone(p.ci.watcher) })),
+      runs,
+    };
   }
 
   async usage(filter: UsageFilter = {}): Promise<UsageView> {

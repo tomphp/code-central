@@ -250,6 +250,24 @@ Runs of Ignored workflows are listed greyed and marked **ignored**, and never co
 
 For now CI only shows: the Factory lands accepted work the same way with CI Tracking on or off.
 
+### The CI view
+
+**CI**, in the **Admin** section of the Inbox's left pane below **Usage**, opens the CI view on the Project chosen in the left pane, or on **All Projects** when none is. Its **Projects** picker changes that, and goes in the address (`/?view=ci&project=acme`); **Back to the Inbox** returns you to where you were. All Projects covers every active Project with CI Tracking on.
+
+At the top, each Project's CI Watcher status: Watching its repository, Starting, or an error with its fix, as in the CI section; a Project with CI Tracking off says so, linking its Project Options. Below it, the CI Runs: those still running first, newest first, then those that finished in the last 7 days, the latest to finish first. Each row has the workflow's name and file, branch, short commit, status, how long it ran (so far, while running), the Ticket or CI Rule it is tracked against, which opens it, and **View on GitHub**. A re-run shows its latest attempt. Runs of Ignored workflows are greyed and marked **ignored**. The view follows the live feed: a run that changes, or a new one, pulses.
+
+```
+Acme API: Watching acme/acme-api.
+
+Workflow        Branch   Commit    Status    Duration  Tracked against   GitHub
+CI ci.yml       main     3f9c2a1   running   2m 40s    acme-api-17       View on GitHub
+Lint lint.yml   main     3f9c2a1   passed    48s       acme-api-17       View on GitHub
+```
+
+Code Central keeps each CI Run for 30 days after it finishes, then prunes it. A Ticket whose runs have all been pruned keeps its pushed commit and has no CI result.
+
+Scripts can read the CI view over the HTTP API: `GET /api/ci?project=<key>`, or leave out `project` for All Projects. An unknown Project is `not_found`. The answer's `projects` are the CI Watchers' statuses, each with its `project`, `tracking`, `repository` and `watcher`, and `runs` the rows in order, each a CI Run with its `project`.
+
 ### CI Rules
 
 A **CI Rule** says "when this workflow fails on this branch, open a Ticket to fix it", for failures no Ticket's own CI catches, such as a red `main` after a hand merge. Add, edit and remove them under **CI Rules**, at the foot of the CI section. Agents have no tool or command to change them. A rule names:

@@ -4,6 +4,8 @@
 // use. contract.ts runs one suite against both.
 import type {
   ChangeEvent,
+  CIFilter,
+  CIOverview,
   FindSpecsFilter,
   FindTicketsFilter,
   HeldSessionEvent,
@@ -131,6 +133,10 @@ export interface Api {
   // or all of them, over the last 7 (the default), 30 or 90 local days.
   // An unknown Project is not_found.
   usage(filter?: UsageFilter): Promise<UsageView>;
+  // ci reads the CI view (code-central-258): one Project's CI Runs, or
+  // every active Project's with CI Tracking on, and their CI Watchers.
+  // An unknown Project is not_found.
+  ci(filter?: CIFilter): Promise<CIOverview>;
   // sessionUsage reads one session's responses, oldest first, each with
   // its Context Size, for its line chart. An unknown Project is not_found;
   // an unknown session has none.

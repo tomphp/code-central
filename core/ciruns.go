@@ -44,6 +44,31 @@ const ciNewlyPushed = 5 * time.Minute
 // workflows, would otherwise be watched every 30 seconds for good.
 const ciWaitLimit = 24 * time.Hour
 
+// ciKeep is how long after it finished a CI Run is kept: older ones are
+// pruned from the store on the CI Watcher's next report, and every read
+// leaves them out from the moment they are due.
+const ciKeep = 30 * 24 * time.Hour
+
+// keptCIRuns is runs without those finished more than ciKeep before now.
+func keptCIRuns(runs []store.CIRun, now time.Time) []store.CIRun {
+	return slices.DeleteFunc(runs, func(run store.CIRun) bool {
+		ended := ciRunEnded(run)
+		return !ended.IsZero() && now.Sub(ended) > ciKeep
+	})
+}
+
+// ciRunEnded is when a completed run finished, or, when the CI Provider
+// gave no finish time, when it started; zero for an unfinished run.
+func ciRunEnded(run store.CIRun) time.Time {
+	if run.Status != store.CICompleted {
+		return time.Time{}
+	}
+	if !run.Finished.IsZero() {
+		return run.Finished
+	}
+	return run.Started
+}
+
 // PushedCommitView is a commit the Factory pushed for a Ticket, and when
 // Code Central heard of it.
 type PushedCommitView struct {
@@ -114,14 +139,15 @@ func ciRunView(key string, r store.CIRun) CIRunView {
 
 // ticketCI is a Ticket's latest pushed commit, its CI result and every CI
 // Run tracked against it, newest pushed commit's first; all empty for a
-// Ticket never pushed while CI Tracking was on.
-func ticketCI(r store.Reader, key string, t store.Ticket) (*PushedCommitView, CIResult, []CIRunView) {
+// Ticket never pushed while CI Tracking was on. A pushed commit whose
+// runs have all been pruned has no CI result: none is running.
+func ticketCI(r store.Reader, key string, t store.Ticket, now time.Time) (*PushedCommitView, CIResult, []CIRunView) {
 	if len(t.PushedCommits) == 0 {
 		return nil, "", nil
 	}
 	latest := t.PushedCommits[len(t.PushedCommits)-1]
 	var mine []store.CIRun
-	for _, run := range r.CIRuns(key) {
+	for _, run := range keptCIRuns(r.CIRuns(key), now) {
 		if run.Ticket == t.Number {
 			mine = append(mine, run)
 		}
@@ -135,7 +161,11 @@ func ticketCI(r store.Reader, key string, t store.Ticket) (*PushedCommitView, CI
 	for _, run := range mine {
 		runs = append(runs, ciRunView(key, run))
 	}
-	return &PushedCommitView{Commit: latest.Commit, Pushed: latest.Pushed}, ciResultOf(latest.Commit, mine), runs
+	pushed := &PushedCommitView{Commit: latest.Commit, Pushed: latest.Pushed}
+	if now.Sub(latest.Pushed) > ciKeep && !slices.ContainsFunc(mine, func(run store.CIRun) bool { return run.Commit == latest.Commit }) {
+		return pushed, "", runs
+	}
+	return pushed, ciResultOf(latest.Commit, mine), runs
 }
 
 // ciResultOf is the CI result of commit from runs: running while any of
@@ -221,8 +251,9 @@ type CIRunsView struct {
 
 // ReportCIRuns is the CI Watcher's report_ci_runs: it upserts each run,
 // keyed by its run ID and attempt, marking runs of Ignored workflows
-// ignored. It needs CI Tracking on. Every Ticket whose runs changed gets
-// a change notice, so the UI updates live.
+// ignored, and prunes the runs finished more than ciKeep ago. It needs
+// CI Tracking on. Every Ticket whose runs changed gets a change notice,
+// as the Project gets ci.changed, so the UI updates live.
 func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput) (Written[CIRunsView], error) {
 	var reported CIRunsView
 	changed := map[int]bool{}
@@ -235,7 +266,9 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 		if !p.CI.Tracking {
 			return &Error{Code: ActionNotAllowed, Message: "CI Tracking is off on " + key + ", so it tracks no CI Runs"}
 		}
-		runs := w.CIRuns(key)
+		stored := w.CIRuns(key)
+		runs := keptCIRuns(slices.Clone(stored), c.now())
+		pruned := len(runs) < len(stored)
 		for i, v := range in.Runs {
 			run, err := c.ciRunOf(w, key, p.CI, v, fmt.Sprintf("runs[%d]", i))
 			if err != nil {
@@ -260,7 +293,7 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 			}
 			reported.Runs = append(reported.Runs, ciRunView(key, run))
 		}
-		if !wrote {
+		if !wrote && !pruned {
 			return nil
 		}
 		return w.PutCIRuns(key, runs)
@@ -363,7 +396,7 @@ type CIWaitingCommit struct {
 // than ciWaitLimit ago.
 func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 	out := []CIWaitingCommit{}
-	runs := r.CIRuns(key)
+	runs := keptCIRuns(r.CIRuns(key), now)
 	for _, t := range r.Tickets(key) {
 		if len(t.PushedCommits) == 0 || t.State == store.Cancelled {
 			continue

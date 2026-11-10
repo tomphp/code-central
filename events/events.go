@@ -12,12 +12,14 @@ const (
 	TicketChanged  = "ticket.changed"
 	SpecChanged    = "spec.changed"
 	ProjectChanged = "project.changed"
+	// CIChanged is a Project's CI Runs changing: its ID is empty.
+	CIChanged = "ci.changed"
 	// OptionsChanged is about no Project: its Project and ID are empty.
 	OptionsChanged = "options.changed"
 )
 
 // Event is one change notice. ID is the display ID of the Ticket or Spec
-// and is empty for project.changed. Project is empty for options.changed,
+// and is empty for project.changed and ci.changed. Project is empty for options.changed,
 // the one notice about no Project; a listener that reads Project treats
 // an empty one as not about any Project.
 type Event struct {

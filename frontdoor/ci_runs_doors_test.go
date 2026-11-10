@@ -295,13 +295,16 @@ func TestReportedRunsSendTheirTicketAChangeNotice(t *testing.T) {
 	sub, stop := srv.Core.Events().Subscribe()
 	defer stop()
 	reportRuns(t, srv, ciRun(1, "ci.yml", "abc123", store.CIQueued, ""))
-	select {
-	case e := <-sub:
-		if e.Type != events.TicketChanged || e.ID != "acme-3" {
-			t.Fatalf("notice %+v, want ticket.changed on acme-3", e)
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case e := <-sub:
+			if e.Type == events.TicketChanged && e.ID == "acme-3" {
+				return
+			}
+		case <-deadline:
+			t.Fatal("no ticket.changed notice on acme-3 for the reported run")
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("no change notice for the reported run")
 	}
 }
 
