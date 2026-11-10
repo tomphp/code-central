@@ -2,6 +2,7 @@ package frontdoor_test
 
 import (
 	"context"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"testing"
@@ -71,7 +72,8 @@ func str(v any) string {
 func TestGetCIWatchHasTheCISettingsRulesAndGHPath(t *testing.T) {
 	srv := newServer(t, ciTrackingOn)
 	httpOK(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"main","state":"Ready"}`))
-	httpOK(t, srv, httpCall{"POST", "/api/set_options", `{"gh_path":` + strconv.Quote("/opt/tools/gh") + `}`})
+	gh := filepath.Join(t.TempDir(), "gh")
+	httpOK(t, srv, httpCall{"POST", "/api/set_options", `{"gh_path":` + strconv.Quote(gh) + `}`})
 
 	status, b := httpDoAs(t, srv, core.Agent, getCIWatch("acme"))
 	if status != 200 {
@@ -81,7 +83,7 @@ func TestGetCIWatchHasTheCISettingsRulesAndGHPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Project != "acme" || !w.Tracking || w.Provider != "github_actions" || w.Repository != "acme/web" || w.GHPath != "/opt/tools/gh" ||
+	if w.Project != "acme" || !w.Tracking || w.Provider != "github_actions" || w.Repository != "acme/web" || w.GHPath != gh ||
 		len(w.IgnoredWorkflows) != 1 || w.IgnoredWorkflows[0] != "nightly.yml" {
 		t.Fatalf("ci watch = %+v, want acme/web on with nightly.yml ignored and the gh path Option", w)
 	}
