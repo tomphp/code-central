@@ -15,7 +15,7 @@ import (
 
 // Every kind of Watcher's status: the separate processes the service runs
 // per Project, each watching one external system, and what they and the
-// service report about them. The CI Watcher is the only kind so far.
+// service report about them: the CI Watcher, and the Issue Watcher.
 //
 // The status lives in memory only, like pings: a Watcher is the service's
 // child, so a restarted service has no status until its Watcher reports
@@ -24,8 +24,13 @@ import (
 // WatcherKind names a kind of Watcher.
 type WatcherKind string
 
-// WatcherCI is the CI Watcher, run while CI Tracking is on.
-const WatcherCI WatcherKind = "ci"
+// The kinds of Watcher.
+const (
+	// WatcherCI is the CI Watcher, run while CI Tracking is on.
+	WatcherCI WatcherKind = "ci"
+	// WatcherIssues is the Issue Watcher, run while GitHub Issues is on.
+	WatcherIssues WatcherKind = "issues"
+)
 
 // watcherKind is how one kind of Watcher is configured; a new kind of
 // Watcher is one more entry in watcherKinds.
@@ -47,10 +52,17 @@ type watcherKind struct {
 var watcherKinds = map[WatcherKind]watcherKind{
 	WatcherCI: {name: "CI Watcher", setting: "CI Tracking", on: func(p store.Project) bool { return p.CI.Tracking },
 		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemCheckFailed}, watches: "CI"},
+	WatcherIssues: {name: "Issue Watcher", setting: "GitHub Issues", on: func(p store.Project) bool { return p.GitHubIssues.On },
+		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemIssuesDisabled, ProblemNoTriage, ProblemCheckFailed},
+		watches:  "GitHub Issues"},
 }
 
 // Name is the kind's glossary name, such as CI Watcher.
 func (k WatcherKind) Name() string { return watcherKinds[k].name }
+
+// Setting is the name of the Project setting that turns the kind on, such
+// as CI Tracking.
+func (k WatcherKind) Setting() string { return watcherKinds[k].setting }
 
 // WatcherProblem names why a Watcher can't watch what it watches.
 type WatcherProblem string
@@ -63,6 +75,12 @@ const (
 	ProblemLoggedOut WatcherProblem = "logged_out"
 	// ProblemRepositoryUnreadable is a repository gh's login can't read.
 	ProblemRepositoryUnreadable WatcherProblem = "repository_unreadable"
+	// ProblemIssuesDisabled is a repository with GitHub's issues turned
+	// off.
+	ProblemIssuesDisabled WatcherProblem = "issues_disabled"
+	// ProblemNoTriage is a repository on which gh's login has less than
+	// triage permission, which labelling and closing issues need.
+	ProblemNoTriage WatcherProblem = "no_triage"
 	// ProblemCheckFailed is a check that didn't run to an answer.
 	ProblemCheckFailed WatcherProblem = "check_failed"
 	// ProblemCrashed is a Watcher that exited without being stopped. The

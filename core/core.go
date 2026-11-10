@@ -38,6 +38,9 @@ type Core struct {
 	// ciCheck is the CI Watcher's check mode, run when CI Tracking is
 	// turned on; nil checks nothing.
 	ciCheck CICheck
+	// issuesCheck is the Issue Watcher's check mode, run when GitHub
+	// Issues is turned on; nil checks nothing.
+	issuesCheck IssuesCheck
 	// watchers holds each Project's Watchers' statuses, in memory only.
 	watchers *watchers
 }
@@ -71,6 +74,9 @@ type ProjectView struct {
 	Landing LandingView `json:"landing"`
 	// CI is the Project's CI settings, always filled in.
 	CI CIView `json:"ci"`
+	// GitHubIssues is the Project's GitHub Issues settings, always filled
+	// in.
+	GitHubIssues GitHubIssuesView `json:"github_issues"`
 }
 
 // LandingView is a Project's Landing Method with its Push option.
@@ -505,7 +511,8 @@ func finished(s store.State) bool { return s == store.Done || s == store.Cancell
 
 func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
-		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}, CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key}))}
+		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}, CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
+		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues)}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at

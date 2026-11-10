@@ -139,6 +139,9 @@ var Operations = []Op{
 	{Name: "rerun_ci", Audience: HumanOnly, Write: true},
 	// Send back to fix and New fix Ticket (code-central-264).
 	{Name: "new_fix_ticket", Audience: HumanOnly, Write: true},
+
+	// GitHub Issues (Spec code-central-279).
+	{Name: "set_github_issues", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

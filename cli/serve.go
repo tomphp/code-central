@@ -18,6 +18,7 @@ import (
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/ids"
+	"github.com/tomoram/code-central/issuewatcher"
 	"github.com/tomoram/code-central/notify"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/usage"
@@ -163,6 +164,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	c := core.New(st, clk, ids.Random{})
 	c.SetUsage(usage.New(dir, clk, time.Local, e.Stderr))
 	c.SetCICheck(ciwatcher.Checker(self, os.Environ()))
+	c.SetIssuesCheck(issuewatcher.Checker(self, os.Environ()))
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	go c.WatchTimedReasons(ctx, ticker.C, func(project, ticketID string) {

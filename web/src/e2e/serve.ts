@@ -29,6 +29,9 @@ export interface Service {
   // logOutOfGH makes the fake gh answer gh auth status as a gh with no
   // login does.
   logOutOfGH(): Promise<void>;
+  // letGHTriage makes the fake gh answer reading repository as GitHub
+  // does for one with issues on, which gh's login can triage.
+  letGHTriage(repository: string): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -76,6 +79,16 @@ export async function serve(): Promise<Service> {
         join(gh.data, "answers.json"),
         JSON.stringify([
           { args: ["auth", "status"], exit: 1, stderr: "You are not logged into any GitHub hosts. To log in, run: gh auth login\n" },
+        ]),
+      ),
+    letGHTriage: (repository) =>
+      writeFile(
+        join(gh.data, "answers.json"),
+        JSON.stringify([
+          {
+            args: ["api", `repos/${repository}`],
+            stdout: JSON.stringify({ full_name: repository, has_issues: true, permissions: { admin: false, maintain: false, push: false, triage: true, pull: true } }),
+          },
         ]),
       ),
     stop: async () => {

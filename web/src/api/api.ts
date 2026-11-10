@@ -30,7 +30,7 @@ import type {
   SessionUsageFilter,
   SessionUsageView,
   TargetView,
-  UsageView,
+  UsageView, GitHubIssuesChange
 } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
@@ -110,6 +110,12 @@ export interface Api {
   // trimmed, and needed as owner/name to turn CI Tracking on; Ignored
   // workflows are trimmed, with blanks and repeats dropped.
   setCITracking(project: string, ci: CITrackingChange): Promise<ProjectView>;
+  // setGitHubIssues sets the Project's GitHub Issues settings. The
+  // repository and label are trimmed; turning it on needs a repository as
+  // owner/name and a passing Issues check, and the first time creates the
+  // Issues Spec, titled like "GitHub Issues: acme/web", which follows a
+  // changed repository unless the human retitled it.
+  setGitHubIssues(project: string, settings: GitHubIssuesChange): Promise<ProjectView>;
   // addCIRule adds a CI Rule and creates its Spec, titled like "CI: ci.yml
   // on main"; editCIRule changes the rule on Spec spec, and
   // removeCIRule removes it, leaving its Spec as the record. Workflow and

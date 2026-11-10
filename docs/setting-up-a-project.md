@@ -301,6 +301,41 @@ Fix ci.yml failing on main
 
 The last line is there when the failing commit is where a Ticket landed, such as one you merged by hand. A rule doesn't pile Tickets up: while its Spec has a Ticket that isn't Done or Cancelled, a further failure only adds a comment to that Ticket, linking the new run and naming its failed jobs. Nor does it double up on a Ticket's own CI: a run on a commit the Factory pushed for a Ticket counts towards that Ticket's CI result and never fires a rule. A run fires one rule: when a rule names its workflow and an `any` rule watches the same branch, the rule naming it fires. A run that fires a rule is tracked against it.
 
+## Linking GitHub issues
+
+**GitHub Issues** brings a GitHub repository's issues into Code Central, and writes the work's progress back to them. It is off on every Project until you turn it on, and Agents have no tool or command to change it. Turn it on in the **GitHub Issues** section of the same Project Options page, below CI:
+
+- **GitHub Issues**: on or off. Code Central uses your existing `gh` login and stores no GitHub token.
+- **GitHub repository**: the repository whose issues come in, as `owner/name`, such as `acme/acme-api`. GitHub Issues can't be on without one. Like CI's, it is filled in from a GitHub Push remote the Factory reported, with a note naming the URL; change it if your issues live in another repository.
+- **Filter label**: one GitHub label, such as `code-central`. Only issues carrying it come in. Leave it empty to bring in every open issue.
+- **New issues need me**: off by default. When on, each new issue also shows in Needs Me and Focus Mode until you triage it.
+
+For now, Save only records these settings and creates the Issues Spec: no issues come in yet.
+
+**Save** applies the settings, and every open UI tab shows them. Turning GitHub Issues on is checked first: Code Central checks that `gh` is installed and logged in, can read the repository, that the repository has its issues turned on, and that the account `gh` is logged in as can triage them, which labelling and closing issues needs. If any of these fails, Save refuses, GitHub Issues stays off, and the section says what is wrong and how to fix it, for example:
+
+```text
+The account gh is logged in as can't triage the issues of acme/acme-api: Code Central labels and closes them, which needs triage permission or more.
+Give the account gh is logged in as triage permission or more on the repository, or log gh in as an account that has it.
+```
+
+or:
+
+```text
+The repository acme/acme-api has its issues turned off.
+Turn Issues on in the repository's Settings on GitHub, under Features, or name the repository whose issues to bring in.
+```
+
+The check uses the same `gh`, found the same way, as CI Tracking's: see [Finding `gh`](running-as-a-service.md#finding-gh).
+
+The first time you turn GitHub Issues on, Code Central creates the Project's **Issues Spec**, titled after the repository, such as `GitHub Issues: acme/acme-api`. Each issue will arrive on it as an **Incoming Issue**, a Draft Ticket to triage, so the Spec list doesn't grow by one per issue ([ADR 0022](adr/0022-incoming-issues-go-on-one-long-lived-issues-spec-per-project.md)). The section names it:
+
+```
+Incoming Issues arrive on acme-api-12.
+```
+
+It is an ordinary Spec, with no Stages. Turning GitHub Issues off and on again reuses it, and changing the repository retitles it unless you renamed it. Turning GitHub Issues off keeps the repository, label and New issues need me for the next time you turn it on, and leaves every linked Spec and Ticket as it is.
+
 ## When `init` behaves differently
 
 ### A repository you don't own: `init --local`

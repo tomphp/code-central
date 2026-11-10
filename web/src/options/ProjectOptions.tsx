@@ -1,9 +1,20 @@
 // The Project Options page: one Project's settings, reached from its menu
-// in the left pane, a section each: the Landing Method, and CI with its CI
-// Rules.
+// in the left pane, a section each: the Landing Method, CI with its CI
+// Rules, and GitHub Issues.
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
-import type { ApiError, CIProvider, CIRule, CIRuleChange, CISettings, Landing, LandingMethod, ProjectRow } from "../api/types";
+import type {
+  ApiError,
+  CIProvider,
+  CIRule,
+  CIRuleChange,
+  CISettings,
+  GitHubIssuesChange,
+  GitHubIssuesSettings,
+  Landing,
+  LandingMethod,
+  ProjectRow,
+} from "../api/types";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { githubRepository } from "./githubRepository";
 
@@ -33,6 +44,7 @@ export function ProjectOptions({ api, projects, project: key, navigate }: Projec
           <h1>{project.display_name}: Project Options</h1>
           <LandingMethodSection api={api} project={project} />
           <CISection api={api} project={project} />
+          <GitHubIssuesSection api={api} project={project} />
         </>
       )}
     </main>
@@ -316,6 +328,127 @@ function CIWatcher({ ci }: { ci: CISettings }) {
   );
 }
 
+// issuesDraft is the form for GitHub Issues as stored, its repository
+// prefilled from a GitHub Push remote while none is set, as CI's is.
+function issuesDraft(g: GitHubIssuesSettings, pushRemoteURL: string): GitHubIssuesChange {
+  return { on: g.on, repository: g.repository || githubRepository(pushRemoteURL) || "", label: g.label, new_issues_need_me: g.new_issues_need_me };
+}
+
+// GitHubIssuesSection is the Project's GitHub Issues settings (Spec
+// code-central-279): the switch, the GitHub repository its issues come
+// from, the filter label and New issues need me. Turning it on runs the
+// Issue Watcher's check, whose refusal shows in place with its fix. Like
+// the other sections it follows the Project as read.
+function GitHubIssuesSection({ api, project }: { api: Api; project: ProjectRow }) {
+  const stored = issuesDraft(project.github_issues, project.ci.push_remote_url);
+  const prefilled = !project.github_issues.repository && stored.repository !== "";
+  const [draft, setDraft] = useState<GitHubIssuesChange>(stored);
+  const [error, setError] = useState<ApiError>();
+  const [saved, setSaved] = useState(false);
+  const id = useId();
+  const { on, repository, label, new_issues_need_me } = stored;
+  useEffect(() => setDraft({ on, repository, label, new_issues_need_me }), [on, repository, label, new_issues_need_me]);
+
+  const edit = (patch: Partial<GitHubIssuesChange>) => {
+    setDraft((d) => ({ ...d, ...patch }));
+    setError(undefined);
+    setSaved(false);
+  };
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    setError(undefined);
+    api.setGitHubIssues(project.key, draft).then(
+      (v) => {
+        setDraft(issuesDraft(v.github_issues, v.ci.push_remote_url));
+        setSaved(true);
+      },
+      (e: ApiError) => setError(e),
+    );
+  };
+  const changed =
+    draft.on !== on || draft.repository !== repository || draft.label.trim() !== label || draft.new_issues_need_me !== new_issues_need_me;
+  const describedBy = (field: string, hint: string) => (error?.field === field ? `${hint} ${id}-error` : hint);
+  const invalid = (field: string) => error?.field === field || undefined;
+  const spec = project.github_issues.spec;
+
+  return (
+    <fieldset className="project-options-section" disabled={project.archived}>
+      <legend>GitHub Issues</legend>
+      <form onSubmit={save}>
+        <div className="project-options-choice">
+          <label>
+            <input
+              type="checkbox"
+              checked={draft.on}
+              onChange={(e) => edit({ on: e.target.checked })}
+              aria-describedby={describedBy("on", `${id}-on`)}
+              aria-invalid={invalid("on")}
+            />{" "}
+            GitHub Issues
+          </label>
+          <p className="project-options-hint" id={`${id}-on`}>
+            Each open issue in the repository arrives as an Incoming Issue, a Draft Ticket to triage, and Code Central writes the work&apos;s
+            progress back to it, through your existing <code>gh</code> login. Code Central stores no GitHub token.
+          </p>
+        </div>
+        <label className="project-options-field">
+          GitHub repository{" "}
+          <input
+            value={draft.repository}
+            placeholder="owner/name"
+            onChange={(e) => edit({ repository: e.target.value })}
+            aria-describedby={describedBy("repository", `${id}-repository`)}
+            aria-invalid={invalid("repository")}
+          />
+        </label>
+        <p className="project-options-hint" id={`${id}-repository`}>
+          {prefilled ? `From the Push remote ${project.ci.push_remote_url}. ` : ""}The repository whose issues come in, as owner/name; GitHub
+          Issues needs one.
+        </p>
+        <label className="project-options-field">
+          Filter label{" "}
+          <input
+            value={draft.label}
+            placeholder="any label"
+            onChange={(e) => edit({ label: e.target.value })}
+            aria-describedby={`${id}-label`}
+          />
+        </label>
+        <p className="project-options-hint" id={`${id}-label`}>
+          Only issues carrying this GitHub label come in. Leave it empty to bring in every open issue.
+        </p>
+        <div className="project-options-choice">
+          <label>
+            <input
+              type="checkbox"
+              checked={draft.new_issues_need_me}
+              onChange={(e) => edit({ new_issues_need_me: e.target.checked })}
+              aria-describedby={`${id}-need-me`}
+            />{" "}
+            New issues need me
+          </label>
+          <p className="project-options-hint" id={`${id}-need-me`}>
+            Each new Incoming Issue also shows in Needs Me and Focus Mode until you triage it.
+          </p>
+        </div>
+        <p className="project-options-hint">For now the settings are only recorded: no issues come in yet.</p>
+        {spec && <p className="muted">Incoming Issues arrive on {spec}.</p>}
+        {error && <Refusal id={`${id}-error`} error={error} />}
+        <div className="project-options-actions">
+          <button type="submit" className="btn primary" disabled={!changed}>
+            Save
+          </button>
+          {saved && !changed && (
+            <span role="status" className="muted">
+              Saved
+            </span>
+          )}
+        </div>
+      </form>
+    </fieldset>
+  );
+}
+
 // ruleWatches is what a CI Rule watches, as its Spec's title says it.
 const ruleWatches = (r: CIRuleChange) => `${r.workflow === "any" ? "any workflow" : r.workflow} on ${r.branch}`;
 
@@ -473,7 +606,8 @@ function RuleForm(props: {
 }
 
 // Refusal is a save the service refused: its message, then its fix when
-// it gives one, as a refused CI Tracking turn-on does (code-central-252).
+// it gives one, as a refused CI Tracking or GitHub Issues turn-on does
+// (code-central-252, code-central-284).
 function Refusal({ id, error }: { id: string; error: ApiError }) {
   return (
     <p className="warning" role="alert" id={id}>

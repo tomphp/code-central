@@ -236,6 +236,17 @@ func (e *RateLimitError) Until(now time.Time) time.Time {
 	return e.Reset
 }
 
+// CheckResult is a check failing because GitHub rate-limited it, at now:
+// there is no knowing yet whether the Watcher can watch, so it is the
+// check failed problem, with when to try again.
+func (e *RateLimitError) CheckResult(now time.Time) core.WatcherCheckResult {
+	r := core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: e.Error(), Fix: "Try again in a few minutes."}
+	if until := e.Until(now); !until.IsZero() {
+		r.Fix = "Try again after " + until.Local().Format(time.Kitchen) + ", when GitHub's rate limit ends."
+	}
+	return r
+}
+
 // rateLimit is the rate limit a failed call's answer says GitHub refused
 // it for, or nil: a 403 or 429 with no requests remaining, or one saying
 // how long to wait, or a message naming a rate limit, as GitHub's

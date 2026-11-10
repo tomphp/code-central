@@ -241,6 +241,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"})
 		return err
 	},
+	"set_github_issues": func(f fixture) error {
+		_, err := f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repository: "acme/web"})
+		return err
+	},
 	"report_push_remote": func(f fixture) error {
 		_, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git"})
 		return err

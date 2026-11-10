@@ -106,6 +106,24 @@ export interface CISettings extends CITrackingChange {
   watcher: CIWatcherStatus;
 }
 
+// The GitHub Issues settings the human sets with setGitHubIssues (Spec
+// code-central-279).
+export interface GitHubIssuesChange {
+  on: boolean;
+  // repository is the GitHub repository as owner/name; on needs one.
+  repository: string;
+  // label is the filter label: only issues carrying it come in; "" lets
+  // every issue in.
+  label: string;
+  new_issues_need_me: boolean;
+}
+
+// A Project's GitHub Issues settings, with its Issues Spec's ID once
+// GitHub Issues has first been turned on.
+export interface GitHubIssuesSettings extends GitHubIssuesChange {
+  spec?: string;
+}
+
 // A Ticket's CI result (code-central-256), from the runs of its latest
 // pushed commit that aren't ignored: running while any is unfinished or
 // none is reported, failed if any concluded failure, cancelled or timed
@@ -199,6 +217,8 @@ export interface ProjectView {
   landing: Landing;
   // ci is always filled in: CI Tracking off by default.
   ci: CISettings;
+  // github_issues is always filled in: GitHub Issues off by default.
+  github_issues: GitHubIssuesSettings;
 }
 
 export interface ProjectRow extends ProjectView {
