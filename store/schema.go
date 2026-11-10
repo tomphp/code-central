@@ -35,6 +35,7 @@ func Schema() string {
 	}
 	values(fmt.Sprintf("  options focus_clear (default %s)", DefaultOptions().FocusClear), FocusClearNames())
 	values("  project landing.method (no landing: merge, push false, remote origin)", landingMethodNames())
+	values("  project ci.provider (no ci: tracking off, github_actions)", ciProviderNames())
 	values("  ticket state, moves[].from, moves[].to", states)
 	values("  rounds[].questions[].status", []string{string(QuestionOpen), string(QuestionAnswered), string(QuestionDismissed)})
 	var external []string

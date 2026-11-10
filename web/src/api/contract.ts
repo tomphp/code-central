@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
+import type { ChangeEvent, CIProvider, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
 import { ApiError } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -51,6 +51,9 @@ export interface Driver {
   // dropTranscriptStreams drops every open Transcript stream, as a flaky
   // connection would; each reconnects by itself (ticket 110).
   dropTranscriptStreams(): void;
+  // reportPushRemote reports the Push remote's URL as a Factory does when
+  // it starts (code-central-251).
+  reportPushRemote(key: string, url: string): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -106,6 +109,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         { method: "merge", push: false, remote: "origin" },
         { method: "merge", push: false, remote: "origin" },
       ]);
+      const off = { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [], push_remote_url: "" };
+      expect(rows.map((r) => r.ci)).toEqual([off, off]);
     });
 
     it("reads Needs Me: empty, then grouped with each row's detail", async () => {
@@ -215,6 +220,53 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(empty.message).toContain("Push needs a git remote");
       const method = await d.api.setLandingMethod("acme", { method: "squash" as LandingMethod, push: false, remote: "origin" }).catch((e) => e);
       expect(method).toMatchObject({ status: 422, code: "invalid", field: "method" });
+    });
+
+    it("sets a Project's CI settings, keeping the Push remote URL the Factory reported", async () => {
+      await d.createProject("acme", "Acme");
+      await d.reportPushRemote("acme", "git@github.com:acme/web.git");
+      expect((await d.api.listProjects())[0].ci.push_remote_url).toBe("git@github.com:acme/web.git");
+
+      const v = await d.api.setCITracking("acme", {
+        tracking: true,
+        provider: "github_actions",
+        repository: " acme/web ",
+        ignored_workflows: [" nightly.yml", "", "nightly.yml", "deploy.yaml"],
+      });
+      const on = {
+        tracking: true,
+        provider: "github_actions",
+        repository: "acme/web",
+        ignored_workflows: ["nightly.yml", "deploy.yaml"],
+        push_remote_url: "git@github.com:acme/web.git",
+      };
+      expect(v).toMatchObject({ key: "acme", ci: on });
+      expect((await d.api.listProjects())[0].ci).toEqual(on);
+
+      const none = await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: " ", ignored_workflows: [] }).catch((e) => e);
+      expect(none).toMatchObject({ status: 422, code: "invalid", field: "repository" });
+      expect(none.message).toContain("owner/name");
+      const url = await d.api
+        .setCITracking("acme", { tracking: true, provider: "github_actions", repository: "https://github.com/acme/web", ignored_workflows: [] })
+        .catch((e) => e);
+      expect(url).toMatchObject({ status: 422, code: "invalid", field: "repository" });
+      const path = await d.api
+        .setCITracking("acme", { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [".github/workflows/ci.yml"] })
+        .catch((e) => e);
+      expect(path).toMatchObject({ status: 422, code: "invalid", field: "ignored_workflows" });
+      const provider = await d.api
+        .setCITracking("acme", { tracking: false, provider: "circleci" as CIProvider, repository: "", ignored_workflows: [] })
+        .catch((e) => e);
+      expect(provider).toMatchObject({ status: 422, code: "invalid", field: "provider" });
+
+      // Off, the repository may be empty.
+      expect((await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [] })).ci).toEqual({
+        tracking: false,
+        provider: "github_actions",
+        repository: "",
+        ignored_workflows: [],
+        push_remote_url: "git@github.com:acme/web.git",
+      });
     });
 
     it("gets one Ticket in full, with its Needs Me reason", async () => {

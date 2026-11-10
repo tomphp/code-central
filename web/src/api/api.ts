@@ -7,6 +7,7 @@ import type {
   FindSpecsFilter,
   FindTicketsFilter,
   HeldSessionEvent,
+  CITrackingChange,
   Landing,
   LinkedRow,
   NeedsMeView,
@@ -102,6 +103,10 @@ export interface Api {
   // remote is trimmed; under Push it can't be empty, and without Push an
   // empty one is stored as origin.
   setLandingMethod(project: string, landing: Landing): Promise<ProjectView>;
+  // setCITracking sets the Project's CI settings. The repository is
+  // trimmed, and needed as owner/name to turn CI Tracking on; Ignored
+  // workflows are trimmed, with blanks and repeats dropped.
+  setCITracking(project: string, ci: CITrackingChange): Promise<ProjectView>;
   // unlink detaches a Spec's or Ticket's Link (ticket 42). It isn't a
   // TicketAction: its target, a Spec or a Ticket, goes in the body.
   unlink(project: string, target: string): Promise<LinkedRow>;

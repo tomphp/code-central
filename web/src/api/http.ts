@@ -74,6 +74,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     unarchiveProject: (project) => call("POST", `${p(project)}/unarchive_project`, {}),
     renameProject: (project, display_name) => call("POST", `${p(project)}/rename_project`, { display_name }),
     setLandingMethod: (project, landing) => call("POST", `${p(project)}/set_landing_method`, landing),
+    setCITracking: (project, ci) => call("POST", `${p(project)}/set_ci_tracking`, { ...ci, full: true }),
     unlink: (project, target) => call("POST", `${p(project)}/unlink`, { target }),
     setTags: (project, target, tags) => call("POST", `${p(project)}/set_tags`, { target, tags }),
     removeTags: (project, target, keys) => call("POST", `${p(project)}/remove_tags`, { target, keys }),

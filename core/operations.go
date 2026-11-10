@@ -10,6 +10,9 @@ const (
 	HumanOnly
 	// IntegrationOnly operations are an Integration's, over HTTP only.
 	IntegrationOnly
+	// FactoryOnly operations are the Factory's own reports, over HTTP
+	// only: agents in a session get no MCP tool or CLI command for them.
+	FactoryOnly
 )
 
 // Op describes one named operation.
@@ -116,6 +119,10 @@ var Operations = []Op{
 	// HTTP only: no MCP tool and no CLI command.
 	{Name: "get_options", Audience: HumanOnly},
 	{Name: "set_options", Audience: HumanOnly, Write: true},
+
+	// CI Tracking (Spec code-central-247).
+	{Name: "set_ci_tracking", Audience: HumanOnly, Write: true},
+	{Name: "report_push_remote", Audience: FactoryOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

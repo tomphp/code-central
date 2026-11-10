@@ -44,6 +44,7 @@ var migrations = []MigrationStep{
 	{From: 4, Name: "add the Accepted State, a finish's branch and commit, and a land's commit on its Move"},
 	{From: 5, Name: "add the global Options file"},
 	{From: 6, Name: "add a Project's Landing Method"},
+	{From: 7, Name: "add a Project's CI settings"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

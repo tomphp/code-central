@@ -69,6 +69,8 @@ import {
   type HeldSessionEvent,
   type LatestEvent,
   type LinkedRow,
+  type CISettings,
+  type CITrackingChange,
   type Landing,
   MAP_LABEL,
   type MapView,
@@ -242,6 +244,7 @@ interface FakeProject {
   archived: boolean;
   archived_at?: string;
   landing: Landing;
+  ci: CISettings;
   next: number;
 }
 
@@ -336,6 +339,7 @@ export class FakeApi implements Api {
       archived: opts.archived ?? false,
       ...(opts.archived ? { archived_at: this.now.toISOString() } : {}),
       landing: { method: "merge", push: false, remote: "origin" },
+      ci: { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [], push_remote_url: "" },
       next: 1,
     });
     this.emit({ type: "project.changed", project: key });
@@ -818,6 +822,45 @@ export class FakeApi implements Api {
       this.emit({ type: "project.changed", project: key });
     }
     return this.projectView(p);
+  }
+
+  async setCITracking(key: string, change: CITrackingChange): Promise<ProjectView> {
+    this.calls.push("setCITracking");
+    const provider = change.provider || "github_actions";
+    if (provider !== "github_actions") {
+      throw new ApiError(422, "invalid", `CI Provider "${provider}" isn't "github_actions", the only one`, "provider");
+    }
+    const repository = change.repository.trim();
+    if (!repository && change.tracking) {
+      throw new ApiError(422, "invalid", "CI Tracking needs the GitHub repository to watch, as owner/name", "repository");
+    }
+    if (repository && !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(repository)) {
+      throw new ApiError(422, "invalid", `"${repository}" isn't a GitHub repository as owner/name, such as acme/web`, "repository");
+    }
+    const ignored: string[] = [];
+    for (const raw of change.ignored_workflows) {
+      const w = raw.trim();
+      if (!w || ignored.includes(w)) continue;
+      if (!/^[^/\\\s]+\.ya?ml$/.test(w)) {
+        throw new ApiError(422, "invalid", `"${w}" isn't a workflow file name, such as ci.yml`, "ignored_workflows");
+      }
+      ignored.push(w);
+    }
+    const p = this.writable(key);
+    this.setCI(p, { ...p.ci, tracking: change.tracking, provider, repository, ignored_workflows: ignored });
+    return this.projectView(p);
+  }
+
+  // reportPushRemote is the Factory's report of its Push remote's URL,
+  // made when it starts.
+  async reportPushRemote(key: string, url: string): Promise<void> {
+    this.setCI(this.writable(key), { ...this.project(key).ci, push_remote_url: url.trim() });
+  }
+
+  private setCI(p: FakeProject, ci: CISettings) {
+    if (JSON.stringify(p.ci) === JSON.stringify(ci)) return;
+    p.ci = ci;
+    this.emit({ type: "project.changed", project: p.key });
   }
 
   // unlink detaches a seeded Ticket's Link, taking it out of Needs Me if it

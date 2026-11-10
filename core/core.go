@@ -63,6 +63,8 @@ type ProjectView struct {
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 	// Landing is how the Project's accepted work lands, always filled in.
 	Landing LandingView `json:"landing"`
+	// CI is the Project's CI settings, always filled in.
+	CI CIView `json:"ci"`
 }
 
 // LandingView is a Project's Landing Method with its Push option.
@@ -478,7 +480,7 @@ func finished(s store.State) bool { return s == store.Done || s == store.Cancell
 
 func projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
-		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}}
+		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}, CI: ciView(p.CI)}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at

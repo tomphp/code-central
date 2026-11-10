@@ -219,6 +219,13 @@ func (s *FileStore) loadProject(key string) error {
 			return &LoadError{File: rel, Field: "landing.method", Msg: fmt.Sprintf("unknown landing method %q (%s)", l.Method, strings.Join(landingMethodNames(), " or "))}
 		}
 	}
+	if c := pf.CI; c != nil {
+		p.CI = CI{Tracking: c.Tracking, Provider: CIProvider(c.Provider), Repository: c.Repository,
+			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL}
+		if !p.CI.Provider.Valid() {
+			return &LoadError{File: rel, Field: "ci.provider", Msg: fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(ciProviderNames(), " or "))}
+		}
+	}
 	s.setProject(p)
 
 	for _, kind := range []string{"specs", "tickets"} {

@@ -105,6 +105,8 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       }
       return t.id;
     },
+    // code-central-251
+    reportPushRemote: async (key, url) => fake.reportPushRemote(key, url),
     // ticket 109
     postSessionEvents: async (session_id, events) => fake.postSessionEvents(session_id, events),
     // Spec code-central-201: the service records an agent's call itself;

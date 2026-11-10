@@ -43,6 +43,26 @@ export interface Landing {
   remote: string;
 }
 
+// A CI Provider: the CI system CI Tracking watches. GitHub Actions is the
+// only one.
+export type CIProvider = "github_actions";
+
+// The CI settings the human sets with setCITracking.
+export interface CITrackingChange {
+  tracking: boolean;
+  provider: CIProvider;
+  // repository is the GitHub repository as owner/name; CI Tracking on needs one.
+  repository: string;
+  // ignored_workflows are workflow file names, such as ci.yml.
+  ignored_workflows: string[];
+}
+
+// A Project's CI settings, with the URL of the Push remote the Factory
+// last reported ("" until it has).
+export interface CISettings extends CITrackingChange {
+  push_remote_url: string;
+}
+
 export interface ProjectView {
   key: string;
   display_name: string;
@@ -53,6 +73,8 @@ export interface ProjectView {
   archived_at?: string;
   // landing is always filled in: merge, push off, origin by default.
   landing: Landing;
+  // ci is always filled in: CI Tracking off by default.
+  ci: CISettings;
 }
 
 export interface ProjectRow extends ProjectView {

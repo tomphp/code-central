@@ -324,6 +324,7 @@ func start(e Env, o options) (*factory, error) {
 		if why := f.missingRemote(p.Landing); why != "" {
 			return nil, errors.New(why)
 		}
+		f.reportPushRemote(p.Landing.Remote)
 	}
 	statePath, err := e.home().State("code-central-factory", project+".json")
 	if err != nil {

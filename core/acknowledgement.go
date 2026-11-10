@@ -59,6 +59,17 @@ func acknowledgeCreate[V any](empty, after V, full bool) (Written[V], error) {
 	return written(empty, after, full, "id", "created", "updated")
 }
 
+// acknowledgeProject is a Project write's result, as acknowledge. A
+// Project has no id or updated, so its Acknowledgement gives its key as
+// the id and the write's time as updated.
+func acknowledgeProject(before, after ProjectView, full bool, at time.Time) (Written[ProjectView], error) {
+	w, err := written(before, after, full)
+	if err == nil && w.Record == nil {
+		w.ID, w.Updated = after.Key, at
+	}
+	return w, err
+}
+
 // written derives the Acknowledgement from the views' JSON, listing in
 // changed every top-level field that differs except those unlisted. It
 // reads the record's id and updated, the number of the last of its edits
@@ -82,11 +93,16 @@ func written[V any](before, after V, full bool, unlisted ...string) (Written[V],
 			ack.Changed = append(ack.Changed, name)
 		}
 	}
-	if err := json.Unmarshal(a["id"], &ack.ID); err != nil {
-		return Written[V]{}, err
+	// A Project's view has neither; acknowledgeProject fills them in.
+	if id, ok := a["id"]; ok {
+		if err := json.Unmarshal(id, &ack.ID); err != nil {
+			return Written[V]{}, err
+		}
 	}
-	if err := json.Unmarshal(a["updated"], &ack.Updated); err != nil {
-		return Written[V]{}, err
+	if updated, ok := a["updated"]; ok {
+		if err := json.Unmarshal(updated, &ack.Updated); err != nil {
+			return Written[V]{}, err
+		}
 	}
 	if state, ok := a["state"]; ok {
 		if err := json.Unmarshal(state, &ack.State); err != nil {
