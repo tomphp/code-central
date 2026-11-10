@@ -51,7 +51,7 @@
 .dashboard-blocks { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 24px; }
 .dashboard-block { --sc: var(--s-ready); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 16px; border-radius: 16px; background: var(--sc); color: #fff; min-height: 30vh; }
 .dashboard-block.state-in-progress { --sc: var(--s-in-progress); }
-.dashboard-block.ci-running { --sc: var(--ci-running); padding: 0; }
+.dashboard-block.ci-running { --sc: var(--ci-running); color: #fff; padding: 0; }
 .dashboard-block-link { flex: 1; align-self: stretch; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 28px 16px; border-radius: inherit; color: inherit; text-decoration: none; }
 .dashboard-count { font-size: clamp(72px, 14vw, 160px); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .dashboard-state { margin-top: 8px; font-size: 24px; font-weight: 600; }
