@@ -37,18 +37,18 @@ func TestOptionsRoutes(t *testing.T) {
 
 func TestGetAndSetOptions(t *testing.T) {
 	h := asHuman(newHandler(t))
-	if rec := do(h, "GET", "/api/options", ""); rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"activity_dashboard"}` {
+	if rec := do(h, "GET", "/api/options", ""); rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"activity_dashboard","gh_path":""}` {
 		t.Fatalf("get_options: %d %s", rec.Code, rec.Body)
 	}
 	rec := do(h, "POST", "/api/set_options", `{"focus_clear":"all_clear"}`)
-	if rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"all_clear"}` {
+	if rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"all_clear","gh_path":""}` {
 		t.Fatalf("set_options: %d %s", rec.Code, rec.Body)
 	}
-	if rec := do(h, "GET", "/api/options", ""); strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"all_clear"}` {
+	if rec := do(h, "GET", "/api/options", ""); strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"all_clear","gh_path":""}` {
 		t.Fatalf("get_options after set: %s", rec.Body)
 	}
 	// An empty change answers the Options as they stand.
-	if rec := do(h, "POST", "/api/set_options", `{}`); rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"all_clear"}` {
+	if rec := do(h, "POST", "/api/set_options", `{}`); rec.Code != 200 || strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"all_clear","gh_path":""}` {
 		t.Fatalf("empty set_options: %d %s", rec.Code, rec.Body)
 	}
 }
@@ -59,7 +59,7 @@ func TestSetOptionsIsRefusedForAnAgent(t *testing.T) {
 	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), `"code":"action_not_allowed"`) {
 		t.Fatalf("agent set_options: %d %s", rec.Code, rec.Body)
 	}
-	if rec := do(h, "GET", "/api/options", ""); strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"activity_dashboard"}` {
+	if rec := do(h, "GET", "/api/options", ""); strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"activity_dashboard","gh_path":""}` {
 		t.Fatalf("the agent can read the Options, unchanged: %d %s", rec.Code, rec.Body)
 	}
 }
@@ -83,7 +83,7 @@ func TestSetOptionsRefusesBadInput(t *testing.T) {
 			}
 		})
 	}
-	if rec := do(h, "GET", "/api/options", ""); strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"activity_dashboard"}` {
+	if rec := do(h, "GET", "/api/options", ""); strings.TrimSpace(rec.Body.String()) != `{"focus_clear":"activity_dashboard","gh_path":""}` {
 		t.Fatalf("a refused set_options changed the Options: %s", rec.Body)
 	}
 }

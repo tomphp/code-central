@@ -110,7 +110,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
 function toError(status: number, text: string): ApiError {
   try {
     const e = JSON.parse(text);
-    if (typeof e?.code === "string") return new ApiError(status, e.code, e.message ?? "", e.field, e.allowed_actions);
+    if (typeof e?.code === "string") return new ApiError(status, e.code, e.message ?? "", e.field, e.allowed_actions, e.fix);
   } catch {
     // Not the JSON error shape: the Guard's 403 or a proxy's error page.
   }

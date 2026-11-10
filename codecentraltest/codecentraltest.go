@@ -49,6 +49,7 @@ type options struct {
 	usageDir string
 	location *time.Location
 	start    time.Time
+	ciCheck  core.CICheck
 }
 
 // WithVersion makes the server report version in its version header.
@@ -71,6 +72,10 @@ func WithLocation(loc *time.Location) Option { return func(o *options) { o.locat
 // can start on a later day, as a restarted service would.
 func WithStart(t time.Time) Option { return func(o *options) { o.start = t } }
 
+// WithCICheck makes check the server's CI Watcher check mode, run when
+// CI Tracking is turned on; without it, nothing is checked.
+func WithCICheck(check core.CICheck) Option { return func(o *options) { o.ciCheck = check } }
+
 // NewServer starts a test service, stopped when t ends.
 func NewServer(t testing.TB, opts ...Option) *Server {
 	t.Helper()
@@ -85,6 +90,7 @@ func NewServer(t testing.TB, opts ...Option) *Server {
 	clk := clock.NewFake(o.start)
 	c := core.New(s, clk, &ids.Sequence{})
 	c.SetUsage(usage.New(o.usageDir, clk, o.location, o.log))
+	c.SetCICheck(o.ciCheck)
 	hs := httptest.NewServer(frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), o.log), o.version))
 	t.Cleanup(hs.Close)
 	return &Server{URL: hs.URL, Client: client.New(hs.URL), Clock: clk, Core: c, Store: s, UsageDir: o.usageDir}

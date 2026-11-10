@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/ciwatcher"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
@@ -126,6 +127,12 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 			m.From, m.To, m.Backup)
 	}
 
+	// The CI Watcher runs as the service's own executable.
+	self, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("cannot find the service's own executable, which runs the CI Watcher: %w", err)
+	}
+
 	addrs := e.ServeAddrs
 	if l := e.Getenv("CODE_CENTRAL_LISTEN"); addrs == nil && l != "" {
 		// For the end-to-end tier, which must never bind the real port.
@@ -154,6 +161,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	clk := clock.System{}
 	c := core.New(st, clk, ids.Random{})
 	c.SetUsage(usage.New(dir, clk, time.Local, e.Stderr))
+	c.SetCICheck(ciwatcher.Checker(self, os.Environ()))
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	go c.WatchTimedReasons(ctx, ticker.C, func(project, ticketID string) {

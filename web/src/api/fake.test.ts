@@ -107,6 +107,11 @@ apiContract("FakeApi", async (): Promise<Driver> => {
     },
     // code-central-251
     reportPushRemote: async (key, url) => fake.reportPushRemote(key, url),
+    logOutOfGH: async () =>
+      fake.seedCICheck({
+        reason: "gh isn't logged in to GitHub: You are not logged into any GitHub hosts. To log in, run: gh auth login",
+        fix: "Run `gh auth login` as the user the service runs as, then turn CI Tracking on again.",
+      }),
     // ticket 109
     postSessionEvents: async (session_id, events) => fake.postSessionEvents(session_id, events),
     // Spec code-central-201: the service records an agent's call itself;

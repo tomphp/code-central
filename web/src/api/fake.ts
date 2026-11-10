@@ -32,6 +32,9 @@
 //
 // The Options start at their defaults; setOptions validates as the
 // service does, and sends options.changed only when something changed.
+// setCITracking runs the CI check when it turns CI Tracking on, or
+// changes what it watches while on, as the service does: it passes
+// unless seedCICheck has given it a refusal.
 //
 // postSessionEvents stands in for a Factory's POST /api/session-events: the
 // events go to the newest Claim with that session ID. Each Claim view
@@ -327,6 +330,8 @@ export class FakeApi implements Api {
   private transcripts = new Map<string, FakeTranscript>();
   private followers = new Set<FakeFollower>();
   private opts: Options = { ...DEFAULT_OPTIONS };
+  // ciCheck is the refusal the CI check answers with; none passes.
+  private ciCheck?: { reason: string; fix: string; field?: "tracking" | "repository" };
   private usageCalls: FakeUsageCall[] = [];
   private usageResponses: FakeUsageRecord[] = [];
 
@@ -430,6 +435,14 @@ export class FakeApi implements Api {
         };
       }),
     }));
+  }
+
+  // seedCICheck sets how the CI Watcher's check answers when CI Tracking
+  // is turned on: refused with this reason and fix, on field (tracking
+  // unless given; the service gives repository when gh can't read it),
+  // or, with none, passed.
+  seedCICheck(refused?: { reason: string; fix: string; field?: "tracking" | "repository" }) {
+    this.ciCheck = refused;
   }
 
   // seedOptions sets the Options as a store would hold them, recording no
@@ -849,6 +862,10 @@ export class FakeApi implements Api {
       ignored.push(w);
     }
     const p = this.writable(key);
+    const checks = change.tracking && !(p.ci.tracking && p.ci.provider === provider && p.ci.repository === repository);
+    if (checks && this.ciCheck) {
+      throw new ApiError(422, "invalid", this.ciCheck.reason, this.ciCheck.field ?? "tracking", undefined, this.ciCheck.fix);
+    }
     this.setCI(p, { ...p.ci, tracking: change.tracking, provider, repository, ignored_workflows: ignored });
     return this.projectView(p);
   }
@@ -953,6 +970,13 @@ export class FakeApi implements Api {
     const { focus_clear } = change;
     if (focus_clear !== undefined && !FOCUS_CLEARS.includes(focus_clear)) {
       throw new ApiError(422, "invalid", `focus_clear "${focus_clear}" is not an Option's value; allowed: ${FOCUS_CLEARS.join(", ")}`, "focus_clear");
+    }
+    if (change.gh_path !== undefined) {
+      const gh_path = change.gh_path.trim();
+      if (gh_path && !/^(\/|[A-Za-z]:[\\/]|\\\\)/.test(gh_path)) {
+        throw new ApiError(422, "invalid", `gh path "${gh_path}" isn't an absolute path, such as /opt/homebrew/bin/gh`, "gh_path");
+      }
+      change = { ...change, gh_path };
     }
     const next = { ...this.opts, ...change };
     if (Object.keys(DEFAULT_OPTIONS).some((k) => next[k as keyof Options] !== this.opts[k as keyof Options])) {

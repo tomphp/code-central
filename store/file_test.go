@@ -300,6 +300,23 @@ func TestOptionsAreOneFileAtTheStoreRoot(t *testing.T) {
 	}
 }
 
+func TestAnOptionsFileKeepsTheGHPathOnlyWhenSet(t *testing.T) {
+	dir := t.TempDir()
+	s := openFile(t, dir)
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, GHPath: "/opt/tools/gh"})
+	})
+	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: all_clear\ngh_path: /opt/tools/gh\n" {
+		t.Fatalf("options.yaml = %q", got)
+	}
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear})
+	})
+	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: all_clear\n" {
+		t.Fatalf("options.yaml = %q, want no gh_path once it is cleared", got)
+	}
+}
+
 func TestAnOptionsFileWithNoKeysReadsAsTheDefaults(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "store.yaml"), fmt.Sprintf("format: %d\n", store.Format))

@@ -515,6 +515,9 @@ export class ApiError extends Error {
     message: string,
     readonly field?: string,
     readonly allowed_actions?: string[],
+    // fix says how to put right what was refused, when the message alone
+    // doesn't: a failed CI check's fix, for one.
+    readonly fix?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -539,10 +542,13 @@ export type FocusClear = (typeof FOCUS_CLEARS)[number];
 // (GET /api/options), each at its default until the human changes it.
 export interface Options {
   focus_clear: FocusClear;
+  // gh_path is where gh, the GitHub CLI, is: an absolute path, or "" to
+  // find it on the service's PATH, then in the usual install places.
+  gh_path: string;
 }
 
 // DEFAULT_OPTIONS are the Options a fresh store reads.
-export const DEFAULT_OPTIONS: Options = { focus_clear: FOCUS_CLEARS[0] };
+export const DEFAULT_OPTIONS: Options = { focus_clear: FOCUS_CLEARS[0], gh_path: "" };
 
 
 // ---- Usage (Spec code-central-201) ----

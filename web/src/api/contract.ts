@@ -54,6 +54,9 @@ export interface Driver {
   // reportPushRemote reports the Push remote's URL as a Factory does when
   // it starts (code-central-251).
   reportPushRemote(key: string, url: string): Promise<void>;
+  // logOutOfGH makes the gh the service finds logged out, so the CI check
+  // refuses turning CI Tracking on (code-central-252).
+  logOutOfGH(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -222,6 +225,19 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(method).toMatchObject({ status: 422, code: "invalid", field: "method" });
     });
 
+    it("refuses turning CI Tracking on when the CI check fails, with its reason and fix", async () => {
+      await d.createProject("acme", "Acme");
+      await d.logOutOfGH();
+      const refused = await d.api
+        .setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] })
+        .catch((e) => e);
+      expect(refused).toBeInstanceOf(ApiError);
+      expect(refused).toMatchObject({ status: 422, code: "invalid", field: "tracking" });
+      expect(refused.message).toContain("isn't logged in");
+      expect(refused.fix).toContain("gh auth login");
+      expect((await d.api.listProjects())[0].ci.tracking).toBe(false);
+    });
+
     it("adds, edits and removes CI Rules, each with its own Spec", async () => {
       await d.createProject("acme", "Acme");
       const added = await d.api.addCIRule("acme", { workflow: " ci.yml ", branch: " main ", state: "Ready" });
@@ -287,6 +303,10 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         .setCITracking("acme", { tracking: false, provider: "circleci" as CIProvider, repository: "", ignored_workflows: [] })
         .catch((e) => e);
       expect(provider).toMatchObject({ status: 422, code: "invalid", field: "provider" });
+
+      // Turning off runs no check, so a logged-out gh doesn't stop it.
+      await d.logOutOfGH();
+      expect((await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [] })).ci.tracking).toBe(false);
 
       // Off, the repository may be empty.
       expect((await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [] })).ci).toEqual({
@@ -1161,11 +1181,25 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     // ---- Options (Spec code-central-160) ----
 
     it("reads the default Options, and sets focus_clear and reads it back", async () => {
-      expect(await d.api.options()).toEqual({ focus_clear: "activity_dashboard" });
+      expect(await d.api.options()).toEqual({ focus_clear: "activity_dashboard", gh_path: "" });
 
-      expect(await d.api.setOptions({ focus_clear: "all_clear" })).toEqual({ focus_clear: "all_clear" });
-      expect(await d.api.options()).toEqual({ focus_clear: "all_clear" });
-      expect(await d.api.setOptions({})).toEqual({ focus_clear: "all_clear" });
+      expect(await d.api.setOptions({ focus_clear: "all_clear" })).toEqual({ focus_clear: "all_clear", gh_path: "" });
+      expect(await d.api.options()).toEqual({ focus_clear: "all_clear", gh_path: "" });
+      expect(await d.api.setOptions({})).toEqual({ focus_clear: "all_clear", gh_path: "" });
+    });
+
+    it("sets the gh path Option to an absolute path, and clears it", async () => {
+      // Absolute where the service runs: a Windows path isn't on Unix.
+      const gh = process.platform === "win32" ? "C:\\Tools\\gh.exe" : "/opt/tools/gh";
+      expect(await d.api.setOptions({ gh_path: ` ${gh} ` })).toEqual({ focus_clear: "activity_dashboard", gh_path: gh });
+      expect((await d.api.options()).gh_path).toBe(gh);
+
+      const relative = await d.api.setOptions({ gh_path: "bin/gh" }).catch((e) => e);
+      expect(relative).toMatchObject({ status: 422, code: "invalid", field: "gh_path" });
+      expect(relative.message).toContain("bin/gh");
+      expect((await d.api.options()).gh_path).toBe(gh);
+
+      expect(await d.api.setOptions({ gh_path: "" })).toEqual({ focus_clear: "activity_dashboard", gh_path: "" });
     });
 
     it("refuses an unknown Option and a bad value, changing nothing", async () => {
@@ -1178,7 +1212,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(bad).toMatchObject({ status: 422, code: "invalid", field: "focus_clear" });
       expect(bad.message).toContain("allowed: activity_dashboard, all_clear");
 
-      expect(await d.api.options()).toEqual({ focus_clear: "activity_dashboard" });
+      expect(await d.api.options()).toEqual({ focus_clear: "activity_dashboard", gh_path: "" });
     });
 
     it("sends options.changed over the live feed when the Options change", async () => {

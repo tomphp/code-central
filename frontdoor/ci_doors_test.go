@@ -2,11 +2,15 @@ package frontdoor_test
 
 import (
 	"context"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/httpapi"
@@ -207,5 +211,97 @@ func TestTheSamePushRemoteURLWritesNothing(t *testing.T) {
 	case got := <-notices:
 		t.Fatalf("the same URL sent %+v", got)
 	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+// ciChecks is a fake CI Watcher check mode: it records each check and
+// answers with result.
+type ciChecks struct {
+	mu     sync.Mutex
+	calls  []core.CICheckInput
+	result core.CICheckResult
+}
+
+func (c *ciChecks) check(_ context.Context, in core.CICheckInput) core.CICheckResult {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls = append(c.calls, in)
+	return c.result
+}
+
+func (c *ciChecks) ran() []core.CICheckInput {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.calls)
+}
+
+// newCICheckServer is newServer with checks as its CI Watcher's check
+// mode.
+func newCICheckServer(t *testing.T, checks *ciChecks) *codecentraltest.Server {
+	t.Helper()
+	return newServerWith(t, []codecentraltest.Option{codecentraltest.WithCICheck(checks.check)})
+}
+
+func TestTurningCITrackingOnRunsTheCheckWithTheGHPathOption(t *testing.T) {
+	checks := &ciChecks{}
+	srv := newCICheckServer(t, checks)
+	gh := filepath.Join(t.TempDir(), "gh")
+	httpOK(t, srv, httpCall{"POST", "/api/set_options", `{"gh_path":` + strconv.Quote(gh) + `}`})
+	ciSettings(t, httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web","full":true}`)), true, "acme/web", nil, "")
+	want := []core.CICheckInput{{Provider: "github_actions", Repository: "acme/web", GHPath: gh}}
+	if got := checks.ran(); !slices.Equal(got, want) {
+		t.Fatalf("checks = %+v, want %+v", got, want)
+	}
+}
+
+func TestAFailedCICheckRefusesTurningCITrackingOnWithItsFix(t *testing.T) {
+	for _, problem := range []core.CIProblem{core.CIGHMissing, core.CILoggedOut, core.CIRepositoryUnreadable, core.CICheckFailed} {
+		t.Run(string(problem), func(t *testing.T) {
+			checks := &ciChecks{result: core.CICheckResult{Problem: problem, Reason: "gh says no", Fix: "Run gh auth login."}}
+			srv := newCICheckServer(t, checks)
+			e := httpRejected(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web"}`), core.Invalid)
+			field := "tracking"
+			if problem == core.CIRepositoryUnreadable {
+				field = "repository"
+			}
+			if e.Field != field || e.Message != "gh says no" || e.Fix != "Run gh auth login." {
+				t.Fatalf("refusal = %+v, want the check's reason and fix on %s", e, field)
+			}
+			ciSettings(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), false, "", nil, "")
+		})
+	}
+}
+
+func TestOnlyTurningCITrackingOnOrChangingItsRepositoryRunsTheCheck(t *testing.T) {
+	checks := &ciChecks{}
+	srv := newCICheckServer(t, checks)
+	httpOK(t, srv, setCITracking(`{"tracking":false,"repository":"acme/web"}`))
+	if n := len(checks.ran()); n != 0 {
+		t.Fatalf("leaving CI Tracking off ran %d checks", n)
+	}
+	httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web"}`))
+	httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web","ignored_workflows":["nightly.yml"]}`))
+	if n := len(checks.ran()); n != 1 {
+		t.Fatalf("turning on, then changing only Ignored workflows, ran %d checks, want 1", n)
+	}
+	httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/site"}`))
+	if got := checks.ran(); len(got) != 2 || got[1].Repository != "acme/site" {
+		t.Fatalf("checks = %+v, want a second for the new repository", got)
+	}
+
+	// Turning off runs no check, even when the check would fail.
+	checks.result = core.CICheckResult{Problem: core.CILoggedOut, Reason: "logged out", Fix: "Run gh auth login."}
+	ciSettings(t, httpOK(t, srv, setCITracking(`{"tracking":false,"repository":"acme/site","full":true}`)), false, "acme/site", nil, "")
+	if n := len(checks.ran()); n != 2 {
+		t.Fatalf("turning off ran a check: %d checks", n)
+	}
+}
+
+func TestAnAgentsSetCITrackingRunsNoCheck(t *testing.T) {
+	checks := &ciChecks{}
+	srv := newCICheckServer(t, checks)
+	httpDoAs(t, srv, core.Agent, setCITracking(`{"tracking":true,"repository":"acme/web"}`))
+	if n := len(checks.ran()); n != 0 {
+		t.Fatalf("an agent's refused set_ci_tracking ran %d checks", n)
 	}
 }

@@ -59,9 +59,12 @@ build: web hooks
 # binaries, real store in a temporary folder, never port 7733): the Go
 # end-to-end tests and the real half of the UI's API contract suite. The
 # binaries' paths reach both through make's environment, not the shell.
+# The UI's service finds the fake gh, built here, on its PATH.
 e2e: export CODE_CENTRAL_BIN := $(CURDIR)/bin/code-central$(EXE)
 e2e: export CODE_CENTRAL_FACTORY_BIN := $(CURDIR)/bin/code-central-factory$(EXE)
+e2e: export CODE_CENTRAL_FAKE_GH_BIN := $(CURDIR)/bin/fake-gh$(EXE)
 e2e: build
+	go build -o bin/fake-gh$(EXE) ./internal/fakegh/gh
 	go test -tags e2e -count=1 ./e2e/
 	cd web && npm run test:e2e
 

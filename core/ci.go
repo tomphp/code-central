@@ -103,11 +103,87 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 			ci.IgnoredWorkflows = append(ci.IgnoredWorkflows, w)
 		}
 	}
+	if err := c.checkCI(ctx, key, ci); err != nil {
+		return Written[ProjectView]{}, err
+	}
 	return c.updateCI(key, in.Full, func(p *store.CI) error {
 		ci.PushRemoteURL, ci.Rules = p.PushRemoteURL, p.Rules
 		*p = ci
 		return nil
 	})
+}
+
+// CIProblem names why the CI Watcher can't watch a repository.
+type CIProblem string
+
+// The CI problems, each with its own fix.
+const (
+	// CIGHMissing is gh, the GitHub CLI, found nowhere Code Central looks.
+	CIGHMissing CIProblem = "gh_missing"
+	// CILoggedOut is gh with no login: gh auth status fails.
+	CILoggedOut CIProblem = "logged_out"
+	// CIRepositoryUnreadable is a repository gh's login can't read.
+	CIRepositoryUnreadable CIProblem = "repository_unreadable"
+	// CICheckFailed is a check that didn't run to an answer.
+	CICheckFailed CIProblem = "check_failed"
+)
+
+// CICheckInput is what the CI Watcher's check mode checks: that it can
+// watch the repository through the CI Provider, finding gh with the gh
+// path Option.
+type CICheckInput struct {
+	Provider   store.CIProvider `json:"provider"`
+	Repository string           `json:"repository"`
+	GHPath     string           `json:"gh_path,omitempty"`
+}
+
+// CICheckResult is the check mode's answer: no Problem when the CI
+// Watcher can watch the repository, else what is wrong and its fix.
+type CICheckResult struct {
+	Problem CIProblem `json:"problem,omitempty"`
+	Reason  string    `json:"reason,omitempty"`
+	Fix     string    `json:"fix,omitempty"`
+}
+
+// CICheck runs the CI Watcher once in its check mode. The service makes
+// no external calls itself (ADR 0002, ADR 0004), so the check runs in the
+// CI Watcher's process.
+type CICheck func(ctx context.Context, in CICheckInput) CICheckResult
+
+// SetCICheck makes c run check when CI Tracking is turned on. Call it
+// before serving; without it, nothing is checked.
+func (c *Core) SetCICheck(check CICheck) { c.ciCheck = check }
+
+// checkCI runs the CI check when ci turns CI Tracking on, or changes what
+// it watches while on, and refuses with the reason and fix when it fails:
+// on the repository when gh can't read it, else on tracking.
+// It runs outside the store's lock, as the check calls GitHub.
+func (c *Core) checkCI(ctx context.Context, key string, ci store.CI) error {
+	if !ci.Tracking || c.ciCheck == nil {
+		return nil
+	}
+	var was store.CI
+	var opts store.Options
+	err := c.store.View(func(r store.Reader) error {
+		if err := writable(r, key); err != nil {
+			return err
+		}
+		p, _ := r.Project(key)
+		was, opts = p.CI, r.Options()
+		return nil
+	})
+	if err != nil || (was.Tracking && was.Provider == ci.Provider && was.Repository == ci.Repository) {
+		return err
+	}
+	res := c.ciCheck(ctx, CICheckInput{Provider: ci.Provider, Repository: ci.Repository, GHPath: opts.GHPath})
+	if res.Problem == "" {
+		return nil
+	}
+	field := "tracking"
+	if res.Problem == CIRepositoryUnreadable {
+		field = "repository"
+	}
+	return &Error{Code: Invalid, Field: field, Message: res.Reason, Fix: res.Fix}
 }
 
 // ReportPushRemoteInput is the Factory's report_push_remote(url, full?).

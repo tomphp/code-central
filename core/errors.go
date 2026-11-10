@@ -23,6 +23,9 @@ type Error struct {
 	Message        string   `json:"message"`
 	AllowedActions []string `json:"allowed_actions,omitempty"`
 	Field          string   `json:"field,omitempty"`
+	// Fix says how the human puts right what was refused, when the
+	// message alone doesn't: a failed CI check's fix, for one.
+	Fix string `json:"fix,omitempty"`
 }
 
 func (e *Error) Error() string {

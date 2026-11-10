@@ -1,11 +1,12 @@
 // Helpers for the UI's end-to-end tests (`make e2e`, *.e2e.test.ts): a
 // real `code-central serve --store <tmpdir> --no-notify` from the built
 // binary in CODE_CENTRAL_BIN, on a free loopback port (never 7733), and
-// agent requests over its HTTP API.
+// agent requests over its HTTP API. The service finds the fake gh built
+// in CODE_CENTRAL_FAKE_GH_BIN first on its PATH, never the real one.
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 export function binary(): string {
   const bin = process.env.CODE_CENTRAL_BIN;
@@ -13,17 +14,46 @@ export function binary(): string {
   return bin;
 }
 
+function fakeGHBinary(): string {
+  const bin = process.env.CODE_CENTRAL_FAKE_GH_BIN;
+  if (!bin) throw new Error("CODE_CENTRAL_FAKE_GH_BIN must name the built fake gh (make e2e sets it)");
+  return bin;
+}
+
 export interface Service {
   url: string;
   // agent makes one POST as an agent, as an MCP tool call or the CLI would.
   agent(path: string, body: unknown): Promise<any>;
+  // logOutOfGH makes the fake gh answer gh auth status as a gh with no
+  // login does.
+  logOutOfGH(): Promise<void>;
   stop(): Promise<void>;
+}
+
+// fakeGH puts the fake gh, as gh, in a folder of its own under dir, and
+// returns that folder and the one it keeps its Script and calls in.
+async function fakeGH(dir: string): Promise<{ bin: string; data: string }> {
+  const bin = join(dir, "bin");
+  const data = join(dir, "data");
+  await mkdir(bin);
+  await mkdir(data);
+  await copyFile(fakeGHBinary(), join(bin, process.platform === "win32" ? "gh.exe" : "gh"));
+  return { bin, data };
 }
 
 export async function serve(): Promise<Service> {
   const store = await mkdtemp(join(tmpdir(), "cc-ui-e2e-"));
+  const ghDir = await mkdtemp(join(tmpdir(), "cc-ui-e2e-gh-"));
+  const gh = await fakeGH(ghDir);
+  // Windows names it Path; a second PATH beside it would be ambiguous.
+  const pathKey = Object.keys(process.env).find((k) => k.toUpperCase() === "PATH") ?? "PATH";
   const proc = spawn(binary(), ["serve", "--store", store, "--no-notify"], {
-    env: { ...process.env, CODE_CENTRAL_LISTEN: "127.0.0.1:0" },
+    env: {
+      ...process.env,
+      CODE_CENTRAL_LISTEN: "127.0.0.1:0",
+      [pathKey]: gh.bin + delimiter + (process.env[pathKey] ?? ""),
+      FAKE_GH_DIR: gh.data,
+    },
     stdio: ["ignore", "pipe", "inherit"],
   });
   const url = await new Promise<string>((resolve, reject) => {
@@ -47,11 +77,19 @@ export async function serve(): Promise<Service> {
       if (!res.ok) throw new Error(`${path}: ${JSON.stringify(v)}`);
       return v;
     },
+    logOutOfGH: () =>
+      writeFile(
+        join(gh.data, "answers.json"),
+        JSON.stringify([
+          { args: ["auth", "status"], exit: 1, stderr: "You are not logged into any GitHub hosts. To log in, run: gh auth login\n" },
+        ]),
+      ),
     stop: async () => {
       const exited = new Promise((r) => proc.on("exit", r));
       proc.kill("SIGTERM");
       await exited;
       await rm(store, { recursive: true, force: true });
+      await rm(ghDir, { recursive: true, force: true });
     },
   };
 }

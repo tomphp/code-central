@@ -46,6 +46,7 @@ var migrations = []MigrationStep{
 	{From: 6, Name: "add a Project's Landing Method"},
 	{From: 7, Name: "add a Project's CI settings"},
 	{From: 8, Name: "add a Project's CI Rules"},
+	{From: 9, Name: "add the gh path Option"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

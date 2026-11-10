@@ -1,8 +1,9 @@
-// The Options view: the human's global preferences, each saved to the
-// service the moment it's chosen. Every Option is one entry in OPTIONS, so
-// a later one is another entry there. Leaving returns to the view the
-// human came from, as the URL's from says.
-import { useEffect, useState } from "react";
+// The Options view: the human's global preferences. Every Option chosen
+// from a set is one entry in OPTIONS, saved the moment it's chosen, so a
+// later one is another entry there; gh path, a path typed in, is saved
+// with its own Save. Leaving returns to the view the human came from, as
+// the URL's from says.
+import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
 import type { ApiError, Options } from "../api/types";
 import { returnViewOf, type UiLocation } from "../url";
@@ -36,7 +37,7 @@ const FOCUS_CLEAR: OptionDefinition<"focus_clear"> = {
   ],
 };
 
-// OPTIONS is every Option the view offers, in the order shown.
+// OPTIONS is every Option chosen from a set, in the order shown.
 const OPTIONS = [FOCUS_CLEAR];
 
 export interface OptionsViewProps {
@@ -56,13 +57,18 @@ export function OptionsView({ api, options, loc, navigate }: OptionsViewProps) {
   const shown = saved ?? options.data;
   const back = returnViewOf(loc);
 
+  // save saves change, and reports whether the service took it.
   const save = (change: Partial<Options>) =>
     api.setOptions(change).then(
       (v) => {
         setSaved(v);
         setError(undefined);
+        return true;
       },
-      (e: ApiError) => setError(e),
+      (e: ApiError) => {
+        setError(e);
+        return false;
+      },
     );
 
   const shownError = error ?? (!shown ? options.error : undefined);
@@ -83,6 +89,7 @@ export function OptionsView({ api, options, loc, navigate }: OptionsViewProps) {
         {OPTIONS.map((o) => (
           <Option key={o.name} option={o} value={shown?.[o.name]} disabled={!shown} onChange={(v) => save({ [o.name]: v })} />
         ))}
+        <GHPathOption value={shown?.gh_path} disabled={!shown} invalid={error?.field === "gh_path"} onSave={(gh_path) => save({ gh_path })} />
       </div>
     </main>
   );
@@ -124,5 +131,60 @@ function Option<K extends keyof Options>({ option, value, disabled, onChange }: 
         ))}
       </div>
     </section>
+  );
+}
+
+interface GHPathOptionProps {
+  // value is the saved gh path; none until the Options are read.
+  value?: string;
+  disabled: boolean;
+  // invalid marks the field when the service refused the last save.
+  invalid: boolean;
+  onSave(ghPath: string): Promise<boolean>;
+}
+
+// GHPathOption is the gh path Option (code-central-252): where gh, the
+// GitHub CLI, is for CI Tracking, typed in and saved with Save.
+function GHPathOption({ value = "", disabled, invalid, onSave }: GHPathOptionProps) {
+  const [draft, setDraft] = useState(value);
+  const [saved, setSaved] = useState(false);
+  const id = useId();
+  useEffect(() => setDraft(value), [value]);
+  const changed = draft.trim() !== value;
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    onSave(draft).then(setSaved);
+  };
+  return (
+    <form onSubmit={save}>
+      <fieldset className="option" disabled={disabled} aria-labelledby={`${id}-label`}>
+        <h2 id={`${id}-label`}>gh path</h2>
+        <input
+          className="option-text"
+          value={draft}
+          placeholder="/opt/homebrew/bin/gh"
+          aria-labelledby={`${id}-label`}
+          aria-describedby={`${id}-hint`}
+          aria-invalid={invalid || undefined}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setSaved(false);
+          }}
+        />{" "}
+        <button type="submit" className="btn" disabled={!changed}>
+          Save
+        </button>
+        {saved && !changed && (
+          <span role="status" className="muted">
+            {" "}
+            Saved
+          </span>
+        )}
+        <p id={`${id}-hint`} className="option-hint muted">
+          Where <code>gh</code>, the GitHub CLI that CI Tracking uses, is: the program or its folder. Leave it empty to find gh on the
+          service&apos;s PATH, then in /opt/homebrew/bin, /usr/local/bin, /home/linuxbrew/.linuxbrew/bin or %ProgramFiles%\GitHub CLI.
+        </p>
+      </fieldset>
+    </form>
   );
 }

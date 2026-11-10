@@ -1,7 +1,8 @@
 // Options view tests: the real App against FakeApi, at ?view=options. They
 // check what the human sees and does: opening it from the Inbox's Admin
-// section, saving the Focus Mode Option, a refused or failed
-// save, returning to where they came from, and a change made elsewhere.
+// section, saving the Focus Mode Option and the gh path Option, a refused
+// or failed save, returning to where they came from, and a change made
+// elsewhere.
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -74,11 +75,11 @@ describe("the Focus Mode Option", () => {
 
     await userEvent.click(choice("All clear"));
     await waitFor(() => expect(choice("All clear")).toBeChecked());
-    expect(await fake.options()).toEqual({ focus_clear: "all_clear" });
+    expect(await fake.options()).toMatchObject({ focus_clear: "all_clear" });
     expect(within(options()).queryByRole("alert")).toBeNull();
 
     await userEvent.click(choice("Activity Dashboard"));
-    await waitFor(async () => expect(await fake.options()).toEqual({ focus_clear: "activity_dashboard" }));
+    await waitFor(async () => expect(await fake.options()).toMatchObject({ focus_clear: "activity_dashboard" }));
     expect(choice("Activity Dashboard")).toBeChecked();
   });
 
@@ -91,7 +92,7 @@ describe("the Focus Mode Option", () => {
     await userEvent.click(choice("All clear"));
     expect(await within(options()).findByRole("alert")).toHaveTextContent("focus_clear is not an Option's value");
     expect(choice("Activity Dashboard")).toBeChecked();
-    expect(await fake.options()).toEqual({ focus_clear: "activity_dashboard" });
+    expect(await fake.options()).toMatchObject({ focus_clear: "activity_dashboard" });
   });
 
   it("shows the error when the service can't be reached", async () => {
@@ -144,5 +145,49 @@ describe("the Focus Mode Option", () => {
     expect(await within(options()).findByRole("alert")).toHaveTextContent("Code Central isn't reachable");
     expect(choice("Activity Dashboard")).not.toBeChecked();
     expect(choice("All clear")).not.toBeChecked();
+  });
+});
+
+describe("the gh path Option", () => {
+  const ghPath = () => within(options()).getByRole("group", { name: "gh path" });
+  const field = () => within(ghPath()).getByRole("textbox", { name: "gh path" });
+
+  it("is empty by default, saves a path and clears it", async () => {
+    const fake = world();
+    renderApp(fake, "/?view=options");
+    await waitFor(() => expect(field()).toBeEnabled());
+    expect(field()).toHaveValue("");
+    expect(field()).toHaveAccessibleDescription(/service's PATH, then in \/opt\/homebrew\/bin/);
+    expect(within(ghPath()).getByRole("button", { name: "Save" })).toBeDisabled();
+
+    await userEvent.type(field(), "/opt/tools/gh");
+    await userEvent.click(within(ghPath()).getByRole("button", { name: "Save" }));
+    expect(await within(ghPath()).findByRole("status")).toHaveTextContent("Saved");
+    expect((await fake.options()).gh_path).toBe("/opt/tools/gh");
+
+    await userEvent.clear(field());
+    await userEvent.click(within(ghPath()).getByRole("button", { name: "Save" }));
+    await waitFor(async () => expect((await fake.options()).gh_path).toBe(""));
+    expect(field()).toHaveValue("");
+  });
+
+  it("shows the service's refusal on the field", async () => {
+    const fake = world();
+    renderApp(fake, "/?view=options");
+    await waitFor(() => expect(field()).toBeEnabled());
+
+    await userEvent.type(field(), "bin/gh");
+    await userEvent.click(within(ghPath()).getByRole("button", { name: "Save" }));
+    expect(await within(options()).findByRole("alert")).toHaveTextContent('gh path "bin/gh" isn\'t an absolute path');
+    expect(field()).toHaveAttribute("aria-invalid", "true");
+    expect((await fake.options()).gh_path).toBe("");
+  });
+
+  it("shows a path set elsewhere once options.changed arrives", async () => {
+    const fake = world();
+    renderApp(fake, "/?view=options");
+    await waitFor(() => expect(field()).toBeEnabled());
+    await act(() => fake.setOptions({ gh_path: "/usr/bin/gh" }));
+    await waitFor(() => expect(field()).toHaveValue("/usr/bin/gh"));
   });
 });
