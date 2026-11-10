@@ -14,10 +14,10 @@ import (
 // runCIRuns checks a Ticket's pushed commits and a Project's CI Runs,
 // which are written apart from its Tickets.
 func runCIRuns(t *testing.T, f Factory) {
-	t.Run("a ticket's pushed commits read back after they are written", func(t *testing.T) {
+	t.Run("a ticket's pushed commits read back after they are written, with the human's Land anyway", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)
-		want := []store.PushedCommit{{Commit: "abc123", Pushed: t0}, {Commit: "def456", Pushed: t0.Add(time.Hour)}}
+		want := []store.PushedCommit{{Commit: "abc123", Pushed: t0, LandAnyway: t0.Add(time.Minute)}, {Commit: "def456", Pushed: t0.Add(time.Hour)}}
 		put(t, s, func(w store.Writer) error {
 			return w.PutTicket("acme", store.Ticket{Number: 2, Title: "Pushed", State: store.Accepted, Spec: 1, Created: t0, Updated: t0, PushedCommits: want})
 		})

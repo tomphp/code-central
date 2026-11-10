@@ -93,6 +93,20 @@ func init() {
 	}
 }
 
+// CI failed's failure options (code-central-261): the human's.
+func init() {
+	Routes["land_anyway"] = "POST /api/p/{key}/tickets/{n}/land_anyway"
+
+	handlers["land_anyway"] = func(c *core.Core, r *http.Request) (any, error) {
+		var in core.TicketInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.LandAnyway(r.Context(), r.PathValue("key"), in)
+	}
+}
+
 // CIOverviewPath reads the CI view (code-central-258):
 // GET /api/ci?project=<key>. Leaving out project reads every active
 // Project with CI Tracking on. Like Usage it is not one of core's

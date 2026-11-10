@@ -437,6 +437,53 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(spec.tickets.find((r) => r.id === id)?.ci_result).toBe("passed");
     });
 
+    it("offers a CI failed Ticket Land anyway under Merge, and records the human's choice", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
+      await d.api.act("acme", id, "accept", {});
+      await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      await d.reportPushedCommit("acme", id, "abc123");
+
+      // While CI is running there is nothing to land anyway.
+      const running = await d.api.act("acme", id, "land_anyway", {}).catch((e) => e);
+      expect(running).toMatchObject({ status: 409, code: "action_not_allowed" });
+      expect(await d.api.getTicket("acme", id)).not.toHaveProperty("ci_failure_options");
+
+      const run = {
+        id: 1,
+        attempt: 1,
+        workflow: "ci.yml",
+        name: "CI",
+        branch: "main",
+        commit: "abc123",
+        status: "completed" as const,
+        conclusion: "failure" as const,
+        url: "https://github.com/acme/web/actions/runs/1",
+        jobs: [],
+        ticket: id,
+      };
+      await d.reportCIRuns("acme", [run]);
+      const failed = await d.api.getTicket("acme", id);
+      expect(failed).toMatchObject({ ci_result: "failed", ci_failure_options: ["land_anyway"] });
+      expect(failed).not.toHaveProperty("land_anyway");
+
+      // Under Branch the human's merge decides: no Land anyway.
+      await d.api.setLandingMethod("acme", { method: "branch", push: true, remote: "origin" });
+      expect((await d.api.getTicket("acme", id)).ci_failure_options).toEqual([]);
+      const branch = await d.api.act("acme", id, "land_anyway", {}).catch((e) => e);
+      expect(branch).toMatchObject({ status: 409, code: "action_not_allowed" });
+
+      await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
+      const ack = await d.api.act("acme", id, "land_anyway", {});
+      wantAcknowledgement(ack, id, "Accepted", ["land_anyway", "ci_failure_options"]);
+      const chosen = await d.api.getTicket("acme", id);
+      expect(chosen).toMatchObject({ ci_result: "failed", land_anyway: true });
+      expect(chosen).not.toHaveProperty("ci_failure_options");
+      expect(chosen.needs_me_reason).not.toBe("ci_failed");
+    });
+
     it("reads the CI view: each run's latest attempt, unfinished first, for one Project or All Projects (code-central-258)", async () => {
       await d.createProject("acme", "Acme");
       await d.createProject("quiet", "Quiet");

@@ -45,7 +45,8 @@ export function TicketPane(props: TicketPaneProps) {
 export type TicketDetailProps = TicketPaneProps;
 
 // TicketDetail is everything about a Ticket below its action panel: Spec,
-// Labels, description, Blockers, its CI section when it has CI Runs, Claim activity with each Claim's Live
+// Labels, description, Blockers, its CI section when it has CI Runs (in the
+// action panel instead while CI failed), Claim activity with each Claim's Live
 // section, move, and a collapsed history of moves, comments and edits
 // merged by time.
 export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketDetailProps) {
@@ -83,7 +84,9 @@ export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketD
           ))}
         </p>
       )}
-      <CISection ticket={t} />
+      {/* A CI failed Ticket's CI section is its action panel, with the
+          failure options, so it isn't shown here too. */}
+      {t.needs_me_reason !== "ci_failed" && <CISection ticket={t} api={api} project={project} />}
       {claims.length > 0 && (
         <ul aria-label="Claims" className="claims muted small">
           {claims.map((c) => (

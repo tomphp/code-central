@@ -120,12 +120,7 @@ describe("end-to-end: the human answers a live Round in Focus Mode", () => {
 
     // The human chooses All clear over the API: the open Focus Mode
     // switches to it live.
-    const res = await fetch(`${svc.url}/api/set_options`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Code-Central-Actor": "human" },
-      body: JSON.stringify({ focus_clear: "all_clear" }),
-    });
-    expect(res.ok).toBe(true);
+    await svc.human("/api/set_options", { focus_clear: "all_clear" });
     await focus.getByRole("region", { name: "All clear" }).waitFor();
     await focus.getByText("Nothing needs you.").waitFor();
     expect(await dashboard.count()).toBe(0);
