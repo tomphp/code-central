@@ -241,11 +241,12 @@ func (c *Core) requirementView(r store.Reader, key string, s store.Spec, tickets
 	slices.SortStableFunc(stages, func(a, b store.Ticket) int {
 		return slices.Index(Stages, StageOf(a.Labels)) - slices.Index(Stages, StageOf(b.Labels))
 	})
+	rule := c.blockRule(r, key)
 	// claimable is a Ticket a Factory could claim now; one waiting on the
 	// human doesn't count.
 	claimable := func(t store.Ticket) bool {
 		reason, _ := c.reasonOf(r, key, t)
-		return t.State == store.Ready && !blocked(r, key, t) && reason == ""
+		return t.State == store.Ready && !rule.blocked(t) && reason == ""
 	}
 	v := &RequirementView{Stages: []StageView{}}
 	if StageOf(stages[0].Labels) != "grilling" {
