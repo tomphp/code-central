@@ -651,7 +651,13 @@ export class FakeApi implements Api {
 
   async needsMe(): Promise<NeedsMeView> {
     this.calls.push("needsMe");
-    return structuredClone({ count: this.rows().length, groups: this.groups.filter((g) => g.tickets.length) });
+    // A row's CI result is its Ticket's now, as core works it out on read.
+    const withCIResult = (r: NeedsMeRow) => {
+      const ci_result = this.tickets.get(r.id)?.ci_result;
+      return ci_result ? { ...r, ci_result } : r;
+    };
+    const groups = this.groups.filter((g) => g.tickets.length).map((g) => ({ ...g, tickets: g.tickets.map(withCIResult) }));
+    return structuredClone({ count: this.rows().length, groups });
   }
 
   async findTickets(project: string, filter: FindTicketsFilter = {}): Promise<TicketRow[]> {
@@ -1189,6 +1195,7 @@ export class FakeApi implements Api {
       ...(t.link && { link: { ...t.link } }),
       ...(onMap(t) && { node_type: nodeTypeOf(t), blocked_by: [...t.blocked_by] }),
       ...this.liveLatest(t),
+      ...(t.ci_result && { ci_result: t.ci_result }),
     }));
   }
 

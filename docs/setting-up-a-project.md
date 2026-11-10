@@ -248,6 +248,8 @@ While CI Tracking and Push are both on, each push the Factory makes for a Ticket
 
 Runs of Ignored workflows are listed greyed and marked **ignored**, and never count towards the CI result. When a Ticket is pushed again, say after it is sent back and accepted again, the newer push gives the CI result, and the earlier push's runs are kept under **Earlier pushes**.
 
+A Ticket with a CI result also shows it as a badge, **CI running**, **CI passed** or **CI failed**, on its row in the Spec view, in Needs Me and in the Activity Dashboard. Above its Tickets, the Spec view sums their badges, such as **1 failed** and **3 passed**, so you can see a Spec's CI health at a glance.
+
 For now CI only shows: the Factory lands accepted work the same way with CI Tracking on or off.
 
 ### CI Rules

@@ -226,6 +226,9 @@ export interface NeedsMeRow {
   spec?: NeedsMeSpec;
   // prototype is set on a Ticket labelled prototype, for its badge.
   prototype?: boolean;
+  // ci_result is the Ticket's CI result, whatever the reason, for its
+  // badge; left out for a Ticket never pushed while CI Tracking was on.
+  ci_result?: CIResult;
 }
 
 // The Spec a Needs Me row's Map Ticket or Prototype is on; map is set
@@ -384,6 +387,9 @@ export interface TicketRow {
   // latest_event is the latest Session Event of the Ticket's live Claim;
   // left out when there is none.
   latest_event?: LatestEvent;
+  // ci_result is the Ticket's CI result, for its badge; left out for a
+  // Ticket never pushed while CI Tracking was on.
+  ci_result?: CIResult;
 }
 
 export interface FindTicketsFilter {
