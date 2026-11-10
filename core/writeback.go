@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/tomoram/code-central/store"
 )
@@ -30,7 +31,14 @@ const (
 	// LabelRequirement is on an issue To Requirement made a Requirement
 	// of, while the Requirement's Stages aren't all Done.
 	LabelRequirement = StatusLabelPrefix + "requirement"
-	// LabelWontFix is on an issue the human chose Won't fix for.
+	// LabelBuilding is on it once the Stages are all Done, until the
+	// Spec is Finished.
+	LabelBuilding = StatusLabelPrefix + "building"
+	// LabelDone is on it once the Spec is Finished with at least one
+	// implementation Ticket Done.
+	LabelDone = StatusLabelPrefix + "done"
+	// LabelWontFix is on an issue the human chose Won't fix for, or whose
+	// Requirement's Spec is Finished with no implementation Ticket Done.
 	LabelWontFix = StatusLabelPrefix + "wont-fix"
 )
 
@@ -42,6 +50,18 @@ const (
 	// CommentWontFix is the key of the comment with the human's Won't fix
 	// reason.
 	CommentWontFix = "wont-fix"
+	// CommentGrilling is the key of the comment with the grilling
+	// Stage's resolution.
+	CommentGrilling = "grilling"
+	// CommentSpec is the key of the comment with the Spec's body as the
+	// spec Stage left it.
+	CommentSpec = "spec"
+	// CommentLanded starts the key of the comment for each implementation
+	// Ticket Done, such as landed:acme-12.
+	CommentLanded = "landed:"
+	// CommentClosed is the key of the comment listing what landed, once
+	// the Spec is Finished.
+	CommentClosed = "closed"
 )
 
 // IssueClose is how an issue is closed.
@@ -49,6 +69,7 @@ type IssueClose string
 
 // The ways an issue is closed, as GitHub names them.
 const (
+	CloseCompleted  IssueClose = "completed"
 	CloseNotPlanned IssueClose = "not_planned"
 )
 
@@ -142,24 +163,119 @@ func (c *Core) ticketIssueWrites(key string, t store.Ticket) (w IssueWrites, ok 
 
 // specIssueWrites is what is due on the issue s, a Spec with an outbound
 // Link that isn't detached, is linked to; ok is false when nothing is.
-// The context comment is due when To Requirement was given context, and
-// the issue should carry code-central:requirement while the
-// Requirement's Stages aren't all Done.
+// The comments come due as the Requirement goes on: the context To
+// Requirement was given, the grilling resolution and the Spec's body as
+// their Stages are Done, each implementation Ticket as it is Done, and
+// what landed once the Spec is Finished. The label follows the work, and
+// the issue is closed once the Spec is Finished: as completed if
+// anything landed, as not planned if nothing did.
 func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w IssueWrites, ok bool) {
 	if !s.Link.Attached() || !s.Link.Outbound {
 		return IssueWrites{}, false
 	}
 	id := DisplayID(key, s.Number)
 	w = IssueWrites{Target: id, Link: *linkView(s.Link), Comments: []IssueComment{}}
-	if extra := requirementContext(r, key, s.Link); extra != "" && !slices.Contains(s.Link.Written, CommentContext) {
-		w.Comments = append(w.Comments, c.issueComment(id, requirementLink, CommentContext, extra))
+	due := func(k, text string) {
+		if strings.TrimSpace(text) != "" && !slices.Contains(s.Link.Written, k) {
+			w.Comments = append(w.Comments, c.issueComment(id, requirementLink, k, text))
+		}
 	}
-	if slices.ContainsFunc(specTickets(r, key, s.Number), func(t store.Ticket) bool {
-		return StageOf(t.Labels) != "" && t.State != store.Done
-	}) {
-		w.Label = LabelRequirement
+	due(CommentContext, requirementContext(r, key, s.Link))
+	tickets := specTickets(r, key, s.Number)
+	stages, stagesDone := map[string]store.Ticket{}, true
+	var landed []store.Ticket
+	for _, t := range tickets {
+		if stage := StageOf(t.Labels); stage != "" {
+			stages[stage] = t
+			stagesDone = stagesDone && t.State == store.Done
+		} else if t.State == store.Done {
+			landed = append(landed, t)
+		}
 	}
+	if g, done := stages["grilling"]; done && g.State == store.Done {
+		due(CommentGrilling, resolution(g))
+	}
+	if sp, done := stages["spec"]; done && sp.State == store.Done {
+		due(CommentSpec, bodyAt(s, doneMove(sp).Time))
+	}
+	slices.SortStableFunc(landed, func(a, b store.Ticket) int { return doneMove(a).Time.Compare(doneMove(b).Time) })
+	var list []string
+	for _, t := range landed {
+		line := landedLine(key, t)
+		due(CommentLanded+DisplayID(key, t.Number), "Landed "+line+".")
+		list = append(list, "- "+line)
+	}
+	_, finishedSpec := summarise(tickets)
+	if finishedSpec && len(landed) > 0 {
+		due(CommentClosed, "Finished. What landed:\n\n"+strings.Join(list, "\n"))
+	}
+	w.Label, w.Close = requirementStatus(finishedSpec, len(landed) > 0, stagesDone)
 	return dueWhile(s.Link.ExternalState, w)
+}
+
+// requirementStatus is the status label and closing due on the issue of
+// a Requirement whose Spec is finished or not, with something landed or
+// not, and whose Stages are all Done or not.
+func requirementStatus(finished, landed, stagesDone bool) (string, IssueClose) {
+	switch {
+	case finished && landed:
+		return LabelDone, CloseCompleted
+	case finished:
+		return LabelWontFix, CloseNotPlanned
+	case stagesDone:
+		return LabelBuilding, ""
+	default:
+		return LabelRequirement, ""
+	}
+}
+
+// resolution is the grilling Stage Ticket t's resolution comment: the
+// latest agent comment on it that isn't its finish summary, nor any
+// other note stored under a Claim; empty when there is none.
+func resolution(t store.Ticket) string {
+	for _, cm := range slices.Backward(t.Comments) {
+		if cm.Actor == string(Agent) && cm.Claim == 0 {
+			return cm.Body
+		}
+	}
+	return ""
+}
+
+// doneMove is the Move that last made t, a Done Ticket, Done, with its
+// land commit if it landed; a Ticket with none, such as one imported
+// Done, is taken as Done when it was last updated.
+func doneMove(t store.Ticket) store.Move {
+	for _, m := range slices.Backward(t.Moves) {
+		if m.To == store.Done {
+			return m
+		}
+	}
+	return store.Move{To: store.Done, Time: t.Updated}
+}
+
+// bodyAt is s's body as it was at the time at, undoing each later edit
+// to it.
+func bodyAt(s store.Spec, at time.Time) string {
+	body := s.Body
+	for _, e := range slices.Backward(s.Edits) {
+		if !e.Time.After(at) {
+			break
+		}
+		if prev, ok := e.Previous["body"]; ok {
+			body = prev
+		}
+	}
+	return body
+}
+
+// landedLine is t, a Done implementation Ticket, as a write-back names
+// it: its title and ID, and its land commit if it has one.
+func landedLine(key string, t store.Ticket) string {
+	line := fmt.Sprintf("**%s** (%s)", t.Title, DisplayID(key, t.Number))
+	if commit := doneMove(t).Commit; commit != "" {
+		line += " in " + commit
+	}
+	return line
 }
 
 // requirementContext is the context the human gave To Requirement for

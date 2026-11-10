@@ -143,8 +143,8 @@ func TestFindLinkedReturnsAnOutboundLinkWithTheFlag(t *testing.T) {
 }
 
 // The context comment is due once, and the issue should carry
-// code-central:requirement while the Stages aren't all Done; nothing is
-// due on the Incoming Issue any more.
+// code-central:requirement while the Stages aren't all Done, then
+// code-central:building; nothing is due on the Incoming Issue any more.
 func TestAnOutboundSpecHasItsContextCommentAndRequirementLabelDue(t *testing.T) {
 	srv := newServer(t, requirementFromIssue)
 	got := writesDue(t, srv)
@@ -155,7 +155,7 @@ func TestAnOutboundSpecHasItsContextCommentAndRequirementLabelDue(t *testing.T) 
 	if w := got["acme-6"]; w.Link.ID != "acme/web#7" {
 		t.Fatalf("acme-6's link %q, want acme/web#7", w.Link.ID)
 	}
-	want := "<!-- code-central acme-6 context -->\nSeen on every login since Monday.\n\n[acme-6 in Code Central](" + srv.URL + "/?view=inbox&list=requirements&requirement=acme-6)"
+	want := "<!-- code-central acme-6 context -->\nSeen on every login since Monday." + backTo(srv)
 	if body := got["acme-6"].Comments[0].Body; body != want {
 		t.Fatalf("context comment = %q, want %q", body, want)
 	}
@@ -169,13 +169,13 @@ func TestAnOutboundSpecHasItsContextCommentAndRequirementLabelDue(t *testing.T) 
 	httpOK(t, srv, reportIssueWritten(`{"target":"acme-6","key":"context"}`))
 	wantDue(t, writesDue(t, srv), "acme-6", "code-central:requirement", "")
 
-	// Once every Stage is Done, it no longer asks for the label.
+	// Once every Stage is Done, the build is under way.
+	implementationTicket(t, srv, "Fix the login")
 	for _, n := range []string{"7", "8", "9"} {
 		httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/" + n + "/move", `{"to_state":"Done"}`})
 	}
-	if w, ok := writesDue(t, srv)["acme-6"]; ok {
-		t.Fatalf("acme-6 has writes due %+v once its Stages are Done, want none", w)
-	}
+	httpOK(t, srv, reportIssueWritten(`{"target":"acme-6","key":"spec"}`))
+	wantDue(t, writesDue(t, srv), "acme-6", "code-central:building", "")
 }
 
 // The comment keys already written for the issue carry over to the

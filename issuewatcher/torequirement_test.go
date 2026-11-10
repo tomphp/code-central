@@ -2,7 +2,6 @@ package issuewatcher_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
@@ -27,9 +26,8 @@ func TestToRequirementPostsTheContextOnceAndLabelsTheIssueRequirement(t *testing
 	spec := w.toRequirement(w.arrivedFirst(labelled(1, "code-central:draft")), "Seen on every login.")
 	from := len(w.h.Calls())
 	w.polled()
-	body := fmt.Sprintf("body=<!-- code-central %s context -->\nSeen on every login.\n\n[%s in Code Central](%s/?view=inbox&list=requirements&requirement=%s)", spec, spec, w.srv.URL, spec)
 	w.wantWrites(from,
-		"POST repos/acme/web/issues/1/comments "+body,
+		w.posted(spec, "context", "Seen on every login."),
 		"POST repos/acme/web/issues/1/labels labels[]=code-central:requirement",
 		"DELETE repos/acme/web/issues/1/labels/code-central:draft")
 	if due := w.writesDue(); len(due) != 1 || len(due[0].Comments) != 0 {
