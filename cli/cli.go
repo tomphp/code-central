@@ -84,6 +84,8 @@ func usagef(format string, args ...any) error { return usageError{fmt.Sprintf(fo
 type command struct {
 	op    string // core operation name, "" for CLI-only commands
 	usage string
+	// hidden leaves the command out of the usage: the service runs it.
+	hidden bool
 	run   func(ctx context.Context, e Env, args []string) error
 }
 
@@ -191,8 +193,10 @@ func Run(ctx context.Context, args []string, e Env) int {
 
 func printUsage(w io.Writer) {
 	names := make([]string, 0, len(commands))
-	for n := range commands {
-		names = append(names, n)
+	for n, c := range commands {
+		if !c.hidden {
+			names = append(names, n)
+		}
 	}
 	sort.Strings(names)
 	fmt.Fprintln(w, "usage: code-central <command> [flags]")

@@ -222,7 +222,14 @@ To change it, open the UI, click **⋯** beside the Project in the left pane, an
 - **GitHub repository**: the repository to watch, as `owner/name`, such as `acme/acme-api`. CI Tracking can't be on without one: Save says so, as it does for anything that isn't `owner/name`. When the Factory starts, it reports the URL of the Push remote (the Landing Method's Remote, `origin` unless you changed it), leaving out any login an HTTPS URL carries. If that URL is GitHub's, over HTTPS or SSH, the field is filled in from it, with a note naming the URL; change it if CI runs somewhere else, such as a fork.
 - **Ignored workflows**: workflow file names, such as `nightly.yml, preview.yml`, separated by commas. Their runs won't count towards a Ticket's CI result. Name the file, not its path: `ci.yml`, not `.github/workflows/ci.yml`.
 
-**Save** applies the settings, and every open UI tab shows them. Turning CI Tracking off keeps the repository and Ignored workflows for the next time you turn it on. For now the CI section only records these settings: the Factory lands accepted work the same way with CI Tracking on or off.
+**Save** applies the settings, and every open UI tab shows them. Turning CI Tracking on is checked first: Code Central checks that `gh`, the GitHub CLI, is installed and logged in, and can read the repository. If any of these fails, Save refuses, and the CI section says what is wrong and how to fix it, for example:
+
+```text
+gh isn't logged in to GitHub: You are not logged into any GitHub hosts. To log in, run: gh auth login
+Run `gh auth login` as the user the service runs as, then turn CI Tracking on again.
+```
+
+[Finding `gh`](running-as-a-service.md#finding-gh) says where Code Central looks for `gh`, and how the **gh path** Option points it somewhere else. Turning CI Tracking off keeps the repository and Ignored workflows for the next time you turn it on. For now the CI section only records these settings: the Factory lands accepted work the same way with CI Tracking on or off.
 
 ## When `init` behaves differently
 

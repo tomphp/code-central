@@ -179,6 +179,7 @@ func (s *FileStore) loadOptions() error {
 	if f.FocusClear != "" {
 		o.FocusClear = FocusClear(f.FocusClear)
 	}
+	o.GHPath = f.GHPath
 	if !o.FocusClear.Valid() {
 		return &LoadError{File: rel, Field: "focus_clear", Msg: fmt.Sprintf("unknown value %q (%s)", f.FocusClear, strings.Join(FocusClearNames(), " or "))}
 	}

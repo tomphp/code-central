@@ -98,6 +98,7 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
     reportPushRemote: async (key, url) => {
       await agent(`/api/p/${key}/report_push_remote`, { url });
     },
+    logOutOfGH: svc.logOutOfGH,
     dropTranscriptStreams: () => {
       for (const cut of streams) cut.abort();
       streams.clear();

@@ -20,7 +20,7 @@ func runOptions(t *testing.T, f Factory) {
 
 	t.Run("options read back after they are written, with no Project", func(t *testing.T) {
 		s := f.New(t)
-		want := store.Options{FocusClear: store.FocusAllClear}
+		want := store.Options{FocusClear: store.FocusAllClear, GHPath: "/opt/tools/gh"}
 		put(t, s, func(w store.Writer) error { return w.PutOptions(want) })
 		check := func(s store.Store) {
 			read(t, s, func(r store.Reader) {

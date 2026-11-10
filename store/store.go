@@ -331,6 +331,9 @@ func (f FocusClear) Valid() bool { return slices.Contains(FocusClears, f) }
 // view. They are the store's one record that belongs to no Project.
 type Options struct {
 	FocusClear FocusClear
+	// GHPath is where gh, the GitHub CLI, is: the gh path Option. Empty
+	// finds it on the service's PATH, then in the usual install places.
+	GHPath string
 }
 
 // DefaultOptions are the Options of a store that has never had any

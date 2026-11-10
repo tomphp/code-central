@@ -21,6 +21,7 @@ type storeFile struct {
 // every key are optional: what's left out takes its default.
 type optionsFile struct {
 	FocusClear string `yaml:"focus_clear,omitempty"`
+	GHPath     string `yaml:"gh_path,omitempty"`
 }
 
 type projectFile struct {
@@ -346,7 +347,7 @@ func encode(record any, project string) (string, []byte, error) {
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI)})
 	case Options:
 		rel = "options.yaml"
-		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear)})
+		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), GHPath: r.GHPath})
 	case Spec:
 		rel = filepath.Join("projects", project, "specs", strconv.Itoa(r.Number)+".md")
 		var front []byte

@@ -126,6 +126,13 @@ function LandingMethodSection({ api, project }: { api: Api; project: ProjectRow 
         {error && (
           <p className="warning" role="alert" id={`${id}-error`}>
             {error.message}
+            {/* A refused turn-on says how to put it right (code-central-252). */}
+            {error.fix && (
+              <>
+                <br />
+                {error.fix}
+              </>
+            )}
           </p>
         )}
         <div className="project-options-actions">
@@ -210,7 +217,13 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
         <legend>CI</legend>
         <div className="project-options-choice">
           <label>
-            <input type="checkbox" checked={draft.tracking} onChange={(e) => edit({ tracking: e.target.checked })} aria-describedby={`${id}-tracking`} />{" "}
+            <input
+              type="checkbox"
+              checked={draft.tracking}
+              onChange={(e) => edit({ tracking: e.target.checked })}
+              aria-describedby={error?.field === "tracking" ? `${id}-tracking ${id}-error` : `${id}-tracking`}
+              aria-invalid={error?.field === "tracking" || undefined}
+            />{" "}
             CI Tracking
           </label>
           <p className="project-options-hint" id={`${id}-tracking`}>
@@ -257,6 +270,13 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
         {error && (
           <p className="warning" role="alert" id={`${id}-error`}>
             {error.message}
+            {/* A refused turn-on says how to put it right (code-central-252). */}
+            {error.fix && (
+              <>
+                <br />
+                {error.fix}
+              </>
+            )}
           </p>
         )}
         <div className="project-options-actions">

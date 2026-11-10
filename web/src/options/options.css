@@ -12,3 +12,7 @@
 .option-choice:has(input:checked) { border-color: var(--accent); }
 .option-choice label { font-weight: 600; cursor: pointer; }
 .option-choice-hint { margin: 4px 0 0 24px; font-size: 13px; }
+/* gh path: a path typed in, with its own Save. */
+fieldset.option { border: 0; padding: 0; margin: 0; min-width: 0; }
+.option-text { width: 360px; max-width: 100%; font: inherit; padding: 4px 8px; }
+.option-hint { margin: 6px 0 0; font-size: 13px; }

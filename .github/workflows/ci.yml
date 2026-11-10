@@ -95,15 +95,18 @@ jobs:
         run: npm run build
 
       # As `make build`, with the OS's executable suffix (.exe on Windows,
-      # empty elsewhere). The absolute paths go to the e2e steps.
+      # empty elsewhere), and the fake gh `make e2e` builds. The absolute
+      # paths go to the e2e steps.
       - name: Build binaries
         run: |
           exe=$(go env GOEXE)
           version=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
           go build -tags webdist -ldflags "-X github.com/tomoram/code-central/cli.Version=$version" -o "bin/code-central$exe" ./cmd/code-central
           go build -o "bin/code-central-factory$exe" ./cmd/code-central-factory
+          go build -o "bin/fake-gh$exe" ./internal/fakegh/gh
           echo "CODE_CENTRAL_BIN=$GITHUB_WORKSPACE/bin/code-central$exe" >> "$GITHUB_ENV"
           echo "CODE_CENTRAL_FACTORY_BIN=$GITHUB_WORKSPACE/bin/code-central-factory$exe" >> "$GITHUB_ENV"
+          echo "CODE_CENTRAL_FAKE_GH_BIN=$GITHUB_WORKSPACE/bin/fake-gh$exe" >> "$GITHUB_ENV"
 
       - name: Install Chromium
         working-directory: web

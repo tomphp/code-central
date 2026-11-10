@@ -147,13 +147,38 @@ Unknown keys or a bad value in `settings.yaml` stop the service and name the fil
 
 Preferences you change while Code Central runs are **Options**, not settings. Set them in the UI: click **Options** in the **Admin** section of the Inbox's left pane. Each choice saves the moment you make it, every open browser follows it at once, and **Back to the Inbox** returns you to where you were.
 
-The one Option so far is *Focus Mode, when nothing needs you*: **Activity Dashboard** (the default) or **All clear**.
+There are two Options so far: *Focus Mode, when nothing needs you*, and **gh path**, which [Finding `gh`](#finding-gh) describes.
+
+*Focus Mode, when nothing needs you* is **Activity Dashboard** (the default) or **All clear**.
 
 Focus Mode shows the dashboard whenever nothing needs you, unless you choose **All clear**: a calm All clear message and nothing else. Until the Options are read, or when they can't be, it shows All clear. The dashboard has a blue block with the number of Ready Tickets and an amber block with the number of In Progress Tickets, and below them a list of the In Progress Tickets. Each entry shows the Ticket's ID and title, its Project (unless Focus Mode is filtered to one), the Requirement and Stage for a Stage Ticket, and its Session's latest event, such as `Read: core/core.go · 2m ago`. Click an entry to open its Ticket in the Inbox. The counts cover only the Project Focus Mode is filtered to, and leave out Archived Projects. They include blocked Ready Tickets and Stage Tickets, so they can be higher than the Inbox's State counts, which leave out the Stage Tickets folded under each State view. The dashboard follows the live feed. A block pulses when its number changes, and an entry pulses each time its Ticket changes, a new Session event included, at most about every 5 seconds for a busy Session; an entry that joins the list pulses once. With your system set to reduce motion, the pulse is a brief brightness flash instead. The dashboard gives way to a Focus Item as soon as something needs you. The "You skipped N" screen is unchanged.
 
-Scripts can read and set Options over the HTTP API, sending `X-Code-Central-Actor: human` to change them: `GET /api/options`, and `POST /api/set_options` with a body such as `{"focus_clear": "all_clear"}`.
+Scripts can read and set Options over the HTTP API, sending `X-Code-Central-Actor: human` to change them: `GET /api/options`, and `POST /api/set_options` with a body such as `{"focus_clear": "all_clear"}` or `{"gh_path": "/opt/tools/gh"}`.
 
 The service keeps Options in its store, in `options.yaml` beside `store.yaml`, so they survive a restart and a cleared browser. There is no file until you first change one, and no MCP tool or CLI command changes them. `settings.yaml` is still the place for what the service needs at startup, such as the port.
+
+## Finding `gh`
+
+CI Tracking (see [Watching CI](setting-up-a-project.md#watching-ci)) reaches GitHub through `gh`, the GitHub CLI, and its own login: Code Central stores no GitHub token. The service itself never calls GitHub. It runs its own executable as the CI Watcher, a hidden `code-central ci-watcher` subcommand, which finds and runs `gh`. Before CI Tracking turns on, the service runs the CI Watcher once in a check mode. The check finds `gh`, runs `gh auth status`, and reads the repository. It runs again when you change the repository while CI Tracking is on. Turning CI Tracking off runs no check.
+
+The CI Watcher finds `gh`:
+
+1. at the **gh path** Option, if it is set;
+2. else on the service's `PATH`;
+3. else in the usual install places: `/opt/homebrew/bin`, `/usr/local/bin`, `/home/linuxbrew/.linuxbrew/bin` and `%ProgramFiles%\GitHub CLI`.
+
+The install places matter because a service gets a shorter `PATH` than your shell. launchd, for example, starts the service with only the system folders on its `PATH`, so a Homebrew `gh` is found in its install place instead.
+
+Set **gh path** when `gh` is somewhere else. It is on the Options page, below the Focus Mode Option: type the path to `gh`, or to the folder it is in, and click **Save**. It must be an absolute path, such as `/opt/tools/gh` or `C:\Tools\gh.exe`. Empty the field and save to go back to looking on `PATH` and in the install places. When gh path is set, the CI Watcher looks nowhere else.
+
+`gh` runs as the user the service runs as, so log in as that user with `gh auth login`. When the check fails, the CI section of Project Options refuses to turn CI Tracking on. It shows what is wrong, then how to fix it:
+
+| What is wrong | What the CI section says | Its fix |
+|---|---|---|
+| `gh` isn't found | gh, the GitHub CLI, isn't on the service's PATH or in /opt/homebrew/bin, /usr/local/bin, /home/linuxbrew/.linuxbrew/bin. | Install gh, the GitHub CLI (https://cli.github.com), or set the gh path Option to where it is. |
+| gh path names no `gh` | The gh path Option is /opt/tools/gh, but gh isn't there. | Set the gh path Option to where gh is, or clear it to find gh on the service's PATH. |
+| `gh` isn't logged in | gh isn't logged in to GitHub: You are not logged into any GitHub hosts. To log in, run: gh auth login | Run `gh auth login` as the user the service runs as, then turn CI Tracking on again. |
+| The repository can't be read | gh can't read the repository acme/acme-api: gh: Not Found (HTTP 404) | Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it. |
 
 ## Usage
 

@@ -35,6 +35,9 @@ type Core struct {
 	latestNotices *latestNotices
 	// usage records agents' MCP calls (Usage); nil records nothing.
 	usage *usage.Recorder
+	// ciCheck is the CI Watcher's check mode, run when CI Tracking is
+	// turned on; nil checks nothing.
+	ciCheck CICheck
 }
 
 // New returns a Core persisting through s, telling time with clk and
