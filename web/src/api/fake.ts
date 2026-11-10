@@ -652,11 +652,11 @@ export class FakeApi implements Api {
   async needsMe(): Promise<NeedsMeView> {
     this.calls.push("needsMe");
     // A row's CI result is its Ticket's now, as core works it out on read.
-    const ci = (r: NeedsMeRow) => {
+    const withCIResult = (r: NeedsMeRow) => {
       const ci_result = this.tickets.get(r.id)?.ci_result;
       return ci_result ? { ...r, ci_result } : r;
     };
-    const groups = this.groups.filter((g) => g.tickets.length).map((g) => ({ ...g, tickets: g.tickets.map(ci) }));
+    const groups = this.groups.filter((g) => g.tickets.length).map((g) => ({ ...g, tickets: g.tickets.map(withCIResult) }));
     return structuredClone({ count: this.rows().length, groups });
   }
 

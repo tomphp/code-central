@@ -116,16 +116,11 @@ func ciRunView(key string, r store.CIRun) CIRunView {
 // Run tracked against it, newest pushed commit's first; all empty for a
 // Ticket never pushed while CI Tracking was on.
 func ticketCI(r store.Reader, key string, t store.Ticket) (*PushedCommitView, CIResult, []CIRunView) {
-	if len(t.PushedCommits) == 0 {
+	mine, ok := ticketRuns(r, key, t)
+	if !ok {
 		return nil, "", nil
 	}
 	latest := t.PushedCommits[len(t.PushedCommits)-1]
-	var mine []store.CIRun
-	for _, run := range r.CIRuns(key) {
-		if run.Ticket == t.Number {
-			mine = append(mine, run)
-		}
-	}
 	// The latest pushed commit's runs first, then each older one's.
 	order := func(commit string) int {
 		return len(t.PushedCommits) - 1 - slices.IndexFunc(t.PushedCommits, func(p store.PushedCommit) bool { return p.Commit == commit })
@@ -138,20 +133,29 @@ func ticketCI(r store.Reader, key string, t store.Ticket) (*PushedCommitView, CI
 	return &PushedCommitView{Commit: latest.Commit, Pushed: latest.Pushed}, ciResultOf(latest.Commit, mine), runs
 }
 
-// ciResult is t's CI result alone, for its rows: "" for a Ticket never
-// pushed while CI Tracking was on.
-func ciResult(r store.Reader, key string, t store.Ticket) CIResult {
-	if len(t.PushedCommits) == 0 {
+// ticketCIResult is t's CI result alone, for its rows' badges: "" for a
+// Ticket never pushed while CI Tracking was on.
+func ticketCIResult(r store.Reader, key string, t store.Ticket) CIResult {
+	mine, ok := ticketRuns(r, key, t)
+	if !ok {
 		return ""
 	}
-	commit := t.PushedCommits[len(t.PushedCommits)-1].Commit
+	return ciResultOf(t.PushedCommits[len(t.PushedCommits)-1].Commit, mine)
+}
+
+// ticketRuns is every CI Run tracked against t, and whether t has a
+// pushed commit at all; the Project's runs are read only when it has.
+func ticketRuns(r store.Reader, key string, t store.Ticket) ([]store.CIRun, bool) {
+	if len(t.PushedCommits) == 0 {
+		return nil, false
+	}
 	var mine []store.CIRun
 	for _, run := range r.CIRuns(key) {
-		if run.Ticket == t.Number && run.Commit == commit {
+		if run.Ticket == t.Number {
 			mine = append(mine, run)
 		}
 	}
-	return ciResultOf(commit, mine)
+	return mine, true
 }
 
 // ciResultOf is the CI result of commit from runs: running while any of

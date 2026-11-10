@@ -2,16 +2,11 @@
 // A Ticket with a CI result shows it as a badge on its rows in the Spec
 // view, Needs Me and the Activity Dashboard, and one with none shows none;
 // the Spec view sums its Tickets' badges per result.
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
 import { FakeApi } from "../api/fake";
 import type { CIResult } from "../api/types";
-
-function renderApp(fake: FakeApi, url: string) {
-  window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
-}
+import { focus, renderApp } from "../focus/focusTesting";
 
 const detail = () => screen.getByRole("complementary", { name: "Ticket" });
 
@@ -58,10 +53,9 @@ describe("the CI badge", () => {
     // Sent back to fix its CI: In Progress again with its last push's result.
     fake.addTicket("acme", { title: "Login page", state: "In Progress", ci_result: "failed" }); // acme-1
     fake.addTicket("acme", { title: "Sign-up page", state: "In Progress" }); // acme-2
-    renderApp(fake, "/?view=focus");
+    renderApp(fake);
 
-    const focus = screen.getByRole("main", { name: "Focus Mode" });
-    const d = await within(focus).findByRole("region", { name: "Activity Dashboard" });
+    const d = await within(focus()).findByRole("region", { name: "Activity Dashboard" });
     const entries = within(within(d).getByRole("list", { name: "In Progress" })).getAllByRole("listitem");
     expect(entries.map(badgeOf)).toEqual(["CI failed", null]);
   });

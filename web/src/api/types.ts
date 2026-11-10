@@ -227,7 +227,7 @@ export interface NeedsMeRow {
   // prototype is set on a Ticket labelled prototype, for its badge.
   prototype?: boolean;
   // ci_result is the Ticket's CI result, whatever the reason, for its
-  // badge; left out for a Ticket with none.
+  // badge; left out for a Ticket never pushed while CI Tracking was on.
   ci_result?: CIResult;
 }
 
