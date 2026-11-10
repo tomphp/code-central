@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -39,7 +40,8 @@ const (
 // Run is the fake gh run as program with args, its Script and calls in
 // dir. The latest Answer that matches is given; with none, it exits 0
 // and prints nothing, as a logged-in gh reading a readable repository
-// would need no more. With dir empty it records nothing.
+// would need no more, except that a repository's issue list is empty.
+// With dir empty it records nothing.
 func Run(dir, program string, args []string, stdout, stderr io.Writer) int {
 	if dir == "" {
 		return 0
@@ -59,7 +61,21 @@ func Run(dir, program string, args []string, stdout, stderr io.Writer) int {
 			return a.Exit
 		}
 	}
+	if issueList(args) {
+		fmt.Fprint(stdout, "[]")
+	}
 	return 0
+}
+
+// issueList reports whether args are gh api listing a repository's
+// issues: repos/<owner>/<repo>/issues, with or without a query.
+func issueList(args []string) bool {
+	if len(args) < 2 || args[0] != "api" {
+		return false
+	}
+	path, _, _ := strings.Cut(args[1], "?")
+	parts := strings.Split(path, "/")
+	return len(parts) == 4 && parts[0] == "repos" && parts[3] == "issues"
 }
 
 // Script adds answers to the fake's Script in dir, after those it has.

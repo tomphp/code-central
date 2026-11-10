@@ -25,6 +25,18 @@ type IssueWatch struct {
 	// Spec is the Issues Spec's ID, left out until GitHub Issues is first
 	// turned on.
 	Spec string `json:"spec,omitempty"`
+	// Issues are the Incoming Issues, in number order, so the Issue
+	// Watcher sees which issues it has and which have changed.
+	Issues []IncomingIssue `json:"issues"`
+}
+
+// IncomingIssue is a Ticket on the Issues Spec that isn't finished and
+// whose Link isn't detached, as get_issue_watch lists it.
+type IncomingIssue struct {
+	Ticket      string   `json:"ticket"`
+	Link        LinkView `json:"link"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
 }
 
 // GetIssueWatch is the Issue Watcher's get_issue_watch.
@@ -36,7 +48,15 @@ func (c *Core) GetIssueWatch(_ context.Context, key string) (IssueWatch, error) 
 			return unknownProject(key)
 		}
 		g := githubIssuesView(key, p.GitHubIssues, WatcherView{})
-		out = IssueWatch{Project: key, On: g.On, Repository: g.Repository, Label: g.Label, GHPath: r.Options().GHPath, Spec: g.Spec}
+		out = IssueWatch{Project: key, On: g.On, Repository: g.Repository, Label: g.Label, GHPath: r.Options().GHPath, Spec: g.Spec, Issues: []IncomingIssue{}}
+		if p.GitHubIssues.Spec == 0 {
+			return nil
+		}
+		for _, t := range r.Tickets(key) {
+			if t.Spec == p.GitHubIssues.Spec && t.Link.Owned() && !finished(t.State) {
+				out.Issues = append(out.Issues, IncomingIssue{Ticket: DisplayID(key, t.Number), Link: *linkView(t.Link), Title: t.Title, Description: t.Description})
+			}
+		}
 		return nil
 	})
 	return out, err

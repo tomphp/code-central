@@ -329,7 +329,7 @@ Turn Issues on in the repository's Settings on GitHub, under Features, or name t
 
 The check uses the same `gh`, found the same way, as CI Tracking's: see [Finding `gh`](running-as-a-service.md#finding-gh).
 
-The first time you turn GitHub Issues on, Code Central creates the Project's **Issues Spec**, titled after the repository, such as `GitHub Issues: acme/acme-api`. Each issue will arrive on it as an **Incoming Issue**, a Draft Ticket to triage, so the Spec list doesn't grow by one per issue ([ADR 0022](adr/0022-incoming-issues-go-on-one-long-lived-issues-spec-per-project.md)). The section names it:
+The first time you turn GitHub Issues on, Code Central creates the Project's **Issues Spec**, titled after the repository, such as `GitHub Issues: acme/acme-api`. Each issue arrives on it as an **Incoming Issue**, a Draft Ticket to triage, so the Spec list doesn't grow by one per issue ([ADR 0022](adr/0022-incoming-issues-go-on-one-long-lived-issues-spec-per-project.md)). The section names it:
 
 ```
 Incoming Issues arrive on acme-api-12.
@@ -347,9 +347,11 @@ While GitHub Issues is on, the service runs the Project's **Issue Watcher**, the
 
 The service stops the Issue Watcher when you turn GitHub Issues off, when you archive the Project and when the service itself stops.
 
+On each check, the Issue Watcher also brings in the repository's open issues, those with the filter label if you set one, oldest first. Every issue arrives once, including those already open when you turned GitHub Issues on, as a Draft Ticket on the Issues Spec with the issue's title and description. Pull requests never arrive. Each Incoming Issue is linked to its issue, with a badge such as **github acme/acme-api#42**, and its panel has an **Open in GitHub** link to the issue, as every linked Spec's and Ticket's does. An issue never arrives twice: not after the Issue Watcher or the service restarts, not after you turn GitHub Issues off and on again, and not after you unlink its Ticket.
+
 ### Triaging Incoming Issues
 
-An Incoming Issue is a Draft (or Ready) Ticket on the Issues Spec, linked to its issue: its panel's GitHub badge opens the issue, and its title and description are GitHub's. Its Ticket panel has a **Triage** section with the triage actions, whether or not New issues need me is on:
+An Incoming Issue is a Draft (or Ready) Ticket on the Issues Spec, linked to its issue: its panel's GitHub badge and **Open in GitHub** link open the issue, and its title and description are GitHub's. Its Ticket panel has a **Triage** section with the triage actions, whether or not New issues need me is on:
 
 - **Keep as Draft** leaves it on the Issues Spec as it is, a Draft as it came in, and writes nothing to GitHub. With New issues need me on, it also takes the issue out of Needs Me for good: closing and reopening the issue, editing it, or turning New issues need me off and on never brings it back.
 

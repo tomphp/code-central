@@ -282,15 +282,7 @@ func TestTheIssueWatcherExitsWhenItsStdinCloses(t *testing.T) {
 	w := newWatching(t)
 	w.start(w.h.Bin)
 	w.status(core.WatcherWatching)
-	w.stdin.Close()
-	select {
-	case err := <-w.done:
-		if err != nil {
-			t.Fatalf("Watch = %v, want nil on its stdin closing", err)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("the Issue Watcher kept running after its stdin closed")
-	}
+	w.stop()
 }
 
 // The service runs the Issue Watcher as its own executable's hidden
