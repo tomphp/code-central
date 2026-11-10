@@ -16,9 +16,10 @@
   --r-landing: #0f766e;
   --r-blocked: #a16207;
   --r-external: #0e7490;
-  /* State colours, so far only on the Activity Dashboard. */
+  /* State colours, and CI Running's, so far only on the Activity Dashboard. */
   --s-ready: #2563eb;
   --s-in-progress: #d97706;
+  --s-ci-running: #0d9488;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {

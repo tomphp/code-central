@@ -1,8 +1,12 @@
 // The Activity Dashboard: what Focus Mode shows instead of All clear when
 // the human has chosen it. Two blocks count the Tickets in Ready and In
-// Progress, and the In Progress Tickets are listed below them. It reads
-// only the Inbox data Focus Mode already has, scoped as Focus Mode is,
-// with Archived Projects left out.
+// Progress, and the In Progress Tickets are listed below them. They come
+// from the Inbox data Focus Mode already has, scoped as Focus Mode is,
+// with Archived Projects left out. When a Project in scope that isn't
+// Archived has CI Tracking on, a third block, CI Running, counts the CI
+// Runs still going that count towards a Ticket's CI result: only then does
+// the dashboard also read the running CI Runs, again on every live-feed
+// change (code-central-277). The block opens the CI view.
 //
 // A block pulses when its count changes. An entry pulses when a
 // ticket.changed notice names its Ticket, which includes each new Session
@@ -12,7 +16,7 @@ import { useEffect, useState } from "react";
 import { numberOf, type Api } from "../api/api";
 import type { State } from "../api/types";
 import { RowLatestEvent } from "../LatestEvent";
-import type { InboxData, ProjectTicket } from "../live";
+import { useFetch, type InboxData, type ProjectTicket } from "../live";
 import { STAGE_TITLE, stageOf } from "../requirement/progress";
 import { CIBadge } from "../ticket/CIBadge";
 import { clickTo, hrefFor, type UiLocation } from "../url";
@@ -21,12 +25,14 @@ import { usePulse } from "./pulse";
 export interface ActivityDashboardProps {
   api: Api;
   now: Date;
+  // version is the live feed's, so the running CI Runs follow every change.
+  version: number;
   data: InboxData;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function ActivityDashboard({ api, now, data, loc, navigate }: ActivityDashboardProps) {
+export function ActivityDashboard({ api, now, version, data, loc, navigate }: ActivityDashboardProps) {
   // changes counts the ticket.changed notices for each Ticket since the
   // dashboard showed: the version number alone doesn't say which Ticket
   // changed, so the dashboard follows the live feed itself.
@@ -43,6 +49,9 @@ export function ActivityDashboard({ api, now, data, loc, navigate }: ActivityDas
   const [shown, setShown] = useState(false);
   useEffect(() => setShown(true), []);
   const archived = new Set(data.projects.filter((p) => p.archived).map((p) => p.key));
+  const ciTracked = data.projects.some((p) => !p.archived && p.ci.tracking && (!loc.project || p.key === loc.project));
+  const running = useFetch(ciTracked ? () => api.ciOverview({ project: loc.project, running: true }) : null, [api, loc.project, ciTracked, version]);
+  const ciRunning = running.data?.runs.length;
   const tickets = data.tickets.filter((t) => (!loc.project || t.project === loc.project) && !archived.has(t.project));
   // Every Ticket in the State counts, Stage and blocked Tickets included,
   // so the In Progress count is the list's length.
@@ -57,6 +66,8 @@ export function ActivityDashboard({ api, now, data, loc, navigate }: ActivityDas
       <div className="dashboard-blocks">
         <StateCount state="Ready" count={inState("Ready").length} />
         <StateCount state="In Progress" count={inProgress.length} />
+        {/* Keyed on whether the count is known yet, so the first read doesn't pulse. */}
+        {ciTracked && <CIRunningCount key={String(ciRunning === undefined)} count={ciRunning} loc={loc} navigate={navigate} />}
       </div>
       {inProgress.length ? (
         <ul aria-label="In Progress" className="dashboard-list">
@@ -76,6 +87,11 @@ export function ActivityDashboard({ api, now, data, loc, navigate }: ActivityDas
       ) : (
         <p className="dashboard-empty">Nothing in progress</p>
       )}
+      {ciTracked && running.error && (
+        <p role="alert" className="warning">
+          {running.error.message}
+        </p>
+      )}
     </section>
   );
 }
@@ -94,11 +110,30 @@ function StateCount({ state, count }: { state: State; count: number }) {
   );
 }
 
+// CIRunningCount is the CI Running block: the count of running CI Runs in
+// big type, a dash until the first read, and its name under it. It opens
+// the CI view in Focus Mode's scope, with Back to Focus Mode, and pulses
+// when the count differs from the one it last showed.
+function CIRunningCount({ count, loc, navigate }: { count?: number } & Pick<ActivityDashboardProps, "loc" | "navigate">) {
+  const pulse = usePulse("dashboard-block state-ci-running", count);
+  const to: Partial<UiLocation> = { view: "ci", project: loc.project, back: loc };
+  return (
+    <div role="group" aria-label="CI Running" {...pulse}>
+      <a className="dashboard-block-link" href={hrefFor({ ...loc, ...to })} onClick={clickTo(navigate, to)}>
+        <span className="dashboard-count" data-testid="count">
+          {count ?? "–"}
+        </span>
+        <span className="dashboard-state">CI Running</span>
+      </a>
+    </div>
+  );
+}
+
 // InProgressEntry is one In Progress Ticket. It opens in the Inbox as a
 // Focus Item's "Open in Inbox" does: a Stage Ticket in its Requirement,
 // with it selected. It pulses each time changes goes up, and on mounting
 // if it joined the list.
-interface InProgressEntryProps extends Omit<ActivityDashboardProps, "api"> {
+interface InProgressEntryProps extends Omit<ActivityDashboardProps, "api" | "version"> {
   ticket: ProjectTicket;
   changes: number;
   joined: boolean;

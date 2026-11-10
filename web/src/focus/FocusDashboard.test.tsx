@@ -7,7 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
-import { ApiError } from "../api/types";
+import { ApiError, type CIRunView } from "../api/types";
 import { change, focus, renderApp } from "./focusTesting";
 
 function world() {
@@ -299,5 +299,179 @@ describe("pulses", () => {
     act(() => void fake.updateTicket("beta-1", { state: "In Progress" }));
     await within(d).findByText("Beta export");
     expect(pulsing(entry(d, "beta-1"))).toBe(true);
+  });
+});
+
+// ---- The CI Running block (code-central-277) ----
+
+// ciWorld is world with CI Tracking and Push on in Acme, and acme-4 In
+// Review with abc123 pushed. Beta keeps CI Tracking off.
+async function ciWorld() {
+  const fake = world();
+  await fake.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
+  await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"] });
+  fake.addTicket("acme", { title: "Theme toggle", state: "In Review" }); // acme-4
+  await fake.reportPushedCommit("acme", "acme-4", "abc123");
+  return fake;
+}
+
+// ciRun is a run of workflow on acme-4's abc123, started minutes ago and still going.
+function ciRun(fake: FakeApi, id: number, workflow: string, more: Partial<CIRunView> = {}): Omit<CIRunView, "ignored"> {
+  return {
+    id,
+    attempt: 1,
+    workflow,
+    name: workflow,
+    branch: "acme-4",
+    commit: "abc123",
+    status: "in_progress",
+    started: new Date(fake.now.getTime() - id * 60_000).toISOString(),
+    url: `https://github.com/acme/web/actions/runs/${id}`,
+    jobs: [],
+    ticket: "acme-4",
+    ...more,
+  };
+}
+
+const ciBlock = (d: HTMLElement) => block(d, "CI Running");
+
+describe("the CI Running block", () => {
+  it("counts the CI Runs that count towards a Ticket's CI result, after Ready and In Progress", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [
+      ciRun(fake, 1, "ci.yml"),
+      ciRun(fake, 2, "lint.yml", { status: "queued" }),
+      ciRun(fake, 3, "e2e.yml", { status: "completed", conclusion: "success", finished: fake.now.toISOString() }),
+      ciRun(fake, 4, "nightly.yml"),
+    ]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(count(d, "CI Running")).toBe("2"));
+    expect(within(ciBlock(d)).getByText("CI Running")).toBeInTheDocument();
+    const blocks = within(d).getAllByRole("group").map((g) => g.getAttribute("aria-label"));
+    expect(blocks).toEqual(["Ready", "In Progress", "CI Running"]);
+  });
+
+  it("reads 0 with nothing running", async () => {
+    const fake = await ciWorld();
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+  });
+
+  it("isn't there, and reads nothing, without CI Tracking in scope", async () => {
+    const fake = world();
+    renderApp(fake);
+    const d = await dashboard();
+    expect(within(d).getAllByRole("group").map((g) => g.getAttribute("aria-label"))).toEqual(["Ready", "In Progress"]);
+    expect(fake.calls).not.toContain("ciOverview");
+  });
+
+  it("honours the Project filter: not there in a Project with CI Tracking off", async () => {
+    const fake = await ciWorld();
+    renderApp(fake, "/?view=focus&project=beta");
+    const d = await dashboard();
+    expect(within(d).queryByRole("group", { name: "CI Running" })).toBeNull();
+    expect(fake.calls).not.toContain("ciOverview");
+  });
+
+  it("isn't there when the only Project with CI Tracking on is Archived", async () => {
+    const fake = await ciWorld();
+    fake.addProject("old", "Old");
+    await fake.setCITracking("old", { tracking: true, provider: "github_actions", repository: "old/web", ignored_workflows: [] });
+    await fake.archiveProject("old");
+    await fake.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+    renderApp(fake);
+    const d = await dashboard();
+    expect(within(d).queryByRole("group", { name: "CI Running" })).toBeNull();
+    expect(fake.calls).not.toContain("ciOverview");
+  });
+
+  it("reads the running runs in Focus Mode's Project scope", async () => {
+    const fake = await ciWorld();
+    const read = vi.spyOn(fake, "ciOverview");
+    renderApp(fake, "/?view=focus&project=acme");
+    await waitFor(() => expect(read).toHaveBeenCalledWith({ project: "acme", running: true }));
+  });
+
+  it("opens the CI view in Focus Mode's scope, with Back to Focus Mode", async () => {
+    const fake = await ciWorld();
+    renderApp(fake, "/?view=focus&project=acme");
+    const d = await dashboard();
+    // The block is drawn afresh when its first read arrives.
+    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    const link = within(ciBlock(d)).getByRole("link");
+    expect(link).toHaveAttribute("href", "?view=ci&project=acme&back=view%3Dfocus%26project%3Dacme");
+
+    await userEvent.click(link);
+    expect(window.location.search).toBe("?view=ci&project=acme&back=view%3Dfocus%26project%3Dacme");
+    await userEvent.click(await screen.findByRole("button", { name: "Back to Focus Mode" }));
+    expect(window.location.search).toBe("?view=focus&project=acme");
+  });
+
+  it("opens the CI view on All Projects from All Projects", async () => {
+    const fake = await ciWorld();
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    expect(within(ciBlock(d)).getByRole("link")).toHaveAttribute("href", "?view=ci&back=view%3Dfocus");
+  });
+
+  it("follows the live feed: runs changing, and a newer pushed commit", async () => {
+    const fake = await ciWorld();
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+
+    await act(() => fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml"), ciRun(fake, 2, "lint.yml")]));
+    await waitFor(() => expect(count(d, "CI Running")).toBe("2"));
+
+    await act(() => fake.reportPushedCommit("acme", "acme-4", "def456"));
+    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+  });
+
+  it("pulses when its count changes, but not on first show", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml")]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(count(d, "CI Running")).toBe("1"));
+    expect(pulsing(ciBlock(d))).toBe(false);
+
+    await act(() => fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml", { status: "completed", conclusion: "success", finished: fake.now.toISOString() })]));
+    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    expect(pulsing(ciBlock(d))).toBe(true);
+    expect(pulsing(block(d, "Ready"))).toBe(false);
+  });
+
+  it("shows a failed read's error below the In Progress list, keeps the rest, and retries on the next change", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml")]);
+    vi.spyOn(fake, "ciOverview").mockRejectedValueOnce(new ApiError(500, "internal", "The CI Runs can't be read"));
+    renderApp(fake);
+    const d = await dashboard();
+    const alert = await within(d).findByRole("alert");
+    expect(alert).toHaveTextContent("The CI Runs can't be read");
+    expect(inProgress(d).compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(ciBlock(d)).toBeInTheDocument();
+    expect(count(d, "Ready")).toBe("2");
+    expect(count(d, "In Progress")).toBe("1");
+    expect(entries(d)).toHaveLength(1);
+
+    act(() => fake.emit({ type: "ci.changed", project: "acme" }));
+    await waitFor(() => expect(count(d, "CI Running")).toBe("1"));
+    expect(within(d).queryByRole("alert")).toBeNull();
+  });
+
+  it("leaves the Focus Item to take over when something needs the human, and shows no CI Watcher status", async () => {
+    const fake = await ciWorld();
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    expect(within(d).queryByText(/CI Watcher|Watching|hasn't reported/)).toBeNull();
+
+    change(fake, [{ reason: "failed", tickets: [{ id: "acme-2" }] }], "acme-2");
+    expect(await within(focus()).findByRole("article", { name: "Focus Item" })).toBeInTheDocument();
+    expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
   });
 });
