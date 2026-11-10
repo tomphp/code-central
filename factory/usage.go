@@ -10,8 +10,8 @@ import (
 )
 
 // Token usage (Spec code-central-201). The Factory reads each model
-// response's usage from a turn's stream-json and posts it to Code
-// Central's POST /api/usage, by the Session Events rules: the same
+// response's usage and model (Spec code-central-266) from a turn's
+// stream-json and posts them to Code Central's POST /api/usage, by the Session Events rules: the same
 // sender, so a post that fails, or an older Code Central's 404, is
 // dropped and a turn is never slowed or failed.
 
@@ -21,6 +21,11 @@ const (
 	kindReview   = "review"
 	kindSubagent = "subagent"
 )
+
+// syntheticModel is the model claude names on a response it made up
+// itself, such as an API error's, rather than one a model gave. It is
+// never posted as a model.
+const syntheticModel = "<synthetic>"
 
 // reviewPrefixes start the description of an Agent call that is a review,
 // as the Context Report reads them.
@@ -48,11 +53,11 @@ func newUsageReader(kind string, now func() time.Time) *usageReader {
 	return &usageReader{kind: kind, now: now, seen: map[string]bool{}, agents: map[string]string{}}
 }
 
-// read gives msg's model response, dated when it is read, the first
-// time its message ID comes: claude prints a response with several
-// content blocks as several lines, each with the same ID and usage. It
-// also remembers msg's Agent calls, so their subagents' responses get
-// their kind.
+// read gives msg's model response, dated when it is read and with its
+// model unless that is syntheticModel, the first time its message ID
+// comes: claude prints a response with several content blocks as several
+// lines, each with the same ID and usage. It also remembers msg's Agent
+// calls, so their subagents' responses get their kind.
 func (u *usageReader) read(msg streamMessage) (core.UsageResponse, bool) {
 	if msg.Type != "assistant" {
 		return core.UsageResponse{}, false
@@ -71,10 +76,15 @@ func (u *usageReader) read(msg streamMessage) (core.UsageResponse, bool) {
 		return core.UsageResponse{}, false
 	}
 	u.seen[m.ID] = true
+	model := m.Model
+	if model == syntheticModel {
+		model = ""
+	}
 	return core.UsageResponse{
 		Time:  u.now(),
 		Agent: msg.ParentToolUseID,
 		Kind:  u.kindOf(msg.ParentToolUseID),
+		Model: model,
 		Tokens: usage.Tokens{
 			InputTokens:      m.Usage.InputTokens,
 			CacheWriteTokens: m.Usage.CacheCreationInputTokens,
