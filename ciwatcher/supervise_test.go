@@ -11,7 +11,6 @@ import (
 	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/watchers"
 )
 
 // supervising is a real Code Central and the service's supervision of
@@ -21,16 +20,13 @@ type supervising struct {
 	t   *testing.T
 	h   *ciwatchertest.Harness
 	srv *codecentraltest.Server
-	log *codecentraltest.SyncBuffer
-	// stop stops the service's supervision, and done closes once every
-	// CI Watcher has stopped.
-	stop func()
-	done chan struct{}
+	// Supervising is the supervision, once started.
+	*ciwatchertest.Supervising
 }
 
 func newSupervising(t *testing.T) *supervising {
 	t.Helper()
-	return &supervising{t: t, h: ciwatchertest.New(t), srv: codecentraltest.NewServer(t), log: &codecentraltest.SyncBuffer{}}
+	return &supervising{t: t, h: ciwatchertest.New(t), srv: codecentraltest.NewServer(t)}
 }
 
 var human = core.WithActor(context.Background(), core.Human)
@@ -55,20 +51,7 @@ func (s *supervising) tracking(key string, on bool) {
 // start starts supervising, with program as the service's executable.
 func (s *supervising) start(program string) {
 	s.t.Helper()
-	ctx, cancel := context.WithCancel(context.Background())
-	s.done = make(chan struct{})
-	s.stop = cancel
-	go func() {
-		defer close(s.done)
-		watchers.Supervise(ctx, watchers.Supervision{
-			Projects: s.srv.Core, Kinds: []watchers.Kind{ciwatcher.Kind}, Program: program, Clock: s.srv.Clock, Log: s.log,
-			Environ: append(s.h.Environ(s.h.Bin), "CODE_CENTRAL_URL="+s.srv.URL),
-		})
-	}()
-	s.t.Cleanup(func() {
-		cancel()
-		<-s.done
-	})
+	s.Supervising = s.h.Supervise(s.srv, program, ciwatcher.Kind)
 }
 
 // status waits for key's CI Watcher status to be state, and returns it.
@@ -84,13 +67,6 @@ func (s *supervising) status(key string, state core.WatcherState) core.WatcherVi
 		return got.State == state
 	}, "%s's CI Watcher status %+v, want %s", key, &got, state)
 	return got
-}
-
-// logged waits for the service's log to say line n times.
-func (s *supervising) logged(line string, n int) {
-	s.t.Helper()
-	codecentraltest.Eventually(s.t, func() bool { return strings.Count(s.log.String(), line) >= n },
-		"the service's log said %q fewer than %d times:\n%s", line, n, s.log)
 }
 
 // crashRuns waits for the crashing CI Watcher to have started n times.
@@ -132,14 +108,14 @@ func TestTheServiceStartsACIWatcherForEachProjectWithCITrackingOn(t *testing.T) 
 	s.project("beta", false)
 	s.start(s.h.CodeCentral)
 	s.status("acme", core.WatcherWatching)
-	s.logged("started the CI Watcher for acme", 1)
+	s.Logged("started the CI Watcher for acme", 1)
 
 	// Turning CI Tracking on starts one.
 	s.tracking("beta", true)
 	s.status("beta", core.WatcherWatching)
-	s.logged("started the CI Watcher for beta", 1)
-	if strings.Count(s.log.String(), "started the CI Watcher for acme") != 1 {
-		t.Fatalf("acme's CI Watcher started again:\n%s", s.log)
+	s.Logged("started the CI Watcher for beta", 1)
+	if strings.Count(s.Log.String(), "started the CI Watcher for acme") != 1 {
+		t.Fatalf("acme's CI Watcher started again:\n%s", s.Log)
 	}
 }
 
@@ -149,11 +125,11 @@ func TestTurningCITrackingOffStopsItsCIWatcher(t *testing.T) {
 	s.start(s.h.CodeCentral)
 	s.status("acme", core.WatcherWatching)
 	s.tracking("acme", false)
-	s.logged("stopped the CI Watcher for acme", 1)
+	s.Logged("stopped the CI Watcher for acme", 1)
 
 	// And on again starts a new one.
 	s.tracking("acme", true)
-	s.logged("started the CI Watcher for acme", 2)
+	s.Logged("started the CI Watcher for acme", 2)
 	s.status("acme", core.WatcherWatching)
 }
 
@@ -165,12 +141,12 @@ func TestArchivingAProjectStopsItsCIWatcher(t *testing.T) {
 	if _, err := s.srv.Core.ArchiveProject(human, "acme"); err != nil {
 		t.Fatal(err)
 	}
-	s.logged("stopped the CI Watcher for acme", 1)
+	s.Logged("stopped the CI Watcher for acme", 1)
 
 	if _, err := s.srv.Core.UnarchiveProject(human, "acme"); err != nil {
 		t.Fatal(err)
 	}
-	s.logged("started the CI Watcher for acme", 2)
+	s.Logged("started the CI Watcher for acme", 2)
 }
 
 func TestStoppingTheServiceStopsEveryCIWatcher(t *testing.T) {
@@ -180,15 +156,15 @@ func TestStoppingTheServiceStopsEveryCIWatcher(t *testing.T) {
 	s.start(s.h.CodeCentral)
 	s.status("acme", core.WatcherWatching)
 	s.status("beta", core.WatcherWatching)
-	s.stop()
+	s.Stop()
 	select {
-	case <-s.done:
+	case <-s.Done:
 	case <-time.After(10 * time.Second):
 		t.Fatal("supervision didn't end")
 	}
 	for _, key := range []string{"acme", "beta"} {
-		if !strings.Contains(s.log.String(), "stopped the CI Watcher for "+key) {
-			t.Fatalf("%s's CI Watcher wasn't stopped:\n%s", key, s.log)
+		if !strings.Contains(s.Log.String(), "stopped the CI Watcher for "+key) {
+			t.Fatalf("%s's CI Watcher wasn't stopped:\n%s", key, s.Log)
 		}
 	}
 }
@@ -239,7 +215,7 @@ func TestACIWatcherStoppedWhileWaitingToRestartIsNotRestarted(t *testing.T) {
 	s.crashRuns(1)
 	s.crashed("1 time")
 	s.tracking("acme", false)
-	s.logged("stopped the CI Watcher for acme", 1)
+	s.Logged("stopped the CI Watcher for acme", 1)
 	s.srv.Clock.Advance(time.Hour)
 	if s.h.CrashRuns() != 1 {
 		t.Fatal("a CI Watcher was restarted after CI Tracking was turned off")

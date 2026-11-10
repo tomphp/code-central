@@ -261,7 +261,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     it("sets a Project's GitHub Issues settings, off by default and checked when turned on", async () => {
       await d.createProject("acme", "Acme");
       const off = { on: false, repository: "", label: "", new_issues_need_me: false };
-      expect((await d.api.listProjects())[0].github_issues).toEqual(off);
+      const notReported = { state: "not_reported" };
+      expect((await d.api.listProjects())[0].github_issues).toEqual({ ...off, watcher: notReported });
 
       const none = await d.api.setGitHubIssues("acme", { ...off, on: true, repository: " " }).catch((e) => e);
       expect(none).toMatchObject({ status: 422, code: "invalid", field: "repository" });
@@ -272,7 +273,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       // Off, nothing is checked and no Issues Spec is made.
       await d.logOutOfGH();
       const kept = await d.api.setGitHubIssues("acme", { on: false, repository: " acme/web ", label: " bug ", new_issues_need_me: true });
-      expect(kept.github_issues).toEqual({ on: false, repository: "acme/web", label: "bug", new_issues_need_me: true });
+      expect(kept.github_issues).toEqual({ on: false, repository: "acme/web", label: "bug", new_issues_need_me: true, watcher: notReported });
 
       const refused = await d.api.setGitHubIssues("acme", { ...kept.github_issues, on: true }).catch((e) => e);
       expect(refused).toBeInstanceOf(ApiError);
@@ -286,7 +287,15 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       await d.letGHTriage("acme/web");
       const on = await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false });
-      expect(on.github_issues).toEqual({ on: true, repository: "acme/web", label: "", new_issues_need_me: false, spec: expect.stringMatching(/^acme-\d+$/) });
+      // The service's own Issue Watcher may report by the time it reads.
+      expect(on.github_issues).toEqual({
+        on: true,
+        repository: "acme/web",
+        label: "",
+        new_issues_need_me: false,
+        spec: expect.stringMatching(/^acme-\d+$/),
+        watcher: expect.anything(),
+      });
       const spec = on.github_issues.spec!;
       const s = await d.api.getSpec("acme", spec);
       expect(s.title).toBe("GitHub Issues: acme/web");

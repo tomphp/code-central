@@ -122,10 +122,25 @@ export interface GitHubIssuesChange {
   new_issues_need_me: boolean;
 }
 
+// Why the Issue Watcher can't work its repository's issues, each with its
+// own fix: the CI Watcher's problems, and issues turned off or a login
+// that can't triage them.
+export type IssuesProblem = CIProblem | "issues_disabled" | "no_triage";
+
+// The Issue Watcher's status as it last reported it (code-central-285),
+// as the CI Watcher's is.
+export interface IssueWatcherStatus extends Omit<CIWatcherStatus, "problem"> {
+  problem?: IssuesProblem;
+}
+
+// An Issue Watcher's report of its status: the service adds since.
+export type IssueWatcherReport = Omit<IssueWatcherStatus, "since"> & { state: "watching" | "error" };
+
 // A Project's GitHub Issues settings, with its Issues Spec's ID once
-// GitHub Issues has first been turned on.
+// GitHub Issues has first been turned on, and the Issue Watcher's status.
 export interface GitHubIssuesSettings extends GitHubIssuesChange {
   spec?: string;
+  watcher: IssueWatcherStatus;
 }
 
 // A Ticket's CI result (code-central-256), from the runs of its latest

@@ -6,7 +6,8 @@
 // shell, so it runs the same on every OS. The test binary also runs as
 // code-central, the CLI, so a test can run the CI Watcher subcommand as
 // the service does, in its own process, and as a CI Watcher that crashes,
-// so a test can watch the service restart it.
+// so a test can watch the service restart it. The Issue Watcher's tests
+// use it too, as both kinds reach GitHub through the same gh.
 //
 // A test package that uses it calls Main from its TestMain:
 //

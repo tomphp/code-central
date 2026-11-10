@@ -3,9 +3,8 @@
 // on, as its own executable's hidden subcommand, restarts one that
 // crashes, and stops them all when it stops (ADR 0018); on the Watcher's
 // side, a Watcher runs until its stdin closes. It also runs any kind's
-// check mode for the service (Check). The service supervises only the CI
-// Watcher so far; the Issue Watcher has only its check mode, and a new
-// kind is one more Kind.
+// check mode for the service (Check). The service supervises the CI
+// Watcher and the Issue Watcher; a new kind is one more Kind.
 package watchers
 
 import (
