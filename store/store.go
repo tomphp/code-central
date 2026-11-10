@@ -158,9 +158,7 @@ type CI struct {
 	IgnoredWorkflows []string
 	PushRemoteURL    string
 	Rules            []CIRule
-	// UnblockOnPush lets a Ticket the CI gate holds stop blocking while
-	// its pushed commit's CI runs or has passed.
-	UnblockOnPush bool
+	UnblockOnPush    bool
 }
 
 // AnyWorkflow is the workflow of a CI Rule that matches every workflow

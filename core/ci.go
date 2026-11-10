@@ -25,6 +25,9 @@ type CIView struct {
 	// IgnoredWorkflows are workflow file base names, such as ci.yml,
 	// whose runs never count towards a CI result.
 	IgnoredWorkflows []string `json:"ignored_workflows"`
+	// UnblockOnPush lets a Ticket the CI gate holds stop blocking while
+	// its pushed commit's CI runs or has passed.
+	UnblockOnPush bool `json:"unblock_on_push"`
 	// PushRemoteURL is the URL of the Push remote the Factory last
 	// reported, empty until it has.
 	PushRemoteURL string `json:"push_remote_url"`
@@ -32,9 +35,6 @@ type CIView struct {
 	Rules []CIRuleView `json:"rules"`
 	// Watcher is the CI Watcher's status, as it last reported it.
 	Watcher WatcherView `json:"watcher"`
-	// UnblockOnPush lets a Ticket the CI gate holds stop blocking while
-	// its pushed commit's CI runs or has passed.
-	UnblockOnPush bool `json:"unblock_on_push"`
 }
 
 // CIRuleView is one CI Rule: when Workflow fails on Branch, open a Ticket
@@ -50,7 +50,7 @@ type CIRuleView struct {
 
 func ciView(key string, c store.CI, watcher WatcherView) CIView {
 	v := CIView{Tracking: c.Tracking, Provider: c.Provider, Repository: c.Repository,
-		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}, Watcher: watcher, UnblockOnPush: c.UnblockOnPush}
+		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), UnblockOnPush: c.UnblockOnPush, PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}, Watcher: watcher}
 	for _, r := range c.Rules {
 		v.Rules = append(v.Rules, CIRuleView{Spec: DisplayID(key, r.Spec), Workflow: r.Workflow, Branch: r.Branch, State: r.State, Created: r.Created})
 	}
