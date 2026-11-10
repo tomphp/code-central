@@ -12,6 +12,10 @@ Uses the five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+## Recipes
+
+Adding or changing an operation, or a store file: see `docs/agents/recipes.md`.
+
 ## Checks
 
 While working, run `make typecheck` and `make vitest F=<file>` (they install web dependencies first in a fresh worktree); run `make test` once at the end.
