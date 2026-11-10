@@ -93,7 +93,7 @@ func Watch(ctx context.Context, cfg Config) error {
 		} else {
 			backoff = 0
 		}
-		if res.watching {
+		if res.reachable {
 			w.report(ctx, core.ReportCIWatcherStatusInput{State: core.CIWatcherWatching, RateLimitedUntil: until})
 		}
 		select {
@@ -124,9 +124,9 @@ type runKey struct {
 type pollResult struct {
 	// waiting is whether a pushed commit waits on CI.
 	waiting bool
-	// watching is whether the CI Provider could be reached, so the CI
-	// Watcher is Watching; an error it reports itself.
-	watching bool
+	// reachable is whether the CI Provider could be reached, so the loop
+	// reports Watching; a poll that finds an error reports it itself.
+	reachable bool
 	// limit is the CI Provider's rate limit, if it refused a call for it.
 	limit *RateLimitError
 }
@@ -163,7 +163,7 @@ func (w *watcher) poll(ctx context.Context) (res pollResult) {
 	if ctx.Err() != nil {
 		return res
 	}
-	res.watching = true
+	res.reachable = true
 	errors.As(err, &res.limit)
 	return res
 }

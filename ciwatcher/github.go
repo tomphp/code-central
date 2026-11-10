@@ -112,10 +112,15 @@ func (g *GitHubActions) CheckAccess(ctx context.Context) (core.CICheckResult, er
 		if r, ran := didntRun(gh, err); !ran {
 			return r, nil
 		}
-		return core.CICheckResult{Problem: core.CILoggedOut, Reason: "gh isn't logged in to GitHub: " + out,
+		// gh auth status calls GitHub too, and says so when that is
+		// rate-limited, with no reset time.
+		if strings.Contains(strings.ToLower(out), "rate limit") {
+			return core.CICheckResult{}, &RateLimitError{Message: rateLimitLine(out)}
+		}
+		return core.CICheckResult{Problem: core.CILoggedOut, Reason: "gh isn't logged in to GitHub: " + firstLine(out),
 			Fix: "Run `gh auth login` as the user the service runs as."}, nil
 	}
-	if _, msg, err := g.call(ctx, gh, "repos/"+g.Repository, "--jq", ".full_name"); err != nil {
+	if _, msg, err := g.callAPI(ctx, gh, "repos/"+g.Repository, "--jq", ".full_name"); err != nil {
 		var limit *RateLimitError
 		if errors.As(err, &limit) {
 			return core.CICheckResult{}, limit
@@ -129,8 +134,8 @@ func (g *GitHubActions) CheckAccess(ctx context.Context) (core.CICheckResult, er
 	return core.CICheckResult{}, nil
 }
 
-// run runs gh with args, never prompting, and returns its first line of
-// output: stderr's when it fails, as gh writes its errors there.
+// run runs gh with args, never prompting, and returns its output:
+// stderr's when it fails, as gh writes its errors there.
 func (g *GitHubActions) run(ctx context.Context, gh string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, gh, args...)
 	cmd.Env = append(append([]string{}, g.Env.Environ...), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
@@ -141,7 +146,17 @@ func (g *GitHubActions) run(ctx context.Context, gh string, args ...string) (str
 	if err != nil && strings.TrimSpace(stderr.String()) != "" {
 		out = stderr.String()
 	}
-	return firstLine(out), err
+	return out, err
+}
+
+// rateLimitLine is the line of out that names the rate limit.
+func rateLimitLine(out string) string {
+	for _, l := range strings.Split(out, "\n") {
+		if strings.Contains(strings.ToLower(l), "rate limit") {
+			return strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "-X "))
+		}
+	}
+	return firstLine(out)
 }
 
 // didntRun is the check failing because gh didn't run at all, rather
@@ -241,13 +256,9 @@ func (g *GitHubActions) api(ctx context.Context, path string, out any) error {
 	if missing != nil {
 		return errors.New(missing.Reason)
 	}
-	body, msg, err := g.call(ctx, gh, path)
+	body, msg, err := g.callAPI(ctx, gh, path)
 	if err != nil {
-		var limit *RateLimitError
-		if errors.As(err, &limit) {
-			return err
-		}
-		return fmt.Errorf("gh api %s: %v: %s", path, err, msg)
+		return fmt.Errorf("gh api %s: %w: %s", path, err, msg)
 	}
 	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("gh api %s: %v", path, err)
@@ -255,11 +266,11 @@ func (g *GitHubActions) api(ctx context.Context, path string, out any) error {
 	return nil
 }
 
-// call runs gh api path with args, never prompting, and with --include,
+// callAPI runs gh api path with args, never prompting, and with --include,
 // so the response's headers say when a rate limit ends. It returns the
 // response's body and, when it fails, the first line gh wrote to stderr;
 // GitHub refusing it for a rate limit is a *RateLimitError.
-func (g *GitHubActions) call(ctx context.Context, gh, path string, args ...string) (body []byte, msg string, err error) {
+func (g *GitHubActions) callAPI(ctx context.Context, gh, path string, args ...string) (body []byte, msg string, err error) {
 	cmd := exec.CommandContext(ctx, gh, append(append([]string{"api", path}, args...), "--include")...)
 	cmd.Env = append(append([]string{}, g.Env.Environ...), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
 	var stdout, stderr bytes.Buffer

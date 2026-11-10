@@ -134,3 +134,14 @@ func TestARateLimitOnReadingTheRepositoryIsntAnError(t *testing.T) {
 	w.rateLimitedUntil(reset)
 	w.noErrors()
 }
+
+// gh auth status calls GitHub too: a rate limit there isn't a logout.
+func TestARateLimitOnCheckingTheLoginIsntAnError(t *testing.T) {
+	w := newWatching(t)
+	w.h.Answer(fakegh.Answer{Args: []string{"auth", "status"}, Exit: 1,
+		Stderr: "github.com\n  X Failed to log in to github.com account octocat (keyring)\n  - API rate limit exceeded for user ID 1.\n"})
+	start := w.srv.Clock.Now()
+	w.start(w.h.Bin)
+	w.rateLimitedUntil(start.Add(2 * ciwatcher.Interval))
+	w.noErrors()
+}
