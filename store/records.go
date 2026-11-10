@@ -34,6 +34,16 @@ type projectFile struct {
 	Landing *landingFile `yaml:"landing,omitempty"`
 	// CI is left out while it is the default.
 	CI *ciFile `yaml:"ci,omitempty"`
+	// GitHubIssues is left out while it is off with nothing set.
+	GitHubIssues *githubIssuesFile `yaml:"github_issues,omitempty"`
+}
+
+type githubIssuesFile struct {
+	On              bool   `yaml:"on"`
+	Repository      string `yaml:"repository,omitempty"`
+	Label           string `yaml:"label,omitempty"`
+	NewIssuesNeedMe bool   `yaml:"new_issues_need_me,omitempty"`
+	Spec            int    `yaml:"spec,omitempty"`
 }
 
 type ciFile struct {
@@ -460,7 +470,8 @@ func encode(record any, project string) (string, []byte, error) {
 	switch r := record.(type) {
 	case Project:
 		rel = filepath.Join("projects", r.Key, "project.yaml")
-		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI)})
+		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
+			GitHubIssues: encodeGitHubIssues(r.GitHubIssues)})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), GHPath: r.GHPath})
@@ -581,6 +592,16 @@ func encodeCI(c CI) *ciFile {
 		f.Rules = append(f.Rules, ciRuleFile{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: string(r.State), Created: formatTime(r.Created)})
 	}
 	return f
+}
+
+// encodeGitHubIssues leaves GitHub Issues out of project.yaml while it is
+// off with nothing set, so a Project that never had it keeps the file it
+// always had.
+func encodeGitHubIssues(g GitHubIssues) *githubIssuesFile {
+	if g == (GitHubIssues{}) {
+		return nil
+	}
+	return &githubIssuesFile{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
 }
 
 // formatOptionalTime leaves a zero time out of the file.

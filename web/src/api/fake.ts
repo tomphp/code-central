@@ -34,7 +34,9 @@
 // service does, and sends options.changed only when something changed.
 // setCITracking runs the CI check when it turns CI Tracking on, or
 // changes what it watches while on, as the service does: it passes
-// unless seedCICheck has given it a refusal.
+// unless seedCICheck has given it a refusal. setGitHubIssues runs the
+// Issues check likewise, refused by seedIssuesCheck, and creates the
+// Issues Spec the first time it turns GitHub Issues on.
 //
 // reportPushedCommit and reportCIRuns work a Ticket's CI result out as
 // the service does, with its failure options while it is CI failed;
@@ -89,6 +91,8 @@ import {
   CI_VIEW_DAYS,
   type CIRuleChange,
   type CISettings,
+  type GitHubIssuesChange,
+  type GitHubIssuesSettings,
   type CIWatcherReport,
   type CIWatcherStatus,
   type PushedCommitView,
@@ -263,6 +267,7 @@ interface FakeProject {
   archived_at?: string;
   landing: Landing;
   ci: CISettings;
+  github_issues: GitHubIssuesSettings;
   next: number;
 }
 
@@ -359,6 +364,8 @@ export class FakeApi implements Api {
   private opts: Options = { ...DEFAULT_OPTIONS };
   // ciCheck is the refusal the CI check answers with; none passes.
   private ciCheck?: { reason: string; fix: string; field?: "tracking" | "repository" };
+  // issuesCheck is the refusal the Issues check answers with; none passes.
+  private issuesCheck?: { reason: string; fix: string; field?: "on" | "repository" };
   private usageCalls: FakeUsageCall[] = [];
   private usageResponses: FakeUsageRecord[] = [];
 
@@ -382,6 +389,7 @@ export class FakeApi implements Api {
         rules: [],
         watcher: { state: "not_reported" },
       },
+      github_issues: { on: false, repository: "", label: "", new_issues_need_me: false },
       next: 1,
     });
     this.emit({ type: "project.changed", project: key });
@@ -478,6 +486,14 @@ export class FakeApi implements Api {
   // or, with none, passed.
   seedCICheck(refused?: { reason: string; fix: string; field?: "tracking" | "repository" }) {
     this.ciCheck = refused;
+  }
+
+  // seedIssuesCheck sets how the Issue Watcher's check answers when GitHub
+  // Issues is turned on: refused with this reason and fix, on field (on
+  // unless given; the service gives repository when the problem is the
+  // repository's), or, with none, passed.
+  seedIssuesCheck(refused?: { reason: string; fix: string; field?: "on" | "repository" }) {
+    this.issuesCheck = refused;
   }
 
   // seedCIWatcherCrash shows key's CI Watcher as the service reports one
@@ -1045,6 +1061,38 @@ export class FakeApi implements Api {
     this.setCI(this.writable(key), { ...this.project(key).ci, push_remote_url });
   }
 
+  async setGitHubIssues(key: string, change: GitHubIssuesChange): Promise<ProjectView> {
+    this.calls.push("setGitHubIssues");
+    const repository = change.repository.trim();
+    if (!repository && change.on) {
+      throw new ApiError(422, "invalid", "GitHub Issues needs the GitHub repository its issues come from, as owner/name", "repository");
+    }
+    if (repository && !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(repository)) {
+      throw new ApiError(422, "invalid", `"${repository}" isn't a GitHub repository as owner/name, such as acme/web`, "repository");
+    }
+    const p = this.writable(key);
+    const was = p.github_issues;
+    if (change.on && !(was.on && was.repository === repository) && this.issuesCheck) {
+      throw new ApiError(422, "invalid", this.issuesCheck.reason, this.issuesCheck.field ?? "on", undefined, this.issuesCheck.fix);
+    }
+    let spec = was.spec;
+    if (change.on && !spec) spec = this.addSpec(key, { title: issuesSpecTitle(repository), body: ISSUES_SPEC_BODY }).id;
+    const next: GitHubIssuesSettings = { on: change.on, repository, label: change.label.trim(), new_issues_need_me: change.new_issues_need_me, ...(spec && { spec }) };
+    if (JSON.stringify(next) !== JSON.stringify(was)) {
+      p.github_issues = next;
+      this.emit({ type: "project.changed", project: key });
+    }
+    // The Issues Spec's title follows the repository, unless the human retitled it.
+    const s = was.spec && this.specs.get(was.spec);
+    if (s && was.repository && repository && was.repository !== repository && s.title === issuesSpecTitle(was.repository)) {
+      s.edits.push({ number: s.edits.length + 1, actor: "human", time: this.now.toISOString(), previous: { title: s.title } });
+      s.title = issuesSpecTitle(repository);
+      s.updated = this.now.toISOString();
+      this.emit({ type: "spec.changed", project: key, id: s.id });
+    }
+    return this.projectView(p);
+  }
+
   async addCIRule(key: string, change: CIRuleChange): Promise<ProjectView> {
     this.calls.push("addCIRule");
     const p = this.writable(key);
@@ -1574,6 +1622,14 @@ function ruleOn(p: FakeProject, spec: string): CIRule {
 const CI_RULE_SPEC_BODY =
   "This Spec holds the fix Tickets of a CI Rule, which opens a Ticket to fix its workflow when it fails on its branch. " +
   "The rule is in the CI section of Project Options; removing it leaves this Spec as the record of its Tickets.\n";
+
+// issuesSpecTitle is the Issues Spec's title, as the service gives it.
+const issuesSpecTitle = (repository: string) => `GitHub Issues: ${repository}`;
+
+// The service's body for the Issues Spec.
+const ISSUES_SPEC_BODY =
+  "This Spec holds the Project's Incoming Issues: each open GitHub issue arrives on it as a linked Draft Ticket, to triage with Keep as Draft, To Requirement or Won't fix. " +
+  "GitHub Issues is in the GitHub Issues section of Project Options; turning it off leaves this Spec and its Tickets as they are.\n";
 
 // WORKFLOW is a workflow file's base name, holding no glob.
 const WORKFLOW = /^[^/\\\s*?[\]]+\.ya?ml$/;

@@ -57,6 +57,9 @@ export interface Driver {
   // logOutOfGH makes the gh the service finds logged out, so the CI check
   // refuses turning CI Tracking on (code-central-252).
   logOutOfGH(): Promise<void>;
+  // letGHTriage makes the gh the service finds able to triage
+  // repository's issues, so the Issues check passes (code-central-284).
+  letGHTriage(repository: string): Promise<void>;
   // reportCIWatcherStatus reports the CI Watcher's status as the CI
   // Watcher does on each poll (code-central-253).
   reportCIWatcherStatus(key: string, status: CIWatcherReport): Promise<void>;
@@ -252,6 +255,48 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(refused.message).toContain("isn't logged in");
       expect(refused.fix).toContain("gh auth login");
       expect((await d.api.listProjects())[0].ci.tracking).toBe(false);
+    });
+
+    it("sets a Project's GitHub Issues settings, off by default and checked when turned on", async () => {
+      await d.createProject("acme", "Acme");
+      const off = { on: false, repository: "", label: "", new_issues_need_me: false };
+      expect((await d.api.listProjects())[0].github_issues).toEqual(off);
+
+      const none = await d.api.setGitHubIssues("acme", { ...off, on: true, repository: " " }).catch((e) => e);
+      expect(none).toMatchObject({ status: 422, code: "invalid", field: "repository" });
+      expect(none.message).toContain("owner/name");
+      const url = await d.api.setGitHubIssues("acme", { ...off, repository: "https://github.com/acme/web" }).catch((e) => e);
+      expect(url).toMatchObject({ status: 422, code: "invalid", field: "repository" });
+
+      // Off, nothing is checked and no Issues Spec is made.
+      await d.logOutOfGH();
+      const kept = await d.api.setGitHubIssues("acme", { on: false, repository: " acme/web ", label: " bug ", new_issues_need_me: true });
+      expect(kept.github_issues).toEqual({ on: false, repository: "acme/web", label: "bug", new_issues_need_me: true });
+
+      const refused = await d.api.setGitHubIssues("acme", { ...kept.github_issues, on: true }).catch((e) => e);
+      expect(refused).toBeInstanceOf(ApiError);
+      expect(refused).toMatchObject({ status: 422, code: "invalid", field: "on" });
+      expect(refused.message).toContain("isn't logged in");
+      expect(refused.fix).toContain("gh auth login");
+      expect((await d.api.listProjects())[0].github_issues).toEqual(kept.github_issues);
+    });
+
+    it("creates the Issues Spec the first time GitHub Issues is turned on, retitled with the repository", async () => {
+      await d.createProject("acme", "Acme");
+      await d.letGHTriage("acme/web");
+      const on = await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false });
+      expect(on.github_issues).toEqual({ on: true, repository: "acme/web", label: "", new_issues_need_me: false, spec: expect.stringMatching(/^acme-\d+$/) });
+      const spec = on.github_issues.spec!;
+      const s = await d.api.getSpec("acme", spec);
+      expect(s.title).toBe("GitHub Issues: acme/web");
+      expect(s.link).toBeUndefined();
+
+      await d.api.setGitHubIssues("acme", { on: false, repository: "acme/web", label: "", new_issues_need_me: false });
+      expect((await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false })).github_issues.spec).toBe(spec);
+
+      await d.letGHTriage("acme/site");
+      await d.api.setGitHubIssues("acme", { on: true, repository: "acme/site", label: "", new_issues_need_me: false });
+      expect((await d.api.getSpec("acme", spec)).title).toBe("GitHub Issues: acme/site");
     });
 
     it("adds, edits and removes CI Rules, each with its own Spec", async () => {
