@@ -1,3 +1,6 @@
+// The contract for a Ticket's pushed commits and a Project's CI Runs
+// (code-central-256).
+
 package storetest
 
 import (

@@ -332,4 +332,9 @@ func TestGetCIWatchHasThePushedCommitsStillWaiting(t *testing.T) {
 	if got := waiting(); len(got) != 1 {
 		t.Fatalf("waiting = %+v, want abc123 watched again while a run is unfinished", got)
 	}
+	// A run that never finishes, or never starts, isn't watched for good.
+	srv.Clock.Advance(24 * time.Hour)
+	if got := waiting(); len(got) != 0 {
+		t.Fatalf("waiting = %+v, want nothing a day after the push", got)
+	}
 }

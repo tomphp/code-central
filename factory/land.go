@@ -147,8 +147,10 @@ func (f *factory) pushBranch(ctx context.Context, tk core.TicketView, remote, co
 	}
 	if pushed {
 		f.printf("%s: pushed %s to %s", tk.ID, tk.Branch, remote)
+		// Only a push made now: one made before CI Tracking was turned on
+		// isn't tracked.
+		f.reportPushed(ctx, tk, remote, tk.Branch, commit)
 	}
-	f.reportPushed(ctx, tk, remote, tk.Branch)
 }
 
 // workOf is the commit of the work the human reviewed: the finish
@@ -285,20 +287,24 @@ func (f *factory) landPushed(ctx context.Context, tk core.TicketView, landing co
 		if pushed {
 			f.printf("%s: pushed %s to %s", tk.ID, f.base, landing.Remote)
 		}
-		f.reportPushed(ctx, tk, landing.Remote, f.base)
+		f.reportPushed(ctx, tk, landing.Remote, f.base, commit)
 	}
 	f.landAt(ctx, tk, commit)
 }
 
 // reportPushed reports, while CI Tracking is on, the commit the remote's
-// branch now holds as tk's pushed commit: the one CI runs on. It is
-// reported once, when it isn't tk's pushed commit already.
-func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, remote, branch string) {
+// branch now holds as tk's pushed commit: the one CI runs on. Without a
+// remote-tracking ref to read, it is pushed, the commit just pushed. It
+// is reported once, when it isn't tk's pushed commit already.
+func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, remote, branch, pushed string) {
 	if !f.tracksCI {
 		return
 	}
 	commit, err := f.repository.commit("refs/remotes/" + remote + "/" + branch)
-	if err != nil || (tk.PushedCommit != nil && tk.PushedCommit.Commit == commit) {
+	if err != nil {
+		commit = pushed
+	}
+	if tk.PushedCommit != nil && tk.PushedCommit.Commit == commit {
 		return
 	}
 	if _, err := f.client.ReportPushedCommit(ctx, f.project, core.ReportPushedCommitInput{Ticket: core.Ref(tk.ID), Commit: commit}); err != nil {

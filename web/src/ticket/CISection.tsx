@@ -21,8 +21,13 @@ export function runStatus(run: CIRunView): string {
   return CONCLUSION_LABEL[run.conclusion];
 }
 
+const runName = (run: CIRunView) => run.name || run.workflow;
+const shortCommit = (commit: string) => commit.slice(0, 7);
+
 const jobStatus = (job: CIJobView) => (job.conclusion ? CONCLUSION_LABEL[job.conclusion] : "running");
 
+// CISection is the Ticket's CI section, or nothing while it has no CI
+// Runs.
 export function CISection({ ticket: t }: { ticket: TicketView }) {
   const runs = t.ci_runs ?? [];
   if (runs.length === 0) return null;
@@ -36,7 +41,7 @@ export function CISection({ ticket: t }: { ticket: TicketView }) {
         {t.ci_result && (
           <span className={`ci-result ci-${t.ci_result}`}>{t.ci_result}</span>
         )}{" "}
-        {latest && <code>{latest.slice(0, 7)}</code>}
+        {latest && <code>{shortCommit(latest)}</code>}
       </h3>
       <CIRuns runs={current} />
       {earlier.length > 0 && (
@@ -55,14 +60,14 @@ function CIRuns({ runs }: { runs: CIRunView[] }) {
       {runs.map((run) => {
         const status = runStatus(run);
         return (
-          <li key={`${run.id}/${run.attempt}`} className={run.ignored ? "ci-run ignored" : "ci-run"} aria-label={run.name || run.workflow}>
+          <li key={`${run.id}/${run.attempt}`} className={run.ignored ? "ci-run ignored" : "ci-run"} aria-label={runName(run)}>
             <div>
               <a href={run.url} target="_blank" rel="noreferrer">
-                {run.name || run.workflow}
+                {runName(run)}
               </a>{" "}
               <span className="muted small">{run.workflow}</span> <span className={`ci-status ci-${status.replace(" ", "-")}`}>{status}</span>
               {run.attempt > 1 && <span className="muted small"> · attempt {run.attempt}</span>}
-              {run.commit && <span className="muted small"> · {run.commit.slice(0, 7)}</span>}
+              {run.commit && <span className="muted small"> · {shortCommit(run.commit)}</span>}
               {run.ignored && <span className="label">ignored</span>}
             </div>
             {run.jobs.length > 0 && (

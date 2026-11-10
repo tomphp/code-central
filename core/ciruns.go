@@ -39,6 +39,11 @@ const (
 // after another has already finished.
 const ciNewlyPushed = 5 * time.Minute
 
+// ciWaitLimit is how long after its push a pushed commit is watched at
+// most: one GitHub never starts a run for, say in a repository with no
+// workflows, would otherwise be watched every 30 seconds for good.
+const ciWaitLimit = 24 * time.Hour
+
 // PushedCommitView is a commit the Factory pushed for a Ticket, and when
 // Code Central heard of it.
 type PushedCommitView struct {
@@ -156,7 +161,7 @@ func ciResultOf(commit string, runs []store.CIRun) CIResult {
 		switch {
 		case run.Status != store.CICompleted:
 			return CIRunning
-		case run.Conclusion == store.CIFailure || run.Conclusion == store.CICancelled || run.Conclusion == store.CITimedOut:
+		case run.Conclusion.Failed():
 			failed = true
 		}
 	}
@@ -354,7 +359,8 @@ type CIWaitingCommit struct {
 
 // ciWaiting is every Ticket's latest pushed commit whose CI result is
 // still running, or that was pushed in the last ciNewlyPushed, oldest
-// push first. A Cancelled Ticket's is left out.
+// push first. A Cancelled Ticket's is left out, as is one pushed more
+// than ciWaitLimit ago.
 func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 	out := []CIWaitingCommit{}
 	runs := r.CIRuns(key)
@@ -363,6 +369,9 @@ func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 			continue
 		}
 		latest := t.PushedCommits[len(t.PushedCommits)-1]
+		if now.Sub(latest.Pushed) >= ciWaitLimit {
+			continue
+		}
 		var mine []store.CIRun
 		for _, run := range runs {
 			if run.Ticket == t.Number {

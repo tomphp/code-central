@@ -120,3 +120,20 @@ func TestWithCITrackingOffThePushedCommitIsNotReported(t *testing.T) {
 		t.Fatalf("pushed commit %+v, want none with CI Tracking off", tk.PushedCommit)
 	}
 }
+
+func TestABranchPushedBeforeCITrackingWasOnIsNotTracked(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.AddRemote("origin")
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
+
+	r := h.Start()
+	r.WaitForOutput(id + ": pushed " + id + " to origin")
+	trackCI(t, h)
+	r.Poll()
+	r.Poll()
+	if tk := h.Ticket(id); tk.PushedCommit != nil {
+		t.Fatalf("pushed commit %+v, want none for a push made before CI Tracking was on", tk.PushedCommit)
+	}
+}

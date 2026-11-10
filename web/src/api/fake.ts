@@ -72,6 +72,7 @@ import {
   type HeldSessionEvent,
   type LatestEvent,
   type LinkedRow,
+  type CIConclusion,
   type CIResult,
   type CIRule,
   type CIRunView,
@@ -257,6 +258,10 @@ interface FakeProject {
   ci: CISettings;
   next: number;
 }
+
+// FAILED_CONCLUSIONS are the conclusions that fail a CI result, as
+// store's CIConclusion.Failed.
+const FAILED_CONCLUSIONS: CIConclusion[] = ["failure", "cancelled", "timed_out"];
 
 export type SeedTicket = Partial<TicketView> & { title: string };
 export type SeedSpec = Partial<SpecView> & { title: string };
@@ -965,6 +970,19 @@ export class FakeApi implements Api {
   async reportCIRuns(key: string, runs: Omit<CIRunView, "ignored">[]): Promise<void> {
     const p = this.writable(key);
     if (!p.ci.tracking) throw new ApiError(403, "action_not_allowed", `CI Tracking is off on ${key}, so it tracks no CI Runs`);
+    runs.forEach((r, i) => {
+      const field = `runs[${i}]`;
+      if (!["queued", "in_progress", "completed"].includes(r.status)) {
+        throw new ApiError(422, "invalid", `"${r.status}" isn't a CI Run status`, `${field}.status`);
+      }
+      if ((r.status === "completed") !== (r.conclusion !== undefined)) {
+        throw new ApiError(422, "invalid", "a completed CI Run has a conclusion, and an unfinished one has none", `${field}.conclusion`);
+      }
+      if ((r.ticket === undefined) === (r.rule === undefined)) {
+        throw new ApiError(422, "invalid", "a CI Run is tracked against one Ticket or one CI Rule", `${field}.ticket`);
+      }
+      if (r.ticket !== undefined) this.ticket(key, r.ticket);
+    });
     const all = this.ciRuns.get(key) ?? [];
     for (const r of runs) {
       const run = { ...structuredClone(r), ignored: p.ci.ignored_workflows.includes(r.workflow) };
@@ -993,7 +1011,7 @@ export class FakeApi implements Api {
     const ci_result: CIResult =
       finished.length === 0 || finished.some((r) => r.status !== "completed")
         ? "running"
-        : finished.some((r) => r.conclusion === "failure" || r.conclusion === "cancelled" || r.conclusion === "timed_out")
+        : finished.some((r) => r.conclusion !== undefined && FAILED_CONCLUSIONS.includes(r.conclusion))
           ? "failed"
           : "passed";
     this.updateTicket(t.id, { pushed_commit: latest, ci_result, ...(mine.length > 0 && { ci_runs: structuredClone(mine) }) });

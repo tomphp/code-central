@@ -367,9 +367,17 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.api.act("acme", id, "accept", {});
       await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
 
-      // With CI Tracking off, a push isn't tracked.
+      // Only an Accepted or In Review Ticket is pushed.
+      const ready = await d.createTicket("acme", "Not yet", "Ready");
+      const early = await d.reportPushedCommit("acme", ready, "abc123").catch((e) => e);
+      expect(String(early.code ?? early.message)).toContain("action_not_allowed");
+
+      // With CI Tracking off, a push isn't tracked, and no runs are taken.
       await d.reportPushedCommit("acme", id, "abc123");
       expect(await d.api.getTicket("acme", id)).not.toHaveProperty("pushed_commit");
+
+      const off = await d.reportCIRuns("acme", []).catch((e) => e);
+      expect(String(off.code ?? off.message)).toContain("action_not_allowed");
 
       await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"] });
       await d.reportPushedCommit("acme", id, "abc123");
@@ -390,6 +398,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         jobs: [{ name: "test", ...(conclusion && { conclusion }), url: `https://github.com/acme/web/actions/runs/${n}/job/1` }],
         ticket: id,
       });
+      const concluded = await d.reportCIRuns("acme", [{ ...run(1, "ci.yml", "in_progress"), conclusion: "success" }]).catch((e) => e);
+      expect(String(concluded.code ?? concluded.message)).toContain("invalid");
       await d.reportCIRuns("acme", [run(1, "ci.yml", "in_progress"), run(2, "nightly.yml", "completed", "failure")]);
       const running = await d.api.getTicket("acme", id);
       expect(running.ci_result).toBe("running");

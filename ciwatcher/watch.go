@@ -163,13 +163,21 @@ func (w *watcher) reportRuns(ctx context.Context, p Provider, waiting []core.CIW
 	for _, run := range changed {
 		in.Runs = append(in.Runs, run.CIRunView)
 	}
-	if _, err := w.Client.ReportCIRuns(ctx, w.Project, in); err != nil {
-		if ctx.Err() == nil {
-			w.logf("report_ci_runs: %v", err)
+	if _, err := w.Client.ReportCIRuns(ctx, w.Project, in); err == nil {
+		for _, run := range changed {
+			w.reported[runKey{run.ID, run.Attempt}] = run.Updated
 		}
 		return
 	}
+	// One run Code Central refuses mustn't hold up the rest: report each
+	// on its own, so only the refused one is tried again next poll.
 	for _, run := range changed {
+		if _, err := w.Client.ReportCIRuns(ctx, w.Project, core.ReportCIRunsInput{Runs: []core.CIRunView{run.CIRunView}}); err != nil {
+			if ctx.Err() == nil {
+				w.logf("report_ci_runs: run %d: %v", run.ID, err)
+			}
+			continue
+		}
 		w.reported[runKey{run.ID, run.Attempt}] = run.Updated
 	}
 }
