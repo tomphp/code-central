@@ -310,7 +310,7 @@ The last line is there when the failing commit is where a Ticket landed, such as
 - **Filter label**: one GitHub label, such as `code-central`. Only issues carrying it come in. Leave it empty to bring in every open issue.
 - **New issues need me**: off by default. When on, each new issue also shows in Needs Me and Focus Mode until you triage it.
 
-For now, Save only records these settings and creates the Issues Spec: no issues come in yet.
+For now, the Issue Watcher only checks it can reach the repository: no issues come in yet.
 
 **Save** applies the settings, and every open UI tab shows them. Turning GitHub Issues on is checked first: Code Central checks that `gh` is installed and logged in, can read the repository, that the repository has its issues turned on, and that the account `gh` is logged in as can triage them, which labelling and closing issues needs. If any of these fails, Save refuses, GitHub Issues stays off, and the section says what is wrong and how to fix it, for example:
 
@@ -335,6 +335,16 @@ Incoming Issues arrive on acme-api-12.
 ```
 
 It is an ordinary Spec, with no Stages. Turning GitHub Issues off and on again reuses it, and changing the repository retitles it unless you renamed it. Turning GitHub Issues off keeps the repository, label and New issues need me for the next time you turn it on, and leaves every linked Spec and Ticket as it is.
+
+While GitHub Issues is on, the service runs the Project's **Issue Watcher**, the process that links its issues, whether or not the Factory is running. The GitHub Issues section shows its status below Save. Every 2 minutes it makes sure again that `gh` is installed and logged in, can read the repository, that the repository has its issues turned on, and that the login can triage them. Its status reads as the CI Watcher's does:
+
+- **Issue Watcher: Watching acme/acme-api.**: it can reach the repository's issues.
+- **Watching acme/acme-api.** with **GitHub is rate-limiting it until 10:15**: GitHub has refused its calls for its rate limit. It makes no calls until the time GitHub gave, then carries on by itself. When GitHub gives no time, it waits twice as long as it last did, up to 10 minutes. This isn't an error, and sends no Notification.
+- **Issue Watcher: Error.**: it can't, with what is wrong and how to fix it, as a refused Save says it. You get one Notification when it goes into an error, not one per check, and once you fix the cause, the next check brings it back to Watching by itself. It reads the **gh path** Option on every check.
+- **Error** saying **The Issue Watcher crashed, restarted 3 times**: the Issue Watcher process keeps exiting. The service restarts it by itself, waiting longer after each crash, up to 5 minutes, and shows the last line it wrote; its output is in [the service log](running-as-a-service.md#the-service-log). You get one Notification when it starts crashing, not one per restart.
+- **Issue Watcher: Starting; it hasn't reported yet.**: it hasn't checked since the service started or GitHub Issues was turned on. Changing the repository starts it here again.
+
+The service stops the Issue Watcher when you turn GitHub Issues off, when you archive the Project and when the service itself stops.
 
 ## When `init` behaves differently
 

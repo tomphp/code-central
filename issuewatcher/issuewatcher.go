@@ -1,7 +1,8 @@
 // Package issuewatcher is the Issue Watcher (Spec code-central-279): the
 // separate process, a hidden subcommand of the code-central binary, that
 // links one Project's GitHub issues through gh, the GitHub CLI, and its
-// own login (package gh). The service makes no external calls itself
+// own login (package gh). The service runs one per Project with GitHub
+// Issues on (Watch, in watch.go). The service makes no external calls itself
 // (ADR 0002, ADR 0004), so it runs the Issue Watcher once in its check
 // mode before GitHub Issues is turned on (Check, and Checker on the
 // service's side).
@@ -47,19 +48,26 @@ func Checker(program string, environ []string) core.IssuesCheck {
 // least triage permission there, which labelling and closing issues need.
 // Being rate-limited fails the check, as there is no knowing yet.
 func Check(ctx context.Context, in core.IssuesCheckInput, env gh.Env) core.WatcherCheckResult {
-	prog, missing := gh.Find(in.GHPath, env)
-	if missing != nil {
-		return *missing
-	}
-	r, err := gh.CheckLogin(ctx, env, prog)
-	if r.Problem == "" && err == nil {
-		r, err = checkRepository(ctx, env, prog, in.Repository)
-	}
+	r, err := checkAccess(ctx, in, env)
 	var limit *gh.RateLimitError
 	if errors.As(err, &limit) {
 		r = limit.CheckResult(time.Now())
 	}
 	return r
+}
+
+// checkAccess is Check, as each poll runs it too: GitHub rate-limiting a
+// call is a *gh.RateLimitError, not a problem.
+func checkAccess(ctx context.Context, in core.IssuesCheckInput, env gh.Env) (core.WatcherCheckResult, error) {
+	prog, missing := gh.Find(in.GHPath, env)
+	if missing != nil {
+		return *missing, nil
+	}
+	r, err := gh.CheckLogin(ctx, env, prog)
+	if r.Problem == "" && err == nil {
+		r, err = checkRepository(ctx, env, prog, in.Repository)
+	}
+	return r, err
 }
 
 // ghRepository is what the check reads of a repository from GitHub's

@@ -95,6 +95,8 @@ import {
   type GitHubIssuesSettings,
   type CIWatcherReport,
   type CIWatcherStatus,
+  type IssueWatcherReport,
+  type IssueWatcherStatus,
   type PushedCommitView,
   type CITrackingChange,
   type Landing,
@@ -389,7 +391,7 @@ export class FakeApi implements Api {
         rules: [],
         watcher: { state: "not_reported" },
       },
-      github_issues: { on: false, repository: "", label: "", new_issues_need_me: false },
+      github_issues: { on: false, repository: "", label: "", new_issues_need_me: false, watcher: { state: "not_reported" } },
       next: 1,
     });
     this.emit({ type: "project.changed", project: key });
@@ -511,6 +513,24 @@ export class FakeApi implements Api {
         since: this.now.toISOString(),
       },
     });
+  }
+
+  // seedIssueWatcherCrash shows key's Issue Watcher as the service
+  // reports one that crashed (code-central-285), restarted restarts times.
+  seedIssueWatcherCrash(key: string, restarts: number, lastLine: string) {
+    const p = this.project(key);
+    const times = restarts === 1 ? "time" : "times";
+    p.github_issues = {
+      ...p.github_issues,
+      watcher: {
+        state: "error",
+        problem: "crashed",
+        message: `The Issue Watcher crashed, restarted ${restarts} ${times}; the last line it wrote: ${lastLine}`,
+        fix: "Code Central restarts it by itself, waiting longer after each crash. Its output is in the service's log.",
+        since: this.now.toISOString(),
+      },
+    };
+    this.emit({ type: "project.changed", project: key });
   }
 
   // seedOptions sets the Options as a store would hold them, recording no
@@ -1042,16 +1062,40 @@ export class FakeApi implements Api {
     if (status.problem === "crashed") throw new ApiError(422, "invalid", `"crashed" isn't a CI problem`, "problem");
     if (status.state === "error" && status.rate_limited_until)
       throw new ApiError(422, "invalid", "only a Watching CI Watcher is rate-limited; an error has its own fix", "rate_limited_until");
-    const watcher: CIWatcherStatus =
+    const watcher = this.nextWatcher(p.ci.watcher, status);
+    if (watcher) this.setCI(p, { ...p.ci, watcher });
+  }
+
+  // reportIssueWatcherStatus is the Issue Watcher's report of its status
+  // (code-central-285), as the integration Actor, refused while GitHub
+  // Issues is off. Only the service reports a crash
+  // (seedIssueWatcherCrash).
+  async reportIssueWatcherStatus(key: string, status: IssueWatcherReport): Promise<void> {
+    const p = this.writable(key);
+    if (!p.github_issues.on) throw new ApiError(403, "action_not_allowed", `GitHub Issues is off on ${key}, so it has no Issue Watcher`);
+    if (status.problem === "crashed") throw new ApiError(422, "invalid", `"crashed" isn't a GitHub Issues problem`, "problem");
+    if (status.state === "error" && status.rate_limited_until)
+      throw new ApiError(422, "invalid", "only a Watching Issue Watcher is rate-limited; an error has its own fix", "rate_limited_until");
+    const watcher = this.nextWatcher(p.github_issues.watcher, status);
+    if (!watcher) return;
+    p.github_issues = { ...p.github_issues, watcher };
+    this.emit({ type: "project.changed", project: key });
+  }
+
+  // nextWatcher is a Watcher's status after it reports status, keeping
+  // since while its state is the same; undefined when nothing changed.
+  private nextWatcher<W extends IssueWatcherStatus>(current: W, status: Omit<W, "since">): W | undefined {
+    const watcher = (
       status.state === "error"
         ? { state: "error", problem: status.problem, message: status.message, fix: status.fix }
         : status.rate_limited_until
           ? { state: status.state, rate_limited_until: status.rate_limited_until }
-          : { state: status.state };
-    const { since: _, ...was } = p.ci.watcher;
-    if (JSON.stringify(was) === JSON.stringify(watcher)) return;
-    watcher.since = was.state === watcher.state ? p.ci.watcher.since : this.now.toISOString();
-    this.setCI(p, { ...p.ci, watcher });
+          : { state: status.state }
+    ) as W;
+    const { since: _, ...was } = current;
+    if (JSON.stringify(was) === JSON.stringify(watcher)) return undefined;
+    watcher.since = was.state === watcher.state ? current.since : this.now.toISOString();
+    return watcher;
   }
 
   // reportPushRemote is the Factory's report of its Push remote's URL,
@@ -1077,7 +1121,17 @@ export class FakeApi implements Api {
     }
     let spec = was.spec;
     if (change.on && !spec) spec = this.addSpec(key, { title: issuesSpecTitle(repository), body: ISSUES_SPEC_BODY }).id;
-    const next: GitHubIssuesSettings = { on: change.on, repository, label: change.label.trim(), new_issues_need_me: change.new_issues_need_me, ...(spec && { spec }) };
+    // Turning GitHub Issues off, or changing its repository, forgets the
+    // Issue Watcher's status.
+    const watcher: IssueWatcherStatus = change.on && was.repository === repository ? was.watcher : { state: "not_reported" };
+    const next: GitHubIssuesSettings = {
+      on: change.on,
+      repository,
+      label: change.label.trim(),
+      new_issues_need_me: change.new_issues_need_me,
+      ...(spec && { spec }),
+      watcher,
+    };
     if (JSON.stringify(next) !== JSON.stringify(was)) {
       p.github_issues = next;
       this.emit({ type: "project.changed", project: key });

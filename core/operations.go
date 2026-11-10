@@ -142,6 +142,9 @@ var Operations = []Op{
 
 	// GitHub Issues (Spec code-central-279).
 	{Name: "set_github_issues", Audience: HumanOnly, Write: true},
+	// The Issue Watcher's own (code-central-285).
+	{Name: "get_issue_watch", Audience: IntegrationOnly},
+	{Name: "report_issue_watcher_status", Audience: IntegrationOnly, Write: true},
 }
 
 // Operation looks an operation up by name.
