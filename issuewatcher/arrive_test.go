@@ -102,21 +102,28 @@ func (w *watching) polled() {
 	w.srv.Clock.BlockUntil(1)
 }
 
-// stop closes the Issue Watcher's stdin and waits for it to exit.
+// stop closes the Issue Watcher's stdin and waits for it to exit, as it
+// should, with no error.
 func (w *watching) stop() {
 	w.t.Helper()
 	w.stdin.Close()
 	select {
-	case <-w.done:
+	case err := <-w.done:
+		if err != nil {
+			w.t.Fatalf("Watch = %v, want nil on its stdin closing", err)
+		}
 	case <-time.After(10 * time.Second):
 		w.t.Fatal("the Issue Watcher kept running after its stdin closed")
 	}
 }
 
+// issueLine is openIssue(n) as incoming lists it.
 func issueLine(n int) string {
 	return fmt.Sprintf("acme/web#%d https://github.com/acme/web/issues/%d Issue %d: Body %d", n, n, n, n)
 }
 
+// wantIncoming checks acme's Incoming Issues are openIssue's ns, and
+// that nothing else is linked: each issue arrived once.
 func wantIncoming(t *testing.T, w *watching, ns ...int) {
 	t.Helper()
 	var want []string

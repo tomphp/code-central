@@ -74,10 +74,7 @@ func TestGetIssueWatchHasTheGitHubIssuesSettingsAndGHPath(t *testing.T) {
 
 	got := httpOK(t, srv, getIssueWatch("acme"))
 	want := map[string]any{"project": "acme", "on": true, "repository": "acme/web", "label": "triage", "gh_path": gh, "spec": "acme-4"}
-	if issues, ok := got["issues"].([]any); !ok || len(issues) != 0 {
-		t.Fatalf("get_issue_watch issues = %v, want none", got["issues"])
-	}
-	delete(got, "issues")
+	noIncomingIssues(t, got)
 	if !mapsEqual(got, want) {
 		t.Fatalf("get_issue_watch = %v, want %v", got, want)
 	}
@@ -87,13 +84,20 @@ func TestGetIssueWatchSaysWhenGitHubIssuesIsOff(t *testing.T) {
 	srv := newServer(t)
 	got := httpOK(t, srv, getIssueWatch("acme"))
 	want := map[string]any{"project": "acme", "on": false, "repository": "", "label": "", "gh_path": ""}
-	if issues, ok := got["issues"].([]any); !ok || len(issues) != 0 {
-		t.Fatalf("get_issue_watch issues = %v, want none", got["issues"])
-	}
-	delete(got, "issues")
+	noIncomingIssues(t, got)
 	if !mapsEqual(got, want) {
 		t.Fatalf("get_issue_watch = %v, want %v", got, want)
 	}
+}
+
+// noIncomingIssues checks get_issue_watch's out lists no Incoming Issues,
+// and takes them out of it, leaving the settings to compare.
+func noIncomingIssues(t *testing.T, out map[string]any) {
+	t.Helper()
+	if issues, ok := out["issues"].([]any); !ok || len(issues) != 0 {
+		t.Fatalf("get_issue_watch issues = %v, want none", out["issues"])
+	}
+	delete(out, "issues")
 }
 
 // createIncomingIssue creates a Draft Ticket on spec linked to acme/web's
