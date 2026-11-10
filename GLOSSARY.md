@@ -246,7 +246,7 @@ One thing in Needs Me the human can decide alone: one open Question, or one wait
 _Avoid_: Action, card, task
 
 **Activity Dashboard**:
-What Focus Mode shows when nothing needs the human, unless the human has chosen All clear. It shows how many Tickets are Ready and In Progress, and lists the In Progress Tickets. A count pulses when it changes, and an entry pulses when its Ticket changes.
+What Focus Mode shows when nothing needs the human, unless the human has chosen All clear. It shows how many Tickets are Ready and In Progress, and lists the In Progress Tickets. When a Project in its scope that isn't Archived has CI Tracking on, a CI Running block also counts the CI Runs still going that count towards a Ticket's CI result. A count pulses when it changes, and an entry pulses when its Ticket changes.
 _Avoid_: Status board, overview, monitor
 
 **Option**:
