@@ -27,13 +27,22 @@ const (
 	// LabelDraft is on an Incoming Issue, a Draft or Ready Ticket on the
 	// Issues Spec that no triage action has taken off it.
 	LabelDraft = StatusLabelPrefix + "draft"
+	// LabelRequirement is on an issue To Requirement made a Requirement
+	// of, while the Requirement's Stages aren't all Done.
+	LabelRequirement = StatusLabelPrefix + "requirement"
 	// LabelWontFix is on an issue the human chose Won't fix for.
 	LabelWontFix = StatusLabelPrefix + "wont-fix"
 )
 
-// CommentWontFix is the key of the comment with the human's Won't fix
-// reason.
-const CommentWontFix = "wont-fix"
+// The keys of the comments written to an issue.
+const (
+	// CommentContext is the key of the comment with the context the human
+	// gave To Requirement.
+	CommentContext = "context"
+	// CommentWontFix is the key of the comment with the human's Won't fix
+	// reason.
+	CommentWontFix = "wont-fix"
+)
 
 // IssueClose is how an issue is closed.
 type IssueClose string
@@ -79,19 +88,24 @@ func IssueMarker(target, key string) string {
 func (c *Core) SetUIURL(url string) { c.uiURL = strings.TrimRight(url, "/") }
 
 // issueComment is the comment key on target, with text, as it is posted.
-func (c *Core) issueComment(target, key, text string) IssueComment {
-	link := fmt.Sprintf("[%s in Code Central](%s/?view=inbox&ticket=%s)", target, c.uiURL, url.QueryEscape(target))
+// Its link back opens the Ticket, or with spec the Spec, in the UI.
+func (c *Core) issueComment(target string, spec bool, key, text string) IssueComment {
+	param := "ticket="
+	if spec {
+		param = "list=requirements&requirement="
+	}
+	link := fmt.Sprintf("[%s in Code Central](%s/?view=inbox&%s%s)", target, c.uiURL, param, url.QueryEscape(target))
 	return IssueComment{Key: key, Body: IssueMarker(target, key) + "\n" + strings.TrimSpace(text) + "\n\n" + link}
 }
 
-// wontFixReason is t's Won't fix reason, if the human chose Won't fix
-// for it: the comment its wont_fix made, empty when it gave none.
-func wontFixReason(t store.Ticket) (reason string, ok bool) {
+// triageComment is the comment the human's triage action via gave when
+// it Cancelled t, if it did: empty when it gave none.
+func triageComment(t store.Ticket, via string) (comment string, ok bool) {
 	if t.State != store.Cancelled || len(t.Moves) == 0 {
 		return "", false
 	}
 	m := t.Moves[len(t.Moves)-1]
-	if m.To != store.Cancelled || m.Via != OptionWontFix {
+	if m.To != store.Cancelled || m.Via != via {
 		return "", false
 	}
 	for _, cm := range slices.Backward(t.Comments) {
@@ -103,27 +117,69 @@ func wontFixReason(t store.Ticket) (reason string, ok bool) {
 }
 
 // ticketIssueWrites is what is due on the issue t, a Ticket on key's
-// Issues Spec, is linked to; ok is false when nothing is. Its label and
-// closing are due only while the issue was last seen open, and nothing
-// is due on a deleted issue.
+// Issues Spec, is linked to; ok is false when nothing is.
 func (c *Core) ticketIssueWrites(key string, t store.Ticket) (w IssueWrites, ok bool) {
-	if !t.Link.Owned() {
+	if !t.Link.Attached() {
 		return IssueWrites{}, false
 	}
 	id := DisplayID(key, t.Number)
 	w = IssueWrites{Target: id, Link: *linkView(t.Link), Comments: []IssueComment{}}
-	if reason, ok := wontFixReason(t); ok {
+	if reason, ok := triageComment(t, OptionWontFix); ok {
 		w.Label, w.Close = LabelWontFix, CloseNotPlanned
 		if strings.TrimSpace(reason) != "" && !slices.Contains(t.Link.Written, CommentWontFix) {
-			w.Comments = append(w.Comments, c.issueComment(id, CommentWontFix, reason))
+			w.Comments = append(w.Comments, c.issueComment(id, false, CommentWontFix, reason))
 		}
 	} else if t.State == store.Draft || t.State == store.Ready {
 		w.Label = LabelDraft
 	}
-	if t.Link.ExternalState != store.ExternalOpen {
+	return dueWhile(t.Link.ExternalState, w)
+}
+
+// specIssueWrites is what is due on the issue s, a Spec with an outbound
+// Link that isn't detached, is linked to; ok is false when nothing is.
+// The context comment is due when To Requirement was given context, and
+// the issue should carry code-central:requirement while the
+// Requirement's Stages aren't all Done.
+func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w IssueWrites, ok bool) {
+	if !s.Link.Attached() || !s.Link.Outbound {
+		return IssueWrites{}, false
+	}
+	id := DisplayID(key, s.Number)
+	w = IssueWrites{Target: id, Link: *linkView(s.Link), Comments: []IssueComment{}}
+	if extra := requirementContext(r, key, s.Link); extra != "" && !slices.Contains(s.Link.Written, CommentContext) {
+		w.Comments = append(w.Comments, c.issueComment(id, true, CommentContext, extra))
+	}
+	if slices.ContainsFunc(specTickets(r, key, s.Number), func(t store.Ticket) bool {
+		return StageOf(t.Labels) != "" && t.State != store.Done
+	}) {
+		w.Label = LabelRequirement
+	}
+	return dueWhile(s.Link.ExternalState, w)
+}
+
+// requirementContext is the context the human gave To Requirement for
+// the issue l links to: the comment to_requirement made on its Incoming
+// Issue, empty when it gave none.
+func requirementContext(r store.Reader, key string, l store.Link) string {
+	for _, t := range r.Tickets(key) {
+		if t.Link.Integration != l.Integration || t.Link.ID != l.ID {
+			continue
+		}
+		if extra, ok := triageComment(t, OptionToRequirement); ok {
+			return extra
+		}
+	}
+	return ""
+}
+
+// dueWhile is w, the writes due on an issue last seen as state: its label
+// and closing are due only while it is open, and nothing is due on a
+// deleted issue. ok is false when nothing is due.
+func dueWhile(state store.ExternalState, w IssueWrites) (IssueWrites, bool) {
+	if state != store.ExternalOpen {
 		w.Label, w.Close = "", ""
 	}
-	if t.Link.ExternalState == store.ExternalDeleted {
+	if state == store.ExternalDeleted {
 		w.Comments = []IssueComment{}
 	}
 	return w, len(w.Comments) > 0 || w.Label != "" || w.Close != ""

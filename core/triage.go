@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -18,12 +19,13 @@ import (
 
 // The triage actions, each an operation's name.
 const (
-	OptionKeepAsDraft = "keep_as_draft"
-	OptionWontFix     = "wont_fix"
+	OptionKeepAsDraft   = "keep_as_draft"
+	OptionToRequirement = "to_requirement"
+	OptionWontFix       = "wont_fix"
 )
 
 // triageActions are the triage actions in the order they are offered.
-var triageActions = []string{OptionKeepAsDraft, OptionWontFix}
+var triageActions = []string{OptionKeepAsDraft, OptionToRequirement, OptionWontFix}
 
 // issuesSpec is the number of key's Issues Spec, 0 when it has none.
 func issuesSpec(r store.Reader, key string) int {
@@ -92,6 +94,101 @@ func (c *Core) KeepAsDraft(ctx context.Context, key string, in TicketInput) (Wri
 		t.AwaitingTriage = false
 		return true, nil
 	})
+}
+
+// ToRequirementInput is the human's to_requirement(ticket, context?).
+type ToRequirementInput struct {
+	Ticket  Ref    `json:"ticket"`
+	Context string `json:"context,omitempty"`
+	// Full asks for the records in place of the Acknowledgements.
+	Full bool `json:"full,omitempty"`
+}
+
+// ToRequirementResult is the Incoming Issue To Requirement Cancelled, and
+// the Requirement it became.
+type ToRequirementResult struct {
+	Ticket Written[TicketView] `json:"ticket"`
+	SubmitRequirementResult
+}
+
+// contextHeading heads the human's context in a Requirement made by To
+// Requirement.
+const contextHeading = "## Context"
+
+// requirementText is the text of the Requirement To Requirement makes of
+// t: its title as a heading, then its description, then the context, if
+// given, under its own heading.
+func requirementText(t store.Ticket, extra string) string {
+	parts := []string{"# " + t.Title}
+	if d := strings.TrimSpace(t.Description); d != "" {
+		parts = append(parts, d)
+	}
+	if extra != "" {
+		parts = append(parts, contextHeading, extra)
+	}
+	return strings.Join(parts, "\n\n") + "\n"
+}
+
+// ToRequirement is the human's to_requirement(ticket, context?): in one
+// store update it makes an Incoming Issue a Requirement whose Spec has an
+// outbound Link to the same issue, carrying over the comment keys
+// written; detaches the Incoming Issue's Link; and Cancels it with the
+// grilling Stage as its Replacement, the context as its comment, and its
+// awaiting triage cleared. Its Move to Cancelled is via to_requirement,
+// so the context comment is due on the issue (writeback.go).
+func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementInput) (ToRequirementResult, error) {
+	if err := humanOnly(ctx, OptionToRequirement); err != nil {
+		return ToRequirementResult{}, err
+	}
+	var res ToRequirementResult
+	err := c.store.Update(func(w store.Writer) error {
+		if err := writable(w, key); err != nil {
+			return err
+		}
+		t, err := resolveTicket(w, key, OptionToRequirement, "ticket", in.Ticket)
+		if err != nil {
+			return err
+		}
+		if why := whyNotIncoming(w, key, t); why != "" {
+			return &Error{Code: ActionNotAllowed, Message: why}
+		}
+		if id, ok := linkedTo(w, key, t.Link, true); ok {
+			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s %s is already linked to Spec %s", t.Link.Integration, t.Link.ID, id)}
+		}
+		var before TicketView
+		if !in.Full {
+			before = c.ticketView(w, key, t)
+		}
+		extra := strings.TrimSpace(in.Context)
+		link := t.Link
+		link.Outbound, link.Written = true, slices.Clone(t.Link.Written)
+		im, specN, stageNs := c.requirementImport(w, key, store.Spec{Title: t.Title, Body: requirementText(t, extra), Link: link}, Stages, "")
+
+		// The grilling Stage is new and waits on nothing, so as the
+		// Replacement it can't make a cycle.
+		now := c.now()
+		if err := transition(ctx, &t, key, "cancel", "", now); err != nil {
+			return err
+		}
+		t.Moves[len(t.Moves)-1].Via = OptionToRequirement
+		t.Replacements = stageNs[:1]
+		if extra != "" {
+			addComment(&t, Human, now, 0, extra)
+		}
+		t.Link.Detached = true
+		t.AwaitingTriage = false
+		t.Updated = now
+		im.Rewritten = []store.Ticket{t}
+		if err := w.PutImport(key, im); err != nil {
+			return err
+		}
+		if res.SubmitRequirementResult, err = c.requirementResult(w, key, specN, stageNs, in.Full); err != nil {
+			return err
+		}
+		res.Ticket, err = acknowledge(before, c.ticketView(w, key, t), in.Full)
+		return err
+	})
+	return res, err
 }
 
 // WontFixInput is the human's wont_fix(ticket, reason?).

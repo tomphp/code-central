@@ -28,8 +28,8 @@ type IssueWatch struct {
 	// Issues are the Incoming Issues, in number order, so the Issue
 	// Watcher sees which issues it has and which have changed.
 	Issues []IncomingIssue `json:"issues"`
-	// Writes are the items whose issues have GitHub writes due, in number
-	// order (writeback.go).
+	// Writes are the items, Incoming Issues and outbound Specs, whose
+	// issues have GitHub writes due, in number order (writeback.go).
 	Writes []IssueWrites `json:"writes"`
 }
 
@@ -55,6 +55,12 @@ func (c *Core) GetIssueWatch(_ context.Context, key string) (IssueWatch, error) 
 		if p.GitHubIssues.Spec == 0 {
 			return nil
 		}
+		byNumber := map[int]IssueWrites{}
+		for _, s := range r.Specs(key) {
+			if w, ok := c.specIssueWrites(r, key, s); ok {
+				byNumber[s.Number] = w
+			}
+		}
 		for _, t := range r.Tickets(key) {
 			if t.Spec != p.GitHubIssues.Spec {
 				continue
@@ -63,6 +69,11 @@ func (c *Core) GetIssueWatch(_ context.Context, key string) (IssueWatch, error) 
 				out.Issues = append(out.Issues, IncomingIssue{Ticket: DisplayID(key, t.Number), Link: *linkView(t.Link), Title: t.Title, Description: t.Description})
 			}
 			if w, ok := c.ticketIssueWrites(key, t); ok {
+				byNumber[t.Number] = w
+			}
+		}
+		for n := 1; n < r.NextNumber(key); n++ {
+			if w, ok := byNumber[n]; ok {
 				out.Writes = append(out.Writes, w)
 			}
 		}

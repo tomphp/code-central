@@ -347,6 +347,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.ReportIssueWritten(integration, "acme", core.ReportIssueWrittenInput{Target: "2", Key: "wont-fix"})
 		return err
 	},
+	"to_requirement": func(f fixture) error {
+		_, err := f.core.ToRequirement(human, "acme", core.ToRequirementInput{Ticket: "acme-2"})
+		return err
+	},
 	"wont_fix": func(f fixture) error {
 		_, err := f.core.WontFix(human, "acme", core.WontFixInput{Ticket: "acme-2"})
 		return err
