@@ -292,3 +292,36 @@ func TestTurningCITrackingOffEndsACrashStreak(t *testing.T) {
 	httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching"}`))
 	ciWatcher(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), "watching", "", "")
 }
+
+// A rate-limited CI Watcher is still Watching, with when GitHub lets it
+// call again (code-central-260): not an error, so no Notification.
+func TestARateLimitedCIWatcherIsWatchingUntilATimeAndNotAnError(t *testing.T) {
+	srv := newServer(t, ciTrackingOn)
+	ctx := context.Background()
+	until := codecentraltest.Start.Add(10 * time.Minute)
+	out := httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching","rate_limited_until":"`+until.Format(time.RFC3339)+`","full":true}`))
+	ciWatcher(t, out, "watching", "", "")
+	if got := out["ci"].(map[string]any)["watcher"].(map[string]any)["rate_limited_until"]; got != until.Format(time.RFC3339) {
+		t.Fatalf("rate_limited_until = %v, want %s", got, until.Format(time.RFC3339))
+	}
+	if got := srv.Core.CIWatcherAttention(ctx); len(got) != 1 || got[0].Errors != 0 {
+		t.Fatalf("CI Watcher attention %+v, want no errors, so no Notification", got)
+	}
+
+	// Reporting Watching again clears it, keeping since.
+	srv.Clock.Advance(10 * time.Minute)
+	out = httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching","full":true}`))
+	w := out["ci"].(map[string]any)["watcher"].(map[string]any)
+	if _, ok := w["rate_limited_until"]; ok || w["since"] != codecentraltest.Start.Format(time.RFC3339) {
+		t.Fatalf("watcher = %v, want watching since the start, no longer rate-limited", w)
+	}
+}
+
+// Only a Watching CI Watcher is rate-limited: an error has its own fix.
+func TestAnErrorIsntRateLimited(t *testing.T) {
+	srv := newServer(t, ciTrackingOn)
+	e := httpRejected(t, srv, reportCIWatcherStatus(`{"state":"error","message":"no","rate_limited_until":"2026-01-05T10:00:00Z"}`), core.Invalid)
+	if e.Field != "rate_limited_until" {
+		t.Fatalf("field %q, want rate_limited_until", e.Field)
+	}
+}

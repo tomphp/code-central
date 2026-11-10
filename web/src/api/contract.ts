@@ -355,6 +355,15 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       });
       await d.reportCIWatcherStatus("acme", { state: "watching" });
       expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "watching", since: expect.any(String) });
+      // Rate-limited is still Watching, until a time.
+      await d.reportCIWatcherStatus("acme", { state: "watching", rate_limited_until: "2026-01-05T10:15:00Z" });
+      expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "watching", rate_limited_until: "2026-01-05T10:15:00Z", since: expect.any(String) });
+      const limitedError = await d
+        .reportCIWatcherStatus("acme", { state: "error", message: "no", rate_limited_until: "2026-01-05T10:15:00Z" })
+        .catch((e) => e);
+      expect(String(limitedError.code ?? limitedError.message)).toContain("invalid");
+      await d.reportCIWatcherStatus("acme", { state: "watching" });
+      expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "watching", since: expect.any(String) });
       // Only the service reports a crash.
       const crashed = await d.reportCIWatcherStatus("acme", { state: "error", problem: "crashed", message: "crashed" }).catch((e) => e);
       expect(String(crashed.code ?? crashed.message)).toContain("invalid");
@@ -426,6 +435,55 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(rows.find((r) => r.id === ready)).not.toHaveProperty("ci_result");
       const spec = await d.api.getSpec("acme", passed.spec.id);
       expect(spec.tickets.find((r) => r.id === id)?.ci_result).toBe("passed");
+    });
+
+    it("reads the CI view: each run's latest attempt, unfinished first, for one Project or All Projects (code-central-258)", async () => {
+      await d.createProject("acme", "Acme");
+      await d.createProject("quiet", "Quiet");
+      const id = await d.createTicket("acme", "Pick a colour", "Ready");
+      await d.finish("acme", id, "Done.", { branch: id, commit: "abc123" });
+      await d.api.act("acme", id, "accept", {});
+      await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"] });
+      await d.reportPushedCommit("acme", id, "abc123");
+      // The pushed commit's time is the service's now, which the runs' times follow.
+      const pushed = Date.parse((await d.api.getTicket("acme", id)).pushed_commit!.pushed);
+      const at = (minutes: number) => new Date(pushed + minutes * 60_000).toISOString();
+      const run = (n: number, workflow: string, started: number, finished?: number, attempt = 1) => ({
+        id: n,
+        attempt,
+        workflow,
+        name: workflow,
+        branch: "main",
+        commit: "abc123",
+        status: finished === undefined ? ("in_progress" as const) : ("completed" as const),
+        ...(finished !== undefined && { conclusion: "success" as const, finished: at(finished) }),
+        started: at(started),
+        url: `https://github.com/acme/web/actions/runs/${n}`,
+        jobs: [],
+        ticket: id,
+      });
+      await d.reportCIRuns("acme", [run(1, "ci.yml", -3, -2), run(2, "lint.yml", -4), run(3, "nightly.yml", -2), run(1, "ci.yml", -1, 0, 2)]);
+
+      const acme = await d.api.ciOverview({ project: "acme" });
+      expect(acme.projects).toEqual([{ project: "acme", tracking: true, repository: "acme/web", watcher: { state: "not_reported" } }]);
+      expect(acme.runs.map((r) => [r.project, r.workflow, r.attempt, r.ignored])).toEqual([
+        ["acme", "nightly.yml", 1, true],
+        ["acme", "lint.yml", 1, false],
+        ["acme", "ci.yml", 2, false],
+      ]);
+      expect(acme.runs[2]).toMatchObject({ ticket: id, commit: "abc123", conclusion: "success", url: "https://github.com/acme/web/actions/runs/1" });
+
+      // All Projects is every active Project with CI Tracking on.
+      const all = await d.api.ciOverview();
+      expect(all.projects.map((p) => p.project)).toEqual(["acme"]);
+      expect(all.runs).toEqual(acme.runs);
+      expect(await d.api.ciOverview({ project: "quiet" })).toEqual({
+        projects: [{ project: "quiet", tracking: false, repository: "", watcher: { state: "not_reported" } }],
+        runs: [],
+      });
+      const unknown = await d.api.ciOverview({ project: "nope" }).catch((e) => e);
+      expect(unknown.code).toBe("not_found");
     });
 
     it("gets one Ticket in full, with its Needs Me reason", async () => {

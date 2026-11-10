@@ -42,11 +42,11 @@ type CIUnavailableView struct {
 // ciGated is t's latest pushed commit and the runs tracked against t,
 // when the CI gate holds t: Accepted with a pushed commit in a Project
 // under Merge + Push with CI Tracking on.
-func ciGated(r store.Reader, p store.Project, t store.Ticket) (store.PushedCommit, []store.CIRun, bool) {
+func ciGated(r store.Reader, p store.Project, t store.Ticket, now time.Time) (store.PushedCommit, []store.CIRun, bool) {
 	if t.State != store.Accepted || p.Landing.Method != store.LandingMerge || !p.Landing.Push || !p.CI.Tracking {
 		return store.PushedCommit{}, nil, false
 	}
-	runs, ok := ticketRuns(r, p.Key, t)
+	runs, ok := ticketRuns(r, p.Key, t, now)
 	if !ok {
 		return store.PushedCommit{}, nil, false
 	}
@@ -58,11 +58,12 @@ func ciGated(r store.Reader, p store.Project, t store.Ticket) (store.PushedCommi
 // when it has also gone CIUnavailableAfter since its push with no word
 // of its CI, why it is CI unavailable.
 func (c *Core) ciWaitingOn(r store.Reader, p store.Project, t store.Ticket) (waiting bool, unavailable *CIUnavailableView) {
-	pushed, runs, ok := ciGated(r, p, t)
-	if !ok || ciResultOf(pushed.Commit, runs) != CIRunning {
+	now := c.now()
+	pushed, runs, ok := ciGated(r, p, t, now)
+	if !ok || latestCIResult(pushed, runs, now) != CIRunning {
 		return false, nil
 	}
-	if c.now().Sub(pushed.Pushed) < CIUnavailableAfter {
+	if now.Sub(pushed.Pushed) < CIUnavailableAfter {
 		return true, nil
 	}
 	view := &CIUnavailableView{Commit: pushed.Commit, Pushed: pushed.Pushed}

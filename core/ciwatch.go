@@ -40,6 +40,9 @@ type CIWatcherView struct {
 	Problem CIProblem `json:"problem,omitempty"`
 	Message string    `json:"message,omitempty"`
 	Fix     string    `json:"fix,omitempty"`
+	// RateLimitedUntil is when GitHub lets a rate-limited CI Watcher call
+	// it again; until then it is still Watching, not in error.
+	RateLimitedUntil time.Time `json:"rate_limited_until,omitzero"`
 	// Since is when the CI Watcher went into this state; nil until it
 	// reports.
 	Since *time.Time `json:"since,omitempty"`
@@ -240,7 +243,8 @@ func ciTicketCommits(r store.Reader, key string) (pushed, landed []CITicketCommi
 }
 
 // ReportCIWatcherStatusInput is the CI Watcher's
-// report_ci_watcher_status(state, problem?, message?, fix?, full?).
+// report_ci_watcher_status(state, problem?, message?, fix?,
+// rate_limited_until?, full?).
 type ReportCIWatcherStatusInput struct {
 	// State is watching or error.
 	State   CIWatcherState `json:"state"`
@@ -248,18 +252,28 @@ type ReportCIWatcherStatusInput struct {
 	// Message and Fix are an error's; watching drops them.
 	Message string `json:"message,omitempty"`
 	Fix     string `json:"fix,omitempty"`
+	// RateLimitedUntil is when GitHub lets a Watching CI Watcher call it
+	// again, while it is rate-limited.
+	RateLimitedUntil time.Time `json:"rate_limited_until,omitzero"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
 
 // ReportCIWatcherStatus is report_ci_watcher_status: the CI Watcher
 // reports on every poll, and a change publishes a notice. Going into an
-// error is counted, whoever reports it, so notify sends one Notification.
+// error is counted, whoever reports it, so notify sends one Notification;
+// being rate-limited is Watching, so it sends none.
 func (c *Core) ReportCIWatcherStatus(_ context.Context, key string, in ReportCIWatcherStatusInput) (Written[ProjectView], error) {
 	next := CIWatcherView{State: in.State}
 	switch in.State {
 	case CIWatcherWatching:
+		if !in.RateLimitedUntil.IsZero() {
+			next.RateLimitedUntil = in.RateLimitedUntil.UTC()
+		}
 	case CIWatcherError:
+		if !in.RateLimitedUntil.IsZero() {
+			return Written[ProjectView]{}, invalid("rate_limited_until", "only a Watching CI Watcher is rate-limited; an error has its own fix")
+		}
 		if in.Problem != "" && !slices.Contains(ciProblems, in.Problem) {
 			return Written[ProjectView]{}, invalid("problem", "%q isn't a CI problem", in.Problem)
 		}

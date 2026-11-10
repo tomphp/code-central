@@ -11,6 +11,7 @@ package ciwatcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -44,7 +45,9 @@ func (e Env) getenv(key string) string {
 type Provider interface {
 	// CheckAccess checks the CI Watcher can watch the repository: a
 	// result with no Problem when it can, else what is wrong and its fix.
-	CheckAccess(ctx context.Context) core.CICheckResult
+	// The CI Provider rate-limiting it is a *RateLimitError, as from
+	// every method: not a problem, just a wait.
+	CheckAccess(ctx context.Context) (core.CICheckResult, error)
 	// RunsForCommit lists the workflow runs started for commit, with
 	// their statuses and conclusions mapped to Code Central's and no jobs.
 	RunsForCommit(ctx context.Context, commit string) ([]Run, error)
@@ -76,11 +79,29 @@ func NewProvider(provider store.CIProvider, repository, ghPath string, env Env) 
 }
 
 // Check is the check mode: whether the CI Watcher can watch in's
-// repository through its CI Provider.
+// repository through its CI Provider. Being rate-limited fails the check,
+// as there is no knowing yet whether the repository can be read.
 func Check(ctx context.Context, in core.CICheckInput, env Env) core.CICheckResult {
+	p, bad := provider(in, env)
+	if bad != nil {
+		return *bad
+	}
+	r, err := p.CheckAccess(ctx)
+	var limit *RateLimitError
+	if errors.As(err, &limit) {
+		r = core.CICheckResult{Problem: core.CICheckFailed, Reason: limit.Error(), Fix: "Try again in a few minutes."}
+		if until := limit.Until(time.Now()); !until.IsZero() {
+			r.Fix = "Try again after " + until.Local().Format(time.Kitchen) + ", when GitHub's rate limit ends."
+		}
+	}
+	return r
+}
+
+// provider is in's CI Provider, or the problem with it.
+func provider(in core.CICheckInput, env Env) (Provider, *core.CICheckResult) {
 	p, err := NewProvider(in.Provider, in.Repository, in.GHPath, env)
 	if err != nil {
-		return core.CICheckResult{Problem: core.CICheckFailed, Reason: err.Error(), Fix: "Choose GitHub Actions as the CI Provider."}
+		return nil, &core.CICheckResult{Problem: core.CICheckFailed, Reason: err.Error(), Fix: "Choose GitHub Actions as the CI Provider."}
 	}
-	return p.CheckAccess(ctx)
+	return p, nil
 }

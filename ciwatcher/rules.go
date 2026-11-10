@@ -8,6 +8,7 @@ package ciwatcher
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -24,8 +25,10 @@ import (
 // even across restarts; a run that fired but whose report failed is
 // remembered, and only reported again. A run finishing in the same
 // second as the latest one tracked against its rule, but on a later
-// poll, is missed.
-func (w *watcher) fireRules(ctx context.Context, p Provider, watch core.CIWatch) {
+// poll, is missed. A rate limit stops it calling the CI Provider: it
+// returns the *RateLimitError, and the runs it didn't get to fire on the
+// next poll.
+func (w *watcher) fireRules(ctx context.Context, p Provider, watch core.CIWatch) error {
 	pushed := map[string]bool{}
 	for _, c := range watch.Pushed {
 		pushed[c.Commit] = true
@@ -47,6 +50,10 @@ func (w *watcher) fireRules(ctx context.Context, p Provider, watch core.CIWatch)
 			}
 		}
 		runs, err := p.CompletedRunsOnBranch(ctx, branch, since)
+		var limit *RateLimitError
+		if errors.As(err, &limit) {
+			return limit
+		}
 		if err != nil {
 			if ctx.Err() == nil {
 				w.logf("listing the runs on %s: %v", branch, err)
@@ -62,9 +69,12 @@ func (w *watcher) fireRules(ctx context.Context, p Provider, watch core.CIWatch)
 			if !ok || !run.Finished.After(ruleSince(rule)) {
 				continue
 			}
-			w.fire(ctx, p, watch, rule, run)
+			if err := w.fire(ctx, p, watch, rule, run); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 // ruleSince is when r starts firing: after it was created, and after the
@@ -93,15 +103,21 @@ func matchRule(rules []core.CIWatchRule, run Run, ignored []string) (core.CIWatc
 }
 
 // fire opens a fix Ticket for run on rule's Spec, or comments on the
-// rule's unfinished one, then reports run tracked against rule.
-func (w *watcher) fire(ctx context.Context, p Provider, watch core.CIWatch, rule core.CIWatchRule, run Run) {
+// rule's unfinished one, then reports run tracked against rule. The CI
+// Provider rate-limiting it is the only error it returns, a
+// *RateLimitError; it logs the others.
+func (w *watcher) fire(ctx context.Context, p Provider, watch core.CIWatch, rule core.CIWatchRule, run Run) error {
 	key := runKey{run.ID, run.Attempt}
 	jobs, err := p.Jobs(ctx, run.ID, run.Attempt)
+	var limit *RateLimitError
+	if errors.As(err, &limit) {
+		return limit
+	}
 	if err != nil {
 		if ctx.Err() == nil {
 			w.logf("%s: listing the jobs of run %d: %v", rule.Spec, run.ID, err)
 		}
-		return
+		return nil
 	}
 	run.Jobs, run.Rule = jobs, rule.Spec
 	if !w.fired[key] {
@@ -109,13 +125,14 @@ func (w *watcher) fire(ctx context.Context, p Provider, watch core.CIWatch, rule
 			if ctx.Err() == nil {
 				w.logf("%s: firing on run %d: %v", rule.Spec, run.ID, err)
 			}
-			return
+			return nil
 		}
 		w.fired[key] = true
 	}
 	if _, err := w.Client.ReportCIRuns(ctx, w.Project, core.ReportCIRunsInput{Runs: []core.CIRunView{run.CIRunView}}); err != nil && ctx.Err() == nil {
 		w.logf("report_ci_runs: run %d: %v", run.ID, err)
 	}
+	return nil
 }
 
 // openOrComment comments on the oldest unfinished Ticket on rule's Spec

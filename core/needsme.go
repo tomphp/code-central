@@ -221,7 +221,7 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 	row := NeedsMeRow{
 		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link),
 		Requirement: req, Spec: needsMeSpec(r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
-		CIResult: ticketCIResult(r, key, t),
+		CIResult: ticketCIResult(r, key, t, c.now()),
 	}
 	switch reason {
 	case ReasonNeedsAnswer:

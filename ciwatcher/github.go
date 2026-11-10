@@ -5,16 +5,21 @@
 package ciwatcher
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -96,31 +101,41 @@ func isProgram(path string) (string, bool) {
 }
 
 // CheckAccess finds gh, checks its login with gh auth status, and reads
-// the repository.
-func (g *GitHubActions) CheckAccess(ctx context.Context) core.CICheckResult {
+// the repository. GitHub rate-limiting the read is a *RateLimitError, not
+// a problem.
+func (g *GitHubActions) CheckAccess(ctx context.Context) (core.CICheckResult, error) {
 	gh, missing := g.FindGH()
 	if missing != nil {
-		return *missing
+		return *missing, nil
 	}
 	if out, err := g.run(ctx, gh, "auth", "status", "--hostname", "github.com"); err != nil {
 		if r, ran := didntRun(gh, err); !ran {
-			return r
+			return r, nil
 		}
-		return core.CICheckResult{Problem: core.CILoggedOut, Reason: "gh isn't logged in to GitHub: " + out,
-			Fix: "Run `gh auth login` as the user the service runs as."}
+		// gh auth status calls GitHub too, and says so when that is
+		// rate-limited, with no reset time.
+		if strings.Contains(strings.ToLower(out), "rate limit") {
+			return core.CICheckResult{}, &RateLimitError{Message: rateLimitLine(out)}
+		}
+		return core.CICheckResult{Problem: core.CILoggedOut, Reason: "gh isn't logged in to GitHub: " + firstLine(out),
+			Fix: "Run `gh auth login` as the user the service runs as."}, nil
 	}
-	if out, err := g.run(ctx, gh, "api", "repos/"+g.Repository, "--jq", ".full_name"); err != nil {
+	if _, msg, err := g.callAPI(ctx, gh, "repos/"+g.Repository, "--jq", ".full_name"); err != nil {
+		var limit *RateLimitError
+		if errors.As(err, &limit) {
+			return core.CICheckResult{}, limit
+		}
 		if r, ran := didntRun(gh, err); !ran {
-			return r
+			return r, nil
 		}
-		return core.CICheckResult{Problem: core.CIRepositoryUnreadable, Reason: fmt.Sprintf("gh can't read the repository %s: %s", g.Repository, out),
-			Fix: "Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it."}
+		return core.CICheckResult{Problem: core.CIRepositoryUnreadable, Reason: fmt.Sprintf("gh can't read the repository %s: %s", g.Repository, msg),
+			Fix: "Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it."}, nil
 	}
-	return core.CICheckResult{}
+	return core.CICheckResult{}, nil
 }
 
-// run runs gh with args, never prompting, and returns its first line of
-// output: stderr's when it fails, as gh writes its errors there.
+// run runs gh with args, never prompting, and returns its output:
+// stderr's when it fails, as gh writes its errors there.
 func (g *GitHubActions) run(ctx context.Context, gh string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, gh, args...)
 	cmd.Env = append(append([]string{}, g.Env.Environ...), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
@@ -131,7 +146,17 @@ func (g *GitHubActions) run(ctx context.Context, gh string, args ...string) (str
 	if err != nil && strings.TrimSpace(stderr.String()) != "" {
 		out = stderr.String()
 	}
-	return firstLine(out), err
+	return out, err
+}
+
+// rateLimitLine is the line of out that names the rate limit.
+func rateLimitLine(out string) string {
+	for _, l := range strings.Split(out, "\n") {
+		if strings.Contains(strings.ToLower(l), "rate limit") {
+			return strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "-X "))
+		}
+	}
+	return firstLine(out)
 }
 
 // didntRun is the check failing because gh didn't run at all, rather
@@ -255,17 +280,105 @@ func (g *GitHubActions) api(ctx context.Context, path string, out any) error {
 	if missing != nil {
 		return errors.New(missing.Reason)
 	}
-	cmd := exec.CommandContext(ctx, gh, "api", path)
-	cmd.Env = append(append([]string{}, g.Env.Environ...), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("gh api %s: %v: %s", path, err, firstLine(stderr.String()))
+	body, msg, err := g.callAPI(ctx, gh, path)
+	if err != nil {
+		return fmt.Errorf("gh api %s: %w: %s", path, err, msg)
 	}
-	if err := json.Unmarshal(stdout.Bytes(), out); err != nil {
+	if err := json.Unmarshal(body, out); err != nil {
 		return fmt.Errorf("gh api %s: %v", path, err)
 	}
 	return nil
+}
+
+// callAPI runs gh api path with args, never prompting, and with --include,
+// so the response's headers say when a rate limit ends. It returns the
+// response's body and, when it fails, the first line gh wrote to stderr;
+// GitHub refusing it for a rate limit is a *RateLimitError.
+func (g *GitHubActions) callAPI(ctx context.Context, gh, path string, args ...string) (body []byte, msg string, err error) {
+	cmd := exec.CommandContext(ctx, gh, append(append([]string{"api", path}, args...), "--include")...)
+	cmd.Env = append(append([]string{}, g.Env.Environ...), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err = cmd.Run()
+	status, header, body := response(stdout.Bytes())
+	if err == nil {
+		return body, "", nil
+	}
+	msg = firstLine(stderr.String())
+	if limit := rateLimit(status, header, msg); limit != nil {
+		return nil, msg, limit
+	}
+	return nil, msg, err
+}
+
+// response splits what gh api --include prints into the status, the
+// headers and the body. Output with no status line is all body.
+func response(out []byte) (status int, header http.Header, body []byte) {
+	if !bytes.HasPrefix(out, []byte("HTTP/")) {
+		return 0, http.Header{}, out
+	}
+	r := bufio.NewReader(bytes.NewReader(out))
+	tp := textproto.NewReader(r)
+	line, err := tp.ReadLine()
+	if err != nil {
+		return 0, http.Header{}, out
+	}
+	if _, code, ok := strings.Cut(line, " "); ok {
+		code, _, _ = strings.Cut(code, " ")
+		status, _ = strconv.Atoi(code)
+	}
+	h, err := tp.ReadMIMEHeader()
+	if err != nil && !errors.Is(err, io.EOF) {
+		return status, http.Header{}, out
+	}
+	body, _ = io.ReadAll(r)
+	return status, http.Header(h), body
+}
+
+// RateLimitError is GitHub refusing a call for its rate limit.
+type RateLimitError struct {
+	// Reset is when GitHub said the limit ends, and RetryAfter how long
+	// it said to wait; both are zero when it said neither.
+	Reset      time.Time
+	RetryAfter time.Duration
+	// Message is what gh said.
+	Message string
+}
+
+func (e *RateLimitError) Error() string { return "GitHub is rate-limiting gh: " + e.Message }
+
+// Until is when the CI Watcher may call GitHub again, from now; zero
+// when GitHub didn't say.
+func (e *RateLimitError) Until(now time.Time) time.Time {
+	if e.RetryAfter > 0 {
+		return now.Add(e.RetryAfter)
+	}
+	return e.Reset
+}
+
+// rateLimit is the rate limit a failed call's answer says GitHub refused
+// it for, or nil: a 403 or 429 with no requests remaining, or one saying
+// how long to wait, or a message naming a rate limit, as GitHub's
+// secondary rate limits may give with neither.
+func rateLimit(status int, header http.Header, msg string) *RateLimitError {
+	if status != 0 && status != http.StatusForbidden && status != http.StatusTooManyRequests {
+		return nil
+	}
+	limit := &RateLimitError{Message: msg}
+	limited := strings.Contains(strings.ToLower(msg), "rate limit")
+	if secs, err := strconv.Atoi(header.Get("Retry-After")); err == nil && secs > 0 {
+		limit.RetryAfter, limited = time.Duration(secs)*time.Second, true
+	}
+	if header.Get("X-Ratelimit-Remaining") == "0" {
+		limited = true
+		if reset, err := strconv.ParseInt(header.Get("X-Ratelimit-Reset"), 10, 64); err == nil && reset > 0 {
+			limit.Reset = time.Unix(reset, 0).UTC()
+		}
+	}
+	if !limited {
+		return nil
+	}
+	return limit
 }
 
 // workflowName is a workflow's file base name from the run's workflow
