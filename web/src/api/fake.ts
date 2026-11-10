@@ -843,7 +843,7 @@ export class FakeApi implements Api {
     for (const raw of change.ignored_workflows) {
       const w = raw.trim();
       if (!w || ignored.includes(w)) continue;
-      if (!/^[^/\\\s*?[\]]+\.ya?ml$/.test(w)) {
+      if (!WORKFLOW.test(w)) {
         throw new ApiError(422, "invalid", `"${w}" isn't a workflow file name, such as ci.yml`, "ignored_workflows");
       }
       ignored.push(w);
@@ -865,7 +865,7 @@ export class FakeApi implements Api {
     const p = this.writable(key);
     const rule = checkCIRule(p, change, "");
     const at = this.now.toISOString();
-    const spec = this.addSpec(key, { title: ciRuleTitle(rule), body: `The CI Rule for ${ciRuleReach(rule)}.\n` });
+    const spec = this.addSpec(key, { title: ciRuleTitle(rule), body: CI_RULE_SPEC_BODY });
     this.setCI(p, { ...p.ci, rules: [...p.ci.rules, { ...rule, spec: spec.id, created: at }] });
     return this.projectView(p);
   }
@@ -876,10 +876,12 @@ export class FakeApi implements Api {
     const old = ruleOn(p, spec);
     const rule = { ...old, ...checkCIRule(p, change, spec) };
     this.setCI(p, { ...p.ci, rules: p.ci.rules.map((r) => (r.spec === spec ? rule : r)) });
-    // The rule's Spec follows it, unless the human retitled it.
+    // The rule's Spec's title follows it, unless the human retitled it.
     const s = this.specs.get(spec);
     if (s && s.title === ciRuleTitle(old) && ciRuleTitle(old) !== ciRuleTitle(rule)) {
+      s.edits.push({ number: s.edits.length + 1, actor: "human", time: this.now.toISOString(), previous: { title: s.title } });
       s.title = ciRuleTitle(rule);
+      s.updated = this.now.toISOString();
       this.emit({ type: "spec.changed", project: key, id: spec });
     }
     return this.projectView(p);
@@ -1238,7 +1240,7 @@ function acknowledgeTicketCreate(after: TicketView): TicketAcknowledgement {
 // than the one on Spec self watching the same workflow and branch.
 function checkCIRule(p: FakeProject, change: CIRuleChange, self: string): CIRuleChange {
   const rule: CIRuleChange = { workflow: change.workflow.trim(), branch: change.branch.trim(), state: change.state };
-  if (rule.workflow !== "any" && !/^[^/\\\s*?[\]]+\.ya?ml$/.test(rule.workflow)) {
+  if (rule.workflow !== "any" && !WORKFLOW.test(rule.workflow)) {
     throw new ApiError(422, "invalid", `"${rule.workflow}" isn't a workflow file name, such as ci.yml, or any for any workflow`, "workflow");
   }
   if (!rule.branch || /[\s*?[\]]/.test(rule.branch)) {
@@ -1248,15 +1250,24 @@ function checkCIRule(p: FakeProject, change: CIRuleChange, self: string): CIRule
     throw new ApiError(422, "invalid", `a CI Rule's Tickets open as Draft or Ready, not "${rule.state}"`, "state");
   }
   const other = p.ci.rules.find((r) => r.spec !== self && r.workflow === rule.workflow && r.branch === rule.branch);
-  if (other) throw new ApiError(422, "invalid", `the CI Rule on Spec ${other.spec} already watches ${ciRuleReach(rule)}`, "workflow");
+  if (other) throw new ApiError(422, "invalid", `the CI Rule on Spec ${other.spec} already watches ${ciRuleWatches(rule)}`, "workflow");
   return rule;
 }
 
+// ruleOn is the rule on Spec spec, or the service's not_found.
 function ruleOn(p: FakeProject, spec: string): CIRule {
   const r = p.ci.rules.find((r) => r.spec === spec);
   if (!r) throw new ApiError(404, "not_found", `there is no CI Rule on Spec ${spec}`);
   return r;
 }
 
-const ciRuleReach = (r: CIRuleChange) => `${r.workflow === "any" ? "any workflow" : r.workflow} on ${r.branch}`;
-const ciRuleTitle = (r: CIRuleChange) => `CI: ${ciRuleReach(r)}`;
+// The service's body for a CI Rule's Spec.
+const CI_RULE_SPEC_BODY =
+  "This Spec holds the fix Tickets of a CI Rule, which opens a Ticket to fix its workflow when it fails on its branch. " +
+  "The rule is in the CI section of Project Options; removing it leaves this Spec as the record of its Tickets.\n";
+
+// WORKFLOW is a workflow file's base name, holding no glob.
+const WORKFLOW = /^[^/\\\s*?[\]]+\.ya?ml$/;
+
+const ciRuleWatches = (r: CIRuleChange) => `${r.workflow === "any" ? "any workflow" : r.workflow} on ${r.branch}`;
+const ciRuleTitle = (r: CIRuleChange) => `CI: ${ciRuleWatches(r)}`;

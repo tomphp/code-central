@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"fmt"
 	neturl "net/url"
 	"regexp"
 	"slices"
@@ -226,7 +225,7 @@ func (c *Core) AddCIRule(ctx context.Context, key string, in CIRuleInput) (Writt
 		}
 		r.Created = c.now()
 		r.Spec = w.NextNumber(key)
-		return w.PutSpec(key, store.Spec{Number: r.Spec, Title: ciRuleTitle(r), Body: ciRuleBody(r), Created: r.Created, Updated: r.Created})
+		return w.PutSpec(key, store.Spec{Number: r.Spec, Title: ciRuleTitle(r), Body: ciRuleSpecBody, Created: r.Created, Updated: r.Created})
 	})
 	if err != nil {
 		return Written[ProjectView]{}, err
@@ -241,8 +240,8 @@ func (c *Core) AddCIRule(ctx context.Context, key string, in CIRuleInput) (Writt
 }
 
 // EditCIRule is the human's edit_ci_rule: the rule keeps its Spec and
-// when it was created. The Spec's title and body follow the rule unless
-// the human has changed them.
+// when it was created. The Spec's title follows the rule unless the human
+// has changed it, in a second write after the rule's.
 func (c *Core) EditCIRule(ctx context.Context, key string, in CIRuleInput) (Written[ProjectView], error) {
 	if err := humanOnly(ctx, "edit_ci_rule"); err != nil {
 		return Written[ProjectView]{}, err
@@ -326,41 +325,33 @@ func ruleOn(key string, rules []store.CIRule, n int) (int, error) {
 func ruleIsNew(key string, rules []store.CIRule, r store.CIRule, self int) error {
 	for _, o := range rules {
 		if o.Spec != self && o.Workflow == r.Workflow && o.Branch == r.Branch {
-			return invalid("workflow", "the CI Rule on Spec %s already watches %s", DisplayID(key, o.Spec), ciRuleReach(r))
+			return invalid("workflow", "the CI Rule on Spec %s already watches %s", DisplayID(key, o.Spec), ciRuleWatches(r))
 		}
 	}
 	return nil
 }
 
-// followRule retitles and rewrites the Spec of the rule edited from old
-// to r, leaving a title or body the human has changed.
+// followRule retitles the Spec of the rule edited from old to r, unless
+// the human has changed its title.
 func (c *Core) followRule(ctx context.Context, key string, old, r store.CIRule) error {
+	if ciRuleTitle(old) == ciRuleTitle(r) {
+		return nil
+	}
 	return c.store.Update(func(w store.Writer) error {
 		s, ok := w.Spec(key, old.Spec)
-		if !ok {
-			return nil
-		}
-		prev := map[string]string{}
-		if s.Title == ciRuleTitle(old) {
-			title := ciRuleTitle(r)
-			change(prev, "title", &s.Title, &title)
-		}
-		if s.Body == ciRuleBody(old) {
-			body := ciRuleBody(r)
-			change(prev, "body", &s.Body, &body)
-		}
-		if len(prev) == 0 {
+		if !ok || s.Title != ciRuleTitle(old) {
 			return nil
 		}
 		s.Updated = c.now()
-		s.Edits = append(s.Edits, store.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: prev})
+		s.Edits = append(s.Edits, store.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: map[string]string{"title": s.Title}})
+		s.Title = ciRuleTitle(r)
 		return w.PutSpec(key, s)
 	})
 }
 
-// ciRuleReach is what a rule watches: "ci.yml on main" or "any workflow
+// ciRuleWatches is what a rule watches: "ci.yml on main" or "any workflow
 // on main".
-func ciRuleReach(r store.CIRule) string {
+func ciRuleWatches(r store.CIRule) string {
 	w := r.Workflow
 	if w == store.AnyWorkflow {
 		w = "any workflow"
@@ -368,13 +359,10 @@ func ciRuleReach(r store.CIRule) string {
 	return w + " on " + r.Branch
 }
 
-func ciRuleTitle(r store.CIRule) string { return "CI: " + ciRuleReach(r) }
+// ciRuleTitle is the title of a rule's Spec: "CI: ci.yml on main".
+func ciRuleTitle(r store.CIRule) string { return "CI: " + ciRuleWatches(r) }
 
-func ciRuleBody(r store.CIRule) string {
-	which := "the workflow " + r.Workflow
-	if r.Workflow == store.AnyWorkflow {
-		which = "any workflow but the Ignored ones"
-	}
-	return fmt.Sprintf("The CI Rule for %s.\n\nWhen %s fails on the branch %s, the CI Watcher opens a Ticket on this Spec to fix it. "+
-		"Removing the rule leaves this Spec as the record of its Tickets.\n", ciRuleReach(r), which, r.Branch)
-}
+// ciRuleSpecBody is a rule's Spec's body. It names neither workflow nor
+// branch, which the title carries, so an edit leaves it as it is.
+const ciRuleSpecBody = "This Spec holds the fix Tickets of a CI Rule, which opens a Ticket to fix its workflow when it fails on its branch. " +
+	"The rule is in the CI section of Project Options; removing it leaves this Spec as the record of its Tickets.\n"

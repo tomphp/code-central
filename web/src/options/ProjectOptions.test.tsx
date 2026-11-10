@@ -277,6 +277,7 @@ describe("Project Options", () => {
       fake.addProject("acme", "Acme");
       renderApp(fake, "/?view=project-options&project=acme");
       const group = await screen.findByRole("group", { name: "CI Rules" });
+      expect(ci()).toContainElement(group);
       expect(within(group).getByText("No CI Rules yet.")).toBeInTheDocument();
 
       await fake.addCIRule("acme", { workflow: "ci.yml", branch: "main", state: "Ready" });

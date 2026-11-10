@@ -83,6 +83,11 @@ func ciRules(t *testing.T, project map[string]any, want ...rule) {
 	}
 }
 
+// firstRule is a Project's first CI Rule.
+func firstRule(project map[string]any) map[string]any {
+	return project["ci"].(map[string]any)["rules"].([]any)[0].(map[string]any)
+}
+
 func getAcme(t *testing.T, srv *codecentraltest.Server) map[string]any {
 	t.Helper()
 	return httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})
@@ -100,24 +105,19 @@ func TestEveryProjectReadCarriesItsCIRules(t *testing.T) {
 	ciRules(t, rows[1].(map[string]any))
 }
 
-func TestARuleIsCreatedWithItsSpec(t *testing.T) {
+func TestAddingACIRuleCreatesItsSpecAtTheSameTime(t *testing.T) {
 	srv := newServer(t)
 	out := httpOK(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"main","full":true}`))
-	created := out["ci"].(map[string]any)["rules"].([]any)[0].(map[string]any)["created"]
-	if spec := httpOK(t, srv, httpCall{"GET", "/api/p/acme/specs/acme-4", ""}); created != spec["created"] {
-		t.Fatalf("rule created %v, Spec created %v: want the same", created, spec["created"])
-	}
-}
-
-func TestAddingACIRuleCreatesItsSpec(t *testing.T) {
-	srv := newServer(t)
-	httpOK(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"main"}`))
 	httpOK(t, srv, addCIRule(`{"workflow":"any","branch":"main"}`))
 	for id, title := range map[string]string{"acme-4": "CI: ci.yml on main", "acme-5": "CI: any workflow on main"} {
 		spec := httpOK(t, srv, httpCall{"GET", "/api/p/acme/specs/" + id, ""})
-		if spec["title"] != title || !strings.Contains(spec["body"].(string), "main") {
-			t.Fatalf("%s: title %v body %q, want %q and a body naming the branch", id, spec["title"], spec["body"], title)
+		if spec["title"] != title || !strings.Contains(spec["body"].(string), "CI Rule") {
+			t.Fatalf("%s: title %v body %q, want %q and a body naming the CI Rule", id, spec["title"], spec["body"], title)
 		}
+	}
+	spec := httpOK(t, srv, httpCall{"GET", "/api/p/acme/specs/acme-4", ""})
+	if created := firstRule(out)["created"]; created != spec["created"] {
+		t.Fatalf("rule created %v, Spec created %v: want the same", created, spec["created"])
 	}
 }
 
@@ -136,11 +136,10 @@ func TestRemovingACIRuleKeepsItsSpec(t *testing.T) {
 
 func TestEditingACIRuleKeepsItsSpecAndCreatedTimeAndRetitlesTheSpec(t *testing.T) {
 	srv := newServer(t)
-	added := httpOK(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"main","full":true}`))
-	created := added["ci"].(map[string]any)["rules"].([]any)[0].(map[string]any)["created"]
+	created := firstRule(httpOK(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"main","full":true}`)))["created"]
 	out := httpOK(t, srv, editCIRule(`{"spec":4,"workflow":"any","branch":"develop","state":"Ready","full":true}`))
 	ciRules(t, out, rule{"acme-4", "any", "develop", "Ready"})
-	if got := out["ci"].(map[string]any)["rules"].([]any)[0].(map[string]any)["created"]; got != created {
+	if got := firstRule(out)["created"]; got != created {
 		t.Fatalf("created %v after an edit, want %v", got, created)
 	}
 	spec := httpOK(t, srv, httpCall{"GET", "/api/p/acme/specs/acme-4", ""})
@@ -231,4 +230,14 @@ func TestAnArchivedProjectRejectsCIRules(t *testing.T) {
 func TestSetCITrackingKeepsTheCIRules(t *testing.T) {
 	srv := newServer(t, withCIRule(`{"workflow":"ci.yml","branch":"main"}`))
 	ciRules(t, httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web","full":true}`)), rule{"acme-4", "ci.yml", "main", "Draft"})
+}
+
+// A Spec the human retitled keeps its title when its rule is edited.
+func TestEditingACIRuleLeavesARetitledSpec(t *testing.T) {
+	srv := newServer(t, withCIRule(`{"workflow":"ci.yml","branch":"main"}`))
+	httpOK(t, srv, httpCall{"POST", "/api/p/acme/specs/acme-4/edit_spec", `{"title":"Keep main green"}`})
+	httpOK(t, srv, editCIRule(`{"spec":"acme-4","workflow":"any","branch":"main"}`))
+	if spec := httpOK(t, srv, httpCall{"GET", "/api/p/acme/specs/acme-4", ""}); spec["title"] != "Keep main green" {
+		t.Fatalf("title %v, want the human's", spec["title"])
+	}
 }

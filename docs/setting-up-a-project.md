@@ -226,7 +226,7 @@ To change it, open the UI, click **⋯** beside the Project in the left pane, an
 
 ### CI Rules
 
-A **CI Rule** says "when this workflow fails on this branch, open a Ticket to fix it", for failures no Ticket's own CI catches, such as a red `main` after a hand merge. Add, edit and remove them in the **CI Rules** section below the CI section. Agents have no tool or command to change them. A rule names:
+A **CI Rule** says "when this workflow fails on this branch, open a Ticket to fix it", for failures no Ticket's own CI catches, such as a red `main` after a hand merge. Add, edit and remove them under **CI Rules**, at the foot of the CI section. Agents have no tool or command to change them. A rule names:
 
 - **Workflow**: one workflow file name, such as `ci.yml`, or `any` for every workflow but the Ignored ones.
 - **Branch**: an exact branch name, such as `main`. Globs such as `release/*` are refused.
@@ -238,7 +238,7 @@ A **CI Rule** says "when this workflow fails on this branch, open a Ticket to fi
 ci.yml on main: opens Ready Tickets on acme-api-42      Edit  Remove
 ```
 
-**Edit** changes a rule in place; its Spec is retitled to match unless you renamed it. **Remove** removes the rule and keeps its Spec as the record of its Tickets. For now rules are only recorded: none opens a Ticket yet.
+**Edit** changes a rule in place, and its Spec's title changes to match unless you renamed the Spec. **Remove** removes the rule and keeps its Spec as the record of its Tickets. For now rules are only recorded: none opens a Ticket yet.
 
 ## When `init` behaves differently
 

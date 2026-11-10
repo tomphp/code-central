@@ -1,5 +1,6 @@
 // The Project Options page: one Project's settings, reached from its menu
-// in the left pane, a section each: the Landing Method, CI and CI Rules.
+// in the left pane, a section each: the Landing Method, and CI with its CI
+// Rules.
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
 import type { ApiError, CIProvider, CIRule, CIRuleChange, CISettings, Landing, LandingMethod, ProjectRow } from "../api/types";
@@ -32,7 +33,6 @@ export function ProjectOptions({ api, projects, project: key, navigate }: Projec
           <h1>{project.display_name}: Project Options</h1>
           <LandingMethodSection api={api} project={project} />
           <CISection api={api} project={project} />
-          <CIRulesSection api={api} project={project} />
         </>
       )}
     </main>
@@ -206,9 +206,9 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
   const invalid = (field: string) => (error?.field === field ? { "aria-invalid": true, "aria-describedby": `${id}-error` } : undefined);
 
   return (
-    <form onSubmit={save}>
-      <fieldset className="project-options-section" disabled={project.archived}>
-        <legend>CI</legend>
+    <fieldset className="project-options-section" disabled={project.archived}>
+      <legend>CI</legend>
+      <form onSubmit={save}>
         <div className="project-options-choice">
           <label>
             <input type="checkbox" checked={draft.tracking} onChange={(e) => edit({ tracking: e.target.checked })} aria-describedby={`${id}-tracking`} />{" "}
@@ -270,30 +270,31 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
             </span>
           )}
         </div>
-      </fieldset>
-    </form>
+      </form>
+      <CIRules api={api} project={project} />
+    </fieldset>
   );
 }
 
-// ruleReach is what a CI Rule watches, as its Spec's title says it.
-const ruleReach = (r: CIRuleChange) => `${r.workflow === "any" ? "any workflow" : r.workflow} on ${r.branch}`;
+// ruleWatches is what a CI Rule watches, as its Spec's title says it.
+const ruleWatches = (r: CIRuleChange) => `${r.workflow === "any" ? "any workflow" : r.workflow} on ${r.branch}`;
 
 const NO_RULE: CIRuleChange = { workflow: "", branch: "", state: "Draft" };
 
-// CIRulesSection lists the Project's CI Rules ("when workflow X fails on
-// branch Y, open a Ticket to fix it") and adds, edits and removes them.
-// Each rule has its own Spec, which removing the rule keeps.
-function CIRulesSection({ api, project }: { api: Api; project: ProjectRow }) {
+// CIRules, in the CI section, lists the Project's CI Rules ("when workflow
+// X fails on branch Y, open a Ticket to fix it") and adds, edits and
+// removes them. Each rule has its own Spec, which removing the rule keeps.
+function CIRules({ api, project }: { api: Api; project: ProjectRow }) {
   const [editing, setEditing] = useState<string>();
   const id = useId();
   const { rules } = project.ci;
 
   return (
-    <fieldset className="project-options-section" disabled={project.archived}>
+    <fieldset className="project-options-rules-section">
       <legend>CI Rules</legend>
       <p className="project-options-hint">
-        When a workflow fails on a branch, the CI Watcher opens a Ticket to fix it, on the rule&apos;s own Spec. A further failure while
-        that Ticket is unfinished comments on it instead.
+        A CI Rule says &ldquo;when this workflow fails on this branch, open a Ticket to fix it&rdquo;, on the rule&apos;s own Spec. For now
+        rules are only recorded: none opens a Ticket yet.
       </p>
       {rules.length === 0 ? (
         <p className="muted">No CI Rules yet.</p>
@@ -303,7 +304,7 @@ function CIRulesSection({ api, project }: { api: Api; project: ProjectRow }) {
             editing === r.spec ? (
               <li key={r.spec}>
                 <RuleForm
-                  label={`Edit ${ruleReach(r)}`}
+                  label={`Edit ${ruleWatches(r)}`}
                   initial={r}
                   submit="Save"
                   save={(change) => api.editCIRule(project.key, r.spec, change).then(() => setEditing(undefined))}
@@ -324,18 +325,19 @@ function CIRulesSection({ api, project }: { api: Api; project: ProjectRow }) {
   );
 }
 
+// RuleRow is one CI Rule, with its Edit and Remove buttons.
 function RuleRow({ rule, removeHint, edit, remove }: { rule: CIRule; removeHint: string; edit(): void; remove(): Promise<unknown> }) {
   const [error, setError] = useState<ApiError>();
-  const reach = ruleReach(rule);
+  const watches = ruleWatches(rule);
   return (
     <li>
       <span>
-        <strong>{reach}</strong>: opens {rule.state} Tickets on {rule.spec}
+        <strong>{watches}</strong>: opens {rule.state} Tickets on {rule.spec}
       </span>{" "}
-      <button type="button" className="btn" aria-label={`Edit ${reach}`} onClick={edit}>
+      <button type="button" className="btn" aria-label={`Edit ${watches}`} onClick={edit}>
         Edit
       </button>{" "}
-      <button type="button" className="btn" aria-label={`Remove ${reach}`} aria-describedby={removeHint} onClick={() => remove().catch(setError)}>
+      <button type="button" className="btn" aria-label={`Remove ${watches}`} aria-describedby={removeHint} onClick={() => remove().catch(setError)}>
         Remove
       </button>
       {error && (
