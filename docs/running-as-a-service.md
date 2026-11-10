@@ -177,7 +177,7 @@ Set **gh path** when `gh` is somewhere else. It is on the Options page, below th
 |---|---|---|
 | `gh` isn't found | gh, the GitHub CLI, isn't on the service's PATH or in /opt/homebrew/bin, /usr/local/bin, /home/linuxbrew/.linuxbrew/bin. | Install gh, the GitHub CLI (https://cli.github.com), or set the gh path Option to where it is. |
 | gh path names no `gh` | The gh path Option is /opt/tools/gh, but gh isn't there. | Set the gh path Option to where gh is, or clear it to find gh on the service's PATH. |
-| `gh` isn't logged in | gh isn't logged in to GitHub: You are not logged into any GitHub hosts. To log in, run: gh auth login | Run `gh auth login` as the user the service runs as, then turn CI Tracking on again. |
+| `gh` isn't logged in | gh isn't logged in to GitHub: You are not logged into any GitHub hosts. To log in, run: gh auth login | Run `gh auth login` as the user the service runs as. |
 | The repository can't be read | gh can't read the repository acme/acme-api: gh: Not Found (HTTP 404) | Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it. |
 
 ## Usage

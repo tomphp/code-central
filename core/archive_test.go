@@ -257,6 +257,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.RemoveCIRule(human, "acme", core.RemoveCIRuleInput{Spec: "1"})
 		return err
 	},
+	"report_ci_watcher_status": func(f fixture) error {
+		_, err := f.core.ReportCIWatcherStatus(ctx, "acme", core.ReportCIWatcherStatusInput{State: core.CIWatcherWatching})
+		return err
+	},
 	"archive_project": func(f fixture) error {
 		_, err := f.core.ArchiveProject(human, "acme")
 		return err

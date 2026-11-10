@@ -10,8 +10,9 @@ const (
 	HumanOnly
 	// IntegrationOnly operations are an Integration's, over HTTP only.
 	IntegrationOnly
-	// FactoryOnly operations are the Factory's own reports, over HTTP
-	// only: agents in a session get no MCP tool or CLI command for them.
+	// FactoryOnly operations are the Factory's and the CI Watcher's own,
+	// over HTTP only: agents in a session get no MCP tool or CLI command
+	// for them.
 	FactoryOnly
 )
 
@@ -126,6 +127,9 @@ var Operations = []Op{
 	{Name: "add_ci_rule", Audience: HumanOnly, Write: true},
 	{Name: "edit_ci_rule", Audience: HumanOnly, Write: true},
 	{Name: "remove_ci_rule", Audience: HumanOnly, Write: true},
+	// The CI Watcher's own (code-central-253).
+	{Name: "get_ci_watch", Audience: FactoryOnly},
+	{Name: "report_ci_watcher_status", Audience: FactoryOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

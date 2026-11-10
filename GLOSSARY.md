@@ -109,7 +109,7 @@ The pluggable part of CI Tracking that talks to one CI system, through its own c
 _Avoid_: Integration, connector
 
 **CI Watcher**:
-The separate process, started and supervised by Code Central, that watches one Project's CI through its CI Provider and reports what it sees over the HTTP API. Before CI Tracking turns on, Code Central runs it once in its **check mode**, which checks it can reach the repository through `gh` and answers with what is wrong and its fix, if anything is.
+The separate process, started and supervised by Code Central, that watches one Project's CI through its CI Provider and reports what it sees over the HTTP API. Before CI Tracking turns on, Code Central runs it once in its **check mode**, which checks it can reach the repository through `gh` and answers with what is wrong and its fix, if anything is. Its status, **Watching** or an error with its fix, shows in the CI section of Project Options; going into an error sends one Notification.
 _Avoid_: CI daemon, CI Integration
 
 **Pushed commit**:

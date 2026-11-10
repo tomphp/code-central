@@ -1,7 +1,8 @@
 // The Project Options page: opened from an active Project's menu in the
 // left pane, it sets the Project's Landing Method (code-central-174) and
 // its CI settings (code-central-251), whose turn-on the CI check may
-// refuse (code-central-252), and CI Rules (code-central-254). Against
+// refuse (code-central-252), CI Rules (code-central-254) and the CI
+// Watcher's status (code-central-253). Against
 // FakeApi.
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -227,6 +228,7 @@ describe("Project Options", () => {
         ignored_workflows: ["nightly.yml", "preview.yml"],
         push_remote_url: "https://github.com/acme/web.git",
         rules: [],
+        watcher: { state: "not_reported" },
       });
       expect(within(ci()).getByRole("textbox", { name: "Ignored workflows" })).toHaveValue("nightly.yml, preview.yml");
       expect(within(ci()).getByRole("button", { name: "Save" })).toBeDisabled();
@@ -235,6 +237,27 @@ describe("Project Options", () => {
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
       await waitFor(async () => expect((await fake.listProjects())[0].ci.tracking).toBe(false));
       expect((await fake.listProjects())[0].ci.repository).toBe("acme/web");
+    });
+
+    it("shows the CI Watcher's status while CI Tracking is on, live", async () => {
+      const fake = new FakeApi();
+      fake.addProject("acme", "Acme");
+      renderApp(fake, "/?view=project-options&project=acme");
+      await within(await screen.findByRole("group", { name: "CI" })).findByRole("checkbox", { name: "CI Tracking" });
+      expect(within(ci()).queryByRole("region", { name: "CI Watcher" })).toBeNull();
+
+      await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      const watcher = await within(ci()).findByRole("region", { name: "CI Watcher" });
+      expect(watcher).toHaveTextContent("CI Watcher: Starting");
+
+      await fake.reportCIWatcherStatus("acme", { state: "error", problem: "logged_out", message: "gh isn't logged in to GitHub", fix: "Run gh auth login." });
+      await waitFor(() => expect(within(ci()).getByRole("region", { name: "CI Watcher" })).toHaveTextContent("CI Watcher: Error"));
+      expect(within(ci()).getByRole("region", { name: "CI Watcher" })).toHaveTextContent("gh isn't logged in to GitHub");
+      expect(within(ci()).getByRole("region", { name: "CI Watcher" })).toHaveTextContent("Run gh auth login.");
+
+      await fake.reportCIWatcherStatus("acme", { state: "watching" });
+      await waitFor(() => expect(within(ci()).getByRole("region", { name: "CI Watcher" })).toHaveTextContent("CI Watcher: Watching acme/web"));
+      expect(within(ci()).getByRole("region", { name: "CI Watcher" })).not.toHaveTextContent("gh auth login");
     });
 
     it("shows the service's refusal on its field", async () => {

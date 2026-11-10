@@ -33,3 +33,14 @@ func (c *Client) EditCIRule(ctx context.Context, key string, in core.CIRuleInput
 func (c *Client) RemoveCIRule(ctx context.Context, key string, in core.RemoveCIRuleInput) (core.Written[core.ProjectView], error) {
 	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/remove_ci_rule", in, in.Full)
 }
+
+// GetCIWatch is the CI Watcher's get_ci_watch.
+func (c *Client) GetCIWatch(ctx context.Context, key string) (core.CIWatch, error) {
+	var out core.CIWatch
+	return out, c.do(ctx, "GET", "/api/p/"+url.PathEscape(key)+"/ci-watch", nil, &out)
+}
+
+// ReportCIWatcherStatus is the CI Watcher's report_ci_watcher_status.
+func (c *Client) ReportCIWatcherStatus(ctx context.Context, key string, in core.ReportCIWatcherStatusInput) (core.Written[core.ProjectView], error) {
+	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_ci_watcher_status", in, in.Full)
+}

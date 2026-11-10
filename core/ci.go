@@ -30,6 +30,8 @@ type CIView struct {
 	PushRemoteURL string `json:"push_remote_url"`
 	// Rules are the CI Rules, in the order they were added.
 	Rules []CIRuleView `json:"rules"`
+	// Watcher is the CI Watcher's status, as it last reported it.
+	Watcher CIWatcherView `json:"watcher"`
 }
 
 // CIRuleView is one CI Rule: when Workflow fails on Branch, open a Ticket
@@ -43,9 +45,9 @@ type CIRuleView struct {
 	Created  time.Time   `json:"created"`
 }
 
-func ciView(key string, c store.CI) CIView {
+func ciView(key string, c store.CI, watcher CIWatcherView) CIView {
 	v := CIView{Tracking: c.Tracking, Provider: c.Provider, Repository: c.Repository,
-		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}}
+		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}, Watcher: watcher}
 	for _, r := range c.Rules {
 		v.Rules = append(v.Rules, CIRuleView{Spec: DisplayID(key, r.Spec), Workflow: r.Workflow, Branch: r.Branch, State: r.State, Created: r.Created})
 	}
@@ -108,6 +110,10 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 	}
 	return c.updateCI(key, in.Full, func(p *store.CI) error {
 		ci.PushRemoteURL, ci.Rules = p.PushRemoteURL, p.Rules
+		// What the CI Watcher said was about the old settings.
+		if !ci.Tracking || ci.Provider != p.Provider || ci.Repository != p.Repository {
+			c.ciWatchers.reset(key)
+		}
 		*p = ci
 		return nil
 	})
@@ -227,19 +233,18 @@ func (c *Core) updateCI(key string, full bool, change func(*store.CI) error) (Wr
 			return err
 		}
 		p, _ := w.Project(key)
-		before = projectView(p)
-		ci := p.CI
+		before = c.projectView(p)
+		was, ci := p.CI, p.CI
 		ci.IgnoredWorkflows = slices.Clone(ci.IgnoredWorkflows)
 		ci.Rules = slices.Clone(ci.Rules)
 		if err := change(&ci); err != nil {
 			return err
 		}
-		if ci.Equal(p.CI) {
-			after = before
+		p.CI = ci
+		after = c.projectView(p)
+		if ci.Equal(was) {
 			return nil
 		}
-		p.CI = ci
-		after = projectView(p)
 		return w.PutProject(p)
 	})
 	if err != nil {

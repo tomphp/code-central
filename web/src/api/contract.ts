@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, CIProvider, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
+import type { ChangeEvent, CIProvider, CIWatcherReport, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
 import { ApiError } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -57,6 +57,9 @@ export interface Driver {
   // logOutOfGH makes the gh the service finds logged out, so the CI check
   // refuses turning CI Tracking on (code-central-252).
   logOutOfGH(): Promise<void>;
+  // reportCIWatcherStatus reports the CI Watcher's status as the CI
+  // Watcher does on each poll (code-central-253).
+  reportCIWatcherStatus(key: string, status: CIWatcherReport): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -112,7 +115,15 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         { method: "merge", push: false, remote: "origin" },
         { method: "merge", push: false, remote: "origin" },
       ]);
-      const off = { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [], push_remote_url: "", rules: [] };
+      const off = {
+        tracking: false,
+        provider: "github_actions",
+        repository: "",
+        ignored_workflows: [],
+        push_remote_url: "",
+        rules: [],
+        watcher: { state: "not_reported" },
+      };
       expect(rows.map((r) => r.ci)).toEqual([off, off]);
     });
 
@@ -284,6 +295,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ignored_workflows: ["nightly.yml", "deploy.yaml"],
         push_remote_url: "git@github.com:acme/web.git",
         rules: [],
+        watcher: { state: "not_reported" },
       };
       expect(v).toMatchObject({ key: "acme", ci: on });
       expect((await d.api.listProjects())[0].ci).toEqual(on);
@@ -316,7 +328,31 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ignored_workflows: [],
         push_remote_url: "git@github.com:acme/web.git",
         rules: [],
+        watcher: { state: "not_reported" },
       });
+    });
+
+    it("reads the CI Watcher's status, forgotten when CI Tracking is turned off", async () => {
+      await d.createProject("acme", "Acme");
+      const refused = await d.reportCIWatcherStatus("acme", { state: "watching" }).catch((e) => e);
+      // The fake throws an ApiError; the service's driver, its JSON.
+      expect(String(refused.code ?? refused.message)).toContain("action_not_allowed");
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "not_reported" });
+
+      await d.reportCIWatcherStatus("acme", { state: "error", problem: "logged_out", message: "gh isn't logged in", fix: "Run gh auth login." });
+      expect((await d.api.listProjects())[0].ci.watcher).toEqual({
+        state: "error",
+        problem: "logged_out",
+        message: "gh isn't logged in",
+        fix: "Run gh auth login.",
+        since: expect.any(String),
+      });
+      await d.reportCIWatcherStatus("acme", { state: "watching" });
+      expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "watching", since: expect.any(String) });
+
+      await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "not_reported" });
     });
 
     it("gets one Ticket in full, with its Needs Me reason", async () => {

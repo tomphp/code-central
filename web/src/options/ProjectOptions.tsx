@@ -269,8 +269,35 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
           )}
         </div>
       </form>
+      {project.ci.tracking && <CIWatcher ci={project.ci} />}
       <CIRules api={api} project={project} />
     </fieldset>
+  );
+}
+
+// CIWatcher is the CI Watcher's status, as it last reported it: Watching,
+// or an error with its fix (code-central-253). It follows the Project as
+// read, so it changes as the CI Watcher reports.
+function CIWatcher({ ci }: { ci: CISettings }) {
+  const { watcher } = ci;
+  return (
+    <section className="project-options-watcher" aria-label="CI Watcher">
+      {watcher.state === "watching" && <p>CI Watcher: Watching {ci.repository}.</p>}
+      {watcher.state === "not_reported" && <p className="muted">CI Watcher: Starting; it hasn&apos;t reported yet.</p>}
+      {watcher.state === "error" && (
+        <p className="warning">
+          CI Watcher: Error. {watcher.message}
+          {watcher.fix && (
+            <>
+              <br />
+              {watcher.fix}
+            </>
+          )}
+          <br />
+          It tries again every 2 minutes, and goes back to Watching once the cause is fixed.
+        </p>
+      )}
+    </section>
   );
 }
 

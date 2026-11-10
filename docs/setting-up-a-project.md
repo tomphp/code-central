@@ -226,10 +226,18 @@ To change it, open the UI, click **⋯** beside the Project in the left pane, an
 
 ```text
 gh isn't logged in to GitHub: You are not logged into any GitHub hosts. To log in, run: gh auth login
-Run `gh auth login` as the user the service runs as, then turn CI Tracking on again.
+Run `gh auth login` as the user the service runs as.
 ```
 
-[Finding `gh`](running-as-a-service.md#finding-gh) says where Code Central looks for `gh`, and how the **gh path** Option points it somewhere else. Turning CI Tracking off keeps the repository and Ignored workflows for the next time you turn it on. For now the CI section only records these settings: the Factory lands accepted work the same way with CI Tracking on or off.
+[Finding `gh`](running-as-a-service.md#finding-gh) says where Code Central looks for `gh`, and how the **gh path** Option points it somewhere else.
+
+While CI Tracking is on, the CI section shows the **CI Watcher**'s status below Save. The CI Watcher is the process that watches the Project's CI. Every 2 minutes it checks again that `gh` is installed and logged in, and can read the repository:
+
+- **Watching acme/acme-api.**: it can reach GitHub.
+- **Error**: it can't. The status says what is wrong and how to fix it, as a refused Save does. You get one Notification when it goes into an error, not one per check. Once you fix the cause, the next check brings it back to Watching by itself, with nothing to restart. Changing the **gh path** Option counts too: the CI Watcher reads it on every check.
+- **Starting; it hasn't reported yet.**: the CI Watcher hasn't checked since the service started or CI Tracking was turned on. The service doesn't start the CI Watcher by itself yet, so for now the status stays here. Changing the repository starts it here again.
+
+Turning CI Tracking off keeps the repository and Ignored workflows for the next time you turn it on. For now the CI section only records these settings: the Factory lands accepted work the same way with CI Tracking on or off.
 
 ### CI Rules
 

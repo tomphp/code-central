@@ -74,11 +74,31 @@ export interface CIRule extends CIRuleChange {
   created: string;
 }
 
+// Why the CI Watcher can't watch its repository, each with its own fix.
+export type CIProblem = "gh_missing" | "logged_out" | "repository_unreadable" | "check_failed";
+
+// The CI Watcher's status as it last reported it (code-central-253):
+// not_reported until it has since the service started or CI Tracking was
+// turned on, then watching, or an error with its message and fix.
+export interface CIWatcherStatus {
+  state: "not_reported" | "watching" | "error";
+  problem?: CIProblem;
+  message?: string;
+  fix?: string;
+  // since is when it went into this state.
+  since?: string;
+}
+
+// A CI Watcher's report of its status: the service adds since.
+export type CIWatcherReport = Omit<CIWatcherStatus, "since"> & { state: "watching" | "error" };
+
 // A Project's CI settings, with the URL of the Push remote the Factory
-// last reported ("" until it has) and the CI Rules, in the order added.
+// last reported ("" until it has), the CI Rules, in the order added, and
+// the CI Watcher's status.
 export interface CISettings extends CITrackingChange {
   push_remote_url: string;
   rules: CIRule[];
+  watcher: CIWatcherStatus;
 }
 
 export interface ProjectView {

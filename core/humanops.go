@@ -63,11 +63,11 @@ func (c *Core) RenameProject(ctx context.Context, key string, in RenameProjectIn
 		}
 		p, _ := w.Project(key)
 		if p.DisplayName == name {
-			v = projectView(p)
+			v = c.projectView(p)
 			return nil
 		}
 		p.DisplayName = name
-		v = projectView(p)
+		v = c.projectView(p)
 		return w.PutProject(p)
 	})
 	return v, err
@@ -106,7 +106,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		}
 		p, _ := w.Project(key)
 		if p.Landing == l {
-			v = projectView(p)
+			v = c.projectView(p)
 			return nil
 		}
 		if p.Landing.Method != l.Method {
@@ -117,7 +117,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 			}
 		}
 		p.Landing = l
-		v = projectView(p)
+		v = c.projectView(p)
 		return w.PutProject(p)
 	})
 	if err != nil {
@@ -146,7 +146,7 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 	out := []ProjectRow{}
 	err := c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
-			row := ProjectRow{ProjectView: projectView(p)}
+			row := ProjectRow{ProjectView: c.projectView(p)}
 			for _, t := range r.Tickets(p.Key) {
 				if reason, _ := c.reasonOf(r, p.Key, t); reason != "" {
 					row.NeedsMe++

@@ -102,7 +102,7 @@ func (g *GitHubActions) CheckAccess(ctx context.Context) core.CICheckResult {
 			return r
 		}
 		return core.CICheckResult{Problem: core.CILoggedOut, Reason: "gh isn't logged in to GitHub: " + out,
-			Fix: "Run `gh auth login` as the user the service runs as, then turn CI Tracking on again."}
+			Fix: "Run `gh auth login` as the user the service runs as."}
 	}
 	if out, err := g.run(ctx, gh, "api", "repos/"+g.Repository, "--jq", ".full_name"); err != nil {
 		if r, ran := didntRun(gh, err); !ran {

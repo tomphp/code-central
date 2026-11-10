@@ -86,7 +86,7 @@ type command struct {
 	usage string
 	// hidden leaves the command out of the usage: the service runs it.
 	hidden bool
-	run   func(ctx context.Context, e Env, args []string) error
+	run    func(ctx context.Context, e Env, args []string) error
 }
 
 // Commands maps each command name to the core operation it exposes, or ""
