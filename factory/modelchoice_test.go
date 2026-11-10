@@ -20,6 +20,14 @@ func setTags(t *testing.T, h *factorytest.Harness, ticket string, tags map[strin
 	}
 }
 
+// setModels sets the Project's Models rows, as the human.
+func setModels(t *testing.T, h *factorytest.Harness, in core.SetModelsInput) {
+	t.Helper()
+	if _, err := h.Human().SetModels(context.Background(), h.Project, in); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // ranWith checks that c passed --model and --effort as want, "" meaning
 // no flag, and that ticket's Claim recorded them.
 func ranWith(t *testing.T, h *factorytest.Harness, ticket string, c factorytest.Call, model, effort string) {
@@ -68,11 +76,8 @@ func TestAKindsModelsRowReachesClaudeOverTheProjectDefaultAndTheFactorysFlags(t 
 	t.Parallel()
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Implement it")
-	in := core.SetModelsInput{Default: core.ModelRowView{Model: "opus", Effort: "medium"},
-		Kinds: []core.KindModelsView{{Kind: core.ImplementationStage, ModelRowView: core.ModelRowView{Effort: "xhigh"}}}}
-	if _, err := h.Human().SetModels(context.Background(), h.Project, in); err != nil {
-		t.Fatal(err)
-	}
+	setModels(t, h, core.SetModelsInput{Default: core.ModelRowView{Model: "opus", Effort: "medium"},
+		Kinds: []core.KindModelsView{{Kind: core.ImplementationStage, ModelRowView: core.ModelRowView{Effort: "xhigh"}}}})
 	h.Start("--model", "sonnet", "--effort", "low")
 	h.WaitForState(id, store.InReview)
 	ranWith(t, h, id, h.Calls()[0], "opus", "xhigh")

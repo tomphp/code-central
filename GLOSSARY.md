@@ -25,7 +25,7 @@ The section of Project Options where the human sets a model and effort for the P
 _Avoid_: Model config, AI settings
 
 **Model Choice**:
-The model and effort a Factory session's turn runs with, worked out at every start and resume from, highest first: the Ticket's `model` or `effort` Tag, the Project's Models row for its kind of work, the Project default row, the Factory's `--model` or `--effort` flag, and Claude Code's own default. Model and effort are each worked out on their own.
+The model and effort a Factory session's turn runs with, worked out at every start and resume from, highest first: the Ticket's `model` or `effort` Tag, the Project's Models row for its kind of work, the Project default row, the Factory's `--model` or `--effort` flag, and Claude Code's own default. Model and effort are each worked out on their own. A model `claude` rejects, or an effort it doesn't accept, fails the Claim with a Failure Report naming where it was set.
 _Avoid_: Model selection, model config
 
 **Reported Models**:

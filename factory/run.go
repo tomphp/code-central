@@ -111,7 +111,7 @@ func (f *factory) poll(ctx context.Context) {
 	if f.halted(ctx) {
 		return
 	}
-	if f.paused() {
+	if f.paused() && !f.endIdlePause() {
 		for _, c := range f.duePausedResumes(f.o.parallel - f.running()) {
 			if !f.resumeCutOff(ctx, c) && f.live(c.ClaimID) {
 				f.requeueCutOff(c)
@@ -361,7 +361,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		f.reportFailure(ctx, c, fl)
 		return true
 	}
-	mc := f.withFlags(c, res.ModelChoice)
+	mc := f.withFlags(stage, res.ModelChoice)
 	f.startTurn(ctx, c, wt, mc, append(f.startArgs(c, mc), firstPrompt(c, stage, wt, guide)))
 	return true
 }

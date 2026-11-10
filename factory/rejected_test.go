@@ -1,7 +1,6 @@
 package factory_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -9,14 +8,6 @@ import (
 	"github.com/tomoram/code-central/factory/factorytest"
 	"github.com/tomoram/code-central/store"
 )
-
-// setModels sets the Project's Models rows, as the human.
-func setModels(t *testing.T, h *factorytest.Harness, in core.SetModelsInput) {
-	t.Helper()
-	if _, err := h.Human().SetModels(context.Background(), h.Project, in); err != nil {
-		t.Fatal(err)
-	}
-}
 
 // wantFailureReport waits for id to fail and checks its one Failure
 // Report says each of what it must.
@@ -171,4 +162,15 @@ func TestWithoutLevelsFromItsHelpTheFactoryDoesntCheckEffort(t *testing.T) {
 	h.Start()
 	h.WaitForState(id, store.InReview)
 	ranWith(t, h, id, h.Calls()[0], "", "xhigh")
+}
+
+func TestAModelRejectedWithOnlyItsResultFailsTheClaim(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("No assistant error")
+	setTags(t, h, id, map[string]string{"model": "opus-9"})
+	// The result alone: terminal_reason api_error, api_error_status 404.
+	h.Script(id, factorytest.ModelNotFound("opus-9")[1:]...)
+	h.Start()
+	wantFailureReport(t, h, id, []string{"`opus-9`", "the Ticket's `model` Tag"}, []string{"Tag"})
 }

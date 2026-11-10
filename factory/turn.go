@@ -23,6 +23,7 @@ type result struct {
 	Subtype           string   `json:"subtype"`
 	IsError           bool     `json:"is_error"`
 	TerminalReason    string   `json:"terminal_reason"`
+	APIErrorStatus    int      `json:"api_error_status"`
 	PermissionDenials []denial `json:"permission_denials"`
 	Result            string   `json:"result"`
 }
