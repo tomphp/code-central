@@ -353,7 +353,7 @@ On each check, the Issue Watcher also brings in the repository's open issues, th
 
 Code Central works out from each Ticket's state what its issue should show, and the Issue Watcher makes it so on its next check. Each linked issue carries one **status label**, which the Issue Watcher creates in the repository if it is missing, taking any other `code-central:` label off the issue:
 
-- `code-central:draft` on an Incoming Issue waiting for triage;
+- `code-central:draft` on an Incoming Issue, kept as a Draft or not yet triaged;
 - `code-central:wont-fix` on one you chose Won't fix for, which is also closed as not planned.
 
 Each comment it posts ends with a link back to the Ticket in Code Central, and is posted exactly once: not again after the Issue Watcher or the service restarts, even if it stopped between posting it and recording it, and not again after you turn GitHub Issues off and on. Anything that comes due while GitHub Issues is off is written once you turn it back on. Your Rounds and their answers, Failure Reports, Transcripts, Claims and comments on a Ticket are never written to GitHub. Unlinking a Ticket stops every write to its issue.

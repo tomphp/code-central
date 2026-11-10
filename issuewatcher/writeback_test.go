@@ -1,7 +1,6 @@
 package issuewatcher_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -72,16 +71,16 @@ func (w *watching) commentsOn(n int, bodies ...string) {
 	w.h.Answer(fakegh.Answer{Args: []string{"api", fmt.Sprintf("repos/acme/web/issues/%d/comments?page=1&per_page=100", n)}, Stdout: string(b)})
 }
 
-// arrived starts the Issue Watcher with issue 1 open, waits for it to
-// arrive, and returns its Ticket.
+// arrived starts the Issue Watcher with issues open, waits for them to
+// arrive, and returns the first one's Ticket.
 func (w *watching) arrived(issues ...issue) string {
 	w.t.Helper()
 	w.openIssues("", 1, issues...)
 	w.start(w.h.Bin)
 	w.status(core.WatcherWatching)
-	watch, err := w.srv.Core.GetIssueWatch(context.Background(), "acme")
-	if err != nil || len(watch.Issues) == 0 {
-		w.t.Fatalf("get_issue_watch = %+v, %v, want issue 1 arrived", watch, err)
+	watch := w.watch()
+	if len(watch.Issues) == 0 {
+		w.t.Fatalf("get_issue_watch = %+v, want the issues arrived", watch)
 	}
 	return watch.Issues[0].Ticket
 }
@@ -97,11 +96,7 @@ func (w *watching) wontFix(ticket, reason string) {
 // writesDue is what get_issue_watch says is still due.
 func (w *watching) writesDue() []core.IssueWrites {
 	w.t.Helper()
-	watch, err := w.srv.Core.GetIssueWatch(context.Background(), "acme")
-	if err != nil {
-		w.t.Fatal(err)
-	}
-	return watch.Writes
+	return w.watch().Writes
 }
 
 // An Incoming Issue gets code-central:draft on the poll after it

@@ -73,16 +73,22 @@ func (w *watching) openIssues(label string, page int, issues ...issue) {
 	w.h.Answer(fakegh.Answer{Args: []string{"api", issuesPath(label, page)}, Stdout: string(b)})
 }
 
-// incoming is acme's Incoming Issues as get_issue_watch lists them, each
-// as its Link's ID, URL, title and description.
-func (w *watching) incoming() []string {
+// watch is acme's get_issue_watch.
+func (w *watching) watch() core.IssueWatch {
 	w.t.Helper()
 	watch, err := w.srv.Core.GetIssueWatch(context.Background(), "acme")
 	if err != nil {
 		w.t.Fatal(err)
 	}
+	return watch
+}
+
+// incoming is acme's Incoming Issues as get_issue_watch lists them, each
+// as its Link's ID, URL, title and description.
+func (w *watching) incoming() []string {
+	w.t.Helper()
 	var out []string
-	for _, i := range watch.Issues {
+	for _, i := range w.watch().Issues {
 		if i.Link.Integration != "github" {
 			w.t.Fatalf("Incoming Issue %s linked by %q, want github", i.Ticket, i.Link.Integration)
 		}

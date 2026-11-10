@@ -24,7 +24,8 @@ const StatusLabelPrefix = "code-central:"
 
 // The status labels an issue carries, one at a time.
 const (
-	// LabelDraft is on an Incoming Issue waiting for triage.
+	// LabelDraft is on an Incoming Issue, a Draft or Ready Ticket on the
+	// Issues Spec that no triage action has taken off it.
 	LabelDraft = StatusLabelPrefix + "draft"
 	// LabelWontFix is on an issue the human chose Won't fix for.
 	LabelWontFix = StatusLabelPrefix + "wont-fix"
@@ -83,9 +84,9 @@ func (c *Core) issueComment(target, key, text string) IssueComment {
 	return IssueComment{Key: key, Body: IssueMarker(target, key) + "\n" + strings.TrimSpace(text) + "\n\n" + link}
 }
 
-// wontFix is t's Won't fix reason, if the human chose Won't fix for it:
-// the comment its wont_fix made, empty when it gave none.
-func wontFix(t store.Ticket) (reason string, ok bool) {
+// wontFixReason is t's Won't fix reason, if the human chose Won't fix
+// for it: the comment its wont_fix made, empty when it gave none.
+func wontFixReason(t store.Ticket) (reason string, ok bool) {
 	if t.State != store.Cancelled || len(t.Moves) == 0 {
 		return "", false
 	}
@@ -103,14 +104,15 @@ func wontFix(t store.Ticket) (reason string, ok bool) {
 
 // ticketIssueWrites is what is due on the issue t, a Ticket on key's
 // Issues Spec, is linked to; ok is false when nothing is. Its label and
-// closing are due only while the issue was last seen open.
+// closing are due only while the issue was last seen open, and nothing
+// is due on a deleted issue.
 func (c *Core) ticketIssueWrites(key string, t store.Ticket) (w IssueWrites, ok bool) {
 	if !t.Link.Owned() {
 		return IssueWrites{}, false
 	}
 	id := DisplayID(key, t.Number)
 	w = IssueWrites{Target: id, Link: *linkView(t.Link), Comments: []IssueComment{}}
-	if reason, ok := wontFix(t); ok {
+	if reason, ok := wontFixReason(t); ok {
 		w.Label, w.Close = LabelWontFix, CloseNotPlanned
 		if strings.TrimSpace(reason) != "" && !slices.Contains(t.Link.Written, CommentWontFix) {
 			w.Comments = append(w.Comments, c.issueComment(id, CommentWontFix, reason))
@@ -120,6 +122,9 @@ func (c *Core) ticketIssueWrites(key string, t store.Ticket) (w IssueWrites, ok 
 	}
 	if t.Link.ExternalState != store.ExternalOpen {
 		w.Label, w.Close = "", ""
+	}
+	if t.Link.ExternalState == store.ExternalDeleted {
+		w.Comments = []IssueComment{}
 	}
 	return w, len(w.Comments) > 0 || w.Label != "" || w.Close != ""
 }

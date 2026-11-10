@@ -6,6 +6,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { FakeApi } from "../../api/fake";
+import { TRIAGE_ACTIONS } from "../../api/types";
 import { change, focus, renderApp, without } from "../../focus/focusTesting";
 import { TicketDetail } from "../../ticket/TicketDetail";
 import { panel } from "./panel";
@@ -62,7 +63,7 @@ describe("a New issue in Needs Me", () => {
     await userEvent.click(within(p).getByRole("button", { name: "Keep as Draft" }));
     expect(fake.calls).toContain("keep_as_draft");
     const t = await fake.getTicket("acme", "acme-2");
-    expect(t).toMatchObject({ state: "Draft", triage_actions: ["keep_as_draft", "wont_fix"] });
+    expect(t).toMatchObject({ state: "Draft", triage_actions: TRIAGE_ACTIONS });
     expect(t.awaiting_triage).toBeUndefined();
     expect(t.needs_me_reason).toBeUndefined();
     expect((await fake.needsMe()).count).toBe(0);
@@ -164,7 +165,7 @@ describe("the triage actions in the Ticket panel", () => {
     const d = await renderDetail(fake);
     await fake.unlink("acme", "acme-2"); // the Ticket shown is stale
     await wontFix(d);
-    expect(await within(d).findByRole("alert")).toHaveTextContent("not an Incoming Issue");
+    expect(await within(d).findByRole("alert")).toHaveTextContent("was unlinked from github acme/web#7");
   });
 
   it("are not offered on any other Ticket", async () => {

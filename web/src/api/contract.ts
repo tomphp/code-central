@@ -10,7 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
 import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeldSessionEvent, LandingMethod, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
-import { ApiError } from "./types";
+import { ApiError, TRIAGE_ACTIONS } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
 
@@ -1252,23 +1252,30 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     });
 
     // ---- New issue and Keep as Draft (code-central-287) ----
-    it("shows a New issue in Needs Me until the human keeps it as a Draft", async () => {
+
+    // incomingIssue turns GitHub Issues on for a new Project acme, from
+    // acme/web, with New issues need me as needMe, and brings acme/web's
+    // issue n in as title; it returns its Ticket and its issue's link.
+    async function incomingIssue(needMe: boolean, n: number, title: string) {
       await d.createProject("acme", "Acme");
       await d.letGHTriage("acme/web");
-      const on = await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: true });
-      const spec = on.github_issues.spec!;
-      const gh = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7" };
-      const id = await d.incomingIssue("acme", spec, "Login is broken", gh);
+      const on = await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: needMe });
+      const gh = { integration: "github", id: `acme/web#${n}`, url: `https://github.com/acme/web/issues/${n}` };
+      return { id: await d.incomingIssue("acme", on.github_issues.spec!, title, gh), gh };
+    }
+
+    it("shows a New issue in Needs Me until the human keeps it as a Draft", async () => {
+      const { id, gh } = await incomingIssue(true, 7, "Login is broken");
       const link = { ...gh, external_state: "open", detached: false };
 
-      expect(await d.api.getTicket("acme", id)).toMatchObject({ state: "Draft", link, awaiting_triage: true, triage_actions: ["keep_as_draft", "wont_fix"], needs_me_reason: "new_issue" });
+      expect(await d.api.getTicket("acme", id)).toMatchObject({ state: "Draft", link, awaiting_triage: true, triage_actions: TRIAGE_ACTIONS, needs_me_reason: "new_issue" });
       const nm = await d.api.needsMe();
       expect(nm.groups.map((g) => g.reason)).toEqual(["new_issue"]);
       expect(nm.groups[0].tickets[0]).toMatchObject({ id, reason: "new_issue", link });
 
       wantAcknowledgement(await d.api.act("acme", id, "keep_as_draft", {}), id, "Draft", ["needs_me_reason", "awaiting_triage"]);
       const kept = await d.api.getTicket("acme", id);
-      expect(kept).toMatchObject({ state: "Draft", triage_actions: ["keep_as_draft", "wont_fix"] });
+      expect(kept).toMatchObject({ state: "Draft", triage_actions: TRIAGE_ACTIONS });
       expect(kept.awaiting_triage).toBeUndefined();
       expect(kept.needs_me_reason).toBeUndefined();
       expect((await d.api.needsMe()).count).toBe(0);
@@ -1281,12 +1288,9 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     });
 
     it("offers the triage actions on an Incoming Issue that came in with New issues need me off", async () => {
-      await d.createProject("acme", "Acme");
-      await d.letGHTriage("acme/web");
-      const on = await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false });
-      const id = await d.incomingIssue("acme", on.github_issues.spec!, "Typo", { integration: "github", id: "acme/web#8", url: "https://github.com/acme/web/issues/8" });
+      const { id } = await incomingIssue(false, 8, "Typo");
       const t = await d.api.getTicket("acme", id);
-      expect(t).toMatchObject({ triage_actions: ["keep_as_draft", "wont_fix"] });
+      expect(t).toMatchObject({ triage_actions: TRIAGE_ACTIONS });
       expect(t.awaiting_triage).toBeUndefined();
       expect(t.needs_me_reason).toBeUndefined();
       expect((await d.api.needsMe()).count).toBe(0);
@@ -1298,10 +1302,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
     // ---- Won't fix (code-central-289) ----
     it("Cancels an Incoming Issue on Won't fix, with the reason as its comment", async () => {
-      await d.createProject("acme", "Acme");
-      await d.letGHTriage("acme/web");
-      const on = await d.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: true });
-      const id = await d.incomingIssue("acme", on.github_issues.spec!, "Login is broken", { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7" });
+      const { id } = await incomingIssue(true, 7, "Login is broken");
 
       wantAcknowledgement(await d.api.act("acme", id, "wont_fix", { reason: "Works as intended." }), id, "Cancelled", ["state", "needs_me_reason", "awaiting_triage", "triage_actions"]);
       const t = await d.api.getTicket("acme", id);
@@ -1317,6 +1318,14 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(refused).toBeInstanceOf(ApiError);
       expect(refused).toMatchObject({ status: 409, code: "action_not_allowed" });
       expect(refused.message).toContain("not an Incoming Issue");
+
+      // Unlinked, an Incoming Issue is refused, naming its Link.
+      const spec = (await d.api.getTicket("acme", id)).spec.id;
+      const other = await d.incomingIssue("acme", spec, "Typo", { integration: "github", id: "acme/web#8", url: "https://github.com/acme/web/issues/8" });
+      await d.api.unlink("acme", other);
+      const unlinked = await d.api.act("acme", other, "wont_fix", {}).catch((e) => e);
+      expect(unlinked).toMatchObject({ status: 409, code: "action_not_allowed" });
+      expect(unlinked.message).toContain(`${other} was unlinked from github acme/web#8`);
     });
 
     // ---- the latest Session Event (ticket 109) ----

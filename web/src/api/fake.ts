@@ -72,8 +72,8 @@ import {
 import { fakeActions } from "./fakeActions";
 import {
   ApiError,
-  TRIAGE_ACTIONS,
   DEFAULT_OPTIONS,
+  TRIAGE_ACTIONS,
   FINISHED,
   FOCUS_CLEARS,
   GUIDED_ON,
@@ -681,7 +681,10 @@ export class FakeApi implements Api {
   // refused on anything else, as core's WontFix is.
   wontFix(t: TicketView, reason?: string): TicketView {
     if (!t.triage_actions?.includes("wont_fix")) {
-      throw new ApiError(409, "action_not_allowed", `${t.id} is not an Incoming Issue: only a linked Ticket on the Project's Issues Spec is triaged`);
+      const why = t.link?.detached
+        ? `${t.id} was unlinked from ${t.link.integration} ${t.link.id}, so it is no longer an Incoming Issue to triage`
+        : `${t.id} is not an Incoming Issue: only a linked Ticket on the Project's Issues Spec is triaged`;
+      throw new ApiError(409, "action_not_allowed", why);
     }
     const at = this.now.toISOString();
     const body = reason?.trim();

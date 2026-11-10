@@ -191,8 +191,8 @@ func TestKeepAsDraftTakesANewIssueOutOfNeedsMeForGood(t *testing.T) {
 
 func TestKeepAsDraftIsRefusedOnAnythingButAnIncomingIssue(t *testing.T) {
 	srv := newServer(t, newIssue)
-	incomingIssue(t, srv, "acme-1", "8") // acme-6, linked but on another Spec
-	incomingIssue(t, srv, "acme-4", "9") // acme-7, detached below
+	incomingIssue(t, srv, "acme-1", "8")  // acme-6, linked but on another Spec
+	incomingIssue(t, srv, "acme-4", "9")  // acme-7, detached below
 	incomingIssue(t, srv, "acme-4", "10") // acme-8, cancelled below
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/unlink", `{"target":"acme-7"}`})
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/8/move", `{"to_state":"Cancelled"}`})

@@ -8,9 +8,9 @@ import (
 
 // The Issue Watcher's own operations (Spec code-central-279):
 // get_issue_watch, the one read it polls, and
-// report_issue_watcher_status; report_issue_written is in writeback.go. Unlike the CI Watcher, it writes as the
-// integration Actor, and its status report is accepted from that Actor
-// only. Its status is kept with every kind of Watcher's, in watcher.go.
+// report_issue_watcher_status; report_issue_written is in writeback.go.
+// Unlike the CI Watcher, it writes as the integration Actor, and its
+// status report is accepted from that Actor only. Its status is kept with every kind of Watcher's, in watcher.go.
 
 // IssueWatch is get_issue_watch: everything the Issue Watcher needs on
 // each poll, so it keeps no state of its own. The gh path Option is read

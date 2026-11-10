@@ -354,8 +354,12 @@ The human's triage action that Cancels an Incoming Issue, with an optional reaso
 _Avoid_: Reject, decline
 
 **Status label**:
-The one `code-central:` label Code Central keeps on a linked GitHub issue to show where its work stands, such as `code-central:draft` on an Incoming Issue waiting for triage or `code-central:wont-fix` after Won't fix. The Issue Watcher creates it in the repository if it is missing.
+The one `code-central:` label Code Central keeps on a linked GitHub issue to show where its work stands, such as `code-central:draft` on an Incoming Issue not yet triaged off the Issues Spec or `code-central:wont-fix` after Won't fix. The Issue Watcher creates it in the repository if it is missing.
 _Avoid_: Tag, state label
+
+**Write-back**:
+What Code Central writes to a linked GitHub issue: its comments, its Status label and closing it. Code Central works out from the work's state what is due on each issue, never from events, and the Issue Watcher makes it so, posting each comment exactly once. Nothing is ever written from Rounds, answers, Failure Reports, Transcripts or Claims.
+_Avoid_: Sync, mirroring
 
 **Outbound Link**:
 A Link on which Code Central owns the definition and only writes to the external item, never reading its edits. To Requirement turns an Incoming Issue's Link into one on the Requirement's Spec.

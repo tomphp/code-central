@@ -106,7 +106,8 @@ func wantDue(t *testing.T, got map[string]issueWrites, target, label, close stri
 // carry code-central:draft; one the human chose Won't fix for should
 // carry code-central:wont-fix and be closed as not planned, with the
 // reason as a comment if given. Nothing is due on a plain Cancel, a
-// detached Link, or an issue that isn't open, but for a comment.
+// detached Link or a deleted issue, and on any other issue that isn't
+// open, only a comment is.
 func TestGetIssueWatchListsTheWritesDueForEachState(t *testing.T) {
 	srv := newServer(t, newIssue)         // acme-5 is issue 7, Draft
 	incomingIssue(t, srv, "acme-4", "8")  // acme-6, approved to Ready
@@ -116,6 +117,7 @@ func TestGetIssueWatchListsTheWritesDueForEachState(t *testing.T) {
 	incomingIssue(t, srv, "acme-4", "12") // acme-10, unlinked
 	incomingIssue(t, srv, "acme-4", "13") // acme-11, closed on GitHub
 	incomingIssue(t, srv, "acme-4", "14") // acme-12, Won't fix, then closed
+	incomingIssue(t, srv, "acme-4", "15") // acme-13, Won't fix, then deleted
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/6/approve", `{}`})
 	httpOK(t, srv, wontFix("7", `{"reason":"  Works as intended.  "}`))
 	httpOK(t, srv, wontFix("8", `{}`))
@@ -124,6 +126,8 @@ func TestGetIssueWatchListsTheWritesDueForEachState(t *testing.T) {
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/integration/set_external_state", `{"target":"11","external_state":"closed"}`})
 	httpOK(t, srv, wontFix("12", `{"reason":"Out of scope."}`))
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/integration/set_external_state", `{"target":"12","external_state":"closed"}`})
+	httpOK(t, srv, wontFix("13", `{"reason":"Gone."}`))
+	httpOK(t, srv, httpCall{"POST", "/api/p/acme/integration/set_external_state", `{"target":"13","external_state":"deleted"}`})
 	// A comment on an Incoming Issue is the Ticket's, never the issue's.
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/5/comment", `{"body":"Looks like a duplicate."}`})
 
@@ -133,7 +137,7 @@ func TestGetIssueWatchListsTheWritesDueForEachState(t *testing.T) {
 	wantDue(t, got, "acme-7", "code-central:wont-fix", "not_planned", "wont-fix")
 	wantDue(t, got, "acme-8", "code-central:wont-fix", "not_planned")
 	wantDue(t, got, "acme-12", "", "", "wont-fix")
-	for _, none := range []string{"acme-9", "acme-10", "acme-11"} {
+	for _, none := range []string{"acme-9", "acme-10", "acme-11", "acme-13"} {
 		if w, ok := got[none]; ok {
 			t.Errorf("%s has writes due %+v, want none", none, w)
 		}
