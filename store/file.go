@@ -225,6 +225,17 @@ func (s *FileStore) loadProject(key string) error {
 		if !p.CI.Provider.Valid() {
 			return &LoadError{File: rel, Field: "ci.provider", Msg: fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(ciProviderNames(), " or "))}
 		}
+		for i, r := range c.Rules {
+			field := fmt.Sprintf("ci.rules[%d]", i)
+			rule := CIRule{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: State(r.State)}
+			if rule.State != Draft && rule.State != Ready {
+				return &LoadError{File: rel, Field: field + ".state", Msg: fmt.Sprintf("a CI Rule's Tickets open as Draft or Ready, not %q", r.State)}
+			}
+			if rule.Created, err = parseTime(r.Created); err != nil {
+				return &LoadError{File: rel, Field: field + ".created", Msg: err.Error()}
+			}
+			p.CI.Rules = append(p.CI.Rules, rule)
+		}
 	}
 	s.setProject(p)
 

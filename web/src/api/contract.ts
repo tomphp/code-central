@@ -109,7 +109,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         { method: "merge", push: false, remote: "origin" },
         { method: "merge", push: false, remote: "origin" },
       ]);
-      const off = { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [], push_remote_url: "" };
+      const off = { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [], push_remote_url: "", rules: [] };
       expect(rows.map((r) => r.ci)).toEqual([off, off]);
     });
 
@@ -222,6 +222,34 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(method).toMatchObject({ status: 422, code: "invalid", field: "method" });
     });
 
+    it("adds, edits and removes CI Rules, each with its own Spec", async () => {
+      await d.createProject("acme", "Acme");
+      const added = await d.api.addCIRule("acme", { workflow: " ci.yml ", branch: " main ", state: "Ready" });
+      expect(added.ci.rules).toEqual([{ spec: expect.stringMatching(/^acme-\d+$/), workflow: "ci.yml", branch: "main", state: "Ready", created: expect.any(String) }]);
+      const first = added.ci.rules[0].spec;
+      expect((await d.api.getSpec("acme", first)).title).toBe("CI: ci.yml on main");
+      const second = (await d.api.addCIRule("acme", { workflow: "any", branch: "main", state: "Draft" })).ci.rules[1].spec;
+      expect((await d.api.getSpec("acme", second)).title).toBe("CI: any workflow on main");
+      expect((await d.api.listProjects())[0].ci.rules.map((r) => r.spec)).toEqual([first, second]);
+
+      const edited = await d.api.editCIRule("acme", first, { workflow: "lint.yml", branch: "develop", state: "Draft" });
+      expect(edited.ci.rules[0]).toEqual({ ...added.ci.rules[0], workflow: "lint.yml", branch: "develop", state: "Draft" });
+      expect((await d.api.getSpec("acme", first)).title).toBe("CI: lint.yml on develop");
+
+      const removed = await d.api.removeCIRule("acme", first);
+      expect(removed.ci.rules.map((r) => r.spec)).toEqual([second]);
+      expect((await d.api.getSpec("acme", first)).title).toBe("CI: lint.yml on develop");
+      expect(await d.api.removeCIRule("acme", first).catch((e) => e)).toMatchObject({ status: 404, code: "not_found" });
+
+      const twice = await d.api.addCIRule("acme", { workflow: "any", branch: "main", state: "Ready" }).catch((e) => e);
+      expect(twice).toMatchObject({ status: 422, code: "invalid" });
+      expect(twice.message).toContain(second);
+      const glob = await d.api.addCIRule("acme", { workflow: "ci.yml", branch: "release/*", state: "Draft" }).catch((e) => e);
+      expect(glob).toMatchObject({ status: 422, code: "invalid", field: "branch" });
+      const path = await d.api.addCIRule("acme", { workflow: ".github/workflows/ci.yml", branch: "main", state: "Draft" }).catch((e) => e);
+      expect(path).toMatchObject({ status: 422, code: "invalid", field: "workflow" });
+    });
+
     it("sets a Project's CI settings, keeping the Push remote URL the Factory reported", async () => {
       await d.createProject("acme", "Acme");
       await d.reportPushRemote("acme", "git@github.com:acme/web.git");
@@ -239,6 +267,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         repository: "acme/web",
         ignored_workflows: ["nightly.yml", "deploy.yaml"],
         push_remote_url: "git@github.com:acme/web.git",
+        rules: [],
       };
       expect(v).toMatchObject({ key: "acme", ci: on });
       expect((await d.api.listProjects())[0].ci).toEqual(on);
@@ -266,6 +295,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         repository: "",
         ignored_workflows: [],
         push_remote_url: "git@github.com:acme/web.git",
+        rules: [],
       });
     });
 
