@@ -138,6 +138,22 @@ func ticketCI(r store.Reader, key string, t store.Ticket) (*PushedCommitView, CI
 	return &PushedCommitView{Commit: latest.Commit, Pushed: latest.Pushed}, ciResultOf(latest.Commit, mine), runs
 }
 
+// ciResult is t's CI result alone, for its rows: "" for a Ticket never
+// pushed while CI Tracking was on.
+func ciResult(r store.Reader, key string, t store.Ticket) CIResult {
+	if len(t.PushedCommits) == 0 {
+		return ""
+	}
+	commit := t.PushedCommits[len(t.PushedCommits)-1].Commit
+	var mine []store.CIRun
+	for _, run := range r.CIRuns(key) {
+		if run.Ticket == t.Number && run.Commit == commit {
+			mine = append(mine, run)
+		}
+	}
+	return ciResultOf(commit, mine)
+}
+
 // ciResultOf is the CI result of commit from runs: running while any of
 // its runs that aren't ignored is unfinished, or none is reported; failed
 // if any concluded failure, cancelled or timed out; passed otherwise,

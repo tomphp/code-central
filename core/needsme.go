@@ -106,6 +106,9 @@ type NeedsMeRow struct {
 	Spec *NeedsMeSpec `json:"spec,omitempty"`
 	// Prototype is set on a Ticket labelled prototype, for its badge.
 	Prototype bool `json:"prototype,omitempty"`
+	// CIResult is the Ticket's CI result, whatever the reason: the row's
+	// badge. Left out for a Ticket with none.
+	CIResult CIResult `json:"ci_result,omitempty"`
 }
 
 // NeedsMeRequirement is the Requirement a Needs Me row's Ticket is on:
@@ -209,6 +212,7 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 	row := NeedsMeRow{
 		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link),
 		Requirement: req, Spec: needsMeSpec(r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
+		CIResult: ciResult(r, key, t),
 	}
 	switch reason {
 	case ReasonNeedsAnswer:
