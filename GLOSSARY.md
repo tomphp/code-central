@@ -124,6 +124,10 @@ _Avoid_: Job, build, pipeline
 A Ticket's running, passed or failed, worked out from the CI Runs of its latest pushed commit that aren't of Ignored workflows: running until they have all finished, failed if any failed, passed otherwise.
 _Avoid_: Build status
 
+**CI gate**:
+What holds a pushed Ticket back from landing until its CI result is passed. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own.
+_Avoid_: CI check, CI hold, waiting-on-CI State
+
 **Ignored workflows**:
 A Project's list of workflow file names, such as `nightly.yml`, whose runs never count towards a CI result and never fire an "any workflow" CI Rule. They are still shown, marked ignored.
 _Avoid_: Excluded workflows, skipped workflows

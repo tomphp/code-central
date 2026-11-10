@@ -158,7 +158,7 @@ func TestATicketWaitingOnCIDoesNotStopAnotherFromMergingAndPushing(t *testing.T)
 	if got := remote.Git("rev-parse", "main"); got != secondPushed {
 		t.Fatalf("the remote's main is at %q, want the second Ticket's merge %s pushed", got, secondPushed)
 	}
-	stillAccepted(t, h, r, first, "while its own CI result is running")
+	stillAccepted(t, h, r, first, "while its own CI Run is running")
 	if tk := h.Ticket(first); tk.PushedCommit == nil || tk.PushedCommit.Commit != firstPushed {
 		t.Fatalf("%s's pushed commit is %+v, want its own %s, not the later push's", first, tk.PushedCommit, firstPushed)
 	}
@@ -166,7 +166,7 @@ func TestATicketWaitingOnCIDoesNotStopAnotherFromMergingAndPushing(t *testing.T)
 	reportRun(t, h, 2, second, secondPushed, store.CICompleted, store.CISuccess)
 	r.Poll()
 	h.WaitForState(second, store.Done)
-	stillAccepted(t, h, r, first, "while its own CI result is running")
+	stillAccepted(t, h, r, first, "while its own CI Run is running")
 }
 
 func TestUnderBranchAndPushTheHumansMergeLandsWhateverTheCIResult(t *testing.T) {
@@ -184,5 +184,35 @@ func TestUnderBranchAndPushTheHumansMergeLandsWhateverTheCIResult(t *testing.T) 
 	r.Poll()
 	if tk := h.WaitForState(id, store.Done); tk.CIResult != core.CIFailed {
 		t.Fatalf("ci result %q, want it landed with its failed CI result", tk.CIResult)
+	}
+}
+
+func TestAnInReviewTicketMergedByHandWaitsOnCIInReview(t *testing.T) {
+	t.Parallel()
+	h, remote, r := gatedHarness(t)
+	id := h.ReadyTicket("Add a feature")
+	commit := h.CommitOn(id, "feature.txt", "feature\n")
+	h.Finished(id, id, commit)
+	h.Git("merge", "-q", "--no-ff", "-m", "My own merge", id)
+
+	r.Poll()
+	r.WaitForOutput(id + ": CI tracks main at ")
+	tk := h.Ticket(id)
+	merge := h.Git("rev-parse", "main")
+	if tk.State != store.InReview || tk.PushedCommit == nil || tk.PushedCommit.Commit != merge {
+		t.Fatalf("%s with pushed commit %+v, want it In Review with the pushed merge %s", tk.State, tk.PushedCommit, merge)
+	}
+	if got := remote.Git("rev-parse", "main"); got != merge {
+		t.Fatalf("the remote's main is at %q, want the merge %s", got, merge)
+	}
+	r.Poll()
+	if s := h.Ticket(id).State; s != store.InReview {
+		t.Fatalf("%s is %s, want it left In Review while CI runs", id, s)
+	}
+
+	reportRun(t, h, 1, id, merge, store.CICompleted, store.CISuccess)
+	r.Poll()
+	if tk := h.WaitForState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != merge {
+		t.Errorf("landed with %q, want the pushed merge %s", tk.Moves[len(tk.Moves)-1].Commit, merge)
 	}
 }

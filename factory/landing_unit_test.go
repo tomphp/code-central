@@ -2,9 +2,14 @@ package factory
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -719,5 +724,51 @@ func TestTheSweepRemovesOnlyCleanWorktreesOfFinishedTickets(t *testing.T) {
 	}
 	if got := w.lines(landed + ": Done: removed its worktree"); got != 1 {
 		t.Errorf("want one removed line, got %q", w.out)
+	}
+}
+
+func TestAPushedCommitWhoseReportFailedIsReportedAsItsOwnNotALaterTicketsPush(t *testing.T) {
+	t.Parallel()
+	w := newLandWorld(t)
+	w.repo.addRemote("origin")
+	w.setLanding(store.LandingMerge, true, "origin")
+	if _, err := w.human.SetCITracking(context.Background(), "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := w.accepted("First")
+	second, _ := w.accepted("Second")
+	// Code Central refuses the first Ticket's report for one poll.
+	var refusing atomic.Bool
+	refusing.Store(true)
+	target, err := url.Parse(w.srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rp := httputil.NewSingleHostReverseProxy(target)
+	proxy := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		if refusing.Load() && strings.HasSuffix(r.URL.Path, "/"+first+"/report_pushed_commit") {
+			http.Error(rw, "down", http.StatusServiceUnavailable)
+			return
+		}
+		rp.ServeHTTP(rw, r)
+	}))
+	t.Cleanup(proxy.Close)
+	w.f.client = client.New(proxy.URL)
+
+	w.poll()
+	w.repo.mu.Lock()
+	firstMerge := w.repo.parents[w.repo.refs["refs/heads/main"]][0]
+	w.repo.mu.Unlock()
+	if tk := w.ticket(first); tk.State != store.Accepted || tk.PushedCommit != nil {
+		t.Fatalf("%s is %s with pushed commit %+v, want it Accepted with its report refused", first, tk.State, tk.PushedCommit)
+	}
+	if tk := w.ticket(second); tk.PushedCommit == nil || tk.PushedCommit.Commit != w.repo.remoteTip("origin", "main") {
+		t.Fatalf("%s's pushed commit %+v, want the remote's main", second, tk.PushedCommit)
+	}
+
+	refusing.Store(false)
+	w.poll()
+	if tk := w.ticket(first); tk.State != store.Accepted || tk.PushedCommit == nil || tk.PushedCommit.Commit != firstMerge {
+		t.Fatalf("%s is %s with pushed commit %+v, want it Accepted with its own merge %s, not the later push", first, tk.State, tk.PushedCommit, firstMerge)
 	}
 }

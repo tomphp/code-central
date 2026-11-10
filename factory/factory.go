@@ -239,9 +239,13 @@ type factory struct {
 	// warnedRemote is the Push remotes found missing, already warned of
 	// and not back since; the poll's own.
 	warnedRemote map[string]bool
-	// waitingOnCI is "<ticket>@<pushed commit>@<CI result>" of Tickets the
+	// saidOnCI is "<ticket>@<pushed commit>@<CI result>" of Tickets the
 	// CI gate holds, already said; the poll's own.
-	waitingOnCI map[string]bool
+	saidOnCI map[string]bool
+	// unreported is, by Ticket ID, the commit a push under Merge + Push
+	// left the remote's base holding, whose report as the Ticket's pushed
+	// commit failed, to report next poll; the poll's own.
+	unreported map[string]string
 	// tracksCI is whether the Project's CI Tracking is on, read with the
 	// Landing Method on every poll: while it is, each push for a Ticket
 	// is reported as its pushed commit.
@@ -269,7 +273,7 @@ type factory struct {
 // newFactory is a factory with nothing found out yet: start fills in the
 // rest.
 func newFactory(e Env, o options) *factory {
-	return &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, waitingOnCI: map[string]bool{}, warnedRemote: map[string]bool{}}
+	return &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
 }
 
 // start makes every start-up check, refusing with the reason.
