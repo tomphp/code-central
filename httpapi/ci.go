@@ -51,3 +51,21 @@ func init() {
 		return c.RemoveCIRule(r.Context(), r.PathValue("key"), in)
 	}
 }
+
+// The CI Watcher's own (code-central-253): the read it polls and its
+// status.
+func init() {
+	Routes["get_ci_watch"] = "GET /api/p/{key}/ci-watch"
+	Routes["report_ci_watcher_status"] = "POST /api/p/{key}/report_ci_watcher_status"
+
+	handlers["get_ci_watch"] = func(c *core.Core, r *http.Request) (any, error) {
+		return c.GetCIWatch(r.Context(), r.PathValue("key"))
+	}
+	handlers["report_ci_watcher_status"] = func(c *core.Core, r *http.Request) (any, error) {
+		var in core.ReportCIWatcherStatusInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.ReportCIWatcherStatus(r.Context(), r.PathValue("key"), in)
+	}
+}

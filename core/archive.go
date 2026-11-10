@@ -59,7 +59,7 @@ func (c *Core) ArchiveProject(ctx context.Context, key string) (ProjectView, err
 		}
 		p, _ := w.Project(key)
 		p.Archived = c.now()
-		v = projectView(p)
+		v = c.projectView(p)
 		return w.PutProject(p)
 	})
 	return v, err
@@ -78,11 +78,11 @@ func (c *Core) UnarchiveProject(ctx context.Context, key string) (ProjectView, e
 			return unknownProject(key)
 		}
 		if p.Archived.IsZero() {
-			v = projectView(p)
+			v = c.projectView(p)
 			return nil
 		}
 		p.Archived = time.Time{}
-		v = projectView(p)
+		v = c.projectView(p)
 		return w.PutProject(p)
 	})
 	return v, err

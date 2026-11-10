@@ -38,6 +38,8 @@ type Core struct {
 	// ciCheck is the CI Watcher's check mode, run when CI Tracking is
 	// turned on; nil checks nothing.
 	ciCheck CICheck
+	// ciWatchers holds each Project's CI Watcher's status, in memory only.
+	ciWatchers *ciWatchers
 }
 
 // New returns a Core persisting through s, telling time with clk and
@@ -49,6 +51,7 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	c.activity = newActivity(c.now())
 	c.transcripts = &transcripts{all: map[markKey]*transcript{}, feeds: map[markKey]map[*TranscriptFeed]struct{}{}}
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
+	c.ciWatchers = &ciWatchers{all: map[string]ciWatcherStatus{}}
 	return c
 }
 
@@ -259,7 +262,7 @@ func (c *Core) CreateProject(_ context.Context, in CreateProjectInput) (ProjectV
 	if err != nil {
 		return ProjectView{}, err
 	}
-	return projectView(p), nil
+	return c.projectView(p), nil
 }
 
 // GetProject is get_project(key).
@@ -270,7 +273,7 @@ func (c *Core) GetProject(_ context.Context, key string) (ProjectView, error) {
 		if !ok {
 			return unknownProject(key)
 		}
-		v = projectView(p)
+		v = c.projectView(p)
 		return nil
 	})
 	return v, err
@@ -481,9 +484,9 @@ func claimOrder(a, b store.Ticket) int {
 
 func finished(s store.State) bool { return s == store.Done || s == store.Cancelled }
 
-func projectView(p store.Project) ProjectView {
+func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
-		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}, CI: ciView(p.Key, p.CI)}
+		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}, CI: ciView(p.Key, p.CI, c.ciWatchers.view(p.Key))}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at

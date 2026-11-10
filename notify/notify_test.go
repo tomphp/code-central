@@ -336,3 +336,70 @@ func TestStartupSummaryForOneTicket(t *testing.T) {
 	f.start()
 	f.want(notify.Notification{Title: "Code Central", Body: "1 Ticket needs you in acme", URL: base + "/?view=inbox"})
 }
+
+// ciWatcher reports the status of key's CI Watcher, turning CI Tracking
+// on first if it is off.
+func (f *fixture) ciWatcher(key string, state core.CIWatcherState, message string) {
+	f.t.Helper()
+	p := must(f.t)(f.core.GetProject(ctx, key)).(core.ProjectView)
+	if !p.CI.Tracking {
+		must(f.t)(f.core.SetCITracking(core.WithActor(ctx, core.Human), key, core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}))
+	}
+	must(f.t)(f.core.ReportCIWatcherStatus(ctx, key, core.ReportCIWatcherStatusInput{State: state, Message: message, Fix: "Run gh auth login."}))
+}
+
+func TestACIWatcherGoingIntoAnErrorNotifiesOnceNotOncePerPoll(t *testing.T) {
+	f := newFixture(t)
+	f.project("acme", 1)
+	f.start()
+	f.ciWatcher("acme", core.CIWatcherWatching, "")
+	f.ciWatcher("acme", core.CIWatcherError, "gh isn't logged in")
+	f.ciWatcher("acme", core.CIWatcherError, "gh isn't logged in")
+	f.closeWindow()
+	inError := notify.Notification{Title: "acme's CI Watcher is in error", Body: "gh isn't logged in", URL: base + "/?view=project-options&project=acme"}
+	f.want(inError)
+
+	// Another error while in error is no new one; nor is it when the tick
+	// looks again.
+	f.ciWatcher("acme", core.CIWatcherError, "gh can't read acme/web")
+	f.clock.Advance(notify.Tick)
+	f.round("acme", "2")
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme-2 has a new Round", Body: "Task A", URL: base + "/?view=inbox&ticket=acme-2"})
+
+	// Back to Watching, then into an error again: one more.
+	f.ciWatcher("acme", core.CIWatcherWatching, "")
+	f.ciWatcher("acme", core.CIWatcherError, "gh isn't logged in")
+	f.closeWindow()
+	f.want(inError)
+	f.wantNothing()
+}
+
+// Turning CI Tracking off and on again forgets the status, but an error
+// after it still notifies.
+func TestACIWatcherErrorAfterCITrackingIsTurnedBackOnNotifies(t *testing.T) {
+	f := newFixture(t)
+	f.project("acme", 0)
+	f.start()
+	f.ciWatcher("acme", core.CIWatcherError, "gh isn't logged in")
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme's CI Watcher is in error", Body: "gh isn't logged in", URL: base + "/?view=project-options&project=acme"})
+	must(t)(f.core.SetCITracking(core.WithActor(ctx, core.Human), "acme", core.SetCITrackingInput{Tracking: false, Repository: "acme/web"}))
+	f.ciWatcher("acme", core.CIWatcherError, "gh isn't logged in")
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme's CI Watcher is in error", Body: "gh isn't logged in", URL: base + "/?view=project-options&project=acme"})
+}
+
+// An error that clears before notify looks still notifies, with its own
+// message: the tick catches it when its notice was missed.
+func TestACIWatcherErrorThatClearedBeforeNotifyLookedStillNotifies(t *testing.T) {
+	f := newFixture(t)
+	f.project("acme", 0)
+	f.ciWatcher("acme", core.CIWatcherWatching, "")
+	f.start()
+	f.ciWatcher("acme", core.CIWatcherError, "gh isn't logged in")
+	f.ciWatcher("acme", core.CIWatcherWatching, "")
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme's CI Watcher is in error", Body: "gh isn't logged in", URL: base + "/?view=project-options&project=acme"})
+	f.wantNothing()
+}

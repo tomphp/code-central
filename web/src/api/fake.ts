@@ -75,6 +75,8 @@ import {
   type CIRule,
   type CIRuleChange,
   type CISettings,
+  type CIWatcherReport,
+  type CIWatcherStatus,
   type CITrackingChange,
   type Landing,
   MAP_LABEL,
@@ -346,7 +348,15 @@ export class FakeApi implements Api {
       archived: opts.archived ?? false,
       ...(opts.archived ? { archived_at: this.now.toISOString() } : {}),
       landing: { method: "merge", push: false, remote: "origin" },
-      ci: { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [], push_remote_url: "", rules: [] },
+      ci: {
+        tracking: false,
+        provider: "github_actions",
+        repository: "",
+        ignored_workflows: [],
+        push_remote_url: "",
+        rules: [],
+        watcher: { state: "not_reported" },
+      },
       next: 1,
     });
     this.emit({ type: "project.changed", project: key });
@@ -866,8 +876,23 @@ export class FakeApi implements Api {
     if (checks && this.ciCheck) {
       throw new ApiError(422, "invalid", this.ciCheck.reason, this.ciCheck.field ?? "tracking", undefined, this.ciCheck.fix);
     }
-    this.setCI(p, { ...p.ci, tracking: change.tracking, provider, repository, ignored_workflows: ignored });
+    // Turning CI Tracking off forgets the CI Watcher's status.
+    const watcher = change.tracking ? p.ci.watcher : { state: "not_reported" as const };
+    this.setCI(p, { ...p.ci, tracking: change.tracking, provider, repository, ignored_workflows: ignored, watcher });
     return this.projectView(p);
+  }
+
+  // reportCIWatcherStatus is the CI Watcher's report of its status
+  // (code-central-253), refused while CI Tracking is off.
+  async reportCIWatcherStatus(key: string, status: CIWatcherReport): Promise<void> {
+    const p = this.writable(key);
+    if (!p.ci.tracking) throw new ApiError(403, "action_not_allowed", `CI Tracking is off on ${key}, so it has no CI Watcher`);
+    const watcher: CIWatcherStatus =
+      status.state === "error" ? { state: "error", problem: status.problem, message: status.message, fix: status.fix } : { state: status.state };
+    const { since: _, ...was } = p.ci.watcher;
+    if (JSON.stringify(was) === JSON.stringify(watcher)) return;
+    watcher.since = was.state === watcher.state ? p.ci.watcher.since : this.now.toISOString();
+    this.setCI(p, { ...p.ci, watcher });
   }
 
   // reportPushRemote is the Factory's report of its Push remote's URL,

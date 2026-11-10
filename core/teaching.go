@@ -37,7 +37,7 @@ func (c *Core) SetProjectMode(_ context.Context, key string, in SetProjectModeIn
 		p, _ := w.Project(key)
 		unchanged := p.Mode == in.Mode
 		p.Mode = in.Mode
-		v = projectView(p)
+		v = c.projectView(p)
 		if unchanged {
 			return nil
 		}
