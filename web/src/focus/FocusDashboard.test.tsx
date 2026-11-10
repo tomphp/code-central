@@ -487,3 +487,219 @@ describe("the CI Running block", () => {
     expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
   });
 });
+
+// ---- The CI Running list (code-central-278) ----
+
+const ciList = (d: HTMLElement) => within(d).getByRole("list", { name: "CI Running" });
+const ciEntries = (d: HTMLElement) => within(ciList(d)).getAllByRole("listitem");
+const ciEntry = (d: HTMLElement, name: string) => within(ciList(d)).getByRole("listitem", { name });
+
+describe("the CI Running list", () => {
+  it("lists the runs the block counts, newest started first, below the In Progress list", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [
+      ciRun(fake, 3, "ci.yml"),
+      ciRun(fake, 1, "lint.yml", { status: "queued" }),
+      ciRun(fake, 2, "e2e.yml", { status: "completed", conclusion: "success", finished: fake.now.toISOString() }),
+      ciRun(fake, 4, "nightly.yml"),
+    ]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d).map((e) => e.getAttribute("aria-label"))).toEqual(["lint.yml", "ci.yml"]));
+    expect(count(d, "CI Running")).toBe("2");
+    expect(inProgress(d).compareDocumentPosition(ciList(d)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("reads No CI Runs running when nothing is", async () => {
+    const fake = await ciWorld();
+    renderApp(fake, "/?view=focus&project=acme");
+    const d = await dashboard();
+    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    expect(within(d).getByText("No CI Runs running")).toBeInTheDocument();
+    expect(within(d).queryByRole("list", { name: "CI Running" })).toBeNull();
+  });
+
+  it("isn't there without CI Tracking in scope", async () => {
+    renderApp(world());
+    const d = await dashboard();
+    expect(within(d).queryByRole("list", { name: "CI Running" })).toBeNull();
+    expect(within(d).queryByText("No CI Runs running")).toBeNull();
+  });
+
+  it("shows each entry's workflow, ID, Project, branch, short commit and how long it has been running", async () => {
+    const fake = await ciWorld();
+    await fake.reportPushedCommit("acme", "acme-4", "abc1234def");
+    await fake.reportCIRuns("acme", [ciRun(fake, 3, "ci.yml", { name: "CI", commit: "abc1234def" }), ciRun(fake, 2, "lint.yml", { name: "", commit: "abc1234def" })]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    expect(ciEntry(d, "CI")).toHaveTextContent(/^acme-4CIAcmeacme-4 · abc1234 · running 3m 0sView on GitHub$/);
+    expect(ciEntry(d, "lint.yml")).toHaveTextContent(/^acme-4lint.ymlAcmeacme-4 · abc1234 · running 2m 0sView on GitHub$/);
+  });
+
+  it("says a queued run is queued, and leaves out the duration of one not started", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 2, "ci.yml", { status: "queued" }), ciRun(fake, 1, "lint.yml", { status: "queued", started: undefined })]);
+    renderApp(fake, "/?view=focus&project=acme");
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    expect(ciEntry(d, "ci.yml")).toHaveTextContent(/^acme-4ci.ymlacme-4 · abc123 · queued 2m 0sView on GitHub$/);
+    expect(ciEntry(d, "lint.yml")).toHaveTextContent(/^acme-4lint.ymlacme-4 · abc123 · queuedView on GitHub$/);
+  });
+
+  it("leaves out the Project when scoped to one", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 3, "ci.yml", { name: "CI" })]);
+    renderApp(fake, "/?view=focus&project=acme");
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    expect(ciEntry(d, "CI")).toHaveTextContent(/^acme-4CIacme-4 · abc123 · running 3m 0sView on GitHub$/);
+  });
+
+  it("opens an entry's Ticket in the Inbox, keeping the Project filter", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml", { name: "CI" })]);
+    renderApp(fake, "/?view=focus&project=acme");
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    const link = within(ciEntry(d, "CI")).getByRole("link", { name: /acme-4/ });
+    expect(link).toHaveAttribute("href", "?view=inbox&project=acme&ticket=acme-4");
+
+    await userEvent.click(link);
+    expect(window.location.search).toBe("?view=inbox&project=acme&ticket=acme-4");
+    expect(await screen.findByRole("complementary", { name: "Ticket" })).toBeInTheDocument();
+  });
+
+  it("opens a Stage Ticket's run in its Requirement", async () => {
+    const fake = await ciWorld();
+    const spec = fake.addSpec("acme", { id: "acme-10", title: "Dark mode" });
+    fake.addTicket("acme", { title: "Spec: Dark mode", state: "In Review", spec: { id: spec.id, title: spec.title }, labels: ["stage:spec"] }); // acme-11
+    await fake.reportPushedCommit("acme", "acme-11", "fed987");
+    await fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml", { name: "CI", branch: "acme-11", commit: "fed987", ticket: "acme-11" })]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    await userEvent.click(within(ciEntry(d, "CI")).getByRole("link", { name: /acme-11/ }));
+    expect(window.location.search).toBe("?view=inbox&requirement=acme-10&ticket=acme-11");
+  });
+
+  it("carries the run's GitHub link beside the Ticket link, not inside it", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml", { name: "CI" })]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    const github = within(ciEntry(d, "CI")).getByRole("link", { name: "View on GitHub" });
+    expect(github).toHaveAttribute("href", "https://github.com/acme/web/actions/runs/1");
+    expect(github).toHaveAttribute("target", "_blank");
+    expect(github.parentElement?.closest("a")).toBeNull();
+    expect(within(ciEntry(d, "CI")).getAllByRole("link")).toHaveLength(2);
+  });
+
+  it("follows the live feed: a run joining, finishing, and a newer pushed commit", async () => {
+    const fake = await ciWorld();
+    renderApp(fake);
+    const d = await dashboard();
+    await within(d).findByText("No CI Runs running");
+
+    await act(() => fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml"), ciRun(fake, 2, "lint.yml")]));
+    await waitFor(() => expect(ciEntries(d).map((e) => e.getAttribute("aria-label"))).toEqual(["ci.yml", "lint.yml"]));
+
+    await act(() => fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml", { status: "completed", conclusion: "failure", finished: fake.now.toISOString() })]));
+    await waitFor(() => expect(ciEntries(d).map((e) => e.getAttribute("aria-label"))).toEqual(["lint.yml"]));
+
+    await act(() => fake.reportPushedCommit("acme", "acme-4", "def456"));
+    expect(await within(d).findByText("No CI Runs running")).toBeInTheDocument();
+  });
+
+  it("drops a run whose workflow becomes Ignored at its next report", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml"), ciRun(fake, 2, "lint.yml")]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+
+    await act(async () => {
+      await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["lint.yml"] });
+      await fake.reportCIRuns("acme", [ciRun(fake, 2, "lint.yml")]);
+    });
+    await waitFor(() => expect(ciEntries(d).map((e) => e.getAttribute("aria-label"))).toEqual(["ci.yml"]));
+  });
+
+  it("shows a failed read's error in its place", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml")]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+
+    vi.spyOn(fake, "ciOverview").mockRejectedValueOnce(new ApiError(500, "internal", "The CI Runs can't be read"));
+    act(() => fake.emit({ type: "ci.changed", project: "acme" }));
+    expect(await within(d).findByRole("alert")).toHaveTextContent("The CI Runs can't be read");
+    expect(within(d).queryByRole("list", { name: "CI Running" })).toBeNull();
+    expect(entries(d)).toHaveLength(1);
+
+    act(() => fake.emit({ type: "ci.changed", project: "acme" }));
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    expect(within(d).queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("CI Running pulses", () => {
+  it("marks no entry on first show", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml"), ciRun(fake, 2, "lint.yml")]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    expect(ciEntries(d).filter(pulsing)).toEqual([]);
+  });
+
+  it("marks an entry when its run's status changes", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml", { status: "queued" }), ciRun(fake, 2, "lint.yml")]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+
+    await act(() => fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml")]));
+    await waitFor(() => expect(ciEntries(d).filter(pulsing)).toEqual([ciEntry(d, "ci.yml")]));
+  });
+
+  it("marks a re-run's next attempt as the same entry", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml"), ciRun(fake, 2, "lint.yml")]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    const before = ciEntry(d, "ci.yml");
+
+    await act(() => fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml", { attempt: 2 })]));
+    await waitFor(() => expect(ciEntries(d).filter(pulsing)).toEqual([ciEntry(d, "ci.yml")]));
+    expect(ciEntry(d, "ci.yml")).toBe(before);
+    expect(ciEntries(d)).toHaveLength(2);
+  });
+
+  it("marks an entry that joins after the dashboard first shows", async () => {
+    const fake = await ciWorld();
+    await fake.reportCIRuns("acme", [ciRun(fake, 2, "lint.yml")]);
+    renderApp(fake);
+    const d = await dashboard();
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+
+    await act(() => fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml")]));
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    expect(ciEntries(d).filter(pulsing)).toEqual([ciEntry(d, "ci.yml")]);
+  });
+
+  it("marks the first entry to join an empty list", async () => {
+    const fake = await ciWorld();
+    renderApp(fake);
+    const d = await dashboard();
+    await within(d).findByText("No CI Runs running");
+
+    await act(() => fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml")]));
+    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    expect(pulsing(ciEntry(d, "ci.yml"))).toBe(true);
+  });
+});

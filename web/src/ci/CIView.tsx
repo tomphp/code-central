@@ -8,10 +8,10 @@
 // returns to the view it was opened from.
 import { useRef } from "react";
 import type { Api } from "../api/api";
-import { CI_VIEW_DAYS, type CIProjectStatus, type CIRunRow, type ProjectRow } from "../api/types";
+import { CI_VIEW_DAYS, type CIProjectStatus, type CIRunRow, type CIRunView, type ProjectRow } from "../api/types";
 import { usePulse } from "../focus/pulse";
 import { useFetch } from "../live";
-import { runStatus } from "../ticket/CISection";
+import { runStatus, shortCommit } from "../ticket/CISection";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import "./ci.css";
 
@@ -198,7 +198,7 @@ function RunRow({ run, now, joined, projectName, navigate }: RunRowProps) {
       </th>
       <td>{run.branch}</td>
       <td>
-        <code>{run.commit.slice(0, 7)}</code>
+        <code>{shortCommit(run.commit)}</code>
       </td>
       <td>
         <span className={`ci-status ci-${status.replace(" ", "-")}`}>{status}</span>
@@ -218,11 +218,19 @@ function RunRow({ run, now, joined, projectName, navigate }: RunRowProps) {
       </td>
       {projectName !== undefined && <td>{projectName}</td>}
       <td>
-        <a href={run.url} target="_blank" rel="noreferrer">
-          View on GitHub
-        </a>
+        <RunGitHubLink run={run} />
       </td>
     </tr>
+  );
+}
+
+// RunGitHubLink opens a run on GitHub, in a new tab: in the CI view's
+// rows and the Activity Dashboard's CI Running entries.
+export function RunGitHubLink({ run, className }: { run: CIRunView; className?: string }) {
+  return (
+    <a href={run.url} target="_blank" rel="noreferrer" className={className}>
+      View on GitHub
+    </a>
   );
 }
 
