@@ -37,7 +37,7 @@ type activity struct {
 
 	mu    sync.Mutex
 	pings map[string]time.Time      // session ID -> last counted ping
-	marks map[markKey]NeedsMeReason // Silent, Long or Accepted but not landed
+	marks map[markKey]NeedsMeReason // Silent, Long, CI unavailable or Accepted but not landed
 }
 
 // markKey names what a timed reason, a Transcript or a latest event
@@ -154,14 +154,21 @@ func (c *Core) notLandedSince(p store.Project, t store.Ticket) *time.Time {
 
 // timedReason is the Needs Me reason time passing gives t in Project p,
 // and since when, or "": Silent Claim, else Long Claim, while In
-// Progress, and Accepted but not landed. Silent takes precedence over
-// Long here, for reads and for the watch alike.
-func (c *Core) timedReason(p store.Project, t store.Ticket) (NeedsMeReason, time.Time) {
+// Progress, and CI unavailable, else Accepted but not landed, while
+// Accepted; one the CI gate holds on a running CI result is never
+// Accepted but not landed, as landing waits on CI. Silent takes
+// precedence over Long here, for reads and for the watch alike.
+func (c *Core) timedReason(r store.Reader, p store.Project, t store.Ticket) (NeedsMeReason, time.Time) {
 	if s := c.silentSince(t); s != nil {
 		return ReasonSilentClaim, *s
 	}
 	if s := c.longSince(t); s != nil {
 		return ReasonLongClaim, *s
+	}
+	if waiting, unavailable := c.ciWaitingOn(r, p, t); unavailable != nil {
+		return ReasonCIUnavailable, unavailable.Pushed
+	} else if waiting {
+		return "", time.Time{}
 	}
 	if s := c.notLandedSince(p, t); s != nil {
 		return ReasonAcceptedNotLanded, *s
@@ -170,7 +177,7 @@ func (c *Core) timedReason(p store.Project, t store.Ticket) (NeedsMeReason, time
 }
 
 // WatchTimedReasons is the background ticker behind the timed reasons:
-// Silent and Long Claims, and Accepted but not landed. On each tick it
+// Silent and Long Claims, CI unavailable, and Accepted but not landed. On each tick it
 // reads every Project and calls changed(project, ticket ID) once for each
 // Claim (or Accepted Ticket) whose timed reason (or none) has changed
 // since the last tick without a write (time passing, or a ping), so live
@@ -196,12 +203,12 @@ func (c *Core) timedReasonChanges() []markKey {
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			for _, t := range r.Tickets(p.Key) {
-				reason, _ := c.timedReason(p, t)
+				reason, _ := c.timedReason(r, p, t)
 				if reason == "" {
 					continue
 				}
 				k := markKey{p.Key, t.Number, 0}
-				if cl, ok := liveClaim(t); ok && reason != ReasonAcceptedNotLanded {
+				if cl, ok := liveClaim(t); ok && (reason == ReasonSilentClaim || reason == ReasonLongClaim) {
 					k.claim = cl.Number
 				}
 				now[k] = reason

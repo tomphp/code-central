@@ -66,6 +66,7 @@ textarea { width: 100%; resize: vertical; }
 .reason-failed { --rc: var(--r-failed); }
 .reason-in_review { --rc: var(--r-review); }
 .reason-to_merge { --rc: var(--r-landing); }
+.reason-ci_unavailable { --rc: var(--r-landing); }
 .reason-accepted_not_landed { --rc: var(--r-landing); }
 .reason-blocked_by_cancelled { --rc: var(--r-blocked); }
 .reason-closed_externally { --rc: var(--r-external); }
