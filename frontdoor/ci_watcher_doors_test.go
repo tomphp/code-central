@@ -2,6 +2,7 @@ package frontdoor_test
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/events"
+	"github.com/tomoram/code-central/store"
 )
 
 // The CI Watcher's own operations (code-central-253): get_ci_watch, the
@@ -86,6 +88,53 @@ func TestGetCIWatchHasTheCISettingsRulesAndGHPath(t *testing.T) {
 	if len(w.Rules) != 1 || w.Rules[0].Spec != "acme-4" || w.Rules[0].Workflow != "ci.yml" || w.Rules[0].Branch != "main" ||
 		!w.Rules[0].Created.Equal(codecentraltest.Start) {
 		t.Fatalf("rules = %+v, want ci.yml on main with when it was created", w.Rules)
+	}
+}
+
+func TestGetCIWatchHasWhenEachRulesLatestRunFinished(t *testing.T) {
+	srv := newServer(t, ciTrackingOn)
+	httpOK(t, srv, addCIRule(`{"workflow":"ci.yml","branch":"main","state":"Ready"}`))
+	rule := func() core.CIWatchRule {
+		t.Helper()
+		w, err := srv.Client.GetCIWatch(context.Background(), "acme")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return w.Rules[0]
+	}
+	if got := rule(); got.LastRun != nil {
+		t.Fatalf("rule = %+v, want no last run before one is reported", got)
+	}
+	run := func(id int64, finished time.Time) core.CIRunView {
+		r := ciRun(id, "ci.yml", "def456", store.CICompleted, store.CIFailure)
+		r.Ticket, r.Rule, r.Finished = "", "acme-4", &finished
+		return r
+	}
+	later := codecentraltest.Start.Add(7 * time.Minute)
+	reportRuns(t, srv, run(1, later), run(2, codecentraltest.Start.Add(3*time.Minute)))
+	if got := rule(); got.LastRun == nil || !got.LastRun.Equal(later) {
+		t.Fatalf("rule = %+v, want its last run finished at %s", got, later)
+	}
+}
+
+func TestGetCIWatchHasEveryPushedAndLandCommitWithItsTicket(t *testing.T) {
+	srv := newServer(t, pushedAccepted)
+	pushCommit(t, srv, "def456")
+	must(t, func() error {
+		_, err := srv.Client.Land(context.Background(), "acme", core.LandInput{Ticket: "acme-3", Commit: "def456"})
+		return err
+	})
+	tk := ticket3(t, srv)
+	w, err := srv.Client.GetCIWatch(context.Background(), "acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []core.CITicketCommit{{Ticket: "acme-3", Spec: tk.Spec.ID, Commit: "abc123"}, {Ticket: "acme-3", Spec: tk.Spec.ID, Commit: "def456"}}
+	if !slices.Equal(w.Pushed, want) {
+		t.Fatalf("pushed = %+v, want %+v", w.Pushed, want)
+	}
+	if !slices.Equal(w.Landed, want[1:]) {
+		t.Fatalf("landed = %+v, want %+v", w.Landed, want[1:])
 	}
 }
 
