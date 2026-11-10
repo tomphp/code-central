@@ -205,10 +205,34 @@ type ghJob struct {
 
 // RunsForCommit lists the workflow runs GitHub started for commit.
 func (g *GitHubActions) RunsForCommit(ctx context.Context, commit string) ([]Run, error) {
+	return g.runs(ctx, fmt.Sprintf("repos/%s/actions/runs?head_sha=%s&per_page=100", g.Repository, url.QueryEscape(commit)))
+}
+
+// CompletedRunsOnBranch lists the completed workflow runs on branch that
+// finished after since. GitHub lists the newest first, and filters by
+// when a run was created, not finished, so this takes the latest 100
+// and keeps those that finished after since: more finishing between two
+// polls, or while the CI Watcher is down, would be missed.
+func (g *GitHubActions) CompletedRunsOnBranch(ctx context.Context, branch string, since time.Time) ([]Run, error) {
+	runs, err := g.runs(ctx, fmt.Sprintf("repos/%s/actions/runs?branch=%s&status=completed&per_page=100", g.Repository, url.QueryEscape(branch)))
+	if err != nil {
+		return nil, err
+	}
+	var out []Run
+	for _, r := range runs {
+		if r.Branch == branch && r.Finished != nil && r.Finished.After(since) {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
+// runs lists the workflow runs at path, a query of GitHub's REST API.
+func (g *GitHubActions) runs(ctx context.Context, path string) ([]Run, error) {
 	var out struct {
 		Runs []ghRun `json:"workflow_runs"`
 	}
-	if err := g.api(ctx, fmt.Sprintf("repos/%s/actions/runs?head_sha=%s&per_page=100", g.Repository, url.QueryEscape(commit)), &out); err != nil {
+	if err := g.api(ctx, path, &out); err != nil {
 		return nil, err
 	}
 	var runs []Run

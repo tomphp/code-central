@@ -51,6 +51,9 @@ type Provider interface {
 	// RunsForCommit lists the workflow runs started for commit, with
 	// their statuses and conclusions mapped to Code Central's and no jobs.
 	RunsForCommit(ctx context.Context, commit string) ([]Run, error)
+	// CompletedRunsOnBranch lists the completed workflow runs on exactly
+	// branch that finished after since, mapped as RunsForCommit's are.
+	CompletedRunsOnBranch(ctx context.Context, branch string, since time.Time) ([]Run, error)
 	// Jobs lists the jobs of one attempt of a run.
 	Jobs(ctx context.Context, id int64, attempt int) ([]core.CIJobView, error)
 	// RerunFailedJobs re-runs the failed jobs of a run, as its next

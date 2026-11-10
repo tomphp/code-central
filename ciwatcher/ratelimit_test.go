@@ -14,6 +14,7 @@ import (
 	"github.com/tomoram/code-central/ciwatcher"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/internal/fakegh"
+	"github.com/tomoram/code-central/store"
 )
 
 // rateLimited scripts GitHub's rate-limit answer to calls starting with
@@ -143,5 +144,27 @@ func TestARateLimitOnCheckingTheLoginIsntAnError(t *testing.T) {
 	start := w.srv.Clock.Now()
 	w.start(w.h.Bin)
 	w.rateLimitedUntil(start.Add(2 * ciwatcher.Interval))
+	w.noErrors()
+}
+
+// Listing a CI Rule's branch may be rate-limited too: the CI Watcher
+// backs off as for a pushed commit's runs, and fires the rule once
+// GitHub answers.
+func TestARateLimitOnListingARulesBranchBacksOff(t *testing.T) {
+	w := newWatching(t)
+	spec := w.rule("ci.yml", "main", store.Ready)
+	reset := w.srv.Clock.Now().Add(5 * time.Minute)
+	branch := []string{"api", "repos/acme/web/actions/runs?branch=main&status=completed&per_page=100"}
+	w.rateLimited(branch, "X-Ratelimit-Remaining: 0", fmt.Sprintf("X-Ratelimit-Reset: %d", reset.Unix()))
+	w.start(w.h.Bin)
+	w.rateLimitedUntil(reset)
+	w.noErrors()
+
+	w.branchAnswer("main", branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "fff111", conclude: "failure", finished: 5})
+	w.jobsAnswer(21, 1, [2]string{"test", "failure"})
+	w.srv.Clock.BlockUntil(1)
+	w.srv.Clock.Advance(5 * time.Minute)
+	w.rateLimitedUntil(time.Time{})
+	w.waitFor("a fix Ticket", func() bool { return len(w.fixTickets(spec)) == 1 })
 	w.noErrors()
 }
