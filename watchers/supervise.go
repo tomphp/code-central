@@ -1,8 +1,9 @@
-// Package watchers is the service's side of every kind of Watcher: it
-// runs one of each kind per Project whose setting is on, as its own
-// executable's hidden subcommand, restarts one that crashes, and stops
-// them all when it stops (ADR 0018). The CI Watcher is the only kind so
-// far; a new kind is one more Kind.
+// Package watchers is the lifetime of every kind of Watcher. On the
+// service's side, it runs one of each kind per Project whose setting is
+// on, as its own executable's hidden subcommand, restarts one that
+// crashes, and stops them all when it stops (ADR 0018); on the Watcher's
+// side, a Watcher runs until its stdin closes. The CI Watcher is the only
+// kind so far; a new kind is one more Kind.
 package watchers
 
 import (
@@ -72,15 +73,15 @@ type Supervision struct {
 	Log io.Writer
 }
 
-// one names one Project's Watcher of one kind.
-type one struct {
+// projectWatcher names one Project's Watcher of one kind.
+type projectWatcher struct {
 	kind    Kind
 	project string
 }
 
 // name is how the service's log names it, such as the CI Watcher for
 // acme.
-func (o one) name() string { return "the " + o.kind.Kind.Name() + " for " + o.project }
+func (o projectWatcher) name() string { return "the " + o.kind.Kind.Name() + " for " + o.project }
 
 // Supervise runs a Watcher of each kind for each Project WatchedProjects
 // names, starting and stopping them as it changes, until ctx ends; then
@@ -118,7 +119,7 @@ func Supervise(ctx context.Context, cfg Supervision) {
 				key := watcherKey{kind.Kind, project}
 				want[key] = true
 				if running[key] == nil {
-					running[key] = cfg.supervise(ctx, one{kind, project}, stopping[key])
+					running[key] = cfg.supervise(ctx, projectWatcher{kind, project}, stopping[key])
 				}
 			}
 		}
@@ -160,7 +161,7 @@ type supervised struct {
 
 // supervise runs o once prev, its last one if it is still exiting, has,
 // restarting it with backoff each time it exits without being stopped.
-func (cfg Supervision) supervise(ctx context.Context, o one, prev *supervised) *supervised {
+func (cfg Supervision) supervise(ctx context.Context, o projectWatcher, prev *supervised) *supervised {
 	ctx, cancel := context.WithCancel(ctx)
 	w := &supervised{cancel: cancel, done: make(chan struct{})}
 	go func() {
@@ -197,7 +198,7 @@ func (cfg Supervision) supervise(ctx context.Context, o one, prev *supervised) *
 // run runs o once, until it exits or ctx ends, and returns the last line
 // it wrote to stderr. Ending ctx closes its stdin, which it exits on; one
 // that doesn't in stopLimit is killed.
-func (cfg Supervision) run(ctx context.Context, o one) string {
+func (cfg Supervision) run(ctx context.Context, o projectWatcher) string {
 	cmd := exec.Command(cfg.Program, o.kind.Args(o.project)...)
 	cmd.Env = cfg.Environ
 	last := &lastLine{w: cfg.Log}

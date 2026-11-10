@@ -37,14 +37,16 @@ type watcherKind struct {
 	setting string
 	on      func(store.Project) bool
 	// problems are the problems an error it reports may name; crashed is
-	// the service's, never the Watcher's.
+	// the service's, never the Watcher's. A problem it may not name is
+	// refused as not a problem of watches, such as CI.
 	problems []WatcherProblem
+	watches  string
 }
 
 // watcherKinds is every kind of Watcher.
 var watcherKinds = map[WatcherKind]watcherKind{
 	WatcherCI: {name: "CI Watcher", setting: "CI Tracking", on: func(p store.Project) bool { return p.CI.Tracking },
-		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemCheckFailed}},
+		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemCheckFailed}, watches: "CI"},
 }
 
 // Name is the kind's glossary name, such as CI Watcher.
@@ -237,7 +239,7 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 			return Written[ProjectView]{}, invalid("rate_limited_until", "only a Watching %s is rate-limited; an error has its own fix", k.name)
 		}
 		if in.Problem != "" && !slices.Contains(k.problems, in.Problem) {
-			return Written[ProjectView]{}, invalid("problem", "%q isn't a %s problem", in.Problem, k.name)
+			return Written[ProjectView]{}, invalid("problem", "%q isn't a %s problem", in.Problem, k.watches)
 		}
 		next.Problem, next.Message, next.Fix = in.Problem, strings.TrimSpace(in.Message), strings.TrimSpace(in.Fix)
 		if next.Message == "" {

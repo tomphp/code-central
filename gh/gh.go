@@ -110,12 +110,18 @@ func isProgram(path string) (string, bool) {
 // a result with no Problem when it is, else the problem and its fix.
 // GitHub rate-limiting the check is a *RateLimitError, not a problem.
 func CheckLogin(ctx context.Context, env Env, prog string) (core.WatcherCheckResult, error) {
-	out, err := run(ctx, env, prog, "auth", "status", "--hostname", "github.com")
+	cmd, stdout, stderr := command(ctx, env, prog, "auth", "status", "--hostname", "github.com")
+	err := cmd.Run()
 	if err == nil {
 		return core.WatcherCheckResult{}, nil
 	}
 	if r, ran := DidntRun(prog, err); !ran {
 		return r, nil
+	}
+	// gh writes its errors to stderr.
+	out := stdout.String()
+	if strings.TrimSpace(stderr.String()) != "" {
+		out = stderr.String()
 	}
 	// gh auth status calls GitHub too, and says so when that is
 	// rate-limited, with no reset time.
@@ -126,19 +132,14 @@ func CheckLogin(ctx context.Context, env Env, prog string) (core.WatcherCheckRes
 		Fix: "Run `gh auth login` as the user the service runs as."}, nil
 }
 
-// run runs prog, gh, with args, never prompting, and returns its output:
-// stderr's when it fails, as gh writes its errors there.
-func run(ctx context.Context, env Env, prog string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, prog, args...)
+// command is prog, gh, run with args in env, never prompting, writing
+// to stdout and stderr.
+func command(ctx context.Context, env Env, prog string, args ...string) (cmd *exec.Cmd, stdout, stderr *bytes.Buffer) {
+	cmd = exec.CommandContext(ctx, prog, args...)
 	cmd.Env = append(append([]string{}, env.Environ...), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err := cmd.Run()
-	out := stdout.String()
-	if err != nil && strings.TrimSpace(stderr.String()) != "" {
-		out = stderr.String()
-	}
-	return out, err
+	stdout, stderr = &bytes.Buffer{}, &bytes.Buffer{}
+	cmd.Stdout, cmd.Stderr = stdout, stderr
+	return cmd, stdout, stderr
 }
 
 // rateLimitLine is the line of out that names the rate limit.
@@ -177,10 +178,7 @@ func FirstLine(s string) string {
 // returns the response's body and, when it fails, the first line gh wrote
 // to stderr; GitHub refusing it for a rate limit is a *RateLimitError.
 func API(ctx context.Context, env Env, prog, path string, args ...string) (body []byte, msg string, err error) {
-	cmd := exec.CommandContext(ctx, prog, append(append([]string{"api", path}, args...), "--include")...)
-	cmd.Env = append(append([]string{}, env.Environ...), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	cmd, stdout, stderr := command(ctx, env, prog, append(append([]string{"api", path}, args...), "--include")...)
 	err = cmd.Run()
 	status, header, body := response(stdout.Bytes())
 	if err == nil {
