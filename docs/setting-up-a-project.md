@@ -269,7 +269,7 @@ Lint lint.yml   main     3f9c2a1   passed    48s       acme-api-17       View on
 
 Code Central keeps each CI Run for 30 days after it finishes, then prunes it. A Ticket whose runs have all been pruned keeps its pushed commit and has no CI result.
 
-Scripts can read the CI view over the HTTP API: `GET /api/ci?project=<key>`, or leave out `project` for All Projects. An unknown Project is `not_found`. The answer's `projects` are the CI Watchers' statuses, each with its `project`, `tracking`, `repository` and `watcher`, and `runs` the rows in order, each a CI Run with its `project`.
+Scripts can read the CI view over the HTTP API: `GET /api/ci?project=<key>`, or leave out `project` for All Projects. An unknown Project is `not_found`. The answer's `projects` are the CI Watchers' statuses, each with its `project`, `tracking`, `repository` and `watcher`, and `runs` the rows in order, each a CI Run with its `project`. Add `running=true` for only the CI Runs that count as running towards a Ticket's CI result: queued or in progress, each at its latest attempt, tracked against a Ticket rather than a CI Rule, on that Ticket's latest pushed commit and not of an Ignored workflow, newest started first. Any other value of `running` than `true` or `false` is `invalid`.
 
 ### CI Rules
 

@@ -18,9 +18,12 @@ import (
 const ciViewDays = 7
 
 // CIOverviewInput is the CI view's read: one Project, or every active
-// Project when Project is "".
+// Project when Project is "". Running keeps only the runs that count as
+// running towards a Ticket's CI result, as the Activity Dashboard reads
+// them (code-central-276).
 type CIOverviewInput struct {
 	Project string
+	Running bool
 }
 
 // CIOverview is the CI view: the CI Watchers' statuses, then the runs,
@@ -49,7 +52,8 @@ type CIRunRow struct {
 
 // CIOverview reads the CI view. One Project's read has that Project,
 // Archived or with CI Tracking off; All Projects has every active Project
-// with CI Tracking on. An unknown Project is not_found.
+// with CI Tracking on. An unknown Project is not_found. With Running, the
+// runs are only those runningForTicket admits.
 func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, error) {
 	out := CIOverview{Projects: []CIProjectStatus{}, Runs: []CIRunRow{}}
 	now := c.now()
@@ -76,6 +80,12 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 		for _, p := range projects {
 			out.Projects = append(out.Projects, CIProjectStatus{Project: p.Key, Tracking: p.CI.Tracking, Repository: p.CI.Repository, Watcher: c.ciWatchers.view(p.Key)})
 			for _, run := range latestAttempts(keptCIRuns(r.CIRuns(p.Key), now)) {
+				if in.Running {
+					if runningForTicket(r, p.Key, run) {
+						rows = append(rows, listed{p.Key, run})
+					}
+					continue
+				}
 				if ended := ciRunEnded(run); run.Status != store.CICompleted || (!ended.IsZero() && now.Sub(ended) <= ciViewDays*24*time.Hour) {
 					rows = append(rows, listed{p.Key, run})
 				}
@@ -103,6 +113,18 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 		out.Runs = append(out.Runs, CIRunRow{Project: row.project, CIRunView: ciRunView(row.project, row.run)})
 	}
 	return out, nil
+}
+
+// runningForTicket reports whether run, its run ID's latest attempt among
+// the kept runs, counts as running towards a Ticket's CI result: it is
+// unfinished, tracked against a Ticket rather than a CI Rule, and counts
+// for that Ticket's latest pushed commit.
+func runningForTicket(r store.Reader, key string, run store.CIRun) bool {
+	if run.Status != store.CIQueued && run.Status != store.CIInProgress || run.Ticket == 0 {
+		return false
+	}
+	t, ok := r.Ticket(key, run.Ticket)
+	return ok && len(t.PushedCommits) > 0 && countsFor(run, latestPushed(t).Commit)
 }
 
 // latestAttempts is runs with each run's latest attempt only.

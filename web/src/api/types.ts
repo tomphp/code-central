@@ -158,9 +158,11 @@ export interface CIRunView {
 export const CI_VIEW_DAYS = 7;
 
 // CIOverviewFilter is a CI view read: one Project, or every active Project with
-// CI Tracking on when project is left out.
+// CI Tracking on when project is left out. running keeps only the runs that
+// count as running towards a Ticket's CI result (code-central-276).
 export interface CIOverviewFilter {
   project?: string;
+  running?: boolean;
 }
 
 // A Project's CI Tracking and its CI Watcher's status, heading the CI view.
