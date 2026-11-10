@@ -72,6 +72,8 @@ import {
   type HeldSessionEvent,
   type LatestEvent,
   type LinkedRow,
+  type CIRule,
+  type CIRuleChange,
   type CISettings,
   type CITrackingChange,
   type Landing,
@@ -344,7 +346,7 @@ export class FakeApi implements Api {
       archived: opts.archived ?? false,
       ...(opts.archived ? { archived_at: this.now.toISOString() } : {}),
       landing: { method: "merge", push: false, remote: "origin" },
-      ci: { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [], push_remote_url: "" },
+      ci: { tracking: false, provider: "github_actions", repository: "", ignored_workflows: [], push_remote_url: "", rules: [] },
       next: 1,
     });
     this.emit({ type: "project.changed", project: key });
@@ -854,7 +856,7 @@ export class FakeApi implements Api {
     for (const raw of change.ignored_workflows) {
       const w = raw.trim();
       if (!w || ignored.includes(w)) continue;
-      if (!/^[^/\\\s]+\.ya?ml$/.test(w)) {
+      if (!WORKFLOW.test(w)) {
         throw new ApiError(422, "invalid", `"${w}" isn't a workflow file name, such as ci.yml`, "ignored_workflows");
       }
       ignored.push(w);
@@ -873,6 +875,41 @@ export class FakeApi implements Api {
   async reportPushRemote(key: string, url: string): Promise<void> {
     const push_remote_url = url.trim().replace(/^(https?:\/\/)[^@/]+@/, "$1");
     this.setCI(this.writable(key), { ...this.project(key).ci, push_remote_url });
+  }
+
+  async addCIRule(key: string, change: CIRuleChange): Promise<ProjectView> {
+    this.calls.push("addCIRule");
+    const p = this.writable(key);
+    const rule = checkCIRule(p, change, "");
+    const at = this.now.toISOString();
+    const spec = this.addSpec(key, { title: ciRuleTitle(rule), body: CI_RULE_SPEC_BODY });
+    this.setCI(p, { ...p.ci, rules: [...p.ci.rules, { ...rule, spec: spec.id, created: at }] });
+    return this.projectView(p);
+  }
+
+  async editCIRule(key: string, spec: string, change: CIRuleChange): Promise<ProjectView> {
+    this.calls.push("editCIRule");
+    const p = this.writable(key);
+    const old = ruleOn(p, spec);
+    const rule = { ...old, ...checkCIRule(p, change, spec) };
+    this.setCI(p, { ...p.ci, rules: p.ci.rules.map((r) => (r.spec === spec ? rule : r)) });
+    // The rule's Spec's title follows it, unless the human retitled it.
+    const s = this.specs.get(spec);
+    if (s && s.title === ciRuleTitle(old) && ciRuleTitle(old) !== ciRuleTitle(rule)) {
+      s.edits.push({ number: s.edits.length + 1, actor: "human", time: this.now.toISOString(), previous: { title: s.title } });
+      s.title = ciRuleTitle(rule);
+      s.updated = this.now.toISOString();
+      this.emit({ type: "spec.changed", project: key, id: spec });
+    }
+    return this.projectView(p);
+  }
+
+  async removeCIRule(key: string, spec: string): Promise<ProjectView> {
+    this.calls.push("removeCIRule");
+    const p = this.writable(key);
+    ruleOn(p, spec);
+    this.setCI(p, { ...p.ci, rules: p.ci.rules.filter((r) => r.spec !== spec) });
+    return this.projectView(p);
   }
 
   private setCI(p: FakeProject, ci: CISettings) {
@@ -1221,3 +1258,40 @@ function acknowledgeSpecCreate(after: SpecView): SpecAcknowledgement {
 function acknowledgeTicketCreate(after: TicketView): TicketAcknowledgement {
   return { ...written(TICKET_FIELDS, EMPTY_TICKET, after, CREATED), state: after.state };
 }
+
+// checkCIRule is change trimmed, or the service's refusal: a workflow
+// file name or any, an exact branch, Draft or Ready, and no other rule
+// than the one on Spec self watching the same workflow and branch.
+function checkCIRule(p: FakeProject, change: CIRuleChange, self: string): CIRuleChange {
+  const rule: CIRuleChange = { workflow: change.workflow.trim(), branch: change.branch.trim(), state: change.state };
+  if (rule.workflow !== "any" && !WORKFLOW.test(rule.workflow)) {
+    throw new ApiError(422, "invalid", `"${rule.workflow}" isn't a workflow file name, such as ci.yml, or any for any workflow`, "workflow");
+  }
+  if (!rule.branch || /[\s*?[\]]/.test(rule.branch)) {
+    throw new ApiError(422, "invalid", `"${rule.branch}" isn't an exact branch name, such as main: a CI Rule's branch takes no globs`, "branch");
+  }
+  if (rule.state !== "Draft" && rule.state !== "Ready") {
+    throw new ApiError(422, "invalid", `a CI Rule's Tickets open as Draft or Ready, not "${rule.state}"`, "state");
+  }
+  const other = p.ci.rules.find((r) => r.spec !== self && r.workflow === rule.workflow && r.branch === rule.branch);
+  if (other) throw new ApiError(422, "invalid", `the CI Rule on Spec ${other.spec} already watches ${ciRuleWatches(rule)}`, "workflow");
+  return rule;
+}
+
+// ruleOn is the rule on Spec spec, or the service's not_found.
+function ruleOn(p: FakeProject, spec: string): CIRule {
+  const r = p.ci.rules.find((r) => r.spec === spec);
+  if (!r) throw new ApiError(404, "not_found", `there is no CI Rule on Spec ${spec}`);
+  return r;
+}
+
+// The service's body for a CI Rule's Spec.
+const CI_RULE_SPEC_BODY =
+  "This Spec holds the fix Tickets of a CI Rule, which opens a Ticket to fix its workflow when it fails on its branch. " +
+  "The rule is in the CI section of Project Options; removing it leaves this Spec as the record of its Tickets.\n";
+
+// WORKFLOW is a workflow file's base name, holding no glob.
+const WORKFLOW = /^[^/\\\s*?[\]]+\.ya?ml$/;
+
+const ciRuleWatches = (r: CIRuleChange) => `${r.workflow === "any" ? "any workflow" : r.workflow} on ${r.branch}`;
+const ciRuleTitle = (r: CIRuleChange) => `CI: ${ciRuleWatches(r)}`;

@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
+	"unicode"
 
 	"github.com/tomoram/code-central/store"
 )
@@ -26,11 +28,28 @@ type CIView struct {
 	// PushRemoteURL is the URL of the Push remote the Factory last
 	// reported, empty until it has.
 	PushRemoteURL string `json:"push_remote_url"`
+	// Rules are the CI Rules, in the order they were added.
+	Rules []CIRuleView `json:"rules"`
 }
 
-func ciView(c store.CI) CIView {
-	return CIView{Tracking: c.Tracking, Provider: c.Provider, Repository: c.Repository,
-		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL}
+// CIRuleView is one CI Rule: when Workflow fails on Branch, open a Ticket
+// to fix it, in State, on the rule's own Spec, whose ID names the rule.
+type CIRuleView struct {
+	Spec string `json:"spec"`
+	// Workflow is a workflow file's base name, or any.
+	Workflow string      `json:"workflow"`
+	Branch   string      `json:"branch"`
+	State    store.State `json:"state"`
+	Created  time.Time   `json:"created"`
+}
+
+func ciView(key string, c store.CI) CIView {
+	v := CIView{Tracking: c.Tracking, Provider: c.Provider, Repository: c.Repository,
+		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}}
+	for _, r := range c.Rules {
+		v.Rules = append(v.Rules, CIRuleView{Spec: DisplayID(key, r.Spec), Workflow: r.Workflow, Branch: r.Branch, State: r.State, Created: r.Created})
+	}
+	return v
 }
 
 // SetCITrackingInput is the human's set_ci_tracking(tracking, provider,
@@ -49,8 +68,9 @@ type SetCITrackingInput struct {
 var repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`)
 
 // workflowPattern is a workflow file's base name: GitHub Actions keeps
-// every workflow in one folder, so the base name names it.
-var workflowPattern = regexp.MustCompile(`^[^/\\\s]+\.ya?ml$`)
+// every workflow in one folder, so the base name names it. It is a name,
+// not a pattern, so it holds no glob.
+var workflowPattern = regexp.MustCompile(`^[^/\\\s*?\[\]]+\.ya?ml$`)
 
 // SetCITracking is the human's set_ci_tracking: CI Tracking on or off,
 // with the CI Provider, the repository it watches and the Ignored
@@ -86,9 +106,10 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 	if err := c.checkCI(ctx, key, ci); err != nil {
 		return Written[ProjectView]{}, err
 	}
-	return c.updateCI(key, in.Full, func(p *store.CI) {
-		ci.PushRemoteURL = p.PushRemoteURL
+	return c.updateCI(key, in.Full, func(p *store.CI) error {
+		ci.PushRemoteURL, ci.Rules = p.PushRemoteURL, p.Rules
 		*p = ci
+		return nil
 	})
 }
 
@@ -179,7 +200,10 @@ func (c *Core) ReportPushRemote(_ context.Context, key string, in ReportPushRemo
 	if url == "" {
 		return Written[ProjectView]{}, invalid("url", "report_push_remote needs the Push remote's URL")
 	}
-	return c.updateCI(key, in.Full, func(p *store.CI) { p.PushRemoteURL = withoutLogin(url) })
+	return c.updateCI(key, in.Full, func(p *store.CI) error {
+		p.PushRemoteURL = withoutLogin(url)
+		return nil
+	})
 }
 
 // withoutLogin is an HTTP(S) remote URL without the login it may carry,
@@ -196,7 +220,7 @@ func withoutLogin(url string) string {
 
 // updateCI changes a Project's CI settings with change, writing nothing
 // when they come out the same.
-func (c *Core) updateCI(key string, full bool, change func(*store.CI)) (Written[ProjectView], error) {
+func (c *Core) updateCI(key string, full bool, change func(*store.CI) error) (Written[ProjectView], error) {
 	var before, after ProjectView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
@@ -206,7 +230,10 @@ func (c *Core) updateCI(key string, full bool, change func(*store.CI)) (Written[
 		before = projectView(p)
 		ci := p.CI
 		ci.IgnoredWorkflows = slices.Clone(ci.IgnoredWorkflows)
-		change(&ci)
+		ci.Rules = slices.Clone(ci.Rules)
+		if err := change(&ci); err != nil {
+			return err
+		}
 		if ci.Equal(p.CI) {
 			after = before
 			return nil
@@ -220,3 +247,198 @@ func (c *Core) updateCI(key string, full bool, change func(*store.CI)) (Written[
 	}
 	return acknowledgeProject(before, after, full, c.now())
 }
+
+// CIRuleInput is the human's add_ci_rule(workflow, branch, state, full?)
+// and, with the rule's Spec, edit_ci_rule.
+type CIRuleInput struct {
+	// Spec names the rule to edit; add_ci_rule leaves it out.
+	Spec Ref `json:"spec,omitempty"`
+	// Workflow is a workflow file's base name, such as ci.yml, or any.
+	Workflow string `json:"workflow"`
+	// Branch is an exact branch name, with no globs.
+	Branch string `json:"branch"`
+	// State is Draft or Ready: Draft when add_ci_rule leaves it out, and
+	// the rule's own when edit_ci_rule does.
+	State store.State `json:"state,omitempty"`
+	// Full asks for the Project in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
+}
+
+// RemoveCIRuleInput is the human's remove_ci_rule(spec, full?).
+type RemoveCIRuleInput struct {
+	Spec Ref `json:"spec"`
+	// Full asks for the Project in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
+}
+
+// globChars are what would make a branch a pattern: a CI Rule's branch
+// is an exact name.
+const globChars = "*?[]"
+
+// AddCIRule is the human's add_ci_rule: "when this workflow fails on
+// this branch, open a Ticket to fix it". It creates the rule's Spec, on
+// which its Tickets will open, titled like "CI: ci.yml on main". An
+// update writes one record, so the Spec is written first and the rule
+// second: a rule never names a missing Spec.
+func (c *Core) AddCIRule(ctx context.Context, key string, in CIRuleInput) (Written[ProjectView], error) {
+	if err := humanOnly(ctx, "add_ci_rule"); err != nil {
+		return Written[ProjectView]{}, err
+	}
+	if in.State == "" {
+		in.State = store.Draft
+	}
+	r, err := checkCIRule(in)
+	if err != nil {
+		return Written[ProjectView]{}, err
+	}
+	err = c.store.Update(func(w store.Writer) error {
+		if err := writable(w, key); err != nil {
+			return err
+		}
+		p, _ := w.Project(key)
+		if err := ruleIsNew(key, p.CI.Rules, r, 0); err != nil {
+			return err
+		}
+		r.Created = c.now()
+		r.Spec = w.NextNumber(key)
+		return w.PutSpec(key, store.Spec{Number: r.Spec, Title: ciRuleTitle(r), Body: ciRuleSpecBody, Created: r.Created, Updated: r.Created})
+	})
+	if err != nil {
+		return Written[ProjectView]{}, err
+	}
+	return c.updateCI(key, in.Full, func(ci *store.CI) error {
+		if err := ruleIsNew(key, ci.Rules, r, 0); err != nil {
+			return err
+		}
+		ci.Rules = append(ci.Rules, r)
+		return nil
+	})
+}
+
+// EditCIRule is the human's edit_ci_rule: the rule keeps its Spec and
+// when it was created. The Spec's title follows the rule unless the human
+// has changed it, in a second write after the rule's.
+func (c *Core) EditCIRule(ctx context.Context, key string, in CIRuleInput) (Written[ProjectView], error) {
+	if err := humanOnly(ctx, "edit_ci_rule"); err != nil {
+		return Written[ProjectView]{}, err
+	}
+	n, err := in.Spec.number(key, "spec")
+	if err != nil {
+		return Written[ProjectView]{}, err
+	}
+	var old, r store.CIRule
+	v, err := c.updateCI(key, in.Full, func(ci *store.CI) error {
+		i, err := ruleOn(key, ci.Rules, n)
+		if err != nil {
+			return err
+		}
+		old = ci.Rules[i]
+		if in.State == "" {
+			in.State = old.State
+		}
+		if r, err = checkCIRule(in); err != nil {
+			return err
+		}
+		if err := ruleIsNew(key, ci.Rules, r, n); err != nil {
+			return err
+		}
+		r.Spec, r.Created = old.Spec, old.Created
+		ci.Rules[i] = r
+		return nil
+	})
+	if err != nil || old.Equal(r) {
+		return v, err
+	}
+	return v, c.followRule(ctx, key, old, r)
+}
+
+// RemoveCIRule is the human's remove_ci_rule. The rule's Spec stays, as
+// the record of its Tickets.
+func (c *Core) RemoveCIRule(ctx context.Context, key string, in RemoveCIRuleInput) (Written[ProjectView], error) {
+	if err := humanOnly(ctx, "remove_ci_rule"); err != nil {
+		return Written[ProjectView]{}, err
+	}
+	n, err := in.Spec.number(key, "spec")
+	if err != nil {
+		return Written[ProjectView]{}, err
+	}
+	return c.updateCI(key, in.Full, func(ci *store.CI) error {
+		i, err := ruleOn(key, ci.Rules, n)
+		if err != nil {
+			return err
+		}
+		ci.Rules = slices.Delete(ci.Rules, i, i+1)
+		return nil
+	})
+}
+
+// checkCIRule is in's rule, trimmed, or why it isn't one.
+func checkCIRule(in CIRuleInput) (store.CIRule, error) {
+	r := store.CIRule{Workflow: strings.TrimSpace(in.Workflow), Branch: strings.TrimSpace(in.Branch), State: in.State}
+	if r.Workflow != store.AnyWorkflow && !workflowPattern.MatchString(r.Workflow) {
+		return r, invalid("workflow", "%q isn't a workflow file name, such as ci.yml, or %s for any workflow", r.Workflow, store.AnyWorkflow)
+	}
+	if r.Branch == "" || strings.ContainsAny(r.Branch, globChars) || strings.IndexFunc(r.Branch, unicode.IsSpace) >= 0 {
+		return r, invalid("branch", "%q isn't an exact branch name, such as main: a CI Rule's branch takes no globs", r.Branch)
+	}
+	if r.State != store.Draft && r.State != store.Ready {
+		return r, invalid("state", "a CI Rule's Tickets open as %s or %s, not %q", store.Draft, store.Ready, r.State)
+	}
+	return r, nil
+}
+
+// ruleOn is the index of the rule on Spec n.
+func ruleOn(key string, rules []store.CIRule, n int) (int, error) {
+	i := slices.IndexFunc(rules, func(r store.CIRule) bool { return r.Spec == n })
+	if i < 0 {
+		return 0, notFound("there is no CI Rule on Spec %s", DisplayID(key, n))
+	}
+	return i, nil
+}
+
+// ruleIsNew refuses r when another rule, not the one on Spec self,
+// already watches its workflow on its branch.
+func ruleIsNew(key string, rules []store.CIRule, r store.CIRule, self int) error {
+	for _, o := range rules {
+		if o.Spec != self && o.Workflow == r.Workflow && o.Branch == r.Branch {
+			return invalid("workflow", "the CI Rule on Spec %s already watches %s", DisplayID(key, o.Spec), ciRuleWatches(r))
+		}
+	}
+	return nil
+}
+
+// followRule retitles the Spec of the rule edited from old to r, unless
+// the human has changed its title.
+func (c *Core) followRule(ctx context.Context, key string, old, r store.CIRule) error {
+	if ciRuleTitle(old) == ciRuleTitle(r) {
+		return nil
+	}
+	return c.store.Update(func(w store.Writer) error {
+		s, ok := w.Spec(key, old.Spec)
+		if !ok || s.Title != ciRuleTitle(old) {
+			return nil
+		}
+		s.Updated = c.now()
+		s.Edits = append(s.Edits, store.Edit{Number: len(s.Edits) + 1, Actor: string(ActorOf(ctx)), Time: s.Updated, Previous: map[string]string{"title": s.Title}})
+		s.Title = ciRuleTitle(r)
+		return w.PutSpec(key, s)
+	})
+}
+
+// ciRuleWatches is what a rule watches: "ci.yml on main" or "any workflow
+// on main".
+func ciRuleWatches(r store.CIRule) string {
+	w := r.Workflow
+	if w == store.AnyWorkflow {
+		w = "any workflow"
+	}
+	return w + " on " + r.Branch
+}
+
+// ciRuleTitle is the title of a rule's Spec: "CI: ci.yml on main".
+func ciRuleTitle(r store.CIRule) string { return "CI: " + ciRuleWatches(r) }
+
+// ciRuleSpecBody is a rule's Spec's body. It names neither workflow nor
+// branch, which the title carries, so an edit leaves it as it is.
+const ciRuleSpecBody = "This Spec holds the fix Tickets of a CI Rule, which opens a Ticket to fix its workflow when it fails on its branch. " +
+	"The rule is in the CI section of Project Options; removing it leaves this Spec as the record of its Tickets.\n"

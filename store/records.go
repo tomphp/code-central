@@ -37,11 +37,20 @@ type projectFile struct {
 }
 
 type ciFile struct {
-	Tracking         bool     `yaml:"tracking"`
-	Provider         string   `yaml:"provider"`
-	Repository       string   `yaml:"repository,omitempty"`
-	IgnoredWorkflows []string `yaml:"ignored_workflows,omitempty"`
-	PushRemoteURL    string   `yaml:"push_remote_url,omitempty"`
+	Tracking         bool         `yaml:"tracking"`
+	Provider         string       `yaml:"provider"`
+	Repository       string       `yaml:"repository,omitempty"`
+	IgnoredWorkflows []string     `yaml:"ignored_workflows,omitempty"`
+	PushRemoteURL    string       `yaml:"push_remote_url,omitempty"`
+	Rules            []ciRuleFile `yaml:"rules,omitempty"`
+}
+
+type ciRuleFile struct {
+	Spec     int    `yaml:"spec"`
+	Workflow string `yaml:"workflow"`
+	Branch   string `yaml:"branch"`
+	State    string `yaml:"state"`
+	Created  string `yaml:"created"`
 }
 
 type landingFile struct {
@@ -433,8 +442,12 @@ func encodeCI(c CI) *ciFile {
 	if c = c.orDefault(); c.Equal(DefaultCI()) {
 		return nil
 	}
-	return &ciFile{Tracking: c.Tracking, Provider: string(c.Provider), Repository: c.Repository,
+	f := &ciFile{Tracking: c.Tracking, Provider: string(c.Provider), Repository: c.Repository,
 		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL}
+	for _, r := range c.Rules {
+		f.Rules = append(f.Rules, ciRuleFile{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: string(r.State), Created: formatTime(r.Created)})
+	}
+	return f
 }
 
 // formatOptionalTime leaves a zero time out of the file.

@@ -7,6 +7,7 @@ import type {
   FindSpecsFilter,
   FindTicketsFilter,
   HeldSessionEvent,
+  CIRuleChange,
   CITrackingChange,
   Landing,
   LinkedRow,
@@ -107,6 +108,13 @@ export interface Api {
   // trimmed, and needed as owner/name to turn CI Tracking on; Ignored
   // workflows are trimmed, with blanks and repeats dropped.
   setCITracking(project: string, ci: CITrackingChange): Promise<ProjectView>;
+  // addCIRule adds a CI Rule and creates its Spec, titled like "CI: ci.yml
+  // on main"; editCIRule changes the rule on Spec spec, and
+  // removeCIRule removes it, leaving its Spec as the record. Workflow and
+  // branch are trimmed; two rules can't watch the same workflow and branch.
+  addCIRule(project: string, rule: CIRuleChange): Promise<ProjectView>;
+  editCIRule(project: string, spec: string, rule: CIRuleChange): Promise<ProjectView>;
+  removeCIRule(project: string, spec: string): Promise<ProjectView>;
   // unlink detaches a Spec's or Ticket's Link (ticket 42). It isn't a
   // TicketAction: its target, a Spec or a Ticket, goes in the body.
   unlink(project: string, target: string): Promise<LinkedRow>;

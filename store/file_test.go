@@ -423,6 +423,8 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 		{"unknown project field", "projects/acme/project.yaml", project + "path: /src\n", "path"},
 		{"landing method outside its set", "projects/acme/project.yaml", project + "landing:\n  method: squash\n  push: false\n  remote: origin\n", "landing.method"},
 		{"ci provider outside its set", "projects/acme/project.yaml", project + "ci:\n  tracking: true\n  provider: circleci\n", "ci.provider"},
+		{"ci rule state outside draft and ready", "projects/acme/project.yaml", project + "ci:\n  tracking: false\n  provider: github_actions\n  rules:\n    - spec: 4\n      workflow: ci.yml\n      branch: main\n      state: Done\n      created: 2026-11-07T09:30:00Z\n", "ci.rules[0].state"},
+		{"ci rule without created", "projects/acme/project.yaml", project + "ci:\n  tracking: false\n  provider: github_actions\n  rules:\n    - spec: 4\n      workflow: ci.yml\n      branch: main\n      state: Ready\n      created: \"\"\n", "ci.rules[0].created"},
 		{"unknown ci field", "projects/acme/project.yaml", project + "ci:\n  tracking: true\n  provider: github_actions\n  token: x\n", "ci.token"},
 		{"unknown landing field", "projects/acme/project.yaml", project + "landing:\n  method: merge\n  push: false\n  remote: origin\n  force: true\n", "landing.force"},
 		{"spec without frontmatter", "projects/acme/specs/3.md", "# just markdown\n", "frontmatter"},

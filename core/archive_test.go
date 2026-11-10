@@ -245,6 +245,18 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git"})
 		return err
 	},
+	"add_ci_rule": func(f fixture) error {
+		_, err := f.core.AddCIRule(human, "acme", core.CIRuleInput{Workflow: "ci.yml", Branch: "main"})
+		return err
+	},
+	"edit_ci_rule": func(f fixture) error {
+		_, err := f.core.EditCIRule(human, "acme", core.CIRuleInput{Spec: "1", Workflow: "ci.yml", Branch: "main"})
+		return err
+	},
+	"remove_ci_rule": func(f fixture) error {
+		_, err := f.core.RemoveCIRule(human, "acme", core.RemoveCIRuleInput{Spec: "1"})
+		return err
+	},
 	"archive_project": func(f fixture) error {
 		_, err := f.core.ArchiveProject(human, "acme")
 		return err

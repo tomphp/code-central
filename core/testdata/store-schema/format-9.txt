@@ -3,7 +3,6 @@ store.yaml
 
 options.yaml (optional): the global Options; a key left out takes its default
   focus_clear: string (optional)
-  gh_path: string (optional)
 
 projects/<key>/project.yaml
   key: string
@@ -21,6 +20,12 @@ projects/<key>/project.yaml
       repository: string (optional)
       ignored_workflows: []string (optional)
       push_remote_url: string (optional)
+      rules: list of mappings (optional)
+          spec: int
+          workflow: string
+          branch: string
+          state: string
+          created: string
 
 projects/<key>/specs/<n>.md: YAML frontmatter between --- lines, then the Markdown body
   id: int

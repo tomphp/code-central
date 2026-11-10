@@ -483,7 +483,7 @@ func finished(s store.State) bool { return s == store.Done || s == store.Cancell
 
 func projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
-		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}, CI: ciView(p.CI)}
+		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}, CI: ciView(p.Key, p.CI)}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at
