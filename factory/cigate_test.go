@@ -43,8 +43,15 @@ func gatedHarness(t *testing.T) (*factorytest.Harness, *factorytest.Remote, *fac
 // tracked against ticket, with its status and conclusion.
 func reportRun(t *testing.T, h *factorytest.Harness, id int64, ticket, commit string, status store.CIRunStatus, conclusion store.CIConclusion) {
 	t.Helper()
+	reportAttempt(t, h, id, 1, ticket, commit, status, conclusion)
+}
+
+// reportAttempt reports, as the CI Watcher, attempt of run id of ci.yml
+// on commit tracked against ticket, with its status and conclusion.
+func reportAttempt(t *testing.T, h *factorytest.Harness, id int64, attempt int, ticket, commit string, status store.CIRunStatus, conclusion store.CIConclusion) {
+	t.Helper()
 	started := h.Clock.Now()
-	run := core.CIRunView{ID: id, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
+	run := core.CIRunView{ID: id, Attempt: attempt, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
 		Status: status, Conclusion: conclusion, Started: &started, URL: "https://github.com/acme/web/actions/runs/1", Jobs: []core.CIJobView{}, Ticket: ticket}
 	if _, err := h.Server.Client.ReportCIRuns(context.Background(), h.Project, core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {
 		t.Fatal(err)
@@ -244,33 +251,7 @@ func TestAnInReviewTicketMergedByHandWaitsOnCIInReview(t *testing.T) {
 func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *testing.T) {
 	t.Parallel()
 	h, remote, r := gatedHarness(t)
-	id := h.ReadyTicket("Add a feature")
-	h.Script(id,
-		factorytest.WriteFile("feature.txt", "feature\n"),
-		factorytest.Git("add", "feature.txt"),
-		factorytest.Git("commit", "-q", "-m", "Add a feature"),
-		factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Added.", "--branch", "{{ticket}}"),
-		factorytest.Result("success"))
-	r.Poll()
-	h.WaitForState(id, store.InReview)
-	h.Accept(id)
-	r.Poll()
-	r.WaitForOutput(id + ": CI tracks main at ")
-	failed := h.Ticket(id).PushedCommit.Commit
-	reportRun(t, h, 1, id, failed, store.CICompleted, store.CIFailure)
-	stillAccepted(t, h, r, id, "with a failed CI result")
-
-	note := "CI failed at " + failed[:12] + ": https://github.com/acme/web/actions/runs/1, failed jobs: test."
-	if _, err := h.Human().SendBack(context.Background(), h.Project, core.SendBackInput{Ticket: core.Ref(id), Note: note}); err != nil {
-		t.Fatal(err)
-	}
-	h.Script(id,
-		factorytest.NeedFile("feature.txt"),
-		factorytest.WriteFile("fix.txt", "fix\n"),
-		factorytest.Git("add", "fix.txt"),
-		factorytest.Git("commit", "-q", "-m", "Fix CI"),
-		factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Fixed.", "--branch", "{{ticket}}"),
-		factorytest.Result("success"))
+	id, failed := sentBackCIFailure(t, h, r)
 	r.Poll()
 	h.WaitForState(id, store.InReview)
 	if calls := h.Calls(); len(calls) != 2 || calls[1].Ticket != id || calls[1].Dir != h.Worktree(id) {
@@ -298,6 +279,42 @@ func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *tes
 	if tk := h.WaitForState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != fixed {
 		t.Errorf("landed with %q, want the new pushed commit %s", tk.Moves[len(tk.Moves)-1].Commit, fixed)
 	}
+}
+
+// sentBackCIFailure has the Factory work a Ticket, which the human
+// accepts and the Factory pushes; its CI fails, and the human sends it
+// back with the next Claim scripted to fix it on its branch. It returns
+// the Ticket, Ready, and its failed pushed commit.
+func sentBackCIFailure(t *testing.T, h *factorytest.Harness, r *factorytest.Running) (id, failed string) {
+	t.Helper()
+	id = h.ReadyTicket("Add a feature")
+	h.Script(id,
+		factorytest.WriteFile("feature.txt", "feature\n"),
+		factorytest.Git("add", "feature.txt"),
+		factorytest.Git("commit", "-q", "-m", "Add a feature"),
+		factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Added.", "--branch", "{{ticket}}"),
+		factorytest.Result("success"))
+	r.Poll()
+	h.WaitForState(id, store.InReview)
+	h.Accept(id)
+	r.Poll()
+	r.WaitForOutput(id + ": CI tracks main at ")
+	failed = h.Ticket(id).PushedCommit.Commit
+	reportRun(t, h, 1, id, failed, store.CICompleted, store.CIFailure)
+	stillAccepted(t, h, r, id, "with a failed CI result")
+
+	note := "CI failed at " + failed[:12] + ": https://github.com/acme/web/actions/runs/1, failed jobs: test."
+	if _, err := h.Human().SendBack(context.Background(), h.Project, core.SendBackInput{Ticket: core.Ref(id), Note: note}); err != nil {
+		t.Fatal(err)
+	}
+	h.Script(id,
+		factorytest.NeedFile("feature.txt"),
+		factorytest.WriteFile("fix.txt", "fix\n"),
+		factorytest.Git("add", "fix.txt"),
+		factorytest.Git("commit", "-q", "-m", "Fix CI"),
+		factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Fixed.", "--branch", "{{ticket}}"),
+		factorytest.Result("success"))
+	return id, failed
 }
 
 // New fix Ticket (code-central-264): a Ready Ticket on the same Spec
