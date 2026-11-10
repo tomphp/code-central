@@ -339,7 +339,9 @@ type CIRunsView struct {
 // keyed by its run ID and attempt, marking runs of Ignored workflows
 // ignored, and prunes the runs finished more than ciKeep ago. It needs
 // CI Tracking on. Every Ticket whose runs changed gets a change notice,
-// as the Project gets ci.changed, so the UI updates live.
+// as the Project gets ci.changed, so the UI updates live; so do the
+// unfinished Tickets it blocks when its CI result changed, since that can
+// clear or hold them under Unblock on push.
 func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput) (Written[CIRunsView], error) {
 	var reported CIRunsView
 	changed := map[int]bool{}
@@ -353,8 +355,9 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 			return &Error{Code: ActionNotAllowed, Message: "CI Tracking is off on " + key + ", so it tracks no CI Runs"}
 		}
 		stored := w.CIRuns(key)
-		runs := keptCIRuns(slices.Clone(stored), c.now())
-		pruned := len(runs) < len(stored)
+		kept := keptCIRuns(slices.Clone(stored), c.now())
+		runs := slices.Clone(kept)
+		pruned := len(kept) < len(stored)
 		for i, v := range in.Runs {
 			run, err := c.ciRunOf(w, key, p.CI, v, fmt.Sprintf("runs[%d]", i))
 			if err != nil {
@@ -382,6 +385,9 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 		if !wrote && !pruned {
 			return nil
 		}
+		for n := range c.ciResultsChanged(w, key, changed, kept, runs) {
+			changed[n] = true
+		}
 		return w.PutCIRuns(key, runs)
 	})
 	if err != nil {
@@ -401,6 +407,37 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 		ack.Changed = []string{"runs"}
 	}
 	return Written[CIRunsView]{Acknowledgement: ack}, nil
+}
+
+// ciResultsChanged are the unfinished dependants, followed through
+// Replacements, of each Ticket in tickets whose CI result differs between
+// the runs before and after.
+func (c *Core) ciResultsChanged(r store.Reader, key string, tickets map[int]bool, before, after []store.CIRun) map[int]bool {
+	resultOf := func(t store.Ticket, runs []store.CIRun) CIResult {
+		var mine []store.CIRun
+		for _, run := range runs {
+			if run.Ticket == t.Number {
+				mine = append(mine, run)
+			}
+		}
+		return latestCIResult(t.PushedCommits[len(t.PushedCommits)-1], mine, c.now())
+	}
+	var moved []int
+	for n := range tickets {
+		if t, ok := r.Ticket(key, n); ok && len(t.PushedCommits) > 0 && resultOf(t, before) != resultOf(t, after) {
+			moved = append(moved, n)
+		}
+	}
+	out := map[int]bool{}
+	if len(moved) == 0 {
+		return out
+	}
+	for _, d := range r.Tickets(key) {
+		if !finished(d.State) && slices.ContainsFunc(waitsOn(r, key, d.Number), func(n int) bool { return slices.Contains(moved, n) }) {
+			out[d.Number] = true
+		}
+	}
+	return out
 }
 
 // ciRunOf is the run v reports, checked, as stored: tracked against an

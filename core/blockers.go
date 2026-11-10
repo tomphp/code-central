@@ -12,9 +12,11 @@ import (
 
 // Blockers (ticket 28). A Blocker is a many-to-many link between Tickets
 // in one Project, across Specs, stored on the dependant as blocked_by.
-// Blocking is computed on read, by blockRule: only Done clears a
-// Blocker, and a Cancelled Blocker is followed through its Replacements
-// (store.Follow), so cancelling never rewrites another Ticket's file.
+// Blocking is computed on read, by blockRule: Done clears a Blocker, as
+// does, under Unblock on push, a CI result running or passed while the CI
+// gate holds it (code-central-298). A Cancelled Blocker is followed
+// through its Replacements (store.Follow), so cancelling never rewrites
+// another Ticket's file.
 
 // BlockerInput is add_blocker's and remove_blocker's input: ticket waits
 // on blocker.
@@ -32,6 +34,10 @@ type BlockerView struct {
 	Title string      `json:"title"`
 	State store.State `json:"state"`
 	Via   string      `json:"via,omitempty"`
+	// ci is the Blocker's CI result while the CI gate holds it, and
+	// cleared is whether it no longer blocks though it isn't Done.
+	ci      CIResult
+	cleared bool
 }
 
 // AddBlocker is add_blocker(ticket, blocker). A link already there
@@ -104,7 +110,8 @@ func (c *Core) blockRule(r store.Reader, key string) blockRule {
 }
 
 // blocked is computed: an unfinished Ticket with a Blocker, after
-// following Replacements, that isn't Done. Finished work is never blocked.
+// following Replacements, that isn't Done or cleared. Finished work is
+// never blocked.
 func (b blockRule) blocked(t store.Ticket) bool {
 	return len(b.openBlockers(t)) > 0
 }
@@ -114,7 +121,7 @@ func (b blockRule) openBlockers(t store.Ticket) []BlockerView {
 	if finished(t.State) {
 		return nil
 	}
-	return slices.DeleteFunc(b.blockerViews(t), func(v BlockerView) bool { return v.State == store.Done })
+	return slices.DeleteFunc(b.blockerViews(t), func(v BlockerView) bool { return v.State == store.Done || v.cleared })
 }
 
 // blockerViews lists t's Blockers after following Replacements, each once.
@@ -130,6 +137,7 @@ func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
 			seen[m] = true
 			bt, _ := b.r.Ticket(key, m)
 			v := BlockerView{ID: DisplayID(key, m), Title: bt.Title, State: bt.State}
+			v.ci, v.cleared = b.gate(bt)
 			if m != n {
 				v.Via = DisplayID(key, n)
 			}
@@ -139,13 +147,35 @@ func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
 	return out
 }
 
-// blockedError rejects claiming a blocked Ticket, naming its Blockers.
+// gate is bt's CI result while the CI gate holds it, and whether that
+// clears it under Unblock on push: a result running (no runs reported
+// and a pending Re-run request among them) or passed. A failed result,
+// or none once the pushed commit's runs are pruned, keeps it blocking.
+// The Project's CI Runs are read only for a Blocker Accepted with a
+// pushed commit, in a Project with the option on.
+func (b blockRule) gate(bt store.Ticket) (CIResult, bool) {
+	if !b.p.CI.UnblockOnPush || bt.State != store.Accepted || len(bt.PushedCommits) == 0 {
+		return "", false
+	}
+	pushed, runs, ok := ciGated(b.r, b.p, bt, b.now)
+	if !ok {
+		return "", false
+	}
+	res := latestCIResult(pushed, runs, b.now)
+	return res, res == CIRunning || res == CIPassed
+}
+
+// blockedError rejects claiming a blocked Ticket, naming its Blockers,
+// with the CI result of one the CI gate holds.
 func (b blockRule) blockedError(t store.Ticket, actor Actor) error {
 	var names []string
 	for _, v := range b.openBlockers(t) {
 		s := fmt.Sprintf("%s (%s", v.ID, v.State)
 		if v.State == store.Cancelled {
 			s += ", with no Replacements"
+		}
+		if v.ci != "" {
+			s += ", CI " + string(v.ci)
 		}
 		if v.Via != "" {
 			s += ", replacing Cancelled " + v.Via
