@@ -293,7 +293,14 @@ func fakeClaude(codeCentral string, args []string) int {
 		return 64
 	}
 	prompt := args[len(args)-1]
-	tm, cm := promptTicket.FindStringSubmatch(prompt), promptClaim.FindStringSubmatch(prompt)
+	// The Ticket and Claim are in the system prompt the Factory appends.
+	text := prompt
+	for i, a := range args[:len(args)-1] {
+		if a == "--append-system-prompt" && i+1 < len(args) {
+			text += "\n" + args[i+1]
+		}
+	}
+	tm, cm := promptTicket.FindStringSubmatch(text), promptClaim.FindStringSubmatch(text)
 	if tm == nil || cm == nil {
 		fmt.Fprintf(os.Stderr, "fake claude: no Ticket or Claim in the prompt %q\n", prompt)
 		return 64
