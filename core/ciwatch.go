@@ -159,10 +159,40 @@ type CIWatch struct {
 	// Waiting are the pushed commits still waiting on a final CI result,
 	// or newly pushed, oldest push first: the CI Watcher lists their runs.
 	Waiting []CIWaitingCommit `json:"waiting"`
+	// Reruns are the Re-run requests waiting on the CI Watcher: it
+	// re-runs each run's failed jobs, and a request clears once it
+	// reports the run's new attempt.
+	Reruns []CIRerun `json:"reruns"`
+}
+
+// CIRerun is one Re-run request: a run that failed on a Ticket's pushed
+// commit, at the attempt that failed.
+type CIRerun struct {
+	Ticket  string `json:"ticket"`
+	Commit  string `json:"commit"`
+	ID      int64  `json:"id"`
+	Attempt int    `json:"attempt"`
+}
+
+// ciReruns is every Re-run request waiting at now, by Ticket, then run. A
+// Cancelled Ticket's are left out.
+func ciReruns(r store.Reader, key string, now time.Time) []CIRerun {
+	out := []CIRerun{}
+	for _, t := range r.Tickets(key) {
+		if len(t.PushedCommits) == 0 || t.State == store.Cancelled {
+			continue
+		}
+		latest := latestPushed(t)
+		mine, _ := ticketRuns(r, key, t, now)
+		for _, a := range pendingReruns(latest, mine) {
+			out = append(out, CIRerun{Ticket: DisplayID(key, t.Number), Commit: latest.Commit, ID: a.ID, Attempt: a.Attempt})
+		}
+	}
+	return out
 }
 
 // GetCIWatch is the CI Watcher's get_ci_watch. With CI Tracking off,
-// nothing waits.
+// nothing waits and nothing is re-run.
 func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 	var out CIWatch
 	err := c.store.View(func(r store.Reader) error {
@@ -172,9 +202,9 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 		}
 		v := ciView(key, p.CI, CIWatcherView{})
 		out = CIWatch{Project: key, Tracking: v.Tracking, Provider: v.Provider, Repository: v.Repository,
-			IgnoredWorkflows: v.IgnoredWorkflows, Rules: v.Rules, GHPath: r.Options().GHPath, Waiting: []CIWaitingCommit{}}
+			IgnoredWorkflows: v.IgnoredWorkflows, Rules: v.Rules, GHPath: r.Options().GHPath, Waiting: []CIWaitingCommit{}, Reruns: []CIRerun{}}
 		if p.CI.Tracking {
-			out.Waiting = ciWaiting(r, key, c.now())
+			out.Waiting, out.Reruns = ciWaiting(r, key, c.now()), ciReruns(r, key, c.now())
 		}
 		return nil
 	})

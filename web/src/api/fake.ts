@@ -38,7 +38,9 @@
 //
 // reportPushedCommit and reportCIRuns work a Ticket's CI result out as
 // the service does, with its failure options while it is CI failed;
-// land_anyway records the human's choice on the latest pushed commit.
+// land_anyway records the human's choice on the latest pushed commit;
+// rerun_ci records a Re-run request for its failed runs, which reads as
+// running until a later attempt of each is reported.
 //
 // postSessionEvents stands in for a Factory's POST /api/session-events: the
 // events go to the newest Claim with that session ID. Each Claim view
@@ -349,6 +351,9 @@ export class FakeApi implements Api {
   // landedAnyway is each "<ticket>@<commit>" the human chose Land anyway
   // for (code-central-261).
   private landedAnyway = new Set<string>();
+  // reruns are each Ticket's Re-run request (code-central-265): its
+  // pushed commit and the failed run attempts it asked for.
+  private reruns = new Map<string, { commit: string; runs: { id: number; attempt: number }[] }>();
   private specs = new Map<string, SpecView>();
   private groups: { reason: NeedsMeReason; tickets: NeedsMeRow[] }[] = [];
   private subs = new Set<EventHandlers>();
@@ -591,6 +596,45 @@ export class FakeApi implements Api {
     this.landedAnyway.add(`${t.id}@${latest.commit}`);
     this.dropNeedsMe(t.id);
     return this.trackCI(key, t);
+  }
+
+  // rerunCI records a Re-run request for each failed run of t's latest
+  // pushed commit, refused unless t is offered it, as core's RerunCI is,
+  // and takes t out of Needs Me.
+  rerunCI(t: TicketView): TicketView {
+    const key = this.projectOf(t.id);
+    const latest = this.pushedCommits.get(t.id)?.at(-1);
+    if (latest && t.state === "Accepted" && this.pendingReruns(key, t.id, latest.commit).length > 0) return this.view(t);
+    if (!latest || !t.ci_failure_options?.includes("rerun_ci")) {
+      throw new ApiError(409, "action_not_allowed", `${t.id} has no failed CI result to re-run`);
+    }
+    const runs = this.countedRuns(key, t.id, latest.commit)
+      .filter((r) => r.conclusion !== undefined && FAILED_CONCLUSIONS.includes(r.conclusion))
+      .map((r) => ({ id: r.id, attempt: r.attempt }))
+      .sort((a, b) => a.id - b.id);
+    this.reruns.set(t.id, { commit: latest.commit, runs });
+    this.dropNeedsMe(t.id);
+    return this.trackCI(key, t);
+  }
+
+  // pendingReruns are the Ticket's Re-run requests for commit with no
+  // later attempt of their run reported, as core's pendingReruns are.
+  private pendingReruns(key: string, id: string, commit: string): { id: number; attempt: number }[] {
+    const req = this.reruns.get(id);
+    if (!req || req.commit !== commit) return [];
+    const mine = (this.ciRuns.get(key) ?? []).filter((r) => r.ticket === id && r.commit === commit);
+    return req.runs.filter((a) => !mine.some((r) => r.id === a.id && r.attempt > a.attempt));
+  }
+
+  // countedRuns are the runs of commit that count towards the Ticket's CI
+  // result: those not ignored, each at its latest attempt.
+  private countedRuns(key: string, id: string, commit: string): CIRunView[] {
+    const counted = new Map<number, CIRunView>();
+    for (const r of this.ciRuns.get(key) ?? []) {
+      if (r.ticket !== id || r.commit !== commit || r.ignored) continue;
+      if ((counted.get(r.id)?.attempt ?? 0) < r.attempt) counted.set(r.id, r);
+    }
+    return [...counted.values()];
   }
 
   // dropNeedsMe takes a Ticket out of Needs Me, as an action that resolves
@@ -1063,23 +1107,21 @@ export class FakeApi implements Api {
     if (!latest) return this.view(t);
     const order = (commit: string) => pushed.length - 1 - pushed.findIndex((c) => c.commit === commit);
     const mine = (this.ciRuns.get(key) ?? []).filter((r) => r.ticket === t.id).sort((a, b) => order(a.commit) - order(b.commit));
-    const counted = new Map<number, CIRunView>();
-    for (const r of mine) {
-      if (r.commit !== latest.commit || r.ignored) continue;
-      if ((counted.get(r.id)?.attempt ?? 0) < r.attempt) counted.set(r.id, r);
-    }
-    const finished = [...counted.values()];
+    const finished = this.countedRuns(key, t.id, latest.commit);
+    // A Re-run request waiting on the CI Watcher reads as running.
+    const rerunning = this.pendingReruns(key, t.id, latest.commit).length > 0;
     const ci_result: CIResult =
-      finished.length === 0 || finished.some((r) => r.status !== "completed")
+      rerunning || finished.length === 0 || finished.some((r) => r.status !== "completed")
         ? "running"
         : finished.some((r) => r.conclusion !== undefined && FAILED_CONCLUSIONS.includes(r.conclusion))
           ? "failed"
           : "passed";
     // CI failed: Accepted, failed, and the human hasn't chosen Land anyway;
-    // Land anyway is offered only under Merge.
+    // Re-run failed jobs is offered under both Landing Methods, Land
+    // anyway only under Merge.
     const land_anyway = this.landedAnyway.has(`${t.id}@${latest.commit}`);
     const ciFailed = t.state === "Accepted" && ci_result === "failed" && !land_anyway;
-    const options: CIFailureOption[] = this.project(key).landing.method === "merge" ? ["land_anyway"] : [];
+    const options: CIFailureOption[] = this.project(key).landing.method === "merge" ? ["rerun_ci", "land_anyway"] : ["rerun_ci"];
     const { land_anyway: _l, ci_failure_options: _o, ...rest } = this.tickets.get(t.id)!;
     this.tickets.set(t.id, rest);
     return this.updateTicket(t.id, {

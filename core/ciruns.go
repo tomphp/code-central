@@ -175,7 +175,36 @@ func latestCIResult(latest store.PushedCommit, runs []store.CIRun, now time.Time
 	if now.Sub(latest.Pushed) > ciKeep && !slices.ContainsFunc(runs, func(run store.CIRun) bool { return run.Commit == latest.Commit }) {
 		return ""
 	}
-	return ciResultOf(latest.Commit, runs)
+	return pushedCIResult(latest, runs)
+}
+
+// pushedCIResult is the CI result of a pushed commit from runs: running
+// while a Re-run request waits on the CI Watcher, else its runs'.
+func pushedCIResult(p store.PushedCommit, runs []store.CIRun) CIResult {
+	if len(pendingReruns(p, runs)) > 0 {
+		return CIRunning
+	}
+	return ciResultOf(p.Commit, runs)
+}
+
+// pendingReruns are p's Re-run requests still waiting on the CI Watcher:
+// those whose run has no later attempt in runs. A request whose run has
+// been pruned waits on nothing.
+func pendingReruns(p store.PushedCommit, runs []store.CIRun) []store.CIRunAttempt {
+	var out []store.CIRunAttempt
+	for _, a := range p.Reruns {
+		kept, answered := false, false
+		for _, run := range runs {
+			if run.ID == a.ID && run.Commit == p.Commit {
+				kept = kept || run.Attempt == a.Attempt
+				answered = answered || run.Attempt > a.Attempt
+			}
+		}
+		if kept && !answered {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // ticketRuns is every CI Run tracked against t and kept at now, and
@@ -428,9 +457,10 @@ type CIWaitingCommit struct {
 }
 
 // ciWaiting is every Ticket's latest pushed commit whose CI result is
-// still running, or that was pushed in the last ciNewlyPushed, oldest
-// push first. A Cancelled Ticket's is left out, as is one pushed more
-// than ciWaitLimit ago.
+// still running, or that was pushed, or asked to be re-run, in the last
+// ciNewlyPushed, oldest push first. A Cancelled Ticket's is left out, as
+// is one pushed, or last asked to be re-run, more than ciWaitLimit ago
+// with no Re-run request waiting.
 func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 	out := []CIWaitingCommit{}
 	runs := keptCIRuns(r.CIRuns(key), now)
@@ -439,8 +469,10 @@ func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 			continue
 		}
 		latest := t.PushedCommits[len(t.PushedCommits)-1]
-		if now.Sub(latest.Pushed) >= ciWaitLimit {
-			continue
+		// A Re-run request starts the wait again.
+		since := latest.Pushed
+		if latest.Rerun.After(since) {
+			since = latest.Rerun
 		}
 		var mine []store.CIRun
 		for _, run := range runs {
@@ -448,7 +480,10 @@ func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 				mine = append(mine, run)
 			}
 		}
-		if ciResultOf(latest.Commit, mine) == CIRunning || now.Sub(latest.Pushed) < ciNewlyPushed {
+		if now.Sub(since) >= ciWaitLimit && len(pendingReruns(latest, mine)) == 0 {
+			continue
+		}
+		if pushedCIResult(latest, mine) == CIRunning || now.Sub(since) < ciNewlyPushed {
 			out = append(out, CIWaitingCommit{Ticket: DisplayID(key, t.Number), Commit: latest.Commit, Pushed: latest.Pushed})
 		}
 	}

@@ -135,6 +135,7 @@ var Operations = []Op{
 	{Name: "report_ci_runs", Audience: FactoryOnly, Write: true},
 	// CI failed and its failure options (code-central-261).
 	{Name: "land_anyway", Audience: HumanOnly, Write: true},
+	{Name: "rerun_ci", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

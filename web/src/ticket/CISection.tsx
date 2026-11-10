@@ -3,8 +3,9 @@
 // link. The latest pushed commit's runs come first; an earlier push's
 // stay below, folded away. Ignored runs are greyed and marked ignored.
 // While the Ticket is CI failed it ends with the failure options
-// (code-central-261), when given the Api to act with.
+// (code-central-261, code-central-265), when given the Api to act with.
 import "../api/actions/land_anyway";
+import "../api/actions/rerun_ci";
 import type { Api } from "../api/api";
 import type { CIConclusion, CIJobView, CIRunView, TicketView } from "../api/types";
 import { useAct } from "./useAct";
@@ -102,9 +103,10 @@ function CIRuns({ runs }: { runs: CIRunView[] }) {
   );
 }
 
-// CIFailureOptions are the failure options of a CI failed Ticket: Land
-// anyway under Merge; under Branch the human's merge decides. Once the
-// human chose Land anyway it says the Factory lands it.
+// CIFailureOptions are the failure options of a CI failed Ticket:
+// Re-run failed jobs under either Landing Method, and Land anyway under
+// Merge; under Branch the human's merge decides. Once the human chose
+// Land anyway it says the Factory lands it.
 function CIFailureOptions({ api, project, ticket: t }: { api: Api; project: string; ticket: TicketView }) {
   const { busy, error, run } = useAct();
   if (t.land_anyway && t.ci_result === "failed") {
@@ -119,9 +121,19 @@ function CIFailureOptions({ api, project, ticket: t }: { api: Api; project: stri
           {error}
         </p>
       )}
+      {options.includes("rerun_ci") && (
+        <>
+          <p className="small">If it may be a flake, re-run the failed jobs: the CI Watcher asks GitHub to, and the Ticket waits on CI again.</p>
+          <p>
+            <button type="button" className="btn" disabled={busy} onClick={() => run(() => api.act(project, t.id, "rerun_ci", {}))}>
+              Re-run failed jobs
+            </button>
+          </p>
+        </>
+      )}
       {options.includes("land_anyway") ? (
         <>
-          <p className="small">If the failure is unrelated to this work, say a flake, land it anyway: the Factory lands it on its next poll.</p>
+          <p className="small">If the failure is unrelated to this work, land it anyway: the Factory lands it on its next poll.</p>
           <p>
             <button type="button" className="btn primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "land_anyway", {}))}>
               Land anyway

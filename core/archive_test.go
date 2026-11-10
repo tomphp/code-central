@@ -269,6 +269,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.LandAnyway(human, "acme", core.TicketInput{Ticket: "acme-2"})
 		return err
 	},
+	"rerun_ci": func(f fixture) error {
+		_, err := f.core.RerunCI(human, "acme", core.TicketInput{Ticket: "acme-2"})
+		return err
+	},
 	"report_ci_runs": func(f fixture) error {
 		_, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{{ID: 1, Attempt: 1, Workflow: "ci.yml", Commit: "abc123", Status: store.CIQueued, Ticket: "acme-2"}}})
 		return err

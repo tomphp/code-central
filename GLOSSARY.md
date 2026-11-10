@@ -213,6 +213,10 @@ _Avoid_: Build broken, red
 The failure option by which the human accepts a CI failed Ticket's failed CI result, for its pushed commit only, so the Factory lands it on its next poll. Offered under Merge + Push only: under Branch + Push the human's merge decides.
 _Avoid_: Override, force land
 
+**Re-run failed jobs**:
+The failure option by which the human asks the CI Watcher to re-run the failed jobs of a CI failed Ticket's failed CI Runs. It records a Re-run request on the pushed commit, and the Ticket's CI result reads running until the CI Watcher reports each run's new attempt. Offered under Merge + Push and Branch + Push.
+_Avoid_: Retry, rebuild
+
 **CI unavailable**:
 The Needs Me reason of a Ticket that has waited 10 minutes or more on CI since its push, while the CI Watcher isn't watching or no CI Runs have been reported for its pushed commit.
 _Avoid_: CI down, CI stuck

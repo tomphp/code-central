@@ -94,9 +94,16 @@ type ticketFile struct {
 }
 
 type pushedCommitFile struct {
-	Commit     string `yaml:"commit"`
-	Pushed     string `yaml:"pushed"`
-	LandAnyway string `yaml:"land_anyway,omitempty"`
+	Commit     string           `yaml:"commit"`
+	Pushed     string           `yaml:"pushed"`
+	LandAnyway string           `yaml:"land_anyway,omitempty"`
+	Rerun      string           `yaml:"rerun,omitempty"`
+	Reruns     []runAttemptFile `yaml:"reruns,omitempty"`
+}
+
+type runAttemptFile struct {
+	ID      int64 `yaml:"id"`
+	Attempt int   `yaml:"attempt"`
 }
 
 // ciRunsFile is projects/<key>/ci-runs.yaml, the Project's CI Runs.
@@ -279,6 +286,14 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 			if p.LandAnyway, err = parseTime(pc.LandAnyway); err != nil {
 				return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].land_anyway", i), Msg: err.Error()}
 			}
+		}
+		if pc.Rerun != "" {
+			if p.Rerun, err = parseTime(pc.Rerun); err != nil {
+				return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].rerun", i), Msg: err.Error()}
+			}
+		}
+		for _, ra := range pc.Reruns {
+			p.Reruns = append(p.Reruns, CIRunAttempt{ID: ra.ID, Attempt: ra.Attempt})
 		}
 		t.PushedCommits = append(t.PushedCommits, p)
 	}
@@ -468,6 +483,12 @@ func encode(record any, project string) (string, []byte, error) {
 			pf := pushedCommitFile{Commit: pc.Commit, Pushed: formatTime(pc.Pushed)}
 			if !pc.LandAnyway.IsZero() {
 				pf.LandAnyway = formatTime(pc.LandAnyway)
+			}
+			if !pc.Rerun.IsZero() {
+				pf.Rerun = formatTime(pc.Rerun)
+			}
+			for _, ra := range pc.Reruns {
+				pf.Reruns = append(pf.Reruns, runAttemptFile{ID: ra.ID, Attempt: ra.Attempt})
 			}
 			f.PushedCommits = append(f.PushedCommits, pf)
 		}

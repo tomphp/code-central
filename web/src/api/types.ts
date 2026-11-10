@@ -281,8 +281,8 @@ export interface CIFailureSummary {
 }
 
 // A failure option the human may choose for a CI failed Ticket, named for
-// its action (code-central-261).
-export type CIFailureOption = "land_anyway";
+// its action (code-central-261, code-central-265).
+export type CIFailureOption = "rerun_ci" | "land_anyway";
 
 // Why a Ticket is CI unavailable: the CI Watcher isn't Watching (with
 // its error's message, if it has one), or no CI Runs have been reported

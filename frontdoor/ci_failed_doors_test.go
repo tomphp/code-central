@@ -79,7 +79,7 @@ func TestAnAcceptedTicketWhoseCIFailedIsInNeedsMeAsCIFailed(t *testing.T) {
 		t.Fatalf("ci failure %+v, want abc123 failing ci.yml", row.CIFailure)
 	}
 	tk := ticket3(t, srv)
-	if tk.NeedsMeReason != core.ReasonCIFailed || !slices.Equal(tk.CIFailureOptions, []string{"land_anyway"}) || tk.LandAnyway {
+	if tk.NeedsMeReason != core.ReasonCIFailed || !slices.Contains(tk.CIFailureOptions, "land_anyway") || tk.LandAnyway {
 		t.Fatalf("reason %q, options %v, land anyway %v: want CI failed offering Land anyway", tk.NeedsMeReason, tk.CIFailureOptions, tk.LandAnyway)
 	}
 }
@@ -185,8 +185,8 @@ func TestLandAnywayIsNotOfferedUnderBranch(t *testing.T) {
 	srv := newServer(t, failedCI)
 	httpOK(t, srv, setLandingMethod(`{"method":"branch","push":true,"remote":"origin"}`))
 	tk := ticket3(t, srv)
-	if tk.NeedsMeReason != core.ReasonCIFailed || tk.CIFailureOptions == nil || len(tk.CIFailureOptions) != 0 {
-		t.Fatalf("reason %q, options %#v: want CI failed with an empty list of options", tk.NeedsMeReason, tk.CIFailureOptions)
+	if tk.NeedsMeReason != core.ReasonCIFailed || tk.CIFailureOptions == nil || slices.Contains(tk.CIFailureOptions, "land_anyway") {
+		t.Fatalf("reason %q, options %#v: want CI failed without Land anyway", tk.NeedsMeReason, tk.CIFailureOptions)
 	}
 	httpRejected(t, srv, landAnyway("3"), core.ActionNotAllowed)
 }
