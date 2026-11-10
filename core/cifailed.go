@@ -50,10 +50,7 @@ func ciFailure(r store.Reader, key string, t store.Ticket, now time.Time) (s CIF
 		return CIFailureSummary{}, time.Time{}, false
 	}
 	s = CIFailureSummary{Commit: latest.Commit, Workflows: []string{}}
-	for _, run := range countedRuns(latest.Commit, mine) {
-		if run.Status != store.CICompleted || !run.Conclusion.Failed() {
-			continue
-		}
+	for _, run := range failedRuns(latest.Commit, mine) {
 		s.Workflows = append(s.Workflows, run.Workflow)
 		if at := run.Finished; !at.IsZero() && (since.IsZero() || at.Before(since)) {
 			since = at
@@ -131,14 +128,15 @@ func whyNotLandAnyway(r store.Reader, key string, t store.Ticket, now time.Time)
 // attempt, recorded on that commit in place of any earlier request. The
 // Ticket's CI result reads running until the CI Watcher, which re-runs
 // the runs' failed jobs, reports each run's new attempt, which answers
-// the request. Asking again while it waits changes nothing.
+// the request, or the request lapses. Asking again while it waits
+// changes nothing.
 func (c *Core) RerunCI(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
 	if err := humanOnly(ctx, "rerun_ci"); err != nil {
 		return Written[TicketView]{}, err
 	}
 	return c.updateTicketIn(key, "rerun_ci", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
 		mine, _ := ticketRuns(r, key, *t, c.now())
-		if len(t.PushedCommits) > 0 && len(pendingReruns(latestPushed(*t), mine)) > 0 && t.State == store.Accepted {
+		if rerunPending(*t, mine, c.now()) && t.State == store.Accepted {
 			return false, nil
 		}
 		if !slices.Contains(ciFailureOptions(r, key, *t, c.now()), OptionRerunCI) {
@@ -146,15 +144,19 @@ func (c *Core) RerunCI(ctx context.Context, key string, in TicketInput) (Written
 		}
 		latest := &t.PushedCommits[len(t.PushedCommits)-1]
 		latest.Reruns = nil
-		for _, run := range countedRuns(latest.Commit, mine) {
-			if run.Status == store.CICompleted && run.Conclusion.Failed() {
-				latest.Reruns = append(latest.Reruns, store.CIRunAttempt{ID: run.ID, Attempt: run.Attempt})
-			}
+		for _, run := range failedRuns(latest.Commit, mine) {
+			latest.Reruns = append(latest.Reruns, store.CIRunAttempt{ID: run.ID, Attempt: run.Attempt})
 		}
 		slices.SortFunc(latest.Reruns, func(a, b store.CIRunAttempt) int { return cmp.Compare(a.ID, b.ID) })
 		latest.Rerun = c.now()
 		return true, nil
 	})
+}
+
+// rerunPending reports whether a Re-run request for t's latest pushed
+// commit waits on the CI Watcher, among t's runs at now.
+func rerunPending(t store.Ticket, runs []store.CIRun, now time.Time) bool {
+	return len(t.PushedCommits) > 0 && len(pendingReruns(latestPushed(t), runs, now)) > 0
 }
 
 // whyNotRerun says why t isn't offered Re-run failed jobs.

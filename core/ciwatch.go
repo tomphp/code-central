@@ -166,12 +166,13 @@ type CIWatch struct {
 }
 
 // CIRerun is one Re-run request: a run that failed on a Ticket's pushed
-// commit, at the attempt that failed.
+// commit, at the attempt that failed, and when the human asked.
 type CIRerun struct {
-	Ticket  string `json:"ticket"`
-	Commit  string `json:"commit"`
-	ID      int64  `json:"id"`
-	Attempt int    `json:"attempt"`
+	Ticket    string    `json:"ticket"`
+	Commit    string    `json:"commit"`
+	ID        int64     `json:"id"`
+	Attempt   int       `json:"attempt"`
+	Requested time.Time `json:"requested"`
 }
 
 // ciReruns is every Re-run request waiting at now, by Ticket, then run. A
@@ -184,8 +185,8 @@ func ciReruns(r store.Reader, key string, now time.Time) []CIRerun {
 		}
 		latest := latestPushed(t)
 		mine, _ := ticketRuns(r, key, t, now)
-		for _, a := range pendingReruns(latest, mine) {
-			out = append(out, CIRerun{Ticket: DisplayID(key, t.Number), Commit: latest.Commit, ID: a.ID, Attempt: a.Attempt})
+		for _, a := range pendingReruns(latest, mine, now) {
+			out = append(out, CIRerun{Ticket: DisplayID(key, t.Number), Commit: latest.Commit, ID: a.ID, Attempt: a.Attempt, Requested: latest.Rerun})
 		}
 	}
 	return out

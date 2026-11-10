@@ -49,7 +49,10 @@ func TestTheCIWatcherRerunsTheFailedJobsAndReportsTheNewAttempt(t *testing.T) {
 	w.ciResult(id, core.CIFailed)
 
 	human := core.WithActor(context.Background(), core.Human)
-	must(t, func() error { _, err := w.srv.Core.RerunCI(human, "acme", core.TicketInput{Ticket: core.Ref(id)}); return err })
+	must(t, func() error {
+		_, err := w.srv.Core.RerunCI(human, "acme", core.TicketInput{Ticket: core.Ref(id)})
+		return err
+	})
 	w.runsAnswer("abc123", listedRun{id: 11, attempt: 2, workflow: "ci.yml", status: "in_progress", updated: "2026-01-05T09:07:00Z"})
 	w.jobsAnswer(11, 2, [2]string{"test", ""})
 	w.waitingPoll()
@@ -92,7 +95,10 @@ func TestTheCIWatcherAsksForAReRunOnce(t *testing.T) {
 	w.ciResult(id, core.CIFailed)
 
 	human := core.WithActor(context.Background(), core.Human)
-	must(t, func() error { _, err := w.srv.Core.RerunCI(human, "acme", core.TicketInput{Ticket: core.Ref(id)}); return err })
+	must(t, func() error {
+		_, err := w.srv.Core.RerunCI(human, "acme", core.TicketInput{Ticket: core.Ref(id)})
+		return err
+	})
 	w.waitingPoll()
 	w.waitingPoll()
 	if n := len(w.rerunCalls()); n != 1 {

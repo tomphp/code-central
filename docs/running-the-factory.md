@@ -434,7 +434,7 @@ acme-shop-5: landed on main at 9c41d07a2b18
 
 Land anyway holds for that pushed commit only: if the Ticket is pushed again, the new push's CI result decides.
 
-**Re-run failed jobs**, for a failure that may be a flake, asks the CI Watcher to re-run each failed run's failed jobs. The Ticket leaves Needs Me and its CI result reads running at once; on its next poll the CI Watcher asks GitHub for the re-run, then reports each run's new attempt, and the Ticket lands if the new attempts pass. If one fails again, the Ticket is CI failed again, with another Notification.
+**Re-run failed jobs**, for a failure that may be a flake, asks the CI Watcher to re-run each failed run's failed jobs. The Ticket leaves Needs Me and its CI result reads running at once; on its next poll the CI Watcher asks GitHub for the re-run, then reports each run's new attempt, and the Ticket lands if the new attempts pass. If one fails again, the Ticket is CI failed again, with another Notification. If GitHub refuses the re-run, say for a run too old to re-run, the request lapses after 10 minutes and the Ticket is CI failed again, so you can choose another option.
 
 The gate holds only while Merge, Push and CI Tracking are all on. Turning CI Tracking off, turning Push off, or switching to Leave as a branch lifts it, and the Factory lands every Ticket waiting on CI on its next poll.
 
