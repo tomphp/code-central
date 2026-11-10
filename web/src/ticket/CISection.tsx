@@ -31,8 +31,9 @@ export function runStatus(run: CIRunView): string {
   return CONCLUSION_LABEL[run.conclusion];
 }
 
-const runName = (run: CIRunView) => run.name || run.workflow;
-const shortCommit = (commit: string) => commit.slice(0, 7);
+// runName is the name a run shows: its workflow's display name, or its file.
+export const runName = (run: CIRunView) => run.name || run.workflow;
+export const shortCommit = (commit: string) => commit.slice(0, 7);
 
 const jobStatus = (job: CIJobView) => (job.conclusion ? CONCLUSION_LABEL[job.conclusion] : "running");
 
