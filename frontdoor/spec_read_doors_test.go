@@ -26,6 +26,19 @@ func TestTheLighterGetSpecThroughEveryDoor(t *testing.T) {
 		map[string]any{"text": "Solution", "level": float64(2)},
 		map[string]any{"text": "Testing Decisions", "level": float64(2)},
 	}
+	onlyTheCutBody := func(t *testing.T, out map[string]any) {
+		if out["body"] != "## Testing Decisions\n\nSeams." {
+			t.Fatalf("body %q", out["body"])
+		}
+		for _, k := range []string{"tickets", "edits"} {
+			if _, ok := out[k]; ok {
+				t.Fatalf("%s returned though not asked for: %v", k, out)
+			}
+		}
+		if !reflect.DeepEqual(out["outline"], outline) {
+			t.Fatalf("outline %v", out["outline"])
+		}
+	}
 	reads := map[string]struct {
 		check func(*testing.T, map[string]any)
 		calls []map[string]any
@@ -49,23 +62,20 @@ func TestTheLighterGetSpecThroughEveryDoor(t *testing.T) {
 			},
 		},
 		"sections": {
-			check: func(t *testing.T, out map[string]any) {
-				if out["body"] != "## Testing Decisions\n\nSeams." {
-					t.Fatalf("body %q", out["body"])
-				}
-				for _, k := range []string{"tickets", "edits"} {
-					if _, ok := out[k]; ok {
-						t.Fatalf("%s returned though not asked for: %v", k, out)
-					}
-				}
-				if !reflect.DeepEqual(out["outline"], outline) {
-					t.Fatalf("outline %v", out["outline"])
-				}
-			},
+			check: onlyTheCutBody,
 			calls: []map[string]any{
 				httpOK(t, srv, httpCall{"GET", "/api/p/acme/specs/1?part=body&section=testing%20decisions", ""}),
 				mcpOK(t, s, "get_spec", map[string]any{"spec": "acme-1", "parts": []string{"body"}, "sections": []string{"testing decisions"}}),
 				cliOK(t, srv, []string{"get-spec", "acme-1", "--part", "body", "--section", "testing decisions"}),
+			},
+		},
+		// Sections without parts read only the body (ticket 318).
+		"sections alone": {
+			check: onlyTheCutBody,
+			calls: []map[string]any{
+				httpOK(t, srv, httpCall{"GET", "/api/p/acme/specs/1?section=testing%20decisions", ""}),
+				mcpOK(t, s, "get_spec", map[string]any{"spec": "acme-1", "sections": []string{"testing decisions"}}),
+				cliOK(t, srv, []string{"get-spec", "acme-1", "--section", "testing decisions"}),
 			},
 		},
 	}
