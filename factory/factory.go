@@ -239,6 +239,10 @@ type factory struct {
 	// warnedRemote is the Push remotes found missing, already warned of
 	// and not back since; the poll's own.
 	warnedRemote map[string]bool
+	// tracksCI is whether the Project's CI Tracking is on, read with the
+	// Landing Method on every poll: while it is, each push for a Ticket
+	// is reported as its pushed commit.
+	tracksCI bool
 
 	// restarted is the saved Claims a stop cut off, to resume as cut off
 	// once a slot is free; the poll's own.

@@ -47,6 +47,7 @@ var migrations = []MigrationStep{
 	{From: 7, Name: "add a Project's CI settings"},
 	{From: 8, Name: "add a Project's CI Rules"},
 	{From: 9, Name: "add the gh path Option"},
+	{From: 10, Name: "add a Ticket's pushed commits and a Project's CI Runs"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

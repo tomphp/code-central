@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
@@ -44,6 +45,20 @@ type Provider interface {
 	// CheckAccess checks the CI Watcher can watch the repository: a
 	// result with no Problem when it can, else what is wrong and its fix.
 	CheckAccess(ctx context.Context) core.CICheckResult
+	// RunsForCommit lists the workflow runs started for commit, with
+	// their statuses and conclusions mapped to Code Central's and no jobs.
+	RunsForCommit(ctx context.Context, commit string) ([]Run, error)
+	// Jobs lists the jobs of one attempt of a run.
+	Jobs(ctx context.Context, id int64, attempt int) ([]core.CIJobView, error)
+}
+
+// Run is one workflow run as a CI Provider lists it: the CI Run to
+// report, with nothing tracked yet and no jobs, and when the provider
+// last changed it, so the CI Watcher fetches jobs only for runs that
+// changed.
+type Run struct {
+	core.CIRunView
+	Updated time.Time
 }
 
 // NewProvider is the CI Provider provider for repository, finding gh

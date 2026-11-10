@@ -239,6 +239,9 @@ func (s *FileStore) loadProject(key string) error {
 		}
 	}
 	s.setProject(p)
+	if err := s.loadCIRuns(key); err != nil {
+		return err
+	}
 
 	for _, kind := range []string{"specs", "tickets"} {
 		ext := map[string]string{"specs": ".md", "tickets": ".yaml"}[kind]
@@ -289,6 +292,28 @@ func (s *FileStore) loadProject(key string) error {
 			}
 		}
 	}
+	return nil
+}
+
+// ciRunsName is the file in a Project's folder holding its CI Runs.
+const ciRunsName = "ci-runs.yaml"
+
+// loadCIRuns reads the Project's ci-runs.yaml, if it has one.
+func (s *FileStore) loadCIRuns(key string) error {
+	rel := "projects/" + key + "/" + ciRunsName
+	data, err := os.ReadFile(filepath.Join(s.dir, rel))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return &LoadError{File: rel, Field: "file", Msg: err.Error()}
+	}
+	runs, lerr := decodeCIRuns(data)
+	if lerr != nil {
+		lerr.File = rel
+		return lerr
+	}
+	s.projects[key].ciRuns = CIRuns{Runs: runs}
 	return nil
 }
 

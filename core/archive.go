@@ -140,6 +140,13 @@ func (w guardedWriter) PutTicket(key string, t store.Ticket) error {
 	return w.Writer.PutTicket(key, t)
 }
 
+func (w guardedWriter) PutCIRuns(key string, runs []store.CIRun) error {
+	if err := writable(w, key); err != nil {
+		return err
+	}
+	return w.Writer.PutCIRuns(key, runs)
+}
+
 func (w guardedWriter) PutImport(key string, im store.Import) error {
 	if err := writable(w, key); err != nil {
 		return err

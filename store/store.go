@@ -326,13 +326,113 @@ type Ticket struct {
 	// work's branch and its head commit. Free-form, never parsed.
 	Branch string
 	Commit string
-	Claims []Claim
-	Rounds []Round
+	// PushedCommits are the commits the Factory pushed for the Ticket
+	// while CI Tracking was on, oldest first: the latest is the one its CI
+	// result comes from, and the older ones stay as its history.
+	PushedCommits []PushedCommit
+	Claims        []Claim
+	Rounds        []Round
 	// FailureReports are numbered and never edited.
 	FailureReports []FailureReport
 	Comments       []Comment
 	Moves          []Move
 	Edits          []Edit
+}
+
+// PushedCommit is one commit the Factory pushed for a Ticket, and when
+// Code Central heard of it.
+type PushedCommit struct {
+	Commit string
+	Pushed time.Time
+}
+
+// CIRunStatus is where a CI Run stands, as Code Central has it.
+type CIRunStatus string
+
+// The CI Run statuses.
+const (
+	CIQueued     CIRunStatus = "queued"
+	CIInProgress CIRunStatus = "in_progress"
+	CICompleted  CIRunStatus = "completed"
+)
+
+// CIRunStatuses lists every CIRunStatus.
+var CIRunStatuses = []CIRunStatus{CIQueued, CIInProgress, CICompleted}
+
+// Valid reports whether s is one of the CIRunStatuses.
+func (s CIRunStatus) Valid() bool { return slices.Contains(CIRunStatuses, s) }
+
+// CIConclusion is how a finished CI Run or job ended, as Code Central has
+// it; empty while it hasn't.
+type CIConclusion string
+
+// The CI conclusions.
+const (
+	CISuccess   CIConclusion = "success"
+	CIFailure   CIConclusion = "failure"
+	CICancelled CIConclusion = "cancelled"
+	CITimedOut  CIConclusion = "timed_out"
+	CISkipped   CIConclusion = "skipped"
+	CINeutral   CIConclusion = "neutral"
+)
+
+// CIConclusions lists every CIConclusion.
+var CIConclusions = []CIConclusion{CISuccess, CIFailure, CICancelled, CITimedOut, CISkipped, CINeutral}
+
+// Valid reports whether c is one of the CIConclusions, or empty.
+func (c CIConclusion) Valid() bool { return c == "" || slices.Contains(CIConclusions, c) }
+
+// CIRun is one attempt of one workflow run the CI Provider reported,
+// keyed by the provider's run ID and the attempt. It is tracked against
+// a Ticket or a CI Rule (the Spec number naming it). A run of an Ignored
+// workflow is kept, marked Ignored.
+type CIRun struct {
+	ID      int64
+	Attempt int
+	// Workflow is the workflow file's base name, such as ci.yml, and Name
+	// the name it shows.
+	Workflow   string
+	Name       string
+	Branch     string
+	Commit     string
+	Status     CIRunStatus
+	Conclusion CIConclusion
+	// Started and Finished are zero until the run starts and finishes.
+	Started  time.Time
+	Finished time.Time
+	URL      string
+	Jobs     []CIJob
+	// Ticket and Rule are what it is tracked against: a Ticket's number,
+	// or a CI Rule's Spec number; the other is 0.
+	Ticket  int
+	Rule    int
+	Ignored bool
+}
+
+// CIJob is one job of a CI Run: its conclusion is empty until it ends.
+type CIJob struct {
+	Name       string
+	Conclusion CIConclusion
+	URL        string
+}
+
+func (r CIRun) clone() CIRun {
+	r.Jobs = slices.Clone(r.Jobs)
+	return r
+}
+
+// CIRuns is a Project's CI Runs, written whole as one record, apart from
+// its Tickets so frequent run updates don't rewrite Ticket files.
+type CIRuns struct {
+	Runs []CIRun
+}
+
+func (rs CIRuns) clone() CIRuns {
+	out := CIRuns{Runs: make([]CIRun, 0, len(rs.Runs))}
+	for _, r := range rs.Runs {
+		out.Runs = append(out.Runs, r.clone())
+	}
+	return out
 }
 
 // FocusClear is what Focus Mode shows when nothing needs the human.
@@ -387,6 +487,8 @@ type Reader interface {
 	NextNumber(project string) int
 	// Options is always a whole value: the defaults until any are written.
 	Options() Options
+	// CIRuns is the project's CI Runs, in the order they were written.
+	CIRuns(project string) []CIRun
 }
 
 // Writer is a Reader that can also write one record.
@@ -401,6 +503,8 @@ type Writer interface {
 	PutImport(project string, im Import) error
 	// PutOptions replaces the Options whole. It touches no Project.
 	PutOptions(Options) error
+	// PutCIRuns replaces the project's CI Runs whole.
+	PutCIRuns(project string, runs []CIRun) error
 }
 
 // Import is a batch of new Specs and Tickets written all or nothing.
@@ -454,6 +558,7 @@ func (t Ticket) clone() Ticket {
 	t.Tags = maps.Clone(t.Tags)
 	t.BlockedBy = slices.Clone(t.BlockedBy)
 	t.Replacements = slices.Clone(t.Replacements)
+	t.PushedCommits = slices.Clone(t.PushedCommits)
 	t.Claims = slices.Clone(t.Claims)
 	t.Rounds = slices.Clone(t.Rounds)
 	for i := range t.Rounds {

@@ -84,12 +84,47 @@ type ticketFile struct {
 	Description    string              `yaml:"description"`
 	Branch         string              `yaml:"branch,omitempty"`
 	Commit         string              `yaml:"commit,omitempty"`
+	PushedCommits  []pushedCommitFile  `yaml:"pushed_commits,omitempty"`
 	Claims         []claimFile         `yaml:"claims"`
 	Rounds         []roundFile         `yaml:"rounds"`
 	FailureReports []failureReportFile `yaml:"failure_reports"`
 	Comments       []commentFile       `yaml:"comments"`
 	Moves          []moveFile          `yaml:"moves"`
 	Edits          []editFile          `yaml:"edits"`
+}
+
+type pushedCommitFile struct {
+	Commit string `yaml:"commit"`
+	Pushed string `yaml:"pushed"`
+}
+
+// ciRunsFile is projects/<key>/ci-runs.yaml, the Project's CI Runs.
+type ciRunsFile struct {
+	Runs []ciRunFile `yaml:"runs"`
+}
+
+type ciRunFile struct {
+	ID         int64       `yaml:"id"`
+	Attempt    int         `yaml:"attempt"`
+	Workflow   string      `yaml:"workflow"`
+	Name       string      `yaml:"name"`
+	Branch     string      `yaml:"branch"`
+	Commit     string      `yaml:"commit"`
+	Status     string      `yaml:"status"`
+	Conclusion string      `yaml:"conclusion,omitempty"`
+	Started    string      `yaml:"started,omitempty"`
+	Finished   string      `yaml:"finished,omitempty"`
+	URL        string      `yaml:"url"`
+	Jobs       []ciJobFile `yaml:"jobs,omitempty"`
+	Ticket     int         `yaml:"ticket,omitempty"`
+	Rule       int         `yaml:"rule,omitempty"`
+	Ignored    bool        `yaml:"ignored,omitempty"`
+}
+
+type ciJobFile struct {
+	Name       string `yaml:"name"`
+	Conclusion string `yaml:"conclusion,omitempty"`
+	URL        string `yaml:"url"`
 }
 
 type editFile struct {
@@ -231,6 +266,16 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	if t.Updated, err = parseTime(f.Updated); err != nil {
 		return Ticket{}, &LoadError{Field: "updated", Msg: err.Error()}
 	}
+	for i, pc := range f.PushedCommits {
+		p := PushedCommit{Commit: pc.Commit}
+		if p.Commit == "" {
+			return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].commit", i), Msg: "required"}
+		}
+		if p.Pushed, err = parseTime(pc.Pushed); err != nil {
+			return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].pushed", i), Msg: err.Error()}
+		}
+		t.PushedCommits = append(t.PushedCommits, p)
+	}
 	for i, c := range f.Claims {
 		cl := Claim{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, EndedBy: c.EndedBy}
 		field := fmt.Sprintf("claims[%d]", i)
@@ -285,6 +330,47 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		return Ticket{}, err.(*LoadError)
 	}
 	return t, nil
+}
+
+// decodeCIRuns decodes ci-runs.yaml, checking each run's status and
+// conclusions.
+func decodeCIRuns(data []byte) ([]CIRun, *LoadError) {
+	var f ciRunsFile
+	if field, err := decodeStrict(data, &f); err != nil {
+		return nil, &LoadError{Field: field, Msg: err.Error()}
+	}
+	var out []CIRun
+	for i, rf := range f.Runs {
+		field := fmt.Sprintf("runs[%d]", i)
+		r := CIRun{ID: rf.ID, Attempt: rf.Attempt, Workflow: rf.Workflow, Name: rf.Name, Branch: rf.Branch, Commit: rf.Commit,
+			Status: CIRunStatus(rf.Status), Conclusion: CIConclusion(rf.Conclusion), URL: rf.URL, Ticket: rf.Ticket, Rule: rf.Rule, Ignored: rf.Ignored}
+		if !r.Status.Valid() {
+			return nil, &LoadError{Field: field + ".status", Msg: fmt.Sprintf("unknown CI Run status %q", rf.Status)}
+		}
+		if !r.Conclusion.Valid() {
+			return nil, &LoadError{Field: field + ".conclusion", Msg: fmt.Sprintf("unknown CI conclusion %q", rf.Conclusion)}
+		}
+		var err error
+		if rf.Started != "" {
+			if r.Started, err = parseTime(rf.Started); err != nil {
+				return nil, &LoadError{Field: field + ".started", Msg: err.Error()}
+			}
+		}
+		if rf.Finished != "" {
+			if r.Finished, err = parseTime(rf.Finished); err != nil {
+				return nil, &LoadError{Field: field + ".finished", Msg: err.Error()}
+			}
+		}
+		for j, jf := range rf.Jobs {
+			job := CIJob{Name: jf.Name, Conclusion: CIConclusion(jf.Conclusion), URL: jf.URL}
+			if !job.Conclusion.Valid() {
+				return nil, &LoadError{Field: fmt.Sprintf("%s.jobs[%d].conclusion", field, j), Msg: fmt.Sprintf("unknown CI conclusion %q", jf.Conclusion)}
+			}
+			r.Jobs = append(r.Jobs, job)
+		}
+		out = append(out, r)
+	}
+	return out, nil
 }
 
 func decodeRounds(rs []roundFile) ([]Round, error) {
@@ -372,6 +458,9 @@ func encode(record any, project string) (string, []byte, error) {
 			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},
 			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
 		}
+		for _, pc := range r.PushedCommits {
+			f.PushedCommits = append(f.PushedCommits, pushedCommitFile{Commit: pc.Commit, Pushed: formatTime(pc.Pushed)})
+		}
 		for _, c := range r.Claims {
 			cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Started: formatTime(c.Started), EndedBy: c.EndedBy}
 			if !c.Ended.IsZero() {
@@ -402,6 +491,19 @@ func encode(record any, project string) (string, []byte, error) {
 		}
 		for _, m := range r.Moves {
 			f.Moves = append(f.Moves, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via, Commit: m.Commit})
+		}
+		data, err = encodeYAML(f)
+	case CIRuns:
+		rel = filepath.Join("projects", project, ciRunsName)
+		f := ciRunsFile{Runs: []ciRunFile{}}
+		for _, run := range r.Runs {
+			rf := ciRunFile{ID: run.ID, Attempt: run.Attempt, Workflow: run.Workflow, Name: run.Name, Branch: run.Branch, Commit: run.Commit,
+				Status: string(run.Status), Conclusion: string(run.Conclusion), Started: formatOptionalTime(run.Started), Finished: formatOptionalTime(run.Finished),
+				URL: run.URL, Ticket: run.Ticket, Rule: run.Rule, Ignored: run.Ignored}
+			for _, j := range run.Jobs {
+				rf.Jobs = append(rf.Jobs, ciJobFile{Name: j.Name, Conclusion: string(j.Conclusion), URL: j.URL})
+			}
+			f.Runs = append(f.Runs, rf)
 		}
 		data, err = encodeYAML(f)
 	default:

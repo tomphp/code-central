@@ -149,8 +149,15 @@ type TicketView struct {
 	Description  string            `json:"description"`
 	// Branch and Commit are the work's branch and head commit, as the
 	// last finish naming them gave them.
-	Branch         string              `json:"branch,omitempty"`
-	Commit         string              `json:"commit,omitempty"`
+	Branch string `json:"branch,omitempty"`
+	Commit string `json:"commit,omitempty"`
+	// PushedCommit is the latest commit the Factory pushed for the Ticket
+	// while CI Tracking was on, and CIResult the CI result of its runs;
+	// both left out while it has none. CIRuns are every CI Run tracked
+	// against it, the latest pushed commit's first. Computed on read.
+	PushedCommit   *PushedCommitView   `json:"pushed_commit,omitempty"`
+	CIResult       CIResult            `json:"ci_result,omitempty"`
+	CIRuns         []CIRunView         `json:"ci_runs,omitempty"`
 	Claims         []ClaimView         `json:"claims,omitzero"`
 	Rounds         []RoundView         `json:"rounds,omitzero"`
 	FailureReports []FailureReportView `json:"failure_reports,omitzero"`
@@ -527,6 +534,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	for _, m := range t.Moves {
 		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit})
 	}
+	v.PushedCommit, v.CIResult, v.CIRuns = ticketCI(r, key, t)
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = c.reasonOf(r, key, t)

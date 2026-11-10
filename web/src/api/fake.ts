@@ -72,11 +72,14 @@ import {
   type HeldSessionEvent,
   type LatestEvent,
   type LinkedRow,
+  type CIResult,
   type CIRule,
+  type CIRunView,
   type CIRuleChange,
   type CISettings,
   type CIWatcherReport,
   type CIWatcherStatus,
+  type PushedCommitView,
   type CITrackingChange,
   type Landing,
   MAP_LABEL,
@@ -325,6 +328,10 @@ export class FakeApi implements Api {
   }
   private projects = new Map<string, FakeProject>();
   private tickets = new Map<string, TicketView>();
+  // pushedCommits are each Ticket's pushed commits, oldest first, and
+  // ciRuns each Project's CI Runs (code-central-256).
+  private pushedCommits = new Map<string, PushedCommitView[]>();
+  private ciRuns = new Map<string, CIRunView[]>();
   private specs = new Map<string, SpecView>();
   private groups: { reason: NeedsMeReason; tickets: NeedsMeRow[] }[] = [];
   private subs = new Set<EventHandlers>();
@@ -935,6 +942,61 @@ export class FakeApi implements Api {
     ruleOn(p, spec);
     this.setCI(p, { ...p.ci, rules: p.ci.rules.filter((r) => r.spec !== spec) });
     return this.projectView(p);
+  }
+
+  // reportPushedCommit is the Factory's report of the commit it pushed for
+  // an Accepted or In Review Ticket (code-central-256), tracked only while
+  // CI Tracking and Push are on.
+  async reportPushedCommit(key: string, id: string, commit: string): Promise<void> {
+    const p = this.writable(key);
+    const t = this.ticket(key, id);
+    if (t.state !== "Accepted" && t.state !== "In Review") {
+      throw new ApiError(403, "action_not_allowed", `${t.id} is ${t.state}: only an Accepted or In Review Ticket is pushed`);
+    }
+    const pushed = this.pushedCommits.get(t.id) ?? [];
+    if (!p.ci.tracking || !p.landing.push || pushed.at(-1)?.commit === commit) return;
+    this.pushedCommits.set(t.id, [...pushed, { commit, pushed: this.now.toISOString() }]);
+    this.trackCI(key, t);
+  }
+
+  // reportCIRuns is the CI Watcher's report of CI Runs (code-central-256),
+  // upserted by run ID and attempt, a run of an Ignored workflow marked
+  // ignored; refused while CI Tracking is off.
+  async reportCIRuns(key: string, runs: Omit<CIRunView, "ignored">[]): Promise<void> {
+    const p = this.writable(key);
+    if (!p.ci.tracking) throw new ApiError(403, "action_not_allowed", `CI Tracking is off on ${key}, so it tracks no CI Runs`);
+    const all = this.ciRuns.get(key) ?? [];
+    for (const r of runs) {
+      const run = { ...structuredClone(r), ignored: p.ci.ignored_workflows.includes(r.workflow) };
+      const at = all.findIndex((x) => x.id === run.id && x.attempt === run.attempt);
+      if (at < 0) all.push(run);
+      else all[at] = run;
+    }
+    this.ciRuns.set(key, all);
+    for (const id of new Set(runs.map((r) => r.ticket).filter((t) => t !== undefined))) this.trackCI(key, this.ticket(key, id));
+  }
+
+  // trackCI works t's pushed commit, CI Runs and CI result out, as core's
+  // ticketCI does on read.
+  private trackCI(key: string, t: TicketView) {
+    const pushed = this.pushedCommits.get(t.id) ?? [];
+    const latest = pushed.at(-1);
+    if (!latest) return;
+    const order = (commit: string) => pushed.length - 1 - pushed.findIndex((c) => c.commit === commit);
+    const mine = (this.ciRuns.get(key) ?? []).filter((r) => r.ticket === t.id).sort((a, b) => order(a.commit) - order(b.commit));
+    const counted = new Map<number, CIRunView>();
+    for (const r of mine) {
+      if (r.commit !== latest.commit || r.ignored) continue;
+      if ((counted.get(r.id)?.attempt ?? 0) < r.attempt) counted.set(r.id, r);
+    }
+    const finished = [...counted.values()];
+    const ci_result: CIResult =
+      finished.length === 0 || finished.some((r) => r.status !== "completed")
+        ? "running"
+        : finished.some((r) => r.conclusion === "failure" || r.conclusion === "cancelled" || r.conclusion === "timed_out")
+          ? "failed"
+          : "passed";
+    this.updateTicket(t.id, { pushed_commit: latest, ci_result, ...(mine.length > 0 && { ci_runs: structuredClone(mine) }) });
   }
 
   private setCI(p: FakeProject, ci: CISettings) {

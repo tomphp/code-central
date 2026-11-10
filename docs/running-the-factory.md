@@ -394,3 +394,11 @@ acme-shop-5: can't push yet: couldn't push acme-shop-5 to origin
 > It stays Accepted and the Factory tries again on every poll.
 
 A branch you merge into the base by hand lands as under Branch, whether or not it was pushed. If you merge it on the host instead, pull the base, and the Factory lands it on its next poll.
+
+With [CI Tracking](setting-up-a-project.md#watching-ci) on as well, the Factory reports each push it makes for a Ticket as the Ticket's pushed commit, once, before landing it: the base's commit on the remote under Merge + Push, the branch's under Branch + Push. The CI Watcher then follows the runs GitHub starts for it:
+
+```text
+acme-shop-5: pushed main to origin
+acme-shop-5: CI tracks main at 9c41d07a2b18
+acme-shop-5: landed on main at 9c41d07a2b18
+```

@@ -7,14 +7,19 @@ package ciwatcher
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/store"
 )
 
 // GitHubActions is the GitHub Actions CI Provider for one repository.
@@ -148,4 +153,133 @@ func firstLine(s string) string {
 		}
 	}
 	return ""
+}
+
+// ghRun is a workflow run as GitHub's REST API gives it.
+type ghRun struct {
+	ID         int64     `json:"id"`
+	Attempt    int       `json:"run_attempt"`
+	Name       string    `json:"name"`
+	Path       string    `json:"path"`
+	Branch     string    `json:"head_branch"`
+	Commit     string    `json:"head_sha"`
+	Status     string    `json:"status"`
+	Conclusion string    `json:"conclusion"`
+	Started    time.Time `json:"run_started_at"`
+	Updated    time.Time `json:"updated_at"`
+	URL        string    `json:"html_url"`
+}
+
+// ghJob is one job of a run as GitHub's REST API gives it.
+type ghJob struct {
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+	URL        string `json:"html_url"`
+}
+
+// RunsForCommit lists the workflow runs GitHub started for commit.
+func (g *GitHubActions) RunsForCommit(ctx context.Context, commit string) ([]Run, error) {
+	var out struct {
+		Runs []ghRun `json:"workflow_runs"`
+	}
+	if err := g.api(ctx, fmt.Sprintf("repos/%s/actions/runs?head_sha=%s&per_page=100", g.Repository, url.QueryEscape(commit)), &out); err != nil {
+		return nil, err
+	}
+	var runs []Run
+	for _, r := range out.Runs {
+		run := Run{Updated: r.Updated, CIRunView: core.CIRunView{ID: r.ID, Attempt: max(r.Attempt, 1), Workflow: workflowName(r.Path), Name: r.Name,
+			Branch: r.Branch, Commit: r.Commit, Status: runStatus(r.Status), URL: r.URL}}
+		if run.Status == store.CICompleted {
+			run.Conclusion = conclusion(r.Conclusion)
+			if !r.Updated.IsZero() {
+				at := r.Updated.UTC()
+				run.Finished = &at
+			}
+		}
+		if !r.Started.IsZero() {
+			at := r.Started.UTC()
+			run.Started = &at
+		}
+		runs = append(runs, run)
+	}
+	return runs, nil
+}
+
+// Jobs lists the jobs of one attempt of a run.
+func (g *GitHubActions) Jobs(ctx context.Context, id int64, attempt int) ([]core.CIJobView, error) {
+	var out struct {
+		Jobs []ghJob `json:"jobs"`
+	}
+	if err := g.api(ctx, fmt.Sprintf("repos/%s/actions/runs/%d/attempts/%d/jobs?per_page=100", g.Repository, id, attempt), &out); err != nil {
+		return nil, err
+	}
+	jobs := []core.CIJobView{}
+	for _, j := range out.Jobs {
+		job := core.CIJobView{Name: j.Name, URL: j.URL}
+		if runStatus(j.Status) == store.CICompleted {
+			job.Conclusion = conclusion(j.Conclusion)
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs, nil
+}
+
+// api reads path from GitHub's REST API through gh into out.
+func (g *GitHubActions) api(ctx context.Context, path string, out any) error {
+	gh, missing := g.FindGH()
+	if missing != nil {
+		return errors.New(missing.Reason)
+	}
+	cmd := exec.CommandContext(ctx, gh, "api", path)
+	cmd.Env = append(append([]string{}, g.Env.Environ...), "GH_PROMPT_DISABLED=1", "NO_COLOR=1")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("gh api %s: %v: %s", path, err, firstLine(stderr.String()))
+	}
+	if err := json.Unmarshal(stdout.Bytes(), out); err != nil {
+		return fmt.Errorf("gh api %s: %v", path, err)
+	}
+	return nil
+}
+
+// workflowName is a workflow's file base name from the run's workflow
+// path, such as .github/workflows/ci.yml, which may name a ref after @.
+func workflowName(p string) string {
+	p, _, _ = strings.Cut(p, "@")
+	return path.Base(p)
+}
+
+// runStatus maps a GitHub run or job status to Code Central's: requested,
+// waiting and pending are all still queued.
+func runStatus(s string) store.CIRunStatus {
+	switch s {
+	case "completed":
+		return store.CICompleted
+	case "in_progress":
+		return store.CIInProgress
+	default:
+		return store.CIQueued
+	}
+}
+
+// conclusion maps a GitHub conclusion to Code Central's: a run that
+// needed an action or failed to start failed, and a stale one was
+// cancelled.
+func conclusion(c string) store.CIConclusion {
+	switch c {
+	case "success":
+		return store.CISuccess
+	case "cancelled", "stale":
+		return store.CICancelled
+	case "timed_out":
+		return store.CITimedOut
+	case "skipped":
+		return store.CISkipped
+	case "neutral":
+		return store.CINeutral
+	default:
+		return store.CIFailure
+	}
 }

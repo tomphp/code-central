@@ -4,7 +4,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { FakeApi } from "../api/fake";
-import type { TicketView } from "../api/types";
+import type { CIRunView, TicketView } from "../api/types";
 import { TicketDetail } from "./TicketDetail";
 
 const at = (fake: FakeApi, minutesAgo: number) => new Date(fake.now.getTime() - minutesAgo * 60_000).toISOString();
@@ -216,5 +216,96 @@ describe("a Prototype's Ticket detail", () => {
 
   it("shows no line without the Tag", () => {
     expect(line(prototype())).toBeNull();
+  });
+});
+
+// A Ticket's CI section (code-central-256).
+describe("the Ticket detail's CI section", () => {
+  const run = (id: number, workflow: string, commit: string, more: Partial<CIRunView> = {}): CIRunView => ({
+    id,
+    attempt: 1,
+    workflow,
+    name: `Build ${workflow}`,
+    branch: "main",
+    commit,
+    status: "completed",
+    conclusion: "success",
+    url: `https://github.com/acme/web/actions/runs/${id}`,
+    jobs: [],
+    ticket: "acme-9",
+    ignored: false,
+    ...more,
+  });
+
+  function pushed(runs: CIRunView[], ci_result: TicketView["ci_result"]) {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    const t = fake.addTicket("acme", {
+      title: "Pushed",
+      state: "Accepted",
+      pushed_commit: { commit: "def4567890", pushed: fake.now.toISOString() },
+      ci_result,
+      ci_runs: runs,
+    });
+    return { fake, t };
+  }
+
+  it("isn't there for a Ticket never pushed", () => {
+    const { fake, t } = seeded();
+    expect(within(renderDetail(fake, t)).queryByRole("region", { name: "CI" })).toBeNull();
+  });
+
+  it("isn't there for a pushed Ticket with no CI Runs reported yet", () => {
+    const { fake, t } = pushed([], "running");
+    expect(within(renderDetail(fake, t)).queryByRole("region", { name: "CI" })).toBeNull();
+  });
+
+  it("shows the CI result and each workflow with its status, jobs and link", () => {
+    const { fake, t } = pushed(
+      [
+        run(1, "ci.yml", "def4567890", {
+          conclusion: "failure",
+          jobs: [
+            { name: "test", conclusion: "failure", url: "https://github.com/acme/web/actions/runs/1/job/1" },
+            { name: "lint", conclusion: "success", url: "https://github.com/acme/web/actions/runs/1/job/2" },
+          ],
+        }),
+        run(2, "deploy.yml", "def4567890", { status: "in_progress", conclusion: undefined, jobs: [{ name: "ship", url: "https://github.com/acme/web/actions/runs/2/job/1" }] }),
+      ],
+      "failed",
+    );
+    const ci = within(renderDetail(fake, t)).getByRole("region", { name: "CI" });
+    expect(within(ci).getByRole("heading")).toHaveTextContent("CI failed def4567");
+
+    const failed = within(ci).getByRole("listitem", { name: "Build ci.yml" });
+    expect(within(failed).getByRole("link", { name: "Build ci.yml" })).toHaveAttribute("href", "https://github.com/acme/web/actions/runs/1");
+    expect(failed).toHaveTextContent("ci.yml failed");
+    expect(within(failed).getByRole("link", { name: "test" })).toHaveAttribute("href", "https://github.com/acme/web/actions/runs/1/job/1");
+    expect(failed).toHaveTextContent("test failed");
+    expect(failed).toHaveTextContent("lint passed");
+
+    const running = within(ci).getByRole("listitem", { name: "Build deploy.yml" });
+    expect(running).toHaveTextContent("deploy.yml running");
+    expect(running).toHaveTextContent("ship running");
+  });
+
+  it("greys an ignored run and marks it ignored", () => {
+    const { fake, t } = pushed([run(1, "ci.yml", "def4567890"), run(2, "nightly.yml", "def4567890", { conclusion: "failure", ignored: true })], "passed");
+    const ci = within(renderDetail(fake, t)).getByRole("region", { name: "CI" });
+    const ignored = within(ci).getByRole("listitem", { name: "Build nightly.yml" });
+    expect(ignored).toHaveClass("ignored");
+    expect(within(ignored).getByText("ignored")).toBeInTheDocument();
+    const counted = within(ci).getByRole("listitem", { name: "Build ci.yml" });
+    expect(counted).not.toHaveClass("ignored");
+    expect(within(counted).queryByText("ignored")).toBeNull();
+  });
+
+  it("keeps an earlier push's runs below, folded away", async () => {
+    const { fake, t } = pushed([run(2, "ci.yml", "def4567890"), run(1, "ci.yml", "abc1234567", { conclusion: "failure" })], "passed");
+    const ci = within(renderDetail(fake, t)).getByRole("region", { name: "CI" });
+    const earlier = within(ci).getByText("Earlier pushes (1 run)");
+    expect(within(ci).getByRole("heading")).toHaveTextContent("CI passed def4567");
+    await userEvent.click(earlier);
+    expect(ci).toHaveTextContent("abc1234");
   });
 });

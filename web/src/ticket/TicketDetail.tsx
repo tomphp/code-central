@@ -11,6 +11,7 @@ import { LatestEventLine } from "../LatestEvent";
 import { LinkBadge } from "./LinkBadge";
 import { Live } from "./Live";
 import { useAct } from "./useAct";
+import { CISection } from "./CISection";
 
 export interface TicketPaneProps {
   api: Api;
@@ -44,7 +45,7 @@ export function TicketPane(props: TicketPaneProps) {
 export type TicketDetailProps = TicketPaneProps;
 
 // TicketDetail is everything about a Ticket below its action panel: Spec,
-// Labels, description, Blockers, Claim activity with each Claim's Live
+// Labels, description, Blockers, its CI section when it has CI Runs, Claim activity with each Claim's Live
 // section, move, and a collapsed history of moves, comments and edits
 // merged by time.
 export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketDetailProps) {
@@ -82,6 +83,7 @@ export function TicketDetail({ api, project, ticket: t, now, openSpec }: TicketD
           ))}
         </p>
       )}
+      <CISection ticket={t} />
       {claims.length > 0 && (
         <ul aria-label="Claims" className="claims muted small">
           {claims.map((c) => (

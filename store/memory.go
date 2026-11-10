@@ -21,6 +21,7 @@ type projectData struct {
 	project Project
 	specs   map[int]Spec
 	tickets map[int]Ticket
+	ciRuns  CIRuns
 }
 
 func newIndex() *index {
@@ -122,6 +123,14 @@ func (r reader) NextNumber(project string) int {
 
 func (r reader) Options() Options { return r.x.options }
 
+func (r reader) CIRuns(project string) []CIRun {
+	p, ok := r.x.projects[project]
+	if !ok {
+		return nil
+	}
+	return p.ciRuns.clone().Runs
+}
+
 type writer struct {
 	reader
 	wrote bool
@@ -216,6 +225,15 @@ func (w *writer) PutOptions(o Options) error {
 		return err
 	}
 	w.x.options = o
+	return nil
+}
+
+func (w *writer) PutCIRuns(project string, runs []CIRun) error {
+	rs := CIRuns{Runs: runs}.clone()
+	if err := w.begin(rs, project); err != nil {
+		return err
+	}
+	w.x.projects[project].ciRuns = rs
 	return nil
 }
 

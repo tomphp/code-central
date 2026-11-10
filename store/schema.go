@@ -24,6 +24,7 @@ func Schema() string {
 	file("projects/<key>/project.yaml", projectFile{})
 	file("projects/<key>/specs/<n>.md: YAML frontmatter between --- lines, then the Markdown body", specFront{})
 	file("projects/<key>/tickets/<n>.yaml", ticketFile{})
+	file("projects/<key>/ci-runs.yaml (optional): the Project's CI Runs", ciRunsFile{})
 
 	values := func(name string, vs []string) {
 		fmt.Fprintf(&b, "%s: %s\n", name, strings.Join(vs, ", "))
@@ -37,6 +38,15 @@ func Schema() string {
 	values("  project landing.method (no landing: merge, push false, remote origin)", landingMethodNames())
 	values("  project ci.provider (no ci: tracking off, github_actions)", ciProviderNames())
 	values("  ticket state, moves[].from, moves[].to", states)
+	var statuses, conclusions []string
+	for _, s := range CIRunStatuses {
+		statuses = append(statuses, string(s))
+	}
+	for _, c := range CIConclusions {
+		conclusions = append(conclusions, string(c))
+	}
+	values("  ci run status", statuses)
+	values("  ci run conclusion, jobs[].conclusion (optional)", conclusions)
 	values("  rounds[].questions[].status", []string{string(QuestionOpen), string(QuestionAnswered), string(QuestionDismissed)})
 	var external []string
 	for _, x := range ExternalStates {

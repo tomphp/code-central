@@ -108,6 +108,9 @@ apiContract("FakeApi", async (): Promise<Driver> => {
     // code-central-251
     reportPushRemote: async (key, url) => fake.reportPushRemote(key, url),
     reportCIWatcherStatus: async (key, status) => fake.reportCIWatcherStatus(key, status),
+    // code-central-256
+    reportPushedCommit: async (key, id, commit) => fake.reportPushedCommit(key, id, commit),
+    reportCIRuns: async (key, runs) => fake.reportCIRuns(key, runs),
     logOutOfGH: async () =>
       fake.seedCICheck({
         reason: "gh isn't logged in to GitHub: You are not logged into any GitHub hosts. To log in, run: gh auth login",
