@@ -38,6 +38,10 @@ var outageErrors = map[string]bool{
 // the human can fix.
 const authFailed = "authentication_failed"
 
+// modelNotFound is the API error of a model claude rejects: the turn's
+// model, not the service or the Factory, is at fault, so its Claim fails.
+const modelNotFound = "model_not_found"
+
 // apiError is the API error the turn ended on, from its messages or its
 // result's terminal reason.
 func (t turnEnd) apiError() string {

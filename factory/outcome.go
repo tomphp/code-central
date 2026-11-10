@@ -53,6 +53,12 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, end turnEnd) store.Sta
 		f.cutOff(c, apiErr)
 		return tk.State
 	}
+	if apiErr == modelNotFound {
+		if f.reportRejectedModel(ctx, t, end) {
+			return store.Failed
+		}
+		return tk.State
+	}
 	if len(denials) > 0 {
 		if f.postDenials(ctx, t, denials) {
 			return store.NeedsAnswer
