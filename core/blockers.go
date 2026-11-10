@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/tomoram/code-central/store"
 )
 
 // Blockers (ticket 28). A Blocker is a many-to-many link between Tickets
 // in one Project, across Specs, stored on the dependant as blocked_by.
-// Blocking is computed on read: only Done clears a Blocker, and a
-// Cancelled Blocker is followed through its Replacements (store.Follow),
-// so cancelling never rewrites another Ticket's file.
+// Blocking is computed on read, by blockRule: only Done clears a
+// Blocker, and a Cancelled Blocker is followed through its Replacements
+// (store.Follow), so cancelling never rewrites another Ticket's file.
 
 // BlockerInput is add_blocker's and remove_blocker's input: ticket waits
 // on blocker.
@@ -75,7 +76,7 @@ func (c *Core) RemoveBlocker(_ context.Context, key string, in BlockerInput) (Wr
 			t.BlockedBy = slices.DeleteFunc(t.BlockedBy, func(n int) bool { return n == b })
 			return true, nil
 		}
-		for _, bv := range blockerViews(r, key, *t) {
+		for _, bv := range c.blockRule(r, key).blockerViews(*t) {
 			if bv.ID == DisplayID(key, b) && bv.Via != "" {
 				return false, invalid("blocker", "%s blocks %s only as a Replacement for Cancelled %s; remove %s instead",
 					bv.ID, DisplayID(key, t.Number), bv.Via, bv.Via)
@@ -85,34 +86,52 @@ func (c *Core) RemoveBlocker(_ context.Context, key string, in BlockerInput) (Wr
 	})
 }
 
+// blockRule is what the blocked check reads: the store, the Blockers'
+// Project's settings and the current time. It holds the Project's
+// settings, not its CI Runs, so a check that needs a Blocker's CI result
+// reads them only for that Blocker. Every caller asks it, so blocking is
+// worked out one way.
+type blockRule struct {
+	r   store.Reader
+	p   store.Project
+	now time.Time
+}
+
+// blockRule is the blocked check for Project key's Tickets now.
+func (c *Core) blockRule(r store.Reader, key string) blockRule {
+	p, _ := r.Project(key)
+	return blockRule{r: r, p: p, now: c.now()}
+}
+
 // blocked is computed: an unfinished Ticket with a Blocker, after
 // following Replacements, that isn't Done. Finished work is never blocked.
-func blocked(r store.Reader, key string, t store.Ticket) bool {
-	return len(openBlockers(r, key, t)) > 0
+func (b blockRule) blocked(t store.Ticket) bool {
+	return len(b.openBlockers(t)) > 0
 }
 
 // openBlockers are the Blockers keeping an unfinished t blocked.
-func openBlockers(r store.Reader, key string, t store.Ticket) []BlockerView {
+func (b blockRule) openBlockers(t store.Ticket) []BlockerView {
 	if finished(t.State) {
 		return nil
 	}
-	return slices.DeleteFunc(blockerViews(r, key, t), func(b BlockerView) bool { return b.State == store.Done })
+	return slices.DeleteFunc(b.blockerViews(t), func(v BlockerView) bool { return v.State == store.Done })
 }
 
 // blockerViews lists t's Blockers after following Replacements, each once.
-func blockerViews(r store.Reader, key string, t store.Ticket) []BlockerView {
+func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
+	key := b.p.Key
 	out := []BlockerView{}
 	seen := map[int]bool{}
-	for _, b := range t.BlockedBy {
-		for _, m := range store.Follow(r, key, b) {
+	for _, n := range t.BlockedBy {
+		for _, m := range store.Follow(b.r, key, n) {
 			if seen[m] {
 				continue
 			}
 			seen[m] = true
-			bt, _ := r.Ticket(key, m)
+			bt, _ := b.r.Ticket(key, m)
 			v := BlockerView{ID: DisplayID(key, m), Title: bt.Title, State: bt.State}
-			if m != b {
-				v.Via = DisplayID(key, b)
+			if m != n {
+				v.Via = DisplayID(key, n)
 			}
 			out = append(out, v)
 		}
@@ -121,20 +140,20 @@ func blockerViews(r store.Reader, key string, t store.Ticket) []BlockerView {
 }
 
 // blockedError rejects claiming a blocked Ticket, naming its Blockers.
-func blockedError(r store.Reader, key string, t store.Ticket, actor Actor) error {
+func (b blockRule) blockedError(t store.Ticket, actor Actor) error {
 	var names []string
-	for _, b := range openBlockers(r, key, t) {
-		s := fmt.Sprintf("%s (%s", b.ID, b.State)
-		if b.State == store.Cancelled {
+	for _, v := range b.openBlockers(t) {
+		s := fmt.Sprintf("%s (%s", v.ID, v.State)
+		if v.State == store.Cancelled {
 			s += ", with no Replacements"
 		}
-		if b.Via != "" {
-			s += ", replacing Cancelled " + b.Via
+		if v.Via != "" {
+			s += ", replacing Cancelled " + v.Via
 		}
 		names = append(names, s+")")
 	}
 	allowed := slices.DeleteFunc(allowedActions(t.State, actor), func(a string) bool { return a == "claim" })
-	msg := fmt.Sprintf("%s is blocked by %s, so claim is not allowed", DisplayID(key, t.Number), strings.Join(names, ", "))
+	msg := fmt.Sprintf("%s is blocked by %s, so claim is not allowed", DisplayID(b.p.Key, t.Number), strings.Join(names, ", "))
 	if len(allowed) > 0 {
 		msg += "; allowed from " + string(t.State) + ": " + strings.Join(allowed, ", ")
 	}
