@@ -57,10 +57,28 @@ export interface CITrackingChange {
   ignored_workflows: string[];
 }
 
+// A CI Rule as the human adds or edits it: when workflow fails on branch,
+// open a Ticket to fix it, in state.
+export interface CIRuleChange {
+  // workflow is a workflow file name, such as ci.yml, or "any".
+  workflow: string;
+  // branch is an exact branch name, with no globs.
+  branch: string;
+  // state is the State the rule's Tickets open in.
+  state: "Draft" | "Ready";
+}
+
+// A CI Rule, named by the ID of its own Spec, on which its Tickets open.
+export interface CIRule extends CIRuleChange {
+  spec: string;
+  created: string;
+}
+
 // A Project's CI settings, with the URL of the Push remote the Factory
-// last reported ("" until it has).
+// last reported ("" until it has) and the CI Rules, in the order added.
 export interface CISettings extends CITrackingChange {
   push_remote_url: string;
+  rules: CIRule[];
 }
 
 export interface ProjectView {

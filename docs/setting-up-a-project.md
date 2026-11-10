@@ -224,6 +224,22 @@ To change it, open the UI, click **⋯** beside the Project in the left pane, an
 
 **Save** applies the settings, and every open UI tab shows them. Turning CI Tracking off keeps the repository and Ignored workflows for the next time you turn it on. For now the CI section only records these settings: the Factory lands accepted work the same way with CI Tracking on or off.
 
+### CI Rules
+
+A **CI Rule** says "when this workflow fails on this branch, open a Ticket to fix it", for failures no Ticket's own CI catches, such as a red `main` after a hand merge. Add, edit and remove them in the **CI Rules** section below the CI section. Agents have no tool or command to change them. A rule names:
+
+- **Workflow**: one workflow file name, such as `ci.yml`, or `any` for every workflow but the Ignored ones.
+- **Branch**: an exact branch name, such as `main`. Globs such as `release/*` are refused.
+- **Tickets open as**: **Draft**, for you to look at first, or **Ready**, for the Factory to start fixing straight away.
+
+**Add rule** creates the rule and its own Spec, titled after what it watches, such as `CI: ci.yml on main` or `CI: any workflow on main`. The rule's Tickets will go on that Spec, so its fix Tickets stay together ([ADR 0017](adr/0017-a-ci-rule-opens-its-tickets-on-a-long-lived-spec-of-its-own.md)). Two rules can't watch the same workflow on the same branch. Each rule is listed with its Spec's ID:
+
+```
+ci.yml on main: opens Ready Tickets on acme-api-42      Edit  Remove
+```
+
+**Edit** changes a rule in place; its Spec is retitled to match unless you renamed it. **Remove** removes the rule and keeps its Spec as the record of its Tickets. For now rules are only recorded: none opens a Ticket yet.
+
 ## When `init` behaves differently
 
 ### A repository you don't own: `init --local`

@@ -123,6 +123,9 @@ var Operations = []Op{
 	// CI Tracking (Spec code-central-247).
 	{Name: "set_ci_tracking", Audience: HumanOnly, Write: true},
 	{Name: "report_push_remote", Audience: FactoryOnly, Write: true},
+	{Name: "add_ci_rule", Audience: HumanOnly, Write: true},
+	{Name: "edit_ci_rule", Audience: HumanOnly, Write: true},
+	{Name: "remove_ci_rule", Audience: HumanOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

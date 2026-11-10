@@ -148,14 +148,36 @@ func ciProviderNames() []string {
 
 // CI is a Project's CI settings: whether CI Tracking is on, the CI
 // Provider and the repository it watches, the Ignored workflows (each a
-// workflow file's base name, such as ci.yml), and the URL of the Push
-// remote the Factory last reported.
+// workflow file's base name, such as ci.yml), the URL of the Push
+// remote the Factory last reported, and the CI Rules.
 type CI struct {
 	Tracking         bool
 	Provider         CIProvider
 	Repository       string
 	IgnoredWorkflows []string
 	PushRemoteURL    string
+	Rules            []CIRule
+}
+
+// AnyWorkflow is the workflow of a CI Rule that matches every workflow
+// but the Ignored ones.
+const AnyWorkflow = "any"
+
+// CIRule is "when Workflow fails on Branch, open a Ticket to fix it": a
+// workflow file's base name or AnyWorkflow, an exact branch name, and
+// the State its Tickets open in, Draft or Ready. Its Tickets go on its
+// own Spec, whose number names the rule.
+type CIRule struct {
+	Spec     int
+	Workflow string
+	Branch   string
+	State    State
+	Created  time.Time
+}
+
+// Equal reports whether r and s are the same rule.
+func (r CIRule) Equal(s CIRule) bool {
+	return r.Spec == s.Spec && r.Workflow == s.Workflow && r.Branch == s.Branch && r.State == s.State && r.Created.Equal(s.Created)
 }
 
 // DefaultCI is the CI of a Project that has never had any set: CI
@@ -165,7 +187,8 @@ func DefaultCI() CI { return CI{Provider: CIGitHubActions} }
 // Equal reports whether c and d are the same settings.
 func (c CI) Equal(d CI) bool {
 	return c.Tracking == d.Tracking && c.Provider == d.Provider && c.Repository == d.Repository &&
-		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL
+		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL &&
+		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal)
 }
 
 // orDefault fills in what c leaves empty from DefaultCI.

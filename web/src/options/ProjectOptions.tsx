@@ -1,8 +1,8 @@
 // The Project Options page: one Project's settings, reached from its menu
-// in the left pane, a section each: the Landing Method and CI.
+// in the left pane, a section each: the Landing Method, CI and CI Rules.
 import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
-import type { ApiError, CIProvider, CISettings, Landing, LandingMethod, ProjectRow } from "../api/types";
+import type { ApiError, CIProvider, CIRule, CIRuleChange, CISettings, Landing, LandingMethod, ProjectRow } from "../api/types";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { githubRepository } from "./githubRepository";
 
@@ -32,6 +32,7 @@ export function ProjectOptions({ api, projects, project: key, navigate }: Projec
           <h1>{project.display_name}: Project Options</h1>
           <LandingMethodSection api={api} project={project} />
           <CISection api={api} project={project} />
+          <CIRulesSection api={api} project={project} />
         </>
       )}
     </main>
@@ -270,6 +271,161 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
           )}
         </div>
       </fieldset>
+    </form>
+  );
+}
+
+// ruleReach is what a CI Rule watches, as its Spec's title says it.
+const ruleReach = (r: CIRuleChange) => `${r.workflow === "any" ? "any workflow" : r.workflow} on ${r.branch}`;
+
+const NO_RULE: CIRuleChange = { workflow: "", branch: "", state: "Draft" };
+
+// CIRulesSection lists the Project's CI Rules ("when workflow X fails on
+// branch Y, open a Ticket to fix it") and adds, edits and removes them.
+// Each rule has its own Spec, which removing the rule keeps.
+function CIRulesSection({ api, project }: { api: Api; project: ProjectRow }) {
+  const [editing, setEditing] = useState<string>();
+  const id = useId();
+  const { rules } = project.ci;
+
+  return (
+    <fieldset className="project-options-section" disabled={project.archived}>
+      <legend>CI Rules</legend>
+      <p className="project-options-hint">
+        When a workflow fails on a branch, the CI Watcher opens a Ticket to fix it, on the rule&apos;s own Spec. A further failure while
+        that Ticket is unfinished comments on it instead.
+      </p>
+      {rules.length === 0 ? (
+        <p className="muted">No CI Rules yet.</p>
+      ) : (
+        <ul className="project-options-rules" aria-label="CI Rules">
+          {rules.map((r) =>
+            editing === r.spec ? (
+              <li key={r.spec}>
+                <RuleForm
+                  label={`Edit ${ruleReach(r)}`}
+                  initial={r}
+                  submit="Save"
+                  save={(change) => api.editCIRule(project.key, r.spec, change).then(() => setEditing(undefined))}
+                  cancel={() => setEditing(undefined)}
+                />
+              </li>
+            ) : (
+              <RuleRow key={r.spec} rule={r} removeHint={`${id}-remove`} edit={() => setEditing(r.spec)} remove={() => api.removeCIRule(project.key, r.spec)} />
+            ),
+          )}
+        </ul>
+      )}
+      <p hidden id={`${id}-remove`}>
+        Removing a rule keeps its Spec, as the record of its Tickets.
+      </p>
+      <RuleForm label="Add a CI Rule" initial={NO_RULE} submit="Add rule" save={(change) => api.addCIRule(project.key, change)} clearOnSave />
+    </fieldset>
+  );
+}
+
+function RuleRow({ rule, removeHint, edit, remove }: { rule: CIRule; removeHint: string; edit(): void; remove(): Promise<unknown> }) {
+  const [error, setError] = useState<ApiError>();
+  const reach = ruleReach(rule);
+  return (
+    <li>
+      <span>
+        <strong>{reach}</strong>: opens {rule.state} Tickets on {rule.spec}
+      </span>{" "}
+      <button type="button" className="btn" aria-label={`Edit ${reach}`} onClick={edit}>
+        Edit
+      </button>{" "}
+      <button type="button" className="btn" aria-label={`Remove ${reach}`} aria-describedby={removeHint} onClick={() => remove().catch(setError)}>
+        Remove
+      </button>
+      {error && (
+        <p className="warning" role="alert">
+          {error.message}
+        </p>
+      )}
+    </li>
+  );
+}
+
+// RuleForm is a CI Rule's fields: adding one, or editing one in place.
+function RuleForm(props: {
+  label: string;
+  initial: CIRuleChange;
+  submit: string;
+  save(change: CIRuleChange): Promise<unknown>;
+  cancel?(): void;
+  clearOnSave?: boolean;
+}) {
+  const { label, initial, submit, save, cancel, clearOnSave } = props;
+  const [draft, setDraft] = useState<CIRuleChange>({ workflow: initial.workflow, branch: initial.branch, state: initial.state });
+  const [error, setError] = useState<ApiError>();
+  const id = useId();
+
+  const edit = (patch: Partial<CIRuleChange>) => {
+    setDraft((d) => ({ ...d, ...patch }));
+    setError(undefined);
+  };
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    setError(undefined);
+    save(draft).then(
+      () => clearOnSave && setDraft(NO_RULE),
+      (e: ApiError) => setError(e),
+    );
+  };
+  const invalid = (field: string) => (error?.field === field ? { "aria-invalid": true, "aria-describedby": `${id}-error` } : undefined);
+  const filled = draft.workflow.trim() !== "" && draft.branch.trim() !== "";
+
+  return (
+    <form aria-label={label} className="project-options-rule" onSubmit={onSubmit}>
+      <label className="project-options-field">
+        Workflow{" "}
+        <input
+          value={draft.workflow}
+          placeholder="ci.yml or any"
+          onChange={(e) => edit({ workflow: e.target.value })}
+          aria-describedby={`${id}-workflow`}
+          {...invalid("workflow")}
+        />
+      </label>
+      <p className="project-options-hint" id={`${id}-workflow`}>
+        A workflow file name, such as ci.yml, or any for every workflow but the Ignored ones.
+      </p>
+      <label className="project-options-field">
+        Branch{" "}
+        <input
+          value={draft.branch}
+          placeholder="main"
+          onChange={(e) => edit({ branch: e.target.value })}
+          aria-describedby={`${id}-branch`}
+          {...invalid("branch")}
+        />
+      </label>
+      <p className="project-options-hint" id={`${id}-branch`}>
+        An exact branch name, with no globs.
+      </p>
+      <label className="project-options-field">
+        Tickets open as{" "}
+        <select value={draft.state} onChange={(e) => edit({ state: e.target.value as CIRuleChange["state"] })} {...invalid("state")}>
+          <option value="Draft">Draft</option>
+          <option value="Ready">Ready</option>
+        </select>
+      </label>
+      {error && (
+        <p className="warning" role="alert" id={`${id}-error`}>
+          {error.message}
+        </p>
+      )}
+      <div className="project-options-actions">
+        <button type="submit" className="btn primary" disabled={!filled}>
+          {submit}
+        </button>
+        {cancel && (
+          <button type="button" className="btn" onClick={cancel}>
+            Cancel
+          </button>
+        )}
+      </div>
     </form>
   );
 }

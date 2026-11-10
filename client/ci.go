@@ -18,3 +18,18 @@ func (c *Client) SetCITracking(ctx context.Context, key string, in core.SetCITra
 func (c *Client) ReportPushRemote(ctx context.Context, key string, in core.ReportPushRemoteInput) (core.Written[core.ProjectView], error) {
 	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_push_remote", in, in.Full)
 }
+
+// AddCIRule is the human's add_ci_rule; set Actor to human.
+func (c *Client) AddCIRule(ctx context.Context, key string, in core.CIRuleInput) (core.Written[core.ProjectView], error) {
+	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/add_ci_rule", in, in.Full)
+}
+
+// EditCIRule is the human's edit_ci_rule; set Actor to human.
+func (c *Client) EditCIRule(ctx context.Context, key string, in core.CIRuleInput) (core.Written[core.ProjectView], error) {
+	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/edit_ci_rule", in, in.Full)
+}
+
+// RemoveCIRule is the human's remove_ci_rule; set Actor to human.
+func (c *Client) RemoveCIRule(ctx context.Context, key string, in core.RemoveCIRuleInput) (core.Written[core.ProjectView], error) {
+	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/remove_ci_rule", in, in.Full)
+}

@@ -1,6 +1,7 @@
 // The Project Options page: opened from an active Project's menu in the
 // left pane, it sets the Project's Landing Method (code-central-174) and
-// its CI settings (code-central-251). Against FakeApi.
+// its CI settings (code-central-251) and CI Rules (code-central-254).
+// Against FakeApi.
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -16,6 +17,8 @@ const nav = () => screen.getByRole("navigation", { name: "Filters" });
 const page = () => screen.getByRole("main", { name: "Project Options" });
 const landing = () => within(page()).getByRole("group", { name: "Landing Method" });
 const ci = () => within(page()).getByRole("group", { name: "CI" });
+const rules = () => within(page()).getByRole("group", { name: "CI Rules" });
+const addForm = () => within(rules()).getByRole("form", { name: "Add a CI Rule" });
 
 describe("Project Options", () => {
   it("opens from an active Project's menu, in the URL, so a reload keeps it", async () => {
@@ -222,6 +225,7 @@ describe("Project Options", () => {
         repository: "acme/web",
         ignored_workflows: ["nightly.yml", "preview.yml"],
         push_remote_url: "https://github.com/acme/web.git",
+        rules: [],
       });
       expect(within(ci()).getByRole("textbox", { name: "Ignored workflows" })).toHaveValue("nightly.yml, preview.yml");
       expect(within(ci()).getByRole("button", { name: "Save" })).toBeDisabled();
@@ -264,6 +268,120 @@ describe("Project Options", () => {
       await waitFor(() => expect(within(ci()).getByRole("checkbox", { name: "CI Tracking" })).toBeChecked());
       expect(within(ci()).getByRole("textbox", { name: "GitHub repository" })).toHaveValue("acme/web");
       expect(within(ci()).getByRole("textbox", { name: "Ignored workflows" })).toHaveValue("nightly.yml");
+    });
+  });
+
+  describe("the CI Rules", () => {
+    it("lists the rules, each with its Spec and the State its Tickets open in", async () => {
+      const fake = new FakeApi();
+      fake.addProject("acme", "Acme");
+      renderApp(fake, "/?view=project-options&project=acme");
+      const group = await screen.findByRole("group", { name: "CI Rules" });
+      expect(within(group).getByText("No CI Rules yet.")).toBeInTheDocument();
+
+      await fake.addCIRule("acme", { workflow: "ci.yml", branch: "main", state: "Ready" });
+      await fake.addCIRule("acme", { workflow: "any", branch: "release", state: "Draft" });
+      const list = await within(rules()).findByRole("list", { name: "CI Rules" });
+      await waitFor(() =>
+        expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+          expect.stringMatching(/^ci\.yml on main.*opens Ready Tickets on acme-1/),
+          expect.stringMatching(/^any workflow on release.*opens Draft Tickets on acme-2/),
+        ]),
+      );
+      expect(within(rules()).queryByText("No CI Rules yet.")).toBeNull();
+    });
+
+    it("adds a rule, creating its Spec", async () => {
+      const fake = new FakeApi();
+      fake.addProject("acme", "Acme");
+      renderApp(fake, "/?view=project-options&project=acme");
+      await screen.findByRole("group", { name: "CI Rules" });
+
+      const add = within(addForm()).getByRole("button", { name: "Add rule" });
+      expect(add).toBeDisabled();
+      await userEvent.type(within(addForm()).getByRole("textbox", { name: "Workflow" }), "ci.yml");
+      await userEvent.type(within(addForm()).getByRole("textbox", { name: "Branch" }), "main");
+      await userEvent.selectOptions(within(addForm()).getByRole("combobox", { name: "Tickets open as" }), "Ready");
+      await userEvent.click(add);
+
+      expect(await within(rules()).findByText(/opens Ready Tickets on acme-1/)).toBeInTheDocument();
+      expect((await fake.listProjects())[0].ci.rules).toMatchObject([{ spec: "acme-1", workflow: "ci.yml", branch: "main", state: "Ready" }]);
+      expect((await fake.getSpec("acme", "acme-1")).title).toBe("CI: ci.yml on main");
+      // The form is cleared for the next rule.
+      expect(within(addForm()).getByRole("textbox", { name: "Workflow" })).toHaveValue("");
+      expect(within(addForm()).getByRole("textbox", { name: "Branch" })).toHaveValue("");
+      expect(within(addForm()).getByRole("combobox", { name: "Tickets open as" })).toHaveValue("Draft");
+    });
+
+    it("shows a refusal on the field it names", async () => {
+      const fake = new FakeApi();
+      fake.addProject("acme", "Acme");
+      renderApp(fake, "/?view=project-options&project=acme");
+      await screen.findByRole("group", { name: "CI Rules" });
+
+      await userEvent.type(within(addForm()).getByRole("textbox", { name: "Workflow" }), "ci.yml");
+      const branch = within(addForm()).getByRole("textbox", { name: "Branch" });
+      await userEvent.type(branch, "release/*");
+      await userEvent.click(within(addForm()).getByRole("button", { name: "Add rule" }));
+      expect(await within(addForm()).findByRole("alert")).toHaveTextContent("a CI Rule's branch takes no globs");
+      expect(branch).toHaveAttribute("aria-invalid", "true");
+      expect((await fake.listProjects())[0].ci.rules).toEqual([]);
+
+      await userEvent.clear(branch);
+      expect(within(addForm()).queryByRole("alert")).toBeNull();
+    });
+
+    it("edits a rule in place, or cancels the edit", async () => {
+      const fake = new FakeApi();
+      fake.addProject("acme", "Acme");
+      await fake.addCIRule("acme", { workflow: "ci.yml", branch: "main", state: "Draft" });
+      renderApp(fake, "/?view=project-options&project=acme");
+
+      await userEvent.click(await within(await screen.findByRole("group", { name: "CI Rules" })).findByRole("button", { name: "Edit ci.yml on main" }));
+      const form = within(rules()).getByRole("form", { name: "Edit ci.yml on main" });
+      const workflow = within(form).getByRole("textbox", { name: "Workflow" });
+      expect(workflow).toHaveValue("ci.yml");
+      await userEvent.clear(workflow);
+      await userEvent.type(workflow, "any");
+      await userEvent.click(within(form).getByRole("button", { name: "Cancel" }));
+      expect(within(rules()).queryByRole("form", { name: "Edit ci.yml on main" })).toBeNull();
+      expect((await fake.listProjects())[0].ci.rules[0].workflow).toBe("ci.yml");
+
+      await userEvent.click(within(rules()).getByRole("button", { name: "Edit ci.yml on main" }));
+      const again = within(rules()).getByRole("form", { name: "Edit ci.yml on main" });
+      expect(within(again).getByRole("textbox", { name: "Workflow" })).toHaveValue("ci.yml");
+      await userEvent.clear(within(again).getByRole("textbox", { name: "Branch" }));
+      await userEvent.type(within(again).getByRole("textbox", { name: "Branch" }), "develop");
+      await userEvent.selectOptions(within(again).getByRole("combobox", { name: "Tickets open as" }), "Ready");
+      await userEvent.click(within(again).getByRole("button", { name: "Save" }));
+
+      expect(await within(rules()).findByText(/opens Ready Tickets on acme-1/)).toHaveTextContent(/^ci\.yml on develop/);
+      expect(within(rules()).queryByRole("form", { name: /^Edit/ })).toBeNull();
+      expect((await fake.listProjects())[0].ci.rules).toMatchObject([{ spec: "acme-1", workflow: "ci.yml", branch: "develop", state: "Ready" }]);
+    });
+
+    it("removes a rule, keeping its Spec as the record", async () => {
+      const fake = new FakeApi();
+      fake.addProject("acme", "Acme");
+      await fake.addCIRule("acme", { workflow: "ci.yml", branch: "main", state: "Draft" });
+      renderApp(fake, "/?view=project-options&project=acme");
+
+      const remove = await within(await screen.findByRole("group", { name: "CI Rules" })).findByRole("button", { name: "Remove ci.yml on main" });
+      expect(remove).toHaveAccessibleDescription(/keeps its Spec/);
+      await userEvent.click(remove);
+      expect(await within(rules()).findByText("No CI Rules yet.")).toBeInTheDocument();
+      expect((await fake.listProjects())[0].ci.rules).toEqual([]);
+      expect((await fake.getSpec("acme", "acme-1")).title).toBe("CI: ci.yml on main");
+    });
+
+    it("can't be changed while the Project is archived", async () => {
+      const fake = new FakeApi();
+      fake.addProject("acme", "Acme");
+      await fake.addCIRule("acme", { workflow: "ci.yml", branch: "main", state: "Draft" });
+      fake.addProject("old", "Old", { archived: true });
+      renderApp(fake, "/?view=project-options&project=old");
+      await screen.findByRole("group", { name: "CI Rules" });
+      expect(within(addForm()).getByRole("textbox", { name: "Workflow" })).toBeDisabled();
     });
   });
 });
