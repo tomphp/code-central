@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -59,6 +60,11 @@ type ciWatcherStatus struct {
 	// one that has cleared by the time it looks.
 	errors    int
 	lastError string
+	// crashingUntil is when a crash streak ends: until then the status
+	// stays crashed, as the service reported it, and the CI Watcher's
+	// own reports are held back, so a CI Watcher that reports Watching
+	// between crashes doesn't hide them or notify for each one.
+	crashingUntil time.Time
 }
 
 // view is the status of key's CI Watcher.
@@ -79,8 +85,33 @@ func (w *ciWatchers) reset(key string) {
 	defer w.mu.Unlock()
 	if s, ok := w.all[key]; ok {
 		s.view = CIWatcherView{State: CIWatcherNotReported}
+		s.crashingUntil = time.Time{}
 		w.all[key] = s
 	}
+}
+
+// report makes next, as the CI Watcher reported it, key's status, unless
+// a crash streak holds it back, and reports whether it changed.
+func (w *ciWatchers) report(key string, next CIWatcherView, now time.Time) bool {
+	w.mu.Lock()
+	crashing := now.Before(w.all[key].crashingUntil)
+	w.mu.Unlock()
+	if crashing {
+		return false
+	}
+	return w.set(key, next, now)
+}
+
+// crashed makes next, the service's crash report, key's status, holding
+// it until until.
+func (w *ciWatchers) crashed(key string, next CIWatcherView, until, now time.Time) bool {
+	changed := w.set(key, next, now)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	s := w.all[key]
+	s.crashingUntil = until
+	w.all[key] = s
+	return changed
 }
 
 // set makes next key's status, keeping since while the status is the
@@ -191,7 +222,7 @@ func (c *Core) ReportCIWatcherStatus(_ context.Context, key string, in ReportCIW
 		// The store's read lock keeps set_ci_tracking from turning CI
 		// Tracking off between the check and the change.
 		before = c.projectView(p)
-		changed = c.ciWatchers.set(key, next, c.now())
+		changed = c.ciWatchers.report(key, next, c.now())
 		after = c.projectView(p)
 		return nil
 	})
@@ -227,4 +258,68 @@ func (w *ciWatchers) attention() []CIWatcherAttention {
 	}
 	slices.SortFunc(out, func(a, b CIWatcherAttention) int { return strings.Compare(a.Project, b.Project) })
 	return out
+}
+
+// CIWatcherSteadyAfter is how long a restarted CI Watcher runs before
+// its crash streak ends: its restart backoff starts again, and its own
+// reports show again.
+const CIWatcherSteadyAfter = 10 * time.Minute
+
+// ciWatched is whether p should have a CI Watcher: CI Tracking on, and
+// not archived.
+func ciWatched(p store.Project) bool { return p.CI.Tracking && p.Archived.IsZero() }
+
+// CIWatchedProjects is the key of every Project the service runs a CI
+// Watcher for.
+func (c *Core) CIWatchedProjects(context.Context) []string {
+	out := []string{}
+	c.store.View(func(r store.Reader) error {
+		for _, p := range r.Projects() {
+			if ciWatched(p) {
+				out = append(out, p.Key)
+			}
+		}
+		return nil
+	})
+	return out
+}
+
+// CIWatcherCrash is the service's report of a CI Watcher that crashed.
+type CIWatcherCrash struct {
+	// Restarts counts the crashes in this streak, each followed by a
+	// restart.
+	Restarts int
+	// LastLine is the last line it wrote to stderr.
+	LastLine string
+	// RestartAt is when the service restarts it.
+	RestartAt time.Time
+}
+
+// ReportCIWatcherCrash is the service's own report that key's CI Watcher
+// crashed. It has no door: the CI Watcher can't report its own crash.
+// The status stays crashed until the CI Watcher has run
+// CIWatcherSteadyAfter from its restart, so like any error the streak
+// sends one Notification however often it restarts. A Project no longer
+// watched is left alone.
+func (c *Core) ReportCIWatcherCrash(_ context.Context, key string, crash CIWatcherCrash) {
+	times := "times"
+	if crash.Restarts == 1 {
+		times = "time"
+	}
+	msg := fmt.Sprintf("The CI Watcher crashed, restarted %d %s", crash.Restarts, times)
+	if line := strings.TrimSpace(crash.LastLine); line != "" {
+		msg += "; the last line it wrote: " + line
+	}
+	next := CIWatcherView{State: CIWatcherError, Problem: CICrashed, Message: msg,
+		Fix: "Code Central restarts it by itself, waiting longer after each crash. Its output is in the service's log."}
+	changed := false
+	c.store.View(func(r store.Reader) error {
+		if p, ok := r.Project(key); ok && ciWatched(p) {
+			changed = c.ciWatchers.crashed(key, next, crash.RestartAt.Add(CIWatcherSteadyAfter), c.now())
+		}
+		return nil
+	})
+	if changed {
+		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
+	}
 }

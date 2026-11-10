@@ -4,7 +4,6 @@ package e2e
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"io"
 	"os"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tomoram/code-central/codecentraltest"
 )
 
 // process is one `code-central serve` the test stops and starts itself.
@@ -20,6 +21,8 @@ type process struct {
 	cmd    *exec.Cmd
 	addr   string
 	exited chan error
+	// stderr is what serve has written to stderr so far, its log.
+	stderr *codecentraltest.SyncBuffer
 }
 
 // startServe runs serve on store, listening on listen (never 7733).
@@ -34,8 +37,11 @@ func startServeBin(t *testing.T, binary, store, listen string) (*process, string
 	cmd := exec.Command(binary, "serve", "--store", store, "--no-notify")
 	startInOwnGroup(cmd)
 	cmd.Env = append(os.Environ(), "CODE_CENTRAL_LISTEN="+listen)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	stderr := &codecentraltest.SyncBuffer{}
+	cmd.Stderr = stderr
+	// Once serve exits, Wait stops copying its output, which a child it
+	// left behind, such as a CI Watcher, would hold open.
+	cmd.WaitDelay = time.Second
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +49,7 @@ func startServeBin(t *testing.T, binary, store, listen string) (*process, string
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	p := &process{cmd: cmd, exited: make(chan error, 1)}
+	p := &process{cmd: cmd, exited: make(chan error, 1), stderr: stderr}
 	line, _ := bufio.NewReader(stdout).ReadString('\n')
 	go func() { io.Copy(io.Discard, stdout); p.exited <- cmd.Wait() }()
 	m := listening.FindStringSubmatch(line)

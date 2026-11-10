@@ -212,7 +212,7 @@ func TestUsageSurvivesARestart(t *testing.T) {
 }
 
 func TestUsageSkipsALineItCannotReadAndSaysSoInTheLog(t *testing.T) {
-	log := &syncBuffer{}
+	log := &codecentraltest.SyncBuffer{}
 	srv := acmeServer(t, codecentraltest.WithLog(log))
 	mcpOK(t, connect(t, srv, "acme"), "find_tickets", map[string]any{})
 	file := usageFile(srv, codecentraltest.Start)
@@ -233,7 +233,7 @@ func TestUsageSkipsALineItCannotReadAndSaysSoInTheLog(t *testing.T) {
 }
 
 func TestAFailedUsageAppendStillAnswersTheCall(t *testing.T) {
-	log := &syncBuffer{}
+	log := &codecentraltest.SyncBuffer{}
 	srv := acmeServer(t, codecentraltest.WithLog(log))
 	// A file where the usage folder should be, so no append can succeed,
 	// on every OS (a read-only folder still takes writes on Windows).
@@ -325,7 +325,7 @@ func TestUsageDeletesOldFilesOnTheFirstRecordOfANewDay(t *testing.T) {
 }
 
 func TestAFailedUsageDeletionIsLoggedAndStillAnswersTheCall(t *testing.T) {
-	log := &syncBuffer{}
+	log := &codecentraltest.SyncBuffer{}
 	srv := acmeServer(t, codecentraltest.WithLog(log))
 	// A folder with something in it where an old file would be, so the
 	// deletion fails on every OS.

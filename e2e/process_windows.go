@@ -27,3 +27,16 @@ func startInOwnGroup(cmd *exec.Cmd) {
 func interrupt(p *os.Process) error {
 	return windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(p.Pid))
 }
+
+// alive reports whether the process pid is still running: it can be
+// opened and has no exit code yet.
+func alive(pid int) bool {
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	if err != nil {
+		return false
+	}
+	defer windows.CloseHandle(h)
+	var code uint32
+	const stillActive = 259
+	return windows.GetExitCodeProcess(h, &code) == nil && code == stillActive
+}

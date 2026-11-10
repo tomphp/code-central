@@ -12,9 +12,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"testing"
 	"time"
+
+	"github.com/tomoram/code-central/codecentraltest"
 )
 
 // fakeClaudeEnv names, to a run of this test binary, the code-central
@@ -88,7 +89,7 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 	factory := exec.Command(factoryBin, "--poll", "5s", "--parallel", "1")
 	factory.Dir, factory.Env = repo, env
 	startInOwnGroup(factory)
-	var factoryOut syncBuffer
+	var factoryOut codecentraltest.SyncBuffer
 	factory.Stdout, factory.Stderr = &factoryOut, &factoryOut
 	if err := factory.Start(); err != nil {
 		t.Fatal(err)
@@ -273,23 +274,6 @@ func gitBinary(t *testing.T) string {
 		}
 	}
 	return git
-}
-
-type syncBuffer struct {
-	mu sync.Mutex
-	b  bytes.Buffer
-}
-
-func (b *syncBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.b.Write(p)
-}
-
-func (b *syncBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.b.String()
 }
 
 var (

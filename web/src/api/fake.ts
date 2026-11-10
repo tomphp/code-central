@@ -467,6 +467,23 @@ export class FakeApi implements Api {
     this.ciCheck = refused;
   }
 
+  // seedCIWatcherCrash shows key's CI Watcher as the service reports one
+  // that crashed (code-central-255), restarted restarts times.
+  seedCIWatcherCrash(key: string, restarts: number, lastLine: string) {
+    const p = this.project(key);
+    const times = restarts === 1 ? "time" : "times";
+    this.setCI(p, {
+      ...p.ci,
+      watcher: {
+        state: "error",
+        problem: "crashed",
+        message: `The CI Watcher crashed, restarted ${restarts} ${times}; the last line it wrote: ${lastLine}`,
+        fix: "Code Central restarts it by itself, waiting longer after each crash. Its output is in the service's log.",
+        since: this.now.toISOString(),
+      },
+    });
+  }
+
   // seedOptions sets the Options as a store would hold them, recording no
   // action and sending no notice.
   seedOptions(options: Partial<Options>) {
@@ -895,10 +912,12 @@ export class FakeApi implements Api {
   }
 
   // reportCIWatcherStatus is the CI Watcher's report of its status
-  // (code-central-253), refused while CI Tracking is off.
+  // (code-central-253), refused while CI Tracking is off. Only the
+  // service reports a crash (seedCIWatcherCrash).
   async reportCIWatcherStatus(key: string, status: CIWatcherReport): Promise<void> {
     const p = this.writable(key);
     if (!p.ci.tracking) throw new ApiError(403, "action_not_allowed", `CI Tracking is off on ${key}, so it has no CI Watcher`);
+    if (status.problem === "crashed") throw new ApiError(422, "invalid", `"crashed" isn't a CI problem`, "problem");
     const watcher: CIWatcherStatus =
       status.state === "error" ? { state: "error", problem: status.problem, message: status.message, fix: status.fix } : { state: status.state };
     const { since: _, ...was } = p.ci.watcher;
