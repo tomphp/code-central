@@ -182,20 +182,20 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w Issu
 	}
 	due(CommentContext, requirementContext(r, key, s.Link))
 	tickets := specTickets(r, key, s.Number)
-	stages, staged := map[string]store.Ticket{}, true
+	stages, stagesDone := map[string]store.Ticket{}, true
 	var landed []store.Ticket
 	for _, t := range tickets {
 		if stage := StageOf(t.Labels); stage != "" {
 			stages[stage] = t
-			staged = staged && t.State == store.Done
+			stagesDone = stagesDone && t.State == store.Done
 		} else if t.State == store.Done {
 			landed = append(landed, t)
 		}
 	}
-	if g, ok := stages["grilling"]; ok && g.State == store.Done {
+	if g, done := stages["grilling"]; done && g.State == store.Done {
 		due(CommentGrilling, resolution(g))
 	}
-	if sp, ok := stages["spec"]; ok && sp.State == store.Done {
+	if sp, done := stages["spec"]; done && sp.State == store.Done {
 		due(CommentSpec, bodyAt(s, doneMove(sp).Time))
 	}
 	slices.SortStableFunc(landed, func(a, b store.Ticket) int { return doneMove(a).Time.Compare(doneMove(b).Time) })
@@ -206,18 +206,27 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w Issu
 		list = append(list, "- "+line)
 	}
 	_, finishedSpec := summarise(tickets)
-	switch {
-	case finishedSpec && len(landed) > 0:
+	if finishedSpec && len(landed) > 0 {
 		due(CommentClosed, "Finished. What landed:\n\n"+strings.Join(list, "\n"))
-		w.Label, w.Close = LabelDone, CloseCompleted
-	case finishedSpec:
-		w.Label, w.Close = LabelWontFix, CloseNotPlanned
-	case staged:
-		w.Label = LabelBuilding
-	default:
-		w.Label = LabelRequirement
 	}
+	w.Label, w.Close = requirementStatus(finishedSpec, len(landed) > 0, stagesDone)
 	return dueWhile(s.Link.ExternalState, w)
+}
+
+// requirementStatus is the status label and closing due on the issue of
+// a Requirement whose Spec is finished or not, with something landed or
+// not, and whose Stages are all Done or not.
+func requirementStatus(finished, landed, stagesDone bool) (string, IssueClose) {
+	switch {
+	case finished && landed:
+		return LabelDone, CloseCompleted
+	case finished:
+		return LabelWontFix, CloseNotPlanned
+	case stagesDone:
+		return LabelBuilding, ""
+	default:
+		return LabelRequirement, ""
+	}
 }
 
 // resolution is the grilling Stage Ticket t's resolution comment: the
@@ -244,7 +253,8 @@ func doneMove(t store.Ticket) store.Move {
 	return store.Move{To: store.Done, Time: t.Updated}
 }
 
-// bodyAt is s's body as it was at at, undoing each later edit to it.
+// bodyAt is s's body as it was at the time at, undoing each later edit
+// to it.
 func bodyAt(s store.Spec, at time.Time) string {
 	body := s.Body
 	for _, e := range slices.Backward(s.Edits) {

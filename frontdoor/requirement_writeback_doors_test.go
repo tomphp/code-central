@@ -26,8 +26,8 @@ func asAgent(t *testing.T, srv *codecentraltest.Server, c httpCall) map[string]a
 	return object(t, b)
 }
 
-// claimed is the agent's claim on acme-n, returning its Claim ID.
-func claimed(t *testing.T, srv *codecentraltest.Server, n string) string {
+// claimedByAgent is the agent's claim on acme-n, returning its Claim ID.
+func claimedByAgent(t *testing.T, srv *codecentraltest.Server, n string) string {
 	t.Helper()
 	srv.Clock.Advance(time.Minute)
 	return asAgent(t, srv, httpCall{"POST", "/api/p/acme/claim", `{"ticket":"acme-` + n + `"}`})["claim_id"].(string)
@@ -40,8 +40,8 @@ func agentComments(t *testing.T, srv *codecentraltest.Server, n, body string) {
 	asAgent(t, srv, httpCall{"POST", "/api/p/acme/tickets/" + n + "/comment", `{"body":` + quote(body) + `}`})
 }
 
-// finishedAndAccepted is the agent's finish of acme-n under claim with summary, and
-// the human's accept, to Done or, with a branch, Accepted.
+// finishedAndAccepted is the agent's finish of acme-n under claim with
+// summary, and the human's accept, to Done or, with a branch, Accepted.
 func finishedAndAccepted(t *testing.T, srv *codecentraltest.Server, n, claim, summary, branch string) {
 	t.Helper()
 	srv.Clock.Advance(time.Minute)
@@ -50,8 +50,8 @@ func finishedAndAccepted(t *testing.T, srv *codecentraltest.Server, n, claim, su
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/" + n + "/accept", `{}`})
 }
 
-// landed is the land of acme-n, Accepted, with commit.
-func landed(t *testing.T, srv *codecentraltest.Server, n, commit string) {
+// landedWith is the land of acme-n, Accepted, with commit.
+func landedWith(t *testing.T, srv *codecentraltest.Server, n, commit string) {
 	t.Helper()
 	srv.Clock.Advance(time.Minute)
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/" + n + "/land", `{"commit":` + quote(commit) + `}`})
@@ -64,8 +64,8 @@ func implementationTicket(t *testing.T, srv *codecentraltest.Server, title strin
 	asAgent(t, srv, httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":"acme-6","title":` + quote(title) + `,"state":"Ready"}`})
 }
 
-// comment is the body of the comment key due on target.
-func comment(t *testing.T, got map[string]issueWrites, target, key string) string {
+// dueComment is the body of the comment key due on target.
+func dueComment(t *testing.T, got map[string]issueWrites, target, key string) string {
 	t.Helper()
 	for _, c := range got[target].Comments {
 		if c.Key == key {
@@ -94,16 +94,16 @@ func TestARequirementsProgressComesDueOnItsIssue(t *testing.T) {
 
 	// The grilling Stage: a Round answered, a Failure Report, the
 	// resolution, a human's comment and the finish summary.
-	claim := claimed(t, srv, "7")
+	claim := claimedByAgent(t, srv, "7")
 	asAgent(t, srv, httpCall{"POST", "/api/p/acme/tickets/7/post_round", `{"claim_id":` + quote(claim) + `,"questions":[{"title":"DB?","body":"Which one?"}]}`})
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/7/answer", `{"question":1,"text":"Postgres"}`})
 	asAgent(t, srv, httpCall{"POST", "/api/p/acme/tickets/7/pick_up_answers", `{"claim_id":` + quote(claim) + `}`})
 	agentComments(t, srv, "7", "An early thought.")
 	asAgent(t, srv, httpCall{"POST", "/api/p/acme/tickets/7/report_failure",
-		`{"claim_id":` + quote(claim) + `,"what_broke":"B","why":"W","what_to_fix":"F","where_work_stands":"S"}`})
+		`{"claim_id":` + quote(claim) + `,"what_broke":"The broken build","why":"A missing tool","what_to_fix":"Install the tool","where_work_stands":"Half grilled"}`})
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/7/to_draft", `{}`})
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/7/approve", `{}`})
-	claim = claimed(t, srv, "7")
+	claim = claimedByAgent(t, srv, "7")
 	agentComments(t, srv, "7", "## Resolution\n\nUse Postgres.")
 	srv.Clock.Advance(time.Minute)
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/7/comment", `{"body":"Thanks."}`})
@@ -113,27 +113,27 @@ func TestARequirementsProgressComesDueOnItsIssue(t *testing.T) {
 	finishedAndAccepted(t, srv, "7", claim, "Grilled: see the resolution.", "")
 	got := writesDue(t, srv)
 	wantDue(t, got, "acme-6", "code-central:requirement", "", "grilling")
-	if body, want := comment(t, got, "acme-6", "grilling"), "<!-- code-central acme-6 grilling -->\n## Resolution\n\nUse Postgres."+backTo(srv); body != want {
+	if body, want := dueComment(t, got, "acme-6", "grilling"), "<!-- code-central acme-6 grilling -->\n## Resolution\n\nUse Postgres."+backTo(srv); body != want {
 		t.Fatalf("grilling comment = %q, want %q", body, want)
 	}
 	httpOK(t, srv, reportIssueWritten(`{"target":"acme-6","key":"grilling"}`))
 
 	// The spec Stage: the Spec's body as it was when the Stage was Done,
 	// not after a later edit.
-	claim = claimed(t, srv, "8")
+	claim = claimedByAgent(t, srv, "8")
 	asAgent(t, srv, httpCall{"POST", "/api/p/acme/specs/6/edit_spec", `{"body":"## Problem\n\nLogin fails.\n"}`})
 	finishedAndAccepted(t, srv, "8", claim, "Spec written.", "")
 	srv.Clock.Advance(time.Minute)
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/specs/6/edit_spec", `{"body":"Edited later."}`})
 	got = writesDue(t, srv)
 	wantDue(t, got, "acme-6", "code-central:requirement", "", "spec")
-	if body, want := comment(t, got, "acme-6", "spec"), "<!-- code-central acme-6 spec -->\n## Problem\n\nLogin fails."+backTo(srv); body != want {
+	if body, want := dueComment(t, got, "acme-6", "spec"), "<!-- code-central acme-6 spec -->\n## Problem\n\nLogin fails."+backTo(srv); body != want {
 		t.Fatalf("spec comment = %q, want %q", body, want)
 	}
 	httpOK(t, srv, reportIssueWritten(`{"target":"acme-6","key":"spec"}`))
 
 	// The tickets Stage: the build starts.
-	claim = claimed(t, srv, "9")
+	claim = claimedByAgent(t, srv, "9")
 	implementationTicket(t, srv, "Fix the login")  // acme-10
 	implementationTicket(t, srv, "Test the login") // acme-11
 	finishedAndAccepted(t, srv, "9", claim, "Tickets made.", "")
@@ -141,29 +141,29 @@ func TestARequirementsProgressComesDueOnItsIssue(t *testing.T) {
 
 	// An implementation Ticket Accepted hasn't landed: nothing is due for
 	// it until it is Done.
-	claim = claimed(t, srv, "10")
+	claim = claimedByAgent(t, srv, "10")
 	finishedAndAccepted(t, srv, "10", claim, "Fixed.", "acme-10")
 	wantDue(t, writesDue(t, srv), "acme-6", "code-central:building", "")
-	landed(t, srv, "10", "abc123")
+	landedWith(t, srv, "10", "abc123")
 	got = writesDue(t, srv)
 	wantDue(t, got, "acme-6", "code-central:building", "", "landed:acme-10")
-	if body, want := comment(t, got, "acme-6", "landed:acme-10"), "<!-- code-central acme-6 landed:acme-10 -->\nLanded **Fix the login** (acme-10) in abc123."+backTo(srv); body != want {
+	if body, want := dueComment(t, got, "acme-6", "landed:acme-10"), "<!-- code-central acme-6 landed:acme-10 -->\nLanded **Fix the login** (acme-10) in abc123."+backTo(srv); body != want {
 		t.Fatalf("landed comment = %q, want %q", body, want)
 	}
 
 	// Once the last lands, the Spec is Finished: what landed, in the order
 	// it landed, and closing as completed.
-	claim = claimed(t, srv, "11")
+	claim = claimedByAgent(t, srv, "11")
 	finishedAndAccepted(t, srv, "11", claim, "Tested.", "acme-11")
-	landed(t, srv, "11", "def456")
+	landedWith(t, srv, "11", "def456")
 	got = writesDue(t, srv)
 	wantDue(t, got, "acme-6", "code-central:done", "completed", "landed:acme-10", "landed:acme-11", "closed")
 	want := "<!-- code-central acme-6 closed -->\nFinished. What landed:\n\n- **Fix the login** (acme-10) in abc123\n- **Test the login** (acme-11) in def456" + backTo(srv)
-	if body := comment(t, got, "acme-6", "closed"); body != want {
+	if body := dueComment(t, got, "acme-6", "closed"); body != want {
 		t.Fatalf("closed comment = %q, want %q", body, want)
 	}
 	for _, c := range got["acme-6"].Comments {
-		for _, never := range []string{"Postgres\"", "An early thought", "Thanks", "Grilled", "what_broke", "Which one?"} {
+		for _, never := range []string{"Postgres\"", "An early thought", "Thanks", "Grilled", "broken build", "missing tool", "Install the tool", "Half grilled", "Which one?"} {
 			if strings.Contains(c.Body, never) {
 				t.Fatalf("%s comment %q has %q in it", c.Key, c.Body, never)
 			}
@@ -199,7 +199,7 @@ func TestACancelledImplementationTicketIsLeftOutOfWhatLanded(t *testing.T) {
 	// The grilling Stage left no resolution, so none is due; moved to
 	// Done by hand, acme-10 has no land commit.
 	wantDue(t, got, "acme-6", "code-central:done", "completed", "spec", "landed:acme-10", "closed")
-	if body := comment(t, got, "acme-6", "closed"); !strings.Contains(body, "- **Fix the login** (acme-10)\n") || strings.Contains(body, "acme-11") {
+	if body := dueComment(t, got, "acme-6", "closed"); !strings.Contains(body, "- **Fix the login** (acme-10)\n") || strings.Contains(body, "acme-11") {
 		t.Fatalf("closed comment = %q, want only acme-10, with no commit", body)
 	}
 }

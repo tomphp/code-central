@@ -155,7 +155,7 @@ func TestAnOutboundSpecHasItsContextCommentAndRequirementLabelDue(t *testing.T) 
 	if w := got["acme-6"]; w.Link.ID != "acme/web#7" {
 		t.Fatalf("acme-6's link %q, want acme/web#7", w.Link.ID)
 	}
-	want := "<!-- code-central acme-6 context -->\nSeen on every login since Monday.\n\n[acme-6 in Code Central](" + srv.URL + "/?view=inbox&list=requirements&requirement=acme-6)"
+	want := "<!-- code-central acme-6 context -->\nSeen on every login since Monday." + backTo(srv)
 	if body := got["acme-6"].Comments[0].Body; body != want {
 		t.Fatalf("context comment = %q, want %q", body, want)
 	}
