@@ -123,18 +123,7 @@ function LandingMethodSection({ api, project }: { api: Api; project: ProjectRow 
             aria-describedby={remoteError ? `${id}-error` : undefined}
           />
         </label>
-        {error && (
-          <p className="warning" role="alert" id={`${id}-error`}>
-            {error.message}
-            {/* A refused turn-on says how to put it right (code-central-252). */}
-            {error.fix && (
-              <>
-                <br />
-                {error.fix}
-              </>
-            )}
-          </p>
-        )}
+        {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>
             Save
@@ -267,18 +256,7 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
         <p className="project-options-hint" id={`${id}-ignored`}>
           Workflow file names, such as nightly.yml, separated by commas: their runs never count towards a Ticket&apos;s CI result.
         </p>
-        {error && (
-          <p className="warning" role="alert" id={`${id}-error`}>
-            {error.message}
-            {/* A refused turn-on says how to put it right (code-central-252). */}
-            {error.fix && (
-              <>
-                <br />
-                {error.fix}
-              </>
-            )}
-          </p>
-        )}
+        {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>
             Save
@@ -291,5 +269,21 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
         </div>
       </fieldset>
     </form>
+  );
+}
+
+// Refusal is a save the service refused: its message, then its fix when
+// it gives one, as a refused CI Tracking turn-on does (code-central-252).
+function Refusal({ id, error }: { id: string; error: ApiError }) {
+  return (
+    <p className="warning" role="alert" id={id}>
+      {error.message}
+      {error.fix && (
+        <>
+          <br />
+          {error.fix}
+        </>
+      )}
+    </p>
   );
 }

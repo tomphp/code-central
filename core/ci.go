@@ -134,7 +134,8 @@ type CICheck func(ctx context.Context, in CICheckInput) CICheckResult
 func (c *Core) SetCICheck(check CICheck) { c.ciCheck = check }
 
 // checkCI runs the CI check when ci turns CI Tracking on, or changes what
-// it watches while on, and refuses with the reason and fix when it fails.
+// it watches while on, and refuses with the reason and fix when it fails:
+// on the repository when gh can't read it, else on tracking.
 // It runs outside the store's lock, as the check calls GitHub.
 func (c *Core) checkCI(ctx context.Context, key string, ci store.CI) error {
 	if !ci.Tracking || c.ciCheck == nil {
@@ -157,7 +158,11 @@ func (c *Core) checkCI(ctx context.Context, key string, ci store.CI) error {
 	if res.Problem == "" {
 		return nil
 	}
-	return &Error{Code: Invalid, Field: "tracking", Message: res.Reason, Fix: res.Fix}
+	field := "tracking"
+	if res.Problem == CIRepositoryUnreadable {
+		field = "repository"
+	}
+	return &Error{Code: Invalid, Field: field, Message: res.Reason, Fix: res.Fix}
 }
 
 // ReportPushRemoteInput is the Factory's report_push_remote(url, full?).

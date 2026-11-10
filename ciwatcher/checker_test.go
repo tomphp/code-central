@@ -41,11 +41,12 @@ func turnOn(srv *codecentraltest.Server) error {
 	return err
 }
 
-// refusal is err as the refusal of turning CI Tracking on.
+// refusal is err as the refusal of turning CI Tracking on: on the
+// repository when gh can't read it, else on tracking.
 func refusal(t *testing.T, err error) *core.Error {
 	t.Helper()
 	var e *core.Error
-	if !errors.As(err, &e) || e.Code != core.Invalid || e.Field != "tracking" {
+	if !errors.As(err, &e) || e.Code != core.Invalid || (e.Field != "tracking" && e.Field != "repository") {
 		t.Fatalf("err = %v, want CI Tracking refused", err)
 	}
 	return e

@@ -329,7 +329,7 @@ export class FakeApi implements Api {
   private followers = new Set<FakeFollower>();
   private opts: Options = { ...DEFAULT_OPTIONS };
   // ciCheck is the refusal the CI check answers with; none passes.
-  private ciCheck?: { reason: string; fix: string };
+  private ciCheck?: { reason: string; fix: string; field?: "tracking" | "repository" };
   private usageCalls: FakeUsageCall[] = [];
   private usageResponses: FakeUsageRecord[] = [];
 
@@ -436,9 +436,10 @@ export class FakeApi implements Api {
   }
 
   // seedCICheck sets how the CI Watcher's check answers when CI Tracking
-  // is turned on: refused with this reason and fix, or, with none,
-  // passed.
-  seedCICheck(refused?: { reason: string; fix: string }) {
+  // is turned on: refused with this reason and fix, on field (tracking
+  // unless given; the service gives repository when gh can't read it),
+  // or, with none, passed.
+  seedCICheck(refused?: { reason: string; fix: string; field?: "tracking" | "repository" }) {
     this.ciCheck = refused;
   }
 
@@ -861,7 +862,7 @@ export class FakeApi implements Api {
     const p = this.writable(key);
     const checks = change.tracking && !(p.ci.tracking && p.ci.provider === provider && p.ci.repository === repository);
     if (checks && this.ciCheck) {
-      throw new ApiError(422, "invalid", this.ciCheck.reason, "tracking", undefined, this.ciCheck.fix);
+      throw new ApiError(422, "invalid", this.ciCheck.reason, this.ciCheck.field ?? "tracking", undefined, this.ciCheck.fix);
     }
     this.setCI(p, { ...p.ci, tracking: change.tracking, provider, repository, ignored_workflows: ignored });
     return this.projectView(p);

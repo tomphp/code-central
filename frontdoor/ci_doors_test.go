@@ -260,8 +260,12 @@ func TestAFailedCICheckRefusesTurningCITrackingOnWithItsFix(t *testing.T) {
 			checks := &ciChecks{result: core.CICheckResult{Problem: problem, Reason: "gh says no", Fix: "Run gh auth login."}}
 			srv := newCICheckServer(t, checks)
 			e := httpRejected(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web"}`), core.Invalid)
-			if e.Field != "tracking" || e.Message != "gh says no" || e.Fix != "Run gh auth login." {
-				t.Fatalf("refusal = %+v, want the check's reason and fix on tracking", e)
+			field := "tracking"
+			if problem == core.CIRepositoryUnreadable {
+				field = "repository"
+			}
+			if e.Field != field || e.Message != "gh says no" || e.Fix != "Run gh auth login." {
+				t.Fatalf("refusal = %+v, want the check's reason and fix on %s", e, field)
 			}
 			ciSettings(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""}), false, "", nil, "")
 		})
