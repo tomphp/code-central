@@ -43,10 +43,11 @@ type SpecDetail struct {
 }
 
 // GetSpecInput is get_spec's input. With neither Parts nor Sections, the
-// read is the full Spec.
+// read is the full Spec; with Sections and no Parts, it is only the body.
 type GetSpecInput struct {
 	Spec Ref `json:"spec"`
-	// Parts are any of body, tickets and edits; all three when empty.
+	// Parts are any of body, tickets and edits; all three when empty, or
+	// only body when Sections are given.
 	Parts []string `json:"parts,omitempty"`
 	// Sections are heading texts: the body returned is only those Sections.
 	Sections []string `json:"sections,omitempty"`
@@ -147,10 +148,14 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 func (in GetSpecInput) lighter() bool { return len(in.Parts) > 0 || len(in.Sections) > 0 }
 
 // parts is the set of parts the read returns, checking them against
-// Sections.
+// Sections. Sections without Parts read only the body.
 func (in GetSpecInput) parts() (map[string]bool, error) {
 	asked := in.Parts
-	if len(asked) == 0 {
+	switch {
+	case len(asked) > 0:
+	case len(in.Sections) > 0:
+		asked = []string{PartBody}
+	default:
 		asked = specParts
 	}
 	out, err := partSet(asked, specParts)

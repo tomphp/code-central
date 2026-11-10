@@ -186,11 +186,11 @@ func TestOnlyReadsForMoreThanBeforeAreWiderReads(t *testing.T) {
 	}
 	spec := func(input map[string]any) Call { return read("get_spec", input) }
 	sessions := []Session{{Ticket: "acme-2", Kind: "implementation", Calls: []Call{
-		// Not wider: the whole Spec covers any part or section of it, and
-		// one section then the tickets asks for no more of the body.
+		// Not wider: the whole Spec covers any part or section of it.
 		spec(map[string]any{"spec": "acme-1"}),
 		spec(map[string]any{"spec": "acme-1", "sections": []any{"Goal"}}),
 		spec(map[string]any{"spec": "acme-1", "parts": []any{"tickets"}}),
+		// Wider: the tickets after sections alone, which read only the body.
 		spec(map[string]any{"spec": "acme-3", "sections": []any{"Goal"}}),
 		spec(map[string]any{"spec": "acme-3", "parts": []any{"tickets"}}),
 		// Wider: the body after only the tickets.
@@ -208,6 +208,7 @@ func TestOnlyReadsForMoreThanBeforeAreWiderReads(t *testing.T) {
 		got = append(got, w.Operation+" "+w.ID+" "+w.To)
 	}
 	want := []string{
+		`get_spec acme-3 {"parts":["tickets"],"spec":"acme-3"}`,
 		`get_spec acme-9 {"parts":["body"],"spec":"acme-9"}`,
 		`get_ticket acme-2 {"parts":["rounds"],"ticket":"acme-2"}`,
 		`get_ticket acme-2 {"full":true,"ticket":"acme-2"}`,
