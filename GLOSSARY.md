@@ -129,8 +129,12 @@ A Ticket's running, passed or failed, worked out from the CI Runs of its latest 
 _Avoid_: Build status
 
 **CI gate**:
-What holds a pushed Ticket back from landing until its CI result is passed. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own.
+What holds a pushed Ticket back from landing until its CI result is passed. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own. Under Unblock on push the gate still holds landing, but no longer holds Blockers.
 _Avoid_: CI check, CI hold, waiting-on-CI State
+
+**Unblock on push**:
+A CI Tracking option, off by default, by which an Accepted Ticket whose pushed commit's CI result is running or passed no longer blocks, though it still lands only on a passed CI result. It has effect only while the CI gate holds.
+_Avoid_: early unblock, skip CI gate, don't wait for CI
 
 **Ignored workflows**:
 A Project's list of workflow file names, such as `nightly.yml`, whose runs never count towards a CI result and never fire an "any workflow" CI Rule. They are still shown, marked ignored.
@@ -149,7 +153,7 @@ The git remote a Landing Method's Push sends work to, `origin` unless the human 
 _Avoid_: Upstream, origin (for the concept)
 
 **Blocker**:
-A Ticket in the same Project that must reach Done before another Ticket can be claimed.
+A Ticket in the same Project that must reach Done before another Ticket can be claimed, or, under Unblock on push, must be Accepted with a pushed commit whose CI result isn't failed.
 _Avoid_: Dependency
 
 **Replacement**:
@@ -318,19 +322,27 @@ A Project's long-lived Spec that its Incoming Issues arrive on, titled like "Git
 _Avoid_: Inbox Spec, triage Spec
 
 **Incoming Issue**:
-A linked Draft Ticket on the Issues Spec, mirroring one GitHub issue that hasn't been triaged yet. GitHub owns its definition.
+A linked Draft or Ready Ticket on the Issues Spec whose Link isn't detached, mirroring one GitHub issue. GitHub owns its definition, and the triage actions are offered on it.
 _Avoid_: Issue Ticket, imported issue
 
 **New issue**:
-The Needs Me reason of an Incoming Issue that arrived while New issues need me was on and that the human hasn't triaged yet.
+The Needs Me reason of an Incoming Issue awaiting triage: it arrived while New issues need me was on, the human hasn't triaged it yet, and it isn't closed externally, which takes over.
 _Avoid_: Untriaged, new Ticket
+
+**Awaiting triage**:
+Whether an Incoming Issue still waits for the human's first triage action. Code Central sets it on an Incoming Issue that arrives while New issues need me is on, and a triage action clears it for good.
+_Avoid_: Unread, pending
+
+**Triage action**:
+What the human may do with an Incoming Issue: Keep as Draft, To Requirement or Won't fix. Each is offered on every Incoming Issue, awaiting triage or not, in its Ticket panel, and on a New issue's row and Focus Item.
+_Avoid_: Triage option, disposition
 
 **New issues need me**:
 A GitHub Issues setting, off by default: when on, each new Incoming Issue also shows in Needs Me and Focus Mode under New issue until the human triages it.
 _Avoid_: Notify on new issues
 
 **Keep as Draft**:
-The human's triage action that leaves an Incoming Issue a Draft and takes it out of Needs Me for good, writing nothing to GitHub.
+The human's triage action that leaves an Incoming Issue as it is, a Draft as it arrived, and clears its awaiting triage, taking it out of Needs Me for good, writing nothing to GitHub.
 _Avoid_: Park, snooze
 
 **To Requirement**:

@@ -252,7 +252,7 @@ Runs of Ignored workflows are listed greyed and marked **ignored**, and never co
 
 A Ticket with a CI result also shows it as a badge, **CI running**, **CI passed** or **CI failed**, on its row in the Spec view, in Needs Me and in the Activity Dashboard. The Activity Dashboard's **CI Running** block also counts the CI Runs still going that count towards a Ticket's CI result, and opens the CI view; its CI Running list below the In Progress Tickets lists those runs, each with its GitHub link. Above its Tickets, the Spec view sums their badges, such as **1 failed** and **3 passed**, so you can see a Spec's CI health at a glance.
 
-Under **Merge + Push**, CI Tracking gates landing: the Factory pushes an accepted Ticket and leaves it Accepted until its CI result is passed, then lands it, so Done means on the remote and green. A failed CI result puts the Ticket in Needs Me as **CI failed**, where you can **Re-run failed jobs**, **Land anyway**, **Send back to fix** or open a **New fix Ticket**. Under **Branch + Push** the CI result only informs you, though you can still re-run the failed jobs or fix it before you merge, and the Factory lands the Ticket when it sees your merge. [With CI Tracking](running-the-factory.md#with-ci-tracking) in Running the Factory shows how.
+Under **Merge + Push**, CI Tracking gates landing: the Factory pushes an accepted Ticket and leaves it Accepted until its CI result is passed, then lands it, so Done means on the remote and green. A Ticket it blocks waits until it lands, unless **Unblock on push** is on: then it waits only until the Ticket is pushed, and is held again if the CI result turns failed, while the Ticket itself still lands only on passed. A failed CI result puts the Ticket in Needs Me as **CI failed**, where you can **Re-run failed jobs**, **Land anyway**, **Send back to fix** or open a **New fix Ticket**. Under **Branch + Push** the CI result only informs you, though you can still re-run the failed jobs or fix it before you merge, and the Factory lands the Ticket when it sees your merge. [With CI Tracking](running-the-factory.md#with-ci-tracking) in Running the Factory shows how.
 
 ### The CI view
 
@@ -348,6 +348,21 @@ While GitHub Issues is on, the service runs the Project's **Issue Watcher**, the
 The service stops the Issue Watcher when you turn GitHub Issues off, when you archive the Project and when the service itself stops.
 
 On each check, the Issue Watcher also brings in the repository's open issues, those with the filter label if you set one, oldest first. Every issue arrives once, including those already open when you turned GitHub Issues on, as a Draft Ticket on the Issues Spec with the issue's title and description. Pull requests never arrive. Each Incoming Issue is linked to its issue, with a badge such as **github acme/acme-api#42**, and its panel has an **Open in GitHub** link to the issue, as every linked Spec's and Ticket's does. An issue never arrives twice: not after the Issue Watcher or the service restarts, not after you turn GitHub Issues off and on again, and not after you unlink its Ticket.
+
+### Triaging Incoming Issues
+
+An Incoming Issue is a Draft (or Ready) Ticket on the Issues Spec, linked to its issue: its panel's GitHub badge and **Open in GitHub** link open the issue, and its title and description are GitHub's. Its Ticket panel has a **Triage** section with the triage actions, whether or not New issues need me is on:
+
+- **Keep as Draft** leaves it on the Issues Spec as it is, a Draft as it came in, and writes nothing to GitHub. With New issues need me on, it also takes the issue out of Needs Me for good: closing and reopening the issue, editing it, or turning New issues need me off and on never brings it back.
+
+With **New issues need me** on, each issue that comes in waits in Needs Me under **New issue**, after Blocked by a Cancelled Ticket and before Closed externally, longest-waiting first. Its row names the issue and when it came in:
+
+```
+acme-api-14  Login is broken
+github acme/acme-api#7 came in 5m ago
+```
+
+Its action panel, in the Inbox and as its Focus Item in Focus Mode, links to the issue and offers the triage actions, so you can triage new issues one at a time. Choosing one moves Focus Mode on to the next item. An issue that comes in while New issues need me is off isn't a New issue, even after you turn it on: triage it from its Ticket panel. An issue closed on GitHub before you triage it shows as **Closed externally** instead, and once you unlink it, it is no longer an Incoming Issue.
 
 ## When `init` behaves differently
 
