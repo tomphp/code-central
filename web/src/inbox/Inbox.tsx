@@ -233,6 +233,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
             project={projectOf(ticket.id)}
             ticket={ticket}
             now={now}
+            reported={projects.find((p) => p.key === projectOf(ticket.id))?.reported_models}
             openSpec={(id) => navigate({ requirement: id })}
           />
         ) : (

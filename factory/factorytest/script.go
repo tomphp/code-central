@@ -159,6 +159,24 @@ func APIError(code string) Step {
 	return Step{Stdout: string(b)}
 }
 
+// ModelNotFound prints what claude prints when the API rejects its model:
+// an assistant message with error model_not_found, then an error result
+// with terminal_reason api_error and api_error_status 404, as Claude Code
+// 2.1.311 does.
+func ModelNotFound(model string) []Step {
+	text := fmt.Sprintf("There's an issue with the selected model (%s). It may not exist or you may not have access to it. Run /model to pick a different model.", model)
+	msg, _ := json.Marshal(map[string]any{
+		"type":    "assistant",
+		"message": map[string]any{"role": "assistant", "content": []map[string]string{{"type": "text", "text": text}}},
+		"error":   "model_not_found",
+	})
+	res, _ := json.Marshal(map[string]any{
+		"type": "result", "subtype": "success", "is_error": true, "session_id": "{{session}}",
+		"terminal_reason": "api_error", "api_error_status": 404, "result": text,
+	})
+	return []Step{{Stdout: string(msg)}, {Stdout: string(res)}, Exit(1)}
+}
+
 // Say prints a stream-json assistant message with this text.
 func Say(text string) Step {
 	b, _ := json.Marshal(map[string]any{

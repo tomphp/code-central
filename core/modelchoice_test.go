@@ -123,6 +123,30 @@ func TestAgentsGetTicketLeavesTheModelChoiceOut(t *testing.T) {
 	}
 }
 
+func TestTheUIsTicketReadCarriesTheModelChoiceWithSources(t *testing.T) {
+	f := newFixture(t)
+	f.readyTicket(t)
+	read := func() *core.ModelChoice {
+		t.Helper()
+		v, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "acme-2", WithModelChoice: true})
+		if err != nil {
+			t.Fatalf("get_ticket: %v", err)
+		}
+		return v.ModelChoice
+	}
+	if mc := read(); mc == nil || *mc != none {
+		t.Errorf("with nothing set, model choice = %+v, want nothing set", mc)
+	}
+	f.setModels(t, core.SetModelsInput{Default: row("sonnet", "low"), Kinds: []core.KindModelsView{kind("implementation", "opus", "")}})
+	if mc, want := read(), choice(fromKind("opus", "implementation"), set("low", core.SourceProjectDefault)); mc == nil || *mc != want {
+		t.Errorf("with Models rows, model choice = %+v, want %+v", mc, want)
+	}
+	f.setTags(t, "acme-2", map[string]string{"effort": "max"})
+	if mc, want := read(), choice(fromKind("opus", "implementation"), set("max", core.SourceTicketTag)); mc == nil || *mc != want {
+		t.Errorf("with an effort Tag, model choice = %+v, want %+v", mc, want)
+	}
+}
+
 func TestReportModelChoiceRecordsTheLatestTurnOnTheClaim(t *testing.T) {
 	f := newFixture(t)
 	f.readyTicket(t)

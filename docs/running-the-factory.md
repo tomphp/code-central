@@ -261,17 +261,19 @@ Before every turn, a first turn or a resume after answers, after a cut-off or af
 4. the Factory's `--model` or `--effort` flag;
 5. Claude Code's own default: the Factory passes no flag.
 
-Set tiers 2 and 3 in the [Models section of Project Options](setting-up-a-project.md#choosing-models-for-each-kind-of-work): a Project default row, and a row for each kind of work. A Ticket's kind of work comes from its Labels: `grilling`, `spec` or `tickets` for a Stage, `map-chart`, `map-grilling`, `map-research` or `map-task` for a Map Ticket, `prototype` for a Prototype, and `implementation` for any other Ticket. Override them for one Ticket with its Tags, from an agent with `set_tags`, or by hand:
+Set tiers 2 and 3 in the [Models section of Project Options](setting-up-a-project.md#choosing-models-for-each-kind-of-work): a Project default row, and a row for each kind of work. A Ticket's kind of work comes from its Labels: `grilling`, `spec` or `tickets` for a Stage, `map-chart`, `map-grilling`, `map-research` or `map-task` for a Map Ticket, `prototype` for a Prototype, and `implementation` for any other Ticket. Override them for one Ticket with its Tags, from the Ticket panel, from an agent with `set_tags`, or by hand:
 
 ```sh
 code-central set-tags acme-shop-5 model=opus effort=high
 ```
 
+The Ticket panel shows the model and effort the Ticket's next turn runs with, each with where it comes from: `opus (Ticket Tag)`, `opus (the Project's implementation row)`, `opus (Project default)`, `sonnet (Factory flag)` for the flag the Factory reported it was started with, or `Claude Code's default`. Below each is its picker. The **Model Tag** suggests the aliases and model IDs the Factory reported and takes any other name: **Set** writes the `model` Tag and **Clear** removes it. The **Effort Tag** offers the valid levels: picking one writes the `effort` Tag, and picking **Project's settings** removes it. Without its Tags the Ticket goes back to its Project's settings. The panel follows the Ticket's Tags, the Models rows and the Factory's reports as they change.
+
 `effort` must be one of the valid levels: `low`, `medium`, `high`, `xhigh` and `max` until a Factory has reported its `claude`'s, below, and then those. `set_tags` rejects anything else and lists them. `model` takes any name `claude --model` takes. On a Spec, `model` and `effort` are ordinary Tags with no effect.
 
 ### What `claude` accepts
 
-When it starts, the Factory runs `claude --help` and reads the effort levels from the `--effort` option's list, `(low, medium, high, xhigh, max)` in Claude Code 2.1.311, and the model aliases from the names quoted in the `--model` option's text, such as `'fable'`, `'opus'` and `'sonnet'`. It reports them to Code Central with its own `--model` and `--effort` flags. Code Central keeps them as the Project's Reported Models: from then on the valid effort levels are the reported ones, and the [Models section](setting-up-a-project.md#choosing-models-for-each-kind-of-work) offers them. A row or Tag already set to a level a later report drops is kept as it is. If the Project can't be read when the Factory starts, it reports on the first poll that can read it.
+When it starts, the Factory runs `claude --help` and reads the effort levels from the `--effort` option's list, `(low, medium, high, xhigh, max)` in Claude Code 2.1.311, and the model aliases from the names quoted in the `--model` option's text, such as `'fable'`, `'opus'` and `'sonnet'`. It reports them to Code Central with its own `--model` and `--effort` flags. Code Central keeps them as the Project's Reported Models: from then on the valid effort levels are the reported ones, and the [Models section](setting-up-a-project.md#choosing-models-for-each-kind-of-work) offers them. A row or Tag already set to a level a later report drops is kept as it is. If the Project can't be read when the Factory starts, it reports on the first poll that can read it. As each session's usage arrives, Code Central also adds to the Reported Models any model ID it names that they don't have yet, such as `claude-opus-5-5`; model IDs are never removed.
 
 An `--effort` that isn't one of the levels `claude --help` lists stops the Factory at the start:
 
@@ -292,6 +294,26 @@ base: main
 What it can't read is reported as nothing, which leaves the levels and aliases an earlier Factory reported as they were; the flags are always reported.
 
 The choice is worked out afresh each turn, so a Tag or Models row changed while a Ticket waits on a Round applies when it resumes, with no Factory restart. Each Claim in the Ticket's Claims records the model and effort its latest turn ran with, or Claude Code's default. Only the sessions the Factory starts are affected: subagents they start, such as code-review's reviewers, keep their own agent definitions' models.
+
+### A model or effort `claude` won't take
+
+A bad model or effort never quietly wastes a Claim or runs at the wrong effort: either one fails the Claim, and the Ticket goes to Failed with a Failure Report that names the value, where it was set and what to change. Where it was set is one of the Ticket's `model` or `effort` Tag, the Project's Models row for its kind of work (named), the Project's default Models row, or the Factory's `--model` flag.
+
+`claude` ignores an `--effort` it doesn't accept and runs at its default, so before every turn the Factory checks the turn's effort against the levels it read from `claude --help`. An effort that fails starts no turn. This catches a Tag or Models row set while other levels were valid, which a later report dropped. When the Factory couldn't read the levels, it checks nothing. Say the Ticket's `effort` Tag is `xhigh` and this `claude` lists `(low, medium, high)`:
+
+```console
+acme-shop-5: Failed: The effort `xhigh`, set by the Ticket's `effort` Tag, isn't one this Factory's claude accepts (low, medium, high), so no turn was started.
+```
+
+The Failure Report's *What to fix* reads: Set the Ticket's `effort` Tag to one that claude accepts (low, medium, high), or remove it (in the Ticket panel, or with `set_tags` or `remove_tags`), then send the Ticket back.
+
+A model `claude` rejects ends the turn with the API error `model_not_found`. Unlike an outage it doesn't pause the Factory, and unlike an expired login it doesn't stop it: the Claim fails and the Factory carries on. Say the Project's Models row for implementation sets `opus-9`:
+
+```console
+acme-shop-5: Failed: claude rejected the model `opus-9`, set by the Project's Models row for implementation (model_not_found).
+```
+
+Its *What to fix* reads: In Project Options, set the model in the Models row for implementation to one that claude accepts, or to Default, then send the Ticket back. Its *Why* quotes what `claude` said.
 
 ## Map Tickets and Prototypes
 

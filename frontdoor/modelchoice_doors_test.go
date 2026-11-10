@@ -55,3 +55,27 @@ func taggedTicket(t *testing.T, srv *codecentraltest.Server) {
 		return err
 	})
 }
+
+// The UI reads the whole Ticket over HTTP with its Model Choice; the
+// agents' doors, MCP and the CLI, leave it out, to keep their context
+// small.
+func TestOnlyTheUIsTicketReadCarriesTheModelChoice(t *testing.T) {
+	srv := newServer(t, taggedTicket)
+	s := connect(t, srv, "acme")
+	out := httpOK(t, srv, httpCall{"GET", "/api/p/acme/tickets/3", ""})
+	mc, _ := out["model_choice"].(map[string]any)
+	model, _ := mc["model"].(map[string]any)
+	field("value", "opus")(t, model)
+	field("source", "ticket_tag")(t, model)
+	effort, _ := mc["effort"].(map[string]any)
+	field("source", "none")(t, effort)
+
+	for door, out := range map[string]map[string]any{
+		"mcp": mcpOK(t, s, "get_ticket", map[string]any{"ticket": "acme-3"}),
+		"cli": cliOK(t, srv, []string{"get-ticket", "acme-3"}),
+	} {
+		if _, ok := out["model_choice"]; ok {
+			t.Errorf("%s get_ticket carries model_choice: %v", door, out["model_choice"])
+		}
+	}
+}
