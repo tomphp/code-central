@@ -6,6 +6,7 @@ import { useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
 import { EFFORT_LEVELS, type ChoiceValue, type ReportedModels, type TicketView } from "../api/types";
 import { CLAUDE_CODE_DEFAULT } from "../format";
+import { effortOptions, modelSuggestions, ModelSuggestions } from "../modelPickers";
 import { useAct } from "./useAct";
 
 // NO_REPORT stands in for the Reported Models until the Project is read:
@@ -47,9 +48,8 @@ export function ModelChoice({ api, project, ticket: t, reported = NO_REPORT }: M
   const { busy, error, run } = useAct();
   if (!mc) return null;
   const tag = { model: t.tags.model ?? "", effort: t.tags.effort ?? "" };
-  const suggestions = [...new Set([...reported.aliases, ...reported.model_ids])];
-  const valid = reported.effort_levels;
-  const levels = tag.effort && !valid.includes(tag.effort) ? [...valid, tag.effort] : valid;
+  const suggestions = modelSuggestions(reported);
+  const levels = effortOptions(reported.effort_levels, tag.effort);
   const setEffort = (effort: string) =>
     run(() => (effort ? api.setTags(project, t.id, { effort }) : api.removeTags(project, t.id, ["effort"])));
 
@@ -66,13 +66,7 @@ export function ModelChoice({ api, project, ticket: t, reported = NO_REPORT }: M
           set={(model) => run(() => api.setTags(project, t.id, { model }))}
           clear={() => run(() => api.removeTags(project, t.id, ["model"]))}
         />
-        {suggestions.length > 0 && (
-          <datalist id={`${id}-models`}>
-            {suggestions.map((m) => (
-              <option key={m} value={m} />
-            ))}
-          </datalist>
-        )}
+        <ModelSuggestions id={`${id}-models`} suggestions={suggestions} />
       </div>
       <div className="model-choice-row">
         <span data-testid="effort-applies">Effort: {applied(mc.effort, reported.effort_flag)}</span>

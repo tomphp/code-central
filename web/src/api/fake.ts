@@ -324,13 +324,13 @@ const kindOf = (labels: string[]): string => {
   return "implementation";
 };
 // choose is the first of a Model Choice value's tiers set, with its
-// source, as core's choose: the Tag, the row for the kind of work named,
-// then the default row.
-const choose = (tag: string | undefined, name: string, kind: string, def: string): ChoiceValue =>
+// source, as core's choose: the Tag, the row for the kind of work, then
+// the default row.
+const choose = (tag: string | undefined, kindName: string, kindValue: string, def: string): ChoiceValue =>
   tag
     ? { value: tag, source: "ticket_tag" }
-    : kind
-      ? { value: kind, source: "project_kind", kind: name }
+    : kindValue
+      ? { value: kindValue, source: "project_kind", kind: kindName }
       : def
         ? { value: def, source: "project_default" }
         : { source: "none" };
@@ -1523,7 +1523,12 @@ export class FakeApi implements Api {
 
   async setTags(project: string, target: string, tags: Record<string, string>): Promise<TargetView> {
     this.calls.push("setTags");
-    return this.retag(project, target, (old) => ({ ...old, ...tags }), tags.effort);
+    // On a Ticket, effort sets its Model Choice, so it is checked.
+    const levels = this.project(project).reported_models.effort_levels;
+    if (tags.effort !== undefined && !this.specs.has(this.specId(project, target)) && !levels.includes(tags.effort)) {
+      throw new ApiError(422, "invalid", `effort "${tags.effort}" isn't a valid level; use one of ${levels.join(", ")}`, "tags");
+    }
+    return this.retag(project, target, (old) => ({ ...old, ...tags }));
   }
 
   async removeTags(project: string, target: string, keys: string[]): Promise<TargetView> {
@@ -1531,10 +1536,8 @@ export class FakeApi implements Api {
     return this.retag(project, target, (old) => Object.fromEntries(Object.entries(old).filter(([k]) => !keys.includes(k))));
   }
 
-  // retag replaces a Spec's or Ticket's Tags with change's. On a Ticket,
-  // an effort being set sets its Model Choice, so it is checked against
-  // the valid levels.
-  private retag(project: string, target: string, change: (old: Record<string, string>) => Record<string, string>, effort?: string): TargetView {
+  // retag replaces a Spec's or Ticket's Tags with change's.
+  private retag(project: string, target: string, change: (old: Record<string, string>) => Record<string, string>): TargetView {
     this.writable(project);
     const id = `${project}-${target.slice(target.lastIndexOf("-") + 1)}`;
     const s = this.specs.get(id);
@@ -1544,10 +1547,6 @@ export class FakeApi implements Api {
       return structuredClone({ id, kind: "spec", labels: s.labels, tags: s.tags });
     }
     const old = this.ticket(project, target);
-    const levels = this.project(project).reported_models.effort_levels;
-    if (effort !== undefined && !levels.includes(effort)) {
-      throw new ApiError(422, "invalid", `effort "${effort}" isn't a valid level; use one of ${levels.join(", ")}`, "tags");
-    }
     const t = this.updateTicket(old.id, { tags: change(old.tags) });
     return structuredClone({ id: t.id, kind: "ticket", labels: t.labels, tags: t.tags });
   }

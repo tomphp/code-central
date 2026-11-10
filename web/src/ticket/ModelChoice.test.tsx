@@ -1,4 +1,4 @@
-// The Ticket detail's Model and effort (code-central-313): the model and
+// The Ticket detail's Model and effort (Spec code-central-301): the model and
 // effort the Ticket's next turn runs with, each with its source, and
 // pickers that write the Ticket's model and effort Tags or clear them.
 // Against FakeApi.
@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
 import type { ReportedModels } from "../api/types";
+import { options, suggested } from "../testPickers";
 import { TicketDetail } from "./TicketDetail";
 
 const report = { effort_levels: [], aliases: [], model_flag: "", effort_flag: "" };
@@ -35,11 +36,6 @@ const section = () => screen.getByRole("group", { name: "Model and effort" });
 const applies = (what: "Model" | "Effort") => within(section()).getByTestId(`${what.toLowerCase()}-applies`).textContent;
 const modelPicker = () => within(section()).getByLabelText("Model Tag");
 const effortPicker = () => within(section()).getByRole("combobox", { name: "Effort Tag" });
-const options = (select: HTMLElement) => within(select).getAllByRole("option").map((o) => o.textContent);
-const suggested = (input: HTMLElement) => {
-  const list = input.getAttribute("list");
-  return list ? Array.from(document.getElementById(list)?.querySelectorAll("option") ?? [], (o) => o.value) : [];
-};
 
 describe("the Ticket detail's Model and effort", () => {
   it("shows Claude Code's default when nothing sets them and the Factory reported no flag", async () => {

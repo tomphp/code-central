@@ -9,6 +9,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
+import { options, suggested } from "../testPickers";
 
 function renderApp(fake: FakeApi) {
   window.history.replaceState(null, "", "/?view=project-options&project=acme");
@@ -23,12 +24,6 @@ const findModels = async () => within(await screen.findByRole("main", { name: "P
 // A model picker is a textbox, or a combobox once it suggests models.
 const model = (row: string) => within(models()).getByLabelText(`Model for ${row}`);
 const effort = (row: string) => within(models()).getByRole("combobox", { name: `Effort for ${row}` });
-const options = (select: HTMLElement) => within(select).getAllByRole("option").map((o) => o.textContent);
-// suggested is what a model picker's list suggests, none without a list.
-const suggested = (input: HTMLElement) => {
-  const list = input.getAttribute("list");
-  return list ? Array.from(document.getElementById(list)?.querySelectorAll("option") ?? [], (o) => o.value) : [];
-};
 const report = { effort_levels: [], aliases: [], model_flag: "", effort_flag: "" };
 const save = () => userEvent.click(within(models()).getByRole("button", { name: "Save" }));
 const unset = { model: "", effort: "" };

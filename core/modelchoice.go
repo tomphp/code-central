@@ -67,13 +67,13 @@ func modelChoice(p store.Project, t store.Ticket) ModelChoice {
 }
 
 // choose is the first value set, from the Tag, the row for the kind of
-// work named and the default row, with its source.
-func choose(tag, name, kind, def string) ChoiceValue {
+// work, and the default row, with its source.
+func choose(tag, kindName, kindValue, def string) ChoiceValue {
 	switch {
 	case tag != "":
 		return ChoiceValue{Value: tag, Source: SourceTicketTag}
-	case kind != "":
-		return ChoiceValue{Value: kind, Source: SourceProjectKind, Kind: name}
+	case kindValue != "":
+		return ChoiceValue{Value: kindValue, Source: SourceProjectKind, Kind: kindName}
 	case def != "":
 		return ChoiceValue{Value: def, Source: SourceProjectDefault}
 	}

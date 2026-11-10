@@ -79,13 +79,14 @@ var handlers = map[string]handlerFunc{
 			return nil, err
 		}
 		// With no part named, the HTTP API returns the whole Ticket: the
-		// UI and the Factory read every part. It carries the Model Choice
-		// too, which the UI's Ticket panel shows.
-		parts := q["part"]
-		if len(parts) == 0 {
-			parts = core.TicketParts
+		// UI and the Factory read every part. The whole Ticket carries the
+		// Model Choice too, which the UI's Ticket panel shows; the CLI, an
+		// agent door, names its parts, so it leaves it out as MCP does.
+		in := core.GetTicketInput{Ticket: core.Ref(r.PathValue("n")), Parts: q["part"]}
+		if len(in.Parts) == 0 {
+			in.Parts, in.WithModelChoice = core.TicketParts, true
 		}
-		return c.GetTicket(r.Context(), r.PathValue("key"), core.GetTicketInput{Ticket: core.Ref(r.PathValue("n")), Parts: parts, WithModelChoice: true})
+		return c.GetTicket(r.Context(), r.PathValue("key"), in)
 	},
 	"find_tickets": func(c *core.Core, r *http.Request) (any, error) {
 		q := r.URL.Query()
