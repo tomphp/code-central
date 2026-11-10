@@ -18,12 +18,12 @@ function world(state: "Ready" | "Draft" = "Ready") {
     blocked: true,
     blocked_by: ["acme-1", "acme-2"],
     blockers: [
-      { id: "acme-1", title: "Old plan", state: "Cancelled" },
-      { id: "acme-2", title: "Shipped", state: "Done" },
+      { id: "acme-1", title: "Old plan", state: "Cancelled", cleared: false },
+      { id: "acme-2", title: "Shipped", state: "Done", cleared: false },
     ],
   }); // acme-3
   fake.setNeedsMe([
-    { reason: "blocked_by_cancelled", tickets: [{ id: "acme-3", blocker: { id: "acme-1", title: "Old plan", state: "Cancelled" } }] },
+    { reason: "blocked_by_cancelled", tickets: [{ id: "acme-3", blocker: { id: "acme-1", title: "Old plan", state: "Cancelled", cleared: false } }] },
   ]);
   return fake;
 }
@@ -62,7 +62,7 @@ describe("the Blocked panel", () => {
     const fake = world();
     fake.updateTicket("acme-3", {
       blocked_by: ["acme-2", "acme-1"],
-      blockers: [{ id: "acme-2", title: "Shipped", state: "Done" }, { id: "acme-4", title: "Also gone", state: "Cancelled", via: "acme-1" }],
+      blockers: [{ id: "acme-2", title: "Shipped", state: "Done", cleared: false }, { id: "acme-4", title: "Also gone", state: "Cancelled", via: "acme-1", cleared: false }],
     });
     const p = await renderPanel(fake);
     expect(p).toHaveTextContent("acme-4 Also gone");

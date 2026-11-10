@@ -18,10 +18,17 @@ import (
 // on push on, and makes Ticket n Accepted with commit abc123 pushed now.
 func (f fixture) gatedBlocker(t *testing.T, n int) {
 	t.Helper()
+	f.gatedBlockerWith(t, n, true)
+}
+
+// gatedBlockerWith is gatedBlocker with Unblock on push set to
+// unblockOnPush.
+func (f fixture) gatedBlockerWith(t *testing.T, n int, unblockOnPush bool) {
+	t.Helper()
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
 		p.Landing = store.Landing{Method: store.LandingMerge, Push: true, Remote: "origin"}
-		p.CI = store.CI{Tracking: true, Provider: store.CIGitHubActions, Repository: "acme/web", UnblockOnPush: true}
+		p.CI = store.CI{Tracking: true, Provider: store.CIGitHubActions, Repository: "acme/web", UnblockOnPush: unblockOnPush}
 		return w.PutProject(p)
 	})
 	if err != nil {
@@ -36,6 +43,19 @@ func (f fixture) gatedBlocker(t *testing.T, n int) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// noticesOf are the change notices sent while do runs.
+func (f fixture) noticesOf(t *testing.T, do func()) map[events.Event]bool {
+	t.Helper()
+	notices, stop := f.core.Events().Subscribe()
+	defer stop()
+	do()
+	got := map[events.Event]bool{}
+	for len(notices) > 0 {
+		got[<-notices] = true
+	}
+	return got
 }
 
 // reportRun reports, as the CI Watcher, a run of ci.yml on abc123
@@ -79,13 +99,7 @@ func TestUnderUnblockOnPushACancelledBlockersGatedReplacementClearsAndBlocksAgai
 		t.Fatalf("blocked %v claimable %v, want the Replacement acme-4 cleared while its CI runs", v.Blocked, v.Claimable)
 	}
 
-	notices, stop := f.core.Events().Subscribe()
-	defer stop()
-	f.reportRun(t, "acme-4", store.CICompleted, store.CIFailure)
-	got := map[events.Event]bool{}
-	for len(notices) > 0 {
-		got[<-notices] = true
-	}
+	got := f.noticesOf(t, func() { f.reportRun(t, "acme-4", store.CICompleted, store.CIFailure) })
 	if !got[events.Event{Type: events.TicketChanged, Project: "acme", ID: "acme-2"}] {
 		t.Fatalf("notices %v, want ticket.changed for acme-2, whose Blocker's CI result changed", got)
 	}
@@ -111,5 +125,22 @@ func TestACIRunReportThatLeavesTheCIResultAloneSendsNoNoticeToDependants(t *test
 		if e := <-notices; e.ID == "acme-2" {
 			t.Fatalf("notice %v for acme-2, though acme-3's CI result is still running", e)
 		}
+	}
+}
+
+// A dependant's Blockers show a gated Blocker's CI result whichever way
+// Unblock on push is set (code-central-299), so its change notices it.
+func TestWithUnblockOnPushOffADependantIsNoticedWhenItsBlockersCIResultChanges(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
+	f.addBlocker(t, "acme-2", "acme-3")
+	f.gatedBlockerWith(t, 3, false)
+
+	got := f.noticesOf(t, func() { f.reportRun(t, "acme-3", store.CICompleted, store.CISuccess) })
+	if !got[events.Event{Type: events.TicketChanged, Project: "acme", ID: "acme-2"}] {
+		t.Fatalf("notices %v, want ticket.changed for acme-2, whose Blocker's CI result changed", got)
+	}
+	if b := f.get(t, "acme-2").Blockers[0]; b.CIResult != core.CIPassed || b.Cleared {
+		t.Fatalf("blocker %+v, want acme-3 with its CI passed, not cleared", b)
 	}
 }

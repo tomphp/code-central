@@ -102,7 +102,7 @@ function aMap(fake: FakeApi, tickets: { title: string; label: string; state: Sta
       spec: { id: spec.id, title: spec.title },
       labels: [t.label],
       blocked_by: blockedBy,
-      blockers: blockers.map((b) => ({ id: b.id, title: b.title, state: b.state })),
+      blockers: blockers.map((b) => ({ id: b.id, title: b.title, state: b.state, cleared: false })),
       blocked: blockers.some((b) => b.state !== "Done"),
     });
   }
