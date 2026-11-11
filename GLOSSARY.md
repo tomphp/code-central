@@ -120,6 +120,14 @@ _Avoid_: CI integration
 The pluggable part of CI Tracking that talks to one CI system, through its own command-line tool and login. GitHub Actions, through `gh`, is the only one.
 _Avoid_: Integration, connector
 
+**Heartbeat**:
+The signal a running Factory sends Code Central on each poll, naming its Project, itself and its host, its state, its note and when the next is due. Code Central keeps only the latest of each Factory, in memory.
+_Avoid_: ping, keepalive, check-in ("Ping" is already the session activity hook)
+
+**Factory Status**:
+Whether a Project's Factories are **Online**, **Draining** (claiming nothing new while it finishes running turns) or **Offline** (no Heartbeat for three of its intervals, at least 90 seconds, or a stopping Heartbeat), as Code Central reads it from their Heartbeats. A Project's combined status is Online if any Factory is, else Draining if any is, else Offline, which is also a Project with no Heartbeat since Code Central started.
+_Avoid_: health, presence, liveness
+
 **Watcher**:
 A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through `gh` and reporting over the HTTP API. Each kind is run while its Project setting is on, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification. The kinds are the CI Watcher and the Issue Watcher.
 _Avoid_: Daemon, poller

@@ -159,6 +159,7 @@ var Operations = []Op{
 	{Name: "set_models", Audience: HumanOnly, Write: true},
 	// The Reported Models (code-central-311).
 	{Name: "report_models", Audience: FactoryOnly, Write: true},
+	{Name: "report_heartbeat", Audience: FactoryOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

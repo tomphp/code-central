@@ -1,0 +1,11 @@
+# A Factory announces itself with a Heartbeat that lives only in memory
+
+The human wants to see on a Project whether a Factory is running for it. Code Central is Factory-agnostic ([ADR 0004](0004-an-integration-is-a-client-of-the-http-api.md)) and a Factory is only a client, so it has no way to know one is there. We decided that each Factory pushes a **Heartbeat** on every poll with `report_heartbeat`, `POST /api/p/{key}/report_heartbeat`, naming itself and its host, its state (`online`, `draining` or `stopping`), a free-text note and its own poll interval. Code Central keeps the latest Heartbeat of each Factory and host, and works out the **Factory Status** on every read from the injected clock: Offline after a `stopping` Heartbeat or three missed intervals (at least 90 seconds), else Draining or Online by the last state. Like Session Events ([ADR 0008](0008-session-events-are-posted-by-the-factory-and-live-only-in-memory.md)), Heartbeats are kept in memory only, never in the store, so the store format doesn't change and every Project is Offline after a restart until its Factories' next Heartbeats. Code Central never probes a Factory and never infers one from its other calls.
+
+- **Infer a Factory from its other calls.** Rejected: claims, pings and reads say a Factory was there, not that it is, and an idle Factory polling an empty queue makes none worth counting. A different Factory would also be read as the same one.
+- **Probe the Factory.** Rejected: it would make the Factory a server Code Central has to find and reach, when today it is only a client ([ADR 0008](0008-session-events-are-posted-by-the-factory-and-live-only-in-memory.md)).
+- **Store Heartbeats.** Rejected: a Heartbeat is stale within a minute, so a stored one would read as a live Factory after a restart, and a write on every poll would grow the store for no history worth keeping.
+
+## Consequences
+
+A Factory that is killed or crashes sends no stopping Heartbeat, so it shows Online until its deadline. Factories are never removed while Code Central runs, so a stopped one stays listed as Offline with its last note. A Heartbeat publishes `project.changed` only for a new Factory or a changed status or note, so a steady Factory doesn't make the UI refetch on every poll.
