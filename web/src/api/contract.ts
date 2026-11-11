@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeldSessionEvent, LandingMethod, ModelsReport, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
+import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
 import { ApiError, TRIAGE_ACTIONS } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -60,6 +60,8 @@ export interface Driver {
   // reportModels reports what the Factory's claude accepts, with its
   // flags, as a Factory does when it starts (code-central-311).
   reportModels(key: string, report: ModelsReport): Promise<void>;
+  // reportHeartbeat sends a Factory's Heartbeat (code-central-324).
+  reportHeartbeat(key: string, report: HeartbeatReport): Promise<void>;
   // logOutOfGH makes the gh the service finds logged out, so the CI check
   // refuses turning CI Tracking on (code-central-252).
   logOutOfGH(): Promise<void>;
@@ -317,6 +319,23 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       // The rows are replaced whole.
       const cleared = await d.api.setModels("acme", { default: unset, kinds: [] });
       expect(cleared.models).toEqual({ default: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
+    });
+
+    it("serves factory_status: offline with no Factories, then each Factory from its Heartbeat", async () => {
+      await d.createProject("acme", "Acme");
+      expect((await d.api.listProjects())[0].factory_status).toEqual({ status: "offline", factories: [] });
+
+      await d.reportHeartbeat("acme", { factory: "code-central-factory", host: "laptop", state: "online", note: "1 of 3 turns running", interval_seconds: 30 });
+      const online = (await d.api.listProjects())[0].factory_status;
+      expect(online.status).toBe("online");
+      expect(online.factories).toEqual([
+        { name: "code-central-factory", host: "laptop", status: "online", note: "1 of 3 turns running", last_heartbeat: expect.any(String), interval_seconds: 30 },
+      ]);
+
+      await d.reportHeartbeat("acme", { factory: "code-central-factory", host: "laptop", state: "stopping", note: "stopped: drained", interval_seconds: 30 });
+      const stopped = (await d.api.listProjects())[0].factory_status;
+      expect(stopped.status).toBe("offline");
+      expect(stopped.factories).toMatchObject([{ status: "offline", note: "stopped: drained" }]);
     });
 
     it("keeps the Factory's report of what its claude accepts, and checks effort against its levels", async () => {

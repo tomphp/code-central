@@ -21,18 +21,20 @@ import type {
 } from "../api/types";
 import { CLAUDE_CODE_DEFAULT } from "../format";
 import { effortOptions, modelSuggestions, ModelSuggestions } from "../modelPickers";
+import { FactoryList, NO_HEARTBEATS } from "../factory/FactoryStatus";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { githubRepository } from "./githubRepository";
 
 export interface ProjectOptionsProps {
   api: Api;
+  now: Date;
   // projects is every Project, once read; the page shows the one keyed project.
   projects?: ProjectRow[];
   project?: string;
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function ProjectOptions({ api, projects, project: key, navigate }: ProjectOptionsProps) {
+export function ProjectOptions({ api, now, projects, project: key, navigate }: ProjectOptionsProps) {
   const project = projects?.find((p) => p.key === key);
   const back: UiLocation = { view: "inbox", project: project?.key };
 
@@ -52,9 +54,28 @@ export function ProjectOptions({ api, projects, project: key, navigate }: Projec
           <CISection api={api} project={project} />
           <GitHubIssuesSection api={api} project={project} />
           <ModelsSection api={api} project={project} />
+          <FactoriesSection project={project} now={now} />
         </>
       )}
     </main>
+  );
+}
+
+// FactoriesSection lists the Project's Factories, as the dot's tooltip does.
+function FactoriesSection({ project, now }: { project: ProjectRow; now: Date }) {
+  const status = project.factory_status;
+  return (
+    <fieldset className="project-options-section">
+      <legend>Factories</legend>
+      {status.factories.length === 0 ? (
+        <p className="factory-empty">
+          {NO_HEARTBEATS} See <a href="docs/running-the-factory.md">running a Factory</a> and{" "}
+          <a href="docs/writing-a-factory.md">writing a Factory</a>.
+        </p>
+      ) : (
+        <FactoryList status={status} now={now} />
+      )}
+    </fieldset>
   );
 }
 

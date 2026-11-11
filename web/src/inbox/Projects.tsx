@@ -5,10 +5,12 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 import type { Api } from "../api/api";
 import type { ApiError, ProjectRow } from "../api/types";
+import { FactoryStatusDot } from "../factory/FactoryStatus";
 
 export interface ProjectFilterProps {
   api: Api;
   project: ProjectRow;
+  now: Date;
   on: boolean;
   onSelect(): void;
   // projectOptions links to the Project's Project Options page.
@@ -16,7 +18,7 @@ export interface ProjectFilterProps {
 }
 
 // ProjectFilter is one Project's row: the filter button, then its menu.
-export function ProjectFilter({ api, project: p, on, onSelect, projectOptions }: ProjectFilterProps) {
+export function ProjectFilter({ api, project: p, now, on, onSelect, projectOptions }: ProjectFilterProps) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
   // name is the rename box's text while the human is renaming.
@@ -57,6 +59,7 @@ export function ProjectFilter({ api, project: p, on, onSelect, projectOptions }:
 
   return (
     <div className="project-row" ref={ref}>
+      {!p.archived && <FactoryStatusDot status={p.factory_status} now={now} />}
       <button
         className={["filter", on && "on"].filter(Boolean).join(" ")}
         aria-pressed={on}

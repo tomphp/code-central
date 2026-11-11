@@ -93,6 +93,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
       key={p.key}
       api={api}
       project={p}
+      now={now}
       on={loc.project === p.key}
       onSelect={() => navigate({ project: p.key })}
       projectOptions={p.archived ? undefined : { href: hrefFor({ view: "project-options", project: p.key }), onClick: go({ view: "project-options", project: p.key }) }}

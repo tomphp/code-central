@@ -321,3 +321,14 @@ a.link-badge:hover { text-decoration: underline; }
 .map-details summary { cursor: pointer; font-weight: 600; }
 .map-fog-text h3 { font-size: 13px; margin: 0 0 4px; }
 .req-chip { color: var(--accent); }
+/* Factory Status dot, tooltip and list (code-central-324). */
+.factory-status { position: relative; display: inline-flex; align-items: center; padding: 0 2px 0 6px; }
+.factory-dot { width: 9px; height: 9px; border-radius: 50%; background: #8a8984; }
+.factory-dot.online { background: #2e9e5b; }
+.factory-dot.draining { background: #e0a020; }
+.factory-dot.offline { background: #8a8984; }
+.factory-dot:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
+.factory-tooltip { position: absolute; left: 0; top: 100%; z-index: 10; min-width: 16rem; max-width: 22rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgb(0 0 0 / .12); }
+.factory-list { margin: 0; padding-left: 1.1rem; }
+.factory-tooltip .factory-list { padding-left: 0; list-style: none; }
+.factory-empty { margin: 0; }
