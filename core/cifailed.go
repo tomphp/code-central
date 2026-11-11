@@ -161,7 +161,7 @@ func (c *Core) RerunCI(ctx context.Context, key string, in TicketInput) (Written
 		}
 		latest := &t.PushedCommits[len(t.PushedCommits)-1]
 		latest.Reruns = nil
-		for _, run := range failedRuns(latest.Commit, mine) {
+		for _, run := range rerunnableRuns(latest.Commit, mine) {
 			latest.Reruns = append(latest.Reruns, store.CIRunAttempt{ID: run.ID, Attempt: run.Attempt})
 		}
 		slices.SortFunc(latest.Reruns, func(a, b store.CIRunAttempt) int { return cmp.Compare(a.ID, b.ID) })

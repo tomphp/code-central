@@ -100,6 +100,16 @@ func TestUnderMergeAndPushWithCITrackingAFailedCIResultDoesNotLand(t *testing.T)
 	r.WaitForOutput(id + ": CI failed at " + pushed[:12])
 }
 
+func TestUnderMergeAndPushWithCITrackingACancelledCIResultDoesNotLand(t *testing.T) {
+	t.Parallel()
+	h, _, r := gatedHarness(t)
+	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
+
+	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CICancelled)
+	stillAccepted(t, h, r, id, "with a cancelled CI result")
+	r.WaitForOutput(id + ": CI cancelled at " + pushed[:12])
+}
+
 // Land anyway (code-central-261): the human accepts the failed CI
 // result, and the Factory lands the Ticket at its pushed commit on its
 // next poll.

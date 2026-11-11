@@ -357,6 +357,10 @@ func (f *factory) landOnCI(ctx context.Context, tk core.TicketView) {
 		f.printf("%s: CI failed at %s, so it stays %s", tk.ID, short(pushed), tk.State)
 		return
 	}
+	if tk.CIResult == core.CICancelled {
+		f.printf("%s: CI cancelled at %s, so it stays %s", tk.ID, short(pushed), tk.State)
+		return
+	}
 	f.printf("%s: waiting on CI at %s before it lands", tk.ID, short(pushed))
 }
 
