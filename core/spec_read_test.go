@@ -57,9 +57,9 @@ func keys(m map[string]any) []string {
 var always = []string{"created", "finished", "id", "labels", "outline", "state_summary", "tags", "title", "updated"}
 
 var specOutline = []any{
-	map[string]any{"text": "Solution", "level": float64(2)},
-	map[string]any{"text": "Detail", "level": float64(3)},
-	map[string]any{"text": "Testing Decisions", "level": float64(2)},
+	map[string]any{"text": "Solution", "level": float64(2), "size": float64(45)},
+	map[string]any{"text": "Detail", "level": float64(3), "size": float64(24)},
+	map[string]any{"text": "Testing Decisions", "level": float64(2), "size": float64(28)},
 }
 
 func TestGetSpecWithNeitherInputIsTheFullSpec(t *testing.T) {
@@ -99,6 +99,7 @@ func TestGetSpecReturnsOnlyTheAskedForParts(t *testing.T) {
 		{[]string{"body"}, []string{"body"}},
 		{[]string{"tickets"}, []string{"tickets"}},
 		{[]string{"edits"}, []string{"edits"}},
+		{[]string{"outline"}, nil},
 		{[]string{"edits", "body"}, []string{"body", "edits"}},
 		{[]string{"body", "tickets", "edits"}, []string{"body", "edits", "tickets"}},
 	} {

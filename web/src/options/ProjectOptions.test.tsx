@@ -106,6 +106,24 @@ describe("Project Options", () => {
     );
   });
 
+  it("saves Pull Request for an Azure Repos Push remote without sending the view-only fields", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    await fake.reportPushRemote("acme", "https://dev.azure.com/org/proj/_git/repo");
+    renderApp(fake, "/?view=project-options&project=acme");
+    await screen.findByRole("group", { name: "Landing Method" });
+
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Pull Request" }));
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    await waitFor(async () =>
+      expect((await fake.listProjects())[0].landing).toMatchObject({
+        method: "pull_request",
+        code_host: "azure_repos",
+      }),
+    );
+    expect(within(landing()).queryByRole("alert")).toBeNull();
+  });
+
   it("shows the Pull Request Watcher's status under Pull Request: Watching, rate-limited, or an error with its fix", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");

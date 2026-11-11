@@ -23,8 +23,8 @@ func TestTheLighterGetSpecThroughEveryDoor(t *testing.T) {
 	})
 	s := connect(t, srv, "acme")
 	outline := []any{
-		map[string]any{"text": "Solution", "level": float64(2)},
-		map[string]any{"text": "Testing Decisions", "level": float64(2)},
+		map[string]any{"text": "Solution", "level": float64(2), "size": float64(19)},
+		map[string]any{"text": "Testing Decisions", "level": float64(2), "size": float64(28)},
 	}
 	onlyTheCutBody := func(t *testing.T, out map[string]any) {
 		if out["body"] != "## Testing Decisions\n\nSeams." {

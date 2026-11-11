@@ -1239,6 +1239,13 @@ export class FakeApi implements Api {
 
   async setLandingMethod(key: string, landing: LandingInput): Promise<ProjectView> {
     this.calls.push("setLandingMethod");
+    // The service decodes strictly, so a view-only field is an error there too.
+    const inputFields = ["method", "push", "remote", "land_per_spec", "pat_env"];
+    for (const k of Object.keys(landing)) {
+      if (!inputFields.includes(k)) {
+        throw new ApiError(422, "invalid", `invalid JSON: json: unknown field "${k}"`, k);
+      }
+    }
     if (landing.method !== "merge" && landing.method !== "branch" && landing.method !== "pull_request") {
       throw new ApiError(422, "invalid", `Landing Method "${landing.method}" is not "merge", "branch" or "pull_request"`, "method");
     }
