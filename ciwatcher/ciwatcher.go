@@ -6,7 +6,7 @@
 // Checker on the service's side).
 //
 // Everything GitHub-specific sits behind the Provider interface, in
-// github.go; GitHub Actions is the only CI Provider.
+// github.go and azure.go.
 package ciwatcher
 
 import (
@@ -51,14 +51,17 @@ type Run struct {
 	Updated time.Time
 }
 
-// NewProvider is the CI Provider provider for repository, finding gh
-// with ghPath, the gh path Option.
-func NewProvider(provider store.CIProvider, repository, ghPath string, env gh.Env) (Provider, error) {
-	switch provider {
+// NewProvider is the CI Provider for in, chosen by its CI Provider:
+// GitHub Actions finds gh with in's gh path Option, and Azure Pipelines
+// reads the PAT from env by in's PAT environment variable.
+func NewProvider(in core.CICheckInput, env gh.Env) (Provider, error) {
+	switch in.Provider {
 	case store.CIGitHubActions:
-		return &GitHubActions{Repository: repository, GHPath: ghPath, Env: env}, nil
+		return &GitHubActions{Repository: in.Repository, GHPath: in.GHPath, Env: env}, nil
+	case store.CIAzurePipelines:
+		return &AzurePipelines{ProjectURL: in.ProjectURL, PATEnv: in.PATEnv, Env: env}, nil
 	default:
-		return nil, fmt.Errorf("CI Provider %q isn't one this CI Watcher can watch yet; GitHub Actions is %q", provider, store.CIGitHubActions)
+		return nil, fmt.Errorf("CI Provider %q isn't one this CI Watcher can watch; they are %q and %q", in.Provider, store.CIGitHubActions, store.CIAzurePipelines)
 	}
 }
 
@@ -80,9 +83,9 @@ func Check(ctx context.Context, in core.CICheckInput, env gh.Env) core.WatcherCh
 
 // provider is in's CI Provider, or the problem with it.
 func provider(in core.CICheckInput, env gh.Env) (Provider, *core.WatcherCheckResult) {
-	p, err := NewProvider(in.Provider, in.Repository, in.GHPath, env)
+	p, err := NewProvider(in, env)
 	if err != nil {
-		return nil, &core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: err.Error(), Fix: "Choose GitHub Actions as the CI Provider."}
+		return nil, &core.WatcherCheckResult{Problem: core.ProblemCheckFailed, Reason: err.Error(), Fix: "Choose GitHub Actions or Azure Pipelines as the CI Provider."}
 	}
 	return p, nil
 }
