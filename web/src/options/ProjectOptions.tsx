@@ -150,7 +150,8 @@ function LandingMethodSection({
     e.preventDefault();
     setError(undefined);
     // The draft becomes what was stored: the service may tidy it into no change.
-    api.setLandingMethod(project.key, draft).then(
+    const { method, push, remote, land_per_spec, pat_env } = draft;
+    api.setLandingMethod(project.key, { method, push, remote, land_per_spec, pat_env }).then(
       (v) => {
         setDraft(v.landing);
         setSaved(true);
