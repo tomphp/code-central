@@ -6,6 +6,10 @@ Run this by hand once v1 is built (`make build`). These paths can't be automated
 
 - [ ] Follow every guide listed in `README.md` on a fresh repository, made as the guide makes it, before a release: the commands, prompts and output still match what the guide shows. Fix the guide in the release if they don't.
 
+## Factory Status
+
+- [ ] With `code-central-factory` running, the Project's dot in the left pane is green and its tooltip (hover, and Tab to focus) lists `code-central-factory on <host>` with `N of M turns running`; Project Options lists the same under **Factories**. Ctrl-C once: the dot turns amber with `draining: …`; once it exits it is grey with `stopped: drained`. `kill -9` the Factory: the dot goes grey within about 100 seconds without a reload. Archived Projects show no dot. The dot reads clearly in light and dark themes.
+
 ## `service install`
 
 - [ ] macOS: `code-central service install`; `launchctl print gui/$(id -u)/com.github.tomoram.code-central` shows it running; `curl -sI http://localhost:7733/api/workflow` shows `X-Code-Central-Version`.

@@ -251,6 +251,23 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Check: the Factory has exited, and the Requirement is still *Finished*.
 
+## The Factory Status dot
+
+While `code-central-factory` runs, it sends Code Central a Heartbeat on every poll, and the Project's row in the left pane shows a dot before its name: green for Online, amber for Draining and grey for Offline. Hover or focus the dot to list each Factory as name on host, its status, its last Heartbeat and its note. Project Options has the same list under **Factories**. Archived Projects show no dot.
+
+The notes code-central-factory sends:
+
+| When | State | Note |
+| --- | --- | --- |
+| each poll | online | `1 of 3 turns running` |
+| paused for an outage | online | `paused: <reason>; next resume at 14:30` |
+| the first Ctrl-C, and each poll while it drains | draining | `draining: waiting on 2 running turn(s)` |
+| it exits after draining | stopping | `stopped: drained` |
+| a second Ctrl-C, SIGTERM or SIGHUP | stopping | `stopped on interrupt` |
+| a stop only you can fix, such as claude's login expiring | stopping | `stopped: <the reason it prints>` |
+
+A stopping Heartbeat shows Offline at once. A crash sends nothing, so the dot goes grey at the Factory's deadline: three polls, and at least 90 seconds. After Code Central restarts every dot is grey until the Factory's next poll. See [Writing a Factory](writing-a-factory.md) for sending Heartbeats from your own.
+
 ## Model and effort
 
 Before every turn, a first turn or a resume after answers, after a cut-off or after a restart, the Factory works out the model and effort the turn runs with. Each is worked out on its own, highest first:
