@@ -9,7 +9,6 @@ import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import { FINISHED, STATES, type MapView, type NeedsMeReason, type NeedsMeRow, type ProjectRow, type SpecDetail, type State, type TicketView } from "../api/types";
 import { duration, REASON_LABEL, rowDetail } from "../format";
-import { RowLatestEvent } from "../LatestEvent";
 import { CIBadge } from "../ticket/CIBadge";
 import { LinkBadge } from "../ticket/LinkBadge";
 import { PrototypeBadge } from "../ticket/PrototypeBadge";
@@ -26,6 +25,9 @@ import { UsageLink } from "../usage/UsageLink";
 import { CILink } from "../ci/CILink";
 import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
+import { StateListBySpec } from "./StateListBySpec";
+import { StateRow, type InboxRowLinkFactory } from "./StateRow";
+import { storedGroup, storeGroup } from "./groupPreference";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 
 export interface InboxProps {
@@ -87,6 +89,13 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
     "data-id": id,
     "aria-current": loc.requirement === id ? ("true" as const) : undefined,
   });
+
+  // The grouping in effect: the URL's, else this browser's last pick.
+  const grouping = loc.group ?? storedGroup();
+  const chooseGroup = (g: "spec" | "ticket") => {
+    storeGroup(g);
+    navigate({ group: g === "spec" ? "spec" : undefined });
+  };
 
   // Only an active Project has a Project Options link: an Archived one takes no writes.
   const projectFilter = (p: ProjectRow) => (
@@ -160,7 +169,33 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
             )}
           </>
         ) : loc.state ? (
-          <StateList tickets={stateList(tickets, loc.state)} reasons={reasons} now={now} link={rowLink} />
+          <>
+            <div className="bs-toggle-bar">
+              <div className="bs-toggle" role="group" aria-label="Group the list">
+                {(["ticket", "spec"] as const).map((g) => (
+                  <button key={g} aria-pressed={grouping === g} onClick={() => chooseGroup(g)}>
+                    {g === "spec" ? "By Spec" : "By Ticket"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {grouping === "spec" ? (
+              <StateListBySpec
+                key={loc.state}
+                state={loc.state}
+                tickets={stateList(tickets, loc.state)}
+                specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
+                reasons={reasons}
+                now={now}
+                link={rowLink}
+                specLink={specLink}
+                selectedTicket={loc.ticket}
+                selectedSpec={loc.requirement}
+              />
+            ) : (
+              <StateList tickets={stateList(tickets, loc.state)} reasons={reasons} now={now} link={rowLink} />
+            )}
+          </>
         ) : (
           <>
             {shownCount === 0 && <p className="empty">Nothing needs you.</p>}
@@ -282,12 +317,6 @@ function FilterButton(p: { on: boolean; label: string; count: number; loud?: boo
 }
 
 type RowLink = ReturnType<InboxRowLinkFactory>;
-type InboxRowLinkFactory = (id: string) => {
-  href: string;
-  onClick(e: MouseEvent): void;
-  "data-id": string;
-  "aria-current"?: "true";
-};
 
 function NeedsMeLink({ row, now, link }: { row: NeedsMeRow; now: Date; link: RowLink }) {
   return (
@@ -323,17 +352,7 @@ function StateList({
   link: InboxRowLinkFactory;
 }) {
   const stages = tickets.filter(isStage);
-  const row = (t: ProjectTicket) => (
-    <a key={t.id} className="row" {...link(t.id)}>
-      <span className="row-top">
-        <span className="tid">{t.id}</span>
-        <span className="row-title">{t.title}</span>
-        {t.link && <LinkBadge link={t.link} plain />}
-        {reasons.has(t.id) && <span className="dot needs-you" role="img" aria-label="Needs you" />}
-      </span>
-      <RowLatestEvent row={t} now={now} className="row-detail" />
-    </a>
-  );
+  const row = (t: ProjectTicket) => <StateRow key={t.id} t={t} needsYou={reasons.has(t.id)} now={now} link={link} />;
   return (
     <>
       {tickets.filter((t) => !isStage(t)).map(row)}

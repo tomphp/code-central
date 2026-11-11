@@ -11,6 +11,8 @@
 // of the view it returns to (none = the Inbox),
 // or ?view=ci&project=<key>&back=<query> for the CI view, where project is
 // its scope (none = All Projects) and back as Usage's.
+// group=spec is the Inbox's By Spec grouping of a State list (none = By
+// Ticket); it stays in the URL across lists and Projects.
 // view is the layout (anything else is the inbox); project, state and
 // list are the left pane's filters (no state and no list = Needs Me;
 // list=requirements is the Requirements view); requirement is the selected
@@ -33,6 +35,8 @@ export interface UiLocation {
   list?: List;
   requirement?: string;
   ticket?: string;
+  // group is the Inbox's grouping of a State list; none is By Ticket.
+  group?: "spec";
   // days is Usage's range; none is the default, 7.
   days?: UsageDays;
   // session is the session Usage has open on its line chart.
@@ -75,6 +79,7 @@ export function readLocation(search: string): UiLocation {
     list: q.get("list") === "requirements" ? "requirements" : undefined,
     requirement: q.get("requirement") || undefined,
     ticket: q.get("ticket") || undefined,
+    group: q.get("group") === "spec" ? "spec" : undefined,
   };
 }
 
@@ -115,6 +120,7 @@ export function hrefFor(loc: UiLocation): string {
   if (loc.list) q.set("list", loc.list);
   if (loc.requirement) q.set("requirement", loc.requirement);
   if (loc.ticket) q.set("ticket", loc.ticket);
+  if (loc.group) q.set("group", loc.group);
   return `?${q}`;
 }
 
