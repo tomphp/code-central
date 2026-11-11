@@ -174,14 +174,19 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 		t.Fatalf("branch acme-5 is at %s, finish named %s", got, impl.Commit)
 	}
 
-	// 4. Accepting it lands it: the base has the merge, and it is Done.
+	// 4. Accepting it merges it into the Spec Branch, which lands on the
+	// base as the Spec's merge once every Ticket is accepted; it is Done.
 	accept("acme-5")
 	done := waitFor("acme-5", "Done")
 	merge := inRepo("rev-parse", "main")
-	if got := inRepo("log", "-1", "--format=%P", merge); got != base+" "+impl.Commit {
-		t.Errorf("main's tip has parents %q, want %q then %q", got, base, impl.Commit)
+	parents := strings.Fields(inRepo("log", "-1", "--format=%P", merge))
+	if len(parents) != 2 || parents[0] != base {
+		t.Fatalf("main's tip has parents %q, want %q then the Spec Branch tip", parents, base)
 	}
-	if got := inRepo("log", "-1", "--format=%s", merge); got != "Merge acme-5: Say hello" {
+	if got := inRepo("log", "-1", "--format=%P", parents[1]); !strings.Contains(got, impl.Commit) {
+		t.Errorf("the Spec Branch tip has parents %q, want it to merge %s", got, impl.Commit)
+	}
+	if got := inRepo("log", "-1", "--format=%s", merge); got != "Merge spec acme-1: Greet the user" {
 		t.Errorf("merge commit subject %q", got)
 	}
 	if b, err := os.ReadFile(filepath.Join(repo, "hello.txt")); err != nil || string(b) != "hello\n" {
