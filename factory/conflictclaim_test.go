@@ -138,3 +138,22 @@ func TestATicketOnASpecBranchIsAConflictClaimOnlyWhenItsBranchConflicts(t *testi
 		}
 	}
 }
+
+func TestTheConflictTicketTheFactoryOpensForASpecBranchStartsAsAConflictClaim(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.MakeRequirement()
+	a, _ := accepted(h, "First", "README", "spec side\n")
+	release := holdTicketsStage(t, h)
+	fix := "acme-5"
+	h.Script(fix, factorytest.Wait())
+	r := h.Start()
+	r.WaitForOutput(a + ": merged into spec/" + h.SpecID())
+
+	h.CommitOn("main", "README", "base side\n")
+	release()
+	r.Poll()
+	r.WaitForOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)
+
+	requireConflictClaim(t, callFor(t, h, fix), "README")
+}

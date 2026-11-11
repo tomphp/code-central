@@ -380,10 +380,16 @@ func joinIDs(tickets []core.TicketView) string {
 	return strings.Join(ids, ", ")
 }
 
+// specConflictTitle is the title of the Ticket that merges the base into
+// the Spec Branch of spec.
+func specConflictTitle(spec string) string {
+	return fmt.Sprintf("Merge the base into the Spec Branch of %s", spec)
+}
+
 // openSpecConflict opens a Ready Ticket on the Spec to merge the base
 // into its Spec Branch, or comments on the open one already there.
 func (f *factory) openSpecConflict(ctx context.Context, spec core.SpecDetail, tip, baseTip string, conflicts []string) {
-	title := fmt.Sprintf("Merge the base into the Spec Branch of %s", spec.ID)
+	title := specConflictTitle(spec.ID)
 	var b strings.Builder
 	fmt.Fprintf(&b, "The Spec Branch %s conflicts with the base, %s, in these files:\n\n", specBranch(spec.ID), f.base)
 	for _, c := range conflicts {
