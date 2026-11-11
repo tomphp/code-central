@@ -169,3 +169,29 @@ func TestAPushReportCarriesItsBranchAndIsRecordedUnderPullRequestWithoutCITracki
 		t.Fatalf("work = %+v, want the pushed branch", w.Work)
 	}
 }
+
+func TestGetCIWatchGivesThePullRequestNumberWithAWaitingCommitThatHasOne(t *testing.T) {
+	f := newFixture(t)
+	f.pullRequestAccepted(t)
+	if _, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Provider: store.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/web", Repository: ""}); err != nil {
+		t.Fatal(err)
+	}
+	waiting := func() core.CIWaitingCommit {
+		t.Helper()
+		w, err := f.core.GetCIWatch(ctx, "acme")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(w.Waiting) != 1 {
+			t.Fatalf("waiting = %+v, want the pushed commit", w.Waiting)
+		}
+		return w.Waiting[0]
+	}
+	if c := waiting(); c.Commit != "abc123" || c.PullRequest != 0 {
+		t.Fatalf("waiting = %+v, want no pull request number before one is reported", c)
+	}
+	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PROpen})
+	if c := waiting(); c.Commit != "abc123" || c.PullRequest != 7 {
+		t.Fatalf("waiting = %+v, want pull request 7", c)
+	}
+}

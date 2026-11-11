@@ -239,7 +239,7 @@ func (w *watcher) reportRuns(ctx context.Context, p Provider, waiting []core.CIW
 	var limit *watchers.RateLimitError
 list:
 	for _, c := range waiting {
-		runs, err := p.RunsForCommit(ctx, c.Commit)
+		runs, err := p.RunsForCommit(ctx, c.Commit, c.PullRequest)
 		if errors.As(err, &limit) {
 			break
 		}
