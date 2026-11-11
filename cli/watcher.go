@@ -18,7 +18,7 @@ func init() {
 	commands[ciwatcher.Command] = command{
 		hidden: true,
 		usage: ciwatcher.Command + " --project <key>  watch the Project's CI until stdin closes; " +
-			ciwatcher.Command + " --check --provider github_actions --repository <owner/name> [--gh-path <path>]  check the CI Watcher can watch the repository, answering JSON",
+			ciwatcher.Command + " --check --provider github_actions --repository <owner/name> [--gh-path <path>] | --provider azure_pipelines --project-url <url> [--pat-env <name>]  check the CI Watcher can watch what it is given, answering JSON",
 		run: runCIWatcher,
 	}
 }
@@ -34,6 +34,8 @@ func runCIWatcher(ctx context.Context, e Env, args []string) error {
 	var in core.CICheckInput
 	provider := fs.String("provider", string(store.CIGitHubActions), "CI Provider")
 	fs.StringVar(&in.Repository, "repository", "", "GitHub repository, owner/name")
+	fs.StringVar(&in.ProjectURL, "project-url", "", "Azure DevOps project URL")
+	fs.StringVar(&in.PATEnv, "pat-env", store.DefaultPATEnv, "the environment variable holding the Azure DevOps PAT")
 	fs.StringVar(&in.GHPath, "gh-path", "", "the gh path Option")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -47,10 +49,14 @@ func runCIWatcher(ctx context.Context, e Env, args []string) error {
 	case !*check:
 		return ciwatcher.Watch(ctx, ciwatcher.Config{Client: newClient(e), Project: *project, Env: gh.Env{Environ: os.Environ()},
 			Clock: clock.System{}, Stdin: e.Stdin, Log: e.Stderr})
-	case in.Repository == "":
-		return usagef("--check needs --repository")
 	}
 	in.Provider = store.CIProvider(*provider)
+	switch {
+	case in.Provider == store.CIAzurePipelines && in.ProjectURL == "":
+		return usagef("--check needs --project-url")
+	case in.Provider != store.CIAzurePipelines && in.Repository == "":
+		return usagef("--check needs --repository")
+	}
 	r := ciwatcher.Check(ctx, in, gh.Env{Environ: os.Environ()})
 	return json.NewEncoder(e.Stdout).Encode(r)
 }

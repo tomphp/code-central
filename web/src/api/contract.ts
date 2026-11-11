@@ -135,6 +135,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         tracking: false,
         provider: "github_actions",
         repository: "",
+        project_url: "",
+        pat_env: "ADO_PAT",
         ignored_workflows: [],
         unblock_on_push: false,
         push_remote_url: "",
@@ -440,6 +442,31 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(path).toMatchObject({ status: 422, code: "invalid", field: "workflow" });
     });
 
+    it("sets a Project's Azure Pipelines settings, validating them by provider", async () => {
+      await d.createProject("acme", "Acme");
+      const azure = { provider: "azure_pipelines" as CIProvider, repository: "", ignored_workflows: [], unblock_on_push: false };
+
+      const none = await d.api.setCITracking("acme", { ...azure, tracking: true, project_url: " " }).catch((e) => e);
+      expect(none).toMatchObject({ status: 422, code: "invalid", field: "project_url" });
+      expect(none.message).toBe("CI Tracking needs the Azure DevOps project to watch, as its URL");
+      const bad = await d.api.setCITracking("acme", { ...azure, tracking: false, project_url: "https://dev.azure.com/acme" }).catch((e) => e);
+      expect(bad).toMatchObject({ status: 422, code: "invalid", field: "project_url" });
+      const env = await d.api.setCITracking("acme", { ...azure, tracking: false, pat_env: "MY-PAT" }).catch((e) => e);
+      expect(env).toMatchObject({ status: 422, code: "invalid", field: "pat_env" });
+      const names = await d.api.setCITracking("acme", { ...azure, tracking: false, ignored_workflows: ["a/b"] }).catch((e) => e);
+      expect(names).toMatchObject({ status: 422, code: "invalid", field: "ignored_workflows" });
+
+      // The project URL is cut back to the project, and a pipeline's name may hold spaces.
+      const v = await d.api.setCITracking("acme", { ...azure, tracking: true, project_url: " https://dev.azure.com/acme/web/_build?definitionId=3", ignored_workflows: ["Nightly build"] });
+      expect(v.ci).toMatchObject({ tracking: true, provider: "azure_pipelines", project_url: "https://dev.azure.com/acme/web", pat_env: "ADO_PAT", ignored_workflows: ["Nightly build"] });
+
+      // Each provider keeps its own fields when the provider is switched.
+      const back = await d.api.setCITracking("acme", { ...azure, provider: "github_actions", tracking: false, repository: "acme/web", project_url: "https://dev.azure.com/acme/web", pat_env: "ACME_PAT" });
+      expect(back.ci).toMatchObject({ provider: "github_actions", repository: "acme/web", project_url: "https://dev.azure.com/acme/web", pat_env: "ACME_PAT" });
+      const unknown = await d.api.setCITracking("acme", { ...azure, provider: "circleci" as CIProvider, tracking: false }).catch((e) => e);
+      expect(unknown.message).toContain("azure_pipelines");
+    });
+
     it("sets a Project's CI settings, keeping the Push remote URL the Factory reported", async () => {
       await d.createProject("acme", "Acme");
       await d.reportPushRemote("acme", "git@github.com:acme/web.git");
@@ -456,6 +483,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         tracking: true,
         provider: "github_actions",
         repository: "acme/web",
+        project_url: "",
+        pat_env: "ADO_PAT",
         ignored_workflows: ["nightly.yml", "deploy.yaml"],
         unblock_on_push: true,
         push_remote_url: "git@github.com:acme/web.git",
@@ -492,6 +521,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         tracking: false,
         provider: "github_actions",
         repository: "",
+        project_url: "",
+        pat_env: "ADO_PAT",
         ignored_workflows: [],
         unblock_on_push: false,
         push_remote_url: "git@github.com:acme/web.git",
@@ -767,7 +798,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.reportCIRuns("acme", [run(1, "ci.yml", -3, -2), run(2, "lint.yml", -4), run(3, "nightly.yml", -2), run(1, "ci.yml", -1, 0, 2)]);
 
       const acme = await d.api.ciOverview({ project: "acme" });
-      expect(acme.projects).toEqual([{ project: "acme", tracking: true, repository: "acme/web", watcher: { state: "not_reported" } }]);
+      expect(acme.projects).toEqual([{ project: "acme", tracking: true, repository: "acme/web", project_url: "", watcher: { state: "not_reported" } }]);
       expect(acme.runs.map((r) => [r.project, r.workflow, r.attempt, r.ignored])).toEqual([
         ["acme", "nightly.yml", 1, true],
         ["acme", "lint.yml", 1, false],
@@ -780,7 +811,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(all.projects.map((p) => p.project)).toEqual(["acme"]);
       expect(all.runs).toEqual(acme.runs);
       expect(await d.api.ciOverview({ project: "quiet" })).toEqual({
-        projects: [{ project: "quiet", tracking: false, repository: "", watcher: { state: "not_reported" } }],
+        projects: [{ project: "quiet", tracking: false, repository: "", project_url: "", watcher: { state: "not_reported" } }],
         runs: [],
       });
       const unknown = await d.api.ciOverview({ project: "nope" }).catch((e) => e);

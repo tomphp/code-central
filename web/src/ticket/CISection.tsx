@@ -22,6 +22,7 @@ const CONCLUSION_LABEL: Record<CIConclusion, string> = {
   timed_out: "timed out",
   skipped: "skipped",
   neutral: "neutral",
+  partially_succeeded: "partially succeeded",
 };
 
 // runStatus is a run's status as the CI section says it.

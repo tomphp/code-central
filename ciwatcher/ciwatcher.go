@@ -58,7 +58,7 @@ func NewProvider(provider store.CIProvider, repository, ghPath string, env gh.En
 	case store.CIGitHubActions:
 		return &GitHubActions{Repository: repository, GHPath: ghPath, Env: env}, nil
 	default:
-		return nil, fmt.Errorf("CI Provider %q isn't %q, the only one", provider, store.CIGitHubActions)
+		return nil, fmt.Errorf("CI Provider %q isn't one this CI Watcher can watch yet; GitHub Actions is %q", provider, store.CIGitHubActions)
 	}
 }
 

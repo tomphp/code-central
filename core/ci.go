@@ -9,21 +9,31 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/tomoram/code-central/azdourl"
 	"github.com/tomoram/code-central/store"
 )
 
 // A Project's CI settings (Spec code-central-247): the human turns CI
 // Tracking on and off with set_ci_tracking, and the Factory reports its
 // Push remote's URL with report_push_remote, so the UI can prefill the
-// GitHub repository.
+// GitHub repository, or from an Azure Repos Push remote the Azure DevOps
+// project URL.
 
 // CIView is a Project's CI settings as every Project read returns them.
 type CIView struct {
-	Tracking   bool             `json:"tracking"`
-	Provider   store.CIProvider `json:"provider"`
-	Repository string           `json:"repository"`
-	// IgnoredWorkflows are workflow file base names, such as ci.yml,
-	// whose runs never count towards a CI result.
+	Tracking bool             `json:"tracking"`
+	Provider store.CIProvider `json:"provider"`
+	// Repository is the GitHub repository GitHub Actions watches.
+	Repository string `json:"repository"`
+	// ProjectURL is the Azure DevOps project Azure Pipelines watches.
+	ProjectURL string `json:"project_url"`
+	// PATEnv is the name of the environment variable holding the Azure
+	// DevOps PAT, ADO_PAT unless the Project names another. The PAT itself
+	// is never kept.
+	PATEnv string `json:"pat_env"`
+	// IgnoredWorkflows are workflow names, such as the workflow file
+	// ci.yml or a pipeline's name, whose runs never count towards a CI
+	// result.
 	IgnoredWorkflows []string `json:"ignored_workflows"`
 	// UnblockOnPush lets a Ticket the CI gate holds stop blocking while
 	// its pushed commit's CI runs or has passed.
@@ -41,7 +51,7 @@ type CIView struct {
 // to fix it, in State, on the rule's own Spec, whose ID names the rule.
 type CIRuleView struct {
 	Spec string `json:"spec"`
-	// Workflow is a workflow file's base name, or any.
+	// Workflow is a workflow file's base name or a pipeline's name, or any.
 	Workflow string      `json:"workflow"`
 	Branch   string      `json:"branch"`
 	State    store.State `json:"state"`
@@ -50,6 +60,7 @@ type CIRuleView struct {
 
 func ciView(key string, c store.CI, watcher WatcherView) CIView {
 	v := CIView{Tracking: c.Tracking, Provider: c.Provider, Repository: c.Repository,
+		ProjectURL: c.ProjectURL, PATEnv: patEnvOf(c),
 		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), UnblockOnPush: c.UnblockOnPush, PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}, Watcher: watcher}
 	for _, r := range c.Rules {
 		v.Rules = append(v.Rules, CIRuleView{Spec: DisplayID(key, r.Spec), Workflow: r.Workflow, Branch: r.Branch, State: r.State, Created: r.Created})
@@ -57,15 +68,29 @@ func ciView(key string, c store.CI, watcher WatcherView) CIView {
 	return v
 }
 
+// patEnvOf is c's PAT environment variable, ADO_PAT when it names none.
+func patEnvOf(c store.CI) string {
+	if c.PATEnv == "" {
+		return store.DefaultPATEnv
+	}
+	return c.PATEnv
+}
+
 // SetCITrackingInput is the human's set_ci_tracking(tracking, provider,
-// repository, ignored_workflows, unblock_on_push, full?).
+// repository, project_url, pat_env, ignored_workflows, unblock_on_push,
+// full?).
 type SetCITrackingInput struct {
 	Tracking bool `json:"tracking"`
-	// Provider is github_actions, the only one, when left out.
-	Provider         store.CIProvider `json:"provider"`
-	Repository       string           `json:"repository"`
-	IgnoredWorkflows []string         `json:"ignored_workflows"`
-	UnblockOnPush    bool             `json:"unblock_on_push"`
+	// Provider is github_actions when left out.
+	Provider   store.CIProvider `json:"provider"`
+	Repository string           `json:"repository"`
+	// ProjectURL is the Azure DevOps project, as its URL.
+	ProjectURL string `json:"project_url"`
+	// PATEnv names the environment variable holding the Azure DevOps PAT;
+	// ADO_PAT when left out.
+	PATEnv           string   `json:"pat_env"`
+	IgnoredWorkflows []string `json:"ignored_workflows"`
+	UnblockOnPush    bool     `json:"unblock_on_push"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -77,6 +102,19 @@ var repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$`)
 // every workflow in one folder, so the base name names it. It is a name,
 // not a pattern, so it holds no glob.
 var workflowPattern = regexp.MustCompile(`^[^/\\\s*?\[\]]+\.ya?ml$`)
+
+// patEnvPattern is an environment variable's name.
+var patEnvPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// checkWorkflow reports whether name is a workflow name for provider, with
+// an example of one for messages. GitHub Actions names workflow files. A pipeline's name is any
+// non-empty name without a folder separator or a glob, spaces allowed.
+func checkWorkflow(provider store.CIProvider, name string) (example string, ok bool) {
+	if provider == store.CIAzurePipelines {
+		return "a pipeline's name, such as Build", name != "" && !strings.ContainsAny(name, `/\*?[]`)
+	}
+	return "a workflow file name, such as ci.yml", workflowPattern.MatchString(name)
+}
 
 // SetCITracking is the human's set_ci_tracking: CI Tracking on or off,
 // with the CI Provider, the repository it watches, the Ignored workflows
@@ -90,21 +128,19 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 		in.Provider = store.CIGitHubActions
 	}
 	if !in.Provider.Valid() {
-		return Written[ProjectView]{}, invalid("provider", "CI Provider %q isn't %q, the only one", in.Provider, store.CIGitHubActions)
+		return Written[ProjectView]{}, invalid("provider", "CI Provider %q isn't %q or %q", in.Provider, store.CIGitHubActions, store.CIAzurePipelines)
 	}
-	ci := store.CI{Tracking: in.Tracking, Provider: in.Provider, Repository: strings.TrimSpace(in.Repository), UnblockOnPush: in.UnblockOnPush}
-	switch {
-	case ci.Repository == "" && ci.Tracking:
-		return Written[ProjectView]{}, invalid("repository", "CI Tracking needs the GitHub repository to watch, as owner/name")
-	case ci.Repository != "" && !repositoryPattern.MatchString(ci.Repository):
-		return Written[ProjectView]{}, invalid("repository", "%q isn't a GitHub repository as owner/name, such as acme/web", ci.Repository)
+	ci := store.CI{Tracking: in.Tracking, Provider: in.Provider, Repository: strings.TrimSpace(in.Repository),
+		ProjectURL: strings.TrimSpace(in.ProjectURL), PATEnv: strings.TrimSpace(in.PATEnv), UnblockOnPush: in.UnblockOnPush}
+	if err := checkCITarget(&ci); err != nil {
+		return Written[ProjectView]{}, err
 	}
 	for _, w := range in.IgnoredWorkflows {
 		w = strings.TrimSpace(w)
-		switch {
+		switch example, ok := checkWorkflow(ci.Provider, w); {
 		case w == "" || slices.Contains(ci.IgnoredWorkflows, w):
-		case !workflowPattern.MatchString(w):
-			return Written[ProjectView]{}, invalid("ignored_workflows", "%q isn't a workflow file name, such as ci.yml", w)
+		case !ok:
+			return Written[ProjectView]{}, invalid("ignored_workflows", "%q isn't %s", w, example)
 		default:
 			ci.IgnoredWorkflows = append(ci.IgnoredWorkflows, w)
 		}
@@ -115,7 +151,7 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 	return c.updateCI(key, in.Full, func(p *store.CI) error {
 		ci.PushRemoteURL, ci.Rules = p.PushRemoteURL, p.Rules
 		// What the CI Watcher said was about the old settings.
-		if !ci.Tracking || ci.Provider != p.Provider || ci.Repository != p.Repository {
+		if !ci.Tracking || watchesAnother(*p, ci) {
 			c.watchers.reset(watcherKey{WatcherCI, key})
 		}
 		*p = ci
@@ -123,12 +159,54 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 	})
 }
 
+// checkCITarget validates what the CI Provider ci names watches: the
+// repository for GitHub Actions, the project URL and PAT environment
+// variable for Azure Pipelines. Each provider's other fields are kept as
+// given, unchecked, until that provider is chosen. It replaces the
+// project URL with the one it parses to.
+func checkCITarget(ci *store.CI) error {
+	switch ci.Provider {
+	case store.CIAzurePipelines:
+		if ci.ProjectURL == "" && ci.Tracking {
+			return invalid("project_url", "CI Tracking needs the Azure DevOps project to watch, as its URL")
+		}
+		if ci.ProjectURL != "" {
+			u, err := azdourl.ParseProjectURL(ci.ProjectURL)
+			if err != nil {
+				return invalid("project_url", "%v", err)
+			}
+			ci.ProjectURL = u
+		}
+		if ci.PATEnv != "" && !patEnvPattern.MatchString(ci.PATEnv) {
+			return invalid("pat_env", "%q isn't an environment variable name: a letter or underscore, then letters, digits and underscores, such as %s", ci.PATEnv, store.DefaultPATEnv)
+		}
+	default:
+		switch {
+		case ci.Repository == "" && ci.Tracking:
+			return invalid("repository", "CI Tracking needs the GitHub repository to watch, as owner/name")
+		case ci.Repository != "" && !repositoryPattern.MatchString(ci.Repository):
+			return invalid("repository", "%q isn't a GitHub repository as owner/name, such as acme/web", ci.Repository)
+		}
+	}
+	return nil
+}
+
+// watchesAnother reports whether now watches something other than was
+// did: another CI Provider, repository, project URL or PAT environment
+// variable.
+func watchesAnother(was, now store.CI) bool {
+	return was.Provider != now.Provider || was.Repository != now.Repository || was.ProjectURL != now.ProjectURL || patEnvOf(was) != patEnvOf(now)
+}
+
 // CICheckInput is what the CI Watcher's check mode checks: that it can
-// watch the repository through the CI Provider, finding gh with the gh
-// path Option.
+// watch what the Project names through its CI Provider: the repository
+// through gh, found with the gh path Option, or the Azure DevOps project
+// through its API with the PAT the environment variable PATEnv names.
 type CICheckInput struct {
 	Provider   store.CIProvider `json:"provider"`
 	Repository string           `json:"repository"`
+	ProjectURL string           `json:"project_url,omitempty"`
+	PATEnv     string           `json:"pat_env,omitempty"`
 	GHPath     string           `json:"gh_path,omitempty"`
 }
 
@@ -143,7 +221,8 @@ func (c *Core) SetCICheck(check CICheck) { c.ciCheck = check }
 
 // checkCI runs the CI check when ci turns CI Tracking on, or changes what
 // it watches while on, and refuses with the reason and fix when it fails:
-// on the repository when gh can't read it, else on tracking.
+// on the repository when gh can't read it, on the project URL when the
+// Azure DevOps project can't be read, else on tracking.
 // It runs outside the store's lock, as the check calls GitHub.
 func (c *Core) checkCI(ctx context.Context, key string, ci store.CI) error {
 	if !ci.Tracking || c.ciCheck == nil {
@@ -159,16 +238,23 @@ func (c *Core) checkCI(ctx context.Context, key string, ci store.CI) error {
 		was, opts = p.CI, r.Options()
 		return nil
 	})
-	if err != nil || (was.Tracking && was.Provider == ci.Provider && was.Repository == ci.Repository) {
+	if err != nil || (was.Tracking && !watchesAnother(was, ci)) {
 		return err
 	}
-	res := c.ciCheck(ctx, CICheckInput{Provider: ci.Provider, Repository: ci.Repository, GHPath: opts.GHPath})
+	in := CICheckInput{Provider: ci.Provider, Repository: ci.Repository, GHPath: opts.GHPath}
+	if ci.Provider == store.CIAzurePipelines {
+		in.ProjectURL, in.PATEnv = ci.ProjectURL, patEnvOf(ci)
+	}
+	res := c.ciCheck(ctx, in)
 	if res.Problem == "" {
 		return nil
 	}
 	field := "tracking"
-	if res.Problem == ProblemRepositoryUnreadable {
+	switch res.Problem {
+	case ProblemRepositoryUnreadable:
 		field = "repository"
+	case ProblemProjectUnreadable:
+		field = "project_url"
 	}
 	return &Error{Code: Invalid, Field: field, Message: res.Reason, Fix: res.Fix}
 }
@@ -273,15 +359,16 @@ func (c *Core) AddCIRule(ctx context.Context, key string, in CIRuleInput) (Writt
 	if in.State == "" {
 		in.State = store.Draft
 	}
-	r, err := checkCIRule(in)
-	if err != nil {
-		return Written[ProjectView]{}, err
-	}
-	err = c.store.Update(func(w store.Writer) error {
+	var r store.CIRule
+	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)
+		var err error
+		if r, err = checkCIRule(p.CI.Provider, in); err != nil {
+			return err
+		}
 		if err := ruleIsNew(key, p.CI.Rules, r, 0); err != nil {
 			return err
 		}
@@ -322,7 +409,7 @@ func (c *Core) EditCIRule(ctx context.Context, key string, in CIRuleInput) (Writ
 		if in.State == "" {
 			in.State = old.State
 		}
-		if r, err = checkCIRule(in); err != nil {
+		if r, err = checkCIRule(ci.Provider, in); err != nil {
 			return err
 		}
 		if err := ruleIsNew(key, ci.Rules, r, n); err != nil {
@@ -358,11 +445,11 @@ func (c *Core) RemoveCIRule(ctx context.Context, key string, in RemoveCIRuleInpu
 	})
 }
 
-// checkCIRule is in's rule, trimmed, or why it isn't one.
-func checkCIRule(in CIRuleInput) (store.CIRule, error) {
+// checkCIRule is in's rule for a Project on provider, trimmed, or why it isn't one.
+func checkCIRule(provider store.CIProvider, in CIRuleInput) (store.CIRule, error) {
 	r := store.CIRule{Workflow: strings.TrimSpace(in.Workflow), Branch: strings.TrimSpace(in.Branch), State: in.State}
-	if r.Workflow != store.AnyWorkflow && !workflowPattern.MatchString(r.Workflow) {
-		return r, invalid("workflow", "%q isn't a workflow file name, such as ci.yml, or %s for any workflow", r.Workflow, store.AnyWorkflow)
+	if example, ok := checkWorkflow(provider, r.Workflow); r.Workflow != store.AnyWorkflow && !ok {
+		return r, invalid("workflow", "%q isn't %s, or %s for any workflow", r.Workflow, example, store.AnyWorkflow)
 	}
 	if r.Branch == "" || strings.ContainsAny(r.Branch, globChars) || strings.IndexFunc(r.Branch, unicode.IsSpace) >= 0 {
 		return r, invalid("branch", "%q isn't an exact branch name, such as main: a CI Rule's branch takes no globs", r.Branch)

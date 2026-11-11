@@ -149,7 +149,7 @@ func (w *watcher) poll(ctx context.Context) (res pollResult) {
 		return res
 	}
 	res.waiting = len(watch.Waiting) > 0
-	p, bad := provider(core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, GHPath: watch.GHPath}, w.Env)
+	p, bad := provider(core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, ProjectURL: watch.ProjectURL, PATEnv: watch.PATEnv, GHPath: watch.GHPath}, w.Env)
 	var r core.WatcherCheckResult
 	if bad != nil {
 		r = *bad

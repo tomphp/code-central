@@ -249,6 +249,8 @@ describe("Project Options", () => {
       expect((await fake.listProjects())[0].ci).toEqual({
         tracking: true,
         provider: "github_actions",
+        project_url: "",
+        pat_env: "ADO_PAT",
         repository: "acme/web",
         ignored_workflows: ["nightly.yml", "preview.yml"],
         unblock_on_push: false,

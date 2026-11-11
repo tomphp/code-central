@@ -125,12 +125,20 @@ A Landing Method's option to send the work to a named git remote: the base after
 _Avoid_: Publish, sync
 
 **CI Tracking**:
-A Project's opt-in, off by default, to have Code Central watch the CI of what the Factory pushes, gate landing on it and run its CI Rules. The human turns it on in the CI section of Project Options, naming the GitHub repository to watch.
+A Project's opt-in, off by default, to have Code Central watch the CI of what the Factory pushes, gate landing on it and run its CI Rules. The human turns it on in the CI section of Project Options, naming what to watch: a GitHub repository or an Azure DevOps project URL, depending on the CI Provider.
 _Avoid_: CI integration
 
 **CI Provider**:
-The pluggable part of CI Tracking that talks to one CI system, through its own command-line tool and login. GitHub Actions, through `gh`, is the only one.
+The pluggable part of CI Tracking that talks to one CI system, through that system's own command-line tool and login, or its API and a token from the environment. There are two: GitHub Actions, through `gh`, and Azure Pipelines.
 _Avoid_: Integration, connector
+
+**Azure Pipelines**:
+The CI Provider for Azure DevOps' CI. It reaches one Azure DevOps project, named by its URL, over Azure DevOps' API, using a PAT that the service's environment holds under a variable the Project names.
+_Avoid_: ADO provider, Azure DevOps CI
+
+**PAT environment variable**:
+The Azure Pipelines setting that names the environment variable holding the Azure DevOps PAT, `ADO_PAT` unless the human names another. Code Central keeps the name, never the PAT.
+_Avoid_: PAT setting, token variable
 
 **Heartbeat**:
 The signal a running Factory sends Code Central on each poll, naming its Project, itself and its host, its state, its note and when the next is due. Code Central keeps only the latest of each Factory, in memory.
@@ -141,11 +149,11 @@ Whether a Project's Factories are **Online**, **Draining** (claiming nothing new
 _Avoid_: health, presence, liveness
 
 **Watcher**:
-A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through `gh` and reporting over the HTTP API. Each kind is run while its Project setting is on, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification. The kinds are the CI Watcher and the Issue Watcher.
+A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through its CI Provider or `gh` and reporting over the HTTP API. Each kind is run while its Project setting is on, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification. The kinds are the CI Watcher and the Issue Watcher.
 _Avoid_: Daemon, poller
 
 **CI Watcher**:
-The kind of Watcher that watches one Project's CI through its CI Provider and reports what it sees over the HTTP API. Before CI Tracking turns on, Code Central runs it once in its **check mode**, which checks it can reach the repository through `gh` and answers with what is wrong and its fix, if anything is. Its status, **Watching** or an error with its fix, shows in the CI section of Project Options; going into an error sends one Notification. Rate-limited by GitHub, it is still Watching, until the time it may call again, and sends no Notification. The service starts one per Project with CI Tracking on, stops it when CI Tracking is turned off or the Project is archived, and restarts one that crashes with backoff, reporting it as crashed, restarted N times.
+The kind of Watcher that watches one Project's CI through its CI Provider and reports what it sees over the HTTP API. Before CI Tracking turns on, Code Central runs it once in its **check mode**, which checks it can reach what it watches through its CI Provider and answers with what is wrong and its fix, if anything is. Its status, **Watching** or an error with its fix, shows in the CI section of Project Options; going into an error sends one Notification. Rate-limited by its CI Provider, it is still Watching, until the time it may call again, and sends no Notification. The service starts one per Project with CI Tracking on, stops it when CI Tracking is turned off or the Project is archived, and restarts one that crashes with backoff, reporting it as crashed, restarted N times.
 _Avoid_: CI daemon, CI Integration
 
 **Pushed commit**:
@@ -153,11 +161,15 @@ The commit the Factory pushed for a Ticket, which it reports on the Ticket: the 
 _Avoid_: Push SHA
 
 **CI Run**:
-One workflow run the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. Kept for 30 days after it finishes.
+One run of a Workflow the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. Kept for 30 days after it finishes.
 _Avoid_: Job, build, pipeline
 
+**Workflow**:
+The named definition a CI Run runs, as its CI Provider names it: a workflow file such as `ci.yml` for GitHub Actions, or a pipeline's name for Azure Pipelines.
+_Avoid_: pipeline, except for Azure Pipelines' own
+
 **CI result**:
-A Ticket's running, failed, cancelled or passed, worked out from the CI Runs of its latest pushed commit that aren't of Ignored workflows, each at its latest attempt: running while any is unfinished, else failed if any failed or timed out, else cancelled if any was cancelled, else passed. A Ticket whose only runs are cancelled is cancelled, not unavailable, and a cancelled run that was re-run and succeeded counts as passed.
+A Ticket's running, failed, cancelled or passed, worked out from the CI Runs of its latest pushed commit that aren't of Ignored workflows, each at its latest attempt: running while any is unfinished, else failed if any failed or timed out, else cancelled if any was cancelled, else passed; a partially succeeded run counts as passed. A Ticket whose only runs are cancelled is cancelled, not unavailable, and a cancelled run that was re-run and succeeded counts as passed.
 _Avoid_: Build status
 
 **CI gate**:
@@ -169,11 +181,11 @@ A CI Tracking option, off by default, by which an Accepted Ticket whose latest p
 _Avoid_: early unblock, skip CI gate, don't wait for CI
 
 **Ignored workflows**:
-A Project's list of workflow file names, such as `nightly.yml`, whose runs never count towards a CI result and never fire an "any workflow" CI Rule. They are still shown, marked ignored.
+A Project's list of workflow names, such as `nightly.yml` or a pipeline's name, whose runs never count towards a CI result and never fire an "any workflow" CI Rule. They are still shown, marked ignored.
 _Avoid_: Excluded workflows, skipped workflows
 
 **CI Rule**:
-A Project's standing rule, "when workflow X fails on branch Y, open a Ticket to fix it", fired only by a run that failed or timed out, never by a cancelled one, and whose Tickets go on a long-lived Spec of its own, as Draft or Ready.
+A Project's standing rule, "when Workflow X fails on branch Y, open a Ticket to fix it", fired only by a run that failed or timed out, never by a cancelled one, and whose Tickets go on a long-lived Spec of its own, as Draft or Ready.
 _Avoid_: Trigger, watch, alert
 
 **Fix Ticket**:
@@ -181,7 +193,7 @@ An ordinary implementation Ticket opened to fix a failed CI Run: by a CI Rule on
 _Avoid_: CI Ticket, failure Ticket
 
 **Push remote**:
-The git remote a Landing Method's Push sends work to, `origin` unless the human names another. The Factory reports its URL when it starts, from which the CI section of Project Options fills in the GitHub repository.
+The git remote a Landing Method's Push sends work to, `origin` unless the human names another. The Factory reports its URL when it starts, from which the CI section of Project Options fills in the GitHub repository, or the Azure DevOps project URL from an Azure Repos remote.
 _Avoid_: Upstream, origin (for the concept)
 
 **Blocker**:
@@ -274,7 +286,7 @@ The failure option by which the human asks the CI Watcher to re-run the failed j
 _Avoid_: Retry, rebuild
 
 **Re-run request**:
-What Re-run failed jobs records on a pushed commit: the failed and cancelled CI Runs, each at the attempt that failed, for the CI Watcher to re-run. It is answered when the CI Watcher reports a later attempt of each, and lapses after 10 minutes unanswered, say when GitHub refuses the re-run, so the Ticket is CI failed again.
+What Re-run failed jobs records on a pushed commit: the failed and cancelled CI Runs, each at the attempt that failed, for the CI Watcher to re-run. It is answered when the CI Watcher reports a later attempt of each, and lapses after 10 minutes unanswered, say when the CI Provider refuses the re-run, so the Ticket is CI failed again.
 _Avoid_: Rerun job, retry
 
 **Send back to fix**:

@@ -54,9 +54,8 @@ export interface Landing {
   remote: string;
 }
 
-// A CI Provider: the CI system CI Tracking watches. GitHub Actions is the
-// only one.
-export type CIProvider = "github_actions";
+// A CI Provider: the CI system CI Tracking watches.
+export type CIProvider = "github_actions" | "azure_pipelines";
 
 // The CI settings the human sets with setCITracking.
 export interface CITrackingChange {
@@ -64,7 +63,16 @@ export interface CITrackingChange {
   provider: CIProvider;
   // repository is the GitHub repository as owner/name; CI Tracking on needs one.
   repository: string;
-  // ignored_workflows are workflow file names, such as ci.yml.
+  // project_url is the Azure DevOps project as its URL, such as
+  // https://dev.azure.com/acme/web; Azure Pipelines on needs one. Each
+  // CI Provider keeps its own fields, so switching loses nothing.
+  project_url?: string;
+  // pat_env names the environment variable holding the Azure DevOps PAT in
+  // the service's environment, ADO_PAT when left empty. The PAT itself is
+  // never kept.
+  pat_env?: string;
+  // ignored_workflows are workflow names: workflow file names, such as
+  // ci.yml, or pipeline names.
   ignored_workflows: string[];
   // unblock_on_push lets a Ticket the CI gate holds stop blocking while
   // its pushed commit's CI runs or has passed. It may be on while CI
@@ -75,7 +83,8 @@ export interface CITrackingChange {
 // A CI Rule as the human adds or edits it: when workflow fails on branch,
 // open a Ticket to fix it, in state.
 export interface CIRuleChange {
-  // workflow is a workflow file name, such as ci.yml, or "any".
+  // workflow is a workflow file name, such as ci.yml, or a pipeline's
+  // name, or "any".
   workflow: string;
   // branch is an exact branch name, with no globs.
   branch: string;
@@ -90,7 +99,16 @@ export interface CIRule extends CIRuleChange {
 }
 
 // Why the CI Watcher can't watch its repository, each with its own fix.
-export type CIProblem = "gh_missing" | "logged_out" | "repository_unreadable" | "check_failed" | "crashed";
+export type CIProblem =
+  | "gh_missing"
+  | "logged_out"
+  | "repository_unreadable"
+  | "pat_missing"
+  | "pat_rejected"
+  | "project_unreadable"
+  | "pat_scope"
+  | "check_failed"
+  | "crashed";
 
 // The CI Watcher's status as it last reported it (code-central-253):
 // not_reported until it has since the service started or CI Tracking was
@@ -114,6 +132,8 @@ export type CIWatcherReport = Omit<CIWatcherStatus, "since"> & { state: "watchin
 // last reported ("" until it has), the CI Rules, in the order added, and
 // the CI Watcher's status.
 export interface CISettings extends CITrackingChange {
+  project_url: string;
+  pat_env: string;
   push_remote_url: string;
   rules: CIRule[];
   watcher: CIWatcherStatus;
@@ -222,7 +242,7 @@ export type CIResult = "running" | "passed" | "failed" | "cancelled";
 
 // Where a CI Run stands, and how a finished run or job ended.
 export type CIRunStatus = "queued" | "in_progress" | "completed";
-export type CIConclusion = "success" | "failure" | "cancelled" | "timed_out" | "skipped" | "neutral";
+export type CIConclusion = "success" | "failure" | "cancelled" | "timed_out" | "skipped" | "neutral" | "partially_succeeded";
 
 // A commit the Factory pushed for a Ticket while CI Tracking was on.
 export interface PushedCommitView {
@@ -278,6 +298,7 @@ export interface CIProjectStatus {
   project: string;
   tracking: boolean;
   repository: string;
+  project_url: string;
   watcher: CIWatcherStatus;
 }
 

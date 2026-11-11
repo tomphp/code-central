@@ -51,7 +51,8 @@ type watcherKind struct {
 // watcherKinds is every kind of Watcher.
 var watcherKinds = map[WatcherKind]watcherKind{
 	WatcherCI: {name: "CI Watcher", setting: "CI Tracking", on: func(p store.Project) bool { return p.CI.Tracking },
-		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemCheckFailed}, watches: "CI"},
+		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemPATMissing, ProblemPATRejected,
+			ProblemProjectUnreadable, ProblemPATScope, ProblemCheckFailed}, watches: "CI"},
 	WatcherIssues: {name: "Issue Watcher", setting: "GitHub Issues", on: func(p store.Project) bool { return p.GitHubIssues.On },
 		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemIssuesDisabled, ProblemNoTriage, ProblemCheckFailed},
 		watches:  "GitHub Issues"},
@@ -81,6 +82,17 @@ const (
 	// ProblemNoTriage is a repository on which gh's login has less than
 	// triage permission, which labelling and closing issues need.
 	ProblemNoTriage WatcherProblem = "no_triage"
+	// ProblemPATMissing is the PAT environment variable unset or empty in
+	// the service's environment.
+	ProblemPATMissing WatcherProblem = "pat_missing"
+	// ProblemPATRejected is an Azure DevOps PAT that is expired, revoked or
+	// wrong.
+	ProblemPATRejected WatcherProblem = "pat_rejected"
+	// ProblemProjectUnreadable is an Azure DevOps project the PAT can't
+	// read, or that wasn't found.
+	ProblemProjectUnreadable WatcherProblem = "project_unreadable"
+	// ProblemPATScope is an Azure DevOps PAT without the Build scope.
+	ProblemPATScope WatcherProblem = "pat_scope"
 	// ProblemCheckFailed is a check that didn't run to an answer.
 	ProblemCheckFailed WatcherProblem = "check_failed"
 	// ProblemCrashed is a Watcher that exited without being stopped. The

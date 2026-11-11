@@ -83,6 +83,8 @@ type ciFile struct {
 	Tracking         bool         `yaml:"tracking"`
 	Provider         string       `yaml:"provider"`
 	Repository       string       `yaml:"repository,omitempty"`
+	ProjectURL       string       `yaml:"project_url,omitempty"`
+	PATEnv           string       `yaml:"pat_env,omitempty"`
 	IgnoredWorkflows []string     `yaml:"ignored_workflows,omitempty"`
 	PushRemoteURL    string       `yaml:"push_remote_url,omitempty"`
 	Rules            []ciRuleFile `yaml:"rules,omitempty"`
@@ -624,7 +626,7 @@ func encodeCI(c CI) *ciFile {
 	if c = c.orDefault(); c.Equal(DefaultCI()) {
 		return nil
 	}
-	f := &ciFile{Tracking: c.Tracking, Provider: string(c.Provider), Repository: c.Repository,
+	f := &ciFile{Tracking: c.Tracking, Provider: string(c.Provider), Repository: c.Repository, ProjectURL: c.ProjectURL, PATEnv: c.PATEnv,
 		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, UnblockOnPush: c.UnblockOnPush}
 	for _, r := range c.Rules {
 		f.Rules = append(f.Rules, ciRuleFile{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: string(r.State), Created: formatTime(r.Created)})
