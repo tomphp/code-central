@@ -412,6 +412,8 @@ Each Project has a **Landing Method**, which you set on its **Project Options** 
 
   The Factory recognises a merge only when the commit itself is in the base. After a squash or rebase merge it isn't, so land the Ticket yourself: **Land** on its panel, with the commit that put the work into the base.
 
+- **Pull Request** hands the merge to the Code Host, GitHub or Azure Repos. Accepting pushes the Ticket's branch, a Pull Request Watcher opens a pull request for it, and the Ticket lands when the host reports it merged. See [Pull Request](#pull-request) below.
+
 Switching from Branch to Merge merges, on the next poll, every Accepted Ticket you haven't merged yet. Switching from Merge to Branch leaves every Accepted Ticket the Factory hasn't merged yet for you.
 
 Under either method, you can still merge an In Review Ticket's branch yourself, and the Factory lands it.
@@ -439,6 +441,58 @@ acme-shop-2: deleted spec/acme-shop-2, which is in main
 acme-shop-4: every Ticket is finished but spec/acme-shop-4 isn't in main: kept
 ```
 
+### Pull Request
+
+Under **Pull Request**, the Project's Push remote must be on GitHub or Azure Repos, and Push is implied: the Factory pushes each Ticket's branch to the remote once you accept it, and reports the pushed commit and branch to Code Central. The Pull Request Watcher (see [The Pull Request Watcher](running-as-a-service.md#the-pull-request-watcher)) opens a ready-for-review pull request into the base from that branch, with the Ticket's title and finish summary, and reports its state. You merge it on the host, by any of its merge buttons. The Factory never calls the host and never merges the Ticket itself:
+
+```text
+acme-shop-5: pushed acme-shop-5 to origin
+```
+
+Before it lands anything or cuts a branch, the Factory fetches the remote and fast-forwards the local base to the remote's. It never merges into, rebases or force-pushes the base. This is the one method under which the Factory pulls.
+
+```text
+main: fast-forwarded to origin/main at 22eeda3a9de2
+```
+
+When the host reports a Ticket's pull request merged, the Ticket lands at the commit the host merged it at, however it merged, squash and rebase included, once the fetched base holds that commit; until then the Factory says it is waiting:
+
+```text
+acme-shop-5: pull request 7 merged
+acme-shop-5: landed on main at 22eeda3a9de2
+```
+
+```text
+acme-shop-5: its pull request is merged at 22eeda3a9de2, which main doesn't hold yet: waiting for it
+```
+
+A Ticket whose branch has nothing the base lacks lands at once, with no pull request. A failed push leaves the Ticket Accepted with a comment, tried again on every poll; the Factory also pushes any Accepted Ticket with no pushed commit yet, such as one accepted before you switched to Pull Request. A failed fetch is a warning and a retry:
+
+```text
+warning: can't fetch origin, so nothing lands this poll: fatal: unable to access 'https://example.com/acme-shop.git/': Could not resolve host: example.com
+```
+
+**Base diverged.** When the local base has commits the remote's lacks, it can't be fast-forwarded. The Factory reports it, then lands nothing and claims no work that would cut a branch, until you reconcile the local base with the remote's, for example by resetting or rebasing it. Its next poll sees the fix by itself. Code Central shows a **Base diverged** item in Needs Me and Focus Mode, with both commits:
+
+```text
+warning: the base, main, has diverged from the remote's: it is at 9ad0fd655dd2 and the remote's at 22eeda3a9de2. Nothing lands and no branch is cut until you reconcile them by hand
+main: no longer diverged from the remote's
+```
+
+With **Land per Spec** on, the Spec's accepted Tickets gather on the Spec Branch as under Merge. Once the Spec is ready, the Factory checks the Spec Branch against the fast-forwarded base (a conflict opens the usual Ticket on the Spec), pushes `spec/<spec id>`, and reports that commit for every waiting Ticket: one pull request opens for the Spec, with a section for each Ticket, and each later merge into the Spec Branch is pushed to update it. When it is merged, every waiting Ticket lands at its merge commit and the Spec Branch is deleted:
+
+```text
+acme-shop-2: pushed spec/acme-shop-2 to origin
+main: fast-forwarded to origin/main at 22eeda3a9de2
+acme-shop-5: pull request 9 merged
+acme-shop-5: landed on main at 22eeda3a9de2
+acme-shop-6: pull request 9 merged
+acme-shop-6: landed on main at 22eeda3a9de2
+acme-shop-2: deleted spec/acme-shop-2, which is in main
+```
+
+An Accepted Ticket whose pull request is closed without merging shows **Pull request closed**, offering Send back and Cancel (for a Spec, New fix Ticket and Cancel). A merged pull request that is conflicting shows under **To merge** as conflicting. There is no CI gate and no Land anyway under Pull Request: CI Tracking only informs, and on Azure Pipelines it follows the builds of the pull request's merge.
+
 ### Push
 
 Either Landing Method has a **Push** option, also on the Project Options page, which names a git remote (`origin` by default). The Factory checks that its repository has that remote, with `git remote get-url`. It refuses to start when it doesn't:
@@ -463,7 +517,7 @@ acme-shop-5: landed on main at f90edae47659
 
 Pushing the base sends everything on it, so commits of your own on the base that you haven't pushed go to the remote too.
 
-The Factory never pulls, rebases or force-pushes. When the push fails, say because the remote is unreachable or has moved ahead of your base, the Ticket stays Accepted, with the base already merged, and the Factory comments once, quoting git:
+The Factory never pulls, rebases or force-pushes under Merge or Branch (under [Pull Request](#pull-request) it fetches and fast-forwards the base). When the push fails, say because the remote is unreachable or has moved ahead of your base, the Ticket stays Accepted, with the base already merged, and the Factory comments once, quoting git:
 
 ```text
 acme-shop-5: can't land yet: couldn't push main to origin

@@ -215,6 +215,24 @@ To change it, open the UI, click **⋯** beside the Project in the left pane, an
 
 **Save** applies the change to the Project in Code Central, and every open UI tab shows it. An Archived Project has no Options item, and its Project Options page is read-only until you unarchive it.
 
+### Pull Request: the PAT, its scopes and a diverged base
+
+Pull Request needs the Factory to have started once, so that Code Central knows the Push remote's URL and works the Code Host out from it: github.com is GitHub; dev.azure.com, ssh.dev.azure.com and `*.visualstudio.com` are Azure Repos. The Landing Method section shows the host and repository, and doesn't let you edit them. Nothing depends on CI Tracking.
+
+- **GitHub** uses your `gh` login, which needs write access to the repository (pull requests are opened through it). Nothing else is stored.
+- **Azure Repos** uses a PAT that the service's environment holds, named by the **PAT variable** field (`ADO_PAT` unless you name another). Make it in Azure DevOps (**User settings**, **Personal access tokens**) with the scope **Code: Read & write**. If you also watch Azure Pipelines, the same variable can serve both when the token has both scopes, **Build: Read & execute** and **Code: Read & write**; each check looks only for its own. [Giving the service an environment variable](running-as-a-service.md#giving-the-service-an-environment-variable) shows how to set it.
+
+Turning Pull Request on runs the check once and creates no pull request. Save refuses with the reason and fix when there is no Push remote URL yet, it names no supported host, `gh` is missing, logged out or can't write, or on Azure Repos the variable is unset or empty, the repository can't be read or the PAT can't contribute to pull requests. For example, with the variable unset on macOS:
+
+```text
+The environment variable ADO_PAT is not set, or is empty, in the Pull Request Watcher's environment.
+Make an Azure DevOps PAT with Code: Read & write, run `launchctl setenv ADO_PAT <PAT>`, then restart the Code Central service.
+```
+
+Under Pull Request there is no CI gate, **Unblock on push** has no effect and **Land anyway** isn't offered.
+
+**Base diverged.** Under Pull Request the Factory keeps your local base level with the remote's by fetching and fast-forwarding it. If the local base holds commits the remote's doesn't, it can't, and Code Central shows a **Base diverged** item in Needs Me and Focus Mode, one per Project, with the two commits. Until you reconcile them by hand, for example by resetting or rebasing your local base onto the remote's, the Factory lands nothing and claims no work that would cut a branch. You do nothing in Code Central: on its next poll the Factory sees the fix and carries on. [Pull Request](running-the-factory.md#pull-request) in Running the Factory shows its lines.
+
 ## Watching CI
 
 **CI Tracking** has Code Central watch the CI of what the Factory pushes. It is off on every Project until you turn it on, and Agents have no tool or command to change it. Turn it on in the **CI** section of the same Project Options page:
