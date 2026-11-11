@@ -238,6 +238,7 @@ describe("Project Options", () => {
       repository: "",
       pat_env: "ADO_PAT",
       watcher: { state: "not_reported" },
+      open_pull_requests: [],
     });
 
     await userEvent.type(remote, "upstream");
@@ -255,6 +256,7 @@ describe("Project Options", () => {
       repository: "",
       pat_env: "ADO_PAT",
       watcher: { state: "not_reported" },
+      open_pull_requests: [],
     });
     expect(save).toBeDisabled();
   });
@@ -1189,5 +1191,27 @@ describe("Project Options", () => {
         within(addForm()).getByRole("textbox", { name: "Workflow" }),
       ).toBeDisabled();
     });
+  });
+
+  it("notes the pull requests left open after a switch away from Pull Request, with links", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    fake.addTicket("acme", { title: "Login form", state: "Accepted" });
+    await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
+    await fake.setLandingMethod("acme", { method: "pull_request", push: false, remote: "origin" });
+    await fake.reportPushedCommit("acme", "acme-1", "abc123", "acme-1");
+    await fake.reportPullRequest("acme", { branch: "acme-1", number: 7, link: "https://github.com/acme/web/pull/7", state: "open" });
+    renderApp(fake, "/?view=project-options&project=acme");
+    await screen.findByRole("group", { name: "Landing Method" });
+    expect(within(landing()).queryByRole("status", { name: "Open pull requests" })).toBeNull();
+
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Merge into base" }));
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    const notice = await within(landing()).findByRole("status", { name: "Open pull requests" });
+    expect(notice).toHaveTextContent("1 pull request is still open on the Code Host.");
+    expect(within(notice).getByRole("link", { name: "https://github.com/acme/web/pull/7" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/web/pull/7",
+    );
   });
 });

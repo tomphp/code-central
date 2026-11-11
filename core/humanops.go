@@ -112,7 +112,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		return ProjectView{}, err
 	}
 	var v ProjectView
-	var accepted []int
+	var accepted, left []int
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
@@ -145,6 +145,11 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		if p.Landing.Method == store.LandingPullRequest && l.Method != store.LandingPullRequest {
 			// What the Pull Request Watcher said was about the old method.
 			c.watchers.reset(watcherKey{WatcherPullRequests, key})
+			for _, t := range w.Tickets(key) {
+				if t.State == store.Accepted && pullRequestOpen(t) {
+					left = append(left, t.Number)
+				}
+			}
 		}
 		p.Landing = l
 		v = c.projectView(p)
@@ -153,9 +158,29 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 	if err != nil {
 		return v, err
 	}
+	// The pull requests stay on the host, so each Ticket says to close its own.
+	for _, n := range left {
+		if err := c.store.Update(func(w store.Writer) error {
+			t, ok := w.Ticket(key, n)
+			if !ok || t.PullRequest == nil {
+				return nil
+			}
+			addComment(&t, Human, c.now(), 0, fmt.Sprintf("The Landing Method is no longer Pull Request, so its pull request %s is left open on the host. Close it there when you no longer want it.", t.PullRequest.Link))
+			t.Updated = c.now()
+			return w.PutTicket(key, t)
+		}); err != nil {
+			return v, err
+		}
+	}
+	if err := c.store.View(func(r store.Reader) error {
+		v.Landing.OpenPullRequests = openPullRequests(r, key, v.Landing.Method)
+		return nil
+	}); err != nil {
+		return v, err
+	}
 	// The method decides an Accepted Ticket's Needs Me reason (To merge,
 	// or Accepted but not landed), so each one changed without a write.
-	for _, n := range accepted {
+	for _, n := range append(accepted, left...) {
 		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, n)})
 	}
 	return v, nil
@@ -177,6 +202,7 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 	err := c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			row := ProjectRow{ProjectView: c.projectView(p)}
+			row.Landing.OpenPullRequests = openPullRequests(r, p.Key, p.Landing.Method)
 			for _, t := range r.Tickets(p.Key) {
 				if reason, _ := c.reasonOf(r, p.Key, t); reason != "" {
 					row.NeedsMe++

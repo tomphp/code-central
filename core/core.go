@@ -115,6 +115,16 @@ type LandingView struct {
 	// Watcher is the Pull Request Watcher's status, not_reported unless the
 	// method is Pull Request.
 	Watcher WatcherView `json:"watcher"`
+	// OpenPullRequests are the pull requests left open on the Code Host
+	// after a switch away from Pull Request, one per Ticket's, until the
+	// Ticket leaves Accepted. Always empty under Pull Request.
+	OpenPullRequests []OpenPullRequest `json:"open_pull_requests"`
+}
+
+// OpenPullRequest is a pull request left open for an Accepted Ticket.
+type OpenPullRequest struct {
+	Ticket string `json:"ticket"`
+	Link   string `json:"link"`
 }
 
 // SpecView is a Spec as every read returns it, and as its writes return
@@ -361,6 +371,7 @@ func (c *Core) GetProject(_ context.Context, key string) (ProjectView, error) {
 			return unknownProject(key)
 		}
 		v = c.projectView(p)
+		v.Landing.OpenPullRequests = openPullRequests(r, key, p.Landing.Method)
 		return nil
 	})
 	return v, err
@@ -680,5 +691,5 @@ func landingViewWith(p store.Project, watcher WatcherView) LandingView {
 	host, repo := codeHostOf(p.CI.PushRemoteURL)
 	push := p.Landing.Push && p.Landing.Method != store.LandingPullRequest
 	return LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
-		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), Watcher: watcher}
+		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}
 }

@@ -273,6 +273,24 @@ function LandingMethodSection({
             </span>
           )}
         </div>
+        {project.landing.open_pull_requests.length > 0 && (
+          <div role="status" aria-label="Open pull requests" className="muted">
+            {project.landing.open_pull_requests.length === 1
+              ? "1 pull request is still open on the Code Host."
+              : `${project.landing.open_pull_requests.length} pull requests are still open on the Code Host.`}{" "}
+            Close {project.landing.open_pull_requests.length === 1 ? "it" : "them"} there yourself:
+            <ul>
+              {project.landing.open_pull_requests.map((pr) => (
+                <li key={pr.ticket}>
+                  {pr.ticket}:{" "}
+                  <a href={pr.link} target="_blank" rel="noreferrer">
+                    {pr.link}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {project.landing.method === "pull_request" && (
           <WatcherStatus
             name="Pull Request Watcher"
