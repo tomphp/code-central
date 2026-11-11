@@ -49,7 +49,7 @@ func Checker(program string, environ []string) core.IssuesCheck {
 // Being rate-limited fails the check, as there is no knowing yet.
 func Check(ctx context.Context, in core.IssuesCheckInput, env gh.Env) core.WatcherCheckResult {
 	_, r, err := checkAccess(ctx, in, env)
-	var limit *gh.RateLimitError
+	var limit *watchers.RateLimitError
 	if errors.As(err, &limit) {
 		r = limit.CheckResult(time.Now())
 	}
@@ -64,7 +64,7 @@ type access struct {
 }
 
 // checkAccess is Check, as each poll runs it too, with what it found:
-// GitHub rate-limiting a call is a *gh.RateLimitError, not a problem.
+// GitHub rate-limiting a call is a *watchers.RateLimitError, not a problem.
 func checkAccess(ctx context.Context, in core.IssuesCheckInput, env gh.Env) (a access, r core.WatcherCheckResult, err error) {
 	prog, missing := gh.Find(in.GHPath, env)
 	if missing != nil {
@@ -105,11 +105,11 @@ func (r ghRepository) canTriage() bool {
 // checkRepository reads repository through prog, gh, and checks its issues
 // are on and gh's login can triage them. It returns the repository's name
 // as GitHub gives it, once it could read it. GitHub rate-limiting the
-// read is a *gh.RateLimitError, not a problem.
+// read is a *watchers.RateLimitError, not a problem.
 func checkRepository(ctx context.Context, env gh.Env, prog, repository string) (string, core.WatcherCheckResult, error) {
 	body, msg, err := gh.API(ctx, env, prog, "repos/"+repository)
 	if err != nil {
-		var limit *gh.RateLimitError
+		var limit *watchers.RateLimitError
 		if errors.As(err, &limit) {
 			return "", core.WatcherCheckResult{}, limit
 		}

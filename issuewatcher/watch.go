@@ -89,7 +89,7 @@ func Watch(ctx context.Context, cfg Config) error {
 // poll is one poll: whether GitHub could be reached, so the loop reports
 // Watching, and its rate limit, if it refused a call for it. A poll that
 // finds an error reports it itself.
-func (cfg Config) poll(ctx context.Context) (reachable bool, limit *gh.RateLimitError) {
+func (cfg Config) poll(ctx context.Context) (reachable bool, limit *watchers.RateLimitError) {
 	watch, err := cfg.Client.GetIssueWatch(ctx, cfg.Project)
 	if err != nil {
 		if ctx.Err() == nil {

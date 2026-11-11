@@ -4,8 +4,6 @@ package watchers
 
 import (
 	"time"
-
-	"github.com/tomoram/code-central/gh"
 )
 
 // MaxRateLimitInterval bounds a rate-limited Watcher's doubled interval,
@@ -26,7 +24,7 @@ type Pace struct {
 // every, and that limit, if not nil, rate-limited; and until when GitHub
 // rate-limits it, zero when it doesn't, for the Watcher to report with
 // Watching.
-func (p *Pace) Next(now time.Time, every time.Duration, limit *gh.RateLimitError) (wait time.Duration, until time.Time) {
+func (p *Pace) Next(now time.Time, every time.Duration, limit *RateLimitError) (wait time.Duration, until time.Time) {
 	if limit == nil {
 		p.backoff = 0
 		return every, time.Time{}

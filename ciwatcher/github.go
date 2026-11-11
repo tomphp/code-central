@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/watchers"
 	"net/url"
 	"path"
 	"strings"
@@ -30,7 +31,7 @@ type GitHubActions struct {
 }
 
 // CheckAccess finds gh, checks its login with gh auth status, and reads
-// the repository. GitHub rate-limiting the read is a *gh.RateLimitError,
+// the repository. GitHub rate-limiting the read is a *watchers.RateLimitError,
 // not a problem.
 func (g *GitHubActions) CheckAccess(ctx context.Context) (core.WatcherCheckResult, error) {
 	prog, missing := gh.Find(g.GHPath, g.Env)
@@ -41,7 +42,7 @@ func (g *GitHubActions) CheckAccess(ctx context.Context) (core.WatcherCheckResul
 		return r, err
 	}
 	if _, msg, err := gh.API(ctx, g.Env, prog, "repos/"+g.Repository, "--jq", ".full_name"); err != nil {
-		var limit *gh.RateLimitError
+		var limit *watchers.RateLimitError
 		if errors.As(err, &limit) {
 			return core.WatcherCheckResult{}, limit
 		}
