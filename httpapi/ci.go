@@ -74,6 +74,7 @@ func init() {
 // pushed commits and the CI Watcher's runs.
 func init() {
 	Routes["report_pushed_commit"] = "POST /api/p/{key}/tickets/{n}/report_pushed_commit"
+	Routes["report_spec_merge"] = "POST /api/p/{key}/tickets/{n}/report_spec_merge"
 	Routes["report_ci_runs"] = "POST /api/p/{key}/report_ci_runs"
 
 	handlers["report_pushed_commit"] = func(c *core.Core, r *http.Request) (any, error) {
@@ -83,6 +84,14 @@ func init() {
 		}
 		in.Ticket = core.Ref(r.PathValue("n"))
 		return c.ReportPushedCommit(r.Context(), r.PathValue("key"), in)
+	}
+	handlers["report_spec_merge"] = func(c *core.Core, r *http.Request) (any, error) {
+		var in core.ReportSpecMergeInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		in.Ticket = core.Ref(r.PathValue("n"))
+		return c.ReportSpecMerge(r.Context(), r.PathValue("key"), in)
 	}
 	handlers["report_ci_runs"] = func(c *core.Core, r *http.Request) (any, error) {
 		var in core.ReportCIRunsInput

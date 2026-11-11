@@ -188,6 +188,12 @@ type TicketView struct {
 	// LandAnyway says the human accepted the latest pushed commit's
 	// failed CI result, so the Factory lands it (code-central-261).
 	LandAnyway bool `json:"land_anyway,omitempty"`
+	// SpecLanded says Land per Spec covers the Ticket, and WaitingForSpec
+	// that it is Accepted and waits for its Spec to land (code-central-371).
+	// Computed on read.
+	SpecMerge      *SpecMergeView `json:"spec_merge,omitempty"`
+	SpecLanded     bool           `json:"spec_landed,omitempty"`
+	WaitingForSpec bool           `json:"waiting_for_spec,omitempty"`
 	// CIFailureOptions are the failure options, each an operation's name,
 	// the human may choose while the Ticket is CI failed; left out
 	// otherwise, and empty when none applies. Computed on read.
@@ -596,6 +602,12 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit})
 	}
 	v.PushedCommit, v.CIResult, v.CIRuns = ticketCI(r, key, t, c.now())
+	pr, _ := r.Project(key)
+	if t.SpecMerge != nil {
+		v.SpecMerge = &SpecMergeView{Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}
+	}
+	v.SpecLanded = specLanded(r, pr.Landing, key, t)
+	v.WaitingForSpec = waitingForSpec(r, pr.Landing, key, t)
 	v.LandAnyway, v.CIFailureOptions = choseLandAnyway(t), ciFailureOptions(r, key, t, c.now())
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
