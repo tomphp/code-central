@@ -76,6 +76,8 @@ type heartbeatKey struct{ project, name, host string }
 type heartbeats struct {
 	mu  sync.Mutex
 	all map[heartbeatKey]heartbeat
+	// seen is each Project's Factory Status as the watch last saw it.
+	seen map[string]string
 }
 
 // status is h's status at now.
@@ -175,4 +177,56 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 	}
 	after := c.projectView(project)
 	return acknowledgeProject(before, after, in.Full, now)
+}
+
+// WatchFactoryStatus is the background ticker behind Going Offline with no
+// write. On each tick it compares every Project's Factory Status, combined
+// and per Factory, with what it saw last time and calls changed(project)
+// for each Project that differs, so live views refetch. The time comes from
+// the injected clock, not the tick; serve ticks every 10s. It returns when
+// ctx ends.
+func (c *Core) WatchFactoryStatus(ctx context.Context, ticks <-chan time.Time, changed func(project string)) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticks:
+			for _, p := range c.factoryStatusChanges() {
+				changed(p)
+			}
+		}
+	}
+}
+
+// factoryStatusChanges returns the Projects whose Factory Status changed
+// since the last call, and remembers the new ones.
+func (c *Core) factoryStatusChanges() []string {
+	now := c.clock.Now()
+	var keys []string
+	c.store.View(func(r store.Reader) error {
+		for _, p := range r.Projects() {
+			keys = append(keys, p.Key)
+		}
+		return nil
+	})
+	hs := c.heartbeats
+	var out []string
+	for _, key := range keys {
+		v := hs.view(key, now)
+		sig := string(v.Status)
+		for _, f := range v.Factories {
+			sig += "\x00" + f.Name + "\x00" + f.Host + "\x00" + string(f.Status)
+		}
+		hs.mu.Lock()
+		prev, ok := hs.seen[key]
+		if !ok {
+			prev = string(FactoryOffline) // a Project with no Factories
+		}
+		hs.seen[key] = sig
+		hs.mu.Unlock()
+		if sig != prev {
+			out = append(out, key)
+		}
+	}
+	return out
 }

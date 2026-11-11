@@ -170,6 +170,11 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	go c.WatchTimedReasons(ctx, ticker.C, func(project, ticketID string) {
 		c.Events().Publish(events.Event{Type: events.TicketChanged, Project: project, ID: ticketID})
 	})
+	factoryTicker := time.NewTicker(10 * time.Second)
+	defer factoryTicker.Stop()
+	go c.WatchFactoryStatus(ctx, factoryTicker.C, func(project string) {
+		c.Events().Publish(events.Event{Type: events.ProjectChanged, Project: project})
+	})
 	handler := frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), e.Stderr, bindHosts...), e.version())
 
 	bound := make([]string, 0, len(listeners))
