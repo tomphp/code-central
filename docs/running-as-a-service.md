@@ -180,14 +180,24 @@ Set **gh path** when `gh` is somewhere else. It is on the Options page, below th
 | `gh` isn't logged in | gh isn't logged in to GitHub: You are not logged into any GitHub hosts. To log in, run: gh auth login | Run `gh auth login` as the user the service runs as. |
 | The repository can't be read | gh can't read the repository acme/acme-api: gh: Not Found (HTTP 404) | Check the repository is the owner/name GitHub shows, and that the account gh is logged in as can see it. |
 
+## Giving the service an environment variable
+
+The Azure Pipelines CI Provider reads its PAT from an environment variable (`ADO_PAT` unless the Project's **PAT environment variable** names another); see [Azure Pipelines](setting-up-a-project.md#azure-pipelines). The service and its CI Watcher don't see your shell's variables, and `service install` copies none, so the PAT never lands in the unit. Set the variable for the service's own session, then restart it:
+
+- **macOS**: `launchctl setenv ADO_PAT <PAT>`. launchd forgets it at logout or reboot, so run it again then.
+- **Linux**: `systemctl --user set-environment ADO_PAT=<PAT>`, which lasts until the user manager restarts. To keep it, put `ADO_PAT=<PAT>` in a file under `~/.config/environment.d/`, such as `~/.config/environment.d/code-central.conf`, which takes effect at your next login.
+- **Windows**: set `ADO_PAT` as a user environment variable (**Edit environment variables for your account**, or `setx ADO_PAT <PAT>`), then sign out and in so the scheduled task starts with it.
+
+Then `code-central service restart`. Turning CI Tracking on with the variable unset or empty is refused, naming the variable and the way for your OS. The CI Watcher reads the variable on every check, but the service has to be started with it.
+
 ## The CI Watcher
 
-For each Project with CI Tracking on, the service runs a **CI Watcher**: a second `code-central` process, the hidden `code-central ci-watcher --project <key>` subcommand, started through the service's own executable, so it is always the same version and needs nothing else installed. It watches that Project's CI through `gh` and reports what it sees to the service over the HTTP API. You never start it yourself. See [ADR 0018](adr/0018-the-service-starts-and-supervises-a-ci-watcher-per-project.md) for why it is a process of its own.
+For each Project with CI Tracking on, the service runs a **CI Watcher**: a second `code-central` process, the hidden `code-central ci-watcher --project <key>` subcommand, started through the service's own executable, so it is always the same version and needs nothing else installed. It watches that Project's CI through `gh`, or Azure DevOps' API for Azure Pipelines, and reports what it sees to the service over the HTTP API. You never start it yourself. See [ADR 0018](adr/0018-the-service-starts-and-supervises-a-ci-watcher-per-project.md) for why it is a process of its own.
 
 - **It starts** with the service, for every Project with CI Tracking on, and when you turn CI Tracking on.
 - **It stops** when you turn CI Tracking off, when you archive the Project, and when the service stops.
 - **It is restarted** if it crashes: after 1 second, then 2, 4 and so on, up to 5 minutes between tries, and back to 1 second once it has run for 10 minutes. While it crashes, the CI section of Project Options says **The CI Watcher crashed, restarted N times**, with the last line it wrote, and you get one Notification.
-- **It backs off** when GitHub rate-limits it: it makes no calls until the reset time GitHub gives, or, with none, waits twice as long each time, up to 10 minutes. The CI section shows it still Watching, rate-limited until then, and you get no Notification.
+- **It backs off** when GitHub rate-limits it, or Azure DevOps throttles it: it makes no calls until the reset time GitHub gives, or, with none, waits twice as long each time, up to 10 minutes. The CI section shows it still Watching, rate-limited until then, and you get no Notification.
 - **It leaves nothing behind.** Its stdin is a pipe from the service, and it exits when that pipe closes. So it ends with the service however the service ends: `code-central service restart`, Ctrl-C, a stopped Windows scheduled task, which doesn't end the service's children itself, or the service being killed.
 
 It writes to [the service log](#the-service-log), beside a line for each start, stop and crash:

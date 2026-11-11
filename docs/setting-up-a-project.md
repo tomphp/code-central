@@ -218,9 +218,10 @@ To change it, open the UI, click **⋯** beside the Project in the left pane, an
 **CI Tracking** has Code Central watch the CI of what the Factory pushes. It is off on every Project until you turn it on, and Agents have no tool or command to change it. Turn it on in the **CI** section of the same Project Options page:
 
 - **CI Tracking**: on or off.
-- **CI Provider**: **GitHub Actions**, the only one for now. Code Central uses your existing `gh` login and stores no GitHub token.
-- **GitHub repository**: the repository to watch, as `owner/name`, such as `acme/acme-api`. CI Tracking can't be on without one: Save says so, as it does for anything that isn't `owner/name`. When the Factory starts, it reports the URL of the Push remote (the Landing Method's Remote, `origin` unless you changed it), leaving out any login an HTTPS URL carries. If that URL is GitHub's, over HTTPS or SSH, the field is filled in from it, with a note naming the URL; change it if CI runs somewhere else, such as a fork.
-- **Ignored workflows**: workflow file names, such as `nightly.yml, preview.yml`, separated by commas. Their runs won't count towards a Ticket's CI result. Name the file, not its path: `ci.yml`, not `.github/workflows/ci.yml`.
+- **CI Provider**: **GitHub Actions** or **Azure Pipelines**. GitHub Actions uses your existing `gh` login and stores no GitHub token. Azure Pipelines calls Azure DevOps' API with a PAT that the service's environment holds; see [Azure Pipelines](#azure-pipelines) below. Each provider keeps its own fields, so switching the CI Provider loses nothing.
+- **GitHub repository** (GitHub Actions): the repository to watch, as `owner/name`, such as `acme/acme-api`. CI Tracking can't be on without one: Save says so, as it does for anything that isn't `owner/name`. When the Factory starts, it reports the URL of the Push remote (the Landing Method's Remote, `origin` unless you changed it), leaving out any login an HTTPS URL carries. If that URL is GitHub's, over HTTPS or SSH, the field is filled in from it, with a note naming the URL; change it if CI runs somewhere else, such as a fork.
+- **Azure DevOps project URL** and **PAT environment variable** (Azure Pipelines): see [Azure Pipelines](#azure-pipelines) below.
+- **Ignored workflows**: workflow names, separated by commas. Their runs won't count towards a Ticket's CI result. For GitHub Actions a workflow is its file name, such as `nightly.yml, preview.yml`: name the file, not its path, `ci.yml`, not `.github/workflows/ci.yml`. For Azure Pipelines it is the pipeline's name, such as `Nightly build, Deploy preview`, spaces allowed, without its folder. Changing the CI Provider leaves the list as it is; names that no longer match anything match nothing.
 - **Unblock on push**: off unless you turn it on. Its hint reads "Lets Tickets blocked by a pushed Ticket start while that Ticket's CI runs or has passed, instead of waiting for it to land. It has effect only under Merge + Push with CI Tracking on." You can turn it on while CI Tracking is off, ready for when it is on; changing only this option runs no check.
 
 **Save** applies the settings, and every open UI tab shows them. Turning CI Tracking on is checked first: Code Central checks that `gh`, the GitHub CLI, is installed and logged in, and can read the repository. If any of these fails, Save refuses, and the CI section says what is wrong and how to fix it, for example:
@@ -232,9 +233,40 @@ Run `gh auth login` as the user the service runs as.
 
 [Finding `gh`](running-as-a-service.md#finding-gh) says where Code Central looks for `gh`, and how the **gh path** Option points it somewhere else.
 
+### Azure Pipelines
+
+Choose **Azure Pipelines** as the CI Provider to watch Azure DevOps' CI. Code Central calls Azure DevOps' REST API itself, from the CI Watcher, and stores no PAT, only the name of the environment variable that holds it.
+
+- **Azure DevOps project URL**: the one project to watch, as its URL, such as `https://dev.azure.com/acme/web`. CI Tracking can't be on without one. Paste what the browser shows: any `/_build`, `/_git/repo` or `/_settings` tail, query, fragment, login and trailing slash are dropped. The forms are:
+  - Azure DevOps Services: `https://dev.azure.com/<organization>/<project>`, or `https://<organization>.visualstudio.com/<project>` (with or without `/DefaultCollection`).
+  - Azure DevOps Server: `https://<host>/<collection>/<project>`, such as `https://tfs.example.com/tfs/DefaultCollection/web`. `http://` is accepted for a Server on an intranet.
+
+  A URL that doesn't parse is refused on the field. When the Push remote is an Azure Repos one over HTTPS (`https://dev.azure.com/acme/web/_git/web`), or SSH on Azure DevOps Services (`git@ssh.dev.azure.com:v3/acme/web/web`), and no project URL is stored, the field is filled in from it, with a note naming the remote. Server SSH remotes aren't filled in.
+- **PAT environment variable**: the name of the environment variable that holds the PAT, `ADO_PAT` unless you name another: a letter or underscore, then letters, digits and underscores.
+
+Make a PAT in Azure DevOps (**User settings**, **Personal access tokens**) with the scope **Build: Read & execute**. Read lists runs and jobs; execute is what **Re-run failed jobs** needs. Code Central can't confirm the execute scope without retrying a run, so a turned-on check doesn't, and a re-run Azure DevOps refuses for scope shows as a refused Re-run request. Then put the PAT in the variable in the *service's* environment, since your shell's isn't passed on: [Giving the service an environment variable](running-as-a-service.md#giving-the-service-an-environment-variable) shows how on each OS. Nothing is captured when you `service install`.
+
+Turning CI Tracking on is checked first, and Save refuses with the reason and its fix when the variable is unset or empty, when Azure DevOps rejects the PAT (expired or revoked), when it can't read the project (refused on the project URL field), or when the PAT lacks Build: Read. For example, with the variable unset on macOS:
+
+```text
+The environment variable ADO_PAT is not set, or is empty, in the CI Watcher's environment.
+Make an Azure DevOps PAT with Build: Read & execute, run `launchctl setenv ADO_PAT <PAT>`, then restart the Code Central service.
+```
+
+Everything else works as for GitHub Actions, with these differences:
+
+- A run's **Workflow** is its pipeline's name, without its folder, and its name is the build number. Ignored workflows and CI Rules match pipeline names.
+- Runs are matched to a Ticket by its pushed commit, whatever repository in the project they built. Only the project's latest 200 builds are searched, which is plenty for a commit that is still waiting.
+- A run's jobs are the build's jobs; stages and tasks aren't listed.
+- A run that **partially succeeded** counts as **passed**, and its row says **Partially succeeded** with a warning mark.
+- **Re-run failed jobs** asks Azure DevOps to retry the build's failed jobs, as a new attempt of the same build.
+- Azure DevOps timing a job out reports it as failed or cancelled, and Code Central takes that as given.
+- Links read **View on Azure DevOps**.
+- Throttling by Azure DevOps (HTTP 429, or 503 with `Retry-After`) is handled like GitHub's rate limit: Watching, with the time it calls again.
+
 While CI Tracking is on, the CI section shows the **CI Watcher**'s status below Save. The CI Watcher is the process that watches the Project's CI. On every check it makes sure again that `gh` is installed and logged in, and can read the repository, then asks GitHub about the runs of each pushed commit still waiting on CI. It checks every 30 seconds while a pushed commit waits, and every 2 minutes otherwise:
 
-- **Watching acme/acme-api.**: it can reach GitHub.
+- **Watching acme/acme-api.**: it can reach GitHub. With Azure Pipelines it reads **Watching https://dev.azure.com/acme/web.**
 - **Watching acme/acme-api.** with **GitHub is rate-limiting it until 10:15**: GitHub has refused its calls for its rate limit. It makes no calls until the time GitHub gave, then carries on by itself. When GitHub gives no time, it waits twice as long as it last did, up to 10 minutes. This isn't an error, and sends no Notification.
 - **Error**: it can't. The status says what is wrong and how to fix it, as a refused Save does. You get one Notification when it goes into an error, not one per check. Once you fix the cause, the next check brings it back to Watching by itself, with nothing to restart. Changing the **gh path** Option counts too: the CI Watcher reads it on every check.
 - **Error** saying **The CI Watcher crashed, restarted 3 times**: the CI Watcher process keeps exiting. The service reports this one, with the last line the CI Watcher wrote, and restarts it by itself, waiting longer after each crash, up to 5 minutes. Its output is in [the service log](running-as-a-service.md#the-service-log). It stays shown until the CI Watcher has run for 10 minutes without crashing, and you get one Notification when it starts crashing, not one per restart.
@@ -247,7 +279,7 @@ While CI Tracking and Push are both on, each push the Factory makes for a Ticket
 - **running** while any of the pushed commit's runs hasn't finished, or before any has started;
 - **failed** if any run failed or timed out;
 - **cancelled** if none failed or timed out but any run was cancelled, say by you or by GitHub. A cancelled run is no failure, so it shows in neutral grey, labelled **cancelled**, where a failed run is red;
-- **passed** otherwise. A skipped or neutral run counts as passed.
+- **passed** otherwise. A skipped or neutral run counts as passed, and so does an Azure Pipelines run that partially succeeded.
 
 Runs of Ignored workflows are listed greyed and marked **ignored**, and never count towards the CI result. When a Ticket is pushed again, say after it is sent back and accepted again, the newer push gives the CI result, and the earlier push's runs are kept under **Earlier pushes**.
 
