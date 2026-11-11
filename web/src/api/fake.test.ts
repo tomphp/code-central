@@ -126,6 +126,8 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       fake.seedIssuesCheck(loggedOut);
     },
     letGHTriage: async () => fake.seedIssuesCheck(),
+    // The fake runs no Pull Request check.
+    letGHWrite: async () => {},
     // ticket 109
     postSessionEvents: async (session_id, events) => fake.postSessionEvents(session_id, events),
     // Spec code-central-201: the service records an agent's call itself;

@@ -126,6 +126,7 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
     },
     logOutOfGH: svc.logOutOfGH,
     letGHTriage: svc.letGHTriage,
+    letGHWrite: svc.letGHWrite,
     dropTranscriptStreams: () => {
       for (const cut of streams) cut.abort();
       streams.clear();

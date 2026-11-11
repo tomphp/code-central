@@ -68,6 +68,10 @@ export interface Driver {
   // letGHTriage makes the gh the service finds able to triage
   // repository's issues, so the Issues check passes (code-central-284).
   letGHTriage(repository: string): Promise<void>;
+  // letGHWrite makes the gh the service finds able to write to
+  // repository, so the Pull Request check passes on GitHub
+  // (code-central-389).
+  letGHWrite(repository: string): Promise<void>;
   // reportCIWatcherStatus reports the CI Watcher's status as the CI
   // Watcher does on each poll (code-central-253).
   reportCIWatcherStatus(key: string, status: CIWatcherReport): Promise<void>;
@@ -279,9 +283,11 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const unsupported = await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "" }).catch((e) => e);
       expect(unsupported).toMatchObject({ status: 422, code: "invalid", field: "method" });
 
-      await d.reportPushRemote("acme", "https://dev.azure.com/acme/shop/_git/web");
+      // On GitHub: turning it on on Azure Repos checks the PAT against Azure DevOps itself, which a test can't reach.
+      await d.reportPushRemote("acme", "git@github.com:acme/web.git");
+      await d.letGHWrite("acme/web");
       const v = await d.api.setLandingMethod("acme", { method: "pull_request", push: true, remote: "", pat_env: " REPOS_PAT " });
-      expect(v.landing).toMatchObject({ method: "pull_request", push: false, code_host: "azure_repos", repository: "acme/shop/web", pat_env: "REPOS_PAT" });
+      expect(v.landing).toMatchObject({ method: "pull_request", push: false, code_host: "github", repository: "acme/web", pat_env: "REPOS_PAT" });
       const kept = await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "" });
       expect(kept.landing.pat_env).toBe("REPOS_PAT");
       const bad = await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "", pat_env: "not a name" }).catch((e) => e);
@@ -618,6 +624,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
       await d.api.act("acme", id, "accept", {});
       await d.reportPushRemote("acme", "git@github.com:acme/web.git");
+      await d.letGHWrite("acme/web");
       await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "origin" });
       const report = { branch: "impl-7", number: 7, link: "https://github.com/acme/web/pull/7" };
 

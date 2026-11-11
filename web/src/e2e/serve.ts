@@ -32,6 +32,9 @@ export interface Service {
   // letGHTriage makes the fake gh answer reading repository as GitHub
   // does for one with issues on, which gh's login can triage.
   letGHTriage(repository: string): Promise<void>;
+  // letGHWrite makes the fake gh answer reading repository as GitHub
+  // does for one gh's login can write to.
+  letGHWrite(repository: string): Promise<void>;
   // scriptGH replaces the fake gh's Script with answers, each answering
   // the calls whose args start with its args.
   scriptGH(answers: GHAnswer[]): Promise<void>;
@@ -55,6 +58,15 @@ export function triageRepository(repository: string): GHAnswer {
   return {
     args: ["api", `repos/${repository}`],
     stdout: JSON.stringify({ full_name: repository, has_issues: true, permissions: { admin: false, maintain: false, push: false, triage: true, pull: true } }),
+  };
+}
+
+// writableRepository is the fake gh's answer to reading repository as
+// GitHub gives it for one gh's login can write to.
+export function writableRepository(repository: string): GHAnswer {
+  return {
+    args: ["api", `repos/${repository}`],
+    stdout: JSON.stringify({ full_name: repository, permissions: { admin: false, maintain: false, push: true, triage: true, pull: true } }),
   };
 }
 
@@ -105,6 +117,7 @@ export async function serve(): Promise<Service> {
         ]),
       ),
     letGHTriage: (repository) => writeFile(join(gh.data, "answers.json"), JSON.stringify([triageRepository(repository)])),
+    letGHWrite: (repository) => writeFile(join(gh.data, "answers.json"), JSON.stringify([writableRepository(repository)])),
     scriptGH: (answers) => writeFile(join(gh.data, "answers.json"), JSON.stringify(answers)),
     ghCalls: async () => {
       const dir = join(gh.data, "calls");
