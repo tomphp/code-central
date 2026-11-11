@@ -49,6 +49,13 @@ type world struct {
 // opts are Factory flags added to its defaults.
 func startWorld(t *testing.T, requirement string, factoryArgs ...string) *world {
 	t.Helper()
+	return startWorldWith(t, requirement, false, factoryArgs...)
+}
+
+// startWorldWith is startWorld, with a bare repository as the remote origin
+// when withRemote, holding main as committed at the start.
+func startWorldWith(t *testing.T, requirement string, withRemote bool, factoryArgs ...string) *world {
+	t.Helper()
 	svc := serve(t)
 	// git reports real paths, so resolve macOS's /var -> /private/var.
 	root, err := filepath.EvalSymlinks(t.TempDir())
@@ -92,6 +99,12 @@ func startWorld(t *testing.T, requirement string, factoryArgs ...string) *world 
 	inRepo("add", "-A")
 	inRepo("commit", "-q", "-m", "Set up Code Central")
 	base := inRepo("rev-parse", "main")
+	if withRemote {
+		remote := filepath.Join(root, "remote.git")
+		inRepo("init", "-q", "--bare", "-b", "main", remote)
+		inRepo("remote", "add", "origin", remote)
+		inRepo("push", "-q", "origin", "main")
+	}
 
 	// The human submits a Requirement: its Spec and three Stage Tickets.
 	code, out := svc.cli(t, repo, "", "submit-requirement", "--text", requirement)
