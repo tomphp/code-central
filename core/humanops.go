@@ -74,11 +74,13 @@ func (c *Core) RenameProject(ctx context.Context, key string, in RenameProjectIn
 }
 
 // SetLandingMethodInput is the human's set_landing_method(method, push,
-// remote).
+// remote, land_per_spec).
 type SetLandingMethodInput struct {
 	Method store.LandingMethod `json:"method"`
 	Push   bool                `json:"push"`
 	Remote string              `json:"remote"`
+	// LandPerSpec, when left out, keeps the stored value.
+	LandPerSpec *bool `json:"land_per_spec,omitempty"`
 }
 
 // SetLandingMethod is the human's set_landing_method: how the Project's
@@ -105,6 +107,10 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 			return err
 		}
 		p, _ := w.Project(key)
+		l.LandPerSpec = p.Landing.LandPerSpec
+		if in.LandPerSpec != nil {
+			l.LandPerSpec = *in.LandPerSpec
+		}
 		if p.Landing == l {
 			v = c.projectView(p)
 			return nil

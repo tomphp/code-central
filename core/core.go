@@ -98,6 +98,9 @@ type LandingView struct {
 	Method store.LandingMethod `json:"method"`
 	Push   bool                `json:"push"`
 	Remote string              `json:"remote"`
+	// LandPerSpec is the Merge option to land a Spec's work together,
+	// shown whatever the method.
+	LandPerSpec bool `json:"land_per_spec"`
 }
 
 // SpecView is a Spec as every read returns it, and as its writes return
@@ -548,7 +551,7 @@ func finished(s store.State) bool { return s == store.Done || s == store.Cancell
 
 func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
-		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}, CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
+		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec}, CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
 	if !p.Archived.IsZero() {

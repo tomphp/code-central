@@ -103,6 +103,9 @@ type landingFile struct {
 	Method string `yaml:"method"`
 	Push   bool   `yaml:"push"`
 	Remote string `yaml:"remote"`
+	// LandPerSpec is a pointer so a file without it, which reads as on,
+	// differs from false.
+	LandPerSpec *bool `yaml:"land_per_spec,omitempty"`
 }
 
 type specFront struct {
@@ -617,7 +620,11 @@ func encodeLanding(l Landing) *landingFile {
 	if l = l.orDefault(); l == DefaultLanding() {
 		return nil
 	}
-	return &landingFile{Method: string(l.Method), Push: l.Push, Remote: l.Remote}
+	f := &landingFile{Method: string(l.Method), Push: l.Push, Remote: l.Remote}
+	if !l.LandPerSpec {
+		f.LandPerSpec = &l.LandPerSpec
+	}
+	return f
 }
 
 // encodeCI leaves the default CI out of project.yaml, so a Project that

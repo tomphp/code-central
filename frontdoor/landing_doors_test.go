@@ -117,3 +117,29 @@ func TestTheSameLandingMethodWritesNothingAndAChangeSendsANotice(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 	}
 }
+
+func landPerSpec(t *testing.T, project map[string]any) any {
+	t.Helper()
+	l, _ := project["landing"].(map[string]any)
+	return l["land_per_spec"]
+}
+
+func TestLandPerSpecIsOnByDefaultAndKeptWhenSetLandingMethodLeavesItOut(t *testing.T) {
+	srv := newServer(t)
+	if got := landPerSpec(t, httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})); got != true {
+		t.Fatalf("land_per_spec = %v, want true by default", got)
+	}
+	out := httpOK(t, srv, setLandingMethod(`{"method":"merge","land_per_spec":false}`))
+	if got := landPerSpec(t, out); got != false {
+		t.Fatalf("land_per_spec = %v, want false once set", got)
+	}
+	// Left out, the stored value stays, even under Branch.
+	out = httpOK(t, srv, setLandingMethod(`{"method":"branch"}`))
+	if got := landPerSpec(t, out); got != false {
+		t.Fatalf("land_per_spec = %v, want false kept", got)
+	}
+	out = httpOK(t, srv, setLandingMethod(`{"method":"merge","land_per_spec":true}`))
+	if got := landPerSpec(t, out); got != true {
+		t.Fatalf("land_per_spec = %v, want true once set back", got)
+	}
+}

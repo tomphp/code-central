@@ -123,12 +123,15 @@ function LandingMethodSection({
   api: Api;
   project: ProjectRow;
 }) {
-  const { method, push, remote } = project.landing;
+  const { method, push, remote, land_per_spec } = project.landing;
   const [draft, setDraft] = useState<Landing>(project.landing);
   const [error, setError] = useState<ApiError>();
   const [saved, setSaved] = useState(false);
   const id = useId();
-  useEffect(() => setDraft({ method, push, remote }), [method, push, remote]);
+  useEffect(
+    () => setDraft({ method, push, remote, land_per_spec }),
+    [method, push, remote, land_per_spec],
+  );
 
   const edit = (patch: Partial<Landing>) => {
     setDraft((d) => ({ ...d, ...patch }));
@@ -148,7 +151,10 @@ function LandingMethodSection({
     );
   };
   const changed =
-    draft.method !== method || draft.push !== push || draft.remote !== remote;
+    draft.method !== method ||
+    draft.push !== push ||
+    draft.remote !== remote ||
+    draft.land_per_spec !== land_per_spec;
   const remoteError = error?.field === "remote";
 
   return (
@@ -192,6 +198,23 @@ function LandingMethodSection({
             pushes the Ticket's branch when you accept it. The Factory checks
             the remote exists, never force-pushes, and under Merge pushes the
             whole base, your own commits on it too.
+          </p>
+        </div>
+        <div className="project-options-choice">
+          <label>
+            <input
+              type="checkbox"
+              checked={draft.land_per_spec}
+              disabled={draft.method === "branch"}
+              onChange={(e) => edit({ land_per_spec: e.target.checked })}
+              aria-describedby={`${id}-land-per-spec`}
+            />{" "}
+            Land per Spec
+          </label>
+          <p className="project-options-hint" id={`${id}-land-per-spec`}>
+            Under Merge, a Spec's work gathers on its own branch and lands in the
+            base, with Push and CI Tracking, once every Ticket on it is accepted,
+            instead of Ticket by Ticket. It has no effect under Leave as a branch.
           </p>
         </div>
         <label className="project-options-remote">

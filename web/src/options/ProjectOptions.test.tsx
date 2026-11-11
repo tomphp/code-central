@@ -63,6 +63,28 @@ describe("Project Options", () => {
     expect(window.location.search).toBe("?view=inbox&project=acme");
   });
 
+  it("shows Land per Spec on under Merge, disabled but kept under Branch, and saves it", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    renderApp(fake, "/?view=project-options&project=acme");
+
+    const box = await within(
+      await screen.findByRole("group", { name: "Landing Method" }),
+    ).findByRole("checkbox", { name: "Land per Spec" });
+    expect(box).toBeChecked();
+    expect(box).toBeEnabled();
+
+    await userEvent.click(box);
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    expect((await fake.listProjects())[0].landing.land_per_spec).toBe(false);
+
+    await userEvent.click(
+      within(landing()).getByRole("radio", { name: "Leave as a branch" }),
+    );
+    expect(box).toBeDisabled();
+    expect(box).not.toBeChecked();
+  });
+
   it("shows the current setting, with Remote enabled only under Push", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
@@ -135,6 +157,7 @@ describe("Project Options", () => {
       method: "merge",
       push: false,
       remote: "origin",
+      land_per_spec: true,
     });
 
     await userEvent.type(remote, "upstream");
@@ -147,6 +170,7 @@ describe("Project Options", () => {
       method: "branch",
       push: true,
       remote: "upstream",
+      land_per_spec: true,
     });
     expect(save).toBeDisabled();
   });

@@ -12,6 +12,7 @@ import type {
   CIRuleChange,
   CITrackingChange,
   Landing,
+  LandingInput,
   LinkedRow,
   NeedsMeView,
   Options,
@@ -112,7 +113,7 @@ export interface Api {
   // setLandingMethod sets how the Project's accepted work lands. The
   // remote is trimmed; under Push it can't be empty, and without Push an
   // empty one is stored as origin.
-  setLandingMethod(project: string, landing: Landing): Promise<ProjectView>;
+  setLandingMethod(project: string, landing: LandingInput): Promise<ProjectView>;
   // setCITracking sets the Project's CI settings. The repository is
   // trimmed, and needed as owner/name to turn CI Tracking on; Ignored
   // workflows are trimmed, with blanks and repeats dropped.

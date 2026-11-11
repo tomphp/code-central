@@ -52,7 +52,13 @@ export interface Landing {
   method: LandingMethod;
   push: boolean;
   remote: string;
+  // Land per Spec: under Merge, a Spec's work lands together. Shown and
+  // kept whatever the method.
+  land_per_spec: boolean;
 }
+
+// What setLandingMethod takes: leaving land_per_spec out keeps the stored value.
+export type LandingInput = Omit<Landing, "land_per_spec"> & { land_per_spec?: boolean };
 
 // A CI Provider: the CI system CI Tracking watches.
 export type CIProvider = "github_actions" | "azure_pipelines";
