@@ -38,6 +38,10 @@ func (f *factory) landing(ctx context.Context) (landing core.LandingView, ok boo
 		return core.LandingView{}, false
 	}
 	f.tracksCI = p.CI.Tracking
+	f.underPullRequest = p.Landing.Method == store.LandingPullRequest
+	if !f.underPullRequest {
+		f.baseDiverged = false
+	}
 	if !f.modelsReported {
 		f.modelsReported = f.reportModels(ctx)
 	}
@@ -47,7 +51,7 @@ func (f *factory) landing(ctx context.Context) (landing core.LandingView, ok boo
 // missingRemote says why landing can't go on when Push names a remote
 // this repository doesn't have, or is "".
 func (f *factory) missingRemote(landing core.LandingView) string {
-	if !landing.Push {
+	if !landing.Push && landing.Method != store.LandingPullRequest {
 		return ""
 	}
 	if f.repository.hasRemote(landing.Remote) {
@@ -96,6 +100,11 @@ func (f *factory) land(ctx context.Context, landing core.LandingView) {
 	accepted := f.landable(ctx, store.Accepted)
 	sort.SliceStable(accepted, func(i, j int) bool { return acceptedAt(accepted[i]).Before(acceptedAt(accepted[j])) })
 	held := f.landSpecsOff(ctx, accepted, landing)
+	pullRequest := landing.Method == store.LandingPullRequest
+	if pullRequest {
+		// The base is brought up to the remote's before anything lands.
+		f.baseCurrent = f.syncBase(ctx, landing.Remote)
+	}
 	for _, tk := range accepted {
 		if f.halted(ctx) || f.paused() {
 			return
@@ -105,6 +114,8 @@ func (f *factory) land(ctx context.Context, landing core.LandingView) {
 		}
 		if landing.Method == store.LandingBranch {
 			f.landMergedBranch(ctx, tk, landing)
+		} else if pullRequest && !f.waitsOnSpecBranch(tk, landing) {
+			f.landPullRequest(ctx, tk, landing)
 		} else if f.waitsOnSpecBranch(tk, landing) {
 			if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
 				f.mergeIntoSpecBranch(ctx, tk)
@@ -113,7 +124,11 @@ func (f *factory) land(ctx context.Context, landing core.LandingView) {
 			f.landAccepted(ctx, tk, landing)
 		}
 	}
-	f.landSpecs(ctx, landing)
+	if !pullRequest {
+		// Under Pull Request a Spec Branch goes to the base through its
+		// own pull request, not by a merge here.
+		f.landSpecs(ctx, landing)
+	}
 	f.detectHandMerges(ctx, landing)
 }
 
@@ -184,6 +199,10 @@ func (f *factory) workOf(tk core.TicketView) (commit, what string, err error) {
 // the base is pushed. (land sees to Accepted ones.) A Ticket merged while in any other State
 // gets a warning line, once.
 func (f *factory) detectHandMerges(ctx context.Context, landing core.LandingView) {
+	if landing.Method == store.LandingPullRequest {
+		f.detectMergedPullRequests(ctx)
+		return
+	}
 	for _, tk := range f.landable(ctx, mergeableStates...) {
 		if f.halted(ctx) || f.paused() {
 			return
@@ -389,7 +408,7 @@ func (f *factory) remoteTip(remote, branch, pushed string) string {
 // when it isn't tk's pushed commit already. ok is false when the report
 // failed.
 func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, branch, commit string) (ok bool) {
-	if !f.tracksCI {
+	if !f.tracksCI && !f.underPullRequest {
 		return true
 	}
 	if tk.PushedCommit != nil && tk.PushedCommit.Commit == commit {
@@ -401,7 +420,9 @@ func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, branch, 
 		}
 		return false
 	}
-	f.printf("%s: CI tracks %s at %s", tk.ID, branch, short(commit))
+	if f.tracksCI {
+		f.printf("%s: CI tracks %s at %s", tk.ID, branch, short(commit))
+	}
 	return true
 }
 

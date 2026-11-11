@@ -269,6 +269,19 @@ func (r *fakeRepo) push(ctx context.Context, remote, branch string) (string, err
 	return "", nil
 }
 
+func (r *fakeRepo) fetch(ctx context.Context, remote string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	rm := r.remotes[remote]
+	if rm == nil || rm.broken {
+		return fmt.Sprintf("fatal: '%s' does not appear to be a git repository", remote), errors.New("exit status 128")
+	}
+	for branch, commit := range rm.refs {
+		r.refs["refs/remotes/"+remote+"/"+branch] = commit
+	}
+	return "", nil
+}
+
 func (r *fakeRepo) worktrees() ([]gitWorktree, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

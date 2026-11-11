@@ -38,6 +38,9 @@ type repo interface {
 	// push pushes branch to remote, never forcing; out is git's output
 	// when it fails. A stop (ctx) kills it.
 	push(ctx context.Context, remote, branch string) (out string, err error)
+	// fetch fetches remote, updating its remote-tracking refs; out is git's
+	// output when it fails. A stop (ctx) kills it.
+	fetch(ctx context.Context, remote string) (out string, err error)
 	// worktrees is what `git worktree list` reports, the repo itself first.
 	worktrees() ([]gitWorktree, error)
 	// status is the worktree dir's uncommitted changes, untracked files
@@ -144,6 +147,14 @@ func (g gitRepo) push(ctx context.Context, remote, branch string) (string, error
 	cmd := exec.CommandContext(ctx, g.git, "push", remote, branch)
 	cmd.Dir = g.dir
 	// A prompt for credentials would wait forever: nobody answers it.
+	cmd.Env = append(slices.Clone(g.environ), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}
+
+func (g gitRepo) fetch(ctx context.Context, remote string) (string, error) {
+	cmd := exec.CommandContext(ctx, g.git, "fetch", "--quiet", remote)
+	cmd.Dir = g.dir
 	cmd.Env = append(slices.Clone(g.environ), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
