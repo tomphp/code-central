@@ -100,6 +100,10 @@ func (f *factory) land(ctx context.Context, landing core.LandingView) {
 		}
 		if landing.Method == store.LandingBranch {
 			f.landMergedBranch(ctx, tk, landing)
+		} else if f.waitsOnSpecBranch(tk, landing) {
+			if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
+				f.mergeIntoSpecBranch(ctx, tk)
+			}
 		} else {
 			f.landAccepted(ctx, tk, landing)
 		}
@@ -262,7 +266,7 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, landing 
 		return
 	}
 	if len(conflicts) > 0 {
-		f.sendBack(ctx, tk, head, baseTip, conflicts)
+		f.sendBack(ctx, tk, head, f.base, baseTip, conflicts)
 		return
 	}
 	msg := fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title)
@@ -454,20 +458,20 @@ func firstLine(s string) string {
 // sendBack sends a Ticket whose work conflicts with the base back to
 // Ready, so a later Claim resolves the conflict and the human reviews it
 // again.
-func (f *factory) sendBack(ctx context.Context, tk core.TicketView, head, baseTip string, conflicts []string) {
+func (f *factory) sendBack(ctx context.Context, tk core.TicketView, head, into, tip string, conflicts []string) {
 	var b strings.Builder
-	fmt.Fprintf(&b, "The Factory couldn't land this: merging %s into %s at %s conflicts in these files:\n\n", short(head), f.base, short(baseTip))
+	fmt.Fprintf(&b, "The Factory couldn't land this: merging %s into %s at %s conflicts in these files:\n\n", short(head), into, short(tip))
 	for _, c := range conflicts {
 		fmt.Fprintf(&b, "- %s\n", c)
 	}
-	fmt.Fprintf(&b, "\nMerge %s into the branch, resolve the conflicts, and finish again.", f.base)
+	fmt.Fprintf(&b, "\nMerge %s into the branch, resolve the conflicts, and finish again.", into)
 	if _, err := f.client.SendBack(ctx, f.project, core.SendBackInput{Ticket: core.Ref(tk.ID), Note: b.String()}); err != nil {
 		if ctx.Err() == nil {
 			f.printf("%s: send_back: %v", tk.ID, err)
 		}
 		return
 	}
-	f.printf("%s: conflicts with %s at %s in %s: sent back to Ready", tk.ID, f.base, short(baseTip), strings.Join(conflicts, ", "))
+	f.printf("%s: conflicts with %s at %s in %s: sent back to Ready", tk.ID, into, short(tip), strings.Join(conflicts, ", "))
 }
 
 // advanceBase fast-forwards the base from old to merge: in the checkout
