@@ -1,0 +1,206 @@
+store.yaml
+  format: int
+
+options.yaml (optional): the global Options; a key left out takes its default
+  focus_clear: string (optional)
+  gh_path: string (optional)
+
+projects/<key>/project.yaml
+  key: string
+  display_name: string
+  created: string
+  mode: string
+  archived: string (optional)
+  landing: mapping (optional)
+      method: string
+      push: bool
+      remote: string
+      land_per_spec: *bool (optional)
+      pat_env: string (optional)
+  ci: mapping (optional)
+      tracking: bool
+      provider: string
+      repository: string (optional)
+      project_url: string (optional)
+      pat_env: string (optional)
+      ignored_workflows: []string (optional)
+      push_remote_url: string (optional)
+      push_remote_base: string (optional)
+      rules: list of mappings (optional)
+          spec: int
+          workflow: string
+          branch: string
+          state: string
+          created: string
+      unblock_on_push: bool (optional)
+  github_issues: mapping (optional)
+      on: bool
+      repository: string (optional)
+      label: string (optional)
+      new_issues_need_me: bool (optional)
+      spec: int (optional)
+  models: mapping (optional)
+      default: mapping (optional)
+          model: string (optional)
+          effort: string (optional)
+      kinds: list of mappings (optional)
+          kind: string
+          model: string (optional)
+          effort: string (optional)
+  reported_models: mapping (optional)
+      effort_levels: []string (optional)
+      aliases: []string (optional)
+      model_ids: []string (optional)
+      model_flag: string (optional)
+      effort_flag: string (optional)
+      reported: string (optional)
+
+projects/<key>/specs/<n>.md: YAML frontmatter between --- lines, then the Markdown body
+  id: int
+  title: string
+  labels: []string
+  tags: map[string]string
+  link: mapping (optional)
+      integration: string
+      id: string
+      url: string (optional)
+      external_state: string
+      detached: bool (optional)
+      outbound: bool (optional)
+      written: []string (optional)
+  created: string
+  updated: string
+  edits: list of mappings
+      number: int
+      actor: string
+      time: string
+      previous: map[string]string
+
+projects/<key>/tickets/<n>.yaml
+  title: string
+  state: string
+  spec: int
+  labels: []string
+  tags: map[string]string
+  blocked_by: []int
+  replacements: []int
+  link: mapping (optional)
+      integration: string
+      id: string
+      url: string (optional)
+      external_state: string
+      detached: bool (optional)
+      outbound: bool (optional)
+      written: []string (optional)
+  awaiting_triage: bool (optional)
+  created: string
+  updated: string
+  description: string
+  branch: string (optional)
+  commit: string (optional)
+  pushed_commits: list of mappings (optional)
+      commit: string
+      branch: string (optional)
+      pushed: string
+      land_anyway: string (optional)
+      rerun: string (optional)
+      reruns: list of mappings (optional)
+          id: int64
+          attempt: int
+  spec_merge: mapping (optional)
+      commit: string
+      merged: string
+  pull_request: mapping (optional)
+      number: int
+      link: string
+      state: string
+      merge_commit: string (optional)
+  claims: list of mappings
+      number: int
+      id: string
+      session_id: string (optional)
+      working_dir: string (optional)
+      resume_command: string (optional)
+      model: string (optional)
+      effort: string (optional)
+      started: string
+      ended: string (optional)
+      ended_by: string (optional)
+  rounds: list of mappings
+      number: int
+      claim: int
+      session_id: string (optional)
+      posted: string
+      questions: list of mappings
+          number: int
+          title: string
+          body: string
+          recommended: string (optional)
+          status: string
+          answer: string (optional)
+          closed: string (optional)
+  failure_reports: list of mappings
+      number: int
+      claim: int
+      session_id: string (optional)
+      working_dir: string (optional)
+      resume_command: string (optional)
+      actor: string
+      time: string
+      what_broke: string
+      why: string
+      what_to_fix: string
+      where_work_stands: string
+  comments: list of mappings
+      number: int
+      actor: string
+      time: string
+      claim: int (optional)
+      body: string
+  moves: list of mappings
+      from: string (optional)
+      to: string
+      actor: string
+      time: string
+      claim: int (optional)
+      via: string (optional)
+      commit: string (optional)
+  edits: list of mappings
+      number: int
+      actor: string
+      time: string
+      previous: map[string]string
+
+projects/<key>/ci-runs.yaml (optional): the Project's CI Runs
+  runs: list of mappings
+      id: int64
+      attempt: int
+      workflow: string
+      name: string
+      branch: string
+      commit: string
+      status: string
+      conclusion: string (optional)
+      started: string (optional)
+      finished: string (optional)
+      url: string
+      jobs: list of mappings (optional)
+          name: string
+          conclusion: string (optional)
+          url: string
+      ticket: int (optional)
+      rule: int (optional)
+      ignored: bool (optional)
+
+values
+  options focus_clear (default activity_dashboard): activity_dashboard, all_clear
+  project landing.method (no landing: merge, push false, remote origin): merge, branch, pull_request
+  project ci.provider (no ci: tracking off, github_actions): github_actions, azure_pipelines
+  project models.kinds[].kind: grilling, spec, tickets, map-chart, map-grilling, map-research, map-task, prototype, implementation
+  ticket state, moves[].from, moves[].to: Draft, Ready, In Progress, Needs Answer, Answered, Failed, In Review, Accepted, Done, Cancelled
+  ci run status: queued, in_progress, completed
+  ci run conclusion, jobs[].conclusion (optional): success, failure, cancelled, timed_out, skipped, neutral, partially_succeeded
+  rounds[].questions[].status: open, answered, dismissed
+  link.external_state: open, closed, deleted, out_of_scope
+  spec edits[].previous keys: title, body, external_state, detached
+  ticket edits[].previous keys: title, description, spec, external_state, detached

@@ -136,6 +136,9 @@ type NeedsMeRow struct {
 	// row's badge; left out for a Ticket never pushed while CI Tracking
 	// was on.
 	CIResult CIResult `json:"ci_result,omitempty"`
+	// PullRequest is the Ticket's pull request, for its item's link; left
+	// out until the Pull Request Watcher reports one.
+	PullRequest *PullRequestView `json:"pull_request,omitempty"`
 }
 
 // NeedsMeRequirement is the Requirement a Needs Me row's Ticket is on:
@@ -239,7 +242,7 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 	row := NeedsMeRow{
 		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link),
 		Requirement: req, Spec: needsMeSpec(r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
-		CIResult: ticketCIResult(r, key, t, c.now()),
+		CIResult: ticketCIResult(r, key, t, c.now()), PullRequest: pullRequestView(t.PullRequest),
 	}
 	switch reason {
 	case ReasonNeedsAnswer:

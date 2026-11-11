@@ -108,6 +108,7 @@ import {
   type GitHubIssuesChange,
   type GitHubIssuesSettings,
   type CIWatcherReport,
+  type PullRequestReport,
   type CIWatcherStatus,
   type IssueWatcherReport,
   type IssueWatcherStatus,
@@ -404,6 +405,9 @@ export class FakeApi implements Api {
   // ciRuns each Project's CI Runs (code-central-256).
   private pushedCommits = new Map<string, PushedCommitView[]>();
   private ciRuns = new Map<string, CIRunView[]>();
+  // pushedBranches is the branch each Ticket's latest push was pushed as
+  // under Pull Request, which a pull request report covers it by.
+  private pushedBranches = new Map<string, string>();
   // landedAnyway is each "<ticket>@<commit>" the human chose Land anyway
   // for (code-central-261).
   private landedAnyway = new Set<string>();
@@ -974,7 +978,8 @@ export class FakeApi implements Api {
     // A row's CI result is its Ticket's now, as core works it out on read.
     const withCIResult = (r: NeedsMeRow) => {
       const ci_result = this.tickets.get(r.id)?.ci_result;
-      return ci_result ? { ...r, ci_result } : r;
+      const pull_request = this.tickets.get(r.id)?.pull_request;
+      return { ...r, ...(ci_result && { ci_result }), ...(pull_request && { pull_request }) };
     };
     const groups = this.groups.filter((g) => g.tickets.length).map((g) => ({ ...g, tickets: g.tickets.map(withCIResult) }));
     return structuredClone({ count: this.rows().length, groups });
@@ -1559,16 +1564,41 @@ export class FakeApi implements Api {
   // reportPushedCommit is the Factory's report of the commit it pushed for
   // an Accepted or In Review Ticket (code-central-256), tracked only while
   // CI Tracking and Push are on.
-  async reportPushedCommit(key: string, id: string, commit: string): Promise<void> {
+  // Under Pull Request a push is recorded whether or not CI Tracking is
+  // on, with the branch it was pushed as (code-central-388).
+  async reportPushedCommit(key: string, id: string, commit: string, branch = ""): Promise<void> {
     const p = this.writable(key);
     const t = this.ticket(key, id);
     if (t.state !== "Accepted" && t.state !== "In Review") {
       throw new ApiError(403, "action_not_allowed", `${t.id} is ${t.state}: only an Accepted or In Review Ticket is pushed`);
     }
+    const pullRequest = p.landing.method === "pull_request";
+    if (pullRequest && branch.trim()) this.pushedBranches.set(t.id, branch.trim());
     const pushed = this.pushedCommits.get(t.id) ?? [];
-    if (!p.ci.tracking || !p.landing.push || pushed.at(-1)?.commit === commit) return;
+    if (!p.ci.tracking || !(p.landing.push || pullRequest) || pushed.at(-1)?.commit === commit) return;
     this.pushedCommits.set(t.id, [...pushed, { commit, pushed: this.now.toISOString() }]);
     this.trackCI(key, t);
+  }
+
+  // reportPullRequest is the Pull Request Watcher's report of the pull
+  // request of the work pushed as report.branch, recorded on every Ticket
+  // it covers: those not yet Done or Cancelled pushed as that branch. Any
+  // state may follow any other, so a reopened pull request is reported
+  // open again (code-central-388).
+  async reportPullRequest(key: string, report: PullRequestReport): Promise<void> {
+    this.writable(key);
+    const { branch, number, link, state, merge_commit } = report;
+    if (!branch.trim()) throw new ApiError(422, "invalid", "report_pull_request needs the pushed work's branch", "branch");
+    if (!(["open", "conflicting", "closed", "merged"] as const).includes(state)) throw new ApiError(422, "invalid", `the state is open, conflicting, closed or merged, not "${state}"`, "state");
+    if (state === "merged" && !merge_commit) throw new ApiError(422, "invalid", "a merged pull request needs the merge commit the Code Host reports", "merge_commit");
+    if (state !== "merged" && merge_commit) throw new ApiError(422, "invalid", "only a merged pull request has a merge commit", "merge_commit");
+    const covered = [...this.tickets.values()].filter(
+      (t) => t.id.startsWith(`${key}-`) && t.state !== "Done" && t.state !== "Cancelled" && this.pushedBranches.get(t.id) === branch.trim(),
+    );
+    if (covered.length === 0) throw new ApiError(404, "not_found", `no Ticket of ${key} has work pushed as branch "${branch}"`);
+    for (const t of covered) {
+      this.updateTicket(t.id, { pull_request: { number, link, state, ...(merge_commit && { merge_commit }) } });
+    }
   }
 
   // reportCIRuns is the CI Watcher's report of CI Runs (code-central-256),
@@ -1838,6 +1868,7 @@ export class FakeApi implements Api {
       ...(onMap(t) && { node_type: nodeTypeOf(t), blocked_by: [...t.blocked_by] }),
       ...this.liveLatest(t),
       ...(t.ci_result && { ci_result: t.ci_result }),
+      ...(t.pull_request && { pull_request: { ...t.pull_request } }),
       ...(t.waiting_for_spec && { waiting_for_spec: true }),
     }));
   }

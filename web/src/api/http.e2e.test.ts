@@ -115,8 +115,11 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
       await agent(`/api/p/${key}/report_ci_watcher_status`, status);
     },
     // code-central-256: as the Factory and the CI Watcher
-    reportPushedCommit: async (key, id, commit) => {
-      await agent(`/api/p/${key}/tickets/${id.split("-").pop()}/report_pushed_commit`, { commit });
+    reportPushedCommit: async (key, id, commit, branch) => {
+      await agent(`/api/p/${key}/tickets/${id.split("-").pop()}/report_pushed_commit`, { commit, branch });
+    },
+    reportPullRequest: async (key, report) => {
+      await agent(`/api/p/${key}/report_pull_request`, report);
     },
     reportCIRuns: async (key, runs) => {
       await agent(`/api/p/${key}/report_ci_runs`, { runs });

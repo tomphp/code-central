@@ -191,8 +191,11 @@ type TicketView struct {
 	// both left out while it has none. CIRuns are every CI Run tracked
 	// against it, the latest pushed commit's first. Computed on read.
 	PushedCommit *PushedCommitView `json:"pushed_commit,omitempty"`
-	CIResult     CIResult          `json:"ci_result,omitempty"`
-	CIRuns       []CIRunView       `json:"ci_runs,omitempty"`
+	// PullRequest is the pull request the Pull Request Watcher reported
+	// for the Ticket's pushed work; left out until it has one.
+	PullRequest *PullRequestView `json:"pull_request,omitempty"`
+	CIResult    CIResult         `json:"ci_result,omitempty"`
+	CIRuns      []CIRunView      `json:"ci_runs,omitempty"`
 	// LandAnyway says the human accepted the latest pushed commit's
 	// failed CI result, so the Factory lands it (code-central-261).
 	LandAnyway bool `json:"land_anyway,omitempty"`
@@ -263,6 +266,9 @@ type TicketRow struct {
 	// its row's badge; left out for a Ticket never pushed while CI
 	// Tracking was on.
 	CIResult CIResult `json:"ci_result,omitempty"`
+	// PullRequest is the Ticket's pull request, for its row's badge; left
+	// out until the Pull Request Watcher reports one.
+	PullRequest *PullRequestView `json:"pull_request,omitempty"`
 	// WaitingForSpec says the Ticket is Accepted and waits for its Spec to
 	// land, for its badge (code-central-371).
 	WaitingForSpec bool `json:"waiting_for_spec,omitempty"`
@@ -548,7 +554,7 @@ func (c *Core) ticketRow(r store.Reader, key string, t store.Ticket, onMap bool)
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Updated: t.Updated, Link: linkView(t.Link),
-		CIResult: ticketCIResult(r, key, t, c.now()),
+		CIResult: ticketCIResult(r, key, t, c.now()), PullRequest: pullRequestView(t.PullRequest),
 	}
 	if p, ok := r.Project(key); ok {
 		row.WaitingForSpec = waitingForSpec(r, p.Landing, key, t)
@@ -619,6 +625,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit})
 	}
 	v.PushedCommit, v.CIResult, v.CIRuns = ticketCI(r, key, t, c.now())
+	v.PullRequest = pullRequestView(t.PullRequest)
 	pr, _ := r.Project(key)
 	if t.SpecMerge != nil {
 		v.SpecMerge = &SpecMergeView{Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}

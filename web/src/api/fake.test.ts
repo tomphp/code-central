@@ -114,7 +114,8 @@ apiContract("FakeApi", async (): Promise<Driver> => {
     reportHeartbeat: async (key, report) => fake.reportHeartbeat(key, report),
     reportCIWatcherStatus: async (key, status) => fake.reportCIWatcherStatus(key, status),
     // code-central-256
-    reportPushedCommit: async (key, id, commit) => fake.reportPushedCommit(key, id, commit),
+    reportPushedCommit: async (key, id, commit, branch) => fake.reportPushedCommit(key, id, commit, branch),
+    reportPullRequest: async (key, report) => fake.reportPullRequest(key, report),
     reportCIRuns: async (key, runs) => fake.reportCIRuns(key, runs),
     logOutOfGH: async () => {
       const loggedOut = {

@@ -225,6 +225,11 @@ func ticketRuns(r store.Reader, key string, t store.Ticket, now time.Time) ([]st
 	if len(t.PushedCommits) == 0 {
 		return nil, false
 	}
+	// Under Pull Request without CI Tracking a push is recorded for its
+	// pull request alone: it has no CI result.
+	if p, _ := r.Project(key); p.Landing.Method == store.LandingPullRequest && !p.CI.Tracking {
+		return nil, false
+	}
 	return runsOf(keptCIRuns(r.CIRuns(key), now), t.Number), true
 }
 
@@ -318,6 +323,9 @@ func countedRuns(commit string, runs []store.CIRun) map[int64]store.CIRun {
 type ReportPushedCommitInput struct {
 	Ticket Ref    `json:"ticket"`
 	Commit string `json:"commit"`
+	// Branch is the branch the Factory pushed the commit as, so that the
+	// Pull Request Watcher knows the pull request's head branch.
+	Branch string `json:"branch,omitempty"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -326,7 +334,8 @@ type ReportPushedCommitInput struct {
 // pushed for an Accepted Ticket (or an In Review one, merged by hand),
 // recorded with when. It is recorded only while CI Tracking and Push are
 // on, so turning CI Tracking on tracks only pushes from then on; with
-// either off, nothing changes. A newer pushed commit replaces the old one
+// either off, nothing changes; under Pull Request, which implies Push, it
+// is recorded whether or not CI Tracking is on. A newer pushed commit replaces the old one
 // as the one the CI result comes from.
 func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushedCommitInput) (Written[TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
@@ -338,13 +347,13 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted or In Review Ticket is pushed", DisplayID(key, t.Number), t.State)}
 		}
 		p, _ := r.Project(key)
-		if !p.CI.Tracking || !p.Landing.Push {
+		if p.Landing.Method != store.LandingPullRequest && (!p.CI.Tracking || !p.Landing.Push) {
 			return false, nil
 		}
 		if n := len(t.PushedCommits); n > 0 && t.PushedCommits[n-1].Commit == commit {
 			return false, nil
 		}
-		t.PushedCommits = append(t.PushedCommits, store.PushedCommit{Commit: commit, Pushed: c.now()})
+		t.PushedCommits = append(t.PushedCommits, store.PushedCommit{Commit: commit, Branch: strings.TrimSpace(in.Branch), Pushed: c.now()})
 		return true, nil
 	})
 }
