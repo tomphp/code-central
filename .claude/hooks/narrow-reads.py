@@ -6,6 +6,7 @@ context, where every later call re-reads it. This refuses them and points
 at a narrow read instead. A `cat` piped into another command or
 redirected is let through, since none of it reaches context whole.
 """
+import glob
 import json
 import os
 import re
@@ -31,7 +32,11 @@ def watched(path):
 
 
 def long_cats(command, cwd):
-    """The long watched files a command cats whole, outside a pipe."""
+    """The long watched files a command cats whole, outside a pipe.
+
+    A `cd` earlier in the command moves where later paths are read from,
+    and a glob names every file it matches.
+    """
     out = []
     for segment in re.split(r"&&|\|\||;|\n", command):
         piped = segment.split("|")
@@ -39,13 +44,20 @@ def long_cats(command, cwd):
             words = shlex.split(piped[0])
         except ValueError:
             continue
+        if len(words) == 2 and words[0] == "cd":
+            cwd = os.path.join(cwd, os.path.expanduser(words[1]))
+            continue
         if not words or words[0] != "cat" or len(piped) > 1 or ">" in piped[0]:
             continue
         for w in words[1:]:
-            if not w.startswith("-") and watched(w):
-                n = lines(w, cwd)
-                if n > LIMIT:
-                    out.append((w, n))
+            if w.startswith("-"):
+                continue
+            base = w if os.path.isabs(w) else os.path.join(cwd, w)
+            for path in sorted(glob.glob(base)) or [base]:
+                if watched(path):
+                    n = lines(path, cwd)
+                    if n > LIMIT:
+                        out.append((os.path.relpath(path, cwd) if not os.path.isabs(w) else path, n))
     return out
 
 
