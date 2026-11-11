@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -199,5 +200,59 @@ func TestAHeartbeatAcknowledgesWithoutFactoryStatusNoise(t *testing.T) {
 	full, err := f.core.ReportHeartbeat(ctx, "acme", core.ReportHeartbeatInput{Factory: "f", Host: "h", State: core.HeartbeatOnline, IntervalSeconds: 10, Full: true})
 	if err != nil || full.Record == nil || full.Record.FactoryStatus.Status != core.FactoryOnline {
 		t.Fatalf("full = %+v, %v", full, err)
+	}
+}
+
+// watchFactories runs f.core.WatchFactoryStatus until the test ends and
+// returns tick: one tick, returning the Projects it reported.
+func watchFactories(t *testing.T, f fixture) (tick func() []string) {
+	t.Helper()
+	ticks := make(chan time.Time)
+	changes := make(chan string, 10)
+	watchCtx, stop := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		f.core.WatchFactoryStatus(watchCtx, ticks, func(project string) { changes <- project })
+		close(done)
+	}()
+	t.Cleanup(func() { stop(); <-done })
+	return func() []string {
+		ticks <- f.clock.Now()
+		ticks <- f.clock.Now() // the second send returns once the first tick is handled
+		var got []string
+		for {
+			select {
+			case p := <-changes:
+				got = append(got, p)
+			default:
+				return got
+			}
+		}
+	}
+}
+
+func TestTheWatchReportsAFactoryGoingOfflineOnceAndAnUnchangedProjectNever(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	f.project(t, "other")
+	tick := watchFactories(t, f)
+	if got := tick(); len(got) != 0 {
+		t.Fatalf("first tick reported %v", got)
+	}
+	beat(f, t, "cc", "box", core.HeartbeatOnline, 10)
+	if got := tick(); len(got) != 1 || got[0] != "acme" {
+		t.Fatalf("after a new Factory reported %v, want acme", got)
+	}
+	f.clock.Advance(89 * time.Second)
+	if got := tick(); len(got) != 0 {
+		t.Fatalf("before the deadline reported %v", got)
+	}
+	f.clock.Advance(time.Second)
+	if got := tick(); len(got) != 1 || got[0] != "acme" {
+		t.Fatalf("at the deadline reported %v, want acme", got)
+	}
+	f.clock.Advance(time.Second)
+	if got := tick(); len(got) != 0 {
+		t.Fatalf("next tick reported %v", got)
 	}
 }
