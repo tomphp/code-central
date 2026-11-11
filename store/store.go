@@ -493,9 +493,13 @@ var CIConclusions = []CIConclusion{CISuccess, CIFailure, CICancelled, CITimedOut
 // Valid reports whether c is one of the CIConclusions, or empty.
 func (c CIConclusion) Valid() bool { return c == "" || slices.Contains(CIConclusions, c) }
 
-// Failed reports whether c fails a CI result: failure, cancelled or
-// timed out.
-func (c CIConclusion) Failed() bool { return c == CIFailure || c == CICancelled || c == CITimedOut }
+// Failed reports whether c fails a CI result: failure or timed out.
+// A cancelled run isn't a failure; see Cancelled.
+func (c CIConclusion) Failed() bool { return c == CIFailure || c == CITimedOut }
+
+// Cancelled reports whether c is a cancelled run, which makes a CI
+// result cancelled rather than failed.
+func (c CIConclusion) Cancelled() bool { return c == CICancelled }
 
 // CIRun is one attempt of one workflow run the CI Provider reported,
 // keyed by the provider's run ID and the attempt. It is tracked against

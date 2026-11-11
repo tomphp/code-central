@@ -29,9 +29,12 @@ const (
 	CIRunning CIResult = "running"
 	// CIPassed is a pushed commit whose runs all finished, none failing.
 	CIPassed CIResult = "passed"
-	// CIFailed is a pushed commit with a run that concluded failure,
-	// cancelled or timed out.
+	// CIFailed is a pushed commit with a run that concluded failure or
+	// timed out.
 	CIFailed CIResult = "failed"
+	// CICancelled is a pushed commit with a cancelled run and none
+	// failed.
+	CICancelled CIResult = "cancelled"
 )
 
 // ciNewlyPushed is how long after its push a pushed commit is still
@@ -242,7 +245,8 @@ func countsFor(run store.CIRun, commit string) bool { return run.Commit == commi
 
 // ciResultOf is the CI result of commit from runs: running while any of
 // its runs that aren't ignored is unfinished, or none is reported; failed
-// if any concluded failure, cancelled or timed out; passed otherwise,
+// if any concluded failure or timed out; else cancelled if any was
+// cancelled, a lone cancelled run included; passed otherwise,
 // skipped and neutral counting as passed. A re-run's latest attempt
 // replaces its earlier ones.
 func ciResultOf(commit string, runs []store.CIRun) CIResult {
@@ -250,27 +254,44 @@ func ciResultOf(commit string, runs []store.CIRun) CIResult {
 	if len(latest) == 0 {
 		return CIRunning
 	}
-	failed := false
+	failed, cancelled := false, false
 	for _, run := range latest {
 		switch {
 		case run.Status != store.CICompleted:
 			return CIRunning
 		case run.Conclusion.Failed():
 			failed = true
+		case run.Conclusion.Cancelled():
+			cancelled = true
 		}
 	}
 	if failed {
 		return CIFailed
 	}
+	if cancelled {
+		return CICancelled
+	}
 	return CIPassed
 }
 
 // failedRuns are the runs of commit, counted towards its CI result, that
-// concluded failure, cancelled or timed out.
+// concluded failure or timed out.
 func failedRuns(commit string, runs []store.CIRun) []store.CIRun {
 	var out []store.CIRun
 	for _, run := range countedRuns(commit, runs) {
 		if run.Status == store.CICompleted && run.Conclusion.Failed() {
+			out = append(out, run)
+		}
+	}
+	return out
+}
+
+// rerunnableRuns are the runs of commit, counted towards its CI result,
+// that failed or were cancelled: what a Re-run request covers.
+func rerunnableRuns(commit string, runs []store.CIRun) []store.CIRun {
+	var out []store.CIRun
+	for _, run := range countedRuns(commit, runs) {
+		if run.Status == store.CICompleted && (run.Conclusion.Failed() || run.Conclusion.Cancelled()) {
 			out = append(out, run)
 		}
 	}

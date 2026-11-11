@@ -182,7 +182,12 @@ func TestTheCIResultOfEachMixOfRuns(t *testing.T) {
 		{"all succeeded", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISuccess), run(2, "lint.yml", store.CICompleted, store.CISuccess)}, core.CIPassed},
 		{"skipped and neutral pass", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISkipped), run(2, "lint.yml", store.CICompleted, store.CINeutral)}, core.CIPassed},
 		{"a failure", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISuccess), run(2, "lint.yml", store.CICompleted, store.CIFailure)}, core.CIFailed},
-		{"a cancelled run", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CICancelled)}, core.CIFailed},
+		{"a lone cancelled run", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CICancelled)}, core.CICancelled},
+		{"a cancelled run beside a pass", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISuccess), run(2, "lint.yml", store.CICompleted, store.CICancelled)}, core.CICancelled},
+		{"a failure beside a cancelled run", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CICancelled), run(2, "lint.yml", store.CICompleted, store.CIFailure)}, core.CIFailed},
+		{"a timed out run beside a cancelled run", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CICancelled), run(2, "lint.yml", store.CICompleted, store.CITimedOut)}, core.CIFailed},
+		{"one in progress beside a cancelled run", []core.CIRunView{run(1, "ci.yml", store.CIInProgress, ""), run(2, "lint.yml", store.CICompleted, store.CICancelled)}, core.CIRunning},
+		{"an ignored cancelled run", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISuccess), run(2, "nightly.yml", store.CICompleted, store.CICancelled)}, core.CIPassed},
 		{"a timed out run", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CITimedOut)}, core.CIFailed},
 		{"an ignored failure", []core.CIRunView{run(1, "ci.yml", store.CICompleted, store.CISuccess), run(2, "nightly.yml", store.CICompleted, store.CIFailure)}, core.CIPassed},
 		{"only an ignored run", []core.CIRunView{run(2, "nightly.yml", store.CICompleted, store.CISuccess)}, core.CIRunning},
@@ -197,6 +202,21 @@ func TestTheCIResultOfEachMixOfRuns(t *testing.T) {
 				t.Fatalf("ci result %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestACancelledRunReRunToSuccessIsPassed(t *testing.T) {
+	srv := newServer(t, pushedAccepted)
+	first := ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CICancelled)
+	reportRuns(t, srv, first)
+	if got := ticket3(t, srv).CIResult; got != core.CICancelled {
+		t.Fatalf("ci result %q, want cancelled", got)
+	}
+	again := ciRun(1, "ci.yml", "abc123", store.CICompleted, store.CISuccess)
+	again.Attempt = 2
+	reportRuns(t, srv, again)
+	if got := ticket3(t, srv).CIResult; got != core.CIPassed {
+		t.Fatalf("ci result %q, want passed once the re-run succeeded", got)
 	}
 }
 

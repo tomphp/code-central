@@ -209,6 +209,36 @@ func TestAFailingLandCommitLinksItsTicketAndSpec(t *testing.T) {
 	}
 }
 
+func TestACancelledRunFiresNoRuleAndOpensNoFixTicket(t *testing.T) {
+	w := newWatching(t)
+	spec := w.rule("ci.yml", "main", store.Ready)
+	w.branchAnswer("main", branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "fff111", conclude: "cancelled", finished: 5})
+	w.start(w.h.Bin)
+	w.rulePoll()
+	if tks := w.fixTickets(spec); len(tks) != 0 {
+		t.Fatalf("Tickets on %s = %d, want none for a cancelled run", spec, len(tks))
+	}
+	if got := w.lastRun(spec); got != nil {
+		t.Fatalf("rule's last run = %v, want none tracked", got)
+	}
+}
+
+func TestACancelledJobIsLeftOutOfTheFailedJobs(t *testing.T) {
+	w := newWatching(t)
+	spec := w.rule("ci.yml", "main", store.Ready)
+	w.branchAnswer("main", branchRun{id: 21, workflow: "ci.yml", branch: "main", commit: "fff111", conclude: "failure", finished: 5})
+	w.jobsAnswer(21, 1, [2]string{"test", "failure"}, [2]string{"slow", "cancelled"})
+	w.start(w.h.Bin)
+	w.rulePoll()
+	tks := w.fixTickets(spec)
+	if len(tks) != 1 {
+		t.Fatalf("Tickets on %s = %d, want one", spec, len(tks))
+	}
+	if !strings.Contains(tks[0].Description, "[test]") || strings.Contains(tks[0].Description, "slow") {
+		t.Fatalf("description should name test but not the cancelled job slow:\n%s", tks[0].Description)
+	}
+}
+
 func TestAFurtherFailureCommentsOnTheRulesUnfinishedTicket(t *testing.T) {
 	w := newWatching(t)
 	spec := w.rule("ci.yml", "main", store.Ready)
@@ -218,9 +248,9 @@ func TestAFurtherFailureCommentsOnTheRulesUnfinishedTicket(t *testing.T) {
 	w.start(w.h.Bin)
 	w.rulePoll()
 
-	second := branchRun{id: 22, workflow: "ci.yml", branch: "main", commit: "fff222", conclude: "cancelled", finished: 9}
+	second := branchRun{id: 22, workflow: "ci.yml", branch: "main", commit: "fff222", conclude: "timed_out", finished: 9}
 	w.branchAnswer("main", first, second)
-	w.jobsAnswer(22, 1, [2]string{"build", "cancelled"})
+	w.jobsAnswer(22, 1, [2]string{"build", "timed_out"})
 	w.rulePoll()
 	tks := w.fixTickets(spec)
 	if len(tks) != 1 {

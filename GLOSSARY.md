@@ -145,11 +145,11 @@ One workflow run the CI system started for a commit, tracked against the Ticket 
 _Avoid_: Job, build, pipeline
 
 **CI result**:
-A Ticket's running, passed or failed, worked out from the CI Runs of its latest pushed commit that aren't of Ignored workflows: running until they have all finished, failed if any failed, passed otherwise.
+A Ticket's running, failed, cancelled or passed, worked out from the CI Runs of its latest pushed commit that aren't of Ignored workflows, each at its latest attempt: running while any is unfinished, else failed if any failed or timed out, else cancelled if any was cancelled, else passed. A Ticket whose only runs are cancelled is cancelled, not unavailable, and a cancelled run that was re-run and succeeded counts as passed.
 _Avoid_: Build status
 
 **CI gate**:
-What holds a pushed Ticket back from landing until its CI result is passed. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own. Under Unblock on push the gate still holds landing, but no longer holds Blockers.
+What holds a pushed Ticket back from landing until its CI result is passed, so it holds on running, failed and cancelled. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own. Under Unblock on push the gate still holds landing, but no longer holds Blockers.
 _Avoid_: CI check, CI hold, waiting-on-CI State
 
 **Unblock on push**:
@@ -161,11 +161,11 @@ A Project's list of workflow file names, such as `nightly.yml`, whose runs never
 _Avoid_: Excluded workflows, skipped workflows
 
 **CI Rule**:
-A Project's standing rule, "when workflow X fails on branch Y, open a Ticket to fix it", whose Tickets go on a long-lived Spec of its own, as Draft or Ready.
+A Project's standing rule, "when workflow X fails on branch Y, open a Ticket to fix it", fired only by a run that failed or timed out, never by a cancelled one, and whose Tickets go on a long-lived Spec of its own, as Draft or Ready.
 _Avoid_: Trigger, watch, alert
 
 **Fix Ticket**:
-An ordinary implementation Ticket opened to fix a failed CI Run: by a CI Rule on its Spec, linking the run and naming its failed jobs, or by the human's New fix Ticket for a CI failed Ticket. While a CI Rule's fix Ticket is unfinished, further failures only comment on it.
+An ordinary implementation Ticket opened to fix a failed CI Run: by a CI Rule on its Spec, linking the run and naming its failed jobs, never its cancelled ones, or by the human's New fix Ticket for a CI failed Ticket. While a CI Rule's fix Ticket is unfinished, further failures only comment on it.
 _Avoid_: CI Ticket, failure Ticket
 
 **Push remote**:
@@ -237,8 +237,12 @@ _Avoid_: Inbox, blocked
 The Needs Me reason of an Accepted Ticket under the Branch Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge.
 _Avoid_: Ready to merge, awaiting merge
 
+**CI cancelled**:
+The Needs Me reason of an Accepted Ticket whose CI result is cancelled and that the human hasn't dealt with yet: re-run, land anyway or send back.
+_Avoid_: CI aborted
+
 **CI failed**:
-The Needs Me reason of an Accepted Ticket whose CI result is failed and that the human hasn't dealt with yet: send it back to fix, re-run the failed jobs, open a new fix Ticket, or land it anyway.
+The Needs Me reason of an Accepted Ticket whose CI result is failed (a run failed or timed out; a cancelled run is CI cancelled instead) and that the human hasn't dealt with yet: send it back to fix, re-run the failed jobs, open a new fix Ticket, or land it anyway.
 _Avoid_: Build broken, red
 
 **Land anyway**:
@@ -246,11 +250,11 @@ The failure option by which the human accepts a CI failed Ticket's failed CI res
 _Avoid_: Override, force land
 
 **Re-run failed jobs**:
-The failure option by which the human asks the CI Watcher to re-run the failed jobs of a CI failed Ticket's failed CI Runs. It records a Re-run request on the pushed commit, and the Ticket's CI result reads running until the CI Watcher reports each run's new attempt. Offered under Merge + Push and Branch + Push.
+The failure option by which the human asks the CI Watcher to re-run the failed jobs of a CI failed Ticket's failed and cancelled CI Runs. It records a Re-run request on the pushed commit, and the Ticket's CI result reads running until the CI Watcher reports each run's new attempt. Offered under Merge + Push and Branch + Push.
 _Avoid_: Retry, rebuild
 
 **Re-run request**:
-What Re-run failed jobs records on a pushed commit: the failed CI Runs, each at the attempt that failed, for the CI Watcher to re-run. It is answered when the CI Watcher reports a later attempt of each, and lapses after 10 minutes unanswered, say when GitHub refuses the re-run, so the Ticket is CI failed again.
+What Re-run failed jobs records on a pushed commit: the failed and cancelled CI Runs, each at the attempt that failed, for the CI Watcher to re-run. It is answered when the CI Watcher reports a later attempt of each, and lapses after 10 minutes unanswered, say when GitHub refuses the re-run, so the Ticket is CI failed again.
 _Avoid_: Rerun job, retry
 
 **Send back to fix**:
