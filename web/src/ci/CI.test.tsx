@@ -177,6 +177,23 @@ describe("the runs", () => {
     expect(within(ciRun).queryByText("ignored")).toBeNull();
   });
 
+  it("shows a cancelled run in grey and a failed or timed out run in red", async () => {
+    const fake = world();
+    await tracked(fake, "acme");
+    await fake.reportCIRuns("acme", [
+      run(fake, 1, "ci.yml", -30, { finished: -20, conclusion: "cancelled" }),
+      run(fake, 2, "lint.yml", -12, { finished: -10, conclusion: "failure" }),
+      run(fake, 3, "deploy.yml", -5, { finished: -4, conclusion: "timed_out" }),
+    ]);
+    renderApp(fake, "/?view=ci&project=acme");
+    const shown = await rows();
+    const status = (name: string) => within(shown.find((r) => r.getAttribute("aria-label") === name)!).getByText(/^(cancelled|failed|timed out)$/);
+    expect(status("CI")).toHaveClass("ci-cancelled");
+    expect(status("CI")).toHaveTextContent("cancelled");
+    expect(status("LINT")).toHaveClass("ci-failed");
+    expect(status("DEPLOY")).toHaveClass("ci-timed-out");
+  });
+
   it("pulses a run that changes and one that joins, from the live feed, but not on opening", async () => {
     const fake = world();
     await tracked(fake, "acme");

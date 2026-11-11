@@ -34,6 +34,17 @@ describe("the CI badge", () => {
     expect(rows.map(badgeOf)).toEqual(["CI failed", "CI running", "CI passed", null]);
   });
 
+  it("shows a cancelled result in grey and a failed one in red", async () => {
+    renderApp(theming(["failed", "cancelled"]), "/?view=inbox&requirement=acme-1");
+
+    const pane = await within(detail()).findByRole("region", { name: "Spec" });
+    const rows = within(within(pane).getByRole("list", { name: "Tickets" })).getAllByRole("listitem");
+    expect(rows.map(badgeOf)).toEqual(["CI failed", "CI cancelled"]);
+    expect(rows[0].querySelector(".ci-badge")).toHaveClass("ci-failed");
+    expect(rows[1].querySelector(".ci-badge")).toHaveClass("ci-cancelled");
+    expect(within(pane).getByText("1 cancelled")).toHaveClass("ci-cancelled");
+  });
+
   it("is on a Ticket's row in Needs Me when it has a CI result, and not when it has none", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
