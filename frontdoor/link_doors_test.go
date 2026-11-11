@@ -61,7 +61,7 @@ func init() {
 		"update_linked_ticket": {
 			setup: linkedItems,
 			ok:    call{http: httpCall{"POST", "/api/p/acme/integration/tickets/5/update_linked_ticket", `{"spec":"acme-1"}`}},
-			check: ticketAcknowledgement("acme-5", "Draft", "spec", "edits"),
+			check: ticketAcknowledgement("acme-5", "Draft", "spec", "spec_landed", "edits"),
 			full:  func(t *testing.T, out map[string]any) { field("id", "acme-1")(t, out["spec"].(map[string]any)) },
 			bad:   call{http: httpCall{"POST", "/api/p/acme/integration/tickets/2/update_linked_ticket", `{"title":"Not linked"}`}},
 			code:  core.ActionNotAllowed,

@@ -219,13 +219,13 @@ func TestCreateTicketAcknowledgesTheFieldsItFilledIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantTicketAcknowledgement(t, v, "acme-3", t0, store.Draft, []string{"title", "state", "spec", "labels", "description"}, 0)
+	wantTicketAcknowledgement(t, v, "acme-3", t0, store.Draft, []string{"title", "state", "spec", "labels", "description", "spec_landed"}, 0)
 
 	v, err = f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Ready", State: store.Ready, BlockedBy: []core.Ref{"3"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantTicketAcknowledgement(t, v, "acme-4", t0, store.Ready, []string{"title", "state", "spec", "blocked_by", "blockers", "blocked"}, 0)
+	wantTicketAcknowledgement(t, v, "acme-4", t0, store.Ready, []string{"title", "state", "spec", "blocked_by", "blockers", "spec_landed", "blocked"}, 0)
 }
 
 func TestLinkedTicketWritesAcknowledge(t *testing.T) {
@@ -236,7 +236,7 @@ func TestLinkedTicketWritesAcknowledge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantTicketAcknowledgement(t, v, "acme-2", t0, store.Draft, []string{"title", "state", "spec", "link"}, 0)
+	wantTicketAcknowledgement(t, v, "acme-2", t0, store.Draft, []string{"title", "state", "spec", "spec_landed", "link"}, 0)
 
 	f.clock.Advance(time.Minute)
 	v, err = f.core.UpdateLinkedTicket(integration, "acme", core.UpdateLinkedTicketInput{Ticket: "2", Title: ptr("Login form")})

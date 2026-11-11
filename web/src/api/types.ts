@@ -639,6 +639,10 @@ export type NodeType = "chart" | "grilling" | "research" | "task" | "prototype" 
 // MAP_LABEL marks a Spec as a Map.
 export const MAP_LABEL = "wayfinder:map";
 
+// LONG_LIVED_LABEL marks a Spec as a Long-lived Spec, whose Tickets land one
+// by one under Land per Spec.
+export const LONG_LIVED_LABEL = "long-lived";
+
 // A Spec as get_spec and submit_requirement return it.
 export interface SpecView {
   id: string;

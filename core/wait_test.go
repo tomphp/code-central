@@ -18,6 +18,7 @@ func TestEveryWriteSendsAChangeNotice(t *testing.T) {
 	want := []events.Event{
 		{Type: events.ProjectChanged, Project: "acme"},
 		{Type: events.SpecChanged, Project: "acme", ID: "acme-1"},
+		{Type: events.SpecChanged, Project: "acme", ID: "acme-1"}, // the long-lived Label
 		{Type: events.TicketChanged, Project: "acme", ID: "acme-2"},
 	}
 	for _, w := range want {
@@ -32,8 +33,8 @@ func TestEveryWriteSendsAChangeNotice(t *testing.T) {
 	if _, err := f.core.Comment(ctx, "acme", core.CommentInput{Ticket: "2", Body: "hi"}); err != nil {
 		t.Fatal(err)
 	}
-	if got := <-notices; got != want[2] {
-		t.Fatalf("got %+v, want %+v", got, want[2])
+	if got := <-notices; got != want[3] {
+		t.Fatalf("got %+v, want %+v", got, want[3])
 	}
 }
 

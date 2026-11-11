@@ -420,7 +420,7 @@ Under either method, you can still merge an In Review Ticket's branch yourself, 
 
 ### Land per Spec
 
-Under Merge with Land per Spec on, a Requirement Spec's accepted work first gathers on its Spec Branch, `spec/<spec id>`. Once every Ticket on the Spec is Accepted, Done or Cancelled and its tickets Stage is finished, the Factory merges the Spec Branch into the base as `Merge spec <spec id>: <title>`, and lands every waiting Ticket at that commit. With Push on, it pushes the base once and lands them after the push succeeds; with CI Tracking on, the same pushed commit is reported for each and they all land once its CI is passed. Only the base is pushed.
+Under Merge with Land per Spec on, the accepted work of every Spec but a Long-lived one first gathers on its Spec Branch, `spec/<spec id>`. A Long-lived Spec is one labelled `long-lived`, as a CI Rule's Spec and the Issues Spec are; its Tickets land one by one. Once every implementation Ticket on the Spec is Accepted, Done or Cancelled (and, for a Requirement, its tickets Stage is finished), and at least one is merged into the Spec Branch, the Factory merges the Spec Branch into the base as `Merge spec <spec id>: <title>`, and lands every waiting Ticket at that commit. With Push on, it pushes the base once and lands them after the push succeeds; with CI Tracking on, the same pushed commit is reported for each and they all land once its CI is passed. Only the base is pushed.
 
 ```text
 acme-shop-5: merged into spec/acme-shop-2 at 3b9e1f0c2d44
@@ -432,7 +432,7 @@ acme-shop-6: landed on main at 9ad0fd655dd2
 
 When the Spec Branch conflicts with the base, the Factory opens a Ready Ticket on the Spec, "Merge the base into the Spec Branch of <spec id>", and retries once it is accepted.
 
-Turning Land per Spec off part-way makes the Factory's next poll merge every Spec Branch that holds merged-but-not-landed Tickets into the base, ready or not, and land them as a group; later Tickets land one by one. Turning it on affects only Tickets accepted afterwards.
+Turning Land per Spec off part-way makes the Factory's next poll merge every Spec Branch that holds merged-but-not-landed Tickets into the base, ready or not, and land them as a group; later Tickets land one by one. Adding the `long-lived` Label to a Spec while its Tickets wait does the same for that Spec alone. Turning Land per Spec on, or taking the Label off, affects only Tickets accepted afterwards. A Ticket added to a Spec after it has landed lands with a second batch: the Spec Branch is merged into the base again once the new Ticket is accepted.
 
 A Spec Branch is deleted once it is in the base and every Ticket on its Spec is Done or Cancelled. One that isn't in the base, as when the whole Spec is cancelled, is kept, and the Factory says so once. Ticket branches are never deleted.
 

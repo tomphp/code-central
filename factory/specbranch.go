@@ -320,19 +320,23 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 }
 
 // landSpecsOff is the poll's landing under Merge with Land per Spec
-// turned off part-way: every Spec Branch holding Accepted Tickets merged
-// and not landed goes into the base, ready or not, and those Tickets land
-// as a group. It returns the Tickets it handled, which the plain path
+// turned off part-way, or a Spec gaining the long-lived Label: every Spec
+// Branch holding Accepted Tickets merged and not landed, which Land per
+// Spec no longer covers, goes into the base, ready or not, and those
+// Tickets land as a group. It returns the Tickets it handled, which the plain path
 // leaves alone this poll.
 func (f *factory) landSpecsOff(ctx context.Context, accepted []core.TicketView, landing core.LandingView, policy store.LandingPolicy) map[string]bool {
 	handled := map[string]bool{}
-	if landing.Method != store.LandingMerge || policy.LandPerSpecInForce() {
+	if landing.Method != store.LandingMerge {
 		return handled
 	}
 	groups := map[string][]core.TicketView{}
 	var specs []string
 	for _, tk := range accepted {
 		if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
+			continue
+		}
+		if tk.SpecLanded && policy.LandPerSpecInForce() {
 			continue
 		}
 		if head, _, err := f.workOf(tk); err == nil && f.inBase(head) {
