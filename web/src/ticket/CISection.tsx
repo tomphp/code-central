@@ -109,8 +109,9 @@ function CIRuns({ runs }: { runs: CIRunView[] }) {
   );
 }
 
-// FAILED is the conclusions that fail a run or job, as core counts them.
-const FAILED: CIConclusion[] = ["failure", "cancelled", "timed_out"];
+// FAILED is the conclusions that fail a run or job, as core counts them;
+// a cancelled one is no failure.
+const FAILED: CIConclusion[] = ["failure", "timed_out"];
 const failed = (c?: CIConclusion) => c !== undefined && FAILED.includes(c);
 
 // fixNote is the note Send back to fix and New fix Ticket start from: each
@@ -123,9 +124,11 @@ function fixNote(t: TicketView): string {
     if (r.commit !== latest || r.ignored) continue;
     if ((runs.get(r.id)?.attempt ?? 0) < r.attempt) runs.set(r.id, r);
   }
-  const failedRuns = [...runs.values()].filter((r) => failed(r.conclusion));
+  // A CI cancelled Ticket's note names its cancelled runs instead.
+  const bad = t.ci_result === "cancelled" ? (c?: CIConclusion) => c === "cancelled" : failed;
+  const failedRuns = [...runs.values()].filter((r) => bad(r.conclusion));
   const lines = failedRuns.map((r) => {
-    const jobs = r.jobs.filter((j) => failed(j.conclusion)).map((j) => j.name).sort();
+    const jobs = r.jobs.filter((j) => bad(j.conclusion)).map((j) => j.name).sort();
     return `- [${runName(r)}](${r.url}) (${r.workflow})${jobs.length > 0 ? `: failed jobs ${jobs.join(", ")}` : ""}`;
   });
   const logs = failedRuns.map((r) => `\`gh run view ${r.id} --log-failed\``).join(", ");

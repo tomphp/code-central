@@ -214,3 +214,43 @@ describe("the CI failed panel", () => {
     expect((await fake.getTicket("acme", "acme-1")).state).toBe("Ready");
   });
 });
+
+describe("the CI cancelled panel", () => {
+  async function cancelledWorld() {
+    const fake = await world();
+    await fake.reportCIRuns("acme", [
+      {
+        id: 1,
+        attempt: 1,
+        workflow: "ci.yml",
+        name: "CI",
+        branch: "main",
+        commit: "abc1234567",
+        status: "completed",
+        conclusion: "cancelled",
+        url: "https://github.com/acme/web/actions/runs/1",
+        jobs: [{ name: "test", conclusion: "cancelled", url: "https://github.com/acme/web/actions/runs/1/job/1" }],
+        ticket: "acme-1",
+      },
+    ]);
+    fake.setNeedsMe([{ reason: "ci_cancelled", tickets: [{ id: "acme-1" }] }]);
+    return fake;
+  }
+
+  it("shows the cancelled result and run in grey, with Re-run, Land anyway and Send back but no New fix Ticket", async () => {
+    renderAt(await cancelledWorld(), "/?view=inbox&ticket=acme-1");
+    const p = screen.getByRole("complementary", { name: "Ticket" });
+    const panel = await within(p).findByRole("region", { name: "CI cancelled" });
+    const ci = within(panel).getByRole("region", { name: "CI" });
+    expect(within(ci).getAllByText("cancelled").length).toBeGreaterThan(0);
+    for (const el of within(ci).getAllByText("cancelled").filter((e) => e.className.includes("ci-"))) {
+      expect(el).toHaveClass("ci-cancelled");
+      expect(el).not.toHaveClass("ci-failed");
+    }
+    expect(within(ci).getByText("cancelled", { selector: ".ci-result" })).toHaveClass("ci-cancelled");
+    expect(within(panel).getByRole("button", { name: "Re-run failed jobs" })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /Land anyway/ })).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /Send back/ })).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: /New fix Ticket/ })).toBeNull();
+  });
+});

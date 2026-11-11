@@ -245,14 +245,15 @@ Turning CI Tracking off keeps the repository, Ignored workflows and Unblock on p
 While CI Tracking and Push are both on, each push the Factory makes for a Ticket is tracked: under **Merge + Push**, the base it pushes after merging the Ticket; under **Branch + Push**, the Ticket's branch, pushed when you accept it. That commit is the Ticket's **pushed commit**. Only pushes made while CI Tracking is on are tracked. The CI Watcher finds the workflow runs GitHub started for it, and the Ticket's panel gains a **CI** section once it has any: the Ticket's **CI result**, then each workflow run with its status, its jobs and links to them on GitHub. The CI result is:
 
 - **running** while any of the pushed commit's runs hasn't finished, or before any has started;
-- **failed** if any run failed, was cancelled or timed out;
+- **failed** if any run failed or timed out;
+- **cancelled** if none failed or timed out but any run was cancelled, say by you or by GitHub. A cancelled run is no failure, so it shows in neutral grey, labelled **cancelled**, where a failed run is red;
 - **passed** otherwise. A skipped or neutral run counts as passed.
 
 Runs of Ignored workflows are listed greyed and marked **ignored**, and never count towards the CI result. When a Ticket is pushed again, say after it is sent back and accepted again, the newer push gives the CI result, and the earlier push's runs are kept under **Earlier pushes**.
 
-A Ticket with a CI result also shows it as a badge, **CI running**, **CI passed** or **CI failed**, on its row in the Spec view, in Needs Me and in the Activity Dashboard. The Activity Dashboard's **CI Running** block also counts the CI Runs still going that count towards a Ticket's CI result, and opens the CI view; its CI Running list below the In Progress Tickets lists those runs, each with its GitHub link. Above its Tickets, the Spec view sums their badges, such as **1 failed** and **3 passed**, so you can see a Spec's CI health at a glance.
+A Ticket with a CI result also shows it as a badge, **CI running**, **CI passed**, **CI failed** or **CI cancelled**, on its row in the Spec view, in Needs Me and in the Activity Dashboard. The Activity Dashboard's **CI Running** block also counts the CI Runs still going that count towards a Ticket's CI result, and opens the CI view; its CI Running list below the In Progress Tickets lists those runs, each with its GitHub link. Above its Tickets, the Spec view sums their badges, such as **1 failed**, **1 cancelled** and **3 passed**, so you can see a Spec's CI health at a glance.
 
-Under **Merge + Push**, CI Tracking gates landing: the Factory pushes an accepted Ticket and leaves it Accepted until its CI result is passed, then lands it, so Done means on the remote and green. A Ticket it blocks waits until it lands, unless **Unblock on push** is on: then it waits only until the Ticket is pushed, and is held again if the CI result turns failed, while the Ticket itself still lands only on passed. A failed CI result puts the Ticket in Needs Me as **CI failed**, where you can **Re-run failed jobs**, **Land anyway**, **Send back to fix** or open a **New fix Ticket**. Under **Branch + Push** the CI result only informs you, though you can still re-run the failed jobs or fix it before you merge, and the Factory lands the Ticket when it sees your merge. [With CI Tracking](running-the-factory.md#with-ci-tracking) in Running the Factory shows how.
+Under **Merge + Push**, CI Tracking gates landing: the Factory pushes an accepted Ticket and leaves it Accepted until its CI result is passed, then lands it, so Done means on the remote and green. A Ticket it blocks waits until it lands, unless **Unblock on push** is on: then it waits only until the Ticket is pushed, and is held again if the CI result turns failed, while the Ticket itself still lands only on passed. A failed CI result puts the Ticket in Needs Me as **CI failed**, where you can **Re-run failed jobs**, **Land anyway**, **Send back to fix** or open a **New fix Ticket**. A cancelled one puts it there as **CI cancelled**, offering the same options except New fix Ticket. Under **Branch + Push** the CI result only informs you, though you can still re-run the failed jobs or fix it before you merge, and the Factory lands the Ticket when it sees your merge. [With CI Tracking](running-the-factory.md#with-ci-tracking) in Running the Factory shows how.
 
 ### The CI view
 
@@ -288,7 +289,7 @@ ci.yml on main: opens Ready Tickets on acme-api-42      Edit  Remove
 
 **Edit** changes a rule in place, and its Spec's title changes to match unless you renamed the Spec. **Remove** removes the rule and keeps its Spec as the record of its Tickets. A rule takes effect from when you add it: runs that finished before then never fire it.
 
-When a run of the rule's workflow fails, is cancelled or times out on exactly its branch, the CI Watcher opens a fix Ticket on the rule's Spec, as Draft or Ready as the rule says. The Ticket is an ordinary implementation Ticket. Its title names the workflow and branch, and its description links the run and names the failed jobs:
+When a run of the rule's workflow fails or times out on exactly its branch, the CI Watcher opens a fix Ticket on the rule's Spec, as Draft or Ready as the rule says. The Ticket is an ordinary implementation Ticket. Its title names the workflow and branch, and its description links the run and names the failed jobs:
 
 ```text
 Fix ci.yml failing on main
@@ -300,7 +301,7 @@ Fix ci.yml failing on main
 - The commit landed acme-api-37, on Spec acme-api-30.
 ```
 
-The last line is there when the failing commit is where a Ticket landed, such as one you merged by hand. A rule doesn't pile Tickets up: while its Spec has a Ticket that isn't Done or Cancelled, a further failure only adds a comment to that Ticket, linking the new run and naming its failed jobs. Nor does it double up on a Ticket's own CI: a run on a commit the Factory pushed for a Ticket counts towards that Ticket's CI result and never fires a rule. A run fires one rule: when a rule names its workflow and an `any` rule watches the same branch, the rule naming it fires. A run that fires a rule is tracked against it.
+The last line is there when the failing commit is where a Ticket landed, such as one you merged by hand. A rule doesn't pile Tickets up: while its Spec has a Ticket that isn't Done or Cancelled, a further failure only adds a comment to that Ticket, linking the new run and naming its failed jobs. Nor does it double up on a Ticket's own CI: a run on a commit the Factory pushed for a Ticket counts towards that Ticket's CI result and never fires a rule. A run fires one rule: when a rule names its workflow and an `any` rule watches the same branch, the rule naming it fires. A run that fires a rule is tracked against it. Only failed and timed_out runs fire a rule: a cancelled run never does.
 
 ## Linking GitHub issues
 

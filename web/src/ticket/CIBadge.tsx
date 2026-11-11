@@ -4,7 +4,7 @@
 import type { CIResult } from "../api/types";
 
 // CI_RESULTS is the order the sums go in: what needs the human first.
-const CI_RESULTS: CIResult[] = ["failed", "running", "passed"];
+const CI_RESULTS: CIResult[] = ["failed", "cancelled", "running", "passed"];
 
 // CIBadge is a row's badge; it shows nothing for a Ticket with no CI
 // result.
