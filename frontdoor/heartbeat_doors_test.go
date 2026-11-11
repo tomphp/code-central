@@ -90,3 +90,13 @@ func TestAnInvalidHeartbeatNamesTheField(t *testing.T) {
 		}
 	}
 }
+
+// The base a Factory reports (code-central-394): report_base, over HTTP only.
+func init() {
+	cases["report_base"] = opCase{
+		ok:    call{http: httpCall{"POST", "/api/p/acme/report_base", `{"state":"diverged","local":"aaa","remote":"bbb"}`}},
+		check: acknowledgement("acme"),
+		bad:   call{http: httpCall{"POST", "/api/p/acme/report_base", `{"state":"sideways","local":"aaa","remote":"bbb"}`}},
+		code:  core.Invalid,
+	}
+}

@@ -177,6 +177,9 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 	err := c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			row := ProjectRow{ProjectView: c.projectView(p)}
+			if _, ok := c.baseDivergedRow(p); ok {
+				row.NeedsMe++
+			}
 			for _, t := range r.Tickets(p.Key) {
 				if reason, _ := c.reasonOf(r, p.Key, t); reason != "" {
 					row.NeedsMe++

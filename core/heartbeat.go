@@ -48,6 +48,9 @@ type FactoryStatusView struct {
 	// Draining if any is, else Offline (also with no Factories).
 	Status    FactoryStatusName `json:"status"`
 	Factories []FactoryView     `json:"factories"`
+	// Base is the base the Factory last reported under Pull Request
+	// (code-central-394); left out while none is reporting.
+	Base *BaseView `json:"base,omitempty"`
 }
 
 // FactoryView is one Factory as the Project view lists it.
@@ -78,6 +81,8 @@ type heartbeats struct {
 	all map[heartbeatKey]heartbeat
 	// seen is each Project's Factory Status as the watch last saw it.
 	seen map[string]string
+	// base is each Project's reported base (code-central-394).
+	base map[string]BaseView
 }
 
 // status is h's status at now.
@@ -108,6 +113,7 @@ func (hs *heartbeats) view(project string, now time.Time) FactoryStatusView {
 			v.Status = s
 		}
 	}
+	v.Base = hs.baseView(project, now)
 	slices.SortFunc(v.Factories, func(a, b FactoryView) int {
 		if c := strings.Compare(a.Name, b.Name); c != 0 {
 			return c
@@ -171,6 +177,11 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 	hs.mu.Lock()
 	prev, seen := hs.all[k]
 	hs.all[k] = h
+	if !seen || prev.status(now) == FactoryOffline || in.State == HeartbeatStopping {
+		// A Factory that is new, back from a lapse or stopping holds
+		// no base report of its own to trust.
+		delete(hs.base, key)
+	}
 	hs.mu.Unlock()
 	if !seen || prev.status(now) != h.status(now) || prev.note != note {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
@@ -214,6 +225,9 @@ func (c *Core) factoryStatusChanges() []string {
 	for _, key := range keys {
 		v := hs.view(key, now)
 		sig := string(v.Status)
+		if v.Base != nil {
+			sig += "\x00base\x00" + string(v.Base.State)
+		}
 		for _, f := range v.Factories {
 			sig += "\x00" + f.Name + "\x00" + f.Host + "\x00" + string(f.Status)
 		}

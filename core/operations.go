@@ -167,6 +167,8 @@ var Operations = []Op{
 	// The Reported Models (code-central-311).
 	{Name: "report_models", Audience: FactoryOnly, Write: true},
 	{Name: "report_heartbeat", Audience: FactoryOnly, Write: true},
+	// The Factory's base under Pull Request (code-central-394).
+	{Name: "report_base", Audience: FactoryOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

@@ -12,7 +12,7 @@
 // there's only ever one note, the latest.
 import { useEffect, useMemo, useState } from "react";
 import type { Api } from "../api/api";
-import type { FocusClear, TicketView } from "../api/types";
+import type { FocusClear, NeedsMeRow, TicketView } from "../api/types";
 import { duration, REASON_LABEL } from "../format";
 import { useTicket, type InboxData } from "../live";
 import { Markdown } from "../Markdown";
@@ -37,7 +37,15 @@ export interface FocusProps {
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function Focus({ api, now, version, data, focusClear, loc, navigate }: FocusProps) {
+export function Focus({
+  api,
+  now,
+  version,
+  data,
+  focusClear,
+  loc,
+  navigate,
+}: FocusProps) {
   const project = data?.projects.find((p) => p.key === loc.project);
   const [onScreen, setOnScreen] = useState<FocusItem>();
   // skipped lives here for this visit only: leaving Focus Mode or
@@ -47,9 +55,23 @@ export function Focus({ api, now, version, data, focusClear, loc, navigate }: Fo
   // here, until a refusal takes it back.
   const [actedOn, setActedOn] = useState<string>();
   const [note, setNote] = useState<Note>();
-  const ticket = useTicket(api, onScreen?.row.project, onScreen?.row.id, version);
+  const ticket = useTicket(
+    api,
+    onScreen?.row.project,
+    onScreen?.row.id,
+    version,
+  );
   const acted = !!onScreen && actedOn === onScreen.key;
-  const screen = data && focusQueue({ needsMe: data.needsMe, project: loc.project, onScreen, ticket: ticket.data, skipped, acted });
+  const screen =
+    data &&
+    focusQueue({
+      needsMe: data.needsMe,
+      project: loc.project,
+      onScreen,
+      ticket: ticket.data,
+      skipped,
+      acted,
+    });
   const item = screen?.item;
   // What's shown becomes what's on screen, so a later read keeps it there.
   // Moving on shows "Dealt with elsewhere" only when the item left without
@@ -58,11 +80,15 @@ export function Focus({ api, now, version, data, focusClear, loc, navigate }: Fo
   // first Question, once read, isn't moving on, so it keeps the note.
   useEffect(() => {
     if (!screen || item?.key === onScreen?.key) return;
-    const roundRead = !!onScreen?.roundKey && !onScreen.question && onScreen.roundKey === item?.roundKey;
+    const roundRead =
+      !!onScreen?.roundKey &&
+      !onScreen.question &&
+      onScreen.roundKey === item?.roundKey;
     setOnScreen(item);
     setActedOn(undefined);
     if (roundRead) return;
-    if (screen.elsewhere && item) setNote({ text: "Dealt with elsewhere", elsewhere: true });
+    if (screen.elsewhere && item)
+      setNote({ text: "Dealt with elsewhere", elsewhere: true });
     else setNote((n) => (n?.elsewhere ? undefined : n));
   }, [screen, item, onScreen]);
   // The note is brief: it goes after NOTE_MS, and a newer note starts its
@@ -89,10 +115,13 @@ export function Focus({ api, now, version, data, focusClear, loc, navigate }: Fo
       <header className="focus-head">
         {loc.project && (
           <span className="focus-project">
-            {project?.display_name ?? loc.project} <span className="muted">{loc.project}</span>
+            {project?.display_name ?? loc.project}{" "}
+            <span className="muted">{loc.project}</span>
           </span>
         )}
-        {screen && !screen.clear && <span className="focus-left">{screen.remaining} left</span>}
+        {screen && !screen.clear && (
+          <span className="focus-left">{screen.remaining} left</span>
+        )}
         {/* Submitting goes nowhere: whatever is on screen stays, skips and
             all, with a note on every screen. */}
         <div className="focus-new">
@@ -116,14 +145,24 @@ export function Focus({ api, now, version, data, focusClear, loc, navigate }: Fo
       {!screen ? (
         <p className="focus-loading">Loading…</p>
       ) : screen.clear && focusClear === "activity_dashboard" ? (
-        <ActivityDashboard api={api} now={now} version={version} data={data} loc={loc} navigate={navigate} />
+        <ActivityDashboard
+          api={api}
+          now={now}
+          version={version}
+          data={data}
+          loc={loc}
+          navigate={navigate}
+        />
       ) : screen.clear ? (
         <section aria-label="All clear" className="focus-clear">
           <h2>All clear</h2>
           <p>Nothing needs you.</p>
         </section>
       ) : screen.onlySkipped ? (
-        <section aria-label="Only skipped Focus Items left" className="focus-clear">
+        <section
+          aria-label="Only skipped Focus Items left"
+          className="focus-clear"
+        >
           <p>You skipped {screen.remaining}, go through them again?</p>
           <button className="btn primary" onClick={() => setSkipped([])}>
             Go through them again
@@ -166,7 +205,10 @@ const WRITES: ReadonlySet<PropertyKey> = new Set<keyof Api>(["act", "unlink"]);
 // forwarded, so the live notice it causes finds it recorded, and
 // onRefused if it's refused, as a refused write left the item where it
 // was. Every other call goes straight to api.
-function recordingWrites(api: Api, { onWrite, onRefused }: { onWrite(): void; onRefused(): void }): Api {
+function recordingWrites(
+  api: Api,
+  { onWrite, onRefused }: { onWrite(): void; onRefused(): void },
+): Api {
   return new Proxy(api, {
     get(target, prop) {
       const v = Reflect.get(target, prop);
@@ -174,10 +216,12 @@ function recordingWrites(api: Api, { onWrite, onRefused }: { onWrite(): void; on
       if (!WRITES.has(prop)) return v.bind(target);
       return (...args: unknown[]) => {
         onWrite();
-        return (v.apply(target, args) as Promise<unknown>).catch((e: unknown) => {
-          onRefused();
-          throw e;
-        });
+        return (v.apply(target, args) as Promise<unknown>).catch(
+          (e: unknown) => {
+            onRefused();
+            throw e;
+          },
+        );
       };
     },
   });
@@ -199,12 +243,26 @@ interface ItemProps {
 // Item is one Focus Item, top to bottom: where it's from, why it waits,
 // then its Question with the answer form, or its reason's panel with the
 // panel's own buttons, and Skip.
-function Item({ api, now, data, item: { row, question }, ticket, loc, navigate, skip }: ItemProps) {
+function Item({
+  api,
+  now,
+  data,
+  item: { row, question },
+  ticket,
+  loc,
+  navigate,
+  skip,
+}: ItemProps) {
   const project = data.projects.find((p) => p.key === row.project);
   const Panel = panelFor(row.reason, ticket?.state)?.Component;
   const waited = duration(now, row.since);
   // A Stage Ticket opens in its Requirement, with it selected.
-  const inbox = { view: "inbox" as const, project: loc.project, requirement: row.requirement?.stage && row.requirement.spec, ticket: row.id };
+  const inbox = {
+    view: "inbox" as const,
+    project: loc.project,
+    requirement: row.requirement?.stage && row.requirement.spec,
+    ticket: row.id,
+  };
   const open = clickTo(navigate, inbox);
   const skipButton = (
     <button type="button" className="btn" onClick={skip}>
@@ -213,20 +271,32 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate, 
   );
 
   return (
-    <article aria-label="Focus Item" className={question ? "focus-item focus-item-question" : "focus-item"}>
+    <article
+      aria-label="Focus Item"
+      className={question ? "focus-item focus-item-question" : "focus-item"}
+    >
       <p className="focus-from">
-        <span className="focus-item-project">{project?.display_name ?? row.project}</span> <span className="muted">{row.project}</span>
+        <span className="focus-item-project">
+          {project?.display_name ?? row.project}
+        </span>{" "}
+        <span className="muted">{row.project}</span>
       </p>
-      <p className="focus-ticket">
-        <span className="tid">{row.id}</span>
-      </p>
+      {row.id && (
+        <p className="focus-ticket">
+          <span className="tid">{row.id}</span>
+        </p>
+      )}
       <h2>{row.title}</h2>
       {row.requirement && (
         <p className="focus-requirement">
-          {row.requirement.stage ? `Requirement: ${row.requirement.title} · ${row.requirement.stage}` : `Requirement: ${row.requirement.title}`}
+          {row.requirement.stage
+            ? `Requirement: ${row.requirement.title} · ${row.requirement.stage}`
+            : `Requirement: ${row.requirement.title}`}
         </p>
       )}
-      {row.spec && <p className="focus-requirement">{`${row.spec.map ? "Map" : "Spec"}: ${row.spec.title}`}</p>}
+      {row.spec && (
+        <p className="focus-requirement">{`${row.spec.map ? "Map" : "Spec"}: ${row.spec.title}`}</p>
+      )}
       {row.prototype && (
         <p className="focus-badges">
           <PrototypeBadge />
@@ -234,7 +304,8 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate, 
       )}
       <p className="focus-why">
         <span className={`reason reason-${row.reason}`}>
-          <span className="dot" aria-hidden="true" /> <span>{REASON_LABEL[row.reason]}</span>
+          <span className="dot" aria-hidden="true" />{" "}
+          <span>{REASON_LABEL[row.reason]}</span>
         </span>{" "}
         · <span>{waited === "just now" ? waited : `waiting ${waited}`}</span>
       </p>
@@ -243,29 +314,78 @@ function Item({ api, now, data, item: { row, question }, ticket, loc, navigate, 
       {question ? (
         <section aria-label="Question" className="focus-question">
           <p className="focus-question-of">
-            Question {question.place} of {question.count} · Round {question.round}
+            Question {question.place} of {question.count} · Round{" "}
+            {question.round}
           </p>
           <h3>{question.q.title}</h3>
           <div className="focus-question-body">
             <Markdown>{question.q.body}</Markdown>
           </div>
-          <QuestionAnswer api={api} project={row.project} ticket={row.id} q={question.q} submitOnModEnter>
+          <QuestionAnswer
+            api={api}
+            project={row.project}
+            ticket={row.id}
+            q={question.q}
+            submitOnModEnter
+          >
             {skipButton}
           </QuestionAnswer>
         </section>
+      ) : row.base_diverged ? (
+        <>
+          <BaseDivergedFix row={row} />
+          <p className="focus-skip">{skipButton}</p>
+        </>
       ) : (
         <>
-          {ticket ? Panel && <Panel key={ticket.state} api={api} project={row.project} ticket={ticket} now={now} /> : <p className="muted">Loading…</p>}
+          {ticket ? (
+            Panel && (
+              <Panel
+                key={ticket.state}
+                api={api}
+                project={row.project}
+                ticket={ticket}
+                now={now}
+              />
+            )
+          ) : (
+            <p className="muted">Loading…</p>
+          )}
           {/* Skip waits for the read, so a Round is never skipped whole
               before its Questions are known. */}
           {ticket && <p className="focus-skip">{skipButton}</p>}
         </>
       )}
-      <p className="focus-open">
-        <a href={hrefFor(inbox)} onClick={open}>
-          Open in Inbox
-        </a>
-      </p>
+      {row.id && (
+        <p className="focus-open">
+          <a href={hrefFor(inbox)} onClick={open}>
+            Open in Inbox
+          </a>
+        </p>
+      )}
     </article>
+  );
+}
+
+// BaseDivergedFix is a Project's Base diverged item: both commits and the
+// fix, which is the human's by hand; the Factory carries on by itself.
+function BaseDivergedFix({ row }: { row: NeedsMeRow }) {
+  const b = row.base_diverged!;
+  const base = b.base ?? "the base";
+  return (
+    <section aria-label="Base diverged" className="panel">
+      <p>
+        The Factory can't fast-forward {base}: it holds commits the remote's
+        doesn't. Nothing lands and no new branch is cut until they agree.
+      </p>
+      <p>
+        Local <code>{b.local.slice(0, 7)}</code> · remote{" "}
+        <code>{b.remote.slice(0, 7)}</code>
+      </p>
+      <p className="small">
+        Reconcile {base} with the remote by hand, for example by resetting or
+        rebasing it. The Factory carries on by itself on its next poll.
+      </p>
+    </section>
   );
 }
