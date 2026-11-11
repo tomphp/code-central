@@ -47,7 +47,7 @@ export interface Progress {
 
 // reasonsOf maps each Ticket in Needs Me to its reason.
 export function reasonsOf(needsMe?: NeedsMeView): Map<string, NeedsMeReason> {
-  return new Map((needsMe?.groups ?? []).flatMap((g) => g.tickets.map((r) => [r.id, g.reason] as const)));
+  return new Map((needsMe?.groups ?? []).flatMap((g) => g.tickets.filter((r) => r.id).map((r) => [r.id, g.reason] as const)));
 }
 
 // needsMeCount is the Needs Me count as the UI shows it, over the rows

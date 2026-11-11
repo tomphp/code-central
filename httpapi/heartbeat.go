@@ -18,3 +18,16 @@ func init() {
 		return c.ReportHeartbeat(r.Context(), r.PathValue("key"), in)
 	}
 }
+
+// The base a Factory reports under Pull Request (code-central-394).
+func init() {
+	Routes["report_base"] = "POST /api/p/{key}/report_base"
+
+	handlers["report_base"] = func(c *core.Core, r *http.Request) (any, error) {
+		var in core.ReportBaseInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.ReportBase(r.Context(), r.PathValue("key"), in)
+	}
+}
