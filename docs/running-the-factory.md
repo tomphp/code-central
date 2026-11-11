@@ -430,6 +430,15 @@ acme-shop-6: landed on main at 9ad0fd655dd2
 
 When the Spec Branch conflicts with the base, the Factory opens a Ready Ticket on the Spec, "Merge the base into the Spec Branch of <spec id>", and retries once it is accepted.
 
+Turning Land per Spec off part-way makes the Factory's next poll merge every Spec Branch that holds merged-but-not-landed Tickets into the base, ready or not, and land them as a group; later Tickets land one by one. Turning it on affects only Tickets accepted afterwards.
+
+A Spec Branch is deleted once it is in the base and every Ticket on its Spec is Done or Cancelled. One that isn't in the base, as when the whole Spec is cancelled, is kept, and the Factory says so once. Ticket branches are never deleted.
+
+```text
+acme-shop-2: deleted spec/acme-shop-2, which is in main
+acme-shop-4: every Ticket is finished but spec/acme-shop-4 isn't in main: kept
+```
+
 ### Push
 
 Either Landing Method has a **Push** option, also on the Project Options page, which names a git remote (`origin` by default). The Factory checks that its repository has that remote, with `git remote get-url`. It refuses to start when it doesn't:

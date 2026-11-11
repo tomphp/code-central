@@ -181,47 +181,105 @@ func (f *factory) landSpec(ctx context.Context, id string, landing core.LandingV
 		}
 		tickets = append(tickets, tk)
 	}
+	f.mergeSpec(ctx, spec, tickets, landing)
+}
+
+// mergeSpec merges the Spec Branch of spec into the base and lands its
+// waiting Tickets as a group. It reports whether the Tickets are handled
+// this poll: false means the Spec Branch is already in the base or can't
+// be read, and the Tickets land through the plain path, as their work is
+// in the base.
+func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []core.TicketView, landing core.LandingView) (handled bool) {
+	id := spec.ID
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
 	ref := "refs/heads/" + specBranch(id)
 	tip, err := f.repository.commit(ref)
 	if err != nil {
-		return
+		return false
 	}
 	baseTip, err := f.repository.commit("refs/heads/" + f.base)
 	if err != nil {
 		f.printf("warning: %s: the base, %s, isn't a branch, so the Spec can't land", id, f.base)
-		return
+		return true
 	}
 	// Merged on an earlier poll whose landing then failed: those Tickets
 	// land through the plain path, as their work is in the base.
 	if f.inBase(tip) {
-		return
+		return false
 	}
 	tree, conflicts, err := f.repository.mergeTree(baseTip, tip)
 	if err != nil {
 		f.printf("warning: %s: can't merge %s: %v", id, specBranch(id), err)
-		return
+		return true
 	}
 	if len(conflicts) > 0 {
 		f.openSpecConflict(ctx, spec, tip, baseTip, conflicts)
-		return
+		return true
 	}
 	merge, err := f.repository.commitTree(tree, fmt.Sprintf("Merge spec %s: %s", id, spec.Title), baseTip, tip)
 	if err != nil {
 		f.printf("warning: %s: can't make the merge commit: %v", id, err)
-		return
+		return true
 	}
 	if why := f.advanceBase(baseTip, merge); why != "" {
 		for _, tk := range tickets {
 			f.cantLandYet(ctx, tk, why)
 		}
-		return
+		return true
 	}
 	f.printf("%s: merged %s into %s at %s", id, specBranch(id), f.base, short(merge))
 	f.printf("%s: landing its Tickets: %s", id, joinIDs(tickets))
 	for _, tk := range tickets {
 		f.landPushed(ctx, tk, landing, merge)
 	}
+	return true
+}
+
+// landSpecsOff is the poll's landing under Merge with Land per Spec
+// turned off part-way: every Spec Branch holding Accepted Tickets merged
+// and not landed goes into the base, ready or not, and those Tickets land
+// as a group. It returns the Tickets it handled, which the plain path
+// leaves alone this poll.
+func (f *factory) landSpecsOff(ctx context.Context, accepted []core.TicketView, landing core.LandingView) map[string]bool {
+	handled := map[string]bool{}
+	if landing.Method != store.LandingMerge || landing.LandPerSpec {
+		return handled
+	}
+	groups := map[string][]core.TicketView{}
+	var specs []string
+	for _, tk := range accepted {
+		if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
+			continue
+		}
+		if head, _, err := f.workOf(tk); err == nil && f.inBase(head) {
+			continue
+		}
+		if len(groups[tk.Spec.ID]) == 0 {
+			specs = append(specs, tk.Spec.ID)
+		}
+		groups[tk.Spec.ID] = append(groups[tk.Spec.ID], tk)
+	}
+	for _, id := range specs {
+		if f.halted(ctx) || f.paused() {
+			break
+		}
+		spec, err := f.client.GetSpec(ctx, f.project, core.GetSpecInput{Spec: core.Ref(id), Parts: []string{"tickets"}})
+		if err != nil {
+			if ctx.Err() == nil {
+				f.printf("%s: get_spec: %v", id, err)
+			}
+			for _, tk := range groups[id] {
+				handled[tk.ID] = true
+			}
+			continue
+		}
+		if f.mergeSpec(ctx, spec, groups[id], landing) {
+			for _, tk := range groups[id] {
+				handled[tk.ID] = true
+			}
+		}
+	}
+	return handled
 }
 
 func joinIDs(tickets []core.TicketView) string {
@@ -279,4 +337,50 @@ func (f *factory) openSpecConflict(ctx context.Context, spec core.SpecDetail, ti
 		return
 	}
 	f.printf("%s: %s conflicts with %s in %s: opened %s to merge the base into it", spec.ID, specBranch(spec.ID), f.base, strings.Join(conflicts, ", "), made.ID)
+}
+
+// sweepSpecBranches deletes each Spec Branch that is in the base once
+// every Ticket on its Spec is Done or Cancelled. One not in the base, as
+// when the whole Spec is cancelled, is kept, with a line printed once.
+func (f *factory) sweepSpecBranches(ctx context.Context) {
+	branches, err := f.repository.specBranches()
+	if err != nil {
+		return
+	}
+	for _, branch := range branches {
+		if ctx.Err() != nil {
+			return
+		}
+		id := strings.TrimPrefix(branch, "spec/")
+		spec, err := f.client.GetSpec(ctx, f.project, core.GetSpecInput{Spec: core.Ref(id), Parts: []string{"tickets"}})
+		if err != nil || len(spec.Tickets) == 0 {
+			continue
+		}
+		finished := true
+		for _, r := range spec.Tickets {
+			if r.State != store.Done && r.State != store.Cancelled {
+				finished = false
+			}
+		}
+		if !finished {
+			continue
+		}
+		ref := "refs/heads/" + branch
+		tip, err := f.repository.commit(ref)
+		if err != nil {
+			continue
+		}
+		if !f.inBase(tip) {
+			if !f.warned[ref] {
+				f.warned[ref] = true
+				f.printf("%s: every Ticket is finished but %s isn't in %s: kept", id, branch, f.base)
+			}
+			continue
+		}
+		if err := f.repository.deleteRef(ref, tip); err != nil {
+			f.printf("warning: %s: can't delete %s: %v", id, branch, err)
+			continue
+		}
+		f.printf("%s: deleted %s, which is in %s", id, branch, f.base)
+	}
 }

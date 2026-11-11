@@ -21,6 +21,7 @@ func (f *factory) landAndSweep(ctx context.Context) {
 		f.land(ctx, landing)
 	}
 	f.sweep(ctx, landing.Method)
+	f.sweepSpecBranches(ctx)
 }
 
 // landing reads the Project's Landing Method, with its Push option, which the human can
@@ -94,9 +95,13 @@ func (f *factory) remoteReady(landing core.LandingView) bool {
 func (f *factory) land(ctx context.Context, landing core.LandingView) {
 	accepted := f.landable(ctx, store.Accepted)
 	sort.SliceStable(accepted, func(i, j int) bool { return acceptedAt(accepted[i]).Before(acceptedAt(accepted[j])) })
+	held := f.landSpecsOff(ctx, accepted, landing)
 	for _, tk := range accepted {
 		if f.halted(ctx) || f.paused() {
 			return
+		}
+		if held[tk.ID] {
+			continue
 		}
 		if landing.Method == store.LandingBranch {
 			f.landMergedBranch(ctx, tk, landing)
