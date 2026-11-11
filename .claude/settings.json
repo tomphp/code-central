@@ -26,6 +26,10 @@
           {
             "command": "python3 -I \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/narrow-reads.py",
             "type": "command"
+          },
+          {
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/prefer-edit.py",
+            "type": "command"
           }
         ],
         "matcher": "Bash|Read"
