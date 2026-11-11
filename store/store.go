@@ -444,13 +444,24 @@ type Ticket struct {
 	// while CI Tracking was on, oldest first: the latest is the one its CI
 	// result comes from, and the older ones stay as its history.
 	PushedCommits []PushedCommit
-	Claims        []Claim
-	Rounds        []Round
+	// SpecMerge is the Spec Branch commit the Factory merged the Ticket's
+	// work into under Land per Spec, and when Code Central heard of it;
+	// nil until then.
+	SpecMerge *SpecMerge
+	Claims    []Claim
+	Rounds    []Round
 	// FailureReports are numbered and never edited.
 	FailureReports []FailureReport
 	Comments       []Comment
 	Moves          []Move
 	Edits          []Edit
+}
+
+// SpecMerge is the Spec Branch commit a Ticket's work was merged into, and
+// when Code Central heard of it.
+type SpecMerge struct {
+	Commit string
+	Merged time.Time
 }
 
 // PushedCommit is one commit the Factory pushed for a Ticket, and when
@@ -708,6 +719,10 @@ func (t Ticket) clone() Ticket {
 	t.BlockedBy = slices.Clone(t.BlockedBy)
 	t.Replacements = slices.Clone(t.Replacements)
 	t.PushedCommits = slices.Clone(t.PushedCommits)
+	if t.SpecMerge != nil {
+		sm := *t.SpecMerge
+		t.SpecMerge = &sm
+	}
 	t.Claims = slices.Clone(t.Claims)
 	t.Rounds = slices.Clone(t.Rounds)
 	for i := range t.Rounds {

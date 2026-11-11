@@ -154,6 +154,11 @@ func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
 			bt, _ := b.r.Ticket(key, m)
 			v := BlockerView{ID: DisplayID(key, m), Title: bt.Title, State: bt.State, CIResult: b.gatedCIResult(bt)}
 			v.Cleared = b.p.CI.UnblockOnPush && (v.CIResult == CIRunning || v.CIResult == CIPassed)
+			// Within a Spec, a Spec-landed Blocker clears once its work is
+			// merged into the Spec Branch.
+			if bt.Spec == t.Spec && bt.State == store.Accepted && specMergeCounts(bt) && specLanded(b.r, b.p.Landing, key, bt) {
+				v.Cleared = true
+			}
 			if m != n {
 				v.Via = DisplayID(key, n)
 			}

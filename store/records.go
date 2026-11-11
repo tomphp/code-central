@@ -135,12 +135,18 @@ type ticketFile struct {
 	Branch         string              `yaml:"branch,omitempty"`
 	Commit         string              `yaml:"commit,omitempty"`
 	PushedCommits  []pushedCommitFile  `yaml:"pushed_commits,omitempty"`
+	SpecMerge      *specMergeFile      `yaml:"spec_merge,omitempty"`
 	Claims         []claimFile         `yaml:"claims"`
 	Rounds         []roundFile         `yaml:"rounds"`
 	FailureReports []failureReportFile `yaml:"failure_reports"`
 	Comments       []commentFile       `yaml:"comments"`
 	Moves          []moveFile          `yaml:"moves"`
 	Edits          []editFile          `yaml:"edits"`
+}
+
+type specMergeFile struct {
+	Commit string `yaml:"commit"`
+	Merged string `yaml:"merged"`
 }
 
 type pushedCommitFile struct {
@@ -349,6 +355,16 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		}
 		t.PushedCommits = append(t.PushedCommits, p)
 	}
+	if f.SpecMerge != nil {
+		sm := &SpecMerge{Commit: f.SpecMerge.Commit}
+		if sm.Commit == "" {
+			return Ticket{}, &LoadError{Field: "spec_merge.commit", Msg: "required"}
+		}
+		if sm.Merged, err = parseTime(f.SpecMerge.Merged); err != nil {
+			return Ticket{}, &LoadError{Field: "spec_merge.merged", Msg: err.Error()}
+		}
+		t.SpecMerge = sm
+	}
 	for i, c := range f.Claims {
 		cl := Claim{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, EndedBy: c.EndedBy}
 		field := fmt.Sprintf("claims[%d]", i)
@@ -545,6 +561,9 @@ func encode(record any, project string) (string, []byte, error) {
 				pf.Reruns = append(pf.Reruns, runAttemptFile{ID: ra.ID, Attempt: ra.Attempt})
 			}
 			f.PushedCommits = append(f.PushedCommits, pf)
+		}
+		if r.SpecMerge != nil {
+			f.SpecMerge = &specMergeFile{Commit: r.SpecMerge.Commit, Merged: formatTime(r.SpecMerge.Merged)}
 		}
 		for _, c := range r.Claims {
 			cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, Started: formatTime(c.Started), EndedBy: c.EndedBy}

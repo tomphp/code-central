@@ -170,6 +170,9 @@ func (c *Core) timedReason(r store.Reader, p store.Project, t store.Ticket) (Nee
 	} else if waiting {
 		return "", time.Time{}
 	}
+	if waitingForSpec(r, p.Landing, p.Key, t) {
+		return "", time.Time{}
+	}
 	if s := c.notLandedSince(p, t); s != nil {
 		return ReasonAcceptedNotLanded, *s
 	}

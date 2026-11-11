@@ -134,6 +134,8 @@ var Operations = []Op{
 	// Tracking a pushed Ticket's CI Runs (code-central-256).
 	{Name: "report_pushed_commit", Audience: FactoryOnly, Write: true},
 	{Name: "report_ci_runs", Audience: FactoryOnly, Write: true},
+	// Land per Spec (code-central-371).
+	{Name: "report_spec_merge", Audience: FactoryOnly, Write: true},
 	// CI failed and its failure options (code-central-261).
 	{Name: "land_anyway", Audience: HumanOnly, Write: true},
 	// Re-run failed jobs (code-central-265).
