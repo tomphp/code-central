@@ -55,7 +55,7 @@ func (w Window) contains(t time.Time) bool {
 
 var (
 	ticketLine = regexp.MustCompile(`(?m)^Ticket: (\S+)$`)
-	stageGuide = regexp.MustCompile(`The Stage Guide for (\S+) follows`)
+	stageGuide = regexp.MustCompile(`The Stage Guide for (\S+) follows|(?m)^(Conflict) Claim: `)
 	// commandArgs is a skill's arguments in the prompt that runs it,
 	// which the Factory keeps to the Ticket's ID.
 	commandArgs = regexp.MustCompile(`<command-args>(\S+)</command-args>`)
@@ -204,7 +204,7 @@ func readLog(file string) (Session, error) {
 			}
 		}
 		if m := stageGuide.FindStringSubmatch(text); m != nil && s.Kind == "" {
-			s.Kind = m[1]
+			s.Kind = strings.ToLower(m[1] + m[2])
 		}
 	}
 	r := bufio.NewReader(f)

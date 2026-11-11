@@ -364,10 +364,14 @@ func (f *factory) claimNext(ctx context.Context) bool {
 	}
 	id := res.Ticket.ID
 	stage := core.GuideName(res.Ticket.Labels)
-	guide := f.stageGuide(ctx, res.StageGuide, stage)
+	conflicts := f.conflictFiles(stage, *res.Ticket)
+	var guide core.StageGuideView
+	if len(conflicts) == 0 {
+		guide = f.stageGuide(ctx, res.StageGuide, stage)
+	}
 	wt := f.worktree(id)
 	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}}
-	c.SystemPrompt = systemPrompt(c, stage, wt, guide)
+	c.SystemPrompt = systemPrompt(c, stage, wt, guide, conflicts)
 	f.noteTicket(c, *res.Ticket)
 	if err := f.addClaim(c); err != nil {
 		f.claimf(c, "%s: can't write the state file: %v", id, err)
@@ -390,7 +394,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		return true
 	}
 	mc := f.withFlags(stage, res.ModelChoice)
-	f.startTurn(ctx, c, wt, mc, append(f.startArgs(c, mc), firstPrompt(c, stage)))
+	f.startTurn(ctx, c, wt, mc, append(f.startArgs(c, mc), firstPrompt(c, stage, f.base, conflicts)))
 	return true
 }
 

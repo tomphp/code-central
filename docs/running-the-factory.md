@@ -232,7 +232,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    When it can't land, the Factory leaves the work for you, and says so on the Ticket and in its terminal:
 
-   - If the branch conflicts with the base, it sends the Ticket back to Ready with a comment naming the conflicting files, and its next Claim merges the base in first.
+   - If the branch conflicts with the base, it sends the Ticket back to Ready with a comment naming the conflicting files, and its next Claim merges the base in first. The Factory itself checks, at that Claim, whether the Ticket's existing branch still conflicts with the base's tip; if it does, the session's first prompt is not `/implement` but the instructions to merge the base in and resolve the conflicting files, which it names, and its system prompt leaves out the implementation Stage Guide for a short instruction to `finish` with the branch and its head commit. A Ticket sent back for any other reason, or whose branch no longer conflicts, starts as an ordinary `/implement` Claim.
    - If it can't move the base, say because uncommitted changes in `~/src/acme-shop` are in the way, the Ticket stays Accepted with a comment saying why, and the Factory tries again on every poll.
 
    You can still merge an In Review Ticket's branch yourself: the Factory notices it on its next poll and lands the Ticket.

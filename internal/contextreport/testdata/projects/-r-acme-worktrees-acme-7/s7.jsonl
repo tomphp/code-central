@@ -1,0 +1,2 @@
+{"type":"user","timestamp":"2026-01-05T09:00:00Z","cwd":"/r/acme.worktrees/acme-7","message":{"role":"user","content":"Ticket acme-7's branch, acme-7, conflicts with the base, main. Merge main into the branch and resolve the conflicts in these files:\n\n- README\n"}}
+{"type":"attachment","timestamp":"2026-01-05T09:00:00Z","attachment":{"type":"prompt_snapshot","systemPrompt":["You are Claude Code.","Ticket: acme-7\nClaim: C7\n\nYou are running under code-central-factory.\n\nConflict Claim: the first prompt holds the work."]}}
