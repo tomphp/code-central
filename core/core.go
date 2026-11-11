@@ -255,6 +255,9 @@ type TicketRow struct {
 	// its row's badge; left out for a Ticket never pushed while CI
 	// Tracking was on.
 	CIResult CIResult `json:"ci_result,omitempty"`
+	// WaitingForSpec says the Ticket is Accepted and waits for its Spec to
+	// land, for its badge (code-central-371).
+	WaitingForSpec bool `json:"waiting_for_spec,omitempty"`
 }
 
 // CreateProjectInput is create_project's input.
@@ -538,6 +541,9 @@ func (c *Core) ticketRow(r store.Reader, key string, t store.Ticket, onMap bool)
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Updated: t.Updated, Link: linkView(t.Link),
 		CIResult: ticketCIResult(r, key, t, c.now()),
+	}
+	if p, ok := r.Project(key); ok {
+		row.WaitingForSpec = waitingForSpec(r, p.Landing, key, t)
 	}
 	if onMap {
 		row.NodeType = NodeType(t.Labels)

@@ -140,6 +140,7 @@ import {
   type TargetView,
   TICKET_FIELDS,
   type TicketAcknowledgement,
+  type LandPerSpecStatus,
   type TicketRow,
   type TicketView,
   type Transcript,
@@ -1599,7 +1600,9 @@ export class FakeApi implements Api {
     // CI cancelled is offered the same without New fix Ticket.
     const ciFailed = t.state === "Accepted" && (ci_result === "failed" || ci_result === "cancelled") && !land_anyway;
     const fixes: CIFailureOption[] = ci_result === "cancelled" ? ["send_back"] : ["send_back", "new_fix_ticket"];
-    const options: CIFailureOption[] = this.project(key).landing.method === "merge" ? ["rerun_ci", "land_anyway", ...fixes] : ["rerun_ci", ...fixes];
+    // A Spec-landed Ticket has no branch of its own to send back.
+    const fixes_ = t.waiting_for_spec || t.ci_group ? fixes.filter((o) => o !== "send_back") : fixes;
+    const options: CIFailureOption[] = this.project(key).landing.method === "merge" ? ["rerun_ci", "land_anyway", ...fixes_] : ["rerun_ci", ...fixes_];
     const { land_anyway: _l, ci_failure_options: _o, ...rest } = this.tickets.get(t.id)!;
     this.tickets.set(t.id, rest);
     return this.updateTicket(t.id, {
@@ -1806,6 +1809,7 @@ export class FakeApi implements Api {
       ...(onMap(t) && { node_type: nodeTypeOf(t), blocked_by: [...t.blocked_by] }),
       ...this.liveLatest(t),
       ...(t.ci_result && { ci_result: t.ci_result }),
+      ...(t.waiting_for_spec && { waiting_for_spec: true }),
     }));
   }
 
@@ -1895,8 +1899,22 @@ export class FakeApi implements Api {
         stages: stages.map((t) => ({ name: stageOf(t)!, ticket: t.id, state: t.state, ...(reason(t) && { needs_me_reason: reason(t) }) })),
         build: { done: build.filter((t) => t.state === "Done").length, total: build.length },
         waiting_for_factory: current ? claimable(current) : build.some(claimable) && !held,
+        ...this.landPerSpecOf(tickets, build),
       },
     };
+  }
+
+  // landPerSpecOf is a Requirement's Land per Spec status while its
+  // Project is under Merge with the option on: the Tickets seeded as
+  // waiting for the Spec, ready once the tickets Stage and every build
+  // Ticket is finished or Accepted.
+  private landPerSpecOf(tickets: TicketView[], build: TicketView[]): { land_per_spec?: LandPerSpecStatus } {
+    const landing = this.project(this.projectOf(tickets[0].id)).landing;
+    if (landing.method !== "merge" || !landing.land_per_spec) return {};
+    const waiting = build.filter((t) => t.waiting_for_spec).map((t) => t.id);
+    const planned = tickets.find((t) => stageOf(t) === "tickets");
+    const ready = waiting.length > 0 && (!planned || FINISHED.includes(planned.state)) && build.every((t) => t.state === "Accepted" || t.state === "Done");
+    return { land_per_spec: { waiting, ready } };
   }
 
   private unfinished(key: string) {

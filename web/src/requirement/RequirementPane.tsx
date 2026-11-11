@@ -4,7 +4,7 @@
 // for, its body (the text, then the Spec) collapsed, and under Build the sums of its implementation Tickets' CI badges
 // and those Tickets with their States.
 import type { Api } from "../api/api";
-import type { NeedsMeReason, SpecDetail } from "../api/types";
+import type { LandPerSpecStatus, NeedsMeReason, SpecDetail } from "../api/types";
 import { BodySection } from "../edit/BodySection";
 import { ago } from "../format";
 import { TicketList } from "../spec/TicketList";
@@ -53,10 +53,25 @@ export function RequirementPane({ api, spec, archived, reasons, now, ticket, sel
         }}
       />
       {note && <p className="panel muted waiting">{note}</p>}
+      <LandPerSpec status={spec.requirement.land_per_spec} />
       {/* The text is the Requirement's until its spec Stage has written the Spec. */}
       <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} archived={archived} />
       <CISums tickets={p.build} />
       {p.build.length > 0 && <TicketList label="Build" tickets={p.build} reasons={reasons} now={now} ticket={ticket} select={select} />}
     </section>
+  );
+}
+
+// LandPerSpec is the Requirement's Land per Spec status (code-central-371):
+// how many Accepted Tickets wait for the Spec to land, and "merging" once
+// it is ready and the Factory merges it into the base.
+function LandPerSpec({ status }: { status?: LandPerSpecStatus }) {
+  if (!status || status.waiting.length === 0) return null;
+  const n = status.waiting.length;
+  return (
+    <p role="status" aria-label="Land per Spec" className="land-per-spec small">
+      {status.ready ? "Merging into the base" : `${n} ${n === 1 ? "Ticket" : "Tickets"} waiting for the Spec`}
+      {status.ready && ` · ${n} ${n === 1 ? "Ticket" : "Tickets"} land with it`}
+    </p>
   );
 }

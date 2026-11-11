@@ -16,6 +16,13 @@ export function CIFailedPanel(props: PanelProps) {
       <section aria-label={title} className="panel">
         <h3>{title}</h3>
         <p className="small">Its pushed commit's CI {cancelled ? "was cancelled" : "failed"}, so it waits Accepted until you choose what to do.</p>
+        {ticket.ci_group && (
+          <p className="small ci-group">
+            {ticket.ci_group.spec} lands together: {ticket.ci_group.waiting} {ticket.ci_group.waiting === 1 ? "Ticket waits" : "Tickets wait"} on this
+            pushed commit. Your choice acts on all of them. Also waiting:{" "}
+            {ticket.ci_group.tickets.filter((id) => id !== ticket.id).join(", ") || "none"}.
+          </p>
+        )}
         <CISection api={api} project={project} ticket={ticket} />
       </section>
       <AcceptedPanel {...props} />

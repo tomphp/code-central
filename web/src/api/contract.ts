@@ -1229,6 +1229,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ],
         build: { done: 0, total: 0 },
         waiting_for_factory: true,
+        land_per_spec: { waiting: [], ready: false },
       });
     });
 
@@ -1316,6 +1317,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ],
         build: { done: 0, total: 0 },
         waiting_for_factory: true,
+        land_per_spec: { waiting: [], ready: false },
       });
       expect((await d.api.getSpec("acme", m.spec.id)).map?.requirements).toEqual([r.spec.id]);
       expect((await d.api.getSpec("acme", plain.spec.id)).requirement?.map).toBeUndefined();

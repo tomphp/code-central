@@ -457,6 +457,9 @@ export interface NeedsMeRow {
   // ci_result is the Ticket's CI result, whatever the reason, for its
   // badge; left out for a Ticket never pushed while CI Tracking was on.
   ci_result?: CIResult;
+  // ci_group is the Spec's Tickets waiting with this one, on a per-Spec CI
+  // item (code-central-379).
+  ci_group?: CIGroup;
 }
 
 // What failed on a CI failed Ticket's pushed commit: the commit and its
@@ -468,6 +471,15 @@ export interface CIFailureSummary {
 
 // A failure option the human may choose for a CI failed Ticket, named for
 // its action (code-central-261, code-central-264, code-central-265).
+// A Spec's Tickets waiting on one pushed commit, the lead first. The lead
+// carries the CI reasons and its options act on all of them.
+export interface CIGroup {
+  spec: string;
+  lead: string;
+  waiting: number;
+  tickets: string[];
+}
+
 export type CIFailureOption = "rerun_ci" | "land_anyway" | "send_back" | "new_fix_ticket";
 
 // Why a Ticket is CI unavailable: the CI Watcher isn't Watching (with
@@ -507,6 +519,16 @@ export interface RequirementView {
   stages: StageView[];
   build: { done: number; total: number };
   waiting_for_factory: boolean;
+  // land_per_spec is the Land per Spec status, present only while the
+  // Project is under Merge with Land per Spec on (code-central-371).
+  land_per_spec?: LandPerSpecStatus;
+}
+
+// The Accepted Tickets waiting for the Spec to land, and whether it is
+// ready to: the Factory is merging it into the base.
+export interface LandPerSpecStatus {
+  waiting: string[];
+  ready: boolean;
 }
 
 export interface StageView {
@@ -639,6 +661,9 @@ export interface TicketRow {
   // ci_result is the Ticket's CI result, for its badge; left out for a
   // Ticket never pushed while CI Tracking was on.
   ci_result?: CIResult;
+  // waiting_for_spec is set on an Accepted Ticket that waits for its Spec
+  // to land, for its badge (code-central-371).
+  waiting_for_spec?: boolean;
 }
 
 export interface FindTicketsFilter {
@@ -797,6 +822,11 @@ export interface TicketView {
   // left out otherwise (code-central-261).
   land_anyway?: boolean;
   ci_failure_options?: CIFailureOption[];
+  // waiting_for_spec is set while the Ticket is Accepted and waits for its
+  // Spec to land; ci_group, while it is one of several waiting on one
+  // pushed commit (code-central-371, code-central-379).
+  waiting_for_spec?: boolean;
+  ci_group?: CIGroup;
   claims: ClaimView[];
   rounds: RoundView[];
   failure_reports: FailureReportView[];
