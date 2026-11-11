@@ -54,23 +54,58 @@ func fakeJob(t *testing.T, name string, steps ...string) job {
 
 // runSuite runs the jobs and returns whether they passed, and what was printed.
 func runSuite(budget time.Duration, jobs ...job) (bool, string) {
+	return runSuiteVerbosely(budget, false, jobs...)
+}
+
+func runSuiteVerbosely(budget time.Duration, verbose bool, jobs ...job) (bool, string) {
 	var out strings.Builder
-	ok := run(jobs, budget, &out)
+	ok := run(jobs, budget, verbose, &out)
 	return ok, out.String()
 }
 
 func TestTheSuitePassesWhenEveryJobPassesInsideTheBudget(t *testing.T) {
 	ok, out := runSuite(10*time.Second,
-		fakeJob(t, "go test", "print", "ok go"),
-		fakeJob(t, "vitest", "print", "ok vitest"),
+		fakeJob(t, "go test", "print", "ok  \tpkg"),
+		fakeJob(t, "vitest", "print", "42 passed"),
 	)
 	if !ok {
 		t.Fatalf("the suite failed:\n%s", out)
 	}
-	for _, want := range []string{"== go test\nok go\n", "== vitest\nok vitest\n", "make test: "} {
+	if strings.Contains(out, "pkg") || strings.Contains(out, "42 passed") {
+		t.Errorf("a passing job's output was printed:\n%s", out)
+	}
+	for _, want := range []string{"ok go test\n", "ok vitest\n", "make test: "} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestVerboseSuitePrintsEveryJobsWholeOutput(t *testing.T) {
+	ok, out := runSuiteVerbosely(10*time.Second, true,
+		fakeJob(t, "go test", "print", "ok  \tpkg"),
+		fakeJob(t, "vitest", "print", "42 passed"),
+	)
+	if !ok {
+		t.Fatalf("the suite failed:\n%s", out)
+	}
+	for _, want := range []string{"== go test\nok  \tpkg\n", "== vitest\n42 passed\n"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestAFailedJobsOutputLeavesOutThePackagesThatPassed(t *testing.T) {
+	ok, out := runSuite(10*time.Second,
+		fakeJob(t, "go test",
+			"print", "ok  \tpkg/a\t0.1s",
+			"print", "?   \tpkg/b\t[no test files]",
+			"print", "--- FAIL: TestC",
+			"exit", "1"),
+	)
+	if ok || strings.Contains(out, "pkg/a") || strings.Contains(out, "pkg/b") || !strings.Contains(out, "--- FAIL: TestC") {
+		t.Errorf("the failure's output isn't just what failed:\n%s", out)
 	}
 }
 

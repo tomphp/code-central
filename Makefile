@@ -5,7 +5,7 @@ TEST_BUDGET := 10
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test typecheck vitest e2e build web clean hooks context-report
+.PHONY: test test-verbose typecheck vitest e2e build web clean hooks context-report ci-failures
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
@@ -18,9 +18,13 @@ endif
 # (against the committed placeholder page, so no Vite build), `vitest run`
 # and the TypeScript type check in parallel. Installing web dependencies
 # (first run, or after the lockfile changes) happens before the clock
-# starts.
+# starts. It prints one line per passing job and the output of a failing
+# one; test-verbose prints every job's whole output.
 test: $(WEB_DEPS) hooks
 	@go run ./internal/testrun -budget $(TEST_BUDGET)s
+
+test-verbose: $(WEB_DEPS) hooks
+	@go run ./internal/testrun -budget $(TEST_BUDGET)s -v
 
 # The inner loop while working on the UI: the TypeScript type check, and
 # vitest on one file (F=src/...) or on all of them. Both install web
@@ -77,3 +81,9 @@ clean:
 # docs/context-report.md explains it.
 context-report:
 	go run ./internal/contextreport $(ARGS)
+
+# What failed in a CI run (RUN=<id>, from `gh run list`): gh's failed
+# steps' log without the setup, the passing tests or the timestamps,
+# capped at 120 lines.
+ci-failures:
+	gh run view $(RUN) --log-failed 2>&1 | go run ./internal/cifailures
