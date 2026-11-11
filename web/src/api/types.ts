@@ -26,6 +26,7 @@ export type NeedsMeReason =
   | "failed"
   | "in_review"
   | "ci_failed"
+  | "ci_cancelled"
   | "to_merge"
   | "ci_unavailable"
   | "accepted_not_landed"
@@ -217,7 +218,7 @@ export interface ModelChoice {
 // pushed commit that aren't ignored: running while any is unfinished or
 // none is reported, failed if any concluded failure, cancelled or timed
 // out, passed otherwise.
-export type CIResult = "running" | "passed" | "failed";
+export type CIResult = "running" | "passed" | "failed" | "cancelled";
 
 // Where a CI Run stands, and how a finished run or job ended.
 export type CIRunStatus = "queued" | "in_progress" | "completed";

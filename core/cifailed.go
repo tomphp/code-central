@@ -46,15 +46,8 @@ type CIFailureSummary struct {
 // hasn't dealt with, from its runs kept at now. since is when its first
 // failed run finished.
 func ciFailure(r store.Reader, key string, t store.Ticket, now time.Time) (s CIFailureSummary, since time.Time, ok bool) {
-	if t.State != store.Accepted || len(t.PushedCommits) == 0 {
-		return CIFailureSummary{}, time.Time{}, false
-	}
-	latest := latestPushed(t)
-	if !latest.LandAnyway.IsZero() {
-		return CIFailureSummary{}, time.Time{}, false
-	}
-	mine, _ := ticketRuns(r, key, t, now)
-	if latestCIResult(latest, mine, now) != CIFailed {
+	latest, mine, ok := unhandledCI(r, key, t, CIFailed, now)
+	if !ok {
 		return CIFailureSummary{}, time.Time{}, false
 	}
 	s = CIFailureSummary{Commit: latest.Commit, Workflows: []string{}}
@@ -72,15 +65,57 @@ func ciFailure(r store.Reader, key string, t store.Ticket, now time.Time) (s CIF
 	return s, since, true
 }
 
-// ciFailureOptions are the failure options the human may choose for t
-// while it is CI failed, nil otherwise: Re-run failed jobs under both,
-// Land anyway under Merge only, since under Branch the human's merge
-// decides, and Send back to fix and New fix Ticket under both.
-func ciFailureOptions(r store.Reader, key string, t store.Ticket, now time.Time) []string {
-	if _, _, ok := ciFailure(r, key, t, now); !ok {
-		return nil
+// unhandledCI is t's latest pushed commit and its runs when t is
+// Accepted, the human hasn't chosen Land anyway for the commit and its
+// CI result is result at now.
+func unhandledCI(r store.Reader, key string, t store.Ticket, result CIResult, now time.Time) (store.PushedCommit, []store.CIRun, bool) {
+	if t.State != store.Accepted || len(t.PushedCommits) == 0 {
+		return store.PushedCommit{}, nil, false
 	}
+	latest := latestPushed(t)
+	if !latest.LandAnyway.IsZero() {
+		return store.PushedCommit{}, nil, false
+	}
+	mine, _ := ticketRuns(r, key, t, now)
+	if latestCIResult(latest, mine, now) != result {
+		return store.PushedCommit{}, nil, false
+	}
+	return latest, mine, true
+}
+
+// ciCancelled is when t's CI became cancelled while it is CI cancelled:
+// an Accepted Ticket whose latest pushed commit's CI result is cancelled
+// and that the human hasn't dealt with, since its first cancelled run
+// finished.
+func ciCancelled(r store.Reader, key string, t store.Ticket, now time.Time) (since time.Time, ok bool) {
+	latest, mine, ok := unhandledCI(r, key, t, CICancelled, now)
+	if !ok {
+		return time.Time{}, false
+	}
+	for _, run := range rerunnableRuns(latest.Commit, mine) {
+		if at := run.Finished; !at.IsZero() && (since.IsZero() || at.Before(since)) {
+			since = at
+		}
+	}
+	if since.IsZero() {
+		since = latest.Pushed
+	}
+	return since, true
+}
+
+// ciFailureOptions are the failure options the human may choose for t
+// while it is CI failed or CI cancelled, nil otherwise: Re-run under
+// both Landing Methods' pushes, Land anyway under Merge only, since
+// under Branch the human's merge decides, Send back to fix, and for a
+// failure New fix Ticket. A cancelled run has nothing to fix forward.
+func ciFailureOptions(r store.Reader, key string, t store.Ticket, now time.Time) []string {
 	fixes := []string{OptionSendBack, OptionNewFixTicket}
+	if _, _, ok := ciFailure(r, key, t, now); !ok {
+		if _, ok := ciCancelled(r, key, t, now); !ok {
+			return nil
+		}
+		fixes = []string{OptionSendBack}
+	}
 	p, _ := r.Project(key)
 	if p.Landing.Method == store.LandingBranch {
 		return append([]string{OptionRerunCI}, fixes...)
@@ -135,7 +170,7 @@ func whyNotLandAnyway(r store.Reader, key string, t store.Ticket, now time.Time)
 		return fmt.Sprintf("%s is %s: only an Accepted Ticket whose CI failed lands anyway", id, t.State)
 	}
 	if _, _, ok := ciFailure(r, key, t, now); !ok {
-		return fmt.Sprintf("%s has no failed CI result to land anyway", id)
+		return fmt.Sprintf("%s has no failed or cancelled CI result to land anyway", id)
 	}
 	return fmt.Sprintf("%s's Project lands by Branch, so your merge decides whether it lands, whatever its CI result", id)
 }
@@ -182,7 +217,7 @@ func whyNotRerun(r store.Reader, key string, t store.Ticket, now time.Time) stri
 	if t.State != store.Accepted {
 		return fmt.Sprintf("%s is %s: only an Accepted Ticket whose CI failed has failed jobs to re-run", id, t.State)
 	}
-	return fmt.Sprintf("%s has no failed CI result to re-run", id)
+	return fmt.Sprintf("%s has no failed or cancelled CI result to re-run", id)
 }
 
 // NewFixTicketInput is new_fix_ticket's input: the CI failed Ticket and

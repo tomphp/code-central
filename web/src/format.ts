@@ -8,6 +8,7 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   failed: "Failed",
   in_review: "In Review",
   ci_failed: "CI failed",
+  ci_cancelled: "CI cancelled",
   to_merge: "To merge",
   ci_unavailable: "CI unavailable",
   accepted_not_landed: "Accepted but not landed",
@@ -44,6 +45,8 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
       return r.summary || "Finished";
     case "ci_failed":
       return r.ci_failure ? `CI failed at ${r.ci_failure.commit.slice(0, 7)}: ${r.ci_failure.workflows.join(", ")}` : "CI failed";
+    case "ci_cancelled":
+      return `CI cancelled ${ago(now, r.since)}`;
     case "to_merge":
       return `Accepted ${ago(now, r.since)}: merge ${r.branch ?? "its branch"} into the base`;
     case "ci_unavailable":

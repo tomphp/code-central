@@ -28,6 +28,9 @@ const (
 	// ReasonCIFailed is an Accepted Ticket whose CI result is failed and
 	// that the human hasn't dealt with (code-central-261).
 	ReasonCIFailed NeedsMeReason = "ci_failed"
+	// ReasonCICancelled is an Accepted Ticket whose CI result is
+	// cancelled and that the human hasn't dealt with.
+	ReasonCICancelled NeedsMeReason = "ci_cancelled"
 	// ReasonToMerge is a Ticket Accepted under the Branch Landing Method
 	// (code-central-175): the human merges its branch, at once.
 	ReasonToMerge NeedsMeReason = "to_merge"
@@ -57,6 +60,7 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonFailed, "Failed: a Failure Report waits for the human"},
 	{ReasonInReview, "In Review: finished work waits to be accepted or rejected"},
 	{ReasonCIFailed, "CI failed: Accepted with its pushed commit's CI failed; the human picks a failure option"},
+	{ReasonCICancelled, "CI cancelled: Accepted with its pushed commit's CI cancelled"},
 	{ReasonToMerge, "To merge: Accepted under the Branch Landing Method; merge its branch to the base"},
 	{ReasonCIUnavailable, "CI unavailable: no word of its CI 10 minutes after its push (CI Watcher not Watching, or no CI Runs)"},
 	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted over 10 minutes and not in the base, unless its CI is running"},
@@ -295,6 +299,9 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 		p, _ := r.Project(key) // t is in it, so it exists
 		if _, since, ok := ciFailure(r, key, t, c.now()); ok {
 			return ReasonCIFailed, since
+		}
+		if since, ok := ciCancelled(r, key, t, c.now()); ok {
+			return ReasonCICancelled, since
 		}
 		if t.State == store.Accepted && p.Landing.Method == store.LandingBranch {
 			return ReasonToMerge, entered(t)

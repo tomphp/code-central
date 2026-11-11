@@ -296,8 +296,10 @@ interface FakeProject {
 }
 
 // FAILED_CONCLUSIONS are the conclusions that fail a CI result, as
-// store's CIConclusion.Failed.
-const FAILED_CONCLUSIONS: CIConclusion[] = ["failure", "cancelled", "timed_out"];
+// store's CIConclusion.Failed; a cancelled run makes it cancelled
+// instead. RERUN_CONCLUSIONS are those a Re-run request covers.
+const FAILED_CONCLUSIONS: CIConclusion[] = ["failure", "timed_out"];
+const RERUN_CONCLUSIONS: CIConclusion[] = [...FAILED_CONCLUSIONS, "cancelled"];
 
 export type SeedTicket = Partial<TicketView> & { title: string };
 export type SeedSpec = Partial<SpecView> & { title: string };
@@ -791,7 +793,7 @@ export class FakeApi implements Api {
       throw new ApiError(409, "action_not_allowed", `${t.id} has no failed CI result to re-run`);
     }
     const runs = this.countedRuns(key, t.id, latest.commit)
-      .filter((r) => r.conclusion !== undefined && FAILED_CONCLUSIONS.includes(r.conclusion))
+      .filter((r) => r.conclusion !== undefined && RERUN_CONCLUSIONS.includes(r.conclusion))
       .map((r) => ({ id: r.id, attempt: r.attempt }))
       .sort((a, b) => a.id - b.id);
     this.reruns.set(t.id, { commit: latest.commit, runs });
@@ -1509,13 +1511,16 @@ export class FakeApi implements Api {
         ? "running"
         : finished.some((r) => r.conclusion !== undefined && FAILED_CONCLUSIONS.includes(r.conclusion))
           ? "failed"
-          : "passed";
+          : finished.some((r) => r.conclusion === "cancelled")
+            ? "cancelled"
+            : "passed";
     // CI failed: Accepted, failed, and the human hasn't chosen Land anyway;
     // Land anyway is offered only under Merge, Re-run failed jobs and the
     // two fixes under both.
     const land_anyway = this.landedAnyway.has(`${t.id}@${latest.commit}`);
-    const ciFailed = t.state === "Accepted" && ci_result === "failed" && !land_anyway;
-    const fixes: CIFailureOption[] = ["send_back", "new_fix_ticket"];
+    // CI cancelled is offered the same without New fix Ticket.
+    const ciFailed = t.state === "Accepted" && (ci_result === "failed" || ci_result === "cancelled") && !land_anyway;
+    const fixes: CIFailureOption[] = ci_result === "cancelled" ? ["send_back"] : ["send_back", "new_fix_ticket"];
     const options: CIFailureOption[] = this.project(key).landing.method === "merge" ? ["rerun_ci", "land_anyway", ...fixes] : ["rerun_ci", ...fixes];
     const { land_anyway: _l, ci_failure_options: _o, ...rest } = this.tickets.get(t.id)!;
     this.tickets.set(t.id, rest);

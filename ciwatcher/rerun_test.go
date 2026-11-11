@@ -105,3 +105,31 @@ func TestTheCIWatcherAsksForAReRunOnce(t *testing.T) {
 		t.Fatalf("%d re-run calls, want one while GitHub starts the new attempt", n)
 	}
 }
+
+// A cancelled run is re-run like a failed one, and nothing re-runs it
+// before the human asks.
+func TestTheCIWatcherRerunsACancelledRun(t *testing.T) {
+	w := newWatching(t)
+	id := w.pushed("abc123")
+	w.runsAnswer("abc123", listedRun{id: 11, attempt: 1, workflow: "ci.yml", status: "completed", conclude: "cancelled", updated: "2026-01-05T09:05:00Z"})
+	w.jobsAnswer(11, 1, [2]string{"test", "cancelled"})
+	w.start(w.h.Bin)
+	w.ciResult(id, core.CICancelled)
+	if n := len(w.rerunCalls()); n != 0 {
+		t.Fatalf("%d re-run calls, want none from a cancellation", n)
+	}
+
+	human := core.WithActor(context.Background(), core.Human)
+	must(t, func() error {
+		_, err := w.srv.Core.RerunCI(human, "acme", core.TicketInput{Ticket: core.Ref(id)})
+		return err
+	})
+	w.runsAnswer("abc123", listedRun{id: 11, attempt: 2, workflow: "ci.yml", status: "completed", conclude: "success", updated: "2026-01-05T09:09:00Z"})
+	w.jobsAnswer(11, 2, [2]string{"test", "success"})
+	w.waitingPoll()
+	w.attempt(id, 2, store.CICompleted)
+	w.ciResult(id, core.CIPassed)
+	if n := len(w.rerunCalls()); n != 1 {
+		t.Fatalf("%d re-run calls, want one", n)
+	}
+}
