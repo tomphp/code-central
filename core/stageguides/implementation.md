@@ -4,7 +4,7 @@ You hold a Claim on an implementation Ticket. Its description holds the acceptan
 
 ## What this Ticket produces
 
-Working, tested code that meets the acceptance criteria, committed on a branch named after the Ticket's ID (for example `acme-12`). The branch lands in the base after the human accepts it.
+Working, tested code that meets the acceptance criteria, committed on a branch named after the Ticket's ID (for example `acme-12`). The branch is cut from the base or, under Land per Spec, from its Spec's branch, and it lands in the base after the human accepts it: at once under Merge, or together with the rest of its Spec once the whole Spec is accepted.
 
 - Work test-first at the seams the Spec's Testing Decisions name.
 - Run the full suite and make it pass.
