@@ -55,6 +55,13 @@ cd hello-world
 code-central-factory
 ```
 
+> [!IMPORTANT]
+> **Windows Users:
+> If you get an error about `git` missing from the `PATH`, then run `code-central-factory`
+> in Git Bash. You can do this be running the following in your terminal before starting the factory:
+>
+> `& "C:\Program Files\Git\bin\bash.exe"`
+
 Start adding requirements in the Code Central UI.
 
 Press the **Focus** button, and repond whenever you are prompted.
