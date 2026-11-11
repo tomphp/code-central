@@ -1719,7 +1719,7 @@ export class FakeApi implements Api {
       return x === undefined ? time(b.started) - time(a.started) : time(y) - time(x);
     });
     return {
-      projects: projects.map((p) => ({ project: p.key, tracking: p.ci.tracking, repository: p.ci.repository, project_url: p.ci.project_url, watcher: structuredClone(p.ci.watcher) })),
+      projects: projects.map((p) => ({ project: p.key, tracking: p.ci.tracking, provider: p.ci.provider, repository: p.ci.repository, project_url: p.ci.project_url, watcher: structuredClone(p.ci.watcher) })),
       runs,
     };
   }
