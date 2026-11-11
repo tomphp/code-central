@@ -196,6 +196,28 @@ describe("the Requirement pane", () => {
     expect(await within(build).findByText("Writing the test first. · just now")).toHaveClass("latest-event");
   });
 
+  it("shows a Cancelled tickets Stage as skipped, makes Build current and opens on the implementation Ticket", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    const r = await fake.submitRequirement("acme", "Export a Spec as Markdown");
+    fake.updateTicket(r.stages[0].id, { state: "Done" });
+    fake.updateTicket(r.stages[1].id, { state: "Done" });
+    fake.updateTicket(r.stages[2].id, { state: "Cancelled" });
+    fake.addTicket("acme", { title: "Implement the export", state: "Ready", spec: { id: r.spec.id, title: "Export a Spec as Markdown" } });
+    renderApp(fake, "/?view=inbox&requirement=acme-1");
+
+    await within(detail()).findByRole("region", { name: "Requirement" });
+    const tickets = segment(/^Tickets/);
+    expect(tickets.closest("li")).toHaveAttribute("data-progress", "skipped");
+    expect(tickets).toHaveAttribute("title", "Tickets: skipped");
+    expect(tickets).toBeEnabled();
+    expect(within(pane()).getByText("Waiting for a Factory to claim a Build Ticket. Nothing needs you yet.")).toBeInTheDocument();
+    expect(await within(detail()).findByRole("heading", { name: "Implement the export" })).toBeInTheDocument();
+
+    await userEvent.click(tickets);
+    expect(params().get("ticket")).toBe(r.stages[2].id);
+  });
+
   it("says when Build waits for a Factory", async () => {
     const fake = await building();
     fake.updateTicket("acme-6", { state: "Done" });
