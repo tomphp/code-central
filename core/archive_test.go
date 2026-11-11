@@ -289,6 +289,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "acme-2", Commit: "abc123"})
 		return err
 	},
+	"report_pull_request": func(f fixture) error {
+		_, err := f.core.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Branch: "acme-2", Number: 1, Link: "https://github.com/a/b/pull/1", State: store.PROpen})
+		return err
+	},
 	"report_spec_merge": func(f fixture) error {
 		_, err := f.core.ReportSpecMerge(ctx, "acme", core.ReportSpecMergeInput{Ticket: "acme-2", Commit: "abc123"})
 		return err

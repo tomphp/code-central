@@ -59,3 +59,14 @@ func (c *Client) ReportSpecMerge(ctx context.Context, key string, in core.Report
 func (c *Client) ReportCIRuns(ctx context.Context, key string, in core.ReportCIRunsInput) (core.Written[core.CIRunsView], error) {
 	return write[core.CIRunsView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_ci_runs", in, in.Full)
 }
+
+// GetPullRequestWatch is the Pull Request Watcher's get_pull_request_watch.
+func (c *Client) GetPullRequestWatch(ctx context.Context, key string) (core.PullRequestWatch, error) {
+	var out core.PullRequestWatch
+	return out, c.do(ctx, "GET", "/api/p/"+url.PathEscape(key)+"/pull-request-watch", nil, &out)
+}
+
+// ReportPullRequest is the Pull Request Watcher's report_pull_request.
+func (c *Client) ReportPullRequest(ctx context.Context, key string, in core.ReportPullRequestInput) (core.Written[core.PullRequestReport], error) {
+	return write[core.PullRequestReport](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_pull_request", in, in.Full)
+}

@@ -65,7 +65,7 @@ func (f *factory) reportPushRemote(remote string) {
 	if err != nil {
 		return
 	}
-	if _, err := f.client.ReportPushRemote(context.Background(), f.project, core.ReportPushRemoteInput{URL: url}); err != nil {
+	if _, err := f.client.ReportPushRemote(context.Background(), f.project, core.ReportPushRemoteInput{URL: url, Base: f.base}); err != nil {
 		f.printf("warning: can't report the Push remote's URL to Code Central: %v", err)
 	}
 }
@@ -395,7 +395,7 @@ func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, branch, 
 	if tk.PushedCommit != nil && tk.PushedCommit.Commit == commit {
 		return true
 	}
-	if _, err := f.client.ReportPushedCommit(ctx, f.project, core.ReportPushedCommitInput{Ticket: core.Ref(tk.ID), Commit: commit}); err != nil {
+	if _, err := f.client.ReportPushedCommit(ctx, f.project, core.ReportPushedCommitInput{Ticket: core.Ref(tk.ID), Commit: commit, Branch: branch}); err != nil {
 		if ctx.Err() == nil {
 			f.printf("%s: report_pushed_commit: %v", tk.ID, err)
 		}

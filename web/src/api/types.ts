@@ -264,6 +264,28 @@ export type CIRunStatus = "queued" | "in_progress" | "completed";
 export type CIConclusion = "success" | "failure" | "cancelled" | "timed_out" | "skipped" | "neutral" | "partially_succeeded";
 
 // A commit the Factory pushed for a Ticket while CI Tracking was on.
+// A pull request's state on its Code Host (code-central-388).
+export type PullRequestState = "open" | "conflicting" | "closed" | "merged";
+
+// A pull request the Pull Request Watcher reported; merge_commit is left
+// out until it is merged.
+export interface PullRequestView {
+  number: number;
+  link: string;
+  state: PullRequestState;
+  merge_commit?: string;
+}
+
+// What the Pull Request Watcher reports of the pull request of the work
+// pushed as branch; merge_commit comes with the merged state alone.
+export interface PullRequestReport {
+  branch: string;
+  number: number;
+  link: string;
+  state: PullRequestState;
+  merge_commit?: string;
+}
+
 export interface PushedCommitView {
   commit: string;
   pushed: string;
@@ -470,6 +492,9 @@ export interface NeedsMeRow {
   // ci_result is the Ticket's CI result, whatever the reason, for its
   // badge; left out for a Ticket never pushed while CI Tracking was on.
   ci_result?: CIResult;
+  // pull_request is the Ticket's pull request, for its item's link; left
+  // out until the Pull Request Watcher reports one.
+  pull_request?: PullRequestView;
   // ci_group is the Spec's Tickets waiting with this one, on a per-Spec CI
   // item (code-central-379).
   ci_group?: CIGroup;
@@ -674,6 +699,9 @@ export interface TicketRow {
   // ci_result is the Ticket's CI result, for its badge; left out for a
   // Ticket never pushed while CI Tracking was on.
   ci_result?: CIResult;
+  // pull_request is the Ticket's pull request, for its row's badge; left
+  // out until the Pull Request Watcher reports one.
+  pull_request?: PullRequestView;
   // waiting_for_spec is set on an Accepted Ticket that waits for its Spec
   // to land, for its badge (code-central-371).
   waiting_for_spec?: boolean;
@@ -827,6 +855,9 @@ export interface TicketView {
   // tracked against the Ticket, the latest pushed commit's first. All are
   // left out while it has none (code-central-256).
   pushed_commit?: PushedCommitView;
+  // pull_request is the pull request the Pull Request Watcher reported for
+  // the Ticket's pushed work (code-central-388).
+  pull_request?: PullRequestView;
   ci_result?: CIResult;
   ci_runs?: CIRunView[];
   // land_anyway says the human accepted the latest pushed commit's failed
@@ -867,7 +898,7 @@ export interface TicketView {
 // a TicketAcknowledgement's changed lists them in.
 export const TICKET_FIELDS = [
   "id", "title", "state", "spec", "labels", "tags", "blocked_by", "blockers", "replacements",
-  "created", "updated", "description", "branch", "commit", "pushed_commit", "ci_result", "ci_runs", "land_anyway", "ci_failure_options", "claims", "rounds", "failure_reports",
+  "created", "updated", "description", "branch", "commit", "pushed_commit", "pull_request", "ci_result", "ci_runs", "land_anyway", "ci_failure_options", "claims", "rounds", "failure_reports",
   "comments", "moves", "edits", "blocked", "claimable", "silent_since", "needs_me_reason", "link",
   "awaiting_triage", "triage_actions",
 ] as const satisfies readonly (keyof TicketView)[];

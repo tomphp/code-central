@@ -385,3 +385,10 @@ a.link-badge:hover { text-decoration: underline; }
 .bs-rows { border-top: 1px solid var(--border); }
 .bs-rows .row { padding-left: 32px; }
 .bs-rows .row:last-child { border-bottom: 0; }
+
+/* The pull request badge (code-central-388). */
+.pr-badge { white-space: nowrap; text-decoration: none; color: inherit; cursor: pointer; }
+a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
+.impl-list .pr-badge { margin-left: 6px; }
+.pr-conflicting, .pr-closed { color: var(--bad, inherit); }
+.pr-merged { opacity: 0.7; }

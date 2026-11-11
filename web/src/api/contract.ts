@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
+import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, PullRequestReport, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
 import { ApiError, TRIAGE_ACTIONS } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -74,7 +74,14 @@ export interface Driver {
   // reportPushedCommit reports the commit a Factory pushed for an
   // Accepted Ticket, and reportCIRuns the CI Runs the CI Watcher saw
   // (code-central-256).
-  reportPushedCommit(key: string, id: string, commit: string): Promise<void>;
+  // The branch it was pushed as is what the Pull Request Watcher opens a
+  // pull request from; under Pull Request a push is recorded with CI
+  // Tracking off too (code-central-388).
+  reportPushedCommit(key: string, id: string, commit: string, branch?: string): Promise<void>;
+  // reportPullRequest reports the pull request of the work pushed as
+  // branch, as the Pull Request Watcher does; it is recorded on every
+  // Ticket the work covers (code-central-388).
+  reportPullRequest(key: string, report: PullRequestReport): Promise<void>;
   reportCIRuns(key: string, runs: Omit<CIRunView, "ignored">[]): Promise<void>;
   close(): Promise<void>;
 }
@@ -599,6 +606,34 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
       expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "not_reported" });
+    });
+
+    it("records a pull request on every Ticket its pushed work covers, and keeps the merge commit", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
+      await d.api.act("acme", id, "accept", {});
+      await d.reportPushRemote("acme", "git@github.com:acme/web.git");
+      await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "origin" });
+      const report = { branch: "impl-7", number: 7, link: "https://github.com/acme/web/pull/7" };
+
+      // Nothing was pushed as that branch yet.
+      const early = await d.reportPullRequest("acme", { ...report, state: "open" }).catch((e) => e);
+      expect(String(early.code ?? early.message)).toContain("not_found");
+
+      // Under Pull Request a push is recorded without CI Tracking.
+      await d.reportPushedCommit("acme", id, "abc123", "impl-7");
+      await d.reportPullRequest("acme", { ...report, state: "open" });
+      expect(await d.api.getTicket("acme", id)).toMatchObject({ pull_request: { number: 7, state: "open" } });
+      expect(await d.api.getTicket("acme", id)).not.toHaveProperty("ci_result");
+
+      // A closed pull request reopened is accepted, and a merged one needs its merge commit.
+      await d.reportPullRequest("acme", { ...report, state: "closed" });
+      await d.reportPullRequest("acme", { ...report, state: "open" });
+      const bare = await d.reportPullRequest("acme", { ...report, state: "merged" }).catch((e) => e);
+      expect(String(bare.code ?? bare.message)).toContain("invalid");
+      await d.reportPullRequest("acme", { ...report, state: "merged", merge_commit: "def456" });
+      expect(await d.api.getTicket("acme", id)).toMatchObject({ pull_request: { number: 7, state: "merged", merge_commit: "def456" } });
     });
 
     it("tracks a pushed Ticket's CI Runs and works its CI result out", async () => {

@@ -13,6 +13,7 @@ import { LatestEventLine } from "../LatestEvent";
 import { LinkBadge } from "./LinkBadge";
 import { OpenExternal } from "./OpenExternal";
 import { Live } from "./Live";
+import { PullRequestBadge } from "./PullRequestBadge";
 import { WaitingBadge } from "./WaitingBadge";
 import { useAct } from "./useAct";
 import { CISection } from "./CISection";
@@ -109,6 +110,7 @@ export function TicketDetail({ api, project, ticket: t, now, reported, openSpec,
           </span>
         ))}
         {t.link && <LinkBadge link={t.link} />}
+        <PullRequestBadge pr={t.pull_request} />
         <OpenExternal link={t.link} />
       </div>
       {t.link && !t.link.detached && <LinkedNote key={t.id} api={api} project={project} ticket={t} />}

@@ -4,6 +4,7 @@
 import type { NeedsMeReason, TicketRow } from "../api/types";
 import { RowLatestEvent } from "../LatestEvent";
 import { CIBadge } from "../ticket/CIBadge";
+import { PullRequestBadge } from "../ticket/PullRequestBadge";
 import { WaitingBadge } from "../ticket/WaitingBadge";
 
 export interface TicketListProps {
@@ -30,6 +31,7 @@ export function TicketList({ label, tickets, reasons, now, ticket, select }: Tic
             <span className={["state", reason && `reason-${reason} loud-state`].filter(Boolean).join(" ")}>{t.state}</span>
             <WaitingBadge waiting={t.waiting_for_spec} />
             <CIBadge result={t.ci_result} />
+            <PullRequestBadge pr={t.pull_request} />
             <RowLatestEvent row={t} now={now} />
           </li>
         );
