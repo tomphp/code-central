@@ -29,9 +29,9 @@ const (
 	// Issues Spec that no triage action has taken off it.
 	LabelDraft = StatusLabelPrefix + "draft"
 	// LabelRequirement is on an issue To Requirement made a Requirement
-	// of, while the Requirement's Stages aren't all Done.
+	// of, while the Requirement's Stages aren't all Done or Cancelled.
 	LabelRequirement = StatusLabelPrefix + "requirement"
-	// LabelBuilding is on it once the Stages are all Done, until the
+	// LabelBuilding is on it once the Stages are all Done or Cancelled, until the
 	// Spec is Finished.
 	LabelBuilding = StatusLabelPrefix + "building"
 	// LabelDone is on it once the Spec is Finished with at least one
@@ -187,7 +187,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w Issu
 	for _, t := range tickets {
 		if stage := StageOf(t.Labels); stage != "" {
 			stages[stage] = t
-			stagesDone = stagesDone && t.State == store.Done
+			stagesDone = stagesDone && (t.State == store.Done || t.State == store.Cancelled)
 		} else if t.State == store.Done {
 			landed = append(landed, t)
 		}
@@ -215,7 +215,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w Issu
 
 // requirementStatus is the status label and closing due on the issue of
 // a Requirement whose Spec is finished or not, with something landed or
-// not, and whose Stages are all Done or not.
+// not, and whose Stages are all Done or Cancelled or not.
 func requirementStatus(finished, landed, stagesDone bool) (string, IssueClose) {
 	switch {
 	case finished && landed:

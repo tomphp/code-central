@@ -270,7 +270,7 @@ func (c *Core) requirementView(r store.Reader, key string, s store.Spec, tickets
 	for i, t := range stages {
 		reason, _ := c.reasonOf(r, key, t)
 		v.Stages = append(v.Stages, StageView{Name: StageOf(t.Labels), Ticket: DisplayID(key, t.Number), State: t.State, NeedsMeReason: reason})
-		if current < 0 && t.State != store.Done {
+		if current < 0 && t.State != store.Done && t.State != store.Cancelled {
 			current = i
 		}
 	}

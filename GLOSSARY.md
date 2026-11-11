@@ -84,8 +84,16 @@ _Avoid_: Issue (that word means only GitHub's item, which an Incoming Issue mirr
 A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to try and react to, so a decision can be made. Its work never lands. A Question answered "Prototype this" in a grilling or Charting Round becomes one, which blocks the asking Ticket until it is Done.
 _Avoid_: Spike, mock-up, demo
 
+**Implement**:
+The human's choice, when accepting a Requirement's spec Stage, to build the Spec as one implementation Ticket, without the tickets Stage. It accepts the spec Stage, creates the Ticket and Cancels the tickets Stage with that Ticket as its Replacement.
+_Avoid_: Skip tickets, fast path, direct build
+
+**Split into Tickets**:
+The human's other choice when accepting a Requirement's spec Stage. It accepts the spec Stage so the tickets Stage runs as usual.
+_Avoid_: Break down, slice
+
 **Stage**:
-One of the three fixed steps that turn a Requirement's text into implementation Tickets (grilling, spec and tickets), each done as its own Ticket.
+One of the three fixed steps that turn a Requirement's text into implementation Tickets (grilling, spec and tickets), each done as its own Ticket. The human may skip the tickets Stage by choosing Implement.
 _Avoid_: Phase, step, definition Ticket
 
 **Stage Guide**:
@@ -378,7 +386,7 @@ The human's triage action that Cancels an Incoming Issue, with an optional reaso
 _Avoid_: Reject, decline
 
 **Status label**:
-The one `code-central:` label Code Central keeps on a linked GitHub issue to show where its work stands, such as `code-central:draft` on an Incoming Issue not yet triaged off the Issues Spec, `code-central:requirement` after To Requirement, `code-central:building` once the Requirement's Stages are Done, `code-central:done` once its Spec is Finished with something landed, or `code-central:wont-fix` after Won't fix or once its Spec is Finished with nothing landed. The Issue Watcher creates it in the repository if it is missing.
+The one `code-central:` label Code Central keeps on a linked GitHub issue to show where its work stands, such as `code-central:draft` on an Incoming Issue not yet triaged off the Issues Spec, `code-central:requirement` after To Requirement, `code-central:building` once the Requirement's Stages are all Done or Cancelled, `code-central:done` once its Spec is Finished with something landed, or `code-central:wont-fix` after Won't fix or once its Spec is Finished with nothing landed. The Issue Watcher creates it in the repository if it is missing.
 _Avoid_: Tag, state label
 
 **Write-back**:
