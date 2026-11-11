@@ -272,7 +272,7 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 		f, _, _ := ciFailure(r, key, t, c.now())
 		row.CIFailure = &f
 	case ReasonToMerge:
-		row.Branch = t.Branch
+		row.Branch = branchOf(t)
 	case ReasonCIUnavailable:
 		p, _ := r.Project(key)
 		_, row.CIUnavailable = c.ciWaitingOn(r, p, t)
@@ -318,6 +318,10 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 		}
 		if since, ok := ciCancelled(r, key, t, c.now()); ok {
 			return ReasonCICancelled, since
+		}
+		if lead, waiting := specPullRequestLead(r, key, t); waiting && !lead {
+			// A Spec's pull request is one item, on its lead Ticket.
+			return "", time.Time{}
 		}
 		if t.State == store.Accepted && p.Landing.Method == store.LandingPullRequest && t.PullRequest != nil && t.PullRequest.State == store.PRClosed {
 			return ReasonPullRequestClosed, entered(t)
