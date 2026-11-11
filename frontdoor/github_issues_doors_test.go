@@ -2,6 +2,7 @@ package frontdoor_test
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -131,8 +132,8 @@ func TestTurningGitHubIssuesOnCreatesTheIssuesSpecOnce(t *testing.T) {
 	out := httpOK(t, srv, setGitHubIssues(`{"on":true,"repository":"acme/web","full":true}`))
 	githubIssues(t, out, issuesSettings{on: true, repository: "acme/web", spec: "acme-4"})
 	s := issuesSpec(t, srv, 4)
-	if s["title"] != "GitHub Issues: acme/web" || s["link"] != nil || len(s["labels"].([]any)) != 0 || s["requirement"] != nil || !strings.Contains(s["body"].(string), "Incoming Issue") {
-		t.Fatalf("Issues Spec = %v, want an ordinary Spec titled for acme/web, with no Link and no Stages", s)
+	if s["title"] != "GitHub Issues: acme/web" || s["link"] != nil || fmt.Sprint(s["labels"]) != "[long-lived]" || s["requirement"] != nil || !strings.Contains(s["body"].(string), "Incoming Issue") {
+		t.Fatalf("Issues Spec = %v, want a long-lived Spec titled for acme/web, with no Link and no Stages", s)
 	}
 
 	// Off and on again, and on with other settings, reuse it.

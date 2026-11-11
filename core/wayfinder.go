@@ -3,6 +3,8 @@ package core
 import (
 	"slices"
 	"strings"
+
+	"github.com/tomoram/code-central/store"
 )
 
 // Wayfinder Labels (Spec 213, ADR 0016). A Map is a Spec labelled
@@ -19,6 +21,10 @@ const MapLabel = WayfinderPrefix + "map"
 
 // PrototypeLabel marks a Ticket as a Prototype.
 const PrototypeLabel = "prototype"
+
+// LongLivedLabel marks a Spec as a Long-lived Spec, one that never
+// finishes, such as a CI Rule's Spec or an Issues Spec.
+const LongLivedLabel = store.LongLivedLabel
 
 // WayfinderTypes are the Map's Ticket types, each named as its Label's
 // suffix.
@@ -90,6 +96,8 @@ func checkPlacement(field string, labels []string, onSpec bool) error {
 		switch {
 		case l == MapLabel && !onSpec:
 			return invalid(field, "%q marks a Spec as a Map; a Ticket can't carry it", l)
+		case l == LongLivedLabel && !onSpec:
+			return invalid(field, "%q marks a Spec as long-lived; it goes on a Spec, not a Ticket", l)
 		case onSpec && l == PrototypeLabel:
 			return invalid(field, "%q marks a Ticket as a Prototype; a Spec can't carry it", l)
 		case onSpec && l != MapLabel && strings.HasPrefix(l, WayfinderPrefix):

@@ -471,6 +471,9 @@ export class FakeApi implements Api {
   addTicket(project: string, seed: SeedTicket): TicketView {
     const p = this.projects.get(project);
     if (!p) throw new Error(`FakeApi: no Project ${project}`);
+    if (seed.labels?.includes("long-lived")) {
+      throw new ApiError(422, "invalid", `"long-lived" marks a Spec as long-lived; it goes on a Spec, not a Ticket`, "labels");
+    }
     const at = this.now.toISOString();
     const t: TicketView = {
       id: `${project}-${p.next++}`,
