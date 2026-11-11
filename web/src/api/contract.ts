@@ -88,9 +88,10 @@ export interface FailureReportBody {
 
 // wantAcknowledgement checks a human action's result is its Ticket's
 // acknowledgement (ADR 0009): the ID, updated time, the names of the
-// fields it changed (changed among them) and the State, and no record.
+// fields it changed (changed among them) and the State, and no record. An
+// operation's next_step may ride along.
 export function wantAcknowledgement(ack: TicketAcknowledgement, id: string, state: State, changed: string[] = []) {
-  expect(Object.keys(ack).filter((k) => k !== "edit").sort()).toEqual(["changed", "id", "state", "updated"]);
+  expect(Object.keys(ack).filter((k) => k !== "edit" && k !== "next_step").sort()).toEqual(["changed", "id", "state", "updated"]);
   expect(ack).toMatchObject({ id, state });
   expect(Number.isNaN(Date.parse(ack.updated))).toBe(false);
   expect(ack.changed).toEqual(expect.arrayContaining(changed));
@@ -470,8 +471,9 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(names).toMatchObject({ status: 422, code: "invalid", field: "ignored_workflows" });
 
       // The project URL is cut back to the project, and a pipeline's name may hold spaces.
-      const v = await d.api.setCITracking("acme", { ...azure, tracking: true, project_url: " https://dev.azure.com/acme/web/_build?definitionId=3", ignored_workflows: ["Nightly build"] });
-      expect(v.ci).toMatchObject({ tracking: true, provider: "azure_pipelines", project_url: "https://dev.azure.com/acme/web", pat_env: "ADO_PAT", ignored_workflows: ["Nightly build"] });
+      // Tracking stays off: turning it on checks the PAT against Azure DevOps itself, which a test can't reach.
+      const v = await d.api.setCITracking("acme", { ...azure, tracking: false, project_url: " https://dev.azure.com/acme/web/_build?definitionId=3", ignored_workflows: ["Nightly build"] });
+      expect(v.ci).toMatchObject({ tracking: false, provider: "azure_pipelines", project_url: "https://dev.azure.com/acme/web", pat_env: "ADO_PAT", ignored_workflows: ["Nightly build"] });
 
       // Each provider keeps its own fields when the provider is switched.
       const back = await d.api.setCITracking("acme", { ...azure, provider: "github_actions", tracking: false, repository: "acme/web", project_url: "https://dev.azure.com/acme/web", pat_env: "ACME_PAT" });

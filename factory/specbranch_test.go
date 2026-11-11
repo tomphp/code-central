@@ -80,7 +80,7 @@ func TestTheFirstClaimMakesTheSpecBranchAndCutsTheTicketBranchFromIt(t *testing.
 	base := h.Git("rev-parse", "main")
 
 	h.Start()
-	h.WaitFor("the worktree of "+id, func() bool { _, err := os.Stat(h.Worktree(id)); return err == nil })
+	h.WaitForWorktree(id)
 
 	if got := h.Git("rev-parse", "spec/"+h.SpecID()); got != base {
 		t.Errorf("the Spec Branch is at %s, want the base's tip %s", got, base)
@@ -102,7 +102,7 @@ func TestASecondTicketIsCutFromTheSpecBranchHoldingTheFirstOnes(t *testing.T) {
 	id := h.ReadyTicket("Second")
 	h.Script(id, factorytest.Wait())
 	r.Tick()
-	h.WaitFor("the worktree of "+id, func() bool { _, err := os.Stat(h.Worktree(id)); return err == nil })
+	h.WaitForWorktree(id)
 
 	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != tip {
 		t.Errorf("the Ticket's branch is at %s, want the Spec Branch's tip %s", got, tip)
