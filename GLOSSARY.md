@@ -40,6 +40,10 @@ _Avoid_: Controller, runner, orchestrator
 The description of a piece of work, such as a feature or user story, delivered through one or more Tickets.
 _Avoid_: Epic, feature, PRD
 
+**Long-lived Spec**:
+A Spec labelled `long-lived`, which never finishes, such as a CI Rule's Spec or the GitHub Issues Spec, so its Tickets land one by one, outside Land per Spec. Code Central labels the Specs it makes for CI Rules and GitHub Issues; the human may label or unlabel any Spec.
+_Avoid_: Bucket Spec, standing Spec
+
 **Section**:
 A part of a Spec's body that starts at a heading and runs to the next heading at the same level or higher.
 _Avoid_: Chapter, part, block
@@ -145,11 +149,11 @@ The Needs Me reason of a Project under Pull Request whose local base holds commi
 _Avoid_: Out of sync, base conflict
 
 **Land per Spec**:
-A Merge and Pull Request option, on by default and kept whatever the method, by which a Requirement Spec's work gathers on one Spec Branch and lands in the base together, instead of Ticket by Ticket. It covers the implementation Tickets of every Spec except a Long-lived Spec's (not Stage Tickets, Map Tickets or Prototypes), and under Branch it has no effect. A Spec that isn't a Requirement is ready once every implementation Ticket on it is Accepted, Done or Cancelled, and a Ticket added after it has landed goes in a second batch. Gaining the `long-lived` Label lands the Spec's waiting Tickets at once; losing it affects only Tickets accepted afterwards. Under Pull Request the Spec gets one pull request instead of landing Ticket by Ticket. Turning it on affects only Tickets accepted afterwards.
+A Merge and Pull Request option, on by default and kept whatever the method, by which a Spec's work gathers on one Spec Branch and lands in the base together, instead of Ticket by Ticket. It covers a Spec's implementation Tickets, not Stage Tickets, Map Tickets, Prototypes or the Tickets of a Long-lived Spec, and under Branch it has no effect. A Requirement is ready to land once its tickets Stage is finished and each of its Tickets is Accepted, Done or Cancelled; any other Spec once each of its Tickets is, so a Ticket added after its Spec has landed lands with a second batch. Under Pull Request the Spec gets one pull request instead of landing Ticket by Ticket. Turning it on, or taking a Spec's `long-lived` Label off, affects only Tickets accepted afterwards; turning it off, or labelling a Spec `long-lived`, lands the Spec's waiting Tickets together at once, ready or not.
 _Avoid_: Spec landing, batch landing, release train
 
 **Spec Branch**:
-The one local branch, `spec/<spec id>`, that a Requirement Spec's accepted implementation Tickets are merged into under Land per Spec. Each Ticket's branch is cut from its tip, and the Factory merges it into the base once the Spec is ready to land. It is pushed only under Pull Request, where the Spec's one pull request is opened from it.
+The one local branch, `spec/<spec id>`, that a Spec's accepted implementation Tickets are merged into under Land per Spec. Each Ticket's branch is cut from its tip, and the Factory merges it into the base once the Spec is ready to land. It is pushed only under Pull Request, where the Spec's one pull request is opened from it.
 _Avoid_: Feature branch, integration branch, epic branch
 
 **Waiting for the Spec**:
@@ -378,12 +382,8 @@ An agent's permanent record of what broke on a Ticket, why, and what to fix, pos
 _Avoid_: Error, incident
 
 **Label**:
-A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels, Wayfinder Labels, `prototype` and `long-lived` are reserved: `long-lived` marks a Long-lived Spec and goes only on a Spec, anyone may add or remove it, and adding it to a Ticket is refused; they mark a Ticket's Stage, a Map or a Map's Ticket type, and a Prototype. A Ticket carries at most one reserved type Label (a Stage Label, a Map Ticket type's Wayfinder Label or `prototype`), which chooses its Stage Guide.
+A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels, Wayfinder Labels, `prototype` and `long-lived` are reserved: they mark a Ticket's Stage, a Map or a Map's Ticket type, a Prototype, and a Long-lived Spec. `long-lived` goes only on a Spec. A Ticket carries at most one reserved type Label (a Stage Label, a Map Ticket type's Wayfinder Label or `prototype`), which chooses its Stage Guide.
 _Avoid_: Category
-
-**Long-lived Spec**:
-A Spec labelled `long-lived`, one that never finishes, so Land per Spec doesn't hold its Tickets for it. A CI Rule's Spec and a Project's Issues Spec are created with the Label, and the human or an agent may add it to or remove it from any Spec.
-_Avoid_: Perpetual Spec, standing Spec
 
 **Wayfinder Label**:
 A reserved `wayfinder:` Label marking a Map (`wayfinder:map`) or a Map's Ticket type (`chart`, `grilling`, `research`, `task`).

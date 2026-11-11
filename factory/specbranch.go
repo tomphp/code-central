@@ -191,11 +191,11 @@ func (f *factory) pushSpec(ctx context.Context, id string, landing core.LandingV
 		}
 		return
 	}
-	if spec.Requirement == nil || spec.Requirement.LandPerSpec == nil || !spec.Requirement.LandPerSpec.Ready {
+	if spec.LandPerSpec == nil || !spec.LandPerSpec.Ready {
 		return
 	}
 	var tickets []core.TicketView
-	for _, w := range spec.Requirement.LandPerSpec.Waiting {
+	for _, w := range spec.LandPerSpec.Waiting {
 		tk, err := f.client.GetTicket(ctx, f.project, core.Ref(w))
 		if err != nil {
 			if ctx.Err() == nil {
@@ -251,11 +251,11 @@ func (f *factory) landSpec(ctx context.Context, id string, landing core.LandingV
 		}
 		return
 	}
-	if spec.Requirement == nil || spec.Requirement.LandPerSpec == nil || !spec.Requirement.LandPerSpec.Ready {
+	if spec.LandPerSpec == nil || !spec.LandPerSpec.Ready {
 		return
 	}
 	var tickets []core.TicketView
-	for _, w := range spec.Requirement.LandPerSpec.Waiting {
+	for _, w := range spec.LandPerSpec.Waiting {
 		tk, err := f.client.GetTicket(ctx, f.project, core.Ref(w))
 		if err != nil {
 			if ctx.Err() == nil {

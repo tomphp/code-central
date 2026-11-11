@@ -10,6 +10,7 @@ import { NewPrototype } from "../requirement/NewRequirement";
 import { CISums } from "../ticket/CIBadge";
 import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
+import { LandPerSpec } from "./LandPerSpec";
 import { TicketList } from "./TicketList";
 
 export interface SpecPaneProps {
@@ -34,6 +35,7 @@ export function SpecPane({ api, spec, archived, reasons, now, ticket, select }: 
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
       </div>
+      <LandPerSpec status={spec.land_per_spec} />
       <BodySection api={api} spec={spec} heading="Body" archived={archived} />
       <CISums tickets={spec.tickets} />
       {spec.tickets.length === 0 ? (

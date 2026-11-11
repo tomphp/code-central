@@ -209,9 +209,6 @@ type RequirementView struct {
 	// WaitingForFactory is whether the next Ticket can be claimed but
 	// nothing has claimed it.
 	WaitingForFactory bool `json:"waiting_for_factory"`
-	// LandPerSpec is the Spec's Land per Spec status, left out unless the
-	// Project is under Merge with Land per Spec on.
-	LandPerSpec *LandPerSpecView `json:"land_per_spec,omitempty"`
 }
 
 // StageView is one Stage Ticket: its Stage name, Ticket ID, State and
@@ -265,7 +262,7 @@ func (c *Core) requirementView(r store.Reader, key string, s store.Spec, tickets
 		reason, _ := c.reasonOf(r, key, t)
 		return t.State == store.Ready && !rule.blocked(t) && reason == ""
 	}
-	v := &RequirementView{Stages: []StageView{}, LandPerSpec: landPerSpecView(r, key, tickets)}
+	v := &RequirementView{Stages: []StageView{}}
 	if StageOf(stages[0].Labels) != "grilling" {
 		v.Map = s.Tags[MapTag]
 	}
