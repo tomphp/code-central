@@ -64,6 +64,59 @@ describe("the In Review panel", () => {
     expect((await fake.getTicket("acme", "acme-1")).state).toBe("Done");
   });
 
+  it("offers only Accept on a Ticket that isn't a spec Stage", async () => {
+    const panel = await renderPanel(world());
+    expect(within(panel).getByRole("button", { name: "Accept" })).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Split into Tickets" })).not.toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Implement" })).not.toBeInTheDocument();
+  });
+
+  describe("on a spec Stage", () => {
+    async function specWorld() {
+      const fake = new FakeApi();
+      fake.addProject("acme", "Acme");
+      const r = await fake.submitRequirement("acme", "Offline mode");
+      const [grilling, spec] = r.stages.map((s) => s.id);
+      fake.updateTicket(grilling, { state: "Done" });
+      fake.updateTicket(spec, { state: "In Review" });
+      return { fake, r, spec, tickets: r.stages[2].id };
+    }
+    async function renderSpec(fake: FakeApi, spec: string) {
+      render(<ReviewPanel api={fake} project="acme" ticket={await fake.getTicket("acme", spec)} now={fake.now} />);
+      return screen.getByRole("region", { name: "In Review" });
+    }
+
+    it("shows Split into Tickets and Implement in place of Accept", async () => {
+      const { fake, spec } = await specWorld();
+      const panel = await renderSpec(fake, spec);
+      expect(within(panel).getByRole("button", { name: "Split into Tickets" })).toBeInTheDocument();
+      expect(within(panel).getByRole("button", { name: "Implement" })).toBeInTheDocument();
+      expect(within(panel).queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
+      expect(within(panel).getByRole("button", { name: "Reject" })).toBeInTheDocument();
+    });
+
+    it("Split into Tickets calls accept", async () => {
+      const { fake, spec } = await specWorld();
+      const panel = await renderSpec(fake, spec);
+      await userEvent.click(within(panel).getByRole("button", { name: "Split into Tickets" }));
+      expect(fake.calls).toContain("accept");
+      expect(fake.calls).not.toContain("implement");
+      expect((await fake.getTicket("acme", spec)).state).toBe("Done");
+    });
+
+    it("Implement calls implement: the tickets Stage is Cancelled with the new Ticket as Replacement", async () => {
+      const { fake, spec, tickets } = await specWorld();
+      const panel = await renderSpec(fake, spec);
+      await userEvent.click(within(panel).getByRole("button", { name: "Implement" }));
+      expect(fake.calls).toContain("implement");
+      expect(fake.calls).not.toContain("accept");
+      expect((await fake.getTicket("acme", spec)).state).toBe("Done");
+      const cancelled = await fake.getTicket("acme", tickets);
+      expect(cancelled.state).toBe("Cancelled");
+      expect((await fake.getTicket("acme", cancelled.replacements[0])).title).toBe("Implement: Offline mode");
+    });
+  });
+
   it("won't send Reject without a comment", async () => {
     const fake = world();
     const panel = await renderPanel(fake);

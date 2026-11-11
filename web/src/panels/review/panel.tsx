@@ -1,7 +1,9 @@
-// The In Review panel: the agent's finish summary, then Accept, and Reject,
-// which can't be sent without a comment saying what to change.
+// The In Review panel: the agent's finish summary, then Accept (on a spec
+// Stage, Split into Tickets and Implement), and Reject, which can't be sent
+// without a comment saying what to change.
 import { useState } from "react";
 import "../../api/actions/accept";
+import "../../api/actions/implement";
 import "../../api/actions/reject";
 import type { CommentView, TicketView } from "../../api/types";
 import { Markdown } from "../../Markdown";
@@ -31,9 +33,20 @@ export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
         </p>
       )}
       <p>
-        <button type="button" className="btn primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "accept", {}))}>
-          Accept
-        </button>
+        {t.labels.includes("stage:spec") ? (
+          <>
+            <button type="button" className="btn primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "accept", {}))}>
+              Split into Tickets
+            </button>{" "}
+            <button type="button" className="btn primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "implement", {}))}>
+              Implement
+            </button>
+          </>
+        ) : (
+          <button type="button" className="btn primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "accept", {}))}>
+            Accept
+          </button>
+        )}
       </p>
       <label className="reject-comment">
         <span className="small muted">What to change (required to reject)</span>
