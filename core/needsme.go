@@ -117,6 +117,9 @@ type NeedsMeRow struct {
 	// CIUnavailable says which: the CI Watcher not Watching, or no CI
 	// Runs for its pushed commit (CI unavailable).
 	CIUnavailable *CIUnavailableView `json:"ci_unavailable,omitempty"`
+	// CIGroup is the Spec's waiting Tickets that share the Ticket's pushed
+	// commit (CI failed, cancelled or unavailable on a Spec-landed Ticket).
+	CIGroup *CIGroupView `json:"ci_group,omitempty"`
 	// Blocker is the Cancelled Blocker (blocked by a Cancelled Ticket).
 	Blocker *BlockerView `json:"blocker,omitempty"`
 	// Link is the Ticket's Link, whatever the reason: the row's badge, and
@@ -267,6 +270,10 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 	case ReasonBlockedByCancelled:
 		b, _ := cancelledBlocker(c.blockRule(r, key), t)
 		row.Blocker = &b
+	}
+	switch reason {
+	case ReasonCIFailed, ReasonCICancelled, ReasonCIUnavailable:
+		row.CIGroup = ciGroupView(r, key, t)
 	}
 	return row, true
 }

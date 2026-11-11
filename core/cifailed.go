@@ -69,7 +69,7 @@ func ciFailure(r store.Reader, key string, t store.Ticket, now time.Time) (s CIF
 // Accepted, the human hasn't chosen Land anyway for the commit and its
 // CI result is result at now.
 func unhandledCI(r store.Reader, key string, t store.Ticket, result CIResult, now time.Time) (store.PushedCommit, []store.CIRun, bool) {
-	if t.State != store.Accepted || len(t.PushedCommits) == 0 {
+	if t.State != store.Accepted || len(t.PushedCommits) == 0 || !isCILead(r, key, t) {
 		return store.PushedCommit{}, nil, false
 	}
 	latest := latestPushed(t)
@@ -116,6 +116,11 @@ func ciFailureOptions(r store.Reader, key string, t store.Ticket, now time.Time)
 		}
 		fixes = []string{OptionSendBack}
 	}
+	// A Spec-landed Ticket's work is in the base with its Spec's, so
+	// there is no branch of its own to send back for a fix.
+	if p, _ := r.Project(key); specLanded(r, p.Landing, key, t) {
+		fixes = slices.DeleteFunc(fixes, func(o string) bool { return o == OptionSendBack })
+	}
 	p, _ := r.Project(key)
 	if p.Landing.Method == store.LandingBranch {
 		return append([]string{OptionRerunCI}, fixes...)
@@ -136,6 +141,64 @@ func acceptFailedCI(t *store.Ticket, now time.Time) {
 	t.PushedCommits[len(t.PushedCommits)-1].LandAnyway = now
 }
 
+// writeGroupOthers applies apply to each Ticket waiting with the named
+// one on its pushed commit, the named Ticket aside, when allowed accepts
+// the named Ticket's choice of option. An update writes one record, so
+// each is its own write; the caller then writes the named Ticket last.
+// Ticket not Accepted or in no group has no others, and allowed alone
+// speaks for it.
+func (c *Core) writeGroupOthers(key string, ref Ref, option string, allowed func(store.Reader, store.Ticket) error, apply func(store.Reader, *store.Ticket)) error {
+	var others []int
+	err := c.store.View(func(r store.Reader) error {
+		if err := writable(r, key); err != nil {
+			return err
+		}
+		t, err := resolveTicket(r, key, option, "ticket", ref)
+		if err != nil {
+			return err
+		}
+		if choseLandAnyway(t) && t.State == store.Accepted && option == OptionLandAnyway {
+			return nil
+		}
+		if rerunning(r, key, t, c.now()) && option == OptionRerunCI {
+			return nil
+		}
+		if err := allowed(r, t); err != nil {
+			return err
+		}
+		for _, o := range ciGroup(r, key, t) {
+			if o.Number != t.Number {
+				others = append(others, o.Number)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	for _, n := range others {
+		err := c.store.Update(func(w store.Writer) error {
+			o, ok := w.Ticket(key, n)
+			if !ok {
+				return nil
+			}
+			apply(w, &o)
+			o.Updated = c.now()
+			return w.PutTicket(key, o)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rerunning is whether a Re-run request for t waits on the CI Watcher.
+func rerunning(r store.Reader, key string, t store.Ticket, now time.Time) bool {
+	mine, _ := ticketRuns(r, key, t, now)
+	return t.State == store.Accepted && rerunPending(t, mine, now)
+}
+
 // choseLandAnyway reports whether the human chose Land anyway for t's
 // latest pushed commit.
 func choseLandAnyway(t store.Ticket) bool {
@@ -149,6 +212,17 @@ func choseLandAnyway(t store.Ticket) bool {
 // it again changes nothing.
 func (c *Core) LandAnyway(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
 	if err := humanOnly(ctx, "land_anyway"); err != nil {
+		return Written[TicketView]{}, err
+	}
+	// A Spec's group lands together: the others first, so a failed write
+	// leaves the lead, which carries the options, still asking.
+	err := c.writeGroupOthers(key, in.Ticket, OptionLandAnyway, func(r store.Reader, t store.Ticket) error {
+		if !slices.Contains(ciFailureOptions(r, key, t, c.now()), OptionLandAnyway) {
+			return &Error{Code: ActionNotAllowed, Message: whyNotLandAnyway(r, key, t, c.now())}
+		}
+		return nil
+	}, func(_ store.Reader, o *store.Ticket) { acceptFailedCI(o, c.now()) })
+	if err != nil {
 		return Written[TicketView]{}, err
 	}
 	return c.updateTicketIn(key, "land_anyway", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
@@ -169,6 +243,9 @@ func whyNotLandAnyway(r store.Reader, key string, t store.Ticket, now time.Time)
 	if t.State != store.Accepted {
 		return fmt.Sprintf("%s is %s: only an Accepted Ticket whose CI failed lands anyway", id, t.State)
 	}
+	if g := ciGroup(r, key, t); len(g) > 0 && g[0].Number != t.Number {
+		return fmt.Sprintf("%s waits with %s on one pushed commit: choose on %s, which acts on all of them", id, DisplayID(key, t.Spec), DisplayID(key, g[0].Number))
+	}
 	if _, _, ok := ciFailure(r, key, t, now); !ok {
 		return fmt.Sprintf("%s has no failed or cancelled CI result to land anyway", id)
 	}
@@ -186,6 +263,20 @@ func (c *Core) RerunCI(ctx context.Context, key string, in TicketInput) (Written
 	if err := humanOnly(ctx, "rerun_ci"); err != nil {
 		return Written[TicketView]{}, err
 	}
+	// The others in the Spec's group share the pushed commit, so each asks
+	// for the same re-run, before the named Ticket.
+	err := c.writeGroupOthers(key, in.Ticket, OptionRerunCI, func(r store.Reader, t store.Ticket) error {
+		if !slices.Contains(ciFailureOptions(r, key, t, c.now()), OptionRerunCI) {
+			return &Error{Code: ActionNotAllowed, Message: whyNotRerun(r, key, t, c.now())}
+		}
+		return nil
+	}, func(r store.Reader, o *store.Ticket) {
+		runs, _ := ticketRuns(r, key, *o, c.now())
+		requestRerun(o, runs, c.now())
+	})
+	if err != nil {
+		return Written[TicketView]{}, err
+	}
 	return c.updateTicketIn(key, "rerun_ci", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
 		mine, _ := ticketRuns(r, key, *t, c.now())
 		if rerunPending(*t, mine, c.now()) && t.State == store.Accepted {
@@ -194,15 +285,21 @@ func (c *Core) RerunCI(ctx context.Context, key string, in TicketInput) (Written
 		if !slices.Contains(ciFailureOptions(r, key, *t, c.now()), OptionRerunCI) {
 			return false, &Error{Code: ActionNotAllowed, Message: whyNotRerun(r, key, *t, c.now())}
 		}
-		latest := &t.PushedCommits[len(t.PushedCommits)-1]
-		latest.Reruns = nil
-		for _, run := range rerunnableRuns(latest.Commit, mine) {
-			latest.Reruns = append(latest.Reruns, store.CIRunAttempt{ID: run.ID, Attempt: run.Attempt})
-		}
-		slices.SortFunc(latest.Reruns, func(a, b store.CIRunAttempt) int { return cmp.Compare(a.ID, b.ID) })
-		latest.Rerun = c.now()
+		requestRerun(t, mine, c.now())
 		return true, nil
 	})
+}
+
+// requestRerun records on t's latest pushed commit a Re-run request for
+// each of its rerunnable runs, in place of any earlier request.
+func requestRerun(t *store.Ticket, runs []store.CIRun, now time.Time) {
+	latest := &t.PushedCommits[len(t.PushedCommits)-1]
+	latest.Reruns = nil
+	for _, run := range rerunnableRuns(latest.Commit, runs) {
+		latest.Reruns = append(latest.Reruns, store.CIRunAttempt{ID: run.ID, Attempt: run.Attempt})
+	}
+	slices.SortFunc(latest.Reruns, func(a, b store.CIRunAttempt) int { return cmp.Compare(a.ID, b.ID) })
+	latest.Rerun = now
 }
 
 // rerunPending reports whether a Re-run request for t's latest pushed
@@ -277,6 +374,13 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 		v, err = acknowledgeCreate(c.ticketView(w, key, store.Ticket{}), c.ticketView(w, key, f), in.Full)
 		return err
 	})
+	if err != nil {
+		return Written[TicketView]{}, err
+	}
+	// The Tickets waiting with it land too, before it.
+	err = c.writeGroupOthers(key, in.Ticket, OptionNewFixTicket, func(r store.Reader, t store.Ticket) error {
+		return refuseUnlessOffered(r, t)
+	}, func(_ store.Reader, o *store.Ticket) { acceptFailedCI(o, c.now()) })
 	if err != nil {
 		return Written[TicketView]{}, err
 	}

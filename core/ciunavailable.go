@@ -66,6 +66,9 @@ func (c *Core) ciWaitingOn(r store.Reader, p store.Project, t store.Ticket) (wai
 	if c.now().Sub(pushed.Pushed) < CIUnavailableAfter {
 		return true, nil
 	}
+	if !isCILead(r, p.Key, t) {
+		return true, nil // the lead of its Spec's group carries the reason
+	}
 	view := &CIUnavailableView{Commit: pushed.Commit, Pushed: pushed.Pushed}
 	if w := c.watchers.view(watcherKey{WatcherCI, p.Key}); w.State != WatcherWatching {
 		view.Cause, view.Message = CIWatcherNotWatching, w.Message
