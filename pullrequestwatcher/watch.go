@@ -43,7 +43,10 @@ type Config struct {
 	Client  Client
 	Project string
 	Env     gh.Env
-	Clock   clock.Clock
+	// AzureProjectURL, when set, is the Azure DevOps project URL to call
+	// instead of the one worked out from the repository, for tests.
+	AzureProjectURL string
+	Clock           clock.Clock
 	// Stdin is a pipe from the service: the Pull Request Watcher exits when
 	// it closes, as a stopped Windows scheduled task doesn't kill its
 	// children. Nil watches until ctx ends.
@@ -108,7 +111,7 @@ func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *wat
 	if !watch.On {
 		return false, false, nil
 	}
-	prog, r, err := checkAccess(ctx, core.PullRequestCheckInput{CodeHost: watch.CodeHost, Repository: watch.Repository, GHPath: watch.GHPath, PATEnv: watch.PATEnv}, cfg.Env)
+	h, r, err := cfg.access(ctx, core.PullRequestCheckInput{CodeHost: watch.CodeHost, Repository: watch.Repository, GHPath: watch.GHPath, PATEnv: watch.PATEnv, ProjectURL: cfg.AzureProjectURL}, false)
 	if ctx.Err() != nil {
 		// Stopped mid-poll: what failed is the stop, not GitHub.
 		return false, false, nil
@@ -120,9 +123,8 @@ func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *wat
 	if errors.As(err, &limit) {
 		return true, false, limit
 	}
-	g := github{prog: prog, env: cfg.Env, repository: watch.Repository, base: watch.Base}
 	for _, w := range watch.Work {
-		pr, err := cfg.follow(ctx, g, w)
+		pr, err := cfg.follow(ctx, h(watch.Base), w)
 		switch {
 		case errors.As(err, &limit):
 			return true, waiting, limit
@@ -143,7 +145,7 @@ func (cfg Config) poll(ctx context.Context) (reachable, waiting bool, limit *wat
 // one, else the merged one, and opens one when none is open or merged and
 // the latest push is newer than the last closed one; then it reports what
 // changed. It returns the pull request as reported, nil when there is none.
-func (cfg Config) follow(ctx context.Context, g github, w core.PushedWorkView) (*pullRequest, error) {
+func (cfg Config) follow(ctx context.Context, g host, w core.PushedWorkView) (*pullRequest, error) {
 	prs, err := g.list(ctx, w.Branch)
 	if err != nil {
 		return nil, err
@@ -158,7 +160,7 @@ func (cfg Config) follow(ctx context.Context, g github, w core.PushedWorkView) (
 		}
 		pr = opened
 	case pr.state() == store.PROpen:
-		if pr, err = g.withMergeability(ctx, pr); err != nil {
+		if pr, err = g.refresh(ctx, pr); err != nil {
 			return pr, err
 		}
 	}
@@ -177,7 +179,7 @@ func choose(prs []*pullRequest) *pullRequest {
 	var merged *pullRequest
 	for _, p := range prs {
 		switch p.state() {
-		case store.PROpen:
+		case store.PROpen, store.PRConflicting:
 			return p
 		case store.PRMerged:
 			if merged == nil {
@@ -208,6 +210,17 @@ func (cfg Config) logf(format string, args ...any) {
 	}
 }
 
+// host is the repository's pull requests on one Code Host, for one base.
+type host interface {
+	// list is every pull request from branch into the base, newest first.
+	list(ctx context.Context, branch string) ([]*pullRequest, error)
+	// refresh is an open pull request read singly, for what a list leaves
+	// out; a host that lists it all returns p.
+	refresh(ctx context.Context, p *pullRequest) (*pullRequest, error)
+	// open opens a pull request ready for review, with title and body.
+	open(ctx context.Context, branch, title, body string) (*pullRequest, error)
+}
+
 // github is the repository's pull requests as gh reaches them.
 type github struct {
 	prog       string
@@ -216,7 +229,8 @@ type github struct {
 	base       string
 }
 
-// pullRequest is a pull request as GitHub's REST API gives it.
+// pullRequest is a pull request as GitHub's REST API gives it; Azure
+// Repos' are mapped into the same fields.
 type pullRequest struct {
 	Number         int        `json:"number"`
 	Link           string     `json:"html_url"`
@@ -268,10 +282,10 @@ func (g github) list(ctx context.Context, branch string) ([]*pullRequest, error)
 	return prs, nil
 }
 
-// withMergeability is the open pull request read singly, as only that read
+// refresh is the open pull request read singly, as only that read
 // tells whether GitHub finds it conflicting; a pull request GitHub hasn't
 // worked the mergeability of yet reads as open.
-func (g github) withMergeability(ctx context.Context, p *pullRequest) (*pullRequest, error) {
+func (g github) refresh(ctx context.Context, p *pullRequest) (*pullRequest, error) {
 	body, _, err := gh.API(ctx, g.env, g.prog, fmt.Sprintf("repos/%s/pulls/%d", g.repository, p.Number))
 	if err != nil {
 		return p, fmt.Errorf("reading pull request %d: %w", p.Number, err)

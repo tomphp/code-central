@@ -45,13 +45,16 @@ type watching struct {
 	done  chan error
 }
 
-func newWatching(t *testing.T) *watching {
+func newWatching(t *testing.T) *watching { return newWatchingOn(t, "git@github.com:acme/web.git") }
+
+// newWatchingOn is newWatching with the Push remote at remote.
+func newWatchingOn(t *testing.T, remote string) *watching {
 	t.Helper()
 	srv := codecentraltest.NewServer(t)
 	c := srv.Core
 	must(t, func() error { _, err := c.CreateProject(human, core.CreateProjectInput{Key: "acme"}); return err })
 	must(t, func() error {
-		_, err := c.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git", Base: "main"})
+		_, err := c.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: remote, Base: "main"})
 		return err
 	})
 	must(t, func() error {
