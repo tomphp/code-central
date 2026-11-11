@@ -84,6 +84,36 @@ func workBranch(guide, ticket string) string {
 	return ""
 }
 
+// conflictFinish ends the system prompt of a conflict Claim, in place of
+// the Stage Guide. Its first words mark the session for the context
+// report (internal/contextreport). It keeps what finish requires of an
+// implementation Ticket: the branch and its head commit.
+const conflictFinish = "Conflict Claim: the first prompt holds the work. When it is done, `finish` with `branch` (the Ticket's ID) and `commit` (the branch's head commit), and a summary of how each conflict was resolved and the test result. The Ticket goes to In Review; stop working it."
+
+// conflictFiles is the files merging the base's tip into the Ticket's
+// existing branch conflicts in, for an implementation Ticket; none for
+// any other, for a branch not yet cut, or when the merge is clean.
+func (f *factory) conflictFiles(stage string, tk core.TicketView) []string {
+	branch := workBranch(stage, tk.ID)
+	if stage != core.ImplementationStage || branch == "" {
+		return nil
+	}
+	head, err := f.repository.commit("refs/heads/" + branch)
+	if err != nil {
+		return nil
+	}
+	baseTip, err := f.repository.commit("refs/heads/" + f.base)
+	if err != nil {
+		return nil
+	}
+	_, conflicts, err := f.repository.mergeTree(baseTip, head)
+	if err != nil {
+		f.printf("warning: %s: can't check the branch against %s: %v", tk.ID, f.base, err)
+		return nil
+	}
+	return conflicts
+}
+
 // mapResearch is the guide of a Map's research Ticket.
 const mapResearch = "map-research"
 
@@ -92,7 +122,20 @@ const mapResearch = "map-research"
 // arguments, since Claude Code repeats a skill's arguments in the expanded
 // skill. A guide that starts no skill is pointed at the system prompt
 // (systemPrompt), which holds everything else.
-func firstPrompt(c claim, stage string) string {
+//
+// A conflict Claim (conflicts non-empty) starts no skill: the prompt
+// holds the instructions for resolving a merge of the base into the
+// Ticket's branch, which is all the work there is.
+func firstPrompt(c claim, stage, base string, conflicts []string) string {
+	if len(conflicts) > 0 {
+		var b strings.Builder
+		fmt.Fprintf(&b, "Ticket %s's branch, %s, conflicts with the base, %s. Merge %s into the branch and resolve the conflicts in these files:\n\n", c.Ticket, c.Ticket, base, base)
+		for _, f := range conflicts {
+			fmt.Fprintf(&b, "- %s\n", f)
+		}
+		b.WriteString("\nResolve them keeping the intent of both sides. Run `make typecheck` and the tests the resolution touches. Commit on the branch, with no push and no PR, and finish the Ticket.")
+		return b.String()
+	}
 	if sk := stageSkills[stage]; sk.skill != "" {
 		return fmt.Sprintf("/%s %s", sk.skill, c.Ticket)
 	}
@@ -105,7 +148,10 @@ func firstPrompt(c claim, stage string) string {
 // records the system prompt at a session's first request and reuses it on
 // every resume until the session is compacted, so it reaches the agent
 // once, and again after a compaction since every turn passes it.
-func systemPrompt(c claim, stage, wt string, g core.StageGuideView) string {
+//
+// For a conflict Claim (conflicts non-empty) the Stage Guide is replaced
+// by a short finish instruction, since the first prompt holds the work.
+func systemPrompt(c claim, stage, wt string, g core.StageGuideView, conflicts []string) string {
 	var b strings.Builder
 	sk := stageSkills[stage]
 	fmt.Fprintf(&b, "Ticket: %s\nClaim: %s\n\n", c.Ticket, c.ClaimID)
@@ -126,6 +172,10 @@ func systemPrompt(c claim, stage, wt string, g core.StageGuideView) string {
 			what, writer = "this "+stage+" Ticket", "It"
 		}
 		fmt.Fprintf(&b, "You are running under code-central-factory, in a detached, read-only worktree at the base's tip, for %s. %s Finish the Ticket when it is done. %s writes nothing to the repository: no files, no commits and no branches.", what, claimed, writer)
+	}
+	if len(conflicts) > 0 {
+		b.WriteString("\n\n" + conflictFinish)
+		return b.String()
 	}
 	fmt.Fprintf(&b, "\n\nThe Stage Guide for %s follows: what this Ticket must produce and how to finish it.\n\n%s", g.Stage, g.Guide)
 	return b.String()

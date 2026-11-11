@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -294,4 +295,25 @@ func TestChangeIsAPercentageOfTheBaselinesFigure(t *testing.T) {
 			t.Errorf("change(%v, %v) = %q, want %q", c.now, c.was, got, c.want)
 		}
 	}
+}
+
+func TestLoadTagsASessionWhoseSystemPromptHasNoStageGuideButIsAConflictClaimAsConflict(t *testing.T) {
+	since, _ := time.Parse(time.RFC3339, "2026-01-05T00:00:00Z")
+	sessions, err := Load(fixtures, "/r/acme", Window{Since: since})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, s := range sessions {
+		got = append(got, s.Ticket+" "+s.Kind)
+	}
+	if !slices.Contains(got, "acme-7 conflict") {
+		t.Fatalf("sessions = %q, want acme-7 as a conflict", got)
+	}
+	for _, k := range Build(sessions, 3).Kinds {
+		if k.Name == "conflict" && k.Sessions == 1 {
+			return
+		}
+	}
+	t.Errorf("no conflict kind with one session in the report")
 }

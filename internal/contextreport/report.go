@@ -96,7 +96,7 @@ const codeCentral = "mcp__code-central__"
 
 // kindOrder is the order kinds are listed in: the Factory's, then the
 // subagents'. Any other kind follows, by name.
-var kindOrder = []string{"grilling", "spec", "tickets", "implementation", "review", "subagent"}
+var kindOrder = []string{"grilling", "spec", "tickets", "implementation", "conflict", "review", "subagent"}
 
 // Build works out the report's figures from the sessions, listing the
 // top largest results, re-read IDs and wider reads.
