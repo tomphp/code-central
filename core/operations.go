@@ -133,6 +133,10 @@ var Operations = []Op{
 	{Name: "report_ci_watcher_status", Audience: FactoryOnly, Write: true},
 	// Tracking a pushed Ticket's CI Runs (code-central-256).
 	{Name: "report_pushed_commit", Audience: FactoryOnly, Write: true},
+	// The Pull Request Watcher's own (code-central-388).
+	{Name: "get_pull_request_watch", Audience: FactoryOnly},
+	{Name: "report_pull_request", Audience: FactoryOnly, Write: true},
+	{Name: "report_pull_request_watcher_status", Audience: FactoryOnly, Write: true},
 	{Name: "report_ci_runs", Audience: FactoryOnly, Write: true},
 	// Land per Spec (code-central-371).
 	{Name: "report_spec_merge", Audience: FactoryOnly, Write: true},
@@ -163,6 +167,8 @@ var Operations = []Op{
 	// The Reported Models (code-central-311).
 	{Name: "report_models", Audience: FactoryOnly, Write: true},
 	{Name: "report_heartbeat", Audience: FactoryOnly, Write: true},
+	// The Factory's base under Pull Request (code-central-394).
+	{Name: "report_base", Audience: FactoryOnly, Write: true},
 }
 
 // Operation looks an operation up by name.

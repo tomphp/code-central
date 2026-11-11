@@ -340,6 +340,10 @@ func (f *factory) nextRunnable(ctx context.Context) (id core.Ref, ok bool) {
 // claimNext claims the Project's next claimable Ticket that it runs and
 // starts its turn. It reports whether it claimed one.
 func (f *factory) claimNext(ctx context.Context) bool {
+	if f.baseDiverged {
+		// No branch is cut from a base that disagrees with the host's.
+		return false
+	}
 	next, ok := f.nextRunnable(ctx)
 	if !ok {
 		return false

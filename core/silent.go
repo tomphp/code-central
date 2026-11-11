@@ -142,7 +142,7 @@ func (c *Core) longSince(t store.Ticket) *time.Time {
 // Method, else nil. It needs no Claim or Factory: only the time since the
 // accept counts. Under Branch, Accepted work is To merge at once instead.
 func (c *Core) notLandedSince(p store.Project, t store.Ticket) *time.Time {
-	if t.State != store.Accepted || p.Landing.Method == store.LandingBranch {
+	if t.State != store.Accepted || p.Landing.Method != store.LandingMerge {
 		return nil
 	}
 	accepted := entered(t)

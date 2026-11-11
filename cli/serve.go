@@ -20,6 +20,7 @@ import (
 	"github.com/tomoram/code-central/ids"
 	"github.com/tomoram/code-central/issuewatcher"
 	"github.com/tomoram/code-central/notify"
+	"github.com/tomoram/code-central/pullrequestwatcher"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/usage"
 	"github.com/tomoram/code-central/watchers"
@@ -165,6 +166,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	c.SetUsage(usage.New(dir, clk, time.Local, e.Stderr))
 	c.SetCICheck(ciwatcher.Checker(self, os.Environ()))
 	c.SetIssuesCheck(issuewatcher.Checker(self, os.Environ()))
+	c.SetPullRequestCheck(pullrequestwatcher.Checker(self, os.Environ()))
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	go c.WatchTimedReasons(ctx, ticker.C, func(project, ticketID string) {
@@ -196,7 +198,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 			defer close(supervised)
 			ticker := time.NewTicker(time.Minute)
 			defer ticker.Stop()
-			watchers.Supervise(superviseCtx, watchers.Supervision{Projects: c, Kinds: []watchers.Kind{ciwatcher.Kind, issuewatcher.Kind}, Program: self, Clock: clk, Tick: ticker.C, Log: e.Stderr,
+			watchers.Supervise(superviseCtx, watchers.Supervision{Projects: c, Kinds: []watchers.Kind{ciwatcher.Kind, issuewatcher.Kind, pullrequestwatcher.Kind}, Program: self, Clock: clk, Tick: ticker.C, Log: e.Stderr,
 				Environ: append(os.Environ(), "CODE_CENTRAL_URL=http://"+bound[0])})
 		}()
 		if e.Notifier != nil && local.Notifications == "on" && !o.noNotify {

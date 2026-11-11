@@ -215,14 +215,14 @@ func (s *FileStore) loadProject(key string) error {
 		}
 	}
 	if l := pf.Landing; l != nil {
-		p.Landing = Landing{Method: LandingMethod(l.Method), Push: l.Push, Remote: l.Remote, LandPerSpec: l.LandPerSpec == nil || *l.LandPerSpec}
+		p.Landing = Landing{Method: LandingMethod(l.Method), Push: l.Push, Remote: l.Remote, LandPerSpec: l.LandPerSpec == nil || *l.LandPerSpec, PATEnv: l.PATEnv}
 		if !p.Landing.Method.Valid() {
 			return &LoadError{File: rel, Field: "landing.method", Msg: fmt.Sprintf("unknown landing method %q (%s)", l.Method, strings.Join(landingMethodNames(), " or "))}
 		}
 	}
 	if c := pf.CI; c != nil {
 		p.CI = CI{Tracking: c.Tracking, Provider: CIProvider(c.Provider), Repository: c.Repository, ProjectURL: c.ProjectURL, PATEnv: c.PATEnv,
-			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, UnblockOnPush: c.UnblockOnPush}
+			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, PushRemoteBase: c.PushRemoteBase, UnblockOnPush: c.UnblockOnPush}
 		if !p.CI.Provider.Valid() {
 			return &LoadError{File: rel, Field: "ci.provider", Msg: fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(ciProviderNames(), " or "))}
 		}

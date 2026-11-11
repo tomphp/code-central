@@ -106,7 +106,7 @@ func ciCancelled(r store.Reader, key string, t store.Ticket, now time.Time) (sin
 // ciFailureOptions are the failure options the human may choose for t
 // while it is CI failed or CI cancelled, nil otherwise: Re-run under
 // both Landing Methods' pushes, Land anyway under Merge only, since
-// under Branch the human's merge decides, Send back to fix, and for a
+// under Branch and Pull Request the human's merge decides, Send back to fix, and for a
 // failure New fix Ticket. A cancelled run has nothing to fix forward.
 func ciFailureOptions(r store.Reader, key string, t store.Ticket, now time.Time) []string {
 	fixes := []string{OptionSendBack, OptionNewFixTicket}
@@ -122,7 +122,7 @@ func ciFailureOptions(r store.Reader, key string, t store.Ticket, now time.Time)
 		fixes = slices.DeleteFunc(fixes, func(o string) bool { return o == OptionSendBack })
 	}
 	p, _ := r.Project(key)
-	if p.Landing.Method == store.LandingBranch {
+	if p.Landing.Method != store.LandingMerge {
 		return append([]string{OptionRerunCI}, fixes...)
 	}
 	return append([]string{OptionRerunCI, OptionLandAnyway}, fixes...)
@@ -249,6 +249,9 @@ func whyNotLandAnyway(r store.Reader, key string, t store.Ticket, now time.Time)
 	if _, _, ok := ciFailure(r, key, t, now); !ok {
 		return fmt.Sprintf("%s has no failed or cancelled CI result to land anyway", id)
 	}
+	if p, _ := r.Project(key); p.Landing.Method == store.LandingPullRequest {
+		return fmt.Sprintf("%s's Project lands by Pull Request, so your merge on the Code Host decides whether it lands, whatever its CI result", id)
+	}
 	return fmt.Sprintf("%s's Project lands by Branch, so your merge decides whether it lands, whatever its CI result", id)
 }
 
@@ -340,6 +343,9 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 	}
 	if strings.TrimSpace(in.Note) == "" {
 		return Written[TicketView]{}, invalid("note", "a fix Ticket needs a note saying what failed, such as the failed CI run's link and its failed jobs")
+	}
+	if v, handled, err := c.newSpecFixTicket(ctx, key, in); handled {
+		return v, err
 	}
 	refuseUnlessOffered := func(r store.Reader, t store.Ticket) error {
 		if !slices.Contains(ciFailureOptions(r, key, t, c.now()), OptionNewFixTicket) {

@@ -5,6 +5,7 @@ package e2e
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"testing"
@@ -134,4 +135,56 @@ func (s *service) watcherState(t *testing.T, settings, state string) {
 		json.NewDecoder(resp.Body).Decode(&p)
 		return p[settings].Watcher.State == state
 	}, "the %s Watcher's status isn't %s", settings, state)
+}
+
+// The service runs a Pull Request Watcher for a Project under Pull Request,
+// whether or not a Factory runs, stops it when the Project switches away
+// or is archived, and restarts it after a crash.
+func TestTheServiceSupervisesThePullRequestWatcher(t *testing.T) {
+	ghData := t.TempDir()
+	t.Setenv("FAKE_GH_DIR", ghData)
+	if err := fakegh.Script(ghData, fakegh.Answer{Args: []string{"api", "repos/acme/web"},
+		Stdout: `{"full_name":"acme/web","permissions":{"push":true,"pull":true}}`}); err != nil {
+		t.Fatal(err)
+	}
+	p, msg := startServe(t, t.TempDir(), "127.0.0.1:0")
+	if p == nil {
+		t.Fatalf("serve: %s", msg)
+	}
+	svc := &service{url: "http://" + p.addr}
+	svc.human(t, "/api/projects/create_project", `{"key":"acme"}`)
+	gh, _ := json.Marshal(map[string]string{"gh_path": fakeGHBin})
+	svc.human(t, "/api/set_options", string(gh))
+	svc.human(t, "/api/p/acme/report_push_remote", `{"url":"git@github.com:acme/web.git","base":"main"}`)
+	method := func(m string) {
+		svc.human(t, "/api/p/acme/set_landing_method", `{"method":"`+m+`","push":false,"remote":"origin"}`)
+	}
+
+	// Turning Pull Request on runs the check, then starts the watcher,
+	// which reports Watching with no Factory running.
+	method("pull_request")
+	first := watcherPID(t, p, "Pull Request Watcher", 1)
+	svc.watcherState(t, "landing", "watching")
+
+	// Switching away stops it.
+	method("branch")
+	codecentraltest.Eventually(t, func() bool { return !alive(first) }, "the Pull Request Watcher kept running after switching away")
+
+	// A crash is restarted.
+	method("pull_request")
+	second := watcherPID(t, p, "Pull Request Watcher", 2)
+	proc, err := os.FindProcess(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := proc.Kill(); err != nil {
+		t.Fatal(err)
+	}
+	third := watcherPID(t, p, "Pull Request Watcher", 3)
+	// The service's crash report holds for the streak, as for the others.
+	svc.watcherState(t, "landing", "error")
+
+	// Archiving the Project stops it.
+	svc.human(t, "/api/p/acme/archive_project", `{}`)
+	codecentraltest.Eventually(t, func() bool { return !alive(third) }, "the Pull Request Watcher kept running after the Project was archived")
 }

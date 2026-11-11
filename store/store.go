@@ -84,10 +84,14 @@ const (
 	LandingMerge LandingMethod = "merge"
 	// LandingBranch: the Factory leaves the branch for the human to merge.
 	LandingBranch LandingMethod = "branch"
+	// LandingPullRequest: the Factory pushes the branch and the Pull
+	// Request Watcher opens a pull request on the Code Host. Push is
+	// implied.
+	LandingPullRequest LandingMethod = "pull_request"
 )
 
 // LandingMethods lists every LandingMethod, the default first.
-var LandingMethods = []LandingMethod{LandingMerge, LandingBranch}
+var LandingMethods = []LandingMethod{LandingMerge, LandingBranch, LandingPullRequest}
 
 // Valid reports whether m is one of the LandingMethods.
 func (m LandingMethod) Valid() bool { return slices.Contains(LandingMethods, m) }
@@ -112,6 +116,10 @@ type Landing struct {
 	// It reads as on for a Project that never stored it, and is kept
 	// whatever the method.
 	LandPerSpec bool
+	// PATEnv is the Pull Request setting naming the environment variable
+	// that holds the Azure Repos PAT. Empty reads as DefaultPATEnv, and
+	// it is kept whatever the method.
+	PATEnv string
 }
 
 // DefaultLandingRemote is the remote Push uses when none is named.
@@ -184,8 +192,11 @@ type CI struct {
 	PATEnv           string
 	IgnoredWorkflows []string
 	PushRemoteURL    string
-	Rules            []CIRule
-	UnblockOnPush    bool
+	// PushRemoteBase is the base branch the Factory last reported, which
+	// the Pull Request Watcher opens pull requests into.
+	PushRemoteBase string
+	Rules          []CIRule
+	UnblockOnPush  bool
 }
 
 // AnyWorkflow is the workflow of a CI Rule that matches every workflow
@@ -216,7 +227,7 @@ func DefaultCI() CI { return CI{Provider: CIGitHubActions} }
 // Equal reports whether c and d are the same settings.
 func (c CI) Equal(d CI) bool {
 	return c.Tracking == d.Tracking && c.Provider == d.Provider && c.Repository == d.Repository && c.ProjectURL == d.ProjectURL && c.PATEnv == d.PATEnv &&
-		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL &&
+		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL && c.PushRemoteBase == d.PushRemoteBase &&
 		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal) && c.UnblockOnPush == d.UnblockOnPush
 }
 
@@ -448,8 +459,11 @@ type Ticket struct {
 	// work into under Land per Spec, and when Code Central heard of it;
 	// nil until then.
 	SpecMerge *SpecMerge
-	Claims    []Claim
-	Rounds    []Round
+	// PullRequest is the pull request the Pull Request Watcher reported
+	// for the Ticket's pushed work (code-central-388); nil until then.
+	PullRequest *PullRequest
+	Claims      []Claim
+	Rounds      []Round
 	// FailureReports are numbered and never edited.
 	FailureReports []FailureReport
 	Comments       []Comment
@@ -464,10 +478,36 @@ type SpecMerge struct {
 	Merged time.Time
 }
 
+// PullRequestState is where a pull request stands on its Code Host.
+type PullRequestState string
+
+// The pull request states.
+const (
+	PROpen        PullRequestState = "open"
+	PRConflicting PullRequestState = "conflicting"
+	PRClosed      PullRequestState = "closed"
+	PRMerged      PullRequestState = "merged"
+)
+
+// PullRequestStates lists every PullRequestState.
+var PullRequestStates = []PullRequestState{PROpen, PRConflicting, PRClosed, PRMerged}
+
+// PullRequest is a pull request on a Code Host: its number and link, its
+// state, and once merged the merge commit the host reports.
+type PullRequest struct {
+	Number      int
+	Link        string
+	State       PullRequestState
+	MergeCommit string
+}
+
 // PushedCommit is one commit the Factory pushed for a Ticket, and when
 // Code Central heard of it.
 type PushedCommit struct {
 	Commit string
+	// Branch is the branch the commit was pushed as; empty for a push
+	// reported without one.
+	Branch string
 	Pushed time.Time
 	// LandAnyway is when the human accepted this commit's failed CI
 	// result, so the Factory lands it (code-central-261); zero until then.
@@ -722,6 +762,10 @@ func (t Ticket) clone() Ticket {
 	if t.SpecMerge != nil {
 		sm := *t.SpecMerge
 		t.SpecMerge = &sm
+	}
+	if t.PullRequest != nil {
+		pr := *t.PullRequest
+		t.PullRequest = &pr
 	}
 	t.Claims = slices.Clone(t.Claims)
 	t.Rounds = slices.Clone(t.Rounds)

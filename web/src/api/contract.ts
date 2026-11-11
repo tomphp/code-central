@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
+import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, PullRequestReport, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
 import { ApiError, TRIAGE_ACTIONS } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -74,7 +74,14 @@ export interface Driver {
   // reportPushedCommit reports the commit a Factory pushed for an
   // Accepted Ticket, and reportCIRuns the CI Runs the CI Watcher saw
   // (code-central-256).
-  reportPushedCommit(key: string, id: string, commit: string): Promise<void>;
+  // The branch it was pushed as is what the Pull Request Watcher opens a
+  // pull request from; under Pull Request a push is recorded with CI
+  // Tracking off too (code-central-388).
+  reportPushedCommit(key: string, id: string, commit: string, branch?: string): Promise<void>;
+  // reportPullRequest reports the pull request of the work pushed as
+  // branch, as the Pull Request Watcher does; it is recorded on every
+  // Ticket the work covers (code-central-388).
+  reportPullRequest(key: string, report: PullRequestReport): Promise<void>;
   reportCIRuns(key: string, runs: Omit<CIRunView, "ignored">[]): Promise<void>;
   close(): Promise<void>;
 }
@@ -129,8 +136,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ["beta", "Beta", 0, false],
       ]);
       expect(rows.map((r) => r.landing)).toEqual([
-        { method: "merge", push: false, remote: "origin", land_per_spec: true },
-        { method: "merge", push: false, remote: "origin", land_per_spec: true },
+        { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" }, open_pull_requests: [] },
+        { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" }, open_pull_requests: [] },
       ]);
       const off = {
         tracking: false,
@@ -240,7 +247,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       const v = await d.api.setLandingMethod("acme", { method: "branch", push: true, remote: " upstream " });
       expect(v).toMatchObject({ key: "acme", landing: { method: "branch", push: true, remote: "upstream" } });
-      expect((await d.api.listProjects())[0].landing).toEqual({ method: "branch", push: true, remote: "upstream", land_per_spec: true });
+      expect((await d.api.listProjects())[0].landing).toEqual({ method: "branch", push: true, remote: "upstream", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" }, open_pull_requests: [] });
 
       // Without Push, an empty remote reads as origin.
       expect((await d.api.setLandingMethod("acme", { method: "merge", push: false, remote: "" })).landing).toEqual({
@@ -248,6 +255,11 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         push: false,
         remote: "origin",
         land_per_spec: true,
+        code_host: "",
+        repository: "",
+        pat_env: "ADO_PAT",
+        watcher: { state: "not_reported" },
+        open_pull_requests: [],
       });
 
       const empty = await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: " " }).catch((e) => e);
@@ -255,6 +267,25 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(empty.message).toContain("Push needs a git remote");
       const method = await d.api.setLandingMethod("acme", { method: "squash" as LandingMethod, push: false, remote: "origin" }).catch((e) => e);
       expect(method).toMatchObject({ status: 422, code: "invalid", field: "method" });
+    });
+
+    it("sets Pull Request once the Push remote URL names a Code Host, ignoring Push, and refuses it before", async () => {
+      await d.createProject("acme", "Acme");
+      const none = await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "" }).catch((e) => e);
+      expect(none).toMatchObject({ status: 422, code: "invalid", field: "method" });
+      expect(none.fix).toContain("start the Factory");
+
+      await d.reportPushRemote("acme", "git@gitlab.com:acme/web.git");
+      const unsupported = await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "" }).catch((e) => e);
+      expect(unsupported).toMatchObject({ status: 422, code: "invalid", field: "method" });
+
+      await d.reportPushRemote("acme", "https://dev.azure.com/acme/shop/_git/web");
+      const v = await d.api.setLandingMethod("acme", { method: "pull_request", push: true, remote: "", pat_env: " REPOS_PAT " });
+      expect(v.landing).toMatchObject({ method: "pull_request", push: false, code_host: "azure_repos", repository: "acme/shop/web", pat_env: "REPOS_PAT" });
+      const kept = await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "" });
+      expect(kept.landing.pat_env).toBe("REPOS_PAT");
+      const bad = await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "", pat_env: "not a name" }).catch((e) => e);
+      expect(bad).toMatchObject({ status: 422, field: "pat_env" });
     });
 
     it("keeps Land per Spec on by default, sets it, and keeps it when a later set leaves it out", async () => {
@@ -579,6 +610,34 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
       expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "not_reported" });
+    });
+
+    it("records a pull request on every Ticket its pushed work covers, and keeps the merge commit", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
+      await d.api.act("acme", id, "accept", {});
+      await d.reportPushRemote("acme", "git@github.com:acme/web.git");
+      await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "origin" });
+      const report = { branch: "impl-7", number: 7, link: "https://github.com/acme/web/pull/7" };
+
+      // Nothing was pushed as that branch yet.
+      const early = await d.reportPullRequest("acme", { ...report, state: "open" }).catch((e) => e);
+      expect(String(early.code ?? early.message)).toContain("not_found");
+
+      // Under Pull Request a push is recorded without CI Tracking.
+      await d.reportPushedCommit("acme", id, "abc123", "impl-7");
+      await d.reportPullRequest("acme", { ...report, state: "open" });
+      expect(await d.api.getTicket("acme", id)).toMatchObject({ pull_request: { number: 7, state: "open" } });
+      expect(await d.api.getTicket("acme", id)).not.toHaveProperty("ci_result");
+
+      // A closed pull request reopened is accepted, and a merged one needs its merge commit.
+      await d.reportPullRequest("acme", { ...report, state: "closed" });
+      await d.reportPullRequest("acme", { ...report, state: "open" });
+      const bare = await d.reportPullRequest("acme", { ...report, state: "merged" }).catch((e) => e);
+      expect(String(bare.code ?? bare.message)).toContain("invalid");
+      await d.reportPullRequest("acme", { ...report, state: "merged", merge_commit: "def456" });
+      expect(await d.api.getTicket("acme", id)).toMatchObject({ pull_request: { number: 7, state: "merged", merge_commit: "def456" } });
     });
 
     it("tracks a pushed Ticket's CI Runs and works its CI result out", async () => {

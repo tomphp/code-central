@@ -38,6 +38,10 @@ func (f *factory) landing(ctx context.Context) (landing core.LandingView, ok boo
 		return core.LandingView{}, false
 	}
 	f.tracksCI = p.CI.Tracking
+	f.underPullRequest = p.Landing.Method == store.LandingPullRequest
+	if !f.underPullRequest {
+		f.baseDiverged = false
+	}
 	if !f.modelsReported {
 		f.modelsReported = f.reportModels(ctx)
 	}
@@ -47,7 +51,7 @@ func (f *factory) landing(ctx context.Context) (landing core.LandingView, ok boo
 // missingRemote says why landing can't go on when Push names a remote
 // this repository doesn't have, or is "".
 func (f *factory) missingRemote(landing core.LandingView) string {
-	if !landing.Push {
+	if !landing.Push && landing.Method != store.LandingPullRequest {
 		return ""
 	}
 	if f.repository.hasRemote(landing.Remote) {
@@ -65,7 +69,7 @@ func (f *factory) reportPushRemote(remote string) {
 	if err != nil {
 		return
 	}
-	if _, err := f.client.ReportPushRemote(context.Background(), f.project, core.ReportPushRemoteInput{URL: url}); err != nil {
+	if _, err := f.client.ReportPushRemote(context.Background(), f.project, core.ReportPushRemoteInput{URL: url, Base: f.base}); err != nil {
 		f.printf("warning: can't report the Push remote's URL to Code Central: %v", err)
 	}
 }
@@ -96,6 +100,11 @@ func (f *factory) land(ctx context.Context, landing core.LandingView) {
 	accepted := f.landable(ctx, store.Accepted)
 	sort.SliceStable(accepted, func(i, j int) bool { return acceptedAt(accepted[i]).Before(acceptedAt(accepted[j])) })
 	held := f.landSpecsOff(ctx, accepted, landing)
+	pullRequest := landing.Method == store.LandingPullRequest
+	if pullRequest {
+		// The base is brought up to the remote's before anything lands.
+		f.baseCurrent = f.syncBase(ctx, landing.Remote)
+	}
 	for _, tk := range accepted {
 		if f.halted(ctx) || f.paused() {
 			return
@@ -105,6 +114,8 @@ func (f *factory) land(ctx context.Context, landing core.LandingView) {
 		}
 		if landing.Method == store.LandingBranch {
 			f.landMergedBranch(ctx, tk, landing)
+		} else if pullRequest && (tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged || !f.waitsOnSpecBranch(tk, landing)) {
+			f.landPullRequest(ctx, tk, landing)
 		} else if f.waitsOnSpecBranch(tk, landing) {
 			if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
 				f.mergeIntoSpecBranch(ctx, tk)
@@ -113,7 +124,13 @@ func (f *factory) land(ctx context.Context, landing core.LandingView) {
 			f.landAccepted(ctx, tk, landing)
 		}
 	}
-	f.landSpecs(ctx, landing)
+	if pullRequest {
+		// A Spec Branch goes to the base through its own pull request,
+		// not by a merge here: it is pushed instead.
+		f.pushSpecs(ctx, accepted, landing)
+	} else {
+		f.landSpecs(ctx, landing)
+	}
 	f.detectHandMerges(ctx, landing)
 }
 
@@ -184,6 +201,10 @@ func (f *factory) workOf(tk core.TicketView) (commit, what string, err error) {
 // the base is pushed. (land sees to Accepted ones.) A Ticket merged while in any other State
 // gets a warning line, once.
 func (f *factory) detectHandMerges(ctx context.Context, landing core.LandingView) {
+	if landing.Method == store.LandingPullRequest {
+		f.detectMergedPullRequests(ctx)
+		return
+	}
 	for _, tk := range f.landable(ctx, mergeableStates...) {
 		if f.halted(ctx) || f.paused() {
 			return
@@ -389,19 +410,21 @@ func (f *factory) remoteTip(remote, branch, pushed string) string {
 // when it isn't tk's pushed commit already. ok is false when the report
 // failed.
 func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, branch, commit string) (ok bool) {
-	if !f.tracksCI {
+	if !f.tracksCI && !f.underPullRequest {
 		return true
 	}
 	if tk.PushedCommit != nil && tk.PushedCommit.Commit == commit {
 		return true
 	}
-	if _, err := f.client.ReportPushedCommit(ctx, f.project, core.ReportPushedCommitInput{Ticket: core.Ref(tk.ID), Commit: commit}); err != nil {
+	if _, err := f.client.ReportPushedCommit(ctx, f.project, core.ReportPushedCommitInput{Ticket: core.Ref(tk.ID), Commit: commit, Branch: branch}); err != nil {
 		if ctx.Err() == nil {
 			f.printf("%s: report_pushed_commit: %v", tk.ID, err)
 		}
 		return false
 	}
-	f.printf("%s: CI tracks %s at %s", tk.ID, branch, short(commit))
+	if f.tracksCI {
+		f.printf("%s: CI tracks %s at %s", tk.ID, branch, short(commit))
+	}
 	return true
 }
 

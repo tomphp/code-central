@@ -81,6 +81,9 @@ type SetLandingMethodInput struct {
 	Remote string              `json:"remote"`
 	// LandPerSpec, when left out, keeps the stored value.
 	LandPerSpec *bool `json:"land_per_spec,omitempty"`
+	// PATEnv names the environment variable holding the Azure Repos PAT
+	// under Pull Request; left out, it keeps the stored name.
+	PATEnv string `json:"pat_env,omitempty"`
 }
 
 // SetLandingMethod is the human's set_landing_method: how the Project's
@@ -91,23 +94,40 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		return ProjectView{}, err
 	}
 	if !in.Method.Valid() {
-		return ProjectView{}, invalid("method", "Landing Method %q is neither %q nor %q", in.Method, store.LandingMerge, store.LandingBranch)
+		return ProjectView{}, invalid("method", "Landing Method %q is not %q, %q or %q", in.Method, store.LandingMerge, store.LandingBranch, store.LandingPullRequest)
 	}
-	l := store.Landing{Method: in.Method, Push: in.Push, Remote: strings.TrimSpace(in.Remote)}
+	// Push is implied under Pull Request, so the flag is ignored and not stored.
+	l := store.Landing{Method: in.Method, Push: in.Push && in.Method != store.LandingPullRequest, Remote: strings.TrimSpace(in.Remote)}
 	if l.Remote == "" {
 		if l.Push {
 			return ProjectView{}, invalid("remote", "Push needs a git remote to push to, such as %q", store.DefaultLandingRemote)
 		}
 		l.Remote = store.DefaultLandingRemote
 	}
+	patEnv := strings.TrimSpace(in.PATEnv)
+	if patEnv != "" && !patEnvPattern.MatchString(patEnv) {
+		return ProjectView{}, invalid("pat_env", "%q is not an environment variable's name, such as %s", patEnv, store.DefaultPATEnv)
+	}
+	if err := c.checkPullRequest(ctx, key, store.Landing{Method: in.Method, PATEnv: patEnv}); err != nil {
+		return ProjectView{}, err
+	}
 	var v ProjectView
-	var accepted []int
+	var accepted, left []int
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
 			return err
 		}
 		p, _ := w.Project(key)
 		l.LandPerSpec = p.Landing.LandPerSpec
+		l.PATEnv = p.Landing.PATEnv
+		if patEnv != "" {
+			l.PATEnv = patEnv
+		}
+		if l.Method == store.LandingPullRequest {
+			if err := checkPullRequestHost(p.CI.PushRemoteURL); err != nil {
+				return err
+			}
+		}
 		if in.LandPerSpec != nil {
 			l.LandPerSpec = *in.LandPerSpec
 		}
@@ -122,6 +142,15 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 				}
 			}
 		}
+		if p.Landing.Method == store.LandingPullRequest && l.Method != store.LandingPullRequest {
+			// What the Pull Request Watcher said was about the old method.
+			c.watchers.reset(watcherKey{WatcherPullRequests, key})
+			for _, t := range w.Tickets(key) {
+				if t.State == store.Accepted && pullRequestOpen(t) {
+					left = append(left, t.Number)
+				}
+			}
+		}
 		p.Landing = l
 		v = c.projectView(p)
 		return w.PutProject(p)
@@ -129,9 +158,29 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 	if err != nil {
 		return v, err
 	}
+	// The pull requests stay on the host, so each Ticket says to close its own.
+	for _, n := range left {
+		if err := c.store.Update(func(w store.Writer) error {
+			t, ok := w.Ticket(key, n)
+			if !ok || t.PullRequest == nil {
+				return nil
+			}
+			addComment(&t, Human, c.now(), 0, fmt.Sprintf("The Landing Method is no longer Pull Request, so its pull request %s is left open on the host. Close it there when you no longer want it.", t.PullRequest.Link))
+			t.Updated = c.now()
+			return w.PutTicket(key, t)
+		}); err != nil {
+			return v, err
+		}
+	}
+	if err := c.store.View(func(r store.Reader) error {
+		v.Landing.OpenPullRequests = openPullRequests(r, key, v.Landing.Method)
+		return nil
+	}); err != nil {
+		return v, err
+	}
 	// The method decides an Accepted Ticket's Needs Me reason (To merge,
 	// or Accepted but not landed), so each one changed without a write.
-	for _, n := range accepted {
+	for _, n := range append(accepted, left...) {
 		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, n)})
 	}
 	return v, nil
@@ -153,6 +202,10 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 	err := c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			row := ProjectRow{ProjectView: c.projectView(p)}
+			row.Landing.OpenPullRequests = openPullRequests(r, p.Key, p.Landing.Method)
+			if _, ok := c.baseDivergedRow(p); ok {
+				row.NeedsMe++
+			}
 			for _, t := range r.Tickets(p.Key) {
 				if reason, _ := c.reasonOf(r, p.Key, t); reason != "" {
 					row.NeedsMe++

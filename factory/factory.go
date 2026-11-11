@@ -240,6 +240,17 @@ type factory struct {
 	// poll's own.
 	leftOnBranch map[string]bool
 
+	// underPullRequest is whether the Landing Method was Pull Request when
+	// last read. A pull request's head commit is reported as pushed even
+	// with CI Tracking off.
+	underPullRequest bool
+	// baseDiverged is whether the local base holds commits the Push
+	// remote's doesn't, so nothing lands and no branch is cut. baseCurrent
+	// is whether it was fast-forwarded to the remote's this poll.
+	baseDiverged, baseCurrent bool
+	// reportBaseFailing is whether the last report_base failed, so a
+	// failure warns once.
+	reportBaseFailing bool
 	// warnedRemote is the Push remotes found missing, already warned of
 	// and not back since; the poll's own.
 	warnedRemote map[string]bool

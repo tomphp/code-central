@@ -31,7 +31,10 @@ type Provider interface {
 	CheckAccess(ctx context.Context) (core.WatcherCheckResult, error)
 	// RunsForCommit lists the workflow runs started for commit, with
 	// their statuses and conclusions mapped to Code Central's and no jobs.
-	RunsForCommit(ctx context.Context, commit string) ([]Run, error)
+	// A pullRequest above zero is the commit's pull request number: Azure
+	// Pipelines also lists the builds of refs/pull/<n>/merge, reported as
+	// run on commit. GitHub matches by commit alone.
+	RunsForCommit(ctx context.Context, commit string, pullRequest int) ([]Run, error)
 	// CompletedRunsOnBranch lists the completed workflow runs on exactly
 	// branch that finished after since, mapped as RunsForCommit's are.
 	CompletedRunsOnBranch(ctx context.Context, branch string, since time.Time) ([]Run, error)

@@ -45,6 +45,12 @@ func (c *Client) ReportCIWatcherStatus(ctx context.Context, key string, in core.
 	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_ci_watcher_status", in, in.Full)
 }
 
+// ReportPullRequestWatcherStatus is the Pull Request Watcher's
+// report_pull_request_watcher_status.
+func (c *Client) ReportPullRequestWatcherStatus(ctx context.Context, key string, in core.ReportWatcherStatusInput) (core.Written[core.ProjectView], error) {
+	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_pull_request_watcher_status", in, in.Full)
+}
+
 // ReportPushedCommit is the Factory's report_pushed_commit.
 func (c *Client) ReportPushedCommit(ctx context.Context, key string, in core.ReportPushedCommitInput) (core.Written[core.TicketView], error) {
 	return write[core.TicketView](ctx, c, item(key, "tickets", in.Ticket, "report_pushed_commit"), in, in.Full)
@@ -58,4 +64,15 @@ func (c *Client) ReportSpecMerge(ctx context.Context, key string, in core.Report
 // ReportCIRuns is the CI Watcher's report_ci_runs.
 func (c *Client) ReportCIRuns(ctx context.Context, key string, in core.ReportCIRunsInput) (core.Written[core.CIRunsView], error) {
 	return write[core.CIRunsView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_ci_runs", in, in.Full)
+}
+
+// GetPullRequestWatch is the Pull Request Watcher's get_pull_request_watch.
+func (c *Client) GetPullRequestWatch(ctx context.Context, key string) (core.PullRequestWatch, error) {
+	var out core.PullRequestWatch
+	return out, c.do(ctx, "GET", "/api/p/"+url.PathEscape(key)+"/pull-request-watch", nil, &out)
+}
+
+// ReportPullRequest is the Pull Request Watcher's report_pull_request.
+func (c *Client) ReportPullRequest(ctx context.Context, key string, in core.ReportPullRequestInput) (core.Written[core.PullRequestReport], error) {
+	return write[core.PullRequestReport](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_pull_request", in, in.Full)
 }

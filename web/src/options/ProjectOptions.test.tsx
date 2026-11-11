@@ -63,6 +63,82 @@ describe("Project Options", () => {
     expect(window.location.search).toBe("?view=inbox&project=acme");
   });
 
+  it("offers Pull Request with no Push checkbox, the worked-out Code Host, and the PAT variable only for Azure Repos", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    renderApp(fake, "/?view=project-options&project=acme");
+    await screen.findByRole("group", { name: "Landing Method" });
+
+    await userEvent.click(
+      within(landing()).getByRole("radio", { name: "Pull Request" }),
+    );
+    expect(within(landing()).queryByRole("checkbox", { name: "Push" })).toBeNull();
+    expect(within(landing()).getByRole("checkbox", { name: "Land per Spec" })).toBeEnabled();
+    expect(within(landing()).getByRole("status", { name: "Code Host" })).toHaveTextContent(
+      "start the Factory once",
+    );
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    const alert = await within(landing()).findByRole("alert");
+    expect(alert).toHaveTextContent("Push remote's URL");
+    expect(alert).toHaveTextContent("start the Factory once");
+
+    await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(within(landing()).getByRole("status", { name: "Code Host" })).toHaveTextContent(
+        "Code Host: GitHub, repository acme/web.",
+      ),
+    );
+    expect(within(landing()).queryByRole("textbox", { name: "PAT variable" })).toBeNull();
+    expect((await fake.listProjects())[0].landing).toMatchObject({ method: "pull_request", push: false });
+
+    await fake.reportPushRemote("acme", "https://dev.azure.com/acme/shop/_git/web");
+    const pat = await within(landing()).findByRole("textbox", { name: "PAT variable" });
+    expect(pat).toHaveValue("ADO_PAT");
+    expect(within(landing()).getByRole("status", { name: "Code Host" })).toHaveTextContent(
+      "Azure Repos, repository acme/shop/web",
+    );
+    await userEvent.clear(pat);
+    await userEvent.type(pat, "REPOS_PAT");
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    await waitFor(async () =>
+      expect((await fake.listProjects())[0].landing.pat_env).toBe("REPOS_PAT"),
+    );
+  });
+
+  it("shows the Pull Request Watcher's status under Pull Request: Watching, rate-limited, or an error with its fix", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
+    renderApp(fake, "/?view=project-options&project=acme");
+    await screen.findByRole("group", { name: "Landing Method" });
+    expect(within(landing()).queryByRole("region", { name: "Pull Request Watcher" })).toBeNull();
+
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Pull Request" }));
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    const watcher = await within(landing()).findByRole("region", { name: "Pull Request Watcher" });
+    expect(watcher).toHaveTextContent("Starting; it hasn't reported yet");
+
+    await fake.reportPullRequestWatcherStatus("acme", { state: "watching" });
+    await waitFor(() => expect(watcher).toHaveTextContent("Pull Request Watcher: Watching acme/web."));
+
+    await fake.reportPullRequestWatcherStatus("acme", {
+      state: "error",
+      problem: "no_write",
+      message: "the account gh is logged in as can't write to acme/web",
+      fix: "Log gh in as an account with write access.",
+    });
+    await waitFor(() => expect(watcher).toHaveTextContent("can't write to acme/web"));
+    expect(watcher).toHaveTextContent("Log gh in as an account with write access.");
+    expect(watcher).toHaveTextContent("goes back to Watching once the cause is fixed");
+
+    // Switching away forgets its status and hides it.
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Merge into base" }));
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(within(landing()).queryByRole("region", { name: "Pull Request Watcher" })).toBeNull());
+    expect((await fake.listProjects())[0].landing.watcher).toEqual({ state: "not_reported" });
+  });
+
   it("shows Land per Spec on under Merge, disabled but kept under Branch, and saves it", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
@@ -158,6 +234,11 @@ describe("Project Options", () => {
       push: false,
       remote: "origin",
       land_per_spec: true,
+      code_host: "",
+      repository: "",
+      pat_env: "ADO_PAT",
+      watcher: { state: "not_reported" },
+      open_pull_requests: [],
     });
 
     await userEvent.type(remote, "upstream");
@@ -171,6 +252,11 @@ describe("Project Options", () => {
       push: true,
       remote: "upstream",
       land_per_spec: true,
+      code_host: "",
+      repository: "",
+      pat_env: "ADO_PAT",
+      watcher: { state: "not_reported" },
+      open_pull_requests: [],
     });
     expect(save).toBeDisabled();
   });
@@ -1105,5 +1191,27 @@ describe("Project Options", () => {
         within(addForm()).getByRole("textbox", { name: "Workflow" }),
       ).toBeDisabled();
     });
+  });
+
+  it("notes the pull requests left open after a switch away from Pull Request, with links", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    fake.addTicket("acme", { title: "Login form", state: "Accepted" });
+    await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
+    await fake.setLandingMethod("acme", { method: "pull_request", push: false, remote: "origin" });
+    await fake.reportPushedCommit("acme", "acme-1", "abc123", "acme-1");
+    await fake.reportPullRequest("acme", { branch: "acme-1", number: 7, link: "https://github.com/acme/web/pull/7", state: "open" });
+    renderApp(fake, "/?view=project-options&project=acme");
+    await screen.findByRole("group", { name: "Landing Method" });
+    expect(within(landing()).queryByRole("status", { name: "Open pull requests" })).toBeNull();
+
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Merge into base" }));
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    const notice = await within(landing()).findByRole("status", { name: "Open pull requests" });
+    expect(notice).toHaveTextContent("1 pull request is still open on the Code Host.");
+    expect(within(notice).getByRole("link", { name: "https://github.com/acme/web/pull/7" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/web/pull/7",
+    );
   });
 });

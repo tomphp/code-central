@@ -257,6 +257,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.ReportHeartbeat(ctx, "acme", core.ReportHeartbeatInput{Factory: "f", Host: "h", State: core.HeartbeatOnline, IntervalSeconds: 10})
 		return err
 	},
+	"report_base": func(f fixture) error {
+		_, err := f.core.ReportBase(ctx, "acme", core.ReportBaseInput{State: core.BaseCurrent, Local: "a", Remote: "a"})
+		return err
+	},
 	"set_github_issues": func(f fixture) error {
 		_, err := f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repository: "acme/web"})
 		return err
@@ -285,8 +289,16 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.ReportCIWatcherStatus(ctx, "acme", core.ReportWatcherStatusInput{State: core.WatcherWatching})
 		return err
 	},
+	"report_pull_request_watcher_status": func(f fixture) error {
+		_, err := f.core.ReportPullRequestWatcherStatus(ctx, "acme", core.ReportWatcherStatusInput{State: core.WatcherWatching})
+		return err
+	},
 	"report_pushed_commit": func(f fixture) error {
 		_, err := f.core.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "acme-2", Commit: "abc123"})
+		return err
+	},
+	"report_pull_request": func(f fixture) error {
+		_, err := f.core.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Branch: "acme-2", Number: 1, Link: "https://github.com/a/b/pull/1", State: store.PROpen})
 		return err
 	},
 	"report_spec_merge": func(f fixture) error {

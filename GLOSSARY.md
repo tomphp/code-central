@@ -113,19 +113,43 @@ A Ticket that is Done or Cancelled, or a Spec that has Tickets and all of them a
 _Avoid_: Closed, archived, complete
 
 **Land**:
-For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing. Under Merge + Push with CI Tracking on, a Ticket lands only once its pushed commit's CI result is passed, so Done means on the remote and green. Under Land per Spec, a Spec-landed Ticket lands only with the rest of its Spec, once the Spec Branch is in the base, and, with Push and CI Tracking, once that push's CI result is passed.
+For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing. Under Pull Request a Ticket lands when the Code Host reports its pull request merged, at the host's merge commit, whatever the merge strategy. Under Merge + Push with CI Tracking on, a Ticket lands only once its pushed commit's CI result is passed, so Done means on the remote and green. Under Land per Spec, a Spec-landed Ticket lands only with the rest of its Spec, once the Spec Branch is in the base, and, with Push and CI Tracking, once that push's CI result is passed.
 _Avoid_: Merge, ship, deliver, complete
 
 **Landing Method**:
-A Project's choice of how accepted work reaches its base. It is Merge (the Factory merges the branch into the base) or Branch (the Factory leaves the branch for the human to merge, and lands the Ticket when it sees the merge). Pull Request comes later. Merge has two options, Push and Land per Spec; Branch has neither effect from Land per Spec.
+A Project's choice of how accepted work reaches its base. It is Merge (the Factory merges the branch into the base), Branch (the Factory leaves the branch for the human to merge, and lands the Ticket when it sees the merge) or Pull Request (the Factory pushes the branch and a pull request is opened on the Code Host). Merge and Branch have Push as an option, and Pull Request implies it; Land per Spec applies under Merge and Pull Request, and has no effect under Branch.
 _Avoid_: Completion option, delivery mode, finish mode
 
+**Pull Request**:
+The third Landing Method: the Factory pushes the accepted branch to the Push remote, a Pull Request Watcher opens a pull request into the base on the Code Host, and the Ticket lands when the host reports it merged. Push is implied.
+_Avoid_: PR, merge request
+
+**Code Host**:
+The service that holds a Project's repository and its pull requests: GitHub (github.com, reached through `gh`) or Azure Repos (dev.azure.com, ssh.dev.azure.com or `*.visualstudio.com`, reached over the REST API with a PAT). Code Central works it out from the Push remote URL the Factory reports, shows it with the repository in Project Options and doesn't let the human edit it; any other host is refused.
+_Avoid_: Git provider, forge
+
+**PAT variable**:
+The Pull Request setting naming the environment variable that holds the Azure Repos PAT, `ADO_PAT` unless the Project names another. Code Central never keeps the PAT; the setting is shown only when the Code Host is Azure Repos, and it may be the same variable as Azure Pipelines' if that token has both scopes.
+_Avoid_: Token setting, secret
+
+**Pull Request Watcher**:
+The kind of Watcher that opens and watches the pull requests of one Project under the Pull Request Landing Method and reports each one's link, state (open, conflicting, closed or merged) and, once merged, the host's merge commit over the HTTP API. The service runs one per Project under Pull Request that isn't Archived, whether or not a Factory runs. Turning Pull Request on runs it once in its check mode.
+_Avoid_: PR bot, merge poller
+
+**Pull request closed**:
+The Needs Me reason of an Accepted Ticket whose pull request was closed or abandoned without merging: send it back (to Ready, with a note) or cancel it. It clears if the pull request is reopened.
+_Avoid_: PR abandoned
+
+**Base diverged**:
+The Needs Me reason of a Project under Pull Request whose local base holds commits the remote base doesn't, so the Factory can't fast-forward it. It is one Focus Item per Project showing the local and remote commits and the fix, and the Factory neither lands nor cuts new branches until the human reconciles the base and its next poll fast-forwards cleanly.
+_Avoid_: Out of sync, base conflict
+
 **Land per Spec**:
-A Merge option, on by default and kept whatever the method, by which a Requirement Spec's work gathers on one Spec Branch and lands in the base together, instead of Ticket by Ticket. It covers only implementation Tickets of Requirement Spec (not Stage Tickets, Map Tickets, Prototypes, or long-lived Specs such as a CI Rule's Spec or the GitHub Issues Spec), and under Branch it has no effect. Turning it on affects only Tickets accepted afterwards.
+A Merge and Pull Request option, on by default and kept whatever the method, by which a Requirement Spec's work gathers on one Spec Branch and lands in the base together, instead of Ticket by Ticket. It covers only implementation Tickets of Requirement Spec (not Stage Tickets, Map Tickets, Prototypes, or long-lived Specs such as a CI Rule's Spec or the GitHub Issues Spec), and under Branch it has no effect. Under Pull Request the Spec gets one pull request instead of landing Ticket by Ticket. Turning it on affects only Tickets accepted afterwards.
 _Avoid_: Spec landing, batch landing, release train
 
 **Spec Branch**:
-The one local branch, `spec/<spec id>`, that a Requirement Spec's accepted implementation Tickets are merged into under Land per Spec. Each Ticket's branch is cut from its tip, and the Factory merges it into the base once the Spec is ready to land. It is never pushed.
+The one local branch, `spec/<spec id>`, that a Requirement Spec's accepted implementation Tickets are merged into under Land per Spec. Each Ticket's branch is cut from its tip, and the Factory merges it into the base once the Spec is ready to land. It is pushed only under Pull Request, where the Spec's one pull request is opened from it.
 _Avoid_: Feature branch, integration branch, epic branch
 
 **Waiting for the Spec**:
@@ -137,7 +161,7 @@ The Needs Me reason of an Accepted Ticket, under Merge, that has not landed afte
 _Avoid_: Stuck, stale
 
 **Push**:
-A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands only once the push succeeds, and with CI Tracking on, only once its CI result is passed as well. Under Land per Spec the Factory pushes the base once for a whole Spec, after merging the Spec Branch into it; the Spec Branch and Ticket branches are never pushed.
+A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands only once the push succeeds, and with CI Tracking on, only once its CI result is passed as well. Under Land per Spec the Factory pushes the base once for a whole Spec, after merging the Spec Branch into it; under Merge and Branch the Spec Branch and Ticket branches are never pushed. Under Pull Request, Push is implied, with no checkbox: the Factory pushes each Ticket's branch on accept, or the Spec Branch under Land per Spec.
 _Avoid_: Publish, sync
 
 **CI Tracking**:
@@ -165,7 +189,7 @@ Whether a Project's Factories are **Online**, **Draining** (claiming nothing new
 _Avoid_: health, presence, liveness
 
 **Watcher**:
-A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through its CI Provider or `gh` and reporting over the HTTP API. Each kind is run while its Project setting is on, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification. The kinds are the CI Watcher and the Issue Watcher.
+A separate process, started and supervised by Code Central, that watches one external system for one Project, reaching it through its CI Provider or `gh` and reporting over the HTTP API. Each kind is run while its Project setting is on, restarted with backoff when it crashes, and has its own status, Watching or an error with its fix, of which going into an error sends one Notification. The kinds are the CI Watcher, the Issue Watcher and the Pull Request Watcher.
 _Avoid_: Daemon, poller
 
 **CI Watcher**:
@@ -173,11 +197,11 @@ The kind of Watcher that watches one Project's CI through its CI Provider and re
 _Avoid_: CI daemon, CI Integration
 
 **Pushed commit**:
-The commit the Factory pushed for a Ticket, which it reports on the Ticket: the base after merging under Merge with Push, or the Ticket's branch on accept under Branch with Push. Its CI Runs give the Ticket's CI result.
+The commit the Factory pushed for a Ticket, which it reports on the Ticket: the base after merging under Merge with Push, or the Ticket's branch on accept under Branch with Push or Pull Request (the Spec Branch, for a Spec under Pull Request with Land per Spec). Its CI Runs give the Ticket's CI result.
 _Avoid_: Push SHA
 
 **CI Run**:
-One run of a Workflow the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. Kept for 30 days after it finishes.
+One run of a Workflow the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. On Azure DevOps under Pull Request, a build is matched by its pull request, since it ran on the host's merge commit. Kept for 30 days after it finishes.
 _Avoid_: Job, build, pipeline
 
 **Workflow**:
@@ -209,7 +233,7 @@ An ordinary implementation Ticket opened to fix a failed CI Run: by a CI Rule on
 _Avoid_: CI Ticket, failure Ticket
 
 **Push remote**:
-The git remote a Landing Method's Push sends work to, `origin` unless the human names another. The Factory reports its URL when it starts, from which the CI section of Project Options fills in the GitHub repository, or the Azure DevOps project URL from an Azure Repos remote.
+The git remote a Landing Method's Push sends work to, `origin` unless the human names another. The Factory reports its URL when it starts, from which the CI section of Project Options fills in the GitHub repository, or the Azure DevOps project URL from an Azure Repos remote, and from which Code Central works out the Code Host under Pull Request.
 _Avoid_: Upstream, origin (for the concept)
 
 **Blocker**:
@@ -270,7 +294,7 @@ Who made a change: the human, an agent, or an Integration.
 _Avoid_: User, caller
 
 **Needs Me**:
-The Tickets waiting on the human before they can move.
+The Tickets waiting on the human before they can move, and a Project's Base diverged.
 _Avoid_: Inbox, blocked
 
 **By Ticket**:
@@ -282,7 +306,7 @@ The grouping of a State list that shows the Specs with Tickets in it, each expan
 _Avoid_: Spec-first view, tree view, Spec mode
 
 **To merge**:
-The Needs Me reason of an Accepted Ticket under the Branch Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge.
+The Needs Me reason of an Accepted Ticket under the Branch or Pull Request Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge. Under Pull Request it links the pull request and says conflicting while the Code Host reports so.
 _Avoid_: Ready to merge, awaiting merge
 
 **CI cancelled**:
@@ -294,7 +318,7 @@ The Needs Me reason of an Accepted Ticket whose CI result is failed (a run faile
 _Avoid_: Build broken, red
 
 **Land anyway**:
-The failure option by which the human accepts a CI failed Ticket's failed CI result, for its pushed commit only, so the Factory lands it on its next poll. Offered under Merge + Push only: under Branch + Push the human's merge decides.
+The failure option by which the human accepts a CI failed Ticket's failed CI result, for its pushed commit only, so the Factory lands it on its next poll. Offered under Merge + Push only: under Branch + Push and under Pull Request the human's merge decides.
 _Avoid_: Override, force land
 
 **Re-run failed jobs**:
@@ -322,7 +346,7 @@ A view showing the human one Focus Item at a time from Needs Me, moving to the n
 _Avoid_: Zen mode, queue view
 
 **Focus Item**:
-One thing in Needs Me the human can decide alone: one open Question, or one waiting Ticket.
+One thing in Needs Me the human can decide alone: one open Question, one waiting Ticket, or a Project's Base diverged.
 _Avoid_: Action, card, task
 
 **Activity Dashboard**:

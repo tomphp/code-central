@@ -155,3 +155,30 @@ func ciOverviewRead(c *core.Core, r *http.Request) (any, error) {
 	}
 	return c.CIOverview(r.Context(), core.CIOverviewInput{Project: q.Get("project"), Running: running != nil && *running})
 }
+
+// The Pull Request Watcher's own (code-central-388): the read it polls
+// and the pull request it reports.
+func init() {
+	Routes["get_pull_request_watch"] = "GET /api/p/{key}/pull-request-watch"
+	Routes["report_pull_request"] = "POST /api/p/{key}/report_pull_request"
+
+	Routes["report_pull_request_watcher_status"] = "POST /api/p/{key}/report_pull_request_watcher_status"
+
+	handlers["report_pull_request_watcher_status"] = func(c *core.Core, r *http.Request) (any, error) {
+		var in core.ReportWatcherStatusInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.ReportPullRequestWatcherStatus(r.Context(), r.PathValue("key"), in)
+	}
+	handlers["get_pull_request_watch"] = func(c *core.Core, r *http.Request) (any, error) {
+		return c.GetPullRequestWatch(r.Context(), r.PathValue("key"))
+	}
+	handlers["report_pull_request"] = func(c *core.Core, r *http.Request) (any, error) {
+		var in core.ReportPullRequestInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.ReportPullRequest(r.Context(), r.PathValue("key"), in)
+	}
+}

@@ -41,6 +41,9 @@ type Core struct {
 	// issuesCheck is the Issue Watcher's check mode, run when GitHub
 	// Issues is turned on; nil checks nothing.
 	issuesCheck IssuesCheck
+	// pullRequestCheck is the Pull Request Watcher's check mode, run when
+	// Pull Request is turned on; nil checks nothing.
+	pullRequestCheck PullRequestCheck
 	// watchers holds each Project's Watchers' statuses, in memory only.
 	watchers *watchers
 	// heartbeats holds each Factory's latest Heartbeat, in memory only.
@@ -60,7 +63,7 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	c.transcripts = &transcripts{all: map[markKey]*transcript{}, feeds: map[markKey]map[*TranscriptFeed]struct{}{}}
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
 	c.watchers = &watchers{all: map[watcherKey]watcherStatus{}}
-	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}}
+	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}, base: map[string]BaseView{}}
 	return c
 }
 
@@ -101,6 +104,27 @@ type LandingView struct {
 	// LandPerSpec is the Merge option to land a Spec's work together,
 	// shown whatever the method.
 	LandPerSpec bool `json:"land_per_spec"`
+	// CodeHost is the Code Host the reported Push remote URL names,
+	// github or azure_repos, empty while none is reported or it is
+	// unsupported. Repository is the host's name for the repository.
+	CodeHost   string `json:"code_host"`
+	Repository string `json:"repository"`
+	// PATEnv is the environment variable holding the Azure Repos PAT,
+	// ADO_PAT unless the Project names another.
+	PATEnv string `json:"pat_env"`
+	// Watcher is the Pull Request Watcher's status, not_reported unless the
+	// method is Pull Request.
+	Watcher WatcherView `json:"watcher"`
+	// OpenPullRequests are the pull requests left open on the Code Host
+	// after a switch away from Pull Request, one per Ticket's, until the
+	// Ticket leaves Accepted. Always empty under Pull Request.
+	OpenPullRequests []OpenPullRequest `json:"open_pull_requests"`
+}
+
+// OpenPullRequest is a pull request left open for an Accepted Ticket.
+type OpenPullRequest struct {
+	Ticket string `json:"ticket"`
+	Link   string `json:"link"`
 }
 
 // SpecView is a Spec as every read returns it, and as its writes return
@@ -183,8 +207,11 @@ type TicketView struct {
 	// both left out while it has none. CIRuns are every CI Run tracked
 	// against it, the latest pushed commit's first. Computed on read.
 	PushedCommit *PushedCommitView `json:"pushed_commit,omitempty"`
-	CIResult     CIResult          `json:"ci_result,omitempty"`
-	CIRuns       []CIRunView       `json:"ci_runs,omitempty"`
+	// PullRequest is the pull request the Pull Request Watcher reported
+	// for the Ticket's pushed work; left out until it has one.
+	PullRequest *PullRequestView `json:"pull_request,omitempty"`
+	CIResult    CIResult         `json:"ci_result,omitempty"`
+	CIRuns      []CIRunView      `json:"ci_runs,omitempty"`
 	// LandAnyway says the human accepted the latest pushed commit's
 	// failed CI result, so the Factory lands it (code-central-261).
 	LandAnyway bool `json:"land_anyway,omitempty"`
@@ -255,6 +282,9 @@ type TicketRow struct {
 	// its row's badge; left out for a Ticket never pushed while CI
 	// Tracking was on.
 	CIResult CIResult `json:"ci_result,omitempty"`
+	// PullRequest is the Ticket's pull request, for its row's badge; left
+	// out until the Pull Request Watcher reports one.
+	PullRequest *PullRequestView `json:"pull_request,omitempty"`
 	// WaitingForSpec says the Ticket is Accepted and waits for its Spec to
 	// land, for its badge (code-central-371).
 	WaitingForSpec bool `json:"waiting_for_spec,omitempty"`
@@ -341,6 +371,7 @@ func (c *Core) GetProject(_ context.Context, key string) (ProjectView, error) {
 			return unknownProject(key)
 		}
 		v = c.projectView(p)
+		v.Landing.OpenPullRequests = openPullRequests(r, key, p.Landing.Method)
 		return nil
 	})
 	return v, err
@@ -540,7 +571,7 @@ func (c *Core) ticketRow(r store.Reader, key string, t store.Ticket, onMap bool)
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Updated: t.Updated, Link: linkView(t.Link),
-		CIResult: ticketCIResult(r, key, t, c.now()),
+		CIResult: ticketCIResult(r, key, t, c.now()), PullRequest: pullRequestView(t.PullRequest),
 	}
 	if p, ok := r.Project(key); ok {
 		row.WaitingForSpec = waitingForSpec(r, p.Landing, key, t)
@@ -566,7 +597,7 @@ func finished(s store.State) bool { return s == store.Done || s == store.Cancell
 
 func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
-		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec}, CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
+		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
 	if !p.Archived.IsZero() {
@@ -611,6 +642,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit})
 	}
 	v.PushedCommit, v.CIResult, v.CIRuns = ticketCI(r, key, t, c.now())
+	v.PullRequest = pullRequestView(t.PullRequest)
 	pr, _ := r.Project(key)
 	if t.SpecMerge != nil {
 		v.SpecMerge = &SpecMergeView{Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}
@@ -646,4 +678,18 @@ func orEmptyMap(m map[string]string) map[string]string {
 		return map[string]string{}
 	}
 	return m
+}
+
+// landingView is p's Landing with the Code Host worked out from the Push
+// remote URL. Push reads as off under Pull Request, which implies it.
+func landingView(p store.Project) LandingView {
+	return landingViewWith(p, WatcherView{State: WatcherNotReported})
+}
+
+// landingViewWith is landingView with the Pull Request Watcher's status.
+func landingViewWith(p store.Project, watcher WatcherView) LandingView {
+	host, repo := codeHostOf(p.CI.PushRemoteURL)
+	push := p.Landing.Push && p.Landing.Method != store.LandingPullRequest
+	return LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
+		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}
 }

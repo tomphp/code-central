@@ -87,6 +87,7 @@ type ciFile struct {
 	PATEnv           string       `yaml:"pat_env,omitempty"`
 	IgnoredWorkflows []string     `yaml:"ignored_workflows,omitempty"`
 	PushRemoteURL    string       `yaml:"push_remote_url,omitempty"`
+	PushRemoteBase   string       `yaml:"push_remote_base,omitempty"`
 	Rules            []ciRuleFile `yaml:"rules,omitempty"`
 	UnblockOnPush    bool         `yaml:"unblock_on_push,omitempty"`
 }
@@ -106,6 +107,8 @@ type landingFile struct {
 	// LandPerSpec is a pointer so a file without it, which reads as on,
 	// differs from false.
 	LandPerSpec *bool `yaml:"land_per_spec,omitempty"`
+	// PATEnv is left out while it is unset.
+	PATEnv string `yaml:"pat_env,omitempty"`
 }
 
 type specFront struct {
@@ -136,6 +139,7 @@ type ticketFile struct {
 	Commit         string              `yaml:"commit,omitempty"`
 	PushedCommits  []pushedCommitFile  `yaml:"pushed_commits,omitempty"`
 	SpecMerge      *specMergeFile      `yaml:"spec_merge,omitempty"`
+	PullRequest    *pullRequestFile    `yaml:"pull_request,omitempty"`
 	Claims         []claimFile         `yaml:"claims"`
 	Rounds         []roundFile         `yaml:"rounds"`
 	FailureReports []failureReportFile `yaml:"failure_reports"`
@@ -149,8 +153,16 @@ type specMergeFile struct {
 	Merged string `yaml:"merged"`
 }
 
+type pullRequestFile struct {
+	Number      int    `yaml:"number"`
+	Link        string `yaml:"link"`
+	State       string `yaml:"state"`
+	MergeCommit string `yaml:"merge_commit,omitempty"`
+}
+
 type pushedCommitFile struct {
 	Commit     string           `yaml:"commit"`
+	Branch     string           `yaml:"branch,omitempty"`
 	Pushed     string           `yaml:"pushed"`
 	LandAnyway string           `yaml:"land_anyway,omitempty"`
 	Rerun      string           `yaml:"rerun,omitempty"`
@@ -333,7 +345,7 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		return Ticket{}, &LoadError{Field: "updated", Msg: err.Error()}
 	}
 	for i, pc := range f.PushedCommits {
-		p := PushedCommit{Commit: pc.Commit}
+		p := PushedCommit{Commit: pc.Commit, Branch: pc.Branch}
 		if p.Commit == "" {
 			return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].commit", i), Msg: "required"}
 		}
@@ -354,6 +366,13 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 			p.Reruns = append(p.Reruns, CIRunAttempt{ID: ra.ID, Attempt: ra.Attempt})
 		}
 		t.PushedCommits = append(t.PushedCommits, p)
+	}
+	if f.PullRequest != nil {
+		pr := &PullRequest{Number: f.PullRequest.Number, Link: f.PullRequest.Link, State: PullRequestState(f.PullRequest.State), MergeCommit: f.PullRequest.MergeCommit}
+		if !slices.Contains(PullRequestStates, pr.State) {
+			return Ticket{}, &LoadError{Field: "pull_request.state", Msg: fmt.Sprintf("%q is not one of %v", pr.State, PullRequestStates)}
+		}
+		t.PullRequest = pr
 	}
 	if f.SpecMerge != nil {
 		sm := &SpecMerge{Commit: f.SpecMerge.Commit}
@@ -550,7 +569,7 @@ func encode(record any, project string) (string, []byte, error) {
 			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
 		}
 		for _, pc := range r.PushedCommits {
-			pf := pushedCommitFile{Commit: pc.Commit, Pushed: formatTime(pc.Pushed)}
+			pf := pushedCommitFile{Commit: pc.Commit, Branch: pc.Branch, Pushed: formatTime(pc.Pushed)}
 			if !pc.LandAnyway.IsZero() {
 				pf.LandAnyway = formatTime(pc.LandAnyway)
 			}
@@ -561,6 +580,9 @@ func encode(record any, project string) (string, []byte, error) {
 				pf.Reruns = append(pf.Reruns, runAttemptFile{ID: ra.ID, Attempt: ra.Attempt})
 			}
 			f.PushedCommits = append(f.PushedCommits, pf)
+		}
+		if r.PullRequest != nil {
+			f.PullRequest = &pullRequestFile{Number: r.PullRequest.Number, Link: r.PullRequest.Link, State: string(r.PullRequest.State), MergeCommit: r.PullRequest.MergeCommit}
 		}
 		if r.SpecMerge != nil {
 			f.SpecMerge = &specMergeFile{Commit: r.SpecMerge.Commit, Merged: formatTime(r.SpecMerge.Merged)}
@@ -639,7 +661,7 @@ func encodeLanding(l Landing) *landingFile {
 	if l = l.orDefault(); l == DefaultLanding() {
 		return nil
 	}
-	f := &landingFile{Method: string(l.Method), Push: l.Push, Remote: l.Remote}
+	f := &landingFile{Method: string(l.Method), Push: l.Push, Remote: l.Remote, PATEnv: l.PATEnv}
 	if !l.LandPerSpec {
 		f.LandPerSpec = &l.LandPerSpec
 	}
@@ -653,7 +675,7 @@ func encodeCI(c CI) *ciFile {
 		return nil
 	}
 	f := &ciFile{Tracking: c.Tracking, Provider: string(c.Provider), Repository: c.Repository, ProjectURL: c.ProjectURL, PATEnv: c.PATEnv,
-		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, UnblockOnPush: c.UnblockOnPush}
+		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, PushRemoteBase: c.PushRemoteBase, UnblockOnPush: c.UnblockOnPush}
 	for _, r := range c.Rules {
 		f.Rules = append(f.Rules, ciRuleFile{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: string(r.State), Created: formatTime(r.Created)})
 	}

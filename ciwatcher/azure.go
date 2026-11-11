@@ -114,21 +114,29 @@ type azureTimeline struct {
 }
 
 // RunsForCommit lists the project's latest builds, newest queued first,
-// and keeps those built from commit, whatever repository they built.
-func (a *AzurePipelines) RunsForCommit(ctx context.Context, commit string) ([]Run, error) {
+// and keeps those built from commit, whatever repository they built, and
+// those of pull request pullRequest's merge ref, which count as built
+// from commit.
+func (a *AzurePipelines) RunsForCommit(ctx context.Context, commit string, pullRequest int) ([]Run, error) {
+	mergeRef := ""
+	if pullRequest > 0 {
+		mergeRef = fmt.Sprintf("refs/pull/%d/merge", pullRequest)
+	}
 	builds, err := a.builds(ctx, azdo.BuildQuery{Top: azureRunLimit, Order: "queueTimeDescending"})
 	if err != nil {
 		return nil, err
 	}
 	var runs []Run
 	for _, b := range builds {
-		if b.SourceVersion != commit {
+		viaPR := mergeRef != "" && b.SourceBranch == mergeRef
+		if b.SourceVersion != commit && !viaPR {
 			continue
 		}
 		run, err := a.run(ctx, b)
 		if err != nil {
 			return nil, err
 		}
+		run.Commit = commit
 		runs = append(runs, run)
 	}
 	return runs, nil

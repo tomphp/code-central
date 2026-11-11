@@ -31,8 +31,17 @@ const (
 	// ReasonCICancelled is an Accepted Ticket whose CI result is
 	// cancelled and that the human hasn't dealt with.
 	ReasonCICancelled NeedsMeReason = "ci_cancelled"
-	// ReasonToMerge is a Ticket Accepted under the Branch Landing Method
-	// (code-central-175): the human merges its branch, at once.
+	// ReasonBaseDiverged is a Project under Pull Request whose Factory
+	// reports its local base diverged from the remote's (code-central-394).
+	// It is one item per Project, with no Ticket.
+	ReasonBaseDiverged NeedsMeReason = "base_diverged"
+	// ReasonPullRequestClosed is an Accepted Ticket under Pull Request
+	// whose pull request is closed or abandoned without merging
+	// (code-central-391); it clears if the pull request is reopened.
+	ReasonPullRequestClosed NeedsMeReason = "pull_request_closed"
+	// ReasonToMerge is a Ticket Accepted under the Branch or Pull Request
+	// Landing Method (code-central-175): the human merges its branch or
+	// pull request, at once.
 	ReasonToMerge NeedsMeReason = "to_merge"
 	// ReasonCIUnavailable is a Ticket the CI gate has held for
 	// CIUnavailableAfter since its push with no word of its CI
@@ -61,7 +70,9 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonInReview, "In Review: finished work waits to be accepted or rejected"},
 	{ReasonCIFailed, "CI failed: Accepted with its pushed commit's CI failed; the human picks a failure option"},
 	{ReasonCICancelled, "CI cancelled: Accepted with its pushed commit's CI cancelled"},
-	{ReasonToMerge, "To merge: Accepted under the Branch Landing Method; merge its branch to the base"},
+	{ReasonBaseDiverged, "Base diverged: a Project's local base has diverged from the remote's; reconcile it by hand"},
+	{ReasonPullRequestClosed, "Pull request closed: Accepted with its pull request closed without merging"},
+	{ReasonToMerge, "To merge: Accepted under Branch or Pull Request; merge it to the base"},
 	{ReasonCIUnavailable, "CI unavailable: no word of its CI 10 minutes after its push (CI Watcher not Watching, or no CI Runs)"},
 	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted over 10 minutes and not in the base, unless its CI is running"},
 	{ReasonBlockedByCancelled, "Blocked by a Cancelled Ticket with no Replacements"},
@@ -136,6 +147,12 @@ type NeedsMeRow struct {
 	// row's badge; left out for a Ticket never pushed while CI Tracking
 	// was on.
 	CIResult CIResult `json:"ci_result,omitempty"`
+	// PullRequest is the Ticket's pull request, for its item's link; left
+	// out until the Pull Request Watcher reports one.
+	PullRequest *PullRequestView `json:"pull_request,omitempty"`
+	// BaseDiverged is the local and remote base commits (Base diverged,
+	// whose row has no Ticket: its ID is empty).
+	BaseDiverged *BaseDivergedView `json:"base_diverged,omitempty"`
 }
 
 // NeedsMeRequirement is the Requirement a Needs Me row's Ticket is on:
@@ -202,6 +219,9 @@ func (c *Core) NeedsMe(context.Context) (NeedsMeView, error) {
 	var all []waiting
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
+			if row, ok := c.baseDivergedRow(p); ok {
+				all = append(all, waiting{row, 0})
+			}
 			for _, t := range r.Tickets(p.Key) {
 				if row, ok := c.needsMeRow(r, p.Key, t); ok {
 					all = append(all, waiting{row, t.Number})
@@ -239,7 +259,7 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 	row := NeedsMeRow{
 		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link),
 		Requirement: req, Spec: needsMeSpec(r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
-		CIResult: ticketCIResult(r, key, t, c.now()),
+		CIResult: ticketCIResult(r, key, t, c.now()), PullRequest: pullRequestView(t.PullRequest),
 	}
 	switch reason {
 	case ReasonNeedsAnswer:
@@ -263,7 +283,7 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 		f, _, _ := ciFailure(r, key, t, c.now())
 		row.CIFailure = &f
 	case ReasonToMerge:
-		row.Branch = t.Branch
+		row.Branch = branchOf(t)
 	case ReasonCIUnavailable:
 		p, _ := r.Project(key)
 		_, row.CIUnavailable = c.ciWaitingOn(r, p, t)
@@ -310,7 +330,14 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 		if since, ok := ciCancelled(r, key, t, c.now()); ok {
 			return ReasonCICancelled, since
 		}
-		if t.State == store.Accepted && p.Landing.Method == store.LandingBranch {
+		if lead, waiting := specPullRequestLead(r, key, t); waiting && !lead {
+			// A Spec's pull request is one item, on its lead Ticket.
+			return "", time.Time{}
+		}
+		if t.State == store.Accepted && p.Landing.Method == store.LandingPullRequest && t.PullRequest != nil && t.PullRequest.State == store.PRClosed {
+			return ReasonPullRequestClosed, entered(t)
+		}
+		if t.State == store.Accepted && (p.Landing.Method == store.LandingBranch || p.Landing.Method == store.LandingPullRequest) {
 			return ReasonToMerge, entered(t)
 		}
 		if reason, since := c.timedReason(r, p, t); reason != "" {

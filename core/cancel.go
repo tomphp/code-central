@@ -22,6 +22,47 @@ type CancelInput struct {
 // unfinished one. Anything the Ticket was blocking becomes blocked by its
 // Replacements when read, so only this Ticket's file is written.
 func (c *Core) Cancel(ctx context.Context, key string, in CancelInput) (Written[TicketView], error) {
+	others := c.closedSpecOthers(ctx, key, in.Ticket)
+	out, err := c.cancelOne(ctx, key, in)
+	if err != nil {
+		return out, err
+	}
+	// Cancelling a Spec's Pull request closed item cancels the Spec's
+	// other waiting Tickets with it, and leaves the Spec Branch.
+	for _, n := range others {
+		if _, err := c.cancelOne(ctx, key, CancelInput{Ticket: Ref(DisplayID(key, n)), Reason: in.Reason}); err != nil {
+			return out, err
+		}
+	}
+	return out, nil
+}
+
+// closedSpecOthers are the Spec's other waiting Tickets when the human
+// cancels the lead Ticket of a Spec whose pull request is closed.
+func (c *Core) closedSpecOthers(ctx context.Context, key string, ref Ref) []int {
+	if ActorOf(ctx) != Human {
+		return nil
+	}
+	var others []int
+	_ = c.store.View(func(r store.Reader) error {
+		t, err := resolveTicket(r, key, "cancel", "ticket", ref)
+		if err != nil {
+			return nil
+		}
+		if lead, _ := specPullRequestLead(r, key, t); !lead || t.PullRequest == nil || t.PullRequest.State != store.PRClosed {
+			return nil
+		}
+		for _, o := range specWork(r, key, t) {
+			if o.Number != t.Number {
+				others = append(others, o.Number)
+			}
+		}
+		return nil
+	})
+	return others
+}
+
+func (c *Core) cancelOne(ctx context.Context, key string, in CancelInput) (Written[TicketView], error) {
 	actor := ActorOf(ctx)
 	return c.updateTicketIn(key, "cancel", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
 		claim := 0

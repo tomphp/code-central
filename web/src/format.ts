@@ -9,6 +9,8 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   in_review: "In Review",
   ci_failed: "CI failed",
   ci_cancelled: "CI cancelled",
+  base_diverged: "Base diverged",
+  pull_request_closed: "Pull request closed",
   to_merge: "To merge",
   ci_unavailable: "CI unavailable",
   accepted_not_landed: "Accepted but not landed",
@@ -31,7 +33,9 @@ export function duration(now: Date, at: string): string {
 export function rowDetail(now: Date, r: NeedsMeRow): string {
   switch (r.reason) {
     case "needs_answer":
-      return r.round ? `${r.round.open} of ${r.round.questions} open · Round ${r.round.number}` : "Questions waiting";
+      return r.round
+        ? `${r.round.open} of ${r.round.questions} open · Round ${r.round.number}`
+        : "Questions waiting";
     case "answered":
       return `Answered ${ago(now, r.since)}, no session has picked it up`;
     case "silent_claim":
@@ -40,23 +44,44 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
       return `No move for ${duration(now, r.since)}`;
     case "failed":
       if (!r.failure) return "Failed";
-      return r.failure.reports > 1 ? `${r.failure.headline} · failed ${r.failure.reports}×` : r.failure.headline;
+      return r.failure.reports > 1
+        ? `${r.failure.headline} · failed ${r.failure.reports}×`
+        : r.failure.headline;
     case "in_review":
       return r.summary || "Finished";
     case "ci_failed":
-      return r.ci_failure ? `CI failed at ${r.ci_failure.commit.slice(0, 7)}: ${r.ci_failure.workflows.join(", ")}` : "CI failed";
+      return r.ci_failure
+        ? `CI failed at ${r.ci_failure.commit.slice(0, 7)}: ${r.ci_failure.workflows.join(", ")}`
+        : "CI failed";
     case "ci_cancelled":
       return `CI cancelled ${ago(now, r.since)}`;
+    case "base_diverged":
+      return r.base_diverged
+        ? `${r.base_diverged.base ?? "The base"} is at ${r.base_diverged.local.slice(0, 7)} and the remote's at ${r.base_diverged.remote.slice(0, 7)}: reconcile them by hand`
+        : "The local base has diverged from the remote's";
+    case "pull_request_closed":
+      return r.pull_request
+        ? `Pull request #${r.pull_request.number} was closed without merging: send the work back or cancel it`
+        : "Its pull request was closed without merging";
     case "to_merge":
+      if (r.pull_request) {
+        const conflicting =
+          r.pull_request.state === "conflicting" ? ", conflicting" : "";
+        return `Accepted ${ago(now, r.since)}: merge pull request #${r.pull_request.number}${conflicting}`;
+      }
       return `Accepted ${ago(now, r.since)}: merge ${r.branch ?? "its branch"} into the base`;
     case "ci_unavailable":
       return ciUnavailableDetail(now, r);
     case "accepted_not_landed":
       return `Accepted ${ago(now, r.since)}, not landed`;
     case "blocked_by_cancelled":
-      return r.blocker ? `Blocked by ${r.blocker.id} ${r.blocker.title}, Cancelled with no Replacement` : "Blocked by a Cancelled Ticket";
+      return r.blocker
+        ? `Blocked by ${r.blocker.id} ${r.blocker.title}, Cancelled with no Replacement`
+        : "Blocked by a Cancelled Ticket";
     case "new_issue":
-      return r.link ? `${r.link.integration} ${r.link.id} came in ${ago(now, r.since)}` : `Came in ${ago(now, r.since)}`;
+      return r.link
+        ? `${r.link.integration} ${r.link.id} came in ${ago(now, r.since)}`
+        : `Came in ${ago(now, r.since)}`;
     case "closed_externally":
       return `${externalDetail(r)} · still ${r.state}`;
   }
@@ -69,7 +94,9 @@ function ciUnavailableDetail(now: Date, r: NeedsMeRow): string {
   if (!u) return `CI unavailable since ${ago(now, r.since)}`;
   const at = `${u.commit.slice(0, 7)} pushed ${ago(now, u.pushed)}`;
   if (u.cause === "no_ci_runs") return `No CI Runs reported for ${at}`;
-  return u.message ? `CI Watcher not Watching: ${u.message} · ${at}` : `CI Watcher not Watching · ${at}`;
+  return u.message
+    ? `CI Watcher not Watching: ${u.message} · ${at}`
+    : `CI Watcher not Watching · ${at}`;
 }
 
 // externalDetail says what happened to a closed-externally row's external item.
