@@ -243,10 +243,6 @@ type factory struct {
 	// poll's own.
 	leftOnBranch map[string]bool
 
-	// underPullRequest is whether the Landing Method was Pull Request when
-	// last read. A pull request's head commit is reported as pushed even
-	// with CI Tracking off.
-	underPullRequest bool
 	// baseDiverged is whether the local base holds commits the Push
 	// remote's doesn't, so nothing lands and no branch is cut. baseCurrent
 	// is whether it was fast-forwarded to the remote's this poll.
@@ -269,11 +265,6 @@ type factory struct {
 	// modelsReported is whether Code Central has taken the report of
 	// accepts; until it has, each poll that reads the Project tries.
 	modelsReported bool
-
-	// tracksCI is whether the Project's CI Tracking is on, read with the
-	// Landing Method on every poll: while it is, each push for a Ticket
-	// is reported as its pushed commit.
-	tracksCI bool
 
 	// restarted is the saved Claims a stop cut off, to resume as cut off
 	// once a slot is free; the poll's own.
@@ -365,7 +356,7 @@ func start(e Env, o options) (*factory, error) {
 	// A Project that can't be read yet is checked on every poll instead.
 	p, readErr := f.client.GetProject(context.Background(), project)
 	if readErr == nil {
-		if why := f.missingRemote(p.Landing); why != "" {
+		if why := f.missingRemote(p.Landing.Remote, landingPolicy(p)); why != "" {
 			return nil, errors.New(why)
 		}
 	}

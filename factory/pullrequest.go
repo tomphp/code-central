@@ -92,7 +92,7 @@ func (f *factory) reportBase(ctx context.Context, diverged bool, local, remote s
 // nothing to merge lands at once, one whose pull request is merged lands
 // at the merge commit, and the rest have their branch pushed for the
 // Watcher to open a pull request on.
-func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, landing core.LandingView) {
+func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, landing core.LandingView, policy store.LandingPolicy) {
 	if tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged {
 		f.landMerged(ctx, tk)
 		return
@@ -118,7 +118,7 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, landi
 	if pushed {
 		f.printf("%s: pushed %s to %s", tk.ID, tk.Branch, landing.Remote)
 	}
-	f.reportPushed(ctx, tk, tk.Branch, f.remoteTip(landing.Remote, tk.Branch, head))
+	f.reportPushed(ctx, tk, policy, tk.Branch, f.remoteTip(landing.Remote, tk.Branch, head))
 }
 
 // landMerged lands tk, whose pull request is reported merged, at the merge
