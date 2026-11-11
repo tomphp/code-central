@@ -22,19 +22,13 @@ import (
 // Spec is a Requirement Spec, one with Stages. Long-lived Specs and plain
 // Specs land Ticket by Ticket.
 func specLanded(r store.Reader, landing store.Landing, key string, t store.Ticket) bool {
-	if !landPerSpecMethod(landing) {
+	if !store.NewLandingPolicy(landing.Method, landing.Push, landing.LandPerSpec, false).LandPerSpecInForce() {
 		return false
 	}
 	if StageOf(t.Labels) != "" || isMap(t.Labels) || slices.Contains(t.Labels, PrototypeLabel) {
 		return false
 	}
 	return isRequirement(r, key, t.Spec)
-}
-
-// landPerSpecMethod is whether landing has Land per Spec in force: under
-// Merge or Pull Request with the option on.
-func landPerSpecMethod(landing store.Landing) bool {
-	return (landing.Method == store.LandingMerge || landing.Method == store.LandingPullRequest) && landing.LandPerSpec
 }
 
 // isRequirement is whether Spec n has a Stage Ticket.
@@ -88,7 +82,7 @@ type LandPerSpecView struct {
 // these Tickets, or nil when the option doesn't apply.
 func landPerSpecView(r store.Reader, key string, tickets []store.Ticket) *LandPerSpecView {
 	p, _ := r.Project(key)
-	if !landPerSpecMethod(p.Landing) {
+	if !p.LandingPolicy().LandPerSpecInForce() {
 		return nil
 	}
 	v := &LandPerSpecView{Waiting: []string{}}

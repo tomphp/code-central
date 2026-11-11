@@ -97,7 +97,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		return ProjectView{}, invalid("method", "Landing Method %q is not %q, %q or %q", in.Method, store.LandingMerge, store.LandingBranch, store.LandingPullRequest)
 	}
 	// Push is implied under Pull Request, so the flag is ignored and not stored.
-	l := store.Landing{Method: in.Method, Push: in.Push && in.Method != store.LandingPullRequest, Remote: strings.TrimSpace(in.Remote)}
+	l := store.Landing{Method: in.Method, Push: in.Push, Remote: strings.TrimSpace(in.Remote)}.Normalized()
 	if l.Remote == "" {
 		if l.Push {
 			return ProjectView{}, invalid("remote", "Push needs a git remote to push to, such as %q", store.DefaultLandingRemote)

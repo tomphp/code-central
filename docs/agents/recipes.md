@@ -19,3 +19,11 @@ Examples to copy: `02bd5d9` (`keep_as_draft`: a human operation with UI) and `89
 Any change to a store file struct (`store/file.go`), its yaml tags or a checked value set bumps the store format, even an additive one. Run `go test ./core -run TestTheStoreSchemaMatchesItsSnapshot`: when it fails, it prints the four steps and the snapshot to diff against. The example to copy is `8964c77`'s `store/migrate_claim_model_test.go`.
 
 Parallel Tickets each bump the format, so they collide at merge. When merging the base brings in a format your branch also claimed, your migration moves to the next number. Renumber its `From` in `store/migrate.go` and `currentFormat`, keep the base's snapshot for the format it took, and write yours for the next format by running the snapshot test with `-write-store-schema`. Merge commit `8093159` shows this.
+
+## Adding or changing a landing rule
+
+How the Landing Method, Push, Land per Spec and CI Tracking combine lives in `store.LandingPolicy` (`store/landingpolicy.go`), and nowhere else.
+
+1. Add a method to `store.LandingPolicy`, or extend one, with a doc comment quoting the glossary rule it answers.
+2. Add or change its row in `TestLandingPolicyMatrix` (`store/landingpolicy_test.go`), which pins every Method × Push × Land per Spec × CI Tracking combination.
+3. Call it from core with `p.LandingPolicy()`, and from the Factory through the `core.ProjectView`'s four inputs. Don't combine Method, Push, Land per Spec or CI Tracking at a call site. A test of one input alone (`Method == X`, `CI.Tracking`) stays a plain comparison.
