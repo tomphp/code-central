@@ -161,12 +161,14 @@ func Run(ctx context.Context, args []string, e Env) int {
 	go f.watchSignals(ctx)
 	go f.events.run()
 	go f.usage.run()
+	go f.heartbeats.run()
 	f.restart(ctx)
 	f.loop(ctx)
 	// Stopping or draining makes one last flush of each, side by side, so
 	// a hung Code Central holds up the stop one postTimeout at most.
 	var flushed sync.WaitGroup
-	for _, close := range []func(){f.events.close, f.usage.close} {
+	// The stopping Heartbeat goes with them, under the same timeout.
+	for _, close := range []func(){f.events.close, f.usage.close, func() { f.heartbeats.close(f.stopNote()) }} {
 		flushed.Go(close)
 	}
 	flushed.Wait()
@@ -271,6 +273,9 @@ type factory struct {
 	stop       context.CancelFunc
 	stopMu     sync.Mutex
 	stopReason string
+	stopSignal os.Signal // the signal that stopped the Factory, if one did
+	drained    bool      // the drain finished with every turn ended
+	heartbeats *heartbeater
 
 	// drainCh is closed by the first Ctrl-C: no more claiming, resuming
 	// or landing, and the Factory exits once its running turns end.
@@ -336,6 +341,7 @@ func start(e Env, o options) (*factory, error) {
 	if every <= 0 {
 		every = postEvery
 	}
+	f.heartbeats = newFactoryHeartbeater(f)
 	f.events = newSender(f.client.PostSessionEvents, every)
 	f.usage = newSender(f.client.PostUsage, every)
 	// A Project that can't be read yet is checked on every poll instead.

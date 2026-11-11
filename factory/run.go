@@ -50,8 +50,12 @@ func (f *factory) watchSignals(ctx context.Context) {
 			if sig == os.Interrupt && !f.draining() {
 				f.printf("draining: no more claiming, resuming or landing; Ctrl-C again to stop the running turns (Claims are kept)")
 				f.drainOnce.Do(func() { close(f.drainCh) })
+				f.heartbeat(core.HeartbeatDraining, f.drainNote())
 				continue
 			}
+			f.stopMu.Lock()
+			f.stopSignal = sig
+			f.stopMu.Unlock()
 			f.printf("stopping on %v: stopping the running turns (Claims are kept)", sig)
 			f.stop()
 			return
@@ -86,6 +90,7 @@ func (f *factory) drain(ctx context.Context) {
 	f.mu.Unlock()
 	if len(names) == 0 {
 		f.printf("drained: no turns running")
+		f.setDrained()
 		return
 	}
 	sort.Strings(names)
@@ -95,17 +100,35 @@ func (f *factory) drain(ctx context.Context) {
 		f.turnsDone.Wait()
 		close(done)
 	}()
-	select {
-	case <-done:
-		f.printf("drained: every turn has ended")
-	case <-ctx.Done():
+	for {
+		select {
+		case <-done:
+			f.printf("drained: every turn has ended")
+			f.setDrained()
+			return
+		case <-ctx.Done():
+			return
+		case <-f.e.After(f.o.poll):
+			f.heartbeat(core.HeartbeatDraining, f.drainNote())
+		}
 	}
+}
+
+func (f *factory) setDrained() {
+	f.stopMu.Lock()
+	f.drained = true
+	f.stopMu.Unlock()
 }
 
 // poll reconciles the held Claims, starts the next decision of each idle
 // guided Map, then fills free slots: Answered resumes first, then saved
 // Claims a stop cut off, then new claims.
 func (f *factory) poll(ctx context.Context) {
+	defer func() {
+		if !f.halted(ctx) {
+			f.heartbeat(core.HeartbeatOnline, f.pollNote())
+		}
+	}()
 	answered := f.reconcile(ctx)
 	f.landAndSweep(ctx)
 	if f.halted(ctx) {
