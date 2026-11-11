@@ -113,6 +113,7 @@ import {
   type PushedCommitView,
   type CITrackingChange,
   type Landing,
+  type LandingInput,
   MAP_LABEL,
   type MapView,
   type Mode,
@@ -431,7 +432,7 @@ export class FakeApi implements Api {
       mode: "committed",
       archived: opts.archived ?? false,
       ...(opts.archived ? { archived_at: this.now.toISOString() } : {}),
-      landing: { method: "merge", push: false, remote: "origin" },
+      landing: { method: "merge", push: false, remote: "origin", land_per_spec: true },
       ci: {
         tracking: false,
         provider: "github_actions",
@@ -1228,17 +1229,18 @@ export class FakeApi implements Api {
     return this.projectView(p);
   }
 
-  async setLandingMethod(key: string, landing: Landing): Promise<ProjectView> {
+  async setLandingMethod(key: string, landing: LandingInput): Promise<ProjectView> {
     this.calls.push("setLandingMethod");
     if (landing.method !== "merge" && landing.method !== "branch") {
       throw new ApiError(422, "invalid", `Landing Method "${landing.method}" is neither "merge" nor "branch"`, "method");
     }
-    const l = { method: landing.method, push: landing.push, remote: landing.remote.trim() };
+    const l: Landing = { method: landing.method, push: landing.push, remote: landing.remote.trim(), land_per_spec: true };
     if (!l.remote) {
       if (l.push) throw new ApiError(422, "invalid", 'Push needs a git remote to push to, such as "origin"', "remote");
       l.remote = "origin";
     }
     const p = this.writable(key);
+    l.land_per_spec = landing.land_per_spec ?? p.landing.land_per_spec;
     if (JSON.stringify(p.landing) !== JSON.stringify(l)) {
       p.landing = l;
       this.emit({ type: "project.changed", project: key });

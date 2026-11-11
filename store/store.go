@@ -108,6 +108,10 @@ type Landing struct {
 	Method LandingMethod
 	Push   bool
 	Remote string
+	// LandPerSpec is the Merge option that lands a Spec's work together.
+	// It reads as on for a Project that never stored it, and is kept
+	// whatever the method.
+	LandPerSpec bool
 }
 
 // DefaultLandingRemote is the remote Push uses when none is named.
@@ -116,13 +120,15 @@ const DefaultLandingRemote = "origin"
 // DefaultLanding is the Landing of a Project that has never had one set:
 // Merge, Push off, remote origin.
 func DefaultLanding() Landing {
-	return Landing{Method: LandingMerge, Remote: DefaultLandingRemote}
+	return Landing{Method: LandingMerge, Remote: DefaultLandingRemote, LandPerSpec: true}
 }
 
 // orDefault fills in what l leaves empty from DefaultLanding.
 func (l Landing) orDefault() Landing {
 	if l.Method == "" {
+		// A Landing with no method was never set: Land per Spec is on.
 		l.Method = LandingMerge
+		l.LandPerSpec = true
 	}
 	if l.Remote == "" {
 		l.Remote = DefaultLandingRemote

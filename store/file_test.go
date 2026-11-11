@@ -366,7 +366,7 @@ func TestADefaultLandingMethodLeavesProjectYAMLUnchanged(t *testing.T) {
 	}
 	mustUpdate(t, s, func(w store.Writer) error {
 		return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC), Mode: store.ModeCommitted,
-			Landing: store.Landing{Method: store.LandingBranch, Push: true, Remote: "origin"}})
+			Landing: store.Landing{Method: store.LandingBranch, Push: true, Remote: "origin", LandPerSpec: true}})
 	})
 	if got, want := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")), plain+"landing:\n  method: branch\n  push: true\n  remote: origin\n"; got != want {
 		t.Fatalf("project.yaml = %q, want %q", got, want)

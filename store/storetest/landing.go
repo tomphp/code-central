@@ -1,6 +1,7 @@
 package storetest
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/tomoram/code-central/store"
@@ -44,4 +45,25 @@ func runLanding(t *testing.T, f Factory) {
 			check(f.Reopen(t, s))
 		}
 	})
+
+	for _, on := range []bool{true, false} {
+		t.Run(fmt.Sprintf("a project's land per spec %v reads back after it is written", on), func(t *testing.T) {
+			s := f.New(t)
+			want := store.Landing{Method: store.LandingMerge, Push: true, Remote: "upstream", LandPerSpec: on}
+			put(t, s, func(w store.Writer) error {
+				return w.PutProject(store.Project{Key: "acme", DisplayName: "acme", Created: t0, Mode: "committed", Landing: want})
+			})
+			check := func(s store.Store) {
+				read(t, s, func(r store.Reader) {
+					if p, _ := r.Project("acme"); p.Landing != want {
+						t.Fatalf("landing = %+v, want %+v", p.Landing, want)
+					}
+				})
+			}
+			check(s)
+			if f.Reopen != nil {
+				check(f.Reopen(t, s))
+			}
+		})
+	}
 }

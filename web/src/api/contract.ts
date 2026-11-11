@@ -128,8 +128,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ["beta", "Beta", 0, false],
       ]);
       expect(rows.map((r) => r.landing)).toEqual([
-        { method: "merge", push: false, remote: "origin" },
-        { method: "merge", push: false, remote: "origin" },
+        { method: "merge", push: false, remote: "origin", land_per_spec: true },
+        { method: "merge", push: false, remote: "origin", land_per_spec: true },
       ]);
       const off = {
         tracking: false,
@@ -239,13 +239,14 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       const v = await d.api.setLandingMethod("acme", { method: "branch", push: true, remote: " upstream " });
       expect(v).toMatchObject({ key: "acme", landing: { method: "branch", push: true, remote: "upstream" } });
-      expect((await d.api.listProjects())[0].landing).toEqual({ method: "branch", push: true, remote: "upstream" });
+      expect((await d.api.listProjects())[0].landing).toEqual({ method: "branch", push: true, remote: "upstream", land_per_spec: true });
 
       // Without Push, an empty remote reads as origin.
       expect((await d.api.setLandingMethod("acme", { method: "merge", push: false, remote: "" })).landing).toEqual({
         method: "merge",
         push: false,
         remote: "origin",
+        land_per_spec: true,
       });
 
       const empty = await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: " " }).catch((e) => e);
@@ -253,6 +254,18 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(empty.message).toContain("Push needs a git remote");
       const method = await d.api.setLandingMethod("acme", { method: "squash" as LandingMethod, push: false, remote: "origin" }).catch((e) => e);
       expect(method).toMatchObject({ status: 422, code: "invalid", field: "method" });
+    });
+
+    it("keeps Land per Spec on by default, sets it, and keeps it when a later set leaves it out", async () => {
+      await d.createProject("acme", "Acme");
+      expect((await d.api.listProjects())[0].landing.land_per_spec).toBe(true);
+      const off = await d.api.setLandingMethod("acme", { method: "merge", push: false, remote: "", land_per_spec: false });
+      expect(off.landing.land_per_spec).toBe(false);
+      // Left out, the stored value stays, and it is shown whatever the method.
+      const kept = await d.api.setLandingMethod("acme", { method: "branch", push: false, remote: "" });
+      expect(kept.landing).toMatchObject({ method: "branch", land_per_spec: false });
+      const on = await d.api.setLandingMethod("acme", { method: "merge", push: false, remote: "", land_per_spec: true });
+      expect(on.landing.land_per_spec).toBe(true);
     });
 
     it("refuses turning CI Tracking on when the CI check fails, with its reason and fix", async () => {

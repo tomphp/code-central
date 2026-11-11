@@ -113,15 +113,31 @@ A Ticket that is Done or Cancelled, or a Spec that has Tickets and all of them a
 _Avoid_: Closed, archived, complete
 
 **Land**:
-For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing. Under Merge + Push with CI Tracking on, a Ticket lands only once its pushed commit's CI result is passed, so Done means on the remote and green.
+For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing. Under Merge + Push with CI Tracking on, a Ticket lands only once its pushed commit's CI result is passed, so Done means on the remote and green. Under Land per Spec, a Spec-landed Ticket lands only with the rest of its Spec, once the Spec Branch is in the base, and, with Push and CI Tracking, once that push's CI result is passed.
 _Avoid_: Merge, ship, deliver, complete
 
 **Landing Method**:
-A Project's choice of how accepted work reaches its base. It is Merge (the Factory merges the branch into the base) or Branch (the Factory leaves the branch for the human to merge, and lands the Ticket when it sees the merge). Pull Request comes later.
+A Project's choice of how accepted work reaches its base. It is Merge (the Factory merges the branch into the base) or Branch (the Factory leaves the branch for the human to merge, and lands the Ticket when it sees the merge). Pull Request comes later. Merge has two options, Push and Land per Spec; Branch has neither effect from Land per Spec.
 _Avoid_: Completion option, delivery mode, finish mode
 
+**Land per Spec**:
+A Merge option, on by default and kept whatever the method, by which a Requirement Spec's work gathers on one Spec Branch and lands in the base together, instead of Ticket by Ticket. It covers only implementation Tickets of Requirement Spec (not Stage Tickets, Map Tickets, Prototypes, or long-lived Specs such as a CI Rule's Spec or the GitHub Issues Spec), and under Branch it has no effect. Turning it on affects only Tickets accepted afterwards.
+_Avoid_: Spec landing, batch landing, release train
+
+**Spec Branch**:
+The one local branch, `spec/<spec id>`, that a Requirement Spec's accepted implementation Tickets are merged into under Land per Spec. Each Ticket's branch is cut from its tip, and the Factory merges it into the base once the Spec is ready to land. It is never pushed.
+_Avoid_: Feature branch, integration branch, epic branch
+
+**Waiting for the Spec**:
+The status shown on an Accepted Ticket under Land per Spec whose work isn't yet in the base, because the rest of its Spec isn't done. It is not a State, and the Ticket isn't flagged in Needs Me as Accepted but not landed.
+_Avoid_: Held, queued, staged
+
+**Accepted but not landed**:
+The Needs Me reason of an Accepted Ticket, under Merge, that has not landed after a while, so the Factory may be stuck. It leaves out a Ticket that is Waiting for the Spec.
+_Avoid_: Stuck, stale
+
 **Push**:
-A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands only once the push succeeds, and with CI Tracking on, only once its CI result is passed as well.
+A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands only once the push succeeds, and with CI Tracking on, only once its CI result is passed as well. Under Land per Spec the Factory pushes the base once for a whole Spec, after merging the Spec Branch into it; the Spec Branch and Ticket branches are never pushed.
 _Avoid_: Publish, sync
 
 **CI Tracking**:
@@ -173,7 +189,7 @@ A Ticket's running, failed, cancelled or passed, worked out from the CI Runs of 
 _Avoid_: Build status
 
 **CI gate**:
-What holds a pushed Ticket back from landing until its CI result is passed, so it holds on running, failed and cancelled. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own. Under Unblock on push the gate still holds landing, but no longer holds Blockers.
+What holds a pushed Ticket back from landing until its CI result is passed, so it holds on running, failed and cancelled. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own. Under Land per Spec a Spec's waiting Tickets share one pushed commit, so one CI result gates them all. Under Unblock on push the gate still holds landing, but no longer holds Blockers.
 _Avoid_: CI check, CI hold, waiting-on-CI State
 
 **Unblock on push**:
@@ -197,7 +213,7 @@ The git remote a Landing Method's Push sends work to, `origin` unless the human 
 _Avoid_: Upstream, origin (for the concept)
 
 **Blocker**:
-A Ticket in the same Project that must reach Done before another Ticket can be claimed, or, under Unblock on push, must be Accepted with a pushed commit whose CI result isn't failed. A Blocker that no longer blocks though it isn't Done is cleared, shown as "no longer blocking".
+A Ticket in the same Project that must reach Done before another Ticket can be claimed, or, under Unblock on push, must be Accepted with a pushed commit whose CI result isn't failed. Under Land per Spec, a Blocker on the same Spec as the dependant is also cleared once it is Accepted and its work is merged into the Spec Branch. A Blocker that no longer blocks though it isn't Done is cleared, shown as "no longer blocking".
 _Avoid_: Dependency
 
 **Replacement**:
@@ -274,7 +290,7 @@ The Needs Me reason of an Accepted Ticket whose CI result is cancelled and that 
 _Avoid_: CI aborted
 
 **CI failed**:
-The Needs Me reason of an Accepted Ticket whose CI result is failed (a run failed or timed out; a cancelled run is CI cancelled instead) and that the human hasn't dealt with yet: send it back to fix, re-run the failed jobs, open a new fix Ticket, or land it anyway.
+The Needs Me reason of an Accepted Ticket whose CI result is failed (a run failed or timed out; a cancelled run is CI cancelled instead) and that the human hasn't dealt with yet: send it back to fix, re-run the failed jobs, open a new fix Ticket, or land it anyway. Under Land per Spec it is one item for the whole Spec, on its lead Ticket (the waiting Ticket accepted earliest), the options act on every waiting Ticket, and send it back to fix isn't offered.
 _Avoid_: Build broken, red
 
 **Land anyway**:
