@@ -1,4 +1,4 @@
-package azdo
+package azdourl
 
 import (
 	"strings"

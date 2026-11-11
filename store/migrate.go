@@ -56,6 +56,7 @@ var migrations = []MigrationStep{
 	{From: 16, Name: "add the keys of the comments written for a Link"},
 	{From: 17, Name: "add a Link's outbound flag"},
 	{From: 18, Name: "add the model and effort a Claim's latest turn ran with"},
+	{From: 19, Name: "add a Project's Azure Pipelines settings and the partially succeeded CI conclusion"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

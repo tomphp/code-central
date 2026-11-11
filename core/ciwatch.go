@@ -16,13 +16,17 @@ import (
 // The gh path Option is read on every poll, so changing it needs no
 // restart.
 type CIWatch struct {
-	Project          string           `json:"project"`
-	Tracking         bool             `json:"tracking"`
-	Provider         store.CIProvider `json:"provider"`
-	Repository       string           `json:"repository"`
-	IgnoredWorkflows []string         `json:"ignored_workflows"`
-	Rules            []CIWatchRule    `json:"rules"`
-	GHPath           string           `json:"gh_path"`
+	Project    string           `json:"project"`
+	Tracking   bool             `json:"tracking"`
+	Provider   store.CIProvider `json:"provider"`
+	Repository string           `json:"repository"`
+	ProjectURL string           `json:"project_url"`
+	// PATEnv is the name of the environment variable holding the Azure
+	// DevOps PAT, which the CI Watcher reads from its own environment.
+	PATEnv           string        `json:"pat_env"`
+	IgnoredWorkflows []string      `json:"ignored_workflows"`
+	Rules            []CIWatchRule `json:"rules"`
+	GHPath           string        `json:"gh_path"`
 	// Waiting are the pushed commits still waiting on a final CI result,
 	// or newly pushed, oldest push first: the CI Watcher lists their runs.
 	Waiting []CIWaitingCommit `json:"waiting"`
@@ -90,7 +94,7 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 			return unknownProject(key)
 		}
 		v := ciView(key, p.CI, WatcherView{})
-		out = CIWatch{Project: key, Tracking: v.Tracking, Provider: v.Provider, Repository: v.Repository,
+		out = CIWatch{Project: key, Tracking: v.Tracking, Provider: v.Provider, Repository: v.Repository, ProjectURL: v.ProjectURL, PATEnv: v.PATEnv,
 			IgnoredWorkflows: v.IgnoredWorkflows, Rules: []CIWatchRule{}, GHPath: r.Options().GHPath,
 			Waiting: []CIWaitingCommit{}, Reruns: []CIRerun{}, Pushed: []CITicketCommit{}, Landed: []CITicketCommit{}}
 		last := ciRulesLastRuns(r.CIRuns(key))

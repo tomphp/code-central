@@ -137,10 +137,17 @@ type CIProvider string
 const (
 	// CIGitHubActions is GitHub Actions, reached through the gh CLI.
 	CIGitHubActions CIProvider = "github_actions"
+	// CIAzurePipelines is Azure Pipelines, reached over Azure DevOps'
+	// REST API with a PAT from the service's environment.
+	CIAzurePipelines CIProvider = "azure_pipelines"
 )
 
+// DefaultPATEnv is the PAT environment variable a Project that names none
+// reads; the store keeps the name empty then, and Project reads fill it in.
+const DefaultPATEnv = "ADO_PAT"
+
 // CIProviders lists every CIProvider, the default first.
-var CIProviders = []CIProvider{CIGitHubActions}
+var CIProviders = []CIProvider{CIGitHubActions, CIAzurePipelines}
 
 // Valid reports whether p is one of the CIProviders.
 func (p CIProvider) Valid() bool { return slices.Contains(CIProviders, p) }
@@ -157,13 +164,18 @@ func ciProviderNames() []string {
 
 // CI is a Project's CI settings: whether CI Tracking is on, the CI
 // Provider and the repository it watches, the Ignored workflows (each a
-// workflow file's base name, such as ci.yml), the URL of the Push
-// remote the Factory last reported, the CI Rules, and whether Unblock on
-// push is on.
+// workflow file's base name, such as ci.yml, or a pipeline's name), the
+// URL of the Push remote the Factory last reported, the CI Rules, and
+// whether Unblock on push is on. Repository is the GitHub repository,
+// ProjectURL the Azure DevOps project and PATEnv the name of the
+// environment variable holding its PAT (never the PAT); each provider
+// keeps its own.
 type CI struct {
 	Tracking         bool
 	Provider         CIProvider
 	Repository       string
+	ProjectURL       string
+	PATEnv           string
 	IgnoredWorkflows []string
 	PushRemoteURL    string
 	Rules            []CIRule
@@ -197,7 +209,7 @@ func DefaultCI() CI { return CI{Provider: CIGitHubActions} }
 
 // Equal reports whether c and d are the same settings.
 func (c CI) Equal(d CI) bool {
-	return c.Tracking == d.Tracking && c.Provider == d.Provider && c.Repository == d.Repository &&
+	return c.Tracking == d.Tracking && c.Provider == d.Provider && c.Repository == d.Repository && c.ProjectURL == d.ProjectURL && c.PATEnv == d.PATEnv &&
 		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL &&
 		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal) && c.UnblockOnPush == d.UnblockOnPush
 }
@@ -485,10 +497,13 @@ const (
 	CITimedOut  CIConclusion = "timed_out"
 	CISkipped   CIConclusion = "skipped"
 	CINeutral   CIConclusion = "neutral"
+	// CIPartiallySucceeded is a run that passed with failures its
+	// pipeline let through; it counts as passed.
+	CIPartiallySucceeded CIConclusion = "partially_succeeded"
 )
 
 // CIConclusions lists every CIConclusion.
-var CIConclusions = []CIConclusion{CISuccess, CIFailure, CICancelled, CITimedOut, CISkipped, CINeutral}
+var CIConclusions = []CIConclusion{CISuccess, CIFailure, CICancelled, CITimedOut, CISkipped, CINeutral, CIPartiallySucceeded}
 
 // Valid reports whether c is one of the CIConclusions, or empty.
 func (c CIConclusion) Valid() bool { return c == "" || slices.Contains(CIConclusions, c) }

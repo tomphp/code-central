@@ -234,6 +234,9 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
       tracking: draft.tracking,
       provider: draft.provider,
       repository: draft.repository,
+      // No fields for the Azure Pipelines settings yet: keep what is stored.
+      project_url: project.ci.project_url,
+      pat_env: project.ci.pat_env,
       ignored_workflows: workflowNames(draft.ignored),
       unblock_on_push: draft.unblockOnPush,
     };

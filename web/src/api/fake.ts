@@ -95,6 +95,7 @@ import {
   type CIConclusion,
   type CIFailureOption,
   type CIResult,
+  type CIProvider,
   type CIRule,
   type CIRunView,
   type CIRunRow,
@@ -414,7 +415,7 @@ export class FakeApi implements Api {
   private followers = new Set<FakeFollower>();
   private opts: Options = { ...DEFAULT_OPTIONS };
   // ciCheck is the refusal the CI check answers with; none passes.
-  private ciCheck?: { reason: string; fix: string; field?: "tracking" | "repository" };
+  private ciCheck?: { reason: string; fix: string; field?: "tracking" | "repository" | "project_url" };
   // issuesCheck is the refusal the Issues check answers with; none passes.
   private issuesCheck?: { reason: string; fix: string; field?: "on" | "repository" };
   private usageCalls: FakeUsageCall[] = [];
@@ -435,6 +436,8 @@ export class FakeApi implements Api {
         tracking: false,
         provider: "github_actions",
         repository: "",
+        project_url: "",
+        pat_env: "ADO_PAT",
         ignored_workflows: [],
         unblock_on_push: false,
         push_remote_url: "",
@@ -539,7 +542,7 @@ export class FakeApi implements Api {
   // is turned on: refused with this reason and fix, on field (tracking
   // unless given; the service gives repository when gh can't read it),
   // or, with none, passed.
-  seedCICheck(refused?: { reason: string; fix: string; field?: "tracking" | "repository" }) {
+  seedCICheck(refused?: { reason: string; fix: string; field?: "tracking" | "repository" | "project_url" }) {
     this.ciCheck = refused;
   }
 
@@ -1284,28 +1287,45 @@ export class FakeApi implements Api {
   async setCITracking(key: string, change: CITrackingChange): Promise<ProjectView> {
     this.calls.push("setCITracking");
     const provider = change.provider || "github_actions";
-    if (provider !== "github_actions") {
-      throw new ApiError(422, "invalid", `CI Provider "${provider}" isn't "github_actions", the only one`, "provider");
+    if (provider !== "github_actions" && provider !== "azure_pipelines") {
+      throw new ApiError(422, "invalid", `CI Provider "${provider}" isn't "github_actions" or "azure_pipelines"`, "provider");
     }
     const repository = change.repository.trim();
-    if (!repository && change.tracking) {
-      throw new ApiError(422, "invalid", "CI Tracking needs the GitHub repository to watch, as owner/name", "repository");
-    }
-    if (repository && !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(repository)) {
-      throw new ApiError(422, "invalid", `"${repository}" isn't a GitHub repository as owner/name, such as acme/web`, "repository");
+    let project_url = (change.project_url ?? "").trim();
+    const pat_env = (change.pat_env ?? "").trim();
+    if (provider === "azure_pipelines") {
+      if (!project_url && change.tracking) {
+        throw new ApiError(422, "invalid", "CI Tracking needs the Azure DevOps project to watch, as its URL", "project_url");
+      }
+      if (project_url) project_url = parseProjectURL(project_url);
+      if (pat_env && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(pat_env)) {
+        throw new ApiError(422, "invalid", `"${pat_env}" isn't an environment variable name: a letter or underscore, then letters, digits and underscores, such as ADO_PAT`, "pat_env");
+      }
+    } else {
+      if (!repository && change.tracking) {
+        throw new ApiError(422, "invalid", "CI Tracking needs the GitHub repository to watch, as owner/name", "repository");
+      }
+      if (repository && !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(repository)) {
+        throw new ApiError(422, "invalid", `"${repository}" isn't a GitHub repository as owner/name, such as acme/web`, "repository");
+      }
     }
     const ignored: string[] = [];
     for (const raw of change.ignored_workflows) {
       const w = raw.trim();
       if (!w || ignored.includes(w)) continue;
-      if (!WORKFLOW.test(w)) {
-        throw new ApiError(422, "invalid", `"${w}" isn't a workflow file name, such as ci.yml`, "ignored_workflows");
-      }
+      const [ok, example] = checkWorkflow(provider, w);
+      if (!ok) throw new ApiError(422, "invalid", `"${w}" isn't ${example}`, "ignored_workflows");
       ignored.push(w);
     }
     const p = this.writable(key);
-    const checks = change.tracking && !(p.ci.tracking && p.ci.provider === provider && p.ci.repository === repository);
-    if (checks && this.ciCheck) {
+    const patName = (e: string) => e || "ADO_PAT";
+    const changed =
+      !p.ci.tracking ||
+      p.ci.provider !== provider ||
+      p.ci.repository !== repository ||
+      p.ci.project_url !== project_url ||
+      patName(p.ci.pat_env) !== patName(pat_env);
+    if (change.tracking && changed && this.ciCheck) {
       throw new ApiError(422, "invalid", this.ciCheck.reason, this.ciCheck.field ?? "tracking", undefined, this.ciCheck.fix);
     }
     // Turning CI Tracking off forgets the CI Watcher's status.
@@ -1315,6 +1335,8 @@ export class FakeApi implements Api {
       tracking: change.tracking,
       provider,
       repository,
+      project_url,
+      pat_env: patName(pat_env),
       ignored_workflows: ignored,
       unblock_on_push: change.unblock_on_push,
       watcher,
@@ -1697,7 +1719,7 @@ export class FakeApi implements Api {
       return x === undefined ? time(b.started) - time(a.started) : time(y) - time(x);
     });
     return {
-      projects: projects.map((p) => ({ project: p.key, tracking: p.ci.tracking, repository: p.ci.repository, watcher: structuredClone(p.ci.watcher) })),
+      projects: projects.map((p) => ({ project: p.key, tracking: p.ci.tracking, repository: p.ci.repository, project_url: p.ci.project_url, watcher: structuredClone(p.ci.watcher) })),
       runs,
     };
   }
@@ -1984,8 +2006,9 @@ function acknowledgeTicketCreate(after: TicketView): TicketAcknowledgement {
 // than the one on Spec self watching the same workflow and branch.
 function checkCIRule(p: FakeProject, change: CIRuleChange, self: string): CIRuleChange {
   const rule: CIRuleChange = { workflow: change.workflow.trim(), branch: change.branch.trim(), state: change.state };
-  if (rule.workflow !== "any" && !WORKFLOW.test(rule.workflow)) {
-    throw new ApiError(422, "invalid", `"${rule.workflow}" isn't a workflow file name, such as ci.yml, or any for any workflow`, "workflow");
+  const [ok, example] = checkWorkflow(p.ci.provider, rule.workflow);
+  if (rule.workflow !== "any" && !ok) {
+    throw new ApiError(422, "invalid", `"${rule.workflow}" isn't ${example}, or any for any workflow`, "workflow");
   }
   if (!rule.branch || /[\s*?[\]]/.test(rule.branch)) {
     throw new ApiError(422, "invalid", `"${rule.branch}" isn't an exact branch name, such as main: a CI Rule's branch takes no globs`, "branch");
@@ -2020,6 +2043,45 @@ const ISSUES_SPEC_BODY =
 
 // WORKFLOW is a workflow file's base name, holding no glob.
 const WORKFLOW = /^[^/\\\s*?[\]]+\.ya?ml$/;
+
+// checkWorkflow is whether name is a workflow name for provider, with an
+// example of one: a workflow file for GitHub Actions, any non-empty
+// pipeline name without a separator or glob, spaces allowed, for Azure
+// Pipelines.
+function checkWorkflow(provider: CIProvider, name: string): [boolean, string] {
+  if (provider === "azure_pipelines") return [name !== "" && !/[/\\*?[\]]/.test(name), "a pipeline's name, such as Build"];
+  return [WORKFLOW.test(name), "a workflow file name, such as ci.yml"];
+}
+
+// parseProjectURL is the stored project URL for what the human typed, or
+// the service's refusal, as azdourl's ParseProjectURL does.
+function parseProjectURL(text: string): string {
+  const bad = (why: string) =>
+    new ApiError(422, "invalid", `"${text}" is not an Azure DevOps project URL: ${why}, such as https://dev.azure.com/acme/web`, "project_url");
+  let u: URL;
+  try {
+    u = new URL(text.replace(/ /g, "%20"));
+  } catch {
+    throw bad("it can't be read as a URL");
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") throw bad("it must start with https://");
+  let segs = u.pathname.replace(/\/$/, "").split("/").slice(1);
+  if (segs.length === 1 && segs[0] === "") segs = [];
+  const cut = segs.findIndex((s) => s.startsWith("_"));
+  if (cut >= 0) segs = segs.slice(0, cut);
+  if (segs.some((s) => s === "")) throw bad("its path has an empty part");
+  const host = u.hostname.toLowerCase();
+  if (host === "dev.azure.com") {
+    if (segs.length !== 2) throw bad("on dev.azure.com it is /<organization>/<project>");
+  } else if (host.endsWith(".visualstudio.com")) {
+    if (!(segs.length === 1 || (segs.length === 2 && segs[0].toLowerCase() === "defaultcollection"))) {
+      throw bad("on visualstudio.com it is /<project> or /DefaultCollection/<project>");
+    }
+  } else if (segs.length < 2) {
+    throw bad("on Azure DevOps Server it is /<collection>/<project>");
+  }
+  return `${u.protocol}//${u.host.toLowerCase()}/${segs.join("/")}`;
+}
 
 const ciRuleWatches = (r: CIRuleChange) => `${r.workflow === "any" ? "any workflow" : r.workflow} on ${r.branch}`;
 const ciRuleTitle = (r: CIRuleChange) => `CI: ${ciRuleWatches(r)}`;

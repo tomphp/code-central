@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers"
 )
 
@@ -16,7 +17,14 @@ const Command = "ci-watcher"
 // CheckArgs are the arguments that run program's CI Watcher in its check
 // mode for in, after the program itself.
 func CheckArgs(in core.CICheckInput) []string {
-	args := []string{Command, "--check", "--provider", string(in.Provider), "--repository", in.Repository}
+	args := []string{Command, "--check", "--provider", string(in.Provider)}
+	if in.Provider == store.CIAzurePipelines {
+		// The PAT is never an argument: the check reads it from the
+		// environment the variable's name points at.
+		args = append(args, "--project-url", in.ProjectURL, "--pat-env", in.PATEnv)
+	} else {
+		args = append(args, "--repository", in.Repository)
+	}
 	if in.GHPath != "" {
 		args = append(args, "--gh-path", in.GHPath)
 	}
