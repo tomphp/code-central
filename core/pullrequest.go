@@ -289,3 +289,25 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in ReportPullReq
 	}
 	return Written[PullRequestReport]{Acknowledgement: ack}, nil
 }
+
+// pullRequestOpen says t waits on a pull request that is still open on the
+// Code Host, conflicting or not.
+func pullRequestOpen(t store.Ticket) bool {
+	return t.PullRequest != nil && (t.PullRequest.State == store.PROpen || t.PullRequest.State == store.PRConflicting)
+}
+
+// openPullRequests is the notice after a switch away from Pull Request:
+// the open pull request of each Accepted Ticket, by Ticket. A Spec's one
+// pull request shows for each of its Tickets. It is empty under Pull Request.
+func openPullRequests(r store.Reader, key string, method store.LandingMethod) []OpenPullRequest {
+	out := []OpenPullRequest{}
+	if method == store.LandingPullRequest {
+		return out
+	}
+	for _, t := range r.Tickets(key) {
+		if t.State == store.Accepted && pullRequestOpen(t) {
+			out = append(out, OpenPullRequest{Ticket: DisplayID(key, t.Number), Link: t.PullRequest.Link})
+		}
+	}
+	return out
+}

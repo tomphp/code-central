@@ -69,6 +69,14 @@ export interface Landing {
   // The Pull Request Watcher's status: not_reported unless the method is
   // Pull Request.
   watcher: PullRequestWatcherStatus;
+  // The pull requests left open on the Code Host after a switch away from
+  // Pull Request, one per Accepted Ticket; always empty under Pull Request.
+  open_pull_requests: OpenPullRequest[];
+}
+
+export interface OpenPullRequest {
+  ticket: string;
+  link: string;
 }
 
 // Why the Pull Request Watcher can't open and follow pull requests, each
@@ -87,7 +95,7 @@ export type PullRequestWatcherReport = Omit<PullRequestWatcherStatus, "since"> &
 
 // What setLandingMethod takes: the Code Host and repository are derived, and
 // leaving land_per_spec or pat_env out keeps the stored value.
-export type LandingInput = Omit<Landing, "land_per_spec" | "code_host" | "repository" | "pat_env" | "watcher"> & {
+export type LandingInput = Omit<Landing, "land_per_spec" | "code_host" | "repository" | "pat_env" | "watcher" | "open_pull_requests"> & {
   land_per_spec?: boolean;
   pat_env?: string;
 };

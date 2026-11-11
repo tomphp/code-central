@@ -304,3 +304,46 @@ func TestUnderPullRequestLandingNeedsNoCI(t *testing.T) {
 	r.Poll()
 	h.WaitForState(id, store.Done)
 }
+
+func TestSwitchingFromPullRequestToMergeLandsWaitingTicketsAlreadyInTheBaseAndMergesTheOthers(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.AddRemote("origin")
+	pullRequestOn(h, "origin")
+	inBase, _ := accepted(h, "Merged by hand", "byhand.txt", "by hand\n")
+	other, _ := accepted(h, "Still waiting", "waiting.txt", "waiting\n")
+	r := h.Start()
+	waitPushed(t, h, inBase, "")
+	waitPushed(t, h, other, "")
+	reportPullRequest(t, h, inBase, "")
+	h.Git("merge", "-q", "--no-ff", "-m", "by hand", inBase)
+	handMerge := h.Git("rev-parse", "main")
+
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge})
+	r.Poll()
+	h.WaitForState(inBase, store.Done)
+	h.WaitForState(other, store.Done)
+	if h.Git("rev-parse", "main") == handMerge {
+		t.Errorf("main is still at %s, want %s merged into it", handMerge, other)
+	}
+}
+
+func TestSwitchingFromPullRequestToBranchWaitsForTheBranchInTheBaseByAncestry(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.AddRemote("origin")
+	pullRequestOn(h, "origin")
+	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
+	r := h.Start()
+	waitPushed(t, h, id, "")
+	reportPullRequest(t, h, id, "")
+
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch})
+	r.Poll()
+	if tk := h.Ticket(id); tk.State != store.Accepted {
+		t.Fatalf("%s is %s, want it waiting Accepted for its branch", id, tk.State)
+	}
+	h.Git("merge", "-q", "--no-ff", "-m", "merged by hand", id)
+	r.Poll()
+	h.WaitForState(id, store.Done)
+}

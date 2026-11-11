@@ -135,8 +135,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ["beta", "Beta", 0, false],
       ]);
       expect(rows.map((r) => r.landing)).toEqual([
-        { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" } },
-        { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" } },
+        { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" }, open_pull_requests: [] },
+        { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" }, open_pull_requests: [] },
       ]);
       const off = {
         tracking: false,
@@ -246,7 +246,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       const v = await d.api.setLandingMethod("acme", { method: "branch", push: true, remote: " upstream " });
       expect(v).toMatchObject({ key: "acme", landing: { method: "branch", push: true, remote: "upstream" } });
-      expect((await d.api.listProjects())[0].landing).toEqual({ method: "branch", push: true, remote: "upstream", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" } });
+      expect((await d.api.listProjects())[0].landing).toEqual({ method: "branch", push: true, remote: "upstream", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" }, open_pull_requests: [] });
 
       // Without Push, an empty remote reads as origin.
       expect((await d.api.setLandingMethod("acme", { method: "merge", push: false, remote: "" })).landing).toEqual({
@@ -258,6 +258,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         repository: "",
         pat_env: "ADO_PAT",
         watcher: { state: "not_reported" },
+        open_pull_requests: [],
       });
 
       const empty = await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: " " }).catch((e) => e);

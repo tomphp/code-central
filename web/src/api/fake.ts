@@ -439,7 +439,7 @@ export class FakeApi implements Api {
       mode: "committed",
       archived: opts.archived ?? false,
       ...(opts.archived ? { archived_at: this.now.toISOString() } : {}),
-      landing: { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" } },
+      landing: { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" }, open_pull_requests: [] },
       ci: {
         tracking: false,
         provider: "github_actions",
@@ -967,8 +967,8 @@ export class FakeApi implements Api {
     this.calls.push("listProjects");
     return [...this.projects.values()]
       .sort((a, b) => a.key.localeCompare(b.key))
-      .map(({ next: _, ...p }) => ({
-        ...p,
+      .map((p) => ({
+        ...this.projectView(p),
         needs_me: this.rows().filter((r) => r.project === p.key).length,
         unfinished: this.unfinished(p.key).length,
       }));
@@ -2007,7 +2007,14 @@ export class FakeApi implements Api {
   }
 
   private projectView({ next: _, ...p }: FakeProject): ProjectView {
-    return structuredClone(p);
+    // After a switch away from Pull Request, the pull requests left open.
+    const open_pull_requests =
+      p.landing.method === "pull_request"
+        ? []
+        : [...this.tickets.values()]
+            .filter((t) => t.id.startsWith(`${p.key}-`) && t.state === "Accepted" && (t.pull_request?.state === "open" || t.pull_request?.state === "conflicting"))
+            .map((t) => ({ ticket: t.id, link: t.pull_request!.link }));
+    return structuredClone({ ...p, landing: { ...p.landing, open_pull_requests } });
   }
 
   private rows() {
