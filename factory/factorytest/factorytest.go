@@ -521,10 +521,17 @@ func (h *Harness) Answer(ticket, text string) {
 // WaitFor polls cond until it holds, failing the test after Timeout.
 func (h *Harness) WaitFor(what string, cond func() bool) {
 	h.t.Helper()
+	h.WaitForDescribed(func() string { return what }, cond)
+}
+
+// WaitForDescribed is WaitFor with what read when the wait times out, so
+// it can report the state the wait ended in.
+func (h *Harness) WaitForDescribed(what func() string, cond func() bool) {
+	h.t.Helper()
 	deadline := time.Now().Add(Timeout)
 	for !cond() {
 		if time.Now().After(deadline) {
-			h.t.Fatalf("timed out waiting for %s", what)
+			h.t.Fatalf("timed out waiting for %s", what())
 		}
 		time.Sleep(5 * time.Millisecond)
 	}

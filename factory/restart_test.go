@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -29,7 +30,9 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 	r := h.Start("--parallel", "5")
 	h.WaitForState(answered, store.NeedsAnswer)
 	h.WaitForState(waiting, store.NeedsAnswer)
-	h.WaitFor("every turn", func() bool { return len(h.Calls()) == 5 })
+	h.WaitForDescribed(func() string {
+		return fmt.Sprintf("every turn (%d started; stdout %q; stderr %q)", len(h.Calls()), r.Stdout(), r.Stderr())
+	}, func() bool { return len(h.Calls()) == 5 })
 	r.Signal(os.Interrupt)
 	r.Signal(os.Interrupt)
 	r.Exited()
