@@ -95,6 +95,10 @@ func (w *landWorld) ready(title string) string {
 			w.t.Fatal(err)
 		}
 		w.spec = s.ID
+		// Long-lived, so that its Tickets land one by one under the default Land per Spec.
+		if _, err := w.srv.Client.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(s.ID), Labels: []string{core.LongLivedLabel}}); err != nil {
+			w.t.Fatal(err)
+		}
 	}
 	tk, err := w.srv.Client.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: core.Ref(w.spec), Title: title, State: store.Ready})
 	if err != nil {

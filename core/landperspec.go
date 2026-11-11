@@ -11,16 +11,16 @@ import (
 )
 
 // Land per Spec (code-central-371): under Merge with the option on, an
-// implementation Ticket of a Requirement is merged into its Spec's Spec
-// Branch when accepted, and the Spec lands once all its Tickets are
-// accepted. Core works out which Tickets this covers, in one place, and
-// when a Spec is ready; the Factory does the git.
+// implementation Ticket of a Spec other than a Long-lived one is merged
+// into its Spec Branch when accepted, and the Spec lands once all its
+// Tickets are accepted. Core works out which Tickets this covers, in one
+// place, and when a Spec is ready; the Factory does the git.
 
 // specLanded is whether t is a Spec-landed Ticket in a Project with
 // landing: the Project is under Merge with Land per Spec on, t is an
 // implementation Ticket (not a Stage, Map or Prototype Ticket), and its
-// Spec is a Requirement Spec, one with Stages. Long-lived Specs and plain
-// Specs land Ticket by Ticket.
+// Spec is neither a Map nor Long-lived (it doesn't carry the long-lived
+// Label). A Long-lived Spec's Tickets land Ticket by Ticket.
 func specLanded(r store.Reader, landing store.Landing, key string, t store.Ticket) bool {
 	if !store.NewLandingPolicy(landing.Method, landing.Push, landing.LandPerSpec, false).LandPerSpecInForce() {
 		return false
@@ -28,14 +28,8 @@ func specLanded(r store.Reader, landing store.Landing, key string, t store.Ticke
 	if StageOf(t.Labels) != "" || isMap(t.Labels) || slices.Contains(t.Labels, PrototypeLabel) {
 		return false
 	}
-	return isRequirement(r, key, t.Spec)
-}
-
-// isRequirement is whether Spec n has a Stage Ticket.
-func isRequirement(r store.Reader, key string, n int) bool {
-	return slices.ContainsFunc(r.Tickets(key), func(t store.Ticket) bool {
-		return t.Spec == n && StageOf(t.Labels) != ""
-	})
+	spec, ok := r.Spec(key, t.Spec)
+	return ok && !isMap(spec.Labels) && !slices.Contains(spec.Labels, LongLivedLabel)
 }
 
 // specMergeCounts is whether t has a Spec merge that counts: one after
@@ -68,7 +62,7 @@ type SpecMergeView struct {
 	Counts bool      `json:"counts"`
 }
 
-// LandPerSpecView is a Requirement's Land per Spec status on a Spec read,
+// LandPerSpecView is a Spec's Land per Spec status on a Spec read,
 // present only while the Project is under Merge with Land per Spec on.
 type LandPerSpecView struct {
 	// Waiting are the Accepted Tickets waiting for the Spec to land.
@@ -78,11 +72,12 @@ type LandPerSpecView struct {
 	Ready bool `json:"ready"`
 }
 
-// landPerSpecView is the Land per Spec status of Requirement Spec n with
-// these Tickets, or nil when the option doesn't apply.
-func landPerSpecView(r store.Reader, key string, tickets []store.Ticket) *LandPerSpecView {
+// landPerSpecView is the Land per Spec status of Spec s with these
+// Tickets, or nil when the option doesn't apply: it isn't in force, or s is
+// a Long-lived Spec.
+func landPerSpecView(r store.Reader, key string, s store.Spec, tickets []store.Ticket) *LandPerSpecView {
 	p, _ := r.Project(key)
-	if !p.LandingPolicy().LandPerSpecInForce() {
+	if !p.LandingPolicy().LandPerSpecInForce() || slices.Contains(s.Labels, LongLivedLabel) {
 		return nil
 	}
 	v := &LandPerSpecView{Waiting: []string{}}

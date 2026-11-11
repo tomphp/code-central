@@ -30,6 +30,10 @@ func init() {
 func specLandedAccepted(t *testing.T, srv *codecentraltest.Server) {
 	t.Helper()
 	must(t, func() error {
+		_, err := srv.Core.RemoveLabels(context.Background(), "acme", core.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
+		return err
+	})
+	must(t, func() error {
 		_, err := srv.Core.CreateTicket(context.Background(), "acme", core.CreateTicketInput{Spec: "1", Title: "Grilling", Labels: []string{core.StageLabel("grilling")}})
 		return err
 	})

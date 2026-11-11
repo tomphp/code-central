@@ -39,8 +39,8 @@ type SpecDetail struct {
 	// Requirement is set only when the Spec is a Requirement.
 	Requirement *RequirementView `json:"requirement,omitempty"`
 	// LandPerSpec is the Spec's Land per Spec status, left out unless it is
-	// a Requirement and the Project is under Merge or Pull Request with
-	// Land per Spec on.
+	// a Long-lived Spec or the Project isn't under Merge or Pull Request
+	// with Land per Spec on.
 	LandPerSpec *LandPerSpecView `json:"land_per_spec,omitempty"`
 	// Map is set only when the Spec is a Map.
 	Map *MapView `json:"map,omitempty"`
@@ -121,9 +121,7 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 		}
 		v.StateSummary, v.Finished = summarise(tickets)
 		v.Requirement = c.requirementView(r, key, s, tickets)
-		if v.Requirement != nil {
-			v.LandPerSpec = landPerSpecView(r, key, tickets)
-		}
+		v.LandPerSpec = landPerSpecView(r, key, s, tickets)
 		v.Map = c.mapView(r, key, s, tickets)
 		if in.lighter() {
 			v.Outline = Outline(s.Body)

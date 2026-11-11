@@ -118,6 +118,7 @@ import {
   type Landing,
   type LandingInput,
   MAP_LABEL,
+  LONG_LIVED_LABEL,
   type MapView,
   type Mode,
   type NeedsMeReason,
@@ -471,7 +472,7 @@ export class FakeApi implements Api {
   addTicket(project: string, seed: SeedTicket): TicketView {
     const p = this.projects.get(project);
     if (!p) throw new Error(`FakeApi: no Project ${project}`);
-    if (seed.labels?.includes("long-lived")) {
+    if (seed.labels?.includes(LONG_LIVED_LABEL)) {
       throw new ApiError(422, "invalid", `"long-lived" marks a Spec as long-lived; it goes on a Spec, not a Ticket`, "labels");
     }
     const at = this.now.toISOString();
@@ -1970,7 +1971,9 @@ export class FakeApi implements Api {
       };
     }
     const stages = STAGES.map((s) => tickets.find((t) => stageOf(t) === s.name)).filter((t) => !!t);
-    if (!stages.length) return { state_summary, finished };
+    if (!stages.length) {
+      return { state_summary, finished, ...this.landPerSpecOf(spec, tickets, tickets.filter((t) => t.state !== "Cancelled" && !t.labels.includes("prototype"))) };
+    }
     // The Map a Requirement was made from, when it has no grilling Stage.
     const map = stageOf(stages[0]) !== "grilling" ? this.specs.get(spec)?.tags.map : undefined;
     // A Ticket a Factory could claim now; one waiting on the human doesn't count.
@@ -1988,15 +1991,17 @@ export class FakeApi implements Api {
         build: { done: build.filter((t) => t.state === "Done").length, total: build.length },
         waiting_for_factory: current ? claimable(current) : build.some(claimable) && !held,
       },
-      ...this.landPerSpecOf(tickets, build),
+      ...this.landPerSpecOf(spec, tickets, build),
     };
   }
 
-  // landPerSpecOf is a Requirement's Land per Spec status while its
-  // Project is under Merge or Pull Request with the option on: the Tickets seeded as
-  // waiting for the Spec, ready once the tickets Stage and every build
-  // Ticket is finished or Accepted.
-  private landPerSpecOf(tickets: TicketView[], build: TicketView[]): { land_per_spec?: LandPerSpecStatus } {
+  // landPerSpecOf is a Spec's Land per Spec status while its Project is
+  // under Merge or Pull Request with the option on, left out for a
+  // Long-lived Spec: the Tickets seeded as waiting for the Spec, ready once
+  // the tickets Stage, if it has one, and every build Ticket is finished or
+  // Accepted.
+  private landPerSpecOf(spec: string, tickets: TicketView[], build: TicketView[]): { land_per_spec?: LandPerSpecStatus } {
+    if (!tickets.length || this.specs.get(spec)?.labels.includes(LONG_LIVED_LABEL)) return {};
     const landing = this.project(this.projectOf(tickets[0].id)).landing;
     if ((landing.method !== "merge" && landing.method !== "pull_request") || !landing.land_per_spec) return {};
     const waiting = build.filter((t) => t.waiting_for_spec).map((t) => t.id);

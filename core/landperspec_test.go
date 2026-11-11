@@ -75,6 +75,15 @@ func (f fixture) specMerge(t *testing.T, id, commit string) {
 	}
 }
 
+func (f fixture) specStatus(t *testing.T, spec core.Ref) *core.LandPerSpecView {
+	t.Helper()
+	v, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: spec})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v.LandPerSpec
+}
+
 func (f fixture) landStatus(t *testing.T) *core.LandPerSpecView {
 	t.Helper()
 	v, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
@@ -108,15 +117,23 @@ func TestNoTicketIsSpecLandedWithLandPerSpecOffOrUnderBranch(t *testing.T) {
 	}
 }
 
-func TestTicketsOfPlainSpecsAndPrototypesAreNotSpecLanded(t *testing.T) {
+func TestPlainSpecsTicketsAreSpecLandedButLongLivedSpecsAndPrototypesAreNot(t *testing.T) {
 	f := landWorld(t, true)
 	f.spec(t, "acme", "Plain")
 	plain := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "Plain work"})
+	f.longLived(t, f.spec(t, "acme", "CI"))
+	long := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-9", Title: "Long work"})
 	proto := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Try", Labels: []string{core.PrototypeLabel}})
-	for _, tk := range []core.TicketView{plain, proto} {
-		if f.getTicket(t, tk.ID).SpecLanded {
-			t.Errorf("%s is Spec-landed", tk.ID)
+	for id, want := range map[string]bool{plain.ID: true, long.ID: false, proto.ID: false} {
+		if got := f.getTicket(t, id).SpecLanded; got != want {
+			t.Errorf("%s Spec-landed = %v, want %v", id, got, want)
 		}
+	}
+	if f.specStatus(t, "acme-7") == nil {
+		t.Error("plain Spec has no Land per Spec status")
+	}
+	if f.specStatus(t, "acme-9") != nil {
+		t.Error("Long-lived Spec has a Land per Spec status")
 	}
 }
 
@@ -234,6 +251,26 @@ func TestACancelledTicketDoesNotHoldASpecBackButATicketAddedLaterDoes(t *testing
 	}
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Later"})
 	if st := f.landStatus(t); st.Ready {
+		t.Errorf("status with a Ticket added later = %+v, want not ready", st)
+	}
+}
+
+func TestAPlainSpecIsReadyOnceEveryTicketIsFinishedAndOneIsMergedAndADraftHoldsItBack(t *testing.T) {
+	f := landWorld(t, true)
+	f.spec(t, "acme", "Plain") // acme-7
+	a := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "A"})
+	b := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "B"})
+	f.moveTo(t, 8, store.Accepted)
+	f.specMerge(t, a.ID, "def456")
+	if st := f.specStatus(t, "acme-7"); st == nil || st.Ready || !slices.Equal(st.Waiting, []string{a.ID}) {
+		t.Fatalf("status with %s still a Draft = %+v, want %s waiting, not ready", b.ID, st, a.ID)
+	}
+	f.moveTo(t, 9, store.Cancelled)
+	if st := f.specStatus(t, "acme-7"); !st.Ready {
+		t.Fatalf("status with every Ticket finished = %+v, want ready", st)
+	}
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-7", Title: "Late"})
+	if st := f.specStatus(t, "acme-7"); st.Ready {
 		t.Errorf("status with a Ticket added later = %+v, want not ready", st)
 	}
 }

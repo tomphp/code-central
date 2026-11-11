@@ -18,13 +18,22 @@ import (
 func (f fixture) work(t *testing.T, states ...store.State) []core.TicketView {
 	t.Helper()
 	f.project(t, "acme")
-	f.spec(t, "acme", "Login")
+	// Long-lived, so that its Tickets land one by one under the default Land per Spec.
+	f.longLived(t, f.spec(t, "acme", "Login"))
 	var out []core.TicketView
 	for i, s := range states {
 		out = append(out, f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "T" + string(rune('a'+i)), State: s}))
 		f.clock.Advance(time.Minute)
 	}
 	return out
+}
+
+// longLived gives s the long-lived Label.
+func (f fixture) longLived(t *testing.T, s core.SpecView) {
+	t.Helper()
+	if _, err := f.core.AddLabels(ctx, "acme", core.LabelsInput{Target: core.Ref(s.ID), Labels: []string{core.LongLivedLabel}}); err != nil {
+		t.Fatalf("add_labels: %v", err)
+	}
 }
 
 var human = core.WithActor(ctx, core.Human)

@@ -62,6 +62,11 @@ func newWatchingOn(t *testing.T, remote string) *watching {
 		return err
 	})
 	must(t, func() error { _, err := c.CreateSpec(ctx, "acme", core.CreateSpecInput{Title: "Login"}); return err })
+	// Long-lived, so that its Ticket gets a pull request of its own.
+	must(t, func() error {
+		_, err := c.AddLabels(ctx, "acme", core.LabelsInput{Target: "acme-1", Labels: []string{core.LongLivedLabel}})
+		return err
+	})
 	must(t, func() error {
 		_, err := c.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Login form", State: store.Ready})
 		return err

@@ -442,15 +442,37 @@ func (h *Harness) LabelledTicket(label, title string) string {
 	return h.readyTicket(title, label)
 }
 
+// sharedSpec creates the shared Spec if it doesn't exist yet. It is
+// Long-lived, so that its Tickets land one by one under the default Land
+// per Spec, until MakeRequirement or MakePlainSpec takes the label off.
+func (h *Harness) sharedSpec() {
+	h.t.Helper()
+	if h.spec != "" {
+		return
+	}
+	ctx := context.Background()
+	c := h.Server.Client
+	s, err := c.CreateSpec(ctx, h.Project, core.CreateSpecInput{Title: "Work"})
+	must(h.t, err)
+	_, err = c.AddLabels(ctx, h.Project, core.LabelsInput{Target: core.Ref(s.ID), Labels: []string{core.LongLivedLabel}})
+	must(h.t, err)
+	h.spec = s.ID
+}
+
+// MakePlainSpec takes the long-lived Label off the shared Spec, so that
+// Land per Spec covers its Tickets.
+func (h *Harness) MakePlainSpec() {
+	h.t.Helper()
+	h.sharedSpec()
+	_, err := h.Server.Client.RemoveLabels(context.Background(), h.Project, core.LabelsInput{Target: core.Ref(h.spec), Labels: []string{core.LongLivedLabel}})
+	must(h.t, err)
+}
+
 func (h *Harness) readyTicket(title string, labels ...string) string {
 	h.t.Helper()
 	ctx := context.Background()
 	c := h.Server.Client
-	if h.spec == "" {
-		s, err := c.CreateSpec(ctx, h.Project, core.CreateSpecInput{Title: "Work"})
-		must(h.t, err)
-		h.spec = s.ID
-	}
+	h.sharedSpec()
 	tk, err := c.CreateTicket(ctx, h.Project, core.CreateTicketInput{Spec: core.Ref(h.spec), Title: title, State: store.Ready, Labels: labels})
 	must(h.t, err)
 	return tk.ID
@@ -462,11 +484,7 @@ func (h *Harness) MakeRequirement() {
 	h.t.Helper()
 	ctx := context.Background()
 	c := h.Server.Client
-	if h.spec == "" {
-		s, err := c.CreateSpec(ctx, h.Project, core.CreateSpecInput{Title: "Work"})
-		must(h.t, err)
-		h.spec = s.ID
-	}
+	h.MakePlainSpec()
 	_, err := c.CreateTicket(ctx, h.Project, core.CreateTicketInput{Spec: core.Ref(h.spec), Title: "Stage", State: store.Draft, Labels: []string{core.StageLabel("grilling")}})
 	must(h.t, err)
 }
