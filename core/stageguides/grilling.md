@@ -7,7 +7,7 @@ You hold a Claim on the grilling Stage of a Requirement. The Requirement is the 
 Grill the human on the Requirement until every decision, new term and open point is settled. The work lands in Code Central, never in the repository:
 
 - **A new title.** Retitle the Spec with `edit_spec`, giving only `title`: a short name for the work, not the human's first line.
-- **A resolution comment.** Post it on this Ticket with `comment`. It lists every decision with its reason, every new term with its meaning, every new ADR the work needs, and every open point left for the spec Stage. The Spec Stage writes the Spec from it, and the tickets Stage assigns writing the terms and ADRs to an implementation Ticket.
+- **A resolution comment.** Post it on this Ticket with `comment`. It lists every decision with its reason, every new term with its meaning, every new ADR the work needs, and every open point left for the spec Stage. The Spec Stage writes the Spec from it, and the tickets Stage assigns writing the terms and ADRs to an implementation Ticket. When the human chooses Implement instead, the single implementation Ticket writes them.
 - Leave the Spec's body as the Requirement's text. The spec Stage replaces it.
 
 If the Requirement is already clear, finish with no Round, and say so in the resolution comment, with the decisions it already makes.

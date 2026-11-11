@@ -30,7 +30,7 @@ The In Review gate replaces any step that would stop to check with the user: the
 
 ## Finishing
 
-`finish` with a summary that lists the test seams, the key decisions and what is out of scope. Give no `branch` or `commit`: a Stage has none. The Ticket goes to In Review; stop working it.
+`finish` with a summary that lists the test seams, the key decisions and what is out of scope. End it with a recommendation, **Implement** or **Split into Tickets**, and a one-line reason based on the Spec's size. Prose only. Give no `branch` or `commit`: a Stage has none. The Ticket goes to In Review; stop working it.
 
 ## A redo
 

@@ -1,6 +1,6 @@
 # Code Central
 
-Code Central is a tool for driving multiple Claude Code sessions while keeping the user focussed on one question at a time.
+Code Central is a tool for driving multiple Claude Code sessions while keeping the user focussed on one question at a time. A Requirement goes through grilling and spec Stages, then either a tickets Stage that splits the Spec into Tickets or **Implement**, which builds it as one Ticket.
 
 ## DISCLAIMER
 
