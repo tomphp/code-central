@@ -24,3 +24,8 @@ func (c *Client) ReportModels(ctx context.Context, key string, in core.ReportMod
 func (c *Client) ReportHeartbeat(ctx context.Context, key string, in core.ReportHeartbeatInput) (core.Written[core.ProjectView], error) {
 	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_heartbeat", in, in.Full)
 }
+
+// ReportBase is the Factory's report_base (code-central-394).
+func (c *Client) ReportBase(ctx context.Context, key string, in core.ReportBaseInput) (core.Written[core.ProjectView], error) {
+	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_base", in, in.Full)
+}

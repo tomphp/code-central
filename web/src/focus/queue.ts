@@ -102,7 +102,8 @@ function isSkipped(item: FocusItem, skipped: FocusItem[]): boolean {
 }
 
 function itemsOf(row: NeedsMeRow, ticket?: TicketView): FocusItem[] {
-  if (row.reason !== "needs_answer") return [{ key: `${row.id} ${row.reason}`, row }];
+  // A Base diverged item is a Project's, with no Ticket ID.
+  if (row.reason !== "needs_answer") return [{ key: `${row.id || row.project} ${row.reason}`, row }];
   // The key comes from the row alone, so it's the same before and after
   // the read; a row naming no Round means the Ticket's latest.
   const roundKey = `${row.id} round ${row.round?.number ?? "latest"}`;

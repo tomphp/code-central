@@ -114,7 +114,7 @@ func (f *factory) land(ctx context.Context, landing core.LandingView) {
 		}
 		if landing.Method == store.LandingBranch {
 			f.landMergedBranch(ctx, tk, landing)
-		} else if pullRequest && !f.waitsOnSpecBranch(tk, landing) {
+		} else if pullRequest && (tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged || !f.waitsOnSpecBranch(tk, landing)) {
 			f.landPullRequest(ctx, tk, landing)
 		} else if f.waitsOnSpecBranch(tk, landing) {
 			if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
@@ -124,9 +124,11 @@ func (f *factory) land(ctx context.Context, landing core.LandingView) {
 			f.landAccepted(ctx, tk, landing)
 		}
 	}
-	if !pullRequest {
-		// Under Pull Request a Spec Branch goes to the base through its
-		// own pull request, not by a merge here.
+	if pullRequest {
+		// A Spec Branch goes to the base through its own pull request,
+		// not by a merge here: it is pushed instead.
+		f.pushSpecs(ctx, accepted, landing)
+	} else {
 		f.landSpecs(ctx, landing)
 	}
 	f.detectHandMerges(ctx, landing)

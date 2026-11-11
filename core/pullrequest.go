@@ -107,10 +107,13 @@ func watchesPullRequest(t store.Ticket) bool {
 }
 
 // pushedWork is every piece of pushed work to watch, in the order of its
-// first Ticket's number.
+// first Ticket's number. Under Land per Spec a Spec's Tickets share its
+// Spec Branch, which is one piece of work titled with the Spec's title.
 func pushedWork(r store.Reader, key string) []PushedWorkView {
 	out := []PushedWorkView{}
 	at := map[string]int{}
+	p, _ := r.Project(key)
+	var covered [][]store.Ticket
 	for _, t := range r.Tickets(key) {
 		if !watchesPullRequest(t) {
 			continue
@@ -118,13 +121,47 @@ func pushedWork(r store.Reader, key string) []PushedWorkView {
 		branch, latest := branchOf(t), t.PushedCommits[len(t.PushedCommits)-1]
 		if i, ok := at[branch]; ok {
 			out[i].Tickets = append(out[i].Tickets, DisplayID(key, t.Number))
+			covered[i] = append(covered[i], t)
+			if latest.Pushed.After(out[i].Pushed) {
+				out[i].Commit, out[i].Pushed = latest.Commit, latest.Pushed
+			}
 			continue
 		}
 		at[branch] = len(out)
+		covered = append(covered, []store.Ticket{t})
 		out = append(out, PushedWorkView{Branch: branch, Commit: latest.Commit, Pushed: latest.Pushed, Tickets: []string{DisplayID(key, t.Number)},
 			Title: t.Title, Body: ticketPullRequestBody(key, t, r), PullRequest: pullRequestView(t.PullRequest)})
 	}
+	for i, ts := range covered {
+		if !specLanded(r, p.Landing, key, ts[0]) {
+			continue
+		}
+		spec, _ := r.Spec(key, ts[0].Spec)
+		out[i].Title, out[i].Body = spec.Title, specPullRequestBody(key, spec, ts, p.DisplayName)
+		// The pull request on a Spec shows on its Tickets alike; the most
+		// recently reported one stands for it.
+		for _, t := range ts {
+			if t.PullRequest != nil {
+				out[i].PullRequest = pullRequestView(t.PullRequest)
+			}
+		}
+	}
 	return out
+}
+
+// specPullRequestBody is the body a Spec's pull request opens with: one
+// section per waiting Ticket with its ID, title and finish summary, under
+// the Spec's ID.
+func specPullRequestBody(key string, spec store.Spec, tickets []store.Ticket, project string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Spec %s in %s.\n", DisplayID(key, spec.Number), project)
+	for _, t := range tickets {
+		fmt.Fprintf(&b, "\n## %s: %s\n\n", DisplayID(key, t.Number), t.Title)
+		if s := lastFinishSummary(t); s != "" {
+			b.WriteString(s + "\n")
+		}
+	}
+	return b.String()
 }
 
 // ticketPullRequestBody is the body a Ticket's pull request opens with:

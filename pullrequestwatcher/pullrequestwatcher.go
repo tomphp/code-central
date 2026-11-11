@@ -31,6 +31,9 @@ func CheckArgs(in core.PullRequestCheckInput) []string {
 	if in.GHPath != "" {
 		args = append(args, "--gh-path", in.GHPath)
 	}
+	if in.PATEnv != "" {
+		args = append(args, "--pat-env", in.PATEnv)
+	}
 	return args
 }
 
@@ -46,10 +49,11 @@ func Checker(program string, environ []string) core.PullRequestCheck {
 // Check is the check mode: whether the Pull Request Watcher can open and
 // follow pull requests on in's repository. On GitHub it passes when gh is
 // found, is logged in, can read the repository and its login has write
-// permission there. Being rate-limited fails the check, as there is no
-// knowing yet.
+// permission there. On Azure Repos it passes when the PAT variable is set,
+// the repository can be read and the PAT can contribute to pull requests.
+// Being rate-limited fails the check, as there is no knowing yet.
 func Check(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) core.WatcherCheckResult {
-	_, r, err := checkAccess(ctx, in, env)
+	_, r, err := Config{Env: env}.access(ctx, in, true)
 	var limit *watchers.RateLimitError
 	if errors.As(err, &limit) {
 		r = limit.CheckResult(time.Now())
@@ -57,14 +61,33 @@ func Check(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) core.
 	return r
 }
 
-// checkAccess is Check, as each poll runs it too, with the gh it found:
-// GitHub rate-limiting a call is a *watchers.RateLimitError, not a problem.
-func checkAccess(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) (prog string, r core.WatcherCheckResult, err error) {
-	if in.CodeHost != core.CodeHostGitHub {
-		return "", core.WatcherCheckResult{Problem: core.ProblemCheckFailed,
-			Reason: fmt.Sprintf("this Pull Request Watcher can't open pull requests on %q yet: it works with GitHub", in.CodeHost),
-			Fix:    "Use Merge or Branch as the Landing Method until it does."}, nil
+// access is Check, as each poll runs it too, with the Code Host's pull
+// requests it can reach, for a base: the Code Host's rate-limiting a call
+// is a *watchers.RateLimitError, not a problem. Only a full check asks
+// whether an Azure Repos PAT can contribute to pull requests, which costs a
+// refused write; each poll reads the repository only.
+func (cfg Config) access(ctx context.Context, in core.PullRequestCheckInput, full bool) (func(base string) host, core.WatcherCheckResult, error) {
+	switch in.CodeHost {
+	case core.CodeHostGitHub:
+		return checkGitHub(ctx, in, cfg.Env)
+	case core.CodeHostAzureRepos:
+		return checkAzureRepos(ctx, in, cfg.Env, full)
 	}
+	return nil, core.WatcherCheckResult{Problem: core.ProblemCheckFailed,
+		Reason: fmt.Sprintf("this Pull Request Watcher can't open pull requests on %q: it works with GitHub and Azure Repos", in.CodeHost),
+		Fix:    "Use Merge or Branch as the Landing Method."}, nil
+}
+
+func checkGitHub(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) (func(string) host, core.WatcherCheckResult, error) {
+	prog, r, err := checkGHAccess(ctx, in, env)
+	if r.Problem != "" || err != nil {
+		return nil, r, err
+	}
+	return func(base string) host { return github{prog: prog, env: env, repository: in.Repository, base: base} }, r, nil
+}
+
+// checkGHAccess is the GitHub check, with the gh it found.
+func checkGHAccess(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) (prog string, r core.WatcherCheckResult, err error) {
 	prog, missing := gh.Find(in.GHPath, env)
 	if missing != nil {
 		return "", *missing, nil

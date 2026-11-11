@@ -257,6 +257,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.ReportHeartbeat(ctx, "acme", core.ReportHeartbeatInput{Factory: "f", Host: "h", State: core.HeartbeatOnline, IntervalSeconds: 10})
 		return err
 	},
+	"report_base": func(f fixture) error {
+		_, err := f.core.ReportBase(ctx, "acme", core.ReportBaseInput{State: core.BaseCurrent, Local: "a", Remote: "a"})
+		return err
+	},
 	"set_github_issues": func(f fixture) error {
 		_, err := f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repository: "acme/web"})
 		return err

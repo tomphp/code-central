@@ -41,10 +41,10 @@ func (f *factory) syncBase(ctx context.Context, remote string) bool {
 	}
 	switch {
 	case local == theirs:
-		f.noteBase(false, local, theirs)
+		f.noteBase(ctx, false, local, theirs)
 		return true
 	case f.repository.isAncestor(local, theirs):
-		f.noteBase(false, local, theirs)
+		f.noteBase(ctx, false, local, theirs)
 		if why := f.advanceBase(local, theirs); why != "" {
 			f.printf("warning: can't fast-forward %s to %s yet: %s", f.base, remote, firstLine(why))
 			return false
@@ -52,13 +52,16 @@ func (f *factory) syncBase(ctx context.Context, remote string) bool {
 		f.printf("%s: fast-forwarded to %s/%s at %s", f.base, remote, f.base, short(theirs))
 		return true
 	}
-	f.noteBase(true, local, theirs)
+	f.noteBase(ctx, true, local, theirs)
 	return false
 }
 
 // noteBase records whether the base has diverged, with a line when that
-// changes.
-func (f *factory) noteBase(diverged bool, local, remote string) {
+// changes, and reports it to Code Central. It reports on every poll that
+// reaches a verdict, since Code Central drops the report with the
+// Heartbeat: a failed fetch reaches none, so it leaves the last report.
+func (f *factory) noteBase(ctx context.Context, diverged bool, local, remote string) {
+	defer f.reportBase(ctx, diverged, local, remote)
 	if diverged && !f.baseDiverged {
 		f.printf("warning: the base, %s, has diverged from the remote's: it is at %s and the remote's at %s. Nothing lands and no branch is cut until you reconcile them by hand", f.base, short(local), short(remote))
 	}
@@ -66,6 +69,23 @@ func (f *factory) noteBase(diverged bool, local, remote string) {
 		f.printf("%s: no longer diverged from the remote's", f.base)
 	}
 	f.baseDiverged = diverged
+}
+
+// reportBase tells Code Central whether the base is current or diverged,
+// with the local and remote commits. A failed report is a warning once
+// until one goes through; the next poll reports again.
+func (f *factory) reportBase(ctx context.Context, diverged bool, local, remote string) {
+	state := core.BaseCurrent
+	if diverged {
+		state = core.BaseDiverged
+	}
+	ctx, cancel := context.WithTimeout(ctx, postTimeout)
+	defer cancel()
+	_, err := f.client.ReportBase(ctx, f.project, core.ReportBaseInput{State: state, Local: local, Remote: remote})
+	if err != nil && ctx.Err() == nil && !f.reportBaseFailing {
+		f.printf("warning: can't report the base to Code Central: %v", err)
+	}
+	f.reportBaseFailing = err != nil
 }
 
 // landPullRequest sees to an Accepted Ticket under Pull Request: one with

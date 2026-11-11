@@ -226,7 +226,7 @@ code-central serve: started the Pull Request Watcher for acme (pid 41024)
 code-central serve: stopped the Pull Request Watcher for acme
 ```
 
-This version's Pull Request Watcher works with GitHub only; Azure Repos comes later.
+On Azure Repos the Watcher uses the REST API with a PAT it reads from the service's environment by the **PAT variable** (`ADO_PAT` by default), as the CI Watcher does for Azure Pipelines. The PAT needs the **Code: Read & write** scope, and may be the same variable as Azure Pipelines' if that token has both scopes; each check only checks its own scope. Azure Repos' `active`, `abandoned` and `completed` statuses and its merge status map to open, conflicting, closed and merged, and the merge commit is the one Azure Repos reports. Turning Pull Request on checks that the variable is set and not empty, that the repository can be read, and that the PAT can contribute to pull requests (it asks Azure Repos for a pull request from a branch that doesn't exist, which it refuses, so none is created), and refuses with the reason and fix when one of them fails.
 
 ## Usage
 

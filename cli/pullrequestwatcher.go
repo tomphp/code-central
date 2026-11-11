@@ -17,7 +17,7 @@ func init() {
 	commands[pullrequestwatcher.Command] = command{
 		hidden: true,
 		usage: pullrequestwatcher.Command + " --project <key>  open and watch the Project's pull requests until stdin closes; " +
-			pullrequestwatcher.Command + " --check --code-host github --repository <owner/name> [--gh-path <path>]  check the Pull Request Watcher can work the repository's pull requests, answering JSON",
+			pullrequestwatcher.Command + " --check --code-host github|azure_repos --repository <owner/name, or organization/project/repository> [--gh-path <path>] [--pat-env <variable>]  check the Pull Request Watcher can work the repository's pull requests, answering JSON",
 		run: runPullRequestWatcher,
 	}
 }
@@ -35,6 +35,7 @@ func runPullRequestWatcher(ctx context.Context, e Env, args []string) error {
 	fs.StringVar(&in.CodeHost, "code-host", core.CodeHostGitHub, "the Code Host")
 	fs.StringVar(&in.Repository, "repository", "", "the repository on the Code Host")
 	fs.StringVar(&in.GHPath, "gh-path", "", "the gh path Option")
+	fs.StringVar(&in.PATEnv, "pat-env", "", "the environment variable holding the Azure Repos PAT")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err

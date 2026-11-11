@@ -147,6 +147,9 @@ func TestUnderPullRequestAFailedFetchOnlyWarns(t *testing.T) {
 	remote.Break()
 	r.Poll()
 	r.WaitForOutput("warning: can't fetch origin")
+	if _, ok := baseDivergedItem(t, h); ok {
+		t.Error("a failed fetch showed Base diverged")
+	}
 	if tk := h.Ticket(id); tk.State != store.Accepted {
 		t.Errorf("%s is %s, want it left Accepted", id, tk.State)
 	}
@@ -178,10 +181,58 @@ func TestUnderPullRequestADivergedBaseStopsLandingAndClaiming(t *testing.T) {
 	if tk := h.Ticket(ready); tk.State != store.Ready {
 		t.Errorf("%s is %s, want it not claimed", ready, tk.State)
 	}
+	local := h.Git("rev-parse", "main")
+	h.WaitFor("Base diverged shows in Needs Me", func() bool {
+		row, ok := baseDivergedItem(t, h)
+		return ok && row.BaseDiverged.Local == local && row.BaseDiverged.Remote == theirs
+	})
 
 	h.Git("reset", "-q", "--hard", "origin/main")
 	r.Poll()
 	h.WaitForState(id, store.Done)
+	h.WaitFor("Base diverged clears", func() bool { _, ok := baseDivergedItem(t, h); return !ok })
+	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+}
+
+// baseDivergedItem is the Project's Base diverged item in Needs Me.
+func baseDivergedItem(t *testing.T, h *factorytest.Harness) (core.NeedsMeRow, bool) {
+	t.Helper()
+	v, err := h.Human().NeedsMe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, g := range v.Groups {
+		if g.Reason == core.ReasonBaseDiverged {
+			for _, row := range g.Tickets {
+				if row.Project == h.Project {
+					return row, true
+				}
+			}
+		}
+	}
+	return core.NeedsMeRow{}, false
+}
+
+func TestUnderPullRequestANewBranchIsCutFromTheFastForwardedBase(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	remote := h.AddRemote("origin")
+	pullRequestOn(h, "origin")
+	h.Git("push", "-q", remote.Path, "main:refs/heads/main")
+	theirs := h.CommitOn("theirs", "theirs.txt", "theirs\n")
+	h.Git("push", "-q", remote.Path, "theirs:refs/heads/main")
+	ready := h.ReadyTicket("Starts from the host's base")
+
+	h.Start()
+	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	if got := h.Git("rev-parse", "main"); got != theirs {
+		t.Errorf("the local base is at %s, want it fast-forwarded to %s", got, theirs)
+	}
+	if h.Calls()[0].Ticket != ready {
+		t.Fatalf("calls %+v, want %s claimed", h.Calls(), ready)
+	}
+	// The branch was cut from the host's base, so it holds its commit.
+	h.Git("merge-base", "--is-ancestor", theirs, ready)
 }
 
 func TestUnderPullRequestATicketWithNothingToMergeLandsWithoutAPullRequest(t *testing.T) {

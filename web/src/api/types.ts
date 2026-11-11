@@ -27,6 +27,7 @@ export type NeedsMeReason =
   | "in_review"
   | "ci_failed"
   | "ci_cancelled"
+  | "base_diverged"
   | "pull_request_closed"
   | "to_merge"
   | "ci_unavailable"
@@ -490,6 +491,12 @@ export interface BlockerView {
   cleared: boolean;
 }
 
+export interface BaseDiverged {
+  base?: string;
+  local: string;
+  remote: string;
+}
+
 export interface NeedsMeRow {
   project: string;
   id: string;
@@ -521,6 +528,9 @@ export interface NeedsMeRow {
   // pull_request is the Ticket's pull request, for its item's link; left
   // out until the Pull Request Watcher reports one.
   pull_request?: PullRequestView;
+  // base_diverged is the local and remote base commits (base_diverged,
+  // whose row has no Ticket: its id is empty).
+  base_diverged?: BaseDiverged;
   // ci_group is the Spec's Tickets waiting with this one, on a per-Spec CI
   // item (code-central-379).
   ci_group?: CIGroup;
