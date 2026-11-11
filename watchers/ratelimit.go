@@ -22,7 +22,10 @@ type RateLimitError struct {
 }
 
 func (e *RateLimitError) Error() string {
-	return e.System + " is rate-limiting gh: " + e.Message
+	if e.System == "GitHub" {
+		return e.System + " is rate-limiting gh: " + e.Message
+	}
+	return e.System + " is throttling Code Central: " + e.Message
 }
 
 // Until is when a Watcher may call the system again, from now; zero when

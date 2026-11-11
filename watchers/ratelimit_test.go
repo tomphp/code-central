@@ -8,3 +8,10 @@ func TestARateLimitErrorNamesTheCISystem(t *testing.T) {
 		t.Fatalf("Error() = %q, want %q", got, want)
 	}
 }
+
+func TestARateLimitErrorOfAnotherSystemNamesItWithoutGh(t *testing.T) {
+	err := &RateLimitError{System: "Azure DevOps", Message: "too many"}
+	if got, want := err.Error(), "Azure DevOps is throttling Code Central: too many"; got != want {
+		t.Fatalf("Error() = %q, want %q", got, want)
+	}
+}
