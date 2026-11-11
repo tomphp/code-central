@@ -275,6 +275,10 @@ func TestAWaitingTicketIsFlaggedAndLeftOutOfAcceptedButNotLanded(t *testing.T) {
 	if r := f.getTicket(t, "acme-5").NeedsMeReason; r != "" {
 		t.Errorf("reason = %q, want none", r)
 	}
+	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{State: []store.State{store.Accepted}})
+	if len(rows) != 1 || !rows[0].WaitingForSpec {
+		t.Errorf("find_tickets rows = %+v, want acme-5 waiting for the Spec", rows)
+	}
 	v, _ := f.core.NeedsMe(human)
 	if v.Count != 0 {
 		t.Errorf("needs me = %+v, want nothing", v)

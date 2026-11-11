@@ -6,6 +6,7 @@ import { RowLatestEvent } from "../LatestEvent";
 import type { ProjectTicket } from "../live";
 import { stageOf } from "../requirement/progress";
 import { LinkBadge } from "../ticket/LinkBadge";
+import { WaitingBadge } from "../ticket/WaitingBadge";
 
 export type InboxRowLinkFactory = (id: string) => {
   href: string;
@@ -25,6 +26,7 @@ export function StateRow({ t, needsYou, now, link, stage }: { t: ProjectTicket; 
         {name && <span className="bs-stage">{name}</span>}
         <span className="row-title">{t.title}</span>
         {t.link && <LinkBadge link={t.link} plain />}
+        <WaitingBadge waiting={t.waiting_for_spec} />
         {needsYou && <span className="dot needs-you" role="img" aria-label="Needs you" />}
       </span>
       <RowLatestEvent row={t} now={now} className="row-detail" />

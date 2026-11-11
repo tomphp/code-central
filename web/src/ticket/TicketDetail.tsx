@@ -13,6 +13,7 @@ import { LatestEventLine } from "../LatestEvent";
 import { LinkBadge } from "./LinkBadge";
 import { OpenExternal } from "./OpenExternal";
 import { Live } from "./Live";
+import { WaitingBadge } from "./WaitingBadge";
 import { useAct } from "./useAct";
 import { CISection } from "./CISection";
 import { Triage } from "./Triage";
@@ -43,6 +44,7 @@ export function TicketPane(props: TicketPaneProps) {
     <>
       <header className="ticket-head">
         <span className="tid">{t.id}</span> <span className="state">{t.state}</span>
+        <WaitingBadge waiting={t.waiting_for_spec} />
         {t.needs_me_reason && (
           <span className={`reason reason-${t.needs_me_reason}`}>
             <span className="dot" aria-hidden="true" /> {REASON_LABEL[t.needs_me_reason]}
