@@ -245,6 +245,14 @@ _Avoid_: User, caller
 The Tickets waiting on the human before they can move.
 _Avoid_: Inbox, blocked
 
+**By Ticket**:
+The default grouping of a State list: its Tickets alone, as a flat list.
+_Avoid_: Flat view, list mode
+
+**By Spec**:
+The grouping of a State list that shows the Specs with Tickets in it, each expanding to those Tickets, instead of the Tickets alone.
+_Avoid_: Spec-first view, tree view, Spec mode
+
 **To merge**:
 The Needs Me reason of an Accepted Ticket under the Branch Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge.
 _Avoid_: Ready to merge, awaiting merge

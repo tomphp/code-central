@@ -4,7 +4,6 @@
 import { useEffect, useState } from "react";
 import type { Api } from "./api/api";
 import {
-  MAP_LABEL,
   STATES,
   type ApiError,
   type NeedsMeView,
@@ -64,24 +63,29 @@ export interface InboxData {
   // tickets is every Project's Tickets, finished ones too, for the State
   // views, the counts and Drafts.
   tickets: ProjectTicket[];
-  // requirements is every Project's Requirements, delivered ones too.
+  // specs is every Project's Specs, finished ones too.
+  specs: ProjectSpec[];
+  // requirements is the Specs that are Requirements, delivered ones too.
   requirements: ProjectSpec[];
-  // maps is every Project's Maps, finished ones too.
+  // maps is the Specs that are Maps, finished ones too.
   maps: ProjectSpec[];
 }
 
 export async function loadInbox(api: Api): Promise<InboxData> {
   const [projects, needsMe] = await Promise.all([api.listProjects(), api.needsMe()]);
-  const [tickets, requirements, maps] = await Promise.all([
+  const [tickets, specs] = await Promise.all([
     Promise.all(projects.map(async (p) => (await api.findTickets(p.key, { state: [...STATES] })).map((t) => ({ ...t, project: p.key })))),
-    Promise.all(
-      projects.map(async (p) => (await api.findSpecs(p.key, { requirements: true, finished: true })).map((s) => ({ ...s, project: p.key }))),
-    ),
-    Promise.all(
-      projects.map(async (p) => (await api.findSpecs(p.key, { labels: [MAP_LABEL], finished: true })).map((s) => ({ ...s, project: p.key }))),
-    ),
+    Promise.all(projects.map(async (p) => (await api.findSpecs(p.key, { finished: true })).map((s) => ({ ...s, project: p.key })))),
   ]);
-  return { projects, needsMe, tickets: tickets.flat(), requirements: requirements.flat(), maps: maps.flat() };
+  const all = specs.flat();
+  return {
+    projects,
+    needsMe,
+    tickets: tickets.flat(),
+    specs: all,
+    requirements: all.filter((s) => s.requirement),
+    maps: all.filter((s) => s.map),
+  };
 }
 
 export function useInboxData(api: Api, version: number) {

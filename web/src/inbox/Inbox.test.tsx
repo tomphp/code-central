@@ -3,7 +3,7 @@
 // fake's seeded data, rendered as received.
 import { render, screen, within, waitFor, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
 
@@ -594,5 +594,188 @@ describe("the Admin section", () => {
     act(() => window.history.back());
     await userEvent.click(within(await screen.findByRole("navigation", { name: "Filters" })).getByRole("link", { name: "Options" }));
     expect(screen.getByRole("main", { name: "Options" })).toBeInTheDocument();
+  });
+});
+
+// bySpecWorld seeds Tickets on a Requirement (acme-1, with its Stages
+// acme-2..4), a plain Spec and a Map, across States.
+async function bySpecWorld() {
+  const fake = new FakeApi();
+  fake.addProject("acme", "Acme");
+  fake.addProject("beta", "Beta");
+  await fake.submitRequirement("acme", "Export a Spec as Markdown"); // acme-1, Stages acme-2..4 (Ready)
+  fake.updateTicket("acme-2", { state: "Done" });
+  const plain = { id: "", title: "" };
+  const spec = fake.addSpec("acme", { title: "Archive finished Projects" }); // acme-5
+  Object.assign(plain, { id: spec.id, title: spec.title });
+  fake.addTicket("acme", { title: "Archive menu", state: "Ready", spec: plain }); // acme-6
+  fake.addTicket("acme", { title: "Archive CLI", state: "Failed", spec: plain }); // acme-7
+  fake.addTicket("acme", { title: "Archive docs", state: "Ready", spec: plain }); // acme-8
+  const map = fake.addSpec("acme", { title: "Wayfinding", labels: ["wayfinder:map"] }); // acme-9
+  const onMap = { id: map.id, title: map.title };
+  fake.addTicket("acme", { title: "Map question", state: "Ready", spec: onMap }); // acme-10
+  fake.addTicket("acme", { title: "Export button", state: "Ready", spec: { id: "acme-1", title: "Export a Spec as Markdown" } }); // acme-11
+  const other = fake.addSpec("beta", { title: "Beta plan" }); // beta-1
+  fake.addTicket("beta", { title: "Beta thing", state: "Ready", spec: { id: other.id, title: other.title } }); // beta-2
+  fake.setNeedsMe([{ reason: "failed", tickets: [{ id: "acme-7", failure: { headline: "Tests fail", reports: 1 } }] }]);
+  return fake;
+}
+
+const cards = () => within(list()).queryAllByRole("region");
+const card = (name: string) => within(list()).getByRole("region", { name });
+const bySpec = () => userEvent.click(within(list()).getByRole("button", { name: "By Spec" }));
+
+describe("State lists By Spec", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("shows the control on State lists only, with By Ticket the default and today's rows", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&state=Ready");
+    const byTicket = await within(list()).findByRole("button", { name: "By Ticket" });
+    expect(byTicket).toHaveAttribute("aria-pressed", "true");
+    expect(within(list()).getByRole("button", { name: "By Spec" })).toHaveAttribute("aria-pressed", "false");
+    expect(rowIds()).toContain("acme-6");
+
+    await userEvent.click(within(nav()).getByRole("button", { name: /^Needs Me/ }));
+    expect(within(list()).queryByRole("button", { name: "By Spec" })).toBeNull();
+    await userEvent.click(within(nav()).getByRole("button", { name: /^Requirements/ }));
+    expect(within(list()).queryByRole("button", { name: "By Spec" })).toBeNull();
+  });
+
+  it("groups into collapsed cards in first-Ticket order, with kind, ID, n of m and chips", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&state=Ready");
+    await within(list()).findByRole("button", { name: "By Spec" });
+    await bySpec();
+    expect(params().get("group")).toBe("spec");
+    expect(cards().map((c) => c.getAttribute("aria-label"))).toEqual([
+      "Export a Spec as Markdown", // its Stage acme-3 comes first
+      "Archive finished Projects",
+      "Wayfinding",
+      "Beta plan",
+    ]);
+    expect(rowIds()).toEqual([]); // collapsed: no rows rendered
+
+    const archive = card("Archive finished Projects");
+    expect(archive).toHaveTextContent("Spec");
+    expect(archive).toHaveTextContent("acme-5");
+    expect(archive).toHaveTextContent("2 of 3");
+    expect(within(archive).getByText("Ready 2")).toHaveAttribute("aria-current", "true");
+    expect(within(archive).getByText("Failed 1")).not.toHaveAttribute("aria-current");
+    expect(card("Wayfinding")).toHaveTextContent("Map");
+    expect(card("Export a Spec as Markdown")).toHaveTextContent("Requirement");
+    expect(card("Export a Spec as Markdown")).toHaveTextContent("Done 1");
+  });
+
+  it("opens a card with its Tickets in flat-list order, Stage Tickets marked, no Stage group", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&state=Ready&group=spec");
+    await userEvent.click(await within(list()).findByRole("button", { name: "Export a Spec as Markdown" }));
+    expect(rowIds()).toEqual(["acme-3", "acme-4", "acme-11"]);
+    expect(within(list()).getByRole("link", { name: /acme-3/ })).toHaveTextContent("spec");
+    expect(within(list()).queryByText(/run by a Factory/)).toBeNull();
+    await userEvent.click(within(list()).getByRole("button", { name: "Export a Spec as Markdown" }));
+    expect(rowIds()).toEqual([]);
+  });
+
+  it("opens the selected Ticket's card on its own, which can be closed", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&state=Ready&group=spec&ticket=acme-8");
+    await waitFor(() => expect(rowIds()).toEqual(["acme-6", "acme-8"]));
+    await userEvent.click(within(list()).getByRole("button", { name: "Archive finished Projects" }));
+    expect(rowIds()).toEqual([]);
+  });
+
+  it("opens the Spec from a card's title", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&state=Ready&group=spec&ticket=acme-8");
+    await userEvent.click(await within(list()).findByRole("link", { name: "Wayfinding" }));
+    expect(params().get("requirement")).toBe("acme-9");
+    expect(params().get("ticket")).toBeNull();
+    expect(params().get("group")).toBe("spec");
+    expect(within(list()).getByRole("link", { name: "Wayfinding" })).toHaveAttribute("aria-current", "true");
+  });
+
+  it("marks a card whose Ticket needs the human", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&state=Failed&group=spec");
+    const archive = await within(list()).findByRole("region", { name: "Archive finished Projects" });
+    expect(archive).toHaveClass("needs");
+    expect(within(archive).getByLabelText("Needs you")).toBeInTheDocument();
+    await userEvent.click(within(archive).getByRole("button", { name: "Archive finished Projects" }));
+    expect(within(within(list()).getByRole("link", { name: /acme-7/ })).getByLabelText("Needs you")).toBeInTheDocument();
+  });
+
+  it("keeps the grouping across lists and Projects, and from the address", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&state=Ready&group=spec");
+    await within(list()).findByRole("button", { name: "Archive finished Projects" });
+    await userEvent.click(within(nav()).getByRole("button", { name: /^Failed/ }));
+    expect(params().get("group")).toBe("spec");
+    expect(within(list()).getByRole("button", { name: "By Spec" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(within(nav()).getByRole("button", { name: /^Needs Me/ }));
+    expect(params().get("group")).toBe("spec");
+    await userEvent.click(within(nav()).getByRole("button", { name: /^Acme/ }));
+    expect(params().get("group")).toBe("spec");
+    await userEvent.click(within(nav()).getByRole("button", { name: /^Ready/ }));
+    expect(cards().map((c) => c.getAttribute("aria-label"))).not.toContain("Beta plan");
+  });
+
+  it("uses the last pick when the address has none, and By Ticket clears it", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&state=Ready");
+    await within(list()).findByRole("button", { name: "By Spec" });
+    await bySpec();
+    expect(localStorage.getItem("code-central.inbox.group")).toBe("spec");
+
+    window.history.replaceState(null, "", "/?view=inbox&state=Ready");
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+    await waitFor(() => expect(within(list()).getByRole("button", { name: "By Spec" })).toHaveAttribute("aria-pressed", "true"));
+
+    await userEvent.click(within(list()).getByRole("button", { name: "By Ticket" }));
+    expect(params().has("group")).toBe(false);
+    expect(localStorage.getItem("code-central.inbox.group")).toBe("ticket");
+    expect(rowIds()).toContain("acme-6");
+  });
+
+  it("falls back to By Ticket when storage throws", async () => {
+    const get = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    const set = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    renderApp(await bySpecWorld(), "/?view=inbox&state=Ready");
+    await within(list()).findByRole("button", { name: "By Spec" });
+    await bySpec();
+    expect(params().get("group")).toBe("spec");
+    get.mockRestore();
+    set.mockRestore();
+  });
+
+  it("says so when a State has no Tickets", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&state=Cancelled&group=spec");
+    expect(await within(list()).findByText("No Tickets Cancelled.")).toBeInTheDocument();
+  });
+
+  it("renders only card headers for a long collapsed list, newest first inside a Done card", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    const specs = ["A", "B", "C"].map((t) => fake.addSpec("acme", { title: `Spec ${t}` }));
+    for (let i = 0; i < 60; i++) {
+      const s = specs[i % 3];
+      fake.addTicket("acme", { title: `Done ${i}`, state: "Done", spec: { id: s.id, title: s.title }, updated: new Date(fake.now.getTime() + i * 1000).toISOString() });
+    }
+    renderApp(fake, "/?view=inbox&state=Done&group=spec");
+    await waitFor(() => expect(cards()).toHaveLength(3));
+    expect(rowIds()).toEqual([]);
+    // The newest Ticket (i=59, Spec C) is first, so its card leads.
+    expect(cards()[0]).toHaveAttribute("aria-label", "Spec C");
+    await userEvent.click(within(cards()[0]).getByRole("button"));
+    // Newest first inside the card: Done 59, 56, 53 ...
+    expect(within(list()).getAllByRole("link").filter((a) => a.dataset.id).map((a) => a.textContent).slice(0, 2)).toEqual([
+      expect.stringContaining("Done 59"),
+      expect.stringContaining("Done 56"),
+    ]);
+    expect(rowIds()).toHaveLength(20);
+  });
+
+  it("loads every Spec with one findSpecs call per Project", async () => {
+    const fake = await bySpecWorld();
+    renderApp(fake);
+    await within(nav()).findByRole("button", { name: /^Ready/ });
+    expect(fake.calls.filter((c) => c === "findSpecs")).toHaveLength(2);
   });
 });
