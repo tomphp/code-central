@@ -490,3 +490,28 @@ func TestATicketAlreadyCIFailedAtStartupIsInTheStartupSummary(t *testing.T) {
 	f.want(notify.Notification{Title: "acme-3 has a new Round", Body: "Task B", URL: base + "/?view=inbox&ticket=acme-3"})
 	f.wantNothing()
 }
+
+// A cancelled CI run is an ordinary Needs Me reason: no CI-failed alert,
+// only the startup summary counts it.
+func TestATicketGoingToCICancelledSendsNoCIFailedAlert(t *testing.T) {
+	f := newFixture(t)
+	f.project("acme", 2)
+	f.accepted("acme", "2")
+	f.pushed("acme", "2", "abc123")
+	f.start()
+	f.ciRun("acme", "2", "abc123", 1, store.CICompleted, store.CICancelled)
+	f.round("acme", "3")
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme-3 has a new Round", Body: "Task B", URL: base + "/?view=inbox&ticket=acme-3"})
+	f.wantNothing()
+}
+
+func TestATicketAlreadyCICancelledAtStartupIsInTheStartupSummary(t *testing.T) {
+	f := newFixture(t)
+	f.project("acme", 2)
+	f.accepted("acme", "2")
+	f.pushed("acme", "2", "abc123")
+	f.ciRun("acme", "2", "abc123", 1, store.CICompleted, store.CICancelled)
+	f.start()
+	f.want(notify.Notification{Title: "Code Central", Body: "1 Ticket needs you in acme", URL: base + "/?view=inbox"})
+}

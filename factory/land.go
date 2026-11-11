@@ -343,8 +343,8 @@ func (f *factory) landOnCI(ctx context.Context, tk core.TicketView) {
 		f.landAt(ctx, tk, pushed)
 		return
 	}
-	if tk.CIResult == core.CIFailed && tk.LandAnyway {
-		f.printf("%s: landing anyway at %s, as you chose, though its CI failed", tk.ID, short(pushed))
+	if (tk.CIResult == core.CIFailed || tk.CIResult == core.CICancelled) && tk.LandAnyway {
+		f.printf("%s: landing anyway at %s, as you chose, though its CI %s", tk.ID, short(pushed), tk.CIResult)
 		f.landAt(ctx, tk, pushed)
 		return
 	}

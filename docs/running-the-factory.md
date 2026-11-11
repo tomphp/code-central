@@ -529,4 +529,6 @@ The last two options fix the failure forward. Under Merge + Push the failed work
 
 The gate holds only while Merge, Push and CI Tracking are all on. Turning CI Tracking off, turning Push off, or switching to Leave as a branch lifts it, and the Factory lands every Ticket waiting on CI on its next poll.
 
+A cancelled run, say one you or GitHub cancelled, is not a failure. The Ticket stays Accepted, the Factory prints `CI cancelled at …, so it stays Accepted`, and it shows in Needs Me as **CI cancelled**, with no failure-specific Notification, offering **Re-run**, **Land anyway** (under Merge + Push) and **Send back to fix**, but no New fix Ticket. Nothing re-runs by itself: Re-run asks the CI Watcher to re-run the cancelled run, and the Ticket's CI result reads passed if the new attempt passes.
+
 Under **Branch + Push**, CI only informs you: the Factory lands the Ticket when it sees your merge, whatever its CI result, so merging stays your decision. A failed CI result still shows the Ticket in Needs Me as **CI failed**, with Re-run failed jobs, Send back to fix and New fix Ticket but without Land anyway: merging the branch is how you land it anyway.
