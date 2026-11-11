@@ -593,9 +593,6 @@ export interface RequirementView {
   stages: StageView[];
   build: { done: number; total: number };
   waiting_for_factory: boolean;
-  // land_per_spec is the Land per Spec status, present only while the
-  // Project is under Merge with Land per Spec on (code-central-371).
-  land_per_spec?: LandPerSpecStatus;
 }
 
 // The Accepted Tickets waiting for the Spec to land, and whether it is
@@ -665,6 +662,10 @@ export interface SpecDetail extends SpecView {
   finished: boolean;
   tickets: TicketRow[];
   requirement?: RequirementView;
+  // land_per_spec is the Land per Spec status, present only on a
+  // Requirement while the Project is under Merge or Pull Request with
+  // Land per Spec on.
+  land_per_spec?: LandPerSpecStatus;
   map?: MapView;
 }
 

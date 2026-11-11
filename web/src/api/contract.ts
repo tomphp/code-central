@@ -1297,7 +1297,6 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ],
         build: { done: 0, total: 0 },
         waiting_for_factory: true,
-        land_per_spec: { waiting: [], ready: false },
       });
     });
 
@@ -1307,7 +1306,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.letGHWrite("acme/web");
       await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "", land_per_spec: true });
       const r = await d.api.submitRequirement("acme", "Export a Spec as Markdown");
-      expect((await d.api.getSpec("acme", r.spec.id)).requirement?.land_per_spec).toEqual({ waiting: [], ready: false });
+      expect((await d.api.getSpec("acme", r.spec.id)).land_per_spec).toEqual({ waiting: [], ready: false });
     });
 
     it("refuses a Requirement with no text", async () => {
@@ -1394,7 +1393,6 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ],
         build: { done: 0, total: 0 },
         waiting_for_factory: true,
-        land_per_spec: { waiting: [], ready: false },
       });
       expect((await d.api.getSpec("acme", m.spec.id)).map?.requirements).toEqual([r.spec.id]);
       expect((await d.api.getSpec("acme", plain.spec.id)).requirement?.map).toBeUndefined();

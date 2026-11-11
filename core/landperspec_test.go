@@ -81,10 +81,7 @@ func (f fixture) landStatus(t *testing.T) *core.LandPerSpecView {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v.Requirement == nil {
-		t.Fatal("acme-1 isn't a Requirement")
-	}
-	return v.Requirement.LandPerSpec
+	return v.LandPerSpec
 }
 
 func TestAnImplementationTicketOfARequirementIsSpecLandedUnderMergeWithLandPerSpecOn(t *testing.T) {
