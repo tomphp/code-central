@@ -32,6 +32,10 @@ type MigrationStep struct {
 	// every file unchanged, which is all an additive change needs: the
 	// migration itself rewrites the number in store.yaml.
 	File func(rel string, data []byte) ([]byte, error)
+	// After runs once the whole store is staged, given the staging
+	// folder, for a change that spans files, such as one file's content
+	// naming another. Nil does nothing.
+	After func(stage string) error
 }
 
 // migrations is the real chain: one step from each older format. To bump
@@ -61,6 +65,7 @@ var migrations = []MigrationStep{
 	{From: 21, Name: "add a Ticket's Spec merge"},
 	{From: 22, Name: "add a Project's Pull Request Landing Method and PAT variable"},
 	{From: 23, Name: "add a Ticket's pull request and a pushed commit's branch"},
+	{From: 24, Name: "label each CI Rule's Spec and Issues Spec long-lived", After: labelLongLivedSpecs},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's
@@ -280,6 +285,14 @@ func (s *FileStore) stage(stage string, from int, chain []MigrationStep) error {
 	for _, err := range errs { // the first failing file, in walk order
 		if err != nil {
 			return err
+		}
+	}
+	for _, st := range chain {
+		if st.After == nil {
+			continue
+		}
+		if err := st.After(stage); err != nil {
+			return &MigrationError{From: st.From, To: st.From + 1, Step: st.Name, File: "the store", Err: err}
 		}
 	}
 	for d := range dirs {

@@ -121,7 +121,7 @@ func (c *Core) createIssuesSpec(key, repository string) (int, error) {
 		}
 		now := c.now()
 		n = w.NextNumber(key)
-		return w.PutSpec(key, store.Spec{Number: n, Title: issuesSpecTitle(repository), Body: issuesSpecBody, Created: now, Updated: now})
+		return w.PutSpec(key, store.Spec{Number: n, Title: issuesSpecTitle(repository), Body: issuesSpecBody, Labels: []string{LongLivedLabel}, Created: now, Updated: now})
 	})
 	return n, err
 }

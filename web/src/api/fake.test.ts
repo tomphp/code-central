@@ -1,3 +1,4 @@
+import { describe, expect, it } from "vitest";
 import { apiContract, type Driver } from "./contract";
 import { FakeApi } from "./fake";
 import type { ApiError, NeedsMeReason, NeedsMeRow, State, TicketView } from "./types";
@@ -152,4 +153,13 @@ apiContract("FakeApi", async (): Promise<Driver> => {
     dropTranscriptStreams: () => fake.dropTranscriptStreams(),
     close: async () => {},
   };
+});
+
+describe("FakeApi long-lived Label", () => {
+  it("refuses long-lived on a Ticket, as the service does, and allows it on a Spec", () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    expect(() => fake.addTicket("acme", { title: "Form", labels: ["long-lived"] })).toThrow(/goes on a Spec/);
+    expect(fake.addSpec("acme", { title: "CI", labels: ["long-lived"] }).labels).toEqual(["long-lived"]);
+  });
 });

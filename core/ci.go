@@ -384,7 +384,7 @@ func (c *Core) AddCIRule(ctx context.Context, key string, in CIRuleInput) (Writt
 		}
 		r.Created = c.now()
 		r.Spec = w.NextNumber(key)
-		return w.PutSpec(key, store.Spec{Number: r.Spec, Title: ciRuleTitle(r), Body: ciRuleSpecBody, Created: r.Created, Updated: r.Created})
+		return w.PutSpec(key, store.Spec{Number: r.Spec, Title: ciRuleTitle(r), Body: ciRuleSpecBody, Labels: []string{LongLivedLabel}, Created: r.Created, Updated: r.Created})
 	})
 	if err != nil {
 		return Written[ProjectView]{}, err

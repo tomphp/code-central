@@ -145,7 +145,7 @@ The Needs Me reason of a Project under Pull Request whose local base holds commi
 _Avoid_: Out of sync, base conflict
 
 **Land per Spec**:
-A Merge and Pull Request option, on by default and kept whatever the method, by which a Requirement Spec's work gathers on one Spec Branch and lands in the base together, instead of Ticket by Ticket. It covers only implementation Tickets of Requirement Spec (not Stage Tickets, Map Tickets, Prototypes, or long-lived Specs such as a CI Rule's Spec or the GitHub Issues Spec), and under Branch it has no effect. Under Pull Request the Spec gets one pull request instead of landing Ticket by Ticket. Turning it on affects only Tickets accepted afterwards.
+A Merge and Pull Request option, on by default and kept whatever the method, by which a Requirement Spec's work gathers on one Spec Branch and lands in the base together, instead of Ticket by Ticket. It covers the implementation Tickets of every Spec except a Long-lived Spec's (not Stage Tickets, Map Tickets or Prototypes), and under Branch it has no effect. A Spec that isn't a Requirement is ready once every implementation Ticket on it is Accepted, Done or Cancelled, and a Ticket added after it has landed goes in a second batch. Gaining the `long-lived` Label lands the Spec's waiting Tickets at once; losing it affects only Tickets accepted afterwards. Under Pull Request the Spec gets one pull request instead of landing Ticket by Ticket. Turning it on affects only Tickets accepted afterwards.
 _Avoid_: Spec landing, batch landing, release train
 
 **Spec Branch**:
@@ -225,7 +225,7 @@ A Project's list of workflow names, such as `nightly.yml` or a pipeline's name, 
 _Avoid_: Excluded workflows, skipped workflows
 
 **CI Rule**:
-A Project's standing rule, "when Workflow X fails on branch Y, open a Ticket to fix it", fired only by a run that failed or timed out, never by a cancelled one, and whose Tickets go on a long-lived Spec of its own, as Draft or Ready.
+A Project's standing rule, "when Workflow X fails on branch Y, open a Ticket to fix it", fired only by a run that failed or timed out, never by a cancelled one, and whose Tickets go on a Long-lived Spec of its own, as Draft or Ready.
 _Avoid_: Trigger, watch, alert
 
 **Fix Ticket**:
@@ -378,8 +378,12 @@ An agent's permanent record of what broke on a Ticket, why, and what to fix, pos
 _Avoid_: Error, incident
 
 **Label**:
-A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels, Wayfinder Labels and `prototype` are reserved: they mark a Ticket's Stage, a Map or a Map's Ticket type, and a Prototype. A Ticket carries at most one reserved type Label (a Stage Label, a Map Ticket type's Wayfinder Label or `prototype`), which chooses its Stage Guide.
+A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels, Wayfinder Labels, `prototype` and `long-lived` are reserved: `long-lived` marks a Long-lived Spec and goes only on a Spec, anyone may add or remove it, and adding it to a Ticket is refused; they mark a Ticket's Stage, a Map or a Map's Ticket type, and a Prototype. A Ticket carries at most one reserved type Label (a Stage Label, a Map Ticket type's Wayfinder Label or `prototype`), which chooses its Stage Guide.
 _Avoid_: Category
+
+**Long-lived Spec**:
+A Spec labelled `long-lived`, one that never finishes, so Land per Spec doesn't hold its Tickets for it. A CI Rule's Spec and a Project's Issues Spec are created with the Label, and the human or an agent may add it to or remove it from any Spec.
+_Avoid_: Perpetual Spec, standing Spec
 
 **Wayfinder Label**:
 A reserved `wayfinder:` Label marking a Map (`wayfinder:map`) or a Map's Ticket type (`chart`, `grilling`, `research`, `task`).
@@ -414,7 +418,7 @@ The kind of Watcher that polls one Project's GitHub issues through `gh`, writing
 _Avoid_: Issue daemon, syncer
 
 **Issues Spec**:
-A Project's long-lived Spec that its Incoming Issues arrive on, titled like "GitHub Issues: owner/repo", with no Link and no Stages. It is created the first time GitHub Issues is turned on, and its title follows the repository unless the human retitles it.
+A Project's Long-lived Spec that its Incoming Issues arrive on, titled like "GitHub Issues: owner/repo", with no Link and no Stages. It is created the first time GitHub Issues is turned on, and its title follows the repository unless the human retitles it.
 _Avoid_: Inbox Spec, triage Spec
 
 **Incoming Issue**:

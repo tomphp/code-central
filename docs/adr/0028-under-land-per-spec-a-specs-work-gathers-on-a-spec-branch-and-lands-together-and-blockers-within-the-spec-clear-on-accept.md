@@ -6,6 +6,8 @@ Merge gets a **Land per Spec** option, per Project beside Push, stored with the 
 
 A Blocker on the same Spec stops blocking once it is Accepted and merged into the Spec Branch, so dependants start from a branch that already holds its work. A Blocker on another Spec still clears only when it lands, or under Unblock on push. A Spec's CI failure is one item on a lead Ticket, and Send back to fix is not offered for it, since the failure belongs to the whole Spec.
 
+[ADR 0031](0031-land-per-spec-covers-every-spec-but-long-lived-ones-which-a-reserved-spec-only-label-marks.md) amends which Specs Land per Spec covers: every Spec but Long-lived ones, not only Requirements.
+
 It amends:
 
 - [ADR 0006](0006-accepted-work-lands-before-it-is-done.md): Accepted no longer means about to land. Under Land per Spec an Accepted Ticket may wait for its Spec, and Accepted but not landed leaves such Tickets out.

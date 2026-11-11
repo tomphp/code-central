@@ -90,6 +90,10 @@ func TestGitHubIssuesTurnsOnWhenTheCheckPasses(t *testing.T) {
 			if g := settings(t, srv); !g.On || g.Spec == "" {
 				t.Fatalf("settings = %+v, want on with its Issues Spec", g)
 			}
+			sp, err := srv.Client.GetSpec(ctx, "acme", core.GetSpecInput{Spec: core.Ref(settings(t, srv).Spec)})
+			if err != nil || !slices.Contains(sp.Labels, "long-lived") {
+				t.Fatalf("the Issues Spec = %+v, %v; want the long-lived Label", sp, err)
+			}
 			var got [][]string
 			for _, c := range h.Calls() {
 				got = append(got, c.Args)
