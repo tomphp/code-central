@@ -112,6 +112,23 @@ type watcher struct {
 	// fired are the runs a CI Rule fired on, so a run whose report
 	// failed is reported again without firing again.
 	fired map[runKey]bool
+	// provided is the CI Provider for providedFor, kept between polls
+	// while the settings don't change, so what a provider remembers, such
+	// as Azure Pipelines' timelines, outlives a poll.
+	provided    Provider
+	providedFor core.CICheckInput
+}
+
+// provider is in's CI Provider, the same one while in is the same.
+func (w *watcher) provider(in core.CICheckInput) (Provider, *core.WatcherCheckResult) {
+	if w.provided != nil && w.providedFor == in {
+		return w.provided, nil
+	}
+	p, bad := provider(in, w.Env)
+	if bad == nil {
+		w.provided, w.providedFor = p, in
+	}
+	return p, bad
 }
 
 // rerunKey names one Re-run request: the attempt that failed, and when
@@ -149,7 +166,7 @@ func (w *watcher) poll(ctx context.Context) (res pollResult) {
 		return res
 	}
 	res.waiting = len(watch.Waiting) > 0
-	p, bad := provider(core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, ProjectURL: watch.ProjectURL, PATEnv: watch.PATEnv, GHPath: watch.GHPath}, w.Env)
+	p, bad := w.provider(core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, ProjectURL: watch.ProjectURL, PATEnv: watch.PATEnv, GHPath: watch.GHPath})
 	var r core.WatcherCheckResult
 	if bad != nil {
 		r = *bad
