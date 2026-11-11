@@ -183,3 +183,32 @@ func TestASpecBranchThatConflictsWithTheBaseOpensOneConflictTicket(t *testing.T)
 		t.Errorf("%s landed despite the conflict", a)
 	}
 }
+
+func TestOnceTheConflictTicketIsAcceptedTheSpecLandsAgain(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.MakeRequirement()
+	a, _ := accepted(h, "First", "README", "spec side\n")
+	release := holdTicketsStage(t, h)
+	// The conflict Ticket is the next one made: its session merges the
+	// base into the Spec Branch and finishes.
+	fix := "acme-5"
+	h.Script(fix, factorytest.Git("merge", "-q", "-X", "theirs", "main"), factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Merged the base.", "--branch", fix))
+	r := h.Start()
+	r.WaitForOutput(a + ": merged into spec/" + h.SpecID())
+
+	if err := os.WriteFile(filepath.Join(h.Repo, "README"), []byte("base side\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h.Git("add", "README")
+	h.Git("commit", "-q", "-m", "base changes README")
+	release()
+	r.Poll()
+	r.WaitForOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)
+	h.WaitForState(fix, store.InReview)
+
+	h.Accept(fix)
+	r.Poll()
+	h.WaitForState(a, store.Done)
+	h.WaitForState(fix, store.Done)
+}

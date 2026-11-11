@@ -31,6 +31,10 @@ type repo interface {
 	fastForward(dir, commit string) (out string, err error)
 	// updateRef moves ref from old to new, failing unless it is at old.
 	updateRef(ref, new, old string) error
+	// specBranches is the names of the branches under spec/.
+	specBranches() ([]string, error)
+	// deleteRef deletes ref, failing unless it is at old.
+	deleteRef(ref, old string) error
 	// push pushes branch to remote, never forcing; out is git's output
 	// when it fails. A stop (ctx) kills it.
 	push(ctx context.Context, remote, branch string) (out string, err error)
@@ -123,6 +127,16 @@ func (g gitRepo) fastForward(dir, commit string) (string, error) {
 
 func (g gitRepo) updateRef(ref, new, old string) error {
 	_, err := g.out("update-ref", ref, new, old)
+	return err
+}
+
+func (g gitRepo) specBranches() ([]string, error) {
+	out, err := g.out("for-each-ref", "--format=%(refname:short)", "refs/heads/spec/")
+	return strings.Fields(out), err
+}
+
+func (g gitRepo) deleteRef(ref, old string) error {
+	_, err := g.out("update-ref", "-d", ref, old)
 	return err
 }
 

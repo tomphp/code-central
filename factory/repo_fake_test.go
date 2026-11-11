@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"sync"
 )
 
@@ -225,6 +226,29 @@ func (r *fakeRepo) updateRef(ref, new, old string) error {
 		return fmt.Errorf("git update-ref: %s isn't at %s", ref, old)
 	}
 	r.refs[ref] = new
+	return nil
+}
+
+func (r *fakeRepo) specBranches() ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var out []string
+	for ref := range r.refs {
+		if b, ok := strings.CutPrefix(ref, "refs/heads/"); ok && strings.HasPrefix(b, "spec/") {
+			out = append(out, b)
+		}
+	}
+	slices.Sort(out)
+	return out, nil
+}
+
+func (r *fakeRepo) deleteRef(ref, old string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.refs[ref] != old {
+		return fmt.Errorf("git update-ref: %s isn't at %s", ref, old)
+	}
+	delete(r.refs, ref)
 	return nil
 }
 
