@@ -6,6 +6,8 @@ import { moveTargets } from "../api/actions/move";
 import type { EditView, ReportedModels, State, TicketView } from "../api/types";
 import { ago, CLAUDE_CODE_DEFAULT, REASON_LABEL } from "../format";
 import { Markdown } from "../Markdown";
+import { EditForm } from "../edit/EditForm";
+import { ticketEditable } from "../edit/editable";
 import { ActionPanel } from "../panels/ActionPanel";
 import { LatestEventLine } from "../LatestEvent";
 import { LinkBadge } from "./LinkBadge";
@@ -27,10 +29,16 @@ export interface TicketPaneProps {
   // openSpec opens the Ticket's Spec, where the view can show it; without
   // it the Spec is named only.
   openSpec?(spec: string): void;
+  // archived is whether the Ticket's Project is Archived, which takes no
+  // edits.
+  archived?: boolean;
 }
 
 export function TicketPane(props: TicketPaneProps) {
   const t = props.ticket;
+  // The form owns its draft, so it stays open if the Ticket stops being
+  // editable under it; Edit is offered only while it is closed.
+  const [editing, setEditing] = useState(false);
   return (
     <>
       <header className="ticket-head">
@@ -40,15 +48,36 @@ export function TicketPane(props: TicketPaneProps) {
             <span className="dot" aria-hidden="true" /> {REASON_LABEL[t.needs_me_reason]}
           </span>
         )}
-        <h2>{t.title}</h2>
+        {editing ? (
+          <EditForm
+            title={t.title}
+            text={t.description}
+            label="description"
+            save={({ title, text }) => props.api.act(props.project, t.id, "edit_ticket", { title, description: text })}
+            close={() => setEditing(false)}
+          />
+        ) : (
+          <>
+            <h2>{t.title}</h2>
+            {ticketEditable(t, !!props.archived) && (
+              <button type="button" className="btn" onClick={() => setEditing(true)}>
+                Edit
+              </button>
+            )}
+          </>
+        )}
       </header>
       <ActionPanel {...props} />
-      <TicketDetail {...props} />
+      <TicketDetail {...props} editing={editing} />
     </>
   );
 }
 
-export type TicketDetailProps = TicketPaneProps;
+export type TicketDetailProps = TicketPaneProps & {
+  // editing is whether the pane's edit form is open, which holds the
+  // description.
+  editing?: boolean;
+};
 
 // TicketDetail is everything about a Ticket below its action panel: Spec,
 // Labels, an Incoming Issue's triage actions (in the action panel instead
@@ -58,7 +87,7 @@ export type TicketDetailProps = TicketPaneProps;
 // (in the action panel instead while CI failed), Claim activity with
 // each Claim's Live section, move, and a collapsed history of moves,
 // comments and edits merged by time.
-export function TicketDetail({ api, project, ticket: t, now, reported, openSpec }: TicketDetailProps) {
+export function TicketDetail({ api, project, ticket: t, now, reported, openSpec, editing }: TicketDetailProps) {
   const claims = [...t.claims].sort((a, b) => b.number - a.number);
   const specName = `${t.spec.id} ${t.spec.title}`;
   return (
@@ -84,7 +113,7 @@ export function TicketDetail({ api, project, ticket: t, now, reported, openSpec 
       {/* A New issue's triage actions are its action panel, so they
           aren't shown here too. */}
       {t.triage_actions && t.needs_me_reason !== "new_issue" && <Triage api={api} project={project} ticket={t} />}
-      {t.description ? <Markdown>{t.description}</Markdown> : <p className="muted">No description.</p>}
+      {editing ? null : t.description ? <Markdown>{t.description}</Markdown> : <p className="muted">No description.</p>}
       {t.tags.prototype !== undefined && <PrototypeAt tag={t.tags.prototype} />}
       {t.blockers.length > 0 && (
         <p className="muted small">

@@ -70,6 +70,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     specQuestions: (project, spec) => call("GET", `${p(project)}/specs/${encodeURIComponent(numberOf(spec))}/questions`),
     act: <A extends TicketAction>(project: string, id: string, action: A, body: TicketActions[A]["body"]) =>
       call<TicketActions[A]["result"]>("POST", `${p(project)}/tickets/${encodeURIComponent(numberOf(id))}/${action}`, body),
+    editSpec: (project, spec, change) => call("POST", `${p(project)}/specs/${encodeURIComponent(numberOf(spec))}/edit_spec`, change),
     archiveProject: (project) => call("POST", `${p(project)}/archive_project`, {}),
     unarchiveProject: (project) => call("POST", `${p(project)}/unarchive_project`, {}),
     renameProject: (project, display_name) => call("POST", `${p(project)}/rename_project`, { display_name }),

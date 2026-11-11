@@ -1,10 +1,11 @@
 // The Requirement pane, above the shared Ticket pane: the header (ID,
 // title, submitted time, New Prototype), the clickable Stage strip (its
 // Map segment linking to the Map it was made from, if any), what it waits
-// for, and under Build the sums of its implementation Tickets' CI badges
+// for, its body (the text, then the Spec) collapsed, and under Build the sums of its implementation Tickets' CI badges
 // and those Tickets with their States.
 import type { Api } from "../api/api";
 import type { NeedsMeReason, SpecDetail } from "../api/types";
+import { BodySection } from "../edit/BodySection";
 import { ago } from "../format";
 import { TicketList } from "../spec/TicketList";
 import { CISums } from "../ticket/CIBadge";
@@ -19,6 +20,8 @@ export interface RequirementPaneProps {
   api: Api;
   spec: SpecDetail & { requirement: NonNullable<SpecDetail["requirement"]> };
   reasons: Map<string, NeedsMeReason>;
+  // archived is whether the Requirement's Project is Archived, which takes no edits.
+  archived?: boolean;
   now: Date;
   // ticket is the selected Ticket.
   ticket?: string;
@@ -27,9 +30,10 @@ export interface RequirementPaneProps {
   specLink(spec: string): Link;
 }
 
-export function RequirementPane({ api, spec, reasons, now, ticket, select, specLink }: RequirementPaneProps) {
+export function RequirementPane({ api, spec, archived, reasons, now, ticket, select, specLink }: RequirementPaneProps) {
   const p = progress(spec.requirement, spec.tickets, reasons);
   const note = waitingNote(p);
+  const specDone = spec.requirement.stages.some((s) => s.name === "spec" && s.state === "Done");
   return (
     <section aria-label="Requirement" className="req-head">
       <span className="tid">{spec.id}</span> <span className="muted small">Requirement · submitted {ago(now, spec.created)}</span>
@@ -49,6 +53,8 @@ export function RequirementPane({ api, spec, reasons, now, ticket, select, specL
         }}
       />
       {note && <p className="panel muted waiting">{note}</p>}
+      {/* The text is the Requirement's until its spec Stage has written the Spec. */}
+      <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} archived={archived} />
       <CISums tickets={p.build} />
       {p.build.length > 0 && <TicketList label="Build" tickets={p.build} reasons={reasons} now={now} ticket={ticket} select={select} />}
     </section>

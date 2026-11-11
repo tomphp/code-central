@@ -336,3 +336,11 @@ a.link-badge:hover { text-decoration: underline; }
 .factory-list { margin: 0; padding-left: 1.1rem; }
 .factory-tooltip .factory-list { padding-left: 0; list-style: none; }
 .factory-empty { margin: 0; }
+.ticket-head h2 { display: inline; }
+.ticket-head > .btn { margin-left: 8px; }
+.edit-form { display: flex; flex-direction: column; gap: 8px; margin: 6px 0; }
+.edit-form input { font: inherit; font-size: 16px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+.edit-form .edit-preview { border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; min-height: 120px; }
+.spec-body { margin: 4px 0 8px; }
+.spec-body-head { display: flex; align-items: center; gap: 8px; }
+.spec-body-head .link { font-weight: 600; }
