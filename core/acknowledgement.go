@@ -59,11 +59,12 @@ func acknowledgeCreate[V any](empty, after V, full bool) (Written[V], error) {
 	return written(empty, after, full, "id", "created", "updated")
 }
 
-// acknowledgeProject is a Project write's result, as acknowledge. A
+// acknowledgeProject is a Project write's result, as acknowledge, leaving
+// out factory_status, which time moves and no write sets. A
 // Project has no id or updated, so its Acknowledgement gives its key as
 // the id and the write's time as updated.
 func acknowledgeProject(before, after ProjectView, full bool, at time.Time) (Written[ProjectView], error) {
-	w, err := written(before, after, full)
+	w, err := written(before, after, full, "factory_status")
 	if err == nil && w.Record == nil {
 		w.ID, w.Updated = after.Key, at
 	}

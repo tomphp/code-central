@@ -43,6 +43,8 @@ type Core struct {
 	issuesCheck IssuesCheck
 	// watchers holds each Project's Watchers' statuses, in memory only.
 	watchers *watchers
+	// heartbeats holds each Factory's latest Heartbeat, in memory only.
+	heartbeats *heartbeats
 	// uiURL is the UI's address, which a comment written to an issue
 	// links back to; empty links relative to the UI.
 	uiURL string
@@ -58,6 +60,7 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	c.transcripts = &transcripts{all: map[markKey]*transcript{}, feeds: map[markKey]map[*TranscriptFeed]struct{}{}}
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
 	c.watchers = &watchers{all: map[watcherKey]watcherStatus{}}
+	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}}
 	return c
 }
 
@@ -85,6 +88,9 @@ type ProjectView struct {
 	// ReportedModels is what the Factory last reported its claude
 	// accepts, always filled in.
 	ReportedModels ReportedModelsView `json:"reported_models"`
+	// FactoryStatus is whether the Project's Factories are online, from
+	// their Heartbeats, always filled in.
+	FactoryStatus FactoryStatusView `json:"factory_status"`
 }
 
 // LandingView is a Project's Landing Method with its Push option.
@@ -544,7 +550,7 @@ func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
 		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote}, CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
-		ReportedModels: reportedModelsView(p.ReportedModels)}
+		ReportedModels: reportedModelsView(p.ReportedModels), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at
