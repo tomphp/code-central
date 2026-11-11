@@ -11,3 +11,5 @@ A Requirement is defined through three Stages (grilling, spec and tickets), and 
 ## Consequences
 
 `stage:` is a reserved Label prefix, and only the names Code Central knows may use it. Because Stage Labels don't drive the workflow, the In Review gate is the same for a Stage as for any Ticket, and Stage Tickets accept straight to Done because `finish` named no branch, not because of their Label.
+
+[ADR 0026](0026-implement-skips-the-tickets-stage.md) makes one named exception: `implement` is valid only on an In Review `stage:spec` Ticket.

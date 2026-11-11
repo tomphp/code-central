@@ -203,3 +203,19 @@ func TestACancelledImplementationTicketIsLeftOutOfWhatLanded(t *testing.T) {
 		t.Fatalf("closed comment = %q, want only acme-10, with no commit", body)
 	}
 }
+
+// A Requirement whose tickets Stage is Cancelled, with the implementation
+// Ticket as its Replacement, is building: the Stages are all Done or
+// Cancelled, and the Spec comment is due once the spec Stage is Done.
+func TestACancelledTicketsStageLetsTheIssueStartBuilding(t *testing.T) {
+	srv := newServer(t, requirementFromIssue)
+	httpOK(t, srv, reportIssueWritten(`{"target":"acme-6","key":"context"}`))
+	implementationTicket(t, srv, "Build it") // acme-10
+	for _, n := range []string{"7", "8"} {
+		srv.Clock.Advance(time.Minute)
+		httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/" + n + "/move", `{"to_state":"Done"}`})
+	}
+	wantDue(t, writesDue(t, srv), "acme-6", "code-central:requirement", "", "spec")
+	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/9/cancel", `{"replacements":[10]}`})
+	wantDue(t, writesDue(t, srv), "acme-6", "code-central:building", "", "spec")
+}

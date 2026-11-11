@@ -228,3 +228,28 @@ func TestNeedsMeListsMapTicketsAndPrototypesOneByOneWithTheirSpec(t *testing.T) 
 		t.Error("a Prototype on a Requirement names it")
 	}
 }
+
+func TestACancelledTicketsStageCountsAsPassedSoBuildIsCurrent(t *testing.T) {
+	f := newFixture(t)
+	f.requirement(t)
+	f.setState(t, 3, store.Done)
+	f.setState(t, 4, store.Done)
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "2", Title: "Everything", State: store.Ready}) // acme-6
+	f.cancel(t, core.CancelInput{Ticket: "acme-5", Replacements: []core.Ref{"acme-6"}}, core.Human)
+	r := f.requirementOf(t, "acme-2")
+	want := []string{"grilling acme-3 Done ", "spec acme-4 Done ", "tickets acme-5 Cancelled "}
+	if got := stageLines(r); !slices.Equal(got, want) {
+		t.Fatalf("stages %q, want %q", got, want)
+	}
+	if r.Build != (core.BuildProgress{Done: 0, Total: 1}) || !r.WaitingForFactory {
+		t.Fatalf("build %+v waiting %v, want 0/1 waiting for the implementation Ticket", r.Build, r.WaitingForFactory)
+	}
+	f.claim(t, core.ClaimInput{Ticket: "acme-6"})
+	if f.requirementOf(t, "acme-2").WaitingForFactory {
+		t.Fatal("a held Claim on the implementation Ticket means a Factory is at work")
+	}
+	f.setState(t, 6, store.Done)
+	if r := f.requirementOf(t, "acme-2"); r.Build != (core.BuildProgress{Done: 1, Total: 1}) {
+		t.Fatalf("build %+v, want 1/1", r.Build)
+	}
+}
