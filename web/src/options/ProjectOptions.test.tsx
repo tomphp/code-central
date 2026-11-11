@@ -106,6 +106,39 @@ describe("Project Options", () => {
     );
   });
 
+  it("shows the Pull Request Watcher's status under Pull Request: Watching, rate-limited, or an error with its fix", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
+    renderApp(fake, "/?view=project-options&project=acme");
+    await screen.findByRole("group", { name: "Landing Method" });
+    expect(within(landing()).queryByRole("region", { name: "Pull Request Watcher" })).toBeNull();
+
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Pull Request" }));
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    const watcher = await within(landing()).findByRole("region", { name: "Pull Request Watcher" });
+    expect(watcher).toHaveTextContent("Starting; it hasn't reported yet");
+
+    await fake.reportPullRequestWatcherStatus("acme", { state: "watching" });
+    await waitFor(() => expect(watcher).toHaveTextContent("Pull Request Watcher: Watching acme/web."));
+
+    await fake.reportPullRequestWatcherStatus("acme", {
+      state: "error",
+      problem: "no_write",
+      message: "the account gh is logged in as can't write to acme/web",
+      fix: "Log gh in as an account with write access.",
+    });
+    await waitFor(() => expect(watcher).toHaveTextContent("can't write to acme/web"));
+    expect(watcher).toHaveTextContent("Log gh in as an account with write access.");
+    expect(watcher).toHaveTextContent("goes back to Watching once the cause is fixed");
+
+    // Switching away forgets its status and hides it.
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Merge into base" }));
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(within(landing()).queryByRole("region", { name: "Pull Request Watcher" })).toBeNull());
+    expect((await fake.listProjects())[0].landing.watcher).toEqual({ state: "not_reported" });
+  });
+
   it("shows Land per Spec on under Merge, disabled but kept under Branch, and saves it", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
@@ -204,6 +237,7 @@ describe("Project Options", () => {
       code_host: "",
       repository: "",
       pat_env: "ADO_PAT",
+      watcher: { state: "not_reported" },
     });
 
     await userEvent.type(remote, "upstream");
@@ -220,6 +254,7 @@ describe("Project Options", () => {
       code_host: "",
       repository: "",
       pat_env: "ADO_PAT",
+      watcher: { state: "not_reported" },
     });
     expect(save).toBeDisabled();
   });

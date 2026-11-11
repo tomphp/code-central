@@ -41,6 +41,9 @@ type Core struct {
 	// issuesCheck is the Issue Watcher's check mode, run when GitHub
 	// Issues is turned on; nil checks nothing.
 	issuesCheck IssuesCheck
+	// pullRequestCheck is the Pull Request Watcher's check mode, run when
+	// Pull Request is turned on; nil checks nothing.
+	pullRequestCheck PullRequestCheck
 	// watchers holds each Project's Watchers' statuses, in memory only.
 	watchers *watchers
 	// heartbeats holds each Factory's latest Heartbeat, in memory only.
@@ -109,6 +112,9 @@ type LandingView struct {
 	// PATEnv is the environment variable holding the Azure Repos PAT,
 	// ADO_PAT unless the Project names another.
 	PATEnv string `json:"pat_env"`
+	// Watcher is the Pull Request Watcher's status, not_reported unless the
+	// method is Pull Request.
+	Watcher WatcherView `json:"watcher"`
 }
 
 // SpecView is a Spec as every read returns it, and as its writes return
@@ -580,7 +586,7 @@ func finished(s store.State) bool { return s == store.Done || s == store.Cancell
 
 func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
-		Landing: landingView(p), CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
+		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
 	if !p.Archived.IsZero() {
@@ -666,8 +672,13 @@ func orEmptyMap(m map[string]string) map[string]string {
 // landingView is p's Landing with the Code Host worked out from the Push
 // remote URL. Push reads as off under Pull Request, which implies it.
 func landingView(p store.Project) LandingView {
+	return landingViewWith(p, WatcherView{State: WatcherNotReported})
+}
+
+// landingViewWith is landingView with the Pull Request Watcher's status.
+func landingViewWith(p store.Project, watcher WatcherView) LandingView {
 	host, repo := codeHostOf(p.CI.PushRemoteURL)
 	push := p.Landing.Push && p.Landing.Method != store.LandingPullRequest
 	return LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
-		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv})}
+		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), Watcher: watcher}
 }

@@ -108,6 +108,9 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 	if patEnv != "" && !patEnvPattern.MatchString(patEnv) {
 		return ProjectView{}, invalid("pat_env", "%q is not an environment variable's name, such as %s", patEnv, store.DefaultPATEnv)
 	}
+	if err := c.checkPullRequest(ctx, key, store.Landing{Method: in.Method, PATEnv: patEnv}); err != nil {
+		return ProjectView{}, err
+	}
 	var v ProjectView
 	var accepted []int
 	err := c.store.Update(func(w store.Writer) error {
@@ -138,6 +141,10 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 					accepted = append(accepted, t.Number)
 				}
 			}
+		}
+		if p.Landing.Method == store.LandingPullRequest && l.Method != store.LandingPullRequest {
+			// What the Pull Request Watcher said was about the old method.
+			c.watchers.reset(watcherKey{WatcherPullRequests, key})
 		}
 		p.Landing = l
 		v = c.projectView(p)

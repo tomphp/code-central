@@ -111,6 +111,7 @@ import {
   type PullRequestReport,
   type CIWatcherStatus,
   type IssueWatcherReport,
+  type PullRequestWatcherReport,
   type IssueWatcherStatus,
   type PushedCommitView,
   type CITrackingChange,
@@ -438,7 +439,7 @@ export class FakeApi implements Api {
       mode: "committed",
       archived: opts.archived ?? false,
       ...(opts.archived ? { archived_at: this.now.toISOString() } : {}),
-      landing: { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT" },
+      landing: { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" } },
       ci: {
         tracking: false,
         provider: "github_actions",
@@ -1275,6 +1276,8 @@ export class FakeApi implements Api {
         throw new ApiError(422, "invalid", `the Push remote ${url} is on a host Pull Request doesn't support`, "method", undefined, "use Merge or Branch, or point the Push remote at a supported host");
       }
     }
+    // What the Pull Request Watcher said was about the old method.
+    if (l.method !== "pull_request") l.watcher = { state: "not_reported" };
     if (JSON.stringify(p.landing) !== JSON.stringify(l)) {
       p.landing = l;
       this.emit({ type: "project.changed", project: key });
@@ -1403,11 +1406,25 @@ export class FakeApi implements Api {
     this.emit({ type: "project.changed", project: key });
   }
 
+  // reportPullRequestWatcherStatus is the Pull Request Watcher's report of
+  // its status (code-central-389), refused unless the Landing Method is
+  // Pull Request.
+  async reportPullRequestWatcherStatus(key: string, status: PullRequestWatcherReport): Promise<void> {
+    const p = this.writable(key);
+    if (p.landing.method !== "pull_request") {
+      throw new ApiError(403, "action_not_allowed", `Pull Request is off on ${key}, so it has no Pull Request Watcher`);
+    }
+    const watcher = this.nextWatcher(p.landing.watcher, status, "Pull Request Watcher", "pull requests");
+    if (!watcher) return;
+    p.landing = { ...p.landing, watcher };
+    this.emit({ type: "project.changed", project: key });
+  }
+
   // nextWatcher is a Watcher's status after it reports status, keeping
   // since while its state is the same; undefined when nothing changed. A
   // crash, which only the service reports, and a rate-limited error are
   // refused, naming the Watcher and what it watches.
-  private nextWatcher<W extends IssueWatcherStatus>(current: W, status: Omit<W, "since">, name: string, watches: string): W | undefined {
+  private nextWatcher<W extends Omit<CIWatcherStatus, "problem"> & { problem?: string }>(current: W, status: Omit<W, "since">, name: string, watches: string): W | undefined {
     if (status.problem === "crashed") throw new ApiError(422, "invalid", `"crashed" isn't a ${watches} problem`, "problem");
     if (status.state === "error" && status.rate_limited_until)
       throw new ApiError(422, "invalid", `only a Watching ${name} is rate-limited; an error has its own fix`, "rate_limited_until");
