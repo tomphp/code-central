@@ -355,3 +355,55 @@ func TestAnAnyRuleMatchesAnAzurePipelineWhateverItsName(t *testing.T) {
 		t.Fatalf("Tickets on %s = %d, want one fix Ticket", spec, len(tks))
 	}
 }
+
+// pullRequestPushed makes the pushed commit's Ticket have pull request 7.
+func (a *azureWatching) pullRequestPushed(commit string) string {
+	a.t.Helper()
+	id := a.pushed(commit)
+	ctx, human := context.Background(), core.WithActor(context.Background(), core.Human)
+	c := a.srv.Core
+	must(a.t, func() error {
+		_, err := c.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "https://dev.azure.com/acme/web/_git/web", Base: "main"})
+		return err
+	})
+	must(a.t, func() error {
+		_, err := c.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
+		return err
+	})
+	must(a.t, func() error {
+		_, err := c.ReportPullRequest(ctx, "acme", core.ReportPullRequestInput{Branch: id, Number: 7, Link: "https://dev.azure.com/acme/web/_git/web/pullrequest/7", State: store.PROpen})
+		return err
+	})
+	return id
+}
+
+func TestAnAzureBuildOnThePullRequestsMergeRefCountsTowardsThePushedCommit(t *testing.T) {
+	a := newAzureWatching(t)
+	id := a.pullRequestPushed("abc123")
+	a.builds(
+		azBuild{id: 11, pipeline: "CI", branch: "refs/pull/7/merge", commit: "mergesha", status: "completed", result: "failed", changed: "2026-01-05T09:05:00Z", finished: "2026-01-05T09:05:00Z"},
+		azBuild{id: 12, pipeline: "CI", branch: "refs/pull/8/merge", commit: "othermerge", status: "completed", result: "failed", changed: "2026-01-05T09:04:00Z", finished: "2026-01-05T09:04:00Z"})
+	a.timeline(11, azRecord{"Job", "test", "failed", 1})
+	a.startAzure()
+
+	tk := a.ciResult(id, core.CIFailed)
+	if len(tk.CIRuns) != 1 || tk.CIRuns[0].ID != 11 || tk.CIRuns[0].Commit != "abc123" || tk.CIRuns[0].Ticket != id {
+		t.Fatalf("runs = %+v, want only the pull request 7 merge build, counted on the pushed commit", tk.CIRuns)
+	}
+}
+
+func TestAnAzureRerunActsOnABuildOnThePullRequestsMergeRef(t *testing.T) {
+	a := newAzureWatching(t)
+	id := a.pullRequestPushed("abc123")
+	a.builds(azBuild{id: 11, pipeline: "CI", branch: "refs/pull/7/merge", commit: "mergesha", status: "completed", result: "failed", changed: "2026-01-05T09:05:00Z", finished: "2026-01-05T09:05:00Z"})
+	a.timeline(11, azRecord{"Job", "test", "failed", 1})
+	a.startAzure()
+	a.ciResult(id, core.CIFailed)
+	human := core.WithActor(context.Background(), core.Human)
+	must(t, func() error {
+		_, err := a.srv.Core.RerunCI(human, "acme", core.TicketInput{Ticket: core.Ref(id)})
+		return err
+	})
+	a.poll()
+	a.waitFor("the build retried", func() bool { return len(a.retries()) == 1 })
+}

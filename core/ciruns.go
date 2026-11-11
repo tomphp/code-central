@@ -540,6 +540,10 @@ type CIWaitingCommit struct {
 	Ticket string    `json:"ticket"`
 	Commit string    `json:"commit"`
 	Pushed time.Time `json:"pushed"`
+	// PullRequest is the number of the Ticket's pull request, when it has
+	// one: Azure Pipelines builds on refs/pull/<n>/merge count towards
+	// the commit's CI result.
+	PullRequest int `json:"pull_request,omitempty"`
 }
 
 // ciWaiting is every Ticket's latest pushed commit whose CI result is
@@ -569,7 +573,11 @@ func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 			continue
 		}
 		if pushedCIResult(latest, mine, now) == CIRunning || now.Sub(since) < ciNewlyPushed {
-			out = append(out, CIWaitingCommit{Ticket: DisplayID(key, t.Number), Commit: latest.Commit, Pushed: latest.Pushed})
+			w := CIWaitingCommit{Ticket: DisplayID(key, t.Number), Commit: latest.Commit, Pushed: latest.Pushed}
+			if t.PullRequest != nil {
+				w.PullRequest = t.PullRequest.Number
+			}
+			out = append(out, w)
 		}
 	}
 	slices.SortStableFunc(out, func(a, b CIWaitingCommit) int { return a.Pushed.Compare(b.Pushed) })

@@ -79,7 +79,7 @@ type ghJob struct {
 }
 
 // RunsForCommit lists the workflow runs GitHub started for commit.
-func (g *GitHubActions) RunsForCommit(ctx context.Context, commit string) ([]Run, error) {
+func (g *GitHubActions) RunsForCommit(ctx context.Context, commit string, _ int) ([]Run, error) {
 	return g.runs(ctx, fmt.Sprintf("repos/%s/actions/runs?head_sha=%s&per_page=100", g.Repository, url.QueryEscape(commit)))
 }
 
