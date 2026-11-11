@@ -59,6 +59,7 @@ var migrations = []MigrationStep{
 	{From: 19, Name: "add a Project's Azure Pipelines settings and the partially succeeded CI conclusion"},
 	{From: 20, Name: "add a Project's Land per Spec"},
 	{From: 21, Name: "add a Ticket's Spec merge"},
+	{From: 22, Name: "add a Project's Pull Request Landing Method and PAT variable"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

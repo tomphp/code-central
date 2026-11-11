@@ -84,10 +84,14 @@ const (
 	LandingMerge LandingMethod = "merge"
 	// LandingBranch: the Factory leaves the branch for the human to merge.
 	LandingBranch LandingMethod = "branch"
+	// LandingPullRequest: the Factory pushes the branch and the Pull
+	// Request Watcher opens a pull request on the Code Host. Push is
+	// implied.
+	LandingPullRequest LandingMethod = "pull_request"
 )
 
 // LandingMethods lists every LandingMethod, the default first.
-var LandingMethods = []LandingMethod{LandingMerge, LandingBranch}
+var LandingMethods = []LandingMethod{LandingMerge, LandingBranch, LandingPullRequest}
 
 // Valid reports whether m is one of the LandingMethods.
 func (m LandingMethod) Valid() bool { return slices.Contains(LandingMethods, m) }
@@ -112,6 +116,10 @@ type Landing struct {
 	// It reads as on for a Project that never stored it, and is kept
 	// whatever the method.
 	LandPerSpec bool
+	// PATEnv is the Pull Request setting naming the environment variable
+	// that holds the Azure Repos PAT. Empty reads as DefaultPATEnv, and
+	// it is kept whatever the method.
+	PATEnv string
 }
 
 // DefaultLandingRemote is the remote Push uses when none is named.

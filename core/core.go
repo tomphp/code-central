@@ -101,6 +101,14 @@ type LandingView struct {
 	// LandPerSpec is the Merge option to land a Spec's work together,
 	// shown whatever the method.
 	LandPerSpec bool `json:"land_per_spec"`
+	// CodeHost is the Code Host the reported Push remote URL names,
+	// github or azure_repos, empty while none is reported or it is
+	// unsupported. Repository is the host's name for the repository.
+	CodeHost   string `json:"code_host"`
+	Repository string `json:"repository"`
+	// PATEnv is the environment variable holding the Azure Repos PAT,
+	// ADO_PAT unless the Project names another.
+	PATEnv string `json:"pat_env"`
 }
 
 // SpecView is a Spec as every read returns it, and as its writes return
@@ -566,7 +574,7 @@ func finished(s store.State) bool { return s == store.Done || s == store.Cancell
 
 func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
-		Landing: LandingView{Method: p.Landing.Method, Push: p.Landing.Push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec}, CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
+		Landing: landingView(p), CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
 	if !p.Archived.IsZero() {
@@ -646,4 +654,13 @@ func orEmptyMap(m map[string]string) map[string]string {
 		return map[string]string{}
 	}
 	return m
+}
+
+// landingView is p's Landing with the Code Host worked out from the Push
+// remote URL. Push reads as off under Pull Request, which implies it.
+func landingView(p store.Project) LandingView {
+	host, repo := codeHostOf(p.CI.PushRemoteURL)
+	push := p.Landing.Push && p.Landing.Method != store.LandingPullRequest
+	return LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
+		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv})}
 }

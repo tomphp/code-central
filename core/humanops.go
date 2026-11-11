@@ -81,6 +81,9 @@ type SetLandingMethodInput struct {
 	Remote string              `json:"remote"`
 	// LandPerSpec, when left out, keeps the stored value.
 	LandPerSpec *bool `json:"land_per_spec,omitempty"`
+	// PATEnv names the environment variable holding the Azure Repos PAT
+	// under Pull Request; left out, it keeps the stored name.
+	PATEnv string `json:"pat_env,omitempty"`
 }
 
 // SetLandingMethod is the human's set_landing_method: how the Project's
@@ -91,14 +94,19 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		return ProjectView{}, err
 	}
 	if !in.Method.Valid() {
-		return ProjectView{}, invalid("method", "Landing Method %q is neither %q nor %q", in.Method, store.LandingMerge, store.LandingBranch)
+		return ProjectView{}, invalid("method", "Landing Method %q is not %q, %q or %q", in.Method, store.LandingMerge, store.LandingBranch, store.LandingPullRequest)
 	}
-	l := store.Landing{Method: in.Method, Push: in.Push, Remote: strings.TrimSpace(in.Remote)}
+	// Push is implied under Pull Request, so the flag is ignored and not stored.
+	l := store.Landing{Method: in.Method, Push: in.Push && in.Method != store.LandingPullRequest, Remote: strings.TrimSpace(in.Remote)}
 	if l.Remote == "" {
 		if l.Push {
 			return ProjectView{}, invalid("remote", "Push needs a git remote to push to, such as %q", store.DefaultLandingRemote)
 		}
 		l.Remote = store.DefaultLandingRemote
+	}
+	patEnv := strings.TrimSpace(in.PATEnv)
+	if patEnv != "" && !patEnvPattern.MatchString(patEnv) {
+		return ProjectView{}, invalid("pat_env", "%q is not an environment variable's name, such as %s", patEnv, store.DefaultPATEnv)
 	}
 	var v ProjectView
 	var accepted []int
@@ -108,6 +116,15 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		}
 		p, _ := w.Project(key)
 		l.LandPerSpec = p.Landing.LandPerSpec
+		l.PATEnv = p.Landing.PATEnv
+		if patEnv != "" {
+			l.PATEnv = patEnv
+		}
+		if l.Method == store.LandingPullRequest {
+			if err := checkPullRequestHost(p.CI.PushRemoteURL); err != nil {
+				return err
+			}
+		}
 		if in.LandPerSpec != nil {
 			l.LandPerSpec = *in.LandPerSpec
 		}

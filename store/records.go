@@ -106,6 +106,8 @@ type landingFile struct {
 	// LandPerSpec is a pointer so a file without it, which reads as on,
 	// differs from false.
 	LandPerSpec *bool `yaml:"land_per_spec,omitempty"`
+	// PATEnv is left out while it is unset.
+	PATEnv string `yaml:"pat_env,omitempty"`
 }
 
 type specFront struct {
@@ -639,7 +641,7 @@ func encodeLanding(l Landing) *landingFile {
 	if l = l.orDefault(); l == DefaultLanding() {
 		return nil
 	}
-	f := &landingFile{Method: string(l.Method), Push: l.Push, Remote: l.Remote}
+	f := &landingFile{Method: string(l.Method), Push: l.Push, Remote: l.Remote, PATEnv: l.PATEnv}
 	if !l.LandPerSpec {
 		f.LandPerSpec = &l.LandPerSpec
 	}

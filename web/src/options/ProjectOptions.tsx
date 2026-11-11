@@ -112,7 +112,14 @@ const METHODS: { method: LandingMethod; label: string; hint: string }[] = [
     label: "Leave as a branch",
     hint: "The Factory leaves the branch for you to merge, and lands the Ticket when it sees the merge in the base.",
   },
+  {
+    method: "pull_request",
+    label: "Pull Request",
+    hint: "The Factory pushes the accepted branch and a pull request is opened on your Code Host; the Ticket lands when you merge it there.",
+  },
 ];
+
+const CODE_HOST_NAMES = { github: "GitHub", azure_repos: "Azure Repos" };
 
 // LandingMethodSection is how the Project's accepted work lands. It follows
 // the Project as read, so a change from another tab shows here too.
@@ -123,14 +130,14 @@ function LandingMethodSection({
   api: Api;
   project: ProjectRow;
 }) {
-  const { method, push, remote, land_per_spec } = project.landing;
+  const { method, push, remote, land_per_spec, pat_env, code_host, repository } = project.landing;
   const [draft, setDraft] = useState<Landing>(project.landing);
   const [error, setError] = useState<ApiError>();
   const [saved, setSaved] = useState(false);
   const id = useId();
   useEffect(
-    () => setDraft({ method, push, remote, land_per_spec }),
-    [method, push, remote, land_per_spec],
+    () => setDraft((d) => ({ ...d, method, push, remote, land_per_spec, pat_env })),
+    [method, push, remote, land_per_spec, pat_env],
   );
 
   const edit = (patch: Partial<Landing>) => {
@@ -154,8 +161,11 @@ function LandingMethodSection({
     draft.method !== method ||
     draft.push !== push ||
     draft.remote !== remote ||
-    draft.land_per_spec !== land_per_spec;
+    draft.land_per_spec !== land_per_spec ||
+    draft.pat_env !== pat_env;
   const remoteError = error?.field === "remote";
+  const pullRequest = draft.method === "pull_request";
+  const pushRemoteURL = project.ci.push_remote_url;
 
   return (
     <form onSubmit={save}>
@@ -183,23 +193,25 @@ function LandingMethodSection({
             </p>
           </div>
         ))}
-        <div className="project-options-choice">
-          <label>
-            <input
-              type="checkbox"
-              checked={draft.push}
-              onChange={(e) => edit({ push: e.target.checked })}
-              aria-describedby={`${id}-push`}
-            />{" "}
-            Push
-          </label>
-          <p className="project-options-hint" id={`${id}-push`}>
-            Merge pushes the base to the remote after merging; Leave as a branch
-            pushes the Ticket's branch when you accept it. The Factory checks
-            the remote exists, never force-pushes, and under Merge pushes the
-            whole base, your own commits on it too.
-          </p>
-        </div>
+        {!pullRequest && (
+          <div className="project-options-choice">
+            <label>
+              <input
+                type="checkbox"
+                checked={draft.push}
+                onChange={(e) => edit({ push: e.target.checked })}
+                aria-describedby={`${id}-push`}
+              />{" "}
+              Push
+            </label>
+            <p className="project-options-hint" id={`${id}-push`}>
+              Merge pushes the base to the remote after merging; Leave as a branch
+              pushes the Ticket's branch when you accept it. The Factory checks
+              the remote exists, never force-pushes, and under Merge pushes the
+              whole base, your own commits on it too.
+            </p>
+          </div>
+        )}
         <div className="project-options-choice">
           <label>
             <input
@@ -214,19 +226,41 @@ function LandingMethodSection({
           <p className="project-options-hint" id={`${id}-land-per-spec`}>
             Under Merge, a Spec's work gathers on its own branch and lands in the
             base, with Push and CI Tracking, once every Ticket on it is accepted,
-            instead of Ticket by Ticket. It has no effect under Leave as a branch.
+            instead of Ticket by Ticket. Under Pull Request the Spec gets one pull
+            request. It has no effect under Leave as a branch.
           </p>
         </div>
         <label className="project-options-remote">
           Remote{" "}
           <input
             value={draft.remote}
-            disabled={!draft.push}
+            disabled={!draft.push && !pullRequest}
             onChange={(e) => edit({ remote: e.target.value })}
             aria-invalid={remoteError || undefined}
             aria-describedby={remoteError ? `${id}-error` : undefined}
           />
         </label>
+        {pullRequest && (
+          <>
+            <p className="project-options-hint" role="status" aria-label="Code Host">
+              {code_host
+                ? `Code Host: ${CODE_HOST_NAMES[code_host]}, repository ${repository}.`
+                : pushRemoteURL
+                  ? `The Push remote ${pushRemoteURL} is on a host Pull Request doesn't support: it supports GitHub and Azure Repos.`
+                  : "No Push remote URL is reported yet: start the Factory once so it reports it, and the Code Host is worked out from it."}
+            </p>
+            {code_host === "azure_repos" && (
+              <label className="project-options-remote">
+                PAT variable{" "}
+                <input
+                  value={draft.pat_env}
+                  onChange={(e) => edit({ pat_env: e.target.value })}
+                  aria-invalid={error?.field === "pat_env" || undefined}
+                />
+              </label>
+            )}
+          </>
+        )}
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>
