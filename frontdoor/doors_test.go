@@ -610,6 +610,23 @@ func TestMCPOnAnUnknownProjectRejectsEveryTool(t *testing.T) {
 	}
 }
 
+func TestAnUnknownFieldIsRejectedNamingTheFieldsTheOperationAccepts(t *testing.T) {
+	srv := newServer(t)
+	s := connect(t, srv, "acme")
+	e := mcpRejected(t, s, "get_ticket", map[string]any{"id": 5}, core.Invalid)
+	if e.Field != "id" || !strings.Contains(e.Message, "accepted fields are ticket, parts") {
+		t.Errorf("got %q field %q, want the accepted fields ticket and parts", e.Message, e.Field)
+	}
+	e = mcpRejected(t, s, "get_ticket", map[string]any{"ticket_id": 5}, core.Invalid)
+	if !strings.Contains(e.Message, "did you mean `ticket`?") {
+		t.Errorf("got %q, want a suggestion of ticket", e.Message)
+	}
+	e = mcpRejected(t, s, "get_ticket", map[string]any{"ticket": ""}, core.Invalid)
+	if e.Field != "ticket" || !strings.Contains(e.Message, "ticket is empty") {
+		t.Errorf("got %q field %q, want ticket named as empty", e.Message, e.Field)
+	}
+}
+
 func TestIDsFromAnotherProjectAreRejectedNamingTheConnectionsProject(t *testing.T) {
 	srv := newServer(t)
 	s := connect(t, srv, "acme")
