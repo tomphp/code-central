@@ -344,6 +344,9 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 	if strings.TrimSpace(in.Note) == "" {
 		return Written[TicketView]{}, invalid("note", "a fix Ticket needs a note saying what failed, such as the failed CI run's link and its failed jobs")
 	}
+	if v, handled, err := c.newSpecFixTicket(ctx, key, in); handled {
+		return v, err
+	}
 	refuseUnlessOffered := func(r store.Reader, t store.Ticket) error {
 		if !slices.Contains(ciFailureOptions(r, key, t, c.now()), OptionNewFixTicket) {
 			return &Error{Code: ActionNotAllowed, Message: whyNotNewFixTicket(key, t)}
