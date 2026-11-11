@@ -47,7 +47,7 @@ type ghLabel struct {
 
 // openIssues lists repository's open issues through prog, gh, oldest
 // first, leaving out pull requests and, if label isn't empty, issues
-// without it. GitHub rate-limiting a call is a *gh.RateLimitError.
+// without it. GitHub rate-limiting a call is a *watchers.RateLimitError.
 func openIssues(ctx context.Context, env gh.Env, prog, repository, label string) ([]ghIssue, error) {
 	var out []ghIssue
 	for page := 1; ; page++ {

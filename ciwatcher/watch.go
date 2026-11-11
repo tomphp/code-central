@@ -135,7 +135,7 @@ type pollResult struct {
 	// reports Watching; a poll that finds an error reports it itself.
 	reachable bool
 	// limit is the CI Provider's rate limit, if it refused a call for it.
-	limit *gh.RateLimitError
+	limit *watchers.RateLimitError
 }
 
 // poll is one poll.
@@ -198,7 +198,7 @@ func (w *watcher) rerunFailed(ctx context.Context, p Provider, reruns []core.CIR
 			continue
 		}
 		err := p.RerunFailedJobs(ctx, r.ID)
-		var limit *gh.RateLimitError
+		var limit *watchers.RateLimitError
 		if errors.As(err, &limit) {
 			return limit
 		}
@@ -216,10 +216,10 @@ func (w *watcher) rerunFailed(ctx context.Context, p Provider, reruns []core.CIR
 // reportRuns lists the runs of each waiting pushed commit, fetches the
 // jobs of those that changed, and reports them tracked against the
 // commit's Ticket. A rate limit stops it calling the CI Provider: it
-// reports what changed so far and returns the *gh.RateLimitError.
+// reports what changed so far and returns the *watchers.RateLimitError.
 func (w *watcher) reportRuns(ctx context.Context, p Provider, waiting []core.CIWaitingCommit) error {
 	var changed []Run
-	var limit *gh.RateLimitError
+	var limit *watchers.RateLimitError
 list:
 	for _, c := range waiting {
 		runs, err := p.RunsForCommit(ctx, c.Commit)

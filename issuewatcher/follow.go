@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/watchers"
 	"net/http"
 	"strconv"
 	"strings"
@@ -28,7 +29,7 @@ import (
 // configured are left as they are. It returns GitHub's rate limit, if it
 // refused a call for it; anything else that goes wrong is logged and
 // tried again on the next poll.
-func (cfg Config) follow(ctx context.Context, watch core.IssueWatch, a access, listed []ghIssue) *gh.RateLimitError {
+func (cfg Config) follow(ctx context.Context, watch core.IssueWatch, a access, listed []ghIssue) *watchers.RateLimitError {
 	open := map[int]ghIssue{}
 	for _, i := range listed {
 		open[i.Number] = i
@@ -40,7 +41,7 @@ func (cfg Config) follow(ctx context.Context, watch core.IssueWatch, a access, l
 		}
 		issue, state, err := cfg.issueOf(ctx, a, watch.Label, open, n)
 		if err != nil {
-			var limit *gh.RateLimitError
+			var limit *watchers.RateLimitError
 			if errors.As(err, &limit) {
 				return limit
 			}
@@ -113,7 +114,7 @@ func issueNumber(repository, id string) (int, bool) {
 // otherwise. The repository is GitHub's name for it, so a renamed one
 // isn't taken for a transfer. The issue is nil once it is deleted or
 // transferred, as its text is no longer the repository's. GitHub
-// rate-limiting the read is a *gh.RateLimitError.
+// rate-limiting the read is a *watchers.RateLimitError.
 func readIssue(ctx context.Context, env gh.Env, a access, label string, n int) (*ghIssue, store.ExternalState, error) {
 	repository := a.repository
 	body, msg, err := gh.API(ctx, env, a.prog, fmt.Sprintf("repos/%s/issues/%d", repository, n))

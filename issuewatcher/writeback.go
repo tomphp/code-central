@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tomoram/code-central/watchers"
 	"net/http"
 	"net/url"
 	"slices"
@@ -43,14 +44,14 @@ func splitLinkID(id string) (repository string, n int, err error) {
 // returns GitHub's rate limit, if it refused a call for it; anything else
 // that goes wrong for an issue is logged, and its writes are tried again
 // on the next poll.
-func (cfg Config) writeBack(ctx context.Context, watch core.IssueWatch, prog string, listed []ghIssue) *gh.RateLimitError {
+func (cfg Config) writeBack(ctx context.Context, watch core.IssueWatch, prog string, listed []ghIssue) *watchers.RateLimitError {
 	open := map[string]ghIssue{}
 	for _, i := range listed {
 		open[LinkID(watch.Repository, i.Number)] = i
 	}
 	for _, w := range watch.Writes {
 		err := cfg.writeIssue(ctx, prog, w, open)
-		var limit *gh.RateLimitError
+		var limit *watchers.RateLimitError
 		switch {
 		case errors.As(err, &limit):
 			return limit
