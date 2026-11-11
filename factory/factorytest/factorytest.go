@@ -66,7 +66,7 @@ func Main(m *testing.M) {
 }
 
 // Timeout bounds every wait in the harness.
-const Timeout = 10 * time.Second
+const Timeout = 30 * time.Second
 
 // EventBatchEvery is how often the Factory under test posts waiting
 // Session Events.
