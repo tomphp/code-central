@@ -38,6 +38,9 @@ var refPattern = regexp.MustCompile(`^(?:(.+)-)?([1-9][0-9]*)$`)
 func (r Ref) number(key, field string) (int, error) {
 	m := refPattern.FindStringSubmatch(strings.TrimSpace(string(r)))
 	if m == nil {
+		if strings.TrimSpace(string(r)) == "" {
+			return 0, invalid(field, "%s is empty: give an ID as %s-<n> or <n>", field, key)
+		}
 		return 0, invalid(field, "%q is not an ID: use %s-<n> or <n>", r, key)
 	}
 	if m[1] != "" && m[1] != key {

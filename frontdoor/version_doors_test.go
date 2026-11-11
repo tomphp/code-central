@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -22,7 +23,9 @@ import (
 // it for create_spec sent "added_later".
 const unknownAddedLater = `invalid JSON: json: unknown field "added_later"`
 
-var versionCases = []struct {
+var acceptedSection = regexp.MustCompile(`: accepted fields are [a-z_]+(, [a-z_]+)*`)
+
+var versionCases =[]struct {
 	name, client, want string
 }{
 	{"a different version", "v1.9", unknownAddedLater + ": the caller is version v1.9 and the service is v1.8; run `code-central service restart`"},
@@ -42,8 +45,10 @@ func versionedServer(t *testing.T) *codecentraltest.Server {
 
 func checkUnknownAddedLater(t *testing.T, e core.Error, want string) {
 	t.Helper()
-	if e.Message != want || e.Field != "added_later" {
-		t.Fatalf("got %q field %q, want %q", e.Message, e.Field, want)
+	// The accepted fields differ by tool: only the version hint is under test.
+	got := acceptedSection.ReplaceAllString(e.Message, "")
+	if got != want || e.Field != "added_later" || got == e.Message {
+		t.Fatalf("got %q field %q, want %q after its accepted fields", e.Message, e.Field, want)
 	}
 }
 

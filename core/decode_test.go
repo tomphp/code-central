@@ -3,6 +3,7 @@ package core_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
@@ -24,7 +25,19 @@ func decodeErr(t *testing.T, ctx context.Context, in string) *core.Error {
 	return e
 }
 
-const bareUnknown = `invalid JSON: json: unknown field "working_dir"`
+const bareUnknown = `invalid JSON: json: unknown field "working_dir": accepted fields are title, count`
+
+func TestAnUnknownFieldListsTheAcceptedFieldsAndNamesTheLikelyOne(t *testing.T) {
+	e := decodeErr(t, context.Background(), `{"titel":"T"}`)
+	want := `invalid JSON: json: unknown field "titel": accepted fields are title, count; did you mean ` + "`title`?"
+	if e.Message != want || e.Field != "titel" {
+		t.Fatalf("got %q field %q, want %q", e.Message, e.Field, want)
+	}
+	e = decodeErr(t, context.Background(), `{"title_id":"T"}`)
+	if !strings.Contains(e.Message, "did you mean `title`?") {
+		t.Fatalf("got %q, want a suggestion of title", e.Message)
+	}
+}
 
 func TestAnUnknownFieldNamesBothVersionsWhenTheClientsDiffers(t *testing.T) {
 	ctx := core.WithVersions(context.Background(), "v1.8", "v1.9")
