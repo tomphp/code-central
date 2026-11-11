@@ -31,8 +31,13 @@ const (
 	// ReasonCICancelled is an Accepted Ticket whose CI result is
 	// cancelled and that the human hasn't dealt with.
 	ReasonCICancelled NeedsMeReason = "ci_cancelled"
-	// ReasonToMerge is a Ticket Accepted under the Branch Landing Method
-	// (code-central-175): the human merges its branch, at once.
+	// ReasonPullRequestClosed is an Accepted Ticket under Pull Request
+	// whose pull request is closed or abandoned without merging
+	// (code-central-391); it clears if the pull request is reopened.
+	ReasonPullRequestClosed NeedsMeReason = "pull_request_closed"
+	// ReasonToMerge is a Ticket Accepted under the Branch or Pull Request
+	// Landing Method (code-central-175): the human merges its branch or
+	// pull request, at once.
 	ReasonToMerge NeedsMeReason = "to_merge"
 	// ReasonCIUnavailable is a Ticket the CI gate has held for
 	// CIUnavailableAfter since its push with no word of its CI
@@ -61,7 +66,8 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonInReview, "In Review: finished work waits to be accepted or rejected"},
 	{ReasonCIFailed, "CI failed: Accepted with its pushed commit's CI failed; the human picks a failure option"},
 	{ReasonCICancelled, "CI cancelled: Accepted with its pushed commit's CI cancelled"},
-	{ReasonToMerge, "To merge: Accepted under the Branch Landing Method; merge its branch to the base"},
+	{ReasonPullRequestClosed, "Pull request closed: Accepted with its pull request closed without merging"},
+	{ReasonToMerge, "To merge: Accepted under Branch or Pull Request; merge it to the base"},
 	{ReasonCIUnavailable, "CI unavailable: no word of its CI 10 minutes after its push (CI Watcher not Watching, or no CI Runs)"},
 	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted over 10 minutes and not in the base, unless its CI is running"},
 	{ReasonBlockedByCancelled, "Blocked by a Cancelled Ticket with no Replacements"},
@@ -313,7 +319,10 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 		if since, ok := ciCancelled(r, key, t, c.now()); ok {
 			return ReasonCICancelled, since
 		}
-		if t.State == store.Accepted && p.Landing.Method == store.LandingBranch {
+		if t.State == store.Accepted && p.Landing.Method == store.LandingPullRequest && t.PullRequest != nil && t.PullRequest.State == store.PRClosed {
+			return ReasonPullRequestClosed, entered(t)
+		}
+		if t.State == store.Accepted && (p.Landing.Method == store.LandingBranch || p.Landing.Method == store.LandingPullRequest) {
 			return ReasonToMerge, entered(t)
 		}
 		if reason, since := c.timedReason(r, p, t); reason != "" {

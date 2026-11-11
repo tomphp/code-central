@@ -27,6 +27,7 @@ export type NeedsMeReason =
   | "in_review"
   | "ci_failed"
   | "ci_cancelled"
+  | "pull_request_closed"
   | "to_merge"
   | "ci_unavailable"
   | "accepted_not_landed"

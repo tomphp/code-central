@@ -9,6 +9,7 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   in_review: "In Review",
   ci_failed: "CI failed",
   ci_cancelled: "CI cancelled",
+  pull_request_closed: "Pull request closed",
   to_merge: "To merge",
   ci_unavailable: "CI unavailable",
   accepted_not_landed: "Accepted but not landed",
@@ -47,7 +48,15 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
       return r.ci_failure ? `CI failed at ${r.ci_failure.commit.slice(0, 7)}: ${r.ci_failure.workflows.join(", ")}` : "CI failed";
     case "ci_cancelled":
       return `CI cancelled ${ago(now, r.since)}`;
+    case "pull_request_closed":
+      return r.pull_request
+        ? `Pull request #${r.pull_request.number} was closed without merging: send the work back or cancel it`
+        : "Its pull request was closed without merging";
     case "to_merge":
+      if (r.pull_request) {
+        const conflicting = r.pull_request.state === "conflicting" ? ", conflicting" : "";
+        return `Accepted ${ago(now, r.since)}: merge pull request #${r.pull_request.number}${conflicting}`;
+      }
       return `Accepted ${ago(now, r.since)}: merge ${r.branch ?? "its branch"} into the base`;
     case "ci_unavailable":
       return ciUnavailableDetail(now, r);
