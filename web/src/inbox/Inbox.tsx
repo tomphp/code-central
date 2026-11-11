@@ -50,6 +50,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
   const inProject = (key: string) => !loc.project || key === loc.project;
   const projects = data?.projects ?? [];
   const archived = projects.filter((p) => p.archived);
+  const isArchived = (id: string) => archived.some((p) => p.key === projectOf(id));
   const shown = (data?.needsMe.groups ?? []).map((g) => ({ ...g, tickets: g.tickets.filter((r) => inProject(r.project)) }));
   // Stage Tickets are never Needs Me rows: their Requirement's row stands in.
   const stageNeeds = new Set(shown.flatMap((g) => g.tickets).flatMap((r) => (r.requirement?.stage ? [r.requirement.spec] : [])));
@@ -204,6 +205,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
             <RequirementPane
               api={api}
               spec={requirement}
+              archived={isArchived(requirement.id)}
               reasons={reasons}
               now={now}
               ticket={loc.ticket}
@@ -222,7 +224,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
               written={(id) => navigate({ list: "requirements", state: undefined, requirement: id, ticket: undefined })}
             />
           ) : spec ? (
-            <SpecPane api={api} spec={spec} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
+            <SpecPane api={api} spec={spec} archived={isArchived(spec.id)} reasons={reasons} now={now} ticket={loc.ticket} select={(id) => navigate({ ticket: id })} />
           ) : (
             <p className="empty">Loading…</p>
           ))}
@@ -234,6 +236,7 @@ export function Inbox({ api, now, data, loc, navigate, requirement, map, spec, r
             project={projectOf(ticket.id)}
             ticket={ticket}
             now={now}
+            archived={isArchived(ticket.id)}
             reported={projects.find((p) => p.key === projectOf(ticket.id))?.reported_models}
             openSpec={(id) => navigate({ requirement: id })}
           />

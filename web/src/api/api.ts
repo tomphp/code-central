@@ -17,6 +17,7 @@ import type {
   Options,
   ProjectRow,
   ProjectView,
+  SpecAcknowledgement,
   SpecDetail,
   SpecQuestions,
   SpecRow,
@@ -96,6 +97,12 @@ export interface Api {
     action: A,
     body: TicketActions[A]["body"],
   ): Promise<TicketActions[A]["result"]>;
+  // editSpec changes a Spec's title or body, sending only what changed
+  // (edit_spec). The text it replaces is kept in the Spec's edits; a
+  // change that changes nothing writes nothing, and an empty title is
+  // refused as invalid. A Spec in any State takes it: the UI decides
+  // where to offer it.
+  editSpec(project: string, spec: string, change: { title?: string; body?: string }): Promise<SpecAcknowledgement>;
   // archiveProject puts away a Project whose Tickets are all finished;
   // an Archived Project refuses every write until unarchiveProject.
   archiveProject(project: string): Promise<ProjectView>;

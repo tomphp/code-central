@@ -69,8 +69,12 @@ The human's action on a finished Map (every Ticket Done or Cancelled) that creat
 _Avoid_: Promote, convert the Map
 
 **Spec view**:
-The UI's view of a plain Spec, one that is neither a Requirement nor a Map: its title, **New Prototype** and its Tickets with their States. It opens from the Spec's name in the Ticket panel.
+The UI's view of a plain Spec, one that is neither a Requirement nor a Map: its title, **New Prototype**, its body, collapsed, with **Edit** until it is Finished, and its Tickets with their States. It opens from the Spec's name in the Ticket panel.
 _Avoid_: Spec page, Spec board
+
+**Edit**:
+The human's action in the UI that changes the title or description of a Draft Ticket, or the title or body of a Spec that isn't Finished and isn't a Map. It decides only where the UI offers editing: agents and the CLI may edit a Spec or Ticket in any State.
+_Avoid_: Modify, update, amend
 
 **Charting**:
 The first Ticket of a Map, which names its destination with the human and creates the first decision Tickets and their Blockers.

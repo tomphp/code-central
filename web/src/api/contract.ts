@@ -1369,6 +1369,105 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     });
 
     // ---- the Integration contract (ticket 42) ----
+    it("edits a Ticket's title and description, recording one edit by human with only what changed", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Pick a colour", "Draft");
+
+      const one = await d.api.act("acme", id, "edit_ticket", { description: "Blue." });
+      wantAcknowledgement(one, id, "Draft", ["description", "edits"]);
+      expect(one.changed).not.toContain("title");
+      expect(one.edit).toBe(1);
+      const both = await d.api.act("acme", id, "edit_ticket", { title: "Pick a shade", description: "Navy." });
+      wantAcknowledgement(both, id, "Draft", ["title", "description", "edits"]);
+
+      const t = await d.api.getTicket("acme", id);
+      expect(t).toMatchObject({ title: "Pick a shade", description: "Navy." });
+      expect(t.edits.map((e) => [e.actor, e.previous])).toEqual([
+        ["human", { description: "" }],
+        ["human", { title: "Pick a colour", description: "Blue." }],
+      ]);
+    });
+
+    it("writes no edit for a Ticket change that changes nothing, and refuses an empty title", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Pick a colour", "Draft");
+      const same = await d.api.act("acme", id, "edit_ticket", { title: "Pick a colour", description: "" });
+      expect(same.changed).toEqual([]);
+      expect(same.edit).toBeUndefined();
+      expect((await d.api.getTicket("acme", id)).edits).toEqual([]);
+
+      const empty = await d.api.act("acme", id, "edit_ticket", { title: "  " }).catch((e) => e);
+      expect(empty).toBeInstanceOf(ApiError);
+      expect(empty).toMatchObject({ status: 422, code: "invalid", field: "title" });
+      expect((await d.api.getTicket("acme", id)).title).toBe("Pick a colour");
+    });
+
+    it("still edits a Ready Ticket, and refuses a definition-owned linked Ticket until it is unlinked", async () => {
+      await d.createProject("acme", "Acme");
+      const ready = await d.createTicket("acme", "Ready one", "Ready");
+      wantAcknowledgement(await d.api.act("acme", ready, "edit_ticket", { title: "Ready two" }), ready, "Ready", ["title", "edits"]);
+
+      const gh = { integration: "github", id: "acme/web#9", url: "https://github.com/acme/web/issues/9" };
+      const linked = await d.linkTicket("acme", "Issue", gh, "open");
+      const refused = await d.api.act("acme", linked, "edit_ticket", { title: "Mine" }).catch((e) => e);
+      expect(refused).toMatchObject({ status: 409, code: "action_not_allowed" });
+      expect((await d.api.getTicket("acme", linked)).title).toBe("Issue");
+
+      await d.api.unlink("acme", linked);
+      wantAcknowledgement(await d.api.act("acme", linked, "edit_ticket", { title: "Mine" }), linked, "Draft", ["title", "edits"]);
+    });
+
+    it("edits a Spec's title and body, recording one edit by human with only what changed", async () => {
+      await d.createProject("acme", "Acme");
+      const { spec } = await d.api.submitRequirement("acme", "Offline mode\nWorks on a plane.");
+      const before = await d.api.getSpec("acme", spec.id);
+
+      const one = await d.api.editSpec("acme", spec.id, { body: "New body." });
+      expect(one).toMatchObject({ id: spec.id, edit: before.edits.length + 1 });
+      expect(one.changed).toEqual(expect.arrayContaining(["body", "edits"]));
+      expect(one.changed).not.toContain("title");
+      const both = await d.api.editSpec("acme", spec.id, { title: "Flight mode", body: "Newer body." });
+      expect(both.changed).toEqual(expect.arrayContaining(["title", "body", "edits"]));
+
+      const s = await d.api.getSpec("acme", spec.id);
+      expect(s).toMatchObject({ title: "Flight mode", body: "Newer body." });
+      expect(s.edits.slice(before.edits.length).map((e) => [e.actor, Object.keys(e.previous).sort()])).toEqual([
+        ["human", ["body"]],
+        ["human", ["body", "title"]],
+      ]);
+      expect(s.edits.at(-1)!.previous.title).toBe("Offline mode");
+    });
+
+    it("writes no edit for a Spec change that changes nothing, and refuses an empty title", async () => {
+      await d.createProject("acme", "Acme");
+      const { spec } = await d.api.submitRequirement("acme", "Offline mode\nWorks on a plane.");
+      const s = await d.api.getSpec("acme", spec.id);
+      const same = await d.api.editSpec("acme", spec.id, { title: s.title, body: s.body });
+      expect(same.changed).toEqual([]);
+      expect(same.edit).toBeUndefined();
+      expect((await d.api.getSpec("acme", spec.id)).edits).toEqual(s.edits);
+
+      const empty = await d.api.editSpec("acme", spec.id, { title: "" }).catch((e) => e);
+      expect(empty).toMatchObject({ status: 422, code: "invalid", field: "title" });
+    });
+
+    it("still edits a Finished Spec, and refuses an edit in an Archived Project", async () => {
+      await d.createProject("acme", "Acme");
+      const { spec, stages } = await d.api.submitRequirement("acme", "Offline mode");
+      for (const t of stages) await d.api.act("acme", t.id, "cancel", {});
+      expect((await d.api.getSpec("acme", spec.id)).finished).toBe(true);
+      const ack = await d.api.editSpec("acme", spec.id, { body: "Still editable." });
+      expect(ack.changed).toContain("body");
+
+      const t = await d.createTicket("acme", "Draft one", "Draft");
+      await d.api.act("acme", t, "cancel", {});
+      await d.api.archiveProject("acme");
+      const spec1 = await d.api.editSpec("acme", spec.id, { body: "No." }).catch((e) => e);
+      expect(spec1).toMatchObject({ status: 409, code: "action_not_allowed" });
+      const ticket1 = await d.api.act("acme", t, "edit_ticket", { title: "No" }).catch((e) => e);
+      expect(ticket1).toMatchObject({ status: 409, code: "action_not_allowed" });
+    });
+
     it("reads a linked Ticket closed externally, and unlinks it", async () => {
       await d.createProject("acme", "Acme");
       const gh = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7" };

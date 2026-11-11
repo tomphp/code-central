@@ -719,6 +719,36 @@ export class FakeApi implements Api {
     return t;
   }
 
+  // editTicket applies the fields that differ, recording an edit by human
+  // with their previous values, as core's EditTicket does: an empty title
+  // is refused, a Ticket whose Link owns its definition is refused, and a
+  // change that changes nothing writes nothing.
+  editTicket(t: TicketView, change: { title?: string; description?: string }): TicketView {
+    if (change.title !== undefined && !change.title.trim()) throw new ApiError(422, "invalid", "a Ticket needs a title", "title");
+    this.definitionOwned(t.id, t.link);
+    const previous: Record<string, string> = {};
+    const patch: Partial<TicketView> = {};
+    if (change.title !== undefined && change.title !== t.title) [previous.title, patch.title] = [t.title, change.title];
+    if (change.description !== undefined && change.description !== t.description) {
+      [previous.description, patch.description] = [t.description, change.description];
+    }
+    if (!Object.keys(previous).length) return t;
+    const edits = [...t.edits, { number: t.edits.length + 1, actor: "human", time: this.now.toISOString(), previous }];
+    return this.updateTicket(t.id, { ...patch, edits });
+  }
+
+  // definitionOwned refuses a write to a Spec or Ticket whose Link owns
+  // its definition, as the service does for the human.
+  private definitionOwned(id: string, link?: LinkView) {
+    if (link && !link.detached && !link.outbound) {
+      throw new ApiError(
+        409,
+        "action_not_allowed",
+        `${id} is linked to ${link.integration} ${link.id}, which owns its definition: change it there, or unlink it first (this request is made as human)`,
+      );
+    }
+  }
+
   // keepAsDraft clears an Incoming Issue's awaiting triage and takes it
   // out of Needs Me, refused on anything else, as core's KeepAsDraft is.
   keepAsDraft(t: TicketView): TicketView {
@@ -1134,6 +1164,30 @@ export class FakeApi implements Api {
     const after = handler(this, t, body);
     // A handler that returns another Ticket created it (new_fix_ticket).
     return after.id === t.id ? acknowledge(before, after) : acknowledgeTicketCreate(after);
+  }
+
+  async editSpec(project: string, spec: string, change: { title?: string; body?: string }): Promise<SpecAcknowledgement> {
+    this.calls.push("editSpec");
+    this.project(project);
+    const id = this.specId(project, spec);
+    // A Spec only a Ticket names becomes a seeded one when it is edited.
+    const s = this.specs.get(id) ?? this.allSpecs(project).find((s) => s.id === id);
+    if (!s) throw new ApiError(404, "not_found", `there is no Spec ${id}`);
+    this.specs.set(id, s);
+    if (change.title !== undefined && !change.title.trim()) throw new ApiError(422, "invalid", "a Spec needs a title", "title");
+    this.writable(project);
+    this.definitionOwned(id, s.link);
+    const before = structuredClone(s);
+    const previous: Record<string, string> = {};
+    if (change.title !== undefined && change.title !== s.title) [previous.title, s.title] = [s.title, change.title];
+    if (change.body !== undefined && change.body !== s.body) [previous.body, s.body] = [s.body, change.body];
+    if (Object.keys(previous).length) {
+      const at = this.now.toISOString();
+      s.edits.push({ number: s.edits.length + 1, actor: "human", time: at, previous });
+      s.updated = at;
+      this.emit({ type: "spec.changed", project, id });
+    }
+    return written(SPEC_FIELDS, before, s, ["updated"]);
   }
 
   async archiveProject(key: string): Promise<ProjectView> {
