@@ -93,6 +93,11 @@ var Workflow = []Action{
 		Requires: "nothing; taken when the last finish named a branch"},
 	{Name: "accept", From: []store.State{store.InReview}, To: store.Done, Who: HumanActor,
 		Requires: "nothing; taken when no finish named a branch"},
+	// implement is the other way to accept a Requirement's spec Stage
+	// (ADR 0016): valid only on that Stage, which core checks.
+	{Name: "implement", From: []store.State{store.InReview}, To: store.Done, Who: HumanActor,
+		Requires: "nothing; only on a spec Stage In Review: accepts it, creates one Ready implementation Ticket for the whole Spec and Cancels the tickets Stage with that Ticket as its Replacement",
+		NextStep: "The spec Stage is Done and the tickets Stage is Cancelled, and <id> now builds the whole Spec."},
 	{Name: "reject", From: []store.State{store.InReview}, To: store.Ready, Who: HumanActor,
 		Requires: "comment (required)"},
 	{Name: "land", From: []store.State{store.Accepted, store.InReview}, To: store.Done, Who: AnyActor,
