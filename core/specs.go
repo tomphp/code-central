@@ -46,7 +46,7 @@ type SpecDetail struct {
 // read is the full Spec; with Sections and no Parts, it is only the body.
 type GetSpecInput struct {
 	Spec Ref `json:"spec"`
-	// Parts are any of body, tickets and edits; all three when empty, or
+	// Parts are any of body, tickets, edits and outline; all three when empty, or
 	// only body when Sections are given.
 	Parts []string `json:"parts,omitempty"`
 	// Sections are heading texts: the body returned is only those Sections.
@@ -59,9 +59,12 @@ const (
 	PartBody    = "body"
 	PartTickets = "tickets"
 	PartEdits   = "edits"
+	// PartOutline reads the outline alone: every read but the full one
+	// returns it, so naming it asks for nothing else.
+	PartOutline = "outline"
 )
 
-var specParts = []string{PartBody, PartTickets, PartEdits}
+var specParts = []string{PartBody, PartTickets, PartEdits, PartOutline}
 
 // SpecRow is one find_specs result.
 type SpecRow struct {

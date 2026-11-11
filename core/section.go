@@ -13,6 +13,9 @@ import (
 type Heading struct {
 	Text  string `json:"text"`
 	Level int    `json:"level"`
+	// Size is the bytes of the Section the heading opens, subsections
+	// included, so a reader can weigh a Section before fetching it.
+	Size int `json:"size"`
 }
 
 // heading is a Heading and the line it starts on.
@@ -27,10 +30,20 @@ var (
 	fence   = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})")
 )
 
-// Outline is every heading of body, in order.
+// Outline is every heading of body, in order, each with its Section's size.
 func Outline(body string) []Heading {
+	lines := strings.Split(body, "\n")
+	hs := headings(lines)
 	out := []Heading{}
-	for _, h := range headings(strings.Split(body, "\n")) {
+	for i, h := range hs {
+		end := len(lines)
+		for _, next := range hs[i+1:] {
+			if next.Level <= h.Level {
+				end = next.line
+				break
+			}
+		}
+		h.Size = len(strings.TrimRight(strings.Join(lines[h.line:end], "\n"), " \t\r\n"))
 		out = append(out, h.Heading)
 	}
 	return out
