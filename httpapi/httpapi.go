@@ -36,10 +36,11 @@ var Routes = map[string]string{
 	"approve":       "POST /api/p/{key}/tickets/{n}/approve",
 	"defer":         "POST /api/p/{key}/tickets/{n}/defer",
 
-	"claim":  "POST /api/p/{key}/claim",
-	"finish": "POST /api/p/{key}/tickets/{n}/finish",
-	"accept": "POST /api/p/{key}/tickets/{n}/accept",
-	"reject": "POST /api/p/{key}/tickets/{n}/reject",
+	"claim":     "POST /api/p/{key}/claim",
+	"finish":    "POST /api/p/{key}/tickets/{n}/finish",
+	"accept":    "POST /api/p/{key}/tickets/{n}/accept",
+	"implement": "POST /api/p/{key}/tickets/{n}/implement",
+	"reject":    "POST /api/p/{key}/tickets/{n}/reject",
 
 	"set_session":  "POST /api/p/{key}/tickets/{n}/set_session",
 	"release":      "POST /api/p/{key}/tickets/{n}/release",
@@ -190,6 +191,13 @@ var handlers = map[string]handlerFunc{
 			return nil, err
 		}
 		return c.Accept(r.Context(), r.PathValue("key"), in)
+	},
+	"implement": func(c *core.Core, r *http.Request) (any, error) {
+		in, err := pathBody(r, func(in *core.TicketInput) *core.Ref { return &in.Ticket })
+		if err != nil {
+			return nil, err
+		}
+		return c.Implement(r.Context(), r.PathValue("key"), in)
 	},
 	"reject": func(c *core.Core, r *http.Request) (any, error) {
 		in, err := pathBody(r, func(in *core.RejectInput) *core.Ref { return &in.Ticket })

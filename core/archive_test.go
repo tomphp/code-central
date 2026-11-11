@@ -161,6 +161,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.Accept(human, "acme", core.TicketInput{Ticket: "2"})
 		return err
 	},
+	"implement": func(f fixture) error {
+		_, err := f.core.Implement(human, "acme", core.TicketInput{Ticket: "2"})
+		return err
+	},
 	"reject": func(f fixture) error {
 		_, err := f.core.Reject(human, "acme", core.RejectInput{Ticket: "2", Comment: "no"})
 		return err

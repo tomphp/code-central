@@ -11,6 +11,8 @@ The `states` and `actions` above are the rules Code Central enforces; anything t
 
 Accepting a Ticket whose finish named a `branch` moves it to Accepted to wait to land; any other Ticket goes straight to Done. Whoever merges the branch calls `land` with the commit that put the work in the base, moving the Ticket to Done; `land` also works from In Review, for work already merged. Only Done clears a Blocker, so a Ticket blocked by Accepted work waits until it lands. If the merge conflicts, `send_back` the Ticket to Ready with a note naming the base commit and the conflicting files. Under a Project's Branch Landing Method, an Accepted Ticket shows the human `to_merge` at once, and lands when the merge is seen; under Merge, one Accepted over 10 minutes shows `accepted_not_landed`.
 
+The human accepts a Requirement's spec Stage In Review with `accept` (Split into Tickets: the tickets Stage runs) or with `implement`, which in one write accepts it, creates one Ready `Implement: <Spec title>` Ticket for the whole Spec and Cancels the tickets Stage with that Ticket as its Replacement. A Cancelled tickets Stage whose Replacement is an implementation Ticket was skipped this way: build the Spec from that Ticket, and write the glossary terms and ADRs it records.
+
 A write returns an acknowledgement (`id`, `updated`, `changed`, …), not the record; `full: true` returns the record. Every write's response may carry a `next_step`. Do what it says, when it says.
 
 ## Questions go to Rounds

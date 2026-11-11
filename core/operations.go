@@ -48,6 +48,7 @@ var Operations = []Op{
 	{Name: "claim", Audience: AgentAndHuman, Write: true},
 	{Name: "finish", Audience: AgentAndHuman, Write: true},
 	{Name: "accept", Audience: HumanOnly, Write: true},
+	{Name: "implement", Audience: HumanOnly, Write: true},
 	{Name: "reject", Audience: HumanOnly, Write: true},
 
 	// Silent Claims and sessions (ticket 31).
