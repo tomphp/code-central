@@ -717,7 +717,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const id = await d.createTicket("acme", "Login page", "Ready");
       await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
       await d.api.act("acme", id, "accept", {});
-      await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
+      await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin", land_per_spec: false });
       await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
       await d.reportPushedCommit("acme", id, "abc123");
 
@@ -824,7 +824,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ]);
         return id;
       };
-      await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
+      await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin", land_per_spec: false });
       await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
 
       const back = await failedTicket("Login page", 1);
