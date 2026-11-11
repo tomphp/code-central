@@ -136,6 +136,7 @@ var Operations = []Op{
 	// The Pull Request Watcher's own (code-central-388).
 	{Name: "get_pull_request_watch", Audience: FactoryOnly},
 	{Name: "report_pull_request", Audience: FactoryOnly, Write: true},
+	{Name: "report_pull_request_watcher_status", Audience: FactoryOnly, Write: true},
 	{Name: "report_ci_runs", Audience: FactoryOnly, Write: true},
 	// Land per Spec (code-central-371).
 	{Name: "report_spec_merge", Audience: FactoryOnly, Write: true},

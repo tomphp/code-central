@@ -285,6 +285,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.ReportCIWatcherStatus(ctx, "acme", core.ReportWatcherStatusInput{State: core.WatcherWatching})
 		return err
 	},
+	"report_pull_request_watcher_status": func(f fixture) error {
+		_, err := f.core.ReportPullRequestWatcherStatus(ctx, "acme", core.ReportWatcherStatusInput{State: core.WatcherWatching})
+		return err
+	},
 	"report_pushed_commit": func(f fixture) error {
 		_, err := f.core.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "acme-2", Commit: "abc123"})
 		return err

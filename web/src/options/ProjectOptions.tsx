@@ -13,6 +13,7 @@ import type {
   GitHubIssuesChange,
   GitHubIssuesSettings,
   IssueWatcherStatus,
+  PullRequestWatcherStatus,
   Landing,
   LandingMethod,
   ModelRow,
@@ -272,6 +273,13 @@ function LandingMethodSection({
             </span>
           )}
         </div>
+        {project.landing.method === "pull_request" && (
+          <WatcherStatus
+            name="Pull Request Watcher"
+            repository={project.landing.repository}
+            watcher={project.landing.watcher}
+          />
+        )}
       </fieldset>
     </form>
   );
@@ -580,7 +588,7 @@ function WatcherStatus({
 }: {
   name: string;
   repository: string;
-  watcher: CIWatcherStatus | IssueWatcherStatus;
+  watcher: CIWatcherStatus | IssueWatcherStatus | PullRequestWatcherStatus;
 }) {
   return (
     <section className="project-options-watcher" aria-label={name}>

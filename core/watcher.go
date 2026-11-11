@@ -30,6 +30,9 @@ const (
 	WatcherCI WatcherKind = "ci"
 	// WatcherIssues is the Issue Watcher, run while GitHub Issues is on.
 	WatcherIssues WatcherKind = "issues"
+	// WatcherPullRequests is the Pull Request Watcher, run while the
+	// Landing Method is Pull Request.
+	WatcherPullRequests WatcherKind = "pull_requests"
 )
 
 // watcherKind is how one kind of Watcher is configured; a new kind of
@@ -56,6 +59,9 @@ var watcherKinds = map[WatcherKind]watcherKind{
 	WatcherIssues: {name: "Issue Watcher", setting: "GitHub Issues", on: func(p store.Project) bool { return p.GitHubIssues.On },
 		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemIssuesDisabled, ProblemNoTriage, ProblemCheckFailed},
 		watches:  "GitHub Issues"},
+	WatcherPullRequests: {name: "Pull Request Watcher", setting: "Pull Request", on: func(p store.Project) bool { return p.Landing.Method == store.LandingPullRequest },
+		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
+			ProblemPATScope, ProblemCheckFailed}, watches: "pull requests"},
 }
 
 // Name is the kind's glossary name, such as CI Watcher.
@@ -82,6 +88,9 @@ const (
 	// ProblemNoTriage is a repository on which gh's login has less than
 	// triage permission, which labelling and closing issues need.
 	ProblemNoTriage WatcherProblem = "no_triage"
+	// ProblemNoWrite is a repository on which gh's login can't write, as
+	// opening a pull request needs.
+	ProblemNoWrite WatcherProblem = "no_write"
 	// ProblemPATMissing is the PAT environment variable unset or empty in
 	// the service's environment.
 	ProblemPATMissing WatcherProblem = "pat_missing"

@@ -217,6 +217,17 @@ code-central serve: started the Issue Watcher for acme (pid 41023)
 code-central serve: stopped the Issue Watcher for acme
 ```
 
+### The Pull Request Watcher
+
+For each Project whose Landing Method is **Pull Request**, the service runs a **Pull Request Watcher** the same way: the hidden `code-central pull-request-watcher --project <key>` subcommand. On GitHub it reaches the host through `gh`, with the login of the user the service runs as, and writes to the service over the HTTP API. It opens a ready-for-review pull request into the base for each branch the Factory has pushed that has none open or merged (adopting an open one from the branch first, so it never opens a duplicate), and reports each pull request's number, link, state (open, conflicting, closed or merged) and merge commit. It keeps polling a closed pull request, so one you reopen is seen. It polls every 2 minutes, and every 30 seconds while pushed work has no pull request yet; when GitHub rate-limits it, it waits until the reset time GitHub gives and still shows Watching. It starts, stops, restarts, backs off and leaves nothing behind just as the CI Watcher does, runs whether or not a Factory does, and shows its status in the Landing Method section of Project Options. The account `gh` is logged in as needs write access to the repository; turning Pull Request on runs the Watcher once in its check mode, which never opens a pull request, and refuses with the reason and fix when `gh` is missing, logged out or lacks write access. Going into an error sends one Notification. Its lines in the service log name it:
+
+```text
+code-central serve: started the Pull Request Watcher for acme (pid 41024)
+code-central serve: stopped the Pull Request Watcher for acme
+```
+
+This version's Pull Request Watcher works with GitHub only; Azure Repos comes later.
+
 ## Usage
 
 **Usage** shows what agents have consumed: the Code Central calls they made, how full their sessions' context got, and the tokens they used each day, in one Project or in all of them, over the last 7, 30 or 90 days. Open it with **Usage** in the **Admin** section of the Inbox's left pane. It opens on **All Projects** and **Last 7 days**; the **Projects** picker lists every Project, Archived ones marked `(Archived)`, and the **Range** picker offers 7, 30 and 90 days. Both go in the address (`/?view=usage&project=acme&days=30`), so a reload or a bookmark keeps them, and **Back to the Inbox** returns you to where you were. A day is a day in the service's local time, and "the last 7 days" is today and the 6 days before it.

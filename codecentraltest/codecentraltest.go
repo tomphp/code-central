@@ -44,13 +44,14 @@ const Version = "dev"
 type Option func(*options)
 
 type options struct {
-	version     string
-	log         io.Writer
-	usageDir    string
-	location    *time.Location
-	start       time.Time
-	ciCheck     core.CICheck
-	issuesCheck core.IssuesCheck
+	version          string
+	log              io.Writer
+	usageDir         string
+	location         *time.Location
+	start            time.Time
+	ciCheck          core.CICheck
+	issuesCheck      core.IssuesCheck
+	pullRequestCheck core.PullRequestCheck
 }
 
 // WithVersion makes the server report version in its version header.
@@ -72,6 +73,12 @@ func WithLocation(loc *time.Location) Option { return func(o *options) { o.locat
 // WithStart starts the fake clock at t instead of Start, so a server
 // can start on a later day, as a restarted service would.
 func WithStart(t time.Time) Option { return func(o *options) { o.start = t } }
+
+// WithPullRequestCheck makes check the server's Pull Request Watcher check
+// mode, run when Pull Request is turned on.
+func WithPullRequestCheck(check core.PullRequestCheck) Option {
+	return func(o *options) { o.pullRequestCheck = check }
+}
 
 // WithCICheck makes check the server's CI Watcher check mode, run when
 // CI Tracking is turned on; without it, nothing is checked.
@@ -99,6 +106,7 @@ func NewServer(t testing.TB, opts ...Option) *Server {
 	c.SetUsage(usage.New(o.usageDir, clk, o.location, o.log))
 	c.SetCICheck(o.ciCheck)
 	c.SetIssuesCheck(o.issuesCheck)
+	c.SetPullRequestCheck(o.pullRequestCheck)
 	hs := httptest.NewUnstartedServer(frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), o.log), o.version))
 	// Before serving, so a comment written to an issue links back here.
 	c.SetUIURL("http://" + hs.Listener.Addr().String())
