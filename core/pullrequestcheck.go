@@ -16,6 +16,9 @@ type PullRequestCheckInput struct {
 	Repository string `json:"repository"`
 	GHPath     string `json:"gh_path,omitempty"`
 	PATEnv     string `json:"pat_env,omitempty"`
+	// ProjectURL, when set, is the Azure DevOps project URL to call instead
+	// of the one worked out from Repository, for tests.
+	ProjectURL string `json:"project_url,omitempty"`
 }
 
 // PullRequestCheck runs the Pull Request Watcher once in its check mode.
@@ -29,8 +32,8 @@ func (c *Core) SetPullRequestCheck(check PullRequestCheck) { c.pullRequestCheck 
 
 // checkPullRequest runs the Pull Request check when l turns Pull Request
 // on (not when it already is), and refuses with the reason and fix when it fails. It runs outside
-// the store's lock, as the check calls the Code Host. Only GitHub is
-// checked, through gh; the Azure Repos check comes with its watcher.
+// the store's lock, as the check calls the Code Host. GitHub is checked
+// through gh, and Azure Repos with the PAT variable.
 func (c *Core) checkPullRequest(ctx context.Context, key string, l store.Landing) error {
 	if l.Method != store.LandingPullRequest || c.pullRequestCheck == nil {
 		return nil
@@ -53,14 +56,16 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, l store.Landing
 		return err
 	}
 	host, repository := codeHostOf(url)
-	if host != CodeHostGitHub {
-		return nil
-	}
 	res := c.pullRequestCheck(ctx, PullRequestCheckInput{CodeHost: host, Repository: repository, GHPath: ghPath, PATEnv: patEnvOf(store.CI{PATEnv: l.PATEnv})})
 	if res.Problem == "" {
 		return nil
 	}
-	return &Error{Code: Invalid, Field: "method", Message: res.Reason, Fix: res.Fix}
+	field := "method"
+	switch res.Problem {
+	case ProblemPATMissing, ProblemPATRejected, ProblemPATScope:
+		field = "pat_env"
+	}
+	return &Error{Code: Invalid, Field: field, Message: res.Reason, Fix: res.Fix}
 }
 
 // ReportPullRequestWatcherStatus is report_pull_request_watcher_status:

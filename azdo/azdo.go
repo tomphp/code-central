@@ -254,6 +254,8 @@ func (c *Client) refusal(resp *http.Response, data []byte, method, rawURL string
 		return fmt.Errorf("%w: %s answered 403", ErrMissingScope, what)
 	case status == http.StatusNotFound:
 		return fmt.Errorf("%w: %s answered 404", ErrNotFound, what)
+	case status == http.StatusBadRequest, status == http.StatusConflict:
+		return fmt.Errorf("%w: %s answered %d: %s", ErrRefused, what, status, watchers.FirstLine(string(data)))
 	case status >= 200 && status < 300:
 		return nil
 	}
