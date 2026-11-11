@@ -337,7 +337,7 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 		if t.State == store.Accepted && p.Landing.Method == store.LandingPullRequest && t.PullRequest != nil && t.PullRequest.State == store.PRClosed {
 			return ReasonPullRequestClosed, entered(t)
 		}
-		if t.State == store.Accepted && (p.Landing.Method == store.LandingBranch || p.Landing.Method == store.LandingPullRequest) {
+		if t.State == store.Accepted && (p.LandingPolicy().LandsOnHumanMerge()) {
 			return ReasonToMerge, entered(t)
 		}
 		if reason, since := c.timedReason(r, p, t); reason != "" {

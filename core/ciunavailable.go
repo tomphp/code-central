@@ -44,7 +44,7 @@ type CIUnavailableView struct {
 // when the CI gate holds t: Accepted with a pushed commit in a Project
 // under Merge + Push with CI Tracking on.
 func ciGated(r store.Reader, p store.Project, t store.Ticket, now time.Time) (store.PushedCommit, []store.CIRun, bool) {
-	if t.State != store.Accepted || p.Landing.Method != store.LandingMerge || !p.Landing.Push || !p.CI.Tracking {
+	if t.State != store.Accepted || !p.LandingPolicy().CIGateHolds() {
 		return store.PushedCommit{}, nil, false
 	}
 	runs, ok := ticketRuns(r, p.Key, t, now)

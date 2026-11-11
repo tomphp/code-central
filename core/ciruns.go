@@ -227,7 +227,7 @@ func ticketRuns(r store.Reader, key string, t store.Ticket, now time.Time) ([]st
 	}
 	// Under Pull Request without CI Tracking a push is recorded for its
 	// pull request alone: it has no CI result.
-	if p, _ := r.Project(key); p.Landing.Method == store.LandingPullRequest && !p.CI.Tracking {
+	if p, _ := r.Project(key); !p.LandingPolicy().TracksCIResults() {
 		return nil, false
 	}
 	return runsOf(keptCIRuns(r.CIRuns(key), now), t.Number), true
@@ -347,7 +347,7 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted or In Review Ticket is pushed", DisplayID(key, t.Number), t.State)}
 		}
 		p, _ := r.Project(key)
-		if p.Landing.Method != store.LandingPullRequest && (!p.CI.Tracking || !p.Landing.Push) {
+		if !p.LandingPolicy().RecordsPushedCommit() {
 			return false, nil
 		}
 		if n := len(t.PushedCommits); n > 0 && t.PushedCommits[n-1].Commit == commit {

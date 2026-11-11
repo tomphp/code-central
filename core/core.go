@@ -689,7 +689,7 @@ func landingView(p store.Project) LandingView {
 // landingViewWith is landingView with the Pull Request Watcher's status.
 func landingViewWith(p store.Project, watcher WatcherView) LandingView {
 	host, repo := codeHostOf(p.CI.PushRemoteURL)
-	push := p.Landing.Push && p.Landing.Method != store.LandingPullRequest
+	push := p.Landing.Normalized().Push
 	return LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
 		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}
 }
