@@ -313,7 +313,14 @@ func azureJobConclusion(r string) store.CIConclusion {
 	}
 }
 
-var errAzureRerun = errors.New("Azure Pipelines re-runs aren't supported yet")
-
-// RerunFailedJobs is not implemented yet.
-func (a *AzurePipelines) RerunFailedJobs(context.Context, int64) error { return errAzureRerun }
+// RerunFailedJobs asks Azure DevOps to retry the build, as a new attempt,
+// which the next poll reports. Azure DevOps refusing it, a 403 when the PAT
+// lacks execute among them, is returned for the CI Watcher to log and try
+// again until the request lapses.
+func (a *AzurePipelines) RerunFailedJobs(ctx context.Context, id int64) error {
+	c, err := a.client()
+	if err != nil {
+		return err
+	}
+	return c.Retry(ctx, int(id))
+}
