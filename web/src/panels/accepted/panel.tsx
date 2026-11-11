@@ -6,7 +6,9 @@
 import { useState } from "react";
 import "../../api/actions/land";
 import "../../api/actions/cancel";
+import "../../api/actions/send_back";
 import type { PanelDef, PanelProps } from "../ActionPanel";
+import { PullRequestBadge } from "../../ticket/PullRequestBadge";
 import { useAct } from "../../ticket/useAct";
 import "./accepted.css";
 
@@ -15,6 +17,8 @@ export function AcceptedPanel({ api, project, ticket: t }: PanelProps) {
   const { busy, error, run } = useAct();
   const canLand = commit.trim() !== "" && !busy;
   const toMerge = t.needs_me_reason === "to_merge";
+  const pr = t.pull_request;
+  const [note, setNote] = useState("");
 
   return (
     <section aria-label="Accepted" className="panel accepted-panel">
@@ -35,7 +39,30 @@ export function AcceptedPanel({ api, project, ticket: t }: PanelProps) {
           "It is Done once it is merged into the base and landed."
         )}
       </p>
-      {toMerge && (
+      {toMerge && pr && (
+        <>
+          <p className="small">
+            <PullRequestBadge pr={pr} /> Merge, squash or rebase it on your Code Host and the Factory lands it at the merge commit.
+            {pr.state === "conflicting" && " The host reports it conflicting, so it can't merge until it is fixed."} Pull request comments aren't read here: put
+            what to fix in the note.
+          </p>
+          <label className="land-commit">
+            <span className="small muted">Note for the fix (required)</span>
+            <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
+          </label>
+          <p>
+            <button
+              type="button"
+              className="btn"
+              disabled={busy || !note.trim()}
+              onClick={() => run(() => api.act(project, t.id, "send_back", { note: note.trim() }))}
+            >
+              Send back to fix
+            </button>
+          </p>
+        </>
+      )}
+      {toMerge && !pr && (
         <p className="small">
           The Factory leaves the branch for you: merge {t.branch ? <code>{t.branch}</code> : "it"} into the base and the Factory lands it, or
           Land it yourself with the commit.

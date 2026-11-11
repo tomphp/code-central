@@ -20,9 +20,10 @@ async function world(method: LandingMethod = "merge") {
   fake.seedOptions({ focus_clear: "all_clear" });
   fake.addProject("acme", "Acme");
   fake.addTicket("acme", { title: "Login page", state: "Accepted", branch: "acme-1", commit: "abc" }); // acme-1
+  if (method === "pull_request") await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
   await fake.setLandingMethod("acme", { method, push: true, remote: "origin" });
   await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
-  await fake.reportPushedCommit("acme", "acme-1", "abc1234567");
+  await fake.reportPushedCommit("acme", "acme-1", "abc1234567", "acme-1");
   await fake.reportCIRuns("acme", [
     {
       id: 1,
@@ -96,6 +97,18 @@ describe("the CI failed panel", () => {
     const p = await pane(await world("branch"));
     const options = within(p).getByRole("group", { name: "Failure options" });
     expect(options).toHaveTextContent("your merge decides: merge acme-1 into the base");
+    expect(within(p).queryByRole("button", { name: "Land anyway" })).toBeNull();
+  });
+
+  it("offers Re-run, Send back and New fix Ticket but never Land anyway under Pull Request", async () => {
+    const fake = await world("pull_request");
+    await fake.reportPullRequest("acme", { branch: "acme-1", number: 7, link: "https://github.com/acme/web/pull/7", state: "open" });
+    const p = await pane(fake);
+    const options = within(p).getByRole("group", { name: "Failure options" });
+    expect(options).toHaveTextContent("your merge decides: merge pull request #7");
+    expect(within(options).getByRole("button", { name: "Re-run failed jobs" })).toBeInTheDocument();
+    expect(within(options).getByRole("button", { name: "Send back to fix" })).toBeInTheDocument();
+    expect(within(options).getByRole("button", { name: "New fix Ticket" })).toBeInTheDocument();
     expect(within(p).queryByRole("button", { name: "Land anyway" })).toBeNull();
   });
 
