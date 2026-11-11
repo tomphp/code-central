@@ -3,6 +3,8 @@ package factory
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
@@ -130,4 +132,151 @@ func (f *factory) cutBranchWorktree(tk core.TicketView, branch, wt string) error
 		}
 	}
 	return f.branchWorktree(branch, wt, from)
+}
+
+// landSpecs merges the Spec Branch of every Spec ready to land into the
+// base and lands the Spec's waiting Tickets as a group, by the Push and
+// CI gate path. A Spec's Tickets are the Accepted ones the Factory has
+// merged into its Spec Branch and not yet landed.
+func (f *factory) landSpecs(ctx context.Context, landing core.LandingView) {
+	if landing.Method != store.LandingMerge || !landing.LandPerSpec {
+		return
+	}
+	waiting := map[string]bool{}
+	var specs []string
+	for _, tk := range f.landable(ctx, store.Accepted) {
+		if tk.SpecLanded && !waiting[tk.Spec.ID] {
+			waiting[tk.Spec.ID] = true
+			specs = append(specs, tk.Spec.ID)
+		}
+	}
+	for _, id := range specs {
+		if f.halted(ctx) || f.paused() {
+			return
+		}
+		f.landSpec(ctx, id, landing)
+	}
+}
+
+// landSpec lands one Spec when Code Central says it is ready.
+func (f *factory) landSpec(ctx context.Context, id string, landing core.LandingView) {
+	spec, err := f.client.GetSpec(ctx, f.project, core.GetSpecInput{Spec: core.Ref(id), Parts: []string{"tickets"}})
+	if err != nil {
+		if ctx.Err() == nil {
+			f.printf("%s: get_spec: %v", id, err)
+		}
+		return
+	}
+	if spec.Requirement == nil || spec.Requirement.LandPerSpec == nil || !spec.Requirement.LandPerSpec.Ready {
+		return
+	}
+	var tickets []core.TicketView
+	for _, w := range spec.Requirement.LandPerSpec.Waiting {
+		tk, err := f.client.GetTicket(ctx, f.project, core.Ref(w))
+		if err != nil {
+			if ctx.Err() == nil {
+				f.printf("%s: get_ticket: %v", w, err)
+			}
+			return
+		}
+		tickets = append(tickets, tk)
+	}
+	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
+	ref := "refs/heads/" + specBranch(id)
+	tip, err := f.repository.commit(ref)
+	if err != nil {
+		return
+	}
+	baseTip, err := f.repository.commit("refs/heads/" + f.base)
+	if err != nil {
+		f.printf("warning: %s: the base, %s, isn't a branch, so the Spec can't land", id, f.base)
+		return
+	}
+	// Merged on an earlier poll whose landing then failed: those Tickets
+	// land through the plain path, as their work is in the base.
+	if f.inBase(tip) {
+		return
+	}
+	tree, conflicts, err := f.repository.mergeTree(baseTip, tip)
+	if err != nil {
+		f.printf("warning: %s: can't merge %s: %v", id, specBranch(id), err)
+		return
+	}
+	if len(conflicts) > 0 {
+		f.openSpecConflict(ctx, spec, tip, baseTip, conflicts)
+		return
+	}
+	merge, err := f.repository.commitTree(tree, fmt.Sprintf("Merge spec %s: %s", id, spec.Title), baseTip, tip)
+	if err != nil {
+		f.printf("warning: %s: can't make the merge commit: %v", id, err)
+		return
+	}
+	if why := f.advanceBase(baseTip, merge); why != "" {
+		for _, tk := range tickets {
+			f.cantLandYet(ctx, tk, why)
+		}
+		return
+	}
+	f.printf("%s: merged %s into %s at %s", id, specBranch(id), f.base, short(merge))
+	f.printf("%s: landing its Tickets: %s", id, joinIDs(tickets))
+	for _, tk := range tickets {
+		f.landPushed(ctx, tk, landing, merge)
+	}
+}
+
+func joinIDs(tickets []core.TicketView) string {
+	ids := make([]string, len(tickets))
+	for i, tk := range tickets {
+		ids[i] = tk.ID
+	}
+	return strings.Join(ids, ", ")
+}
+
+// openSpecConflict opens a Ready Ticket on the Spec to merge the base
+// into its Spec Branch, or comments on the open one already there.
+func (f *factory) openSpecConflict(ctx context.Context, spec core.SpecDetail, tip, baseTip string, conflicts []string) {
+	title := fmt.Sprintf("Merge the base into the Spec Branch of %s", spec.ID)
+	var b strings.Builder
+	fmt.Fprintf(&b, "The Spec Branch %s conflicts with the base, %s, in these files:\n\n", specBranch(spec.ID), f.base)
+	for _, c := range conflicts {
+		fmt.Fprintf(&b, "- %s\n", c)
+	}
+	fmt.Fprintf(&b, "\nThe base's tip is %s and the Spec Branch's tip is %s. Merge the base into this branch and resolve the conflicts.\n", baseTip, tip)
+	body := b.String()
+
+	rows, err := f.client.FindTickets(ctx, f.project, core.FindTicketsInput{Spec: core.Ref(spec.ID), Title: title})
+	if err != nil {
+		if ctx.Err() == nil {
+			f.printf("%s: find_tickets: %v", spec.ID, err)
+		}
+		return
+	}
+	for _, r := range rows {
+		if r.Title != title || r.State == store.Done || r.State == store.Cancelled {
+			continue
+		}
+		existing, err := f.client.GetTicket(ctx, f.project, core.Ref(r.ID))
+		if err != nil {
+			return
+		}
+		for _, c := range existing.Comments {
+			if c.Body == body {
+				return
+			}
+		}
+		if _, err := f.client.Comment(ctx, f.project, core.CommentInput{Ticket: core.Ref(r.ID), Body: body}); err != nil && ctx.Err() == nil {
+			f.printf("%s: comment: %v", r.ID, err)
+			return
+		}
+		f.printf("%s: %s conflicts with %s again: commented on %s", spec.ID, specBranch(spec.ID), f.base, r.ID)
+		return
+	}
+	made, err := f.client.CreateTicket(ctx, f.project, core.CreateTicketInput{Spec: core.Ref(spec.ID), Title: title, Description: body, State: store.Ready})
+	if err != nil {
+		if ctx.Err() == nil {
+			f.printf("%s: create_ticket: %v", spec.ID, err)
+		}
+		return
+	}
+	f.printf("%s: %s conflicts with %s in %s: opened %s to merge the base into it", spec.ID, specBranch(spec.ID), f.base, strings.Join(conflicts, ", "), made.ID)
 }
