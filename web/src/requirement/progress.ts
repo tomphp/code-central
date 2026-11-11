@@ -16,8 +16,9 @@ export const STAGE_TITLE: Record<StageName | "build", string> = {
 
 // done: finished; needs: waiting on the human; queued: claimable, waiting
 // for a Factory (drawn dashed); running: a Factory is on it; waiting: not
-// started, behind an earlier segment.
-export type SegmentProgress = "done" | "needs" | "queued" | "running" | "waiting";
+// started, behind an earlier segment; skipped: a Cancelled Stage (drawn
+// struck through), passed over as a done one is.
+export type SegmentProgress = "done" | "skipped" | "needs" | "queued" | "running" | "waiting";
 
 export interface Segment {
   stage: StageName | "build";
@@ -33,7 +34,7 @@ export interface Segment {
 
 export interface Progress {
   segments: Segment[]; // grilling (or its Map), spec, tickets, build
-  // current is the first segment not done, or Build once all are.
+  // current is the first segment not done or skipped, or Build once all are.
   current: Segment;
   // build is the implementation Tickets, Cancelled ones included.
   build: TicketRow[];
@@ -69,13 +70,15 @@ export const stageOf = (t: { labels: string[] }): StageName | undefined => STAGE
 
 export function progress(req: RequirementView, tickets: TicketRow[], reasons: Map<string, NeedsMeReason>): Progress {
   const build = tickets.filter((t) => !isStage(t));
-  const firstOpen = req.stages.findIndex((s) => s.state !== "Done");
+  const firstOpen = req.stages.findIndex((s) => s.state !== "Done" && s.state !== "Cancelled");
   const segments: Segment[] = req.stages.map((s, i) => {
     const reason = s.needs_me_reason ?? reasons.get(s.ticket);
     const segProgress: SegmentProgress =
       s.state === "Done"
         ? "done"
-        : reason
+        : s.state === "Cancelled"
+          ? "skipped"
+          : reason
           ? "needs"
           : i === firstOpen && req.waiting_for_factory
             ? "queued"
@@ -106,7 +109,7 @@ export function progress(req: RequirementView, tickets: TicketRow[], reasons: Ma
   ];
   return {
     segments,
-    current: segments.find((s) => s.progress !== "done") ?? buildSeg,
+    current: segments.find((s) => s.progress !== "done" && s.progress !== "skipped") ?? buildSeg,
     build,
     done: req.build.done,
     total: req.build.total,

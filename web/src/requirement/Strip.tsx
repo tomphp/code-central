@@ -58,7 +58,7 @@ export function Strip({ p, onPick, current, mapLink }: StripProps) {
   );
 }
 
-const PROGRESS_TITLE = { done: "Done", needs: "Needs you", queued: "Waiting for a Factory", running: "A Factory is on it", waiting: "Not started" };
+const PROGRESS_TITLE = { done: "Done", skipped: "skipped", needs: "Needs you", queued: "Waiting for a Factory", running: "A Factory is on it", waiting: "Not started" };
 
 function segmentTitle(s: Segment) {
   return `${s.name}: ${PROGRESS_TITLE[s.progress]}`;

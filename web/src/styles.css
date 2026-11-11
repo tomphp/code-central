@@ -273,6 +273,7 @@ a.link-badge:hover { text-decoration: underline; }
 .seg > button { cursor: pointer; }
 .seg > button:disabled { cursor: default; }
 .seg.progress-done > * { border-top-color: var(--r-review); color: var(--text); }
+.seg.progress-skipped > * { text-decoration: line-through; }
 .seg.progress-running > * { border-top-color: var(--accent); color: var(--text); }
 .seg.progress-queued > * { border-top-style: dashed; border-top-color: var(--accent); }
 .seg.progress-needs > * { border-top-color: var(--rc); color: var(--rc); font-weight: 700; }

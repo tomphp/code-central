@@ -1807,7 +1807,7 @@ export class FakeApi implements Api {
     const claimable = (t: TicketView) =>
       t.state === "Ready" && !reason(t) && t.blocked_by.every((b) => this.tickets.get(b)?.state === "Done");
     const build = tickets.filter((t) => !stageOf(t) && t.state !== "Cancelled");
-    const current = stages.find((t) => t.state !== "Done");
+    const current = stages.find((t) => t.state !== "Done" && t.state !== "Cancelled");
     const held = tickets.some((t) => t.claims.some((c) => !c.ended));
     return {
       state_summary,
