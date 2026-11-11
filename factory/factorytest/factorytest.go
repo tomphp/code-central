@@ -398,6 +398,20 @@ func (h *Harness) GitIn(dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// WaitForWorktree waits until ticket's worktree is a usable git worktree: its
+// directory appears before git has finished making it.
+func (h *Harness) WaitForWorktree(ticket string) {
+	h.t.Helper()
+	git, err := realGit()
+	must(h.t, err)
+	h.WaitFor("the worktree of "+ticket, func() bool {
+		cmd := exec.Command(git, "rev-parse", "HEAD")
+		cmd.Dir = h.Worktree(ticket)
+		cmd.Env = h.Environ()
+		return cmd.Run() == nil
+	})
+}
+
 // Worktree is where the Factory keeps ticket's worktree.
 func (h *Harness) Worktree(ticket string) string { return filepath.Join(h.Repo+".worktrees", ticket) }
 
