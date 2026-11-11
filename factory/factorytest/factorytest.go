@@ -442,6 +442,24 @@ func (h *Harness) readyTicket(title string, labels ...string) string {
 	return tk.ID
 }
 
+// MakeRequirement makes the shared Spec a Requirement Spec, one with
+// Stages, by adding a Draft Stage Ticket the Factory won't claim.
+func (h *Harness) MakeRequirement() {
+	h.t.Helper()
+	ctx := context.Background()
+	c := h.Server.Client
+	if h.spec == "" {
+		s, err := c.CreateSpec(ctx, h.Project, core.CreateSpecInput{Title: "Work"})
+		must(h.t, err)
+		h.spec = s.ID
+	}
+	_, err := c.CreateTicket(ctx, h.Project, core.CreateTicketInput{Spec: core.Ref(h.spec), Title: "Stage", State: store.Draft, Labels: []string{core.StageLabel("grilling")}})
+	must(h.t, err)
+}
+
+// SpecID is the ID of the shared Spec the harness's Tickets are on.
+func (h *Harness) SpecID() string { return h.spec }
+
 // Ticket reads a Ticket from Code Central.
 func (h *Harness) Ticket(id string) core.TicketView {
 	h.t.Helper()

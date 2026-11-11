@@ -31,10 +31,11 @@ func find(list []gitWorktree, path string) (gitWorktree, bool) {
 
 // branchWorktree gives a Ticket its worktree at wt on branch, its
 // workBranch: reused when it is there, else added on the existing
-// branch, else on a new branch from the base's tip. Anything else at wt,
+// branch, else on a new branch from from: the base's tip, or a Spec
+// Branch's. Anything else at wt,
 // or branch checked out elsewhere, is a failure, and nothing is
 // touched.
-func (f *factory) branchWorktree(branch, wt string) error {
+func (f *factory) branchWorktree(branch, wt, from string) error {
 	list, err := f.repository.worktrees()
 	if err != nil {
 		return err
@@ -57,7 +58,7 @@ func (f *factory) branchWorktree(branch, wt string) error {
 		_, err := f.gitOut(f.repo, "worktree", "add", "-q", wt, branch)
 		return err
 	}
-	_, err = f.gitOut(f.repo, "worktree", "add", "-q", "-b", branch, wt, f.base)
+	_, err = f.gitOut(f.repo, "worktree", "add", "-q", "-b", branch, wt, from)
 	return err
 }
 
@@ -110,7 +111,7 @@ func (f *factory) prune() {
 // sweep looks at every worktree `git worktree list` reports in the
 // Factory's folder. One whose Ticket is Done or Cancelled, or Accepted
 // under the Branch Landing Method, so the human can check its branch
-// out, is removed with `git worktree remove` when clean, and left with a
+// out, or Accepted with its Spec merge recorded under Land per Spec, is removed with `git worktree remove` when clean, and left with a
 // warning line when dirty. Branches are never deleted, and anything else
 // is kept.
 func (f *factory) sweep(ctx context.Context, method store.LandingMethod) {
@@ -138,7 +139,7 @@ func (f *factory) sweep(ctx context.Context, method store.LandingMethod) {
 			}
 			continue
 		}
-		if !doneWithWorktree(tk.State, method) {
+		if !doneWithWorktree(tk, method) {
 			continue
 		}
 		status, err := f.repository.status(w.path)
@@ -164,8 +165,16 @@ func (f *factory) sweep(ctx context.Context, method store.LandingMethod) {
 
 // doneWithWorktree reports whether the Factory is done with the worktree
 // of a Ticket in state, under the Landing Method.
-func doneWithWorktree(state store.State, method store.LandingMethod) bool {
-	return state == store.Done || state == store.Cancelled || state == store.Accepted && method == store.LandingBranch
+func doneWithWorktree(tk core.TicketView, method store.LandingMethod) bool {
+	switch tk.State {
+	case store.Done, store.Cancelled:
+		return true
+	case store.Accepted:
+		// Under Land per Spec its work is safe in the Spec Branch once
+		// the merge is recorded.
+		return method == store.LandingBranch || tk.SpecLanded && tk.SpecMerge != nil && tk.SpecMerge.Counts
+	}
+	return false
 }
 
 // turnRunningOn reports whether a turn is running on ticket.

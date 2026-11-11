@@ -373,7 +373,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 	}
 	f.claimed(c, *res.Ticket, wt)
 	if branch := workBranch(stage, id); branch != "" {
-		err = f.branchWorktree(branch, wt)
+		err = f.cutBranchWorktree(*res.Ticket, branch, wt)
 	} else {
 		err = f.stageWorktree(wt)
 	}
