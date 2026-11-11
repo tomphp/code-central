@@ -294,6 +294,35 @@ export interface CIOverview {
   runs: CIRunRow[];
 }
 
+export type FactoryStatusName = "online" | "draining" | "offline";
+
+// A Factory as the Project view lists it, from its last Heartbeat.
+export interface FactoryView {
+  name: string;
+  host: string;
+  status: FactoryStatusName;
+  // note is "" when none; a stopped Factory keeps its last one.
+  note: string;
+  last_heartbeat: string;
+  interval_seconds: number;
+}
+
+// A Project's Factory Status, worked out by Code Central: the UI only
+// renders it. status is the combined one (offline with no Factories).
+export interface FactoryStatus {
+  status: FactoryStatusName;
+  factories: FactoryView[];
+}
+
+// What a Factory sends as a Heartbeat.
+export interface HeartbeatReport {
+  factory: string;
+  host: string;
+  state: "online" | "draining" | "stopping";
+  note?: string;
+  interval_seconds: number;
+}
+
 export interface ProjectView {
   key: string;
   display_name: string;
@@ -313,6 +342,9 @@ export interface ProjectView {
   // reported_models is always filled in: no aliases or model IDs, and
   // the seeded effort levels, until a Factory reports.
   reported_models: ReportedModels;
+  // factory_status is always filled in: offline, with no Factories,
+  // until one sends a Heartbeat.
+  factory_status: FactoryStatus;
 }
 
 export interface ProjectRow extends ProjectView {

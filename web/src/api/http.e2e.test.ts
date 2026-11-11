@@ -106,6 +106,10 @@ apiContract("HTTP API against code-central serve", async (): Promise<Driver> => 
     reportModels: async (key, report) => {
       await agent(`/api/p/${key}/report_models`, report);
     },
+    // code-central-324: as a Factory
+    reportHeartbeat: async (key, report) => {
+      await agent(`/api/p/${key}/report_heartbeat`, report);
+    },
     // code-central-253: as the CI Watcher
     reportCIWatcherStatus: async (key, status) => {
       await agent(`/api/p/${key}/report_ci_watcher_status`, status);

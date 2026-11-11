@@ -57,7 +57,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
       return (
         <>
           {banner}
-          <ProjectOptions api={api} projects={inbox.data?.projects} project={loc.project} navigate={navigate} />
+          <ProjectOptions api={api} now={now()} projects={inbox.data?.projects} project={loc.project} navigate={navigate} />
         </>
       );
     case "inbox":

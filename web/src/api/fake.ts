@@ -147,6 +147,8 @@ import {
   sessionKey,
   type ModelRow,
   type Models,
+  type FactoryStatus,
+  type HeartbeatReport,
   type ModelsReport,
   type ReportedModels,
   type UsageDay,
@@ -289,6 +291,7 @@ interface FakeProject {
   github_issues: GitHubIssuesSettings;
   models: Models;
   reported_models: ReportedModels;
+  factory_status: FactoryStatus;
   next: number;
 }
 
@@ -439,6 +442,7 @@ export class FakeApi implements Api {
       github_issues: { on: false, repository: "", label: "", new_issues_need_me: false, watcher: { state: "not_reported" } },
       models: { default: { model: "", effort: "" }, kinds: KINDS_OF_WORK.map((kind) => ({ kind, model: "", effort: "" })) },
       reported_models: { effort_levels: [...EFFORT_LEVELS], aliases: [], model_ids: [], model_flag: "", effort_flag: "" },
+      factory_status: { status: "offline", factories: [] },
       next: 1,
     });
     this.emit({ type: "project.changed", project: key });
@@ -1336,6 +1340,31 @@ export class FakeApi implements Api {
       effort_flag,
       reported: this.now.toISOString(),
     };
+    this.emit({ type: "project.changed", project: key });
+  }
+
+  // reportHeartbeat records a Factory's Heartbeat as Code Central does,
+  // without the clock: the status echoes the Heartbeat's state, a stopping
+  // one being offline, and time passing never changes it.
+  async reportHeartbeat(key: string, report: HeartbeatReport): Promise<void> {
+    const name = report.factory.trim();
+    const host = report.host.trim();
+    if (!name) throw new ApiError(422, "invalid", "factory is required", "factory");
+    if (!host) throw new ApiError(422, "invalid", "host is required", "host");
+    const p = this.writable(key);
+    const factory = {
+      name,
+      host,
+      status: report.state === "stopping" ? ("offline" as const) : report.state,
+      note: (report.note ?? "").trim().slice(0, 200),
+      last_heartbeat: this.now.toISOString(),
+      interval_seconds: report.interval_seconds,
+    };
+    const factories = [...p.factory_status.factories.filter((f) => f.name !== name || f.host !== host), factory].sort(
+      (a, b) => a.name.localeCompare(b.name) || a.host.localeCompare(b.host),
+    );
+    const status = factories.some((f) => f.status === "online") ? "online" : factories.some((f) => f.status === "draining") ? "draining" : "offline";
+    p.factory_status = { status, factories };
     this.emit({ type: "project.changed", project: key });
   }
 

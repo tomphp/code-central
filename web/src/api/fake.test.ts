@@ -111,6 +111,7 @@ apiContract("FakeApi", async (): Promise<Driver> => {
     reportPushRemote: async (key, url) => fake.reportPushRemote(key, url),
     // code-central-311
     reportModels: async (key, report) => fake.reportModels(key, report),
+    reportHeartbeat: async (key, report) => fake.reportHeartbeat(key, report),
     reportCIWatcherStatus: async (key, status) => fake.reportCIWatcherStatus(key, status),
     // code-central-256
     reportPushedCommit: async (key, id, commit) => fake.reportPushedCommit(key, id, commit),
