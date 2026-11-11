@@ -48,8 +48,13 @@ func TestEachPollSendsAnOnlineHeartbeatWithTheTurnsRunning(t *testing.T) {
 	}
 	h.Continue(id)
 	h.WaitForState(id, store.InReview)
-	r.Poll()
-	waitForFactory(t, h, core.FactoryOnline, "0 of 2 turns running")
+	// The turn's process may still be exiting after the Ticket is in
+	// review, so poll until a Heartbeat sees it gone.
+	h.WaitFor("the Factory to be online with 0 of 2 turns running", func() bool {
+		r.Poll()
+		fs := factories(t, h)
+		return fs.Status == core.FactoryOnline && len(fs.Factories) == 1 && strings.Contains(fs.Factories[0].Note, "0 of 2 turns running")
+	})
 }
 
 func TestAnOutagePauseStaysOnlineAndSaysWhenItResumes(t *testing.T) {
