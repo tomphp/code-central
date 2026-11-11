@@ -1036,6 +1036,48 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(r).toMatchObject({ status: 409, code: "action_not_allowed" });
     });
 
+    it("implements a finished spec Stage: the Stage is Done, one Ready implementation Ticket is made, and the tickets Stage is Cancelled with it as Replacement", async () => {
+      await d.createProject("acme", "Acme");
+      const r = await d.api.submitRequirement("acme", "Offline mode\nWorks on a plane.");
+      const [grilling, spec, tickets] = r.stages.map((s) => s.id);
+      await d.api.act("acme", grilling, "move", { to_state: "Done" });
+      await d.finish("acme", spec, "Wrote the Spec");
+
+      const ack = await d.api.act("acme", spec, "implement", {});
+      wantAcknowledgement(ack, spec, "Done", ["state", "moves"]);
+      const done = await d.api.getTicket("acme", spec);
+      expect(done.moves.at(-1)).toMatchObject({ from: "In Review", to: "Done", actor: "human", via: "implement" });
+
+      const s = await d.api.getSpec("acme", r.spec.id);
+      const build = s.tickets.find((t) => t.title === "Implement: Offline mode");
+      expect(build).toBeDefined();
+      const b = await d.api.getTicket("acme", build!.id);
+      expect(b).toMatchObject({ state: "Ready", labels: [], blocked_by: [] });
+      expect(b.moves).toMatchObject([{ to: "Ready", actor: "human", via: "implement" }]);
+      expect(b.description).toBe(
+        `Implement the whole Spec [${r.spec.id}](${r.spec.id}). Its User Stories, Implementation Decisions and Testing Decisions are the acceptance criteria, including writing the glossary terms and ADRs it records. Read them with \`get_spec\` and \`sections\`.\n`,
+      );
+      const cancelled = await d.api.getTicket("acme", tickets);
+      expect(cancelled).toMatchObject({ state: "Cancelled", replacements: [b.id] });
+      expect(cancelled.moves.at(-1)).toMatchObject({ to: "Cancelled", actor: "human", via: "implement" });
+      expect(cancelled.comments.at(-1)).toMatchObject({ actor: "human", body: expect.stringContaining(b.id) });
+    });
+
+    it("refuses implement on a Ticket that isn't a spec Stage or isn't In Review, writing nothing", async () => {
+      await d.createProject("acme", "Acme");
+      const plain = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", plain, "Done it");
+      const e = await d.api.act("acme", plain, "implement", {}).catch((e) => e);
+      expect(e).toMatchObject({ status: 409, code: "action_not_allowed" });
+      expect(e.message).toContain("not a spec Stage");
+      expect((await d.api.getTicket("acme", plain)).state).toBe("In Review");
+
+      const r = await d.api.submitRequirement("acme", "Offline mode");
+      const notReview = await d.api.act("acme", r.stages[1].id, "implement", {}).catch((e) => e);
+      expect(notReview).toMatchObject({ status: 409, code: "action_not_allowed" });
+      expect((await d.api.getSpec("acme", r.spec.id)).tickets).toHaveLength(3);
+    });
+
     // ---- Blockers, move and cancel (ticket 37) ----
 
     it("removes a Blocker, and rejects one that isn't there", async () => {
