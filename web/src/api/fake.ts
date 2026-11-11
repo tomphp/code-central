@@ -1017,13 +1017,14 @@ export class FakeApi implements Api {
     const id = this.specId(project, spec);
     const s = this.allSpecs(project).find((s) => s.id === id);
     if (!s) throw new ApiError(404, "not_found", `there is no Spec ${id}`);
-    const { state_summary, finished, requirement, map } = this.derive(id);
+    const { state_summary, finished, requirement, land_per_spec, map } = this.derive(id);
     return structuredClone({
       ...s,
       state_summary,
       finished,
       tickets: this.rowsOf(this.ticketsOf(id)),
       ...(requirement && { requirement }),
+      ...(land_per_spec && { land_per_spec }),
       ...(map && { map }),
     });
   }
@@ -1944,7 +1945,7 @@ export class FakeApi implements Api {
   }
 
   // derive is what a Spec read works out from the Spec's Tickets.
-  private derive(spec: string): { state_summary: StateSummary; finished: boolean; requirement?: RequirementView; map?: MapView } {
+  private derive(spec: string): { state_summary: StateSummary; finished: boolean; requirement?: RequirementView; land_per_spec?: LandPerSpecStatus; map?: MapView } {
     const tickets = this.ticketsOf(spec);
     const state_summary: StateSummary = {};
     for (const t of tickets) state_summary[t.state] = (state_summary[t.state] ?? 0) + 1;
@@ -1983,8 +1984,8 @@ export class FakeApi implements Api {
         stages: stages.map((t) => ({ name: stageOf(t)!, ticket: t.id, state: t.state, ...(reason(t) && { needs_me_reason: reason(t) }) })),
         build: { done: build.filter((t) => t.state === "Done").length, total: build.length },
         waiting_for_factory: current ? claimable(current) : build.some(claimable) && !held,
-        ...this.landPerSpecOf(tickets, build),
       },
+      ...this.landPerSpecOf(tickets, build),
     };
   }
 
