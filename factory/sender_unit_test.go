@@ -18,7 +18,7 @@ func TestAnOlderCodeCentralsNotFoundForUsageIsDroppedNeverRetried(t *testing.T) 
 		http.NotFound(w, r)
 	}))
 	defer old.Close()
-	s := newSender(client.New(old.URL).PostUsage, time.Millisecond)
+	s := newSender(client.New(old.URL).PostUsage, time.Millisecond, postTimeout)
 	go s.run()
 	s.add("s1", core.UsageResponse{Kind: "implementation"})
 	for posts.Load() == 0 {

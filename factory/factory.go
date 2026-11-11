@@ -50,6 +50,9 @@ type Env struct {
 	// EventBatchEvery is how often waiting Session Events and token usage
 	// are posted; zero means postEvery.
 	EventBatchEvery time.Duration
+	// EventPostTimeout bounds each post of Session Events and token
+	// usage; zero means postTimeout.
+	EventPostTimeout time.Duration
 	// Signals is the stop signals the Factory gets: the first Ctrl-C
 	// (os.Interrupt) drains; a second, SIGTERM or SIGHUP stops the turns
 	// at once. Nil means none come.
@@ -353,8 +356,12 @@ func start(e Env, o options) (*factory, error) {
 		every = postEvery
 	}
 	f.heartbeats = newFactoryHeartbeater(f)
-	f.events = newSender(f.client.PostSessionEvents, every)
-	f.usage = newSender(f.client.PostUsage, every)
+	timeout := e.EventPostTimeout
+	if timeout <= 0 {
+		timeout = postTimeout
+	}
+	f.events = newSender(f.client.PostSessionEvents, every, timeout)
+	f.usage = newSender(f.client.PostUsage, every, timeout)
 	// A Project that can't be read yet is checked on every poll instead.
 	p, readErr := f.client.GetProject(context.Background(), project)
 	if readErr == nil {

@@ -3,8 +3,10 @@
 // triggers arriving mid-animation don't queue.
 import { useEffect, useState } from "react";
 
-// PULSE_MS is how long a pulse lasts; focus.css's animations match it.
-const PULSE_MS = 600;
+// pulseTiming.ms is how long a pulse lasts; focus.css's animations match
+// it. Tests lengthen it, so a slow machine can't end a pulse before they
+// look for it.
+export const pulseTiming = { ms: 600 };
 
 // Pulse is what a pulsing element spreads on itself: data-pulsing marks
 // that it is pulsing, and its class adds the one that runs the animation.
@@ -31,7 +33,7 @@ export function usePulse(className: string, trigger: unknown, onMount = false): 
   }
   useEffect(() => {
     if (!on) return;
-    const timer = setTimeout(() => setOn(false), PULSE_MS);
+    const timer = setTimeout(() => setOn(false), pulseTiming.ms);
     return () => clearTimeout(timer);
   }, [on, count]);
   return on ? { "data-pulsing": "true", className: `${className} dashboard-pulse-${count % 2}` } : { className };

@@ -680,7 +680,10 @@ func (h *Harness) launch(dir string, args ...string) *Running {
 		Backoff:   h.Backoff,
 		// Session Events are posted often, so tests needn't wait a second.
 		EventBatchEvery: EventBatchEvery,
-		Signals:         r.signals,
+		// A post that times out is dropped, so on a loaded machine a
+		// test could wait for an event that never comes.
+		EventPostTimeout: Timeout,
+		Signals:          r.signals,
 	}
 	go func() {
 		defer close(r.done)

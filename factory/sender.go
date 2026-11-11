@@ -31,11 +31,12 @@ type queued[T any] struct {
 // sender is one of the Factory's posters: of Session Events, or of
 // model responses' token usage. It posts what is waiting every postEvery, or sooner once
 // postBatchMax are waiting, one post per session in the order they
-// came, so each session's order holds. every is postEvery unless a
-// test shortens it.
+// came, so each session's order holds. every is postEvery, and timeout
+// postTimeout, unless a test changes them.
 type sender[T any] struct {
-	post  func(ctx context.Context, session string, items []T) error
-	every time.Duration
+	post    func(ctx context.Context, session string, items []T) error
+	every   time.Duration
+	timeout time.Duration
 
 	mu      sync.Mutex
 	waiting []queued[T]
@@ -44,8 +45,8 @@ type sender[T any] struct {
 	done    chan struct{}
 }
 
-func newSender[T any](post func(context.Context, string, []T) error, every time.Duration) *sender[T] {
-	return &sender[T]{post: post, every: every, full: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
+func newSender[T any](post func(context.Context, string, []T) error, every, timeout time.Duration) *sender[T] {
+	return &sender[T]{post: post, every: every, timeout: timeout, full: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
 }
 
 // add queues item for session, dropping the oldest waiting item when the
@@ -73,9 +74,9 @@ func (s *sender[T]) run() {
 	for {
 		select {
 		case <-s.stop:
-			// The last flush has one postTimeout in all, so a hung
-			// Code Central holds up the stop no longer than that.
-			ctx, cancel := context.WithTimeout(context.Background(), postTimeout)
+			// The last flush has one timeout in all, so a hung Code
+			// Central holds up the stop no longer than that.
+			ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 			s.flush(ctx)
 			cancel()
 			return
@@ -93,7 +94,7 @@ func (s *sender[T]) close() {
 }
 
 // flush posts every waiting item, one post per session, each with
-// postTimeout within ctx. A post that fails, an older Code
+// timeout within ctx. A post that fails, an older Code
 // Central's 404 included, is dropped, never retried.
 func (s *sender[T]) flush(ctx context.Context) {
 	s.mu.Lock()
@@ -109,7 +110,7 @@ func (s *sender[T]) flush(ctx context.Context) {
 		bySession[w.session] = append(bySession[w.session], w.item)
 	}
 	for _, session := range sessions {
-		ctx, cancel := context.WithTimeout(ctx, postTimeout)
+		ctx, cancel := context.WithTimeout(ctx, s.timeout)
 		_ = s.post(ctx, session, bySession[session])
 		cancel()
 	}

@@ -55,7 +55,8 @@ describe("Pull request closed", () => {
     const fake = await world("closed", "pull_request_closed");
     renderApp(fake);
     const it = await item();
-    expect(within(it).getByText("Pull request closed", { selector: "span, p, h3, div" })).toBeInTheDocument();
+    expect(within(it).getByText("Pull request closed", { selector: "span" })).toBeInTheDocument();
+    expect(await within(it).findByRole("heading", { name: "Pull request closed" })).toBeInTheDocument();
     expect(await within(it).findByRole("link", { name: "Pull request 7, closed" })).toHaveAttribute("href", PR_LINK);
     expect(within(it).queryByRole("button", { name: /Land anyway/ })).toBeNull();
 
