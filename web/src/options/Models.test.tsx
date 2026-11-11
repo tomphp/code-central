@@ -33,13 +33,13 @@ const fresh = (fake: FakeApi) => {
 };
 
 describe("the Models section", () => {
-  it("comes last, with the Project default row then a row per kind of work, all at Default", async () => {
+  it("comes after GitHub Issues, with the Project default row then a row per kind of work, all at Default", async () => {
     const fake = fresh(new FakeApi());
     renderApp(fake);
 
     await findModels();
     const sections = Array.from(page().querySelectorAll("fieldset.project-options-section > legend"), (l) => l.textContent);
-    expect(sections).toEqual(["Landing Method", "CI", "GitHub Issues", "Models"]);
+    expect(sections).toEqual(["Landing Method", "CI", "GitHub Issues", "Models", "Factories"]);
     expect(within(models()).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["Project default", ...KINDS]);
     for (const row of ["the Project default", ...KINDS]) {
       expect(model(row)).toHaveValue("");
