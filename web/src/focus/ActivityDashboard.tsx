@@ -19,12 +19,12 @@
 // An entry shows its Ticket's CI badge when it has a CI result.
 import { useEffect, useRef, useState } from "react";
 import { numberOf, type Api } from "../api/api";
-import type { ApiError, CIOverview, CIRunRow, State } from "../api/types";
+import type { ApiError, CIOverview, CIProvider, CIRunRow, State } from "../api/types";
 import { RowLatestEvent } from "../LatestEvent";
 import { useFetch, type InboxData, type ProjectTicket } from "../live";
 import { STAGE_TITLE, stageOf } from "../requirement/progress";
 import { CILink } from "../ci/CILink";
-import { RunGitHubLink, runDuration } from "../ci/CIView";
+import { RunLink, runDuration } from "../ci/CIView";
 import { CIBadge } from "../ticket/CIBadge";
 import { runName, runStatus, shortCommit } from "../ticket/CISection";
 import { clickTo, hrefFor, type UiLocation } from "../url";
@@ -150,11 +150,12 @@ function CIRunningList({ now, data, runs, loc, navigate }: CIRunningListProps) {
       </p>
     );
   }
-  if (!runs.data) return null;
-  return runs.data.runs.length ? (
+  const overview = runs.data;
+  if (!overview) return null;
+  return overview.runs.length ? (
     <ul aria-label="CI Running" className="dashboard-list">
-      {runs.data.runs.map((r) => (
-        <CIRunEntry key={runKey(r)} now={now} data={data} run={r} joined={!first.current?.has(runKey(r))} loc={loc} navigate={navigate} />
+      {overview.runs.map((r) => (
+        <CIRunEntry key={runKey(r)} now={now} data={data} run={r} provider={overview.projects.find((p) => p.project === r.project)?.provider} joined={!first.current?.has(runKey(r))} loc={loc} navigate={navigate} />
       ))}
     </ul>
   ) : (
@@ -166,15 +167,16 @@ function CIRunningList({ now, data, runs, loc, navigate }: CIRunningListProps) {
 const runKey = (r: CIRunRow) => `${r.project}/${r.id}`;
 
 // CIRunEntry is one running CI Run. Its Ticket link opens the run's Ticket
-// as an In Progress entry does, and its GitHub link sits beside it, since
+// as an In Progress entry does, and its link to the CI system sits beside it, since
 // a link can't hold another. It pulses when the run's status or attempt
 // changes, and on mounting if it joined the list.
 interface CIRunEntryProps extends Omit<ActivityDashboardProps, "api" | "version"> {
   run: CIRunRow;
+  provider?: CIProvider;
   joined: boolean;
 }
 
-function CIRunEntry({ now, data, run, joined, loc, navigate }: CIRunEntryProps) {
+function CIRunEntry({ now, data, run, provider, joined, loc, navigate }: CIRunEntryProps) {
   const pulse = usePulse("dashboard-ci-entry", `${run.status} ${run.attempt}`, joined);
   // The service lists only runs tracked against a Ticket.
   const inbox = inboxFor(data, run.project, run.ticket!, loc);
@@ -191,7 +193,7 @@ function CIRunEntry({ now, data, run, joined, loc, navigate }: CIRunEntryProps) 
           {run.started && ` ${runDuration(run, now)}`}
         </span>
       </a>
-      <RunGitHubLink run={run} className="dashboard-ci-github" />
+      <RunLink run={run} provider={provider} className="dashboard-ci-github" />
     </li>
   );
 }

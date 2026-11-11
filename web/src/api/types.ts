@@ -297,6 +297,7 @@ export interface CIOverviewFilter {
 export interface CIProjectStatus {
   project: string;
   tracking: boolean;
+  provider: CIProvider;
   repository: string;
   project_url: string;
   watcher: CIWatcherStatus;

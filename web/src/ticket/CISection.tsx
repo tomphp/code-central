@@ -22,7 +22,7 @@ const CONCLUSION_LABEL: Record<CIConclusion, string> = {
   timed_out: "timed out",
   skipped: "skipped",
   neutral: "neutral",
-  partially_succeeded: "partially succeeded",
+  partially_succeeded: "Partially succeeded",
 };
 
 // runStatus is a run's status as the CI section says it.
@@ -30,6 +30,20 @@ export function runStatus(run: CIRunView): string {
   if (run.status === "queued") return "queued";
   if (run.status === "in_progress" || !run.conclusion) return "running";
   return CONCLUSION_LABEL[run.conclusion];
+}
+
+// statusClass is the CSS class of a status label, such as "ci-timed-out".
+const statusClass = (status: string) => `ci-${status.toLowerCase().replace(" ", "-")}`;
+
+// RunStatusBadge is a status as a badge. A partially succeeded one has the
+// passed styling plus a warning mark.
+export function RunStatusBadge({ status }: { status: string }) {
+  return (
+    <span className={`ci-status ${statusClass(status)}`}>
+      {status === CONCLUSION_LABEL.partially_succeeded && <span aria-hidden="true">⚠ </span>}
+      {status}
+    </span>
+  );
 }
 
 // runName is the name a run shows: its workflow's display name, or its file.
@@ -86,7 +100,7 @@ function CIRuns({ runs }: { runs: CIRunView[] }) {
               <a href={run.url} target="_blank" rel="noreferrer">
                 {runName(run)}
               </a>{" "}
-              <span className="muted small">{run.workflow}</span> <span className={`ci-status ci-${status.replace(" ", "-")}`}>{status}</span>
+              <span className="muted small">{run.workflow}</span> <RunStatusBadge status={status} />
               {run.attempt > 1 && <span className="muted small"> · attempt {run.attempt}</span>}
               {run.commit && <span className="muted small"> · {shortCommit(run.commit)}</span>}
               {run.ignored && <span className="label">ignored</span>}
