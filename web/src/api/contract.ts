@@ -1301,6 +1301,15 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       });
     });
 
+    it("shows a Requirement's Land per Spec status under Pull Request with Land per Spec on", async () => {
+      await d.createProject("acme", "Acme");
+      await d.reportPushRemote("acme", "git@github.com:acme/web.git");
+      await d.letGHWrite("acme/web");
+      await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "", land_per_spec: true });
+      const r = await d.api.submitRequirement("acme", "Export a Spec as Markdown");
+      expect((await d.api.getSpec("acme", r.spec.id)).requirement?.land_per_spec).toEqual({ waiting: [], ready: false });
+    });
+
     it("refuses a Requirement with no text", async () => {
       await d.createProject("acme", "Acme");
       const e = await d.api.submitRequirement("acme", "  \n ").catch((e) => e);

@@ -1989,12 +1989,12 @@ export class FakeApi implements Api {
   }
 
   // landPerSpecOf is a Requirement's Land per Spec status while its
-  // Project is under Merge with the option on: the Tickets seeded as
+  // Project is under Merge or Pull Request with the option on: the Tickets seeded as
   // waiting for the Spec, ready once the tickets Stage and every build
   // Ticket is finished or Accepted.
   private landPerSpecOf(tickets: TicketView[], build: TicketView[]): { land_per_spec?: LandPerSpecStatus } {
     const landing = this.project(this.projectOf(tickets[0].id)).landing;
-    if (landing.method !== "merge" || !landing.land_per_spec) return {};
+    if ((landing.method !== "merge" && landing.method !== "pull_request") || !landing.land_per_spec) return {};
     const waiting = build.filter((t) => t.waiting_for_spec).map((t) => t.id);
     const planned = tickets.find((t) => stageOf(t) === "tickets");
     const ready = waiting.length > 0 && (!planned || FINISHED.includes(planned.state)) && build.every((t) => t.state === "Accepted" || t.state === "Done");
