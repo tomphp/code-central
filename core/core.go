@@ -191,9 +191,12 @@ type TicketView struct {
 	// SpecLanded says Land per Spec covers the Ticket, and WaitingForSpec
 	// that it is Accepted and waits for its Spec to land (code-central-371).
 	// Computed on read.
-	SpecMerge      *SpecMergeView `json:"spec_merge,omitempty"`
-	SpecLanded     bool           `json:"spec_landed,omitempty"`
-	WaitingForSpec bool           `json:"waiting_for_spec,omitempty"`
+	SpecMerge  *SpecMergeView `json:"spec_merge,omitempty"`
+	SpecLanded bool           `json:"spec_landed,omitempty"`
+	// CIGroup is the Spec's Tickets waiting with this one on one pushed
+	// commit, the lead first (code-central-379).
+	CIGroup        *CIGroupView `json:"ci_group,omitempty"`
+	WaitingForSpec bool         `json:"waiting_for_spec,omitempty"`
 	// CIFailureOptions are the failure options, each an operation's name,
 	// the human may choose while the Ticket is CI failed; left out
 	// otherwise, and empty when none applies. Computed on read.
@@ -608,6 +611,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	}
 	v.SpecLanded = specLanded(r, pr.Landing, key, t)
 	v.WaitingForSpec = waitingForSpec(r, pr.Landing, key, t)
+	v.CIGroup = ciGroupView(r, key, t)
 	v.LandAnyway, v.CIFailureOptions = choseLandAnyway(t), ciFailureOptions(r, key, t, c.now())
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)

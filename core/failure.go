@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -119,11 +120,29 @@ func (c *Core) GiveUp(ctx context.Context, key string, in GiveUpInput) (StopResu
 // The note is stored as a comment. The Ticket keeps its created time, so
 // it keeps its place near the front of the claim order.
 func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Written[TicketView], error) {
+	if ActorOf(ctx) == Human {
+		if err := c.refuseSendBackInGroup(key, in.Ticket); err != nil {
+			return Written[TicketView]{}, err
+		}
+	}
 	return c.actThen(ctx, key, in.Ticket, in.Full, "send_back", "", in.Note, func(t *store.Ticket) error {
 		if from := t.Moves[len(t.Moves)-1].From; from == store.Accepted && strings.TrimSpace(in.Note) == "" {
 			return invalid("note", "sending back Accepted work needs a note saying why: the base commit and the conflicting files of a merge conflict, or the failed CI run's link and its failed jobs")
 		}
 		return nil
+	})
+}
+
+// refuseSendBackInGroup rejects the human's send_back of an Accepted
+// Ticket in a Spec's CI group (code-central-379): its work is in the base
+// with the Spec's, so there is nothing of its own to send back to fix.
+func (c *Core) refuseSendBackInGroup(key string, ref Ref) error {
+	return c.store.View(func(r store.Reader) error {
+		t, err := resolveTicket(r, key, "send_back", "ticket", ref)
+		if err != nil || len(ciGroup(r, key, t)) == 0 {
+			return nil // the send-back itself reports what is wrong
+		}
+		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s's work is in the base with its Spec's, so there is no branch of its own to send back: land it anyway or open a fix Ticket", DisplayID(key, t.Number))}
 	})
 }
 
