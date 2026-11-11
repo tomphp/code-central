@@ -21,11 +21,34 @@ import (
 // fakeClaudeEnv names, to a run of this test binary, the code-central
 // binary it calls as the fake claude. It is in the Factory's environment,
 // so its turns get it; the tests themselves never run with it.
+// twoTicketSpec is the title of the Requirement whose tickets Stage makes two
+// implementation Tickets, the second blocked by the first.
+const twoTicketSpec = "Greet and part"
+
 const fakeClaudeEnv = "E2E_FAKE_CLAUDE_CODE_CENTRAL"
 
-// 3. A Requirement to Done: the real service and the real Factory, with a
+// A Requirement to Done: the real service and the real Factory, with a
 // fake claude working every Stage and the one implementation Ticket.
-func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.T) {
+// world is a running service, a repository with Project acme and the Factory
+// working it, with helpers to watch Tickets and accept them.
+type world struct {
+	svc        *service
+	repo       string
+	inRepo     func(args ...string) string
+	base       string
+	factory    *exec.Cmd
+	factoryOut *codecentraltest.SyncBuffer
+	exited     chan error
+	stopped    *bool
+	ticket     func(id string) ticketView
+	waitFor    func(id, state string) ticketView
+	accept     func(id string)
+}
+
+// startWorld submits the requirement as Spec acme-1 and starts the Factory.
+// opts are Factory flags added to its defaults.
+func startWorld(t *testing.T, requirement string, factoryArgs ...string) *world {
+	t.Helper()
 	svc := serve(t)
 	// git reports real paths, so resolve macOS's /var -> /private/var.
 	root, err := filepath.EvalSymlinks(t.TempDir())
@@ -70,8 +93,8 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 	inRepo("commit", "-q", "-m", "Set up Code Central")
 	base := inRepo("rev-parse", "main")
 
-	// 1. The human submits a Requirement: its Spec and three Stage Tickets.
-	code, out := svc.cli(t, repo, "", "submit-requirement", "--text", "Greet the user\n\nSay hello on start.")
+	// The human submits a Requirement: its Spec and three Stage Tickets.
+	code, out := svc.cli(t, repo, "", "submit-requirement", "--text", requirement)
 	if code != 0 {
 		t.Fatalf("submit-requirement: exit %d: %s", code, out)
 	}
@@ -86,11 +109,11 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 	}
 
 	// The Factory runs as its own process in the repository.
-	factory := exec.Command(factoryBin, "--poll", "5s", "--parallel", "1")
+	factory := exec.Command(factoryBin, append([]string{"--poll", "5s", "--parallel", "1"}, factoryArgs...)...)
 	factory.Dir, factory.Env = repo, env
 	startInOwnGroup(factory)
-	var factoryOut codecentraltest.SyncBuffer
-	factory.Stdout, factory.Stderr = &factoryOut, &factoryOut
+	factoryOut := &codecentraltest.SyncBuffer{}
+	factory.Stdout, factory.Stderr = factoryOut, factoryOut
 	if err := factory.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -140,6 +163,17 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 		n := strings.TrimPrefix(id, "acme-")
 		svc.human(t, "/api/p/acme/tickets/"+n+"/accept", `{}`)
 	}
+	return &world{svc, repo, inRepo, base, factory, factoryOut, exited, &stopped, ticket, waitFor, accept}
+}
+
+// A Requirement to Done: the real service and the real Factory, with a
+// fake claude working every Stage and the one implementation Ticket.
+func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.T) {
+	w := startWorld(t, "Greet the user\n\nSay hello on start.")
+	svc, repo, inRepo, base := w.svc, w.repo, w.inRepo, w.base
+	ticket, waitFor, accept := w.ticket, w.waitFor, w.accept
+	var code int
+	var out string
 
 	// 2. The Stages, in order: the Factory claims each once the one before
 	// is Done, the fake finishes it, and the human accepts it.
@@ -174,18 +208,15 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 		t.Fatalf("branch acme-5 is at %s, finish named %s", got, impl.Commit)
 	}
 
-	// 4. Accepting it merges it into the Spec Branch, which lands on the
-	// base as the Spec's merge once every Ticket is accepted; it is Done.
+	// 4. Accepting it lands it, through its Spec Branch, which is the only
+	// Ticket of its Spec: the base has the Spec's merge, and it is Done.
 	accept("acme-5")
 	done := waitFor("acme-5", "Done")
 	merge := inRepo("rev-parse", "main")
-	parents := strings.Fields(inRepo("log", "-1", "--format=%P", merge))
-	if len(parents) != 2 || parents[0] != base {
-		t.Fatalf("main's tip has parents %q, want %q then the Spec Branch tip", parents, base)
+	if got := inRepo("log", "-1", "--format=%P", merge); !strings.HasPrefix(got, base+" ") {
+		t.Errorf("main's tip has parents %q, want the base %s first", got, base)
 	}
-	if got := inRepo("log", "-1", "--format=%P", parents[1]); !strings.Contains(got, impl.Commit) {
-		t.Errorf("the Spec Branch tip has parents %q, want it to merge %s", got, impl.Commit)
-	}
+	inRepo("merge-base", "--is-ancestor", impl.Commit, "main") // fails the test if not
 	if got := inRepo("log", "-1", "--format=%s", merge); got != "Merge spec acme-1: Greet the user" {
 		t.Errorf("merge commit subject %q", got)
 	}
@@ -196,13 +227,19 @@ func TestARequirementGoesThroughEveryStageAndItsTicketLandsOnTheBase(t *testing.
 		t.Errorf("the land Move records commit %q, want the merge %s", m.Commit, merge)
 	}
 
-	// 5. Ctrl-C drains the idle Factory, which exits cleanly.
+	w.stop(t)
+}
+
+// stop interrupts the idle Factory and checks that it drains and exits cleanly.
+func (w *world) stop(t *testing.T) {
+	t.Helper()
+	factory, exited, factoryOut := w.factory, w.exited, w.factoryOut
 	if err := interrupt(factory.Process); err != nil {
 		t.Fatalf("interrupting the Factory: %v", err)
 	}
 	select {
 	case err := <-exited:
-		stopped = true
+		*w.stopped = true
 		if err != nil {
 			t.Fatalf("the Factory did not stop cleanly: %v", err)
 		}
@@ -244,10 +281,12 @@ func installSelf(t *testing.T, dst string) {
 
 type ticketView struct {
 	ID     string   `json:"id"`
+	Title  string   `json:"title"`
 	State  string   `json:"state"`
 	Labels []string `json:"labels"`
 	Spec   struct {
-		ID string `json:"id"`
+		ID    string `json:"id"`
+		Title string `json:"title"`
 	} `json:"spec"`
 	Branch string `json:"branch"`
 	Commit string `json:"commit"`
@@ -347,15 +386,28 @@ func fakeClaude(codeCentral string, args []string) int {
 				"--state", "Ready", "--blocked-by", id, "--description", "Write hello.txt."); err != nil {
 				return err
 			}
-			finish = append(finish, "--summary", "1. Say hello (blocked by "+id+").")
+			summary := "1. Say hello (blocked by " + id + ")."
+			if tk.Spec.Title == twoTicketSpec {
+				// acme-5 is the one just made: the second depends on it.
+				if _, err := run(codeCentral, "create-ticket", "--spec", tk.Spec.ID, "--title", "Say goodbye",
+					"--state", "Ready", "--blocked-by", "acme-5", "--description", "Write goodbye.txt."); err != nil {
+					return err
+				}
+				summary += " 2. Say goodbye (blocked by acme-5)."
+			}
+			finish = append(finish, "--summary", summary)
 		default:
-			if err := os.WriteFile("hello.txt", []byte("hello\n"), 0o644); err != nil {
+			file, word := "hello.txt", "hello"
+			if tk.Title == "Say goodbye" {
+				file, word = "goodbye.txt", "goodbye"
+			}
+			if err := os.WriteFile(file, []byte(word+"\n"), 0o644); err != nil {
 				return err
 			}
-			if _, err := run("git", "add", "hello.txt"); err != nil {
+			if _, err := run("git", "add", file); err != nil {
 				return err
 			}
-			if _, err := run("git", "commit", "-q", "-m", "Say hello"); err != nil {
+			if _, err := run("git", "commit", "-q", "-m", tk.Title); err != nil {
 				return err
 			}
 			commit, err := run("git", "rev-parse", "HEAD")
