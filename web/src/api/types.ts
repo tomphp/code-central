@@ -45,7 +45,10 @@ export const TRIAGE_ACTIONS: TriageAction[] = ["keep_as_draft", "to_requirement"
 export type Mode = "committed" | "local";
 
 // A Landing Method: how a Project's accepted work reaches its base.
-export type LandingMethod = "merge" | "branch";
+export type LandingMethod = "merge" | "branch" | "pull_request";
+
+// A Code Host: where a Pull Request is opened, worked out from the Push remote URL.
+export type CodeHost = "github" | "azure_repos";
 
 // A Project's Landing Method with its Push option and the remote it uses.
 export interface Landing {
@@ -55,10 +58,20 @@ export interface Landing {
   // Land per Spec: under Merge, a Spec's work lands together. Shown and
   // kept whatever the method.
   land_per_spec: boolean;
+  // The Code Host and its repository, worked out from the reported Push
+  // remote URL: empty while none is reported or it is unsupported.
+  code_host: CodeHost | "";
+  repository: string;
+  // The environment variable holding the Azure Repos PAT, ADO_PAT by default.
+  pat_env: string;
 }
 
-// What setLandingMethod takes: leaving land_per_spec out keeps the stored value.
-export type LandingInput = Omit<Landing, "land_per_spec"> & { land_per_spec?: boolean };
+// What setLandingMethod takes: the Code Host and repository are derived, and
+// leaving land_per_spec or pat_env out keeps the stored value.
+export type LandingInput = Omit<Landing, "land_per_spec" | "code_host" | "repository" | "pat_env"> & {
+  land_per_spec?: boolean;
+  pat_env?: string;
+};
 
 // A CI Provider: the CI system CI Tracking watches.
 export type CIProvider = "github_actions" | "azure_pipelines";

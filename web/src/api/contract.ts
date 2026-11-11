@@ -128,8 +128,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ["beta", "Beta", 0, false],
       ]);
       expect(rows.map((r) => r.landing)).toEqual([
-        { method: "merge", push: false, remote: "origin", land_per_spec: true },
-        { method: "merge", push: false, remote: "origin", land_per_spec: true },
+        { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT" },
+        { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT" },
       ]);
       const off = {
         tracking: false,
@@ -239,7 +239,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       const v = await d.api.setLandingMethod("acme", { method: "branch", push: true, remote: " upstream " });
       expect(v).toMatchObject({ key: "acme", landing: { method: "branch", push: true, remote: "upstream" } });
-      expect((await d.api.listProjects())[0].landing).toEqual({ method: "branch", push: true, remote: "upstream", land_per_spec: true });
+      expect((await d.api.listProjects())[0].landing).toEqual({ method: "branch", push: true, remote: "upstream", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT" });
 
       // Without Push, an empty remote reads as origin.
       expect((await d.api.setLandingMethod("acme", { method: "merge", push: false, remote: "" })).landing).toEqual({
@@ -247,6 +247,9 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         push: false,
         remote: "origin",
         land_per_spec: true,
+        code_host: "",
+        repository: "",
+        pat_env: "ADO_PAT",
       });
 
       const empty = await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: " " }).catch((e) => e);
@@ -254,6 +257,25 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(empty.message).toContain("Push needs a git remote");
       const method = await d.api.setLandingMethod("acme", { method: "squash" as LandingMethod, push: false, remote: "origin" }).catch((e) => e);
       expect(method).toMatchObject({ status: 422, code: "invalid", field: "method" });
+    });
+
+    it("sets Pull Request once the Push remote URL names a Code Host, ignoring Push, and refuses it before", async () => {
+      await d.createProject("acme", "Acme");
+      const none = await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "" }).catch((e) => e);
+      expect(none).toMatchObject({ status: 422, code: "invalid", field: "method" });
+      expect(none.fix).toContain("start the Factory");
+
+      await d.reportPushRemote("acme", "git@gitlab.com:acme/web.git");
+      const unsupported = await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "" }).catch((e) => e);
+      expect(unsupported).toMatchObject({ status: 422, code: "invalid", field: "method" });
+
+      await d.reportPushRemote("acme", "https://dev.azure.com/acme/shop/_git/web");
+      const v = await d.api.setLandingMethod("acme", { method: "pull_request", push: true, remote: "", pat_env: " REPOS_PAT " });
+      expect(v.landing).toMatchObject({ method: "pull_request", push: false, code_host: "azure_repos", repository: "acme/shop/web", pat_env: "REPOS_PAT" });
+      const kept = await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "" });
+      expect(kept.landing.pat_env).toBe("REPOS_PAT");
+      const bad = await d.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "", pat_env: "not a name" }).catch((e) => e);
+      expect(bad).toMatchObject({ status: 422, field: "pat_env" });
     });
 
     it("keeps Land per Spec on by default, sets it, and keeps it when a later set leaves it out", async () => {

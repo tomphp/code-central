@@ -74,6 +74,7 @@ import {
   type TicketActions,
   type TranscriptHandlers,
 } from "./api";
+import { codeHostOf } from "./codeHost";
 import { fakeActions } from "./fakeActions";
 import {
   ApiError,
@@ -433,7 +434,7 @@ export class FakeApi implements Api {
       mode: "committed",
       archived: opts.archived ?? false,
       ...(opts.archived ? { archived_at: this.now.toISOString() } : {}),
-      landing: { method: "merge", push: false, remote: "origin", land_per_spec: true },
+      landing: { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT" },
       ci: {
         tracking: false,
         provider: "github_actions",
@@ -1232,16 +1233,43 @@ export class FakeApi implements Api {
 
   async setLandingMethod(key: string, landing: LandingInput): Promise<ProjectView> {
     this.calls.push("setLandingMethod");
-    if (landing.method !== "merge" && landing.method !== "branch") {
-      throw new ApiError(422, "invalid", `Landing Method "${landing.method}" is neither "merge" nor "branch"`, "method");
+    if (landing.method !== "merge" && landing.method !== "branch" && landing.method !== "pull_request") {
+      throw new ApiError(422, "invalid", `Landing Method "${landing.method}" is not "merge", "branch" or "pull_request"`, "method");
     }
-    const l: Landing = { method: landing.method, push: landing.push, remote: landing.remote.trim(), land_per_spec: true };
+    const l: Landing = {
+      ...this.project(key).landing,
+      method: landing.method,
+      // Push is implied under Pull Request, so the flag is ignored.
+      push: landing.push && landing.method !== "pull_request",
+      remote: landing.remote.trim(),
+    };
+    const pat = landing.pat_env?.trim();
+    if (pat && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(pat)) {
+      throw new ApiError(422, "invalid", `"${pat}" is not an environment variable's name, such as ADO_PAT`, "pat_env");
+    }
+    if (pat) l.pat_env = pat;
     if (!l.remote) {
       if (l.push) throw new ApiError(422, "invalid", 'Push needs a git remote to push to, such as "origin"', "remote");
       l.remote = "origin";
     }
     const p = this.writable(key);
     l.land_per_spec = landing.land_per_spec ?? p.landing.land_per_spec;
+    if (l.method === "pull_request") {
+      const url = p.ci.push_remote_url.trim();
+      if (!url) {
+        throw new ApiError(
+          422,
+          "invalid",
+          "Pull Request needs the Push remote's URL to work out the Code Host, and the Factory hasn't reported one",
+          "method",
+          undefined,
+          "start the Factory once so it reports the Push remote's URL, then turn Pull Request on",
+        );
+      }
+      if (!codeHostOf(url).code_host) {
+        throw new ApiError(422, "invalid", `the Push remote ${url} is on a host Pull Request doesn't support`, "method", undefined, "use Merge or Branch, or point the Push remote at a supported host");
+      }
+    }
     if (JSON.stringify(p.landing) !== JSON.stringify(l)) {
       p.landing = l;
       this.emit({ type: "project.changed", project: key });
@@ -1617,6 +1645,7 @@ export class FakeApi implements Api {
   private setCI(p: FakeProject, ci: CISettings) {
     if (JSON.stringify(p.ci) === JSON.stringify(ci)) return;
     p.ci = ci;
+    p.landing = { ...p.landing, ...codeHostOf(ci.push_remote_url) };
     this.emit({ type: "project.changed", project: p.key });
   }
 

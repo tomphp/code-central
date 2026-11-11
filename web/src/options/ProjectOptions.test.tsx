@@ -63,6 +63,49 @@ describe("Project Options", () => {
     expect(window.location.search).toBe("?view=inbox&project=acme");
   });
 
+  it("offers Pull Request with no Push checkbox, the worked-out Code Host, and the PAT variable only for Azure Repos", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    renderApp(fake, "/?view=project-options&project=acme");
+    await screen.findByRole("group", { name: "Landing Method" });
+
+    await userEvent.click(
+      within(landing()).getByRole("radio", { name: "Pull Request" }),
+    );
+    expect(within(landing()).queryByRole("checkbox", { name: "Push" })).toBeNull();
+    expect(within(landing()).getByRole("checkbox", { name: "Land per Spec" })).toBeEnabled();
+    expect(within(landing()).getByRole("status", { name: "Code Host" })).toHaveTextContent(
+      "start the Factory once",
+    );
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    const alert = await within(landing()).findByRole("alert");
+    expect(alert).toHaveTextContent("Push remote's URL");
+    expect(alert).toHaveTextContent("start the Factory once");
+
+    await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(within(landing()).getByRole("status", { name: "Code Host" })).toHaveTextContent(
+        "Code Host: GitHub, repository acme/web.",
+      ),
+    );
+    expect(within(landing()).queryByRole("textbox", { name: "PAT variable" })).toBeNull();
+    expect((await fake.listProjects())[0].landing).toMatchObject({ method: "pull_request", push: false });
+
+    await fake.reportPushRemote("acme", "https://dev.azure.com/acme/shop/_git/web");
+    const pat = await within(landing()).findByRole("textbox", { name: "PAT variable" });
+    expect(pat).toHaveValue("ADO_PAT");
+    expect(within(landing()).getByRole("status", { name: "Code Host" })).toHaveTextContent(
+      "Azure Repos, repository acme/shop/web",
+    );
+    await userEvent.clear(pat);
+    await userEvent.type(pat, "REPOS_PAT");
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    await waitFor(async () =>
+      expect((await fake.listProjects())[0].landing.pat_env).toBe("REPOS_PAT"),
+    );
+  });
+
   it("shows Land per Spec on under Merge, disabled but kept under Branch, and saves it", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
@@ -158,6 +201,9 @@ describe("Project Options", () => {
       push: false,
       remote: "origin",
       land_per_spec: true,
+      code_host: "",
+      repository: "",
+      pat_env: "ADO_PAT",
     });
 
     await userEvent.type(remote, "upstream");
@@ -171,6 +217,9 @@ describe("Project Options", () => {
       push: true,
       remote: "upstream",
       land_per_spec: true,
+      code_host: "",
+      repository: "",
+      pat_env: "ADO_PAT",
     });
     expect(save).toBeDisabled();
   });
