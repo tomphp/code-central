@@ -31,7 +31,7 @@ const (
 // included, by Stage.
 var guideBudgets = map[string]int{
 	"grilling":       4200,
-	"spec":           3300,
+	"spec":           3450,
 	"tickets":        3500,
 	"implementation": 3300,
 	"map-chart":      4000,

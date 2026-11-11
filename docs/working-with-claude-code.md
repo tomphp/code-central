@@ -137,7 +137,7 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
 
    Check: the strip's Grilling segment is done, and the next Stage is waiting, `acme-shop-3 Spec: Format prices for display` in Ready.
 
-7. **Do the same for the spec and tickets Stages.** Each is one prompt, then a review in the UI. The session posts a Round only if it has a Question the earlier Stages didn't settle. If it does, answer it as in steps 4 and 5.
+7. **Do the same for the spec and tickets Stages.** Each is one prompt, then a review in the UI. The spec Stage's review has two choices, **Split into Tickets** and **Implement**, and the session's summary ends with a recommendation between them and a one-line reason based on the Spec's size. This run splits; for a small Spec, **Implement** builds it as one implementation Ticket and skips the tickets Stage. The session posts a Round only if it has a Question the earlier Stages didn't settle. If it does, answer it as in steps 4 and 5.
 
    ```text
    > /to-spec Claim the spec Stage of acme-shop-1 and write its Spec.
@@ -152,7 +152,7 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
    …
    ```
 
-   Check the Spec's body on `acme-shop-1`, then **Accept** `acme-shop-3`.
+   Check the Spec's body on `acme-shop-1`, then click **Split into Tickets** on `acme-shop-3`. (**Implement** instead accepts it, creates one implementation Ticket for the whole Spec and cancels the tickets Stage, which the strip shows as skipped; the Ticket is Ready straight away and also writes any new terms and ADRs. Go to step 8.)
 
    ```text
    > /to-tickets Claim the tickets Stage of acme-shop-1 and break its Spec into implementation Tickets.

@@ -27,7 +27,7 @@ This guide sets a repository up as a Project, so that agents can reach its Specs
    | --- | --- |
    | grilling Stage | `/grilling`, with `/domain-modeling` alongside |
    | spec Stage | `/to-spec` |
-   | tickets Stage | `/to-tickets` |
+   | tickets Stage (skipped when you choose **Implement** on the spec Stage's review) | `/to-tickets` |
    | implementation | `/implement` |
    | a Map's Charting (`wayfinder:chart`) | `/wayfinder` |
    | a Map's grilling (`wayfinder:grilling`) | `/grilling`, with `/domain-modeling` alongside |
