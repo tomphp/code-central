@@ -40,6 +40,7 @@ type CIOverview struct {
 type CIProjectStatus struct {
 	Project    string      `json:"project"`
 	Tracking   bool        `json:"tracking"`
+	Provider   string      `json:"provider"`
 	Repository string      `json:"repository"`
 	ProjectURL string      `json:"project_url"`
 	Watcher    WatcherView `json:"watcher"`
@@ -80,7 +81,7 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 			}
 		}
 		for _, p := range projects {
-			out.Projects = append(out.Projects, CIProjectStatus{Project: p.Key, Tracking: p.CI.Tracking, Repository: p.CI.Repository, ProjectURL: p.CI.ProjectURL, Watcher: c.watchers.view(watcherKey{WatcherCI, p.Key})})
+			out.Projects = append(out.Projects, CIProjectStatus{Project: p.Key, Tracking: p.CI.Tracking, Provider: string(p.CI.Provider), Repository: p.CI.Repository, ProjectURL: p.CI.ProjectURL, Watcher: c.watchers.view(watcherKey{WatcherCI, p.Key})})
 			for _, run := range latestAttempts(keptCIRuns(r.CIRuns(p.Key), now)) {
 				if in.Running {
 					if runningForTicket(r, p.Key, run) {

@@ -26,6 +26,11 @@ async function tracked(fake: FakeApi, key: string, repository = `${key}/web`) {
   await fake.setCITracking(key, { tracking: true, provider: "github_actions", repository, ignored_workflows: ["nightly.yml"], unblock_on_push: false });
 }
 
+// azure turns CI Tracking on for key, watching an Azure DevOps project.
+async function azure(fake: FakeApi, key: string) {
+  await fake.setCITracking(key, { tracking: true, provider: "azure_pipelines", repository: "", project_url: `https://dev.azure.com/${key}/web`, ignored_workflows: [], unblock_on_push: false });
+}
+
 // at is the fake's now moved by minutes.
 const at = (fake: FakeApi, minutes: number) => new Date(fake.now.getTime() + minutes * MINUTE).toISOString();
 
@@ -112,6 +117,14 @@ describe("the CI Watchers' statuses", () => {
     expect(watchers()).toHaveTextContent("Beta: Error. gh isn't logged in.Run gh auth login.");
   });
 
+  it("watches the project URL of an Azure Pipelines Project", async () => {
+    const fake = world();
+    await azure(fake, "acme");
+    await fake.reportCIWatcherStatus("acme", { state: "watching" });
+    renderApp(fake, "/?view=ci&project=acme");
+    expect(await within(ci()).findByText("Acme: Watching https://dev.azure.com/acme/web.")).toBeInTheDocument();
+  });
+
   it("says when the CI Watcher hasn't reported yet", async () => {
     const fake = world();
     await tracked(fake, "acme");
@@ -153,6 +166,31 @@ describe("the runs", () => {
 
     await userEvent.click(within(shown[2]).getByRole("link", { name: "acme-1" }));
     expect(window.location.search).toBe("?view=inbox&project=acme&ticket=acme-1");
+  });
+
+  it("labels an Azure Pipelines run's link from its Project's CI Provider", async () => {
+    const fake = world();
+    await azure(fake, "acme");
+    await tracked(fake, "beta");
+    await fake.reportCIRuns("acme", [{ ...run(fake, 1, "Build", -3), url: "https://dev.azure.com/acme/web/_build/results?buildId=1" }]);
+    fake.addTicket("beta", { title: "Other", state: "Accepted" });
+    await fake.reportCIRuns("beta", [{ ...run(fake, 2, "ci.yml", -3), ticket: "beta-1" }]);
+    renderApp(fake, "/?view=ci");
+    const [acme, beta] = (await rows()).sort((a, b) => a.getAttribute("aria-label")!.localeCompare(b.getAttribute("aria-label")!));
+    expect(within(acme).getByRole("link", { name: "View on Azure DevOps" })).toHaveAttribute("href", "https://dev.azure.com/acme/web/_build/results?buildId=1");
+    expect(within(beta).getByRole("link", { name: "View on GitHub" })).toBeInTheDocument();
+  });
+
+  it("shows a partially succeeded run as passed with a warning mark", async () => {
+    const fake = world();
+    await azure(fake, "acme");
+    await fake.reportCIRuns("acme", [run(fake, 1, "Build", -5, { finished: -3, conclusion: "partially_succeeded" })]);
+    renderApp(fake, "/?view=ci&project=acme");
+    const [row] = await rows();
+    const status = within(row).getByText(/Partially succeeded/);
+    expect(status).toHaveClass("ci-partially-succeeded");
+    expect(status).toHaveTextContent("⚠ Partially succeeded");
+    expect(within(row).getByRole("link", { name: "View on Azure DevOps" })).toBeInTheDocument();
   });
 
   it("names each run's Project in All Projects, and a CI Rule a run is tracked against", async () => {

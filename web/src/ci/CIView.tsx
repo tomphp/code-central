@@ -3,15 +3,15 @@
 // Watchers' statuses head it; then the runs, in-progress ones first, then
 // those finished in the last 7 days, each with its workflow, branch,
 // short commit, status, duration, the Ticket or CI Rule it is tracked
-// against and its GitHub link. Ignored runs are greyed and marked
+// against and its link to the CI system. Ignored runs are greyed and marked
 // ignored. It follows the live feed, and a run that changes pulses. Back
 // returns to the view it was opened from.
 import { useRef } from "react";
 import type { Api } from "../api/api";
-import { CI_VIEW_DAYS, type CIProjectStatus, type CIRunRow, type CIRunView, type ProjectRow } from "../api/types";
+import { CI_VIEW_DAYS, type CIProvider, type CIProjectStatus, type CIRunRow, type CIRunView, type ProjectRow } from "../api/types";
 import { usePulse } from "../focus/pulse";
 import { useFetch } from "../live";
-import { runStatus, shortCommit } from "../ticket/CISection";
+import { RunStatusBadge, runStatus, shortCommit } from "../ticket/CISection";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import "./ci.css";
 
@@ -99,7 +99,7 @@ function CIBody({ api, now, version, project, projectName, navigate }: CIBodyPro
                   <th scope="col" className="num">Duration</th>
                   <th scope="col">Tracked against</th>
                   {!project && <th scope="col">Project</th>}
-                  <th scope="col">GitHub</th>
+                  <th scope="col">Link</th>
                 </tr>
               </thead>
               <tbody>
@@ -107,6 +107,7 @@ function CIBody({ api, now, version, project, projectName, navigate }: CIBodyPro
                   <RunRow
                     key={runKey(r)}
                     run={r}
+                    provider={data.projects.find((p) => p.project === r.project)?.provider}
                     now={now}
                     joined={!first.current?.has(runKey(r))}
                     projectName={project ? undefined : projectName(r.project)}
@@ -135,7 +136,7 @@ interface WatcherStatusProps {
 
 // WatcherStatus is one Project's CI Watcher's status, as it last
 // reported it, or that the Project has CI Tracking off.
-function WatcherStatus({ status: { project, tracking, repository, watcher }, name, navigate }: WatcherStatusProps) {
+function WatcherStatus({ status: { project, tracking, provider, repository, project_url, watcher }, name, navigate }: WatcherStatusProps) {
   const options: Partial<UiLocation> = { view: "project-options", project };
   if (!tracking) {
     return (
@@ -152,7 +153,7 @@ function WatcherStatus({ status: { project, tracking, repository, watcher }, nam
     case "watching":
       return (
         <p>
-          {name}: Watching {repository}.
+          {name}: Watching {provider === "azure_pipelines" ? project_url : repository}.
         </p>
       );
     case "not_reported":
@@ -174,6 +175,7 @@ function WatcherStatus({ status: { project, tracking, repository, watcher }, nam
 
 interface RunRowProps {
   run: CIRunRow;
+  provider?: CIProvider;
   now: Date;
   // joined is a run that wasn't in the view's first read: it pulses once.
   joined: boolean;
@@ -184,7 +186,7 @@ interface RunRowProps {
 
 // RunRow is one run's row. It pulses when the run's status, conclusion
 // or attempt changes.
-function RunRow({ run, now, joined, projectName, navigate }: RunRowProps) {
+function RunRow({ run, provider, now, joined, projectName, navigate }: RunRowProps) {
   const status = runStatus(run);
   const pulse = usePulse(run.ignored ? "ci-row ignored" : "ci-row", `${run.status} ${run.conclusion ?? ""} ${run.attempt}`, joined);
   const tracked = run.ticket ?? run.rule;
@@ -201,7 +203,7 @@ function RunRow({ run, now, joined, projectName, navigate }: RunRowProps) {
         <code>{shortCommit(run.commit)}</code>
       </td>
       <td>
-        <span className={`ci-status ci-${status.replace(" ", "-")}`}>{status}</span>
+        <RunStatusBadge status={status} />
         {run.attempt > 1 && <span className="muted small"> · attempt {run.attempt}</span>}
         {run.ignored && <span className="label">ignored</span>}
       </td>
@@ -218,18 +220,19 @@ function RunRow({ run, now, joined, projectName, navigate }: RunRowProps) {
       </td>
       {projectName !== undefined && <td>{projectName}</td>}
       <td>
-        <RunGitHubLink run={run} />
+        <RunLink run={run} provider={provider} />
       </td>
     </tr>
   );
 }
 
-// RunGitHubLink opens a run on GitHub, in a new tab: in the CI view's
-// rows and the Activity Dashboard's CI Running entries.
-export function RunGitHubLink({ run, className }: { run: CIRunView; className?: string }) {
+// RunLink opens a run on its CI system, named from the Project's CI
+// Provider, in a new tab: in the CI view's rows and the Activity
+// Dashboard's CI Running entries.
+export function RunLink({ run, provider, className }: { run: CIRunView; provider?: CIProvider; className?: string }) {
   return (
     <a href={run.url} target="_blank" rel="noreferrer" className={className}>
-      View on GitHub
+      {provider === "azure_pipelines" ? "View on Azure DevOps" : "View on GitHub"}
     </a>
   );
 }
