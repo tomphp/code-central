@@ -20,6 +20,7 @@ func TestAnAcceptedSpecLandedTicketIsMergedIntoTheSpecBranchAndNotTheBase(t *tes
 	h := factorytest.New(t)
 	id, commit := requirementAccepted(h, "Add a feature", "feature.txt", "feature\n")
 	oldMain := h.Git("rev-parse", "main")
+	holdTicketsStage(t, h)
 
 	r := h.Start()
 	r.WaitForOutput(id + ": merged into spec/" + h.SpecID() + " at ")
@@ -93,6 +94,7 @@ func TestASecondTicketIsCutFromTheSpecBranchHoldingTheFirstOnes(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	_, _ = requirementAccepted(h, "First", "one.txt", "1\n")
+	holdTicketsStage(t, h)
 	r := h.Start()
 	r.WaitForOutput("merged into spec/" + h.SpecID())
 	tip := h.Git("rev-parse", "spec/"+h.SpecID())
@@ -118,6 +120,7 @@ func TestAnAcceptedTicketsWorktreeIsRemovedOnceItsSpecMergeIsRecorded(t *testing
 	head := h.GitIn(h.Worktree(id), "rev-parse", "HEAD")
 	h.Finished(id, id, head)
 	h.Accept(id)
+	holdTicketsStage(t, h)
 
 	r := h.Start()
 	r.WaitForOutput(id + ": Accepted: removed its worktree")

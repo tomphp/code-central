@@ -416,6 +416,20 @@ Switching from Branch to Merge merges, on the next poll, every Accepted Ticket y
 
 Under either method, you can still merge an In Review Ticket's branch yourself, and the Factory lands it.
 
+### Land per Spec
+
+Under Merge with Land per Spec on, a Requirement Spec's accepted work first gathers on its Spec Branch, `spec/<spec id>`. Once every Ticket on the Spec is Accepted, Done or Cancelled and its tickets Stage is finished, the Factory merges the Spec Branch into the base as `Merge spec <spec id>: <title>`, and lands every waiting Ticket at that commit. With Push on, it pushes the base once and lands them after the push succeeds; with CI Tracking on, the same pushed commit is reported for each and they all land once its CI is passed. Only the base is pushed.
+
+```text
+acme-shop-5: merged into spec/acme-shop-2 at 3b9e1f0c2d44
+acme-shop-2: merged spec/acme-shop-2 into main at 9ad0fd655dd2
+acme-shop-2: landing its Tickets: acme-shop-5, acme-shop-6
+acme-shop-5: landed on main at 9ad0fd655dd2
+acme-shop-6: landed on main at 9ad0fd655dd2
+```
+
+When the Spec Branch conflicts with the base, the Factory opens a Ready Ticket on the Spec, "Merge the base into the Spec Branch of <spec id>", and retries once it is accepted.
+
 ### Push
 
 Either Landing Method has a **Push** option, also on the Project Options page, which names a git remote (`origin` by default). The Factory checks that its repository has that remote, with `git remote get-url`. It refuses to start when it doesn't:

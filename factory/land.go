@@ -108,6 +108,7 @@ func (f *factory) land(ctx context.Context, landing core.LandingView) {
 			f.landAccepted(ctx, tk, landing)
 		}
 	}
+	f.landSpecs(ctx, landing)
 	f.detectHandMerges(ctx, landing)
 }
 
