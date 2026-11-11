@@ -48,10 +48,10 @@ var findingTools = map[string]tool{
 		}),
 	},
 	"get_spec": {
-		description: "Get a Spec with its body, a count of its Tickets per State, and its Tickets as find_tickets rows; parts (body, tickets, edits) and sections (heading texts) read less and add the body's outline; sections alone return only the body.",
+		description: "Get a Spec with its body, a count of its Tickets per State, and its Tickets as find_tickets rows; parts (body, tickets, edits, outline) and sections (heading texts) read less and add the body's outline, each heading with its Section's size in bytes; parts [\"outline\"] alone is the cheapest read; sections alone return only the body.",
 		schema: object(map[string]any{
 			"spec":     ref("The Spec."),
-			"parts":    list("Only these parts, any of body, tickets and edits; all three when left out, or only body with sections."),
+			"parts":    list("Only these parts, any of body, tickets, edits and outline; all three when left out, or only body with sections."),
 			"sections": list("Only the body's Sections under these headings, matched case-insensitively at any level."),
 		}, "spec"),
 		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.GetSpecInput) (any, error) {

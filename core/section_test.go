@@ -43,8 +43,8 @@ Second notes.`
 
 func TestTheOutlineListsEveryHeadingWithItsLevel(t *testing.T) {
 	want := []core.Heading{
-		{Text: "Title", Level: 1}, {Text: "Solution", Level: 2}, {Text: "Detail", Level: 3},
-		{Text: "Testing Decisions", Level: 2}, {Text: "Notes", Level: 2}, {Text: "Appendix", Level: 1}, {Text: "notes", Level: 2},
+		{Text: "Title", Level: 1, Size: 144}, {Text: "Solution", Level: 2, Size: 48}, {Text: "Detail", Level: 3, Size: 24},
+		{Text: "Testing Decisions", Level: 2, Size: 53}, {Text: "Notes", Level: 2, Size: 22}, {Text: "Appendix", Level: 1, Size: 35}, {Text: "notes", Level: 2, Size: 23},
 	}
 	if got := core.Outline(sectioned); !reflect.DeepEqual(got, want) {
 		t.Fatalf("outline %v, want %v", got, want)
@@ -66,7 +66,11 @@ func TestTheOutlineListsEveryHeadingWithItsLevel(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			if got := core.Outline(c.body); !reflect.DeepEqual(got, c.want) {
+			got := core.Outline(c.body)
+			for i := range got {
+				got[i].Size = 0 // sizes are checked above
+			}
+			if !reflect.DeepEqual(got, c.want) {
 				t.Fatalf("outline %v, want %v", got, c.want)
 			}
 		})
