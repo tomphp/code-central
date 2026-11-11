@@ -19,3 +19,8 @@ func (c *Client) SetModels(ctx context.Context, key string, in core.SetModelsInp
 func (c *Client) ReportModels(ctx context.Context, key string, in core.ReportModelsInput) (core.Written[core.ProjectView], error) {
 	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_models", in, in.Full)
 }
+
+// ReportHeartbeat is the Factory's report_heartbeat (Spec code-central-305).
+func (c *Client) ReportHeartbeat(ctx context.Context, key string, in core.ReportHeartbeatInput) (core.Written[core.ProjectView], error) {
+	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_heartbeat", in, in.Full)
+}

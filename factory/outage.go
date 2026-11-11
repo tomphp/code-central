@@ -144,6 +144,16 @@ func (f *factory) paused() bool {
 	return f.pause != nil
 }
 
+// pausedFor says what a paused Factory waits on and when it next resumes.
+func (f *factory) pausedFor() (reason string, until time.Time, ok bool) {
+	f.pauseMu.Lock()
+	defer f.pauseMu.Unlock()
+	if f.pause == nil {
+		return "", time.Time{}, false
+	}
+	return f.pause.reason, f.pause.until, true
+}
+
 // duePausedResumes says what the paused Factory is waiting on and takes
 // the cut-off Claims due a resume, up to free slots.
 func (f *factory) duePausedResumes(free int) []claim {
