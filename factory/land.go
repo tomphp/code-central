@@ -113,6 +113,9 @@ func (f *factory) land(ctx context.Context, landing core.LandingView, policy sto
 			return
 		}
 	}
+	if policy.CIGateHolds() {
+		f.reportTip(ctx, landing.Remote, policy)
+	}
 	for _, tk := range accepted {
 		if f.halted(ctx) || f.paused() {
 			return
@@ -441,6 +444,32 @@ func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, policy s
 		f.printf("%s: CI tracks %s at %s", tk.ID, branch, short(commit))
 	}
 	return true
+}
+
+// reportTip reports the remote's base tip, once the base is synced, as the
+// pushed commit of each Ticket waiting on CI (Accepted, or In Review and
+// merged by hand, with a pushed commit) whose latest pushed commit isn't
+// the tip but is an ancestor of it: the tip contains the Ticket's work,
+// and if it passes, the Ticket lands (ADR 0034). A tip that doesn't
+// contain the work, as after a force push, is reported to no Ticket.
+func (f *factory) reportTip(ctx context.Context, remote string, policy store.LandingPolicy) {
+	base := f.baseBranch()
+	tip, err := f.repository.commit("refs/remotes/" + remote + "/" + base)
+	if err != nil {
+		return
+	}
+	for _, tk := range f.landable(ctx, store.Accepted, store.InReview) {
+		if f.halted(ctx) || f.paused() {
+			return
+		}
+		if tk.PushedCommit == nil || tk.PushedCommit.Commit == tip || !f.repository.isAncestor(tk.PushedCommit.Commit, tip) {
+			continue
+		}
+		if tk.State == store.InReview && (tk.Commit == "" || !f.inBase(tk.Commit)) {
+			continue
+		}
+		f.reportPushed(ctx, tk, policy, base, tip)
+	}
 }
 
 // push pushes branch to remote unless its remote-tracking ref already
