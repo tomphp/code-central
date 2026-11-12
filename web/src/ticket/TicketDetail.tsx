@@ -132,9 +132,11 @@ export function TicketDetail({ api, project, ticket: t, now, reported, openSpec,
         </p>
       )}
       <ModelChoice api={api} project={project} ticket={t} reported={reported} />
-      {/* A CI failed Ticket's CI section is its action panel, with the
-          failure options, so it isn't shown here too. */}
-      {t.needs_me_reason !== "ci_failed" && t.needs_me_reason !== "ci_cancelled" && <CISection ticket={t} api={api} project={project} />}
+      {/* A Ticket in a CI item has the CI section in its action panel,
+          with the failure options, so it isn't shown here too. */}
+      {t.needs_me_reason !== "ci_failed" && t.needs_me_reason !== "ci_cancelled" && t.needs_me_reason !== "ci_unavailable" && (
+        <CISection ticket={t} api={api} project={project} />
+      )}
       {claims.length > 0 && (
         <ul aria-label="Claims" className="claims muted small">
           {claims.map((c) => (

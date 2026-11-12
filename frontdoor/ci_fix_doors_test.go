@@ -61,7 +61,7 @@ func TestACIFailedTicketIsOfferedBothFixesUnderMergeAndBranch(t *testing.T) {
 func TestTheHumanSendsACIFailedTicketBackToFix(t *testing.T) {
 	srv := newServer(t, failedCI)
 	out := httpOK(t, srv, sendBack("3", fixNote))
-	ticketAcknowledgement("acme-3", "Ready", "state", "ci_failure_options", "comments", "moves", "claimable", "needs_me_reason")(t, out)
+	ticketAcknowledgement("acme-3", "Ready", "state", "ci_item", "ci_failure_options", "comments", "moves", "claimable", "needs_me_reason")(t, out)
 
 	tk := ticket3(t, srv)
 	if m := tk.Moves[len(tk.Moves)-1]; m.From != store.Accepted || m.To != store.Ready || m.Actor != string(core.Human) {

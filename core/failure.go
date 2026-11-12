@@ -121,7 +121,7 @@ func (c *Core) GiveUp(ctx context.Context, key string, in GiveUpInput) (StopResu
 // it keeps its place near the front of the claim order.
 func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Written[TicketView], error) {
 	if ActorOf(ctx) == Human {
-		if err := c.refuseSendBackInGroup(key, in.Ticket); err != nil {
+		if err := c.refuseSendBackOfShared(key, in.Ticket); err != nil {
 			return Written[TicketView]{}, err
 		}
 	}
@@ -133,16 +133,32 @@ func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Writ
 	})
 }
 
-// refuseSendBackInGroup rejects the human's send_back of an Accepted
-// Ticket in a Spec's CI group (code-central-379): its work is in the base
-// with the Spec's, so there is nothing of its own to send back to fix.
-func (c *Core) refuseSendBackInGroup(key string, ref Ref) error {
+// refuseSendBackOfShared rejects the human's send_back of an Accepted
+// pushed Ticket that is Spec-landed (code-central-379), whose work is in
+// the base with the Spec's, so there is nothing of its own to send back
+// to fix, or whose CI failed or CI cancelled item lists other Tickets
+// too (code-central-432), which the commit's fix must cover as well.
+func (c *Core) refuseSendBackOfShared(key string, ref Ref) error {
 	return c.store.View(func(r store.Reader) error {
 		t, err := resolveTicket(r, key, "send_back", "ticket", ref)
-		if err != nil || len(ciGroup(r, key, t)) == 0 {
+		if err != nil || t.State != store.Accepted || len(t.PushedCommits) == 0 {
 			return nil // the send-back itself reports what is wrong
 		}
-		return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s's work is in the base with its Spec's, so there is no branch of its own to send back: land it anyway or open a fix Ticket", DisplayID(key, t.Number))}
+		p, _ := r.Project(key)
+		id := DisplayID(key, t.Number)
+		if specLanded(r, p.Landing, key, t) {
+			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s's work is in the base with its Spec's, so there is no branch of its own to send back: land it anyway or open a fix Ticket", id)}
+		}
+		if it, ok := c.ciItemOf(r, p, t); ok && it.reason != ReasonCIUnavailable && len(it.tickets) > 1 {
+			var others []string
+			for _, o := range it.tickets {
+				if o.Number != t.Number {
+					others = append(others, DisplayID(key, o.Number))
+				}
+			}
+			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s waits on %s with %s, so there is no fix of its own to send back: re-run the failed jobs, land them anyway or open a fix Ticket", id, shortCommit(it.commit), strings.Join(others, ", "))}
+		}
+		return nil
 	})
 }
 

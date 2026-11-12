@@ -148,14 +148,14 @@ func TestWithCITrackingASpecsTicketsShareOnePushedCommitAndLandOncePassed(t *tes
 	}
 	stillAccepted(t, h, r, a, "while CI hasn't passed")
 
+	// One shared run per commit, as the real CI Watcher reports, tracked
+	// against one of the Tickets; both read it.
 	reportRun(t, h, 1, a, pa.Commit, store.CICompleted, store.CIFailure)
-	reportRun(t, h, 4, b, pa.Commit, store.CICompleted, store.CIFailure)
 	stillAccepted(t, h, r, a, "with a failed CI result")
 	stillAccepted(t, h, r, b, "with a failed CI result")
 
-	// A re-run passes; the CI Watcher reports it against every Ticket.
+	// A re-run passes.
 	reportAttempt(t, h, 1, 2, a, pa.Commit, store.CICompleted, store.CISuccess)
-	reportAttempt(t, h, 4, 2, b, pa.Commit, store.CICompleted, store.CISuccess)
 	r.Poll()
 	h.WaitForState(a, store.Done)
 	h.WaitForState(b, store.Done)

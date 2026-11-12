@@ -157,7 +157,7 @@ describe("the CI failed panel", () => {
   it("says in its Needs Me row what failed", async () => {
     const fake = await world();
     const row = (await fake.needsMe()).groups[0].tickets[0];
-    expect(rowDetail(fake.now, row)).toBe("CI failed at abc1234: ci.yml");
+    expect(rowDetail(fake.now, row)).toBe("ci.yml failed");
   });
 
   it("prefills the note with the failed run's link and its failed jobs' names", async () => {

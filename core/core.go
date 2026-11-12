@@ -219,19 +219,22 @@ type TicketView struct {
 	CICommit    string           `json:"ci_commit,omitempty"`
 	CIRuns      []CIRunView      `json:"ci_runs,omitempty"`
 	// LandAnyway says the human accepted the latest pushed commit's
-	// failed CI result, so the Factory lands it (code-central-261).
+	// failed CI result, so the Factory lands it (code-central-261), on
+	// this Ticket or on another sharing the commit (code-central-432).
 	LandAnyway bool `json:"land_anyway,omitempty"`
 	// SpecLanded says Land per Spec covers the Ticket, and WaitingForSpec
 	// that it is Accepted and waits for its Spec to land (code-central-371).
 	// Computed on read.
 	SpecMerge  *SpecMergeView `json:"spec_merge,omitempty"`
 	SpecLanded bool           `json:"spec_landed,omitempty"`
-	// CIGroup is the Spec's Tickets waiting with this one on one pushed
-	// commit, the lead first (code-central-379).
-	CIGroup        *CIGroupView `json:"ci_group,omitempty"`
-	WaitingForSpec bool         `json:"waiting_for_spec,omitempty"`
+	// CIItem is the CI failed, CI cancelled or CI unavailable item that
+	// lists this Ticket, with every other Ticket waiting on its pushed
+	// commit (code-central-432); left out while none does.
+	CIItem         *CIItemView `json:"ci_item,omitempty"`
+	WaitingForSpec bool        `json:"waiting_for_spec,omitempty"`
 	// CIFailureOptions are the failure options, each an operation's name,
-	// the human may choose while the Ticket is CI failed; left out
+	// the human may choose on the Ticket's CI item while it is CI failed
+	// or CI cancelled, acting on every Ticket it lists; left out
 	// otherwise, and empty when none applies. Computed on read.
 	CIFailureOptions []string            `json:"ci_failure_options,omitzero"`
 	Claims           []ClaimView         `json:"claims,omitzero"`
@@ -654,8 +657,13 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	}
 	v.SpecLanded = specLanded(r, pr.Landing, key, t)
 	v.WaitingForSpec = waitingForSpec(r, pr.Landing, key, t)
-	v.CIGroup = ciGroupView(r, key, t)
-	v.LandAnyway, v.CIFailureOptions = choseLandAnyway(t), ciFailureOptions(r, key, t, c.now())
+	if it, ok := c.ciItemOf(r, pr, t); ok {
+		v.CIItem = ciItemView(r, pr, it)
+		if it.reason != ReasonCIUnavailable {
+			v.CIFailureOptions = v.CIItem.Options
+		}
+	}
+	v.LandAnyway = choseLandAnyway(pr, t)
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = c.reasonOf(r, key, t)

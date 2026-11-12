@@ -20,7 +20,7 @@ func init() {
 	cases["rerun_ci"] = opCase{
 		setup: failedCI,
 		ok:    call{http: rerunCI("3")},
-		check: ticketAcknowledgement("acme-3", "Accepted", "ci_result", "ci_failure_options", "needs_me_reason"),
+		check: ticketAcknowledgement("acme-3", "Accepted", "ci_result", "ci_item", "ci_failure_options", "needs_me_reason"),
 		full:  field("ci_result", "running"),
 		bad:   call{http: rerunCI("2")},
 		code:  core.ActionNotAllowed,

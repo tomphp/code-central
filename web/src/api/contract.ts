@@ -739,6 +739,14 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const failed = await d.api.getTicket("acme", id);
       expect(failed).toMatchObject({ ci_result: "failed", ci_failure_options: ["rerun_ci", "land_anyway", "send_back", "new_fix_ticket"] });
       expect(failed).not.toHaveProperty("land_anyway");
+      // The Ticket links its commit's CI item, one per pushed commit,
+      // listing the Tickets waiting on it (code-central-432).
+      expect(failed.ci_item).toEqual({
+        reason: "ci_failed",
+        commit: "abc123",
+        tickets: [{ id, title: "Login page", spec: failed.spec.id }],
+        options: ["rerun_ci", "land_anyway", "send_back", "new_fix_ticket"],
+      });
 
       // Under Branch the human's merge decides: no Land anyway.
       await d.api.setLandingMethod("acme", { method: "branch", push: true, remote: "origin" });
@@ -752,6 +760,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const chosen = await d.api.getTicket("acme", id);
       expect(chosen).toMatchObject({ ci_result: "failed", land_anyway: true });
       expect(chosen).not.toHaveProperty("ci_failure_options");
+      expect(chosen).not.toHaveProperty("ci_item");
       expect(chosen.needs_me_reason).not.toBe("ci_failed");
     });
 

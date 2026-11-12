@@ -536,29 +536,40 @@ export interface NeedsMeRow {
   // base_missing is the missing base's branch and the fix (base_missing,
   // whose row has no Ticket either).
   base_missing?: BaseMissing;
-  // ci_group is the Spec's Tickets waiting with this one, on a per-Spec CI
-  // item (code-central-379).
-  ci_group?: CIGroup;
+  // ci_item is the pushed commit's item: the Tickets waiting on it and
+  // the failure options (ci_failed, ci_cancelled and ci_unavailable, whose
+  // row is one per commit with no Ticket of its own, code-central-432).
+  ci_item?: CIItem;
 }
 
-// What failed on a CI failed Ticket's pushed commit: the commit and its
+// What failed on a CI failed item's pushed commit: the commit and its
 // failed runs' workflow file names.
 export interface CIFailureSummary {
   commit: string;
   workflows: string[];
 }
 
-// A failure option the human may choose for a CI failed Ticket, named for
-// its action (code-central-261, code-central-264, code-central-265).
-// A Spec's Tickets waiting on one pushed commit, the lead first. The lead
-// carries the CI reasons and its options act on all of them.
-export interface CIGroup {
-  spec: string;
-  lead: string;
-  waiting: number;
-  tickets: string[];
+// A CI failed, CI cancelled or CI unavailable item (code-central-432): one
+// per pushed commit, listing the Tickets waiting on it, accepted earliest
+// first, across Specs, and the failure options the human may choose,
+// which act on all of them; none while CI unavailable.
+export interface CIItem {
+  reason: "ci_failed" | "ci_cancelled" | "ci_unavailable";
+  commit: string;
+  tickets: CIItemTicket[];
+  options: CIFailureOption[];
 }
 
+// One Ticket a CI item lists, with its Spec.
+export interface CIItemTicket {
+  id: string;
+  title: string;
+  spec: string;
+}
+
+// A failure option the human may choose on a CI failed or CI cancelled
+// item, named for its action (code-central-261, code-central-264,
+// code-central-265).
 export type CIFailureOption = "rerun_ci" | "land_anyway" | "send_back" | "new_fix_ticket";
 
 // Why a Ticket is CI unavailable: the CI Watcher isn't Watching (with
@@ -911,15 +922,17 @@ export interface TicketView {
   ci_runs?: CIRunView[];
   // land_anyway says the human accepted the latest pushed commit's failed
   // CI result, so the Factory lands it; ci_failure_options are the
-  // failure options the human may choose while the Ticket is CI failed,
-  // left out otherwise (code-central-261).
+  // failure options the human may choose on the Ticket's CI item while
+  // it is CI failed or CI cancelled, acting on every Ticket it lists,
+  // left out otherwise (code-central-261, code-central-432).
   land_anyway?: boolean;
   ci_failure_options?: CIFailureOption[];
-  // waiting_for_spec is set while the Ticket is Accepted and waits for its
-  // Spec to land; ci_group, while it is one of several waiting on one
-  // pushed commit (code-central-371, code-central-379).
+  // ci_item is the CI item listing the Ticket, with every other Ticket
+  // waiting on its pushed commit; waiting_for_spec is set while the
+  // Ticket is Accepted and waits for its Spec to land (code-central-371,
+  // code-central-432).
+  ci_item?: CIItem;
   waiting_for_spec?: boolean;
-  ci_group?: CIGroup;
   claims: ClaimView[];
   rounds: RoundView[];
   failure_reports: FailureReportView[];
@@ -947,7 +960,7 @@ export interface TicketView {
 // a TicketAcknowledgement's changed lists them in.
 export const TICKET_FIELDS = [
   "id", "title", "state", "spec", "labels", "tags", "blocked_by", "blockers", "replacements",
-  "created", "updated", "description", "branch", "commit", "pushed_commit", "pull_request", "ci_result", "ci_commit", "ci_runs", "land_anyway", "ci_failure_options", "claims", "rounds", "failure_reports",
+  "created", "updated", "description", "branch", "commit", "pushed_commit", "pull_request", "ci_result", "ci_commit", "ci_runs", "land_anyway", "ci_item", "ci_failure_options", "claims", "rounds", "failure_reports",
   "comments", "moves", "edits", "blocked", "claimable", "silent_since", "needs_me_reason", "link",
   "awaiting_triage", "triage_actions",
 ] as const satisfies readonly (keyof TicketView)[];

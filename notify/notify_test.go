@@ -515,3 +515,19 @@ func TestATicketAlreadyCICancelledAtStartupIsInTheStartupSummary(t *testing.T) {
 	f.start()
 	f.want(notify.Notification{Title: "Code Central", Body: "1 Ticket needs you in acme", URL: base + "/?view=inbox"})
 }
+
+// Tickets waiting on one pushed commit share its CI failed item
+// (code-central-432), so its failure notifies once, not once per Ticket.
+func TestTicketsSharingAPushedCommitNotifyItsCIFailureOnce(t *testing.T) {
+	f := newFixture(t)
+	f.project("acme", 2)
+	f.accepted("acme", "2")
+	f.accepted("acme", "3")
+	f.pushed("acme", "2", "abc123")
+	f.pushed("acme", "3", "abc123")
+	f.start()
+	f.ciRun("acme", "2", "abc123", 1, store.CICompleted, store.CIFailure)
+	f.closeWindow()
+	f.want(notify.Notification{Title: "acme-2's CI failed", Body: "Task A", URL: base + "/?view=inbox&ticket=acme-2"})
+	f.wantNothing()
+}
