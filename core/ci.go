@@ -262,8 +262,8 @@ func (c *Core) checkCI(ctx context.Context, key string, ci store.CI) error {
 // ReportPushRemoteInput is the Factory's report_push_remote(url, full?).
 type ReportPushRemoteInput struct {
 	URL string `json:"url"`
-	// Base is the base branch the Factory lands into, which pull requests
-	// open into; left out by a Factory that doesn't report it.
+	// Base is ignored: the base is a Project setting, and an older Factory
+	// still sends it.
 	Base string `json:"base,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
@@ -278,9 +278,6 @@ func (c *Core) ReportPushRemote(_ context.Context, key string, in ReportPushRemo
 	}
 	return c.updateCI(key, in.Full, func(p *store.CI) error {
 		p.PushRemoteURL = withoutLogin(url)
-		if b := strings.TrimSpace(in.Base); b != "" {
-			p.PushRemoteBase = b
-		}
 		return nil
 	})
 }
