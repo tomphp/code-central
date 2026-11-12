@@ -419,7 +419,7 @@ Under either method, you can still merge an In Review Ticket's branch yourself, 
 
 ### Land per Spec
 
-Under Merge with Land per Spec on, the accepted work of every Spec but a Long-lived one first gathers on its Spec Branch, `spec/<spec id>`. A Long-lived Spec is one labelled `long-lived`, as a CI Rule's Spec and the Issues Spec are; its Tickets land one by one. Once every implementation Ticket on the Spec is Accepted, Done or Cancelled (and, for a Requirement, its tickets Stage is finished), and at least one is merged into the Spec Branch, the Factory merges the Spec Branch into the base as `Merge spec <spec id>: <title>`, and lands every waiting Ticket at that commit. With Push on, it pushes the base once and lands them after the push succeeds; with CI Tracking on, the same pushed commit is reported for each and they all land once its CI is passed. Only the base is pushed.
+Under Merge with Land per Spec on, the accepted work of every Spec but a Long-lived one first gathers on its Spec Branch, `spec/<spec id>`. A Long-lived Spec is one labelled `long-lived`, as a CI Rule's Spec and the Issues Spec are; its Tickets land one by one. Once every implementation Ticket on the Spec is Accepted, Done or Cancelled (and, for a Requirement, its tickets Stage is finished), and at least one is merged into the Spec Branch, the Factory merges the Spec Branch into the base as `Merge spec <spec id>: <title>`, and lands every waiting Ticket at that commit. With Push on, it pushes the base once and lands them after the push succeeds; with CI Tracking on, the same pushed commit is reported for each, they all land once its CI is passed, and if it fails they are listed on the commit's one CI failed item, with no Send back to fix, since their work is in the base with the Spec's. Only the base is pushed.
 
 ```text
 acme-shop-5: merged into spec/acme-shop-2 at 3b9e1f0c2d44
@@ -594,7 +594,7 @@ A branch you merge into the base by hand lands as under Branch, whether or not i
 
 With [CI Tracking](setting-up-a-project.md#watching-ci) on as well, the Factory reports each push it makes for a Ticket as the Ticket's pushed commit, once: the base's commit on the remote under Merge + Push, the branch's under Branch + Push. The CI Watcher then follows the runs GitHub starts for it.
 
-Under **Merge + Push**, CI gates landing, so Done means on the remote and green. The Factory merges, pushes and reports the pushed commit, and leaves the Ticket Accepted. On every later poll it reads the Ticket's CI result, and once it is passed, lands the Ticket at its pushed commit:
+Under **Merge + Push**, CI gates landing, so Done means on the remote and green. The Factory merges, pushes and reports the pushed commit, and leaves the Ticket Accepted. On every later poll it reads the Ticket's CI result, and once it is passed, lands the Ticket at the pushed commit that passed. A Ticket with several pushed commits since it was last sent back passes as soon as any of them does, an earlier one that goes green after a later one failed included:
 
 ```text
 acme-shop-5: pushed main to origin
@@ -603,16 +603,30 @@ acme-shop-5: waiting on CI at 9c41d07a2b18 before it lands
 acme-shop-5: landed on main at 9c41d07a2b18
 ```
 
-There is no State for waiting on CI: the Ticket stays Accepted, so a Ticket it blocks isn't claimed until its CI has passed and it lands. Waiting doesn't hold up the rest: the Factory goes on merging and pushing other accepted Tickets meanwhile, and each lands on its own pushed commit's CI result, not on a later push's. An In Review Ticket you merge by hand waits the same way, In Review.
+There is no State for waiting on CI: the Ticket stays Accepted, so a Ticket it blocks isn't claimed until its CI has passed and it lands. Waiting doesn't hold up the rest: the Factory goes on merging and pushing other accepted Tickets meanwhile. An In Review Ticket you merge by hand waits the same way, In Review.
 
-While its CI is running, an Accepted Ticket waiting on it doesn't show in Needs Me, however long CI takes. When no word of its CI comes for 10 minutes after its push, it shows in Needs Me as **CI unavailable**, so a broken CI Watcher doesn't hold up the work unseen. Its detail says which cause applies: the CI Watcher isn't Watching (with its error, which the CI section of Project Options also shows), or the CI Watcher is Watching but no CI Runs have been reported for the pushed commit, say because no workflow runs on the base or all that do are Ignored workflows:
+A later commit on the remote's base contains the work of every Ticket pushed before it, so the Factory reports it to them. On each poll, once the base is synced, it compares the remote's base tip with the latest pushed commit of each Ticket waiting on CI: when the tip is a different commit and the Ticket's pushed commit is an ancestor of it, the tip becomes the Ticket's newest pushed commit. That happens after another Ticket's merge is pushed, and after a commit pushed by hand from another clone. When the tip passes, every Ticket that was waiting lands at it:
+
+```text
+acme-shop-5: pushed main to origin
+acme-shop-5: CI tracks main at 9c41d07a2b18
+acme-shop-6: pushed main to origin
+acme-shop-6: CI tracks main at 4be0d2f713a6
+acme-shop-5: CI tracks main at 4be0d2f713a6
+acme-shop-5: landed on main at 4be0d2f713a6
+acme-shop-6: landed on main at 4be0d2f713a6
+```
+
+A Ticket whose pushed commit isn't in the tip, say after the base was force-pushed back, gets no report.
+
+While its CI is running, an Accepted Ticket waiting on it doesn't show in Needs Me, however long CI takes. When no word of its CI comes for 10 minutes after its push, its pushed commit shows in Needs Me as **CI unavailable**, so a broken CI Watcher doesn't hold up the work unseen. CI unavailable, CI failed and CI cancelled are each one Needs Me item per pushed commit, with no Ticket of its own: the item lists every Ticket waiting on the commit, across Specs, since under Merge + Push several Tickets come to share the base's tip. Its detail says which cause applies: the CI Watcher isn't Watching (with its error, which the CI section of Project Options also shows), or the CI Watcher is Watching but no CI Runs have been reported for the pushed commit, say because no workflow runs on the base or all that do are Ignored workflows:
 
 ```text
 CI Watcher not Watching: gh is logged out · 9c41d07 pushed 12m ago
 No CI Runs reported for 9c41d07 pushed 12m ago
 ```
 
-It leaves Needs Me once runs are reported or the CI Watcher is Watching again, or when the gate lifts.
+The item leaves Needs Me once runs are reported or the CI Watcher is Watching again, or when the gate lifts.
 
 When the CI result is failed, the Ticket stays Accepted, and the Factory says so once:
 
@@ -620,24 +634,24 @@ When the CI result is failed, the Ticket stays Accepted, and the Factory says so
 acme-shop-5: CI failed at 9c41d07a2b18, so it stays Accepted
 ```
 
-It shows in Needs Me as **CI failed**, with one Notification, until you choose what to do. Its panel, in the Inbox and in Focus Mode, shows its CI section and the failure options. **Land anyway** accepts the failure, say a flake unrelated to the work, and the Factory lands the Ticket at its pushed commit on its next poll:
+The pushed commit shows in Needs Me as **CI failed**, one item listing every Ticket waiting on it, with one Notification, until you choose what to do. The item's panel, in the Inbox and in Focus Mode, shows the CI section and the failure options; each listed Ticket's own view shows its CI result and links the item. Your choice is stored once for the commit and acts on every listed Ticket. **Land anyway** accepts the failure, say a flake unrelated to the work, and the Factory lands each of them at the pushed commit on its next poll:
 
 ```text
 acme-shop-5: landing anyway at 9c41d07a2b18, as you chose, though its CI failed
 acme-shop-5: landed on main at 9c41d07a2b18
 ```
 
-Land anyway holds for that pushed commit only: if the Ticket is pushed again, the new push's CI result decides.
+Land anyway holds for that pushed commit only: if a listed Ticket is pushed again, the new push's CI result decides.
 
-**Re-run failed jobs**, for a failure that may be a flake, asks the CI Watcher to re-run each failed run's failed jobs. The Ticket leaves Needs Me and its CI result reads running at once; on its next poll the CI Watcher asks GitHub for the re-run, then reports each run's new attempt, and the Ticket lands if the new attempts pass. If one fails again, the Ticket is CI failed again, with another Notification. If GitHub refuses the re-run, say for a run too old to re-run, the request lapses after 10 minutes and the Ticket is CI failed again, so you can choose another option.
+**Re-run failed jobs**, for a failure that may be a flake, asks the CI Watcher to re-run each failed run's failed jobs, once for the commit. The item leaves Needs Me and every listed Ticket's CI result reads running at once; on its next poll the CI Watcher asks GitHub for the re-run, then reports each run's new attempt, and the Tickets land if the new attempts pass. If one fails again, the commit is CI failed again, with another Notification. If GitHub refuses the re-run, say for a run too old to re-run, the request lapses after 10 minutes and the commit is CI failed again, so you can choose another option.
 
 The last two options fix the failure forward. Under Merge + Push the failed work is already on the remote's base, so neither reverts it. Both carry a note, prefilled with the failed run's link, its failed jobs' names and the `gh run view <run> --log-failed` command for their logs:
 
-- **Send back to fix** sends the Ticket back to Ready with the note. The next Claim works on the same branch, in the same worktree, and finishes it for you to review again. When you accept it, the Factory merges and pushes it again, and the new pushed commit's CI result decides; the old one's runs stay on the Ticket, folded under "Earlier pushes".
-- **New fix Ticket** opens a Ready Ticket on the same Spec, titled `Fix the CI failure of acme-shop-5: …`, with the note as its description, and accepts the failed CI result as Land anyway does: the Factory lands the failed Ticket on its next poll, and an agent picks up the fix Ticket. A comment on the failed Ticket names the fix Ticket.
+- **Send back to fix** sends the Ticket back to Ready with the note. It is offered only when the item lists exactly one Ticket, and not a Spec-landed one: a commit several Tickets wait on has no one branch to fix it on. The next Claim works on the same branch, in the same worktree, and finishes it for you to review again. When you accept it, the Factory merges and pushes it again, and the new pushed commit's CI result decides; the old one's runs stay on the Ticket, folded under "Earlier pushes".
+- **New fix Ticket** opens a Ready Ticket on the Project's **CI Fixes** Spec, a Long-lived Spec Code Central creates the first time you use it, titled `Fix the CI failure of acme-shop-5: …`, with the note as its description. It doesn't accept the failed CI result: the listed Tickets stay Accepted and the item leaves Needs Me while the fix Ticket is open, and when the fix's push passes CI the listed Tickets land with it. If you cancel the fix Ticket while the commit is still failing, the item returns. An agent picks up the fix Ticket, and a comment on the Ticket you chose it on names it.
 
 The gate holds only while Merge, Push and CI Tracking are all on. Turning CI Tracking off, turning Push off, or switching to Leave as a branch lifts it, and the Factory lands every Ticket waiting on CI on its next poll.
 
-A cancelled run, say one you or GitHub cancelled, is not a failure, so the web UI shows it in neutral grey, labelled **cancelled**, in the CI view, the Ticket's CI section and its CI badge, where a failed run stays red. The Ticket stays Accepted, the Factory prints `CI cancelled at …, so it stays Accepted`, and it shows in Needs Me as **CI cancelled**, with no failure-specific Notification, offering **Re-run**, **Land anyway** (under Merge + Push) and **Send back to fix**, but no New fix Ticket. Nothing re-runs by itself: Re-run asks the CI Watcher to re-run the cancelled run, and the Ticket's CI result reads passed if the new attempt passes.
+A cancelled run, say one you or GitHub cancelled, is not a failure, so the web UI shows it in neutral grey, labelled **cancelled**, in the CI view, the Ticket's CI section and its CI badge, where a failed run stays red. The Ticket stays Accepted, the Factory prints `CI cancelled at …, so it stays Accepted`, and the pushed commit shows in Needs Me as **CI cancelled**, one item listing the Tickets waiting on it, with no failure-specific Notification, offering **Re-run**, **Land anyway** (under Merge + Push) and **Send back to fix** (for one Ticket alone), but no New fix Ticket. Nothing re-runs by itself: Re-run asks the CI Watcher to re-run the cancelled run, and the listed Tickets' CI result reads passed if the new attempt passes.
 
-Under **Branch + Push**, CI only informs you: the Factory lands the Ticket when it sees your merge, whatever its CI result, so merging stays your decision. A failed CI result still shows the Ticket in Needs Me as **CI failed**, with Re-run failed jobs, Send back to fix and New fix Ticket but without Land anyway: merging the branch is how you land it anyway.
+Under **Branch + Push**, CI only informs you: the Factory lands the Ticket when it sees your merge, whatever its CI result, so merging stays your decision. A failed CI result still shows the pushed commit in Needs Me as **CI failed**, listing the Ticket, with Re-run failed jobs, Send back to fix and New fix Ticket but without Land anyway: merging the branch is how you land it anyway.

@@ -113,6 +113,9 @@ func (f *factory) land(ctx context.Context, landing core.LandingView, policy sto
 			return
 		}
 	}
+	if policy.CIGateHolds() {
+		f.reportTip(ctx, landing.Remote, policy)
+	}
 	for _, tk := range accepted {
 		if f.halted(ctx) || f.paused() {
 			return
@@ -327,8 +330,8 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, landing 
 // landPushed lands tk at commit, which is in the base. Under Merge with
 // Push on, it first makes sure the remote's base holds commit, and leaves
 // tk where it is, commented, when the push fails. With CI Tracking on as
-// well, the CI gate holds: tk lands only at its pushed commit once that
-// commit's CI result is passed (ADR 0019).
+// well, the CI gate holds: tk lands only once its CI result is passed,
+// at the pushed commit that passed (ADR 0019, ADR 0034).
 func (f *factory) landPushed(ctx context.Context, tk core.TicketView, landing core.LandingView, policy store.LandingPolicy, base, commit string) {
 	if !policy.PushesBase() {
 		f.landAt(ctx, tk, commit)
@@ -379,14 +382,14 @@ func (f *factory) pushedBase(tk core.TicketView, remote, base, commit string) bo
 	return f.repository.isAncestor(commit, pushed) && f.repository.isAncestor(pushed, "refs/remotes/"+remote+"/"+base)
 }
 
-// landOnCI lands a Ticket the CI gate holds at its pushed commit once
-// its CI result is passed, or once the human chose Land anyway on a
-// failed one. Until then it stays where it is, with a line for each CI
-// result it waits on.
+// landOnCI lands a Ticket the CI gate holds once its CI result is
+// passed, at the pushed commit that passed, or once the human chose Land
+// anyway on a failed one, at its latest. Until then it stays where it
+// is, with a line for each CI result it waits on.
 func (f *factory) landOnCI(ctx context.Context, tk core.TicketView) {
 	pushed := tk.PushedCommit.Commit
 	if tk.CIResult == core.CIPassed {
-		f.landAt(ctx, tk, pushed)
+		f.landAt(ctx, tk, tk.CICommit)
 		return
 	}
 	if (tk.CIResult == core.CIFailed || tk.CIResult == core.CICancelled) && tk.LandAnyway {
@@ -441,6 +444,32 @@ func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, policy s
 		f.printf("%s: CI tracks %s at %s", tk.ID, branch, short(commit))
 	}
 	return true
+}
+
+// reportTip reports the remote's base tip, once the base is synced, as the
+// pushed commit of each Ticket waiting on CI (Accepted, or In Review and
+// merged by hand, with a pushed commit) whose latest pushed commit isn't
+// the tip but is an ancestor of it: the tip contains the Ticket's work,
+// and if it passes, the Ticket lands (ADR 0034). A tip that doesn't
+// contain the work, as after a force push, is reported to no Ticket.
+func (f *factory) reportTip(ctx context.Context, remote string, policy store.LandingPolicy) {
+	base := f.baseBranch()
+	tip, err := f.repository.commit("refs/remotes/" + remote + "/" + base)
+	if err != nil {
+		return
+	}
+	for _, tk := range f.landable(ctx, store.Accepted, store.InReview) {
+		if f.halted(ctx) || f.paused() {
+			return
+		}
+		if tk.PushedCommit == nil || tk.PushedCommit.Commit == tip || !f.repository.isAncestor(tk.PushedCommit.Commit, tip) {
+			continue
+		}
+		if tk.State == store.InReview && (tk.Commit == "" || !f.inBase(tk.Commit)) {
+			continue
+		}
+		f.reportPushed(ctx, tk, policy, base, tip)
+	}
 }
 
 // push pushes branch to remote unless its remote-tracking ref already

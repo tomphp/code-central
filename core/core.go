@@ -208,29 +208,35 @@ type TicketView struct {
 	Branch string `json:"branch,omitempty"`
 	Commit string `json:"commit,omitempty"`
 	// PushedCommit is the latest commit the Factory pushed for the Ticket
-	// while CI Tracking was on, and CIResult the CI result of its runs;
-	// both left out while it has none. CIRuns are every CI Run tracked
+	// while CI Tracking was on, CIResult the Ticket's CI result and
+	// CICommit the pushed commit it comes from: under the CI gate one
+	// that passed, if any did, else the latest (code-central-430). All
+	// are left out while it has none. CIRuns are every CI Run tracked
 	// against it, the latest pushed commit's first. Computed on read.
 	PushedCommit *PushedCommitView `json:"pushed_commit,omitempty"`
 	// PullRequest is the pull request the Pull Request Watcher reported
 	// for the Ticket's pushed work; left out until it has one.
 	PullRequest *PullRequestView `json:"pull_request,omitempty"`
 	CIResult    CIResult         `json:"ci_result,omitempty"`
+	CICommit    string           `json:"ci_commit,omitempty"`
 	CIRuns      []CIRunView      `json:"ci_runs,omitempty"`
 	// LandAnyway says the human accepted the latest pushed commit's
-	// failed CI result, so the Factory lands it (code-central-261).
+	// failed CI result, so the Factory lands it (code-central-261), on
+	// this Ticket or on another sharing the commit (code-central-432).
 	LandAnyway bool `json:"land_anyway,omitempty"`
 	// SpecLanded says Land per Spec covers the Ticket, and WaitingForSpec
 	// that it is Accepted and waits for its Spec to land (code-central-371).
 	// Computed on read.
 	SpecMerge  *SpecMergeView `json:"spec_merge,omitempty"`
 	SpecLanded bool           `json:"spec_landed,omitempty"`
-	// CIGroup is the Spec's Tickets waiting with this one on one pushed
-	// commit, the lead first (code-central-379).
-	CIGroup        *CIGroupView `json:"ci_group,omitempty"`
-	WaitingForSpec bool         `json:"waiting_for_spec,omitempty"`
+	// CIItem is the CI failed, CI cancelled or CI unavailable item that
+	// lists this Ticket, with every other Ticket waiting on its pushed
+	// commit (code-central-432); left out while none does.
+	CIItem         *CIItemView `json:"ci_item,omitempty"`
+	WaitingForSpec bool        `json:"waiting_for_spec,omitempty"`
 	// CIFailureOptions are the failure options, each an operation's name,
-	// the human may choose while the Ticket is CI failed; left out
+	// the human may choose on the Ticket's CI item while it is CI failed
+	// or CI cancelled, acting on every Ticket it lists; left out
 	// otherwise, and empty when none applies. Computed on read.
 	CIFailureOptions []string            `json:"ci_failure_options,omitzero"`
 	Claims           []ClaimView         `json:"claims,omitzero"`
@@ -283,9 +289,8 @@ type TicketRow struct {
 	// LatestEvent is the latest Session Event of the Ticket's live Claim,
 	// shown short; left out when there is none.
 	LatestEvent *LatestEvent `json:"latest_event,omitempty"`
-	// CIResult is the CI result of the Ticket's latest pushed commit, for
-	// its row's badge; left out for a Ticket never pushed while CI
-	// Tracking was on.
+	// CIResult is the Ticket's CI result, for its row's badge; left out
+	// for a Ticket never pushed while CI Tracking was on.
 	CIResult CIResult `json:"ci_result,omitempty"`
 	// PullRequest is the Ticket's pull request, for its row's badge; left
 	// out until the Pull Request Watcher reports one.
@@ -646,7 +651,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	for _, m := range t.Moves {
 		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit})
 	}
-	v.PushedCommit, v.CIResult, v.CIRuns = ticketCI(r, key, t, c.now())
+	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = ticketCI(r, key, t, c.now())
 	v.PullRequest = pullRequestView(t.PullRequest)
 	pr, _ := r.Project(key)
 	if t.SpecMerge != nil {
@@ -654,8 +659,13 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	}
 	v.SpecLanded = specLanded(r, pr.Landing, key, t)
 	v.WaitingForSpec = waitingForSpec(r, pr.Landing, key, t)
-	v.CIGroup = ciGroupView(r, key, t)
-	v.LandAnyway, v.CIFailureOptions = choseLandAnyway(t), ciFailureOptions(r, key, t, c.now())
+	if it, ok := c.ciItemOf(r, pr, t); ok {
+		v.CIItem = ciItemView(r, pr, it)
+		if it.reason != ReasonCIUnavailable {
+			v.CIFailureOptions = v.CIItem.Options
+		}
+	}
+	v.LandAnyway = choseLandAnyway(pr, t)
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = c.reasonOf(r, key, t)

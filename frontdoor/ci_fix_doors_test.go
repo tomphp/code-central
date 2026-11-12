@@ -15,14 +15,14 @@ import (
 // Send back to fix and New fix Ticket (code-central-264): the failure
 // options that fix forward. send_back gains the human's row from
 // Accepted to Ready; new_fix_ticket, the human's, opens a Ready Ticket on
-// the same Spec and lands the failed one as Land anyway does.
+// the CI Fixes Spec and leaves the failed one waiting (code-central-433).
 func init() {
 	cases["new_fix_ticket"] = opCase{
 		setup: failedCI,
 		ok:    call{http: newFixTicket("3", fixNote)},
-		check: ticketAcknowledgement("acme-4", "Ready", "title", "state", "spec", "description", "claimable"),
+		check: ticketAcknowledgement("acme-5", "Ready", "title", "state", "spec", "description", "claimable"),
 		full: func(t *testing.T, out map[string]any) {
-			field("id", "acme-4")(t, out)
+			field("id", "acme-5")(t, out)
 			field("state", "Ready")(t, out)
 		},
 		bad:  call{http: newFixTicket("2", fixNote)},
@@ -61,7 +61,7 @@ func TestACIFailedTicketIsOfferedBothFixesUnderMergeAndBranch(t *testing.T) {
 func TestTheHumanSendsACIFailedTicketBackToFix(t *testing.T) {
 	srv := newServer(t, failedCI)
 	out := httpOK(t, srv, sendBack("3", fixNote))
-	ticketAcknowledgement("acme-3", "Ready", "state", "ci_failure_options", "comments", "moves", "claimable", "needs_me_reason")(t, out)
+	ticketAcknowledgement("acme-3", "Ready", "state", "ci_item", "ci_failure_options", "comments", "moves", "claimable", "needs_me_reason")(t, out)
 
 	tk := ticket3(t, srv)
 	if m := tk.Moves[len(tk.Moves)-1]; m.From != store.Accepted || m.To != store.Ready || m.Actor != string(core.Human) {
@@ -118,26 +118,26 @@ func TestTheWorkflowHasTheHumansSendBackFromAccepted(t *testing.T) {
 	}
 }
 
-func TestNewFixTicketOpensAReadyTicketOnTheSameSpecAndLandsTheFailedOne(t *testing.T) {
+func TestNewFixTicketOpensAReadyTicketOnTheCIFixesSpecAndLeavesTheFailedOneWaiting(t *testing.T) {
 	srv := newServer(t, failedCI)
 	httpOK(t, srv, newFixTicket("3", fixNote))
 
-	fix, err := srv.Client.GetTicket(context.Background(), "acme", "acme-4")
+	fix, err := srv.Client.GetTicket(context.Background(), "acme", "acme-5")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fix.State != store.Ready || fix.Spec.ID != "acme-1" || !strings.Contains(fix.Description, fixNote) || !strings.Contains(fix.Description, "acme-3") {
-		t.Fatalf("fix Ticket %s on %s with description %q, want Ready on acme-1 carrying the note and naming acme-3", fix.State, fix.Spec.ID, fix.Description)
+	if fix.State != store.Ready || fix.Spec.ID != "acme-4" || fix.Spec.Title != "CI Fixes" || !strings.Contains(fix.Description, fixNote) || !strings.Contains(fix.Description, "acme-3") {
+		t.Fatalf("fix Ticket %s on %s %q with description %q, want Ready on the CI Fixes Spec acme-4 carrying the note and naming acme-3", fix.State, fix.Spec.ID, fix.Spec.Title, fix.Description)
 	}
 	if !strings.Contains(fix.Title, "acme-3") {
 		t.Fatalf("fix Ticket titled %q, want it naming acme-3", fix.Title)
 	}
 
 	tk := ticket3(t, srv)
-	if tk.State != store.Accepted || !tk.LandAnyway || tk.CIFailureOptions != nil {
-		t.Fatalf("%s, land anyway %v, options %v: want it Accepted with the same acceptance as Land anyway", tk.State, tk.LandAnyway, tk.CIFailureOptions)
+	if tk.State != store.Accepted || tk.LandAnyway || tk.CIFailureOptions != nil {
+		t.Fatalf("%s, land anyway %v, options %v: want it Accepted, not landing anyway, with no options while the fix Ticket is open", tk.State, tk.LandAnyway, tk.CIFailureOptions)
 	}
-	if c := tk.Comments[len(tk.Comments)-1]; !strings.Contains(c.Body, "acme-4") {
+	if c := tk.Comments[len(tk.Comments)-1]; !strings.Contains(c.Body, "acme-5") {
 		t.Fatalf("comment %q, want it naming the fix Ticket", c.Body)
 	}
 	if row, ok := needsMeRowOf(t, srv, "acme-3"); ok {

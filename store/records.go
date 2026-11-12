@@ -43,11 +43,25 @@ type projectFile struct {
 	ReportedModels *reportedModelsFile `yaml:"reported_models,omitempty"`
 	// StageGuides is left out while every optional line is on.
 	StageGuides *stageGuidesFile `yaml:"stage_guides,omitempty"`
+	// CIResponses is left out while there are none.
+	CIResponses []ciResponseFile `yaml:"ci_responses,omitempty"`
+	// CIFixesSpec is the CI Fixes Spec's number, left out until it exists.
+	CIFixesSpec int `yaml:"ci_fixes_spec,omitempty"`
 }
 
 // stageGuidesFile is a Project's Stage Guides settings.
 type stageGuidesFile struct {
 	SubagentExplorationOff bool `yaml:"subagent_exploration_off,omitempty"`
+}
+
+// ciResponseFile is the human's response to one pushed commit's CI
+// result.
+type ciResponseFile struct {
+	Commit     string           `yaml:"commit"`
+	LandAnyway string           `yaml:"land_anyway,omitempty"`
+	Rerun      string           `yaml:"rerun,omitempty"`
+	Reruns     []runAttemptFile `yaml:"reruns,omitempty"`
+	FixTicket  int              `yaml:"fix_ticket,omitempty"`
 }
 
 // reportedModelsFile is what the Factory reported its claude accepts.
@@ -561,7 +575,7 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
 			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models),
-			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides)})
+			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), GHPath: r.GHPath})
@@ -771,6 +785,47 @@ func decodeModels(f modelsFile) (Models, string, error) {
 		return slices.Index(ModelKinds, a.Kind) - slices.Index(ModelKinds, b.Kind)
 	})
 	return m, "", nil
+}
+
+// encodeCIResponses is p's CI responses as project.yaml holds them.
+func encodeCIResponses(rs []CIResponse) []ciResponseFile {
+	var out []ciResponseFile
+	for _, r := range rs {
+		f := ciResponseFile{Commit: r.Commit, LandAnyway: formatOptionalTime(r.LandAnyway), Rerun: formatOptionalTime(r.Rerun), FixTicket: r.FixTicket}
+		for _, ra := range r.Reruns {
+			f.Reruns = append(f.Reruns, runAttemptFile{ID: ra.ID, Attempt: ra.Attempt})
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+// decodeCIResponses checks fs as load does, returning the field, relative
+// to ci_responses, with the error.
+func decodeCIResponses(fs []ciResponseFile) ([]CIResponse, string, error) {
+	var out []CIResponse
+	for i, f := range fs {
+		r := CIResponse{Commit: f.Commit, FixTicket: f.FixTicket}
+		if r.Commit == "" {
+			return nil, fmt.Sprintf("[%d].commit", i), errors.New("required")
+		}
+		var err error
+		if f.LandAnyway != "" {
+			if r.LandAnyway, err = parseTime(f.LandAnyway); err != nil {
+				return nil, fmt.Sprintf("[%d].land_anyway", i), err
+			}
+		}
+		if f.Rerun != "" {
+			if r.Rerun, err = parseTime(f.Rerun); err != nil {
+				return nil, fmt.Sprintf("[%d].rerun", i), err
+			}
+		}
+		for _, ra := range f.Reruns {
+			r.Reruns = append(r.Reruns, CIRunAttempt{ID: ra.ID, Attempt: ra.Attempt})
+		}
+		out = append(out, r)
+	}
+	return out, "", nil
 }
 
 // encodeReportedModels leaves the Reported Models out of project.yaml

@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/tomoram/code-central/store"
@@ -51,17 +52,23 @@ type CIRerun struct {
 	Requested time.Time `json:"requested"`
 }
 
-// ciReruns is every Re-run request waiting at now, by Ticket, then run. A
-// Cancelled Ticket's are left out.
+// ciReruns is every Re-run request waiting at now, by Ticket, then run,
+// once per run: Tickets sharing a pushed commit share its request, so
+// the CI Watcher asks for each run once (code-central-432). A Cancelled
+// Ticket's are left out.
 func ciReruns(r store.Reader, key string, now time.Time) []CIRerun {
 	out := []CIRerun{}
+	p, _ := r.Project(key)
 	for _, t := range r.Tickets(key) {
 		if len(t.PushedCommits) == 0 || t.State == store.Cancelled {
 			continue
 		}
-		latest := latestPushed(t)
+		latest := respondedLatest(p, t)
 		mine, _ := ticketRuns(r, key, t, now)
 		for _, a := range pendingReruns(latest, mine, now) {
+			if slices.ContainsFunc(out, func(x CIRerun) bool { return x.Commit == latest.Commit && x.ID == a.ID && x.Attempt == a.Attempt }) {
+				continue
+			}
 			out = append(out, CIRerun{Ticket: DisplayID(key, t.Number), Commit: latest.Commit, ID: a.ID, Attempt: a.Attempt, Requested: latest.Rerun})
 		}
 	}

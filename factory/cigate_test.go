@@ -110,6 +110,30 @@ func TestUnderMergeAndPushWithCITrackingACancelledCIResultDoesNotLand(t *testing
 	r.WaitForOutput(id + ": CI cancelled at " + pushed[:12])
 }
 
+// A Ticket's CI result is passed once any of its pushed commits since it
+// last moved back to Ready passed (code-central-430), and it lands at the
+// one that passed.
+func TestUnderTheCIGateATicketLandsAtAnEarlierPushedCommitThatPassedAfterALaterOneFailed(t *testing.T) {
+	t.Parallel()
+	h, remote, r := gatedHarness(t)
+	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
+	reportRun(t, h, 1, id, pushed, store.CIInProgress, "")
+	later := h.CommitOn("later", "later.txt", "later\n")
+	h.Git("push", "-q", remote.Path, "later:refs/heads/main")
+	if _, err := h.Server.Client.ReportPushedCommit(context.Background(), h.Project, core.ReportPushedCommitInput{Ticket: core.Ref(id), Commit: later, Branch: "main"}); err != nil {
+		t.Fatal(err)
+	}
+	reportRun(t, h, 2, id, later, store.CICompleted, store.CIFailure)
+	stillAccepted(t, h, r, id, "with its latest pushed commit failed and the earlier one running")
+
+	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CISuccess)
+	r.Poll()
+	tk := h.WaitForState(id, store.Done)
+	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != pushed {
+		t.Errorf("landed with %q, want the pushed commit that passed, %s", m.Commit, pushed)
+	}
+}
+
 // Land anyway (code-central-261): the human accepts the failed CI
 // result, and the Factory lands the Ticket at its pushed commit on its
 // next poll.
@@ -190,20 +214,13 @@ func TestTheGateLiftingLandsAWaitingTicketOnTheNextPoll(t *testing.T) {
 func TestATicketWaitingOnCIDoesNotStopAnotherFromMergingAndPushing(t *testing.T) {
 	t.Parallel()
 	h, remote, r := gatedHarness(t)
-	first, firstPushed := gated(t, h, r, "Add a feature", "feature.txt")
+	first, _ := gated(t, h, r, "Add a feature", "feature.txt")
 	second, secondPushed := gated(t, h, r, "Add another", "another.txt")
 	if got := remote.Git("rev-parse", "main"); got != secondPushed {
 		t.Fatalf("the remote's main is at %q, want the second Ticket's merge %s pushed", got, secondPushed)
 	}
-	stillAccepted(t, h, r, first, "while its own CI Run is running")
-	if tk := h.Ticket(first); tk.PushedCommit == nil || tk.PushedCommit.Commit != firstPushed {
-		t.Fatalf("%s's pushed commit is %+v, want its own %s, not the later push's", first, tk.PushedCommit, firstPushed)
-	}
-
-	reportRun(t, h, 2, second, secondPushed, store.CICompleted, store.CISuccess)
-	r.Poll()
-	h.WaitForState(second, store.Done)
-	stillAccepted(t, h, r, first, "while its own CI Run is running")
+	stillAccepted(t, h, r, first, "while its CI Run is running")
+	stillAccepted(t, h, r, second, "while its CI Run is running")
 }
 
 func TestUnderBranchAndPushTheHumansMergeLandsWhateverTheCIResult(t *testing.T) {
@@ -327,9 +344,10 @@ func sentBackCIFailure(t *testing.T, h *factorytest.Harness, r *factorytest.Runn
 	return id, failed
 }
 
-// New fix Ticket (code-central-264): a Ready Ticket on the same Spec
-// carries the failure, and the failed Ticket lands on the next poll.
-func TestAfterNewFixTicketTheFailedTicketLandsOnTheNextPoll(t *testing.T) {
+// New fix Ticket (code-central-433): a Ready Ticket on the CI Fixes Spec
+// carries the failure, and the failed Ticket keeps waiting: it doesn't
+// land on the next poll.
+func TestAfterNewFixTicketTheFailedTicketKeepsWaiting(t *testing.T) {
 	t.Parallel()
 	h, _, r := gatedHarness(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
@@ -341,11 +359,112 @@ func TestAfterNewFixTicketTheFailedTicketLandsOnTheNextPoll(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.Script(res.ID, factorytest.Wait())
-	r.Poll()
-	if tk := h.WaitForState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != pushed {
-		t.Errorf("landed with %q, want the pushed commit %s", tk.Moves[len(tk.Moves)-1].Commit, pushed)
+	stillAccepted(t, h, r, id, "while its fix Ticket is open")
+	if fix := h.Ticket(res.ID); fix.Spec.ID == h.Ticket(id).Spec.ID || fix.Spec.Title != "CI Fixes" {
+		t.Errorf("fix Ticket on %s %q, want the CI Fixes Spec", fix.Spec.ID, fix.Spec.Title)
 	}
-	if fix := h.Ticket(res.ID); fix.Spec.ID != h.Ticket(id).Spec.ID {
-		t.Errorf("fix Ticket on %s, want the failed Ticket's Spec", fix.Spec.ID)
+}
+
+// The tip report (code-central-431): a later commit on the remote's base
+// that contains a waiting Ticket's work is reported as its pushed commit,
+// so that when it passes the Ticket lands.
+
+func TestAfterAnotherTicketsMergeIsPushedEarlierWaitingTicketsGetTheNewTipAndLandWhenItPasses(t *testing.T) {
+	t.Parallel()
+	h, remote, r := gatedHarness(t)
+	first, _ := gated(t, h, r, "Add a feature", "feature.txt")
+	second, tip := gated(t, h, r, "Add another", "another.txt")
+
+	stillAccepted(t, h, r, first, "while the tip's CI runs")
+	if pc := h.Ticket(first).PushedCommit; pc == nil || pc.Commit != tip {
+		t.Fatalf("%s's pushed commit is %+v, want the remote's tip %s", first, pc, tip)
+	}
+	if n := strings.Count(r.Stdout(), first+": CI tracks main at "+tip[:12]); n != 1 {
+		t.Errorf("reported the tip onto %s %d times, want once however often it polls:\n%s", first, n, r.Stdout())
+	}
+
+	reportRun(t, h, 1, second, tip, store.CICompleted, store.CISuccess)
+	r.Poll()
+	for _, id := range []string{first, second} {
+		tk := h.WaitForState(id, store.Done)
+		if m := tk.Moves[len(tk.Moves)-1]; m.Commit != tip {
+			t.Errorf("%s landed with %q, want the tip that passed, %s", id, m.Commit, tip)
+		}
+	}
+	if got := remote.Git("rev-parse", "main"); got != tip {
+		t.Errorf("the remote's main is at %s, want it left at %s", got, tip)
+	}
+}
+
+func TestACommitPushedByHandFromAnotherCloneIsReportedToWaitingTicketsAndLandsThemWhenItPasses(t *testing.T) {
+	t.Parallel()
+	h, remote, r := gatedHarness(t)
+	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
+	byHand := h.CommitOn("hand", "hand.txt", "hand\n")
+	h.Git("push", "-q", remote.Path, "hand:refs/heads/main")
+
+	stillAccepted(t, h, r, id, "while the hand-pushed commit's CI runs")
+	pc := h.Ticket(id).PushedCommit
+	if pc == nil || pc.Commit != byHand {
+		t.Fatalf("%s's pushed commit is %+v, want the hand-pushed %s, which contains its work at %s", id, pc, byHand, pushed)
+	}
+
+	reportRun(t, h, 1, id, byHand, store.CICompleted, store.CISuccess)
+	r.Poll()
+	if tk := h.WaitForState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != byHand {
+		t.Errorf("landed with %q, want the hand-pushed commit %s", tk.Moves[len(tk.Moves)-1].Commit, byHand)
+	}
+}
+
+func TestAnInReviewTicketMergedByHandGetsALaterTipToo(t *testing.T) {
+	t.Parallel()
+	h, remote, r := gatedHarness(t)
+	id := h.ReadyTicket("Add a feature")
+	h.Finished(id, id, h.CommitOn(id, "feature.txt", "feature\n"))
+	h.Git("merge", "-q", "--no-ff", "-m", "My own merge", id)
+	r.Poll()
+	r.WaitForOutput(id + ": CI tracks main at ")
+	byHand := h.CommitOn("hand", "hand.txt", "hand\n")
+	h.Git("push", "-q", remote.Path, "hand:refs/heads/main")
+
+	r.Poll()
+	r.WaitForOutput(id + ": CI tracks main at " + byHand[:12])
+	reportRun(t, h, 1, id, byHand, store.CICompleted, store.CISuccess)
+	r.Poll()
+	if tk := h.WaitForState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != byHand {
+		t.Errorf("landed with %q, want the later commit %s", tk.Moves[len(tk.Moves)-1].Commit, byHand)
+	}
+}
+
+func TestATipThatDoesNotContainATicketsWorkIsNotReportedToIt(t *testing.T) {
+	t.Parallel()
+	h, remote, r := gatedHarness(t)
+	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
+	// Another clone force-pushes the base back to before the Ticket's work.
+	before := h.Git("rev-parse", pushed+"^1")
+	h.Git("push", "-q", "-f", remote.Path, before+":refs/heads/main")
+
+	stillAccepted(t, h, r, id, "while the tip lacks its work")
+	if strings.Contains(r.Stdout(), id+": CI tracks main at "+before[:12]) {
+		t.Errorf("the tip %s, which lacks the work, was reported onto %s:\n%s", before, id, r.Stdout())
+	}
+}
+
+func TestUnderBranchAndPushALaterTipIsNotReportedToATicket(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	remote := h.AddRemote("origin")
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+	trackCI(t, h)
+	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
+	r := h.Start()
+	r.WaitForOutput(id + ": CI tracks " + id + " at ")
+	h.CommitOn("hand", "hand.txt", "hand\n")
+	h.Git("push", "-q", remote.Path, "hand:refs/heads/main")
+
+	r.Poll()
+	r.Poll()
+	if pc := h.Ticket(id).PushedCommit; pc == nil || pc.Commit != commit {
+		t.Errorf("%s's pushed commit is %+v, want it left at its branch's %s", id, pc, commit)
 	}
 }

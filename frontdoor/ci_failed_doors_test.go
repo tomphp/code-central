@@ -19,7 +19,7 @@ func init() {
 	cases["land_anyway"] = opCase{
 		setup: failedCI,
 		ok:    call{http: landAnyway("3")},
-		check: ticketAcknowledgement("acme-3", "Accepted", "land_anyway", "ci_failure_options", "needs_me_reason"),
+		check: ticketAcknowledgement("acme-3", "Accepted", "land_anyway", "ci_item", "ci_failure_options", "needs_me_reason"),
 		full:  func(t *testing.T, out map[string]any) { boolField(t, out, "land_anyway", true) },
 		bad:   call{http: landAnyway("2")},
 		code:  core.ActionNotAllowed,
@@ -51,7 +51,7 @@ func failedCI(t *testing.T, srv *codecentraltest.Server) {
 }
 
 // needsMeRowOf is id's Needs Me row, as the HTTP API gives it, if it has
-// one.
+// one: its own, or the CI item listing it (code-central-432).
 func needsMeRowOf(t *testing.T, srv *codecentraltest.Server, id string) (core.NeedsMeRow, bool) {
 	t.Helper()
 	v, err := srv.Client.NeedsMe(context.Background())
@@ -61,6 +61,9 @@ func needsMeRowOf(t *testing.T, srv *codecentraltest.Server, id string) (core.Ne
 	for _, g := range v.Groups {
 		for _, row := range g.Tickets {
 			if row.ID == id {
+				return row, true
+			}
+			if row.CIItem != nil && slices.ContainsFunc(row.CIItem.Tickets, func(tk core.CIItemTicket) bool { return tk.ID == id }) {
 				return row, true
 			}
 		}
@@ -78,7 +81,17 @@ func TestAnAcceptedTicketWhoseCIFailedIsInNeedsMeAsCIFailed(t *testing.T) {
 	if row.CIFailure == nil || row.CIFailure.Commit != "abc123" || !slices.Equal(row.CIFailure.Workflows, []string{"ci.yml"}) {
 		t.Fatalf("ci failure %+v, want abc123 failing ci.yml", row.CIFailure)
 	}
+	// The row is the commit's item, with no Ticket of its own (code-central-432).
+	if row.ID != "" || row.Title != "CI failed at abc123" || row.CIItem == nil || len(row.CIItem.Tickets) != 1 || row.CIItem.Tickets[0].ID != "acme-3" {
+		t.Fatalf("row %+v, want the item for abc123 listing acme-3 with no Ticket of its own", row)
+	}
+	if want := []string{"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"}; !slices.Equal(row.CIItem.Options, want) {
+		t.Fatalf("item options %v, want %v", row.CIItem.Options, want)
+	}
 	tk := ticket3(t, srv)
+	if tk.CIItem == nil || tk.CIItem.Commit != "abc123" {
+		t.Fatalf("ticket item %+v, want acme-3 linking the item for abc123", tk.CIItem)
+	}
 	if tk.NeedsMeReason != core.ReasonCIFailed || !slices.Contains(tk.CIFailureOptions, "land_anyway") || tk.LandAnyway {
 		t.Fatalf("reason %q, options %v, land anyway %v: want CI failed offering Land anyway", tk.NeedsMeReason, tk.CIFailureOptions, tk.LandAnyway)
 	}

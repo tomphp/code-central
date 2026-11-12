@@ -747,6 +747,14 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const failed = await d.api.getTicket("acme", id);
       expect(failed).toMatchObject({ ci_result: "failed", ci_failure_options: ["rerun_ci", "land_anyway", "send_back", "new_fix_ticket"] });
       expect(failed).not.toHaveProperty("land_anyway");
+      // The Ticket links its commit's CI item, one per pushed commit,
+      // listing the Tickets waiting on it (code-central-432).
+      expect(failed.ci_item).toEqual({
+        reason: "ci_failed",
+        commit: "abc123",
+        tickets: [{ id, title: "Login page", spec: failed.spec.id }],
+        options: ["rerun_ci", "land_anyway", "send_back", "new_fix_ticket"],
+      });
 
       // Under Branch the human's merge decides: no Land anyway.
       await d.api.setLandingMethod("acme", { method: "branch", push: true, remote: "origin" });
@@ -760,7 +768,40 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const chosen = await d.api.getTicket("acme", id);
       expect(chosen).toMatchObject({ ci_result: "failed", land_anyway: true });
       expect(chosen).not.toHaveProperty("ci_failure_options");
+      expect(chosen).not.toHaveProperty("ci_item");
       expect(chosen.needs_me_reason).not.toBe("ci_failed");
+    });
+
+    it("passes a Ticket under the CI gate once any of its pushed commits passed (code-central-430)", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
+      await d.api.act("acme", id, "accept", {});
+      await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin", land_per_spec: false });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      const run = (n: number, commit: string, status: "in_progress" | "completed", conclusion?: "success" | "failure") => ({
+        id: n,
+        attempt: 1,
+        workflow: "ci.yml",
+        name: "CI",
+        branch: "main",
+        commit,
+        status,
+        ...(conclusion && { conclusion }),
+        url: `https://github.com/acme/web/actions/runs/${n}`,
+        jobs: [],
+        ticket: id,
+      });
+      await d.reportPushedCommit("acme", id, "abc123");
+      await d.reportCIRuns("acme", [run(1, "abc123", "in_progress")]);
+      await d.reportPushedCommit("acme", id, "def456");
+      await d.reportCIRuns("acme", [run(2, "def456", "completed", "failure")]);
+      expect(await d.api.getTicket("acme", id)).toMatchObject({ ci_result: "failed", ci_commit: "def456", pushed_commit: { commit: "def456" } });
+
+      await d.reportCIRuns("acme", [run(1, "abc123", "completed", "success")]);
+      const passed = await d.api.getTicket("acme", id);
+      expect(passed).toMatchObject({ ci_result: "passed", ci_commit: "abc123", pushed_commit: { commit: "def456" } });
+      expect(passed).not.toHaveProperty("ci_failure_options");
     });
 
     it("re-runs a CI failed Ticket's failed jobs: it waits on CI until the run's new attempt passes (code-central-265)", async () => {
@@ -804,7 +845,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.getTicket("acme", id)).ci_result).toBe("passed");
     });
 
-    it("sends a CI failed Ticket back to fix with a note, or opens a New fix Ticket and lands it anyway (code-central-264)", async () => {
+    it("sends a CI failed Ticket back to fix with a note, or opens a New fix Ticket on the CI Fixes Spec that leaves it waiting (code-central-264, code-central-433)", async () => {
       await d.createProject("acme", "Acme");
       const failedTicket = async (title: string, run: number) => {
         const id = await d.createTicket("acme", title, "Ready");
@@ -841,15 +882,15 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(ready).not.toHaveProperty("ci_failure_options");
 
       const fixed = await failedTicket("Sign-up page", 2);
-      const before = await d.api.getTicket("acme", fixed);
       const ack = await d.api.act("acme", fixed, "new_fix_ticket", { note: "CI failed: runs/2" });
       expect(ack).toMatchObject({ state: "Ready" });
       expect(ack.id).not.toBe(fixed);
       const fix = await d.api.getTicket("acme", ack.id);
-      expect(fix).toMatchObject({ state: "Ready", spec: before.spec, title: `Fix the CI failure of ${fixed}: Sign-up page` });
+      expect(fix).toMatchObject({ state: "Ready", spec: { title: "CI Fixes" }, title: `Fix the CI failure of ${fixed}: Sign-up page` });
       expect(fix.description).toContain("CI failed: runs/2");
       const landing = await d.api.getTicket("acme", fixed);
-      expect(landing).toMatchObject({ state: "Accepted", land_anyway: true });
+      expect(landing).toMatchObject({ state: "Accepted" });
+      expect(landing.land_anyway).toBeFalsy();
       expect(landing).not.toHaveProperty("ci_failure_options");
       expect(landing.comments.at(-1)?.body).toContain(ack.id);
     });
@@ -944,7 +985,10 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       const acme = await d.api.ciOverview({ project: "acme", running: true });
       expect(acme.projects.map((p) => [p.project, p.tracking, p.repository])).toEqual([["acme", true, "acme/web"]]);
+      // Under the CI gate old111, pushed before abc123, still counts
+      // (code-central-430).
       expect(acme.runs.map((r) => [r.project, r.workflow, r.attempt])).toEqual([
+        ["acme", "old.yml", 1],
         ["acme", "queued.yml", 1],
         ["acme", "ci.yml", 1],
       ]);

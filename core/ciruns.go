@@ -18,8 +18,9 @@ import (
 // CI Watcher reports the runs GitHub started for it with report_ci_runs,
 // and Code Central works the Ticket's CI result out on read.
 
-// CIResult is a Ticket's CI result, from the runs of its latest pushed
-// commit that aren't ignored.
+// CIResult is a Ticket's CI result, from the runs of its pushed commits
+// that aren't ignored: under the CI gate passed once any pushed since it
+// last moved back to Ready passed, otherwise its latest pushed commit's.
 type CIResult string
 
 // The CI results.
@@ -140,13 +141,14 @@ func ciRunView(key string, r store.CIRun) CIRunView {
 	return v
 }
 
-// ticketCI is a Ticket's latest pushed commit, its CI result and every CI
-// Run tracked against it, newest pushed commit's first; all empty for a
-// Ticket never pushed while CI Tracking was on.
-func ticketCI(r store.Reader, key string, t store.Ticket, now time.Time) (*PushedCommitView, CIResult, []CIRunView) {
+// ticketCI is a Ticket's latest pushed commit, its CI result, the pushed
+// commit the result comes from and every CI Run tracked against it, newest
+// pushed commit's first; all empty for a Ticket never pushed while CI
+// Tracking was on.
+func ticketCI(r store.Reader, key string, t store.Ticket, now time.Time) (*PushedCommitView, CIResult, string, []CIRunView) {
 	mine, ok := ticketRuns(r, key, t, now)
 	if !ok {
-		return nil, "", nil
+		return nil, "", "", nil
 	}
 	latest := t.PushedCommits[len(t.PushedCommits)-1]
 	// The latest pushed commit's runs first, then each older one's.
@@ -158,7 +160,8 @@ func ticketCI(r store.Reader, key string, t store.Ticket, now time.Time) (*Pushe
 	for _, run := range mine {
 		runs = append(runs, ciRunView(key, run))
 	}
-	return &PushedCommitView{Commit: latest.Commit, Pushed: latest.Pushed}, latestCIResult(latest, mine, now), runs
+	from, result := ticketResult(r, key, t, mine, now)
+	return &PushedCommitView{Commit: latest.Commit, Pushed: latest.Pushed}, result, from, runs
 }
 
 // ticketCIResult is t's CI result alone, for its rows' badges: "" for a
@@ -168,7 +171,54 @@ func ticketCIResult(r store.Reader, key string, t store.Ticket, now time.Time) C
 	if !ok {
 		return ""
 	}
-	return latestCIResult(t.PushedCommits[len(t.PushedCommits)-1], mine, now)
+	_, result := ticketResult(r, key, t, mine, now)
+	return result
+}
+
+// ticketResult is t's CI result from its runs at now, and the commit it
+// comes from: the newest of its result commits that passed, if any has,
+// otherwise its latest pushed commit (code-central-430); no commit while
+// it has no CI result. t must have a pushed commit.
+func ticketResult(r store.Reader, key string, t store.Ticket, runs []store.CIRun, now time.Time) (commit string, result CIResult) {
+	p, _ := r.Project(key)
+	for _, pc := range resultCommits(p, t) {
+		if pushedCIResult(pc, runs, now) == CIPassed {
+			return pc.Commit, CIPassed
+		}
+	}
+	latest := respondedLatest(p, t)
+	if result = latestCIResult(latest, runs, now); result == "" {
+		return "", ""
+	}
+	return latest.Commit, result
+}
+
+// resultCommits are the pushed commits t's CI result reads, newest
+// first, each with p's response to it: under the CI gate those pushed
+// since it last moved back to Ready, any of which passing passes t;
+// otherwise, or when it has pushed none since, its latest. t must have a
+// pushed commit.
+func resultCommits(p store.Project, t store.Ticket) []store.PushedCommit {
+	var out []store.PushedCommit
+	if p.LandingPolicy().CIGateHolds() {
+		since := backToReady(t)
+		for _, pc := range slices.Backward(respondedCommits(p, t)) {
+			if !pc.Pushed.After(since) {
+				break
+			}
+			out = append(out, pc)
+		}
+	}
+	if len(out) == 0 {
+		out = []store.PushedCommit{respondedLatest(p, t)}
+	}
+	return out
+}
+
+// readsCommit reports whether t's CI result reads commit: whether it is
+// one of t's result commits.
+func readsCommit(p store.Project, t store.Ticket, commit string) bool {
+	return len(t.PushedCommits) > 0 && slices.ContainsFunc(resultCommits(p, t), func(pc store.PushedCommit) bool { return pc.Commit == commit })
 }
 
 // latestCIResult is the CI result of a Ticket's latest pushed commit from
@@ -246,11 +296,14 @@ func runsOf(runs []store.CIRun, t store.Ticket) []store.CIRun {
 	return mine
 }
 
-// ticketsOfCommit are the Tickets whose latest pushed commit is commit.
-func ticketsOfCommit(r store.Reader, key, commit string) []store.Ticket {
+// ticketsReading are the Tickets whose CI result reads commit: those whose
+// latest pushed commit it is, and under the CI gate those that pushed it
+// since they last moved back to Ready.
+func ticketsReading(r store.Reader, key, commit string) []store.Ticket {
+	p, _ := r.Project(key)
 	var out []store.Ticket
 	for _, t := range r.Tickets(key) {
-		if len(t.PushedCommits) > 0 && latestPushed(t).Commit == commit {
+		if readsCommit(p, t, commit) {
 			out = append(out, t)
 		}
 	}
@@ -355,7 +408,10 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 	if commit == "" {
 		return Written[TicketView]{}, invalid("commit", "report_pushed_commit needs the commit the Factory pushed")
 	}
-	return c.updateTicketIn(key, "report_pushed_commit", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+	// The Tickets already waiting on the commit get a change notice: its
+	// CI item lists one more (code-central-432).
+	var sharing []int
+	v, err := c.updateTicketIn(key, "report_pushed_commit", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
 		if t.State != store.Accepted && t.State != store.InReview {
 			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted or In Review Ticket is pushed", DisplayID(key, t.Number), t.State)}
 		}
@@ -367,8 +423,20 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 			return false, nil
 		}
 		t.PushedCommits = append(t.PushedCommits, store.PushedCommit{Commit: commit, Branch: strings.TrimSpace(in.Branch), Pushed: c.now()})
+		for _, o := range r.Tickets(key) {
+			if o.Number != t.Number && len(o.PushedCommits) > 0 && latestPushed(o).Commit == commit {
+				sharing = append(sharing, o.Number)
+			}
+		}
 		return true, nil
 	})
+	if err != nil {
+		return Written[TicketView]{}, err
+	}
+	for _, n := range sharing {
+		c.publishTicketChanged(key, n)
+	}
+	return v, nil
 }
 
 // ReportCIRunsInput is the CI Watcher's report_ci_runs(runs, full?).
@@ -451,14 +519,14 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 }
 
 // markCIRunChanged adds to changed every Ticket that reads run: those
-// whose latest pushed commit is its commit. A run tracked against a Ticket
-// that has since pushed another still marks that Ticket.
+// whose CI result reads its commit. A run tracked against a Ticket that
+// has since pushed another still marks that Ticket.
 func (c *Core) markCIRunChanged(r store.Reader, key string, changed map[int]bool, run store.CIRun) {
 	if run.Ticket == 0 {
 		return
 	}
 	changed[run.Ticket] = true
-	for _, t := range ticketsOfCommit(r, key, run.Commit) {
+	for _, t := range ticketsReading(r, key, run.Commit) {
 		changed[t.Number] = true
 	}
 }
@@ -540,29 +608,27 @@ type CIWaitingCommit struct {
 	PullRequest int `json:"pull_request,omitempty"`
 }
 
-// ciWaiting is every Ticket's latest pushed commit whose CI result is
-// still running, or that was pushed, or asked to be re-run, in the last
-// ciNewlyPushed, oldest push first. A Cancelled Ticket's is left out, as
-// is one pushed, or last asked to be re-run, more than ciWaitLimit ago.
+// ciWaiting is the pushed commits the CI Watcher watches, once per
+// commit, oldest push first: each Ticket's latest pushed commit and,
+// under the CI gate, every other it pushed since it last moved back to
+// Ready, whose CI result is still running, or that was pushed, or asked
+// to be re-run, in the last ciNewlyPushed. A Cancelled Ticket's are left
+// out, as is one pushed, or last asked to be re-run, more than
+// ciWaitLimit ago.
 func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 	out := []CIWaitingCommit{}
 	runs := keptCIRuns(r.CIRuns(key), now)
+	p, _ := r.Project(key)
 	for _, t := range r.Tickets(key) {
 		if len(t.PushedCommits) == 0 || t.State == store.Cancelled {
 			continue
 		}
-		latest := t.PushedCommits[len(t.PushedCommits)-1]
-		// A Re-run request starts the wait again.
-		since := latest.Pushed
-		if latest.Rerun.After(since) {
-			since = latest.Rerun
-		}
 		mine := runsOf(runs, t)
-		if now.Sub(since) >= ciWaitLimit {
-			continue
-		}
-		if pushedCIResult(latest, mine, now) == CIRunning || now.Sub(since) < ciNewlyPushed {
-			w := CIWaitingCommit{Ticket: DisplayID(key, t.Number), Commit: latest.Commit, Pushed: latest.Pushed}
+		for _, pc := range resultCommits(p, t) {
+			if !ciWatched(pc, mine, now) {
+				continue
+			}
+			w := CIWaitingCommit{Ticket: DisplayID(key, t.Number), Commit: pc.Commit, Pushed: pc.Pushed}
 			if t.PullRequest != nil {
 				w.PullRequest = t.PullRequest.Number
 			}
@@ -570,5 +636,25 @@ func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 		}
 	}
 	slices.SortStableFunc(out, func(a, b CIWaitingCommit) int { return a.Pushed.Compare(b.Pushed) })
-	return out
+	seen := map[string]bool{}
+	return slices.DeleteFunc(out, func(w CIWaitingCommit) bool {
+		dup := seen[w.Commit]
+		seen[w.Commit] = true
+		return dup
+	})
+}
+
+// ciWatched reports whether the CI Watcher watches pushed commit p, from
+// its runs at now: running, or newly pushed or asked to be re-run, and
+// within ciWaitLimit of either.
+func ciWatched(p store.PushedCommit, runs []store.CIRun, now time.Time) bool {
+	// A Re-run request starts the wait again.
+	since := p.Pushed
+	if p.Rerun.After(since) {
+		since = p.Rerun
+	}
+	if now.Sub(since) >= ciWaitLimit {
+		return false
+	}
+	return pushedCIResult(p, runs, now) == CIRunning || now.Sub(since) < ciNewlyPushed
 }

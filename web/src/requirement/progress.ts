@@ -45,9 +45,14 @@ export interface Progress {
   needs: { ticket: string; reason: NeedsMeReason; stage?: StageName }[];
 }
 
-// reasonsOf maps each Ticket in Needs Me to its reason.
+// reasonsOf maps each Ticket in Needs Me to its reason: its own row's,
+// or that of the CI item listing it (code-central-432).
 export function reasonsOf(needsMe?: NeedsMeView): Map<string, NeedsMeReason> {
-  return new Map((needsMe?.groups ?? []).flatMap((g) => g.tickets.filter((r) => r.id).map((r) => [r.id, g.reason] as const)));
+  return new Map(
+    (needsMe?.groups ?? []).flatMap((g) =>
+      g.tickets.flatMap((r) => (r.id ? [[r.id, g.reason] as const] : (r.ci_item?.tickets ?? []).map((t) => [t.id, g.reason] as const))),
+    ),
+  );
 }
 
 // needsMeCount is the Needs Me count as the UI shows it, over the rows

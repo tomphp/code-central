@@ -121,7 +121,7 @@ A Ticket that is Done or Cancelled, or a Spec that has Tickets and all of them a
 _Avoid_: Closed, archived, complete
 
 **Land**:
-For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing. Under Pull Request a Ticket lands when the Code Host reports its pull request merged, at the host's merge commit, whatever the merge strategy. Under Merge + Push with CI Tracking on, a Ticket lands only once its pushed commit's CI result is passed, so Done means on the remote and green. Under Land per Spec, a Spec-landed Ticket lands only with the rest of its Spec, once the Spec Branch is in the base, and, with Push and CI Tracking, once that push's CI result is passed.
+For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing. Under Pull Request a Ticket lands when the Code Host reports its pull request merged, at the host's merge commit, whatever the merge strategy. Under Merge + Push with CI Tracking on, a Ticket lands only once its CI result is passed, at the pushed commit that passed, so Done means on the remote and green at a commit containing its work. Under Land per Spec, a Spec-landed Ticket lands only with the rest of its Spec, once the Spec Branch is in the base, and, with Push and CI Tracking, once its CI result is passed.
 _Avoid_: Merge, ship, deliver, complete
 
 **Landing Method**:
@@ -176,7 +176,7 @@ The Needs Me reason of an Accepted Ticket, under Merge, that has not landed afte
 _Avoid_: Stuck, stale
 
 **Push**:
-A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands only once the push succeeds, and with CI Tracking on, only once its CI result is passed as well. Under Land per Spec the Factory pushes the base once for a whole Spec, after merging the Spec Branch into it; under Merge and Branch the Spec Branch and Ticket branches are never pushed. Under Pull Request, Push is implied, with no checkbox: the Factory pushes each Ticket's branch on accept, or the Spec Branch under Land per Spec.
+A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands only once the push succeeds, and with CI Tracking on, only once its CI result is passed as well, from that push or a later one containing its work. Under Land per Spec the Factory pushes the base once for a whole Spec, after merging the Spec Branch into it; under Merge and Branch the Spec Branch and Ticket branches are never pushed. Under Pull Request, Push is implied, with no checkbox: the Factory pushes each Ticket's branch on accept, or the Spec Branch under Land per Spec.
 _Avoid_: Publish, sync
 
 **CI Tracking**:
@@ -212,11 +212,11 @@ The kind of Watcher that watches one Project's CI through its CI Provider and re
 _Avoid_: CI daemon, CI Integration
 
 **Pushed commit**:
-The commit the Factory pushed for a Ticket, which it reports on the Ticket: the base after merging under Merge with Push, or the Ticket's branch on accept under Branch with Push or Pull Request (the Spec Branch, for a Spec under Pull Request with Land per Spec). Its CI Runs give the Ticket's CI result.
+The commit the Factory pushed for a Ticket, which it reports on the Ticket: the base after merging under Merge with Push, or the Ticket's branch on accept under Branch with Push or Pull Request (the Spec Branch, for a Spec under Pull Request with Land per Spec). Under Merge with Push and CI Tracking it is also a later commit on the remote's base that the Factory saw containing the Ticket's work, which it reports on each Ticket waiting on CI. A Ticket may have several, one per push; their CI Runs give the Ticket's CI result: under the CI gate those of every pushed commit since the Ticket last moved back to Ready, otherwise its latest's. Several Tickets may share one, and its CI failed, CI cancelled or CI unavailable is one Needs Me item listing them all.
 _Avoid_: Push SHA
 
 **CI Run**:
-One run of a Workflow the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. A Ticket-tracked run counts for every Ticket whose latest pushed commit it ran on, not only the one it was tracked against. On Azure DevOps under Pull Request, a build is matched by its pull request, since it ran on the host's merge commit. Kept for 30 days after it finishes.
+One run of a Workflow the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. A Ticket-tracked run counts for every Ticket whose pushed commit it ran on, not only the one it was tracked against. On Azure DevOps under Pull Request, a build is matched by its pull request, since it ran on the host's merge commit. Kept for 30 days after it finishes.
 _Avoid_: Job, build, pipeline
 
 **Workflow**:
@@ -224,7 +224,7 @@ The named definition a CI Run runs, as its CI Provider names it: a workflow file
 _Avoid_: pipeline, except for Azure Pipelines' own
 
 **CI result**:
-A Ticket's running, failed, cancelled or passed, worked out from the CI Runs of its latest pushed commit that aren't of Ignored workflows, each at its latest attempt: running while any is unfinished, else failed if any failed or timed out, else cancelled if any was cancelled, else passed; a partially succeeded run counts as passed. A Ticket whose only runs are cancelled is cancelled, not unavailable, and a cancelled run that was re-run and succeeded counts as passed.
+A Ticket's running, failed, cancelled or passed. A pushed commit's is worked out from its CI Runs that aren't of Ignored workflows, each at its latest attempt: running while any is unfinished, else failed if any failed or timed out, else cancelled if any was cancelled, else passed; a partially succeeded run counts as passed. A commit whose only runs are cancelled is cancelled, not unavailable, and a cancelled run that was re-run and succeeded counts as passed. Under the CI gate a Ticket's CI result is passed if any of its pushed commits since it last moved back to Ready has passed, and otherwise its latest pushed commit's (ADR 0034); under Branch + Push and Pull Request it is always its latest pushed commit's. The Ticket shows which pushed commit its CI result comes from, and lands at that commit.
 _Avoid_: Build status
 
 **CI gate**:
@@ -240,7 +240,7 @@ A Project's standing rule, "when Workflow X fails on branch Y, open a Ticket to 
 _Avoid_: Trigger, watch, alert
 
 **Fix Ticket**:
-An ordinary implementation Ticket opened to fix a failed CI Run: by a CI Rule on its Spec, linking the run and naming its failed jobs, never its cancelled ones, or by the human's New fix Ticket for a CI failed Ticket. While a CI Rule's fix Ticket is unfinished, further failures only comment on it.
+An ordinary implementation Ticket opened to fix a failed CI Run: by a CI Rule on its Spec, linking the run and naming its failed jobs, never its cancelled ones, or by the human's New fix Ticket on a CI failed item, on the CI Fixes Spec. While a CI Rule's fix Ticket is unfinished, further failures only comment on it.
 _Avoid_: CI Ticket, failure Ticket
 
 **Push remote**:
@@ -305,7 +305,7 @@ Who made a change: the human, an agent, or an Integration.
 _Avoid_: User, caller
 
 **Needs Me**:
-The Tickets waiting on the human before they can move, and a Project's Base diverged or Base missing.
+The Tickets waiting on the human before they can move, a Project's Base diverged or Base missing, and each pushed commit's CI failed, CI cancelled or CI unavailable, one item per commit listing the Tickets waiting on it.
 _Avoid_: Inbox, blocked
 
 **By Ticket**:
@@ -321,43 +321,55 @@ The Needs Me reason of an Accepted Ticket under the Branch or Pull Request Landi
 _Avoid_: Ready to merge, awaiting merge
 
 **CI cancelled**:
-The Needs Me reason of an Accepted Ticket whose CI result is cancelled and that the human hasn't dealt with yet: re-run, land anyway or send back.
+The Needs Me reason of a pushed commit whose CI result is cancelled, listing the Accepted Tickets waiting on it that the human hasn't dealt with yet: re-run, land anyway or send back. It is one item per commit, with no Ticket of its own, as CI failed is.
 _Avoid_: CI aborted
 
 **CI failed**:
-The Needs Me reason of an Accepted Ticket whose CI result is failed (a run failed or timed out; a cancelled run is CI cancelled instead) and that the human hasn't dealt with yet: send it back to fix, re-run the failed jobs, open a new fix Ticket, or land it anyway. Under Land per Spec it is one item for the whole Spec, on its lead Ticket (the waiting Ticket accepted earliest), the options act on every waiting Ticket, and send it back to fix isn't offered.
+The Needs Me reason of a pushed commit whose CI result is failed (a run failed or timed out; a cancelled run is CI cancelled instead), listing the Accepted Tickets waiting on it, across Specs, that the human hasn't dealt with yet: re-run the failed jobs, land them anyway, open a new fix Ticket, or send it back to fix. The item is left out of Needs Me while its fix Ticket is neither Done nor Cancelled, and returns if the fix Ticket is Cancelled while the commit is still failing. It is one item per commit, with no Ticket of its own, and each option acts on every listed Ticket; send it back to fix is offered only when the item lists one Ticket that isn't Spec-landed. Each listed Ticket's view shows its CI result and links the item.
 _Avoid_: Build broken, red
 
 **Land anyway**:
-The failure option by which the human accepts a CI failed Ticket's failed CI result, for its pushed commit only, so the Factory lands it on its next poll. Offered under Merge + Push only: under Branch + Push and under Pull Request the human's merge decides.
+The failure option by which the human accepts a CI failed or CI cancelled item's CI result, stored once on the Project for that pushed commit only, so the Factory lands every Ticket the item lists on its next poll. Offered under Merge + Push only: under Branch + Push and under Pull Request the human's merge decides.
 _Avoid_: Override, force land
 
 **Re-run failed jobs**:
-The failure option by which the human asks the CI Watcher to re-run the failed jobs of a CI failed Ticket's failed and cancelled CI Runs. It records a Re-run request on the pushed commit, and the Ticket's CI result reads running until the CI Watcher reports each run's new attempt. Offered under Merge + Push and Branch + Push.
+The failure option by which the human asks the CI Watcher to re-run the failed jobs of a CI failed or CI cancelled item's failed and cancelled CI Runs, once for the pushed commit. It records a Re-run request on the Project for the commit, and every listed Ticket's CI result reads running until the CI Watcher reports each run's new attempt. Offered under Merge + Push and Branch + Push.
 _Avoid_: Retry, rebuild
 
 **Re-run request**:
-What Re-run failed jobs records on a pushed commit: the failed and cancelled CI Runs, each at the attempt that failed, for the CI Watcher to re-run. It is answered when the CI Watcher reports a later attempt of each, and lapses after 10 minutes unanswered, say when the CI Provider refuses the re-run, so the Ticket is CI failed again.
+What Re-run failed jobs records for a pushed commit: the failed and cancelled CI Runs, each at the attempt that failed, for the CI Watcher to re-run. It is answered when the CI Watcher reports a later attempt of each, and lapses after 10 minutes unanswered, say when the CI Provider refuses the re-run, so the commit is CI failed again.
 _Avoid_: Rerun job, retry
 
 **Send back to fix**:
-The failure option by which the human sends a CI failed Ticket back to Ready with a note naming the failed run and jobs, so the next Claim fixes it on the same branch; its re-accept's newer pushed commit has its own CI result. Offered under Merge + Push and Branch + Push.
+The failure option by which the human sends a CI failed Ticket back to Ready with a note naming the failed run and jobs, so the next Claim fixes it on the same branch; its re-accept's newer pushed commit has its own CI result. Offered under Merge + Push and Branch + Push, only when the item lists exactly one Ticket and that Ticket isn't Spec-landed.
 _Avoid_: Revert, reject
 
 **New fix Ticket**:
-The failure option by which the human opens a Ready Ticket on a CI failed Ticket's Spec, carrying the note, and accepts the failed CI result as Land anyway does, so the failed Ticket lands and the fix goes on top. Offered under Merge + Push and Branch + Push.
+The failure option by which the human opens a Ready Ticket on the Project's CI Fixes Spec, carrying the note, and stores it once on the commit's response. It doesn't accept the failed CI result: every Ticket the item lists stays Accepted, and lands when a later commit containing the work passes CI, such as the fix's push. Offered under Merge + Push and Branch + Push.
 _Avoid_: Follow-up ticket, hotfix
 
+**CI Fixes Spec**:
+The Long-lived Spec, one per Project, that New fix Tickets open their fix Ticket on. Code Central creates it on first use, titled `CI Fixes` and labelled `long-lived`, as it does a CI Rule's Spec.
+_Avoid_: Fix Spec
+
 **CI unavailable**:
-The Needs Me reason of a Ticket that has waited 10 minutes or more on CI since its push, while the CI Watcher isn't watching or no CI Runs have been reported for its pushed commit.
+The Needs Me reason of a pushed commit the CI gate has held Tickets on for 10 minutes or more since their push, while the CI Watcher isn't watching or no CI Runs have been reported for it. It is one item per commit, with no Ticket of its own and no options, listing the Tickets waiting on it.
 _Avoid_: CI down, CI stuck
+
+**CI item**:
+A pushed commit's CI failed, CI cancelled or CI unavailable as Needs Me shows it: one item per commit, with no Ticket of its own, listing the Tickets whose latest pushed commit it is and that wait on it, accepted earliest first, across Specs, with the failure options the human may choose, which act on all of them. Worked out on read, never stored; each listed Ticket's view links it.
+_Avoid_: CI group, lead Ticket
+
+**CI response**:
+The human's Land anyway or Re-run request for one pushed commit, stored once on the Project for that commit, so every Ticket whose latest pushed commit it is reads it. A response stored on a Ticket's own pushed commit before CI items is still read.
+_Avoid_: CI choice, override record
 
 **Focus Mode**:
 A view showing the human one Focus Item at a time from Needs Me, moving to the next as each is dealt with or skipped.
 _Avoid_: Zen mode, queue view
 
 **Focus Item**:
-One thing in Needs Me the human can decide alone: one open Question, one waiting Ticket, or a Project's Base diverged or Base missing.
+One thing in Needs Me the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, or a Project's Base diverged or Base missing.
 _Avoid_: Action, card, task
 
 **Activity Dashboard**:

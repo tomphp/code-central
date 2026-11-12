@@ -157,7 +157,7 @@ describe("the CI failed panel", () => {
   it("says in its Needs Me row what failed", async () => {
     const fake = await world();
     const row = (await fake.needsMe()).groups[0].tickets[0];
-    expect(rowDetail(fake.now, row)).toBe("CI failed at abc1234: ci.yml");
+    expect(rowDetail(fake.now, row)).toBe("ci.yml failed");
   });
 
   it("prefills the note with the failed run's link and its failed jobs' names", async () => {
@@ -182,21 +182,21 @@ describe("the CI failed panel", () => {
     expect((await fake.needsMe()).count).toBe(0);
   });
 
-  it("opens a New fix Ticket on the same Spec, and the failed Ticket lands anyway, naming it", async () => {
+  it("opens a New fix Ticket on the CI Fixes Spec, and the failed Ticket keeps waiting, naming it", async () => {
     const fake = await world();
     const p = await pane(fake);
     await userEvent.click(within(p).getByRole("button", { name: "New fix Ticket" }));
 
     expect(fake.actions()).toContain("new_fix_ticket");
-    const fix = await fake.getTicket("acme", "acme-2");
-    expect(fix).toMatchObject({ state: "Ready", title: "Fix the CI failure of acme-1: Login page" });
+    const fix = await fake.getTicket("acme", "acme-3");
+    expect(fix).toMatchObject({ state: "Ready", spec: { title: "CI Fixes" }, title: "Fix the CI failure of acme-1: Login page" });
     expect(fix.description).toContain("[CI](https://github.com/acme/web/actions/runs/1)");
     const t = await fake.getTicket("acme", "acme-1");
-    expect(t).toMatchObject({ state: "Accepted", land_anyway: true });
-    expect(t.comments.at(-1)?.body).toContain("acme-2");
+    expect(t.state).toBe("Accepted");
+    expect(t.land_anyway).toBeFalsy();
+    expect(t.comments.at(-1)?.body).toContain("acme-3");
     expect((await fake.needsMe()).count).toBe(0);
-    await waitFor(() => expect(p).toHaveTextContent("acme-2 fixes this CI failure forward"));
-    expect(within(p).getByRole("region", { name: "CI" })).toHaveTextContent("You accepted its failed CI result");
+    await waitFor(() => expect(p).toHaveTextContent("acme-3 fixes this CI failure forward"));
   });
 
   it("needs a note for either fix", async () => {
@@ -213,7 +213,7 @@ describe("the CI failed panel", () => {
     const options = within(p).getByRole("group", { name: "Failure options" });
     expect(within(options).getByRole("button", { name: "Send back to fix" })).toBeInTheDocument();
     await userEvent.click(within(options).getByRole("button", { name: "New fix Ticket" }));
-    expect((await fake.getTicket("acme", "acme-2")).state).toBe("Ready");
+    expect((await fake.getTicket("acme", "acme-3")).state).toBe("Ready");
     expect((await fake.needsMe()).count).toBe(0);
   });
 

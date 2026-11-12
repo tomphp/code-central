@@ -186,7 +186,7 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in NewFixTicket
 		if err != nil {
 			return nil // the CI failure path reports what is wrong
 		}
-		if isLead, _ := specPullRequestLead(r, key, t); !isLead || len(ciFailureOptions(r, key, t, c.now())) > 0 {
+		if isLead, _ := specPullRequestLead(r, key, t); !isLead || len(c.ciFailureOptions(r, key, t)) > 0 {
 			return nil
 		}
 		lead, handled = t, true

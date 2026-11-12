@@ -25,11 +25,14 @@ const (
 	ReasonLongClaim   NeedsMeReason = "long_claim"
 	ReasonFailed      NeedsMeReason = "failed"
 	ReasonInReview    NeedsMeReason = "in_review"
-	// ReasonCIFailed is an Accepted Ticket whose CI result is failed and
-	// that the human hasn't dealt with (code-central-261).
+	// ReasonCIFailed is a pushed commit whose CI result is failed, with
+	// the Accepted Tickets waiting on it, which the human hasn't dealt
+	// with (code-central-261). It is one item per commit, with no Ticket
+	// (code-central-432); each listed Ticket reads it as its reason.
 	ReasonCIFailed NeedsMeReason = "ci_failed"
-	// ReasonCICancelled is an Accepted Ticket whose CI result is
-	// cancelled and that the human hasn't dealt with.
+	// ReasonCICancelled is a pushed commit whose CI result is cancelled,
+	// with the Accepted Tickets waiting on it, which the human hasn't
+	// dealt with. One item per commit, like CI failed.
 	ReasonCICancelled NeedsMeReason = "ci_cancelled"
 	// ReasonBaseDiverged is a Project under Pull Request or Merge + Push
 	// whose Factory reports its local base diverged from the remote's
@@ -48,9 +51,9 @@ const (
 	// Landing Method (code-central-175): the human merges its branch or
 	// pull request, at once.
 	ReasonToMerge NeedsMeReason = "to_merge"
-	// ReasonCIUnavailable is a Ticket the CI gate has held for
-	// CIUnavailableAfter since its push with no word of its CI
-	// (code-central-262).
+	// ReasonCIUnavailable is a pushed commit the CI gate has held Tickets
+	// on for CIUnavailableAfter since their push with no word of its CI
+	// (code-central-262). One item per commit, like CI failed.
 	ReasonCIUnavailable NeedsMeReason = "ci_unavailable"
 	// ReasonAcceptedNotLanded is a Ticket Accepted for more than
 	// NotLandedAfter (ticket 72): its work hasn't reached the base.
@@ -64,6 +67,12 @@ const (
 	ReasonClosedExternally NeedsMeReason = "closed_externally"
 )
 
+// isCIItem reports whether r is shown as a CI item: one Needs Me row
+// per pushed commit, with no Ticket of its own (code-central-432).
+func (r NeedsMeReason) isCIItem() bool {
+	return r == ReasonCIFailed || r == ReasonCICancelled || r == ReasonCIUnavailable
+}
+
 // needsMeReasons are the reasons in group order, each with what it means
 // for the published workflow.
 var needsMeReasons = []NeedsMeReasonView{
@@ -73,13 +82,13 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonLongClaim, "Long Claim: In Progress and active, with no claim or pick_up_answers for over 60 minutes"},
 	{ReasonFailed, "Failed: a Failure Report waits for the human"},
 	{ReasonInReview, "In Review: finished work waits to be accepted or rejected"},
-	{ReasonCIFailed, "CI failed: Accepted with its pushed commit's CI failed; the human picks a failure option"},
-	{ReasonCICancelled, "CI cancelled: Accepted with its pushed commit's CI cancelled"},
+	{ReasonCIFailed, "CI failed: one item per pushed commit, listing the Tickets waiting on it; a failure option acts on all of them"},
+	{ReasonCICancelled, "CI cancelled: one item per pushed commit whose CI was cancelled"},
 	{ReasonBaseDiverged, "Base diverged: a Project's local base has diverged from the remote's; reconcile it by hand"},
 	{ReasonBaseMissing, "Base missing: a Project's base branch exists nowhere; create it or change it in Options"},
 	{ReasonPullRequestClosed, "Pull request closed: Accepted with its pull request closed without merging"},
 	{ReasonToMerge, "To merge: Accepted under Branch or Pull Request; merge it to the base"},
-	{ReasonCIUnavailable, "CI unavailable: no word of its CI 10 minutes after its push (CI Watcher not Watching, or no CI Runs)"},
+	{ReasonCIUnavailable, "CI unavailable: one item per pushed commit with no word of its CI 10 minutes after its push"},
 	{ReasonAcceptedNotLanded, "Accepted but not landed: Accepted over 10 minutes and not in the base, unless its CI is running"},
 	{ReasonBlockedByCancelled, "Blocked by a Cancelled Ticket with no Replacements"},
 	{ReasonNewIssue, "New issue: an Incoming Issue awaiting triage"},
@@ -113,7 +122,9 @@ type NeedsMeGroup struct {
 // failed), the accept (To merge, and Accepted but not landed), the push
 // (CI unavailable),
 // the Blocker's cancel, or the Ticket's creation (New issue). Only the
-// detail field for its reason is set.
+// detail field for its reason is set. A CI failed, CI cancelled or CI
+// unavailable row is one per pushed commit, with no Ticket: its ID is
+// empty, and CIItem lists the Tickets waiting on the commit.
 type NeedsMeRow struct {
 	Project string        `json:"project"`
 	ID      string        `json:"id"`
@@ -132,11 +143,11 @@ type NeedsMeRow struct {
 	// CIFailure is what failed on the pushed commit (CI failed).
 	CIFailure *CIFailureSummary `json:"ci_failure,omitempty"`
 	// CIUnavailable says which: the CI Watcher not Watching, or no CI
-	// Runs for its pushed commit (CI unavailable).
+	// Runs for the pushed commit (CI unavailable).
 	CIUnavailable *CIUnavailableView `json:"ci_unavailable,omitempty"`
-	// CIGroup is the Spec's waiting Tickets that share the Ticket's pushed
-	// commit (CI failed, cancelled or unavailable on a Spec-landed Ticket).
-	CIGroup *CIGroupView `json:"ci_group,omitempty"`
+	// CIItem is the pushed commit's item: the Tickets waiting on it and
+	// the failure options (CI failed, CI cancelled and CI unavailable).
+	CIItem *CIItemView `json:"ci_item,omitempty"`
 	// Blocker is the Cancelled Blocker (blocked by a Cancelled Ticket).
 	Blocker *BlockerView `json:"blocker,omitempty"`
 	// Link is the Ticket's Link, whatever the reason: the row's badge, and
@@ -149,9 +160,9 @@ type NeedsMeRow struct {
 	Spec *NeedsMeSpec `json:"spec,omitempty"`
 	// Prototype is set on a Ticket labelled prototype, for its badge.
 	Prototype bool `json:"prototype,omitempty"`
-	// CIResult is the Ticket's CI result, whatever the reason, for the
-	// row's badge; left out for a Ticket never pushed while CI Tracking
-	// was on.
+	// CIResult is the Ticket's CI result, whatever the reason, or a CI
+	// item's commit's, for the row's badge; left out for a Ticket never
+	// pushed while CI Tracking was on.
 	CIResult CIResult `json:"ci_result,omitempty"`
 	// PullRequest is the Ticket's pull request, for its item's link; left
 	// out until the Pull Request Watcher reports one.
@@ -224,19 +235,24 @@ func (c *Core) NeedsMe(context.Context) (NeedsMeView, error) {
 	type waiting struct {
 		row NeedsMeRow
 		n   int
+		// commit orders a Project's CI items, which have no Ticket.
+		commit string
 	}
 	var all []waiting
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			if row, ok := c.baseDivergedRow(p); ok {
-				all = append(all, waiting{row, 0})
+				all = append(all, waiting{row: row})
 			}
 			if row, ok := c.baseMissingRow(p); ok {
-				all = append(all, waiting{row, 0})
+				all = append(all, waiting{row: row})
+			}
+			for _, it := range c.ciItems(r, p) {
+				all = append(all, waiting{row: c.ciItemRow(r, p, it), commit: it.commit})
 			}
 			for _, t := range r.Tickets(p.Key) {
 				if row, ok := c.needsMeRow(r, p.Key, t); ok {
-					all = append(all, waiting{row, t.Number})
+					all = append(all, waiting{row: row, n: t.Number})
 				}
 			}
 		}
@@ -248,6 +264,7 @@ func (c *Core) NeedsMe(context.Context) (NeedsMeView, error) {
 			a.row.Since.Compare(b.row.Since),
 			cmp.Compare(a.row.Project, b.row.Project),
 			cmp.Compare(a.n, b.n),
+			cmp.Compare(a.commit, b.commit),
 		)
 	})
 	v := NeedsMeView{Count: len(all), Groups: []NeedsMeGroup{}}
@@ -261,10 +278,11 @@ func (c *Core) NeedsMe(context.Context) (NeedsMeView, error) {
 	return v, nil
 }
 
-// needsMeRow is t's Needs Me row, if it waits on the human.
+// needsMeRow is t's Needs Me row, if it waits on the human with a row
+// of its own: a Ticket a CI item lists has none.
 func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRow, bool) {
 	reason, since := c.reasonOf(r, key, t)
-	if reason == "" {
+	if reason == "" || reason.isCIItem() {
 		return NeedsMeRow{}, false
 	}
 	req := needsMeRequirement(r, key, t)
@@ -291,21 +309,11 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 		}
 	case ReasonInReview:
 		row.Summary = firstLine(finishSummary(t))
-	case ReasonCIFailed:
-		f, _, _ := ciFailure(r, key, t, c.now())
-		row.CIFailure = &f
 	case ReasonToMerge:
 		row.Branch = branchOf(t)
-	case ReasonCIUnavailable:
-		p, _ := r.Project(key)
-		_, row.CIUnavailable = c.ciWaitingOn(r, p, t)
 	case ReasonBlockedByCancelled:
 		b, _ := cancelledBlocker(c.blockRule(r, key), t)
 		row.Blocker = &b
-	}
-	switch reason {
-	case ReasonCIFailed, ReasonCICancelled, ReasonCIUnavailable:
-		row.CIGroup = ciGroupView(r, key, t)
 	}
 	return row, true
 }
