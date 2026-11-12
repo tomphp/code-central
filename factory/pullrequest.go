@@ -28,12 +28,12 @@ func (f *factory) syncBase(ctx context.Context, remote string) bool {
 		}
 		return false
 	}
-	local, err := f.repository.commit("refs/heads/" + f.base)
+	local, err := f.repository.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
-		f.printf("warning: the base, %s, isn't a branch, so the Factory can't keep it level with %s", f.base, remote)
+		f.printf("warning: the base, %s, isn't a branch, so the Factory can't keep it level with %s", f.baseBranch(), remote)
 		return false
 	}
-	theirs, err := f.repository.commit("refs/remotes/" + remote + "/" + f.base)
+	theirs, err := f.repository.commit("refs/remotes/" + remote + "/" + f.baseBranch())
 	if err != nil {
 		// The remote has no base yet: nothing to catch up with.
 		f.baseDiverged = false
@@ -46,10 +46,10 @@ func (f *factory) syncBase(ctx context.Context, remote string) bool {
 	case f.repository.isAncestor(local, theirs):
 		f.noteBase(ctx, false, local, theirs)
 		if why := f.advanceBase(local, theirs); why != "" {
-			f.printf("warning: can't fast-forward %s to %s yet: %s", f.base, remote, firstLine(why))
+			f.printf("warning: can't fast-forward %s to %s yet: %s", f.baseBranch(), remote, firstLine(why))
 			return false
 		}
-		f.printf("%s: fast-forwarded to %s/%s at %s", f.base, remote, f.base, short(theirs))
+		f.printf("%s: fast-forwarded to %s/%s at %s", f.baseBranch(), remote, f.baseBranch(), short(theirs))
 		return true
 	}
 	f.noteBase(ctx, true, local, theirs)
@@ -63,10 +63,10 @@ func (f *factory) syncBase(ctx context.Context, remote string) bool {
 func (f *factory) noteBase(ctx context.Context, diverged bool, local, remote string) {
 	defer f.reportBase(ctx, diverged, local, remote)
 	if diverged && !f.baseDiverged {
-		f.printf("warning: the base, %s, has diverged from the remote's: it is at %s and the remote's at %s. Nothing lands and no branch is cut until you reconcile them by hand", f.base, short(local), short(remote))
+		f.printf("warning: the base, %s, has diverged from the remote's: it is at %s and the remote's at %s. Nothing lands and no branch is cut until you reconcile them by hand", f.baseBranch(), short(local), short(remote))
 	}
 	if !diverged && f.baseDiverged {
-		f.printf("%s: no longer diverged from the remote's", f.base)
+		f.printf("%s: no longer diverged from the remote's", f.baseBranch())
 	}
 	f.baseDiverged = diverged
 }
@@ -99,7 +99,7 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, landi
 	}
 	head, _, err := f.workOf(tk)
 	if err == nil && tk.PullRequest == nil && !f.pushedAlready(landing.Remote, tk.Branch) && f.baseCurrent && f.inBase(head) {
-		f.printf("%s: nothing to merge into %s", tk.ID, f.base)
+		f.printf("%s: nothing to merge into %s", tk.ID, f.baseBranch())
 		f.landAt(ctx, tk, head)
 		return
 	}
@@ -130,7 +130,7 @@ func (f *factory) landMerged(ctx context.Context, tk core.TicketView) {
 		key := tk.ID + "@" + merge
 		if !f.leftOnBranch[key] {
 			f.leftOnBranch[key] = true
-			f.printf("%s: its pull request is merged at %s, which %s doesn't hold yet: waiting for it", tk.ID, short(merge), f.base)
+			f.printf("%s: its pull request is merged at %s, which %s doesn't hold yet: waiting for it", tk.ID, short(merge), f.baseBranch())
 		}
 		return
 	}

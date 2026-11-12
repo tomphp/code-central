@@ -77,7 +77,7 @@ func (f *factory) stageWorktree(wt string) error {
 		if _, err := os.Stat(wt); err == nil {
 			return f.strayDirectory(wt)
 		}
-		_, err := f.gitOut(f.repo, "worktree", "add", "-q", "--detach", wt, f.base)
+		_, err := f.gitOut(f.repo, "worktree", "add", "-q", "--detach", wt, f.baseBranch())
 		return err
 	}
 	if w.branch != "" {
@@ -91,12 +91,12 @@ func (f *factory) stageWorktree(wt string) error {
 		head, _ := f.gitOut(wt, "rev-parse", "--short", "HEAD")
 		return &failure{core.ReportFailureInput{
 			WhatBroke:       fmt.Sprintf("The Stage's worktree is dirty, so the Factory can't start the Stage. Changed files:\n\n%s", status),
-			Why:             fmt.Sprintf("A Stage writes nothing to the repository, but %s has uncommitted changes, most likely written by an earlier Claim's session. The Factory moves a Stage's worktree to %s's tip at each new Claim only when it is clean.", wt, f.base),
+			Why:             fmt.Sprintf("A Stage writes nothing to the repository, but %s has uncommitted changes, most likely written by an earlier Claim's session. The Factory moves a Stage's worktree to %s's tip at each new Claim only when it is clean.", wt, f.baseBranch()),
 			WhatToFix:       fmt.Sprintf("Look at the changes in %s and keep anything worth keeping elsewhere (a Stage's output belongs in Code Central). Then clean the worktree and send the Ticket back.", wt),
 			WhereWorkStands: fmt.Sprintf("No session ran under this Claim. The worktree %s is detached at %s, with the changes above left as they were.", wt, head),
 		}}
 	}
-	_, err = f.gitOut(wt, "checkout", "-q", "--detach", f.base)
+	_, err = f.gitOut(wt, "checkout", "-q", "--detach", f.baseBranch())
 	return err
 }
 

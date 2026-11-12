@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
 	"github.com/tomoram/code-central/store"
 )
@@ -42,7 +43,7 @@ func TestAnExistingBranchNamedAfterTheTicketGetsTheWorktree(t *testing.T) {
 	}
 }
 
-func TestANewBranchStartsFromTheBaseGivenWithBase(t *testing.T) {
+func TestANewBranchStartsFromTheProjectsBase(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	id := h.ReadyTicket("On release")
@@ -50,8 +51,10 @@ func TestANewBranchStartsFromTheBaseGivenWithBase(t *testing.T) {
 	h.Git("commit", "-q", "--allow-empty", "-m", "main moves on")
 	h.Git("checkout", "-q", "--detach")
 	releaseTip := h.Git("rev-parse", "release")
+	release := "release"
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Base: &release})
 
-	r := h.Start("--base", "release")
+	r := h.Start()
 	r.WaitForOutput("base: release")
 	h.WaitForState(id, store.InReview)
 	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != releaseTip {
