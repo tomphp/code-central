@@ -92,6 +92,7 @@ var Operations = []Op{
 	{Name: "set_landing_method", Audience: HumanOnly, Write: true},
 	// Subagent Exploration (code-central-441).
 	{Name: "set_subagent_exploration", Audience: HumanOnly, Write: true},
+	{Name: "set_model_assignment", Audience: HumanOnly, Write: true},
 
 	// The Integration contract (ticket 42).
 	{Name: "create_linked_spec", Audience: IntegrationOnly, Write: true},

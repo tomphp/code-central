@@ -18,4 +18,6 @@ Because the guide now depends on the Project, every door serves the Project's ow
 - Every door, including HTTP and the CLI, takes a Project to serve a guide.
 - Existing Projects read as on, so upgrading changes nothing.
 - A change applies from the next Claim and the next `get_stage_guide` call. A session already running, or one resumed after a Round, keeps the guide in the system prompt it started with, unlike Models, which apply from the next turn.
-- The context budget measures the implementation guide with the fragment in, its largest case.
+- The context budget measures the implementation guide with the fragment in, its largest case, and the tickets guide with the Model Assignment fragment in.
+- A fragment can be filled in with Project data, as Model Assignment's is with the Project's Reported Models.
+- A setting can default to off: it is stored as on (not as its opposite), so a Project stored without it reads off, and the store format bump migrates every existing Project off.

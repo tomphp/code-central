@@ -254,7 +254,7 @@ func (s *FileStore) loadProject(key string) error {
 		}
 	}
 	if g := pf.StageGuides; g != nil {
-		p.StageGuides = StageGuides{SubagentExplorationOff: g.SubagentExplorationOff}
+		p.StageGuides = StageGuides{SubagentExplorationOff: g.SubagentExplorationOff, ModelAssignmentOn: g.ModelAssignmentOn}
 	}
 	rs, at, err := decodeCIResponses(pf.CIResponses)
 	if err != nil {

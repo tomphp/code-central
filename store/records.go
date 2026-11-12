@@ -52,6 +52,7 @@ type projectFile struct {
 // stageGuidesFile is a Project's Stage Guides settings.
 type stageGuidesFile struct {
 	SubagentExplorationOff bool `yaml:"subagent_exploration_off,omitempty"`
+	ModelAssignmentOn      bool `yaml:"model_assignment_on,omitempty"`
 }
 
 // ciResponseFile is the human's response to one pushed commit's CI
@@ -724,7 +725,7 @@ func encodeStageGuides(g StageGuides) *stageGuidesFile {
 	if g == (StageGuides{}) {
 		return nil
 	}
-	return &stageGuidesFile{SubagentExplorationOff: g.SubagentExplorationOff}
+	return &stageGuidesFile{SubagentExplorationOff: g.SubagentExplorationOff, ModelAssignmentOn: g.ModelAssignmentOn}
 }
 
 // encodeModels leaves Models out of project.yaml while it sets nothing,

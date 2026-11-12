@@ -11,6 +11,7 @@ import (
 func init() {
 	Routes["get_stage_guide"] = "GET /api/p/{key}/stage-guides/{stage}"
 	Routes["set_subagent_exploration"] = "POST /api/p/{key}/set_subagent_exploration"
+	Routes["set_model_assignment"] = "POST /api/p/{key}/set_model_assignment"
 
 	handlers["get_stage_guide"] = func(c *core.Core, r *http.Request) (any, error) {
 		if err := onlyParams(r.URL.Query()); err != nil {
@@ -24,5 +25,12 @@ func init() {
 			return nil, err
 		}
 		return c.SetSubagentExploration(r.Context(), r.PathValue("key"), in)
+	}
+	handlers["set_model_assignment"] = func(c *core.Core, r *http.Request) (any, error) {
+		var in core.SetModelAssignmentInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.SetModelAssignment(r.Context(), r.PathValue("key"), in)
 	}
 }
