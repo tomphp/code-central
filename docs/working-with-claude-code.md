@@ -101,7 +101,7 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
 
    It may ask to run `code-central wait acme-shop-2` in the background. If you allow it, the session picks the answers up by itself once you've answered. If you don't, tell it when you're done, as below.
 
-   Check: **Needs Me** in the UI shows 1, and the Requirement's row reads *Grilling: Questions*. Click the row: `acme-shop-2` is in Needs Answer, with *Round 1, 6 of 6 open*.
+   Check: **Needs Me** in the UI shows 1, and the Requirement's row reads *Grilling: Questions*. Click the row: `acme-shop-2` (shown as `#2` while only Acme Shop is selected) is in Needs Answer, with *Round 1, 6 of 6 open*.
 
 4. **Answer the Round in the UI.** Each Question has the agent's recommended answer filled in as a draft. Nothing is saved until you answer. For each Question you can:
 
@@ -246,7 +246,7 @@ Round 1:
 …
 ```
 
-You answer by typing in the terminal. Check: in the UI, `acme-shop-7 Grilling: Show prices with VAT` is still Ready, with no Claim and no Round, and Needs Me doesn't change.
+You answer by typing in the terminal. Check: in the UI, `acme-shop-7` (`#7` with one Project selected) `Grilling: Show prices with VAT` is still Ready, with no Claim and no Round, and Needs Me doesn't change.
 
 Choose between the two ways:
 
