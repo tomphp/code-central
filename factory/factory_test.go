@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/factory/factorytest"
+	"github.com/tomoram/code-central/store"
 )
 
 func TestMain(m *testing.M) { factorytest.Main(m) }
@@ -81,11 +82,19 @@ func TestTheFactoryRefusesToStartWithGitOlderThan2_38(t *testing.T) {
 	refuses(t, h, h.Repo, "git 2.37.9 is older than 2.38")
 }
 
-func TestTheFactoryRefusesToStartOnADetachedHeadWithoutBase(t *testing.T) {
+func TestTheFactoryStartsOnADetachedHead(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
+	id := h.ReadyTicket("From anywhere")
 	h.Git("checkout", "-q", "--detach")
-	refuses(t, h, h.Repo, "HEAD is detached")
+	h.Start().WaitForOutput("base: main")
+	h.WaitForState(id, store.InReview)
+}
+
+func TestTheFactoryRefusesTheBaseFlagAndPointsToProjectOptions(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	refuses(t, h, h.Repo, "Project Options' Base branch field", "--base", "release")
 }
 
 func TestTheFactoryRefusesToStartWhenTheWorktreeFolderCannotBeMade(t *testing.T) {

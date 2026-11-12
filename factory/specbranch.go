@@ -20,9 +20,9 @@ func specBranch(spec string) string { return "spec/" + spec }
 // base's tip first. The branch is never checked out: only its ref moves.
 func (f *factory) specBranchTip(spec string) (string, error) {
 	ref := "refs/heads/" + specBranch(spec)
-	baseTip, err := f.repository.commit("refs/heads/" + f.base)
+	baseTip, err := f.repository.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
-		return "", fmt.Errorf("the base, %s, isn't a branch", f.base)
+		return "", fmt.Errorf("the base, %s, isn't a branch", f.baseBranch())
 	}
 	tip, err := f.repository.commit(ref)
 	if err != nil {
@@ -33,7 +33,7 @@ func (f *factory) specBranchTip(spec string) (string, error) {
 	}
 	if tip != baseTip && f.inBase(tip) {
 		if err := f.repository.updateRef(ref, baseTip, tip); err != nil {
-			return "", fmt.Errorf("can't move the Spec Branch %s to %s's tip: %v", specBranch(spec), f.base, err)
+			return "", fmt.Errorf("can't move the Spec Branch %s to %s's tip: %v", specBranch(spec), f.baseBranch(), err)
 		}
 		return baseTip, nil
 	}
@@ -121,7 +121,7 @@ func (f *factory) waitsOnSpecBranch(tk core.TicketView, landing core.LandingView
 // branch is cut from the base's tip, or for a Spec-landed Ticket from its
 // Spec Branch's tip; an existing branch is reused as it is.
 func (f *factory) cutBranchWorktree(tk core.TicketView, branch, wt string) error {
-	from := f.base
+	from := f.baseBranch()
 	if tk.SpecLanded {
 		if _, err := f.repository.commit("refs/heads/" + branch); err != nil {
 			tip, err := f.specBranchTip(tk.Spec.ID)
@@ -214,7 +214,7 @@ func (f *factory) pushSpec(ctx context.Context, id string, landing core.LandingV
 	if err != nil || f.inBase(tip) {
 		return
 	}
-	baseTip, err := f.repository.commit("refs/heads/" + f.base)
+	baseTip, err := f.repository.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
 		return
 	}
@@ -281,9 +281,9 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 	if err != nil {
 		return false
 	}
-	baseTip, err := f.repository.commit("refs/heads/" + f.base)
+	baseTip, err := f.repository.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
-		f.printf("warning: %s: the base, %s, isn't a branch, so the Spec can't land", id, f.base)
+		f.printf("warning: %s: the base, %s, isn't a branch, so the Spec can't land", id, f.baseBranch())
 		return true
 	}
 	// Merged on an earlier poll whose landing then failed: those Tickets
@@ -311,7 +311,7 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 		}
 		return true
 	}
-	f.printf("%s: merged %s into %s at %s", id, specBranch(id), f.base, short(merge))
+	f.printf("%s: merged %s into %s at %s", id, specBranch(id), f.baseBranch(), short(merge))
 	f.printf("%s: landing its Tickets: %s", id, joinIDs(tickets))
 	for _, tk := range tickets {
 		f.landPushed(ctx, tk, landing, policy, merge)
@@ -389,7 +389,7 @@ func specConflictTitle(spec string) string {
 func (f *factory) openSpecConflict(ctx context.Context, spec core.SpecDetail, tip, baseTip string, conflicts []string) {
 	title := specConflictTitle(spec.ID)
 	var b strings.Builder
-	fmt.Fprintf(&b, "The Spec Branch %s conflicts with the base, %s, in these files:\n\n", specBranch(spec.ID), f.base)
+	fmt.Fprintf(&b, "The Spec Branch %s conflicts with the base, %s, in these files:\n\n", specBranch(spec.ID), f.baseBranch())
 	for _, c := range conflicts {
 		fmt.Fprintf(&b, "- %s\n", c)
 	}
@@ -420,7 +420,7 @@ func (f *factory) openSpecConflict(ctx context.Context, spec core.SpecDetail, ti
 			f.printf("%s: comment: %v", r.ID, err)
 			return
 		}
-		f.printf("%s: %s conflicts with %s again: commented on %s", spec.ID, specBranch(spec.ID), f.base, r.ID)
+		f.printf("%s: %s conflicts with %s again: commented on %s", spec.ID, specBranch(spec.ID), f.baseBranch(), r.ID)
 		return
 	}
 	made, err := f.client.CreateTicket(ctx, f.project, core.CreateTicketInput{Spec: core.Ref(spec.ID), Title: title, Description: body, State: store.Ready})
@@ -430,7 +430,7 @@ func (f *factory) openSpecConflict(ctx context.Context, spec core.SpecDetail, ti
 		}
 		return
 	}
-	f.printf("%s: %s conflicts with %s in %s: opened %s to merge the base into it", spec.ID, specBranch(spec.ID), f.base, strings.Join(conflicts, ", "), made.ID)
+	f.printf("%s: %s conflicts with %s in %s: opened %s to merge the base into it", spec.ID, specBranch(spec.ID), f.baseBranch(), strings.Join(conflicts, ", "), made.ID)
 }
 
 // specLanded reports whether a Ticket of spec has landed, which under
@@ -479,7 +479,7 @@ func (f *factory) sweepSpecBranches(ctx context.Context, underPullRequest bool) 
 		if !f.inBase(tip) && !(underPullRequest && f.specLanded(spec)) {
 			if !f.warned[ref] {
 				f.warned[ref] = true
-				f.printf("%s: every Ticket is finished but %s isn't in %s: kept", id, branch, f.base)
+				f.printf("%s: every Ticket is finished but %s isn't in %s: kept", id, branch, f.baseBranch())
 			}
 			continue
 		}
@@ -487,6 +487,6 @@ func (f *factory) sweepSpecBranches(ctx context.Context, underPullRequest bool) 
 			f.printf("warning: %s: can't delete %s: %v", id, branch, err)
 			continue
 		}
-		f.printf("%s: deleted %s, which is in %s", id, branch, f.base)
+		f.printf("%s: deleted %s, which is in %s", id, branch, f.baseBranch())
 	}
 }

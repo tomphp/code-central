@@ -110,13 +110,13 @@ func (f *factory) conflictFiles(stage string, tk core.TicketView) []string {
 			return nil
 		}
 	}
-	baseTip, err := f.repository.commit("refs/heads/" + f.base)
+	baseTip, err := f.repository.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
 		return nil
 	}
 	_, conflicts, err := f.repository.mergeTree(baseTip, head)
 	if err != nil {
-		f.printf("warning: %s: can't check the branch against %s: %v", tk.ID, f.base, err)
+		f.printf("warning: %s: can't check the branch against %s: %v", tk.ID, f.baseBranch(), err)
 		return nil
 	}
 	return conflicts

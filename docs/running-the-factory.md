@@ -37,12 +37,11 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Step 3 of [A brand new repository](setting-up-a-project.md#a-brand-new-repository) commits it.
 
-   `code-central-factory -h` lists its flags. These are the ones that matter:
+   The base, the branch work starts from and lands on, is the Project's **Base branch** setting in Project Options (`main` by default), read again on every poll. The Factory doesn't care which branch is checked out, or whether HEAD is detached. `code-central-factory -h` lists its flags. These are the ones that matter:
 
    | Flag | What it does |
    | --- | --- |
    | `--parallel <n>` | The most `claude` turns running at once. The default is 3. |
-   | `--base <branch>` | The branch work starts from, and the one it merges into when it lands. The default is the branch checked out when you start it, here `main`. |
    | `--model <model>` | The model for every session it starts or resumes, such as `--model opus`, unless the Ticket sets one. The default is Claude Code's own. See [Model and effort](#model-and-effort). |
    | `--effort <level>` | The effort for every session it starts or resumes, such as `--effort high`, unless the Ticket sets one. The default is Claude Code's own. It must be a level `claude --help` lists; see [What `claude` accepts](#what-claude-accepts). |
    | `--bypass-permissions` | Runs every session in `bypassPermissions` mode, with no permission checks. It prints a warning line at the start. |

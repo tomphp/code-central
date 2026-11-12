@@ -37,6 +37,7 @@ func (f *factory) landing(ctx context.Context) (landing core.LandingView, policy
 		}
 		return core.LandingView{}, store.LandingPolicy{}, false
 	}
+	f.setBase(p.Landing.Base)
 	if p.Landing.Method != store.LandingPullRequest {
 		f.baseDiverged = false
 	}
@@ -67,7 +68,7 @@ func (f *factory) reportPushRemote(remote string) {
 	if err != nil {
 		return
 	}
-	if _, err := f.client.ReportPushRemote(context.Background(), f.project, core.ReportPushRemoteInput{URL: url, Base: f.base}); err != nil {
+	if _, err := f.client.ReportPushRemote(context.Background(), f.project, core.ReportPushRemoteInput{URL: url}); err != nil {
 		f.printf("warning: can't report the Push remote's URL to Code Central: %v", err)
 	}
 }
@@ -139,7 +140,7 @@ func (f *factory) land(ctx context.Context, landing core.LandingView, policy sto
 func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView, landing core.LandingView, policy store.LandingPolicy) {
 	head, what, err := f.workOf(tk)
 	if err == nil && f.inBase(head) {
-		f.printf("%s: merged into %s by hand", tk.ID, f.base)
+		f.printf("%s: merged into %s by hand", tk.ID, f.baseBranch())
 		f.landAt(ctx, tk, head)
 		return
 	}
@@ -159,7 +160,7 @@ func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView, land
 	if merge == "" {
 		merge = short(head)
 	}
-	f.printf("%s: Accepted under the Branch Landing Method: merge %s into %s and the Factory lands it", tk.ID, merge, f.base)
+	f.printf("%s: Accepted under the Branch Landing Method: merge %s into %s and the Factory lands it", tk.ID, merge, f.baseBranch())
 }
 
 // pushBranch makes sure tk's branch, holding commit, is on remote, and
@@ -211,14 +212,14 @@ func (f *factory) detectHandMerges(ctx context.Context, landing core.LandingView
 			continue
 		}
 		if tk.State == store.InReview {
-			f.printf("%s: merged into %s by hand", tk.ID, f.base)
+			f.printf("%s: merged into %s by hand", tk.ID, f.baseBranch())
 			f.landPushed(ctx, tk, landing, policy, tk.Commit)
 			continue
 		}
 		key := tk.ID + "@" + tk.Commit
 		if !f.warnedMerged[key] {
 			f.warnedMerged[key] = true
-			f.printf("warning: %s is %s but its finish commit %s is already in %s: only an In Review or Accepted Ticket lands", tk.ID, tk.State, short(tk.Commit), f.base)
+			f.printf("warning: %s is %s but its finish commit %s is already in %s: only an In Review or Accepted Ticket lands", tk.ID, tk.State, short(tk.Commit), f.baseBranch())
 		}
 	}
 }
@@ -232,7 +233,7 @@ var mergeableStates = slices.DeleteFunc(slices.Clone(store.States), func(s store
 
 // inBase reports whether commit is reachable from the base.
 func (f *factory) inBase(commit string) bool {
-	return f.repository.isAncestor(commit, "refs/heads/"+f.base)
+	return f.repository.isAncestor(commit, "refs/heads/"+f.baseBranch())
 }
 
 // landable is every Ticket in these States, read in full.
@@ -271,9 +272,9 @@ func acceptedAt(tk core.TicketView) time.Time {
 // landAccepted merges an Accepted Ticket's work into the base and lands
 // it.
 func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, landing core.LandingView, policy store.LandingPolicy) {
-	baseTip, err := f.repository.commit("refs/heads/" + f.base)
+	baseTip, err := f.repository.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
-		f.cantLandYet(ctx, tk, fmt.Sprintf("the base, %s, isn't a branch, so the Factory can't move it.", f.base))
+		f.cantLandYet(ctx, tk, fmt.Sprintf("the base, %s, isn't a branch, so the Factory can't move it.", f.baseBranch()))
 		return
 	}
 	head, what, err := f.workOf(tk)
@@ -291,7 +292,7 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, landing 
 		return
 	}
 	if len(conflicts) > 0 {
-		f.sendBack(ctx, tk, head, f.base, baseTip, conflicts)
+		f.sendBack(ctx, tk, head, f.baseBranch(), baseTip, conflicts)
 		return
 	}
 	msg := fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title)
@@ -327,7 +328,7 @@ func (f *factory) landPushed(ctx context.Context, tk core.TicketView, landing co
 		return
 	}
 	if pushed {
-		f.printf("%s: pushed %s to %s", tk.ID, f.base, landing.Remote)
+		f.printf("%s: pushed %s to %s", tk.ID, f.baseBranch(), landing.Remote)
 	}
 	if !policy.CIGateHolds() {
 		f.landAt(ctx, tk, commit)
@@ -339,11 +340,11 @@ func (f *factory) landPushed(ctx context.Context, tk core.TicketView, landing co
 	// since. Its CI result is read on a later poll.
 	switch {
 	case pushed:
-		commit = f.remoteTip(landing.Remote, f.base, commit)
+		commit = f.remoteTip(landing.Remote, f.baseBranch(), commit)
 	case f.unreported[tk.ID] != "":
 		commit = f.unreported[tk.ID]
 	}
-	if f.reportPushed(ctx, tk, policy, f.base, commit) {
+	if f.reportPushed(ctx, tk, policy, f.baseBranch(), commit) {
 		delete(f.unreported, tk.ID)
 	} else {
 		f.unreported[tk.ID] = commit
@@ -359,7 +360,7 @@ func (f *factory) pushedBase(tk core.TicketView, remote, commit string) bool {
 		return false
 	}
 	pushed := tk.PushedCommit.Commit
-	return f.repository.isAncestor(commit, pushed) && f.repository.isAncestor(pushed, "refs/remotes/"+remote+"/"+f.base)
+	return f.repository.isAncestor(commit, pushed) && f.repository.isAncestor(pushed, "refs/remotes/"+remote+"/"+f.baseBranch())
 }
 
 // landOnCI lands a Ticket the CI gate holds at its pushed commit once
@@ -429,7 +430,7 @@ func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, policy s
 // pushBase pushes the base to remote unless the remote's base already
 // holds commit.
 func (f *factory) pushBase(ctx context.Context, remote, commit string) (pushed bool, why string) {
-	return f.push(ctx, remote, f.base, commit)
+	return f.push(ctx, remote, f.baseBranch(), commit)
 }
 
 // push pushes branch to remote unless its remote-tracking ref already
@@ -510,7 +511,7 @@ func (f *factory) advanceBase(old, merge string) string {
 		return err.Error()
 	}
 	for _, w := range list {
-		if w.branch != f.base {
+		if w.branch != f.baseBranch() {
 			continue
 		}
 		if moved := f.baseMoved(old); moved != "" {
@@ -523,9 +524,9 @@ func (f *factory) advanceBase(old, merge string) string {
 		if moved := f.baseMoved(old); moved != "" {
 			return moved
 		}
-		return fmt.Sprintf("uncommitted changes in %s, where %s is checked out, are in the way:\n\n%s", w.path, f.base, out)
+		return fmt.Sprintf("uncommitted changes in %s, where %s is checked out, are in the way:\n\n%s", w.path, f.baseBranch(), out)
 	}
-	if err := f.repository.updateRef("refs/heads/"+f.base, merge, old); err != nil {
+	if err := f.repository.updateRef("refs/heads/"+f.baseBranch(), merge, old); err != nil {
 		if moved := f.baseMoved(old); moved != "" {
 			return moved
 		}
@@ -536,10 +537,10 @@ func (f *factory) advanceBase(old, merge string) string {
 
 // baseMoved says so when the base is no longer at old.
 func (f *factory) baseMoved(old string) string {
-	if tip, err := f.repository.commit("refs/heads/" + f.base); err == nil && tip == old {
+	if tip, err := f.repository.commit("refs/heads/" + f.baseBranch()); err == nil && tip == old {
 		return ""
 	}
-	return fmt.Sprintf("%s moved while the Factory was merging.", f.base)
+	return fmt.Sprintf("%s moved while the Factory was merging.", f.baseBranch())
 }
 
 // landAt calls land with the commit that put tk's work into the base.
@@ -550,7 +551,7 @@ func (f *factory) landAt(ctx context.Context, tk core.TicketView, commit string)
 		}
 		return
 	}
-	f.printf("%s: landed on %s at %s", tk.ID, f.base, short(commit))
+	f.printf("%s: landed on %s at %s", tk.ID, f.baseBranch(), short(commit))
 }
 
 func short(commit string) string {
