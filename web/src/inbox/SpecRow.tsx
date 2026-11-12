@@ -36,14 +36,16 @@ export interface SpecRowProps {
   // quietWhenIdle dims the row when it is finished or nothing of it needs
   // the human, as the Requirements view does.
   quietWhenIdle?: boolean;
+  // startOpen opens the row when it first shows.
+  startOpen?: boolean;
 }
 
-export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticketLink, selectedTicket, quietWhenIdle }: SpecRowProps) {
+export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticketLink, selectedTicket, quietWhenIdle, startOpen }: SpecRowProps) {
   const listed = shown ?? stagesFirst(all);
   // The row holding the selected Ticket opens on its own, once per
   // selection, so the human can still close it.
   const holdsSelected = !!selectedTicket && listed.some((t) => t.id === selectedTicket);
-  const [open, setOpen] = useState(holdsSelected);
+  const [open, setOpen] = useState(holdsSelected || !!startOpen);
   useEffect(() => {
     if (holdsSelected) setOpen(true);
   }, [selectedTicket, holdsSelected]);
