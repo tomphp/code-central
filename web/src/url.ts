@@ -15,7 +15,8 @@
 // Ticket); it stays in the URL across lists and Projects.
 // view is the layout (anything else is the inbox); project, state and
 // list are the left pane's filters (no state and no list = Needs Me;
-// list=requirements is the Requirements view); requirement is the selected
+// list=requirements is the Requirements view, list=tickets the All Tickets
+// view); requirement is the selected
 // Spec's ID (a Requirement, a Map or a plain Spec) and ticket the selected
 // Ticket's display ID (within the Spec, when one is selected).
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
@@ -24,7 +25,7 @@ import { STATES, USAGE_DAYS, type State, type UsageDays, type SessionUsageFilter
 export type View = "inbox" | "focus" | "options" | "project-options" | "usage" | "ci";
 // A ReturnView is a view the Options view, Usage and the CI view return to.
 export type ReturnView = Exclude<View, "options" | "project-options" | "usage" | "ci">;
-export type List = "requirements";
+export type List = "requirements" | "tickets";
 
 export interface UiLocation {
   view: View;
@@ -37,6 +38,8 @@ export interface UiLocation {
   ticket?: string;
   // group is the Inbox's grouping of a State list; none is By Ticket.
   group?: "spec";
+  // finished shows Done and Cancelled Tickets in the All Tickets view.
+  finished?: true;
   // days is Usage's range; none is the default, 7.
   days?: UsageDays;
   // session is the session Usage has open on its line chart.
@@ -76,10 +79,11 @@ export function readLocation(search: string): UiLocation {
     view: "inbox",
     project: q.get("project") || undefined,
     state: state && STATES.includes(state) ? state : undefined,
-    list: q.get("list") === "requirements" ? "requirements" : undefined,
+    list: q.get("list") === "requirements" || q.get("list") === "tickets" ? (q.get("list") as List) : undefined,
     requirement: q.get("requirement") || undefined,
     ticket: q.get("ticket") || undefined,
     group: q.get("group") === "spec" ? "spec" : undefined,
+    finished: q.get("finished") === "1" ? true : undefined,
   };
 }
 
@@ -121,6 +125,7 @@ export function hrefFor(loc: UiLocation): string {
   if (loc.requirement) q.set("requirement", loc.requirement);
   if (loc.ticket) q.set("ticket", loc.ticket);
   if (loc.group) q.set("group", loc.group);
+  if (loc.finished) q.set("finished", "1");
   return `?${q}`;
 }
 

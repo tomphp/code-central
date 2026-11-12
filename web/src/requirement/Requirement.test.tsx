@@ -157,7 +157,7 @@ describe("the Requirement pane", () => {
     expect(await within(detail()).findByRole("heading", { name: "Spec: Archive finished Projects" })).toBeInTheDocument();
     expect(segment(/^Spec/).closest("li")).toHaveAttribute("aria-current", "step");
 
-    await userEvent.click(within(build).getByRole("button", { name: /acme-7/ }));
+    await userEvent.click(within(build).getByRole("button", { name: /acme-7 CLI/ }));
     expect(await within(detail()).findByRole("heading", { name: "CLI: archive-project" })).toBeInTheDocument();
   });
 

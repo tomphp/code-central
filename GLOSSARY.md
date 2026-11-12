@@ -40,6 +40,14 @@ _Avoid_: Controller, runner, orchestrator
 The description of a piece of work, such as a feature or user story, delivered through one or more Tickets.
 _Avoid_: Epic, feature, PRD
 
+**All Tickets view**:
+The Inbox's list of every Ticket in scope (`list=tickets`), of every kind and Stage, flat and newest first by creation, each row with its State chip, needs-you dot and kind label and naming its Spec. It follows the Project filter and reads only what the Inbox already loads. Its link counts the Tickets that are neither Done nor Cancelled.
+_Avoid_: Ticket list, all Tickets page
+
+**Short ID**:
+How the UI shows a Ticket's or Spec's ID while one Project is selected, its number alone as `#123`. With All Projects selected the full ID shows instead. Either way, clicking it copies the full ID.
+_Avoid_: Ticket number, short key
+
 **Long-lived Spec**:
 A Spec labelled `long-lived`, which never finishes, such as a CI Rule's Spec or the GitHub Issues Spec, so its Tickets land one by one, outside Land per Spec. Code Central labels the Specs it makes for CI Rules and GitHub Issues; the human may label or unlabel any Spec.
 _Avoid_: Bucket Spec, standing Spec
@@ -313,8 +321,16 @@ The default grouping of a State list: its Tickets alone, as a flat list.
 _Avoid_: Flat view, list mode
 
 **By Spec**:
-The grouping of a State list that shows the Specs with Tickets in it, each expanding to those Tickets, instead of the Tickets alone.
+The grouping of a State list that shows the Specs with Tickets in it as Spec rows, each expanding to those Tickets, instead of the Tickets alone.
 _Avoid_: Spec-first view, tree view, Spec mode
+
+**Show finished**:
+The All Tickets view's checkbox, off by default, that brings back its Done and Cancelled Tickets; Accepted Tickets are always shown. It is kept in the URL as `finished=1` and per browser beside the grouping.
+_Avoid_: Show done, history toggle
+
+**Spec row**:
+The one row the UI shows a Spec in, in the Requirements view, Needs Me and By Spec: ID, kind, title and needs-you dot, then the Stage strip for a Requirement or the State chips for any other Spec, then the headline. It expands to the Spec's Tickets.
+_Avoid_: Spec card, Requirement row, bs-card
 
 **To merge**:
 The Needs Me reason of an Accepted Ticket under the Branch or Pull Request Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge. Under Pull Request it links the pull request and says conflicting while the Code Host reports so.

@@ -1,7 +1,7 @@
 // Inbox layout tests: the real App and panels against FakeApi. They check
 // layout only; what the service computes (group order, reasons) is the
 // fake's seeded data, rendered as received.
-import { render, screen, within, waitFor, act, fireEvent } from "@testing-library/react";
+import { render, screen, within, waitFor, act, fireEvent, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
@@ -621,8 +621,15 @@ async function bySpecWorld() {
   return fake;
 }
 
-const cards = () => within(list()).queryAllByRole("region");
-const card = (name: string) => within(list()).getByRole("region", { name });
+const specRows = () => within(list()).queryAllByRole("region");
+const specRow = (name: string) => within(list()).getByRole("region", { name });
+// The Tickets an open Spec row lists; none while it is closed.
+const openIds = (name: string) => {
+  const tickets = within(specRow(name)).queryByRole("group", { name: `Tickets of ${name}` });
+  return tickets ? within(tickets).getAllByRole("link").map((a) => a.dataset.id) : [];
+};
+// The Spec row's own link, the one that opens the Spec.
+const specLinkOf = (name: string) => specRow(name).querySelector<HTMLElement>(`a[data-id]`)!;
 const bySpec = () => userEvent.click(within(list()).getByRole("button", { name: "By Spec" }));
 
 describe("State lists By Spec", () => {
@@ -641,60 +648,64 @@ describe("State lists By Spec", () => {
     expect(within(list()).queryByRole("button", { name: "By Spec" })).toBeNull();
   });
 
-  it("groups into collapsed cards in first-Ticket order, with kind, ID, n of m and chips", async () => {
+  it("groups into collapsed Spec rows in first-Ticket order, with kind, ID, n of m and chips", async () => {
     renderApp(await bySpecWorld(), "/?view=inbox&state=Ready");
     await within(list()).findByRole("button", { name: "By Spec" });
     await bySpec();
     expect(params().get("group")).toBe("spec");
-    expect(cards().map((c) => c.getAttribute("aria-label"))).toEqual([
+    expect(specRows().map((c) => c.getAttribute("aria-label"))).toEqual([
       "Export a Spec as Markdown", // its Stage acme-3 comes first
       "Archive finished Projects",
       "Wayfinding",
       "Beta plan",
     ]);
-    expect(rowIds()).toEqual([]); // collapsed: no rows rendered
+    expect(rowIds()).toEqual(["acme-1", "acme-5", "acme-9", "beta-1"]); // collapsed: the Spec rows alone
 
-    const archive = card("Archive finished Projects");
-    expect(archive).toHaveTextContent("Spec");
+    const archive = specRow("Archive finished Projects");
+    expect(within(archive).getByText("Spec")).toBeInTheDocument();
     expect(archive).toHaveTextContent("acme-5");
     expect(archive).toHaveTextContent("2 of 3");
     expect(within(archive).getByText("Ready 2")).toHaveAttribute("aria-current", "true");
     expect(within(archive).getByText("Failed 1")).not.toHaveAttribute("aria-current");
-    expect(card("Wayfinding")).toHaveTextContent("Map");
-    expect(card("Export a Spec as Markdown")).toHaveTextContent("Requirement");
-    expect(card("Export a Spec as Markdown")).toHaveTextContent("Done 1");
+    expect(within(specRow("Wayfinding")).getByText("Map")).toBeInTheDocument();
+    // A Requirement shows its Stage strip in place of chips.
+    const req = specRow("Export a Spec as Markdown");
+    expect(within(req).getByRole("list", { name: "Stages" })).toBeInTheDocument();
+    expect(within(req).queryByText("Done 1")).toBeNull();
+    expect(req).toHaveTextContent("3 of 4");
   });
 
-  it("opens a card with its Tickets in flat-list order, Stage Tickets marked, no Stage group", async () => {
+  it("opens a Spec row with its Tickets in flat-list order, Stage Tickets marked, no Stage group", async () => {
     renderApp(await bySpecWorld(), "/?view=inbox&state=Ready&group=spec");
     await userEvent.click(await within(list()).findByRole("button", { name: "Export a Spec as Markdown" }));
-    expect(rowIds()).toEqual(["acme-3", "acme-4", "acme-11"]);
+    expect(openIds("Export a Spec as Markdown")).toEqual(["acme-3", "acme-4", "acme-11"]);
     expect(within(list()).getByRole("link", { name: /acme-3/ })).toHaveTextContent("spec");
     expect(within(list()).queryByText(/run by a Factory/)).toBeNull();
+    expect(params().has("requirement")).toBe(false);
     await userEvent.click(within(list()).getByRole("button", { name: "Export a Spec as Markdown" }));
-    expect(rowIds()).toEqual([]);
+    expect(openIds("Export a Spec as Markdown")).toEqual([]);
   });
 
-  it("opens the selected Ticket's card on its own, which can be closed", async () => {
+  it("opens the selected Ticket's Spec row on its own, which can be closed", async () => {
     renderApp(await bySpecWorld(), "/?view=inbox&state=Ready&group=spec&ticket=acme-8");
-    await waitFor(() => expect(rowIds()).toEqual(["acme-6", "acme-8"]));
+    await waitFor(() => expect(openIds("Archive finished Projects")).toEqual(["acme-6", "acme-8"]));
     await userEvent.click(within(list()).getByRole("button", { name: "Archive finished Projects" }));
-    expect(rowIds()).toEqual([]);
+    expect(openIds("Archive finished Projects")).toEqual([]);
   });
 
-  it("opens the Spec from a card's title", async () => {
+  it("opens the Spec from a click on its row", async () => {
     renderApp(await bySpecWorld(), "/?view=inbox&state=Ready&group=spec&ticket=acme-8");
-    await userEvent.click(await within(list()).findByRole("link", { name: "Wayfinding" }));
+    await within(list()).findByRole("region", { name: "Wayfinding" });
+    await userEvent.click(specLinkOf("Wayfinding"));
     expect(params().get("requirement")).toBe("acme-9");
     expect(params().get("ticket")).toBeNull();
     expect(params().get("group")).toBe("spec");
-    expect(within(list()).getByRole("link", { name: "Wayfinding" })).toHaveAttribute("aria-current", "true");
+    expect(specLinkOf("Wayfinding")).toHaveAttribute("aria-current", "true");
   });
 
-  it("marks a card whose Ticket needs the human", async () => {
+  it("marks a Spec row whose Ticket needs the human", async () => {
     renderApp(await bySpecWorld(), "/?view=inbox&state=Failed&group=spec");
     const archive = await within(list()).findByRole("region", { name: "Archive finished Projects" });
-    expect(archive).toHaveClass("needs");
     expect(within(archive).getByLabelText("Needs you")).toBeInTheDocument();
     await userEvent.click(within(archive).getByRole("button", { name: "Archive finished Projects" }));
     expect(within(within(list()).getByRole("link", { name: /acme-7/ })).getByLabelText("Needs you")).toBeInTheDocument();
@@ -711,7 +722,7 @@ describe("State lists By Spec", () => {
     await userEvent.click(within(nav()).getByRole("button", { name: /^Acme/ }));
     expect(params().get("group")).toBe("spec");
     await userEvent.click(within(nav()).getByRole("button", { name: /^Ready/ }));
-    expect(cards().map((c) => c.getAttribute("aria-label"))).not.toContain("Beta plan");
+    expect(specRows().map((c) => c.getAttribute("aria-label"))).not.toContain("Beta plan");
   });
 
   it("uses the last pick when the address has none, and By Ticket clears it", async () => {
@@ -750,7 +761,7 @@ describe("State lists By Spec", () => {
     expect(await within(list()).findByText("No Tickets Cancelled.")).toBeInTheDocument();
   });
 
-  it("renders only card headers for a long collapsed list, newest first inside a Done card", async () => {
+  it("renders only Spec rows for a long collapsed list, newest first inside a Done Spec row", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
     const specs = ["A", "B", "C"].map((t) => fake.addSpec("acme", { title: `Spec ${t}` }));
@@ -759,17 +770,18 @@ describe("State lists By Spec", () => {
       fake.addTicket("acme", { title: `Done ${i}`, state: "Done", spec: { id: s.id, title: s.title }, updated: new Date(fake.now.getTime() + i * 1000).toISOString() });
     }
     renderApp(fake, "/?view=inbox&state=Done&group=spec");
-    await waitFor(() => expect(cards()).toHaveLength(3));
-    expect(rowIds()).toEqual([]);
-    // The newest Ticket (i=59, Spec C) is first, so its card leads.
-    expect(cards()[0]).toHaveAttribute("aria-label", "Spec C");
-    await userEvent.click(within(cards()[0]).getByRole("button"));
-    // Newest first inside the card: Done 59, 56, 53 ...
-    expect(within(list()).getAllByRole("link").filter((a) => a.dataset.id).map((a) => a.textContent).slice(0, 2)).toEqual([
+    await waitFor(() => expect(specRows()).toHaveLength(3));
+    expect(rowIds()).toHaveLength(3);
+    // The newest Ticket (i=59, Spec C) is first, so its Spec row leads.
+    expect(specRows()[0]).toHaveAttribute("aria-label", "Spec C");
+    await userEvent.click(within(specRows()[0]).getByRole("button", { name: "Spec C" }));
+    // Newest first inside the Spec row: Done 59, 56, 53 ...
+    const tickets = within(specRows()[0]).getByRole("group", { name: "Tickets of Spec C" });
+    expect(within(tickets).getAllByRole("link").slice(0, 2).map((a) => a.textContent)).toEqual([
       expect.stringContaining("Done 59"),
       expect.stringContaining("Done 56"),
     ]);
-    expect(rowIds()).toHaveLength(20);
+    expect(rowIds()).toHaveLength(23);
   });
 
   it("loads every Spec with one findSpecs call per Project", async () => {
@@ -777,5 +789,328 @@ describe("State lists By Spec", () => {
     renderApp(fake);
     await within(nav()).findByRole("button", { name: /^Ready/ });
     expect(fake.calls.filter((c) => c === "findSpecs")).toHaveLength(2);
+  });
+});
+
+describe("the Spec row", () => {
+  beforeEach(() => localStorage.clear());
+
+  // withLongLived adds a Long-lived Spec (acme-12) with a Ready Ticket
+  // (acme-13) and one a Factory is on (acme-14).
+  function withLongLived(fake: FakeApi) {
+    const fixes = fake.addSpec("acme", { title: "CI Fixes", labels: ["long-lived"] }); // acme-12
+    const spec = { id: fixes.id, title: fixes.title };
+    fake.addTicket("acme", { title: "Fix the flaky test", state: "Ready", spec }); // acme-13
+    fake.addTicket("acme", { title: "Fix lint", state: "In Progress", spec }); // acme-14
+    return fake;
+  }
+
+  it("badges every kind but a Requirement, and shows the strip for a Requirement and State chips for the rest", async () => {
+    renderApp(withLongLived(await bySpecWorld()), "/?view=inbox&state=Ready&group=spec");
+    const req = await within(list()).findByRole("region", { name: "Export a Spec as Markdown" });
+    expect(within(req).getByRole("list", { name: "Stages" })).toBeInTheDocument();
+    expect(within(req).queryByText("Requirement")).toBeNull();
+    expect(within(req).queryByText(/^Ready \d+$/)).toBeNull();
+
+    for (const [name, kind] of [["Archive finished Projects", "Spec"], ["Wayfinding", "Map"], ["CI Fixes", "Long-lived"]]) {
+      expect(within(specRow(name)).getByText(kind)).toBeInTheDocument();
+      expect(within(specRow(name)).queryByRole("list", { name: "Stages" })).toBeNull();
+      expect(within(specRow(name)).getByText(/^Ready \d+$/)).toHaveAttribute("aria-current", "true");
+    }
+    expect(within(specRow("CI Fixes")).getByText("In Progress 1")).not.toHaveAttribute("aria-current");
+  });
+
+  it("heads a plain Spec with its first need, else a Factory on it, else its Done count alone", async () => {
+    renderApp(withLongLived(await bySpecWorld()), "/?view=inbox&state=Ready&group=spec");
+    const archive = await within(list()).findByRole("region", { name: "Archive finished Projects" });
+    expect(archive).toHaveTextContent("Failed · 0 of 3 Done");
+    expect(specRow("CI Fixes")).toHaveTextContent("A Factory is on it · 0 of 2 Done");
+    expect(specRow("CI Fixes")).toHaveTextContent("1 of 2");
+    const beta = specRow("Beta plan");
+    expect(beta).toHaveTextContent("0 of 1 Done");
+    expect(beta).not.toHaveTextContent("·");
+    expect(beta).not.toHaveTextContent("1 of 1");
+  });
+
+  it("heads a finished Spec with its Done count", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    const s = fake.addSpec("acme", { title: "Shipped" }); // acme-1
+    for (const state of ["Done", "Done", "Cancelled"] as const) fake.addTicket("acme", { title: state, state, spec: { id: s.id, title: s.title } });
+    renderApp(fake, "/?view=inbox&state=Done&group=spec");
+    const row = await within(list()).findByRole("region", { name: "Shipped" });
+    expect(row).toHaveTextContent("Finished · 2 of 3 Tickets Done");
+    expect(row).toHaveTextContent("2 of 3");
+  });
+
+  it("dots a Spec that needs the human, and no other", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&state=Ready&group=spec");
+    const archive = await within(list()).findByRole("region", { name: "Archive finished Projects" });
+    // acme-7 needs the human, though it isn't in the Ready list.
+    expect(within(archive).getByLabelText("Needs you")).toBeInTheDocument();
+    for (const name of ["Export a Spec as Markdown", "Wayfinding", "Beta plan"]) expect(within(specRow(name)).queryByLabelText("Needs you")).toBeNull();
+  });
+
+  it("expands a Requirement in the Requirements view to all its Tickets, Stages first, with State chips, without navigating", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&list=requirements");
+    await userEvent.click(await within(list()).findByRole("button", { name: "Export a Spec as Markdown" }));
+    expect(openIds("Export a Spec as Markdown")).toEqual(["acme-2", "acme-3", "acme-4", "acme-11"]);
+    expect(within(list()).getByRole("link", { name: /acme-2/ })).toHaveTextContent("Done");
+    expect(within(list()).getByRole("link", { name: /acme-11/ })).toHaveTextContent("Ready");
+    expect(params().has("requirement")).toBe(false);
+    await userEvent.click(within(list()).getByRole("button", { name: "Export a Spec as Markdown" }));
+    expect(openIds("Export a Spec as Markdown")).toEqual([]);
+  });
+
+  it("shows a Map in the Requirements view with chips and its decision count", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&list=requirements");
+    const map = await within(list()).findByRole("region", { name: "Wayfinding" });
+    expect(within(map).getByText("Map")).toBeInTheDocument();
+    expect(within(map).getByText("Ready 1")).toBeInTheDocument();
+    expect(map).toHaveTextContent("0/0 decided");
+    await userEvent.click(within(map).getByRole("button", { name: "Wayfinding" }));
+    expect(openIds("Wayfinding")).toEqual(["acme-10"]);
+  });
+
+  it("opens the selected Ticket's row on its own in the Requirements view, and a row click opens the Spec", async () => {
+    renderApp(await bySpecWorld(), "/?view=inbox&list=requirements&ticket=acme-11");
+    await waitFor(() => expect(openIds("Export a Spec as Markdown")).toContain("acme-11"));
+    await userEvent.click(specLinkOf("Export a Spec as Markdown"));
+    expect(params().get("requirement")).toBe("acme-1");
+    expect(specLinkOf("Export a Spec as Markdown")).toHaveAttribute("aria-current", "true");
+  });
+
+  it("expands a Requirement in Needs Me to its Tickets", async () => {
+    renderApp(await requirements());
+    const group = await within(list()).findByRole("region", { name: "Requirements" });
+    await userEvent.click(within(group).getByRole("button", { name: "Export a Spec as Markdown" }));
+    expect(openIds("Export a Spec as Markdown")).toEqual(["acme-2", "acme-3", "acme-4"]);
+    expect(within(within(list()).getByRole("link", { name: /acme-3/ })).getByLabelText("Needs you")).toBeInTheDocument();
+    expect(params().has("requirement")).toBe(false);
+  });
+});
+
+describe("Short IDs", () => {
+  const idIn = (name: string) => within(list()).findByRole("button", { name });
+
+  it("shows #n with one Project selected and the full ID with All Projects, the full ID on hover", async () => {
+    renderApp(world(), "/?state=Ready&project=acme");
+    const short = await idIn("acme-4");
+    expect(short).toHaveTextContent("#4");
+    expect(short).toHaveAttribute("title", "acme-4");
+    cleanup();
+    renderApp(world(), "/?state=Ready");
+    expect(await idIn("acme-4")).toHaveTextContent("acme-4");
+  });
+
+  it("copies the full ID on click, flashes Copied and leaves the URL alone", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderApp(world(), "/?state=Ready&project=acme");
+    const before = window.location.href;
+    const id = await idIn("acme-4");
+    await user.click(id);
+    expect(writeText).toHaveBeenCalledWith("acme-4");
+    expect(await within(list()).findByText("Copied")).toBeInTheDocument();
+    expect(window.location.href).toBe(before);
+  });
+
+  it("does nothing when there is no clipboard", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+    renderApp(world(), "/?state=Ready&project=acme");
+    const before = window.location.href;
+    const id = await idIn("acme-4");
+    await user.click(id);
+    expect(id).toHaveTextContent("#4");
+    expect(window.location.href).toBe(before);
+  });
+
+  it("does nothing more when the write fails", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderApp(world(), "/?state=Ready&project=acme");
+    const before = window.location.href;
+    const id = await idIn("acme-4");
+    await user.click(id);
+    expect(writeText).toHaveBeenCalled();
+    expect(id).toHaveTextContent("#4");
+    expect(window.location.href).toBe(before);
+  });
+});
+
+describe("the All Tickets view", () => {
+  beforeEach(() => localStorage.clear());
+
+  async function ticketsWorld() {
+    const fake = await bySpecWorld();
+    const at = (m: number) => new Date(fake.now.getTime() + m * 60_000).toISOString();
+    const plain = { id: "acme-5", title: "Archive finished Projects" };
+    fake.addTicket("acme", { title: "Sketch the menu", state: "Ready", labels: ["prototype"], spec: plain, created: at(10) }); // acme-12
+    fake.addTicket("beta", { title: "Beta newest", state: "Ready", spec: { id: "beta-1", title: "Beta plan" }, created: at(20) }); // beta-3
+    fake.addTicket("acme", { title: "Old and done", state: "Done", spec: plain, created: at(-30) }); // acme-13
+    return fake;
+  }
+  const allTickets = () => userEvent.click(within(nav()).getByRole("button", { name: /^All Tickets/ }));
+
+  it("sits after Requirements, counting unfinished Tickets and following the Project filter", async () => {
+    renderApp(await ticketsWorld());
+    await within(nav()).findByRole("button", { name: /^Requirements/ });
+    const names = within(nav()).getAllByRole("button").map((b) => b.textContent);
+    const at = names.findIndex((n) => /^Requirements/.test(n ?? ""));
+    expect(names[at + 1]).toMatch(/^All Tickets/);
+    // acme: 4 Stages? seeded Tickets 1 Stage Done, the rest unfinished; the Done one and Done Stage excluded.
+    const total = Number(within(nav()).getByRole("button", { name: /^All Tickets/ }).textContent!.replace(/\D/g, ""));
+    await userEvent.click(within(nav()).getByRole("button", { name: /^Beta/ }));
+    const beta = Number(within(nav()).getByRole("button", { name: /^All Tickets/ }).textContent!.replace(/\D/g, ""));
+    expect(beta).toBe(2);
+    expect(total).toBeGreaterThan(beta);
+  });
+
+  it("lists every kind of Ticket inline, newest first by creation across Projects, with chip, label and Spec line", async () => {
+    renderApp(await ticketsWorld(), "/?view=inbox&finished=1");
+    await within(nav()).findByRole("button", { name: /^All Tickets/ });
+    await allTickets();
+    expect(params().get("list")).toBe("tickets");
+    expect(rowIds()[0]).toBe("beta-3");
+    expect(rowIds()[1]).toBe("acme-12");
+    expect(rowIds().at(-1)).toBe("acme-13"); // the oldest created
+    expect(rowIds()).toContain("acme-3"); // a Stage Ticket, inline
+    expect(within(list()).queryByText(/run by a Factory/)).toBeNull();
+
+    const proto = within(list()).getByRole("link", { name: /acme-12/ });
+    expect(proto).toHaveTextContent("Prototype");
+    expect(proto).toHaveTextContent("Ready");
+    expect(proto).toHaveTextContent("Spec");
+    expect(proto).toHaveTextContent("acme-5");
+    expect(proto).toHaveTextContent("Archive finished Projects");
+    expect(within(list()).getByRole("link", { name: /acme-3/ })).toHaveTextContent("spec");
+    expect(within(list()).getByRole("link", { name: /acme-6/ })).not.toHaveTextContent(/Prototype|grilling/);
+    expect(within(within(list()).getByRole("link", { name: /acme-7/ })).getByLabelText("Needs you")).toBeInTheDocument();
+  });
+
+  it("follows the Project filter and opens a Ticket on the right", async () => {
+    renderApp(await ticketsWorld(), "/?view=inbox&list=tickets&project=beta");
+    await waitFor(() => expect(rowIds()).toEqual(["beta-3", "beta-2"]));
+    await userEvent.click(within(list()).getByRole("link", { name: /Beta thing/ }));
+    expect(params().get("ticket")).toBe("beta-2");
+    expect(params().get("list")).toBe("tickets");
+    expect(detail()).toHaveTextContent("Beta thing");
+  });
+
+  it("keeps the grouping toggle, which persists", async () => {
+    renderApp(await ticketsWorld(), "/?view=inbox&list=tickets");
+    await within(list()).findByRole("button", { name: "By Spec" });
+    await bySpec();
+    expect(params().get("group")).toBe("spec");
+    expect(localStorage.length).toBe(1);
+  });
+
+  it("groups By Spec in the order of each Spec's newest Ticket, Stage Tickets first, with State chips", async () => {
+    renderApp(await ticketsWorld(), "/?view=inbox&list=tickets&group=spec&project=acme&finished=1");
+    const rows = await within(list()).findAllByRole("region");
+    // acme-5's newest Ticket (acme-12) is newer than any of the Requirement's.
+    expect(rows[0]).toHaveAccessibleName("Archive finished Projects");
+    expect(within(rows[0]).queryByText("Sketch the menu")).toBeNull(); // collapsed
+    await userEvent.click(within(rows[0]).getByRole("button", { name: "Archive finished Projects" }));
+    const plainIds = within(rows[0]).getAllByRole("link").map((a) => a.getAttribute("data-id")).filter(Boolean);
+    expect(plainIds.indexOf("acme-13")).toBeLessThan(plainIds.indexOf("acme-12")); // oldest first
+    expect(within(rows[0]).getByText("Sketch the menu").closest("a")).toHaveTextContent("Ready");
+
+    const req = within(list()).getByRole("region", { name: "Export a Spec as Markdown" });
+    await userEvent.click(within(req).getByRole("button", { name: "Export a Spec as Markdown" }));
+    const ids = within(req).getAllByRole("link").map((a) => a.getAttribute("data-id")).filter(Boolean);
+    expect(ids.slice(1)).toEqual(["acme-2", "acme-3", "acme-4", "acme-11"]); // Stages first, in Stage order
+  });
+
+  it("switching the grouping in a State list switches it here", async () => {
+    renderApp(await ticketsWorld(), "/?state=Ready");
+    await within(list()).findByRole("button", { name: "By Spec" });
+    await bySpec();
+    await allTickets();
+    expect(params().get("group")).toBe("spec");
+    expect(await within(list()).findAllByRole("region")).not.toHaveLength(0);
+  });
+
+  it("hides Done and Cancelled until Show finished, kept in the URL and per browser", async () => {
+    renderApp(await ticketsWorld(), "/?view=inbox&list=tickets");
+    await within(list()).findByRole("checkbox", { name: "Show finished" });
+    await waitFor(() => expect(rowIds()).not.toContain("acme-13"));
+    await userEvent.click(within(list()).getByRole("checkbox", { name: "Show finished" }));
+    expect(params().get("finished")).toBe("1");
+    await waitFor(() => expect(rowIds()).toContain("acme-13"));
+    expect(localStorage.getItem("code-central.inbox.finished")).toBe("1");
+
+    window.history.replaceState(null, "", "/?view=inbox&list=tickets");
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+    await waitFor(() => expect(within(list()).getByRole("checkbox", { name: "Show finished" })).toBeChecked());
+
+    await userEvent.click(within(list()).getByRole("checkbox", { name: "Show finished" }));
+    expect(params().has("finished")).toBe(false);
+    await waitFor(() => expect(rowIds()).not.toContain("acme-13"));
+  });
+
+  describe("search by ID", () => {
+    const box = () => within(list()).getByRole("searchbox", { name: "Ticket ID" });
+    const search = (text: string) => userEvent.type(box(), text);
+
+    it("matches substrings and prefixes of the full ID, case-insensitively, across Projects, finished included", async () => {
+      renderApp(await ticketsWorld(), "/?view=inbox&list=tickets");
+      await within(list()).findByRole("searchbox", { name: "Ticket ID" });
+      await search("ACME-1");
+      await waitFor(() => expect(rowIds()).toContain("acme-13")); // Done, Show finished off
+      expect(rowIds().every((id) => id?.includes("acme-1"))).toBe(true);
+      await userEvent.clear(box());
+      await search("3");
+      await waitFor(() => expect(rowIds()).toContain("beta-3"));
+      expect(rowIds()).toContain("acme-3");
+      expect(window.location.search).not.toContain("3");
+    });
+
+    it("never matches titles and says No Tickets match.", async () => {
+      renderApp(await ticketsWorld(), "/?view=inbox&list=tickets");
+      await within(list()).findByRole("searchbox", { name: "Ticket ID" });
+      await search("Sketch");
+      expect(await within(list()).findByText("No Tickets match.")).toBeInTheDocument();
+    });
+
+    it("By Spec shows a Spec with its matching Tickets, or all its Tickets when its own ID matches, opened", async () => {
+      renderApp(await ticketsWorld(), "/?view=inbox&list=tickets&group=spec");
+      await within(list()).findByRole("searchbox", { name: "Ticket ID" });
+      await search("acme-13");
+      const row = await within(list()).findByRole("region", { name: "Archive finished Projects" });
+      expect(within(row).getAllByRole("link").map((a) => a.getAttribute("data-id")).filter(Boolean).slice(1)).toEqual(["acme-13"]); // after the Spec's own link
+      await userEvent.clear(box());
+      await search("acme-5");
+      const whole = await within(list()).findByRole("region", { name: "Archive finished Projects" });
+      const ids = within(whole).getAllByRole("link").map((a) => a.getAttribute("data-id")).filter(Boolean);
+      expect(ids).toEqual(expect.arrayContaining(["acme-12", "acme-13"]));
+    });
+  });
+
+  it("leaves out fully finished Specs By Spec", async () => {
+    const fake = await ticketsWorld();
+    fake.addTicket("beta", { title: "Beta shipped", state: "Done", spec: { id: "beta-9", title: "Shipped plan" } });
+    renderApp(fake, "/?view=inbox&list=tickets&group=spec");
+    await within(list()).findAllByRole("region");
+    expect(within(list()).queryByRole("region", { name: "Shipped plan" })).toBeNull();
+    await userEvent.click(within(list()).getByRole("checkbox", { name: "Show finished" }));
+    expect(await within(list()).findByRole("region", { name: "Shipped plan" })).toBeInTheDocument();
+  });
+
+  it("says No Tickets yet. with Show finished on and nothing there", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    renderApp(fake, "/?view=inbox&list=tickets&finished=1");
+    expect(await within(list()).findByText("No Tickets yet.")).toBeInTheDocument();
+  });
+
+  it("says so when nothing is there", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    renderApp(fake, "/?view=inbox&list=tickets");
+    expect(await within(list()).findByText("No unfinished Tickets.")).toBeInTheDocument();
   });
 });

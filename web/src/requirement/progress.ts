@@ -1,6 +1,7 @@
 // A Requirement's progress as the UI shows it: one segment per Stage and one
 // for Build, worked out from the service's requirement block, the
 // Requirement's implementation Tickets and what Needs Me says needs the human.
+import { REASON_LABEL } from "../format";
 import { FINISHED, type NeedsMeReason, type NeedsMeView, type RequirementView, type StageName, type TicketRow } from "../api/types";
 
 // MAP_TITLE names the segment a Requirement made from a Map has in
@@ -138,4 +139,18 @@ export function waitingNote(p: Progress): string | undefined {
   if (!p.waitingForFactory) return undefined;
   const what = p.current.ticket ? p.current.name : "a Build Ticket";
   return `Waiting for a Factory to claim ${what}.${p.needs.length ? "" : " Nothing needs you yet."}`;
+}
+
+// headline is a Requirement's one line in its Spec row: what needs the
+// human, else what it is waiting for.
+export function headline(finished: boolean, p: Progress): string {
+  if (finished) return p.total ? `Finished · ${p.done} of ${p.total} Tickets Done` : "Finished";
+  const n = p.needs[0];
+  if (n) {
+    const where = n.stage ? p.segments.find((s) => s.stage === n.stage)!.name : "Build";
+    return `${where}: ${REASON_LABEL[n.reason]}${p.needs.length > 1 ? ` · +${p.needs.length - 1} more` : ""}`;
+  }
+  if (p.waitingForFactory) return `${p.current.name}: waiting for a Factory`;
+  if (p.current.stage === "build") return p.total ? `Build: ${p.done} of ${p.total} Done` : "Build: no Tickets yet";
+  return `${p.current.name}: ${p.current.progress === "running" ? "a Factory is on it" : "not started"}`;
 }
