@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"maps"
 	"path"
 	"reflect"
 	"slices"
@@ -502,7 +503,8 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 	if err != nil {
 		return Written[CIRunsView]{}, err
 	}
-	for n := range changed {
+	// In Ticket order, so what watches the events sees them the same way each time.
+	for _, n := range slices.Sorted(maps.Keys(changed)) {
 		c.events.Publish(events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, n)})
 	}
 	if reported.Runs == nil {
