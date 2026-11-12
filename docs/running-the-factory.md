@@ -37,7 +37,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Step 3 of [A brand new repository](setting-up-a-project.md#a-brand-new-repository) commits it.
 
-   The base, the branch work starts from and lands on, is the Project's **Base branch** setting in Project Options (`main` by default), read again on every poll. The Factory doesn't care which branch is checked out, or whether HEAD is detached. `code-central-factory -h` lists its flags. These are the ones that matter:
+   The base, the branch work starts from and lands on, is the Project's **Base branch** setting in Project Options (`main` by default), read again on every poll. The Factory doesn't care which branch is checked out, or whether HEAD is detached. When you change it, the Factory prints `base: release, was main` and applies the new base to every step not yet taken: an Accepted Ticket or waiting Spec Branch not yet merged merges into it, and so does a branch in progress. Work already merged into the old base finishes there (its push and CI), an open pull request keeps its target, and a Ticket waiting under Branch is watched on the new base. The Factory remembers where it merged only while it runs. `code-central-factory -h` lists its flags. These are the ones that matter:
 
    | Flag | What it does |
    | --- | --- |

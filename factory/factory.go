@@ -246,6 +246,11 @@ type factory struct {
 	// human to merge under the Branch Landing Method, already said; the
 	// poll's own.
 	leftOnBranch map[string]bool
+	// mergedOn is where the Factory merged each Ticket it hasn't landed
+	// yet, so a change of base leaves it to finish there.
+	mergedOn map[string]mergeOn
+	// oldBases are the bases the Project named earlier in this run.
+	oldBases []string
 
 	// baseDiverged is whether the local base holds commits the Push
 	// remote's doesn't, so nothing lands and no branch is cut. baseCurrent
@@ -307,7 +312,7 @@ type factory struct {
 // newFactory is a factory with nothing found out yet: start fills in the
 // rest.
 func newFactory(e Env, o options) *factory {
-	return &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
+	return &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, mergedOn: map[string]mergeOn{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
 }
 
 // start makes every start-up check, refusing with the reason.
@@ -469,6 +474,7 @@ func (f *factory) setBase(base string) {
 	if old != base {
 		f.printf("base: %s, was %s", base, old)
 		f.baseDiverged, f.baseCurrent = false, false
+		f.oldBases = append(f.oldBases, old)
 	}
 }
 

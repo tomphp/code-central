@@ -99,7 +99,7 @@ func (f *factory) reportBaseState(ctx context.Context, in core.ReportBaseInput) 
 // Watcher to open a pull request on.
 func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, landing core.LandingView, policy store.LandingPolicy) {
 	if tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged {
-		f.landMerged(ctx, tk)
+		f.landMerged(ctx, tk, landing.Remote)
 		return
 	}
 	head, _, err := f.workOf(tk)
@@ -126,12 +126,24 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, landi
 	f.reportPushed(ctx, tk, policy, tk.Branch, f.remoteTip(landing.Remote, tk.Branch, head))
 }
 
+// inOldBase reports whether the fetched remote holds commit on a base the
+// Project named earlier in this run: an open pull request keeps its target
+// when the base changes, so it merges there.
+func (f *factory) inOldBase(commit, remote string) bool {
+	for _, b := range f.oldBases {
+		if f.repository.isAncestor(commit, "refs/remotes/"+remote+"/"+b) {
+			return true
+		}
+	}
+	return false
+}
+
 // landMerged lands tk, whose pull request is reported merged, at the merge
 // commit, once the fetched base holds it. Until then it waits for a later
 // poll.
-func (f *factory) landMerged(ctx context.Context, tk core.TicketView) {
+func (f *factory) landMerged(ctx context.Context, tk core.TicketView, remote string) {
 	merge := tk.PullRequest.MergeCommit
-	if !f.baseCurrent || !f.inBase(merge) {
+	if !f.baseCurrent || !f.inBase(merge) && !f.inOldBase(merge, remote) {
 		key := tk.ID + "@" + merge
 		if !f.leftOnBranch[key] {
 			f.leftOnBranch[key] = true
@@ -147,7 +159,7 @@ func (f *factory) landMerged(ctx context.Context, tk core.TicketView) {
 // merged, as a branch merged by hand does under Branch. A Ticket in any
 // other State whose pull request is merged gets a warning line and a
 // comment, once.
-func (f *factory) detectMergedPullRequests(ctx context.Context) {
+func (f *factory) detectMergedPullRequests(ctx context.Context, remote string) {
 	for _, tk := range f.landable(ctx, mergeableStates...) {
 		if f.halted(ctx) || f.paused() {
 			return
@@ -156,7 +168,7 @@ func (f *factory) detectMergedPullRequests(ctx context.Context) {
 			continue
 		}
 		if tk.State == store.InReview {
-			f.landMerged(ctx, tk)
+			f.landMerged(ctx, tk, remote)
 			continue
 		}
 		key := tk.ID + "@" + tk.PullRequest.MergeCommit
