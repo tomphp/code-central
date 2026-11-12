@@ -16,11 +16,11 @@ import (
 // Land anyway, and there is no CI gate.
 
 // withCITracking turns CI Tracking on beside Pull Request.
-func (f fixture) withCITracking(t *testing.T, unblockOnPush bool) {
+func (f fixture) withCITracking(t *testing.T) {
 	t.Helper()
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
-		p.CI = store.CI{Tracking: true, Provider: store.CIGitHubActions, Repository: "acme/web", UnblockOnPush: unblockOnPush, PushRemoteURL: p.CI.PushRemoteURL}
+		p.CI = store.CI{Tracking: true, Provider: store.CIGitHubActions, Repository: "acme/web", PushRemoteURL: p.CI.PushRemoteURL}
 		return w.PutProject(p)
 	})
 	if err != nil {
@@ -115,7 +115,7 @@ func TestAMergedPullRequestIsNotPullRequestClosed(t *testing.T) {
 func TestCIFailedUnderPullRequestNeverOffersLandAnyway(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.withCITracking(t, false)
+	f.withCITracking(t)
 	f.reportRun(t, "acme-2", store.CICompleted, store.CIFailure)
 
 	v := f.getTicket(t, "acme-2")
@@ -133,7 +133,7 @@ func TestCIFailedUnderPullRequestNeverOffersLandAnyway(t *testing.T) {
 func TestCICancelledUnderPullRequestOffersRerunAndSendBack(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.withCITracking(t, false)
+	f.withCITracking(t)
 	f.reportRun(t, "acme-2", store.CICompleted, store.CICancelled)
 
 	wantReason(t, f.get(t, "2"), core.ReasonCICancelled)
@@ -145,22 +145,9 @@ func TestCICancelledUnderPullRequestOffersRerunAndSendBack(t *testing.T) {
 func TestCIUnavailableNeverAppliesUnderPullRequest(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestAccepted(t)
-	f.withCITracking(t, false)
+	f.withCITracking(t)
 	f.clock.Advance(core.CIUnavailableAfter + time.Minute)
 	wantReason(t, f.get(t, "2"), core.ReasonToMerge)
-}
-
-func TestUnblockOnPushHasNoEffectUnderPullRequest(t *testing.T) {
-	f := newFixture(t)
-	f.work(t, store.Ready, store.Ready) // acme-2, acme-3
-	f.addBlocker(t, "acme-2", "acme-3")
-	f.pullRequestWork(t, 3)
-	f.withCITracking(t, true)
-	f.reportRun(t, "acme-3", store.CICompleted, store.CISuccess)
-
-	if v := f.get(t, "acme-2"); !v.Blocked || v.Claimable {
-		t.Fatalf("blocked %v claimable %v, want acme-3 blocking until it lands", v.Blocked, v.Claimable)
-	}
 }
 
 // pullRequestWork turns Pull Request on and makes Ticket n Accepted and

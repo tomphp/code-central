@@ -14,8 +14,7 @@ import (
 // Blockers (ticket 28). A Blocker is a many-to-many link between Tickets
 // in one Project, across Specs, stored on the dependant as blocked_by.
 // Blocking is computed on read, by blockRule: Done clears a Blocker, as
-// does, under Unblock on push, a CI result running or passed while the CI
-// gate holds it (code-central-298). A Cancelled Blocker is followed
+// does a Blocker inside a Spec once it is merged into the Spec Branch. A Cancelled Blocker is followed
 // through its Replacements (store.Follow), so cancelling never rewrites
 // another Ticket's file.
 
@@ -35,11 +34,8 @@ type BlockerView struct {
 	Title string      `json:"title"`
 	State store.State `json:"state"`
 	Via   string      `json:"via,omitempty"`
-	// CIResult is the Blocker's CI result while the CI gate holds it,
-	// whether or not Unblock on push is on, and Cleared is whether it no
-	// longer blocks though it isn't Done (code-central-299).
-	CIResult CIResult `json:"ci_result,omitempty"`
-	Cleared  bool     `json:"cleared"`
+	// Cleared is whether it no longer blocks though it isn't Done.
+	Cleared bool `json:"cleared"`
 	// brief shows the Blocker as its ID and State only (TicketView.Brief).
 	brief bool
 }
@@ -152,8 +148,7 @@ func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
 			}
 			seen[m] = true
 			bt, _ := b.r.Ticket(key, m)
-			v := BlockerView{ID: DisplayID(key, m), Title: bt.Title, State: bt.State, CIResult: b.gatedCIResult(bt)}
-			v.Cleared = b.p.CI.UnblockOnPush && (v.CIResult == CIRunning || v.CIResult == CIPassed)
+			v := BlockerView{ID: DisplayID(key, m), Title: bt.Title, State: bt.State}
 			// Within a Spec, a Spec-landed Blocker clears once its work is
 			// merged into the Spec Branch.
 			if bt.Spec == t.Spec && bt.State == store.Accepted && specMergeCounts(bt) && specLanded(b.r, b.p.Landing, key, bt) {
@@ -168,24 +163,6 @@ func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
 	return out
 }
 
-// gatedCIResult is bt's CI result while the CI gate holds it, else "".
-// Under Unblock on push a result running (which includes no runs
-// reported, or a pending Re-run request) or passed clears bt; a failed
-// result, or none once the pushed commit's runs are pruned, keeps it
-// blocking. ciGated reads the Project's CI Runs only for a Ticket
-// Accepted with a pushed commit under Merge + Push with CI Tracking on.
-// A push no later than bt's last move back to Ready, as when it was sent
-// back and accepted again but not yet pushed, isn't its work, so it has
-// no CI result here and keeps blocking. Times are whole seconds, and a
-// new push always comes after the work done since.
-func (b blockRule) gatedCIResult(bt store.Ticket) CIResult {
-	pushed, runs, ok := ciGated(b.r, b.p, bt, b.now)
-	if !ok || !pushed.Pushed.After(backToReady(bt)) {
-		return ""
-	}
-	return latestCIResult(pushed, runs, b.now)
-}
-
 // backToReady is when t last moved to Ready from another State, or zero
 // if it never has; its creation doesn't count.
 func backToReady(t store.Ticket) time.Time {
@@ -198,17 +175,13 @@ func backToReady(t store.Ticket) time.Time {
 }
 
 // blockedError rejects claiming a blocked Ticket, naming its Blockers,
-// with the CI result of one the CI gate holds, whether or not Unblock on
-// push is on.
+
 func (b blockRule) blockedError(t store.Ticket, actor Actor) error {
 	var names []string
 	for _, v := range b.openBlockers(t) {
 		s := fmt.Sprintf("%s (%s", v.ID, v.State)
 		if v.State == store.Cancelled {
 			s += ", with no Replacements"
-		}
-		if v.CIResult != "" {
-			s += ", CI " + string(v.CIResult)
 		}
 		if v.Via != "" {
 			s += ", replacing Cancelled " + v.Via

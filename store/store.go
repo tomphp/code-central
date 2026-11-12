@@ -179,8 +179,8 @@ func ciProviderNames() []string {
 // CI is a Project's CI settings: whether CI Tracking is on, the CI
 // Provider and the repository it watches, the Ignored workflows (each a
 // workflow file's base name, such as ci.yml, or a pipeline's name), the
-// URL of the Push remote the Factory last reported, the CI Rules, and
-// whether Unblock on push is on. Repository is the GitHub repository,
+// URL of the Push remote the Factory last reported, and the CI Rules.
+// Repository is the GitHub repository,
 // ProjectURL the Azure DevOps project and PATEnv the name of the
 // environment variable holding its PAT (never the PAT); each provider
 // keeps its own.
@@ -196,7 +196,6 @@ type CI struct {
 	// the Pull Request Watcher opens pull requests into.
 	PushRemoteBase string
 	Rules          []CIRule
-	UnblockOnPush  bool
 }
 
 // AnyWorkflow is the workflow of a CI Rule that matches every workflow
@@ -228,7 +227,7 @@ func DefaultCI() CI { return CI{Provider: CIGitHubActions} }
 func (c CI) Equal(d CI) bool {
 	return c.Tracking == d.Tracking && c.Provider == d.Provider && c.Repository == d.Repository && c.ProjectURL == d.ProjectURL && c.PATEnv == d.PATEnv &&
 		slices.Equal(c.IgnoredWorkflows, d.IgnoredWorkflows) && c.PushRemoteURL == d.PushRemoteURL && c.PushRemoteBase == d.PushRemoteBase &&
-		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal) && c.UnblockOnPush == d.UnblockOnPush
+		slices.EqualFunc(c.Rules, d.Rules, CIRule.Equal)
 }
 
 // orDefault fills in what c leaves empty from DefaultCI.

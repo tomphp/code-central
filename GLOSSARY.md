@@ -217,12 +217,8 @@ A Ticket's running, failed, cancelled or passed, worked out from the CI Runs of 
 _Avoid_: Build status
 
 **CI gate**:
-What holds a pushed Ticket back from landing until its CI result is passed, so it holds on running, failed and cancelled. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own. Under Land per Spec a Spec's waiting Tickets share one pushed commit, so one CI result gates them all. Under Unblock on push the gate still holds landing, but no longer holds Blockers.
+What holds a pushed Ticket back from landing until its CI result is passed, so it holds on running, failed and cancelled. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own. Under Land per Spec a Spec's waiting Tickets share one pushed commit, so one CI result gates them all.
 _Avoid_: CI check, CI hold, waiting-on-CI State
-
-**Unblock on push**:
-A CI Tracking option, off by default, by which an Accepted Ticket whose latest pushed commit, pushed since it was last sent back to Ready, has a CI result running or passed no longer blocks, though it still lands only on a passed CI result. It has effect only while the CI gate holds.
-_Avoid_: early unblock, skip CI gate, don't wait for CI
 
 **Ignored workflows**:
 A Project's list of workflow names, such as `nightly.yml` or a pipeline's name, whose runs never count towards a CI result and never fire an "any workflow" CI Rule. They are still shown, marked ignored.
@@ -241,7 +237,7 @@ The git remote a Landing Method's Push sends work to, `origin` unless the human 
 _Avoid_: Upstream, origin (for the concept)
 
 **Blocker**:
-A Ticket in the same Project that must reach Done before another Ticket can be claimed, or, under Unblock on push, must be Accepted with a pushed commit whose CI result isn't failed. Under Land per Spec, a Blocker on the same Spec as the dependant is also cleared once it is Accepted and its work is merged into the Spec Branch. A Blocker that no longer blocks though it isn't Done is cleared, shown as "no longer blocking".
+A Ticket in the same Project that must reach Done before another Ticket can be claimed, which an Accepted Ticket waiting on CI doesn't until it lands. Under Land per Spec, a Blocker on the same Spec as the dependant is also cleared once it is Accepted and its work is merged into the Spec Branch. A Blocker that no longer blocks though it isn't Done is cleared, shown as "no longer blocking".
 _Avoid_: Dependency
 
 **Replacement**:

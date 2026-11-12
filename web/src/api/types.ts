@@ -120,10 +120,6 @@ export interface CITrackingChange {
   // ignored_workflows are workflow names: workflow file names, such as
   // ci.yml, or pipeline names.
   ignored_workflows: string[];
-  // unblock_on_push lets a Ticket the CI gate holds stop blocking while
-  // its pushed commit's CI runs or has passed. It may be on while CI
-  // Tracking is off.
-  unblock_on_push: boolean;
 }
 
 // A CI Rule as the human adds or edits it: when workflow fails on branch,
@@ -483,11 +479,8 @@ export interface BlockerView {
   title: string;
   state: State;
   via?: string;
-  // ci_result is the Blocker's CI result while the CI gate holds it,
-  // whether or not Unblock on push is on.
-  ci_result?: CIResult;
   // cleared is whether the Blocker no longer blocks though it isn't Done,
-  // which only Unblock on push does.
+  // as one on the same Spec does once it is merged into the Spec Branch.
   cleared: boolean;
 }
 

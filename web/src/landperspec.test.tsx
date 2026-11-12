@@ -63,7 +63,7 @@ describe("the per-Spec CI failed item", () => {
   it("names the Spec and lists the other waiting Tickets, offering no Send back to fix", async () => {
     const fake = await world(true);
     await fake.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
-    await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
+    await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
     await fake.reportPushedCommit("acme", "acme-5", "abc1234567");
     await fake.reportCIRuns("acme", [
       { id: 1, attempt: 1, workflow: "ci.yml", name: "CI", branch: "main", commit: "abc1234567", status: "completed", conclusion: "failure", url: "https://example.test/1", jobs: [], ticket: "acme-5" },
