@@ -1307,6 +1307,16 @@ export class FakeApi implements Api {
     return this.projectView(p);
   }
 
+  async setSubagentExploration(key: string, on: boolean): Promise<ProjectView> {
+    this.calls.push("setSubagentExploration");
+    const p = this.writable(key);
+    if (p.stage_guides.subagent_exploration !== on) {
+      p.stage_guides = { subagent_exploration: on };
+      this.emit({ type: "project.changed", project: key });
+    }
+    return this.projectView(p);
+  }
+
   async setModels(key: string, change: Models): Promise<ProjectView> {
     this.calls.push("setModels");
     const p = this.writable(key);
