@@ -1,7 +1,7 @@
 // Inbox layout tests: the real App and panels against FakeApi. They check
 // layout only; what the service computes (group order, reasons) is the
 // fake's seeded data, rendered as received.
-import { render, screen, within, waitFor, act, fireEvent } from "@testing-library/react";
+import { render, screen, within, waitFor, act, fireEvent, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
@@ -763,7 +763,7 @@ describe("State lists By Spec", () => {
     expect(rowIds()).toEqual([]);
     // The newest Ticket (i=59, Spec C) is first, so its card leads.
     expect(cards()[0]).toHaveAttribute("aria-label", "Spec C");
-    await userEvent.click(within(cards()[0]).getByRole("button"));
+    await userEvent.click(within(cards()[0]).getAllByRole("button")[0]);
     // Newest first inside the card: Done 59, 56, 53 ...
     expect(within(list()).getAllByRole("link").filter((a) => a.dataset.id).map((a) => a.textContent).slice(0, 2)).toEqual([
       expect.stringContaining("Done 59"),
@@ -777,5 +777,56 @@ describe("State lists By Spec", () => {
     renderApp(fake);
     await within(nav()).findByRole("button", { name: /^Ready/ });
     expect(fake.calls.filter((c) => c === "findSpecs")).toHaveLength(2);
+  });
+});
+
+describe("Short IDs", () => {
+  const idIn = (name: string) => within(list()).findByRole("button", { name });
+
+  it("shows #n with one Project selected and the full ID with All Projects, the full ID on hover", async () => {
+    renderApp(world(), "/?state=Ready&project=acme");
+    const short = await idIn("acme-4");
+    expect(short).toHaveTextContent("#4");
+    expect(short).toHaveAttribute("title", "acme-4");
+    cleanup();
+    renderApp(world(), "/?state=Ready");
+    expect(await idIn("acme-4")).toHaveTextContent("acme-4");
+  });
+
+  it("copies the full ID on click, flashes Copied and leaves the URL alone", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderApp(world(), "/?state=Ready&project=acme");
+    const before = window.location.href;
+    const id = await idIn("acme-4");
+    await user.click(id);
+    expect(writeText).toHaveBeenCalledWith("acme-4");
+    expect(await within(list()).findByText("Copied")).toBeInTheDocument();
+    expect(window.location.href).toBe(before);
+  });
+
+  it("does nothing when there is no clipboard", async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
+    renderApp(world(), "/?state=Ready&project=acme");
+    const before = window.location.href;
+    const id = await idIn("acme-4");
+    await user.click(id);
+    expect(id).toHaveTextContent("#4");
+    expect(window.location.href).toBe(before);
+  });
+
+  it("does nothing more when the write fails", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    renderApp(world(), "/?state=Ready&project=acme");
+    const before = window.location.href;
+    const id = await idIn("acme-4");
+    await user.click(id);
+    expect(writeText).toHaveBeenCalled();
+    expect(id).toHaveTextContent("#4");
+    expect(window.location.href).toBe(before);
   });
 });

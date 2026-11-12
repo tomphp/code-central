@@ -40,6 +40,10 @@ _Avoid_: Controller, runner, orchestrator
 The description of a piece of work, such as a feature or user story, delivered through one or more Tickets.
 _Avoid_: Epic, feature, PRD
 
+**Short ID**:
+How the UI shows a Ticket's or Spec's ID while one Project is selected, its number alone as `#123`. With All Projects selected the full ID shows instead. Either way, clicking it copies the full ID.
+_Avoid_: Ticket number, short key
+
 **Long-lived Spec**:
 A Spec labelled `long-lived`, which never finishes, such as a CI Rule's Spec or the GitHub Issues Spec, so its Tickets land one by one, outside Land per Spec. Code Central labels the Specs it makes for CI Rules and GitHub Issues; the human may label or unlabel any Spec.
 _Avoid_: Bucket Spec, standing Spec

@@ -6,6 +6,7 @@ import { RowLatestEvent } from "../LatestEvent";
 import { CIBadge } from "../ticket/CIBadge";
 import { PullRequestBadge } from "../ticket/PullRequestBadge";
 import { WaitingBadge } from "../ticket/WaitingBadge";
+import { ShortId } from "../inbox/ShortId";
 
 export interface TicketListProps {
   // label names the list.
@@ -26,7 +27,7 @@ export function TicketList({ label, tickets, reasons, now, ticket, select }: Tic
         return (
           <li key={t.id}>
             <button className="link" aria-current={t.id === ticket ? "true" : undefined} onClick={() => select(t.id)}>
-              <span className="tid">{t.id}</span> {t.title}
+              <ShortId id={t.id} /> {t.title}
             </button>{" "}
             <span className={["state", reason && `reason-${reason} loud-state`].filter(Boolean).join(" ")}>{t.state}</span>
             <WaitingBadge waiting={t.waiting_for_spec} />

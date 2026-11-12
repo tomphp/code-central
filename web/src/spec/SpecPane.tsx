@@ -12,6 +12,7 @@ import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
 import { LandPerSpec } from "./LandPerSpec";
 import { TicketList } from "./TicketList";
+import { ShortId } from "../inbox/ShortId";
 
 export interface SpecPaneProps {
   api: Api;
@@ -28,7 +29,7 @@ export interface SpecPaneProps {
 export function SpecPane({ api, spec, archived, reasons, now, ticket, select }: SpecPaneProps) {
   return (
     <section aria-label="Spec" className="req-head">
-      <span className="tid">{spec.id}</span> <span className="muted small">Spec · submitted {ago(now, spec.created)}</span>
+      <ShortId id={spec.id} /> <span className="muted small">Spec · submitted {ago(now, spec.created)}</span>
       <h2>{spec.title}</h2>
       <div className="spec-actions">
         <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />

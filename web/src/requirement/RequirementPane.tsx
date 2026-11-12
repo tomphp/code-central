@@ -16,6 +16,7 @@ import type { Link } from "../url";
 import { NewPrototype } from "./NewRequirement";
 import { progress, waitingNote } from "./progress";
 import { Strip } from "./Strip";
+import { ShortId } from "../inbox/ShortId";
 
 export interface RequirementPaneProps {
   api: Api;
@@ -37,7 +38,7 @@ export function RequirementPane({ api, spec, archived, reasons, now, ticket, sel
   const specDone = spec.requirement.stages.some((s) => s.name === "spec" && s.state === "Done");
   return (
     <section aria-label="Requirement" className="req-head">
-      <span className="tid">{spec.id}</span> <span className="muted small">Requirement · submitted {ago(now, spec.created)}</span>
+      <ShortId id={spec.id} /> <span className="muted small">Requirement · submitted {ago(now, spec.created)}</span>
       <h2>{spec.title}</h2>
       <div className="spec-actions">
         <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
