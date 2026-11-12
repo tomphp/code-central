@@ -33,18 +33,24 @@ function kindLabel(t: ProjectTicket): string | undefined {
   return t.node_type && t.node_type !== "ticket" ? t.node_type : undefined;
 }
 
+function Empty({ showFinished }: { showFinished: boolean }) {
+  return <p className="empty">{showFinished ? "No Tickets yet." : "No unfinished Tickets."}</p>;
+}
+
 export function AllTicketsByTicket({
   tickets,
   specs,
   reasons,
   link,
+  showFinished,
 }: {
   tickets: ProjectTicket[];
   specs: Map<string, ProjectSpec>;
   reasons: Map<string, NeedsMeReason>;
   link: InboxRowLinkFactory;
+  showFinished: boolean;
 }) {
-  if (tickets.length === 0) return <p className="empty">No unfinished Tickets.</p>;
+  if (tickets.length === 0) return <Empty showFinished={showFinished} />;
   return (
     <>
       {newestFirst(tickets).map((t) => {
@@ -83,7 +89,9 @@ export function AllTicketsBySpec({
   link,
   specLink,
   selectedTicket,
+  showFinished,
 }: {
+  showFinished: boolean;
   tickets: ProjectTicket[];
   specs: Map<string, ProjectSpec>;
   // ticketsOf is all of a Spec's Tickets, in every State.
@@ -95,7 +103,7 @@ export function AllTicketsBySpec({
   selectedTicket?: string;
 }) {
   const groups = groupBySpec(newestFirst(tickets));
-  if (groups.length === 0) return <p className="empty">No unfinished Tickets.</p>;
+  if (groups.length === 0) return <Empty showFinished={showFinished} />;
   return (
     <div className="spec-rows">
       {groups.map((g) => (

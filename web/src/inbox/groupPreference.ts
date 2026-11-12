@@ -19,3 +19,22 @@ export function storeGroup(group: Group): void {
     // The choice then lasts only as long as the URL.
   }
 }
+
+// Show finished is kept beside the grouping: on only once chosen.
+const FINISHED_KEY = "code-central.inbox.finished";
+
+export function storedFinished(): boolean {
+  try {
+    return localStorage.getItem(FINISHED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function storeFinished(on: boolean): void {
+  try {
+    localStorage.setItem(FINISHED_KEY, on ? "1" : "0");
+  } catch {
+    // The choice then lasts only as long as the URL.
+  }
+}

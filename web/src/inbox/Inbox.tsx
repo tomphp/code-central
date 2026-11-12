@@ -44,7 +44,7 @@ import { groupBySpec } from "./groupBySpec";
 import { SpecRow } from "./SpecRow";
 import { StateListBySpec } from "./StateListBySpec";
 import { StateRow, type InboxRowLinkFactory } from "./StateRow";
-import { storedGroup, storeGroup } from "./groupPreference";
+import { storedFinished, storedGroup, storeFinished, storeGroup } from "./groupPreference";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { OneProject, ShortId } from "./ShortId";
 
@@ -161,6 +161,12 @@ export function Inbox({
     />
   );
 
+  const showFinished = loc.finished ?? storedFinished();
+  const chooseFinished = (on: boolean) => {
+    storeFinished(on);
+    navigate({ finished: on ? true : undefined });
+  };
+  const listedTickets = showFinished ? tickets : tickets.filter((t) => !FINISHED.includes(t.state));
   // The grouping in effect: the URL's, else this browser's last pick.
   const grouping = loc.group ?? storedGroup();
   const chooseGroup = (g: "spec" | "ticket") => {
@@ -184,6 +190,16 @@ export function Inbox({
         </button>
       ))}
     </div>
+    {loc.list === "tickets" && (
+      <label className="bs-finished">
+        <input
+          type="checkbox"
+          checked={showFinished}
+          onChange={(e) => chooseFinished(e.target.checked)}
+        />{" "}
+        Show finished
+      </label>
+    )}
   </div>
   );
 
@@ -293,7 +309,8 @@ export function Inbox({
             {toggleBar}
             {grouping === "spec" ? (
               <AllTicketsBySpec
-                tickets={tickets}
+                tickets={listedTickets}
+                showFinished={showFinished}
                 specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
                 ticketsOf={ticketsOf}
                 reasons={reasons}
@@ -304,7 +321,8 @@ export function Inbox({
               />
             ) : (
               <AllTicketsByTicket
-                tickets={tickets}
+                tickets={listedTickets}
+                showFinished={showFinished}
                 specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
                 reasons={reasons}
                 link={rowLink}
