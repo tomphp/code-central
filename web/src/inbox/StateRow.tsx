@@ -7,6 +7,7 @@ import type { ProjectTicket } from "../live";
 import { stageOf } from "../requirement/progress";
 import { LinkBadge } from "../ticket/LinkBadge";
 import { WaitingBadge } from "../ticket/WaitingBadge";
+import { ShortId } from "./ShortId";
 
 export type InboxRowLinkFactory = (id: string) => {
   href: string;
@@ -22,7 +23,7 @@ export function StateRow({ t, needsYou, now, link, stage }: { t: ProjectTicket; 
   return (
     <a className="row" {...link(t.id)}>
       <span className="row-top">
-        <span className="tid">{t.id}</span>
+        <ShortId id={t.id} />
         {name && <span className="bs-stage">{name}</span>}
         <span className="row-title">{t.title}</span>
         {t.link && <LinkBadge link={t.link} plain />}

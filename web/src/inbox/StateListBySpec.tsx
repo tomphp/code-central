@@ -7,6 +7,7 @@ import type { NeedsMeReason, State } from "../api/types";
 import type { ProjectSpec, ProjectTicket } from "../live";
 import { groupBySpec } from "./groupBySpec";
 import { StateRow, type InboxRowLinkFactory } from "./StateRow";
+import { ShortId } from "./ShortId";
 
 const slug = (s: State) => s.toLowerCase().replace(/\s+/g, "-");
 
@@ -67,7 +68,7 @@ export function StateListBySpec({
                 </div>
                 <div className="bs-head-sub">
                   <span className={`bs-kind bs-kind-${c.kind.toLowerCase()}`}>{c.kind}</span>
-                  <span className="tid">{c.id}</span>
+                  <ShortId id={c.id} />
                   <span className="bs-count">
                     {c.total > 0 ? `${c.tickets.length} of ${c.total}` : c.tickets.length}
                   </span>

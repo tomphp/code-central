@@ -45,6 +45,7 @@ import { StateListBySpec } from "./StateListBySpec";
 import { StateRow, type InboxRowLinkFactory } from "./StateRow";
 import { storedGroup, storeGroup } from "./groupPreference";
 import { clickTo, hrefFor, type UiLocation } from "../url";
+import { OneProject, ShortId } from "./ShortId";
 
 export interface InboxProps {
   api: Api;
@@ -172,6 +173,7 @@ export function Inbox({
   );
 
   return (
+    <OneProject.Provider value={!!loc.project}>
     <div className="inbox">
       <nav aria-label="Filters" className="inbox-nav">
         <div className="inbox-title">
@@ -429,6 +431,7 @@ export function Inbox({
         )}
       </aside>
     </div>
+    </OneProject.Provider>
   );
 }
 
@@ -525,7 +528,7 @@ function NeedsMeLink({
   return (
     <a className="row" {...link}>
       <span className="row-top">
-        <span className="tid">{row.id}</span>
+        <ShortId id={row.id} />
         <span className="row-title">{row.title}</span>
         {row.prototype && <PrototypeBadge />}
         {row.link && <LinkBadge link={row.link} plain />}
@@ -598,7 +601,7 @@ function Drafts({
       {drafts.map((t) => (
         <a key={t.id} className="row quiet" {...link(t.id)}>
           <span className="row-top">
-            <span className="tid">{t.id}</span>
+            <ShortId id={t.id} />
             <span className="row-title">{t.title}</span>
           </span>
         </a>

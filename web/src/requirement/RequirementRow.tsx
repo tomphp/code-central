@@ -5,6 +5,7 @@ import { REASON_LABEL } from "../format";
 import type { ProjectSpec } from "../live";
 import type { Progress } from "./progress";
 import { Strip } from "./Strip";
+import { ShortId } from "../inbox/ShortId";
 
 export interface RequirementRowProps {
   spec: ProjectSpec;
@@ -16,7 +17,7 @@ export function RequirementRow({ spec, p, link }: RequirementRowProps) {
   return (
     <a className={`row req-row${spec.finished || !p.needs.length ? " quiet" : ""}`} {...link}>
       <span className="row-top">
-        <span className="tid">{spec.id}</span>
+        <ShortId id={spec.id} />
         <span className="row-title">{spec.title}</span>
         {p.needs[0] && <span className={`dot reason-${p.needs[0].reason}`} role="img" aria-label="Needs you" />}
       </span>

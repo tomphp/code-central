@@ -4,6 +4,7 @@
 import type { MouseEvent } from "react";
 import type { MapView } from "../api/types";
 import type { ProjectSpec } from "../live";
+import { ShortId } from "../inbox/ShortId";
 
 export interface MapRowProps {
   spec: ProjectSpec & { map: MapView };
@@ -15,7 +16,7 @@ export function MapRow({ spec, link }: MapRowProps) {
   return (
     <a className={`row req-row map-row${spec.finished || !m.needs_you ? " quiet" : ""}`} {...link}>
       <span className="row-top">
-        <span className="tid">{spec.id}</span>
+        <ShortId id={spec.id} />
         <span className="row-title">{spec.title}</span>
         {m.needs_you > 0 && <span className="dot" role="img" aria-label="Needs you" />}
       </span>

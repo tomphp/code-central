@@ -19,6 +19,7 @@ import { useAct } from "../ticket/useAct";
 import { FOG, isFrontier, layoutMap, NODE, nodeProgress } from "./graph";
 import { mapCount } from "./MapRow";
 import { mapSection } from "./sections";
+import { ShortId } from "../inbox/ShortId";
 
 export interface MapPaneProps {
   api: Api;
@@ -50,7 +51,7 @@ export function MapPane({ api, spec, reasons, now, ticket, select, specLink, wri
 
   return (
     <section aria-label="Map" className="req-head map-view">
-      <span className="tid">{spec.id}</span> <span className="muted small">Map · submitted {ago(now, spec.created)}</span>
+      <ShortId id={spec.id} /> <span className="muted small">Map · submitted {ago(now, spec.created)}</span>
       <h2>{spec.title}</h2>
       <p className="map-count">{mapCount(spec.map)}</p>
       <label className="map-guided" title="The Factory starts the next decision whenever the Map is idle">
@@ -112,7 +113,7 @@ export function MapPane({ api, spec, reasons, now, ticket, select, specLink, wri
                       <span className="state">{t.state}</span>
                     </span>
                     <button className="link map-node-title" aria-current={t.id === ticket ? "true" : undefined} onClick={() => select(t.id)}>
-                      <span className="tid">{t.id}</span> {t.title}
+                      <ShortId id={t.id} /> {t.title}
                     </button>
                     {isFrontier(t) && (
                       <button className="btn map-start" aria-label={`Start ${t.title}`} disabled={busy} onClick={() => start(t)}>

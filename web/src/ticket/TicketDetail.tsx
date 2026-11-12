@@ -19,6 +19,7 @@ import { useAct } from "./useAct";
 import { CISection } from "./CISection";
 import { Triage } from "./Triage";
 import { ModelChoice } from "./ModelChoice";
+import { ShortId } from "../inbox/ShortId";
 
 export interface TicketPaneProps {
   api: Api;
@@ -44,7 +45,7 @@ export function TicketPane(props: TicketPaneProps) {
   return (
     <>
       <header className="ticket-head">
-        <span className="tid">{t.id}</span> <span className="state">{t.state}</span>
+        <ShortId id={t.id} /> <span className="state">{t.state}</span>
         <WaitingBadge waiting={t.waiting_for_spec} />
         {t.needs_me_reason && (
           <span className={`reason reason-${t.needs_me_reason}`}>
