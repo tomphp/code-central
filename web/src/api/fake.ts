@@ -1970,6 +1970,7 @@ export class FakeApi implements Api {
       spec: t.spec.id,
       labels: [...t.labels],
       blocked: t.blocked,
+      created: t.created,
       updated: t.updated,
       ...(t.link && { link: { ...t.link } }),
       ...(onMap(t) && { node_type: nodeTypeOf(t), blocked_by: [...t.blocked_by] }),
