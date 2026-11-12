@@ -116,7 +116,7 @@ describe("the Ticket detail", () => {
     expect(renderDetail(fake, t)).toHaveTextContent("No description.");
   });
 
-  it("shows a gated Blocker's CI result beside its State, and marks a cleared one as no longer blocking", () => {
+  it("shows each Blocker's State, and marks a cleared one as no longer blocking", () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
     const t = fake.addTicket("acme", {
@@ -124,13 +124,13 @@ describe("the Ticket detail", () => {
       state: "Ready",
       blocked_by: ["acme-3", "acme-5", "acme-6"],
       blockers: [
-        { id: "acme-3", title: "Login API", state: "Accepted", ci_result: "running", cleared: true },
-        { id: "acme-5", title: "Sessions", state: "Accepted", ci_result: "failed", cleared: false },
+        { id: "acme-3", title: "Login API", state: "Accepted", cleared: true },
+        { id: "acme-5", title: "Sessions", state: "Accepted", cleared: false },
         { id: "acme-6", title: "Cookies", state: "Ready", cleared: false },
       ],
     });
     expect(renderDetail(fake, t)).toHaveTextContent(
-      "Blocked by acme-3 Login API (Accepted · CI running · no longer blocking), acme-5 Sessions (Accepted · CI failed), acme-6 Cookies (Ready)",
+      "Blocked by acme-3 Login API (Accepted · no longer blocking), acme-5 Sessions (Accepted), acme-6 Cookies (Ready)",
     );
   });
 

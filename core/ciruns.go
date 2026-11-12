@@ -387,9 +387,7 @@ type CIRunsView struct {
 // keyed by its run ID and attempt, marking runs of Ignored workflows
 // ignored, and prunes the runs finished more than ciKeep ago. It needs
 // CI Tracking on. Every Ticket whose runs changed gets a change notice,
-// as the Project gets ci.changed, so the UI updates live; so do the
-// Tickets it blocks when its CI result changed, since their Blockers
-// show it, and under Unblock on push it can clear or hold them.
+// as the Project gets ci.changed, so the UI updates live.
 func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput) (Written[CIRunsView], error) {
 	var reported CIRunsView
 	changed := map[int]bool{}
@@ -431,9 +429,6 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 		if !wrote && !pruned {
 			return nil
 		}
-		for _, n := range c.dependantsOfChangedCIResults(w, key, changed, kept, runs) {
-			changed[n] = true
-		}
 		return w.PutCIRuns(key, runs)
 	})
 	if err != nil {
@@ -466,31 +461,6 @@ func (c *Core) markCIRunChanged(r store.Reader, key string, changed map[int]bool
 	for _, t := range ticketsOfCommit(r, key, run.Commit) {
 		changed[t.Number] = true
 	}
-}
-
-// dependantsOfChangedCIResults are the Tickets waiting, through
-// Replacements, on a Ticket in tickets whose CI result differs
-// between the kept runs before and after.
-func (c *Core) dependantsOfChangedCIResults(r store.Reader, key string, tickets map[int]bool, before, after []store.CIRun) []int {
-	resultOf := func(t store.Ticket, runs []store.CIRun) CIResult {
-		return latestCIResult(t.PushedCommits[len(t.PushedCommits)-1], runsOf(runs, t), c.now())
-	}
-	var moved []int
-	for n := range tickets {
-		if t, ok := r.Ticket(key, n); ok && len(t.PushedCommits) > 0 && resultOf(t, before) != resultOf(t, after) {
-			moved = append(moved, n)
-		}
-	}
-	if len(moved) == 0 {
-		return nil
-	}
-	var out []int
-	for _, d := range r.Tickets(key) {
-		if slices.ContainsFunc(waitsOn(r, key, d.Number), func(n int) bool { return slices.Contains(moved, n) }) {
-			out = append(out, d.Number)
-		}
-	}
-	return out
 }
 
 // ciRunOf is the run v reports, checked, as stored: tracked against an

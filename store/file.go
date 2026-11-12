@@ -222,7 +222,7 @@ func (s *FileStore) loadProject(key string) error {
 	}
 	if c := pf.CI; c != nil {
 		p.CI = CI{Tracking: c.Tracking, Provider: CIProvider(c.Provider), Repository: c.Repository, ProjectURL: c.ProjectURL, PATEnv: c.PATEnv,
-			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, PushRemoteBase: c.PushRemoteBase, UnblockOnPush: c.UnblockOnPush}
+			IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, PushRemoteBase: c.PushRemoteBase}
 		if !p.CI.Provider.Valid() {
 			return &LoadError{File: rel, Field: "ci.provider", Msg: fmt.Sprintf("unknown CI provider %q (%s)", c.Provider, strings.Join(ciProviderNames(), " or "))}
 		}
