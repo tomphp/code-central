@@ -81,6 +81,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       call("POST", `${p(project)}/set_github_issues`, { on, repository, label, new_issues_need_me, full: true }),
     setModels: (project, models) => call("POST", `${p(project)}/set_models`, { default: models.default, kinds: models.kinds, full: true }),
     setSubagentExploration: (project, on) => call("POST", `${p(project)}/set_subagent_exploration`, { on, full: true }),
+    setModelAssignment: (project, on) => call("POST", `${p(project)}/set_model_assignment`, { on, full: true }),
     addCIRule: (project, rule) => call("POST", `${p(project)}/add_ci_rule`, { ...rule, full: true }),
     editCIRule: (project, spec, rule) => call("POST", `${p(project)}/edit_ci_rule`, { ...rule, spec, full: true }),
     removeCIRule: (project, spec) => call("POST", `${p(project)}/remove_ci_rule`, { spec, full: true }),
