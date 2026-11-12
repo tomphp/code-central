@@ -215,7 +215,7 @@ func (s *FileStore) loadProject(key string) error {
 		}
 	}
 	if l := pf.Landing; l != nil {
-		p.Landing = Landing{Method: LandingMethod(l.Method), Push: l.Push, Remote: l.Remote, LandPerSpec: l.LandPerSpec == nil || *l.LandPerSpec, PATEnv: l.PATEnv}
+		p.Landing = Landing{Method: LandingMethod(l.Method), Push: l.Push, Remote: l.Remote, LandPerSpec: l.LandPerSpec == nil || *l.LandPerSpec, PATEnv: l.PATEnv, Base: l.Base}
 		if !p.Landing.Method.Valid() {
 			return &LoadError{File: rel, Field: "landing.method", Msg: fmt.Sprintf("unknown landing method %q (%s)", l.Method, strings.Join(landingMethodNames(), " or "))}
 		}

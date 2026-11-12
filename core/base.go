@@ -83,7 +83,7 @@ func (c *Core) ReportBase(_ context.Context, key string, in ReportBaseInput) (Wr
 	hs := c.heartbeats
 	hs.mu.Lock()
 	prev, seen := hs.base[key]
-	hs.base[key] = BaseView{State: in.State, Local: local, Remote: remote, Branch: project.CI.PushRemoteBase, At: now}
+	hs.base[key] = BaseView{State: in.State, Local: local, Remote: remote, Branch: project.Base(), At: now}
 	hs.mu.Unlock()
 	if !seen || prev.State != in.State || prev.Local != local || prev.Remote != remote {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
@@ -131,6 +131,6 @@ func (c *Core) baseDivergedRow(p store.Project) (NeedsMeRow, bool) {
 	}
 	return NeedsMeRow{
 		Project: p.Key, Title: "Base diverged", Reason: ReasonBaseDiverged, Since: b.At,
-		BaseDiverged: &BaseDivergedView{Base: p.CI.PushRemoteBase, Local: b.Local, Remote: b.Remote},
+		BaseDiverged: &BaseDivergedView{Base: p.Base(), Local: b.Local, Remote: b.Remote},
 	}, true
 }

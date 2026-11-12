@@ -120,6 +120,26 @@ type Landing struct {
 	// that holds the Azure Repos PAT. Empty reads as DefaultPATEnv, and
 	// it is kept whatever the method.
 	PATEnv string
+	// Base is the branch the Project's work is cut from and lands on,
+	// under every Landing Method. Empty reads as the Project's stored
+	// PushRemoteBase, else DefaultBase; see Project.Base.
+	Base string
+}
+
+// DefaultBase is the base of a Project that names none and never had one
+// reported.
+const DefaultBase = "main"
+
+// Base is the branch p's work is cut from and lands on: the stored
+// Landing Base, else the frozen PushRemoteBase, else DefaultBase.
+func (p Project) Base() string {
+	switch {
+	case p.Landing.Base != "":
+		return p.Landing.Base
+	case p.CI.PushRemoteBase != "":
+		return p.CI.PushRemoteBase
+	}
+	return DefaultBase
 }
 
 // DefaultLandingRemote is the remote Push uses when none is named.
@@ -192,8 +212,9 @@ type CI struct {
 	PATEnv           string
 	IgnoredWorkflows []string
 	PushRemoteURL    string
-	// PushRemoteBase is the base branch the Factory last reported, which
-	// the Pull Request Watcher opens pull requests into.
+	// PushRemoteBase is the base branch a Factory reported before the base
+	// became a Project setting. It is frozen: only Project.Base reads it,
+	// as the fallback for a Landing with no Base.
 	PushRemoteBase string
 	Rules          []CIRule
 }

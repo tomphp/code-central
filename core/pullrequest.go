@@ -79,7 +79,7 @@ func (c *Core) GetPullRequestWatch(_ context.Context, key string) (PullRequestWa
 		}
 		lv := landingView(p)
 		out = PullRequestWatch{Project: key, On: p.Landing.Method == store.LandingPullRequest, CodeHost: lv.CodeHost, Repository: lv.Repository,
-			Base: p.CI.PushRemoteBase, PATEnv: lv.PATEnv, GHPath: r.Options().GHPath, Work: []PushedWorkView{}}
+			Base: p.Base(), PATEnv: lv.PATEnv, GHPath: r.Options().GHPath, Work: []PushedWorkView{}}
 		if out.On {
 			out.Work = pushedWork(r, key)
 		}

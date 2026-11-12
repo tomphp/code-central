@@ -66,6 +66,7 @@ var migrations = []MigrationStep{
 	{From: 22, Name: "add a Project's Pull Request Landing Method and PAT variable"},
 	{From: 23, Name: "add a Ticket's pull request and a pushed commit's branch"},
 	{From: 24, Name: "label each CI Rule's Spec and Issues Spec long-lived", After: labelLongLivedSpecs},
+	{From: 25, Name: "add a Project's base"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

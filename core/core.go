@@ -112,6 +112,9 @@ type LandingView struct {
 	// PATEnv is the environment variable holding the Azure Repos PAT,
 	// ADO_PAT unless the Project names another.
 	PATEnv string `json:"pat_env"`
+	// Base is the branch the Project's work is cut from and lands on: the
+	// stored one, else the reported fallback, else main.
+	Base string `json:"base"`
 	// Watcher is the Pull Request Watcher's status, not_reported unless the
 	// method is Pull Request.
 	Watcher WatcherView `json:"watcher"`
@@ -691,5 +694,5 @@ func landingViewWith(p store.Project, watcher WatcherView) LandingView {
 	host, repo := codeHostOf(p.CI.PushRemoteURL)
 	push := p.Landing.Normalized().Push
 	return LandingView{Method: p.Landing.Method, Push: push, Remote: p.Landing.Remote, LandPerSpec: p.Landing.LandPerSpec,
-		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}
+		CodeHost: host, Repository: repo, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv}), Base: p.Base(), Watcher: watcher, OpenPullRequests: []OpenPullRequest{}}
 }
