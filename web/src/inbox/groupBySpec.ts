@@ -6,6 +6,8 @@ import type { ProjectSpec, ProjectTicket } from "../live";
 
 export type SpecKind = "Requirement" | "Map" | "Spec";
 
+export const specKindOf = (spec?: ProjectSpec): SpecKind => (spec?.requirement ? "Requirement" : spec?.map ? "Map" : "Spec");
+
 export interface SpecCard {
   id: string;
   // title is the Spec's ID while its Spec isn't loaded yet.
@@ -30,7 +32,7 @@ export function groupBySpec(tickets: ProjectTicket[], specs: Map<string, Project
       card = {
         id: t.spec,
         title: spec?.title ?? t.spec,
-        kind: spec?.requirement ? "Requirement" : spec?.map ? "Map" : "Spec",
+        kind: specKindOf(spec),
         tickets: [],
         total: counts.reduce((n, c) => n + c.count, 0),
         counts,
