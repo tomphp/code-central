@@ -1231,12 +1231,11 @@ describe("Project Options", () => {
       "Stage Guides",
     ]);
 
-    // Stage Guides has no section until its Ticket lands; the other four do.
     const scrolled: string[] = [];
     Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
       scrolled.push(this.id);
     });
-    for (const link of links.slice(0, 4)) {
+    for (const link of links) {
       const id = link.getAttribute("href")!.slice(1);
       const section = page().querySelector(`#${id}`);
       expect(section).not.toBeNull();

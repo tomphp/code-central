@@ -38,7 +38,7 @@ describe("the GitHub Issues section", () => {
 
     await findIssues();
     const sections = Array.from(page().querySelectorAll("fieldset.project-options-section > legend"), (l) => l.textContent);
-    expect(sections).toEqual(["Landing Method", "CI", "GitHub Issues", "Models", "Factories"]);
+    expect(sections).toEqual(["Landing Method", "CI", "GitHub Issues", "Models", "Stage Guides", "Factories"]);
 
     const on = toggle("GitHub Issues");
     expect(on).not.toBeChecked();

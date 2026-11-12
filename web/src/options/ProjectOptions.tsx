@@ -1,6 +1,6 @@
 // The Project Options page: one Project's settings, reached from its menu
 // in the left pane, a section each: the Landing Method, CI with its CI
-// Rules, GitHub Issues, and Models.
+// Rules, GitHub Issues, Models, and Stage Guides.
 import {
   useEffect,
   useId,
@@ -47,8 +47,7 @@ export interface ProjectOptionsProps {
 }
 
 // SECTIONS is the one list the section menu is built from; each id is the id
-// of that section's fieldset. The Stage Guides section is listed for when it
-// exists (code-central-441).
+// of that section's fieldset.
 export const SECTIONS = [
   { id: "project-options-landing-method", label: "Landing Method" },
   { id: "project-options-ci", label: "CI" },
@@ -108,6 +107,7 @@ export function ProjectOptions({
               <CISection api={api} project={project} />
               <GitHubIssuesSection api={api} project={project} />
               <ModelsSection api={api} project={project} />
+              <StageGuidesSection api={api} project={project} />
               <FactoriesSection project={project} now={now} />
             </div>
           </div>
@@ -979,6 +979,71 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
           </tbody>
         </table>
         <ModelSuggestions id={`${id}-models`} suggestions={suggestions} />
+        {error && <Refusal id={`${id}-error`} error={error} />}
+        <div className="project-options-actions">
+          <button type="submit" className="btn primary" disabled={!changed}>
+            Save
+          </button>
+          {saved && !changed && (
+            <span role="status" className="muted">
+              Saved
+            </span>
+          )}
+        </div>
+      </form>
+    </fieldset>
+  );
+}
+
+// StageGuidesSection is the Project's Stage Guides settings (Spec
+// code-central-441): the Subagent Exploration checkbox, with its own Save.
+// Like the other sections it follows the Project as read.
+function StageGuidesSection({ api, project }: { api: Api; project: ProjectRow }) {
+  const stored = project.stage_guides.subagent_exploration;
+  const [draft, setDraft] = useState(stored);
+  const [error, setError] = useState<ApiError>();
+  const [saved, setSaved] = useState(false);
+  const id = useId();
+  useEffect(() => setDraft(stored), [stored]);
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    setError(undefined);
+    api.setSubagentExploration(project.key, draft).then(
+      (v) => {
+        setDraft(v.stage_guides.subagent_exploration);
+        setSaved(true);
+      },
+      (e: ApiError) => setError(e),
+    );
+  };
+  const changed = draft !== stored;
+
+  return (
+    <fieldset id="project-options-stage-guides" className="project-options-section" disabled={project.archived}>
+      <legend>Stage Guides</legend>
+      <form onSubmit={save}>
+        <label>
+          <input
+            type="checkbox"
+            checked={draft}
+            onChange={(e) => {
+              setDraft(e.target.checked);
+              setError(undefined);
+              setSaved(false);
+            }}
+            aria-describedby={`${id}-hint`}
+          />{" "}
+          Subagent Exploration
+        </label>
+        <p id={`${id}-hint`} className="project-options-hint">
+          While on, the implementation guide tells the agent to ask an Explore
+          subagent when understanding existing code means reading across several
+          files, so only its conclusion stays in context. Turn it off if your
+          agents have no subagents or can&apos;t afford them. A change applies
+          from the next Claim and the next get_stage_guide call, not to a
+          running or resumed session.
+        </p>
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>
