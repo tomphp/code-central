@@ -52,8 +52,8 @@ func Outline(body string) []Heading {
 }
 
 // Sections cuts from body the Sections whose headings match names (see
-// matchHeadings), in document order and joined by a blank line, or returns the names that
-// matched no heading. A Section runs from its heading to the next heading
+// matchHeadings), in document order and joined by a blank line, or returns
+// the names that matched no heading. A Section runs from its heading to the next heading
 // at the same level or higher, so it includes its subsections; one inside
 // another matched Section is not repeated.
 func Sections(body string, names []string) (string, []string) {
