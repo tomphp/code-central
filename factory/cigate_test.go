@@ -344,9 +344,10 @@ func sentBackCIFailure(t *testing.T, h *factorytest.Harness, r *factorytest.Runn
 	return id, failed
 }
 
-// New fix Ticket (code-central-264): a Ready Ticket on the same Spec
-// carries the failure, and the failed Ticket lands on the next poll.
-func TestAfterNewFixTicketTheFailedTicketLandsOnTheNextPoll(t *testing.T) {
+// New fix Ticket (code-central-433): a Ready Ticket on the CI Fixes Spec
+// carries the failure, and the failed Ticket keeps waiting: it doesn't
+// land on the next poll.
+func TestAfterNewFixTicketTheFailedTicketKeepsWaiting(t *testing.T) {
 	t.Parallel()
 	h, _, r := gatedHarness(t)
 	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
@@ -358,12 +359,9 @@ func TestAfterNewFixTicketTheFailedTicketLandsOnTheNextPoll(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.Script(res.ID, factorytest.Wait())
-	r.Poll()
-	if tk := h.WaitForState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != pushed {
-		t.Errorf("landed with %q, want the pushed commit %s", tk.Moves[len(tk.Moves)-1].Commit, pushed)
-	}
-	if fix := h.Ticket(res.ID); fix.Spec.ID != h.Ticket(id).Spec.ID {
-		t.Errorf("fix Ticket on %s, want the failed Ticket's Spec", fix.Spec.ID)
+	stillAccepted(t, h, r, id, "while its fix Ticket is open")
+	if fix := h.Ticket(res.ID); fix.Spec.ID == h.Ticket(id).Spec.ID || fix.Spec.Title != "CI Fixes" {
+		t.Errorf("fix Ticket on %s %q, want the CI Fixes Spec", fix.Spec.ID, fix.Spec.Title)
 	}
 }
 

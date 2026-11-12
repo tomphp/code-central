@@ -845,7 +845,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.getTicket("acme", id)).ci_result).toBe("passed");
     });
 
-    it("sends a CI failed Ticket back to fix with a note, or opens a New fix Ticket and lands it anyway (code-central-264)", async () => {
+    it("sends a CI failed Ticket back to fix with a note, or opens a New fix Ticket on the CI Fixes Spec that leaves it waiting (code-central-264, code-central-433)", async () => {
       await d.createProject("acme", "Acme");
       const failedTicket = async (title: string, run: number) => {
         const id = await d.createTicket("acme", title, "Ready");
@@ -882,15 +882,15 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(ready).not.toHaveProperty("ci_failure_options");
 
       const fixed = await failedTicket("Sign-up page", 2);
-      const before = await d.api.getTicket("acme", fixed);
       const ack = await d.api.act("acme", fixed, "new_fix_ticket", { note: "CI failed: runs/2" });
       expect(ack).toMatchObject({ state: "Ready" });
       expect(ack.id).not.toBe(fixed);
       const fix = await d.api.getTicket("acme", ack.id);
-      expect(fix).toMatchObject({ state: "Ready", spec: before.spec, title: `Fix the CI failure of ${fixed}: Sign-up page` });
+      expect(fix).toMatchObject({ state: "Ready", spec: { title: "CI Fixes" }, title: `Fix the CI failure of ${fixed}: Sign-up page` });
       expect(fix.description).toContain("CI failed: runs/2");
       const landing = await d.api.getTicket("acme", fixed);
-      expect(landing).toMatchObject({ state: "Accepted", land_anyway: true });
+      expect(landing).toMatchObject({ state: "Accepted" });
+      expect(landing.land_anyway).toBeFalsy();
       expect(landing).not.toHaveProperty("ci_failure_options");
       expect(landing.comments.at(-1)?.body).toContain(ack.id);
     });

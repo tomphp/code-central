@@ -418,6 +418,10 @@ export class FakeApi implements Api {
   // for (code-central-261): once per commit, read by every Ticket whose
   // latest pushed commit it is (code-central-432).
   private landedAnyway = new Set<string>();
+  // fixTickets is the fix Ticket opened for each "<project>@<commit>"
+  // (code-central-433): its CI failed item is left out of Needs Me while
+  // that Ticket is neither Done nor Cancelled.
+  private fixTickets = new Map<string, string>();
   // reruns are each "<project>@<commit>"'s Re-run request
   // (code-central-265): the failed run attempts it asked for, once per
   // commit too.
@@ -886,10 +890,10 @@ export class FakeApi implements Api {
     return [...counted.values()];
   }
 
-  // newFixTicket opens a Ready Ticket on t's Spec carrying note, and
-  // records on t the same acceptance as Land anyway, with a comment naming
-  // the fix Ticket, refused unless t is offered it, as core's NewFixTicket
-  // is. It returns the fix Ticket.
+  // newFixTicket opens a Ready Ticket on the Project's CI Fixes Spec
+  // carrying note, with a comment on t naming it, refused unless t is
+  // offered it, as core's NewFixTicket is. t keeps waiting: it isn't
+  // accepted as Land anyway is. It returns the fix Ticket.
   newFixTicket(t: TicketView, note: string | undefined): TicketView {
     const key = this.projectOf(t.id);
     const latest = this.pushedCommits.get(t.id)?.at(-1);
@@ -899,17 +903,18 @@ export class FakeApi implements Api {
     if (!latest || !t.ci_failure_options?.includes("new_fix_ticket")) {
       throw new ApiError(409, "action_not_allowed", `${t.id} has no failed CI result waiting on you to fix`);
     }
+    const fixesSpec = this.allSpecs(key).find((s) => s.title === "CI Fixes" && s.labels.includes("long-lived")) ?? this.addSpec(key, { title: "CI Fixes", body: CI_FIXES_SPEC_BODY, labels: ["long-lived"] });
     const fix = this.addTicket(key, {
       title: `Fix the CI failure of ${t.id}: ${t.title}`,
       state: "Ready",
-      spec: t.spec,
+      spec: { id: fixesSpec.id, title: fixesSpec.title },
       claimable: true,
-      description: `${t.id}'s CI failed, and it lands anyway: fix the failure forward, on top of its work in the base.\n\n${note}`,
+      description: `${t.id}'s CI failed: fix the failure forward, on top of its work in the base. It stays Accepted, and lands when a later commit passes CI.\n\n${note}`,
     });
-    this.landedAnyway.add(`${key}@${latest.commit}`);
+    this.fixTickets.set(`${key}@${latest.commit}`, fix.id);
     this.dropNeedsMe(t.id);
     const at = this.now.toISOString();
-    const body = `New fix Ticket: ${fix.id} fixes this CI failure forward, and ${t.id} lands anyway.`;
+    const body = `New fix Ticket: ${fix.id} fixes this CI failure forward; ${t.id} stays Accepted and lands when a later commit passes CI.`;
     this.updateTicket(t.id, { comments: [...t.comments, { number: t.comments.length + 1, actor: "human", time: at, body }] });
     this.retrackCommit(key, t, latest.commit);
     return fix;
@@ -1746,7 +1751,10 @@ export class FakeApi implements Api {
     // two fixes under both.
     const land_anyway = this.landedAnyway.has(`${key}@${latest.commit}`);
     // CI cancelled is offered the same without New fix Ticket.
-    const ciFailed = t.state === "Accepted" && (ci_result === "failed" || ci_result === "cancelled") && !land_anyway;
+    const fixId = this.fixTickets.get(`${key}@${latest.commit}`);
+    const fixState = fixId ? this.tickets.get(fixId)?.state : undefined;
+    const fixOpen = ci_result === "failed" && fixState !== undefined && fixState !== "Done" && fixState !== "Cancelled";
+    const ciFailed = t.state === "Accepted" && (ci_result === "failed" || ci_result === "cancelled") && !land_anyway && !fixOpen;
     // The commit's CI item lists every Accepted Ticket whose latest pushed
     // commit it is (code-central-432); the options act on all of them.
     const listed = [...this.tickets.values()]
@@ -2221,6 +2229,10 @@ function ruleOn(p: FakeProject, spec: string): CIRule {
 }
 
 // The service's body for a CI Rule's Spec.
+const CI_FIXES_SPEC_BODY =
+  "This Spec holds the fix Tickets the human opens with New fix Ticket when a commit's CI failed. " +
+  "Each fixes its failure forward, and the Tickets waiting on that commit land when a later commit passes CI.\n";
+
 const CI_RULE_SPEC_BODY =
   "This Spec holds the fix Tickets of a CI Rule, which opens a Ticket to fix its workflow when it fails on its branch. " +
   "The rule is in the CI section of Project Options; removing it leaves this Spec as the record of its Tickets.\n";

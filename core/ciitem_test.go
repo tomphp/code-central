@@ -192,26 +192,62 @@ func TestRerunOnAListedTicketReRunsTheCommitOnceForEveryListedTicket(t *testing.
 	}
 }
 
-func TestNewFixTicketLandsEveryListedTicketAndOpensAFixTicketOnTheNamedTicketsSpec(t *testing.T) {
+func TestNewFixTicketOpensOneReadyTicketOnTheCIFixesSpecAndLeavesTheListedTicketsWaiting(t *testing.T) {
 	f := itemWorld(t)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
 	if _, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-8", Note: "ci.yml failed"}); err != nil {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"acme-5", "acme-8"} {
-		if tk := f.getTicket(t, id); !tk.LandAnyway || tk.NeedsMeReason != "" {
-			t.Errorf("%s: land anyway %v, reason %q", id, tk.LandAnyway, tk.NeedsMeReason)
+		if tk := f.getTicket(t, id); tk.State != store.Accepted || tk.LandAnyway || tk.NeedsMeReason != "" || tk.CIResult != core.CIFailed {
+			t.Errorf("%s: %s, land anyway %v, reason %q, result %q, want Accepted, failed and out of Needs Me", id, tk.State, tk.LandAnyway, tk.NeedsMeReason, tk.CIResult)
 		}
 	}
-	fix := f.getTicket(t, "acme-9")
-	if fix.State != store.Ready || fix.Spec.ID != "acme-7" {
-		t.Fatalf("fix Ticket %s on %q, want Ready on acme-7", fix.State, fix.Spec.ID)
+	fix := f.getTicket(t, "acme-10")
+	if fix.State != store.Ready || fix.Spec.ID != "acme-9" {
+		t.Fatalf("fix Ticket %s on %q, want Ready on the CI Fixes Spec acme-9", fix.State, fix.Spec.ID)
 	}
+	spec, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-9"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Title != "CI Fixes" || !slices.Contains(spec.Labels, core.LongLivedLabel) {
+		t.Fatalf("CI Fixes Spec %q with labels %v, want it long-lived", spec.Title, spec.Labels)
+	}
+	f.store.View(func(r store.Reader) error {
+		p, _ := r.Project("acme")
+		if len(p.CIResponses) != 1 || p.CIResponses[0].FixTicket != 10 || p.CIFixesSpec != 9 {
+			t.Errorf("responses %+v, CI Fixes Spec %d, want the fix Ticket stored once on abc123's response", p.CIResponses, p.CIFixesSpec)
+		}
+		return nil
+	})
 	if n := len(f.getTicket(t, "acme-8").Comments); n != 1 {
 		t.Fatalf("acme-8 has %d comments, want the one naming the fix Ticket", n)
 	}
 	if n := len(f.getTicket(t, "acme-5").Comments); n != 0 {
 		t.Fatalf("acme-5 has %d comments, want none", n)
+	}
+	// The item stays out of Needs Me while the fix Ticket is open.
+	if _, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-5", Note: "again"}); err == nil {
+		t.Fatal("a second fix Ticket for the same commit was opened, want it refused while the first is open")
+	}
+}
+
+func TestTheCIFailedItemReturnsWhenItsFixTicketIsCancelledOrDoneWhileTheCommitStillFails(t *testing.T) {
+	for _, state := range []store.State{store.Cancelled, store.Done} {
+		f := itemWorld(t)
+		f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
+		if _, err := f.core.NewFixTicket(human, "acme", core.NewFixTicketInput{Ticket: "acme-8", Note: "ci.yml failed"}); err != nil {
+			t.Fatal(err)
+		}
+		f.store.Update(func(w store.Writer) error {
+			fix, _ := w.Ticket("acme", 10)
+			fix.State = state
+			return w.PutTicket("acme", fix)
+		})
+		if got := f.getTicket(t, "acme-5").NeedsMeReason; got != core.ReasonCIFailed {
+			t.Errorf("fix %s: reason %q, want the item back while the commit still fails", state, got)
+		}
 	}
 }
 

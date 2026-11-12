@@ -240,7 +240,7 @@ A Project's standing rule, "when Workflow X fails on branch Y, open a Ticket to 
 _Avoid_: Trigger, watch, alert
 
 **Fix Ticket**:
-An ordinary implementation Ticket opened to fix a failed CI Run: by a CI Rule on its Spec, linking the run and naming its failed jobs, never its cancelled ones, or by the human's New fix Ticket on a CI failed item. While a CI Rule's fix Ticket is unfinished, further failures only comment on it.
+An ordinary implementation Ticket opened to fix a failed CI Run: by a CI Rule on its Spec, linking the run and naming its failed jobs, never its cancelled ones, or by the human's New fix Ticket on a CI failed item, on the CI Fixes Spec. While a CI Rule's fix Ticket is unfinished, further failures only comment on it.
 _Avoid_: CI Ticket, failure Ticket
 
 **Push remote**:
@@ -325,7 +325,7 @@ The Needs Me reason of a pushed commit whose CI result is cancelled, listing the
 _Avoid_: CI aborted
 
 **CI failed**:
-The Needs Me reason of a pushed commit whose CI result is failed (a run failed or timed out; a cancelled run is CI cancelled instead), listing the Accepted Tickets waiting on it, across Specs, that the human hasn't dealt with yet: re-run the failed jobs, land them anyway, open a new fix Ticket, or send it back to fix. It is one item per commit, with no Ticket of its own, and each option acts on every listed Ticket; send it back to fix is offered only when the item lists one Ticket that isn't Spec-landed. Each listed Ticket's view shows its CI result and links the item.
+The Needs Me reason of a pushed commit whose CI result is failed (a run failed or timed out; a cancelled run is CI cancelled instead), listing the Accepted Tickets waiting on it, across Specs, that the human hasn't dealt with yet: re-run the failed jobs, land them anyway, open a new fix Ticket, or send it back to fix. The item is left out of Needs Me while its fix Ticket is neither Done nor Cancelled, and returns if the fix Ticket is Cancelled while the commit is still failing. It is one item per commit, with no Ticket of its own, and each option acts on every listed Ticket; send it back to fix is offered only when the item lists one Ticket that isn't Spec-landed. Each listed Ticket's view shows its CI result and links the item.
 _Avoid_: Build broken, red
 
 **Land anyway**:
@@ -345,8 +345,12 @@ The failure option by which the human sends a CI failed Ticket back to Ready wit
 _Avoid_: Revert, reject
 
 **New fix Ticket**:
-The failure option by which the human opens a Ready Ticket on the Spec of the CI failed Ticket it is chosen on, carrying the note, and accepts the failed CI result as Land anyway does, so every Ticket the item lists lands and the fix goes on top. Offered under Merge + Push and Branch + Push.
+The failure option by which the human opens a Ready Ticket on the Project's CI Fixes Spec, carrying the note, and stores it once on the commit's response. It doesn't accept the failed CI result: every Ticket the item lists stays Accepted, and lands when a later commit containing the work passes CI, such as the fix's push. Offered under Merge + Push and Branch + Push.
 _Avoid_: Follow-up ticket, hotfix
+
+**CI Fixes Spec**:
+The Long-lived Spec, one per Project, that New fix Tickets open their fix Ticket on. Code Central creates it on first use, titled `CI Fixes` and labelled `long-lived`, as it does a CI Rule's Spec.
+_Avoid_: Fix Spec
 
 **CI unavailable**:
 The Needs Me reason of a pushed commit the CI gate has held Tickets on for 10 minutes or more since their push, while the CI Watcher isn't watching or no CI Runs have been reported for it. It is one item per commit, with no Ticket of its own and no options, listing the Tickets waiting on it.

@@ -208,7 +208,7 @@ function CIFailureOptions({ api, project, ticket: t }: { api: Api; project: stri
       {fixes && (
         <>
           <p className="small">
-            To fix it, send it back for the next agent to fix on its branch, or open a new fix Ticket on its Spec and let this one land. Either
+            To fix it, send it back for the next agent to fix on its branch, or open a new fix Ticket on the CI Fixes Spec, which this one waits for. Either
             way the fix goes on top: nothing is reverted.
           </p>
           <label className="ci-fix-note">

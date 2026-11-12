@@ -80,6 +80,9 @@ type Project struct {
 	// results, one per commit (code-central-432). A Project stored
 	// without them has none.
 	CIResponses []CIResponse
+	// CIFixesSpec is the number of the Project's CI Fixes Spec, the
+	// Long-lived Spec its New fix Tickets open on; 0 until the first one.
+	CIFixesSpec int
 }
 
 // StageGuides is a Project's Stage Guides settings (Spec
@@ -106,6 +109,9 @@ type CIResponse struct {
 	// asked for.
 	Rerun  time.Time
 	Reruns []CIRunAttempt
+	// FixTicket is the number of the fix Ticket the human opened for the
+	// commit's failure with New fix Ticket; 0 until then.
+	FixTicket int
 }
 
 // LandingMethod is how accepted work reaches a Project's base.
