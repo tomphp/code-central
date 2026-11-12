@@ -55,10 +55,13 @@ type StageGuidesView struct {
 	// SubagentExploration is whether the implementation guide tells the
 	// agent to send reading across several files to a subagent.
 	SubagentExploration bool `json:"subagent_exploration"`
+	// ModelAssignment is whether the tickets Stage sets each Ticket's
+	// model and effort.
+	ModelAssignment bool `json:"model_assignment"`
 }
 
 func stageGuidesView(g store.StageGuides) StageGuidesView {
-	return StageGuidesView{SubagentExploration: !g.SubagentExplorationOff}
+	return StageGuidesView{SubagentExploration: !g.SubagentExplorationOff, ModelAssignment: g.ModelAssignmentOn}
 }
 
 // StageGuideInput is get_stage_guide's input.
@@ -157,6 +160,42 @@ func (c *Core) SetSubagentExploration(ctx context.Context, key string, in SetSub
 		before = c.projectView(p)
 		was := p.StageGuides
 		p.StageGuides.SubagentExplorationOff = !in.On
+		after = c.projectView(p)
+		if p.StageGuides == was {
+			return nil
+		}
+		return w.PutProject(p)
+	})
+	if err != nil {
+		return Written[ProjectView]{}, err
+	}
+	return acknowledgeProject(before, after, in.Full, c.now())
+}
+
+// SetModelAssignmentInput is the human's set_model_assignment(on, full?).
+type SetModelAssignmentInput struct {
+	On bool `json:"on"`
+	// Full asks for the Project in place of the Acknowledgement.
+	Full bool `json:"full,omitempty"`
+}
+
+// SetModelAssignment is the human's set_model_assignment: whether the
+// tickets Stage sets each Ticket's model and effort. Like the Project's
+// other settings it adds no Move, Edit or Comment; the Project's notice
+// announces it, and only on a change.
+func (c *Core) SetModelAssignment(ctx context.Context, key string, in SetModelAssignmentInput) (Written[ProjectView], error) {
+	if err := humanOnly(ctx, "set_model_assignment"); err != nil {
+		return Written[ProjectView]{}, err
+	}
+	var before, after ProjectView
+	err := c.store.Update(func(w store.Writer) error {
+		if err := writable(w, key); err != nil {
+			return err
+		}
+		p, _ := w.Project(key)
+		before = c.projectView(p)
+		was := p.StageGuides
+		p.StageGuides.ModelAssignmentOn = in.On
 		after = c.projectView(p)
 		if p.StageGuides == was {
 			return nil

@@ -93,6 +93,9 @@ type StageGuides struct {
 	// SubagentExplorationOff leaves the implementation guide's subagent
 	// line out.
 	SubagentExplorationOff bool
+	// ModelAssignmentOn turns Model Assignment on. It is stored as on so
+	// that a Project stored without it reads off (ADR 0034).
+	ModelAssignmentOn bool
 }
 
 // CIResponse is the human's response to one pushed commit's CI result,

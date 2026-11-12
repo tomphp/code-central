@@ -395,3 +395,46 @@ func TestGetStageGuideOnAnUnknownProjectIsRefused(t *testing.T) {
 	_, err := f.core.GetStageGuide(ctx, "nope", core.StageGuideInput{Stage: "tickets"})
 	wantCode(t, err, core.UnknownProject, "")
 }
+
+// Model Assignment (code-central-471, ADR 0034).
+func TestAProjectStoredWithoutTheSettingHasModelAssignmentOff(t *testing.T) {
+	f := newFixture(t)
+	if p := f.project(t, "acme"); p.StageGuides.ModelAssignment {
+		t.Fatalf("stage_guides = %+v, want Model Assignment off", p.StageGuides)
+	}
+}
+
+func TestSetModelAssignmentTurnsItOnAndSendsTheNoticeOnlyOnAChange(t *testing.T) {
+	f := newFixture(t)
+	if p := f.project(t, "acme"); p.StageGuides.ModelAssignment {
+		t.Fatalf("stage_guides = %+v, want Model Assignment off", p.StageGuides)
+	}
+	notices, stop := f.core.Events().Subscribe()
+	defer stop()
+
+	w, err := f.core.SetModelAssignment(human, "acme", core.SetModelAssignmentInput{On: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Record != nil || w.ID != "acme" || !slices.Equal(w.Changed, []string{"stage_guides"}) {
+		t.Errorf("acknowledgement = %+v, want stage_guides changed on acme", w)
+	}
+	if got := <-notices; got != (events.Event{Type: events.ProjectChanged, Project: "acme"}) {
+		t.Fatalf("got %+v, want the Project's notice", got)
+	}
+	again, err := f.core.SetModelAssignment(human, "acme", core.SetModelAssignmentInput{On: true, Full: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sg := again.Record.StageGuides; !sg.ModelAssignment || !sg.SubagentExploration {
+		t.Fatalf("stage_guides = %+v, want Model Assignment on and Subagent Exploration untouched", sg)
+	}
+	noNotice(t, notices)
+}
+
+func TestAnAgentCannotSetModelAssignment(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	_, err := f.core.SetModelAssignment(ctx, "acme", core.SetModelAssignmentInput{On: true})
+	wantCode(t, err, core.ActionNotAllowed, "")
+}
