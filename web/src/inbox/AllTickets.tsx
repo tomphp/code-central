@@ -7,8 +7,9 @@ import type { ProjectSpec, ProjectTicket } from "../live";
 import { stageOf } from "../requirement/progress";
 import { LinkBadge } from "../ticket/LinkBadge";
 import { WaitingBadge } from "../ticket/WaitingBadge";
+import { groupBySpec } from "./groupBySpec";
 import { ShortId } from "./ShortId";
-import { specKindOf } from "./SpecRow";
+import { SpecRow, specKindOf, stagesFirst, type SpecRowProps } from "./SpecRow";
 import { stateSlug, type InboxRowLinkFactory } from "./StateRow";
 
 const numberOf = (id: string) => Number(id.slice(id.lastIndexOf("-") + 1));
@@ -67,5 +68,50 @@ export function AllTicketsByTicket({
         );
       })}
     </>
+  );
+}
+
+// AllTicketsBySpec is the All Tickets view's By Spec grouping: one Spec row
+// per Spec with Tickets in view, in the order of its newest Ticket, each
+// opening on its Tickets with their State chips.
+export function AllTicketsBySpec({
+  tickets,
+  specs,
+  ticketsOf,
+  reasons,
+  now,
+  link,
+  specLink,
+  selectedTicket,
+}: {
+  tickets: ProjectTicket[];
+  specs: Map<string, ProjectSpec>;
+  // ticketsOf is all of a Spec's Tickets, in every State.
+  ticketsOf(spec: string): ProjectTicket[];
+  reasons: Map<string, NeedsMeReason>;
+  now: Date;
+  link: InboxRowLinkFactory;
+  specLink(id: string): SpecRowProps["link"];
+  selectedTicket?: string;
+}) {
+  const groups = groupBySpec(newestFirst(tickets));
+  if (groups.length === 0) return <p className="empty">No unfinished Tickets.</p>;
+  return (
+    <div className="spec-rows">
+      {groups.map((g) => (
+        <SpecRow
+          key={g.id}
+          id={g.id}
+          spec={specs.get(g.id)}
+          all={ticketsOf(g.id)}
+          shown={stagesFirst(g.tickets)}
+          reasons={reasons}
+          now={now}
+          link={specLink(g.id)}
+          ticketLink={link}
+          selectedTicket={selectedTicket}
+        />
+      ))}
+    </div>
   );
 }

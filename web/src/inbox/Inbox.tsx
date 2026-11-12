@@ -39,7 +39,7 @@ import { UsageLink } from "../usage/UsageLink";
 import { CILink } from "../ci/CILink";
 import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
-import { AllTicketsByTicket } from "./AllTickets";
+import { AllTicketsBySpec, AllTicketsByTicket } from "./AllTickets";
 import { groupBySpec } from "./groupBySpec";
 import { SpecRow } from "./SpecRow";
 import { StateListBySpec } from "./StateListBySpec";
@@ -291,13 +291,25 @@ export function Inbox({
         ) : loc.list === "tickets" ? (
           <>
             {toggleBar}
-            {/* By Spec is built in the next Ticket; the toggle only persists. */}
-            <AllTicketsByTicket
-              tickets={tickets}
-              specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
-              reasons={reasons}
-              link={rowLink}
-            />
+            {grouping === "spec" ? (
+              <AllTicketsBySpec
+                tickets={tickets}
+                specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
+                ticketsOf={ticketsOf}
+                reasons={reasons}
+                now={now}
+                link={rowLink}
+                specLink={requirementLink}
+                selectedTicket={loc.ticket}
+              />
+            ) : (
+              <AllTicketsByTicket
+                tickets={tickets}
+                specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
+                reasons={reasons}
+                link={rowLink}
+              />
+            )}
           </>
         ) : loc.state ? (
           <>

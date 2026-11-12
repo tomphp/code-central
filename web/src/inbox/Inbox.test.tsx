@@ -1008,6 +1008,32 @@ describe("the All Tickets view", () => {
     expect(localStorage.length).toBe(1);
   });
 
+  it("groups By Spec in the order of each Spec's newest Ticket, Stage Tickets first, with State chips", async () => {
+    renderApp(await ticketsWorld(), "/?view=inbox&list=tickets&group=spec&project=acme");
+    const rows = await within(list()).findAllByRole("region");
+    // acme-5's newest Ticket (acme-12) is newer than any of the Requirement's.
+    expect(rows[0]).toHaveAccessibleName("Archive finished Projects");
+    expect(within(rows[0]).queryByText("Sketch the menu")).toBeNull(); // collapsed
+    await userEvent.click(within(rows[0]).getByRole("button", { name: "Archive finished Projects" }));
+    const plainIds = within(rows[0]).getAllByRole("link").map((a) => a.getAttribute("data-id")).filter(Boolean);
+    expect(plainIds.indexOf("acme-13")).toBeLessThan(plainIds.indexOf("acme-12")); // oldest first
+    expect(within(rows[0]).getByText("Sketch the menu").closest("a")).toHaveTextContent("Ready");
+
+    const req = within(list()).getByRole("region", { name: "Export a Spec as Markdown" });
+    await userEvent.click(within(req).getByRole("button", { name: "Export a Spec as Markdown" }));
+    const ids = within(req).getAllByRole("link").map((a) => a.getAttribute("data-id")).filter(Boolean);
+    expect(ids.slice(1)).toEqual(["acme-2", "acme-3", "acme-4", "acme-11"]); // Stages first, in Stage order
+  });
+
+  it("switching the grouping in a State list switches it here", async () => {
+    renderApp(await ticketsWorld(), "/?state=Ready");
+    await within(list()).findByRole("button", { name: "By Spec" });
+    await bySpec();
+    await allTickets();
+    expect(params().get("group")).toBe("spec");
+    expect(await within(list()).findAllByRole("region")).not.toHaveLength(0);
+  });
+
   it("says so when nothing is there", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
