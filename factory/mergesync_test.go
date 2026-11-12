@@ -204,6 +204,11 @@ func TestUnderMergeWithoutPushTheFactoryNeverFetches(t *testing.T) {
 	remote := h.AddRemote("origin")
 	h.CommitOn("theirs", "theirs.txt", "theirs\n")
 	h.Git("push", "-q", remote.Path, "theirs:refs/heads/main")
+	// Some git versions record a tracking ref for a push to a configured
+	// remote's URL; drop it so only a fetch by the Factory can leave one.
+	for _, ref := range strings.Fields(h.Git("for-each-ref", "--format=%(refname)", "refs/remotes")) {
+		h.Git("update-ref", "-d", ref)
+	}
 	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Remote: "origin"})
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
