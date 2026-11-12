@@ -459,13 +459,21 @@ Each row has a **Model**, typed in as `claude --model` takes it, such as `opus` 
 
 ## Stage Guides
 
-Code Central gives each Claim a Stage Guide, its instructions for that kind of work. A guide is the Project's own, and only a named Project setting can change what it says. There is one so far, **Subagent Exploration**, which is on by default. It is a checkbox in the **Stage Guides** section of the Project Options page, below Models, with its own **Save**; every open UI tab shows a change, and an Archived Project shows it read-only. While it is on, the implementation guide tells the agent to ask an Explore subagent when understanding existing code means reading across several files, and to keep its answer, not the files. Turn it off for a Project whose agents have no subagents or can't afford them: the guide then has no such line and no empty bullet where it was.
+Code Central gives each Claim a Stage Guide, its instructions for that kind of work. A guide is the Project's own, and only a named Project setting can change what it says. There are two so far, each a checkbox in the **Stage Guides** section of the Project Options page, below Models, with its own **Save**; every open UI tab shows a change, and an Archived Project shows them read-only.
 
-A Project stored before the setting existed reads as on, so nothing changes until you turn it off. Every Project read shows it as `stage_guides`, as in `{"subagent_exploration": true}`. Only you set it, from Project Options or over HTTP with `POST /api/p/{key}/set_subagent_exploration` and `{"on": false}`; agents have no tool or command for it.
+- **Subagent Exploration** is on by default. While it is on, the implementation guide tells the agent to ask an Explore subagent when understanding existing code means reading across several files, and to keep its answer, not the files. Turn it off for a Project whose agents have no subagents or can't afford them: the guide then has no such line and no empty bullet where it was.
+- **Model Assignment** is off by default. While it is on, the tickets guide tells the agent to recommend an `effort` for each Ticket it creates, and a `model` too, one of the aliases the Factory [reported its `claude` accepts](running-the-factory.md#what-claude-accepts) (the line names only the effort until it has reported), and to pass them in `tags` to `create_ticket`. It also tells the agent to give the model, the effort and a one-line reason on each line of the finish summary's numbered breakdown, and to update the Tags with `set_tags` on a redo. The Tags then decide each Ticket's [model and effort](running-the-factory.md#model-and-effort), over the Models section's rows. Turn it on when you want the agent that breaks a Spec into Tickets to size each one's model and effort, instead of every Ticket running on its kind of work's row.
+
+A Project stored before a setting existed reads it as its default, so nothing changes until you change it. Every Project read shows them as `stage_guides`, as in `{"subagent_exploration": true, "model_assignment": false}`. Only you set them, from Project Options or over HTTP, and agents have no tool or command for them:
+
+```sh
+curl -X POST localhost:7733/api/p/acme-api/set_subagent_exploration -d '{"on": false}'
+curl -X POST localhost:7733/api/p/acme-api/set_model_assignment -d '{"on": true}'
+```
 
 A change applies from the next Claim and the next `get_stage_guide` call. A session already running, or one resumed after a Round, keeps the guide in the system prompt it started with, unlike Models, which apply from each Ticket's next turn. To read the guide your Project's agents get, `GET /api/p/{key}/stage-guides/{stage}` or `code-central get-stage-guide <stage>`, which prints the configured Project's guide (`--project` names another).
 
-A later optional line follows the same pattern: one named setting, stored as the opposite so its zero value keeps the line in, and one fragment in `core/stageguides/fragments/`, which the guide's placeholder line (`<!-- subagent-exploration -->`) marks the place of. [ADR 0034](adr/0034-a-stage-guide-can-vary-by-project-only-through-named-project-settings-that-the-human-sets.md) records the decision.
+Another optional line follows the same pattern: one named setting, whose zero value may keep the line in or leave it out, and one fragment in `core/stageguides/fragments/`, which a placeholder line in the guide (`<!-- subagent-exploration -->`, `<!-- model-assignment -->`) marks the place of. [ADR 0034](adr/0034-a-stage-guide-can-vary-by-project-only-through-named-project-settings-that-the-human-sets.md) records the decision.
 
 ## When `init` behaves differently
 

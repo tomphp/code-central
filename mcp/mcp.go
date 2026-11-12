@@ -57,6 +57,7 @@ var tools = map[string]tool{
 			"state":       map[string]any{"type": "string", "enum": []string{"Draft", "Ready"}, "description": "Draft (the default) or Ready."},
 			"labels":      list("Labels to add."),
 			"blocked_by":  map[string]any{"type": "array", "items": map[string]any{"type": []string{"string", "integer"}}, "description": "Tickets it waits on until they are Done. IDs: <key>-<n> or <n>."},
+			"tags":        map[string]any{"type": "object", "additionalProperties": map[string]any{"type": "string"}, "description": "Tags to set on it, as {key: value}; checked as set_tags checks them, so effort must be a valid level."},
 			"full":        flag("Return the whole Ticket instead of the acknowledgement."),
 		}, "spec", "title"),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {

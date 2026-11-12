@@ -465,7 +465,7 @@ export class FakeApi implements Api {
       github_issues: { on: false, repository: "", label: "", new_issues_need_me: false, watcher: { state: "not_reported" } },
       models: { default: { model: "", effort: "" }, kinds: KINDS_OF_WORK.map((kind) => ({ kind, model: "", effort: "" })) },
       reported_models: { effort_levels: [...EFFORT_LEVELS], aliases: [], model_ids: [], model_flag: "", effort_flag: "" },
-      stage_guides: { subagent_exploration: true },
+      stage_guides: { subagent_exploration: true, model_assignment: false },
       factory_status: { status: "offline", factories: [] },
       next: 1,
     });
@@ -1336,7 +1336,17 @@ export class FakeApi implements Api {
     this.calls.push("setSubagentExploration");
     const p = this.writable(key);
     if (p.stage_guides.subagent_exploration !== on) {
-      p.stage_guides = { subagent_exploration: on };
+      p.stage_guides = { ...p.stage_guides, subagent_exploration: on };
+      this.emit({ type: "project.changed", project: key });
+    }
+    return this.projectView(p);
+  }
+
+  async setModelAssignment(key: string, on: boolean): Promise<ProjectView> {
+    this.calls.push("setModelAssignment");
+    const p = this.writable(key);
+    if (p.stage_guides.model_assignment !== on) {
+      p.stage_guides = { ...p.stage_guides, model_assignment: on };
       this.emit({ type: "project.changed", project: key });
     }
     return this.projectView(p);

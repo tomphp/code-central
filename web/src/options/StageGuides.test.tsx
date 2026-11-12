@@ -16,6 +16,7 @@ function renderApp(fake: FakeApi) {
 const guides = async () =>
   within(await screen.findByRole("main", { name: "Project Options" })).findByRole("group", { name: "Stage Guides" });
 const checkbox = (g: HTMLElement) => within(g).getByRole("checkbox", { name: "Subagent Exploration" });
+const assignment = (g: HTMLElement) => within(g).getByRole("checkbox", { name: "Model Assignment" });
 const fresh = (opts: { archived?: boolean } = {}) => {
   const fake = new FakeApi();
   fake.addProject("acme", "Acme", opts);
@@ -31,7 +32,7 @@ describe("the Stage Guides section", () => {
     expect(g).toHaveTextContent("Explore subagent");
     expect(g).toHaveTextContent("no subagents or can't afford them");
     expect(g).toHaveTextContent("next Claim");
-    expect(within(g).getByRole("button", { name: "Save" })).toBeDisabled();
+    for (const save of within(g).getAllByRole("button", { name: "Save" })) expect(save).toBeDisabled();
   });
 
   it("saves through set_subagent_exploration, leaving the Models rows alone", async () => {
@@ -40,7 +41,7 @@ describe("the Stage Guides section", () => {
     const g = await guides();
 
     await userEvent.click(checkbox(g));
-    await userEvent.click(within(g).getByRole("button", { name: "Save" }));
+    await userEvent.click(within(g).getAllByRole("button", { name: "Save" })[0]);
 
     expect(await within(g).findByRole("status")).toHaveTextContent("Saved");
     expect(fake.calls).toContain("setSubagentExploration");
@@ -63,5 +64,40 @@ describe("the Stage Guides section", () => {
 
     const g = await guides();
     expect(checkbox(g)).toBeDisabled();
+    expect(assignment(g)).toBeDisabled();
+  });
+
+  it("shows Model Assignment off, with what it does", async () => {
+    renderApp(fresh());
+
+    const g = await guides();
+    expect(assignment(g)).not.toBeChecked();
+    expect(g).toHaveTextContent("Reported Models");
+  });
+
+  it("saves Model Assignment through its own Save, leaving Subagent Exploration alone", async () => {
+    const fake = fresh();
+    renderApp(fake);
+    const g = await guides();
+
+    await userEvent.click(assignment(g));
+    const saves = within(g).getAllByRole("button", { name: "Save" });
+    expect(saves[0]).toBeDisabled();
+    await userEvent.click(saves[1]);
+
+    expect(await within(g).findByRole("status")).toHaveTextContent("Saved");
+    expect(fake.calls).toContain("setModelAssignment");
+    expect(fake.calls).not.toContain("setSubagentExploration");
+    expect((await fake.listProjects())[0].stage_guides).toEqual({ subagent_exploration: true, model_assignment: true });
+    expect(assignment(g)).toBeChecked();
+  });
+
+  it("shows a Model Assignment change made elsewhere, as another tab would", async () => {
+    const fake = fresh();
+    renderApp(fake);
+    const g = await guides();
+
+    await fake.setModelAssignment("acme", true);
+    await waitFor(() => expect(assignment(g)).toBeChecked());
   });
 });

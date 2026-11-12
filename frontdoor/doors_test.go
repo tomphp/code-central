@@ -87,12 +87,17 @@ var cases = map[string]opCase{
 	},
 	"create_ticket": {
 		ok: call{
-			mcp:  map[string]any{"spec": 1, "title": "Form", "state": "Ready", "labels": []string{"ui"}, "description": "Build it."},
-			http: httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"Form","state":"Ready","labels":["ui"],"description":"Build it."}`},
-			cli:  []string{"--spec", "1", "--title", "Form", "--state", "Ready", "--label", "ui", "--description", "Build it."},
+			mcp:  map[string]any{"spec": 1, "title": "Form", "state": "Ready", "labels": []string{"ui"}, "description": "Build it.", "tags": map[string]string{"effort": "high"}},
+			http: httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"Form","state":"Ready","labels":["ui"],"description":"Build it.","tags":{"effort":"high"}}`},
+			cli:  []string{"--spec", "1", "--title", "Form", "--state", "Ready", "--label", "ui", "--description", "Build it.", "--tag", "effort=high"},
 		},
-		check: ticketAcknowledgement("acme-4", "Ready", "title", "state", "spec", "labels", "description", "claimable"),
-		full:  field("id", "acme-4"),
+		check: ticketAcknowledgement("acme-4", "Ready", "title", "state", "spec", "labels", "tags", "description", "claimable"),
+		full: func(t *testing.T, out map[string]any) {
+			t.Helper()
+			field("id", "acme-4")(t, out)
+			tags, _ := out["tags"].(map[string]any)
+			field("effort", "high")(t, tags)
+		},
 		bad: call{
 			mcp:  map[string]any{"spec": "acme-9", "title": "Form"},
 			http: httpCall{"POST", "/api/p/acme/create_ticket", `{"spec":"acme-9","title":"Form"}`},

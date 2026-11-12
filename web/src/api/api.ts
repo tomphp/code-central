@@ -131,6 +131,9 @@ export interface Api {
   // setSubagentExploration turns on or off the implementation guide's
   // subagent line, from the next Claim and the next get_stage_guide.
   setSubagentExploration(project: string, on: boolean): Promise<ProjectView>;
+  // setModelAssignment turns on or off the tickets guide's model and effort
+  // assignment (human-only), off to begin with.
+  setModelAssignment(project: string, on: boolean): Promise<ProjectView>;
   // addCIRule adds a CI Rule and creates its Spec, titled like "CI: ci.yml
   // on main"; editCIRule changes the rule on Spec spec, and
   // removeCIRule removes it, leaving its Spec as the record. Workflow and

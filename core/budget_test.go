@@ -32,7 +32,7 @@ const (
 var guideBudgets = map[string]int{
 	"grilling":       4200,
 	"spec":           3450,
-	"tickets":        3500,
+	"tickets":        3700, // with Model Assignment on and aliases reported
 	"implementation": 3500,
 	"map-chart":      4000,
 	"map-grilling":   4000,
@@ -110,6 +110,9 @@ func TestTheStageGuidesTroubleRulesStayWithin800Bytes(t *testing.T) {
 
 func TestEachStageGuideStaysWithinItsBudget(t *testing.T) {
 	f := newFixture(t)
+	f.project(t, "acme")
+	f.reportModels(t, core.ReportModelsInput{Aliases: []string{"opus", "sonnet", "haiku"}, EffortLevels: []string{"low", "medium", "high", "xhigh", "max"}})
+	f.setModelAssignment(t, true)
 	for _, stage := range core.GuideNames {
 		limit, ok := guideBudgets[stage]
 		if !ok {

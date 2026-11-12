@@ -105,7 +105,7 @@ func init() {
 	commands = map[string]command{
 		"init":          {usage: "init [--key <key>] [--local | --committed]  set this repository up as a Project (--local keeps init's files out of git)", run: runInit},
 		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->] [--full]", run: runCreateSpec},
-		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--description <md> | --file <path|->] [--full]", run: runCreateTicket},
+		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--tag <key>=<value>]... [--description <md> | --file <path|->] [--full]", run: runCreateTicket},
 		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id> [--part claims|failure_reports|comments|rounds|moves|edits]...", run: runGetTicket},
 		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--spec <id>] [--claimable[=false]]", run: runFindTickets},
 
@@ -337,15 +337,20 @@ func runCreateTicket(ctx context.Context, e Env, args []string) error {
 	desc := fs.String("description", "", "")
 	file := fs.String("file", "", "")
 	full := fs.Bool("full", false, "")
-	var labels, blockedBy strs
+	var labels, blockedBy, tagPairs strs
 	fs.Var(&labels, "label", "")
 	fs.Var(&blockedBy, "blocked-by", "")
+	fs.Var(&tagPairs, "tag", "")
 	pos, err := parse(fs, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) > 0 {
 		return usagef("unexpected argument %q", pos[0])
+	}
+	tags, err := tagFlags(tagPairs)
+	if err != nil {
+		return err
 	}
 	sc, err := resolveScope(e, *project)
 	if err != nil {
@@ -356,7 +361,7 @@ func runCreateTicket(ctx context.Context, e Env, args []string) error {
 		return err
 	}
 	in := core.CreateTicketInput{
-		Spec: core.Ref(*spec), Title: *title, Description: text, State: store.State(*state), Labels: labels, Full: *full,
+		Spec: core.Ref(*spec), Title: *title, Description: text, State: store.State(*state), Labels: labels, Tags: tags, Full: *full,
 	}
 	for _, b := range blockedBy {
 		in.BlockedBy = append(in.BlockedBy, core.Ref(b))

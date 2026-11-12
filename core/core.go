@@ -9,6 +9,7 @@ package core
 import (
 	"cmp"
 	"context"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -325,6 +326,8 @@ type CreateTicketInput struct {
 	State       store.State `json:"state,omitempty"`
 	Labels      []string    `json:"labels,omitempty"`
 	BlockedBy   []Ref       `json:"blocked_by,omitempty"`
+	// Tags are the Ticket's Tags from the start, checked as set_tags checks them.
+	Tags map[string]string `json:"tags,omitempty"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -411,7 +414,7 @@ func (c *Core) CreateSpec(_ context.Context, key string, in CreateSpecInput) (Wr
 }
 
 // CreateTicket is create_ticket(spec, title, description, state, labels,
-// blocked_by, full?).
+// blocked_by, tags?, full?).
 func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput) (Written[TicketView], error) {
 	if strings.TrimSpace(in.Title) == "" {
 		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
@@ -429,9 +432,15 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 	if err := checkTicketLabels("labels", in.Labels); err != nil {
 		return Written[TicketView]{}, err
 	}
+	if err := checkTagSyntax(in.Tags); err != nil {
+		return Written[TicketView]{}, err
+	}
 	var v Written[TicketView]
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
+			return err
+		}
+		if err := checkTicketTags(w, key, in.Tags); err != nil {
 			return err
 		}
 		sp, err := resolveSpec(w, key, "create_ticket", "spec", in.Spec)
@@ -447,7 +456,7 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 		now := c.now()
 		t := store.Ticket{
 			Number: w.NextNumber(key), Title: in.Title, State: state, Spec: specN,
-			Labels: in.Labels, BlockedBy: blockedBy, Created: now, Updated: now, Description: in.Description,
+			Labels: in.Labels, Tags: maps.Clone(in.Tags), BlockedBy: blockedBy, Created: now, Updated: now, Description: in.Description,
 		}
 		if err := w.PutTicket(key, t); err != nil {
 			return err

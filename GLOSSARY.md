@@ -113,8 +113,12 @@ One of the three fixed steps that turn a Requirement's text into implementation 
 _Avoid_: Phase, step, definition Ticket
 
 **Stage Guide**:
-Code Central's instructions telling an agent what a Stage must produce, how to finish it and what to do when it can't carry on. Implementation Tickets, a Map's Tickets and Prototypes get one too, though they are not Stages. A Project can change what its guide says only through a named Project setting, such as Subagent Exploration.
+Code Central's instructions telling an agent what a Stage must produce, how to finish it and what to do when it can't carry on. Implementation Tickets, a Map's Tickets and Prototypes get one too, though they are not Stages. A Project can change what its guide says only through a named Project setting, such as Subagent Exploration or Model Assignment.
 _Avoid_: Prompt, playbook, skill
+
+**Model Assignment**:
+A Project setting that has the tickets Stage Guide tell the agent to give each implementation Ticket it creates a `model` and `effort` Tag, chosen from the Project's Reported Models. Off unless the human turns it on.
+_Avoid_: auto model assignment, model recommendation
 
 **Subagent Exploration**:
 A Project setting that has the implementation Stage Guide tell the agent to send reading across several files to a subagent and keep only its answer. On unless the human turns it off.
@@ -429,7 +433,7 @@ A Ticket's type on a Map, as Spec reads show it: its Wayfinder Label's type (`ch
 _Avoid_: Ticket kind
 
 **Tag**:
-A free-form key and value on a Spec or Ticket, with no meaning to Code Central's workflow; the Factory reads the `guided` Tag on a Map and the `model` and `effort` Tags on a Ticket, and the read side the `prototype`, `research` and `map` Tags. `effort` is the one Tag whose value Code Central checks: on a Ticket it must be a valid effort level.
+A free-form key and value on a Spec or Ticket, with no meaning to Code Central's workflow; the Factory reads the `guided` Tag on a Map and the `model` and `effort` Tags on a Ticket, and the read side the `prototype`, `research` and `map` Tags. The tickets Stage sets `model` and `effort` on the Tickets it creates when Model Assignment is on. `effort` is the one Tag whose value Code Central checks: on a Ticket it must be a valid effort level.
 _Avoid_: Label, attribute, property
 
 **Import**:

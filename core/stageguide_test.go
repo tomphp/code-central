@@ -395,3 +395,116 @@ func TestGetStageGuideOnAnUnknownProjectIsRefused(t *testing.T) {
 	_, err := f.core.GetStageGuide(ctx, "nope", core.StageGuideInput{Stage: "tickets"})
 	wantCode(t, err, core.UnknownProject, "")
 }
+
+// Model Assignment (code-central-471, ADR 0034).
+func TestAProjectStoredWithoutTheSettingHasModelAssignmentOff(t *testing.T) {
+	f := newFixture(t)
+	if p := f.project(t, "acme"); p.StageGuides.ModelAssignment {
+		t.Fatalf("stage_guides = %+v, want Model Assignment off", p.StageGuides)
+	}
+}
+
+func TestSetModelAssignmentTurnsItOnAndSendsTheNoticeOnlyOnAChange(t *testing.T) {
+	f := newFixture(t)
+	if p := f.project(t, "acme"); p.StageGuides.ModelAssignment {
+		t.Fatalf("stage_guides = %+v, want Model Assignment off", p.StageGuides)
+	}
+	notices, stop := f.core.Events().Subscribe()
+	defer stop()
+
+	w, err := f.core.SetModelAssignment(human, "acme", core.SetModelAssignmentInput{On: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Record != nil || w.ID != "acme" || !slices.Equal(w.Changed, []string{"stage_guides"}) {
+		t.Errorf("acknowledgement = %+v, want stage_guides changed on acme", w)
+	}
+	if got := <-notices; got != (events.Event{Type: events.ProjectChanged, Project: "acme"}) {
+		t.Fatalf("got %+v, want the Project's notice", got)
+	}
+	again, err := f.core.SetModelAssignment(human, "acme", core.SetModelAssignmentInput{On: true, Full: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sg := again.Record.StageGuides; !sg.ModelAssignment || !sg.SubagentExploration {
+		t.Fatalf("stage_guides = %+v, want Model Assignment on and Subagent Exploration untouched", sg)
+	}
+	noNotice(t, notices)
+}
+
+func TestAnAgentCannotSetModelAssignment(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	_, err := f.core.SetModelAssignment(ctx, "acme", core.SetModelAssignmentInput{On: true})
+	wantCode(t, err, core.ActionNotAllowed, "")
+}
+
+// The Model Assignment fragment (code-central-472, ADR 0034).
+func (f fixture) setModelAssignment(t *testing.T, on bool) {
+	t.Helper()
+	if _, err := f.core.SetModelAssignment(human, "acme", core.SetModelAssignmentInput{On: on}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestModelAssignmentOffLeavesNoModelTextNoGapAndNoPlaceholder(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	g := guide(t, f, "tickets")
+	for _, s := range []string{"model-assignment", "effort", "set_tags", "<!--", "- \n", "\n\n\n"} {
+		if strings.Contains(g, s) {
+			t.Errorf("the tickets guide has %q with Model Assignment off:\n%s", s, g)
+		}
+	}
+	if !strings.Contains(g, "Give no Stage Label.\n\nIf the Spec records") {
+		t.Errorf("the bullets are not followed by the paragraph:\n%s", g)
+	}
+}
+
+func TestModelAssignmentOnListsTheReportedAliasesAndLevels(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	f.reportModels(t, core.ReportModelsInput{Aliases: []string{"opus", "sonnet"}, EffortLevels: []string{"low", "high"}})
+	f.setModelAssignment(t, true)
+	g := guide(t, f, "tickets")
+	for _, s := range []string{"`opus`, `sonnet`", "`low`, `high`", "`create_ticket`", "`tags`", "reason", "`set_tags`", "Give no Stage Label.\n- "} {
+		if !strings.Contains(g, s) {
+			t.Errorf("the tickets guide lacks %q:\n%s", s, g)
+		}
+	}
+	if strings.Contains(g, "medium") || strings.Contains(g, "haiku") {
+		t.Errorf("the guide lists more than the reported values:\n%s", g)
+	}
+}
+
+func TestModelAssignmentOnWithNoAliasesAsksForEffortOnlyWithSeededLevels(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	f.setModelAssignment(t, true)
+	g := guide(t, f, "tickets")
+	if !strings.Contains(g, "`low`, `medium`, `high`, `xhigh`, `max`") || !strings.Contains(g, "`set_tags`") {
+		t.Errorf("the guide lacks the seeded levels or set_tags:\n%s", g)
+	}
+	if strings.Contains(g, "`model`") || strings.Contains(g, "alias") {
+		t.Errorf("the guide mentions the model with no aliases:\n%s", g)
+	}
+}
+
+func TestOnlyTheTicketsGuideChangesWithModelAssignment(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	before := map[string]string{}
+	for _, stage := range core.GuideNames {
+		before[stage] = guide(t, f, stage)
+	}
+	f.setModelAssignment(t, true)
+	for _, stage := range core.GuideNames {
+		g := guide(t, f, stage)
+		if (g != before[stage]) != (stage == "tickets") {
+			t.Errorf("the %s guide changed = %v with Model Assignment on", stage, g != before[stage])
+		}
+		if strings.Contains(g, "<!--") || strings.Contains(g, "{{") {
+			t.Errorf("the %s guide has unrendered text", stage)
+		}
+	}
+}

@@ -221,6 +221,7 @@ export interface GitHubIssuesSettings extends GitHubIssuesChange {
 // A Project's Stage Guides settings (Spec code-central-441).
 export interface StageGuides {
   subagent_exploration: boolean;
+  model_assignment: boolean;
 }
 
 // A Models row (Spec code-central-301): the model and effort it sets,

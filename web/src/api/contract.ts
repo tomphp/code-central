@@ -358,10 +358,19 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
     it("sets a Project's Subagent Exploration, on to begin with", async () => {
       await d.createProject("acme", "Acme");
-      expect((await d.api.listProjects())[0].stage_guides).toEqual({ subagent_exploration: true });
-      expect((await d.api.setSubagentExploration("acme", false)).stage_guides).toEqual({ subagent_exploration: false });
-      expect((await d.api.listProjects())[0].stage_guides).toEqual({ subagent_exploration: false });
-      expect((await d.api.setSubagentExploration("acme", true)).stage_guides).toEqual({ subagent_exploration: true });
+      expect((await d.api.listProjects())[0].stage_guides).toEqual({ subagent_exploration: true, model_assignment: false });
+      expect((await d.api.setSubagentExploration("acme", false)).stage_guides).toEqual({ subagent_exploration: false, model_assignment: false });
+      expect((await d.api.listProjects())[0].stage_guides).toEqual({ subagent_exploration: false, model_assignment: false });
+      expect((await d.api.setSubagentExploration("acme", true)).stage_guides).toEqual({ subagent_exploration: true, model_assignment: false });
+    });
+
+    it("sets a Project's Model Assignment, off to begin with, apart from Subagent Exploration", async () => {
+      await d.createProject("acme", "Acme");
+      expect((await d.api.listProjects())[0].stage_guides.model_assignment).toBe(false);
+      expect((await d.api.setModelAssignment("acme", true)).stage_guides).toEqual({ subagent_exploration: true, model_assignment: true });
+      expect((await d.api.listProjects())[0].stage_guides.model_assignment).toBe(true);
+      expect((await d.api.setSubagentExploration("acme", false)).stage_guides).toEqual({ subagent_exploration: false, model_assignment: true });
+      expect((await d.api.setModelAssignment("acme", false)).stage_guides).toEqual({ subagent_exploration: false, model_assignment: false });
     });
 
     it("sets a Project's Models, a row per kind of work, all at Default to begin with", async () => {

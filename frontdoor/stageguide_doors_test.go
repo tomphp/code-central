@@ -140,3 +140,39 @@ func TestClaimWithSubagentExplorationOffCarriesAGuideWithoutTheLineOnEveryDoor(t
 		})
 	}
 }
+
+// Model Assignment (code-central-471): set_model_assignment is the human's,
+// so HTTP only, and a Project reads it off until it is set.
+func init() {
+	cases["set_model_assignment"] = opCase{
+		ok: call{http: setModelAssignment(`{"on":true}`)},
+		check: func(t *testing.T, out map[string]any) {
+			acknowledgement("acme", "stage_guides")(t, out)
+		},
+		full: func(t *testing.T, out map[string]any) {
+			t.Helper()
+			sg, _ := out["stage_guides"].(map[string]any)
+			if sg["model_assignment"] != true {
+				t.Fatalf("stage_guides = %v, want Model Assignment on", out["stage_guides"])
+			}
+		},
+		bad:  call{http: setModelAssignment(`{"on":"no"}`)},
+		code: core.Invalid,
+	}
+}
+
+func setModelAssignment(body string) httpCall {
+	return httpCall{"POST", "/api/p/acme/set_model_assignment", body}
+}
+
+func TestSetModelAssignmentIsRejectedForAnAgentAndProjectsReadItOff(t *testing.T) {
+	srv := newServer(t)
+	status, b := httpDoAs(t, srv, core.Agent, setModelAssignment(`{"on":true}`))
+	if e := errorJSON(t, b, core.ActionNotAllowed); status != httpapi.Status(core.ActionNotAllowed) || !strings.Contains(e.Message, "human") {
+		t.Fatalf("status %d, want %d; message %q", status, httpapi.Status(core.ActionNotAllowed), e.Message)
+	}
+	sg, _ := httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})["stage_guides"].(map[string]any)
+	if sg["model_assignment"] != false {
+		t.Fatalf("stage_guides = %v, want Model Assignment off", sg)
+	}
+}
