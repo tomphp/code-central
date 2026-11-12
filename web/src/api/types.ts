@@ -218,6 +218,11 @@ export interface GitHubIssuesSettings extends GitHubIssuesChange {
   watcher: IssueWatcherStatus;
 }
 
+// A Project's Stage Guides settings (Spec code-central-441).
+export interface StageGuides {
+  subagent_exploration: boolean;
+}
+
 // A Models row (Spec code-central-301): the model and effort it sets,
 // each "" for Default, which leaves it to the tier below.
 export interface ModelRow {
@@ -433,6 +438,8 @@ export interface ProjectView {
   // reported_models is always filled in: no aliases or model IDs, and
   // the seeded effort levels, until a Factory reports.
   reported_models: ReportedModels;
+  // stage_guides is always filled in: Subagent Exploration on by default.
+  stage_guides: StageGuides;
   // factory_status is always filled in: offline, with no Factories,
   // until one sends a Heartbeat.
   factory_status: FactoryStatus;

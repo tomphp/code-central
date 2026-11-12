@@ -7,7 +7,7 @@ You hold a Claim on an implementation Ticket. Its description holds the acceptan
 Working, tested code that meets the acceptance criteria, committed on a branch named after the Ticket's ID (for example `acme-12`). The branch is cut from the base or, under Land per Spec, from its Spec's branch, and it lands in the base after the human accepts it: at once under Merge, or together with the rest of its Spec once the whole Spec is accepted.
 
 - Work test-first at the seams the Spec's Testing Decisions name.
-- When understanding existing code means reading across several files, ask an Explore subagent and keep its answer, not the files; read the file you will change yourself.
+<!-- subagent-exploration -->
 - Run the full suite and make it pass.
 - Then review the code against the Spec and the repository's standards, and fix what you find.
 - Commit only on the branch named after the Ticket's ID. Don't push it, and don't open a pull request: the branch lands in the base after the human accepts it.
