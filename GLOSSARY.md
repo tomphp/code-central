@@ -321,8 +321,12 @@ The default grouping of a State list: its Tickets alone, as a flat list.
 _Avoid_: Flat view, list mode
 
 **By Spec**:
-The grouping of a State list that shows the Specs with Tickets in it, each expanding to those Tickets, instead of the Tickets alone.
+The grouping of a State list that shows the Specs with Tickets in it as Spec rows, each expanding to those Tickets, instead of the Tickets alone.
 _Avoid_: Spec-first view, tree view, Spec mode
+
+**Spec row**:
+The one row the UI shows a Spec in, in the Requirements view, Needs Me and By Spec: ID, kind, title and needs-you dot, then the Stage strip for a Requirement or the State chips for any other Spec, then the headline. It expands to the Spec's Tickets.
+_Avoid_: Spec card, Requirement row, bs-card
 
 **To merge**:
 The Needs Me reason of an Accepted Ticket under the Branch or Pull Request Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge. Under Pull Request it links the pull request and says conflicting while the Code Host reports so.

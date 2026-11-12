@@ -25,7 +25,6 @@ import { LinkBadge } from "../ticket/LinkBadge";
 import { PrototypeBadge } from "../ticket/PrototypeBadge";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { MapPane } from "../map/MapPane";
-import { MapRow } from "../map/MapRow";
 import {
   isStage,
   needsMeCount,
@@ -33,7 +32,6 @@ import {
   reasonsOf,
 } from "../requirement/progress";
 import { RequirementPane } from "../requirement/RequirementPane";
-import { RequirementRow } from "../requirement/RequirementRow";
 import { SpecPane } from "../spec/SpecPane";
 import { TicketPane } from "../ticket/TicketDetail";
 import { OptionsLink } from "../options/OptionsLink";
@@ -42,6 +40,8 @@ import { CILink } from "../ci/CILink";
 import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
 import { AllTicketsByTicket } from "./AllTickets";
+import { groupBySpec } from "./groupBySpec";
+import { SpecRow } from "./SpecRow";
 import { StateListBySpec } from "./StateListBySpec";
 import { StateRow, type InboxRowLinkFactory } from "./StateRow";
 import { storedGroup, storeGroup } from "./groupPreference";
@@ -104,6 +104,9 @@ export function Inbox({
     .filter((g) => g.tickets.length > 0);
   const reasons = reasonsOf(data?.needsMe);
   const tickets = (data?.tickets ?? []).filter((t) => inProject(t.project));
+  // Every Spec's Tickets, in every State and Project, for its Spec row.
+  const bySpec = new Map(groupBySpec(data?.tickets ?? []).map((g) => [g.id, g.tickets]));
+  const ticketsOf = (spec: string) => bySpec.get(spec) ?? [];
   const requirements = requirementList(
     (data?.requirements ?? []).filter((s) => inProject(s.project)),
   );
@@ -111,11 +114,7 @@ export function Inbox({
   // The Requirements view lists Maps among the Requirements.
   const listed = requirementList(byCreation([...requirements, ...maps]));
   const progressOf = (s: ProjectSpec) =>
-    progress(
-      s.requirement!,
-      (data?.tickets ?? []).filter((t) => t.spec === s.id),
-      reasons,
-    );
+    progress(s.requirement!, ticketsOf(s.id), reasons);
   const needingReqs = requirements.filter((s) => stageNeeds.has(s.id));
   // In flight: unfinished, and nothing of it waits on the human.
   const inFlight = requirements.filter(
@@ -145,6 +144,22 @@ export function Inbox({
     "data-id": id,
     "aria-current": loc.requirement === id ? ("true" as const) : undefined,
   });
+  // specRow is a Spec's row in the Requirements view and Needs Me, opening
+  // on all of its Tickets.
+  const specRow = (s: ProjectSpec, { quietWhenIdle = false } = {}) => (
+    <SpecRow
+      key={s.id}
+      id={s.id}
+      spec={s}
+      all={ticketsOf(s.id)}
+      reasons={reasons}
+      now={now}
+      link={requirementLink(s.id)}
+      ticketLink={rowLink}
+      selectedTicket={loc.ticket}
+      quietWhenIdle={quietWhenIdle}
+    />
+  );
 
   // The grouping in effect: the URL's, else this browser's last pick.
   const grouping = loc.group ?? storedGroup();
@@ -269,22 +284,9 @@ export function Inbox({
             {listed.length === 0 && (
               <p className="empty">No Requirements yet.</p>
             )}
-            {listed.map((s) =>
-              s.map ? (
-                <MapRow
-                  key={s.id}
-                  spec={{ ...s, map: s.map }}
-                  link={requirementLink(s.id)}
-                />
-              ) : (
-                <RequirementRow
-                  key={s.id}
-                  spec={s}
-                  p={progressOf(s)}
-                  link={requirementLink(s.id)}
-                />
-              ),
-            )}
+            <div className="spec-rows">
+              {listed.map((s) => specRow(s, { quietWhenIdle: true }))}
+            </div>
           </>
         ) : loc.list === "tickets" ? (
           <>
@@ -306,12 +308,12 @@ export function Inbox({
                 state={loc.state}
                 tickets={stateList(tickets, loc.state)}
                 specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
+                ticketsOf={ticketsOf}
                 reasons={reasons}
                 now={now}
                 link={rowLink}
-                specLink={specLink}
+                specLink={requirementLink}
                 selectedTicket={loc.ticket}
-                selectedSpec={loc.requirement}
               />
             ) : (
               <StateList
@@ -333,14 +335,7 @@ export function Inbox({
                 <h3 className="group-head">
                   Requirements <span>{needingReqs.length}</span>
                 </h3>
-                {needingReqs.map((s) => (
-                  <RequirementRow
-                    key={s.id}
-                    spec={s}
-                    p={progressOf(s)}
-                    link={requirementLink(s.id)}
-                  />
-                ))}
+                {needingReqs.map((s) => specRow(s))}
               </section>
             )}
             {groups.map((g) => (
@@ -367,14 +362,7 @@ export function Inbox({
                 <summary>
                   Requirements in flight ({inFlight.length}): not waiting on you
                 </summary>
-                {inFlight.map((s) => (
-                  <RequirementRow
-                    key={s.id}
-                    spec={s}
-                    p={progressOf(s)}
-                    link={requirementLink(s.id)}
-                  />
-                ))}
+                {inFlight.map((s) => specRow(s))}
               </details>
             )}
             {drafts.length > 0 && <Drafts drafts={drafts} link={rowLink} />}
