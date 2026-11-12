@@ -32,30 +32,6 @@ func TestUnderMergeAndPushTheBaseIsPushedBeforeTheTicketLands(t *testing.T) {
 	}
 }
 
-func TestUnderMergeAndPushARemoteThatIsAheadIsNeverOverwritten(t *testing.T) {
-	t.Parallel()
-	h := factorytest.New(t)
-	remote := h.AddRemote("origin")
-	theirs := h.CommitOn("theirs", "theirs.txt", "theirs\n")
-	// Pushed by path, so the repo's origin/main doesn't know of it.
-	h.Git("push", "-q", remote.Path, "theirs:refs/heads/main")
-	mergeAndPush(h, "origin")
-	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
-
-	r := h.Start()
-	r.Poll()
-	tk := h.Ticket(id)
-	if tk.State != store.Accepted {
-		t.Errorf("%s is %s, want it held Accepted", id, tk.State)
-	}
-	if got := remote.Git("rev-parse", "main"); got != theirs {
-		t.Errorf("the remote's main is at %q, want it left at %s", got, theirs)
-	}
-	if !commented(tk, "couldn't push main to origin") {
-		t.Errorf("want a comment on the rejected push, got %+v", tk.Comments)
-	}
-}
-
 func TestTheFactoryRefusesToStartWhenPushNamesAMissingRemote(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)

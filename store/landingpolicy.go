@@ -72,6 +72,13 @@ func (lp LandingPolicy) PushesBase() bool {
 	return lp.method == LandingMerge && lp.push
 }
 
+// KeepsBaseLevel answers whether the Factory fetches the Push remote and
+// fast-forwards the local base before it lands or cuts a branch, and
+// reports Base diverged when it can't: Pull Request, or Merge and Push.
+func (lp LandingPolicy) KeepsBaseLevel() bool {
+	return lp.method == LandingPullRequest || lp.PushesBase()
+}
+
 // LandsOnHumanMerge answers whether a Ticket lands when a human merges it,
 // so it needs them to merge: Branch (the human merges the branch) or Pull
 // Request (the human merges the pull request). This is the To merge rule.

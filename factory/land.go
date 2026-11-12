@@ -18,7 +18,7 @@ import (
 func (f *factory) landAndSweep(ctx context.Context) {
 	landing, policy, ok := f.landing(ctx)
 	if ok {
-		ok = f.locateBase(ctx, landing)
+		ok = f.locateBase(ctx, landing, policy)
 	}
 	if ok && !f.paused() && !f.halted(ctx) && f.remoteReady(landing, policy) {
 		f.land(ctx, landing, policy)
@@ -41,13 +41,14 @@ func (f *factory) landing(ctx context.Context) (landing core.LandingView, policy
 		return core.LandingView{}, store.LandingPolicy{}, false
 	}
 	f.setBase(p.Landing.Base)
-	if p.Landing.Method != store.LandingPullRequest {
+	policy = landingPolicy(p)
+	if !policy.KeepsBaseLevel() {
 		f.baseDiverged = false
 	}
 	if !f.modelsReported {
 		f.modelsReported = f.reportModels(ctx)
 	}
-	return p.Landing, landingPolicy(p), true
+	return p.Landing, policy, true
 }
 
 // missingRemote says why landing can't go on when Push names a remote
@@ -103,9 +104,14 @@ func (f *factory) land(ctx context.Context, landing core.LandingView, policy sto
 	sort.SliceStable(accepted, func(i, j int) bool { return acceptedAt(accepted[i]).Before(acceptedAt(accepted[j])) })
 	held := f.landSpecsOff(ctx, accepted, landing, policy)
 	pullRequest := landing.Method == store.LandingPullRequest
-	if pullRequest {
+	if policy.KeepsBaseLevel() {
 		// The base is brought up to the remote's before anything lands.
-		f.baseCurrent = f.syncBase(ctx, landing.Remote)
+		f.baseCurrent = f.syncBase(ctx, landing.Remote, policy.PushesBase(), accepted)
+		if !f.baseCurrent && policy.PushesBase() {
+			// Under Merge + Push a base that isn't level lands nothing: not
+			// a Ticket, nor a merge into a Spec Branch cut from it.
+			return
+		}
 	}
 	for _, tk := range accepted {
 		if f.halted(ctx) || f.paused() {
@@ -506,10 +512,16 @@ func (f *factory) sendBack(ctx context.Context, tk core.TicketView, head, into, 
 	f.printf("%s: conflicts with %s at %s in %s: sent back to Ready", tk.ID, into, short(tip), strings.Join(conflicts, ", "))
 }
 
-// advanceBase fast-forwards the base from old to merge: in the checkout
+// advanceBase fast-forwards the base from old to merge. It returns why it
+// couldn't, or "".
+func (f *factory) advanceBase(old, merge string) string {
+	return f.setBaseTo(old, merge, f.repository.fastForward)
+}
+
+// setBaseTo moves the base from old to tip: with move in the worktree
 // where it is checked out, or by ref with old as a guard. It returns why
 // it couldn't, or "".
-func (f *factory) advanceBase(old, merge string) string {
+func (f *factory) setBaseTo(old, tip string, move func(dir, commit string) (out string, err error)) string {
 	list, err := f.repository.worktrees()
 	if err != nil {
 		return err.Error()
@@ -521,7 +533,7 @@ func (f *factory) advanceBase(old, merge string) string {
 		if moved := f.baseMoved(old); moved != "" {
 			return moved
 		}
-		out, err := f.repository.fastForward(w.path, merge)
+		out, err := move(w.path, tip)
 		if err == nil {
 			return ""
 		}
@@ -530,7 +542,7 @@ func (f *factory) advanceBase(old, merge string) string {
 		}
 		return fmt.Sprintf("uncommitted changes in %s, where %s is checked out, are in the way:\n\n%s", w.path, f.baseBranch(), out)
 	}
-	if err := f.repository.updateRef("refs/heads/"+f.baseBranch(), merge, old); err != nil {
+	if err := f.repository.updateRef("refs/heads/"+f.baseBranch(), tip, old); err != nil {
 		if moved := f.baseMoved(old); moved != "" {
 			return moved
 		}

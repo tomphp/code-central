@@ -16,12 +16,17 @@ import (
 // no part, and there is no CI gate.
 
 // syncBase fetches remote and fast-forwards the local base to the
-// remote's, never merging, rebasing or forcing. It reports whether the
-// base is level with the remote's. A failed fetch is a warning, retried
-// next poll; a local base holding commits the remote's doesn't is
-// diverged, and stops landing and new branches until a later poll finds it
-// fixed.
-func (f *factory) syncBase(ctx context.Context, remote string) bool {
+// remote's, never merging or forcing. It reports whether the base is
+// level with the remote's, or with pushesBase (Merge + Push, where the
+// Factory merges locally and then pushes the base), level or ahead of
+// it: a local base holding the remote's whole history is current, and one
+// that holds commits the remote's doesn't while the remote holds commits
+// it doesn't is moved onto the remote's tip (moveBase), with merged the
+// Accepted Tickets whose merges it rebuilds. A failed fetch is a warning,
+// retried next poll; a local base that can't be brought level (under Pull
+// Request, any holding commits the remote's doesn't) is diverged, and
+// stops landing and new branches until a later poll finds it fixed.
+func (f *factory) syncBase(ctx context.Context, remote string, pushesBase bool, merged []core.TicketView) bool {
 	if out, err := f.repository.fetch(ctx, remote); err != nil {
 		if ctx.Err() == nil {
 			f.printf("warning: can't fetch %s, so nothing lands this poll: %s", remote, firstLine(out))
@@ -40,7 +45,7 @@ func (f *factory) syncBase(ctx context.Context, remote string) bool {
 		return true
 	}
 	switch {
-	case local == theirs:
+	case local == theirs, pushesBase && f.repository.isAncestor(theirs, local):
 		f.noteBase(ctx, false, local, theirs)
 		return true
 	case f.repository.isAncestor(local, theirs):
@@ -51,6 +56,8 @@ func (f *factory) syncBase(ctx context.Context, remote string) bool {
 		}
 		f.printf("%s: fast-forwarded to %s/%s at %s", f.baseBranch(), remote, f.baseBranch(), short(theirs))
 		return true
+	case pushesBase:
+		return f.moveBase(ctx, remote, local, theirs, merged)
 	}
 	f.noteBase(ctx, true, local, theirs)
 	return false
