@@ -26,8 +26,10 @@ export interface CIViewProps {
   navigate(patch: Partial<UiLocation>): void;
 }
 
+const BACK_LABEL = { inbox: "Back to the Inbox", focus: "Back to Focus Mode", activity: "Back to Activity" };
+
 export function CIView({ api, now, version, projects = [], loc, navigate }: CIViewProps) {
-  const back = loc.back?.view === "focus" ? "focus" : "inbox";
+  const back = loc.back?.view === "focus" || loc.back?.view === "activity" ? loc.back.view : "inbox";
   const projectName = (key: string) => projects.find((p) => p.key === key)?.display_name ?? key;
 
   return (
@@ -47,7 +49,7 @@ export function CIView({ api, now, version, projects = [], loc, navigate }: CIVi
           </select>
         </label>
         <button className="btn ci-back" onClick={() => navigate(loc.back ?? { view: "inbox" })}>
-          {back === "focus" ? "Back to Focus Mode" : "Back to the Inbox"}
+          {BACK_LABEL[back]}
         </button>
       </header>
       {/* Keyed by scope, so another scope starts from nothing and its first read doesn't pulse. */}

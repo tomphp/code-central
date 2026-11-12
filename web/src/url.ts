@@ -10,7 +10,9 @@
 // on its line chart (agent none for a main session), and back the query
 // of the view it returns to (none = the Inbox),
 // or ?view=ci&project=<key>&back=<query> for the CI view, where project is
-// its scope (none = All Projects) and back as Usage's.
+// its scope (none = All Projects) and back as Usage's,
+// or ?view=activity&project=<key>&back=<query> for the Activity Dashboard
+// in a view of its own, the same.
 // group=spec is the Inbox's By Spec grouping of a State list (none = By
 // Ticket); it stays in the URL across lists and Projects.
 // view is the layout (anything else is the inbox); project, state and
@@ -22,9 +24,9 @@
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { STATES, USAGE_DAYS, type State, type UsageDays, type SessionUsageFilter } from "./api/types";
 
-export type View = "inbox" | "focus" | "options" | "project-options" | "usage" | "ci";
-// A ReturnView is a view the Options view, Usage and the CI view return to.
-export type ReturnView = Exclude<View, "options" | "project-options" | "usage" | "ci">;
+export type View = "inbox" | "focus" | "options" | "project-options" | "usage" | "ci" | "activity";
+// A ReturnView is a view the Options view, Usage, the CI view and the Activity view return to.
+export type ReturnView = Exclude<View, "options" | "project-options" | "usage" | "ci" | "activity">;
 export type List = "requirements" | "tickets";
 
 export interface UiLocation {
@@ -44,7 +46,7 @@ export interface UiLocation {
   days?: UsageDays;
   // session is the session Usage has open on its line chart.
   session?: SessionUsageFilter;
-  // back is where Usage and the CI view return to, a ReturnView with its
+  // back is where Usage, the CI view and the Activity view return to, a ReturnView with its
   // parameters.
   back?: UiLocation;
 }
@@ -61,7 +63,7 @@ export function readLocation(search: string): UiLocation {
     return { ...readLocation(`?${q}`), view: "options", from };
   }
   const view = q.get("view");
-  if (view === "ci") return { view, project: q.get("project") || undefined, back: readBack(q) };
+  if (view === "ci" || view === "activity") return { view, project: q.get("project") || undefined, back: readBack(q) };
   if (view === "usage") {
     const days = Number(q.get("days")) as UsageDays;
     const [sessionProject, session, agent] = [q.get("session_project"), q.get("session"), q.get("agent")];
@@ -88,10 +90,11 @@ export function readLocation(search: string): UiLocation {
 }
 
 // readBack is the view an address's back returns to: the Inbox unless it
-// names the Inbox or Focus Mode.
+// names the Inbox, Focus Mode or the Activity view (the CI view's Back from
+// the dashboard's CI Running block).
 function readBack(q: URLSearchParams): UiLocation {
   const back = readLocation(`?${q.get("back") ?? ""}`);
-  return back.view === "inbox" || back.view === "focus" ? back : readLocation(INBOX);
+  return back.view === "inbox" || back.view === "focus" || back.view === "activity" ? back : readLocation(INBOX);
 }
 
 // Link is an in-app link: its href, and a click that navigates in place.
@@ -118,7 +121,7 @@ export function hrefFor(loc: UiLocation): string {
     }
     return withBack(q, loc);
   }
-  if (loc.view === "ci") return withBack(q, loc);
+  if (loc.view === "ci" || loc.view === "activity") return withBack(q, loc);
   if (loc.view !== "inbox") return `?${q}`;
   if (loc.state) q.set("state", loc.state);
   if (loc.list) q.set("list", loc.list);

@@ -37,6 +37,7 @@ import { TicketPane } from "../ticket/TicketDetail";
 import { OptionsLink } from "../options/OptionsLink";
 import { UsageLink } from "../usage/UsageLink";
 import { CILink } from "../ci/CILink";
+import { ActivityLink } from "../activity/ActivityLink";
 import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
 import { AllTicketsBySpec, AllTicketsByTicket, matchesId } from "./AllTickets";
@@ -304,6 +305,7 @@ export function Inbox({
         ))}
         <h2>Admin</h2>
         <UsageLink loc={loc} navigate={navigate} className="filter" />
+        <ActivityLink loc={loc} navigate={navigate} className="filter" />
         <CILink loc={loc} navigate={navigate} className="filter" />
         <OptionsLink loc={loc} navigate={navigate} className="filter" />
         <ArchivedProjects count={archived.length}>

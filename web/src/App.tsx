@@ -11,6 +11,7 @@ import { useNeedsMeTitle } from "./title";
 import { useUiLocation } from "./url";
 import { UsageView } from "./usage/UsageView";
 import { CIView } from "./ci/CIView";
+import { ActivityView } from "./activity/ActivityView";
 
 export interface AppProps {
   api: Api;
@@ -53,6 +54,13 @@ export function App({ api, now = () => new Date() }: AppProps) {
       return <UsageView api={api} projects={inbox.data?.projects} loc={loc} navigate={navigate} />;
     case "ci":
       return <CIView api={api} now={now()} version={version} projects={inbox.data?.projects} loc={loc} navigate={navigate} />;
+    case "activity":
+      return (
+        <>
+          {banner}
+          <ActivityView api={api} now={now()} version={version} data={inbox.data} loc={loc} navigate={navigate} />
+        </>
+      );
     case "project-options":
       return (
         <>
