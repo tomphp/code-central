@@ -128,6 +128,9 @@ export interface Api {
   // is set to Default. A model is trimmed and can't be blank or span
   // lines; an effort must be one of the valid levels.
   setModels(project: string, models: Models): Promise<ProjectView>;
+  // setSubagentExploration turns on or off the implementation guide's
+  // subagent line, from the next Claim and the next get_stage_guide.
+  setSubagentExploration(project: string, on: boolean): Promise<ProjectView>;
   // addCIRule adds a CI Rule and creates its Spec, titled like "CI: ci.yml
   // on main"; editCIRule changes the rule on Spec spec, and
   // removeCIRule removes it, leaving its Spec as the record. Workflow and

@@ -73,6 +73,19 @@ type Project struct {
 	// ReportedModels is what the Factory last reported its claude accepts.
 	// A Project stored without them has had no report.
 	ReportedModels ReportedModels
+	// StageGuides is the Project's Stage Guides settings. A Project stored
+	// without them reads as the zero StageGuides: every optional line on.
+	StageGuides StageGuides
+}
+
+// StageGuides is a Project's Stage Guides settings (Spec
+// code-central-441), each the opposite of a named optional guide line, so
+// the zero value keeps every line in and a Project stored without the
+// record needs no migration.
+type StageGuides struct {
+	// SubagentExplorationOff leaves the implementation guide's subagent
+	// line out.
+	SubagentExplorationOff bool
 }
 
 // LandingMethod is how accepted work reaches a Project's base.

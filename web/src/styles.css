@@ -103,8 +103,18 @@ a.filter { text-decoration: none; }
 .project-error { flex-basis: 100%; margin: 2px 0 4px; }
 .menu a[role="menuitem"] { text-decoration: none; box-sizing: border-box; }
 
-/* The Project Options page: one column of sections. */
-.project-options { max-width: 40rem; margin: 0 auto; padding: 24px; }
+/* The Project Options page: sections in one column, with a section menu on the left on wide screens. */
+.project-options { max-width: 52rem; margin: 0 auto; padding: 24px; }
+.project-options-layout { display: block; }
+.project-options-menu { display: none; }
+.project-options-menu ul { list-style: none; margin: 0; padding: 0; }
+.project-options-menu li { margin: 0 0 6px; }
+.project-options-sections > * + * { margin-top: 16px; }
+.project-options-section { scroll-margin-top: 16px; }
+@media (min-width: 900px) {
+  .project-options-layout { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 24px; align-items: start; }
+  .project-options-menu { display: block; position: sticky; top: 16px; }
+}
 .project-options h1 { font-size: 20px; margin: 12px 0 20px; }
 .project-options-section { border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px 16px; margin: 0; }
 .project-options-section legend { font-weight: 600; padding: 0 4px; }

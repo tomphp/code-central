@@ -6,7 +6,7 @@
 // FakeApi.
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
 
@@ -1213,5 +1213,38 @@ describe("Project Options", () => {
       "href",
       "https://github.com/acme/web/pull/7",
     );
+  });
+
+  it("has a section menu whose entries jump to their sections", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    renderApp(fake, "/?view=project-options&project=acme");
+    await screen.findByRole("heading", { name: "Acme: Project Options" });
+
+    const menu = within(page()).getByRole("navigation", { name: "Sections" });
+    const links = within(menu).getAllByRole("link");
+    expect(links.map((l) => l.textContent)).toEqual([
+      "Landing Method",
+      "CI",
+      "GitHub Issues",
+      "Models",
+      "Stage Guides",
+    ]);
+
+    const scrolled: string[] = [];
+    Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this.id);
+    });
+    for (const link of links) {
+      const id = link.getAttribute("href")!.slice(1);
+      const section = page().querySelector(`#${id}`);
+      expect(section).not.toBeNull();
+      expect(section!.querySelector("legend")!.textContent).toBe(
+        link.textContent,
+      );
+      await userEvent.click(link);
+      expect(scrolled.pop()).toBe(id);
+    }
+    expect(window.location.search).toBe("?view=project-options&project=acme");
   });
 });
