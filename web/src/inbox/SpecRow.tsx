@@ -158,7 +158,7 @@ const STAGE_ORDER: StageName[] = ["grilling", "spec", "tickets"];
 // stagesFirst is a Spec's Tickets as an open row lists them all: a
 // Requirement's Stage Tickets first, in Stage order, then the rest oldest
 // first.
-function stagesFirst(tickets: ProjectTicket[]): ProjectTicket[] {
+export function stagesFirst(tickets: ProjectTicket[]): ProjectTicket[] {
   const rank = (t: ProjectTicket) => {
     const s = stageOf(t);
     return s ? STAGE_ORDER.indexOf(s) : STAGE_ORDER.length;
