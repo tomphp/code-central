@@ -151,7 +151,7 @@ describe("Project Options", () => {
     expect(watcher).toHaveTextContent("goes back to Watching once the cause is fixed");
 
     // Switching away forgets its status and hides it.
-    await userEvent.click(within(landing()).getByRole("radio", { name: "Merge into base" }));
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Merge" }));
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(within(landing()).queryByRole("region", { name: "Pull Request Watcher" })).toBeNull());
     expect((await fake.listProjects())[0].landing.watcher).toEqual({ state: "not_reported" });
@@ -191,7 +191,7 @@ describe("Project Options", () => {
 
     const merge = await within(
       await screen.findByRole("group", { name: "Landing Method" }),
-    ).findByRole("radio", { name: "Merge into base" });
+    ).findByRole("radio", { name: "Merge" });
     expect(merge).not.toBeChecked();
     expect(merge).toHaveAccessibleDescription(
       /merges the accepted branch into the base/,
@@ -217,6 +217,40 @@ describe("Project Options", () => {
     expect(remote).toBeEnabled();
   });
 
+  it("shows the Base branch above the radios, sends it on every save, and shows its error", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    await fake.setLandingMethod("acme", { method: "merge", push: false, remote: "origin", base: "develop" });
+    renderApp(fake, "/?view=project-options&project=acme");
+
+    await screen.findByRole("group", { name: "Landing Method" });
+    const base = within(landing()).getByRole("textbox", { name: "Base branch" });
+    expect(base).toHaveValue("develop");
+    const radio = within(landing()).getByRole("radio", { name: "Merge" });
+    expect(base.compareDocumentPosition(radio) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(landing()).queryByRole("radio", { name: "Merge into base" })).toBeNull();
+
+    // Changing only the method still sends the base shown.
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Leave as a branch" }));
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    await waitFor(async () =>
+      expect((await fake.listProjects())[0].landing).toMatchObject({ method: "branch", base: "develop" }),
+    );
+
+    await userEvent.clear(base);
+    await userEvent.type(base, "release/1.0");
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    await waitFor(async () => expect((await fake.listProjects())[0].landing.base).toBe("release/1.0"));
+
+    await userEvent.clear(base);
+    await userEvent.type(base, "bad name");
+    await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    expect(await within(landing()).findByRole("alert")).toHaveTextContent("branch name");
+    expect(base).toHaveAttribute("aria-invalid", "true");
+    expect(base).toHaveAccessibleDescription(/branch name/);
+    expect((await fake.listProjects())[0].landing.base).toBe("release/1.0");
+  });
+
   it("saves the Landing Method, and shows a field error from the service", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
@@ -226,7 +260,7 @@ describe("Project Options", () => {
       await screen.findByRole("group", { name: "Landing Method" }),
     ).findByRole("button", { name: "Save" });
     expect(
-      within(landing()).getByRole("radio", { name: "Merge into base" }),
+      within(landing()).getByRole("radio", { name: "Merge" }),
     ).toBeChecked();
     expect(
       within(landing()).getByRole("textbox", { name: "Remote" }),
@@ -255,6 +289,7 @@ describe("Project Options", () => {
       code_host: "",
       repository: "",
       pat_env: "ADO_PAT",
+      base: "main",
       watcher: { state: "not_reported" },
       open_pull_requests: [],
     });
@@ -273,6 +308,7 @@ describe("Project Options", () => {
       code_host: "",
       repository: "",
       pat_env: "ADO_PAT",
+      base: "main",
       watcher: { state: "not_reported" },
       open_pull_requests: [],
     });
@@ -312,7 +348,7 @@ describe("Project Options", () => {
     expect(
       await within(
         await screen.findByRole("group", { name: "Landing Method" }),
-      ).findByRole("radio", { name: "Merge into base" }),
+      ).findByRole("radio", { name: "Merge" }),
     ).toBeChecked();
 
     await fake.setLandingMethod("acme", {
@@ -360,7 +396,7 @@ describe("Project Options", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      within(landing()).getByRole("radio", { name: "Merge into base" }),
+      within(landing()).getByRole("radio", { name: "Merge" }),
     ).toBeDisabled();
     expect(
       within(landing()).getByRole("checkbox", { name: "Push" }),
@@ -1169,7 +1205,7 @@ describe("Project Options", () => {
     await screen.findByRole("group", { name: "Landing Method" });
     expect(within(landing()).queryByRole("status", { name: "Open pull requests" })).toBeNull();
 
-    await userEvent.click(within(landing()).getByRole("radio", { name: "Merge into base" }));
+    await userEvent.click(within(landing()).getByRole("radio", { name: "Merge" }));
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
     const notice = await within(landing()).findByRole("status", { name: "Open pull requests" });
     expect(notice).toHaveTextContent("1 pull request is still open on the Code Host.");

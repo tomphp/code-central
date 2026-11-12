@@ -66,6 +66,8 @@ export interface Landing {
   repository: string;
   // The environment variable holding the Azure Repos PAT, ADO_PAT by default.
   pat_env: string;
+  // The branch the Project's work is cut from and lands on.
+  base: string;
   // The Pull Request Watcher's status: not_reported unless the method is
   // Pull Request.
   watcher: PullRequestWatcherStatus;
@@ -94,10 +96,11 @@ export interface PullRequestWatcherStatus extends Omit<CIWatcherStatus, "problem
 export type PullRequestWatcherReport = Omit<PullRequestWatcherStatus, "since"> & { state: "watching" | "error" };
 
 // What setLandingMethod takes: the Code Host and repository are derived, and
-// leaving land_per_spec or pat_env out keeps the stored value.
-export type LandingInput = Omit<Landing, "land_per_spec" | "code_host" | "repository" | "pat_env" | "watcher" | "open_pull_requests"> & {
+// leaving land_per_spec, pat_env or base out keeps the stored value.
+export type LandingInput = Omit<Landing, "land_per_spec" | "code_host" | "repository" | "pat_env" | "base" | "watcher" | "open_pull_requests"> & {
   land_per_spec?: boolean;
   pat_env?: string;
+  base?: string;
 };
 
 // A CI Provider: the CI system CI Tracking watches.

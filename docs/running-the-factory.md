@@ -391,7 +391,7 @@ When a Map's Ticket asks you a Round or finishes into In Review, it waits on you
 
 Each Project has a **Landing Method**, which you set on its **Project Options** page, from the three-dots menu on the Project. The Factory reads it again on every poll, before it lands anything, so a change applies from its next poll to every Ticket still waiting to land, with no restart.
 
-- **Merge** ("Merge into base"), the default, is what step 7 shows. The Factory merges an accepted Ticket's branch into the base and lands it. When the branch conflicts with the base it sends the Ticket back to Ready; when it can't move the base it leaves the Ticket Accepted with a comment and tries again on every poll. It keeps an Accepted Ticket's worktree until the Ticket lands, since a Ticket sent back is worked in it again.
+- **Merge**, the default, is what step 7 shows. The Factory merges an accepted Ticket's branch into the base and lands it. When the branch conflicts with the base it sends the Ticket back to Ready; when it can't move the base it leaves the Ticket Accepted with a comment and tries again on every poll. It keeps an Accepted Ticket's worktree until the Ticket lands, since a Ticket sent back is worked in it again.
 - **Branch** ("Leave as a branch") leaves the merging to you. The Factory never merges an Accepted Ticket and never sends it back for conflicts: a conflict in a branch you merge is yours to resolve. Within a poll of your **Accept**, it says so once and removes the Ticket's worktree, keeping its branch, so you can check the branch out:
 
   ```text
