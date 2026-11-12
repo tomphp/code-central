@@ -17,7 +17,7 @@ import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
 import { useAct } from "../ticket/useAct";
 import { FOG, isFrontier, layoutMap, NODE, nodeProgress } from "./graph";
-import { mapCount } from "./MapRow";
+import { mapCount } from "./mapCount";
 import { mapSection } from "./sections";
 import { ShortId } from "../inbox/ShortId";
 

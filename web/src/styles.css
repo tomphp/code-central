@@ -357,7 +357,7 @@ a.link-badge:hover { text-decoration: underline; }
 .spec-body-head { display: flex; align-items: center; gap: 8px; }
 .spec-body-head .link { font-weight: 600; }
 
-/* The Inbox's By Spec grouping of a State list: a card per Spec. */
+/* The State chips' colours, and the State lists' By Ticket | By Spec toggle. */
 .st-draft { --st: #a8a29e; }
 .st-ready { --st: #94a3b8; }
 .st-in-progress { --st: var(--accent); }
@@ -373,30 +373,28 @@ a.link-badge:hover { text-decoration: underline; }
 .bs-toggle button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; padding: 4px 12px; cursor: pointer; }
 .bs-toggle button + button { border-left: 1px solid var(--border); }
 .bs-toggle button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-.bs-cards { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
-.bs-card { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; }
-.bs-card.needs { border-color: color-mix(in srgb, var(--r-answer) 55%, var(--border)); }
-.bs-head { display: flex; gap: 6px; align-items: flex-start; padding: 10px 12px 10px 6px; }
-.bs-head-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.bs-head-top, .bs-head-sub { display: flex; gap: 8px; align-items: center; min-width: 0; }
-.bs-head .tid { white-space: nowrap; flex: none; }
-.bs-chev { border: 0; background: none; color: var(--muted); width: 20px; height: 20px; padding: 0; cursor: pointer; font-size: 12px; flex: none; border-radius: 4px; }
-.bs-chev:hover { background: var(--surface-2); color: var(--text); }
-.bs-title { color: var(--text); text-decoration: none; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.bs-title:hover { text-decoration: underline; color: var(--accent); }
-.bs-title[aria-current="true"] { color: var(--accent); }
-.bs-kind { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 4px; flex: none; border: 1px solid currentColor; }
-.bs-kind-requirement { color: var(--accent); }
-.bs-kind-map { color: var(--r-answered); }
-.bs-kind-spec { color: var(--muted); }
-.bs-count { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
-.bs-stage { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 0 5px; border-radius: 4px; background: var(--surface-2); color: var(--muted); flex: none; }
-.bs-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
-.bs-chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; color: var(--text); background: color-mix(in srgb, var(--st) 14%, transparent); border: 1px solid color-mix(in srgb, var(--st) 40%, transparent); white-space: nowrap; }
-.bs-chip.here { background: var(--st); color: #fff; border-color: var(--st); font-weight: 600; }
-.bs-rows { border-top: 1px solid var(--border); }
-.bs-rows .row { padding-left: 32px; }
-.bs-rows .row:last-child { border-bottom: 0; }
+/* The Spec row (code-central-458): a chevron, then a row link to the Spec. */
+.spec-row { border-bottom: 1px solid var(--border); }
+.spec-row.needs { border-left: 3px solid color-mix(in srgb, var(--r-answer) 55%, transparent); }
+.spec-row.quiet > .spec-row-head { opacity: .7; }
+.spec-row-head { display: flex; align-items: flex-start; }
+.spec-row-head .row { flex: 1; min-width: 0; border-bottom: 0; padding-left: 6px; }
+.spec-row-foot { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.spec-row-foot .row-detail { flex: 1; min-width: 0; }
+.spec-row-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
+.spec-row-tickets { border-top: 1px solid var(--border); background: color-mix(in srgb, var(--surface-2) 40%, transparent); }
+.spec-row-tickets .row { padding-left: 32px; }
+.spec-row-tickets .row:last-child { border-bottom: 0; }
+.chev { border: 0; background: none; color: var(--muted); width: 20px; height: 20px; padding: 0; margin: 9px 0 0 6px; cursor: pointer; font-size: 12px; flex: none; border-radius: 4px; }
+.chev:hover { background: var(--surface-2); color: var(--text); }
+.kind-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 4px; flex: none; border: 1px solid currentColor; }
+.kind-map { color: var(--r-answered); }
+.kind-spec { color: var(--muted); }
+.kind-long-lived { color: var(--r-landing); }
+.stage-badge { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; padding: 0 5px; border-radius: 4px; background: var(--surface-2); color: var(--muted); flex: none; }
+.state-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; }
+.state-chip { font-size: 11px; padding: 1px 7px; border-radius: 999px; color: var(--text); background: color-mix(in srgb, var(--st) 14%, transparent); border: 1px solid color-mix(in srgb, var(--st) 40%, transparent); white-space: nowrap; flex: none; }
+.state-chip.here { background: var(--st); color: #fff; border-color: var(--st); font-weight: 600; }
 
 /* The pull request badge (code-central-388). */
 .pr-badge { white-space: nowrap; text-decoration: none; color: inherit; cursor: pointer; }
