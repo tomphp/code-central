@@ -290,7 +290,7 @@ func TestFindTickets(t *testing.T) {
 
 	rows, _ := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{Labels: []string{"ui"}})
 	r := rows[0]
-	if r.Title != "Login form" || r.State != store.Draft || r.Spec != "acme-1" || !slices.Equal(r.Labels, []string{"ui", "auth"}) || r.Blocked || !r.Updated.Equal(t0.Add(2*time.Minute)) {
+	if r.Title != "Login form" || r.State != store.Draft || r.Spec != "acme-1" || !slices.Equal(r.Labels, []string{"ui", "auth"}) || r.Blocked || !r.Created.Equal(t0.Add(2*time.Minute)) || !r.Updated.Equal(t0.Add(2*time.Minute)) {
 		t.Fatalf("row: %+v", r)
 	}
 

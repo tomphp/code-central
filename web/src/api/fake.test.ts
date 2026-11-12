@@ -34,7 +34,11 @@ apiContract("FakeApi", async (): Promise<Driver> => {
     api: fake,
     createProject: async (key, name) => fake.addProject(key, name),
     // Every Ticket is under one Spec, as the real driver's are.
-    createTicket: async (key, title, state) => fake.addTicket(key, { title, state, spec: { id: `${key}-0`, title: "Contract" } }).id,
+    createTicket: async (key, title, state) => {
+      // Each Ticket is made a moment after the last, as the real service's clock runs.
+      fake.now = new Date(fake.now.getTime() + 1000);
+      return fake.addTicket(key, { title, state, spec: { id: `${key}-0`, title: "Contract" } }).id;
+    },
     postRound: async (key, id, questions) => {
       const posted = fake.now.toISOString();
       fake.updateTicket(id, {

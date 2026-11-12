@@ -278,6 +278,7 @@ type TicketRow struct {
 	Spec    string      `json:"spec"`
 	Labels  []string    `json:"labels"`
 	Blocked bool        `json:"blocked"`
+	Created time.Time   `json:"created"`
 	Updated time.Time   `json:"updated"`
 	Link    *LinkView   `json:"link,omitempty"`
 	// NodeType is the Ticket's type on a Map (see NodeType); left out for
@@ -580,7 +581,7 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 func (c *Core) ticketRow(r store.Reader, key string, t store.Ticket, onMap bool) TicketRow {
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
-		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Updated: t.Updated, Link: linkView(t.Link),
+		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Created: t.Created, Updated: t.Updated, Link: linkView(t.Link),
 		CIResult: ticketCIResult(r, key, t, c.now()), PullRequest: pullRequestView(t.PullRequest),
 	}
 	if p, ok := r.Project(key); ok {

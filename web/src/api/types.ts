@@ -750,6 +750,7 @@ export interface TicketRow {
   spec: string;
   labels: string[];
   blocked: boolean;
+  created: string;
   updated: string;
   link?: LinkView;
   // node_type is the Ticket's type on a Map; left out on any other Spec.

@@ -198,6 +198,17 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(either).toHaveLength(2);
     });
 
+    it("carries created on a row, increasing for Tickets made in order", async () => {
+      await d.createProject("acme", "Acme");
+      const a = await d.createTicket("acme", "A", "Draft");
+      const b = await d.createTicket("acme", "B", "Draft");
+
+      const rows = await d.api.findTickets("acme");
+      const created = (id: string) => rows.find((r) => r.id === id)!.created;
+      expect(Number.isNaN(Date.parse(created(a)))).toBe(false);
+      expect(Date.parse(created(b))).toBeGreaterThan(Date.parse(created(a)));
+    });
+
     it("leaves finished Tickets out of findTickets unless the filter names them", async () => {
       await d.createProject("acme", "Acme");
       const a = await d.createTicket("acme", "A", "Ready");
