@@ -261,6 +261,7 @@ func (s *FileStore) loadProject(key string) error {
 		return &LoadError{File: rel, Field: "ci_responses" + at, Msg: err.Error()}
 	}
 	p.CIResponses = rs
+	p.CIFixesSpec = pf.CIFixesSpec
 	s.setProject(p)
 	if err := s.loadCIRuns(key); err != nil {
 		return err

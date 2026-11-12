@@ -31,9 +31,9 @@ const (
 	// OptionSendBack is the human's send_back from Accepted: the next
 	// Claim fixes the work on its branch (code-central-264).
 	OptionSendBack = "send_back"
-	// OptionNewFixTicket is new_fix_ticket: a Ready Ticket on the same
-	// Spec fixes it forward, and the failed Ticket lands
-	// (code-central-264).
+	// OptionNewFixTicket is new_fix_ticket: a Ready Ticket on the
+	// CI Fixes Spec fixes it forward, and the failed Tickets keep
+	// waiting for a later commit that passes (code-central-433).
 	OptionNewFixTicket = "new_fix_ticket"
 )
 
@@ -51,6 +51,9 @@ type CIFailureSummary struct {
 func ciFailure(r store.Reader, key string, t store.Ticket, now time.Time) (s CIFailureSummary, since time.Time, ok bool) {
 	latest, mine, ok := unhandledCI(r, key, t, CIFailed, now)
 	if !ok {
+		return CIFailureSummary{}, time.Time{}, false
+	}
+	if p, _ := r.Project(key); fixTicketOpen(r, p, latest.Commit) {
 		return CIFailureSummary{}, time.Time{}, false
 	}
 	s = CIFailureSummary{Commit: latest.Commit, Workflows: []string{}}
@@ -127,9 +130,21 @@ func latestPushed(t store.Ticket) store.PushedCommit {
 }
 
 // acceptFailedCI records on p the human's acceptance of commit's failed
-// CI result at now, as Land anyway and New fix Ticket both do.
+// CI result at now, as Land anyway does.
 func acceptFailedCI(p *store.Project, commit string, now time.Time) {
 	respond(p, commit, func(res *store.CIResponse) { res.LandAnyway = now })
+}
+
+// fixTicketOpen reports whether the human opened a fix Ticket for
+// commit's failure that is neither Done nor Cancelled, which leaves the
+// commit's CI failed item out of Needs Me.
+func fixTicketOpen(r store.Reader, p store.Project, commit string) bool {
+	n := responseOf(p, commit).FixTicket
+	if n == 0 {
+		return false
+	}
+	fix, ok := r.Ticket(p.Key, n)
+	return ok && fix.State != store.Done && fix.State != store.Cancelled
 }
 
 // respondCI is the human's op, land_anyway or rerun_ci, on the Ticket
@@ -284,15 +299,18 @@ type NewFixTicketInput struct {
 }
 
 // NewFixTicket is the human's new_fix_ticket(ticket, note): it opens a
-// Ready Ticket on a CI failed Ticket's Spec, its description the note,
-// and records on the Project the same acceptance as Land anyway for the
-// Ticket's pushed commit, so every Ticket its CI item lists lands, with a
-// comment on the named Ticket naming the fix Ticket. Under Merge + Push
-// the failed work is already on the remote's base, so the fix Ticket
-// fixes it forward. An update writes one record, so the fix Ticket is
-// written first and the acceptance second: the failed Ticket never
-// lands without its fix Ticket. Its result is the fix Ticket's create
-// Acknowledgement.
+// Ready Ticket on the Project's CI Fixes Spec, created on first use as a
+// Long-lived Spec, its description the note, and stores it once on the
+// failed Ticket's pushed commit's response. It doesn't accept the failed
+// CI result: every Ticket the item lists stays Accepted, and lands when a
+// later commit passes CI. The item is left out of Needs Me while the fix
+// Ticket is neither Done nor Cancelled, and returns if it is Cancelled
+// while the commit is still failing. A comment on the named Ticket names
+// the fix Ticket. Under Merge + Push the failed work is already on the
+// remote's base, so the fix Ticket fixes it forward. An update writes one
+// record, so the Spec, the fix Ticket and the response are written in
+// that order: nothing names what doesn't exist. Its result is the fix
+// Ticket's create Acknowledgement.
 func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInput) (Written[TicketView], error) {
 	if err := humanOnly(ctx, "new_fix_ticket"); err != nil {
 		return Written[TicketView]{}, err
@@ -303,60 +321,103 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 	if v, handled, err := c.newSpecFixTicket(ctx, key, in); handled {
 		return v, err
 	}
-	refuseUnlessOffered := func(r store.Reader, t store.Ticket) error {
-		if !slices.Contains(c.ciFailureOptions(r, key, t), OptionNewFixTicket) {
-			return &Error{Code: ActionNotAllowed, Message: whyNotNewFixTicket(key, t)}
-		}
-		return nil
-	}
-	var v Written[TicketView]
-	var failed, fix string
-	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
+	var failed store.Ticket
+	err := c.store.View(func(r store.Reader) error {
+		if err := writable(r, key); err != nil {
 			return err
 		}
-		t, err := resolveTicket(w, key, "new_fix_ticket", "ticket", in.Ticket)
+		t, err := resolveTicket(r, key, "new_fix_ticket", "ticket", in.Ticket)
 		if err != nil {
 			return err
 		}
-		if err := refuseUnlessOffered(w, t); err != nil {
+		if !slices.Contains(c.ciFailureOptions(r, key, t), OptionNewFixTicket) {
+			return &Error{Code: ActionNotAllowed, Message: whyNotNewFixTicket(key, t)}
+		}
+		failed = t
+		return nil
+	})
+	if err != nil {
+		return Written[TicketView]{}, err
+	}
+	spec, err := c.ciFixesSpec(key)
+	if err != nil {
+		return Written[TicketView]{}, err
+	}
+	var v Written[TicketView]
+	var fix int
+	err = c.store.Update(func(w store.Writer) error {
+		if err := writable(w, key); err != nil {
 			return err
 		}
 		now := c.now()
-		failed = DisplayID(key, t.Number)
+		id := DisplayID(key, failed.Number)
 		f := store.Ticket{
-			Number: w.NextNumber(key), Title: fmt.Sprintf("Fix the CI failure of %s: %s", failed, t.Title), State: store.Ready, Spec: t.Spec,
+			Number: w.NextNumber(key), Title: fmt.Sprintf("Fix the CI failure of %s: %s", id, failed.Title), State: store.Ready, Spec: spec,
 			Created: now, Updated: now,
-			Description: fmt.Sprintf("%s's CI failed, and it lands anyway: fix the failure forward, on top of its work in the base.\n\n%s", failed, in.Note),
+			Description: fmt.Sprintf("%s's CI failed: fix the failure forward, on top of its work in the base. It stays Accepted, and lands when a later commit passes CI.\n\n%s", id, in.Note),
 		}
 		if err := w.PutTicket(key, f); err != nil {
 			return err
 		}
-		fix = DisplayID(key, f.Number)
+		fix = f.Number
 		v, err = acknowledgeCreate(c.ticketView(w, key, store.Ticket{}), c.ticketView(w, key, f), in.Full)
 		return err
 	})
 	if err != nil {
 		return Written[TicketView]{}, err
 	}
-	// The acceptance lands every listed Ticket, before the comment.
 	_, err = c.respondCI(key, OptionNewFixTicket, in.Ticket, true,
 		func(store.Project, store.Ticket, []store.CIRun) bool { return false },
 		func(_ store.Reader, t store.Ticket) string { return whyNotNewFixTicket(key, t) },
 		func(p *store.Project, latest store.PushedCommit, _ []store.CIRun) {
-			acceptFailedCI(p, latest.Commit, c.now())
+			respond(p, latest.Commit, func(res *store.CIResponse) { res.FixTicket = fix })
 		})
 	if err != nil {
 		return Written[TicketView]{}, err
 	}
 	_, err = c.updateTicketIn(key, "new_fix_ticket", in.Ticket, true, func(_ store.Reader, t *store.Ticket) (bool, error) {
-		addComment(t, ActorOf(ctx), c.now(), 0, fmt.Sprintf("New fix Ticket: %s fixes this CI failure forward, and %s lands anyway.", fix, failed))
+		addComment(t, ActorOf(ctx), c.now(), 0, fmt.Sprintf("New fix Ticket: %s fixes this CI failure forward; %s stays Accepted and lands when a later commit passes CI.", DisplayID(key, fix), DisplayID(key, t.Number)))
 		return true, nil
 	})
 	if err != nil {
 		return Written[TicketView]{}, err
 	}
 	return v, nil
+}
+
+// ciFixesSpecBody is the CI Fixes Spec's body.
+const ciFixesSpecBody = "This Spec holds the fix Tickets the human opens with New fix Ticket when a commit's CI failed. " +
+	"Each fixes its failure forward, and the Tickets waiting on that commit land when a later commit passes CI.\n"
+
+// ciFixesSpec is key's CI Fixes Spec, a Long-lived Spec created on first
+// use; the Spec is written before the Project names it.
+func (c *Core) ciFixesSpec(key string) (int, error) {
+	n := 0
+	err := c.store.Update(func(w store.Writer) error {
+		if err := writable(w, key); err != nil {
+			return err
+		}
+		if p, _ := w.Project(key); p.CIFixesSpec != 0 {
+			n = p.CIFixesSpec
+			return nil
+		}
+		now := c.now()
+		n = w.NextNumber(key)
+		return w.PutSpec(key, store.Spec{Number: n, Title: "CI Fixes", Body: ciFixesSpecBody, Labels: []string{LongLivedLabel}, Created: now, Updated: now})
+	})
+	if err != nil {
+		return 0, err
+	}
+	err = c.store.Update(func(w store.Writer) error {
+		p, _ := w.Project(key)
+		if p.CIFixesSpec != 0 {
+			n = p.CIFixesSpec
+			return nil
+		}
+		p.CIFixesSpec = n
+		return w.PutProject(p)
+	})
+	return n, err
 }
 
 // whyNotNewFixTicket says why t isn't offered New fix Ticket.
