@@ -755,6 +755,38 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(chosen.needs_me_reason).not.toBe("ci_failed");
     });
 
+    it("passes a Ticket under the CI gate once any of its pushed commits passed (code-central-430)", async () => {
+      await d.createProject("acme", "Acme");
+      const id = await d.createTicket("acme", "Login page", "Ready");
+      await d.finish("acme", id, "Added the login page", { branch: "impl-7", commit: "abc123" });
+      await d.api.act("acme", id, "accept", {});
+      await d.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin", land_per_spec: false });
+      await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      const run = (n: number, commit: string, status: "in_progress" | "completed", conclusion?: "success" | "failure") => ({
+        id: n,
+        attempt: 1,
+        workflow: "ci.yml",
+        name: "CI",
+        branch: "main",
+        commit,
+        status,
+        ...(conclusion && { conclusion }),
+        url: `https://github.com/acme/web/actions/runs/${n}`,
+        jobs: [],
+        ticket: id,
+      });
+      await d.reportPushedCommit("acme", id, "abc123");
+      await d.reportCIRuns("acme", [run(1, "abc123", "in_progress")]);
+      await d.reportPushedCommit("acme", id, "def456");
+      await d.reportCIRuns("acme", [run(2, "def456", "completed", "failure")]);
+      expect(await d.api.getTicket("acme", id)).toMatchObject({ ci_result: "failed", ci_commit: "def456", pushed_commit: { commit: "def456" } });
+
+      await d.reportCIRuns("acme", [run(1, "abc123", "completed", "success")]);
+      const passed = await d.api.getTicket("acme", id);
+      expect(passed).toMatchObject({ ci_result: "passed", ci_commit: "abc123", pushed_commit: { commit: "def456" } });
+      expect(passed).not.toHaveProperty("ci_failure_options");
+    });
+
     it("re-runs a CI failed Ticket's failed jobs: it waits on CI until the run's new attempt passes (code-central-265)", async () => {
       await d.createProject("acme", "Acme");
       const id = await d.createTicket("acme", "Login page", "Ready");
@@ -936,7 +968,10 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       const acme = await d.api.ciOverview({ project: "acme", running: true });
       expect(acme.projects.map((p) => [p.project, p.tracking, p.repository])).toEqual([["acme", true, "acme/web"]]);
+      // Under the CI gate old111, pushed before abc123, still counts
+      // (code-central-430).
       expect(acme.runs.map((r) => [r.project, r.workflow, r.attempt])).toEqual([
+        ["acme", "old.yml", 1],
         ["acme", "queued.yml", 1],
         ["acme", "ci.yml", 1],
       ]);

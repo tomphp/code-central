@@ -117,7 +117,7 @@ A Ticket that is Done or Cancelled, or a Spec that has Tickets and all of them a
 _Avoid_: Closed, archived, complete
 
 **Land**:
-For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing. Under Pull Request a Ticket lands when the Code Host reports its pull request merged, at the host's merge commit, whatever the merge strategy. Under Merge + Push with CI Tracking on, a Ticket lands only once its pushed commit's CI result is passed, so Done means on the remote and green. Under Land per Spec, a Spec-landed Ticket lands only with the rest of its Spec, once the Spec Branch is in the base, and, with Push and CI Tracking, once that push's CI result is passed.
+For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing. Under Pull Request a Ticket lands when the Code Host reports its pull request merged, at the host's merge commit, whatever the merge strategy. Under Merge + Push with CI Tracking on, a Ticket lands only once its CI result is passed, at the pushed commit that passed, so Done means on the remote and green at a commit containing its work. Under Land per Spec, a Spec-landed Ticket lands only with the rest of its Spec, once the Spec Branch is in the base, and, with Push and CI Tracking, once its CI result is passed.
 _Avoid_: Merge, ship, deliver, complete
 
 **Landing Method**:
@@ -172,7 +172,7 @@ The Needs Me reason of an Accepted Ticket, under Merge, that has not landed afte
 _Avoid_: Stuck, stale
 
 **Push**:
-A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands only once the push succeeds, and with CI Tracking on, only once its CI result is passed as well. Under Land per Spec the Factory pushes the base once for a whole Spec, after merging the Spec Branch into it; under Merge and Branch the Spec Branch and Ticket branches are never pushed. Under Pull Request, Push is implied, with no checkbox: the Factory pushes each Ticket's branch on accept, or the Spec Branch under Land per Spec.
+A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands only once the push succeeds, and with CI Tracking on, only once its CI result is passed as well, from that push or a later one containing its work. Under Land per Spec the Factory pushes the base once for a whole Spec, after merging the Spec Branch into it; under Merge and Branch the Spec Branch and Ticket branches are never pushed. Under Pull Request, Push is implied, with no checkbox: the Factory pushes each Ticket's branch on accept, or the Spec Branch under Land per Spec.
 _Avoid_: Publish, sync
 
 **CI Tracking**:
@@ -208,11 +208,11 @@ The kind of Watcher that watches one Project's CI through its CI Provider and re
 _Avoid_: CI daemon, CI Integration
 
 **Pushed commit**:
-The commit the Factory pushed for a Ticket, which it reports on the Ticket: the base after merging under Merge with Push, or the Ticket's branch on accept under Branch with Push or Pull Request (the Spec Branch, for a Spec under Pull Request with Land per Spec). Its CI Runs give the Ticket's CI result.
+The commit the Factory pushed for a Ticket, which it reports on the Ticket: the base after merging under Merge with Push, or the Ticket's branch on accept under Branch with Push or Pull Request (the Spec Branch, for a Spec under Pull Request with Land per Spec). A Ticket may have several, one per push; their CI Runs give the Ticket's CI result: under the CI gate those of every pushed commit since the Ticket last moved back to Ready, otherwise its latest's.
 _Avoid_: Push SHA
 
 **CI Run**:
-One run of a Workflow the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. A Ticket-tracked run counts for every Ticket whose latest pushed commit it ran on, not only the one it was tracked against. On Azure DevOps under Pull Request, a build is matched by its pull request, since it ran on the host's merge commit. Kept for 30 days after it finishes.
+One run of a Workflow the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. A Ticket-tracked run counts for every Ticket whose pushed commit it ran on, not only the one it was tracked against. On Azure DevOps under Pull Request, a build is matched by its pull request, since it ran on the host's merge commit. Kept for 30 days after it finishes.
 _Avoid_: Job, build, pipeline
 
 **Workflow**:
@@ -220,7 +220,7 @@ The named definition a CI Run runs, as its CI Provider names it: a workflow file
 _Avoid_: pipeline, except for Azure Pipelines' own
 
 **CI result**:
-A Ticket's running, failed, cancelled or passed, worked out from the CI Runs of its latest pushed commit that aren't of Ignored workflows, each at its latest attempt: running while any is unfinished, else failed if any failed or timed out, else cancelled if any was cancelled, else passed; a partially succeeded run counts as passed. A Ticket whose only runs are cancelled is cancelled, not unavailable, and a cancelled run that was re-run and succeeded counts as passed.
+A Ticket's running, failed, cancelled or passed. A pushed commit's is worked out from its CI Runs that aren't of Ignored workflows, each at its latest attempt: running while any is unfinished, else failed if any failed or timed out, else cancelled if any was cancelled, else passed; a partially succeeded run counts as passed. A commit whose only runs are cancelled is cancelled, not unavailable, and a cancelled run that was re-run and succeeded counts as passed. Under the CI gate a Ticket's CI result is passed if any of its pushed commits since it last moved back to Ready has passed, and otherwise its latest pushed commit's (ADR 0034); under Branch + Push and Pull Request it is always its latest pushed commit's. The Ticket shows which pushed commit its CI result comes from, and lands at that commit.
 _Avoid_: Build status
 
 **CI gate**:

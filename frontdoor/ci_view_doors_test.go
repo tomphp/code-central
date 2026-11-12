@@ -278,13 +278,29 @@ func TestTheRunningReadHasTheUnfinishedRunsCountingTowardsATicketsCIResult(t *te
 	}
 }
 
-func TestTheRunningReadLeavesOutRunsOnATicketsEarlierPushedCommit(t *testing.T) {
+// Under the CI gate an earlier pushed commit that passes still passes the
+// Ticket (code-central-430), so its running run still counts.
+func TestUnderTheCIGateTheRunningReadKeepsRunsOnATicketsEarlierPushedCommit(t *testing.T) {
 	srv := newServer(t, pushedAccepted)
 	reportRuns(t, srv, started(1, "ci.yml", 0), ciRun(2, "old.yml", "fff999", store.CIInProgress, ""))
 	if got := runKeys(readCI(t, srv, "?running=true")); !slices.Equal(got, []string{"acme/ci.yml#1"}) {
 		t.Fatalf("runs %v, want only abc123's run: fff999 isn't acme-3's pushed commit", got)
 	}
 
+	pushCommit(t, srv, "def456")
+	reportRuns(t, srv, ciRun(3, "e2e.yml", "def456", store.CIQueued, ""))
+	if got := runKeys(readCI(t, srv, "?running=true")); !slices.Equal(slices.Sorted(slices.Values(got)), []string{"acme/ci.yml#1", "acme/e2e.yml#1"}) {
+		t.Fatalf("runs %v, want abc123's run and def456's", got)
+	}
+}
+
+func TestOutsideTheCIGateTheRunningReadLeavesOutRunsOnATicketsEarlierPushedCommit(t *testing.T) {
+	srv := newServer(t, pushedAccepted)
+	must(t, func() error {
+		_, err := srv.Core.SetLandingMethod(core.WithActor(context.Background(), core.Human), "acme", core.SetLandingMethodInput{Method: store.LandingBranch, Push: true, Remote: "origin"})
+		return err
+	})
+	reportRuns(t, srv, started(1, "ci.yml", 0))
 	pushCommit(t, srv, "def456")
 	if got := runKeys(readCI(t, srv, "?running=true")); len(got) != 0 {
 		t.Fatalf("runs %v, want abc123's run dropped once def456 is pushed", got)

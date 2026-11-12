@@ -594,7 +594,7 @@ A branch you merge into the base by hand lands as under Branch, whether or not i
 
 With [CI Tracking](setting-up-a-project.md#watching-ci) on as well, the Factory reports each push it makes for a Ticket as the Ticket's pushed commit, once: the base's commit on the remote under Merge + Push, the branch's under Branch + Push. The CI Watcher then follows the runs GitHub starts for it.
 
-Under **Merge + Push**, CI gates landing, so Done means on the remote and green. The Factory merges, pushes and reports the pushed commit, and leaves the Ticket Accepted. On every later poll it reads the Ticket's CI result, and once it is passed, lands the Ticket at its pushed commit:
+Under **Merge + Push**, CI gates landing, so Done means on the remote and green. The Factory merges, pushes and reports the pushed commit, and leaves the Ticket Accepted. On every later poll it reads the Ticket's CI result, and once it is passed, lands the Ticket at the pushed commit that passed. A Ticket with several pushed commits since it was last sent back passes as soon as any of them does, an earlier one that goes green after a later one failed included:
 
 ```text
 acme-shop-5: pushed main to origin
@@ -603,7 +603,7 @@ acme-shop-5: waiting on CI at 9c41d07a2b18 before it lands
 acme-shop-5: landed on main at 9c41d07a2b18
 ```
 
-There is no State for waiting on CI: the Ticket stays Accepted, so a Ticket it blocks isn't claimed until its CI has passed and it lands. Waiting doesn't hold up the rest: the Factory goes on merging and pushing other accepted Tickets meanwhile, and each lands on its own pushed commit's CI result, not on a later push's. An In Review Ticket you merge by hand waits the same way, In Review.
+There is no State for waiting on CI: the Ticket stays Accepted, so a Ticket it blocks isn't claimed until its CI has passed and it lands. Waiting doesn't hold up the rest: the Factory goes on merging and pushing other accepted Tickets meanwhile, and each lands on its own pushed commits' CI result, not on another Ticket's push. An In Review Ticket you merge by hand waits the same way, In Review.
 
 While its CI is running, an Accepted Ticket waiting on it doesn't show in Needs Me, however long CI takes. When no word of its CI comes for 10 minutes after its push, it shows in Needs Me as **CI unavailable**, so a broken CI Watcher doesn't hold up the work unseen. Its detail says which cause applies: the CI Watcher isn't Watching (with its error, which the CI section of Project Options also shows), or the CI Watcher is Watching but no CI Runs have been reported for the pushed commit, say because no workflow runs on the base or all that do are Ignored workflows:
 
