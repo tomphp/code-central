@@ -603,7 +603,21 @@ acme-shop-5: waiting on CI at 9c41d07a2b18 before it lands
 acme-shop-5: landed on main at 9c41d07a2b18
 ```
 
-There is no State for waiting on CI: the Ticket stays Accepted, so a Ticket it blocks isn't claimed until its CI has passed and it lands. Waiting doesn't hold up the rest: the Factory goes on merging and pushing other accepted Tickets meanwhile, and each lands on its own pushed commits' CI result, not on another Ticket's push. An In Review Ticket you merge by hand waits the same way, In Review.
+There is no State for waiting on CI: the Ticket stays Accepted, so a Ticket it blocks isn't claimed until its CI has passed and it lands. Waiting doesn't hold up the rest: the Factory goes on merging and pushing other accepted Tickets meanwhile. An In Review Ticket you merge by hand waits the same way, In Review.
+
+A later commit on the remote's base contains the work of every Ticket pushed before it, so the Factory reports it to them. On each poll, once the base is synced, it compares the remote's base tip with the latest pushed commit of each Ticket waiting on CI: when the tip is a different commit and the Ticket's pushed commit is an ancestor of it, the tip becomes the Ticket's newest pushed commit. That happens after another Ticket's merge is pushed, and after a commit pushed by hand from another clone. When the tip passes, every Ticket that was waiting lands at it:
+
+```text
+acme-shop-5: pushed main to origin
+acme-shop-5: CI tracks main at 9c41d07a2b18
+acme-shop-6: pushed main to origin
+acme-shop-6: CI tracks main at 4be0d2f713a6
+acme-shop-5: CI tracks main at 4be0d2f713a6
+acme-shop-5: landed on main at 4be0d2f713a6
+acme-shop-6: landed on main at 4be0d2f713a6
+```
+
+A Ticket whose pushed commit isn't in the tip, say after the base was force-pushed back, gets no report.
 
 While its CI is running, an Accepted Ticket waiting on it doesn't show in Needs Me, however long CI takes. When no word of its CI comes for 10 minutes after its push, its pushed commit shows in Needs Me as **CI unavailable**, so a broken CI Watcher doesn't hold up the work unseen. CI unavailable, CI failed and CI cancelled are each one Needs Me item per pushed commit, with no Ticket of its own: the item lists every Ticket waiting on the commit, across Specs, since under Merge + Push several Tickets come to share the base's tip. Its detail says which cause applies: the CI Watcher isn't Watching (with its error, which the CI section of Project Options also shows), or the CI Watcher is Watching but no CI Runs have been reported for the pushed commit, say because no workflow runs on the base or all that do are Ignored workflows:
 

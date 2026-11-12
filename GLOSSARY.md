@@ -212,7 +212,7 @@ The kind of Watcher that watches one Project's CI through its CI Provider and re
 _Avoid_: CI daemon, CI Integration
 
 **Pushed commit**:
-The commit the Factory pushed for a Ticket, which it reports on the Ticket: the base after merging under Merge with Push, or the Ticket's branch on accept under Branch with Push or Pull Request (the Spec Branch, for a Spec under Pull Request with Land per Spec). A Ticket may have several, one per push; their CI Runs give the Ticket's CI result: under the CI gate those of every pushed commit since the Ticket last moved back to Ready, otherwise its latest's. Several Tickets may share one, and its CI failed, CI cancelled or CI unavailable is one Needs Me item listing them all.
+The commit the Factory pushed for a Ticket, which it reports on the Ticket: the base after merging under Merge with Push, or the Ticket's branch on accept under Branch with Push or Pull Request (the Spec Branch, for a Spec under Pull Request with Land per Spec). Under Merge with Push and CI Tracking it is also a later commit on the remote's base that the Factory saw containing the Ticket's work, which it reports on each Ticket waiting on CI. A Ticket may have several, one per push; their CI Runs give the Ticket's CI result: under the CI gate those of every pushed commit since the Ticket last moved back to Ready, otherwise its latest's. Several Tickets may share one, and its CI failed, CI cancelled or CI unavailable is one Needs Me item listing them all.
 _Avoid_: Push SHA
 
 **CI Run**:
