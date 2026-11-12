@@ -71,10 +71,10 @@ func TestTheWorkflowSaysWhatCountsAsNeedsMe(t *testing.T) {
 	w := workflow(t)
 	want := []core.NeedsMeReason{
 		core.ReasonNeedsAnswer, core.ReasonAnswered, core.ReasonSilentClaim, core.ReasonLongClaim, core.ReasonFailed,
-		core.ReasonInReview, core.ReasonCIFailed, core.ReasonCICancelled, core.ReasonBaseDiverged, core.ReasonPullRequestClosed, core.ReasonToMerge, core.ReasonCIUnavailable, core.ReasonAcceptedNotLanded, core.ReasonBlockedByCancelled, core.ReasonNewIssue, core.ReasonClosedExternally,
+		core.ReasonInReview, core.ReasonCIFailed, core.ReasonCICancelled, core.ReasonBaseDiverged, core.ReasonBaseMissing, core.ReasonPullRequestClosed, core.ReasonToMerge, core.ReasonCIUnavailable, core.ReasonAcceptedNotLanded, core.ReasonBlockedByCancelled, core.ReasonNewIssue, core.ReasonClosedExternally,
 	}
 	if len(w.NeedsMe) != len(want) {
-		t.Fatalf("Needs Me reasons %v, want the sixteen in group order", w.NeedsMe)
+		t.Fatalf("Needs Me reasons %v, want the seventeen in group order", w.NeedsMe)
 	}
 	for i, r := range w.NeedsMe {
 		if r.Reason != want[i] || r.Meaning == "" {

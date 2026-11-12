@@ -10,6 +10,7 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   ci_failed: "CI failed",
   ci_cancelled: "CI cancelled",
   base_diverged: "Base diverged",
+  base_missing: "Base missing",
   pull_request_closed: "Pull request closed",
   to_merge: "To merge",
   ci_unavailable: "CI unavailable",
@@ -59,6 +60,8 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
       return r.base_diverged
         ? `${r.base_diverged.base ?? "The base"} is at ${r.base_diverged.local.slice(0, 7)} and the remote's at ${r.base_diverged.remote.slice(0, 7)}: reconcile them by hand`
         : "The local base has diverged from the remote's";
+    case "base_missing":
+      return r.base_missing?.fix ?? "The base branch doesn't exist";
     case "pull_request_closed":
       return r.pull_request
         ? `Pull request #${r.pull_request.number} was closed without merging: send the work back or cancel it`

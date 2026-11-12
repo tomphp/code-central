@@ -218,6 +218,9 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 			if _, ok := c.baseDivergedRow(p); ok {
 				row.NeedsMe++
 			}
+			if _, ok := c.baseMissingRow(p); ok {
+				row.NeedsMe++
+			}
 			for _, t := range r.Tickets(p.Key) {
 				if reason, _ := c.reasonOf(r, p.Key, t); reason != "" {
 					row.NeedsMe++

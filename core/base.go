@@ -21,6 +21,9 @@ type BaseState string
 const (
 	BaseCurrent  BaseState = "current"
 	BaseDiverged BaseState = "diverged"
+	// BaseMissing is a base that exists neither locally nor on the Push
+	// remote; it carries no commits.
+	BaseMissing BaseState = "missing"
 )
 
 // BaseView is a Project's reported base, as its Factory Status carries it;
@@ -43,11 +46,18 @@ type BaseDivergedView struct {
 	Remote string `json:"remote"`
 }
 
+// BaseMissingView is a Base missing item's detail: the branch and the fix.
+type BaseMissingView struct {
+	Base string `json:"base"`
+	Fix  string `json:"fix"`
+}
+
 // ReportBaseInput is the Factory's report_base(state, local, remote,
 // full?).
 type ReportBaseInput struct {
 	State BaseState `json:"state"`
 	// Local and Remote are the local and remote base commits.
+	// They are required for current and diverged, and ignored for missing.
 	Local  string `json:"local"`
 	Remote string `json:"remote"`
 	// Full asks for the Project in place of the Acknowledgement.
@@ -59,12 +69,15 @@ type ReportBaseInput struct {
 // while the latest says so and a Factory is still online.
 func (c *Core) ReportBase(_ context.Context, key string, in ReportBaseInput) (Written[ProjectView], error) {
 	local, remote := strings.TrimSpace(in.Local), strings.TrimSpace(in.Remote)
+	if in.State == BaseMissing {
+		local, remote = "", ""
+	}
 	switch {
-	case in.State != BaseCurrent && in.State != BaseDiverged:
-		return Written[ProjectView]{}, invalid("state", "state is current or diverged, not %q", in.State)
-	case local == "":
+	case in.State != BaseCurrent && in.State != BaseDiverged && in.State != BaseMissing:
+		return Written[ProjectView]{}, invalid("state", "state is current, diverged or missing, not %q", in.State)
+	case in.State != BaseMissing && local == "":
 		return Written[ProjectView]{}, invalid("local", "local is required: the local base commit")
-	case remote == "":
+	case in.State != BaseMissing && remote == "":
 		return Written[ProjectView]{}, invalid("remote", "remote is required: the remote base commit")
 	}
 	var before ProjectView
@@ -132,5 +145,35 @@ func (c *Core) baseDivergedRow(p store.Project) (NeedsMeRow, bool) {
 	return NeedsMeRow{
 		Project: p.Key, Title: "Base diverged", Reason: ReasonBaseDiverged, Since: b.At,
 		BaseDiverged: &BaseDivergedView{Base: p.Base(), Local: b.Local, Remote: b.Remote},
+	}, true
+}
+
+// missingBase is project's reported base while it is missing, under any
+// Landing Method, and the Project isn't archived.
+func (c *Core) missingBase(p store.Project) (BaseView, bool) {
+	if !p.Archived.IsZero() {
+		return BaseView{}, false
+	}
+	hs := c.heartbeats
+	hs.mu.Lock()
+	defer hs.mu.Unlock()
+	b := hs.baseView(p.Key, c.clock.Now())
+	if b == nil || b.State != BaseMissing {
+		return BaseView{}, false
+	}
+	return *b, true
+}
+
+// baseMissingRow is p's Base missing item: one per Project, with no
+// Ticket.
+func (c *Core) baseMissingRow(p store.Project) (NeedsMeRow, bool) {
+	b, ok := c.missingBase(p)
+	if !ok {
+		return NeedsMeRow{}, false
+	}
+	base := p.Base()
+	return NeedsMeRow{
+		Project: p.Key, Title: "Base missing", Reason: ReasonBaseMissing, Since: b.At,
+		BaseMissing: &BaseMissingView{Base: base, Fix: "Create the branch " + base + ", or change Base branch in Project Options"},
 	}, true
 }

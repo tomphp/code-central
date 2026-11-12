@@ -233,6 +233,8 @@ Under Pull Request there is no CI gate and **Land anyway** isn't offered.
 
 **Base diverged.** Under Pull Request the Factory keeps your local base level with the remote's by fetching and fast-forwarding it. If the local base holds commits the remote's doesn't, it can't, and Code Central shows a **Base diverged** item in Needs Me and Focus Mode, one per Project, with the two commits. Until you reconcile them by hand, for example by resetting or rebasing your local base onto the remote's, the Factory lands nothing and claims no work that would cut a branch. You do nothing in Code Central: on its next poll the Factory sees the fix and carries on. [Pull Request](running-the-factory.md#pull-request) in Running the Factory shows its lines.
 
+**Base missing.** Under every Landing Method, if the Project's base branch exists neither locally nor on the Push remote, the Factory reports it and Code Central shows a **Base missing** item in Needs Me and Focus Mode, one per Project, naming the branch and linking to Project Options. Create the branch, or change the Base branch in Project Options. The item clears on the Factory's next poll that finds the branch. It never shows beside Base diverged, which is a Pull Request item.
+
 ## Watching CI
 
 **CI Tracking** has Code Central watch the CI of what the Factory pushes. It is off on every Project until you turn it on, and Agents have no tool or command to change it. Turn it on in the **CI** section of the same Project Options page:
