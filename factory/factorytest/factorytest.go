@@ -168,9 +168,16 @@ func New(t testing.TB) *Harness {
 const project = "acme"
 
 // gitIdentity is every git's environment in the harness: no system
-// config, and a fixed author and committer.
+// config, no background maintenance (its detached process can create
+// .git/objects/maintenance.lock while the temp dir is being removed),
+// and a fixed author and committer.
 var gitIdentity = map[string]string{
 	"GIT_CONFIG_NOSYSTEM": "1",
+	"GIT_CONFIG_COUNT":    "2",
+	"GIT_CONFIG_KEY_0":    "maintenance.auto",
+	"GIT_CONFIG_VALUE_0":  "false",
+	"GIT_CONFIG_KEY_1":    "gc.auto",
+	"GIT_CONFIG_VALUE_1":  "0",
 	"GIT_AUTHOR_NAME":     "Factory Test",
 	"GIT_AUTHOR_EMAIL":    "factory@example.com",
 	"GIT_COMMITTER_NAME":  "Factory Test",
