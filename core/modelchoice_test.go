@@ -2,6 +2,7 @@ package core_test
 
 import (
 	"encoding/json"
+	"maps"
 	"strings"
 	"testing"
 
@@ -199,5 +200,62 @@ func TestAClaimsModelAndEffortSurviveAReload(t *testing.T) {
 	}
 	if cl := tk.Claims[0]; cl.Model != "opus" || cl.Effort != "xhigh" {
 		t.Errorf("claim after a reload = %+v, want opus at xhigh", cl)
+	}
+}
+
+func TestCreateTicketTakesTagsFromTheStart(t *testing.T) {
+	f := newFixture(t)
+	f.readyTicket(t)
+	tags := map[string]string{"model": "claude-opus-5-5", "effort": "high", "area": "web"}
+	if _, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "tagged", Tags: tags}); err != nil {
+		t.Fatalf("create_ticket: %v", err)
+	}
+	if got := f.get(t, "acme-3").Tags; !maps.Equal(got, tags) {
+		t.Errorf("tags = %v, want %v", got, tags)
+	}
+	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{Tags: map[string]string{"effort": "high"}})
+	if err != nil || len(rows) != 1 || rows[0].ID != "acme-3" {
+		t.Errorf("find by Tag = %+v, %v", rows, err)
+	}
+	want := core.ModelChoice{
+		Model:  core.ChoiceValue{Value: "claude-opus-5-5", Source: core.SourceTicketTag},
+		Effort: core.ChoiceValue{Value: "high", Source: core.SourceTicketTag},
+	}
+	if mc := f.modelChoice(t, "acme-3"); mc != want {
+		t.Errorf("model choice = %+v, want %+v", mc, want)
+	}
+}
+
+func TestCreateTicketRejectsBadTagsAndCreatesNothing(t *testing.T) {
+	f := newFixture(t)
+	f.readyTicket(t)
+	for name, tags := range map[string]map[string]string{
+		"effort":     {"effort": "extreme"},
+		"bad key":    {"Bad Key": "x"},
+		"empty":      {"area": " "},
+		"multi-line": {"area": "a\nb"},
+	} {
+		_, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "t", Tags: tags})
+		wantCode(t, err, core.Invalid, "tags")
+		if err != nil && name == "effort" && !strings.Contains(err.Error(), "low, medium, high, xhigh, max") {
+			t.Errorf("error %q doesn't list the valid levels", err)
+		}
+	}
+	rows, err := f.core.FindTickets(ctx, "acme", core.FindTicketsInput{})
+	if err != nil || len(rows) != 1 {
+		t.Errorf("tickets = %+v, %v; want only the first", rows, err)
+	}
+}
+
+func TestCreateTicketWithEmptyTagsIsAsBefore(t *testing.T) {
+	f := newFixture(t)
+	f.readyTicket(t)
+	for _, tags := range []map[string]string{nil, {}} {
+		if _, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "plain", Tags: tags}); err != nil {
+			t.Fatalf("create_ticket: %v", err)
+		}
+	}
+	if got := f.get(t, "acme-3").Tags; len(got) != 0 {
+		t.Errorf("tags = %v, want none", got)
 	}
 }

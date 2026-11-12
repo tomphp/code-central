@@ -266,24 +266,40 @@ func (c *Core) SetTags(_ context.Context, key string, in SetTagsInput) (TargetVi
 	if len(in.Tags) == 0 {
 		return TargetView{}, invalid("tags", "name at least one Tag")
 	}
-	for k, v := range in.Tags {
-		if !tagKey.MatchString(k) {
-			return TargetView{}, invalid("tags", "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
-		}
-		if strings.TrimSpace(v) == "" || strings.ContainsAny(v, "\r\n") {
-			return TargetView{}, invalid("tags", "Tag %q needs a non-empty, single-line value", k)
-		}
+	if err := checkTagSyntax(in.Tags); err != nil {
+		return TargetView{}, err
 	}
 	return c.updateTargetIn(key, in.Target, func(r store.Reader, onSpec bool, _ *[]string, tags map[string]string) error {
-		// On a Ticket, effort sets its Model Choice, so it is checked.
-		if effort, ok := in.Tags[EffortTag]; ok && !onSpec {
-			if err := checkEffort(r, key, "tags", effort); err != nil {
+		if !onSpec {
+			if err := checkTicketTags(r, key, in.Tags); err != nil {
 				return err
 			}
 		}
 		maps.Copy(tags, in.Tags)
 		return nil
 	})
+}
+
+// checkTagSyntax checks each Tag's key and value.
+func checkTagSyntax(tags map[string]string) error {
+	for k, v := range tags {
+		if !tagKey.MatchString(k) {
+			return invalid("tags", "Tag key %q must be lowercase letters, digits, '.', '_' and '-'", k)
+		}
+		if strings.TrimSpace(v) == "" || strings.ContainsAny(v, "\r\n") {
+			return invalid("tags", "Tag %q needs a non-empty, single-line value", k)
+		}
+	}
+	return nil
+}
+
+// checkTicketTags checks what only a Ticket's Tags must meet: effort sets
+// its Model Choice, so it is a valid effort level for the Project.
+func checkTicketTags(r store.Reader, key string, tags map[string]string) error {
+	if effort, ok := tags[EffortTag]; ok {
+		return checkEffort(r, key, "tags", effort)
+	}
+	return nil
 }
 
 // RemoveTags is remove_tags(target, keys). A key not present is ignored.
