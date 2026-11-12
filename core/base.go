@@ -9,9 +9,10 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// The base a Factory reports under Pull Request (code-central-394): on
-// each poll it fetches the Push remote and fast-forwards the local base,
-// then says whether the base is current or has diverged. Code Central
+// The base a Factory reports under Pull Request (code-central-394) and
+// Merge + Push (code-central-425): on each poll it fetches the Push
+// remote and brings the local base level with the remote's, then says
+// whether the base is current or has diverged. Code Central
 // keeps the latest report of each Project in memory only, like the
 // Heartbeat, and drops it when the Project's Factories all go offline.
 

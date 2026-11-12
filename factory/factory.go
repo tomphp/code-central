@@ -254,9 +254,10 @@ type factory struct {
 
 	// baseDiverged is whether the local base holds commits the Push
 	// remote's doesn't (and, under Merge + Push, the remote's holds ones it
-	// doesn't), so nothing lands and no branch is cut. baseCurrent is
-	// whether it was level with the remote's this poll, fast-forwarded if
-	// need be.
+	// doesn't and the Factory couldn't move the local base onto it), so
+	// nothing lands and no branch is cut. baseCurrent is whether it was
+	// level with the remote's this poll, fast-forwarded or moved if need
+	// be.
 	baseDiverged, baseCurrent bool
 	// base is the Project's base as the last read of it said; baseMu
 	// guards it, because turns read it from their own goroutines.
