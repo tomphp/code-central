@@ -39,8 +39,8 @@ func (lp LandingPolicy) LandPerSpecInForce() bool {
 }
 
 // CIGateHolds answers "Under Merge + Push with CI Tracking on, a Ticket
-// lands only once its pushed commit's CI result is passed": Merge and Push
-// and CI Tracking.
+// lands only once its CI result is passed, at the pushed commit that
+// passed": Merge and Push and CI Tracking.
 func (lp LandingPolicy) CIGateHolds() bool {
 	return lp.method == LandingMerge && lp.push && lp.tracking
 }

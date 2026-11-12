@@ -1665,6 +1665,18 @@ export class FakeApi implements Api {
     for (const id of new Set(runs.map((r) => r.ticket).filter((t) => t !== undefined))) this.trackCI(key, this.ticket(key, id));
   }
 
+  // resultCommits are the pushed commits t's CI result reads, newest first,
+  // as core's resultCommits: under the CI gate those pushed since it last
+  // moved back to Ready; otherwise, or when it has pushed none since, its
+  // latest.
+  private resultCommits(key: string, t: TicketView): PushedCommitView[] {
+    const pushed = this.pushedCommits.get(t.id) ?? [];
+    const p = this.project(key);
+    const back = Date.parse([...t.moves].reverse().find((m) => m.to === "Ready" && m.from)?.time ?? "") || 0;
+    const since = p.landing.method === "merge" && p.landing.push && p.ci.tracking ? pushed.filter((c) => Date.parse(c.pushed) > back).reverse() : [];
+    return since.length > 0 ? since : pushed.slice(-1);
+  }
+
   // trackCI works t's pushed commit, CI Runs and CI result out, as core's
   // ticketCI does on read.
   private trackCI(key: string, t: TicketView): TicketView {
@@ -1673,17 +1685,22 @@ export class FakeApi implements Api {
     if (!latest) return this.view(t);
     const order = (commit: string) => pushed.length - 1 - pushed.findIndex((c) => c.commit === commit);
     const mine = (this.ciRuns.get(key) ?? []).filter((r) => r.ticket === t.id).sort((a, b) => order(a.commit) - order(b.commit));
-    const finished = this.countedRuns(key, t.id, latest.commit);
-    // A Re-run request waiting on the CI Watcher reads as running.
-    const rerunning = this.pendingReruns(key, t.id, latest.commit).length > 0;
-    const ci_result: CIResult =
-      rerunning || finished.length === 0 || finished.some((r) => r.status !== "completed")
+    const resultOf = (commit: string): CIResult => {
+      const finished = this.countedRuns(key, t.id, commit);
+      // A Re-run request waiting on the CI Watcher reads as running.
+      const rerunning = this.pendingReruns(key, t.id, commit).length > 0;
+      return rerunning || finished.length === 0 || finished.some((r) => r.status !== "completed")
         ? "running"
         : finished.some((r) => r.conclusion !== undefined && FAILED_CONCLUSIONS.includes(r.conclusion))
           ? "failed"
           : finished.some((r) => r.conclusion === "cancelled")
             ? "cancelled"
             : "passed";
+    };
+    // Any of its result commits that passed passes it (code-central-430).
+    const green = this.resultCommits(key, t).find((c) => resultOf(c.commit) === "passed");
+    const ci_commit = green?.commit ?? latest.commit;
+    const ci_result = green ? "passed" : resultOf(latest.commit);
     // CI failed: Accepted, failed, and the human hasn't chosen Land anyway;
     // Land anyway is offered only under Merge, Re-run failed jobs and the
     // two fixes under both.
@@ -1699,6 +1716,7 @@ export class FakeApi implements Api {
     return this.updateTicket(t.id, {
       pushed_commit: latest,
       ci_result,
+      ci_commit,
       ...(mine.length > 0 && { ci_runs: structuredClone(mine) }),
       ...(land_anyway && { land_anyway }),
       ...(ciFailed && { ci_failure_options: options }),
@@ -1793,7 +1811,7 @@ export class FakeApi implements Api {
   // attempt, unfinished ones first, newest started first, then those
   // finished in the last CI_VIEW_DAYS days, newest finished first. With
   // running, only the unfinished runs that count towards their Ticket's CI
-  // result: tracked against a Ticket, on its latest pushed commit, not ignored.
+  // result: tracked against a Ticket, on one of its result commits, not ignored.
   async ciOverview(filter: CIOverviewFilter = {}): Promise<CIOverview> {
     this.calls.push("ciOverview");
     if (filter.project && !this.projects.has(filter.project)) throw new ApiError(404, "not_found", `no Project "${filter.project}"`);
@@ -1804,7 +1822,8 @@ export class FakeApi implements Api {
       const all = this.ciRuns.get(p.key) ?? [];
       const latest = all.filter((r) => !all.some((o) => o.id === r.id && o.attempt > r.attempt));
       const running = (r: CIRunView) =>
-        r.status !== "completed" && r.ticket !== undefined && !r.ignored && r.commit === this.pushedCommits.get(r.ticket)?.at(-1)?.commit;
+        r.status !== "completed" && r.ticket !== undefined && !r.ignored &&
+        this.resultCommits(p.key, this.ticket(p.key, r.ticket)).some((c) => c.commit === r.commit);
       return latest
         .filter((r) => (filter.running ? running(r) : r.status !== "completed" || (ended(r) !== undefined && Date.parse(ended(r)!) >= since)))
         .map((r) => ({ ...structuredClone(r), project: p.key }));

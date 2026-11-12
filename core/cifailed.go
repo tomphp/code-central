@@ -66,7 +66,7 @@ func ciFailure(r store.Reader, key string, t store.Ticket, now time.Time) (s CIF
 }
 
 // unhandledCI is t's latest pushed commit and its runs when t is
-// Accepted, the human hasn't chosen Land anyway for the commit and its
+// Accepted, the human hasn't chosen Land anyway for the commit and t's
 // CI result is result at now.
 func unhandledCI(r store.Reader, key string, t store.Ticket, result CIResult, now time.Time) (store.PushedCommit, []store.CIRun, bool) {
 	if t.State != store.Accepted || len(t.PushedCommits) == 0 || !isCILead(r, key, t) {
@@ -77,7 +77,7 @@ func unhandledCI(r store.Reader, key string, t store.Ticket, result CIResult, no
 		return store.PushedCommit{}, nil, false
 	}
 	mine, _ := ticketRuns(r, key, t, now)
-	if latestCIResult(latest, mine, now) != result {
+	if _, got := ticketResult(r, key, t, mine, now); got != result {
 		return store.PushedCommit{}, nil, false
 	}
 	return latest, mine, true

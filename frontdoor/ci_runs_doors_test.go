@@ -20,7 +20,7 @@ func init() {
 	cases["report_pushed_commit"] = opCase{
 		setup: trackedAccepted,
 		ok:    call{http: reportPushedCommit("3", `{"commit":"abc123"}`)},
-		check: ticketAcknowledgement("acme-3", "Accepted", "pushed_commit", "ci_result"),
+		check: ticketAcknowledgement("acme-3", "Accepted", "pushed_commit", "ci_result", "ci_commit"),
 		full: func(t *testing.T, out map[string]any) {
 			pushed, _ := out["pushed_commit"].(map[string]any)
 			if pushed == nil || pushed["commit"] != "abc123" {

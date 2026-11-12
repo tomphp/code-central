@@ -206,14 +206,17 @@ type TicketView struct {
 	Branch string `json:"branch,omitempty"`
 	Commit string `json:"commit,omitempty"`
 	// PushedCommit is the latest commit the Factory pushed for the Ticket
-	// while CI Tracking was on, and CIResult the CI result of its runs;
-	// both left out while it has none. CIRuns are every CI Run tracked
+	// while CI Tracking was on, CIResult the Ticket's CI result and
+	// CICommit the pushed commit it comes from: under the CI gate one
+	// that passed, if any did, else the latest (code-central-430). All
+	// are left out while it has none. CIRuns are every CI Run tracked
 	// against it, the latest pushed commit's first. Computed on read.
 	PushedCommit *PushedCommitView `json:"pushed_commit,omitempty"`
 	// PullRequest is the pull request the Pull Request Watcher reported
 	// for the Ticket's pushed work; left out until it has one.
 	PullRequest *PullRequestView `json:"pull_request,omitempty"`
 	CIResult    CIResult         `json:"ci_result,omitempty"`
+	CICommit    string           `json:"ci_commit,omitempty"`
 	CIRuns      []CIRunView      `json:"ci_runs,omitempty"`
 	// LandAnyway says the human accepted the latest pushed commit's
 	// failed CI result, so the Factory lands it (code-central-261).
@@ -281,9 +284,8 @@ type TicketRow struct {
 	// LatestEvent is the latest Session Event of the Ticket's live Claim,
 	// shown short; left out when there is none.
 	LatestEvent *LatestEvent `json:"latest_event,omitempty"`
-	// CIResult is the CI result of the Ticket's latest pushed commit, for
-	// its row's badge; left out for a Ticket never pushed while CI
-	// Tracking was on.
+	// CIResult is the Ticket's CI result, for its row's badge; left out
+	// for a Ticket never pushed while CI Tracking was on.
 	CIResult CIResult `json:"ci_result,omitempty"`
 	// PullRequest is the Ticket's pull request, for its row's badge; left
 	// out until the Pull Request Watcher reports one.
@@ -644,7 +646,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	for _, m := range t.Moves {
 		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit})
 	}
-	v.PushedCommit, v.CIResult, v.CIRuns = ticketCI(r, key, t, c.now())
+	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = ticketCI(r, key, t, c.now())
 	v.PullRequest = pullRequestView(t.PullRequest)
 	pr, _ := r.Project(key)
 	if t.SpecMerge != nil {

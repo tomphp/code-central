@@ -60,7 +60,10 @@ func ciGated(r store.Reader, p store.Project, t store.Ticket, now time.Time) (st
 // of its CI, why it is CI unavailable.
 func (c *Core) ciWaitingOn(r store.Reader, p store.Project, t store.Ticket) (waiting bool, unavailable *CIUnavailableView) {
 	pushed, runs, ok := ciGated(r, p, t, c.now())
-	if !ok || latestCIResult(pushed, runs, c.now()) != CIRunning {
+	if !ok {
+		return false, nil
+	}
+	if _, result := ticketResult(r, p.Key, t, runs, c.now()); result != CIRunning {
 		return false, nil
 	}
 	if c.now().Sub(pushed.Pushed) < CIUnavailableAfter {

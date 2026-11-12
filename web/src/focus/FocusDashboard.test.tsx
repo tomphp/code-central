@@ -417,7 +417,7 @@ describe("the CI Running block", () => {
     expect(within(ciBlock(d)).getByRole("link")).toHaveAttribute("href", "?view=ci&back=view%3Dfocus");
   });
 
-  it("follows the live feed: runs changing, and a newer pushed commit", async () => {
+  it("follows the live feed: runs changing, and a newer pushed commit outside the CI gate", async () => {
     const fake = await ciWorld();
     renderApp(fake);
     const d = await dashboard();
@@ -426,6 +426,8 @@ describe("the CI Running block", () => {
     await act(() => fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml"), ciRun(fake, 2, "lint.yml")]));
     await waitFor(() => expect(count(d, "CI Running")).toBe("2"));
 
+    // Under the CI gate an earlier pushed commit still counts (code-central-430).
+    await act(() => fake.setLandingMethod("acme", { method: "branch", push: true, remote: "origin" }));
     await act(() => fake.reportPushedCommit("acme", "acme-4", "def456"));
     await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
   });
@@ -596,7 +598,7 @@ describe("the CI Running list", () => {
     expect(within(ciEntry(d, "CI")).getAllByRole("link")).toHaveLength(2);
   });
 
-  it("follows the live feed: a run joining, finishing, and a newer pushed commit", async () => {
+  it("follows the live feed: a run joining, finishing, and a newer pushed commit outside the CI gate", async () => {
     const fake = await ciWorld();
     renderApp(fake);
     const d = await dashboard();
@@ -608,6 +610,8 @@ describe("the CI Running list", () => {
     await act(() => fake.reportCIRuns("acme", [ciRun(fake, 1, "ci.yml", { status: "completed", conclusion: "failure", finished: fake.now.toISOString() })]));
     await waitFor(() => expect(ciEntries(d).map((e) => e.getAttribute("aria-label"))).toEqual(["lint.yml"]));
 
+    // Under the CI gate an earlier pushed commit still counts (code-central-430).
+    await act(() => fake.setLandingMethod("acme", { method: "branch", push: true, remote: "origin" }));
     await act(() => fake.reportPushedCommit("acme", "acme-4", "def456"));
     expect(await within(d).findByText("No CI Runs running")).toBeInTheDocument();
   });

@@ -110,6 +110,30 @@ func TestUnderMergeAndPushWithCITrackingACancelledCIResultDoesNotLand(t *testing
 	r.WaitForOutput(id + ": CI cancelled at " + pushed[:12])
 }
 
+// A Ticket's CI result is passed once any of its pushed commits since it
+// last moved back to Ready passed (code-central-430), and it lands at the
+// one that passed.
+func TestUnderTheCIGateATicketLandsAtAnEarlierPushedCommitThatPassedAfterALaterOneFailed(t *testing.T) {
+	t.Parallel()
+	h, remote, r := gatedHarness(t)
+	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
+	reportRun(t, h, 1, id, pushed, store.CIInProgress, "")
+	later := h.CommitOn("later", "later.txt", "later\n")
+	h.Git("push", "-q", remote.Path, "later:refs/heads/main")
+	if _, err := h.Server.Client.ReportPushedCommit(context.Background(), h.Project, core.ReportPushedCommitInput{Ticket: core.Ref(id), Commit: later, Branch: "main"}); err != nil {
+		t.Fatal(err)
+	}
+	reportRun(t, h, 2, id, later, store.CICompleted, store.CIFailure)
+	stillAccepted(t, h, r, id, "with its latest pushed commit failed and the earlier one running")
+
+	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CISuccess)
+	r.Poll()
+	tk := h.WaitForState(id, store.Done)
+	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != pushed {
+		t.Errorf("landed with %q, want the pushed commit that passed, %s", m.Commit, pushed)
+	}
+}
+
 // Land anyway (code-central-261): the human accepts the failed CI
 // result, and the Factory lands the Ticket at its pushed commit on its
 // next poll.

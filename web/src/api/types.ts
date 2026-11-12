@@ -897,7 +897,9 @@ export interface TicketView {
   branch?: string;
   commit?: string;
   // pushed_commit is the latest commit the Factory pushed while CI
-  // Tracking was on, and ci_result its CI result; ci_runs are every CI Run
+  // Tracking was on, ci_result the Ticket's CI result and ci_commit the
+  // pushed commit it comes from: under the CI gate one that passed, if
+  // any did, else the latest (code-central-430); ci_runs are every CI Run
   // tracked against the Ticket, the latest pushed commit's first. All are
   // left out while it has none (code-central-256).
   pushed_commit?: PushedCommitView;
@@ -905,6 +907,7 @@ export interface TicketView {
   // the Ticket's pushed work (code-central-388).
   pull_request?: PullRequestView;
   ci_result?: CIResult;
+  ci_commit?: string;
   ci_runs?: CIRunView[];
   // land_anyway says the human accepted the latest pushed commit's failed
   // CI result, so the Factory lands it; ci_failure_options are the
@@ -944,7 +947,7 @@ export interface TicketView {
 // a TicketAcknowledgement's changed lists them in.
 export const TICKET_FIELDS = [
   "id", "title", "state", "spec", "labels", "tags", "blocked_by", "blockers", "replacements",
-  "created", "updated", "description", "branch", "commit", "pushed_commit", "pull_request", "ci_result", "ci_runs", "land_anyway", "ci_failure_options", "claims", "rounds", "failure_reports",
+  "created", "updated", "description", "branch", "commit", "pushed_commit", "pull_request", "ci_result", "ci_commit", "ci_runs", "land_anyway", "ci_failure_options", "claims", "rounds", "failure_reports",
   "comments", "moves", "edits", "blocked", "claimable", "silent_since", "needs_me_reason", "link",
   "awaiting_triage", "triage_actions",
 ] as const satisfies readonly (keyof TicketView)[];
