@@ -18,7 +18,7 @@ import (
 func (f *factory) landAndSweep(ctx context.Context) {
 	landing, policy, ok := f.landing(ctx)
 	if ok {
-		ok = f.locateBase(ctx, landing)
+		ok = f.locateBase(ctx, landing, policy)
 	}
 	if ok && !f.paused() && !f.halted(ctx) && f.remoteReady(landing, policy) {
 		f.land(ctx, landing, policy)
@@ -41,13 +41,14 @@ func (f *factory) landing(ctx context.Context) (landing core.LandingView, policy
 		return core.LandingView{}, store.LandingPolicy{}, false
 	}
 	f.setBase(p.Landing.Base)
-	if p.Landing.Method != store.LandingPullRequest {
+	policy = landingPolicy(p)
+	if !policy.KeepsBaseLevel() {
 		f.baseDiverged = false
 	}
 	if !f.modelsReported {
 		f.modelsReported = f.reportModels(ctx)
 	}
-	return p.Landing, landingPolicy(p), true
+	return p.Landing, policy, true
 }
 
 // missingRemote says why landing can't go on when Push names a remote
@@ -103,9 +104,14 @@ func (f *factory) land(ctx context.Context, landing core.LandingView, policy sto
 	sort.SliceStable(accepted, func(i, j int) bool { return acceptedAt(accepted[i]).Before(acceptedAt(accepted[j])) })
 	held := f.landSpecsOff(ctx, accepted, landing, policy)
 	pullRequest := landing.Method == store.LandingPullRequest
-	if pullRequest {
+	if policy.KeepsBaseLevel() {
 		// The base is brought up to the remote's before anything lands.
-		f.baseCurrent = f.syncBase(ctx, landing.Remote)
+		f.baseCurrent = f.syncBase(ctx, landing.Remote, policy.PushesBase())
+		if !f.baseCurrent && policy.PushesBase() {
+			// Under Merge + Push a base that isn't level lands nothing: not
+			// a Ticket, nor a merge into a Spec Branch cut from it.
+			return
+		}
 	}
 	for _, tk := range accepted {
 		if f.halted(ctx) || f.paused() {

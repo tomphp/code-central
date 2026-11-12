@@ -81,7 +81,7 @@ func TestChangingTheBaseAfterTheMergeButBeforeThePushFinishesOnTheOldBase(t *tes
 	oldRelease := h.Git("rev-parse", "release")
 	setMergeBase(h, "main")
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
-	remote.Break()
+	remote.RefusePushes()
 	r := h.Start()
 	r.WaitForOutput(id + ": can't land yet")
 	if !contains(h, "main", commit) {
@@ -89,7 +89,7 @@ func TestChangingTheBaseAfterTheMergeButBeforeThePushFinishesOnTheOldBase(t *tes
 	}
 
 	setMergeBase(h, "release")
-	remote.Restore()
+	remote.AcceptPushes()
 	r.Poll()
 	h.WaitForState(id, store.Done)
 	r.WaitForOutput(id + ": pushed main to origin")
@@ -110,12 +110,12 @@ func TestChangingTheBaseAfterASpecIsMergedButBeforeThePushFinishesOnTheOldBase(t
 	oldRelease := h.Git("rev-parse", "release")
 	setMergeBase(h, "main")
 	a, b := twoAccepted(t, h)
-	remote.Break()
+	remote.RefusePushes()
 	r := h.Start()
 	r.WaitForOutput(h.SpecID() + ": merged spec/" + h.SpecID() + " into main at ")
 
 	setMergeBase(h, "release")
-	remote.Restore()
+	remote.AcceptPushes()
 	r.Poll()
 	h.WaitForState(a, store.Done)
 	h.WaitForState(b, store.Done)
