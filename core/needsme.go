@@ -35,6 +35,10 @@ const (
 	// reports its local base diverged from the remote's (code-central-394).
 	// It is one item per Project, with no Ticket.
 	ReasonBaseDiverged NeedsMeReason = "base_diverged"
+	// ReasonBaseMissing is a Project whose Factory reports its base
+	// missing, under any Landing Method. It is one item per Project, with
+	// no Ticket.
+	ReasonBaseMissing NeedsMeReason = "base_missing"
 	// ReasonPullRequestClosed is an Accepted Ticket under Pull Request
 	// whose pull request is closed or abandoned without merging
 	// (code-central-391); it clears if the pull request is reopened.
@@ -71,6 +75,7 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonCIFailed, "CI failed: Accepted with its pushed commit's CI failed; the human picks a failure option"},
 	{ReasonCICancelled, "CI cancelled: Accepted with its pushed commit's CI cancelled"},
 	{ReasonBaseDiverged, "Base diverged: a Project's local base has diverged from the remote's; reconcile it by hand"},
+	{ReasonBaseMissing, "Base missing: a Project's base branch exists nowhere; create it or change it in Options"},
 	{ReasonPullRequestClosed, "Pull request closed: Accepted with its pull request closed without merging"},
 	{ReasonToMerge, "To merge: Accepted under Branch or Pull Request; merge it to the base"},
 	{ReasonCIUnavailable, "CI unavailable: no word of its CI 10 minutes after its push (CI Watcher not Watching, or no CI Runs)"},
@@ -153,6 +158,9 @@ type NeedsMeRow struct {
 	// BaseDiverged is the local and remote base commits (Base diverged,
 	// whose row has no Ticket: its ID is empty).
 	BaseDiverged *BaseDivergedView `json:"base_diverged,omitempty"`
+	// BaseMissing is the missing base's branch and the fix (Base missing,
+	// whose row has no Ticket either).
+	BaseMissing *BaseMissingView `json:"base_missing,omitempty"`
 }
 
 // NeedsMeRequirement is the Requirement a Needs Me row's Ticket is on:
@@ -220,6 +228,9 @@ func (c *Core) NeedsMe(context.Context) (NeedsMeView, error) {
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			if row, ok := c.baseDivergedRow(p); ok {
+				all = append(all, waiting{row, 0})
+			}
+			if row, ok := c.baseMissingRow(p); ok {
 				all = append(all, waiting{row, 0})
 			}
 			for _, t := range r.Tickets(p.Key) {

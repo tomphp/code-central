@@ -28,6 +28,7 @@ export type NeedsMeReason =
   | "ci_failed"
   | "ci_cancelled"
   | "base_diverged"
+  | "base_missing"
   | "pull_request_closed"
   | "to_merge"
   | "ci_unavailable"
@@ -490,6 +491,11 @@ export interface BaseDiverged {
   remote: string;
 }
 
+export interface BaseMissing {
+  base: string;
+  fix: string;
+}
+
 export interface NeedsMeRow {
   project: string;
   id: string;
@@ -524,6 +530,9 @@ export interface NeedsMeRow {
   // base_diverged is the local and remote base commits (base_diverged,
   // whose row has no Ticket: its id is empty).
   base_diverged?: BaseDiverged;
+  // base_missing is the missing base's branch and the fix (base_missing,
+  // whose row has no Ticket either).
+  base_missing?: BaseMissing;
   // ci_group is the Spec's Tickets waiting with this one, on a per-Spec CI
   // item (code-central-379).
   ci_group?: CIGroup;

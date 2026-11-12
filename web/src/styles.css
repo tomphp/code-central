@@ -70,6 +70,7 @@ textarea { width: 100%; resize: vertical; }
 .reason-ci_failed { --rc: var(--r-failed); }
 .reason-ci_cancelled { --rc: var(--muted); }
 .reason-base_diverged { --rc: var(--r-failed); }
+.reason-base_missing { --rc: var(--r-failed); }
 .reason-to_merge { --rc: var(--r-landing); }
 .reason-ci_unavailable { --rc: var(--r-landing); }
 .reason-accepted_not_landed { --rc: var(--r-landing); }
