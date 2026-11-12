@@ -205,7 +205,7 @@ The commit the Factory pushed for a Ticket, which it reports on the Ticket: the 
 _Avoid_: Push SHA
 
 **CI Run**:
-One run of a Workflow the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. On Azure DevOps under Pull Request, a build is matched by its pull request, since it ran on the host's merge commit. Kept for 30 days after it finishes.
+One run of a Workflow the CI system started for a commit, tracked against the Ticket whose pushed commit it ran on, or against the CI Rule it fired. A Ticket-tracked run counts for every Ticket whose latest pushed commit it ran on, not only the one it was tracked against. On Azure DevOps under Pull Request, a build is matched by its pull request, since it ran on the host's merge commit. Kept for 30 days after it finishes.
 _Avoid_: Job, build, pipeline
 
 **Workflow**:

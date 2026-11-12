@@ -121,13 +121,12 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 // runningForTicket reports whether run, its run ID's latest attempt among
 // the kept runs, counts as running towards a Ticket's CI result: it is
 // unfinished, tracked against a Ticket rather than a CI Rule, and counts
-// for that Ticket's latest pushed commit.
+// for the latest pushed commit of some Ticket.
 func runningForTicket(r store.Reader, key string, run store.CIRun) bool {
 	if run.Status != store.CIQueued && run.Status != store.CIInProgress || run.Ticket == 0 {
 		return false
 	}
-	t, ok := r.Ticket(key, run.Ticket)
-	return ok && len(t.PushedCommits) > 0 && countsFor(run, latestPushed(t).Commit)
+	return len(ticketsOfCommit(r, key, run.Commit)) > 0 && !run.Ignored
 }
 
 // latestAttempts is runs with each run's latest attempt only.
