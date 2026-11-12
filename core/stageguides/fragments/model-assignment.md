@@ -1,0 +1,1 @@
+- Recommend {{if .Aliases}}a `model` (one of {{list .Aliases}}) and {{end}}an `effort` (one of {{list .Levels}}) for each Ticket and pass them in `tags` to `create_ticket`. In each line of the finish summary's numbered breakdown give {{if .Aliases}}the model, {{end}}the effort and a one-line reason. A redo updates them with `set_tags`.

@@ -438,3 +438,73 @@ func TestAnAgentCannotSetModelAssignment(t *testing.T) {
 	_, err := f.core.SetModelAssignment(ctx, "acme", core.SetModelAssignmentInput{On: true})
 	wantCode(t, err, core.ActionNotAllowed, "")
 }
+
+// The Model Assignment fragment (code-central-472, ADR 0034).
+func (f fixture) setModelAssignment(t *testing.T, on bool) {
+	t.Helper()
+	if _, err := f.core.SetModelAssignment(human, "acme", core.SetModelAssignmentInput{On: on}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestModelAssignmentOffLeavesNoModelTextNoGapAndNoPlaceholder(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	g := guide(t, f, "tickets")
+	for _, s := range []string{"model-assignment", "effort", "set_tags", "<!--", "- \n", "\n\n\n"} {
+		if strings.Contains(g, s) {
+			t.Errorf("the tickets guide has %q with Model Assignment off:\n%s", s, g)
+		}
+	}
+	if !strings.Contains(g, "Give no Stage Label.\n\nIf the Spec records") {
+		t.Errorf("the bullets are not followed by the paragraph:\n%s", g)
+	}
+}
+
+func TestModelAssignmentOnListsTheReportedAliasesAndLevels(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	f.reportModels(t, core.ReportModelsInput{Aliases: []string{"opus", "sonnet"}, EffortLevels: []string{"low", "high"}})
+	f.setModelAssignment(t, true)
+	g := guide(t, f, "tickets")
+	for _, s := range []string{"`opus`, `sonnet`", "`low`, `high`", "`create_ticket`", "`tags`", "reason", "`set_tags`", "Give no Stage Label.\n- "} {
+		if !strings.Contains(g, s) {
+			t.Errorf("the tickets guide lacks %q:\n%s", s, g)
+		}
+	}
+	if strings.Contains(g, "medium") || strings.Contains(g, "haiku") {
+		t.Errorf("the guide lists more than the reported values:\n%s", g)
+	}
+}
+
+func TestModelAssignmentOnWithNoAliasesAsksForEffortOnlyWithSeededLevels(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	f.setModelAssignment(t, true)
+	g := guide(t, f, "tickets")
+	if !strings.Contains(g, "`low`, `medium`, `high`, `xhigh`, `max`") || !strings.Contains(g, "`set_tags`") {
+		t.Errorf("the guide lacks the seeded levels or set_tags:\n%s", g)
+	}
+	if strings.Contains(g, "`model`") || strings.Contains(g, "alias") {
+		t.Errorf("the guide mentions the model with no aliases:\n%s", g)
+	}
+}
+
+func TestOnlyTheTicketsGuideChangesWithModelAssignment(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	before := map[string]string{}
+	for _, stage := range core.GuideNames {
+		before[stage] = guide(t, f, stage)
+	}
+	f.setModelAssignment(t, true)
+	for _, stage := range core.GuideNames {
+		g := guide(t, f, stage)
+		if (g != before[stage]) != (stage == "tickets") {
+			t.Errorf("the %s guide changed = %v with Model Assignment on", stage, g != before[stage])
+		}
+		if strings.Contains(g, "<!--") || strings.Contains(g, "{{") {
+			t.Errorf("the %s guide has unrendered text", stage)
+		}
+	}
+}
