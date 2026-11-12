@@ -91,6 +91,8 @@ type ProjectView struct {
 	// ReportedModels is what the Factory last reported its claude
 	// accepts, always filled in.
 	ReportedModels ReportedModelsView `json:"reported_models"`
+	// StageGuides is the Project's Stage Guides settings, always filled in.
+	StageGuides StageGuidesView `json:"stage_guides"`
 	// FactoryStatus is whether the Project's Factories are online, from
 	// their Heartbeats, always filled in.
 	FactoryStatus FactoryStatusView `json:"factory_status"`
@@ -219,19 +221,22 @@ type TicketView struct {
 	CICommit    string           `json:"ci_commit,omitempty"`
 	CIRuns      []CIRunView      `json:"ci_runs,omitempty"`
 	// LandAnyway says the human accepted the latest pushed commit's
-	// failed CI result, so the Factory lands it (code-central-261).
+	// failed CI result, so the Factory lands it (code-central-261), on
+	// this Ticket or on another sharing the commit (code-central-432).
 	LandAnyway bool `json:"land_anyway,omitempty"`
 	// SpecLanded says Land per Spec covers the Ticket, and WaitingForSpec
 	// that it is Accepted and waits for its Spec to land (code-central-371).
 	// Computed on read.
 	SpecMerge  *SpecMergeView `json:"spec_merge,omitempty"`
 	SpecLanded bool           `json:"spec_landed,omitempty"`
-	// CIGroup is the Spec's Tickets waiting with this one on one pushed
-	// commit, the lead first (code-central-379).
-	CIGroup        *CIGroupView `json:"ci_group,omitempty"`
-	WaitingForSpec bool         `json:"waiting_for_spec,omitempty"`
+	// CIItem is the CI failed, CI cancelled or CI unavailable item that
+	// lists this Ticket, with every other Ticket waiting on its pushed
+	// commit (code-central-432); left out while none does.
+	CIItem         *CIItemView `json:"ci_item,omitempty"`
+	WaitingForSpec bool        `json:"waiting_for_spec,omitempty"`
 	// CIFailureOptions are the failure options, each an operation's name,
-	// the human may choose while the Ticket is CI failed; left out
+	// the human may choose on the Ticket's CI item while it is CI failed
+	// or CI cancelled, acting on every Ticket it lists; left out
 	// otherwise, and empty when none applies. Computed on read.
 	CIFailureOptions []string            `json:"ci_failure_options,omitzero"`
 	Claims           []ClaimView         `json:"claims,omitzero"`
@@ -604,7 +609,7 @@ func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
 		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
-		ReportedModels: reportedModelsView(p.ReportedModels), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
+		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at
@@ -654,8 +659,13 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	}
 	v.SpecLanded = specLanded(r, pr.Landing, key, t)
 	v.WaitingForSpec = waitingForSpec(r, pr.Landing, key, t)
-	v.CIGroup = ciGroupView(r, key, t)
-	v.LandAnyway, v.CIFailureOptions = choseLandAnyway(t), ciFailureOptions(r, key, t, c.now())
+	if it, ok := c.ciItemOf(r, pr, t); ok {
+		v.CIItem = ciItemView(r, pr, it)
+		if it.reason != ReasonCIUnavailable {
+			v.CIFailureOptions = v.CIItem.Options
+		}
+	}
+	v.LandAnyway = choseLandAnyway(pr, t)
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = c.reasonOf(r, key, t)

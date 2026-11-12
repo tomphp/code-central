@@ -16,7 +16,7 @@ func (f *factory) stageGuide(ctx context.Context, fromClaim *core.StageGuideView
 	if fromClaim != nil {
 		return *fromClaim
 	}
-	g, err := f.client.GetStageGuide(ctx, core.StageGuideInput{Stage: stage})
+	g, err := f.client.GetStageGuide(ctx, f.project, core.StageGuideInput{Stage: stage})
 	if err != nil {
 		f.printf("get_stage_guide %s: %v", stage, err)
 		return core.StageGuideView{Stage: stage}

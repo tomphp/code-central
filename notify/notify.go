@@ -107,7 +107,7 @@ func Start(ctx context.Context, cfg Config) {
 	if cfg.Log == nil {
 		cfg.Log = io.Discard
 	}
-	w := &watcher{cfg: cfg, known: map[string]core.AttentionTicket{}, long: map[longKey]bool{}, watcherErrors: map[watcherKey]int{}}
+	w := &watcher{cfg: cfg, known: map[string]core.AttentionTicket{}, long: map[longKey]bool{}, ciFailed: map[commitKey]bool{}, watcherErrors: map[watcherKey]int{}}
 	// Subscribe before the first look so no change falls between them.
 	notices, stop := cfg.Source.Events().Subscribe()
 	all := cfg.Source.Attention(ctx)
@@ -134,9 +134,19 @@ type watcher struct {
 	// long is every Claim already counted as Long: one Notification each,
 	// however often it stops and starts being Long.
 	long map[longKey]bool
+	// ciFailed is every pushed commit whose CI failed has been notified
+	// and that some known Ticket is still CI failed at: one Notification
+	// per commit, however many Tickets wait on it (code-central-432).
+	ciFailed map[commitKey]bool
 	// watcherErrors is how often each Project's Watcher of each kind had
 	// gone into an error at the last look.
 	watcherErrors map[watcherKey]int
+}
+
+// commitKey names one Project's pushed commit.
+type commitKey struct {
+	project string
+	commit  string
 }
 
 // watcherKey names one Project's Watcher of one kind.
@@ -215,7 +225,19 @@ func (w *watcher) observe(t core.AttentionTicket) {
 	if t.SilentClaim != 0 && t.SilentClaim != was.SilentClaim {
 		w.pending = append(w.pending, event{reason: silentClaim, ticket: t})
 	}
-	if t.CIFailedCommit != "" && t.CIFailedCommit != was.CIFailedCommit {
+	if was.CIFailedCommit != "" && t.CIFailedCommit != was.CIFailedCommit {
+		// The commit is CI failed again only once every Ticket has left it.
+		k := commitKey{t.Project, was.CIFailedCommit}
+		stillAt := false
+		for _, o := range w.known {
+			stillAt = stillAt || (o.Project == k.project && o.CIFailedCommit == k.commit)
+		}
+		if !stillAt {
+			delete(w.ciFailed, k)
+		}
+	}
+	if k := (commitKey{t.Project, t.CIFailedCommit}); t.CIFailedCommit != "" && t.CIFailedCommit != was.CIFailedCommit && !w.ciFailed[k] {
+		w.ciFailed[k] = true
 		w.pending = append(w.pending, event{reason: ciFailed, ticket: t})
 	}
 	if k := (longKey{t.ID, t.LongClaim}); t.LongClaim != 0 && !w.long[k] {

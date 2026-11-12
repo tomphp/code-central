@@ -1,7 +1,13 @@
 // The Project Options page: one Project's settings, reached from its menu
 // in the left pane, a section each: the Landing Method, CI with its CI
-// Rules, GitHub Issues, and Models.
-import { useEffect, useId, useState, type FormEvent } from "react";
+// Rules, GitHub Issues, Models, and Stage Guides.
+import {
+  useEffect,
+  useId,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+} from "react";
 import type { Api } from "../api/api";
 import type {
   ApiError,
@@ -40,6 +46,24 @@ export interface ProjectOptionsProps {
   navigate(patch: Partial<UiLocation>): void;
 }
 
+// SECTIONS is the one list the section menu is built from; each id is the id
+// of that section's fieldset.
+export const SECTIONS = [
+  { id: "project-options-landing-method", label: "Landing Method" },
+  { id: "project-options-ci", label: "CI" },
+  { id: "project-options-github-issues", label: "GitHub Issues" },
+  { id: "project-options-models", label: "Models" },
+  { id: "project-options-stage-guides", label: "Stage Guides" },
+];
+
+// jumpTo scrolls to a section without changing the URL, which holds the view.
+function jumpTo(id: string) {
+  return (e: MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    document.getElementById(id)?.scrollIntoView?.();
+  };
+}
+
 export function ProjectOptions({
   api,
   now,
@@ -66,11 +90,27 @@ export function ProjectOptions({
       ) : (
         <>
           <h1>{project.display_name}: Project Options</h1>
-          <LandingMethodSection api={api} project={project} />
-          <CISection api={api} project={project} />
-          <GitHubIssuesSection api={api} project={project} />
-          <ModelsSection api={api} project={project} />
-          <FactoriesSection project={project} now={now} />
+          <div className="project-options-layout">
+            <nav aria-label="Sections" className="project-options-menu">
+              <ul>
+                {SECTIONS.map((s) => (
+                  <li key={s.id}>
+                    <a href={`#${s.id}`} onClick={jumpTo(s.id)}>
+                      {s.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+            <div className="project-options-sections">
+              <LandingMethodSection api={api} project={project} />
+              <CISection api={api} project={project} />
+              <GitHubIssuesSection api={api} project={project} />
+              <ModelsSection api={api} project={project} />
+              <StageGuidesSection api={api} project={project} />
+              <FactoriesSection project={project} now={now} />
+            </div>
+          </div>
         </>
       )}
     </main>
@@ -173,7 +213,7 @@ function LandingMethodSection({
 
   return (
     <form onSubmit={save}>
-      <fieldset className="project-options-section" disabled={project.archived}>
+      <fieldset id="project-options-landing-method" className="project-options-section" disabled={project.archived}>
         <legend>Landing Method</legend>
         {project.archived && (
           <p className="muted">
@@ -434,7 +474,7 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
       : undefined;
 
   return (
-    <fieldset className="project-options-section" disabled={project.archived}>
+    <fieldset id="project-options-ci" className="project-options-section" disabled={project.archived}>
       <legend>CI</legend>
       <form onSubmit={save}>
         <div className="project-options-choice">
@@ -708,7 +748,7 @@ function GitHubIssuesSection({
   const spec = project.github_issues.spec;
 
   return (
-    <fieldset className="project-options-section" disabled={project.archived}>
+    <fieldset id="project-options-github-issues" className="project-options-section" disabled={project.archived}>
       <legend>GitHub Issues</legend>
       <form onSubmit={save}>
         <div className="project-options-choice">
@@ -884,7 +924,7 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
       : undefined;
 
   return (
-    <fieldset className="project-options-section" disabled={project.archived}>
+    <fieldset id="project-options-models" className="project-options-section" disabled={project.archived}>
       <legend>Models</legend>
       <p className="project-options-hint project-options-models-hint">
         The model and effort the Factory&apos;s sessions run with, for each kind
@@ -939,6 +979,71 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
           </tbody>
         </table>
         <ModelSuggestions id={`${id}-models`} suggestions={suggestions} />
+        {error && <Refusal id={`${id}-error`} error={error} />}
+        <div className="project-options-actions">
+          <button type="submit" className="btn primary" disabled={!changed}>
+            Save
+          </button>
+          {saved && !changed && (
+            <span role="status" className="muted">
+              Saved
+            </span>
+          )}
+        </div>
+      </form>
+    </fieldset>
+  );
+}
+
+// StageGuidesSection is the Project's Stage Guides settings (Spec
+// code-central-441): the Subagent Exploration checkbox, with its own Save.
+// Like the other sections it follows the Project as read.
+function StageGuidesSection({ api, project }: { api: Api; project: ProjectRow }) {
+  const stored = project.stage_guides.subagent_exploration;
+  const [draft, setDraft] = useState(stored);
+  const [error, setError] = useState<ApiError>();
+  const [saved, setSaved] = useState(false);
+  const id = useId();
+  useEffect(() => setDraft(stored), [stored]);
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    setError(undefined);
+    api.setSubagentExploration(project.key, draft).then(
+      (v) => {
+        setDraft(v.stage_guides.subagent_exploration);
+        setSaved(true);
+      },
+      (e: ApiError) => setError(e),
+    );
+  };
+  const changed = draft !== stored;
+
+  return (
+    <fieldset id="project-options-stage-guides" className="project-options-section" disabled={project.archived}>
+      <legend>Stage Guides</legend>
+      <form onSubmit={save}>
+        <label>
+          <input
+            type="checkbox"
+            checked={draft}
+            onChange={(e) => {
+              setDraft(e.target.checked);
+              setError(undefined);
+              setSaved(false);
+            }}
+            aria-describedby={`${id}-hint`}
+          />{" "}
+          Subagent Exploration
+        </label>
+        <p id={`${id}-hint`} className="project-options-hint">
+          While on, the implementation guide tells the agent to ask an Explore
+          subagent when understanding existing code means reading across several
+          files, so only its conclusion stays in context. Turn it off if your
+          agents have no subagents or can&apos;t afford them. A change applies
+          from the next Claim and the next get_stage_guide call, not to a
+          running or resumed session.
+        </p>
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>

@@ -2,10 +2,12 @@ package core_test
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/events"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -13,8 +15,9 @@ import (
 
 func TestEachStageHasAGuide(t *testing.T) {
 	f := newFixture(t)
+	f.project(t, "acme")
 	for _, stage := range []string{"grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"} {
-		g, err := f.core.GetStageGuide(ctx, core.StageGuideInput{Stage: stage})
+		g, err := f.core.GetStageGuide(ctx, "acme", core.StageGuideInput{Stage: stage})
 		if err != nil {
 			t.Fatalf("get_stage_guide %s: %v", stage, err)
 		}
@@ -26,8 +29,9 @@ func TestEachStageHasAGuide(t *testing.T) {
 
 func TestAnUnknownStageHasNoGuide(t *testing.T) {
 	f := newFixture(t)
+	f.project(t, "acme")
 	for _, stage := range []string{"", "build", "stage:spec", "Spec", "map", "chart", "wayfinder:chart", "map-map", "research"} {
-		_, err := f.core.GetStageGuide(ctx, core.StageGuideInput{Stage: stage})
+		_, err := f.core.GetStageGuide(ctx, "acme", core.StageGuideInput{Stage: stage})
 		wantCode(t, err, core.Invalid, "stage")
 	}
 }
@@ -35,7 +39,8 @@ func TestAnUnknownStageHasNoGuide(t *testing.T) {
 // guide is the named Stage's guide, failing the test if it can't be read.
 func guide(t *testing.T, f fixture, stage string) string {
 	t.Helper()
-	g, err := f.core.GetStageGuide(ctx, core.StageGuideInput{Stage: stage})
+	f.core.CreateProject(ctx, core.CreateProjectInput{Key: "acme"}) // a second create is refused
+	g, err := f.core.GetStageGuide(ctx, "acme", core.StageGuideInput{Stage: stage})
 	if err != nil {
 		t.Fatalf("get_stage_guide %s: %v", stage, err)
 	}
@@ -283,4 +288,110 @@ func TestGetWorkflowsTroubleRulesAreTheStageGuidesText(t *testing.T) {
 			t.Errorf("get_workflow's prose doesn't carry the %s guide's trouble rules:\n%s", stage, s)
 		}
 	}
+}
+
+// Subagent Exploration (code-central-441, ADR 0034).
+
+const subagentFragment = "ask an Explore subagent and keep its answer, not the files"
+
+func (f fixture) setSubagentExploration(t *testing.T, on bool) core.ProjectView {
+	t.Helper()
+	w, err := f.core.SetSubagentExploration(human, "acme", core.SetSubagentExplorationInput{On: on, Full: true})
+	if err != nil {
+		t.Fatalf("set_subagent_exploration: %v", err)
+	}
+	return *w.Record
+}
+
+func TestAProjectStoredWithoutTheSettingHasSubagentExplorationOn(t *testing.T) {
+	f := newFixture(t)
+	if p := f.project(t, "acme"); !p.StageGuides.SubagentExploration {
+		t.Fatalf("stage_guides = %+v, want Subagent Exploration on", p.StageGuides)
+	}
+	if g := guide(t, f, "implementation"); !strings.Contains(g, subagentFragment) {
+		t.Fatalf("the implementation guide has no subagent line:\n%s", g)
+	}
+}
+
+func TestSubagentExplorationOffLeavesNoLineAndNoGap(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	if p := f.setSubagentExploration(t, false); p.StageGuides.SubagentExploration {
+		t.Fatalf("stage_guides = %+v, want Subagent Exploration off", p.StageGuides)
+	}
+	g := guide(t, f, "implementation")
+	if strings.Contains(g, subagentFragment) || strings.Contains(g, "subagent-exploration") {
+		t.Fatalf("the guide still has the line or its placeholder:\n%s", g)
+	}
+	if !strings.Contains(g, "- Work test-first at the seams the Spec's Testing Decisions name.\n- Run the full suite") {
+		t.Fatalf("the bullets around the line are not adjacent:\n%s", g)
+	}
+	f.setSubagentExploration(t, true)
+	if g := guide(t, f, "implementation"); !strings.Contains(g, "name.\n- "+"When understanding existing code") {
+		t.Fatalf("on again, the line is not the same bullet:\n%s", g)
+	}
+}
+
+func TestNoServedGuideHasAnUnreplacedPlaceholder(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	for _, on := range []bool{true, false} {
+		f.setSubagentExploration(t, on)
+		for _, stage := range core.GuideNames {
+			if g := guide(t, f, stage); strings.Contains(g, "<!--") {
+				t.Errorf("the %s guide has a placeholder with Subagent Exploration %v", stage, on)
+			}
+		}
+	}
+}
+
+func TestClaimBuildsTheGuideFromTheTicketsProject(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	f.spec(t, "acme", "Search")
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Index", State: store.Ready})
+	f.setSubagentExploration(t, false)
+	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StageGuide == nil || strings.Contains(res.StageGuide.Guide, subagentFragment) || res.StageGuide.Guide != guide(t, f, "implementation") {
+		t.Fatalf("claim carried %+v, want the guide with Subagent Exploration off", res.StageGuide)
+	}
+}
+
+func TestSetSubagentExplorationSendsTheProjectsNoticeOnlyOnAChange(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	notices, stop := f.core.Events().Subscribe()
+	defer stop()
+
+	w, err := f.core.SetSubagentExploration(human, "acme", core.SetSubagentExplorationInput{On: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Record != nil || w.ID != "acme" || !slices.Equal(w.Changed, []string{"stage_guides"}) {
+		t.Errorf("acknowledgement = %+v, want stage_guides changed on acme", w)
+	}
+	if got := <-notices; got != (events.Event{Type: events.ProjectChanged, Project: "acme"}) {
+		t.Fatalf("got %+v, want the Project's notice", got)
+	}
+	noNotice(t, notices)
+	if _, err := f.core.SetSubagentExploration(human, "acme", core.SetSubagentExplorationInput{On: false}); err != nil {
+		t.Fatal(err)
+	}
+	noNotice(t, notices)
+}
+
+func TestAnAgentCannotSetSubagentExploration(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	_, err := f.core.SetSubagentExploration(ctx, "acme", core.SetSubagentExplorationInput{On: false})
+	wantCode(t, err, core.ActionNotAllowed, "")
+}
+
+func TestGetStageGuideOnAnUnknownProjectIsRefused(t *testing.T) {
+	f := newFixture(t)
+	_, err := f.core.GetStageGuide(ctx, "nope", core.StageGuideInput{Stage: "tickets"})
+	wantCode(t, err, core.UnknownProject, "")
 }

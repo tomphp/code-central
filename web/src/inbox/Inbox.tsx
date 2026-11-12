@@ -18,7 +18,7 @@ import {
   type State,
   type TicketView,
 } from "../api/types";
-import { duration, REASON_LABEL, rowDetail } from "../format";
+import { duration, REASON_LABEL, rowDetail, ticketOf } from "../format";
 import { CIBadge } from "../ticket/CIBadge";
 import { PullRequestBadge } from "../ticket/PullRequestBadge";
 import { LinkBadge } from "../ticket/LinkBadge";
@@ -331,10 +331,10 @@ export function Inbox({
                 </h3>
                 {g.tickets.map((r) => (
                   <NeedsMeLink
-                    key={r.id || `${r.project} ${r.reason}`}
+                    key={r.id || `${r.project} ${r.reason} ${r.ci_item?.commit ?? ""}`}
                     row={r}
                     now={now}
-                    link={rowLink(r.id)}
+                    link={rowLink(ticketOf(r))}
                   />
                 ))}
               </section>
@@ -495,15 +495,29 @@ function NeedsMeLink({
   now: Date;
   link: RowLink;
 }) {
-  // A Project's Base diverged has no Ticket to open.
+  // A Project's Base diverged has no Ticket to open. A CI item has none
+  // of its own either: it opens on the first Ticket it lists, whose panel
+  // shows the item and its options (code-central-432).
   if (!row.id) {
+    const top = (
+      <span className="row-top">
+        <span className="tid">{row.project}</span>
+        <span className="row-title">{row.title}</span>
+        {row.ci_item && <CIBadge result={row.ci_result} />}
+        <span className="muted small">{duration(now, row.since)}</span>
+      </span>
+    );
+    if (row.ci_item) {
+      return (
+        <a className="row" {...link}>
+          {top}
+          <span className="row-detail">{rowDetail(now, row)}</span>
+        </a>
+      );
+    }
     return (
       <div className="row">
-        <span className="row-top">
-          <span className="tid">{row.project}</span>
-          <span className="row-title">{row.title}</span>
-          <span className="muted small">{duration(now, row.since)}</span>
-        </span>
+        {top}
         <span className="row-detail">{rowDetail(now, row)}</span>
       </div>
     );

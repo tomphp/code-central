@@ -253,6 +253,14 @@ func (s *FileStore) loadProject(key string) error {
 			return &LoadError{File: rel, Field: "reported_models." + field, Msg: err.Error()}
 		}
 	}
+	if g := pf.StageGuides; g != nil {
+		p.StageGuides = StageGuides{SubagentExplorationOff: g.SubagentExplorationOff}
+	}
+	rs, at, err := decodeCIResponses(pf.CIResponses)
+	if err != nil {
+		return &LoadError{File: rel, Field: "ci_responses" + at, Msg: err.Error()}
+	}
+	p.CIResponses = rs
 	s.setProject(p)
 	if err := s.loadCIRuns(key); err != nil {
 		return err

@@ -102,11 +102,16 @@ func (w *watching) start(path ...string) {
 	r, pw := io.Pipe()
 	w.stdin, w.done = pw, make(chan error, 1)
 	cctx, cancel := context.WithCancel(context.Background())
+	exited := make(chan struct{})
+	// Wait for the loop to stop, so that no gh call is still writing into the
+	// TempDir when its cleanup removes it.
 	w.t.Cleanup(func() {
 		cancel()
 		pw.Close()
+		<-exited
 	})
 	go func() {
+		defer close(exited)
 		w.done <- pullrequestwatcher.Watch(cctx, pullrequestwatcher.Config{
 			Client: client.New(w.srv.URL), Project: "acme", Clock: w.srv.Clock, Stdin: r, Log: io.Discard,
 			Env: gh.Env{Environ: w.h.Environ(path...), InstallPlaces: []string{}},

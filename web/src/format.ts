@@ -20,6 +20,17 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   closed_externally: "Closed externally",
 };
 
+// ticketOf is the Ticket a Needs Me row opens on: its own, or the first
+// a CI item lists (code-central-432); "" for a Project's item.
+export function ticketOf(r: NeedsMeRow): string {
+  return r.id || r.ci_item?.tickets[0]?.id || "";
+}
+
+// listedTickets names the Tickets a CI item lists.
+function listedTickets(r: NeedsMeRow): string {
+  return (r.ci_item?.tickets ?? []).map((t) => t.id).join(", ");
+}
+
 // duration is how long ago `at` was, roughly: "just now", "5m", "3h", "2d".
 export function duration(now: Date, at: string): string {
   const m = Math.floor((now.getTime() - Date.parse(at)) / 60_000);
@@ -50,12 +61,15 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
         : r.failure.headline;
     case "in_review":
       return r.summary || "Finished";
-    case "ci_failed":
-      return r.ci_failure
-        ? `CI failed at ${r.ci_failure.commit.slice(0, 7)}: ${r.ci_failure.workflows.join(", ")}`
-        : "CI failed";
-    case "ci_cancelled":
-      return `CI cancelled ${ago(now, r.since)}`;
+    case "ci_failed": {
+      // One item per pushed commit, listing the Tickets waiting on it.
+      const failed = r.ci_failure ? `${r.ci_failure.workflows.join(", ")} failed` : "CI failed";
+      return r.ci_item ? `${listedTickets(r)} · ${failed}` : failed;
+    }
+    case "ci_cancelled": {
+      const cancelled = `CI cancelled ${ago(now, r.since)}`;
+      return r.ci_item ? `${listedTickets(r)} · ${cancelled}` : cancelled;
+    }
     case "base_diverged":
       return r.base_diverged
         ? `${r.base_diverged.base ?? "The base"} is at ${r.base_diverged.local.slice(0, 7)} and the remote's at ${r.base_diverged.remote.slice(0, 7)}: reconcile them by hand`
@@ -94,12 +108,13 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
 // its CI since its push.
 function ciUnavailableDetail(now: Date, r: NeedsMeRow): string {
   const u = r.ci_unavailable;
-  if (!u) return `CI unavailable since ${ago(now, r.since)}`;
+  const listed = r.ci_item ? `${listedTickets(r)} · ` : "";
+  if (!u) return `${listed}CI unavailable since ${ago(now, r.since)}`;
   const at = `${u.commit.slice(0, 7)} pushed ${ago(now, u.pushed)}`;
-  if (u.cause === "no_ci_runs") return `No CI Runs reported for ${at}`;
+  if (u.cause === "no_ci_runs") return `${listed}No CI Runs reported for ${at}`;
   return u.message
-    ? `CI Watcher not Watching: ${u.message} · ${at}`
-    : `CI Watcher not Watching · ${at}`;
+    ? `${listed}CI Watcher not Watching: ${u.message} · ${at}`
+    : `${listed}CI Watcher not Watching · ${at}`;
 }
 
 // externalDetail says what happened to a closed-externally row's external item.

@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Api } from "../api/api";
 import type { FocusClear, NeedsMeRow, TicketView } from "../api/types";
-import { duration, REASON_LABEL } from "../format";
+import { duration, REASON_LABEL, ticketOf } from "../format";
 import { useTicket, type InboxData } from "../live";
 import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
@@ -55,10 +55,12 @@ export function Focus({
   // here, until a refusal takes it back.
   const [actedOn, setActedOn] = useState<string>();
   const [note, setNote] = useState<Note>();
+  // A CI item has no Ticket of its own: its panel shows the first Ticket
+  // it lists, whose options act on every one of them.
   const ticket = useTicket(
     api,
     onScreen?.row.project,
-    onScreen?.row.id,
+    onScreen && ticketOf(onScreen.row),
     version,
   );
   const acted = !!onScreen && actedOn === onScreen.key;
@@ -175,7 +177,7 @@ export function Focus({
           now={now}
           data={data}
           item={item}
-          ticket={ticket.data?.id === item.row.id ? ticket.data : undefined}
+          ticket={ticket.data?.id === ticketOf(item.row) ? ticket.data : undefined}
           loc={loc}
           navigate={navigate}
           skip={() => setSkipped([...skipped, item])}
@@ -256,12 +258,14 @@ function Item({
   const project = data.projects.find((p) => p.key === row.project);
   const Panel = panelFor(row.reason, ticket?.state)?.Component;
   const waited = duration(now, row.since);
-  // A Stage Ticket opens in its Requirement, with it selected.
+  // A Stage Ticket opens in its Requirement, with it selected; a CI item
+  // opens on the first Ticket it lists.
+  const ticketId = ticketOf(row);
   const inbox = {
     view: "inbox" as const,
     project: loc.project,
     requirement: row.requirement?.stage && row.requirement.spec,
-    ticket: row.id,
+    ticket: ticketId,
   };
   const open = clickTo(navigate, inbox);
   const skipButton = (
@@ -281,10 +285,22 @@ function Item({
         </span>{" "}
         <span className="muted">{row.project}</span>
       </p>
-      {row.id && (
+      {row.id ? (
         <p className="focus-ticket">
           <span className="tid">{row.id}</span>
         </p>
+      ) : (
+        row.ci_item && (
+          // A CI item's line is the Tickets it lists.
+          <p className="focus-ticket">
+            {row.ci_item.tickets.map((t, i) => (
+              <span key={t.id}>
+                {i > 0 && " "}
+                <span className="tid">{t.id}</span>
+              </span>
+            ))}
+          </p>
+        )
       )}
       <h2>{row.title}</h2>
       {row.requirement && (
@@ -361,7 +377,7 @@ function Item({
           {ticket && <p className="focus-skip">{skipButton}</p>}
         </>
       )}
-      {row.id && (
+      {ticketId && (
         <p className="focus-open">
           <a href={hrefFor(inbox)} onClick={open}>
             Open in Inbox

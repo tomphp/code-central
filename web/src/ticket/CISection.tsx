@@ -150,7 +150,8 @@ function fixNote(t: TicketView): string {
   return [`CI failed at ${shortCommit(latest)}:`, lines.join("\n"), ...(logs ? [`Read the failed jobs' logs with ${logs}.`] : [])].join("\n\n");
 }
 
-// CIFailureOptions are the failure options of a CI failed Ticket:
+// CIFailureOptions are the failure options of a Ticket's CI failed or
+// CI cancelled item, which act on every Ticket it lists:
 // Re-run failed jobs under either Landing Method; Land anyway under
 // Merge, where under Branch the human's merge decides; then under both,
 // Send back to fix and New fix Ticket, which fix forward with

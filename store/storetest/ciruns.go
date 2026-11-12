@@ -35,6 +35,29 @@ func runCIRuns(t *testing.T, f Factory) {
 		}
 	})
 
+	t.Run("a project's ci responses read back after they are written, one per pushed commit", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		want := []store.CIResponse{{Commit: "abc123", LandAnyway: t0.Add(time.Minute)}, {Commit: "def456",
+			Rerun: t0.Add(2 * time.Hour), Reruns: []store.CIRunAttempt{{ID: 9001, Attempt: 1}, {ID: 9003, Attempt: 2}}}}
+		put(t, s, func(w store.Writer) error {
+			p, _ := w.Project("acme")
+			p.CIResponses = want
+			return w.PutProject(p)
+		})
+		check := func(s store.Store) {
+			read(t, s, func(r store.Reader) {
+				if p, _ := r.Project("acme"); !reflect.DeepEqual(p.CIResponses, want) {
+					t.Fatalf("ci responses = %+v, want %+v", p.CIResponses, want)
+				}
+			})
+		}
+		check(s)
+		if f.Reopen != nil {
+			check(f.Reopen(t, s))
+		}
+	})
+
 	t.Run("a project's ci runs read back after they are written", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)
