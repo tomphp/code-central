@@ -114,3 +114,50 @@ func TestSectionsNameTheNamesThatMatchedNothing(t *testing.T) {
 		t.Fatalf("cut %q alongside unmatched names", cut)
 	}
 }
+
+const headed = `### Who works out what (new ADR 0024)
+
+Body.
+
+## Store
+
+Shop.
+
+## Storefront
+
+Front.
+
+## Store: details
+
+More.
+
+## Cache layer
+
+One.
+
+## Cache rules
+
+Two.`
+
+func TestSectionsMatchAHeadingByItsLeadingWords(t *testing.T) {
+	cases := map[string]struct {
+		names []string
+		want  string
+	}{
+		"a prefix at a word boundary":    {[]string{"who works out what"}, "### Who works out what (new ADR 0024)\n\nBody."},
+		"an exact match beats a prefix":  {[]string{"Store"}, "## Store\n\nShop."},
+		"a prefix matching several":      {[]string{"Cache"}, "## Cache layer\n\nOne.\n\n## Cache rules\n\nTwo."},
+		"punctuation is a word boundary": {[]string{"Store:"}, "## Store: details\n\nMore."},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			got, unmatched := core.Sections(headed, c.names)
+			if len(unmatched) != 0 || got != c.want {
+				t.Fatalf("cut %q unmatched %v, want %q", got, unmatched, c.want)
+			}
+		})
+	}
+	if _, unmatched := core.Sections(headed, []string{"Stor", "Front"}); !reflect.DeepEqual(unmatched, []string{"Stor", "Front"}) {
+		t.Fatalf("unmatched %v: a prefix must end at a word boundary", unmatched)
+	}
+}

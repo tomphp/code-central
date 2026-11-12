@@ -3,6 +3,8 @@ package core
 import (
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // Sections of a Markdown body (ticket 134): its outline, and the cut of
@@ -49,27 +51,34 @@ func Outline(body string) []Heading {
 	return out
 }
 
-// Sections cuts from body the Sections whose headings match names, in
-// document order and joined by a blank line, or returns the names that
-// matched no heading. A Section runs from its heading to the next heading
+// Sections cuts from body the Sections whose headings match names (see
+// matchHeadings), in document order and joined by a blank line, or returns
+// the names that matched no heading. A Section runs from its heading to the next heading
 // at the same level or higher, so it includes its subsections; one inside
 // another matched Section is not repeated.
 func Sections(body string, names []string) (string, []string) {
 	lines := strings.Split(body, "\n")
 	hs := headings(lines)
-	want := map[string]bool{}
+	want := map[int]bool{}
+	var unmatched []string
 	for _, n := range names {
-		want[headingKey(n)] = true
+		idx := matchHeadings(hs, headingKey(n))
+		for _, i := range idx {
+			want[i] = true
+		}
+		if len(idx) == 0 {
+			unmatched = append(unmatched, n)
+		}
 	}
-	found := map[string]bool{}
+	if len(unmatched) > 0 {
+		return "", unmatched
+	}
 	var cuts []string
 	covered := 0
 	for i, h := range hs {
-		key := strings.ToLower(h.Text)
-		if !want[key] {
+		if !want[i] {
 			continue
 		}
-		found[key] = true
 		if h.line < covered {
 			continue
 		}
@@ -81,15 +90,6 @@ func Sections(body string, names []string) (string, []string) {
 			}
 		}
 		cuts = append(cuts, strings.TrimRight(strings.Join(lines[h.line:covered], "\n"), " \t\r\n"))
-	}
-	var unmatched []string
-	for _, n := range names {
-		if !found[headingKey(n)] {
-			unmatched = append(unmatched, n)
-		}
-	}
-	if len(unmatched) > 0 {
-		return "", unmatched
 	}
 	return strings.Join(cuts, "\n\n"), nil
 }
@@ -134,4 +134,36 @@ func headingText(s string) string {
 // closing # marks, case-insensitively.
 func headingKey(name string) string {
 	return strings.ToLower(headingText(strings.TrimLeft(strings.TrimSpace(name), "#")))
+}
+
+// matchHeadings is the indexes of the headings key names: those equal to it
+// or, when none is, those that start with it at a word boundary, so "Who
+// works out what" finds "Who works out what (new ADR 0024)" but "Store"
+// doesn't find "Storefront".
+func matchHeadings(hs []heading, key string) []int {
+	var exact, prefix []int
+	for i, h := range hs {
+		text := strings.ToLower(h.Text)
+		switch {
+		case text == key:
+			exact = append(exact, i)
+		case key != "" && strings.HasPrefix(text, key) && !wordChar(nextRune(text[len(key):])):
+			prefix = append(prefix, i)
+		}
+	}
+	if len(exact) > 0 {
+		return exact
+	}
+	return prefix
+}
+
+// nextRune is the first character of s.
+func nextRune(s string) rune {
+	r, _ := utf8.DecodeRuneInString(s)
+	return r
+}
+
+// wordChar reports whether r continues a word.
+func wordChar(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
 }
