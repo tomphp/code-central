@@ -281,6 +281,14 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 	if err != nil {
 		return false
 	}
+	if old, ok := f.mergedOnOldBase(firstID(tickets)); ok {
+		// Merged before the base changed, so finishing on its push or CI:
+		// it lands on the base it was merged into.
+		for _, tk := range tickets {
+			f.landPushed(ctx, tk, landing, policy, old.base, old.commit)
+		}
+		return true
+	}
 	baseTip, err := f.repository.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
 		f.printf("warning: %s: the base, %s, isn't a branch, so the Spec can't land", id, f.baseBranch())
@@ -314,7 +322,8 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 	f.printf("%s: merged %s into %s at %s", id, specBranch(id), f.baseBranch(), short(merge))
 	f.printf("%s: landing its Tickets: %s", id, joinIDs(tickets))
 	for _, tk := range tickets {
-		f.landPushed(ctx, tk, landing, policy, merge)
+		f.mergedOn[tk.ID] = mergeOn{f.baseBranch(), merge}
+		f.landPushed(ctx, tk, landing, policy, f.baseBranch(), merge)
 	}
 	return true
 }
@@ -489,4 +498,12 @@ func (f *factory) sweepSpecBranches(ctx context.Context, underPullRequest bool) 
 		}
 		f.printf("%s: deleted %s, which is in %s", id, branch, f.baseBranch())
 	}
+}
+
+// firstID is the ID of the first of tickets, or "".
+func firstID(tickets []core.TicketView) string {
+	if len(tickets) == 0 {
+		return ""
+	}
+	return tickets[0].ID
 }
