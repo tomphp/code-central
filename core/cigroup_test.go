@@ -184,3 +184,38 @@ func TestACITicketOutsideLandPerSpecKeepsItsOwnReasonAndOptions(t *testing.T) {
 		}
 	}
 }
+
+// A run tracked against a non-lead member (code-central-418) still reads
+// as the result of every Ticket sharing its commit.
+func TestCIRunsTrackedAgainstANonLeadMemberGiveEveryMemberTheResult(t *testing.T) {
+	f := groupWorld(t)
+	started := f.clock.Now()
+	run := core.CIRunView{ID: 2, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: "abc123",
+		Status: store.CICompleted, Conclusion: store.CIFailure, Started: &started, Finished: &started, URL: "https://github.com/acme/web/actions/runs/2", Ticket: "acme-6"}
+	if _, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"acme-5", "acme-6"} {
+		if got := f.getTicket(t, id).CIResult; got != core.CIFailed {
+			t.Fatalf("%s CI result %q, want failed", id, got)
+		}
+	}
+	if lead := f.getTicket(t, "acme-5"); lead.NeedsMeReason != core.ReasonCIFailed {
+		t.Fatalf("lead reason %q, want CI failed", lead.NeedsMeReason)
+	}
+}
+
+// Tickets sharing a pushed commit (code-central-418) read the same CI
+// result, whichever of them the runs were tracked against.
+func TestATicketReadsTheCIRunsOfACommitTrackedAgainstAnotherTicket(t *testing.T) {
+	f := groupWorld(t)
+	f.reportRun(t, "acme-5", store.CICompleted, store.CIFailure)
+	other := f.getTicket(t, "acme-6")
+	if other.CIResult != core.CIFailed || len(other.CIRuns) != 1 {
+		t.Fatalf("CI result %q with %d runs, want failed with 1", other.CIResult, len(other.CIRuns))
+	}
+	f.clock.Advance(core.CIUnavailableAfter + time.Minute)
+	if got := f.getTicket(t, "acme-6").NeedsMeReason; got == core.ReasonCIUnavailable {
+		t.Fatalf("reason %q, want no CI unavailable", got)
+	}
+}
