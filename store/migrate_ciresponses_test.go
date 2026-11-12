@@ -8,13 +8,13 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Format 27 (code-central-432) added a Project's CI responses: the
+// Format 28 (code-central-432) added a Project's CI responses: the
 // human's Land anyway and Re-run request, once per pushed commit. The
-// real chain migrates a format-26 store, which has none and whose pushed
+// real chain migrates a format-27 store, which has none and whose pushed
 // commits may still carry them, copying every file unchanged.
-func TestTheRealChainMigratesAFormat26StoreToTheCIResponsesFormat(t *testing.T) {
+func TestTheRealChainMigratesAFormat27StoreToTheCIResponsesFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 26\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 27\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\nci:\n  tracking: true\n  provider: github_actions\n  repository: acme/web\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/tickets/2.yaml"),
@@ -22,9 +22,9 @@ func TestTheRealChainMigratesAFormat26StoreToTheCIResponsesFormat(t *testing.T) 
 	before := snapshot(t, dir)
 
 	s := openFile(t, dir)
-	bak := filepath.Join(filepath.Dir(dir), "code-central.format-26.bak")
-	if m := s.Migrated(); m == nil || *m != (store.Migration{From: 26, To: store.Format, Backup: bak}) {
-		t.Fatalf("migrated = %+v, want a migration from format 26 with its backup", m)
+	bak := filepath.Join(filepath.Dir(dir), "code-central.format-27.bak")
+	if m := s.Migrated(); m == nil || *m != (store.Migration{From: 27, To: store.Format, Backup: bak}) {
+		t.Fatalf("migrated = %+v, want a migration from format 27 with its backup", m)
 	}
 	after := snapshot(t, dir)
 	for rel, content := range before {

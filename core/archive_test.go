@@ -249,6 +249,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetModels(human, "acme", core.SetModelsInput{Default: core.ModelRowView{Model: "opus"}})
 		return err
 	},
+	"set_subagent_exploration": func(f fixture) error {
+		_, err := f.core.SetSubagentExploration(human, "acme", core.SetSubagentExplorationInput{On: false})
+		return err
+	},
 	"report_models": func(f fixture) error {
 		_, err := f.core.ReportModels(ctx, "acme", core.ReportModelsInput{EffortLevels: []string{"low"}})
 		return err

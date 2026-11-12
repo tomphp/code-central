@@ -55,13 +55,8 @@ projects/<key>/project.yaml
       model_flag: string (optional)
       effort_flag: string (optional)
       reported: string (optional)
-  ci_responses: list of mappings (optional)
-      commit: string
-      land_anyway: string (optional)
-      rerun: string (optional)
-      reruns: list of mappings (optional)
-          id: int64
-          attempt: int
+  stage_guides: mapping (optional)
+      subagent_exploration_off: bool (optional)
 
 projects/<key>/specs/<n>.md: YAML frontmatter between --- lines, then the Markdown body
   id: int

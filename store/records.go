@@ -41,8 +41,15 @@ type projectFile struct {
 	Models *modelsFile `yaml:"models,omitempty"`
 	// ReportedModels is left out while it holds nothing.
 	ReportedModels *reportedModelsFile `yaml:"reported_models,omitempty"`
+	// StageGuides is left out while every optional line is on.
+	StageGuides *stageGuidesFile `yaml:"stage_guides,omitempty"`
 	// CIResponses is left out while there are none.
 	CIResponses []ciResponseFile `yaml:"ci_responses,omitempty"`
+}
+
+// stageGuidesFile is a Project's Stage Guides settings.
+type stageGuidesFile struct {
+	SubagentExplorationOff bool `yaml:"subagent_exploration_off,omitempty"`
 }
 
 // ciResponseFile is the human's response to one pushed commit's CI
@@ -565,7 +572,7 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
 			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models),
-			ReportedModels: encodeReportedModels(r.ReportedModels), CIResponses: encodeCIResponses(r.CIResponses)})
+			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), CIResponses: encodeCIResponses(r.CIResponses)})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), GHPath: r.GHPath})
@@ -706,6 +713,15 @@ func encodeGitHubIssues(g GitHubIssues) *githubIssuesFile {
 		return nil
 	}
 	return &githubIssuesFile{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
+}
+
+// encodeStageGuides leaves the Stage Guides settings out of project.yaml
+// while every optional line is on.
+func encodeStageGuides(g StageGuides) *stageGuidesFile {
+	if g == (StageGuides{}) {
+		return nil
+	}
+	return &stageGuidesFile{SubagentExplorationOff: g.SubagentExplorationOff}
 }
 
 // encodeModels leaves Models out of project.yaml while it sets nothing,

@@ -17,7 +17,7 @@ The short, permanent name that identifies a Project to anything connecting to Co
 _Avoid_: Slug, Project ID
 
 **Project Options**:
-The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues and Models. Unlike an Option, what it sets belongs to one Project.
+The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models and Stage Guides. Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
 
 **Models**:
@@ -105,8 +105,12 @@ One of the three fixed steps that turn a Requirement's text into implementation 
 _Avoid_: Phase, step, definition Ticket
 
 **Stage Guide**:
-Code Central's instructions telling an agent what a Stage must produce, how to finish it and what to do when it can't carry on. Implementation Tickets, a Map's Tickets and Prototypes get one too, though they are not Stages.
+Code Central's instructions telling an agent what a Stage must produce, how to finish it and what to do when it can't carry on. Implementation Tickets, a Map's Tickets and Prototypes get one too, though they are not Stages. A Project can change what its guide says only through a named Project setting, such as Subagent Exploration.
 _Avoid_: Prompt, playbook, skill
+
+**Subagent Exploration**:
+A Project setting that has the implementation Stage Guide tell the agent to send reading across several files to a subagent and keep only its answer. On unless the human turns it off.
+_Avoid_: Explore line, subagent mode
 
 **State**:
 The single position a Ticket occupies in the delivery workflow.

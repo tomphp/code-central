@@ -344,6 +344,14 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.listProjects())[0].github_issues).toEqual(kept.github_issues);
     });
 
+    it("sets a Project's Subagent Exploration, on to begin with", async () => {
+      await d.createProject("acme", "Acme");
+      expect((await d.api.listProjects())[0].stage_guides).toEqual({ subagent_exploration: true });
+      expect((await d.api.setSubagentExploration("acme", false)).stage_guides).toEqual({ subagent_exploration: false });
+      expect((await d.api.listProjects())[0].stage_guides).toEqual({ subagent_exploration: false });
+      expect((await d.api.setSubagentExploration("acme", true)).stage_guides).toEqual({ subagent_exploration: true });
+    });
+
     it("sets a Project's Models, a row per kind of work, all at Default to begin with", async () => {
       await d.createProject("acme", "Acme");
       const kinds = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"];
