@@ -4,7 +4,7 @@
 // Options; the list in the middle; the selected Requirement, Map or plain
 // Spec and Ticket on the right. A layout only: the data comes from live.ts and the
 // Ticket pane is shared with any later view.
-import type { MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import {
@@ -39,7 +39,7 @@ import { UsageLink } from "../usage/UsageLink";
 import { CILink } from "../ci/CILink";
 import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
-import { AllTicketsBySpec, AllTicketsByTicket } from "./AllTickets";
+import { AllTicketsBySpec, AllTicketsByTicket, matchesId } from "./AllTickets";
 import { groupBySpec } from "./groupBySpec";
 import { SpecRow } from "./SpecRow";
 import { StateListBySpec } from "./StateListBySpec";
@@ -166,7 +166,16 @@ export function Inbox({
     storeFinished(on);
     navigate({ finished: on ? true : undefined });
   };
-  const listedTickets = showFinished ? tickets : tickets.filter((t) => !FINISHED.includes(t.state));
+  // The ID search is page-only. While it is not empty it overrides Show
+  // finished; By Spec also takes every Ticket of a Spec whose own ID matches.
+  const [search, setSearch] = useState("");
+  const query = search.trim();
+  const listedTickets = query
+    ? tickets.filter((t) => matchesId(t.id, query))
+    : showFinished
+      ? tickets
+      : tickets.filter((t) => !FINISHED.includes(t.state));
+  const specSearchTickets = tickets.filter((t) => matchesId(t.id, query) || matchesId(t.spec, query));
   // The grouping in effect: the URL's, else this browser's last pick.
   const grouping = loc.group ?? storedGroup();
   const chooseGroup = (g: "spec" | "ticket") => {
@@ -199,6 +208,16 @@ export function Inbox({
         />{" "}
         Show finished
       </label>
+    )}
+    {loc.list === "tickets" && (
+      <input
+        type="search"
+        className="bs-search"
+        aria-label="Ticket ID"
+        placeholder="Ticket ID, e.g. 452"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
     )}
   </div>
   );
@@ -309,7 +328,8 @@ export function Inbox({
             {toggleBar}
             {grouping === "spec" ? (
               <AllTicketsBySpec
-                tickets={listedTickets}
+                tickets={query ? specSearchTickets : listedTickets}
+                search={query}
                 showFinished={showFinished}
                 specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
                 ticketsOf={ticketsOf}
@@ -322,6 +342,7 @@ export function Inbox({
             ) : (
               <AllTicketsByTicket
                 tickets={listedTickets}
+                search={query}
                 showFinished={showFinished}
                 specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
                 reasons={reasons}

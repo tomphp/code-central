@@ -1052,6 +1052,44 @@ describe("the All Tickets view", () => {
     await waitFor(() => expect(rowIds()).not.toContain("acme-13"));
   });
 
+  describe("search by ID", () => {
+    const box = () => within(list()).getByRole("searchbox", { name: "Ticket ID" });
+    const search = (text: string) => userEvent.type(box(), text);
+
+    it("matches substrings and prefixes of the full ID, case-insensitively, across Projects, finished included", async () => {
+      renderApp(await ticketsWorld(), "/?view=inbox&list=tickets");
+      await within(list()).findByRole("searchbox", { name: "Ticket ID" });
+      await search("ACME-1");
+      await waitFor(() => expect(rowIds()).toContain("acme-13")); // Done, Show finished off
+      expect(rowIds().every((id) => id?.includes("acme-1"))).toBe(true);
+      await userEvent.clear(box());
+      await search("3");
+      await waitFor(() => expect(rowIds()).toContain("beta-3"));
+      expect(rowIds()).toContain("acme-3");
+      expect(window.location.search).not.toContain("3");
+    });
+
+    it("never matches titles and says No Tickets match.", async () => {
+      renderApp(await ticketsWorld(), "/?view=inbox&list=tickets");
+      await within(list()).findByRole("searchbox", { name: "Ticket ID" });
+      await search("Sketch");
+      expect(await within(list()).findByText("No Tickets match.")).toBeInTheDocument();
+    });
+
+    it("By Spec shows a Spec with its matching Tickets, or all its Tickets when its own ID matches, opened", async () => {
+      renderApp(await ticketsWorld(), "/?view=inbox&list=tickets&group=spec");
+      await within(list()).findByRole("searchbox", { name: "Ticket ID" });
+      await search("acme-13");
+      const row = await within(list()).findByRole("region", { name: "Archive finished Projects" });
+      expect(within(row).getAllByRole("link").map((a) => a.getAttribute("data-id")).filter(Boolean).slice(1)).toEqual(["acme-13"]); // after the Spec's own link
+      await userEvent.clear(box());
+      await search("acme-5");
+      const whole = await within(list()).findByRole("region", { name: "Archive finished Projects" });
+      const ids = within(whole).getAllByRole("link").map((a) => a.getAttribute("data-id")).filter(Boolean);
+      expect(ids).toEqual(expect.arrayContaining(["acme-12", "acme-13"]));
+    });
+  });
+
   it("leaves out fully finished Specs By Spec", async () => {
     const fake = await ticketsWorld();
     fake.addTicket("beta", { title: "Beta shipped", state: "Done", spec: { id: "beta-9", title: "Shipped plan" } });

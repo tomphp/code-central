@@ -33,7 +33,11 @@ function kindLabel(t: ProjectTicket): string | undefined {
   return t.node_type && t.node_type !== "ticket" ? t.node_type : undefined;
 }
 
-function Empty({ showFinished }: { showFinished: boolean }) {
+// matchesId is the search: a case-insensitive substring of the full ID.
+export const matchesId = (id: string, search: string) => id.toLowerCase().includes(search.toLowerCase());
+
+function Empty({ showFinished, search }: { showFinished: boolean; search: string }) {
+  if (search) return <p className="empty">No Tickets match.</p>;
   return <p className="empty">{showFinished ? "No Tickets yet." : "No unfinished Tickets."}</p>;
 }
 
@@ -43,14 +47,16 @@ export function AllTicketsByTicket({
   reasons,
   link,
   showFinished,
+  search,
 }: {
   tickets: ProjectTicket[];
   specs: Map<string, ProjectSpec>;
   reasons: Map<string, NeedsMeReason>;
   link: InboxRowLinkFactory;
   showFinished: boolean;
+  search: string;
 }) {
-  if (tickets.length === 0) return <Empty showFinished={showFinished} />;
+  if (tickets.length === 0) return <Empty showFinished={showFinished} search={search} />;
   return (
     <>
       {newestFirst(tickets).map((t) => {
@@ -90,8 +96,11 @@ export function AllTicketsBySpec({
   specLink,
   selectedTicket,
   showFinished,
+  search,
 }: {
   showFinished: boolean;
+  // search is the ID search in effect; its rows start open.
+  search: string;
   tickets: ProjectTicket[];
   specs: Map<string, ProjectSpec>;
   // ticketsOf is all of a Spec's Tickets, in every State.
@@ -103,12 +112,13 @@ export function AllTicketsBySpec({
   selectedTicket?: string;
 }) {
   const groups = groupBySpec(newestFirst(tickets));
-  if (groups.length === 0) return <Empty showFinished={showFinished} />;
+  if (groups.length === 0) return <Empty showFinished={showFinished} search={search} />;
   return (
     <div className="spec-rows">
       {groups.map((g) => (
         <SpecRow
-          key={g.id}
+          key={`${g.id}${search ? " found" : ""}`}
+          startOpen={!!search}
           id={g.id}
           spec={specs.get(g.id)}
           all={ticketsOf(g.id)}
