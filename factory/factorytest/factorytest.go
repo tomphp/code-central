@@ -632,6 +632,21 @@ func (r *Remote) Restore() {
 	must(r.h.t, os.Rename(r.Path+".broken", r.Path))
 }
 
+// RefusePushes makes the remote refuse every push but still serve fetches,
+// until AcceptPushes.
+func (r *Remote) RefusePushes() {
+	r.h.t.Helper()
+	hook := filepath.Join(r.Path, "hooks", "pre-receive")
+	must(r.h.t, os.MkdirAll(filepath.Dir(hook), 0o755))
+	must(r.h.t, os.WriteFile(hook, []byte("#!/bin/sh\necho 'pushes are refused' >&2\nexit 1\n"), 0o755))
+}
+
+// AcceptPushes undoes RefusePushes.
+func (r *Remote) AcceptPushes() {
+	r.h.t.Helper()
+	must(r.h.t, os.Remove(filepath.Join(r.Path, "hooks", "pre-receive")))
+}
+
 // CommitOn commits file with content on branch, made from main when it
 // doesn't exist, and returns the commit. The repo is left on main.
 func (h *Harness) CommitOn(branch, file, content string) string {

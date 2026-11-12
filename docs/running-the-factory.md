@@ -471,7 +471,7 @@ A Ticket whose branch has nothing the base lacks lands at once, with no pull req
 warning: can't fetch origin, so nothing lands this poll: fatal: unable to access 'https://example.com/acme-shop.git/': Could not resolve host: example.com
 ```
 
-**Base diverged.** When the local base has commits the remote's lacks, it can't be fast-forwarded. The Factory reports it, then lands nothing and claims no work that would cut a branch, until you reconcile the local base with the remote's, for example by resetting or rebasing it. Its next poll sees the fix by itself. Code Central shows a **Base diverged** item in Needs Me and Focus Mode, with both commits:
+**Base diverged.** When the local base has commits the remote's lacks, it can't be fast-forwarded (under Merge + Push, only when the remote has commits the local base lacks as well, since a base that is merely ahead is current). The Factory reports it, then lands nothing and claims no work that would cut a branch, until you reconcile the local base with the remote's, for example by resetting or rebasing it. Its next poll sees the fix by itself. Code Central shows a **Base diverged** item in Needs Me and Focus Mode, with both commits:
 
 ```text
 warning: the base, main, has diverged from the remote's: it is at 9ad0fd655dd2 and the remote's at 22eeda3a9de2. Nothing lands and no branch is cut until you reconcile them by hand
@@ -528,7 +528,15 @@ acme-shop-5: landed on main at f90edae47659
 
 Pushing the base sends everything on it, so commits of your own on the base that you haven't pushed go to the remote too.
 
-The Factory never pulls, rebases or force-pushes under Merge or Branch (under [Pull Request](#pull-request) it fetches and fast-forwards the base). When the push fails, say because the remote is unreachable or has moved ahead of your base, the Ticket stays Accepted, with the base already merged, and the Factory comments once, quoting git:
+Under Merge + Push, before it lands anything or cuts a branch, the Factory fetches the remote and brings the local base level with it, whether or not CI Tracking is on. A base behind the remote's, say after a push from another clone, is fast-forwarded, and new branches are cut from the new tip:
+
+```text
+main: fast-forwarded to origin/main at 22eeda3a9de2
+```
+
+A base level with the remote's, or ahead of it, as it is after the Factory's own merge that isn't pushed yet, is current. When both have moved, the Factory reports [Base diverged](#pull-request) and lands nothing until you reconcile them. If uncommitted changes in the checkout where the base is checked out are in the way of a fast-forward, the poll waits and warns. A failed fetch is a warning and a retry on the next poll, as under Pull Request.
+
+The Factory never force-pushes, and never pulls or rebases under Branch (under [Pull Request](#pull-request) it fetches and fast-forwards the base). When the push fails, say because the remote is unreachable or has moved ahead of your base since the fetch, the Ticket stays Accepted, with the base already merged, and the Factory comments once, quoting git:
 
 ```text
 acme-shop-5: can't land yet: couldn't push main to origin

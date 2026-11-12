@@ -109,6 +109,7 @@ func TestAFailedPushLeavesTheSpecsTicketsAcceptedAndRetries(t *testing.T) {
 	remote := h.AddRemote("origin")
 	theirs := h.CommitOn("theirs", "theirs.txt", "theirs\n")
 	h.Git("push", "-q", remote.Path, "theirs:refs/heads/main")
+	remote.RefusePushes()
 	mergeAndPush(h, "origin")
 	a, b := twoAccepted(t, h)
 
@@ -123,7 +124,11 @@ func TestAFailedPushLeavesTheSpecsTicketsAcceptedAndRetries(t *testing.T) {
 	if got := remote.Git("rev-parse", "main"); got != theirs {
 		t.Errorf("the remote moved to %s", got)
 	}
-	_ = r
+
+	remote.AcceptPushes()
+	r.Poll()
+	h.WaitForState(a, store.Done)
+	h.WaitForState(b, store.Done)
 }
 
 func TestWithCITrackingASpecsTicketsShareOnePushedCommitAndLandOncePassed(t *testing.T) {

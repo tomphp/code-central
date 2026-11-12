@@ -121,15 +121,37 @@ func TestAStoppingFactoryDropsTheBaseReport(t *testing.T) {
 	}
 }
 
-func TestBaseDivergedOnlyShowsUnderPullRequest(t *testing.T) {
+func TestBaseDivergedOnlyShowsWhereTheFactoryKeepsTheBaseLevel(t *testing.T) {
 	f := newFixture(t)
 	f.pullRequestProject(t)
 	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"})
-	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge}); err != nil {
+	for _, in := range []core.SetLandingMethodInput{
+		{Method: store.LandingMerge},
+		{Method: store.LandingBranch},
+	} {
+		if _, err := f.core.SetLandingMethod(human, "acme", in); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := baseRow(t, f); ok {
+			t.Fatalf("Base diverged shows under %+v", in)
+		}
+	}
+}
+
+func TestBaseDivergedShowsUnderMergeWithPush(t *testing.T) {
+	f := newFixture(t)
+	f.pullRequestProject(t)
+	if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Push: true, Remote: "origin"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := baseRow(t, f); ok {
-		t.Fatal("Base diverged shows under Merge")
+	f.reportBase(t, core.ReportBaseInput{State: core.BaseDiverged, Local: "a", Remote: "b"})
+	row, ok := baseRow(t, f)
+	if !ok || row.BaseDiverged.Local != "a" || row.BaseDiverged.Remote != "b" {
+		t.Fatalf("row %+v ok %v, want Base diverged with both commits", row, ok)
+	}
+	rows, err := f.core.ListProjects(ctx)
+	if err != nil || len(rows) != 1 || rows[0].NeedsMe != 1 {
+		t.Fatalf("rows %+v err %v, want needs_me 1", rows, err)
 	}
 }
 

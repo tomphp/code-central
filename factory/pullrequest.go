@@ -17,11 +17,14 @@ import (
 
 // syncBase fetches remote and fast-forwards the local base to the
 // remote's, never merging, rebasing or forcing. It reports whether the
-// base is level with the remote's. A failed fetch is a warning, retried
-// next poll; a local base holding commits the remote's doesn't is
-// diverged, and stops landing and new branches until a later poll finds it
-// fixed.
-func (f *factory) syncBase(ctx context.Context, remote string) bool {
+// base is level with the remote's, or with localAheadOK, level or ahead of
+// it: under Merge + Push the Factory merges locally and then pushes, so a
+// local base holding the remote's whole history is current. A failed fetch
+// is a warning, retried next poll; a local base holding commits the
+// remote's doesn't, while the remote holds commits it doesn't (or at all,
+// without localAheadOK), is diverged, and stops landing and new branches
+// until a later poll finds it fixed.
+func (f *factory) syncBase(ctx context.Context, remote string, localAheadOK bool) bool {
 	if out, err := f.repository.fetch(ctx, remote); err != nil {
 		if ctx.Err() == nil {
 			f.printf("warning: can't fetch %s, so nothing lands this poll: %s", remote, firstLine(out))
@@ -40,7 +43,7 @@ func (f *factory) syncBase(ctx context.Context, remote string) bool {
 		return true
 	}
 	switch {
-	case local == theirs:
+	case local == theirs, localAheadOK && f.repository.isAncestor(theirs, local):
 		f.noteBase(ctx, false, local, theirs)
 		return true
 	case f.repository.isAncestor(local, theirs):
