@@ -100,7 +100,10 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
 }
 
 // SpecKind is what a Spec row's badge says: nothing for a Requirement.
-type SpecKind = "Requirement" | "Map" | "Long-lived" | "Spec";
+export type SpecKind = "Requirement" | "Map" | "Long-lived" | "Spec";
+
+export const specKindOf = (spec?: ProjectSpec): SpecKind =>
+  spec?.requirement ? "Requirement" : spec?.map ? "Map" : spec?.labels.includes(LONG_LIVED_LABEL) ? "Long-lived" : "Spec";
 
 // describe is what a Spec row says of its Spec, by kind. A Requirement
 // has its Stage progress and today's headline, and needs the human when
@@ -121,8 +124,7 @@ function describe(
   }
   if (spec?.map) return { kind: "Map", needsYou: spec.map.needs_you > 0, headline: spec.finished ? "Finished" : mapCount(spec.map) };
   const need = firstNeed(all, reasons);
-  const kind = spec?.labels.includes(LONG_LIVED_LABEL) ? "Long-lived" : "Spec";
-  return { kind, need, needsYou: !!need, headline: spec ? specHeadline(spec.finished, need, all, summary) : "" };
+  return { kind: specKindOf(spec), need, needsYou: !!need, headline: spec ? specHeadline(spec.finished, need, all, summary) : "" };
 }
 
 function specHeadline(finished: boolean, need: NeedsMeReason | undefined, all: ProjectTicket[], summary: StateSummary): string {

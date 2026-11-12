@@ -39,6 +39,7 @@ import { UsageLink } from "../usage/UsageLink";
 import { CILink } from "../ci/CILink";
 import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
+import { AllTicketsByTicket } from "./AllTickets";
 import { groupBySpec } from "./groupBySpec";
 import { SpecRow } from "./SpecRow";
 import { StateListBySpec } from "./StateListBySpec";
@@ -166,6 +167,25 @@ export function Inbox({
     storeGroup(g);
     navigate({ group: g === "spec" ? "spec" : undefined });
   };
+  const toggleBar = (
+  <div className="bs-toggle-bar">
+    <div
+      className="bs-toggle"
+      role="group"
+      aria-label="Group the list"
+    >
+      {(["ticket", "spec"] as const).map((g) => (
+        <button
+          key={g}
+          aria-pressed={grouping === g}
+          onClick={() => chooseGroup(g)}
+        >
+          {g === "spec" ? "By Spec" : "By Ticket"}
+        </button>
+      ))}
+    </div>
+  </div>
+  );
 
   // Only an active Project has a Project Options link: an Archived one takes no writes.
   const projectFilter = (p: ProjectRow) => (
@@ -231,6 +251,12 @@ export function Inbox({
           count={listed.filter((s) => !s.finished).length}
           onClick={() => navigate({ list: "requirements", state: undefined })}
         />
+        <FilterButton
+          on={loc.list === "tickets"}
+          label="All Tickets"
+          count={tickets.filter((t) => !FINISHED.includes(t.state)).length}
+          onClick={() => navigate({ list: "tickets", state: undefined })}
+        />
         {STATES.map((s) => (
           <FilterButton
             key={s}
@@ -262,25 +288,20 @@ export function Inbox({
               {listed.map((s) => specRow(s, { quietWhenIdle: true }))}
             </div>
           </>
+        ) : loc.list === "tickets" ? (
+          <>
+            {toggleBar}
+            {/* By Spec is built in the next Ticket; the toggle only persists. */}
+            <AllTicketsByTicket
+              tickets={tickets}
+              specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
+              reasons={reasons}
+              link={rowLink}
+            />
+          </>
         ) : loc.state ? (
           <>
-            <div className="bs-toggle-bar">
-              <div
-                className="bs-toggle"
-                role="group"
-                aria-label="Group the list"
-              >
-                {(["ticket", "spec"] as const).map((g) => (
-                  <button
-                    key={g}
-                    aria-pressed={grouping === g}
-                    onClick={() => chooseGroup(g)}
-                  >
-                    {g === "spec" ? "By Spec" : "By Ticket"}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {toggleBar}
             {grouping === "spec" ? (
               <StateListBySpec
                 key={loc.state}
