@@ -79,9 +79,14 @@ func (f *factory) reportBase(ctx context.Context, diverged bool, local, remote s
 	if diverged {
 		state = core.BaseDiverged
 	}
+	f.reportBaseState(ctx, core.ReportBaseInput{State: state, Local: local, Remote: remote})
+}
+
+// reportBaseState sends one report_base.
+func (f *factory) reportBaseState(ctx context.Context, in core.ReportBaseInput) {
 	ctx, cancel := context.WithTimeout(ctx, postTimeout)
 	defer cancel()
-	_, err := f.client.ReportBase(ctx, f.project, core.ReportBaseInput{State: state, Local: local, Remote: remote})
+	_, err := f.client.ReportBase(ctx, f.project, in)
 	if err != nil && ctx.Err() == nil && !f.reportBaseFailing {
 		f.printf("warning: can't report the base to Code Central: %v", err)
 	}
