@@ -230,18 +230,31 @@ func ticketRuns(r store.Reader, key string, t store.Ticket, now time.Time) ([]st
 	if p, _ := r.Project(key); !p.LandingPolicy().TracksCIResults() {
 		return nil, false
 	}
-	return runsOf(keptCIRuns(r.CIRuns(key), now), t.Number), true
+	return runsOf(keptCIRuns(r.CIRuns(key), now), t), true
 }
 
-// runsOf are the runs tracked against Ticket n.
-func runsOf(runs []store.CIRun, n int) []store.CIRun {
+// runsOf are the Ticket-tracked runs of the commits t pushed, whichever
+// Ticket they were tracked against: Tickets sharing a pushed commit share
+// its runs. Runs tracked against a CI Rule are left out.
+func runsOf(runs []store.CIRun, t store.Ticket) []store.CIRun {
 	var mine []store.CIRun
 	for _, run := range runs {
-		if run.Ticket == n {
+		if run.Ticket != 0 && slices.ContainsFunc(t.PushedCommits, func(p store.PushedCommit) bool { return p.Commit == run.Commit }) {
 			mine = append(mine, run)
 		}
 	}
 	return mine
+}
+
+// ticketsOfCommit are the Tickets whose latest pushed commit is commit.
+func ticketsOfCommit(r store.Reader, key, commit string) []store.Ticket {
+	var out []store.Ticket
+	for _, t := range r.Tickets(key) {
+		if len(t.PushedCommits) > 0 && latestPushed(t).Commit == commit {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // countsFor reports whether run counts towards commit's CI result: one
@@ -412,9 +425,7 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 				runs[at] = run
 			}
 			wrote = true
-			if run.Ticket != 0 {
-				changed[run.Ticket] = true
-			}
+			c.markCIRunChanged(w, key, changed, run)
 			reported.Runs = append(reported.Runs, ciRunView(key, run))
 		}
 		if !wrote && !pruned {
@@ -444,12 +455,25 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 	return Written[CIRunsView]{Acknowledgement: ack}, nil
 }
 
+// markCIRunChanged adds to changed every Ticket that reads run: those
+// whose latest pushed commit is its commit. A run tracked against a Ticket
+// that has since pushed another still marks that Ticket.
+func (c *Core) markCIRunChanged(r store.Reader, key string, changed map[int]bool, run store.CIRun) {
+	if run.Ticket == 0 {
+		return
+	}
+	changed[run.Ticket] = true
+	for _, t := range ticketsOfCommit(r, key, run.Commit) {
+		changed[t.Number] = true
+	}
+}
+
 // dependantsOfChangedCIResults are the Tickets waiting, through
 // Replacements, on a Ticket in tickets whose CI result differs
 // between the kept runs before and after.
 func (c *Core) dependantsOfChangedCIResults(r store.Reader, key string, tickets map[int]bool, before, after []store.CIRun) []int {
 	resultOf := func(t store.Ticket, runs []store.CIRun) CIResult {
-		return latestCIResult(t.PushedCommits[len(t.PushedCommits)-1], runsOf(runs, t.Number), c.now())
+		return latestCIResult(t.PushedCommits[len(t.PushedCommits)-1], runsOf(runs, t), c.now())
 	}
 	var moved []int
 	for n := range tickets {
@@ -563,12 +587,7 @@ func ciWaiting(r store.Reader, key string, now time.Time) []CIWaitingCommit {
 		if latest.Rerun.After(since) {
 			since = latest.Rerun
 		}
-		var mine []store.CIRun
-		for _, run := range runs {
-			if run.Ticket == t.Number {
-				mine = append(mine, run)
-			}
-		}
+		mine := runsOf(runs, t)
 		if now.Sub(since) >= ciWaitLimit {
 			continue
 		}
