@@ -39,6 +39,7 @@ import { UsageLink } from "../usage/UsageLink";
 import { CILink } from "../ci/CILink";
 import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
+import { groupBySpec } from "./groupBySpec";
 import { SpecRow } from "./SpecRow";
 import { StateListBySpec } from "./StateListBySpec";
 import { StateRow, type InboxRowLinkFactory } from "./StateRow";
@@ -103,12 +104,7 @@ export function Inbox({
   const reasons = reasonsOf(data?.needsMe);
   const tickets = (data?.tickets ?? []).filter((t) => inProject(t.project));
   // Every Spec's Tickets, in every State and Project, for its Spec row.
-  const bySpec = new Map<string, ProjectTicket[]>();
-  for (const t of data?.tickets ?? []) {
-    const of = bySpec.get(t.spec);
-    if (of) of.push(t);
-    else bySpec.set(t.spec, [t]);
-  }
+  const bySpec = new Map(groupBySpec(data?.tickets ?? []).map((g) => [g.id, g.tickets]));
   const ticketsOf = (spec: string) => bySpec.get(spec) ?? [];
   const requirements = requirementList(
     (data?.requirements ?? []).filter((s) => inProject(s.project)),
@@ -149,7 +145,7 @@ export function Inbox({
   });
   // specRow is a Spec's row in the Requirements view and Needs Me, opening
   // on all of its Tickets.
-  const specRow = (s: ProjectSpec, quietWhenIdle?: boolean) => (
+  const specRow = (s: ProjectSpec, { quietWhenIdle = false } = {}) => (
     <SpecRow
       key={s.id}
       id={s.id}
@@ -263,7 +259,7 @@ export function Inbox({
               <p className="empty">No Requirements yet.</p>
             )}
             <div className="spec-rows">
-              {listed.map((s) => specRow(s, true))}
+              {listed.map((s) => specRow(s, { quietWhenIdle: true }))}
             </div>
           </>
         ) : loc.state ? (

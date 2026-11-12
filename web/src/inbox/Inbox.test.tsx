@@ -621,11 +621,15 @@ async function bySpecWorld() {
   return fake;
 }
 
-const cards = () => within(list()).queryAllByRole("region");
-const card = (name: string) => within(list()).getByRole("region", { name });
-// The Tickets an open Spec row lists: its row links after the Spec's own.
-const openIds = (name: string) => [...card(name).querySelectorAll<HTMLElement>("a[data-id]")].slice(1).map((a) => a.dataset.id);
-const specLinkOf = (name: string) => card(name).querySelector<HTMLElement>("a[data-id]")!;
+const specRows = () => within(list()).queryAllByRole("region");
+const specRow = (name: string) => within(list()).getByRole("region", { name });
+// The Tickets an open Spec row lists; none while it is closed.
+const openIds = (name: string) => {
+  const tickets = within(specRow(name)).queryByRole("group", { name: `Tickets of ${name}` });
+  return tickets ? within(tickets).getAllByRole("link").map((a) => a.dataset.id) : [];
+};
+// The Spec row's own link, the one that opens the Spec.
+const specLinkOf = (name: string) => specRow(name).querySelector<HTMLElement>(`a[data-id]`)!;
 const bySpec = () => userEvent.click(within(list()).getByRole("button", { name: "By Spec" }));
 
 describe("State lists By Spec", () => {
@@ -649,7 +653,7 @@ describe("State lists By Spec", () => {
     await within(list()).findByRole("button", { name: "By Spec" });
     await bySpec();
     expect(params().get("group")).toBe("spec");
-    expect(cards().map((c) => c.getAttribute("aria-label"))).toEqual([
+    expect(specRows().map((c) => c.getAttribute("aria-label"))).toEqual([
       "Export a Spec as Markdown", // its Stage acme-3 comes first
       "Archive finished Projects",
       "Wayfinding",
@@ -657,15 +661,15 @@ describe("State lists By Spec", () => {
     ]);
     expect(rowIds()).toEqual(["acme-1", "acme-5", "acme-9", "beta-1"]); // collapsed: the Spec rows alone
 
-    const archive = card("Archive finished Projects");
+    const archive = specRow("Archive finished Projects");
     expect(within(archive).getByText("Spec")).toBeInTheDocument();
     expect(archive).toHaveTextContent("acme-5");
     expect(archive).toHaveTextContent("2 of 3");
     expect(within(archive).getByText("Ready 2")).toHaveAttribute("aria-current", "true");
     expect(within(archive).getByText("Failed 1")).not.toHaveAttribute("aria-current");
-    expect(within(card("Wayfinding")).getByText("Map")).toBeInTheDocument();
+    expect(within(specRow("Wayfinding")).getByText("Map")).toBeInTheDocument();
     // A Requirement shows its Stage strip in place of chips.
-    const req = card("Export a Spec as Markdown");
+    const req = specRow("Export a Spec as Markdown");
     expect(within(req).getByRole("list", { name: "Stages" })).toBeInTheDocument();
     expect(within(req).queryByText("Done 1")).toBeNull();
     expect(req).toHaveTextContent("3 of 4");
@@ -718,7 +722,7 @@ describe("State lists By Spec", () => {
     await userEvent.click(within(nav()).getByRole("button", { name: /^Acme/ }));
     expect(params().get("group")).toBe("spec");
     await userEvent.click(within(nav()).getByRole("button", { name: /^Ready/ }));
-    expect(cards().map((c) => c.getAttribute("aria-label"))).not.toContain("Beta plan");
+    expect(specRows().map((c) => c.getAttribute("aria-label"))).not.toContain("Beta plan");
   });
 
   it("uses the last pick when the address has none, and By Ticket clears it", async () => {
@@ -766,13 +770,14 @@ describe("State lists By Spec", () => {
       fake.addTicket("acme", { title: `Done ${i}`, state: "Done", spec: { id: s.id, title: s.title }, updated: new Date(fake.now.getTime() + i * 1000).toISOString() });
     }
     renderApp(fake, "/?view=inbox&state=Done&group=spec");
-    await waitFor(() => expect(cards()).toHaveLength(3));
+    await waitFor(() => expect(specRows()).toHaveLength(3));
     expect(rowIds()).toHaveLength(3);
     // The newest Ticket (i=59, Spec C) is first, so its Spec row leads.
-    expect(cards()[0]).toHaveAttribute("aria-label", "Spec C");
-    await userEvent.click(within(cards()[0]).getByRole("button", { name: "Spec C" }));
+    expect(specRows()[0]).toHaveAttribute("aria-label", "Spec C");
+    await userEvent.click(within(specRows()[0]).getByRole("button", { name: "Spec C" }));
     // Newest first inside the Spec row: Done 59, 56, 53 ...
-    expect([...cards()[0].querySelectorAll("a[data-id]")].slice(1, 3).map((a) => a.textContent)).toEqual([
+    const tickets = within(specRows()[0]).getByRole("group", { name: "Tickets of Spec C" });
+    expect(within(tickets).getAllByRole("link").slice(0, 2).map((a) => a.textContent)).toEqual([
       expect.stringContaining("Done 59"),
       expect.stringContaining("Done 56"),
     ]);
@@ -808,20 +813,20 @@ describe("the Spec row", () => {
     expect(within(req).queryByText(/^Ready \d+$/)).toBeNull();
 
     for (const [name, kind] of [["Archive finished Projects", "Spec"], ["Wayfinding", "Map"], ["CI Fixes", "Long-lived"]]) {
-      expect(within(card(name)).getByText(kind)).toBeInTheDocument();
-      expect(within(card(name)).queryByRole("list", { name: "Stages" })).toBeNull();
-      expect(within(card(name)).getByText(/^Ready \d+$/)).toHaveAttribute("aria-current", "true");
+      expect(within(specRow(name)).getByText(kind)).toBeInTheDocument();
+      expect(within(specRow(name)).queryByRole("list", { name: "Stages" })).toBeNull();
+      expect(within(specRow(name)).getByText(/^Ready \d+$/)).toHaveAttribute("aria-current", "true");
     }
-    expect(within(card("CI Fixes")).getByText("In Progress 1")).not.toHaveAttribute("aria-current");
+    expect(within(specRow("CI Fixes")).getByText("In Progress 1")).not.toHaveAttribute("aria-current");
   });
 
   it("heads a plain Spec with its first need, else a Factory on it, else its Done count alone", async () => {
     renderApp(withLongLived(await bySpecWorld()), "/?view=inbox&state=Ready&group=spec");
     const archive = await within(list()).findByRole("region", { name: "Archive finished Projects" });
     expect(archive).toHaveTextContent("Failed · 0 of 3 Done");
-    expect(card("CI Fixes")).toHaveTextContent("A Factory is on it · 0 of 2 Done");
-    expect(card("CI Fixes")).toHaveTextContent("1 of 2");
-    const beta = card("Beta plan");
+    expect(specRow("CI Fixes")).toHaveTextContent("A Factory is on it · 0 of 2 Done");
+    expect(specRow("CI Fixes")).toHaveTextContent("1 of 2");
+    const beta = specRow("Beta plan");
     expect(beta).toHaveTextContent("0 of 1 Done");
     expect(beta).not.toHaveTextContent("·");
     expect(beta).not.toHaveTextContent("1 of 1");
@@ -843,7 +848,7 @@ describe("the Spec row", () => {
     const archive = await within(list()).findByRole("region", { name: "Archive finished Projects" });
     // acme-7 needs the human, though it isn't in the Ready list.
     expect(within(archive).getByLabelText("Needs you")).toBeInTheDocument();
-    for (const name of ["Export a Spec as Markdown", "Wayfinding", "Beta plan"]) expect(within(card(name)).queryByLabelText("Needs you")).toBeNull();
+    for (const name of ["Export a Spec as Markdown", "Wayfinding", "Beta plan"]) expect(within(specRow(name)).queryByLabelText("Needs you")).toBeNull();
   });
 
   it("expands a Requirement in the Requirements view to all its Tickets, Stages first, with State chips, without navigating", async () => {

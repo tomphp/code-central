@@ -1,3 +1,4 @@
+// A Map's decision count, as its Spec row's headline and its pane show it.
 import type { MapView } from "../api/types";
 
 // mapCount is a Map's progress as a count: "<decided>/<total> decided",

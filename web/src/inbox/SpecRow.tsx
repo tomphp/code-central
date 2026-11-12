@@ -10,7 +10,7 @@ import { LONG_LIVED_LABEL, STATES, type NeedsMeReason, type StageName, type Stat
 import { REASON_LABEL } from "../format";
 import type { ProjectSpec, ProjectTicket } from "../live";
 import { mapCount } from "../map/mapCount";
-import { progress, stageOf, type Progress } from "../requirement/progress";
+import { headline, progress, stageOf, type Progress } from "../requirement/progress";
 import { Strip } from "../requirement/Strip";
 import { StateRow, stateSlug, type InboxRowLinkFactory } from "./StateRow";
 import { ShortId } from "./ShortId";
@@ -49,12 +49,9 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
   }, [selectedTicket, holdsSelected]);
 
   const title = spec?.title ?? id;
-  const p = spec?.requirement && progress(spec.requirement, all, reasons);
   const summary = spec?.state_summary ?? countStates(all);
   const total = STATES.reduce((n, s) => n + (summary[s] ?? 0), 0);
-  const need = p ? p.needs[0]?.reason : spec?.map ? undefined : firstNeed(all, reasons);
-  const needsYou = p ? !!p.needs.length : spec?.map ? spec.map.needs_you > 0 : !!need;
-  const kind = p ? undefined : spec?.map ? "Map" : spec?.labels.includes(LONG_LIVED_LABEL) ? "Long-lived" : "Spec";
+  const { kind, progress: p, need, needsYou, headline } = describe(spec, all, summary, reasons);
   const quiet = quietWhenIdle && (spec?.finished || !needsYou);
 
   return (
@@ -66,7 +63,7 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
         <a className="row" {...link}>
           <span className="row-top">
             <ShortId id={id} />
-            {kind && <span className={`kind-badge kind-${stateSlug(kind)}`}>{kind}</span>}
+            {kind !== "Requirement" && <span className={`kind-badge kind-${stateSlug(kind)}`}>{kind}</span>}
             <span className="row-title">{title}</span>
             {needsYou && <span className={`dot${need ? ` reason-${need}` : ""}`} role="img" aria-label="Needs you" />}
           </span>
@@ -82,17 +79,17 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
             </span>
           )}
           <span className="spec-row-foot">
-            <span className="row-detail">{spec ? specHeadline(spec, p, need, all, summary.Done ?? 0, total) : ""}</span>
-            {listed.length < total && (
+            <span className="row-detail">{headline}</span>
+            {shown && shown.length < total && (
               <span className="spec-row-count">
-                {listed.length} of {total}
+                {shown.length} of {total}
               </span>
             )}
           </span>
         </a>
       </div>
       {open && (
-        <div className="spec-row-tickets">
+        <div className="spec-row-tickets" role="group" aria-label={`Tickets of ${title}`}>
           {listed.map((t) => (
             <StateRow key={t.id} t={t} needsYou={reasons.has(t.id)} now={now} link={ticketLink} stage chip={!here} />
           ))}
@@ -102,28 +99,38 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
   );
 }
 
-// specHeadline is a Spec row's one line. A Requirement's says what needs
-// the human, else what it is waiting for; a Map's is its decision count;
-// any other Spec's is its first need, else whether a Factory is on it,
-// then how many of its Tickets are Done.
-function specHeadline(spec: ProjectSpec, p: Progress | undefined, need: NeedsMeReason | undefined, all: ProjectTicket[], done: number, total: number): string {
-  if (p) return requirementHeadline(spec, p);
-  if (spec.map) return spec.finished ? "Finished" : mapCount(spec.map);
-  if (spec.finished) return `Finished · ${done} of ${total} Tickets Done`;
-  const doing = need ? REASON_LABEL[need] : all.some((t) => CLAIMED.includes(t.state)) ? "A Factory is on it" : undefined;
-  return [doing, `${done} of ${total} Done`].filter(Boolean).join(" · ");
+// SpecKind is what a Spec row's badge says: nothing for a Requirement.
+type SpecKind = "Requirement" | "Map" | "Long-lived" | "Spec";
+
+// describe is what a Spec row says of its Spec, by kind. A Requirement
+// has its Stage progress and today's headline, and needs the human when
+// any Stage or Build Ticket does. A Map's headline is its decision count,
+// and it needs the human when its needs_you count says so. Any other
+// Spec's headline is its first need, else whether a Factory is on it, then
+// how many of its Tickets are Done; it needs the human when any of its
+// Tickets does.
+function describe(
+  spec: ProjectSpec | undefined,
+  all: ProjectTicket[],
+  summary: StateSummary,
+  reasons: Map<string, NeedsMeReason>,
+): { kind: SpecKind; progress?: Progress; need?: NeedsMeReason; needsYou: boolean; headline: string } {
+  if (spec?.requirement) {
+    const p = progress(spec.requirement, all, reasons);
+    return { kind: "Requirement", progress: p, need: p.needs[0]?.reason, needsYou: p.needs.length > 0, headline: headline(spec.finished, p) };
+  }
+  if (spec?.map) return { kind: "Map", needsYou: spec.map.needs_you > 0, headline: spec.finished ? "Finished" : mapCount(spec.map) };
+  const need = firstNeed(all, reasons);
+  const kind = spec?.labels.includes(LONG_LIVED_LABEL) ? "Long-lived" : "Spec";
+  return { kind, need, needsYou: !!need, headline: spec ? specHeadline(spec.finished, need, all, summary) : "" };
 }
 
-function requirementHeadline(spec: ProjectSpec, p: Progress): string {
-  if (spec.finished) return p.total ? `Finished · ${p.done} of ${p.total} Tickets Done` : "Finished";
-  const n = p.needs[0];
-  if (n) {
-    const where = n.stage ? p.segments.find((s) => s.stage === n.stage)!.name : "Build";
-    return `${where}: ${REASON_LABEL[n.reason]}${p.needs.length > 1 ? ` · +${p.needs.length - 1} more` : ""}`;
-  }
-  if (p.waitingForFactory) return `${p.current.name}: waiting for a Factory`;
-  if (p.current.stage === "build") return p.total ? `Build: ${p.done} of ${p.total} Done` : "Build: no Tickets yet";
-  return `${p.current.name}: ${p.current.progress === "running" ? "a Factory is on it" : "not started"}`;
+function specHeadline(finished: boolean, need: NeedsMeReason | undefined, all: ProjectTicket[], summary: StateSummary): string {
+  const done = summary.Done ?? 0;
+  const total = STATES.reduce((n, s) => n + (summary[s] ?? 0), 0);
+  if (finished) return `Finished · ${done} of ${total} Tickets Done`;
+  const doing = need ? REASON_LABEL[need] : all.some((t) => CLAIMED.includes(t.state)) ? "A Factory is on it" : undefined;
+  return [doing, total > 0 && `${done} of ${total} Done`].filter(Boolean).join(" · ");
 }
 
 // CLAIMED is the States a Ticket holds a live Claim in.
@@ -149,7 +156,7 @@ const STAGE_ORDER: StageName[] = ["grilling", "spec", "tickets"];
 // stagesFirst is a Spec's Tickets as an open row lists them all: a
 // Requirement's Stage Tickets first, in Stage order, then the rest oldest
 // first.
-export function stagesFirst(tickets: ProjectTicket[]): ProjectTicket[] {
+function stagesFirst(tickets: ProjectTicket[]): ProjectTicket[] {
   const rank = (t: ProjectTicket) => {
     const s = stageOf(t);
     return s ? STAGE_ORDER.indexOf(s) : STAGE_ORDER.length;
