@@ -9,6 +9,7 @@ The implementation Tickets that deliver the Spec, as thin vertical slices, each 
 - `state` `Ready`, so it can be claimed once its Blockers are done.
 - Each one blocked by this Ticket: put its ID in `blocked_by`, so no implementation starts before the human accepts the breakdown. Add the Blockers between them as the work needs, in `blocked_by` or with `add_blocker`.
 - A description that holds its acceptance criteria and points at the Spec sections behind them. Give no Stage Label.
+<!-- model-assignment -->
 
 If the Spec records new terms or ADRs, assign writing them to an implementation Ticket, usually the first.
 

@@ -5,6 +5,7 @@ import (
 	"embed"
 	"slices"
 	"strings"
+	"text/template"
 
 	"github.com/tomoram/code-central/store"
 )
@@ -47,7 +48,22 @@ var guideFragments embed.FS
 // fragment: the guide holds a placeholder line, and the fragment's text,
 // already a whole bullet, replaces it when the setting is on; when it is
 // off, the placeholder line is removed whole.
-const subagentExplorationPlaceholder = "<!-- subagent-exploration -->"
+const (
+	subagentExplorationPlaceholder = "<!-- subagent-exploration -->"
+	modelAssignmentPlaceholder     = "<!-- model-assignment -->"
+)
+
+// modelAssignmentFragment is the Model Assignment fragment, a template
+// filled from the Project's Reported Models.
+var modelAssignmentFragment = template.Must(template.New("model-assignment.md").Funcs(template.FuncMap{
+	"list": func(values []string) string {
+		quoted := make([]string, len(values))
+		for i, v := range values {
+			quoted[i] = "`" + v + "`"
+		}
+		return strings.Join(quoted, ", ")
+	},
+}).ParseFS(guideFragments, "stageguides/fragments/model-assignment.md"))
 
 // StageGuidesView is a Project's Stage Guides settings as every Project
 // read returns them.
@@ -86,7 +102,7 @@ func (c *Core) GetStageGuide(_ context.Context, key string, in StageGuideInput) 
 	if !slices.Contains(GuideNames, in.Stage) {
 		return StageGuideView{}, invalid("stage", "there is no Stage Guide %q; the guides are %s", in.Stage, strings.Join(GuideNames, ", "))
 	}
-	return stageGuide(in.Stage, p.StageGuides), nil
+	return stageGuide(in.Stage, p), nil
 }
 
 // projectOf is the stored Project named key, or not_found.
@@ -102,9 +118,10 @@ func (c *Core) projectOf(key string) (store.Project, error) {
 	return p, err
 }
 
-// stageGuide is the named Stage's guide for a Project with settings g,
-// ending with the trouble rules; the name must be one of GuideNames.
-func stageGuide(stage string, g store.StageGuides) StageGuideView {
+// stageGuide is the named Stage's guide for Project p, ending with the
+// trouble rules; the name must be one of GuideNames.
+func stageGuide(stage string, p store.Project) StageGuideView {
+	g := p.StageGuides
 	b, err := stageGuides.ReadFile("stageguides/" + stage + ".md")
 	if err != nil {
 		panic("core: no Stage Guide for " + stage)
@@ -119,7 +136,25 @@ func stageGuide(stage string, g store.StageGuides) StageGuideView {
 		}
 		text = strings.Replace(text, subagentExplorationPlaceholder+"\n", string(f), 1)
 	}
+	if strings.Contains(text, modelAssignmentPlaceholder) {
+		text = strings.Replace(text, modelAssignmentPlaceholder+"\n", modelAssignmentText(p), 1)
+	}
 	return StageGuideView{Stage: stage, Guide: text + "\n" + troubleRules}
+}
+
+// modelAssignmentText is what replaces the model-assignment placeholder
+// line: nothing while Model Assignment is off, else the fragment filled
+// from p's Reported Models.
+func modelAssignmentText(p store.Project) string {
+	if !p.StageGuides.ModelAssignmentOn {
+		return ""
+	}
+	var b strings.Builder
+	data := struct{ Aliases, Levels []string }{p.ReportedModels.Aliases, validLevels(p.ReportedModels)}
+	if err := modelAssignmentFragment.Execute(&b, data); err != nil {
+		panic("core: model-assignment fragment: " + err.Error())
+	}
+	return b.String()
 }
 
 // GuideName names the guide for a Ticket with these Labels: its Stage,

@@ -127,7 +127,7 @@ func (c *Core) Claim(ctx context.Context, key string, in ClaimInput) (ClaimResul
 func (c *Core) claimResult(r store.Reader, key string, t store.Ticket, id string) ClaimResult {
 	v := defaultView(c.ticketView(r, key, t))
 	p, _ := r.Project(key)
-	g := stageGuide(GuideName(t.Labels), p.StageGuides)
+	g := stageGuide(GuideName(t.Labels), p)
 	mc := modelChoice(p, t)
 	return ClaimResult{ClaimID: id, Ticket: &v, StageGuide: &g, ModelChoice: &mc}
 }
