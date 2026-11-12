@@ -35,9 +35,6 @@ type CIView struct {
 	// ci.yml or a pipeline's name, whose runs never count towards a CI
 	// result.
 	IgnoredWorkflows []string `json:"ignored_workflows"`
-	// UnblockOnPush lets a Ticket the CI gate holds stop blocking while
-	// its pushed commit's CI runs or has passed.
-	UnblockOnPush bool `json:"unblock_on_push"`
 	// PushRemoteURL is the URL of the Push remote the Factory last
 	// reported, empty until it has.
 	PushRemoteURL string `json:"push_remote_url"`
@@ -61,7 +58,7 @@ type CIRuleView struct {
 func ciView(key string, c store.CI, watcher WatcherView) CIView {
 	v := CIView{Tracking: c.Tracking, Provider: c.Provider, Repository: c.Repository,
 		ProjectURL: c.ProjectURL, PATEnv: patEnvOf(c),
-		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), UnblockOnPush: c.UnblockOnPush, PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}, Watcher: watcher}
+		IgnoredWorkflows: orEmpty(c.IgnoredWorkflows), PushRemoteURL: c.PushRemoteURL, Rules: []CIRuleView{}, Watcher: watcher}
 	for _, r := range c.Rules {
 		v.Rules = append(v.Rules, CIRuleView{Spec: DisplayID(key, r.Spec), Workflow: r.Workflow, Branch: r.Branch, State: r.State, Created: r.Created})
 	}
@@ -77,7 +74,7 @@ func patEnvOf(c store.CI) string {
 }
 
 // SetCITrackingInput is the human's set_ci_tracking(tracking, provider,
-// repository, project_url, pat_env, ignored_workflows, unblock_on_push,
+// repository, project_url, pat_env, ignored_workflows,
 // full?).
 type SetCITrackingInput struct {
 	Tracking bool `json:"tracking"`
@@ -90,7 +87,6 @@ type SetCITrackingInput struct {
 	// ADO_PAT when left out.
 	PATEnv           string   `json:"pat_env"`
 	IgnoredWorkflows []string `json:"ignored_workflows"`
-	UnblockOnPush    bool     `json:"unblock_on_push"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -117,9 +113,9 @@ func checkWorkflow(provider store.CIProvider, name string) (example string, ok b
 }
 
 // SetCITracking is the human's set_ci_tracking: CI Tracking on or off,
-// with the CI Provider, the repository it watches, the Ignored workflows
-// and Unblock on push. Turning it on needs a repository. The Push remote
-// URL the Factory reported is kept.
+// with the CI Provider, the repository it watches and the Ignored
+// workflows. Turning it on needs a repository. The Push remote URL the
+// Factory reported is kept.
 func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingInput) (Written[ProjectView], error) {
 	if err := humanOnly(ctx, "set_ci_tracking"); err != nil {
 		return Written[ProjectView]{}, err
@@ -131,7 +127,7 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 		return Written[ProjectView]{}, invalid("provider", "CI Provider %q isn't %q or %q", in.Provider, store.CIGitHubActions, store.CIAzurePipelines)
 	}
 	ci := store.CI{Tracking: in.Tracking, Provider: in.Provider, Repository: strings.TrimSpace(in.Repository),
-		ProjectURL: strings.TrimSpace(in.ProjectURL), PATEnv: strings.TrimSpace(in.PATEnv), UnblockOnPush: in.UnblockOnPush}
+		ProjectURL: strings.TrimSpace(in.ProjectURL), PATEnv: strings.TrimSpace(in.PATEnv)}
 	if err := checkCITarget(&ci); err != nil {
 		return Written[ProjectView]{}, err
 	}

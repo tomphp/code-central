@@ -423,54 +423,11 @@ describe("Project Options", () => {
         /Workflow file names, such as nightly\.yml/,
       );
       expect(
-        within(group).getByRole("checkbox", { name: "Unblock on push" }),
-      ).not.toBeChecked();
+        within(group).queryByRole("checkbox", { name: "Unblock on push" }),
+      ).not.toBeInTheDocument();
       expect(
         within(group).getByRole("button", { name: "Save" }),
       ).toBeDisabled();
-    });
-
-    it("saves Unblock on push with the rest of the section, saying it only has effect under Merge + Push with CI Tracking on", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      renderApp(fake, "/?view=project-options&project=acme");
-
-      const unblock = await within(
-        await screen.findByRole("group", { name: "CI" }),
-      ).findByRole("checkbox", { name: "Unblock on push" });
-      expect(unblock).toHaveAccessibleDescription(
-        /Lets Tickets blocked by a pushed Ticket start while that Ticket's CI runs or has passed/,
-      );
-      expect(unblock).toHaveAccessibleDescription(
-        /only under Merge \+ Push with CI Tracking on/,
-      );
-
-      // It may be on while CI Tracking is off.
-      await userEvent.click(unblock);
-      await userEvent.type(
-        within(ci()).getByRole("textbox", { name: "Ignored workflows" }),
-        "nightly.yml",
-      );
-      await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
-      expect(await within(ci()).findByRole("status")).toHaveTextContent(
-        "Saved",
-      );
-      expect((await fake.listProjects())[0].ci).toMatchObject({
-        tracking: false,
-        ignored_workflows: ["nightly.yml"],
-        unblock_on_push: true,
-      });
-      expect(within(ci()).getByRole("button", { name: "Save" })).toBeDisabled();
-
-      await userEvent.click(unblock);
-      expect(within(ci()).getByRole("button", { name: "Save" })).toBeEnabled();
-      await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
-      await waitFor(async () =>
-        expect((await fake.listProjects())[0].ci.unblock_on_push).toBe(false),
-      );
-      expect((await fake.listProjects())[0].ci.ignored_workflows).toEqual([
-        "nightly.yml",
-      ]);
     });
 
     it("prefills the repository from a GitHub Push remote the Factory reported, and lets the human change it", async () => {
@@ -515,7 +472,6 @@ describe("Project Options", () => {
         provider: "github_actions",
         repository: "beta/fork",
         ignored_workflows: [],
-        unblock_on_push: false,
       });
       const { unmount } = renderApp(
         fake,
@@ -625,7 +581,6 @@ describe("Project Options", () => {
         repository: "",
         project_url: "https://dev.azure.com/beta/other",
         ignored_workflows: [],
-        unblock_on_push: false,
       });
       const { unmount } = renderApp(
         fake,
@@ -720,7 +675,6 @@ describe("Project Options", () => {
         repository: "",
         project_url: "https://dev.azure.com/acme/web",
         ignored_workflows: [],
-        unblock_on_push: false,
       });
       await fake.reportCIWatcherStatus("acme", { state: "watching" });
       renderApp(fake, "/?view=project-options&project=acme");
@@ -757,7 +711,6 @@ describe("Project Options", () => {
         pat_env: "ADO_PAT",
         repository: "acme/web",
         ignored_workflows: ["nightly.yml", "preview.yml"],
-        unblock_on_push: false,
         push_remote_url: "https://github.com/acme/web.git",
         rules: [],
         watcher: { state: "not_reported" },
@@ -792,7 +745,6 @@ describe("Project Options", () => {
         provider: "github_actions",
         repository: "acme/web",
         ignored_workflows: [],
-        unblock_on_push: false,
       });
       const watcher = await within(ci()).findByRole("region", {
         name: "CI Watcher",
@@ -836,7 +788,6 @@ describe("Project Options", () => {
         provider: "github_actions",
         repository: "acme/web",
         ignored_workflows: [],
-        unblock_on_push: false,
       });
       await fake.reportCIWatcherStatus("acme", {
         state: "watching",
@@ -870,7 +821,6 @@ describe("Project Options", () => {
         provider: "github_actions",
         repository: "acme/web",
         ignored_workflows: [],
-        unblock_on_push: false,
       });
       fake.seedCIWatcherCrash("acme", 3, "panic: boom");
       renderApp(fake, "/?view=project-options&project=acme");
@@ -974,7 +924,6 @@ describe("Project Options", () => {
         provider: "github_actions",
         repository: "acme/web",
         ignored_workflows: ["nightly.yml"],
-        unblock_on_push: true,
       });
       await waitFor(() =>
         expect(
@@ -987,9 +936,6 @@ describe("Project Options", () => {
       expect(
         within(ci()).getByRole("textbox", { name: "Ignored workflows" }),
       ).toHaveValue("nightly.yml");
-      expect(
-        within(ci()).getByRole("checkbox", { name: "Unblock on push" }),
-      ).toBeChecked();
     });
   });
 

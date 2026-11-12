@@ -448,7 +448,6 @@ export class FakeApi implements Api {
         project_url: "",
         pat_env: "ADO_PAT",
         ignored_workflows: [],
-        unblock_on_push: false,
         push_remote_url: "",
         rules: [],
         watcher: { state: "not_reported" },
@@ -1389,7 +1388,6 @@ export class FakeApi implements Api {
       project_url,
       pat_env: patName(pat_env),
       ignored_workflows: ignored,
-      unblock_on_push: change.unblock_on_push,
       watcher,
     });
     return this.projectView(p);

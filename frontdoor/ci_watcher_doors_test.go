@@ -197,7 +197,6 @@ func TestChangingTheRepositoryForgetsTheCIWatchersStatus(t *testing.T) {
 	srv := newServer(t, ciTrackingOn)
 	httpOK(t, srv, reportCIWatcherStatus(`{"state":"watching"}`))
 	ciWatcher(t, httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web","ignored_workflows":["deploy.yml"],"full":true}`)), "watching", "", "")
-	ciWatcher(t, httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/web","ignored_workflows":["deploy.yml"],"unblock_on_push":true,"full":true}`)), "watching", "", "")
 	ciWatcher(t, httpOK(t, srv, setCITracking(`{"tracking":true,"repository":"acme/site","full":true}`)), "not_reported", "", "")
 }
 

@@ -22,7 +22,7 @@ async function world(method: LandingMethod = "merge") {
   fake.addTicket("acme", { title: "Login page", state: "Accepted", branch: "acme-1", commit: "abc" }); // acme-1
   if (method === "pull_request") await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
   await fake.setLandingMethod("acme", { method, push: true, remote: "origin" });
-  await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
+  await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
   await fake.reportPushedCommit("acme", "acme-1", "abc1234567", "acme-1");
   await fake.reportCIRuns("acme", [
     {

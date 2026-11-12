@@ -89,7 +89,10 @@ type ciFile struct {
 	PushRemoteURL    string       `yaml:"push_remote_url,omitempty"`
 	PushRemoteBase   string       `yaml:"push_remote_base,omitempty"`
 	Rules            []ciRuleFile `yaml:"rules,omitempty"`
-	UnblockOnPush    bool         `yaml:"unblock_on_push,omitempty"`
+	// UnblockOnPush is the removed Unblock on push option (ADR 0023,
+	// superseded by ADR 0032). It is read so a file that still holds it loads, and
+	// never kept or written.
+	UnblockOnPush bool `yaml:"unblock_on_push,omitempty"`
 }
 
 type ciRuleFile struct {
@@ -675,7 +678,7 @@ func encodeCI(c CI) *ciFile {
 		return nil
 	}
 	f := &ciFile{Tracking: c.Tracking, Provider: string(c.Provider), Repository: c.Repository, ProjectURL: c.ProjectURL, PATEnv: c.PATEnv,
-		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, PushRemoteBase: c.PushRemoteBase, UnblockOnPush: c.UnblockOnPush}
+		IgnoredWorkflows: c.IgnoredWorkflows, PushRemoteURL: c.PushRemoteURL, PushRemoteBase: c.PushRemoteBase}
 	for _, r := range c.Rules {
 		f.Rules = append(f.Rules, ciRuleFile{Spec: r.Spec, Workflow: r.Workflow, Branch: r.Branch, State: string(r.State), Created: formatTime(r.Created)})
 	}

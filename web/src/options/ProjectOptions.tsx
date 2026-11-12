@@ -317,7 +317,6 @@ interface CIDraft {
   projectURL: string;
   patEnv: string;
   ignored: string;
-  unblockOnPush: boolean;
 }
 
 // ciDraft is the form for ci as stored, its repository prefilled from a
@@ -336,7 +335,6 @@ function ciDraft(ci: CISettings): CIDraft {
       "",
     patEnv: ci.pat_env || "ADO_PAT",
     ignored: ci.ignored_workflows.join(", "),
-    unblockOnPush: ci.unblock_on_push,
   };
 }
 
@@ -345,8 +343,7 @@ const workflowNames = (ignored: string) =>
   ignored.split(/[\s,]+/).filter(Boolean);
 
 // CISection is the Project's CI settings: CI Tracking, its CI Provider,
-// the GitHub repository or Azure DevOps project it watches, the Ignored workflows and Unblock on
-// push. Like the Landing Method it follows the Project as read.
+// the GitHub repository or Azure DevOps project it watches, and the Ignored workflows. Like the Landing Method it follows the Project as read.
 function CISection({ api, project }: { api: Api; project: ProjectRow }) {
   const stored = ciDraft(project.ci);
   const prefilled = !project.ci.repository && stored.repository !== "";
@@ -366,7 +363,6 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
     projectURL,
     patEnv,
     ignored,
-    unblockOnPush,
   } = stored;
   useEffect(
     () =>
@@ -377,8 +373,7 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
         projectURL,
         patEnv,
         ignored,
-        unblockOnPush,
-      }),
+          }),
     [
       tracking,
       provider,
@@ -386,8 +381,7 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
       projectURL,
       patEnv,
       ignored,
-      unblockOnPush,
-    ],
+      ],
   );
 
   const edit = (patch: Partial<CIDraft>) => {
@@ -405,7 +399,6 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
       project_url: draft.projectURL,
       pat_env: draft.patEnv,
       ignored_workflows: workflowNames(draft.ignored),
-      unblock_on_push: draft.unblockOnPush,
     };
     api.setCITracking(project.key, change).then(
       (v) => {
@@ -422,8 +415,7 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
     draft.projectURL !== projectURL ||
     draft.patEnv !== patEnv ||
     workflowNames(draft.ignored).join(",") !==
-      workflowNames(ignored).join(",") ||
-    draft.unblockOnPush !== unblockOnPush;
+      workflowNames(ignored).join(",");
   const invalid = (field: string) =>
     error?.field === field
       ? { "aria-invalid": true, "aria-describedby": `${id}-error` }
@@ -549,22 +541,6 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
             ? "Pipeline names, such as Nightly build, separated by commas: their runs never count towards a Ticket's CI result."
             : "Workflow file names, such as nightly.yml, separated by commas: their runs never count towards a Ticket's CI result."}
         </p>
-        <div className="project-options-choice">
-          <label>
-            <input
-              type="checkbox"
-              checked={draft.unblockOnPush}
-              onChange={(e) => edit({ unblockOnPush: e.target.checked })}
-              aria-describedby={`${id}-unblock`}
-            />{" "}
-            Unblock on push
-          </label>
-          <p className="project-options-hint" id={`${id}-unblock`}>
-            Lets Tickets blocked by a pushed Ticket start while that
-            Ticket&apos;s CI runs or has passed, instead of waiting for it to
-            land. It has effect only under Merge + Push with CI Tracking on.
-          </p>
-        </div>
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>

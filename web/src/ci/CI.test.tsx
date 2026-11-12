@@ -28,13 +28,12 @@ async function tracked(fake: FakeApi, key: string, repository = `${key}/web`) {
     provider: "github_actions",
     repository,
     ignored_workflows: ["nightly.yml"],
-    unblock_on_push: false,
   });
 }
 
 // azure turns CI Tracking on for key, watching an Azure DevOps project.
 async function azure(fake: FakeApi, key: string) {
-  await fake.setCITracking(key, { tracking: true, provider: "azure_pipelines", repository: "", project_url: `https://dev.azure.com/${key}/web`, ignored_workflows: [], unblock_on_push: false });
+  await fake.setCITracking(key, { tracking: true, provider: "azure_pipelines", repository: "", project_url: `https://dev.azure.com/${key}/web`, ignored_workflows: [] });
 }
 
 // at is the fake's now moved by minutes.
@@ -163,7 +162,6 @@ describe("the CI Watchers' statuses", () => {
       repository: "",
       project_url: "https://dev.azure.com/acme/web",
       ignored_workflows: [],
-      unblock_on_push: false,
     });
     await fake.reportCIWatcherStatus("acme", { state: "watching" });
     renderApp(fake, "/?view=ci");

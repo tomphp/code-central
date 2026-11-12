@@ -232,7 +232,7 @@ describe("the GitHub Issues section", () => {
     it("is the Issue Watcher's own, apart from the CI Watcher's", async () => {
       const fake = new FakeApi();
       fake.addProject("acme", "Acme");
-      await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [], unblock_on_push: false });
+      await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
       await fake.reportCIWatcherStatus("acme", { state: "error", problem: "logged_out", message: "gh isn't logged in to GitHub", fix: "Run gh auth login." });
       await turnOn(fake);
       renderApp(fake);

@@ -126,7 +126,6 @@ export function TicketDetail({ api, project, ticket: t, now, reported, openSpec,
             <span key={b.id}>
               {i > 0 && ", "}
               {b.id} {b.title} ({b.state}
-              {b.ci_result && <> · CI {b.ci_result}</>}
               {b.cleared && <> · no longer blocking</>})
             </span>
           ))}
