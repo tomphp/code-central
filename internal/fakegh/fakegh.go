@@ -112,7 +112,7 @@ func Calls(dir string) ([]Call, error) {
 	}
 	var out []Call
 	for _, e := range entries {
-		b, err := os.ReadFile(filepath.Join(dir, callsDir, e.Name()))
+		b, err := readSettled(filepath.Join(dir, callsDir, e.Name()))
 		if err != nil {
 			return nil, err
 		}
@@ -123,6 +123,23 @@ func Calls(dir string) ([]Call, error) {
 		out = append(out, c)
 	}
 	return out, nil
+}
+
+// readSettled reads path, trying again for a moment when it fails: on
+// Windows a file only just renamed into place can still be held by the
+// writer's process, and opening it fails with a sharing violation.
+func readSettled(path string) ([]byte, error) {
+	var (
+		b   []byte
+		err error
+	)
+	for range 50 {
+		if b, err = os.ReadFile(path); err == nil || os.IsNotExist(err) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return b, err
 }
 
 func readAnswers(dir string) ([]Answer, error) {
