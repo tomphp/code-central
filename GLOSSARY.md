@@ -40,6 +40,10 @@ _Avoid_: Controller, runner, orchestrator
 The description of a piece of work, such as a feature or user story, delivered through one or more Tickets.
 _Avoid_: Epic, feature, PRD
 
+**All Tickets view**:
+The Inbox's list of every Ticket in scope (`list=tickets`), of every kind and Stage, flat and newest first by creation, each row with its State chip, needs-you dot and kind label and naming its Spec. It follows the Project filter and reads only what the Inbox already loads. Its link counts the Tickets that are neither Done nor Cancelled.
+_Avoid_: Ticket list, all Tickets page
+
 **Short ID**:
 How the UI shows a Ticket's or Spec's ID while one Project is selected, its number alone as `#123`. With All Projects selected the full ID shows instead. Either way, clicking it copies the full ID.
 _Avoid_: Ticket number, short key

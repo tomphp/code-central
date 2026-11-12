@@ -830,3 +830,78 @@ describe("Short IDs", () => {
     expect(window.location.href).toBe(before);
   });
 });
+
+describe("the All Tickets view", () => {
+  beforeEach(() => localStorage.clear());
+
+  async function ticketsWorld() {
+    const fake = await bySpecWorld();
+    const at = (m: number) => new Date(fake.now.getTime() + m * 60_000).toISOString();
+    const plain = { id: "acme-5", title: "Archive finished Projects" };
+    fake.addTicket("acme", { title: "Sketch the menu", state: "Ready", labels: ["prototype"], spec: plain, created: at(10) }); // acme-12
+    fake.addTicket("beta", { title: "Beta newest", state: "Ready", spec: { id: "beta-1", title: "Beta plan" }, created: at(20) }); // beta-3
+    fake.addTicket("acme", { title: "Old and done", state: "Done", spec: plain, created: at(-30) }); // acme-13
+    return fake;
+  }
+  const allTickets = () => userEvent.click(within(nav()).getByRole("button", { name: /^All Tickets/ }));
+
+  it("sits after Requirements, counting unfinished Tickets and following the Project filter", async () => {
+    renderApp(await ticketsWorld());
+    await within(nav()).findByRole("button", { name: /^Requirements/ });
+    const names = within(nav()).getAllByRole("button").map((b) => b.textContent);
+    const at = names.findIndex((n) => /^Requirements/.test(n ?? ""));
+    expect(names[at + 1]).toMatch(/^All Tickets/);
+    // acme: 4 Stages? seeded Tickets 1 Stage Done, the rest unfinished; the Done one and Done Stage excluded.
+    const total = Number(within(nav()).getByRole("button", { name: /^All Tickets/ }).textContent!.replace(/\D/g, ""));
+    await userEvent.click(within(nav()).getByRole("button", { name: /^Beta/ }));
+    const beta = Number(within(nav()).getByRole("button", { name: /^All Tickets/ }).textContent!.replace(/\D/g, ""));
+    expect(beta).toBe(2);
+    expect(total).toBeGreaterThan(beta);
+  });
+
+  it("lists every kind of Ticket inline, newest first by creation across Projects, with chip, label and Spec line", async () => {
+    renderApp(await ticketsWorld());
+    await within(nav()).findByRole("button", { name: /^All Tickets/ });
+    await allTickets();
+    expect(params().get("list")).toBe("tickets");
+    expect(rowIds()[0]).toBe("beta-3");
+    expect(rowIds()[1]).toBe("acme-12");
+    expect(rowIds().at(-1)).toBe("acme-13"); // the oldest created
+    expect(rowIds()).toContain("acme-3"); // a Stage Ticket, inline
+    expect(within(list()).queryByText(/run by a Factory/)).toBeNull();
+
+    const proto = within(list()).getByRole("link", { name: /acme-12/ });
+    expect(proto).toHaveTextContent("Prototype");
+    expect(proto).toHaveTextContent("Ready");
+    expect(proto).toHaveTextContent("Spec");
+    expect(proto).toHaveTextContent("acme-5");
+    expect(proto).toHaveTextContent("Archive finished Projects");
+    expect(within(list()).getByRole("link", { name: /acme-3/ })).toHaveTextContent("spec");
+    expect(within(list()).getByRole("link", { name: /acme-6/ })).not.toHaveTextContent(/Prototype|grilling/);
+    expect(within(within(list()).getByRole("link", { name: /acme-7/ })).getByLabelText("Needs you")).toBeInTheDocument();
+  });
+
+  it("follows the Project filter and opens a Ticket on the right", async () => {
+    renderApp(await ticketsWorld(), "/?view=inbox&list=tickets&project=beta");
+    await waitFor(() => expect(rowIds()).toEqual(["beta-3", "beta-2"]));
+    await userEvent.click(within(list()).getByRole("link", { name: /Beta thing/ }));
+    expect(params().get("ticket")).toBe("beta-2");
+    expect(params().get("list")).toBe("tickets");
+    expect(detail()).toHaveTextContent("Beta thing");
+  });
+
+  it("keeps the grouping toggle, which persists", async () => {
+    renderApp(await ticketsWorld(), "/?view=inbox&list=tickets");
+    await within(list()).findByRole("button", { name: "By Spec" });
+    await bySpec();
+    expect(params().get("group")).toBe("spec");
+    expect(localStorage.length).toBe(1);
+  });
+
+  it("says so when nothing is there", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    renderApp(fake, "/?view=inbox&list=tickets");
+    expect(await within(list()).findByText("No unfinished Tickets.")).toBeInTheDocument();
+  });
+});
