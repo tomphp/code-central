@@ -38,6 +38,8 @@ export interface UiLocation {
   ticket?: string;
   // group is the Inbox's grouping of a State list; none is By Ticket.
   group?: "spec";
+  // finished shows Done and Cancelled Tickets in the All Tickets view.
+  finished?: true;
   // days is Usage's range; none is the default, 7.
   days?: UsageDays;
   // session is the session Usage has open on its line chart.
@@ -81,6 +83,7 @@ export function readLocation(search: string): UiLocation {
     requirement: q.get("requirement") || undefined,
     ticket: q.get("ticket") || undefined,
     group: q.get("group") === "spec" ? "spec" : undefined,
+    finished: q.get("finished") === "1" ? true : undefined,
   };
 }
 
@@ -122,6 +125,7 @@ export function hrefFor(loc: UiLocation): string {
   if (loc.requirement) q.set("requirement", loc.requirement);
   if (loc.ticket) q.set("ticket", loc.ticket);
   if (loc.group) q.set("group", loc.group);
+  if (loc.finished) q.set("finished", "1");
   return `?${q}`;
 }
 

@@ -970,7 +970,7 @@ describe("the All Tickets view", () => {
   });
 
   it("lists every kind of Ticket inline, newest first by creation across Projects, with chip, label and Spec line", async () => {
-    renderApp(await ticketsWorld());
+    renderApp(await ticketsWorld(), "/?view=inbox&finished=1");
     await within(nav()).findByRole("button", { name: /^All Tickets/ });
     await allTickets();
     expect(params().get("list")).toBe("tickets");
@@ -1009,7 +1009,7 @@ describe("the All Tickets view", () => {
   });
 
   it("groups By Spec in the order of each Spec's newest Ticket, Stage Tickets first, with State chips", async () => {
-    renderApp(await ticketsWorld(), "/?view=inbox&list=tickets&group=spec&project=acme");
+    renderApp(await ticketsWorld(), "/?view=inbox&list=tickets&group=spec&project=acme&finished=1");
     const rows = await within(list()).findAllByRole("region");
     // acme-5's newest Ticket (acme-12) is newer than any of the Requirement's.
     expect(rows[0]).toHaveAccessibleName("Archive finished Projects");
@@ -1032,6 +1032,41 @@ describe("the All Tickets view", () => {
     await allTickets();
     expect(params().get("group")).toBe("spec");
     expect(await within(list()).findAllByRole("region")).not.toHaveLength(0);
+  });
+
+  it("hides Done and Cancelled until Show finished, kept in the URL and per browser", async () => {
+    renderApp(await ticketsWorld(), "/?view=inbox&list=tickets");
+    await within(list()).findByRole("checkbox", { name: "Show finished" });
+    await waitFor(() => expect(rowIds()).not.toContain("acme-13"));
+    await userEvent.click(within(list()).getByRole("checkbox", { name: "Show finished" }));
+    expect(params().get("finished")).toBe("1");
+    await waitFor(() => expect(rowIds()).toContain("acme-13"));
+    expect(localStorage.getItem("code-central.inbox.finished")).toBe("1");
+
+    window.history.replaceState(null, "", "/?view=inbox&list=tickets");
+    act(() => window.dispatchEvent(new PopStateEvent("popstate")));
+    await waitFor(() => expect(within(list()).getByRole("checkbox", { name: "Show finished" })).toBeChecked());
+
+    await userEvent.click(within(list()).getByRole("checkbox", { name: "Show finished" }));
+    expect(params().has("finished")).toBe(false);
+    await waitFor(() => expect(rowIds()).not.toContain("acme-13"));
+  });
+
+  it("leaves out fully finished Specs By Spec", async () => {
+    const fake = await ticketsWorld();
+    fake.addTicket("beta", { title: "Beta shipped", state: "Done", spec: { id: "beta-9", title: "Shipped plan" } });
+    renderApp(fake, "/?view=inbox&list=tickets&group=spec");
+    await within(list()).findAllByRole("region");
+    expect(within(list()).queryByRole("region", { name: "Shipped plan" })).toBeNull();
+    await userEvent.click(within(list()).getByRole("checkbox", { name: "Show finished" }));
+    expect(await within(list()).findByRole("region", { name: "Shipped plan" })).toBeInTheDocument();
+  });
+
+  it("says No Tickets yet. with Show finished on and nothing there", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    renderApp(fake, "/?view=inbox&list=tickets&finished=1");
+    expect(await within(list()).findByText("No Tickets yet.")).toBeInTheDocument();
   });
 
   it("says so when nothing is there", async () => {

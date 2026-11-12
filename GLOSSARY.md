@@ -324,6 +324,10 @@ _Avoid_: Flat view, list mode
 The grouping of a State list that shows the Specs with Tickets in it as Spec rows, each expanding to those Tickets, instead of the Tickets alone.
 _Avoid_: Spec-first view, tree view, Spec mode
 
+**Show finished**:
+The All Tickets view's checkbox, off by default, that brings back its Done and Cancelled Tickets; Accepted Tickets are always shown. It is kept in the URL as `finished=1` and per browser beside the grouping.
+_Avoid_: Show done, history toggle
+
 **Spec row**:
 The one row the UI shows a Spec in, in the Requirements view, Needs Me and By Spec: ID, kind, title and needs-you dot, then the Stage strip for a Requirement or the State chips for any other Spec, then the headline. It expands to the Spec's Tickets.
 _Avoid_: Spec card, Requirement row, bs-card
