@@ -68,7 +68,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Each Claim gets a worktree of its own under `~/src/acme-shop.worktrees`, named after the Ticket. A Stage's worktree is read-only and detached at the base's tip; the Stages write to Code Central, not to the repository.
 
-   The session's prompt is the Stage's skill and the Ticket, `/grilling acme-shop-2`. The rest of what the session needs, its Ticket and Claim, how the Factory runs it and the Stage Guide, goes once into its system prompt (`--append-system-prompt`), which every resume passes again so a session keeps it after a compaction.
+   The session's prompt is the Stage's skill and the Ticket, `/grilling acme-shop-2`. The rest of what the session needs, its Ticket and Claim, how the Factory runs it and the Stage Guide, goes once into its system prompt (`--append-system-prompt`), which every resume passes again so a session keeps it after a compaction. The guide is the Project's own, built by Code Central and returned by `claim`, so the Factory needs no flag for what it says: the Project's [Stage Guides](setting-up-a-project.md#stage-guides) settings decide it. Only when an older service's `claim` returns no guide does the Factory ask for it with `get_stage_guide`, passing its Project.
 
    Check: `acme-shop-2` is In Progress, and the Requirement's row reads *Grilling: a Factory is on it*. Nothing needs you yet.
 

@@ -1,0 +1,1 @@
+- When understanding existing code means reading across several files, ask an Explore subagent and keep its answer, not the files; read the file you will change yourself.

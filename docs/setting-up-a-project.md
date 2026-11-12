@@ -457,6 +457,16 @@ Each row has a **Model**, typed in as `claude --model` takes it, such as `opus` 
 
 **Save** replaces every row at once, and every open UI tab shows them. A model that is blank or spans more than one line, or an effort outside the valid levels, is refused, with the reason under the table. A Ticket's own `model` and `effort` Tags, which its Ticket panel sets, override its row; [Model and effort](running-the-factory.md#model-and-effort) gives the whole order. A change applies from each Ticket's next turn, so there is no need to restart the Factory.
 
+## Stage Guides
+
+Code Central gives each Claim a Stage Guide, its instructions for that kind of work. A guide is the Project's own, and only a named Project setting can change what it says. There is one so far, **Subagent Exploration**, which is on by default. While it is on, the implementation guide tells the agent to ask an Explore subagent when understanding existing code means reading across several files, and to keep its answer, not the files. Turn it off for a Project whose agents have no subagents or can't afford them: the guide then has no such line and no empty bullet where it was.
+
+A Project stored before the setting existed reads as on, so nothing changes until you turn it off. Every Project read shows it as `stage_guides`, as in `{"subagent_exploration": true}`. Only you set it, over HTTP from Project Options with `POST /api/p/{key}/set_subagent_exploration` and `{"on": false}`; agents have no tool or command for it.
+
+A change applies from the next Claim and the next `get_stage_guide` call. A session already running, or one resumed after a Round, keeps the guide in the system prompt it started with, unlike Models, which apply from each Ticket's next turn. To read the guide your Project's agents get, `GET /api/p/{key}/stage-guides/{stage}` or `code-central get-stage-guide <stage>`, which prints the configured Project's guide (`--project` names another).
+
+A later optional line follows the same pattern: one named setting, stored as the opposite so its zero value keeps the line in, and one fragment in `core/stageguides/fragments/`, which the guide's placeholder line (`<!-- subagent-exploration -->`) marks the place of. [ADR 0034](adr/0034-a-stage-guide-can-vary-by-project-only-through-named-project-settings-that-the-human-sets.md) records the decision.
+
 ## When `init` behaves differently
 
 ### A repository you don't own: `init --local`
