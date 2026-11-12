@@ -19,6 +19,7 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/home"
+	"github.com/tomoram/code-central/store"
 )
 
 // Env is everything the Factory touches outside itself, so tests can run
@@ -101,7 +102,6 @@ type options struct {
 	bypass   bool
 	model    string
 	effort   string
-	base     string
 	project  string
 	verbose  bool
 }
@@ -115,11 +115,16 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.BoolVar(&o.bypass, "bypass-permissions", false, "run every session in bypassPermissions mode")
 	fs.StringVar(&o.model, "model", "", "the model for every start and resume a Ticket's model Tag doesn't set")
 	fs.StringVar(&o.effort, "effort", "", "the effort for every start and resume a Ticket's effort Tag doesn't set")
-	fs.StringVar(&o.base, "base", "", "the branch work starts from (default: the branch checked out)")
+	fs.String("base", "", "removed: the base is the Project's Base branch setting")
 	fs.BoolVar(&o.verbose, "verbose", false, "print a line for each tool call the agents make")
 	fs.StringVar(&o.project, "project", "", "Project Key (default $CODE_CENTRAL_PROJECT, else the nearest .mcp.json)")
 	if err := fs.Parse(args); err != nil {
 		return o, err
+	}
+	refused := false
+	fs.Visit(func(fl *flag.Flag) { refused = refused || fl.Name == "base" })
+	if refused {
+		return o, errors.New("--base is gone: the base is the Project's setting now; set it in Project Options' Base branch field")
 	}
 	if fs.NArg() > 0 {
 		return o, fmt.Errorf("unexpected argument %q", fs.Arg(0))
@@ -154,7 +159,7 @@ func Run(ctx context.Context, args []string, e Env) int {
 		return exitRefused
 	}
 	defer f.lock.Close()
-	f.printf("base: %s", f.base)
+	f.printf("base: %s", f.baseBranch())
 	if o.bypass {
 		f.printf("warning: --bypass-permissions: every session runs in bypassPermissions mode, with no permission checks")
 	}
@@ -218,7 +223,6 @@ type factory struct {
 	// use it.
 	repository repo
 	project    string
-	base       string
 	worktrees  string // <repo-parent>/<repo-dir>.worktrees
 	client     *client.Client
 	events     *sender[core.SessionEvent]  // posts Session Events
@@ -242,11 +246,28 @@ type factory struct {
 	// human to merge under the Branch Landing Method, already said; the
 	// poll's own.
 	leftOnBranch map[string]bool
+	// mergedOn is where the Factory merged each Ticket it hasn't landed
+	// yet, so a change of base leaves it to finish there.
+	mergedOn map[string]mergeOn
+	// oldBases are the bases the Project named earlier in this run.
+	oldBases []string
 
 	// baseDiverged is whether the local base holds commits the Push
 	// remote's doesn't, so nothing lands and no branch is cut. baseCurrent
 	// is whether it was fast-forwarded to the remote's this poll.
 	baseDiverged, baseCurrent bool
+	// base is the Project's base as the last read of it said; baseMu
+	// guards it, because turns read it from their own goroutines.
+	baseMu sync.Mutex
+	base   string
+	// baseMissing is whether the base exists neither locally nor on the
+	// Landing remote, as the last poll found; mcpBase is the base whose
+	// .mcp.json was last found committed, and mcpHeld whether the file
+	// is missing from the base, so no branch or worktree is cut. All are
+	// the poll's own, like baseDiverged.
+	baseMissing bool
+	mcpBase     string
+	mcpHeld     bool
 	// reportBaseFailing is whether the last report_base failed, so a
 	// failure warns once.
 	reportBaseFailing bool
@@ -291,7 +312,7 @@ type factory struct {
 // newFactory is a factory with nothing found out yet: start fills in the
 // rest.
 func newFactory(e Env, o options) *factory {
-	return &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
+	return &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, mergedOn: map[string]mergeOn{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
 }
 
 // start makes every start-up check, refusing with the reason.
@@ -319,18 +340,6 @@ func start(e Env, o options) (*factory, error) {
 		return nil, errors.New("no Project: pass --project <key>, set CODE_CENTRAL_PROJECT, or run `code-central init` in the repository")
 	}
 	f.project = project
-	if f.base = o.base; f.base == "" {
-		b, err := f.gitOut(top, "symbolic-ref", "--short", "-q", "HEAD")
-		if err != nil || b == "" {
-			return nil, errors.New("HEAD is detached: check out the branch work should start from, or pass --base <branch>")
-		}
-		f.base = b
-	} else if _, err := f.gitOut(top, "rev-parse", "--verify", "-q", f.base+"^{commit}"); err != nil {
-		return nil, fmt.Errorf("--base %s isn't a commit in this repository", f.base)
-	}
-	if _, err := f.gitOut(top, "cat-file", "-e", f.base+":.mcp.json"); err != nil {
-		return nil, fmt.Errorf(".mcp.json isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", f.base, f.base)
-	}
 	if f.claude, ok = e.lookPath("claude"); !ok {
 		return nil, errors.New("claude isn't on PATH")
 	}
@@ -355,6 +364,18 @@ func start(e Env, o options) (*factory, error) {
 	f.usage = newSender(f.client.PostUsage, every, timeout)
 	// A Project that can't be read yet is checked on every poll instead.
 	p, readErr := f.client.GetProject(context.Background(), project)
+	// The base is the Project's, read again on every poll; until it can be
+	// read, it is the default.
+	f.base = store.DefaultBase
+	if readErr == nil {
+		f.base = p.Landing.Base
+	}
+	if _, err := f.gitOut(top, "rev-parse", "--verify", "-q", f.base+"^{commit}"); err == nil {
+		if !f.mcpCommitted() {
+			return nil, errors.New(f.mcpMessage())
+		}
+		f.mcpBase = f.base
+	}
 	if readErr == nil {
 		if why := f.missingRemote(p.Landing.Remote, landingPolicy(p)); why != "" {
 			return nil, errors.New(why)
@@ -434,4 +455,36 @@ func writable(dir string) error {
 // gitOut runs git in dir and returns its trimmed output.
 func (f *factory) gitOut(dir string, args ...string) (string, error) {
 	return gitOut(f.git, f.e.Environ, dir, args...)
+}
+
+// baseBranch is the Project's base as of the last poll's read.
+func (f *factory) baseBranch() string {
+	f.baseMu.Lock()
+	defer f.baseMu.Unlock()
+	return f.base
+}
+
+// setBase takes the base the Project names this poll. A change of base
+// says so and forgets what was known of the old one.
+func (f *factory) setBase(base string) {
+	f.baseMu.Lock()
+	old := f.base
+	f.base = base
+	f.baseMu.Unlock()
+	if old != base {
+		f.printf("base: %s, was %s", base, old)
+		f.baseDiverged, f.baseCurrent = false, false
+		f.oldBases = append(f.oldBases, old)
+	}
+}
+
+// mcpCommitted is whether .mcp.json is committed on the base.
+func (f *factory) mcpCommitted() bool {
+	_, err := f.gitOut(f.repo, "cat-file", "-e", f.baseBranch()+":.mcp.json")
+	return err == nil
+}
+
+func (f *factory) mcpMessage() string {
+	b := f.baseBranch()
+	return fmt.Sprintf(".mcp.json isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", b, b)
 }

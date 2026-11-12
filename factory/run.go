@@ -344,6 +344,10 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		// No branch is cut from a base that disagrees with the host's.
 		return false
 	}
+	if f.baseMissing || f.mcpHeld {
+		// Every claim cuts a branch or a worktree from the base.
+		return false
+	}
 	next, ok := f.nextRunnable(ctx)
 	if !ok {
 		return false
@@ -394,7 +398,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		return true
 	}
 	mc := f.withFlags(stage, res.ModelChoice)
-	f.startTurn(ctx, c, wt, mc, append(f.startArgs(c, mc), firstPrompt(c, stage, f.base, conflicts)))
+	f.startTurn(ctx, c, wt, mc, append(f.startArgs(c, mc), firstPrompt(c, stage, f.baseBranch(), conflicts)))
 	return true
 }
 

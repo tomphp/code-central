@@ -28,12 +28,12 @@ func (f *factory) syncBase(ctx context.Context, remote string) bool {
 		}
 		return false
 	}
-	local, err := f.repository.commit("refs/heads/" + f.base)
+	local, err := f.repository.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
-		f.printf("warning: the base, %s, isn't a branch, so the Factory can't keep it level with %s", f.base, remote)
+		f.printf("warning: the base, %s, isn't a branch, so the Factory can't keep it level with %s", f.baseBranch(), remote)
 		return false
 	}
-	theirs, err := f.repository.commit("refs/remotes/" + remote + "/" + f.base)
+	theirs, err := f.repository.commit("refs/remotes/" + remote + "/" + f.baseBranch())
 	if err != nil {
 		// The remote has no base yet: nothing to catch up with.
 		f.baseDiverged = false
@@ -46,10 +46,10 @@ func (f *factory) syncBase(ctx context.Context, remote string) bool {
 	case f.repository.isAncestor(local, theirs):
 		f.noteBase(ctx, false, local, theirs)
 		if why := f.advanceBase(local, theirs); why != "" {
-			f.printf("warning: can't fast-forward %s to %s yet: %s", f.base, remote, firstLine(why))
+			f.printf("warning: can't fast-forward %s to %s yet: %s", f.baseBranch(), remote, firstLine(why))
 			return false
 		}
-		f.printf("%s: fast-forwarded to %s/%s at %s", f.base, remote, f.base, short(theirs))
+		f.printf("%s: fast-forwarded to %s/%s at %s", f.baseBranch(), remote, f.baseBranch(), short(theirs))
 		return true
 	}
 	f.noteBase(ctx, true, local, theirs)
@@ -63,10 +63,10 @@ func (f *factory) syncBase(ctx context.Context, remote string) bool {
 func (f *factory) noteBase(ctx context.Context, diverged bool, local, remote string) {
 	defer f.reportBase(ctx, diverged, local, remote)
 	if diverged && !f.baseDiverged {
-		f.printf("warning: the base, %s, has diverged from the remote's: it is at %s and the remote's at %s. Nothing lands and no branch is cut until you reconcile them by hand", f.base, short(local), short(remote))
+		f.printf("warning: the base, %s, has diverged from the remote's: it is at %s and the remote's at %s. Nothing lands and no branch is cut until you reconcile them by hand", f.baseBranch(), short(local), short(remote))
 	}
 	if !diverged && f.baseDiverged {
-		f.printf("%s: no longer diverged from the remote's", f.base)
+		f.printf("%s: no longer diverged from the remote's", f.baseBranch())
 	}
 	f.baseDiverged = diverged
 }
@@ -79,9 +79,14 @@ func (f *factory) reportBase(ctx context.Context, diverged bool, local, remote s
 	if diverged {
 		state = core.BaseDiverged
 	}
+	f.reportBaseState(ctx, core.ReportBaseInput{State: state, Local: local, Remote: remote})
+}
+
+// reportBaseState sends one report_base.
+func (f *factory) reportBaseState(ctx context.Context, in core.ReportBaseInput) {
 	ctx, cancel := context.WithTimeout(ctx, postTimeout)
 	defer cancel()
-	_, err := f.client.ReportBase(ctx, f.project, core.ReportBaseInput{State: state, Local: local, Remote: remote})
+	_, err := f.client.ReportBase(ctx, f.project, in)
 	if err != nil && ctx.Err() == nil && !f.reportBaseFailing {
 		f.printf("warning: can't report the base to Code Central: %v", err)
 	}
@@ -94,12 +99,12 @@ func (f *factory) reportBase(ctx context.Context, diverged bool, local, remote s
 // Watcher to open a pull request on.
 func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, landing core.LandingView, policy store.LandingPolicy) {
 	if tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged {
-		f.landMerged(ctx, tk)
+		f.landMerged(ctx, tk, landing.Remote)
 		return
 	}
 	head, _, err := f.workOf(tk)
 	if err == nil && tk.PullRequest == nil && !f.pushedAlready(landing.Remote, tk.Branch) && f.baseCurrent && f.inBase(head) {
-		f.printf("%s: nothing to merge into %s", tk.ID, f.base)
+		f.printf("%s: nothing to merge into %s", tk.ID, f.baseBranch())
 		f.landAt(ctx, tk, head)
 		return
 	}
@@ -121,16 +126,28 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, landi
 	f.reportPushed(ctx, tk, policy, tk.Branch, f.remoteTip(landing.Remote, tk.Branch, head))
 }
 
+// inOldBase reports whether the fetched remote holds commit on a base the
+// Project named earlier in this run: an open pull request keeps its target
+// when the base changes, so it merges there.
+func (f *factory) inOldBase(commit, remote string) bool {
+	for _, b := range f.oldBases {
+		if f.repository.isAncestor(commit, "refs/remotes/"+remote+"/"+b) {
+			return true
+		}
+	}
+	return false
+}
+
 // landMerged lands tk, whose pull request is reported merged, at the merge
 // commit, once the fetched base holds it. Until then it waits for a later
 // poll.
-func (f *factory) landMerged(ctx context.Context, tk core.TicketView) {
+func (f *factory) landMerged(ctx context.Context, tk core.TicketView, remote string) {
 	merge := tk.PullRequest.MergeCommit
-	if !f.baseCurrent || !f.inBase(merge) {
+	if !f.baseCurrent || !f.inBase(merge) && !f.inOldBase(merge, remote) {
 		key := tk.ID + "@" + merge
 		if !f.leftOnBranch[key] {
 			f.leftOnBranch[key] = true
-			f.printf("%s: its pull request is merged at %s, which %s doesn't hold yet: waiting for it", tk.ID, short(merge), f.base)
+			f.printf("%s: its pull request is merged at %s, which %s doesn't hold yet: waiting for it", tk.ID, short(merge), f.baseBranch())
 		}
 		return
 	}
@@ -142,7 +159,7 @@ func (f *factory) landMerged(ctx context.Context, tk core.TicketView) {
 // merged, as a branch merged by hand does under Branch. A Ticket in any
 // other State whose pull request is merged gets a warning line and a
 // comment, once.
-func (f *factory) detectMergedPullRequests(ctx context.Context) {
+func (f *factory) detectMergedPullRequests(ctx context.Context, remote string) {
 	for _, tk := range f.landable(ctx, mergeableStates...) {
 		if f.halted(ctx) || f.paused() {
 			return
@@ -151,7 +168,7 @@ func (f *factory) detectMergedPullRequests(ctx context.Context) {
 			continue
 		}
 		if tk.State == store.InReview {
-			f.landMerged(ctx, tk)
+			f.landMerged(ctx, tk, remote)
 			continue
 		}
 		key := tk.ID + "@" + tk.PullRequest.MergeCommit

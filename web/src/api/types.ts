@@ -28,6 +28,7 @@ export type NeedsMeReason =
   | "ci_failed"
   | "ci_cancelled"
   | "base_diverged"
+  | "base_missing"
   | "pull_request_closed"
   | "to_merge"
   | "ci_unavailable"
@@ -66,6 +67,8 @@ export interface Landing {
   repository: string;
   // The environment variable holding the Azure Repos PAT, ADO_PAT by default.
   pat_env: string;
+  // The branch the Project's work is cut from and lands on.
+  base: string;
   // The Pull Request Watcher's status: not_reported unless the method is
   // Pull Request.
   watcher: PullRequestWatcherStatus;
@@ -94,10 +97,11 @@ export interface PullRequestWatcherStatus extends Omit<CIWatcherStatus, "problem
 export type PullRequestWatcherReport = Omit<PullRequestWatcherStatus, "since"> & { state: "watching" | "error" };
 
 // What setLandingMethod takes: the Code Host and repository are derived, and
-// leaving land_per_spec or pat_env out keeps the stored value.
-export type LandingInput = Omit<Landing, "land_per_spec" | "code_host" | "repository" | "pat_env" | "watcher" | "open_pull_requests"> & {
+// leaving land_per_spec, pat_env or base out keeps the stored value.
+export type LandingInput = Omit<Landing, "land_per_spec" | "code_host" | "repository" | "pat_env" | "base" | "watcher" | "open_pull_requests"> & {
   land_per_spec?: boolean;
   pat_env?: string;
+  base?: string;
 };
 
 // A CI Provider: the CI system CI Tracking watches.
@@ -490,6 +494,11 @@ export interface BaseDiverged {
   remote: string;
 }
 
+export interface BaseMissing {
+  base: string;
+  fix: string;
+}
+
 export interface NeedsMeRow {
   project: string;
   id: string;
@@ -524,6 +533,9 @@ export interface NeedsMeRow {
   // base_diverged is the local and remote base commits (base_diverged,
   // whose row has no Ticket: its id is empty).
   base_diverged?: BaseDiverged;
+  // base_missing is the missing base's branch and the fix (base_missing,
+  // whose row has no Ticket either).
+  base_missing?: BaseMissing;
   // ci_group is the Spec's Tickets waiting with this one, on a per-Spec CI
   // item (code-central-379).
   ci_group?: CIGroup;

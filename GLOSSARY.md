@@ -144,6 +144,13 @@ _Avoid_: PR bot, merge poller
 The Needs Me reason of an Accepted Ticket whose pull request was closed or abandoned without merging: send it back (to Ready, with a note) or cancel it. It clears if the pull request is reopened.
 _Avoid_: PR abandoned
 
+**Base**:
+The branch, a Project setting (`main` by default), that a Project's work is cut from and lands on, under every Landing Method.
+_Avoid_: target branch, merge branch
+
+**Base missing**:
+The Needs Me reason of a Project whose base exists neither locally nor on the Push remote. It is one Focus Item per Project naming the branch and the fix. Until a later poll finds the branch, the Factory neither lands nor cuts new branches. It sits beside Base diverged.
+
 **Base diverged**:
 The Needs Me reason of a Project under Pull Request whose local base holds commits the remote base doesn't, so the Factory can't fast-forward it. It is one Focus Item per Project showing the local and remote commits and the fix, and the Factory neither lands nor cuts new branches until the human reconciles the base and its next poll fast-forwards cleanly.
 _Avoid_: Out of sync, base conflict
@@ -294,7 +301,7 @@ Who made a change: the human, an agent, or an Integration.
 _Avoid_: User, caller
 
 **Needs Me**:
-The Tickets waiting on the human before they can move, and a Project's Base diverged.
+The Tickets waiting on the human before they can move, and a Project's Base diverged or Base missing.
 _Avoid_: Inbox, blocked
 
 **By Ticket**:
@@ -346,7 +353,7 @@ A view showing the human one Focus Item at a time from Needs Me, moving to the n
 _Avoid_: Zen mode, queue view
 
 **Focus Item**:
-One thing in Needs Me the human can decide alone: one open Question, one waiting Ticket, or a Project's Base diverged.
+One thing in Needs Me the human can decide alone: one open Question, one waiting Ticket, or a Project's Base diverged or Base missing.
 _Avoid_: Action, card, task
 
 **Activity Dashboard**:

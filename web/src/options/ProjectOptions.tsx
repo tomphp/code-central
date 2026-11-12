@@ -105,7 +105,7 @@ function FactoriesSection({
 const METHODS: { method: LandingMethod; label: string; hint: string }[] = [
   {
     method: "merge",
-    label: "Merge into base",
+    label: "Merge",
     hint: "The Factory merges the accepted branch into the base and lands the Ticket.",
   },
   {
@@ -131,14 +131,14 @@ function LandingMethodSection({
   api: Api;
   project: ProjectRow;
 }) {
-  const { method, push, remote, land_per_spec, pat_env, code_host, repository } = project.landing;
+  const { method, push, remote, land_per_spec, pat_env, base, code_host, repository } = project.landing;
   const [draft, setDraft] = useState<Landing>(project.landing);
   const [error, setError] = useState<ApiError>();
   const [saved, setSaved] = useState(false);
   const id = useId();
   useEffect(
-    () => setDraft((d) => ({ ...d, method, push, remote, land_per_spec, pat_env })),
-    [method, push, remote, land_per_spec, pat_env],
+    () => setDraft((d) => ({ ...d, method, push, remote, land_per_spec, pat_env, base })),
+    [method, push, remote, land_per_spec, pat_env, base],
   );
 
   const edit = (patch: Partial<Landing>) => {
@@ -150,8 +150,8 @@ function LandingMethodSection({
     e.preventDefault();
     setError(undefined);
     // The draft becomes what was stored: the service may tidy it into no change.
-    const { method, push, remote, land_per_spec, pat_env } = draft;
-    api.setLandingMethod(project.key, { method, push, remote, land_per_spec, pat_env }).then(
+    const { method, push, remote, land_per_spec, pat_env, base } = draft;
+    api.setLandingMethod(project.key, { method, push, remote, land_per_spec, pat_env, base }).then(
       (v) => {
         setDraft(v.landing);
         setSaved(true);
@@ -164,8 +164,10 @@ function LandingMethodSection({
     draft.push !== push ||
     draft.remote !== remote ||
     draft.land_per_spec !== land_per_spec ||
-    draft.pat_env !== pat_env;
+    draft.pat_env !== pat_env ||
+    draft.base !== base;
   const remoteError = error?.field === "remote";
+  const baseError = error?.field === "base";
   const pullRequest = draft.method === "pull_request";
   const pushRemoteURL = project.ci.push_remote_url;
 
@@ -178,6 +180,16 @@ function LandingMethodSection({
             The Project is archived: unarchive it to change its options.
           </p>
         )}
+        <label className="project-options-remote">
+          Base branch
+          <input
+            type="text"
+            value={draft.base}
+            onChange={(e) => edit({ base: e.target.value })}
+            aria-invalid={baseError || undefined}
+            aria-describedby={baseError ? `${id}-error` : undefined}
+          />
+        </label>
         {METHODS.map((m) => (
           <div key={m.method} className="project-options-choice">
             <label>

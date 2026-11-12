@@ -84,6 +84,9 @@ type SetLandingMethodInput struct {
 	// PATEnv names the environment variable holding the Azure Repos PAT
 	// under Pull Request; left out, it keeps the stored name.
 	PATEnv string `json:"pat_env,omitempty"`
+	// Base is the branch work is cut from and lands on; left out, it keeps
+	// the stored one. Only its name is checked, never whether it exists.
+	Base *string `json:"base,omitempty"`
 }
 
 // SetLandingMethod is the human's set_landing_method: how the Project's
@@ -108,6 +111,11 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 	if patEnv != "" && !patEnvPattern.MatchString(patEnv) {
 		return ProjectView{}, invalid("pat_env", "%q is not an environment variable's name, such as %s", patEnv, store.DefaultPATEnv)
 	}
+	if in.Base != nil {
+		if err := checkBranchName(strings.TrimSpace(*in.Base)); err != nil {
+			return ProjectView{}, invalid("base", "%s", err)
+		}
+	}
 	if err := c.checkPullRequest(ctx, key, store.Landing{Method: in.Method, PATEnv: patEnv}); err != nil {
 		return ProjectView{}, err
 	}
@@ -120,6 +128,10 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		p, _ := w.Project(key)
 		l.LandPerSpec = p.Landing.LandPerSpec
 		l.PATEnv = p.Landing.PATEnv
+		l.Base = p.Landing.Base
+		if in.Base != nil {
+			l.Base = strings.TrimSpace(*in.Base)
+		}
 		if patEnv != "" {
 			l.PATEnv = patEnv
 		}
@@ -204,6 +216,9 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 			row := ProjectRow{ProjectView: c.projectView(p)}
 			row.Landing.OpenPullRequests = openPullRequests(r, p.Key, p.Landing.Method)
 			if _, ok := c.baseDivergedRow(p); ok {
+				row.NeedsMe++
+			}
+			if _, ok := c.baseMissingRow(p); ok {
 				row.NeedsMe++
 			}
 			for _, t := range r.Tickets(p.Key) {

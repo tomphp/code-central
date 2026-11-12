@@ -20,7 +20,7 @@ import (
 // The ceilings in bytes, which the Context Report measures in.
 const (
 	// workflowBudget is the whole get_workflow response.
-	workflowBudget = 12400
+	workflowBudget = 12550
 	// ticketBudget is the default get_ticket of redone's acme-2.
 	ticketBudget = 1100
 	// acknowledgementBudget is each write's default result.

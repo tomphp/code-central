@@ -142,3 +142,68 @@ func TestBaseDivergedCountsInTheProjectsNeedsMe(t *testing.T) {
 		t.Fatalf("rows %+v err %v, want needs_me 1", rows, err)
 	}
 }
+
+func missingRow(t *testing.T, f fixture) (core.NeedsMeRow, bool) {
+	t.Helper()
+	v, err := f.core.NeedsMe(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, g := range v.Groups {
+		if g.Reason == core.ReasonBaseMissing {
+			if len(g.Tickets) != 1 {
+				t.Fatalf("group %+v, want one item per Project", g)
+			}
+			return g.Tickets[0], true
+		}
+	}
+	return core.NeedsMeRow{}, false
+}
+
+func TestAMissingBaseShowsUnderEveryLandingMethod(t *testing.T) {
+	for _, method := range []store.LandingMethod{store.LandingMerge, store.LandingBranch, store.LandingPullRequest} {
+		f := newFixture(t)
+		f.pullRequestProject(t)
+		if _, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: method}); err != nil {
+			t.Fatal(err)
+		}
+		// local and remote are ignored with missing.
+		f.reportBase(t, core.ReportBaseInput{State: core.BaseMissing, Local: "ignored"})
+		row, ok := missingRow(t, f)
+		if !ok || row.Project != "acme" || row.ID != "" || row.BaseMissing == nil || row.BaseMissing.Base != "main" {
+			t.Fatalf("%s: row %+v ok=%v, want Base missing naming main", method, row, ok)
+		}
+		if _, ok := baseRow(t, f); ok {
+			t.Fatalf("%s: Base diverged shows beside Base missing", method)
+		}
+		if rows, _ := f.core.ListProjects(ctx); len(rows) != 1 || rows[0].NeedsMe != 1 {
+			t.Fatalf("%s: rows %+v, want needs_me 1", method, rows)
+		}
+		f.reportBase(t, core.ReportBaseInput{State: core.BaseCurrent, Local: "a", Remote: "a"})
+		if _, ok := missingRow(t, f); ok {
+			t.Fatalf("%s: Base missing still shows once the base is current", method)
+		}
+	}
+}
+
+func TestBaseMissingLapsesWithTheHeartbeat(t *testing.T) {
+	f := newFixture(t)
+	f.pullRequestProject(t)
+	f.reportBase(t, core.ReportBaseInput{State: core.BaseMissing})
+	f.clock.Advance(time.Hour)
+	if _, ok := missingRow(t, f); ok {
+		t.Fatal("Base missing outlived the Factory's heartbeat")
+	}
+}
+
+func TestBaseMissingStaysOffAnArchivedProject(t *testing.T) {
+	f := newFixture(t)
+	f.pullRequestProject(t)
+	f.reportBase(t, core.ReportBaseInput{State: core.BaseMissing})
+	if _, err := f.core.ArchiveProject(human, "acme"); err != nil {
+		t.Skipf("cannot archive: %v", err)
+	}
+	if _, ok := missingRow(t, f); ok {
+		t.Fatal("Base missing shows on an archived Project")
+	}
+}

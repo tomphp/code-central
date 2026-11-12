@@ -114,3 +114,39 @@ func commented(tk core.TicketView, parts ...string) bool {
 	}
 	return false
 }
+
+func TestAnAcceptedTicketIsMergedIntoTheBaseTheProjectNames(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.Git("branch", "release")
+	base := "release"
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Base: &base})
+	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
+	oldMain := h.Git("rev-parse", "main")
+	oldRelease := h.Git("rev-parse", "release")
+
+	r := h.Start()
+	h.WaitForState(id, store.Done)
+
+	if h.Git("rev-parse", "main") != oldMain {
+		t.Error("main moved, want the merge on release")
+	}
+	merge := h.Git("rev-parse", "release")
+	if got := h.Git("log", "-1", "--format=%P", merge); got != oldRelease+" "+commit {
+		t.Errorf("release's tip has parents %q, want %q then %q", got, oldRelease, commit)
+	}
+
+	// Changing the base takes hold on the next poll.
+	h.Git("branch", "next")
+	next := "next"
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Base: &next})
+	id2, commit2 := accepted(h, "Another feature", "other.txt", "other\n")
+	r.Poll()
+	h.WaitForState(id2, store.Done)
+	if h.Git("rev-parse", "release") != merge {
+		t.Error("release moved after the base changed")
+	}
+	if got := h.Git("log", "-1", "--format=%P", "next"); !strings.HasSuffix(got, " "+commit2) {
+		t.Errorf("next's tip has parents %q, want it to end at %s", got, commit2)
+	}
+}

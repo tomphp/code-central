@@ -37,12 +37,11 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Step 3 of [A brand new repository](setting-up-a-project.md#a-brand-new-repository) commits it.
 
-   `code-central-factory -h` lists its flags. These are the ones that matter:
+   The base, the branch work starts from and lands on, is the Project's **Base branch** setting in Project Options (`main` by default), read again on every poll. The Factory doesn't care which branch is checked out, or whether HEAD is detached. When you change it, the Factory prints `base: release, was main` and applies the new base to every step not yet taken: an Accepted Ticket or waiting Spec Branch not yet merged merges into it, and so does a branch in progress. Work already merged into the old base finishes there (its push and CI), an open pull request keeps its target, and a Ticket waiting under Branch is watched on the new base. The Factory remembers where it merged only while it runs. `code-central-factory -h` lists its flags. These are the ones that matter:
 
    | Flag | What it does |
    | --- | --- |
    | `--parallel <n>` | The most `claude` turns running at once. The default is 3. |
-   | `--base <branch>` | The branch work starts from, and the one it merges into when it lands. The default is the branch checked out when you start it, here `main`. |
    | `--model <model>` | The model for every session it starts or resumes, such as `--model opus`, unless the Ticket sets one. The default is Claude Code's own. See [Model and effort](#model-and-effort). |
    | `--effort <level>` | The effort for every session it starts or resumes, such as `--effort high`, unless the Ticket sets one. The default is Claude Code's own. It must be a level `claude --help` lists; see [What `claude` accepts](#what-claude-accepts). |
    | `--bypass-permissions` | Runs every session in `bypassPermissions` mode, with no permission checks. It prints a warning line at the start. |
@@ -391,7 +390,7 @@ When a Map's Ticket asks you a Round or finishes into In Review, it waits on you
 
 Each Project has a **Landing Method**, which you set on its **Project Options** page, from the three-dots menu on the Project. The Factory reads it again on every poll, before it lands anything, so a change applies from its next poll to every Ticket still waiting to land, with no restart.
 
-- **Merge** ("Merge into base"), the default, is what step 7 shows. The Factory merges an accepted Ticket's branch into the base and lands it. When the branch conflicts with the base it sends the Ticket back to Ready; when it can't move the base it leaves the Ticket Accepted with a comment and tries again on every poll. It keeps an Accepted Ticket's worktree until the Ticket lands, since a Ticket sent back is worked in it again.
+- **Merge**, the default, is what step 7 shows. The Factory merges an accepted Ticket's branch into the base and lands it. When the branch conflicts with the base it sends the Ticket back to Ready; when it can't move the base it leaves the Ticket Accepted with a comment and tries again on every poll. It keeps an Accepted Ticket's worktree until the Ticket lands, since a Ticket sent back is worked in it again.
 - **Branch** ("Leave as a branch") leaves the merging to you. The Factory never merges an Accepted Ticket and never sends it back for conflicts: a conflict in a branch you merge is yours to resolve. Within a poll of your **Accept**, it says so once and removes the Ticket's worktree, keeping its branch, so you can check the branch out:
 
   ```text
@@ -478,6 +477,18 @@ warning: can't fetch origin, so nothing lands this poll: fatal: unable to access
 warning: the base, main, has diverged from the remote's: it is at 9ad0fd655dd2 and the remote's at 22eeda3a9de2. Nothing lands and no branch is cut until you reconcile them by hand
 main: no longer diverged from the remote's
 ```
+
+**Base missing.** Under every Landing Method, a base that exists neither locally nor on the Push remote is reported as missing through `report_base`. Code Central shows one **Base missing** item per Project in Needs Me and Focus Mode, naming the branch and the fix: create the branch, or change the Base branch in Project Options. The report clears when a later poll reports the base current.
+
+On every poll, before it claims or lands, the Factory looks for the base. A local branch is used as it is. A base that exists only on the Push remote is created locally at the remote's commit, after a fetch. If it exists in neither place the Factory keeps running and heartbeating, but claims nothing and lands nothing until you create the branch or change the setting. It needs no restart:
+
+```text
+base: created release at 9ad0fd655dd2 from origin/release
+warning: the base, release, exists neither here nor on origin: nothing lands and no branch is cut until you create it or change the Base branch in Project Options
+base: found release again
+```
+
+When a base is found for the first time in a run, or changes, the Factory checks that `.mcp.json` is committed on it. At start it refuses to start without the file. Mid-run it cuts no new branches or worktrees, and prints the same message once, until the file is committed; landing carries on.
 
 With **Land per Spec** on, the Spec's accepted Tickets gather on the Spec Branch as under Merge. Once the Spec is ready, the Factory checks the Spec Branch against the fast-forwarded base (a conflict opens the usual Ticket on the Spec), pushes `spec/<spec id>`, and reports that commit for every waiting Ticket: one pull request opens for the Spec, with a section for each Ticket, and each later merge into the Spec Branch is pushed to update it. When it is merged, every waiting Ticket lands at its merge commit and the Spec Branch is deleted:
 
