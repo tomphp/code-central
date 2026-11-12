@@ -440,7 +440,7 @@ export class FakeApi implements Api {
       mode: "committed",
       archived: opts.archived ?? false,
       ...(opts.archived ? { archived_at: this.now.toISOString() } : {}),
-      landing: { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", watcher: { state: "not_reported" }, open_pull_requests: [] },
+      landing: { method: "merge", push: false, remote: "origin", land_per_spec: true, code_host: "", repository: "", pat_env: "ADO_PAT", base: "main", watcher: { state: "not_reported" }, open_pull_requests: [] },
       ci: {
         tracking: false,
         provider: "github_actions",
@@ -1244,7 +1244,7 @@ export class FakeApi implements Api {
   async setLandingMethod(key: string, landing: LandingInput): Promise<ProjectView> {
     this.calls.push("setLandingMethod");
     // The service decodes strictly, so a view-only field is an error there too.
-    const inputFields = ["method", "push", "remote", "land_per_spec", "pat_env"];
+    const inputFields = ["method", "push", "remote", "land_per_spec", "pat_env", "base"];
     for (const k of Object.keys(landing)) {
       if (!inputFields.includes(k)) {
         throw new ApiError(422, "invalid", `invalid JSON: json: unknown field "${k}"`, k);
@@ -1265,6 +1265,12 @@ export class FakeApi implements Api {
       throw new ApiError(422, "invalid", `"${pat}" is not an environment variable's name, such as ADO_PAT`, "pat_env");
     }
     if (pat) l.pat_env = pat;
+    const base = landing.base?.trim();
+    if (base !== undefined) {
+      const bad = branchNameProblem(base);
+      if (bad) throw new ApiError(422, "invalid", `branch name "${base}" ${bad}`, "base");
+      l.base = base || "main";
+    }
     if (!l.remote) {
       if (l.push) throw new ApiError(422, "invalid", 'Push needs a git remote to push to, such as "origin"', "remote");
       l.remote = "origin";
@@ -2166,6 +2172,20 @@ const WORKFLOW = /^[^/\\\s*?[\]]+\.ya?ml$/;
 // example of one: a workflow file for GitHub Actions, any non-empty
 // pipeline name without a separator or glob, spaces allowed, for Azure
 // Pipelines.
+// branchNameProblem is why a git branch name is refused, as the service
+// words it, or "" when it is allowed.
+function branchNameProblem(name: string): string {
+  if (name === "") return "";
+  if (name === "@") return "can't be @";
+  if (name.startsWith("-")) return "can't start with -";
+  if (name.startsWith("/") || name.endsWith("/") || name.includes("//")) return "can't start or end with /, or hold //";
+  if (name.endsWith(".") || name.includes("..")) return "can't end with . or hold ..";
+  if (name.includes("@{")) return "can't hold @{";
+  if (/[ ~^:?*[\\\x00-\x1f\x7f]/.test(name)) return "can't hold spaces, control characters or any of ~ ^ : ? * [ \\";
+  if (name.split("/").some((p) => p.startsWith(".") || p.endsWith(".lock"))) return "can't have a part starting with . or ending in .lock";
+  return "";
+}
+
 function checkWorkflow(provider: CIProvider, name: string): [boolean, string] {
   if (provider === "azure_pipelines") return [name !== "" && !/[/\\*?[\]]/.test(name), "a pipeline's name, such as Build"];
   return [WORKFLOW.test(name), "a workflow file name, such as ci.yml"];
