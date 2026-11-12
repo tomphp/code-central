@@ -1,7 +1,13 @@
 // The Project Options page: one Project's settings, reached from its menu
 // in the left pane, a section each: the Landing Method, CI with its CI
 // Rules, GitHub Issues, and Models.
-import { useEffect, useId, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+} from "react";
 import type { Api } from "../api/api";
 import type {
   ApiError,
@@ -40,6 +46,25 @@ export interface ProjectOptionsProps {
   navigate(patch: Partial<UiLocation>): void;
 }
 
+// SECTIONS is the one list the section menu is built from; each id is the id
+// of that section's fieldset. The Stage Guides section is listed for when it
+// exists (code-central-441).
+export const SECTIONS = [
+  { id: "project-options-landing-method", label: "Landing Method" },
+  { id: "project-options-ci", label: "CI" },
+  { id: "project-options-github-issues", label: "GitHub Issues" },
+  { id: "project-options-models", label: "Models" },
+  { id: "project-options-stage-guides", label: "Stage Guides" },
+];
+
+// jumpTo scrolls to a section without changing the URL, which holds the view.
+function jumpTo(id: string) {
+  return (e: MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    document.getElementById(id)?.scrollIntoView?.();
+  };
+}
+
 export function ProjectOptions({
   api,
   now,
@@ -66,11 +91,26 @@ export function ProjectOptions({
       ) : (
         <>
           <h1>{project.display_name}: Project Options</h1>
-          <LandingMethodSection api={api} project={project} />
-          <CISection api={api} project={project} />
-          <GitHubIssuesSection api={api} project={project} />
-          <ModelsSection api={api} project={project} />
-          <FactoriesSection project={project} now={now} />
+          <div className="project-options-layout">
+            <nav aria-label="Sections" className="project-options-menu">
+              <ul>
+                {SECTIONS.map((s) => (
+                  <li key={s.id}>
+                    <a href={`#${s.id}`} onClick={jumpTo(s.id)}>
+                      {s.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+            <div className="project-options-sections">
+              <LandingMethodSection api={api} project={project} />
+              <CISection api={api} project={project} />
+              <GitHubIssuesSection api={api} project={project} />
+              <ModelsSection api={api} project={project} />
+              <FactoriesSection project={project} now={now} />
+            </div>
+          </div>
         </>
       )}
     </main>
@@ -173,7 +213,7 @@ function LandingMethodSection({
 
   return (
     <form onSubmit={save}>
-      <fieldset className="project-options-section" disabled={project.archived}>
+      <fieldset id="project-options-landing-method" className="project-options-section" disabled={project.archived}>
         <legend>Landing Method</legend>
         {project.archived && (
           <p className="muted">
@@ -434,7 +474,7 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
       : undefined;
 
   return (
-    <fieldset className="project-options-section" disabled={project.archived}>
+    <fieldset id="project-options-ci" className="project-options-section" disabled={project.archived}>
       <legend>CI</legend>
       <form onSubmit={save}>
         <div className="project-options-choice">
@@ -708,7 +748,7 @@ function GitHubIssuesSection({
   const spec = project.github_issues.spec;
 
   return (
-    <fieldset className="project-options-section" disabled={project.archived}>
+    <fieldset id="project-options-github-issues" className="project-options-section" disabled={project.archived}>
       <legend>GitHub Issues</legend>
       <form onSubmit={save}>
         <div className="project-options-choice">
@@ -884,7 +924,7 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
       : undefined;
 
   return (
-    <fieldset className="project-options-section" disabled={project.archived}>
+    <fieldset id="project-options-models" className="project-options-section" disabled={project.archived}>
       <legend>Models</legend>
       <p className="project-options-hint project-options-models-hint">
         The model and effort the Factory&apos;s sessions run with, for each kind
