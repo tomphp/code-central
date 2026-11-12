@@ -26,9 +26,27 @@ type repo interface {
 	mergeTree(base, head string) (tree string, conflicts []string, err error)
 	// commitTree makes a commit of tree with these parents.
 	commitTree(tree, msg string, parents ...string) (string, error)
+	// commitTreeLike makes a commit of tree with these parents, keeping
+	// the message and author of the commit like.
+	commitTreeLike(tree, like string, parents ...string) (string, error)
+	// replayTree applies commit's change onto base without touching any
+	// working tree, as a cherry-pick does: the resulting tree, or the
+	// conflicting files.
+	replayTree(base, commit string) (tree string, conflicts []string, err error)
+	// firstParents is the commits on rev's first-parent line that exclude
+	// doesn't reach, oldest first.
+	firstParents(rev, exclude string) ([]string, error)
+	// parentsOf is commit's parents, first parent first.
+	parentsOf(commit string) ([]string, error)
 	// fastForward fast-forwards the branch checked out in the worktree dir
 	// to commit; out is git's output when it can't.
 	fastForward(dir, commit string) (out string, err error)
+	// reset moves the branch checked out in the worktree dir from old to
+	// commit, which needn't descend from old, keeping uncommitted changes
+	// to files the move doesn't touch; out is git's output when changes in
+	// the way stop it. A branch found moved from old meanwhile is put back
+	// where it was, and reported.
+	reset(dir, commit, old string) (out string, err error)
 	// updateRef moves ref from old to new, failing unless it is at old.
 	updateRef(ref, new, old string) error
 	// specBranches is the names of the branches under spec/.
@@ -88,7 +106,17 @@ func (g gitRepo) hasRemote(name string) bool {
 }
 
 func (g gitRepo) mergeTree(base, head string) (tree string, conflicts []string, err error) {
-	cmd := exec.Command(g.git, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head)
+	return g.mergeTreeWith(nil, base, head)
+}
+
+func (g gitRepo) replayTree(base, commit string) (tree string, conflicts []string, err error) {
+	return g.mergeTreeWith([]string{"--merge-base=" + commit + "^"}, base, commit)
+}
+
+// mergeTreeWith is merge-tree of base and head with these extra options.
+func (g gitRepo) mergeTreeWith(options []string, base, head string) (tree string, conflicts []string, err error) {
+	args := append([]string{"merge-tree", "--write-tree", "--name-only", "--no-messages"}, options...)
+	cmd := exec.Command(g.git, append(args, base, head)...)
 	cmd.Dir = g.dir
 	cmd.Env = g.environ
 	var stderr strings.Builder
@@ -113,15 +141,68 @@ func (g gitRepo) mergeTree(base, head string) (tree string, conflicts []string, 
 }
 
 func (g gitRepo) commitTree(tree, msg string, parents ...string) (string, error) {
+	return g.out(commitTreeArgs(tree, msg, parents)...)
+}
+
+// commitTreeArgs is the commit-tree command for tree with these parents
+// and message.
+func commitTreeArgs(tree, msg string, parents []string) []string {
 	args := []string{"commit-tree", tree}
 	for _, p := range parents {
 		args = append(args, "-p", p)
 	}
-	return g.out(append(args, "-m", msg)...)
+	return append(args, "-m", msg)
+}
+
+func (g gitRepo) commitTreeLike(tree, like string, parents ...string) (string, error) {
+	// The author's name, email and date, then the message.
+	info, err := g.out("log", "-1", "--format=%an%n%ae%n%aD%n%B", like)
+	if err != nil {
+		return "", err
+	}
+	fields := strings.SplitN(info, "\n", 4)
+	if len(fields) != 4 {
+		return "", fmt.Errorf("git log: can't read %s: %q", like, info)
+	}
+	environ := append(slices.Clone(g.environ), "GIT_AUTHOR_NAME="+fields[0], "GIT_AUTHOR_EMAIL="+fields[1], "GIT_AUTHOR_DATE="+fields[2])
+	return gitOut(g.git, environ, g.dir, commitTreeArgs(tree, fields[3], parents)...)
+}
+
+func (g gitRepo) firstParents(rev, exclude string) ([]string, error) {
+	out, err := g.out("rev-list", "--first-parent", "--reverse", rev, "^"+exclude)
+	return strings.Fields(out), err
+}
+
+func (g gitRepo) parentsOf(commit string) ([]string, error) {
+	out, err := g.out("log", "-1", "--format=%P", commit)
+	return strings.Fields(out), err
 }
 
 func (g gitRepo) fastForward(dir, commit string) (string, error) {
-	cmd := exec.Command(g.git, "merge", "--ff-only", "-q", commit)
+	return g.inWorktree(dir, "merge", "--ff-only", "-q", commit)
+}
+
+func (g gitRepo) reset(dir, commit, old string) (string, error) {
+	out, err := g.inWorktree(dir, "reset", "--keep", "-q", commit)
+	if err != nil {
+		return out, err
+	}
+	// reset moves the branch from wherever it is, and leaves where that
+	// was in ORIG_HEAD: a commit made on it since the Factory last looked
+	// would be dropped, so it goes back.
+	if was, err := gitOut(g.git, g.environ, dir, "rev-parse", "--verify", "-q", "ORIG_HEAD"); err == nil && was != old {
+		if out, err := g.inWorktree(dir, "reset", "--keep", "-q", was); err != nil {
+			return out, fmt.Errorf("the branch moved to %s meanwhile, and can't be put back: %w", was, err)
+		}
+		return "", fmt.Errorf("the branch moved to %s meanwhile", was)
+	}
+	return "", nil
+}
+
+// inWorktree runs git in the worktree dir and returns its combined
+// output, for git's own account of why it couldn't.
+func (g gitRepo) inWorktree(dir string, args ...string) (string, error) {
+	cmd := exec.Command(g.git, args...)
 	cmd.Dir = dir
 	cmd.Env = g.environ
 	out, err := cmd.CombinedOutput()

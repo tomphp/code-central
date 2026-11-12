@@ -204,6 +204,53 @@ func (r *fakeRepo) commitTree(tree, msg string, parents ...string) (string, erro
 	return r.newCommit(msg, parents...), nil
 }
 
+func (r *fakeRepo) commitTreeLike(tree, like string, parents ...string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.newCommit(r.message[like], parents...), nil
+}
+
+func (r *fakeRepo) replayTree(base, commit string) (string, []string, error) {
+	return r.mergeTree(base, commit)
+}
+
+func (r *fakeRepo) firstParents(rev, exclude string) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, _ := r.resolve(rev)
+	stop, _ := r.resolve(exclude)
+	var chain []string
+	for c != "" && !r.reachable(c, stop) {
+		chain = append([]string{c}, chain...)
+		if len(r.parents[c]) == 0 {
+			break
+		}
+		c = r.parents[c][0]
+	}
+	return chain, nil
+}
+
+func (r *fakeRepo) parentsOf(commit string) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.parents[commit]), nil
+}
+
+func (r *fakeRepo) reset(dir, commit, old string) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.dirty[dir] != "" {
+		return "error: Your local changes to the following files would be overwritten by reset:\n\t" + r.dirty[dir], errors.New("exit status 1")
+	}
+	w, _ := find(r.list, dir)
+	ref := "refs/heads/" + w.branch
+	if r.refs[ref] != old {
+		return "", fmt.Errorf("the branch moved to %s meanwhile", r.refs[ref])
+	}
+	r.refs[ref] = commit
+	return "", nil
+}
+
 func (r *fakeRepo) fastForward(dir, commit string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

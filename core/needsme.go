@@ -31,9 +31,10 @@ const (
 	// ReasonCICancelled is an Accepted Ticket whose CI result is
 	// cancelled and that the human hasn't dealt with.
 	ReasonCICancelled NeedsMeReason = "ci_cancelled"
-	// ReasonBaseDiverged is a Project under Pull Request whose Factory
-	// reports its local base diverged from the remote's (code-central-394).
-	// It is one item per Project, with no Ticket.
+	// ReasonBaseDiverged is a Project under Pull Request or Merge + Push
+	// whose Factory reports its local base diverged from the remote's
+	// (code-central-394, code-central-425). It is one item per Project,
+	// with no Ticket.
 	ReasonBaseDiverged NeedsMeReason = "base_diverged"
 	// ReasonBaseMissing is a Project whose Factory reports its base
 	// missing, under any Landing Method. It is one item per Project, with

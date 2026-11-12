@@ -152,7 +152,7 @@ _Avoid_: target branch, merge branch
 The Needs Me reason of a Project whose base exists neither locally nor on the Push remote. It is one Focus Item per Project naming the branch and the fix. Until a later poll finds the branch, the Factory neither lands nor cuts new branches. It sits beside Base diverged.
 
 **Base diverged**:
-The Needs Me reason of a Project under Pull Request or Merge + Push whose local base holds commits the remote base doesn't, while under Merge + Push the remote holds commits the local base doesn't too (a local base that is only ahead is current), so the Factory can't fast-forward it. It is one Focus Item per Project showing the local and remote commits and the fix, and the Factory neither lands nor cuts new branches until the human reconciles the base and its next poll fast-forwards cleanly.
+The Needs Me reason of a Project whose Factory can't bring the local base level with the remote base. Under Pull Request it means the local base holds commits the remote's doesn't, so the Factory can't fast-forward it. Under Merge + Push, where a local base that is only ahead is current, it means the local base and the remote's each hold commits the other lacks and the Factory couldn't move the local base onto the remote's: a rebuilt merge or a replayed commit conflicted, or an unpushed merge isn't one of the Factory's. It is one Focus Item per Project showing the local and remote commits and the fix, and the Factory neither lands nor cuts new branches until the human reconciles the base and its next poll brings it level cleanly.
 _Avoid_: Out of sync, base conflict
 
 **Land per Spec**:

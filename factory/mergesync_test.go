@@ -14,7 +14,8 @@ import (
 // Under Merge + Push the Factory fetches the Push remote and brings the
 // local base level with it before it lands or cuts a branch
 // (code-central-428): behind, it fast-forwards; level or ahead, it is
-// current; both moved, it reports Base diverged and waits.
+// current; both moved, it moves the local base onto the remote's
+// (movebase_test.go), and reports Base diverged when it can't.
 
 func TestUnderMergeAndPushARemoteThatIsAheadIsFastForwardedBeforeTheTicketLands(t *testing.T) {
 	t.Parallel()
@@ -100,20 +101,24 @@ func TestUnderMergeAndPushALocalBaseAheadOfTheRemoteIsCurrent(t *testing.T) {
 	}
 }
 
-func TestUnderMergeAndPushADivergedBaseStopsLandingAndClaiming(t *testing.T) {
+func TestUnderMergeAndPushAConflictingMoveLeavesTheBaseAsItWasAndStopsLandingAndClaiming(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	remote := h.AddRemote("origin")
 	mergeAndPush(h, "origin")
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	h.Git("push", "-q", remote.Path, "main:refs/heads/main")
-	theirs := h.CommitOn("theirs", "theirs.txt", "theirs\n")
+	theirs := h.CommitOn("theirs", "shared.txt", "theirs\n")
 	h.Git("push", "-q", remote.Path, "theirs:refs/heads/main")
-	h.CommitOn("main", "mine.txt", "mine\n")
+	mine := h.CommitOn("main", "shared.txt", "mine\n")
 	ready := h.ReadyTicket("Waits for the base")
 
 	r := h.Start()
+	r.WaitForOutput("warning: can't move main onto origin/main: " + mine[:12] + " conflicts in shared.txt")
 	r.WaitForOutput("has diverged from the remote's")
+	if got := h.Git("rev-parse", "main"); got != mine {
+		t.Errorf("main moved to %s, want it left at %s", got, mine)
+	}
 	if tk := h.Ticket(id); tk.State != store.Accepted {
 		t.Errorf("%s is %s, want it held Accepted", id, tk.State)
 	}
