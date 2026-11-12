@@ -255,6 +255,14 @@ type factory struct {
 	// guards it, because turns read it from their own goroutines.
 	baseMu sync.Mutex
 	base   string
+	// baseMissing is whether the base exists neither locally nor on the
+	// Landing remote, as the last poll found; mcpBase is the base whose
+	// .mcp.json was last found committed, and mcpHeld whether the file
+	// is missing from the base, so no branch or worktree is cut. All are
+	// the poll's own, like baseDiverged.
+	baseMissing bool
+	mcpBase     string
+	mcpHeld     bool
 	// reportBaseFailing is whether the last report_base failed, so a
 	// failure warns once.
 	reportBaseFailing bool
@@ -358,9 +366,10 @@ func start(e Env, o options) (*factory, error) {
 		f.base = p.Landing.Base
 	}
 	if _, err := f.gitOut(top, "rev-parse", "--verify", "-q", f.base+"^{commit}"); err == nil {
-		if _, err := f.gitOut(top, "cat-file", "-e", f.base+":.mcp.json"); err != nil {
-			return nil, fmt.Errorf(".mcp.json isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", f.base, f.base)
+		if !f.mcpCommitted() {
+			return nil, errors.New(f.mcpMessage())
 		}
+		f.mcpBase = f.base
 	}
 	if readErr == nil {
 		if why := f.missingRemote(p.Landing.Remote, landingPolicy(p)); why != "" {
@@ -461,4 +470,15 @@ func (f *factory) setBase(base string) {
 		f.printf("base: %s, was %s", base, old)
 		f.baseDiverged, f.baseCurrent = false, false
 	}
+}
+
+// mcpCommitted is whether .mcp.json is committed on the base.
+func (f *factory) mcpCommitted() bool {
+	_, err := f.gitOut(f.repo, "cat-file", "-e", f.baseBranch()+":.mcp.json")
+	return err == nil
+}
+
+func (f *factory) mcpMessage() string {
+	b := f.baseBranch()
+	return fmt.Sprintf(".mcp.json isn't committed on %s: every worktree starts from %s, so its sessions need it; commit it first", b, b)
 }

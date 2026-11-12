@@ -17,6 +17,9 @@ import (
 // remote, and sweeps the worktrees the Factory is done with.
 func (f *factory) landAndSweep(ctx context.Context) {
 	landing, policy, ok := f.landing(ctx)
+	if ok {
+		ok = f.locateBase(ctx, landing)
+	}
 	if ok && !f.paused() && !f.halted(ctx) && f.remoteReady(landing, policy) {
 		f.land(ctx, landing, policy)
 	}

@@ -344,6 +344,10 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		// No branch is cut from a base that disagrees with the host's.
 		return false
 	}
+	if f.baseMissing || f.mcpHeld {
+		// Every claim cuts a branch or a worktree from the base.
+		return false
+	}
 	next, ok := f.nextRunnable(ctx)
 	if !ok {
 		return false

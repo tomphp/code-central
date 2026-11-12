@@ -480,6 +480,16 @@ main: no longer diverged from the remote's
 
 **Base missing.** Under every Landing Method, a base that exists neither locally nor on the Push remote is reported as missing through `report_base`. Code Central shows one **Base missing** item per Project in Needs Me and Focus Mode, naming the branch and the fix: create the branch, or change the Base branch in Project Options. The report clears when a later poll reports the base current.
 
+On every poll, before it claims or lands, the Factory looks for the base. A local branch is used as it is. A base that exists only on the Push remote is created locally at the remote's commit, after a fetch. If it exists in neither place the Factory keeps running and heartbeating, but claims nothing and lands nothing until you create the branch or change the setting. It needs no restart:
+
+```text
+base: created release at 9ad0fd655dd2 from origin/release
+warning: the base, release, exists neither here nor on origin: nothing lands and no branch is cut until you create it or change the Base branch in Project Options
+base: found release again
+```
+
+When a base is found for the first time in a run, or changes, the Factory checks that `.mcp.json` is committed on it. At start it refuses to start without the file. Mid-run it cuts no new branches or worktrees, and prints the same message once, until the file is committed; landing carries on.
+
 With **Land per Spec** on, the Spec's accepted Tickets gather on the Spec Branch as under Merge. Once the Spec is ready, the Factory checks the Spec Branch against the fast-forwarded base (a conflict opens the usual Ticket on the Spec), pushes `spec/<spec id>`, and reports that commit for every waiting Ticket: one pull request opens for the Spec, with a section for each Ticket, and each later merge into the Spec Branch is pushed to update it. When it is merged, every waiting Ticket lands at its merge commit and the Spec Branch is deleted:
 
 ```text
