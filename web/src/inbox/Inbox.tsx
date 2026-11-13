@@ -185,6 +185,16 @@ export function Inbox({
   };
   const toggleBar = (
   <div className="bs-toggle-bar">
+    {loc.list === "tickets" && (
+      <input
+        type="search"
+        className="bs-search"
+        aria-label="Ticket ID"
+        placeholder="Ticket ID, e.g. 452"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+    )}
     <div
       className="bs-toggle"
       role="group"
@@ -196,29 +206,19 @@ export function Inbox({
           aria-pressed={grouping === g}
           onClick={() => chooseGroup(g)}
         >
-          {g === "spec" ? "By Spec" : "By Ticket"}
+          {g === "spec" ? "Spec" : "Ticket"}
         </button>
       ))}
     </div>
     {loc.list === "tickets" && (
-      <label className="bs-finished">
-        <input
-          type="checkbox"
-          checked={showFinished}
-          onChange={(e) => chooseFinished(e.target.checked)}
-        />{" "}
-        Show finished
-      </label>
-    )}
-    {loc.list === "tickets" && (
-      <input
-        type="search"
-        className="bs-search"
-        aria-label="Ticket ID"
-        placeholder="Ticket ID, e.g. 452"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      <div className="bs-toggle">
+        <button
+          aria-pressed={showFinished}
+          onClick={() => chooseFinished(!showFinished)}
+        >
+          Show finished
+        </button>
+      </div>
     )}
   </div>
   );

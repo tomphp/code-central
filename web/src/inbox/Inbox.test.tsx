@@ -630,27 +630,27 @@ const openIds = (name: string) => {
 };
 // The Spec row's own link, the one that opens the Spec.
 const specLinkOf = (name: string) => specRow(name).querySelector<HTMLElement>(`a[data-id]`)!;
-const bySpec = () => userEvent.click(within(list()).getByRole("button", { name: "By Spec" }));
+const bySpec = () => userEvent.click(within(list()).getByRole("button", { name: "Spec" }));
 
 describe("State lists By Spec", () => {
   beforeEach(() => localStorage.clear());
 
   it("shows the control on State lists only, with By Ticket the default and today's rows", async () => {
     renderApp(await bySpecWorld(), "/?view=inbox&state=Ready");
-    const byTicket = await within(list()).findByRole("button", { name: "By Ticket" });
+    const byTicket = await within(list()).findByRole("button", { name: "Ticket" });
     expect(byTicket).toHaveAttribute("aria-pressed", "true");
-    expect(within(list()).getByRole("button", { name: "By Spec" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(list()).getByRole("button", { name: "Spec" })).toHaveAttribute("aria-pressed", "false");
     expect(rowIds()).toContain("acme-6");
 
     await userEvent.click(within(nav()).getByRole("button", { name: /^Needs Me/ }));
-    expect(within(list()).queryByRole("button", { name: "By Spec" })).toBeNull();
+    expect(within(list()).queryByRole("button", { name: "Spec" })).toBeNull();
     await userEvent.click(within(nav()).getByRole("button", { name: /^Requirements/ }));
-    expect(within(list()).queryByRole("button", { name: "By Spec" })).toBeNull();
+    expect(within(list()).queryByRole("button", { name: "Spec" })).toBeNull();
   });
 
   it("groups into collapsed Spec rows in first-Ticket order, with kind, ID, n of m and chips", async () => {
     renderApp(await bySpecWorld(), "/?view=inbox&state=Ready");
-    await within(list()).findByRole("button", { name: "By Spec" });
+    await within(list()).findByRole("button", { name: "Spec" });
     await bySpec();
     expect(params().get("group")).toBe("spec");
     expect(specRows().map((c) => c.getAttribute("aria-label"))).toEqual([
@@ -716,7 +716,7 @@ describe("State lists By Spec", () => {
     await within(list()).findByRole("button", { name: "Archive finished Projects" });
     await userEvent.click(within(nav()).getByRole("button", { name: /^Failed/ }));
     expect(params().get("group")).toBe("spec");
-    expect(within(list()).getByRole("button", { name: "By Spec" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(list()).getByRole("button", { name: "Spec" })).toHaveAttribute("aria-pressed", "true");
     await userEvent.click(within(nav()).getByRole("button", { name: /^Needs Me/ }));
     expect(params().get("group")).toBe("spec");
     await userEvent.click(within(nav()).getByRole("button", { name: /^Acme/ }));
@@ -727,15 +727,15 @@ describe("State lists By Spec", () => {
 
   it("uses the last pick when the address has none, and By Ticket clears it", async () => {
     renderApp(await bySpecWorld(), "/?view=inbox&state=Ready");
-    await within(list()).findByRole("button", { name: "By Spec" });
+    await within(list()).findByRole("button", { name: "Spec" });
     await bySpec();
     expect(localStorage.getItem("code-central.inbox.group")).toBe("spec");
 
     window.history.replaceState(null, "", "/?view=inbox&state=Ready");
     act(() => window.dispatchEvent(new PopStateEvent("popstate")));
-    await waitFor(() => expect(within(list()).getByRole("button", { name: "By Spec" })).toHaveAttribute("aria-pressed", "true"));
+    await waitFor(() => expect(within(list()).getByRole("button", { name: "Spec" })).toHaveAttribute("aria-pressed", "true"));
 
-    await userEvent.click(within(list()).getByRole("button", { name: "By Ticket" }));
+    await userEvent.click(within(list()).getByRole("button", { name: "Ticket" }));
     expect(params().has("group")).toBe(false);
     expect(localStorage.getItem("code-central.inbox.group")).toBe("ticket");
     expect(rowIds()).toContain("acme-6");
@@ -749,7 +749,7 @@ describe("State lists By Spec", () => {
       throw new Error("denied");
     });
     renderApp(await bySpecWorld(), "/?view=inbox&state=Ready");
-    await within(list()).findByRole("button", { name: "By Spec" });
+    await within(list()).findByRole("button", { name: "Spec" });
     await bySpec();
     expect(params().get("group")).toBe("spec");
     get.mockRestore();
@@ -1002,7 +1002,7 @@ describe("the All Tickets view", () => {
 
   it("keeps the grouping toggle, which persists", async () => {
     renderApp(await ticketsWorld(), "/?view=inbox&list=tickets");
-    await within(list()).findByRole("button", { name: "By Spec" });
+    await within(list()).findByRole("button", { name: "Spec" });
     await bySpec();
     expect(params().get("group")).toBe("spec");
     expect(localStorage.length).toBe(1);
@@ -1027,7 +1027,7 @@ describe("the All Tickets view", () => {
 
   it("switching the grouping in a State list switches it here", async () => {
     renderApp(await ticketsWorld(), "/?state=Ready");
-    await within(list()).findByRole("button", { name: "By Spec" });
+    await within(list()).findByRole("button", { name: "Spec" });
     await bySpec();
     await allTickets();
     expect(params().get("group")).toBe("spec");
@@ -1036,18 +1036,18 @@ describe("the All Tickets view", () => {
 
   it("hides Done and Cancelled until Show finished, kept in the URL and per browser", async () => {
     renderApp(await ticketsWorld(), "/?view=inbox&list=tickets");
-    await within(list()).findByRole("checkbox", { name: "Show finished" });
+    await within(list()).findByRole("button", { name: "Show finished" });
     await waitFor(() => expect(rowIds()).not.toContain("acme-13"));
-    await userEvent.click(within(list()).getByRole("checkbox", { name: "Show finished" }));
+    await userEvent.click(within(list()).getByRole("button", { name: "Show finished" }));
     expect(params().get("finished")).toBe("1");
     await waitFor(() => expect(rowIds()).toContain("acme-13"));
     expect(localStorage.getItem("code-central.inbox.finished")).toBe("1");
 
     window.history.replaceState(null, "", "/?view=inbox&list=tickets");
     act(() => window.dispatchEvent(new PopStateEvent("popstate")));
-    await waitFor(() => expect(within(list()).getByRole("checkbox", { name: "Show finished" })).toBeChecked());
+    await waitFor(() => expect(within(list()).getByRole("button", { name: "Show finished" })).toHaveAttribute("aria-pressed", "true"));
 
-    await userEvent.click(within(list()).getByRole("checkbox", { name: "Show finished" }));
+    await userEvent.click(within(list()).getByRole("button", { name: "Show finished" }));
     expect(params().has("finished")).toBe(false);
     await waitFor(() => expect(rowIds()).not.toContain("acme-13"));
   });
@@ -1096,7 +1096,7 @@ describe("the All Tickets view", () => {
     renderApp(fake, "/?view=inbox&list=tickets&group=spec");
     await within(list()).findAllByRole("region");
     expect(within(list()).queryByRole("region", { name: "Shipped plan" })).toBeNull();
-    await userEvent.click(within(list()).getByRole("checkbox", { name: "Show finished" }));
+    await userEvent.click(within(list()).getByRole("button", { name: "Show finished" }));
     expect(await within(list()).findByRole("region", { name: "Shipped plan" })).toBeInTheDocument();
   });
 
