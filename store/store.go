@@ -90,7 +90,77 @@ type Project struct {
 	// SmallChangesSpec is the number of the Project's Small Changes Spec, the
 	// Long-lived Spec its Small Changes open on; 0 until the first one.
 	SmallChangesSpec int
+	// AutoAccept is the Project's Auto-accept setting: the kinds it is on
+	// for, in AutoAcceptKinds order (ADR 0037). It is stored as on, so a
+	// Project stored without it reads every kind off (ADR 0034).
+	AutoAccept []AutoAcceptKind
 }
+
+// AutoAcceptKind is an Auto-accept kind: the kind of Ticket a Project's
+// Auto-accept setting is switched on for. A Ticket's kind is worked out
+// on read from what it carries, never stored.
+type AutoAcceptKind string
+
+// The Auto-accept kinds, by their stable keys.
+const (
+	// AutoAcceptGrilling is Grilling outcomes: a grilling Stage.
+	AutoAcceptGrilling AutoAcceptKind = "grilling"
+	// AutoAcceptSpec is Spec recommendation: a spec Stage, accepted by
+	// its Spec recommendation.
+	AutoAcceptSpec AutoAcceptKind = "spec"
+	// AutoAcceptTickets is Tickets Stage: a tickets Stage.
+	AutoAcceptTickets AutoAcceptKind = "tickets"
+	// AutoAcceptImplementation is Implementation results: every Ticket
+	// that is none of the others and not a Prototype or a Map Ticket.
+	AutoAcceptImplementation AutoAcceptKind = "implementation"
+	// AutoAcceptMerge is Merge results: a Spec merge Ticket, by its mark.
+	AutoAcceptMerge AutoAcceptKind = "merge"
+)
+
+// AutoAcceptKinds lists every Auto-accept kind, in the order a Project
+// stores and shows them.
+var AutoAcceptKinds = []AutoAcceptKind{AutoAcceptGrilling, AutoAcceptSpec, AutoAcceptTickets, AutoAcceptImplementation, AutoAcceptMerge}
+
+// Valid reports whether k is one of the Auto-accept kinds.
+func (k AutoAcceptKind) Valid() bool { return slices.Contains(AutoAcceptKinds, k) }
+
+// AutoAccepts reports whether the Project's Auto-accept setting is on
+// for kind k.
+func (p Project) AutoAccepts(k AutoAcceptKind) bool { return slices.Contains(p.AutoAccept, k) }
+
+// SetAutoAccept turns the Project's Auto-accept setting on or off for
+// kind k, keeping AutoAccept in AutoAcceptKinds order.
+func (p *Project) SetAutoAccept(k AutoAcceptKind, on bool) {
+	var out []AutoAcceptKind
+	for _, each := range AutoAcceptKinds {
+		if each == k && on || each != k && p.AutoAccepts(each) {
+			out = append(out, each)
+		}
+	}
+	p.AutoAccept = out
+}
+
+// AutoAcceptCause is why a Move was made by an auto-accept: which switch
+// turned it on. Empty on every other Move.
+type AutoAcceptCause string
+
+// The auto-accept causes, in the order the first that applies is
+// recorded.
+const (
+	// CauseTicketLabel is the auto-accept Label on the Ticket.
+	CauseTicketLabel AutoAcceptCause = "ticket-label"
+	// CauseSpecLabel is the auto-accept Label on the Ticket's Spec.
+	CauseSpecLabel AutoAcceptCause = "spec-label"
+	// CauseProject is the Project's Auto-accept setting for the Ticket's
+	// kind.
+	CauseProject AutoAcceptCause = "project"
+)
+
+// AutoAcceptCauses lists every auto-accept cause.
+var AutoAcceptCauses = []AutoAcceptCause{CauseTicketLabel, CauseSpecLabel, CauseProject}
+
+// Valid reports whether c is one of the auto-accept causes.
+func (c AutoAcceptCause) Valid() bool { return slices.Contains(AutoAcceptCauses, c) }
 
 // StageGuides is a Project's Stage Guides settings (Spec
 // code-central-441), each the opposite of a named optional guide line, so
@@ -434,6 +504,9 @@ type Move struct {
 	Via   string
 	// Commit is the commit that put the work into the base, on a land.
 	Commit string
+	// Cause is why an auto-accept made the Move; empty on every other
+	// Move. Its Actor is still human (ADR 0037).
+	Cause AutoAcceptCause
 }
 
 // Claim is one agent's hold on a Ticket, from the claim until a move out
@@ -520,13 +593,21 @@ type Ticket struct {
 	// while New issues need me is on (Spec code-central-279), and cleared
 	// when the human triages it; never set again once cleared.
 	AwaitingTriage bool
-	Created        time.Time
-	Updated        time.Time
-	Description    string
+	// SpecMergeTicket marks a Spec merge Ticket: one Code Central opened
+	// with open_spec_merge to merge the base into a Spec Branch
+	// (code-central-542). Only that operation sets it; nothing clears it.
+	SpecMergeTicket bool
+	Created         time.Time
+	Updated         time.Time
+	Description     string
 	// Branch and Commit are what the last finish naming them gave: the
 	// work's branch and its head commit. Free-form, never parsed.
 	Branch string
 	Commit string
+	// Recommendation is the Spec recommendation the last finish of a spec
+	// Stage gave; empty on any other Ticket and on a spec Stage finished
+	// before there was one.
+	Recommendation Recommendation
 	// PushedCommits are the commits the Factory pushed for the Ticket
 	// while CI Tracking was on, oldest first: the latest is the one its CI
 	// result comes from, and the older ones stay as its history.
@@ -546,6 +627,25 @@ type Ticket struct {
 	Moves          []Move
 	Edits          []Edit
 }
+
+// Recommendation is a spec Stage's Spec recommendation: how its agent
+// recommends the human accepts it.
+type Recommendation string
+
+// The two Spec recommendations.
+const (
+	// RecommendImplement is Implement: one implementation Ticket builds
+	// the whole Spec.
+	RecommendImplement Recommendation = "implement"
+	// RecommendSplit is Split into Tickets: the tickets Stage runs.
+	RecommendSplit Recommendation = "split"
+)
+
+// Recommendations lists every Spec recommendation.
+var Recommendations = []Recommendation{RecommendImplement, RecommendSplit}
+
+// Valid reports whether r is one of the Spec recommendations.
+func (r Recommendation) Valid() bool { return slices.Contains(Recommendations, r) }
 
 // SpecMerge is the Spec Branch commit a Ticket's work was merged into, and
 // when Code Central heard of it.
@@ -796,7 +896,7 @@ type Writer interface {
 	PutSpec(project string, s Spec) error
 	PutTicket(project string, t Ticket) error
 	// PutImport is the one bulk write: every Spec and Ticket in im is new,
-	// but for the existing Tickets it rewrites, and they all land together
+	// but for the existing ones it rewrites, and they all land together
 	// or none does. It counts as the update's one write.
 	PutImport(project string, im Import) error
 	// PutOptions replaces the Options whole. It touches no Project.
@@ -812,6 +912,9 @@ type Import struct {
 	// Rewritten are existing Tickets written along with the new records,
 	// such as the Incoming Issue To Requirement Cancels.
 	Rewritten []Ticket
+	// RewrittenSpecs are existing Specs written along with them, such as
+	// a Spec given the auto-accept Label with the Tickets it accepts.
+	RewrittenSpecs []Spec
 }
 
 func (im Import) clone() Import {
@@ -824,6 +927,9 @@ func (im Import) clone() Import {
 	}
 	for _, t := range im.Rewritten {
 		out.Rewritten = append(out.Rewritten, t.clone())
+	}
+	for _, sp := range im.RewrittenSpecs {
+		out.RewrittenSpecs = append(out.RewrittenSpecs, sp.clone())
 	}
 	return out
 }
@@ -846,8 +952,9 @@ var (
 	ErrUnknownProject = errors.New("store: unknown project")
 	// ErrExists means an Import named a Spec or Ticket number already in use.
 	ErrExists = errors.New("store: an import may only add new records")
-	// ErrNotExists means an Import rewrote a Ticket that doesn't exist.
-	ErrNotExists = errors.New("store: an import may only rewrite existing Tickets")
+	// ErrNotExists means an Import rewrote a Ticket or Spec that doesn't
+	// exist.
+	ErrNotExists = errors.New("store: an import may only rewrite existing Tickets and Specs")
 	// ErrInvalidOption means an Option written was outside its set.
 	ErrInvalidOption = errors.New("store: an Option's value is outside its set")
 )

@@ -257,6 +257,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetSubagentExploration(human, "acme", core.SetSubagentExplorationInput{On: false})
 		return err
 	},
+	"set_auto_accept": func(f fixture) error {
+		_, err := f.core.SetAutoAccept(human, "acme", core.SetAutoAcceptInput{Kinds: map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true}})
+		return err
+	},
 	"set_focus_kinds": func(f fixture) error {
 		_, err := f.core.SetFocusKinds(human, "acme", core.SetFocusKindsInput{Off: []core.NeedsMeReason{core.ReasonAnswered}})
 		return err
@@ -315,6 +319,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 	},
 	"report_spec_merge": func(f fixture) error {
 		_, err := f.core.ReportSpecMerge(ctx, "acme", core.ReportSpecMergeInput{Ticket: "acme-2", Commit: "abc123"})
+		return err
+	},
+	"open_spec_merge": func(f fixture) error {
+		_, err := f.core.OpenSpecMerge(ctx, "acme", core.OpenSpecMergeInput{Spec: "acme-1", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"})
 		return err
 	},
 	"report_model_choice": func(f fixture) error {

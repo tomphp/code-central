@@ -93,6 +93,8 @@ var Operations = []Op{
 	// Subagent Exploration (code-central-441).
 	{Name: "set_subagent_exploration", Audience: HumanOnly, Write: true},
 	{Name: "set_model_assignment", Audience: HumanOnly, Write: true},
+	// Auto-accept (code-central-536): the human's alone, over HTTP only.
+	{Name: "set_auto_accept", Audience: HumanOnly, Write: true},
 	// Focus Kinds (Spec code-central-550).
 	{Name: "set_focus_kinds", Audience: HumanOnly, Write: true},
 
@@ -146,6 +148,8 @@ var Operations = []Op{
 	{Name: "report_ci_runs", Audience: FactoryOnly, Write: true},
 	// Land per Spec (code-central-371).
 	{Name: "report_spec_merge", Audience: FactoryOnly, Write: true},
+	// Spec merge Tickets (code-central-542).
+	{Name: "open_spec_merge", Audience: FactoryOnly, Write: true},
 	// CI failed and its failure options (code-central-261).
 	{Name: "land_anyway", Audience: HumanOnly, Write: true},
 	// Re-run failed jobs (code-central-265).

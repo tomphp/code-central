@@ -31,7 +31,7 @@ describe("the Focus section", () => {
 
     await findFocus();
     const sections = Array.from(page().querySelectorAll("fieldset.project-options-section > legend"), (l) => l.textContent);
-    expect(sections.slice(sections.indexOf("Stage Guides"))).toEqual(["Stage Guides", "Focus", "Factories"]);
+    expect(sections.slice(sections.indexOf("Stage Guides"))).toEqual(["Stage Guides", "Auto-accept", "Focus", "Factories"]);
     expect(within(focus()).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(NEEDS_ME_REASONS.map((r) => REASON_LABEL[r]));
     for (const r of NEEDS_ME_REASONS) expect(box(REASON_LABEL[r])).toBeChecked();
     expect(within(focus()).getByRole("columnheader", { name: "Show in Focus" })).toBeInTheDocument();

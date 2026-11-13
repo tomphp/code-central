@@ -393,7 +393,7 @@ func fakeClaude(codeCentral string, args []string) int {
 			if _, err := run(codeCentral, "edit-spec", tk.Spec.ID, "--body", body); err != nil {
 				return err
 			}
-			finish = append(finish, "--summary", "Wrote the Spec.")
+			finish = append(finish, "--summary", "Wrote the Spec. Split: the e2e build runs the tickets Stage.", "--recommendation", "split")
 		case contains(tk.Labels, "stage:tickets"):
 			if _, err := run(codeCentral, "create-ticket", "--spec", tk.Spec.ID, "--title", "Say hello",
 				"--state", "Ready", "--blocked-by", id, "--description", "Write hello.txt."); err != nil {

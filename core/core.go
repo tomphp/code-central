@@ -94,6 +94,9 @@ type ProjectView struct {
 	ReportedModels ReportedModelsView `json:"reported_models"`
 	// StageGuides is the Project's Stage Guides settings, always filled in.
 	StageGuides StageGuidesView `json:"stage_guides"`
+	// AutoAccept is the Project's Auto-accept setting, one entry per
+	// Auto-accept kind, always filled in.
+	AutoAccept AutoAcceptView `json:"auto_accept"`
 	// FocusKinds is the Project's Focus Kinds, always filled in: every
 	// Needs Me reason on by default.
 	FocusKinds FocusKindsView `json:"focus_kinds"`
@@ -167,6 +170,14 @@ type MoveView struct {
 	Via   string      `json:"via,omitempty"`
 	// Commit is the commit that put the work into the base, on a land.
 	Commit string `json:"commit,omitempty"`
+	// Cause is why an auto-accept made the Move (project, ticket-label or
+	// spec-label); left out on every other Move.
+	Cause store.AutoAcceptCause `json:"cause,omitempty"`
+}
+
+// moveView is one Move as reads show it.
+func moveView(m store.Move) MoveView {
+	return MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: m.Cause}
 }
 
 // ClaimView is one Claim as reads show it: never with its Claim ID.
@@ -211,6 +222,9 @@ type TicketView struct {
 	// last finish naming them gave them.
 	Branch string `json:"branch,omitempty"`
 	Commit string `json:"commit,omitempty"`
+	// Recommendation is a spec Stage's Spec recommendation, as its last
+	// finish gave it; empty on any other Ticket.
+	Recommendation store.Recommendation `json:"recommendation,omitempty"`
 	// PushedCommit is the latest commit the Factory pushed for the Ticket
 	// while CI Tracking was on, CIResult the Ticket's CI result and
 	// CICommit the pushed commit it comes from: under the CI gate one
@@ -265,6 +279,9 @@ type TicketView struct {
 	// AwaitingTriage is set on an Incoming Issue that came in while New
 	// issues need me was on and that the human hasn't triaged yet.
 	AwaitingTriage bool `json:"awaiting_triage,omitempty"`
+	// SpecMergeTicket marks a Spec merge Ticket, one open_spec_merge
+	// opened; left out on any other Ticket.
+	SpecMergeTicket bool `json:"spec_merge_ticket,omitempty"`
 	// TriageActions are the triage actions, each an operation's name, the
 	// human may take on an Incoming Issue; left out on any other Ticket.
 	// Computed on read.
@@ -418,7 +435,7 @@ func (c *Core) CreateSpec(_ context.Context, key string, in CreateSpecInput) (Wr
 
 // CreateTicket is create_ticket(spec, title, description, state, labels,
 // blocked_by, tags?, full?).
-func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput) (Written[TicketView], error) {
+func (c *Core) CreateTicket(ctx context.Context, key string, in CreateTicketInput) (Written[TicketView], error) {
 	if strings.TrimSpace(in.Title) == "" {
 		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
 	}
@@ -433,6 +450,9 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 		return Written[TicketView]{}, invalid("spec", "every Ticket belongs to a Spec")
 	}
 	if err := checkTicketLabels("labels", in.Labels); err != nil {
+		return Written[TicketView]{}, err
+	}
+	if err := checkHumanLabels(ctx, "labels", in.Labels); err != nil {
 		return Written[TicketView]{}, err
 	}
 	if err := checkTagSyntax(in.Tags); err != nil {
@@ -622,7 +642,7 @@ func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
 		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
-		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides),
+		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), AutoAccept: autoAcceptView(p),
 		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
 	if !p.Archived.IsZero() {
 		at := p.Archived
@@ -648,7 +668,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Blockers: rule.blockerViews(t),
 		Created:  t.Created, Updated: t.Updated, Description: t.Description,
-		Branch: t.Branch, Commit: t.Commit,
+		Branch: t.Branch, Commit: t.Commit, Recommendation: t.Recommendation,
 		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), FailureReports: failureReportViews(t.FailureReports),
 		Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: rule.blocked(t), Link: linkView(t.Link),
@@ -663,7 +683,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		v.Claims = append(v.Claims, cv)
 	}
 	for _, m := range t.Moves {
-		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit})
+		v.Moves = append(v.Moves, moveView(m))
 	}
 	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = ticketCI(r, key, t, c.now())
 	v.PullRequest = pullRequestView(t.PullRequest)
@@ -684,6 +704,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = c.reasonOf(r, key, t)
 	v.AwaitingTriage, v.TriageActions = t.AwaitingTriage, ticketTriageActions(r, key, t)
+	v.SpecMergeTicket = t.SpecMergeTicket
 	return v
 }
 

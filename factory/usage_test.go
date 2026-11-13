@@ -67,7 +67,7 @@ func TestEachModelResponsesTokenUsageIsPostedOnceUnderItsKind(t *testing.T) {
 		factorytest.Response("msg_e1", "toolu_explore", "", 50, 0, 0, 5),
 		factorytest.Response("msg_e2", "toolu_explore", "", 60, 0, 0, 5),
 		factorytest.Response("msg_2", "", "", 100, 0, 700, 20),
-		factorytest.Finish("Done."),
+		factorytest.FinishSpec("Done.", "split"),
 		factorytest.Result("success"),
 	)
 	h.Start()

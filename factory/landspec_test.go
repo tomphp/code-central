@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
@@ -182,10 +183,47 @@ func TestASpecBranchThatConflictsWithTheBaseOpensOneConflictTicket(t *testing.T)
 
 	rows, err := h.Server.Client.FindTickets(context.Background(), h.Project, core.FindTicketsInput{Spec: core.Ref(h.SpecID()), Title: "Merge the base into the Spec Branch of " + h.SpecID()})
 	if err != nil || len(rows) != 1 {
-		t.Errorf("conflict Tickets %+v (%v), want exactly one", rows, err)
+		t.Fatalf("conflict Tickets %+v (%v), want exactly one", rows, err)
+	}
+	// Code Central opened it, marked, from the files and both tips.
+	fix := h.Ticket(rows[0].ID)
+	baseTip, specTip := h.Git("rev-parse", "main"), h.Git("rev-parse", "spec/"+h.SpecID())
+	if !fix.SpecMergeTicket || !strings.Contains(fix.Description, "- README\n") ||
+		!strings.Contains(fix.Description, "base's tip is "+baseTip) || !strings.Contains(fix.Description, "Spec Branch's tip is "+specTip) {
+		t.Errorf("conflict Ticket %+v, want it marked, naming README, %s and %s", fix, baseTip, specTip)
 	}
 	if h.Ticket(a).State != store.Accepted {
 		t.Errorf("%s landed despite the conflict", a)
+	}
+}
+
+func TestASpecBranchConflictingWithAMovedBaseCommentsOnItsOpenSpecMergeTicket(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.MakeRequirement()
+	a, _ := accepted(h, "First", "README", "spec side\n")
+	release := holdTicketsStage(t, h)
+	fix := "acme-5"
+	h.Script(fix, factorytest.Wait())
+	r := h.Start()
+	r.WaitForOutput(a + ": merged into spec/" + h.SpecID())
+
+	h.CommitOn("main", "README", "base side\n")
+	release()
+	r.Poll()
+	r.WaitForOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)
+
+	// Land per Spec off merges the Spec Branch on every poll, ready or
+	// not, so the moved base meets the same conflict.
+	h.CommitOn("main", "README", "base side again\n")
+	baseTip := h.Git("rev-parse", "main")
+	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, LandPerSpec: off()})
+	r.Poll()
+	r.WaitForOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main again: commented on " + fix)
+
+	comments := h.Ticket(fix).Comments
+	if len(comments) != 1 || !strings.Contains(comments[0].Body, "base's tip is "+baseTip) {
+		t.Errorf("comments %+v, want one naming the base's tip %s", comments, baseTip)
 	}
 }
 

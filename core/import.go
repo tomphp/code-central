@@ -112,9 +112,9 @@ var importStates = []store.State{store.Draft, store.Ready, store.Done, store.Can
 
 // Import is import(payload, dry_run?). It writes as agent whoever calls,
 // never creates a Project, and writes everything or nothing.
-func (c *Core) Import(_ context.Context, key string, in ImportInput) (ImportResult, error) {
+func (c *Core) Import(ctx context.Context, key string, in ImportInput) (ImportResult, error) {
 	p := in.Payload
-	if err := checkImport(p); err != nil {
+	if err := checkImport(ctx, p); err != nil {
 		return ImportResult{}, err
 	}
 	var res ImportResult
@@ -152,8 +152,8 @@ func (c *Core) Import(_ context.Context, key string, in ImportInput) (ImportResu
 }
 
 // checkImport validates the payload on its own, naming the first fault's
-// field path.
-func checkImport(p ImportPayload) error {
+// field path. Only the human may name the auto-accept Label.
+func checkImport(ctx context.Context, p ImportPayload) error {
 	if len(p.Specs) == 0 {
 		return invalid("specs", "an Import needs at least one Spec: one per feature folder")
 	}
@@ -179,7 +179,7 @@ func checkImport(p ImportPayload) error {
 		if strings.TrimSpace(s.Title) == "" {
 			return invalid(at+".title", "a Spec needs a title: the folder's name when it has no spec.md or map.md")
 		}
-		if err := checkImportLabelsTags(at, s.Labels, s.Tags, true); err != nil {
+		if err := checkImportLabelsTags(ctx, at, s.Labels, s.Tags, true); err != nil {
 			return err
 		}
 	}
@@ -201,7 +201,7 @@ func checkImport(p ImportPayload) error {
 		if t.State != "" && !slices.Contains(importStates, t.State) {
 			return invalid(at+".state", "an imported Ticket is Draft, Ready, Done or Cancelled, not %q", t.State)
 		}
-		if err := checkImportLabelsTags(at, t.Labels, t.Tags, false); err != nil {
+		if err := checkImportLabelsTags(ctx, at, t.Labels, t.Tags, false); err != nil {
 			return err
 		}
 		for j, b := range t.BlockedBy {
@@ -225,13 +225,16 @@ func checkImport(p ImportPayload) error {
 	return nil
 }
 
-func checkImportLabelsTags(at string, labels []string, tags map[string]string, onSpec bool) error {
+func checkImportLabelsTags(ctx context.Context, at string, labels []string, tags map[string]string, onSpec bool) error {
 	for j, l := range labels {
 		field := fmt.Sprintf("%s.labels[%d]", at, j)
 		if !singleLine(l) {
 			return invalid(field, "a Label is non-empty and single-line, not %q", l)
 		}
 		if err := checkReservedNames(field, []string{l}); err != nil {
+			return err
+		}
+		if err := checkHumanLabels(ctx, field, []string{l}); err != nil {
 			return err
 		}
 		if err := checkPlacement(field, []string{l}, onSpec); err != nil {

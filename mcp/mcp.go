@@ -116,12 +116,13 @@ var tools = map[string]tool{
 	"finish": {
 		description: "Finish a claimed Ticket into In Review with a summary: what was done, where (branch or commit), and what to check. Returns an acknowledgement with the next step, or the Ticket with full.",
 		schema: object(map[string]any{
-			"ticket":   ref("The Ticket."),
-			"claim_id": text("The Claim ID claim returned."),
-			"summary":  text("What was done, where, and what the reviewer should check, in Markdown."),
-			"branch":   text("The branch the work is on, if any. Accepting work on a branch moves it to Accepted, to land once merged."),
-			"commit":   text("The branch's head commit, if any."),
-			"full":     flag("Return the whole Ticket instead of the acknowledgement."),
+			"ticket":         ref("The Ticket."),
+			"claim_id":       text("The Claim ID claim returned."),
+			"summary":        text("What was done, where, and what the reviewer should check, in Markdown."),
+			"branch":         text("The branch the work is on, if any. Accepting work on a branch moves it to Accepted, to land once merged."),
+			"commit":         text("The branch's head commit, if any."),
+			"recommendation": map[string]any{"type": "string", "enum": []string{"implement", "split"}, "description": "Required on a spec Stage only: implement or split."},
+			"full":           flag("Return the whole Ticket instead of the acknowledgement."),
 		}, "ticket", "claim_id", "summary"),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.FinishInput

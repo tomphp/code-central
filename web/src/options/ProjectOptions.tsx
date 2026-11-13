@@ -11,6 +11,7 @@ import { GitHubIssuesSection } from "./GitHubIssuesSection";
 import { LandingMethodSection } from "./LandingMethodSection";
 import { ModelsSection } from "./ModelsSection";
 import { StageGuidesSection } from "./StageGuidesSection";
+import { AutoAcceptSection } from "./AutoAcceptSection";
 import { FocusSection } from "./FocusSection";
 
 export interface ProjectOptionsProps {
@@ -30,6 +31,7 @@ export const SECTIONS = [
   { id: "project-options-github-issues", label: "GitHub Issues" },
   { id: "project-options-models", label: "Models" },
   { id: "project-options-stage-guides", label: "Stage Guides" },
+  { id: "project-options-auto-accept", label: "Auto-accept" },
   { id: "project-options-focus", label: "Focus" },
 ];
 
@@ -85,6 +87,7 @@ export function ProjectOptions({
               <GitHubIssuesSection api={api} project={project} />
               <ModelsSection api={api} project={project} />
               <StageGuidesSection api={api} project={project} />
+              <AutoAcceptSection api={api} project={project} />
               <FocusSection api={api} project={project} />
               <FactoriesSection project={project} now={now} />
             </div>

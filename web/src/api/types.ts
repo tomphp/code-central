@@ -228,6 +228,18 @@ export interface StageGuides {
   model_assignment: boolean;
 }
 
+// An Auto-accept kind (Spec code-central-536): the kind of finished
+// Ticket a Project's Auto-accept setting is switched on for.
+export type AutoAcceptKind = "grilling" | "spec" | "tickets" | "implementation" | "merge";
+export const AUTO_ACCEPT_KINDS: AutoAcceptKind[] = ["grilling", "spec", "tickets", "implementation", "merge"];
+
+// A Project's Auto-accept setting: on or off per kind, all off to begin
+// with.
+export type AutoAccept = Record<AutoAcceptKind, boolean>;
+
+// Why an auto-accept made a Move: the Project's setting, or the
+// auto-accept Label on the Ticket or on its Spec.
+export type AutoAcceptCause = "project" | "ticket-label" | "spec-label";
 // A Project's Focus Kinds (Spec code-central-550): the Needs Me reasons
 // that are off, in group order. Only the focus queue reads them.
 export interface FocusKinds {
@@ -451,6 +463,8 @@ export interface ProjectView {
   reported_models: ReportedModels;
   // stage_guides is always filled in: Subagent Exploration on by default.
   stage_guides: StageGuides;
+  // auto_accept is always filled in: every kind off by default.
+  auto_accept: AutoAccept;
   // focus_kinds is always filled in: every Needs Me reason on by default.
   focus_kinds: FocusKinds;
   // factory_status is always filled in: offline, with no Factories,
@@ -902,6 +916,8 @@ export interface MoveView {
   via?: string;
   // commit is the commit that put the work into the base, on a land.
   commit?: string;
+  // cause is why an auto-accept made the Move; absent on every other.
+  cause?: AutoAcceptCause;
 }
 
 export interface EditView {
@@ -928,6 +944,9 @@ export interface TicketView {
   // finish naming them gave them. Work with a branch is Accepted, then lands.
   branch?: string;
   commit?: string;
+  // recommendation is a spec Stage's Spec recommendation, as its last
+  // finish gave it: implement (Implement) or split (Split into Tickets).
+  recommendation?: "implement" | "split";
   // pushed_commit is the latest commit the Factory pushed while CI
   // Tracking was on, ci_result the Ticket's CI result and ci_commit the
   // pushed commit it comes from: under the CI gate one that passed, if
@@ -970,6 +989,9 @@ export interface TicketView {
   // triage_actions are the triage actions offered on an Incoming Issue,
   // left out on any other Ticket (code-central-287).
   awaiting_triage?: boolean;
+  // spec_merge_ticket marks a Spec merge Ticket, one open_spec_merge
+  // opened; left out on any other Ticket (code-central-542).
+  spec_merge_ticket?: boolean;
   triage_actions?: TriageAction[];
   // model_choice is the model and effort the Ticket's next turn runs
   // with, each with its source; only the UI's read carries it (Spec
@@ -983,7 +1005,7 @@ export const TICKET_FIELDS = [
   "id", "title", "state", "spec", "labels", "tags", "blocked_by", "blockers", "replacements",
   "created", "updated", "description", "branch", "commit", "pushed_commit", "pull_request", "ci_result", "ci_commit", "ci_runs", "land_anyway", "ci_item", "ci_failure_options", "claims", "rounds", "failure_reports",
   "comments", "moves", "edits", "blocked", "claimable", "silent_since", "needs_me_reason", "link",
-  "awaiting_triage", "triage_actions",
+  "awaiting_triage", "spec_merge_ticket", "triage_actions",
 ] as const satisfies readonly (keyof TicketView)[];
 
 // SPEC_FIELDS are SpecView's fields in the service's order, the order a

@@ -17,7 +17,7 @@ The short, permanent name that identifies a Project to anything connecting to Co
 _Avoid_: Slug, Project ID
 
 **Project Options**:
-The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides and Focus. Unlike an Option, what it sets belongs to one Project.
+The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides, Auto-accept and Focus. Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
 
 **Models**:
@@ -197,6 +197,10 @@ _Avoid_: Spec landing, batch landing, release train
 **Spec Branch**:
 The one local branch, `spec/<spec id>`, that a Spec's accepted implementation Tickets are merged into under Land per Spec. Each Ticket's branch is cut from its tip, and the Factory merges it into the base once the Spec is ready to land. It is pushed only under Pull Request, where the Spec's one pull request is opened from it.
 _Avoid_: Feature branch, integration branch, epic branch
+
+**Spec merge Ticket**:
+The Ready Ticket, "Merge the base into the Spec Branch of <spec id>", that Code Central opens on a Spec when the Factory finds its Spec Branch conflicting with the base, naming the conflicting files and both tips; the Factory retries the Spec once it is accepted. Code Central marks it as one, and only its open_spec_merge sets the mark: a Ticket given the title any other way, or opened by a Factory from before the mark, is an ordinary Ticket. While one is open, a later conflict is commented on it, and the same conflict again writes nothing.
+_Avoid_: Conflict Ticket, merge Ticket
 
 **Waiting for the Spec**:
 The status shown on an Accepted Ticket under Land per Spec whose work isn't yet in the base, because the rest of its Spec isn't done. It is not a State, and the Ticket isn't flagged in Needs Me as Accepted but not landed.
@@ -476,8 +480,28 @@ An agent's permanent record of what broke on a Ticket, why, and what to fix, pos
 _Avoid_: Error, incident
 
 **Label**:
-A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels, Wayfinder Labels, `prototype` and `long-lived` are reserved: they mark a Ticket's Stage, a Map or a Map's Ticket type, a Prototype, and a Long-lived Spec. `long-lived` goes only on a Spec. A Ticket carries at most one reserved type Label (a Stage Label, a Map Ticket type's Wayfinder Label or `prototype`), which chooses its Stage Guide.
+A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels, Wayfinder Labels, `prototype` and `long-lived` are reserved: they mark a Ticket's Stage, a Map or a Map's Ticket type, a Prototype, and a Long-lived Spec. `long-lived` goes only on a Spec. A Ticket carries at most one reserved type Label (a Stage Label, a Map Ticket type's Wayfinder Label or `prototype`), which chooses its Stage Guide. `auto-accept` is also reserved, goes on a Spec or a Ticket, and is not a type Label, so it doesn't count toward that limit.
 _Avoid_: Category
+
+**Auto-accept**:
+The human's accept carried out within `finish`, when the finished Ticket is auto-accept eligible. It is recorded as a Move by the human, marked with its cause (the Project setting, the Ticket's Label or the Spec's Label), not as a new Actor. Only the human can turn it on.
+_Avoid_: Auto-approve, auto-merge, system accept
+
+**Auto-accept kind**:
+The kind of Ticket a Project's Auto-accept setting is switched on for: Grilling outcomes (`grilling`), Spec recommendation (`spec`), Tickets Stage (`tickets`), Implementation results (`implementation`) or Merge results (`merge`). It is worked out on read from what a Ticket carries, never stored. Prototypes and Map Tickets have none and are never auto-accepted.
+_Avoid_: Auto-accept type, category
+
+**Auto-accept Label**:
+The reserved `auto-accept` Label, which on a Ticket or its Spec makes the Ticket eligible whatever the Project's setting. Only the human may add or remove it. Adding it also accepts every eligible Ticket it now covers that is In Review; removing it changes nothing already accepted.
+_Avoid_: Auto label, opt-in Label
+
+**Spec merge Ticket**:
+The Ready Ticket Code Central opens, at the Factory's request, on a Spec whose Spec Branch conflicts with the base, so an agent merges the base into the Spec Branch. It carries a stored mark set only by that operation, which gives it the Merge results Auto-accept kind. A Ticket opened before the mark existed stays unmarked and manual.
+_Avoid_: Conflict Ticket, merge Ticket
+
+**Spec recommendation**:
+The `implement` or `split` that a spec Stage's `finish` must carry. The Ticket keeps the latest one; the web UI highlights the matching button, and a spec Stage is auto-accept eligible only if its latest finish carried one.
+_Avoid_: Verdict, suggestion
 
 **Wayfinder Label**:
 A reserved `wayfinder:` Label marking a Map (`wayfinder:map`) or a Map's Ticket type (`chart`, `grilling`, `research`, `task`).

@@ -52,6 +52,9 @@ type projectFile struct {
 	CIFixesSpec int `yaml:"ci_fixes_spec,omitempty"`
 	// SmallChangesSpec is the Small Changes Spec's number, left out until it exists.
 	SmallChangesSpec int `yaml:"small_changes_spec,omitempty"`
+	// AutoAccept is the Auto-accept kinds that are on, left out while
+	// every kind is off.
+	AutoAccept []string `yaml:"auto_accept,omitempty"`
 }
 
 // stageGuidesFile is a Project's Stage Guides settings.
@@ -155,29 +158,31 @@ type specFront struct {
 }
 
 type ticketFile struct {
-	Title          string              `yaml:"title"`
-	State          string              `yaml:"state"`
-	Spec           int                 `yaml:"spec"`
-	Labels         []string            `yaml:"labels"`
-	Tags           map[string]string   `yaml:"tags"`
-	BlockedBy      []int               `yaml:"blocked_by"`
-	Replacements   []int               `yaml:"replacements"`
-	Link           *linkFile           `yaml:"link,omitempty"`
-	AwaitingTriage bool                `yaml:"awaiting_triage,omitempty"`
-	Created        string              `yaml:"created"`
-	Updated        string              `yaml:"updated"`
-	Description    string              `yaml:"description"`
-	Branch         string              `yaml:"branch,omitempty"`
-	Commit         string              `yaml:"commit,omitempty"`
-	PushedCommits  []pushedCommitFile  `yaml:"pushed_commits,omitempty"`
-	SpecMerge      *specMergeFile      `yaml:"spec_merge,omitempty"`
-	PullRequest    *pullRequestFile    `yaml:"pull_request,omitempty"`
-	Claims         []claimFile         `yaml:"claims"`
-	Rounds         []roundFile         `yaml:"rounds"`
-	FailureReports []failureReportFile `yaml:"failure_reports"`
-	Comments       []commentFile       `yaml:"comments"`
-	Moves          []moveFile          `yaml:"moves"`
-	Edits          []editFile          `yaml:"edits"`
+	Title           string              `yaml:"title"`
+	State           string              `yaml:"state"`
+	Spec            int                 `yaml:"spec"`
+	Labels          []string            `yaml:"labels"`
+	Tags            map[string]string   `yaml:"tags"`
+	BlockedBy       []int               `yaml:"blocked_by"`
+	Replacements    []int               `yaml:"replacements"`
+	Link            *linkFile           `yaml:"link,omitempty"`
+	AwaitingTriage  bool                `yaml:"awaiting_triage,omitempty"`
+	SpecMergeTicket bool                `yaml:"spec_merge_ticket,omitempty"`
+	Created         string              `yaml:"created"`
+	Updated         string              `yaml:"updated"`
+	Description     string              `yaml:"description"`
+	Branch          string              `yaml:"branch,omitempty"`
+	Commit          string              `yaml:"commit,omitempty"`
+	Recommendation  string              `yaml:"recommendation,omitempty"`
+	PushedCommits   []pushedCommitFile  `yaml:"pushed_commits,omitempty"`
+	SpecMerge       *specMergeFile      `yaml:"spec_merge,omitempty"`
+	PullRequest     *pullRequestFile    `yaml:"pull_request,omitempty"`
+	Claims          []claimFile         `yaml:"claims"`
+	Rounds          []roundFile         `yaml:"rounds"`
+	FailureReports  []failureReportFile `yaml:"failure_reports"`
+	Comments        []commentFile       `yaml:"comments"`
+	Moves           []moveFile          `yaml:"moves"`
+	Edits           []editFile          `yaml:"edits"`
 }
 
 type specMergeFile struct {
@@ -303,6 +308,7 @@ type moveFile struct {
 	Claim  int    `yaml:"claim,omitempty"`
 	Via    string `yaml:"via,omitempty"`
 	Commit string `yaml:"commit,omitempty"` // a land's commit
+	Cause  string `yaml:"cause,omitempty"`  // an auto-accept's cause
 }
 
 // The fields an edit's previous values may name.
@@ -353,8 +359,8 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	}
 	t := Ticket{
 		Number: n, Title: f.Title, State: State(f.State), Spec: f.Spec, Labels: f.Labels, Tags: f.Tags,
-		BlockedBy: f.BlockedBy, Replacements: f.Replacements, AwaitingTriage: f.AwaitingTriage, Description: f.Description,
-		Branch: f.Branch, Commit: f.Commit,
+		BlockedBy: f.BlockedBy, Replacements: f.Replacements, AwaitingTriage: f.AwaitingTriage, SpecMergeTicket: f.SpecMergeTicket, Description: f.Description,
+		Branch: f.Branch, Commit: f.Commit, Recommendation: Recommendation(f.Recommendation),
 	}
 	if t.Title == "" {
 		return Ticket{}, &LoadError{Field: "title", Msg: "required"}
@@ -364,6 +370,9 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	}
 	if t.Spec < 1 {
 		return Ticket{}, &LoadError{Field: "spec", Msg: "required"}
+	}
+	if t.Recommendation != "" && !t.Recommendation.Valid() {
+		return Ticket{}, &LoadError{Field: "recommendation", Msg: fmt.Sprintf("unknown Spec recommendation %q", f.Recommendation)}
 	}
 	var lerr *LoadError
 	if t.Link, lerr = decodeLink(f.Link); lerr != nil {
@@ -453,7 +462,10 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		t.Comments = append(t.Comments, cm)
 	}
 	for i, m := range f.Moves {
-		mv := Move{From: State(m.From), To: State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via, Commit: m.Commit}
+		mv := Move{From: State(m.From), To: State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: AutoAcceptCause(m.Cause)}
+		if mv.Cause != "" && !mv.Cause.Valid() {
+			return Ticket{}, &LoadError{Field: fmt.Sprintf("moves[%d].cause", i), Msg: fmt.Sprintf("unknown auto-accept cause %q", m.Cause)}
+		}
 		field := fmt.Sprintf("moves[%d]", i)
 		if m.From != "" && !mv.From.Valid() {
 			return Ticket{}, &LoadError{Field: field + ".from", Msg: fmt.Sprintf("unknown State %q", m.From)}
@@ -581,7 +593,7 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
 			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models),
-			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec})
+			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, AutoAccept: encodeAutoAccept(r.AutoAccept)})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath})
@@ -595,8 +607,8 @@ func encode(record any, project string) (string, []byte, error) {
 		f := ticketFile{
 			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
 			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: encodeLink(r.Link), AwaitingTriage: r.AwaitingTriage,
-			Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
-			Branch: r.Branch, Commit: r.Commit,
+			SpecMergeTicket: r.SpecMergeTicket, Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
+			Branch: r.Branch, Commit: r.Commit, Recommendation: string(r.Recommendation),
 			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},
 			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
 		}
@@ -648,7 +660,7 @@ func encode(record any, project string) (string, []byte, error) {
 			f.Comments = append(f.Comments, commentFile{Number: c.Number, Actor: c.Actor, Time: formatTime(c.Time), Claim: c.Claim, Body: c.Body})
 		}
 		for _, m := range r.Moves {
-			f.Moves = append(f.Moves, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via, Commit: m.Commit})
+			f.Moves = append(f.Moves, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: string(m.Cause)})
 		}
 		data, err = encodeYAML(f)
 	case CIRuns:
@@ -722,6 +734,15 @@ func encodeGitHubIssues(g GitHubIssues) *githubIssuesFile {
 		return nil
 	}
 	return &githubIssuesFile{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
+}
+
+// encodeAutoAccept is the on kinds as project.yaml holds them.
+func encodeAutoAccept(kinds []AutoAcceptKind) []string {
+	var out []string
+	for _, k := range kinds {
+		out = append(out, string(k))
+	}
+	return out
 }
 
 // encodeStageGuides leaves the Stage Guides settings out of project.yaml

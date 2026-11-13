@@ -155,6 +155,7 @@ import {
   USAGE_DAYS,
   USAGE_KEPT_DAYS,
   EFFORT_LEVELS,
+  AUTO_ACCEPT_KINDS,
   sessionKey,
   type ModelRow,
   type Models,
@@ -163,6 +164,7 @@ import {
   type ModelsReport,
   type ReportedModels,
   type StageGuides,
+  type AutoAccept,
   type FocusKinds,
   type UsageDay,
   type UsageDayTokens,
@@ -305,6 +307,7 @@ interface FakeProject {
   models: Models;
   reported_models: ReportedModels;
   stage_guides: StageGuides;
+  auto_accept: AutoAccept;
   focus_kinds: FocusKinds;
   factory_status: FactoryStatus;
   next: number;
@@ -470,6 +473,7 @@ export class FakeApi implements Api {
       models: { default: { model: "", effort: "" }, kinds: KINDS_OF_WORK.map((kind) => ({ kind, model: "", effort: "" })) },
       reported_models: { effort_levels: [...EFFORT_LEVELS], aliases: [], model_ids: [], model_flag: "", effort_flag: "" },
       stage_guides: { subagent_exploration: true, model_assignment: false },
+      auto_accept: { grilling: false, spec: false, tickets: false, implementation: false, merge: false },
       focus_kinds: { off: [] },
       factory_status: { status: "offline", factories: [] },
       next: 1,
@@ -1376,6 +1380,17 @@ export class FakeApi implements Api {
     const p = this.writable(key);
     if (p.stage_guides.model_assignment !== on) {
       p.stage_guides = { ...p.stage_guides, model_assignment: on };
+      this.emit({ type: "project.changed", project: key });
+    }
+    return this.projectView(p);
+  }
+
+  async setAutoAccept(key: string, kinds: Partial<AutoAccept>): Promise<ProjectView> {
+    this.calls.push("setAutoAccept");
+    const p = this.writable(key);
+    const next = { ...p.auto_accept, ...kinds };
+    if (AUTO_ACCEPT_KINDS.some((k) => next[k] !== p.auto_accept[k])) {
+      p.auto_accept = next;
       this.emit({ type: "project.changed", project: key });
     }
     return this.projectView(p);

@@ -1,7 +1,8 @@
 // The In Review panel: the agent's finish summary, then Accept (on a spec
-// Stage, Split into Tickets and Implement), and Reject, which can't be sent
-// without a comment saying what to change.
-import { useState } from "react";
+// Stage, Split into Tickets and Implement, with the Spec recommendation
+// highlighted), and Reject, which can't be sent without a comment saying
+// what to change.
+import { Fragment, useId, useState } from "react";
 import "../../api/actions/accept";
 import "../../api/actions/implement";
 import "../../api/actions/reject";
@@ -12,11 +13,20 @@ import { useAct } from "../../ticket/useAct";
 import { Button } from "../../controls/Button";
 import "./review.css";
 
+// specChoices are a spec Stage's two ways to accept, each with the Spec
+// recommendation that names it. With a recommendation only that choice is
+// primary, marked Recommended beside it; with none, both are primary.
+const specChoices = [
+  { recommendation: "split", action: "accept", label: "Split into Tickets" },
+  { recommendation: "implement", action: "implement", label: "Implement" },
+] as const satisfies readonly { recommendation: NonNullable<TicketView["recommendation"]>; action: string; label: string }[];
+
 export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
   const [comment, setComment] = useState("");
   const { busy, error, run } = useAct();
   const summary = finishSummary(t);
   const canReject = comment.trim() !== "" && !busy;
+  const recommendedId = useId();
 
   return (
     <section aria-label="In Review" className="panel review-panel">
@@ -35,14 +45,29 @@ export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
       )}
       <p>
         {t.labels.includes("stage:spec") ? (
-          <>
-            <Button type="button" variant="primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "accept", {}))}>
-              Split into Tickets
-            </Button>{" "}
-            <Button type="button" variant="primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "implement", {}))}>
-              Implement
-            </Button>
-          </>
+          specChoices.map(({ recommendation, action, label }) => {
+            const recommended = t.recommendation === recommendation;
+            return (
+              <Fragment key={recommendation}>
+                <Button
+                  type="button"
+                  variant={!t.recommendation || recommended ? "primary" : "default"}
+                  aria-describedby={recommended ? recommendedId : undefined}
+                  disabled={busy}
+                  onClick={() => run(() => api.act(project, t.id, action, {}))}
+                >
+                  {label}
+                </Button>{" "}
+                {recommended && (
+                  <>
+                    <span id={recommendedId} className="small muted">
+                      Recommended
+                    </span>{" "}
+                  </>
+                )}
+              </Fragment>
+            );
+          })
         ) : (
           <Button type="button" variant="primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "accept", {}))}>
             Accept

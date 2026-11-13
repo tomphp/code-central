@@ -205,7 +205,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
 
 Each Project has a **Landing Method**: what the Factory does with an implementation Ticket's branch once you accept it. A new Project starts on **Merge** with **Push** off: the Factory merges the branch into the base locally and lands the Ticket, and nothing leaves the machine. Leave it there unless you want something else.
 
-To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=project-options&project=acme-api`, so you can bookmark it. On a wide screen a menu on the left lists the page's sections (Landing Method, CI, GitHub Issues, Models, Stage Guides and Focus) and stays in view as you scroll; choosing an entry jumps to that section. On a narrow screen the menu is hidden. Its **Landing Method** section starts with the **Base branch**, a text field showing the branch the Project's work is cut from and lands on (`main` until you change it; it is saved with the rest of the section, and Save refuses a name git would not accept). Below it are the three methods:
+To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=project-options&project=acme-api`, so you can bookmark it. On a wide screen a menu on the left lists the page's sections (Landing Method, CI, GitHub Issues, Models, Stage Guides, Auto-accept and Focus) and stays in view as you scroll; choosing an entry jumps to that section. On a narrow screen the menu is hidden. Its **Landing Method** section starts with the **Base branch**, a text field showing the branch the Project's work is cut from and lands on (`main` until you change it; it is saved with the rest of the section, and Save refuses a name git would not accept). Below it are the three methods:
 
 - **Merge**: the Factory merges the accepted branch into the base and lands the Ticket. The default.
 - **Leave as a branch**: the Factory leaves the branch for you to merge, and lands the Ticket when it sees the merge in the base.
@@ -474,6 +474,42 @@ curl -X POST localhost:7733/api/p/acme-api/set_model_assignment -d '{"on": true}
 A change applies from the next Claim and the next `get_stage_guide` call. A session already running, or one resumed after a Round, keeps the guide in the system prompt it started with, unlike Models, which apply from each Ticket's next turn. To read the guide your Project's agents get, `GET /api/p/{key}/stage-guides/{stage}` or `code-central get-stage-guide <stage>`, which prints the configured Project's guide (`--project` names another).
 
 Another optional line follows the same pattern: one named setting, whose zero value may keep the line in or leave it out, and one fragment in `core/stageguides/fragments/`, which a placeholder line in the guide (`<!-- subagent-exploration -->`, `<!-- model-assignment -->`) marks the place of. [ADR 0034](adr/0034-a-stage-guide-can-vary-by-project-only-through-named-project-settings-that-the-human-sets.md) records the decision.
+
+## Auto-accept
+
+Auto-accept lets finished work you would accept anyway skip In Review: when a Ticket of a kind you have switched on finishes, `finish` moves it to In Review and, in the same write, carries out your accept, so it never shows in Needs Me. A Ticket's **Auto-accept kind** is worked out from what it carries, and each kind is one switch, all off by default:
+
+| Kind | Key | What it covers |
+|---|---|---|
+| Grilling outcomes | `grilling` | A finished grilling Stage, which goes on to its spec Stage |
+| Spec recommendation | `spec` | A finished spec Stage, accepted by the choice its agent recommended: Implement or Split into Tickets |
+| Tickets Stage | `tickets` | A finished tickets Stage, so the Tickets it wrote are built |
+| Implementation results | `implementation` | Every other finished Ticket: feature work, a Small Change, CI fix, CI Rule and Incoming Issue Tickets, and `Implement:` Tickets |
+| Merge results | `merge` | A Spec merge Ticket only, the one Code Central opens when a Spec Branch conflicts with the base |
+
+Prototypes and Map Tickets have no kind and are never auto-accepted. An auto-accepted Ticket goes where your own accept would take it, Accepted when its finish named a branch and Done otherwise, and the Move is recorded as yours with its cause, so the Factory lands it, CI Tracking gates it and Land per Spec gathers it unchanged. An auto-accepted Implement on a Requirement whose tickets Stage is still Draft creates its implementation Ticket as Draft. A spec Stage already In Review from before recommendations existed stays for you to accept.
+
+In the UI it is the **Auto-accept** section of the Project Options page, below Stage Guides: one checkbox per kind, a line saying Prototypes and Map Tickets are never auto-accepted, and one **Save**. An auto-accepted Move shows in the Ticket's **History** as `In Review → Accepted by human, Auto-accepted (Project setting: Implementation results)`, naming the kind; the Ticket and Spec rows get no badge, and nothing appears in Needs Me.
+
+Every Project read shows the setting as `auto_accept`, as in `{"grilling": false, "spec": false, "tickets": false, "implementation": true, "merge": false}`. Only you set it, over HTTP; agents have no tool or command for it, and a kind you leave out of the map keeps its value:
+
+```sh
+curl -X POST localhost:7733/api/p/acme-api/set_auto_accept -H 'X-Code-Central-Actor: human' -d '{"kinds": {"implementation": true, "merge": true}}'
+```
+
+Turning a kind on affects only Tickets that finish afterwards: nothing already In Review is accepted. [ADR 0037](adr/0037-auto-accept-happens-within-finish-on-the-humans-behalf-and-only-the-human-can-turn-it-on.md) records the decision.
+
+### The `auto-accept` Label
+
+To auto-accept one Ticket, or everything on one Spec, whatever the Project's switches say, give it the reserved `auto-accept` Label. On a Ticket or its Spec it turns every kind on for that Ticket, so a Requirement labelled `auto-accept` runs from grilling to its last implementation Ticket without you, and the Label on a Long-lived Spec such as Small Changes auto-accepts every Small Change. Prototypes and Map Tickets are still never auto-accepted. The Move's cause tells you which switch let a Ticket through: `ticket-label`, `spec-label` or `project`, in that order when more than one applies.
+
+Adding the Label also accepts, in the same write, every Ticket it now covers that is already In Review, except a spec Stage with no recommendation. Removing it changes nothing already accepted; only later finishes go back to In Review.
+
+The Label is yours alone. `add_labels`, `remove_labels`, `create_ticket` and an import refuse it as `invalid` from an agent or an Integration, so MCP and the CLI can't name it. Add or remove it over HTTP as the human:
+
+```sh
+curl -X POST localhost:7733/api/p/acme-api/add_labels -H 'X-Code-Central-Actor: human' -d '{"target": "acme-api-12", "labels": ["auto-accept"]}'
+```
 
 ## When `init` behaves differently
 

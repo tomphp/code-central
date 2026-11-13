@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"slices"
 	"strings"
 
@@ -84,6 +85,15 @@ func checkReservedNames(field string, labels []string) error {
 		if ok && !slices.Contains(wayfinderNames, name) {
 			return invalid(field, "%q uses the reserved %q prefix; the only Wayfinder Labels are %s", l, WayfinderPrefix, wayfinderLabelList)
 		}
+	}
+	return nil
+}
+
+// checkHumanLabels rejects the auto-accept Label named by anyone but the
+// human, who alone adds or removes it.
+func checkHumanLabels(ctx context.Context, field string, labels []string) error {
+	if slices.Contains(labels, AutoAcceptLabel) && ActorOf(ctx) != Human {
+		return invalid(field, "%q is reserved for the human, who alone adds or removes it", AutoAcceptLabel)
 	}
 	return nil
 }

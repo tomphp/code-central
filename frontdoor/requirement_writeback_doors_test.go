@@ -122,7 +122,9 @@ func TestARequirementsProgressComesDueOnItsIssue(t *testing.T) {
 	// not after a later edit.
 	claim = claimedByAgent(t, srv, "8")
 	asAgent(t, srv, httpCall{"POST", "/api/p/acme/specs/6/edit_spec", `{"body":"## Problem\n\nLogin fails.\n"}`})
-	finishedAndAccepted(t, srv, "8", claim, "Spec written.", "")
+	srv.Clock.Advance(time.Minute)
+	asAgent(t, srv, httpCall{"POST", "/api/p/acme/tickets/8/finish", `{"claim_id":` + quote(claim) + `,"summary":"Spec written.","recommendation":"split"}`})
+	httpOK(t, srv, httpCall{"POST", "/api/p/acme/tickets/8/accept", `{}`})
 	srv.Clock.Advance(time.Minute)
 	httpOK(t, srv, httpCall{"POST", "/api/p/acme/specs/6/edit_spec", `{"body":"Edited later."}`})
 	got = writesDue(t, srv)
