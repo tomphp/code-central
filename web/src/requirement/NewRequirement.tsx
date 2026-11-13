@@ -42,7 +42,9 @@ interface Kind<R> {
   // straight offers the "Straight to Spec" checkbox, and says what ticking
   // it creates.
   straight?: { creates: string };
-  submit(api: Api, project: string, text: string, straight: boolean): Promise<R>;
+  // draftable shows Save as Draft, which calls submit with draft true.
+  draftable?: boolean;
+  submit(api: Api, project: string, text: string, draft: boolean, straight: boolean): Promise<R>;
 }
 
 const REQUIREMENT: Kind<{ spec: SpecAcknowledgement }> = {
@@ -52,7 +54,8 @@ const REQUIREMENT: Kind<{ spec: SpecAcknowledgement }> = {
   placeholder: "Describe what you want built. The first line becomes the working title.",
   creates: "Creates a Spec and its Grilling, Spec and Tickets Stages. A Factory picks up Grilling.",
   straight: { creates: "Creates a Spec and its Spec and Tickets Stages. A Factory picks up Spec." },
-  submit: (api, project, text, straight) => api.submitRequirement(project, text, undefined, straight),
+  draftable: true,
+  submit: (api, project, text, draft, straight) => api.submitRequirement(project, text, undefined, straight, draft),
 };
 
 const MAP: Kind<{ spec: SpecAcknowledgement }> = {
@@ -61,7 +64,8 @@ const MAP: Kind<{ spec: SpecAcknowledgement }> = {
   noun: "Map",
   placeholder: "Describe where you want to get to. The first line becomes the working title.",
   creates: "Creates a Map and its Charting Ticket. A Factory picks up Charting.",
-  submit: (api, project, text) => api.submitMap(project, text),
+  draftable: true,
+  submit: (api, project, text, draft) => api.submitMap(project, text, draft),
 };
 
 const SMALL_CHANGE: Kind<TicketAcknowledgement> = {
@@ -70,7 +74,8 @@ const SMALL_CHANGE: Kind<TicketAcknowledgement> = {
   noun: "Small Change",
   placeholder: "Describe the change you want. The first line becomes the Ticket's title.",
   creates: "Creates a Ready Ticket on the Small Changes Spec. A Factory builds it and it lands on its own.",
-  submit: (api, project, text) => api.submitSmallChange(project, text),
+  draftable: true,
+  submit: (api, project, text, draft) => api.submitSmallChange(project, text, draft),
 };
 
 // prototypeOn is New Prototype on spec.
@@ -113,6 +118,7 @@ export function WriteTheSpec({ api, map, onSubmitted }: WriteTheSpecProps) {
   const kind: Kind<{ spec: SpecAcknowledgement }> = {
     ...REQUIREMENT,
     straight: undefined,
+    draftable: false,
     button: "Write the Spec",
     variant: "default",
     creates: "Creates a Spec and its Spec and Tickets Stages, from the Map's decisions. A Factory picks up Spec.",
@@ -188,15 +194,18 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
+  const send = (draft: boolean) => {
     if (!text.trim() || !chosen) return;
     setBusy(true);
     setError(undefined);
-    kind.submit(api, chosen, text, straight).then(onSubmitted, (e: ApiError) => {
+    kind.submit(api, chosen, text, draft, straight).then(onSubmitted, (e: ApiError) => {
       setBusy(false);
       setError(e.message);
     });
+  };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    send(false);
   };
 
   return createPortal(
@@ -233,6 +242,11 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
             <Button type="button"  onClick={onClose}>
               Cancel
             </Button>
+            {kind.draftable && (
+              <Button type="button" disabled={busy || !text.trim() || !chosen} onClick={() => send(true)}>
+                Save as Draft
+              </Button>
+            )}
             <Button type="submit" variant="primary" disabled={busy || !text.trim() || !chosen}>
               Submit {kind.noun.toLowerCase()}
             </Button>
