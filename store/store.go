@@ -83,6 +83,9 @@ type Project struct {
 	// CIFixesSpec is the number of the Project's CI Fixes Spec, the
 	// Long-lived Spec its New fix Tickets open on; 0 until the first one.
 	CIFixesSpec int
+	// SmallChangesSpec is the number of the Project's Small Changes Spec, the
+	// Long-lived Spec its Small Changes open on; 0 until the first one.
+	SmallChangesSpec int
 }
 
 // StageGuides is a Project's Stage Guides settings (Spec
