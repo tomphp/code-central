@@ -34,4 +34,4 @@ A component used across areas lives in `web/src/controls/`; one that belongs to 
 
 1. Write the component, and a vitest test through its rendered output (role, accessible name, variant class).
 2. Put a `<Component>.stories.tsx` beside it, one story per variant, using `Meta` and `StoryObj` from `@storybook/react-vite` (see `controls/ToggleGroup.stories.tsx`). Where it needs a Ticket, build one with `api/fake.ts`. Area CSS the story needs is imported in `web/.storybook/preview.ts`.
-3. Run `just serve-components` to look at it, and `just build-components` to check Storybook still builds. Storybook is a devDependency only: it is not in the embedded `dist` and `make test` doesn't run it.
+3. Run `make serve-components` to look at it, and `make build-components` to check Storybook still builds. Storybook is a devDependency only: it is not in the embedded `dist` and `make test` doesn't run it.

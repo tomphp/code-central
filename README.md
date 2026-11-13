@@ -86,7 +86,7 @@ Read them in this order:
 
 ## Developing the UI
 
-`code-central serve` and `npm --prefix web run dev` run the app with hot reload (Vite serves the UI on :5173 and proxies `/api` to the service). `just serve-components` serves a component browser, a Storybook of the UI's shared components, on http://localhost:6006; `just build-components` builds it into `web/storybook-static` to check it. It needs [just](https://github.com/casey/just) and Node, and is a dev tool only: it isn't in the built UI or in `make test`. Each shared component has a `*.stories.tsx` beside it; see [Recipes](docs/agents/recipes.md).
+`code-central serve` and `npm --prefix web run dev` run the app with hot reload (Vite serves the UI on :5173 and proxies `/api` to the service). `make serve-components` serves a component browser, a Storybook of the UI's shared components, on http://localhost:6006; `make build-components` builds it into `web/storybook-static` to check it. It needs Node, and is a dev tool only: it isn't in the built UI or in `make test`. Each shared component has a `*.stories.tsx` beside it; see [Recipes](docs/agents/recipes.md).
 
 ## Running the service
 

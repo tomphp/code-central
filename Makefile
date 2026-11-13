@@ -5,7 +5,7 @@ TEST_BUDGET := 10
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test test-verbose typecheck vitest e2e build web clean hooks context-report ci-failures
+.PHONY: test test-verbose typecheck vitest e2e build web clean hooks context-report ci-failures serve-components build-components
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
@@ -87,3 +87,14 @@ context-report:
 # capped at 120 lines.
 ci-failures:
 	gh run view $(RUN) --log-failed 2>&1 | go run ./internal/cifailures
+
+# The UI's component browser, a dev-only Storybook (web/.storybook/).
+# Storybook is a devDependency of web/ and nothing in the embedded dist or in
+# `make test` uses it. serve-components serves it on http://localhost:6006 with
+# hot reload; build-components builds it statically into web/storybook-static,
+# which checks it builds.
+serve-components: $(WEB_DEPS)
+	cd web && npm exec -- storybook dev -p 6006 --no-open
+
+build-components: $(WEB_DEPS)
+	cd web && npm exec -- storybook build
