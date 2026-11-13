@@ -8,6 +8,6 @@ export function LatestEventLine({ event, now, className }: { event: LatestEvent;
 }
 
 // RowLatestEvent is an In Progress row's latest event; nothing on any other row.
-export function RowLatestEvent({ row, now, className }: { row: TicketRow; now: Date; className?: string }) {
+export function RowLatestEvent({ row, now, className }: { row: Pick<TicketRow, "state" | "latest_event">; now: Date; className?: string }) {
   return row.state === "In Progress" && row.latest_event ? <LatestEventLine event={row.latest_event} now={now} className={className} /> : null;
 }
