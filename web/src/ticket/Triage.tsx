@@ -9,6 +9,7 @@ import "../api/actions/to_requirement";
 import "../api/actions/wont_fix";
 import type { TicketView } from "../api/types";
 import { useAct } from "./useAct";
+import { Button } from "../controls/Button";
 
 // BOXES are the triage actions that open a box before confirming: the
 // box's label, the field its text is sent as, and what it says.
@@ -42,18 +43,18 @@ export function TriageActions({ api, project, ticket: t }: { api: Api; project: 
     <>
       <p className="actions">
         {actions.includes("keep_as_draft") && (
-          <button type="button" className="btn" disabled={busy} onClick={() => run(() => api.act(project, t.id, "keep_as_draft", {}))}>
+          <Button type="button"  disabled={busy} onClick={() => run(() => api.act(project, t.id, "keep_as_draft", {}))}>
             Keep as Draft
-          </button>
+          </Button>
         )}
         {!open &&
           (Object.keys(BOXES) as BoxAction[])
             .filter((a) => actions.includes(a))
             .map((a) => (
-              <button
+              <Button
                 key={a}
                 type="button"
-                className="btn"
+
                 disabled={busy}
                 onClick={() => {
                   setText("");
@@ -61,7 +62,7 @@ export function TriageActions({ api, project, ticket: t }: { api: Api; project: 
                 }}
               >
                 {BOXES[a].title}…
-              </button>
+              </Button>
             ))}
       </p>
       {open && box && (
@@ -79,12 +80,12 @@ export function TriageActions({ api, project, ticket: t }: { api: Api; project: 
           </label>
           <p className="small muted">{box.note}</p>
           <p className="actions">
-            <button type="submit" className="btn primary" disabled={busy}>
+            <Button type="submit" variant="primary" disabled={busy}>
               {box.title}
-            </button>
-            <button type="button" className="btn" disabled={busy} onClick={() => setOpen(undefined)}>
+            </Button>
+            <Button type="button"  disabled={busy} onClick={() => setOpen(undefined)}>
               Back
-            </button>
+            </Button>
           </p>
         </form>
       )}

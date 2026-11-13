@@ -22,6 +22,7 @@ import { reasonsOf } from "../requirement/progress";
 import { NewSplit } from "../requirement/NewSplit";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { ColumnsMenu } from "./ColumnsMenu";
+import { Button } from "../controls/Button";
 import "./board.css";
 
 export interface BoardViewProps {
@@ -118,9 +119,9 @@ export function BoardView({ api, now, data, loc, navigate }: BoardViewProps) {
                   }
                 />
               </div>
-              <button className="btn" onClick={() => navigate(loc.back ?? { view: "inbox" })}>
+              <Button  onClick={() => navigate(loc.back ?? { view: "inbox" })}>
                 Back to the Inbox
-              </button>
+              </Button>
             </>
           }
         />

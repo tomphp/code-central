@@ -9,6 +9,7 @@ import { ApiError, type RoundView, type TicketView } from "../../api/types";
 import { ago, duration } from "../../format";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { ResumeCommand, type Session } from "./ResumeCommand";
+import { Button } from "../../controls/Button";
 import "./resume.css";
 
 function ResumeRelease({ api, project, ticket: t, now }: PanelProps) {
@@ -94,9 +95,9 @@ function Release({
   if (!open) {
     return (
       <p>
-        <button type="button" className="btn danger" onClick={() => setOpen(true)}>
+        <Button type="button" variant="danger" onClick={() => setOpen(true)}>
           {verb}…
-        </button>
+        </Button>
       </p>
     );
   }
@@ -126,12 +127,12 @@ function Release({
       </label>
       {error && <p className="warning">{error}</p>}
       <p>
-        <button type="button" className="btn danger" disabled={busy} onClick={release}>
+        <Button type="button" variant="danger" disabled={busy} onClick={release}>
           {verb} Claim
-        </button>{" "}
-        <button type="button" className="btn" disabled={busy} onClick={() => setOpen(false)}>
+        </Button>{" "}
+        <Button type="button"  disabled={busy} onClick={() => setOpen(false)}>
           Keep the Claim
-        </button>
+        </Button>
       </p>
     </div>
   );

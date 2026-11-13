@@ -12,6 +12,7 @@ import { Markdown } from "../../Markdown";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { ResumeCommand } from "../resume/ResumeCommand";
 import { useAct } from "../../ticket/useAct";
+import { Button } from "../../controls/Button";
 import "./failed.css";
 
 export function FailedPanel({ api, project, ticket: t, now }: PanelProps) {
@@ -38,20 +39,20 @@ export function FailedPanel({ api, project, ticket: t, now }: PanelProps) {
         </p>
       )}
       <p className="moves">
-        <button
+        <Button
           type="button"
-          className="btn primary"
+          variant="primary"
           disabled={busy}
           onClick={() => run(() => api.act(project, t.id, "send_back", note.trim() ? { note: note.trim() } : {}))}
         >
           Send back
-        </button>
-        <button type="button" className="btn" disabled={busy} onClick={() => run(() => api.act(project, t.id, "to_draft", {}))}>
+        </Button>
+        <Button type="button"  disabled={busy} onClick={() => run(() => api.act(project, t.id, "to_draft", {}))}>
           To Draft
-        </button>
-        <button type="button" className="btn danger" disabled={busy} onClick={() => run(() => api.act(project, t.id, "cancel", {}))}>
+        </Button>
+        <Button type="button" variant="danger" disabled={busy} onClick={() => run(() => api.act(project, t.id, "cancel", {}))}>
           Cancel
-        </button>
+        </Button>
       </p>
 
       <div className="investigate">

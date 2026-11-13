@@ -20,6 +20,7 @@ import { FOG, isFrontier, layoutMap, NODE, nodeProgress } from "./graph";
 import { mapCount } from "./mapCount";
 import { mapSection } from "./sections";
 import { ShortId } from "../inbox/ShortId";
+import { Button } from "../controls/Button";
 
 export interface MapPaneProps {
   api: Api;
@@ -116,9 +117,9 @@ export function MapPane({ api, spec, reasons, now, ticket, select, specLink, wri
                       <ShortId id={t.id} /> {t.title}
                     </button>
                     {isFrontier(t) && (
-                      <button className="btn map-start" aria-label={`Start ${t.title}`} disabled={busy} onClick={() => start(t)}>
+                      <Button className="map-start" aria-label={`Start ${t.title}`} disabled={busy} onClick={() => start(t)}>
                         Start
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </foreignObject>

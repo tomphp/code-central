@@ -11,6 +11,7 @@ import { Markdown } from "../../Markdown";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { QuestionAnswer } from "./QuestionAnswer";
 import { useAction } from "./useAction";
+import { Button } from "../../controls/Button";
 import "./round.css";
 
 export const panel: PanelDef = { reasons: ["needs_answer"], Component: RoundPanel };
@@ -29,13 +30,12 @@ export function RoundPanel({ api, project, ticket }: PanelProps) {
           {open.length} of {round.questions.length} open
         </span>
         {open.some((q) => q.recommended) && (
-          <button
-            className="btn"
+          <Button
             disabled={accept.busy}
             onClick={() => accept.run(() => api.act(project, ticket.id, "accept_recommended", { round: round.number }))}
           >
             Accept all recommended
-          </button>
+          </Button>
         )}
       </div>
       {accept.alert}

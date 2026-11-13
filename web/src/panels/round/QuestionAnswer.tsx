@@ -12,6 +12,7 @@ import "../../api/actions/rounds";
 import type { QuestionView } from "../../api/types";
 import "./round.css";
 import { useAction } from "./useAction";
+import { Button } from "../../controls/Button";
 
 export interface QuestionAnswerProps {
   api: Api;
@@ -56,17 +57,17 @@ export function QuestionAnswer({ api, project, ticket, q, submitOnModEnter, chil
       <textarea ref={boxRef} id={boxId} rows={2} value={text} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} />
       {alert}
       <div className="question-actions">
-        <button className="btn primary" disabled={!canAnswer} onClick={answer}>
+        <Button variant="primary" disabled={!canAnswer} onClick={answer}>
           {q.status === "answered" ? "Update answer" : "Answer"}
-        </button>
+        </Button>
         {q.status !== "dismissed" && (
-          <button className="btn" disabled={busy} onClick={dismiss}>
+          <Button  disabled={busy} onClick={dismiss}>
             Dismiss
-          </button>
+          </Button>
         )}
-        <button className="btn" disabled={busy} onClick={prototypeThis}>
+        <Button  disabled={busy} onClick={prototypeThis}>
           Prototype this
-        </button>
+        </Button>
         {children}
       </div>
     </>

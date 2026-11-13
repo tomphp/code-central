@@ -6,6 +6,7 @@ import type { ExternalState } from "../../api/types";
 import { LinkBadge } from "../../ticket/LinkBadge";
 import { useAct } from "../../ticket/useAct";
 import type { PanelProps } from "../ActionPanel";
+import { Button } from "../../controls/Button";
 
 const WHAT: Record<ExternalState, string> = {
   open: "is open",
@@ -25,19 +26,19 @@ export function ClosedExternally({ api, project, ticket: t }: PanelProps) {
         </p>
       )}
       <p className="actions">
-        <button className="btn danger" disabled={busy} onClick={() => run(() => api.act(project, t.id, "cancel", {}))}>
+        <Button variant="danger" disabled={busy} onClick={() => run(() => api.act(project, t.id, "cancel", {}))}>
           Cancel
-        </button>{" "}
-        <button
-          className="btn primary"
+        </Button>{" "}
+        <Button
+          variant="primary"
           disabled={busy}
           onClick={() => run(() => api.act(project, t.id, "move", { to_state: "Done" }))}
         >
           Mark Done
-        </button>{" "}
-        <button className="btn" disabled={busy} onClick={() => run(() => api.unlink(project, t.id))}>
+        </Button>{" "}
+        <Button  disabled={busy} onClick={() => run(() => api.unlink(project, t.id))}>
           Unlink
-        </button>
+        </Button>
       </p>
       {error && (
         <p role="alert" className="warning">

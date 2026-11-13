@@ -37,6 +37,7 @@ import { FactoryList, NO_HEARTBEATS } from "../factory/FactoryStatus";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { azureProjectURL } from "./azureProjectURL";
 import { githubRepository } from "./githubRepository";
+import { Button } from "../controls/Button";
 
 export interface ProjectOptionsProps {
   api: Api;
@@ -318,9 +319,9 @@ function LandingMethodSection({
         )}
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
-          <button type="submit" className="btn primary" disabled={!changed}>
+          <Button type="submit" variant="primary" disabled={!changed}>
             Save
-          </button>
+          </Button>
           {saved && !changed && (
             <span role="status" className="muted">
               Saved
@@ -596,9 +597,9 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
         </p>
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
-          <button type="submit" className="btn primary" disabled={!changed}>
+          <Button type="submit" variant="primary" disabled={!changed}>
             Save
-          </button>
+          </Button>
           {saved && !changed && (
             <span role="status" className="muted">
               Saved
@@ -822,9 +823,9 @@ function GitHubIssuesSection({
         {spec && <p className="muted">Incoming Issues arrive on {spec}.</p>}
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
-          <button type="submit" className="btn primary" disabled={!changed}>
+          <Button type="submit" variant="primary" disabled={!changed}>
             Save
-          </button>
+          </Button>
           {saved && !changed && (
             <span role="status" className="muted">
               Saved
@@ -982,9 +983,9 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
         <ModelSuggestions id={`${id}-models`} suggestions={suggestions} />
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
-          <button type="submit" className="btn primary" disabled={!changed}>
+          <Button type="submit" variant="primary" disabled={!changed}>
             Save
-          </button>
+          </Button>
           {saved && !changed && (
             <span role="status" className="muted">
               Saved
@@ -1081,9 +1082,9 @@ function StageGuideCheckbox({
       </p>
       {error && <Refusal id={`${id}-error`} error={error} />}
       <div className="project-options-actions">
-        <button type="submit" className="btn primary" disabled={!changed}>
+        <Button type="submit" variant="primary" disabled={!changed}>
           Save
-        </button>
+        </Button>
         {saved && !changed && (
           <span role="status" className="muted">
             Saved
@@ -1180,23 +1181,23 @@ function RuleRow({
       <span>
         <strong>{watches}</strong>: opens {rule.state} Tickets on {rule.spec}
       </span>{" "}
-      <button
+      <Button
         type="button"
-        className="btn"
+
         aria-label={`Edit ${watches}`}
         onClick={edit}
       >
         Edit
-      </button>{" "}
-      <button
+      </Button>{" "}
+      <Button
         type="button"
-        className="btn"
+
         aria-label={`Remove ${watches}`}
         aria-describedby={removeHint}
         onClick={() => remove().catch(setError)}
       >
         Remove
-      </button>
+      </Button>
       {error && (
         <p className="warning" role="alert">
           {error.message}
@@ -1294,13 +1295,13 @@ function RuleForm(props: {
         </p>
       )}
       <div className="project-options-actions">
-        <button type="submit" className="btn primary" disabled={!filled}>
+        <Button type="submit" variant="primary" disabled={!filled}>
           {submit}
-        </button>
+        </Button>
         {cancel && (
-          <button type="button" className="btn" onClick={cancel}>
+          <Button type="button"  onClick={cancel}>
             Cancel
-          </button>
+          </Button>
         )}
       </div>
     </form>
