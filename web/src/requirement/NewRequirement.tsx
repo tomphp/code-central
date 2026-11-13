@@ -1,4 +1,4 @@
-// "New requirement", "New Map" and "New Prototype": buttons that each
+// "New requirement", "New Map", "New Small Change" and "New Prototype": buttons that each
 // open the same modal, one free-text box. A new Requirement or Map goes to
 // the filtered Project, or the only one; with several and none filtered,
 // the modal asks which. A Prototype goes on the Spec whose view it is on.
@@ -15,7 +15,8 @@ import type { ApiError, ProjectRow, SpecAcknowledgement, TicketAcknowledgement }
 
 export interface NewRequirementProps {
   api: Api;
-  // projects are the Projects a Requirement or Map can go to: the active ones.
+  // projects are the Projects a Requirement, Map or Small Change can go to:
+  // the active ones.
   projects: ProjectRow[];
   // project is the filtered Project, if any.
   project?: string;
@@ -57,6 +58,15 @@ const MAP: Kind<{ spec: SpecAcknowledgement }> = {
   submit: (api, project, text) => api.submitMap(project, text),
 };
 
+const SMALL_CHANGE: Kind<TicketAcknowledgement> = {
+  button: "New Small Change",
+  className: "btn",
+  noun: "Small Change",
+  placeholder: "Describe the change you want. The first line becomes the Ticket's title.",
+  creates: "Creates a Ready Ticket on the Small Changes Spec. A Factory builds it and it lands on its own.",
+  submit: (api, project, text) => api.submitSmallChange(project, text),
+};
+
 // prototypeOn is New Prototype on spec.
 const prototypeOn = (spec: string): Kind<TicketAcknowledgement> => ({
   button: "New Prototype",
@@ -73,6 +83,14 @@ export function NewRequirement(props: NewRequirementProps) {
 
 export function NewMap(props: NewRequirementProps) {
   return <NewFromText kind={MAP} {...props} />;
+}
+
+export interface NewSmallChangeProps extends Omit<NewRequirementProps, "onSubmitted"> {
+  onSubmitted(t: TicketAcknowledgement): void;
+}
+
+export function NewSmallChange(props: NewSmallChangeProps) {
+  return <NewFromText kind={SMALL_CHANGE} {...props} />;
 }
 
 export interface WriteTheSpecProps {

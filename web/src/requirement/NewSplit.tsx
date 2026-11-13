@@ -1,21 +1,25 @@
 // The split "+ New ▾": "+ New" opens New requirement, the main action; its
-// "▾" opens a menu of Requirement and Map, so every kind is discoverable.
+// "▾" opens a menu of Requirement, Map and Small Change, so every kind is discoverable.
 // The menu stays mounted while closed, so a modal opened from one of its
 // items outlives it. The ▾ and its menu follow the usual menu-button
 // keyboard pattern. The menu is placed against the nearest positioned
 // ancestor, which the caller provides.
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from "react";
-import type { SpecAcknowledgement } from "../api/types";
-import { NewMap, NewRequirement, type NewRequirementProps } from "./NewRequirement";
+import type { SpecAcknowledgement, TicketAcknowledgement } from "../api/types";
+import { NewMap, NewRequirement, NewSmallChange, type NewRequirementProps } from "./NewRequirement";
 
 // NewKind is what + New ▾ can make.
-export type NewKind = "Requirement" | "Map";
+export type NewKind = "Requirement" | "Map" | "Small Change";
+
+// Made is what a submit resolves to, keyed by its kind: a Requirement or
+// Map carries its Spec, a Small Change its Ticket.
+export type Made = { kind: "Requirement" | "Map"; spec: SpecAcknowledgement } | { kind: "Small Change"; ticket: TicketAcknowledgement };
 
 export interface NewSplitProps extends Omit<NewRequirementProps, "trigger" | "onSubmitted"> {
   // variant styles both halves of the split.
   variant: "primary" | "plain";
   // onSubmitted is told which kind was made, with its acknowledgement.
-  onSubmitted(r: { kind: NewKind; spec: SpecAcknowledgement }): void;
+  onSubmitted(r: Made): void;
 }
 
 // NewSplit is + New, its ▾ and the ▾'s menu.
@@ -25,7 +29,7 @@ export function NewSplit({ variant, onSubmitted, ...newProps }: NewSplitProps) {
   const menu = useRef<HTMLDivElement>(null);
   const moreId = useId();
   const btn = variant === "primary" ? "btn primary" : "btn";
-  const made = (kind: NewKind) => (r: { spec: SpecAcknowledgement }) => onSubmitted({ kind, ...r });
+  const made = (kind: "Requirement" | "Map") => (r: { spec: SpecAcknowledgement }) => onSubmitted({ kind, ...r });
 
   const items = () => Array.from(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
   const focusFirst = () => items()[0]?.focus();
@@ -120,6 +124,11 @@ export function NewSplit({ variant, onSubmitted, ...newProps }: NewSplitProps) {
           {...newProps}
           onSubmitted={made("Map")}
           trigger={(show) => <MenuItem icon="◇" label="Map" hint="Charts the decisions to get somewhere" onClick={pick(show)} />}
+        />
+        <NewSmallChange
+          {...newProps}
+          onSubmitted={(ticket) => onSubmitted({ kind: "Small Change", ticket })}
+          trigger={(show) => <MenuItem icon="✓" label="Small Change" hint="One Ticket, built and landed as it is" onClick={pick(show)} />}
         />
       </div>
     </>
