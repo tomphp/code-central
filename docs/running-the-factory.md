@@ -45,6 +45,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    | `--model <model>` | The model for every session it starts or resumes, such as `--model opus`, unless the Ticket sets one. The default is Claude Code's own. See [Model and effort](#model-and-effort). |
    | `--effort <level>` | The effort for every session it starts or resumes, such as `--effort high`, unless the Ticket sets one. The default is Claude Code's own. It must be a level `claude --help` lists; see [What `claude` accepts](#what-claude-accepts). |
    | `--bypass-permissions` | Runs every session in `bypassPermissions` mode, with no permission checks. It prints a warning line at the start. |
+   | `-- <Claude Args>` | Everything after `--` is `claude` flags the Factory passes, as given, to every start and resume, such as `-- --chrome`. See [Claude Args](#claude-args). |
 
    Without `--bypass-permissions`, every session runs in auto mode with no permission prompts. Anything auto mode won't allow is denied and the turn carries on without it. If a turn ends on denied calls, the Factory posts a Round asking you about each one, and answering it lets the session try again. Allow rules for the repository go in its committed `.claude/settings.json`.
 
@@ -344,6 +345,36 @@ acme-shop-5: Failed: claude rejected the model `opus-9`, set by the Project's Mo
 ```
 
 Its *What to fix* reads: In Project Options, set the model in the Models row for implementation to one that claude accepts, or to Default, then send the Ticket back. Its *Why* quotes what `claude` said.
+
+## Claude Args
+
+Factory sessions can't turn on the Chrome extension with an interactive `/chrome`, and Claude Code only enables it with `--chrome`. Everything after `--` on the Factory's command line is **Claude Args**: `claude` flags the Factory passes, as given, to every start and resume of every Claim, so agents can use the browser to see a UI change in the running app:
+
+```console
+$ code-central-factory --parallel 1 -- --chrome --add-dir ../shared
+base: main
+passing to every claude turn: --chrome --add-dir ../shared
+```
+
+Any `claude` flag works the same way, written as you would type it to `claude`. A resumed session gets them again, and after a restart it gets the restarted Factory's. They stay on the machine: Code Central never sees them. Parallel sessions share one Chrome, so if browser work collides, try `--parallel 1`.
+
+The Factory refuses to start when a Claude Arg is a flag it sets itself, in its `--flag=value` form too, and points at its own flag where it has one:
+
+```console
+$ code-central-factory -- --model=opus
+code-central-factory: --model=opus can't be a Claude Arg: use the Factory's --model
+```
+
+Those are `--model` and `--effort` (use the Factory's), `--permission-mode`, `--permission-prompts` and `--dangerously-skip-permissions` (use `--bypass-permissions`), and the ones the Factory sets itself: `-p`/`--print`, `--session-id`, `-r`/`--resume`, `-c`/`--continue`, `--output-format`, `--input-format`, `--allowedTools`/`--allowed-tools`, `--append-system-prompt`, `--system-prompt`, `--system-prompt-file`, `--no-session-persistence` and `--bare`. A bare `--` among them is refused too.
+
+With Claude Args, the Factory also checks at startup that `claude` accepts them, by running `claude -p` with them once, with no prompt and empty input. That makes no model call and leaves no session behind. A typo stops the Factory:
+
+```console
+$ code-central-factory -- --chrom
+code-central-factory: refusing to start: claude doesn't accept the Claude Args: error: unknown option '--chrom'
+```
+
+If `claude` answers in a way the Factory doesn't recognise, it prints a warning with the output and carries on. The check doesn't prove Chrome is connected; `--chrome` only makes the browser tools available. When a turn exits with no result message, its Failure Report's *What to fix* also lists the Claude Args the turn started with, so you suspect them if `claude` rejected one.
 
 ## Map Tickets and Prototypes
 

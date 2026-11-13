@@ -104,6 +104,9 @@ type options struct {
 	effort   string
 	project  string
 	verbose  bool
+	// claudeArgs are what follows -- on the command line: claude flags
+	// every start and resume passes as given.
+	claudeArgs []string
 }
 
 func parseFlags(args []string, stderr io.Writer) (options, error) {
@@ -118,6 +121,12 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.String("base", "", "removed: the base is the Project's Base branch setting")
 	fs.BoolVar(&o.verbose, "verbose", false, "print a line for each tool call the agents make")
 	fs.StringVar(&o.project, "project", "", "Project Key (default $CODE_CENTRAL_PROJECT, else the nearest .mcp.json)")
+	fs.Usage = func() {
+		fmt.Fprintln(stderr, "Usage: code-central-factory [flags] [-- <Claude Args>]")
+		fmt.Fprintln(stderr, "\n<Claude Args> are claude flags, such as --chrome, passed as given to every start and resume.")
+		fmt.Fprintln(stderr, "\nFlags:")
+		fs.PrintDefaults()
+	}
 	if err := fs.Parse(args); err != nil {
 		return o, err
 	}
@@ -126,8 +135,14 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	if refused {
 		return o, errors.New("--base is gone: the base is the Project's setting now; set it in Project Options' Base branch field")
 	}
-	if fs.NArg() > 0 {
-		return o, fmt.Errorf("unexpected argument %q", fs.Arg(0))
+	if rest := fs.Args(); len(rest) > 0 {
+		if i := len(args) - len(rest) - 1; i < 0 || args[i] != "--" {
+			return o, fmt.Errorf("unexpected argument %q", rest[0])
+		}
+		if err := checkClaudeArgs(rest); err != nil {
+			return o, err
+		}
+		o.claudeArgs = rest
 	}
 	if o.parallel < 1 {
 		return o, errors.New("--parallel must be at least 1")
@@ -160,6 +175,9 @@ func Run(ctx context.Context, args []string, e Env) int {
 	}
 	defer f.lock.Close()
 	f.printf("base: %s", f.baseBranch())
+	if len(o.claudeArgs) > 0 {
+		f.printf("passing to every claude turn: %s", joinArgs(o.claudeArgs))
+	}
 	if o.bypass {
 		f.printf("warning: --bypass-permissions: every session runs in bypassPermissions mode, with no permission checks")
 	}
@@ -386,6 +404,9 @@ func start(e Env, o options) (*factory, error) {
 	}
 	f.accepts = f.readClaudeHelp()
 	if err := f.checkEffortFlag(); err != nil {
+		return nil, err
+	}
+	if err := f.checkClaudeArgsAccepted(); err != nil {
 		return nil, err
 	}
 	if readErr == nil {

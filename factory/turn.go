@@ -64,7 +64,9 @@ func (f *factory) resumeArgs(c claim, mc turnChoice) []string {
 
 // turnFlags are the flags every start and resume passes: the output
 // format, the permission mode, the turn's model and effort when set, and
-// the Claim's allowed tools and its system prompt.
+// the Claim's allowed tools and its system prompt, then the Claude Args
+// and a -- that ends the flags, so that a flag taking several values
+// can't swallow the prompt that follows.
 func (f *factory) turnFlags(c claim, mc turnChoice) []string {
 	args := []string{"--output-format", "stream-json", "--verbose"}
 	if f.o.bypass {
@@ -84,7 +86,8 @@ func (f *factory) turnFlags(c claim, mc turnChoice) []string {
 	if c.SystemPrompt != "" {
 		args = append(args, "--append-system-prompt", c.SystemPrompt)
 	}
-	return args
+	args = append(args, f.o.claudeArgs...)
+	return append(args, "--")
 }
 
 // startTurn runs `claude args...` in dir for c, taking a slot until it
