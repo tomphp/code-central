@@ -144,6 +144,8 @@ var Operations = []Op{
 	{Name: "report_ci_runs", Audience: FactoryOnly, Write: true},
 	// Land per Spec (code-central-371).
 	{Name: "report_spec_merge", Audience: FactoryOnly, Write: true},
+	// Spec merge Tickets (code-central-542).
+	{Name: "open_spec_merge", Audience: FactoryOnly, Write: true},
 	// CI failed and its failure options (code-central-261).
 	{Name: "land_anyway", Audience: HumanOnly, Write: true},
 	// Re-run failed jobs (code-central-265).

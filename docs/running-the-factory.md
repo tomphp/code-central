@@ -474,7 +474,12 @@ acme-shop-5: landed on main at 9ad0fd655dd2
 acme-shop-6: landed on main at 9ad0fd655dd2
 ```
 
-When the Spec Branch conflicts with the base, the Factory opens a Ready Ticket on the Spec, "Merge the base into the Spec Branch of <spec id>", and retries once it is accepted.
+When the Spec Branch conflicts with the base, the Factory asks Code Central to open a Spec merge Ticket: a Ready Ticket on the Spec, "Merge the base into the Spec Branch of <spec id>", naming the conflicting files and both branches' tips, which Code Central marks as a Spec merge Ticket. While that Ticket is open, a later conflict is commented on it instead, and the same conflict again writes nothing. The Factory retries once the Ticket is accepted. A Ticket with that title made any other way, or opened by a Factory from before the mark, is not marked; Code Central comments on it the same way but leaves it unmarked.
+
+```text
+acme-shop-2: spec/acme-shop-2 conflicts with main in README.md: opened acme-shop-7 to merge the base into it
+acme-shop-2: spec/acme-shop-2 conflicts with main again: commented on acme-shop-7
+```
 
 Turning Land per Spec off part-way makes the Factory's next poll merge every Spec Branch that holds merged-but-not-landed Tickets into the base, ready or not, and land them as a group; later Tickets land one by one. Adding the `long-lived` Label to a Spec while its Tickets wait does the same for that Spec alone. Turning Land per Spec on, or taking the Label off, affects only Tickets accepted afterwards. A Ticket added to a Spec after it has landed lands with a second batch: the Spec Branch is merged into the base again once the new Ticket is accepted.
 

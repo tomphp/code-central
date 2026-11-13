@@ -195,6 +195,10 @@ _Avoid_: Spec landing, batch landing, release train
 The one local branch, `spec/<spec id>`, that a Spec's accepted implementation Tickets are merged into under Land per Spec. Each Ticket's branch is cut from its tip, and the Factory merges it into the base once the Spec is ready to land. It is pushed only under Pull Request, where the Spec's one pull request is opened from it.
 _Avoid_: Feature branch, integration branch, epic branch
 
+**Spec merge Ticket**:
+The Ready Ticket, "Merge the base into the Spec Branch of <spec id>", that Code Central opens on a Spec when the Factory finds its Spec Branch conflicting with the base, naming the conflicting files and both tips; the Factory retries the Spec once it is accepted. Code Central marks it as one, and only its open_spec_merge sets the mark: a Ticket given the title any other way, or opened by a Factory from before the mark, is an ordinary Ticket. While one is open, a later conflict is commented on it, and the same conflict again writes nothing.
+_Avoid_: Conflict Ticket, merge Ticket
+
 **Waiting for the Spec**:
 The status shown on an Accepted Ticket under Land per Spec whose work isn't yet in the base, because the rest of its Spec isn't done. It is not a State, and the Ticket isn't flagged in Needs Me as Accepted but not landed.
 _Avoid_: Held, queued, staged
