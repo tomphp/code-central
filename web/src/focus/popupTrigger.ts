@@ -11,7 +11,7 @@ import type { FocusPopup, NeedsMeView } from "../api/types";
 import type { FocusPopupClose } from "../board/FocusPopup";
 import { modalOpen, useModalOpen } from "../controls/Modal";
 import type { View } from "../url";
-import { focusKeys } from "./queue";
+import { focusKeys, type ProjectFocus } from "./queue";
 
 // POPUP_VIEWS is the views the popup opens over by itself: never Focus
 // Mode, which shows the same queue, nor Options or Project Options, where
@@ -25,6 +25,9 @@ export interface TriggerInput {
   project?: string;
   // needsMe is none while it loads.
   needsMe?: NeedsMeView;
+  // projects is every Project, whose Focus Kinds say which rows are Focus
+  // Items.
+  projects: readonly ProjectFocus[];
   // dismissed is the key of every Focus Item the popup closed on, this
   // tab.
   dismissed: ReadonlySet<string>;
@@ -42,10 +45,10 @@ export interface TriggerInput {
 // its row's key alone, which the popup's close dismisses with its
 // Questions' keys, so a Round dismissed unread isn't new once read. It
 // waits to open while another popup is open or a text field has focus.
-export function popupOpen({ option, view, project, needsMe, dismissed, open, otherPopup, typing }: TriggerInput): boolean {
+export function popupOpen({ option, view, project, needsMe, projects, dismissed, open, otherPopup, typing }: TriggerInput): boolean {
   if (option !== "on" || !POPUP_VIEWS.includes(view) || !needsMe) return false;
   if (open) return true;
-  return !otherPopup && !typing && focusKeys({ needsMe, project }).some((k) => !dismissed.has(k));
+  return !otherPopup && !typing && focusKeys({ needsMe, projects, project }).some((k) => !dismissed.has(k));
 }
 
 // usePopupTrigger holds the dismissed set and whether the popup is open
