@@ -268,6 +268,17 @@ describe("Focus Pop-up never interrupts", () => {
     noPopup();
   });
 
+  it("doesn't open for the Focus Items a card's Focus popup showed once Back closes it", async () => {
+    window.history.replaceState(null, "", "/?view=board&project=beta");
+    window.history.pushState(null, "", "/?view=board&project=beta&popup=beta-1");
+    renderApp(popupOn(), "/?view=board&project=beta&popup=beta-1");
+    await heading("Beta search");
+    act(() => window.history.back());
+    await waitFor(() => expect(window.location.search).toBe("?view=board&project=beta"));
+    await act(async () => {});
+    noPopup();
+  });
+
   it("waits while another popup is open, and opens once it closes", async () => {
     const fake = popupOn();
     await dismissed(fake, "/?view=board&project=acme");

@@ -89,7 +89,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
         return (
           <>
             {banner}
-            <BoardView api={api} now={now()} version={version} data={inbox.data} loc={loc} navigate={navigate} onFocusPopupClose={popup.dismiss} />
+            <BoardView api={api} now={now()} version={version} data={inbox.data} loc={loc} navigate={navigate} onFocusPopupGone={popup.dismiss} />
           </>
         );
       case "project-options":

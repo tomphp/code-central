@@ -108,17 +108,17 @@ export function Modal({
   );
 }
 
-// open is how many counted Modals are open now, and listeners who to tell
-// when that changes.
-let open = 0;
+// openCount is how many counted Modals are open now, and listeners who to
+// tell when that changes.
+let openCount = 0;
 const listeners = new Set<() => void>();
 
 // opened counts a Modal open and returns what counts it closed.
 function opened(): () => void {
-  open++;
+  openCount++;
   listeners.forEach((l) => l());
   return () => {
-    open--;
+    openCount--;
     listeners.forEach((l) => l());
   };
 }
@@ -130,7 +130,7 @@ function subscribe(listener: () => void): () => void {
 
 // modalOpen is whether any counted Modal is open anywhere in the page.
 export function modalOpen(): boolean {
-  return open > 0;
+  return openCount > 0;
 }
 
 // useModalOpen is modalOpen, rendering again as it changes.

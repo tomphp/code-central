@@ -51,11 +51,11 @@ export function popupOpen({ option, view, project, needsMe, dismissed, open, oth
 // usePopupTrigger holds the dismissed set and whether the popup is open
 // for the tab's life: not in the URL, not saved, not shared between tabs,
 // and kept across views. close is the popup's onClose, and dismiss the
-// Board's Focus popup's, whose Focus Items it holds closed too.
+// Board's Focus popup's onGone, whose Focus Items it holds closed too.
 export function usePopupTrigger(input: Omit<TriggerInput, "dismissed" | "open" | "otherPopup" | "typing">): {
   open: boolean;
   close(closed: FocusPopupClose): void;
-  dismiss(closed: FocusPopupClose): void;
+  dismiss(keys: string[]): void;
 } {
   const [{ dismissed, shown }, dispatch] = useReducer(trigger, { dismissed: new Set<string>(), shown: false });
   // It opens only once rendered with the signals read live, after every
@@ -70,7 +70,7 @@ export function usePopupTrigger(input: Omit<TriggerInput, "dismissed" | "open" |
   return {
     open,
     close: ({ keys }) => dispatch({ type: "close", keys }),
-    dismiss: ({ keys }) => dispatch({ type: "dismiss", keys }),
+    dismiss: (keys) => dispatch({ type: "dismiss", keys }),
   };
 }
 
@@ -93,8 +93,9 @@ function trigger(state: TriggerState, action: TriggerAction): TriggerState {
       return shown === state.shown ? state : { ...state, shown };
     }
     case "close":
+      return { dismissed: new Set([...state.dismissed, ...action.keys]), shown: false };
     case "dismiss":
-      return { dismissed: new Set([...state.dismissed, ...action.keys]), shown: action.type === "close" ? false : state.shown };
+      return { ...state, dismissed: new Set([...state.dismissed, ...action.keys]) };
   }
 }
 
