@@ -18,8 +18,10 @@
 .board-swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--st); flex: none; }
 
 .board-scroll { flex: 1; min-height: 0; overflow: auto; }
-.board-grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(165px, 1fr)); column-gap: 8px; padding: 0 16px 24px; min-width: min-content; }
-.board-col-head { position: sticky; top: 0; z-index: 2; margin: 0; background: var(--bg); display: flex; align-items: center; gap: 8px; padding: 12px 8px 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border-bottom: 3px solid var(--st); }
+.board-grid { padding: 0 16px 24px; min-width: min-content; }
+.board-heads, .board-cells { display: grid; grid-template-columns: repeat(var(--cols), minmax(165px, 1fr)); column-gap: 8px; }
+.board-heads { position: sticky; top: 0; z-index: 2; background: var(--bg); }
+.board-col-head { margin: 0; background: var(--bg); display: flex; align-items: center; gap: 8px; padding: 12px 8px 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border-bottom: 3px solid var(--st); }
 .board-col-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .board-col-count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
 .board-cell { display: flex; flex-direction: column; gap: 6px; padding: 8px 4px; min-width: 0; min-height: 60vh; border-radius: 0 0 8px 8px; background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
@@ -54,3 +56,13 @@
 @media (prefers-reduced-motion: reduce) {
   .board-card.dashboard-pulse-0, .board-card.dashboard-pulse-1 { animation: none; outline: 2px solid var(--accent); }
 }
+
+/* By Spec lanes: each lane is headed by its Spec row, stuck to the left
+   while the columns scroll sideways; collapsed, a lane keeps one count per
+   column under its header. */
+.board-lane { margin-top: 12px; }
+.board-lane-head { position: sticky; left: 16px; width: min(440px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 6px; }
+.board-lane-head .spec-row { border-bottom: 0; }
+.board-lane .board-cell { min-height: 0; }
+.board-counts .board-cell { min-height: 0; padding: 6px 4px; align-items: center; }
+.board-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
