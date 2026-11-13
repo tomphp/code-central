@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/tomoram/code-central/store"
 )
@@ -180,7 +181,9 @@ func claimTarget(rule blockRule, in ClaimInput) (t store.Ticket, found bool, err
 
 // Finish is finish(ticket, claim_id, summary): the holder moves In
 // Progress to In Review, with the summary stored as a comment. A spec
-// Stage's finish also gives its Spec recommendation.
+// Stage's finish also gives its Spec recommendation. Then, in the same
+// write, an auto-accept eligible Ticket is accepted on the human's
+// behalf (ADR 0037); the result is the same either way.
 func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishResult, error) {
 	if strings.TrimSpace(in.Summary) == "" {
 		return FinishResult{}, invalid("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
@@ -189,7 +192,24 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 	if rec != "" && !rec.Valid() {
 		return FinishResult{}, invalid("recommendation", "recommendation %q is neither %q nor %q", in.Recommendation, store.RecommendImplement, store.RecommendSplit)
 	}
-	v, err := c.actThen(ctx, key, in.Ticket, in.Full, "finish", in.ClaimID, in.Summary, func(t *store.Ticket) error {
+	var v Written[TicketView]
+	err := c.store.Update(func(w store.Writer) error {
+		if err := writable(w, key); err != nil {
+			return err
+		}
+		t, err := resolveTicket(w, key, "finish", "ticket", in.Ticket)
+		if err != nil {
+			return err
+		}
+		// With full the before view isn't compared, so it isn't built.
+		var before TicketView
+		if !in.Full {
+			before = c.ticketView(w, key, t)
+		}
+		now := c.now()
+		if err := c.actOn(ctx, &t, key, "finish", in.ClaimID, in.Summary, now); err != nil {
+			return err
+		}
 		spec := StageOf(t.Labels) == "spec"
 		switch {
 		case spec && rec == "":
@@ -204,7 +224,13 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 		if cm := strings.TrimSpace(in.Commit); cm != "" {
 			t.Commit = cm
 		}
-		return nil
+		t.Updated = now
+		// The result is read here, before any auto-accept, so the agent
+		// sees the same whether or not one follows.
+		if v, err = acknowledge(before, c.ticketView(w, key, t), in.Full); err != nil {
+			return err
+		}
+		return c.autoAccept(ctx, w, key, t, now)
 	})
 	if err != nil {
 		return FinishResult{}, err
@@ -217,12 +243,24 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 // Done otherwise.
 func (c *Core) Accept(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
 	return c.updateTicket(key, "accept", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
-		to := store.Done
-		if t.Branch != "" {
-			to = store.Accepted
-		}
-		return true, transitionTo(ctx, t, key, "accept", "", to, c.now())
+		return true, acceptStep(ctx, t, key, "", c.now())
 	})
+}
+
+// acceptStep is the accept transition on t, the step the human's accept
+// and an auto-accept share: In Review to Accepted when the work's finish
+// named a branch, and to Done otherwise. The Move records cause, empty
+// for the human's own accept.
+func acceptStep(ctx context.Context, t *store.Ticket, key string, cause store.AutoAcceptCause, now time.Time) error {
+	to := store.Done
+	if t.Branch != "" {
+		to = store.Accepted
+	}
+	if err := transitionTo(ctx, t, key, "accept", "", to, now); err != nil {
+		return err
+	}
+	t.Moves[len(t.Moves)-1].Cause = cause
+	return nil
 }
 
 // LandInput is land's input: the commit that put the work into the base.
@@ -270,16 +308,8 @@ func (c *Core) act(ctx context.Context, key string, ref Ref, full bool, name, cl
 // in the same write. An error from then abandons the write.
 func (c *Core) actThen(ctx context.Context, key string, ref Ref, full bool, name, claimID, note string, then func(*store.Ticket) error) (Written[TicketView], error) {
 	return c.updateTicket(key, name, ref, full, func(t *store.Ticket) (bool, error) {
-		claim := 0
-		if live, ok := liveClaim(*t); ok {
-			claim = live.Number
-		}
-		now := c.now()
-		if err := transition(ctx, t, key, name, claimID, now); err != nil {
+		if err := c.actOn(ctx, t, key, name, claimID, note, c.now()); err != nil {
 			return false, err
-		}
-		if note != "" {
-			addComment(t, ActorOf(ctx), now, claim, note)
 		}
 		if then != nil {
 			if err := then(t); err != nil {
@@ -288,4 +318,21 @@ func (c *Core) actThen(ctx context.Context, key string, ref Ref, full bool, name
 		}
 		return true, nil
 	})
+}
+
+// actOn is one action from the workflow table on t at now: the
+// transition, then the action's note (if any) as a comment under the
+// Claim it was made on.
+func (c *Core) actOn(ctx context.Context, t *store.Ticket, key, name, claimID, note string, now time.Time) error {
+	claim := 0
+	if live, ok := liveClaim(*t); ok {
+		claim = live.Number
+	}
+	if err := transition(ctx, t, key, name, claimID, now); err != nil {
+		return err
+	}
+	if note != "" {
+		addComment(t, ActorOf(ctx), now, claim, note)
+	}
+	return nil
 }

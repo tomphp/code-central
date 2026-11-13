@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/tomoram/code-central/store"
 )
@@ -75,6 +76,60 @@ func (c *Core) SetAutoAccept(ctx context.Context, key string, in SetAutoAcceptIn
 		return Written[ProjectView]{}, err
 	}
 	return acknowledgeProject(before, after, in.Full, c.now())
+}
+
+// autoAcceptKind is t's Auto-accept kind, worked out from what it
+// carries: its Stage, the Spec merge mark, or Implementation results for
+// every other Ticket. A Prototype, a Wayfinder-type Ticket and a Map's
+// Ticket have none.
+func autoAcceptKind(r store.Reader, key string, t store.Ticket) (store.AutoAcceptKind, bool) {
+	if slices.ContainsFunc(t.Labels, isWayfinderType) {
+		return "", false
+	}
+	if sp, ok := r.Spec(key, t.Spec); ok && isMap(sp.Labels) {
+		return "", false
+	}
+	switch StageOf(t.Labels) {
+	case "grilling":
+		return store.AutoAcceptGrilling, true
+	case "spec":
+		return store.AutoAcceptSpec, true
+	case "tickets":
+		return store.AutoAcceptTickets, true
+	}
+	if t.SpecMergeTicket {
+		return store.AutoAcceptMerge, true
+	}
+	return store.AutoAcceptImplementation, true
+}
+
+// autoAcceptCause is why t, just finished, is auto-accept eligible: the
+// first cause that applies, or false when none does. A spec Stage is
+// eligible only once a finish has given its Spec recommendation.
+func autoAcceptCause(r store.Reader, key string, t store.Ticket) (store.AutoAcceptCause, bool) {
+	kind, ok := autoAcceptKind(r, key, t)
+	if !ok || kind == store.AutoAcceptSpec && t.Recommendation == "" {
+		return "", false
+	}
+	if p, ok := r.Project(key); ok && p.AutoAccepts(kind) {
+		return store.CauseProject, true
+	}
+	return "", false
+}
+
+// autoAccept ends finish's write: when t, now In Review, is auto-accept
+// eligible it carries out the human's accept in the same write, else it
+// writes t as it is. The accepting Move's Actor is human, with the
+// cause.
+func (c *Core) autoAccept(ctx context.Context, w store.Writer, key string, t store.Ticket, now time.Time) error {
+	cause, ok := autoAcceptCause(w, key, t)
+	if !ok {
+		return w.PutTicket(key, t)
+	}
+	if err := acceptStep(WithActor(ctx, Human), &t, key, cause, now); err != nil {
+		return err
+	}
+	return w.PutTicket(key, t)
 }
 
 // joinKinds lists the Auto-accept kinds for an error message.
