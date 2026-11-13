@@ -37,6 +37,8 @@ import { FactoryList, NO_HEARTBEATS } from "../factory/FactoryStatus";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { azureProjectURL } from "./azureProjectURL";
 import { githubRepository } from "./githubRepository";
+import { Field } from "../controls/Field";
+import { Select } from "../controls/Select";
 
 export interface ProjectOptionsProps {
   api: Api;
@@ -500,11 +502,12 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
         </div>
         <label className="project-options-field">
           CI Provider{" "}
-          <select
+          <Select
             value={draft.provider}
-            onChange={(e) => {
+            options={PROVIDERS.map((pr) => ({ value: pr.provider, label: pr.label }))}
+            onChange={(v) => {
               // Each provider keeps its own values; Azure Pipelines starts from the Push remote.
-              const next = e.target.value as CIProvider;
+              const next = v as CIProvider;
               edit({
                 provider: next,
                 ...(next === "azure_pipelines" &&
@@ -515,18 +518,22 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
                   : {}),
               });
             }}
-          >
-            {PROVIDERS.map((p) => (
-              <option key={p.provider} value={p.provider}>
-                {p.label}
-              </option>
-            ))}
-          </select>
+          />
         </label>
         {draft.provider === "github_actions" && (
           <>
-            <label className="project-options-field">
-              GitHub repository{" "}
+            <Field
+              label="GitHub repository"
+              hintId={`${id}-repository`}
+              hint={
+                <>
+              {prefilled
+                ? `From the Push remote ${project.ci.push_remote_url}. `
+                : ""}
+              The repository to watch, as owner/name; CI Tracking needs one.
+                </>
+              }
+            >
               <input
                 value={draft.repository}
                 placeholder="owner/name"
@@ -534,19 +541,24 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
                 aria-describedby={`${id}-repository`}
                 {...invalid("repository")}
               />
-            </label>
-            <p className="project-options-hint" id={`${id}-repository`}>
-              {prefilled
-                ? `From the Push remote ${project.ci.push_remote_url}. `
-                : ""}
-              The repository to watch, as owner/name; CI Tracking needs one.
-            </p>
+            </Field>
           </>
         )}
         {draft.provider === "azure_pipelines" && (
           <>
-            <label className="project-options-field">
-              Azure DevOps project URL{" "}
+            <Field
+              label="Azure DevOps project URL"
+              hintId={`${id}-project-url`}
+              hint={
+                <>
+              {urlPrefilled
+                ? `From the Push remote ${project.ci.push_remote_url}. `
+                : ""}
+              The Azure DevOps project to watch, as its URL, such as
+              https://dev.azure.com/acme/web; CI Tracking needs one.
+                </>
+              }
+            >
               <input
                 value={draft.projectURL}
                 placeholder="https://dev.azure.com/org/project"
@@ -554,16 +566,18 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
                 aria-describedby={`${id}-project-url`}
                 {...invalid("project_url")}
               />
-            </label>
-            <p className="project-options-hint" id={`${id}-project-url`}>
-              {urlPrefilled
-                ? `From the Push remote ${project.ci.push_remote_url}. `
-                : ""}
-              The Azure DevOps project to watch, as its URL, such as
-              https://dev.azure.com/acme/web; CI Tracking needs one.
-            </p>
-            <label className="project-options-field">
-              PAT environment variable{" "}
+            </Field>
+            <Field
+              label="PAT environment variable"
+              hintId={`${id}-pat-env`}
+              hint={
+                <>
+              The environment variable that holds an Azure DevOps PAT with
+              Build: Read &amp; execute, in the service&apos;s environment. Code
+              Central keeps the name, never the PAT.
+                </>
+              }
+            >
               <input
                 value={draft.patEnv}
                 placeholder="ADO_PAT"
@@ -571,16 +585,20 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
                 aria-describedby={`${id}-pat-env`}
                 {...invalid("pat_env")}
               />
-            </label>
-            <p className="project-options-hint" id={`${id}-pat-env`}>
-              The environment variable that holds an Azure DevOps PAT with
-              Build: Read &amp; execute, in the service&apos;s environment. Code
-              Central keeps the name, never the PAT.
-            </p>
+            </Field>
           </>
         )}
-        <label className="project-options-field">
-          Ignored workflows{" "}
+        <Field
+          label="Ignored workflows"
+          hintId={`${id}-ignored`}
+          hint={
+            <>
+          {draft.provider === "azure_pipelines"
+            ? "Pipeline names, such as Nightly build, separated by commas: their runs never count towards a Ticket's CI result."
+            : "Workflow file names, such as nightly.yml, separated by commas: their runs never count towards a Ticket's CI result."}
+            </>
+          }
+        >
           <input
             value={draft.ignored}
             placeholder="nightly.yml, preview.yml"
@@ -588,12 +606,7 @@ function CISection({ api, project }: { api: Api; project: ProjectRow }) {
             aria-describedby={`${id}-ignored`}
             {...invalid("ignored_workflows")}
           />
-        </label>
-        <p className="project-options-hint" id={`${id}-ignored`}>
-          {draft.provider === "azure_pipelines"
-            ? "Pipeline names, such as Nightly build, separated by commas: their runs never count towards a Ticket's CI result."
-            : "Workflow file names, such as nightly.yml, separated by commas: their runs never count towards a Ticket's CI result."}
-        </p>
+        </Field>
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
           <button type="submit" className="btn primary" disabled={!changed}>
@@ -770,8 +783,19 @@ function GitHubIssuesSection({
             Code Central stores no GitHub token.
           </p>
         </div>
-        <label className="project-options-field">
-          GitHub repository{" "}
+        <Field
+          label="GitHub repository"
+          hintId={`${id}-repository`}
+          hint={
+            <>
+          {prefilled
+            ? `From the Push remote ${project.ci.push_remote_url}. `
+            : ""}
+          The repository whose issues come in, as owner/name; GitHub Issues
+          needs one.
+            </>
+          }
+        >
           <input
             value={draft.repository}
             placeholder="owner/name"
@@ -779,27 +803,24 @@ function GitHubIssuesSection({
             aria-describedby={describedBy("repository", `${id}-repository`)}
             aria-invalid={invalid("repository")}
           />
-        </label>
-        <p className="project-options-hint" id={`${id}-repository`}>
-          {prefilled
-            ? `From the Push remote ${project.ci.push_remote_url}. `
-            : ""}
-          The repository whose issues come in, as owner/name; GitHub Issues
-          needs one.
-        </p>
-        <label className="project-options-field">
-          Filter label{" "}
+        </Field>
+        <Field
+          label="Filter label"
+          hintId={`${id}-label`}
+          hint={
+            <>
+          Only issues carrying this GitHub label come in. Leave it empty to
+          bring in every open issue.
+            </>
+          }
+        >
           <input
             value={draft.label}
             placeholder="any label"
             onChange={(e) => edit({ label: e.target.value })}
             aria-describedby={`${id}-label`}
           />
-        </label>
-        <p className="project-options-hint" id={`${id}-label`}>
-          Only issues carrying this GitHub label come in. Leave it empty to
-          bring in every open issue.
-        </p>
+        </Field>
         <div className="project-options-choice">
           <label>
             <input
@@ -960,19 +981,14 @@ function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
                     />
                   </td>
                   <td>
-                    <select
+                    <Select
                       aria-label={`Effort for ${name}`}
                       value={row.effort}
-                      onChange={(e) => edit(kind, { effort: e.target.value })}
+                      onChange={(v) => edit(kind, { effort: v })}
+                      placeholder={inherited(kind, "effort")}
+                      options={levels.map((l) => ({ value: l }))}
                       {...invalid(`${field}.effort`)}
-                    >
-                      <option value="">{inherited(kind, "effort")}</option>
-                      {levels.map((l) => (
-                        <option key={l} value={l}>
-                          {l}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </td>
                 </tr>
               );
@@ -1248,8 +1264,16 @@ function RuleForm(props: {
       className="project-options-rule"
       onSubmit={onSubmit}
     >
-      <label className="project-options-field">
-        Workflow{" "}
+      <Field
+        label="Workflow"
+        hintId={`${id}-workflow`}
+        hint={
+          <>
+        A workflow file name, such as ci.yml, or any for every workflow but the
+        Ignored ones.
+          </>
+        }
+      >
         <input
           value={draft.workflow}
           placeholder="ci.yml or any"
@@ -1257,13 +1281,16 @@ function RuleForm(props: {
           aria-describedby={`${id}-workflow`}
           {...invalid("workflow")}
         />
-      </label>
-      <p className="project-options-hint" id={`${id}-workflow`}>
-        A workflow file name, such as ci.yml, or any for every workflow but the
-        Ignored ones.
-      </p>
-      <label className="project-options-field">
-        Branch{" "}
+      </Field>
+      <Field
+        label="Branch"
+        hintId={`${id}-branch`}
+        hint={
+          <>
+        An exact branch name, with no globs.
+          </>
+        }
+      >
         <input
           value={draft.branch}
           placeholder="main"
@@ -1271,22 +1298,15 @@ function RuleForm(props: {
           aria-describedby={`${id}-branch`}
           {...invalid("branch")}
         />
-      </label>
-      <p className="project-options-hint" id={`${id}-branch`}>
-        An exact branch name, with no globs.
-      </p>
+      </Field>
       <label className="project-options-field">
         Tickets open as{" "}
-        <select
+        <Select
           value={draft.state}
-          onChange={(e) =>
-            edit({ state: e.target.value as CIRuleChange["state"] })
-          }
+          onChange={(v) => edit({ state: v as CIRuleChange["state"] })}
+          options={[{ value: "Draft" }, { value: "Ready" }]}
           {...invalid("state")}
-        >
-          <option value="Draft">Draft</option>
-          <option value="Ready">Ready</option>
-        </select>
+        />
       </label>
       {error && (
         <p className="warning" role="alert" id={`${id}-error`}>
