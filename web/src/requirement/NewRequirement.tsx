@@ -39,7 +39,10 @@ interface Kind<R> {
   creates: string;
   // text prefills the text box.
   text?: string;
-  submit(api: Api, project: string, text: string): Promise<R>;
+  // straight offers the "Straight to Spec" checkbox, and says what ticking
+  // it creates.
+  straight?: { creates: string };
+  submit(api: Api, project: string, text: string, straight: boolean): Promise<R>;
 }
 
 const REQUIREMENT: Kind<{ spec: SpecAcknowledgement }> = {
@@ -48,7 +51,8 @@ const REQUIREMENT: Kind<{ spec: SpecAcknowledgement }> = {
   noun: "Requirement",
   placeholder: "Describe what you want built. The first line becomes the working title.",
   creates: "Creates a Spec and its Grilling, Spec and Tickets Stages. A Factory picks up Grilling.",
-  submit: (api, project, text) => api.submitRequirement(project, text),
+  straight: { creates: "Creates a Spec and its Spec and Tickets Stages. A Factory picks up Spec." },
+  submit: (api, project, text, straight) => api.submitRequirement(project, text, undefined, straight),
 };
 
 const MAP: Kind<{ spec: SpecAcknowledgement }> = {
@@ -108,6 +112,7 @@ export interface WriteTheSpecProps {
 export function WriteTheSpec({ api, map, onSubmitted }: WriteTheSpecProps) {
   const kind: Kind<{ spec: SpecAcknowledgement }> = {
     ...REQUIREMENT,
+    straight: undefined,
     button: "Write the Spec",
     variant: "default",
     creates: "Creates a Spec and its Spec and Tickets Stages, from the Map's decisions. A Factory picks up Spec.",
@@ -173,6 +178,7 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
   const chosen = picked ?? project ?? projects[0]?.key ?? "";
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const [straight, setStraight] = useState(false);
   const titleId = useId();
   const ask = !project && projects.length > 1;
 
@@ -187,7 +193,7 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
     if (!text.trim() || !chosen) return;
     setBusy(true);
     setError(undefined);
-    kind.submit(api, chosen, text).then(onSubmitted, (e: ApiError) => {
+    kind.submit(api, chosen, text, straight).then(onSubmitted, (e: ApiError) => {
       setBusy(false);
       setError(e.message);
     });
@@ -216,9 +222,14 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
             autoFocus
             onChange={(e) => setText(e.target.value)}
           />
+          {kind.straight && (
+            <label className="small">
+              <input type="checkbox" checked={straight} onChange={(e) => setStraight(e.target.checked)} /> Straight to Spec (no grilling)
+            </label>
+          )}
           {error && <p className="warning">{error}</p>}
           <div className="modal-actions">
-            <span className="muted small">{kind.creates}</span>
+            <span className="muted small">{kind.straight && straight ? kind.straight.creates : kind.creates}</span>
             <Button type="button"  onClick={onClose}>
               Cancel
             </Button>
