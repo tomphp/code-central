@@ -2,8 +2,9 @@
 // A Ticket with a CI result shows it as a badge on its rows in the Spec
 // view, Needs Me and the Activity Dashboard, and one with none shows none;
 // the Spec view sums its Tickets' badges per result.
-import { screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { ListCIBadge } from "./CIBadge";
 import { FakeApi } from "../api/fake";
 import type { CIResult } from "../api/types";
 import { focus, renderApp } from "../focus/focusTesting";
@@ -107,5 +108,16 @@ describe("the Spec view's CI sums", () => {
     expect(within(pane).getByRole("group", { name: "CI results" })).toHaveTextContent("1 failed");
     const build = within(within(pane).getByRole("list", { name: "Build" })).getAllByRole("listitem");
     expect(build.map(badgeOf)).toEqual(["CI failed"]);
+  });
+});
+
+describe("ListCIBadge", () => {
+  it("shows nothing for a Done Ticket or one with no CI result, and the badge otherwise", () => {
+    const { container, rerender } = render(<ListCIBadge t={{ state: "Done", ci_result: "passed" }} />);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<ListCIBadge t={{ state: "Accepted" }} />);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<ListCIBadge t={{ state: "Accepted", ci_result: "running" }} />);
+    expect(container).toHaveTextContent("CI running");
   });
 });
