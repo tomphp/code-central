@@ -8,7 +8,7 @@ import (
 
 // Submitting a Small Change.
 func init() {
-	commands["submit-small-change"] = command{op: "submit_small_change", usage: "submit-small-change [--text <md> | --file <path|->] [--full]  submit a Small Change; its first line becomes the Ticket's title", run: runSubmitSmallChange}
+	commands["submit-small-change"] = command{op: "submit_small_change", usage: "submit-small-change [--text <md> | --file <path|->] [--draft] [--full]  submit a Small Change; its first line becomes the Ticket's title", run: runSubmitSmallChange}
 }
 
 func runSubmitSmallChange(ctx context.Context, e Env, args []string) error {
@@ -16,6 +16,7 @@ func runSubmitSmallChange(ctx context.Context, e Env, args []string) error {
 	project := addScope(fs)
 	inline := fs.String("text", "", "")
 	file := fs.String("file", "", "")
+	draft := fs.Bool("draft", false, "")
 	full := fs.Bool("full", false, "")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -32,7 +33,7 @@ func runSubmitSmallChange(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.SubmitSmallChange(ctx, sc.project, core.SubmitSmallChangeInput{Text: text, Full: *full})
+	v, err := sc.client.SubmitSmallChange(ctx, sc.project, core.SubmitSmallChangeInput{Text: text, Draft: *draft, Full: *full})
 	if err != nil {
 		return err
 	}

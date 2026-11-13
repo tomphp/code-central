@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"time"
 
 	"github.com/tomoram/code-central/store"
 )
@@ -14,12 +15,15 @@ import (
 // whose first line becomes the Ticket's title.
 type SubmitSmallChangeInput struct {
 	Text string `json:"text"`
+	// Draft saves every Ticket the submit writes as Draft, not Ready, so
+	// nothing is claimed until the human moves them to Ready.
+	Draft bool `json:"draft,omitempty"`
 	// Full asks for the Ticket in place of its Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
 
-// SubmitSmallChange is submit_small_change(text). It writes, as human
-// whoever calls, a Ready Ticket titled with the text's first line, with the
+// SubmitSmallChange is submit_small_change(text, draft?). It writes, as human
+// whoever calls, a Ready (or with draft, Draft) Ticket titled with the text's first line, with the
 // text as its description, on the Small Changes Spec.
 func (c *Core) SubmitSmallChange(_ context.Context, key string, in SubmitSmallChangeInput) (Written[TicketView], error) {
 	title := titleLine(in.Text)
@@ -37,9 +41,9 @@ func (c *Core) SubmitSmallChange(_ context.Context, key string, in SubmitSmallCh
 		}
 		now := c.now()
 		t := store.Ticket{
-			Number: w.NextNumber(key), Title: title, State: store.Ready, Spec: spec,
+			Number: w.NextNumber(key), Title: title, State: submitState(in.Draft), Spec: spec,
 			Created: now, Updated: now, Description: in.Text,
-			Moves: []store.Move{{To: store.Ready, Actor: string(Human), Time: now, Via: "submit_small_change"}},
+			Moves: submitMoves(in.Draft, now, "submit_small_change"),
 		}
 		if err := w.PutTicket(key, t); err != nil {
 			return err
@@ -48,6 +52,23 @@ func (c *Core) SubmitSmallChange(_ context.Context, key string, in SubmitSmallCh
 		return err
 	})
 	return v, err
+}
+
+// submitState is the State a submit writes its Tickets in.
+func submitState(draft bool) store.State {
+	if draft {
+		return store.Draft
+	}
+	return store.Ready
+}
+
+// submitMoves is the Moves of a Ticket a submit writes: its move to
+// Ready, or none when it is a Draft.
+func submitMoves(draft bool, now time.Time, via string) []store.Move {
+	if draft {
+		return nil
+	}
+	return []store.Move{{To: store.Ready, Actor: string(Human), Time: now, Via: via}}
 }
 
 // smallChangesSpecBody is the Small Changes Spec's body.

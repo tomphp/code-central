@@ -64,10 +64,12 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       const qs = q.toString();
       return call("GET", `${p(project)}/specs${qs ? `?${qs}` : ""}`);
     },
-    submitRequirement: (project, text, map) => call("POST", `${p(project)}/submit_requirement`, { text, ...(map && { map }) }),
-    submitMap: (project, text) => call("POST", `${p(project)}/submit_map`, { text }),
+    submitRequirement: (project, text, map, draft) =>
+      call("POST", `${p(project)}/submit_requirement`, { text, ...(map && { map }), ...(draft && { draft }) }),
+    submitMap: (project, text, draft) => call("POST", `${p(project)}/submit_map`, { text, ...(draft && { draft }) }),
     submitPrototype: (project, spec, text) => call("POST", `${p(project)}/submit_prototype`, { spec, text }),
-    submitSmallChange: (project, text) => call("POST", `${p(project)}/submit_small_change`, { text }),
+    submitSmallChange: (project, text, draft) =>
+      call("POST", `${p(project)}/submit_small_change`, { text, ...(draft && { draft }) }),
     specQuestions: (project, spec) => call("GET", `${p(project)}/specs/${encodeURIComponent(numberOf(spec))}/questions`),
     act: <A extends TicketAction>(project: string, id: string, action: A, body: TicketActions[A]["body"]) =>
       call<TicketActions[A]["result"]>("POST", `${p(project)}/tickets/${encodeURIComponent(numberOf(id))}/${action}`, body),

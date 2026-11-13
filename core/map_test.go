@@ -414,3 +414,18 @@ func TestTheMapBlockIsGuidedOnlyWhenItsGuidedTagIsOn(t *testing.T) {
 		t.Fatalf("find_specs rows carry guided too: %+v, %v", rows, err)
 	}
 }
+
+func TestADraftMapsChargingTicketIsDraftAndItsSpecStillExists(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	res, err := f.core.SubmitMap(ctx, "acme", core.SubmitMapInput{Text: offlineMode, Draft: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tk := f.get(t, core.Ref(res.Charting.ID)); tk.State != store.Draft || tk.Claimable {
+		t.Fatalf("charting %+v", tk)
+	}
+	if _, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: core.Ref(res.Spec.ID)}); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -22,6 +22,9 @@ var MapSections = []string{"Destination", "Notes", "Decisions so far", "Not yet 
 // line becomes the Spec's title.
 type SubmitMapInput struct {
 	Text string `json:"text"`
+	// Draft saves every Ticket the submit writes as Draft, not Ready, so
+	// nothing is claimed until the human moves them to Ready.
+	Draft bool `json:"draft,omitempty"`
 	// Full asks for the Spec and Charting Ticket in place of their
 	// Acknowledgements.
 	Full bool `json:"full,omitempty"`
@@ -55,10 +58,10 @@ func (c *Core) SubmitMap(_ context.Context, key string, in SubmitMapInput) (Subm
 		return w.PutImport(key, store.Import{
 			Specs: []store.Spec{{Number: specN, Title: title, Labels: []string{MapLabel}, Created: now, Updated: now, Body: mapBody(in.Text)}},
 			Tickets: []store.Ticket{{
-				Number: specN + 1, Title: "Charting: " + title, State: store.Ready, Spec: specN,
+				Number: specN + 1, Title: "Charting: " + title, State: submitState(in.Draft), Spec: specN,
 				Labels: []string{WayfinderPrefix + "chart"}, Created: now, Updated: now,
 				Description: fmt.Sprintf(chartingDescription, DisplayID(key, specN)),
-				Moves:       []store.Move{{To: store.Ready, Actor: string(Human), Time: now, Via: "submit_map"}},
+				Moves:       submitMoves(in.Draft, now, "submit_map"),
 			}},
 		})
 	})

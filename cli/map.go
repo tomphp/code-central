@@ -8,7 +8,7 @@ import (
 
 // Submitting a Map.
 func init() {
-	commands["submit-map"] = command{op: "submit_map", usage: "submit-map [--text <md> | --file <path|->] [--full]  submit a Map; its first line becomes the Spec's title", run: runSubmitMap}
+	commands["submit-map"] = command{op: "submit_map", usage: "submit-map [--text <md> | --file <path|->] [--draft] [--full]  submit a Map; its first line becomes the Spec's title", run: runSubmitMap}
 }
 
 func runSubmitMap(ctx context.Context, e Env, args []string) error {
@@ -16,6 +16,7 @@ func runSubmitMap(ctx context.Context, e Env, args []string) error {
 	project := addScope(fs)
 	inline := fs.String("text", "", "")
 	file := fs.String("file", "", "")
+	draft := fs.Bool("draft", false, "")
 	full := fs.Bool("full", false, "")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -32,7 +33,7 @@ func runSubmitMap(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.SubmitMap(ctx, sc.project, core.SubmitMapInput{Text: text, Full: *full})
+	v, err := sc.client.SubmitMap(ctx, sc.project, core.SubmitMapInput{Text: text, Draft: *draft, Full: *full})
 	if err != nil {
 		return err
 	}
