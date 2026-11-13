@@ -256,12 +256,11 @@ export function Inbox({
             projects: projects.filter((p) => !p.archived),
             project: loc.project,
             onSubmitted: (r) =>
-              navigate({
-                list: "requirements",
-                state: undefined,
-                requirement: r.spec.id,
-                ticket: undefined,
-              }),
+              navigate(
+                r.kind === "Small Change"
+                  ? { requirement: undefined, ticket: r.ticket.id }
+                  : { list: "requirements", state: undefined, requirement: r.spec.id, ticket: undefined },
+              ),
           }}
           onFocusMode={() => navigate({ view: "focus" })}
         />

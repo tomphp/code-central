@@ -1558,6 +1558,43 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(nowhere).toMatchObject({ status: 422, code: "invalid", field: "spec" });
     });
 
+    // ---- Small Changes (code-central-475) ----
+    it("submits a Small Change as one Ready Ticket on the Small Changes Spec, titled by the text's first line", async () => {
+      await d.createProject("acme", "Acme");
+      const ack = await d.api.submitSmallChange("acme", "Rename the button\nIt says Go; make it say Start.");
+      wantAcknowledgement(ack, ack.id, "Ready", ["title", "state", "spec", "description", "moves", "claimable"]);
+
+      const t = await d.api.getTicket("acme", ack.id);
+      expect(t).toMatchObject({
+        title: "Rename the button",
+        description: "Rename the button\nIt says Go; make it say Start.",
+        state: "Ready",
+        spec: { title: "Small Changes" },
+        labels: [],
+        claimable: true,
+      });
+      expect(t.moves).toMatchObject([{ to: "Ready", actor: "human", via: "submit_small_change" }]);
+      const spec = await d.api.getSpec("acme", t.spec.id);
+      expect(spec.labels).toContain("long-lived");
+      expect(spec.tickets.map((t) => t.id)).toContain(ack.id);
+    });
+
+    it("reuses the Small Changes Spec for a second Small Change", async () => {
+      await d.createProject("acme", "Acme");
+      const one = await d.api.submitSmallChange("acme", "Rename the button");
+      const two = await d.api.submitSmallChange("acme", "Fix the typo");
+      const a = await d.api.getTicket("acme", one.id);
+      const b = await d.api.getTicket("acme", two.id);
+      expect(b.spec.id).toBe(a.spec.id);
+    });
+
+    it("refuses a Small Change with no text", async () => {
+      await d.createProject("acme", "Acme");
+      const blank = await d.api.submitSmallChange("acme", "  \n ").catch((e) => e);
+      expect(blank).toBeInstanceOf(ApiError);
+      expect(blank).toMatchObject({ status: 422, code: "invalid", field: "text" });
+    });
+
     // ---- the Integration contract (ticket 42) ----
     it("edits a Ticket's title and description, recording one edit by human with only what changed", async () => {
       await d.createProject("acme", "Acme");

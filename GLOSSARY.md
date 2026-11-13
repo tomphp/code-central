@@ -49,7 +49,7 @@ How the UI shows a Ticket's or Spec's ID while one Project is selected, its numb
 _Avoid_: Ticket number, short key
 
 **Long-lived Spec**:
-A Spec labelled `long-lived`, which never finishes, such as a CI Rule's Spec or the GitHub Issues Spec, so its Tickets land one by one, outside Land per Spec. Code Central labels the Specs it makes for CI Rules and GitHub Issues; the human may label or unlabel any Spec.
+A Spec labelled `long-lived`, which never finishes, such as a CI Rule's Spec, the GitHub Issues Spec, the CI Fixes Spec or the Small Changes Spec, so its Tickets land one by one, outside Land per Spec. Code Central labels the Specs it makes for CI Rules, GitHub Issues, CI fixes and Small Changes; the human may label or unlabel any Spec.
 _Avoid_: Bucket Spec, standing Spec
 
 **Section**:
@@ -99,6 +99,14 @@ _Avoid_: Issue (that word means only GitHub's item, which an Incoming Issue mirr
 **Prototype**:
 A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to try and react to, so a decision can be made. Its work never lands. A Question answered "Prototype this" in a grilling or Charting Round becomes one, which blocks the asking Ticket until it is Done.
 _Avoid_: Spike, mock-up, demo
+
+**Small Change**:
+The human's choice in **+ New ▾**, and also `submit_small_change`. It opens one Ready implementation Ticket from the human's free text on the Project's Small Changes Spec, with no Stages, so the Ticket is built and lands on its own. The first line is the title and the whole text the description.
+_Avoid_: Quick change, task, hotfix
+
+**Small Changes Spec**:
+The Long-lived Spec, one per Project, that Small Changes open their Ticket on. Code Central creates it on first use, titled `Small Changes` and labelled `long-lived`, as it does the CI Fixes Spec, and finds it by its stored number, so retitling it breaks nothing.
+_Avoid_: Changes Spec, Tasks Spec
 
 **Implement**:
 The human's choice, when accepting a Requirement's spec Stage, to build the Spec as one implementation Ticket, without the tickets Stage. It accepts the spec Stage, creates the Ticket and Cancels the tickets Stage with that Ticket as its Replacement.

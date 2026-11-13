@@ -38,8 +38,12 @@ const headerButtons = async () =>
 const skip = async () => userEvent.click(await within(focus()).findByRole("button", { name: "Skip" }));
 
 // added opens the modal for kind from + New ▾ and submits it.
-async function added(kind: "Requirement" | "Map") {
-  if (kind === "Requirement") {
+async function added(kind: "Requirement" | "Map" | "Small Change") {
+  if (kind === "Small Change") {
+    await userEvent.click(menuButton());
+    await userEvent.click(item("Small Change"));
+    await submit("New Small Change", "Submit small change");
+  } else if (kind === "Requirement") {
     await userEvent.click(await newButton());
     await submit("New requirement", "Submit requirement");
   } else {
@@ -162,9 +166,11 @@ describe("+ New ▾ in Focus Mode's header", () => {
       await userEvent.keyboard("{ArrowDown}");
       expect(item("Map")).toHaveFocus();
       await userEvent.keyboard("{ArrowDown}");
+      expect(item("Small Change")).toHaveFocus();
+      await userEvent.keyboard("{ArrowDown}");
       expect(item("Requirement")).toHaveFocus();
       await userEvent.keyboard("{ArrowUp}");
-      expect(item("Map")).toHaveFocus();
+      expect(item("Small Change")).toHaveFocus();
     });
 
     it("closes on Esc and returns focus to ▾", async () => {
@@ -189,6 +195,7 @@ describe("+ New ▾ in Focus Mode's header", () => {
     it.each([
       ["+ New", "New requirement", "Submit requirement", "submitRequirement"],
       ["Map", "New Map", "Submit map", "submitMap"],
+      ["Small Change", "New Small Change", "Submit small change", "submitSmallChange"],
     ])("from %s closes the modal and leaves Focus Mode as it was, skipped list and all", async (from, dialog, button, call) => {
       const fake = world();
       renderApp(fake, "/?view=focus&project=acme");
@@ -291,7 +298,7 @@ describe("+ New ▾ in Focus Mode's header", () => {
     beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true, advanceTimeDelta: 1 }));
     afterEach(() => vi.useRealTimers());
 
-    it.each([["Requirement"], ["Map"]] as const)("reads %s added after a submit, and goes after 4 s", async (kind) => {
+    it.each([["Requirement"], ["Map"], ["Small Change"]] as const)("reads %s added after a submit, and goes after 4 s", async (kind) => {
       const fake = world();
       renderApp(fake);
       await heading("Flaky build");
