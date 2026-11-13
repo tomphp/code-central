@@ -1,7 +1,8 @@
 // End-to-end (`make e2e`): Playwright drives a real browser against the UI
 // embedded in the built binary. The human opens the Board from the Inbox's
-// View section, sees an agent's Ticket in its In Progress column, opens it
-// in the Inbox, and the browser's Back returns them to the Board.
+// View section, sees an agent's Ticket in its In Progress column, opens its
+// Ticket popup, closes it with Escape, and after reopening it closes it with
+// the browser's Back.
 // Browser set-up as in round.e2e.test.ts.
 import { chromium, type Browser } from "playwright-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -19,7 +20,7 @@ describe("end-to-end: the human opens the Board from the Inbox", () => {
     await svc?.stop();
   });
 
-  it("the Board link opens the Board with the agent's Ticket in its column, a card opens it, and Back returns", async () => {
+  it("the Board link opens the Board with the agent's Ticket in its column, a card opens its Ticket popup, and Escape or Back closes it", async () => {
     const page = await browser.newPage();
 
     await svc.agent("/api/projects/create_project", { key: "acme", display_name: "Acme" });
@@ -38,13 +39,19 @@ describe("end-to-end: the human opens the Board from the Inbox", () => {
     expect(await board.getByRole("region", { name: "Ready" }).getByRole("link", { name: /Sign-up page/ }).count()).toBe(1);
     const boardAddress = page.url();
 
+    const popup = page.getByRole("dialog", { name: "Ticket popup" });
     await inProgress.getByText("Login form").click();
-    await page.waitForURL(/view=inbox/);
-    expect(page.url()).toContain(`ticket=${working}`);
-    await page.getByRole("complementary", { name: "Ticket" }).getByRole("heading", { name: /Login form/ }).waitFor();
+    await popup.getByRole("heading", { name: /Login form/ }).waitFor();
+    expect(page.url()).toContain(`popup=${working}`);
 
+    await page.keyboard.press("Escape");
+    await popup.waitFor({ state: "detached" });
+    expect(page.url()).toBe(boardAddress);
+
+    await inProgress.getByText("Login form").click();
+    await popup.getByRole("heading", { name: /Login form/ }).waitFor();
     await page.goBack();
-    await inProgress.getByRole("link", { name: /Login form/ }).waitFor();
+    await popup.waitFor({ state: "detached" });
     expect(page.url()).toBe(boardAddress);
   }, 30_000);
 });

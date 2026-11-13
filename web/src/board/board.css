@@ -76,3 +76,9 @@
 .board-lane .board-cell { min-height: 0; background: none; }
 .board-counts .board-cell { padding: 6px 4px; align-items: center; }
 .board-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* The popups: × sits at the right of a header row above the pane, which
+   stays in view while the wide card's content scrolls. */
+.popup-head { position: sticky; top: -18px; z-index: 1; display: flex; justify-content: flex-end; margin: -18px -20px 0; padding: 8px 10px 0; background: var(--surface); }
+.popup-close { border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
+.popup-close:hover { color: var(--text); background: var(--surface-2); }
