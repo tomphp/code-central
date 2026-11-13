@@ -10,18 +10,19 @@ import { FINISHED, STATES, type NeedsMeReason, type State } from "../api/types";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { ToggleGroup } from "../controls/ToggleGroup";
 import { ViewHeader } from "../controls/ViewHeader";
-import { usePulse } from "../focus/pulse";
 import { kindLabel, newestFirst } from "../inbox/AllTickets";
 import { groupBySpec } from "../inbox/groupBySpec";
 import { hiddenColumns, storedGroup, storeGroup, storeHidden } from "../inbox/groupPreference";
-import { OneProject, ShortId } from "../inbox/ShortId";
+import { OneProject } from "../inbox/ShortId";
 import { SpecRow, specKindOf } from "../inbox/SpecRow";
-import { stateSlug } from "../inbox/StateRow";
+import { stateSlug } from "../controls/StateChip";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { reasonsOf } from "../requirement/progress";
 import { NewSplit } from "../requirement/NewSplit";
 import { clickTo, hrefFor, type UiLocation } from "../url";
+import { TicketCard } from "../ticket/TicketCard";
 import { ColumnsMenu } from "./ColumnsMenu";
+import { Button } from "../controls/Button";
 import "./board.css";
 
 export interface BoardViewProps {
@@ -118,9 +119,9 @@ export function BoardView({ api, now, data, loc, navigate }: BoardViewProps) {
                   }
                 />
               </div>
-              <button className="btn" onClick={() => navigate(loc.back ?? { view: "inbox" })}>
+              <Button  onClick={() => navigate(loc.back ?? { view: "inbox" })}>
                 Back to the Inbox
-              </button>
+              </Button>
             </>
           }
         />
@@ -227,44 +228,24 @@ function Cells({
             ) : here.length === 0 ? (
               !inLane && <p className="board-empty">No Tickets</p>
             ) : (
-              here.map((t) => (
-                <Card key={t.id} t={t} spec={inLane ? undefined : specs.get(t.spec)} reason={reasons.get(t.id)} joined={joined(t)} link={link(t)} />
-              ))
+              here.map((t) => {
+                const spec = inLane ? undefined : specs.get(t.spec);
+                return (
+                  <TicketCard
+                    key={t.id}
+                    t={t}
+                    link={link(t)}
+                    badge={kindLabel(t)}
+                    reason={reasons.get(t.id)}
+                    spec={spec && { kind: specKindOf(spec), title: spec.title }}
+                    joined={joined(t)}
+                  />
+                );
+              })
             )}
           </section>
         );
       })}
     </div>
-  );
-}
-
-// Card is a Ticket on the Board: its short ID, kind, Blocked and needs-you
-// dot on top, its title, then its Spec's kind and name (spec is left out
-// inside a lane). It pulses when its Ticket's last update changes.
-function Card({ t, spec, reason, joined, link }: { t: ProjectTicket; spec?: ProjectSpec; reason?: NeedsMeReason; joined: boolean; link: CardLink }) {
-  const pulse = usePulse(reason ? `board-card needs reason-${reason}` : "board-card", t.updated, joined, "board");
-  const label = kindLabel(t);
-  const kind = specKindOf(spec);
-  return (
-    <a {...pulse} {...link}>
-      <span className="board-card-top">
-        <ShortId id={t.id} />
-        {label && <span className="stage-badge">{label}</span>}
-        <span className="board-spacer" />
-        {t.blocked && (
-          <span className="board-blocked" title="Has open Blockers">
-            ⛔ Blocked
-          </span>
-        )}
-        {reason && <span className="dot" role="img" aria-label="Needs you" />}
-      </span>
-      <span className="board-card-title">{t.title}</span>
-      {spec && (
-        <span className="board-card-spec">
-          <span className={`kind-badge kind-${stateSlug(kind)}`}>{kind}</span>{" "}
-          {spec.title}
-        </span>
-      )}
-    </a>
   );
 }

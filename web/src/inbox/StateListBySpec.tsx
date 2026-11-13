@@ -4,7 +4,7 @@ import type { NeedsMeReason, State } from "../api/types";
 import type { ProjectSpec, ProjectTicket } from "../live";
 import { groupBySpec } from "./groupBySpec";
 import { SpecRow, type SpecRowProps } from "./SpecRow";
-import type { InboxRowLinkFactory } from "./StateRow";
+import type { InboxRowLinkFactory } from "../ticket/TicketLine";
 
 export function StateListBySpec({
   state,

@@ -5,12 +5,11 @@
 import type { NeedsMeReason } from "../api/types";
 import type { ProjectSpec, ProjectTicket } from "../live";
 import { stageOf } from "../requirement/progress";
-import { LinkBadge } from "../ticket/LinkBadge";
-import { WaitingBadge } from "../ticket/WaitingBadge";
+import { TicketLine, type InboxRowLinkFactory } from "../ticket/TicketLine";
 import { groupBySpec } from "./groupBySpec";
 import { ShortId } from "./ShortId";
 import { SpecRow, specKindOf, stagesFirst, type SpecRowProps } from "./SpecRow";
-import { stateSlug, type InboxRowLinkFactory } from "./StateRow";
+import { KindBadge } from "../controls/KindBadge";
 
 const numberOf = (id: string) => Number(id.slice(id.lastIndexOf("-") + 1));
 
@@ -61,22 +60,20 @@ export function AllTicketsByTicket({
     <>
       {newestFirst(tickets).map((t) => {
         const spec = specs.get(t.spec);
-        const label = kindLabel(t);
         return (
-          <a key={t.id} className="row" {...link(t.id)}>
-            <span className="row-top">
-              <ShortId id={t.id} />
-              {label && <span className="stage-badge">{label}</span>}
-              <span className="row-title">{t.title}</span>
-              {t.link && <LinkBadge link={t.link} plain />}
-              <WaitingBadge waiting={t.waiting_for_spec} />
-              <span className={`state-chip st-${stateSlug(t.state)}`}>{t.state}</span>
-              {reasons.has(t.id) && <span className="dot needs-you" role="img" aria-label="Needs you" />}
-            </span>
-            <span className="row-detail">
-              <span className={`kind-badge kind-${stateSlug(specKindOf(spec))}`}>{specKindOf(spec)}</span> <ShortId id={t.spec} /> {spec?.title ?? ""}
-            </span>
-          </a>
+          <TicketLine
+            key={t.id}
+            t={t}
+            link={link(t.id)}
+            badge={kindLabel(t)}
+            chip
+            needsYou={reasons.has(t.id)}
+            detail={
+              <>
+                <KindBadge kind={specKindOf(spec)} /> <ShortId id={t.spec} /> {spec?.title ?? ""}
+              </>
+            }
+          />
         );
       })}
     </>

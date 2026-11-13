@@ -3,7 +3,8 @@
 // with how many of the columns show appended while any is hidden.
 import { useEffect, useId, useRef, useState } from "react";
 import { STATES, type State } from "../api/types";
-import { stateSlug } from "../inbox/StateRow";
+import { Button } from "../controls/Button";
+import { stateSlug } from "../controls/StateChip";
 
 export interface ColumnsMenuProps {
   hidden: readonly State[];
@@ -39,10 +40,10 @@ export function ColumnsMenu({ hidden, onChange }: ColumnsMenuProps) {
         button.current?.focus();
       }}
     >
-      <button ref={button} className="btn" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+      <Button ref={button}  aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
         Columns
         {hidden.length > 0 && <span className="muted"> · {STATES.length - hidden.length}/{STATES.length}</span>} ▾
-      </button>
+      </Button>
       <div id={id} role="group" aria-label="Columns" className="board-columns-menu" hidden={!open}>
         {STATES.map((s) => (
           <label key={s}>

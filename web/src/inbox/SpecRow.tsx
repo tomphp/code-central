@@ -6,15 +6,17 @@
 // the rest of the row opens the Spec. Whether it is open lives on the page
 // only. As a Board lane's header the chevron instead collapses the lane,
 // and the row lists no Tickets.
-import { useEffect, useState, type MouseEvent } from "react";
+import { useEffect, useState } from "react";
 import { LONG_LIVED_LABEL, STATES, type NeedsMeReason, type StageName, type State, type StateSummary } from "../api/types";
 import { REASON_LABEL } from "../format";
 import type { ProjectSpec, ProjectTicket } from "../live";
 import { mapCount } from "../map/mapCount";
 import { headline, progress, stageOf, type Progress } from "../requirement/progress";
 import { Strip } from "../requirement/Strip";
-import { StateRow, stateSlug, type InboxRowLinkFactory } from "./StateRow";
+import { KindBadge } from "../controls/KindBadge";
+import { StateChip } from "../controls/StateChip";
 import { ShortId } from "./ShortId";
+import { TicketLine, type InboxRowLinkFactory, type RowLink } from "../ticket/TicketLine";
 
 export interface SpecRowProps {
   id: string;
@@ -31,7 +33,7 @@ export interface SpecRowProps {
   here?: State;
   reasons: Map<string, NeedsMeReason>;
   now: Date;
-  link: { href: string; onClick(e: MouseEvent): void; "data-id": string; "aria-current"?: "true" };
+  link: RowLink;
   // ticketLink is left out for a lane, which lists no Tickets.
   ticketLink?: InboxRowLinkFactory;
   selectedTicket?: string;
@@ -71,7 +73,7 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
         <a className="row" {...link}>
           <span className="row-top">
             <ShortId id={id} />
-            {kind !== "Requirement" && <span className={`kind-badge kind-${stateSlug(kind)}`}>{kind}</span>}
+            {kind !== "Requirement" && <KindBadge kind={kind} />}
             <span className="row-title">{title}</span>
             {needsYou && <span className={`dot${need ? ` reason-${need}` : ""}`} role="img" aria-label="Needs you" />}
           </span>
@@ -80,9 +82,9 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
           ) : (
             <span className="state-chips">
               {STATES.filter((s) => summary[s]).map((s) => (
-                <span key={s} className={`state-chip st-${stateSlug(s)}${s === here ? " here" : ""}`} aria-current={s === here ? "true" : undefined}>
+                <StateChip key={s} state={s} here={s === here}>
                   {s} {summary[s]}
-                </span>
+                </StateChip>
               ))}
             </span>
           )}
@@ -99,7 +101,7 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
       {open && !lane && ticketLink && (
         <div className="spec-row-tickets" role="group" aria-label={`Tickets of ${title}`}>
           {listed.map((t) => (
-            <StateRow key={t.id} t={t} needsYou={reasons.has(t.id)} now={now} link={ticketLink} stage chip={!here} />
+            <TicketLine key={t.id} t={t} link={ticketLink(t.id)} badge={stageOf(t)} chip={!here} needsYou={reasons.has(t.id)} now={now} />
           ))}
         </div>
       )}

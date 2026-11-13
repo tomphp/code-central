@@ -8,6 +8,7 @@ import "../../api/actions/send_back";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { PullRequestBadge } from "../../ticket/PullRequestBadge";
 import { useAct } from "../../ticket/useAct";
+import { Button } from "../../controls/Button";
 
 export function PullRequestClosedPanel({ api, project, ticket: t }: PanelProps) {
   const { busy, error, run } = useAct();
@@ -30,17 +31,17 @@ export function PullRequestClosedPanel({ api, project, ticket: t }: PanelProps) 
         <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
       <p>
-        <button
+        <Button
           type="button"
-          className="btn primary"
+          variant="primary"
           disabled={busy || !note.trim()}
           onClick={() => run(() => api.act(project, t.id, "send_back", { note: note.trim() }))}
         >
           Send back
-        </button>{" "}
-        <button type="button" className="btn danger" disabled={busy} onClick={() => run(() => api.act(project, t.id, "cancel", {}))}>
+        </Button>{" "}
+        <Button type="button" variant="danger" disabled={busy} onClick={() => run(() => api.act(project, t.id, "cancel", {}))}>
           Cancel
-        </button>
+        </Button>
       </p>
     </section>
   );

@@ -7,6 +7,7 @@ import type { SpecDetail } from "../api/types";
 import { Markdown } from "../Markdown";
 import { EditForm } from "./EditForm";
 import { specEditable } from "./editable";
+import { Button } from "../controls/Button";
 
 export interface BodySectionProps {
   api: Api;
@@ -26,16 +27,16 @@ export function BodySection({ api, spec, heading, archived = false }: BodySectio
           {heading}
         </button>
         {!editing && specEditable(spec, archived) && (
-          <button
+          <Button
             type="button"
-            className="btn"
+
             onClick={() => {
               setOpen(true);
               setEditing(true);
             }}
           >
             Edit
-          </button>
+          </Button>
         )}
       </div>
       {editing ? (

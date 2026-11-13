@@ -2,6 +2,7 @@
 // says that no session ID is recorded. Shared by any panel that offers to
 // bring a session back (the Failed panel's report has one too).
 import { useState } from "react";
+import { Button } from "../../controls/Button";
 
 // Session is what a Claim (or a Failure Report's copy of it) records about
 // getting back into its session. Code Central never parses any of it.
@@ -43,9 +44,9 @@ export function ResumeCommand(session: Session) {
   return (
     <p className="resume-command">
       <code>{command}</code>{" "}
-      <button type="button" className="btn" onClick={copy}>
+      <Button type="button"  onClick={copy}>
         {copied ? "Copied" : "Copy"}
-      </button>
+      </Button>
     </p>
   );
 }

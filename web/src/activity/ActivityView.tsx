@@ -10,6 +10,7 @@ import type { ProjectRow } from "../api/types";
 import { ActivityDashboard } from "../focus/ActivityDashboard";
 import type { InboxData } from "../live";
 import type { UiLocation } from "../url";
+import { Button } from "../controls/Button";
 import "../focus/focus.css";
 import "./activity.css";
 
@@ -33,9 +34,9 @@ export function ActivityView({ api, now, version, data, loc, navigate }: Activit
         title="Activity"
         left={<ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />}
         right={
-          <button className="btn" onClick={() => navigate(loc.back ?? { view: "inbox" })}>
+          <Button  onClick={() => navigate(loc.back ?? { view: "inbox" })}>
             {back === "focus" ? "Back to Focus Mode" : "Back to the Inbox"}
-          </button>
+          </Button>
         }
       />
       {data ? <ActivityDashboard api={api} now={now} version={version} data={data} loc={loc} navigate={navigate} /> : <p className="muted">Loading…</p>}

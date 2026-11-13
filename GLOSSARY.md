@@ -352,6 +352,14 @@ _Avoid_: Column filter, column picker
 The one row the UI shows a Spec in, in the Requirements view, Needs Me, By Spec and the Board view's lanes: ID, kind, title and needs-you dot, then the Stage strip for a Requirement or the State chips for any other Spec, then the headline. It expands to the Spec's Tickets.
 _Avoid_: Spec card, Requirement row, bs-card
 
+**Ticket row**:
+The one row the UI lists a Ticket in, in the State lists, All Tickets, Needs Me, Drafts and a Spec row's Tickets: Short ID, Stage badge, title, State chip, Link and Waiting badges and needs-you dot, then the latest Session Event or the list's own detail. The whole row opens the Ticket.
+_Avoid_: Ticket line, State row
+
+**Ticket card**:
+A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, then the title, then its Spec's kind and title outside a lane. It pulses when it joins its column or its Ticket changes.
+_Avoid_: Board card, Ticket tile
+
 **To merge**:
 The Needs Me reason of an Accepted Ticket under the Branch or Pull Request Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge. Under Pull Request it links the pull request and says conflicting while the Code Host reports so.
 _Avoid_: Ready to merge, awaiting merge

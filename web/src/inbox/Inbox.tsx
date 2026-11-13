@@ -5,36 +5,26 @@
 // Options; the list in the middle; the selected Requirement, Map or plain
 // Spec and Ticket on the right. A layout only: the data comes from live.ts and the
 // Ticket pane is shared with any later view.
-import { useState, type MouseEvent } from "react";
+import { useState } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import {
   FINISHED,
   STATES,
   type MapView,
-  type NeedsMeReason,
-  type NeedsMeRow,
   type ProjectRow,
   type SpecDetail,
-  type State,
   type TicketView,
 } from "../api/types";
-import { duration, REASON_LABEL, rowDetail, ticketOf } from "../format";
-import { CIBadge } from "../ticket/CIBadge";
-import { PullRequestBadge } from "../ticket/PullRequestBadge";
-import { LinkBadge } from "../ticket/LinkBadge";
-import { PrototypeBadge } from "../ticket/PrototypeBadge";
-import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
-import { MapPane } from "../map/MapPane";
+import { REASON_LABEL, ticketOf } from "../format";
+import type { InboxData, ProjectSpec } from "../live";
 import {
   isStage,
   needsMeCount,
   progress,
   reasonsOf,
 } from "../requirement/progress";
-import { RequirementPane } from "../requirement/RequirementPane";
-import { SpecPane } from "../spec/SpecPane";
-import { TicketPane } from "../ticket/TicketDetail";
+import { InboxDetail } from "./InboxDetail";
 import { OptionsLink } from "../options/OptionsLink";
 import { UsageLink } from "../usage/UsageLink";
 import { CILink } from "../ci/CILink";
@@ -42,15 +32,19 @@ import { ActivityLink } from "../activity/ActivityLink";
 import { BoardLink } from "../board/BoardLink";
 import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
-import { ToggleGroup } from "../controls/ToggleGroup";
 import { AllTicketsBySpec, AllTicketsByTicket, matchesId } from "./AllTickets";
 import { groupBySpec } from "./groupBySpec";
 import { SpecRow } from "./SpecRow";
 import { StateListBySpec } from "./StateListBySpec";
-import { StateRow, type InboxRowLinkFactory } from "./StateRow";
+import { FilterButton } from "./FilterButton";
+import { NeedsMeLink } from "./NeedsMeLink";
+import { StateList } from "./StateList";
+import { Drafts } from "./Drafts";
+import { byCreation, requirementList, stateList } from "./lists";
+import { ListToggleBar } from "./ListToggleBar";
 import { storedFinished, storedGroup, storeFinished, storeGroup } from "./groupPreference";
 import { clickTo, hrefFor, type UiLocation } from "../url";
-import { OneProject, ShortId } from "./ShortId";
+import { OneProject } from "./ShortId";
 
 export interface InboxProps {
   api: Api;
@@ -187,37 +181,15 @@ export function Inbox({
     navigate({ group: g === "spec" ? "spec" : undefined });
   };
   const toggleBar = (
-  <div className="bs-toggle-bar">
-    {loc.list === "tickets" && (
-      <input
-        type="search"
-        className="bs-search"
-        aria-label="Ticket ID"
-        placeholder="Ticket ID, e.g. 452"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
-    )}
-    <ToggleGroup
-      label="Group the list"
-      options={[
-        { value: "ticket", label: "Ticket" },
-        { value: "spec", label: "Spec" },
-      ]}
-      value={grouping}
-      onChange={chooseGroup}
+    <ListToggleBar
+      tickets={loc.list === "tickets"}
+      search={search}
+      onSearch={setSearch}
+      grouping={grouping}
+      onGroup={chooseGroup}
+      showFinished={showFinished}
+      onShowFinished={chooseFinished}
     />
-    {loc.list === "tickets" && (
-      <div className="bs-toggle">
-        <button
-          aria-pressed={showFinished}
-          onClick={() => chooseFinished(!showFinished)}
-        >
-          Show finished
-        </button>
-      </div>
-    )}
-  </div>
   );
 
   // Only an active Project has a Project Options link: an Archived one takes no writes.
@@ -420,251 +392,24 @@ export function Inbox({
         )}
       </main>
 
-      <aside aria-label="Ticket" className="inbox-detail">
-        {loc.requirement &&
-          (requirementError ? (
-            <p className="empty">{requirementError}</p>
-          ) : requirement ? (
-            <RequirementPane
-              api={api}
-              spec={requirement}
-              archived={isArchived(requirement.id)}
-              reasons={reasons}
-              now={now}
-              ticket={loc.ticket}
-              select={(id) => navigate({ ticket: id })}
-              specLink={specLink}
-            />
-          ) : map ? (
-            <MapPane
-              api={api}
-              spec={map}
-              reasons={reasons}
-              now={now}
-              ticket={loc.ticket}
-              select={(id) => navigate({ ticket: id })}
-              specLink={specLink}
-              written={(id) =>
-                navigate({
-                  list: "requirements",
-                  state: undefined,
-                  requirement: id,
-                  ticket: undefined,
-                })
-              }
-            />
-          ) : spec ? (
-            <SpecPane
-              api={api}
-              spec={spec}
-              archived={isArchived(spec.id)}
-              reasons={reasons}
-              now={now}
-              ticket={loc.ticket}
-              select={(id) => navigate({ ticket: id })}
-            />
-          ) : (
-            <p className="empty">Loading…</p>
-          ))}
-        {ticketError ? (
-          <p className="empty">{ticketError}</p>
-        ) : ticket && loc.ticket && ticket.id === loc.ticket ? (
-          <TicketPane
-            api={api}
-            project={projectOf(ticket.id)}
-            ticket={ticket}
-            now={now}
-            archived={isArchived(ticket.id)}
-            reported={
-              projects.find((p) => p.key === projectOf(ticket.id))
-                ?.reported_models
-            }
-            openSpec={(id) => navigate({ requirement: id })}
-          />
-        ) : (
-          !loc.requirement && (
-            <p className="empty">
-              {loc.ticket ? "Loading…" : "Select a Ticket."}
-            </p>
-          )
-        )}
-      </aside>
+      <InboxDetail
+        api={api}
+        now={now}
+        loc={loc}
+        navigate={navigate}
+        requirement={requirement}
+        map={map}
+        spec={spec}
+        requirementError={requirementError}
+        ticket={ticket}
+        ticketError={ticketError}
+        reasons={reasons}
+        projects={projects}
+        isArchived={isArchived}
+        specLink={specLink}
+      />
     </div>
     </OneProject.Provider>
   );
 }
 
-// stateList is one State's Tickets: in claim order, as found, except the
-// finished States, which read newest first.
-function stateList(tickets: ProjectTicket[], state: State): ProjectTicket[] {
-  const rows = tickets.filter((t) => t.state === state);
-  return FINISHED.includes(state)
-    ? rows.sort((a, b) => b.updated.localeCompare(a.updated))
-    : rows;
-}
-
-// byCreation puts Specs from several lists back in creation order: by
-// Project, then ID.
-function byCreation(specs: ProjectSpec[]): ProjectSpec[] {
-  const n = (s: ProjectSpec) => Number(s.id.slice(s.id.lastIndexOf("-") + 1));
-  return [...specs].sort(
-    (a, b) => a.project.localeCompare(b.project) || n(a) - n(b),
-  );
-}
-
-// requirementList is the Requirements view's order: unfinished ones, then
-// finished ones, newest first in each.
-function requirementList(specs: ProjectSpec[]): ProjectSpec[] {
-  const newest = [...specs].reverse();
-  return [
-    ...newest.filter((s) => !s.finished),
-    ...newest.filter((s) => s.finished),
-  ];
-}
-
-function FilterButton(p: {
-  on: boolean;
-  label: string;
-  count: number;
-  loud?: boolean;
-  sub?: boolean;
-  onClick(): void;
-}) {
-  return (
-    <button
-      className={["filter", p.on && "on", p.sub && "sub"]
-        .filter(Boolean)
-        .join(" ")}
-      aria-pressed={p.on}
-      onClick={p.onClick}
-    >
-      {p.label}{" "}
-      <span className={p.loud && p.count > 0 ? "count loud" : "count"}>
-        {p.count}
-      </span>
-    </button>
-  );
-}
-
-type RowLink = ReturnType<InboxRowLinkFactory>;
-
-function NeedsMeLink({
-  row,
-  now,
-  link,
-}: {
-  row: NeedsMeRow;
-  now: Date;
-  link: RowLink;
-}) {
-  // A Project's Base diverged has no Ticket to open. A CI item has none
-  // of its own either: it opens on the first Ticket it lists, whose panel
-  // shows the item and its options (code-central-432).
-  if (!row.id) {
-    const top = (
-      <span className="row-top">
-        <span className="tid">{row.project}</span>
-        <span className="row-title">{row.title}</span>
-        {row.ci_item && <CIBadge result={row.ci_result} />}
-        <span className="muted small">{duration(now, row.since)}</span>
-      </span>
-    );
-    if (row.ci_item) {
-      return (
-        <a className="row" {...link}>
-          {top}
-          <span className="row-detail">{rowDetail(now, row)}</span>
-        </a>
-      );
-    }
-    return (
-      <div className="row">
-        {top}
-        <span className="row-detail">{rowDetail(now, row)}</span>
-      </div>
-    );
-  }
-  return (
-    <a className="row" {...link}>
-      <span className="row-top">
-        <ShortId id={row.id} />
-        <span className="row-title">{row.title}</span>
-        {row.prototype && <PrototypeBadge />}
-        {row.link && <LinkBadge link={row.link} plain />}
-        <CIBadge result={row.ci_result} />
-        <PullRequestBadge pr={row.pull_request} inRowLink />
-        <span className="muted small">{duration(now, row.since)}</span>
-      </span>
-      <span className="row-detail">
-        {row.requirement && (
-          <span className="req-chip">↳ {row.requirement.title}</span>
-        )}
-        {row.spec && (
-          <span className="req-chip">
-            ↳ {row.spec.map ? `Map: ${row.spec.title}` : row.spec.title}
-          </span>
-        )}{" "}
-        {rowDetail(now, row)}
-      </span>
-    </a>
-  );
-}
-
-// StateList is one State's Tickets, flat, with its Stage Tickets folded
-// into a collapsed group after them: a Factory runs those. An In Progress
-// row shows its latest Session Event under its title.
-function StateList({
-  tickets,
-  reasons,
-  now,
-  link,
-}: {
-  tickets: ProjectTicket[];
-  reasons: Map<string, NeedsMeReason>;
-  now: Date;
-  link: InboxRowLinkFactory;
-}) {
-  const stages = tickets.filter(isStage);
-  const row = (t: ProjectTicket) => (
-    <StateRow
-      key={t.id}
-      t={t}
-      needsYou={reasons.has(t.id)}
-      now={now}
-      link={link}
-    />
-  );
-  return (
-    <>
-      {tickets.filter((t) => !isStage(t)).map(row)}
-      {stages.length > 0 && (
-        <details className="quiet-group">
-          <summary>Stage Tickets ({stages.length}): run by a Factory</summary>
-          {stages.map(row)}
-        </details>
-      )}
-    </>
-  );
-}
-
-function Drafts({
-  drafts,
-  link,
-}: {
-  drafts: ProjectTicket[];
-  link: InboxRowLinkFactory;
-}) {
-  return (
-    <details className="quiet-group">
-      <summary>Drafts ({drafts.length}): not waiting on anyone</summary>
-      {drafts.map((t) => (
-        <a key={t.id} className="row quiet" {...link(t.id)}>
-          <span className="row-top">
-            <ShortId id={t.id} />
-            <span className="row-title">{t.title}</span>
-          </span>
-        </a>
-      ))}
-    </details>
-  );
-}

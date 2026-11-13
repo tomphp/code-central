@@ -27,3 +27,11 @@ How the Landing Method, Push, Land per Spec and CI Tracking combine lives in `st
 1. Add a method to `store.LandingPolicy`, or extend one, with a doc comment quoting the glossary rule it answers.
 2. Add or change its row in `TestLandingPolicyMatrix` (`store/landingpolicy_test.go`), which pins every Method × Push × Land per Spec × CI Tracking combination.
 3. Call it from core with `p.LandingPolicy()`, and from the Factory through the `core.ProjectView`'s four inputs. Don't combine Method, Push, Land per Spec or CI Tracking at a call site. A test of one input alone (`Method == X`, `CI.Tracking`) stays a plain comparison.
+
+## Add or change a UI component
+
+A component used across areas lives in `web/src/controls/`; one that belongs to an area lives beside it (`ticket/`, `board/`, ...). It is presentational: data and callbacks come in as props, and fetching and hooks like `useAct` stay at the call site. It keeps the global CSS class names it renders.
+
+1. Write the component, and a vitest test through its rendered output (role, accessible name, variant class).
+2. Put a `<Component>.stories.tsx` beside it, one story per variant, using `Meta` and `StoryObj` from `@storybook/react-vite` (see `controls/ToggleGroup.stories.tsx`). Where it needs a Ticket, build one with `api/fake.ts`. Area CSS the story needs is imported in `web/.storybook/preview.ts`.
+3. Run `just serve-components` to look at it, and `just build-components` to check Storybook still builds. Storybook is a devDependency only: it is not in the embedded `dist` and `make test` doesn't run it.

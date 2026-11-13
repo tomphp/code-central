@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { Markdown } from "../Markdown";
 import { useAct } from "../ticket/useAct";
+import { Button } from "../controls/Button";
 
 export interface EditFormProps {
   title: string;
@@ -48,15 +49,15 @@ export function EditForm({ title, text, label, save, close }: EditFormProps) {
         <textarea aria-label={name} rows={12} value={draftText} onChange={(e) => setText(e.target.value)} />
       )}
       <div className="edit-actions">
-        <button className="btn primary" disabled={busy}>
+        <Button variant="primary" disabled={busy}>
           Save
-        </button>{" "}
-        <button type="button" className="btn" onClick={close}>
+        </Button>{" "}
+        <Button type="button"  onClick={close}>
           Cancel
-        </button>{" "}
-        <button type="button" className="btn" aria-pressed={preview} onClick={() => setPreview(!preview)}>
+        </Button>{" "}
+        <Button type="button"  aria-pressed={preview} onClick={() => setPreview(!preview)}>
           Preview
-        </button>
+        </Button>
       </div>
       {error && (
         <p role="alert" className="warning">

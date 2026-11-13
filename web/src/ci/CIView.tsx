@@ -15,6 +15,7 @@ import { usePulse } from "../focus/pulse";
 import { useFetch } from "../live";
 import { RunStatusBadge, runStatus, shortCommit } from "../ticket/CISection";
 import { clickTo, hrefFor, type UiLocation } from "../url";
+import { Button } from "../controls/Button";
 import "./ci.css";
 
 export interface CIViewProps {
@@ -40,9 +41,9 @@ export function CIView({ api, now, version, projects = [], loc, navigate }: CIVi
         title="CI"
         left={<ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />}
         right={
-          <button className="btn" onClick={() => navigate(loc.back ?? { view: "inbox" })}>
+          <Button  onClick={() => navigate(loc.back ?? { view: "inbox" })}>
             {BACK_LABEL[back]}
-          </button>
+          </Button>
         }
       />
       {/* Keyed by scope, so another scope starts from nothing and its first read doesn't pulse. */}
