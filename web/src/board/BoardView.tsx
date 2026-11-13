@@ -25,7 +25,7 @@ import { clickTo, hrefFor, type UiLocation } from "../url";
 import { TicketCard } from "../ticket/TicketCard";
 import { ColumnsMenu } from "./ColumnsMenu";
 import { LaneHeader } from "./LaneHeader";
-import { FocusPopup } from "./FocusPopup";
+import { FocusPopup, type FocusPopupClose } from "./FocusPopup";
 import { usePopupKind } from "./popupKind";
 import { SpecPopup } from "./SpecPopup";
 import { TicketPopup } from "./TicketPopup";
@@ -40,9 +40,12 @@ export interface BoardViewProps {
   data?: InboxData;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
+  // onFocusPopupClose hears a card's Focus popup close, for the automatic
+  // Focus popup not to reopen for its Focus Items.
+  onFocusPopupClose?(closed: FocusPopupClose): void;
 }
 
-export function BoardView({ api, now, version, data, loc, navigate }: BoardViewProps) {
+export function BoardView({ api, now, version, data, loc, navigate, onFocusPopupClose }: BoardViewProps) {
   const projects = data?.projects ?? [];
   const hidden = hiddenColumns(loc.hide);
   const shown = STATES.filter((s) => !hidden.includes(s));
@@ -166,7 +169,20 @@ export function BoardView({ api, now, version, data, loc, navigate }: BoardViewP
       </main>
       {/* At most one popup, chosen from popup=. */}
       {loc.popup && kind === "focus" && data && (
-        <FocusPopup key={loc.popup} mode="ticket" api={api} now={now} version={version} data={data} id={loc.popup} onClose={closePopup} navigate={navigate} />
+        <FocusPopup
+          key={loc.popup}
+          mode="ticket"
+          api={api}
+          now={now}
+          version={version}
+          data={data}
+          id={loc.popup}
+          onClose={(closed) => {
+            onFocusPopupClose?.(closed);
+            closePopup();
+          }}
+          navigate={navigate}
+        />
       )}
       {loc.popup && kind === "spec" && (
         <SpecPopup

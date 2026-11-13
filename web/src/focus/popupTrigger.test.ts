@@ -17,6 +17,6 @@ describe("popupOpen", () => {
     ["a new CI item for a dismissed Project", row({ id: "", reason: "ci_failed", ci_item: { reason: "ci_failed", commit: "bbb", tickets: [], options: [] } }), ["acme ci_failed aaa"], true],
   ])("with %s, opens: %s", (_, r, dismissed, open) => {
     const needsMe = { count: 1, groups: [{ reason: r.reason, tickets: [r] }] };
-    expect(popupOpen({ option: "on", view: "inbox", needsMe, dismissed: new Set(dismissed), open: false })).toBe(open);
+    expect(popupOpen({ option: "on", view: "inbox", needsMe, dismissed: new Set(dismissed), open: false, otherPopup: false, typing: false })).toBe(open);
   });
 });

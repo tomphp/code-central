@@ -3,7 +3,8 @@
 // Activity Dashboard, the CI view and the Usage view while Focus Items in
 // the view's scope wait, and again when a new one arrives; never over Focus
 // Mode, Options or Project Options. Closing it holds for the Focus Items
-// there then, for the tab's life.
+// there then, for the tab's life. It never interrupts: it waits while
+// another popup is open or a text field has focus.
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -208,4 +209,108 @@ describe("Focus Pop-up", () => {
       noPopup();
     },
   );
+});
+
+describe("Focus Pop-up never interrupts", () => {
+  const board = () => screen.getByRole("main", { name: "Board" });
+  const dialogs = () => screen.queryAllByRole("dialog").map((d) => d.getAttribute("aria-label"));
+  // dismissed renders the App at url, waits for the Focus popup and
+  // closes it, so only a new Focus Item opens it again.
+  async function dismissed(fake: FakeApi, url: string, first = "Flaky build") {
+    renderApp(fake, url);
+    await heading(first);
+    await close();
+    noPopup();
+  }
+
+  it("still opens a card's Focus popup, and waits for it to close before opening for a new Focus Item", async () => {
+    const fake = popupOn();
+    await dismissed(fake, "/?view=board&project=acme");
+    await userEvent.click(within(board()).getByText("Login page"));
+    expect(await heading("Login page")).toBeInTheDocument();
+    expect(window.location.search).toBe("?view=board&project=acme&popup=acme-3");
+    expect(popup()).not.toHaveTextContent(/\d+ left/);
+
+    arrive(fake);
+    await waitFor(() => expect(document.title).toBe("(4) Code Central"));
+    await act(async () => {});
+    expect(dialogs()).toEqual(["Focus popup"]);
+    expect(popup()).not.toHaveTextContent("Quiet session");
+
+    await close();
+    expect(await heading("Quiet session")).toBeInTheDocument();
+    expect(within(popup()).getByText(/\d+ left/)).toBeInTheDocument();
+  });
+
+  it("waits for a card's Focus popup loaded from the address, then opens for the Focus Items left once it closes by itself", async () => {
+    const fake = popupOn();
+    renderApp(fake, "/?view=board&project=acme&popup=acme-2");
+    await heading("Flaky build");
+    expect(dialogs()).toEqual(["Focus popup"]);
+    expect(popup()).not.toHaveTextContent(/\d+ left/);
+
+    change(fake, without(fake, "acme-2"), "acme-2");
+    await waitFor(() => expect(window.location.search).toBe("?view=board&project=acme"));
+    expect(await heading("Login page")).toBeInTheDocument();
+    expect(within(popup()).getByText("1 left")).toBeInTheDocument();
+  });
+
+  it("doesn't open for the Focus Items a card's Focus popup showed once it's closed", async () => {
+    const fake = popupOn();
+    renderApp(fake, "/?view=board&project=beta&popup=beta-1");
+    await heading("Beta search");
+    await close();
+    await waitFor(() => expect(window.location.search).toBe("?view=board&project=beta"));
+    await act(async () => {});
+    noPopup();
+    go("/?view=inbox&project=beta");
+    await screen.findByRole("complementary", { name: "Ticket" });
+    noPopup();
+  });
+
+  it("waits while another popup is open, and opens once it closes", async () => {
+    const fake = popupOn();
+    await dismissed(fake, "/?view=board&project=acme");
+    // acme-1 doesn't need the human: its card opens its Ticket popup.
+    await userEvent.click(within(board()).getByText("Pick a colour"));
+    await screen.findByRole("dialog", { name: "Ticket popup" });
+
+    arrive(fake);
+    await waitFor(() => expect(document.title).toBe("(4) Code Central"));
+    await act(async () => {});
+    expect(dialogs()).toEqual(["Ticket popup"]);
+
+    await userEvent.keyboard("{Escape}");
+    expect(await heading("Quiet session")).toBeInTheDocument();
+    expect(dialogs()).toEqual(["Focus popup"]);
+  });
+
+  it("waits while a text field has focus, and opens once it loses it", async () => {
+    const fake = popupOn();
+    await dismissed(fake, "/?view=inbox&list=tickets");
+    const box = await screen.findByRole("searchbox", { name: "Ticket ID" });
+    await userEvent.click(box);
+    await userEvent.keyboard("4");
+
+    arrive(fake);
+    await waitFor(() => expect(document.title).toBe("(4) Code Central"));
+    noPopup();
+    expect(box).toHaveFocus();
+
+    act(() => box.blur());
+    expect(await heading("Quiet session")).toBeInTheDocument();
+  });
+
+  it("doesn't open on load while a text field has focus", async () => {
+    const field = document.body.appendChild(document.createElement("textarea"));
+    field.focus();
+    try {
+      await settled(popupOn(), "/?view=activity");
+      noPopup();
+      act(() => field.blur());
+      expect(await heading("Flaky build")).toBeInTheDocument();
+    } finally {
+      field.remove();
+    }
+  });
 });

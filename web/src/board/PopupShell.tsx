@@ -9,12 +9,14 @@ export interface PopupShellProps {
   label: string;
   onClose(): void;
   head?: ReactNode;
+  // uncounted is Modal's: the automatic Focus popup's own shell.
+  uncounted?: boolean;
   children: ReactNode;
 }
 
-export function PopupShell({ label, onClose, head, children }: PopupShellProps) {
+export function PopupShell({ label, onClose, head, uncounted, children }: PopupShellProps) {
   return (
-    <Modal label={label} size="wide" onClose={onClose}>
+    <Modal label={label} size="wide" uncounted={uncounted} onClose={onClose}>
       <div className="popup-head">
         {head}
         <button type="button" className="popup-close" aria-label="Close" onClick={onClose}>

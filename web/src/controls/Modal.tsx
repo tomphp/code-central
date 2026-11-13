@@ -4,8 +4,10 @@
 // preventDefault on it). The card is the dialog: focus moves in on open, Tab
 // stays inside it and focus goes back to the opener on close. "narrow" is the
 // 40rem dialog; "wide" is for popups, capped to the viewport, with its content
-// scrolling inside it while the page behind stays put.
-import { useEffect, useRef, type ReactNode } from "react";
+// scrolling inside it while the page behind stays put. While any Modal is
+// open, unless uncounted, useModalOpen says so: the automatic Focus popup
+// waits on it.
+import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 export interface ModalProps {
@@ -14,6 +16,9 @@ export interface ModalProps {
   labelledBy?: string;
   label?: string;
   size?: "narrow" | "wide";
+  // uncounted leaves the Modal out of useModalOpen: the automatic Focus
+  // popup's own, which doesn't wait on itself.
+  uncounted?: boolean;
   onClose(): void;
   children: ReactNode;
 }
@@ -25,6 +30,7 @@ export function Modal({
   labelledBy,
   label,
   size = "narrow",
+  uncounted = false,
   onClose,
   children,
 }: ModalProps) {
@@ -40,6 +46,8 @@ export function Modal({
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
   }, []);
+
+  useEffect(() => (uncounted ? undefined : opened()), [uncounted]);
 
   useEffect(() => {
     if (size !== "wide") return;
@@ -98,4 +106,34 @@ export function Modal({
     </div>,
     document.body,
   );
+}
+
+// open is how many counted Modals are open now, and listeners who to tell
+// when that changes.
+let open = 0;
+const listeners = new Set<() => void>();
+
+// opened counts a Modal open and returns what counts it closed.
+function opened(): () => void {
+  open++;
+  listeners.forEach((l) => l());
+  return () => {
+    open--;
+    listeners.forEach((l) => l());
+  };
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+// modalOpen is whether any counted Modal is open anywhere in the page.
+export function modalOpen(): boolean {
+  return open > 0;
+}
+
+// useModalOpen is modalOpen, rendering again as it changes.
+export function useModalOpen(): boolean {
+  return useSyncExternalStore(subscribe, modalOpen);
 }

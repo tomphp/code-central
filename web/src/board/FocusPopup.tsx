@@ -91,8 +91,11 @@ export function FocusPopup(props: FocusPopupProps) {
   };
 
   return (
+    // Queue mode is the automatic Focus popup's, which doesn't wait on
+    // itself as another popup.
     <PopupShell
       label="Focus popup"
+      uncounted={queue}
       onClose={() => close("dismissed")}
       head={queue && !screen.clear && <span className="focus-left">{screen.remaining} left</span>}
     >
