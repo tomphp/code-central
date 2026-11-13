@@ -297,6 +297,93 @@ describe("the Board's grouping", () => {
   });
 });
 
+describe("the Board's By Spec lanes", () => {
+  // lanes seeds a second Spec, newer than Login, with a Ready and an In Progress Ticket,
+  // and a third whose only Ticket is Done.
+  function lanesWorld() {
+    const fake = world();
+    const billing = fake.addSpec("acme", { title: "Billing" }); // acme-7
+    const spec = { id: billing.id, title: billing.title };
+    fake.addTicket("acme", { title: "Invoice list", state: "Ready", spec, created: at(7), updated: at(7) }); // acme-8
+    fake.addTicket("acme", { title: "Refunds", state: "In Progress", spec, created: at(8), updated: at(8) }); // acme-9
+    const archive = fake.addSpec("acme", { title: "Archive" }); // acme-10
+    fake.addTicket("acme", { title: "Cold storage", state: "Done", spec: { id: archive.id, title: archive.title }, created: at(9), updated: at(9) }); // acme-11
+    return fake;
+  }
+  const lanes = () => within(board()).getAllByRole("group", { name: /^Lane: / }).map((l) => l.getAttribute("aria-label"));
+  const lane = (title: string) => within(board()).getByRole("group", { name: `Lane: ${title}` });
+  const bySpec = (url = "/?view=board&project=acme&group=spec") => renderApp(lanesWorld(), url);
+
+  it("shows one lane per Spec with a Ticket in a shown column, newest Spec first, and no lanes By Ticket", async () => {
+    bySpec();
+    await loaded();
+    expect(lanes()).toEqual(["Lane: Billing", "Lane: Login"]);
+    await userEvent.click(within(within(board()).getByRole("group", { name: "Group the board" })).getByRole("button", { name: "Ticket" }));
+    expect(within(board()).queryAllByRole("group", { name: /^Lane: / })).toEqual([]);
+    expect(cards("Ready")).toHaveLength(3);
+  });
+
+  it("adds a lane when its Spec's Done Tickets are shown with Columns ▾", async () => {
+    bySpec("/?view=board&project=acme&group=spec&hide=");
+    await loaded();
+    expect(lanes()).toEqual(["Lane: Archive", "Lane: Billing", "Lane: Login"]);
+  });
+
+  it("heads each lane with its Spec row, which opens the Spec", async () => {
+    bySpec();
+    await loaded();
+    const row = within(lane("Login")).getByRole("region", { name: "Login" });
+    await userEvent.click(within(row).getByRole("link", { name: /Login/ }));
+    const q = new URLSearchParams(window.location.search);
+    expect(q.get("view")).toBe("inbox");
+    expect(q.get("project")).toBe("acme");
+    expect(q.get("requirement")).toBe("acme-1");
+  });
+
+  it("puts each Ticket's card in its lane's column, without the Spec line", async () => {
+    bySpec();
+    await loaded();
+    const ready = within(lane("Login")).getByRole("region", { name: "Ready" });
+    expect(within(ready).getAllByRole("link").map((c) => c.querySelector(".board-card-title")?.textContent)).toEqual(["Password reset", "Login form"]);
+    const billingReady = within(lane("Billing")).getByRole("region", { name: "Ready" });
+    expect(within(billingReady).getByRole("link", { name: /Invoice list/ })).not.toHaveTextContent("Billing");
+    expect(within(lane("Login")).getByRole("link", { name: /Login form/ }).querySelector(".board-card-spec")).toBeNull();
+  });
+
+  it("counts a column's Tickets across all lanes in its head", async () => {
+    bySpec();
+    await loaded();
+    expect(heads()).toContain("Ready 3");
+    expect(heads()).toContain("In Progress 2");
+    expect(heads()).toContain("Draft 0");
+  });
+
+  it("collapses a lane to its header, keeping its per-column counts and the head totals", async () => {
+    bySpec();
+    await loaded();
+    const toggle = within(lane("Login")).getByRole("button", { name: "Login" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(within(lane("Login")).queryAllByRole("link", { name: /Login form|Sign-up page|Password reset/ })).toEqual([]);
+    expect(within(within(lane("Login")).getByRole("region", { name: "Ready" })).getByText("2")).toBeInTheDocument();
+    expect(within(within(lane("Login")).getByRole("region", { name: "In Progress" })).getByText("1")).toBeInTheDocument();
+    expect(within(lane("Billing")).getByRole("link", { name: /Invoice list/ })).toBeInTheDocument();
+    expect(heads()).toContain("Ready 3");
+    await userEvent.click(toggle);
+    expect(within(lane("Login")).getByRole("link", { name: /Login form/ })).toBeInTheDocument();
+  });
+
+  it("follows a Ticket moving column inside its lane", async () => {
+    const fake = lanesWorld();
+    renderApp(fake, "/?view=board&project=acme&group=spec");
+    await loaded();
+    act(() => void fake.updateTicket("acme-2", { state: "In Progress" }));
+    await waitFor(() => expect(within(within(lane("Login")).getByRole("region", { name: "In Progress" })).getByRole("link", { name: /Login form/ })).toBeInTheDocument());
+    expect(heads()).toContain("In Progress 3");
+  });
+});
+
 describe("+ New ▾ on the Board", () => {
   it("submits a Requirement and opens its Spec in the Requirements list", async () => {
     const fake = world();

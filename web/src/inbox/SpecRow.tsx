@@ -4,7 +4,8 @@
 // needs-you dot; then a Requirement's Stage strip or any other Spec's State
 // chips; then a one-line headline. The chevron opens it on its Tickets;
 // the rest of the row opens the Spec. Whether it is open lives on the page
-// only.
+// only. As a Board lane's header the chevron instead collapses the lane,
+// and the row lists no Tickets.
 import { useEffect, useState, type MouseEvent } from "react";
 import { LONG_LIVED_LABEL, STATES, type NeedsMeReason, type StageName, type State, type StateSummary } from "../api/types";
 import { REASON_LABEL } from "../format";
@@ -31,23 +32,28 @@ export interface SpecRowProps {
   reasons: Map<string, NeedsMeReason>;
   now: Date;
   link: { href: string; onClick(e: MouseEvent): void; "data-id": string; "aria-current"?: "true" };
-  ticketLink: InboxRowLinkFactory;
+  // ticketLink is left out for a lane, which lists no Tickets.
+  ticketLink?: InboxRowLinkFactory;
   selectedTicket?: string;
   // quietWhenIdle dims the row when it is finished or nothing of it needs
   // the human, as the Requirements view does.
   quietWhenIdle?: boolean;
   // startOpen opens the row when it first shows.
   startOpen?: boolean;
+  // lane makes the row a Board lane's header: its chevron shows whether the
+  // lane is open, and toggles it.
+  lane?: { collapsed: boolean; toggle(): void };
 }
 
-export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticketLink, selectedTicket, quietWhenIdle, startOpen }: SpecRowProps) {
+export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticketLink, selectedTicket, quietWhenIdle, startOpen, lane }: SpecRowProps) {
   const listed = shown ?? stagesFirst(all);
   // The row holding the selected Ticket opens on its own, once per
   // selection, so the human can still close it.
   const holdsSelected = !!selectedTicket && listed.some((t) => t.id === selectedTicket);
-  const [open, setOpen] = useState(holdsSelected || !!startOpen);
+  const [listOpen, setListOpen] = useState(holdsSelected || !!startOpen);
+  const open = lane ? !lane.collapsed : listOpen;
   useEffect(() => {
-    if (holdsSelected) setOpen(true);
+    if (holdsSelected) setListOpen(true);
   }, [selectedTicket, holdsSelected]);
 
   const title = spec?.title ?? id;
@@ -59,7 +65,7 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
   return (
     <section className={`spec-row${needsYou ? " needs" : ""}${quiet ? " quiet" : ""}`} aria-label={title}>
       <div className="spec-row-head">
-        <button className="chev" aria-expanded={open} aria-label={title} onClick={() => setOpen((o) => !o)}>
+        <button className="chev" aria-expanded={open} aria-label={title} onClick={() => (lane ? lane.toggle() : setListOpen((o) => !o))}>
           {open ? "▾" : "▸"}
         </button>
         <a className="row" {...link}>
@@ -90,7 +96,7 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
           </span>
         </a>
       </div>
-      {open && (
+      {open && !lane && ticketLink && (
         <div className="spec-row-tickets" role="group" aria-label={`Tickets of ${title}`}>
           {listed.map((t) => (
             <StateRow key={t.id} t={t} needsYou={reasons.has(t.id)} now={now} link={ticketLink} stage chip={!here} />
