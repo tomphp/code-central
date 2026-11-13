@@ -262,6 +262,10 @@ func (s *FileStore) loadProject(key string) error {
 	if g := pf.StageGuides; g != nil {
 		p.StageGuides = StageGuides{SubagentExplorationOff: g.SubagentExplorationOff, ModelAssignmentOn: g.ModelAssignmentOn}
 	}
+	var at string
+	if p.FocusKindsOff, at, err = decodeFocusKindsOff(pf.FocusKindsOff); err != nil {
+		return &LoadError{File: rel, Field: "focus_kinds_off" + at, Msg: err.Error()}
+	}
 	rs, at, err := decodeCIResponses(pf.CIResponses)
 	if err != nil {
 		return &LoadError{File: rel, Field: "ci_responses" + at, Msg: err.Error()}

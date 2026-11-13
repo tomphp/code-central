@@ -59,6 +59,7 @@ projects/<key>/project.yaml
   stage_guides: mapping (optional)
       subagent_exploration_off: bool (optional)
       model_assignment_on: bool (optional)
+  focus_kinds_off: []string (optional)
   ci_responses: list of mappings (optional)
       commit: string
       land_anyway: string (optional)
@@ -108,7 +109,6 @@ projects/<key>/tickets/<n>.yaml
       outbound: bool (optional)
       written: []string (optional)
   awaiting_triage: bool (optional)
-  spec_merge_ticket: bool (optional)
   created: string
   updated: string
   description: string
@@ -214,6 +214,7 @@ values
   project landing.method (no landing: merge, push false, remote origin): merge, branch, pull_request
   project ci.provider (no ci: tracking off, github_actions): github_actions, azure_pipelines
   project models.kinds[].kind: grilling, spec, tickets, map-chart, map-grilling, map-research, map-task, prototype, implementation
+  project focus_kinds_off[]: needs_answer, answered, silent_claim, long_claim, failed, in_review, ci_failed, ci_cancelled, base_diverged, base_missing, pull_request_closed, to_merge, ci_unavailable, accepted_not_landed, blocked_by_cancelled, new_issue, closed_externally
   ticket state, moves[].from, moves[].to: Draft, Ready, In Progress, Needs Answer, Answered, Failed, In Review, Accepted, Done, Cancelled
   ci run status: queued, in_progress, completed
   ci run conclusion, jobs[].conclusion (optional): success, failure, cancelled, timed_out, skipped, neutral, partially_succeeded

@@ -1230,6 +1230,7 @@ describe("Project Options", () => {
       "Models",
       "Stage Guides",
       "Auto-accept",
+      "Focus",
     ]);
 
     const scrolled: string[] = [];

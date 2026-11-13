@@ -66,6 +66,7 @@ export function Focus({
     data &&
     focusQueue({
       needsMe: data.needsMe,
+      projects: data.projects,
       project: loc.project,
       onScreen,
       ticket: ticket.data,

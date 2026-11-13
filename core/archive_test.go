@@ -261,6 +261,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetAutoAccept(human, "acme", core.SetAutoAcceptInput{Kinds: map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true}})
 		return err
 	},
+	"set_focus_kinds": func(f fixture) error {
+		_, err := f.core.SetFocusKinds(human, "acme", core.SetFocusKindsInput{Off: []core.NeedsMeReason{core.ReasonAnswered}})
+		return err
+	},
 	"report_models": func(f fixture) error {
 		_, err := f.core.ReportModels(ctx, "acme", core.ReportModelsInput{EffortLevels: []string{"low"}})
 		return err

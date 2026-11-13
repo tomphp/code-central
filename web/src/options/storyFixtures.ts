@@ -65,6 +65,7 @@ export const storyProject = (patch: Partial<ProjectRow> = {}): ProjectRow => ({
   },
   stage_guides: { subagent_exploration: true, model_assignment: false },
   auto_accept: { grilling: false, spec: false, tickets: false, implementation: false, merge: false },
+  focus_kinds: { off: [] },
   factory_status: {
     status: "online",
     factories: [

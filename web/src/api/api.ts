@@ -33,7 +33,7 @@ import type {
   SessionUsageFilter,
   SessionUsageView,
   TargetView,
-  UsageView, GitHubIssuesChange, Models
+  UsageView, GitHubIssuesChange, Models, NeedsMeReason
 } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
@@ -145,6 +145,10 @@ export interface Api {
   // kind (human-only), all off to begin with; a kind left out keeps its
   // value.
   setAutoAccept(project: string, kinds: Partial<AutoAccept>): Promise<ProjectView>;
+  // setFocusKinds replaces the Project's list of Needs Me reasons that are
+  // off whole, keeping them in group order with duplicates collapsed. It
+  // refuses anything that isn't a Needs Me reason.
+  setFocusKinds(project: string, off: NeedsMeReason[]): Promise<ProjectView>;
   // addCIRule adds a CI Rule and creates its Spec, titled like "CI: ci.yml
   // on main"; editCIRule changes the rule on Spec spec, and
   // removeCIRule removes it, leaving its Spec as the record. Workflow and

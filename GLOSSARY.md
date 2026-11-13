@@ -17,7 +17,7 @@ The short, permanent name that identifies a Project to anything connecting to Co
 _Avoid_: Slug, Project ID
 
 **Project Options**:
-The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Auto-accept and Stage Guides. Unlike an Option, what it sets belongs to one Project.
+The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides, Auto-accept and Focus. Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
 
 **Models**:
@@ -45,8 +45,11 @@ The Inbox's list of every Ticket in scope (`list=tickets`), of every kind and St
 _Avoid_: Ticket list, all Tickets page
 
 **Board view**:
-The view of the Tickets in scope as cards in one column per State (`view=board`). Its link is in the Inbox's View section. It takes no action itself: a Ticket card opens its Focus popup or Ticket popup, and a Lane header its Spec popup, kept in the URL as `popup=`.
+The view of the Tickets in scope as cards in one column per State, plus the Needs Me column while it's shown (`view=board`). Its link is in the Inbox's View section. It takes no action itself: a Ticket card opens its Focus popup or Ticket popup, and a Lane header its Spec popup, kept in the URL as `popup=`.
 _Avoid_: Kanban, Ticket board
+
+**Needs Me column**:
+The Board view's column, shown or hidden in Columns ▾ and off unless the human turns it on, that sits after In Progress and holds the Ticket card of every Ticket in scope that needs the human, in place of its State's column, whatever State columns are hidden. Each card there also shows its State and Needs Me reason. It is kept in the URL as `needs=` and per browser. _Avoid_: meta-column, needs-me lane
 
 **Short ID**:
 How the UI shows a Ticket's or Spec's ID while one Project is selected, its number alone as `#123`. With All Projects selected the full ID shows instead. Either way, clicking it copies the full ID.
@@ -353,7 +356,7 @@ The All Tickets view's checkbox, off by default, that brings back its Done and C
 _Avoid_: Show done, history toggle
 
 **Columns ▾**:
-The Board view's menu that shows or hides each State's column. It is kept in the URL as `hide=` and per browser.
+The Board view's menu that shows or hides each State's column and the Needs Me column. It is kept in the URL as `hide=` and per browser.
 _Avoid_: Column filter, column picker
 
 **Spec row**:
@@ -369,15 +372,15 @@ The one row the UI lists a Ticket in, in the State lists, All Tickets, Needs Me,
 _Avoid_: Ticket line, State row
 
 **Ticket card**:
-A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, then the title, then its Spec's kind and title outside a lane. It pulses when it joins its column or its Ticket changes. Clicking it opens its Focus popup or Ticket popup.
+A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, then the title, then its Spec's kind and title outside a lane. In the Needs Me column it also shows its State chip and Needs Me reason. It pulses when it joins its column (the Needs Me column too) or its Ticket changes. Clicking it opens its Focus popup or Ticket popup.
 _Avoid_: Board card, Ticket tile
 
 **Focus Pop-up**:
-The Option that has the Focus popup open by itself, with the whole Needs Me queue in scope, on every view but Focus Mode, Options and Project Options, when a view loads with Focus Items or a new Focus Item arrives. Off unless the human turns it on.
+The Option that has the Focus popup open by itself, with every Focus Item in Needs Me in scope, on every view but Focus Mode, Options and Project Options, when a view loads with Focus Items or a new Focus Item arrives. A Needs Me reason its Project's Focus Kinds leave off neither opens it nor shows in it. Off unless the human turns it on.
 _Avoid_: auto popup, needs-me popup, auto focus
 
 **Focus popup**:
-A popup showing Focus Items one at a time in the view Focus Mode also uses. It shows either a Board Ticket card's Ticket's Focus Items (its CI item's, for a Ticket listed in one) or, under Focus Pop-up, every Focus Item in the view's scope, with Skip and N left. It opens by itself only once no other popup is open and no text field has focus. It closes once none is left, whoever dealt with them, or, under Focus Pop-up, once only skipped ones are.
+A popup showing Focus Items one at a time in the view Focus Mode also uses. It shows either a Board Ticket card's Ticket's Focus Items (its CI item's, for a Ticket listed in one), even of a reason its Project's Focus Kinds leave off, or, under Focus Pop-up, every Focus Item in the view's scope, with Skip and N left. It opens by itself only once no other popup is open and no text field has focus. It closes once none is left, whoever dealt with them, or, under Focus Pop-up, once only skipped ones are.
 _Avoid_: needs-me popup, action popup
 
 **Ticket popup**:
@@ -441,8 +444,12 @@ A view showing the human one Focus Item at a time from Needs Me, moving to the n
 _Avoid_: Zen mode, queue view
 
 **Focus Item**:
-One thing in Needs Me the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, or a Project's Base diverged or Base missing.
+One thing in Needs Me, of a reason its Project's Focus Kinds leave on, that the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, or a Project's Base diverged or Base missing.
 _Avoid_: Action, card, task
+
+**Focus Kinds**:
+The Project setting naming which Needs Me reasons are Focus Items for that Project. It is set in the Focus section of Project Options, with every reason on by default. A reason left off stays in Needs Me, its count, the needs-you dots and Notifications.
+_Avoid_: focus filter, muted kinds
 
 **Activity Dashboard**:
 What Focus Mode shows when nothing needs the human, unless the human has chosen All clear. The Inbox's Activity link, in its Admin section, also opens it in a view of its own, whatever needs the human, for the Project the Inbox has chosen (All Projects when none) and with a Project selector and a Back button. It shows how many Tickets are Ready and In Progress, and lists the In Progress Tickets. When a Project in its scope that isn't Archived has CI Tracking on, a CI Running block also counts the CI Runs still going that count towards a Ticket's CI result, and a CI Running list below the In Progress Tickets lists them, or says "No CI Runs running". Each entry shows the run's workflow, Ticket, branch, short commit and how long it has been going, opens its Ticket in the Inbox and carries the run's GitHub link. A count pulses when it changes, and an entry pulses when its Ticket changes.

@@ -44,6 +44,8 @@ type projectFile struct {
 	ReportedModels *reportedModelsFile `yaml:"reported_models,omitempty"`
 	// StageGuides is left out while every optional line is on.
 	StageGuides *stageGuidesFile `yaml:"stage_guides,omitempty"`
+	// FocusKindsOff is left out while every Needs Me reason is on.
+	FocusKindsOff []string `yaml:"focus_kinds_off,omitempty"`
 	// CIResponses is left out while there are none.
 	CIResponses []ciResponseFile `yaml:"ci_responses,omitempty"`
 	// CIFixesSpec is the CI Fixes Spec's number, left out until it exists.
@@ -591,7 +593,7 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
 			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models),
-			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, AutoAccept: encodeAutoAccept(r.AutoAccept)})
+			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, AutoAccept: encodeAutoAccept(r.AutoAccept)})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath})
@@ -750,6 +752,27 @@ func encodeStageGuides(g StageGuides) *stageGuidesFile {
 		return nil
 	}
 	return &stageGuidesFile{SubagentExplorationOff: g.SubagentExplorationOff, ModelAssignmentOn: g.ModelAssignmentOn}
+}
+
+// decodeFocusKindsOff checks off as load does: each a Needs Me reason,
+// once. It returns them in NeedsMeReasons order, with the offending
+// field, relative to focus_kinds_off, with the error.
+func decodeFocusKindsOff(off []string) ([]string, string, error) {
+	var out []string
+	for i, r := range off {
+		field := fmt.Sprintf("[%d]", i)
+		if !slices.Contains(NeedsMeReasons, r) {
+			return nil, field, fmt.Errorf("unknown Needs Me reason %q (%s)", r, strings.Join(NeedsMeReasons, ", "))
+		}
+		if slices.Contains(out, r) {
+			return nil, field, fmt.Errorf("%q a second time", r)
+		}
+		out = append(out, r)
+	}
+	slices.SortFunc(out, func(a, b string) int {
+		return slices.Index(NeedsMeReasons, a) - slices.Index(NeedsMeReasons, b)
+	})
+	return out, "", nil
 }
 
 // encodeModels leaves Models out of project.yaml while it sets nothing,

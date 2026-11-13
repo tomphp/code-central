@@ -121,7 +121,10 @@ describe("the Board's columns", () => {
     renderApp(world(), "/?view=board&project=acme");
     await loaded();
     await userEvent.click(columnsButton());
-    expect(within(board()).getAllByRole("checkbox")).toEqual(STATES.map((s) => within(board()).getByRole("checkbox", { name: s })));
+    expect(within(board()).getAllByRole("checkbox")).toEqual(
+      STATES.flatMap((s) => [within(board()).getByRole("checkbox", { name: s }), ...(s === "In Progress" ? [within(board()).getByRole("checkbox", { name: "Needs Me" })] : [])]),
+    );
+    expect(within(board()).getByRole("checkbox", { name: "Needs Me" })).not.toBeChecked();
     expect(within(board()).getByRole("checkbox", { name: "Done" })).not.toBeChecked();
     expect(within(board()).getByRole("checkbox", { name: "Ready" })).toBeChecked();
 
@@ -573,6 +576,20 @@ describe("the Board's Focus popup", () => {
     expect(screen.queryByRole("dialog", { name: "Ticket popup" })).toBeNull();
   });
 
+  it("still opens from a card, with its item and needs-you dot, when its Project's Focus Kinds leave the reason off", async () => {
+    const fake = world();
+    fake.updateTicket("acme-3", { state: "Answered" });
+    fake.setNeedsMe([{ reason: "answered", tickets: [{ id: "acme-3", since: at(7) }] }]);
+    await fake.setFocusKinds("acme", ["answered"]);
+    renderApp(fake, "/?view=board&project=acme");
+    await loaded();
+    expect(within(card("Sign-up page")).getByRole("img", { name: "Needs you" })).toBeInTheDocument();
+    await userEvent.click(within(card("Sign-up page")).getByText("Sign-up page"));
+    expect(within(await item()).getByRole("heading", { name: "Sign-up page" })).toBeInTheDocument();
+    expect(window.location.search).toBe("?view=board&project=acme&popup=acme-3");
+    expect(screen.queryByRole("dialog", { name: "Ticket popup" })).toBeNull();
+  });
+
   it("gives focus back to the card when it closes", async () => {
     renderApp(asking(), "/?view=board&project=acme");
     await loaded();
@@ -881,5 +898,181 @@ describe("+ New ▾ on the Board", () => {
     expect(q.get("view")).toBe("inbox");
     expect(q.get("project")).toBe("acme");
     expect(q.get("ticket")).toBe("acme-8");
+  });
+});
+
+describe("the Board's Needs Me column", () => {
+  const needsOn = "/?view=board&project=acme&needs=1";
+  const needsCol = () => within(board()).getByRole("region", { name: "Needs Me" });
+  const needsTitles = () => within(needsCol()).queryAllByRole("link").map((c) => c.querySelector(".board-card-title")?.textContent);
+  // needing: Sign-up page (In Progress) and Login form (Ready) need the human, in that order.
+  function needing() {
+    const fake = world();
+    fake.setNeedsMe([
+      { reason: "needs_answer", tickets: [{ id: "acme-3" }] },
+      { reason: "in_review", tickets: [{ id: "acme-2" }] },
+    ]);
+    return fake;
+  }
+
+  it("is off by default: no column, the address untouched, and its checkbox after In Progress", async () => {
+    renderApp(needing(), "/?view=board&project=acme");
+    await loaded();
+    expect(heads()).not.toContain("Needs Me 2");
+    expect(within(board()).queryByRole("region", { name: "Needs Me" })).toBeNull();
+    expect(window.location.search).toBe("?view=board&project=acme");
+    expect(columnsButton()).toHaveTextContent("Columns · 8/10");
+  });
+
+  it("is shown with Columns ▾, kept in the address and the browser, and doesn't change the N/M count", async () => {
+    const fake = needing();
+    const { unmount } = renderApp(fake, "/?view=board&project=acme");
+    await loaded();
+    await userEvent.click(columnsButton());
+    await userEvent.click(within(board()).getByRole("checkbox", { name: "Needs Me" }));
+    expect(new URLSearchParams(window.location.search).get("needs")).toBe("1");
+    expect(heads()).toEqual(["Draft 0", "Ready 1", "In Progress 0", "Needs Me 2", "Needs Answer 0", "Answered 0", "Failed 0", "In Review 0", "Accepted 0"]);
+    expect(columnsButton()).toHaveTextContent("Columns · 8/10");
+    unmount();
+
+    renderApp(fake, "/?view=board&project=acme");
+    await loaded();
+    expect(heads()).toContain("Needs Me 2");
+
+    await userEvent.click(columnsButton());
+    await userEvent.click(within(board()).getByRole("checkbox", { name: "Needs Me" }));
+    expect(new URLSearchParams(window.location.search).get("needs")).toBe("0");
+    expect(heads()).not.toContain("Needs Me 2");
+  });
+
+  it("follows the address over the browser, and old hide= addresses open without it", async () => {
+    localStorage.setItem("code-central.board.needs", "1");
+    const fake = needing();
+    const { unmount } = renderApp(fake, "/?view=board&project=acme&needs=0");
+    await loaded();
+    expect(heads().some((h) => h?.startsWith("Needs Me"))).toBe(false);
+    unmount();
+    localStorage.clear();
+    renderApp(fake, "/?view=board&project=acme&hide=Done");
+    await loaded();
+    expect(heads().some((h) => h?.startsWith("Needs Me"))).toBe(false);
+  });
+
+  it("holds needing Tickets in Needs Me's order, out of their State columns, with State chip and reason", async () => {
+    renderApp(needing(), needsOn);
+    await loaded();
+    expect(needsTitles()).toEqual(["Sign-up page", "Login form"]);
+    expect(cards("Ready").map((c) => c.textContent)).not.toContain("Login form");
+    expect(titles("Ready")).toEqual(["Password reset"]);
+    const [first, second] = within(needsCol()).getAllByRole("link");
+    expect(first).toHaveTextContent("In Progress");
+    expect(first).toHaveTextContent("Questions");
+    expect(second).toHaveTextContent("Ready");
+    expect(second).toHaveTextContent("In Review");
+    expect(within(column("Ready")).getByRole("link")).not.toHaveTextContent("Questions");
+    expect(within(board()).getByRole("heading", { name: "Needs Me 2" })).toBeInTheDocument();
+  });
+
+  it("lists a CI item's Tickets, and not Base diverged", async () => {
+    const fake = world();
+    const spec = { id: "acme-1", title: "Login" };
+    fake.addTicket("acme", { title: "Basket", state: "Accepted", spec, branch: "acme-7", commit: "abc", created: at(7), updated: at(7) });
+    await failCI(fake, "acme", ["acme-7"]);
+    renderApp(fake, needsOn);
+    await loaded();
+    await waitFor(() => expect(needsTitles()).toEqual(["Basket"]));
+    expect(within(needsCol()).getByRole("link")).toHaveTextContent("CI failed");
+  });
+
+  it("shows a needing Ticket whose State column is hidden, and no other Ticket of it", async () => {
+    const fake = needing();
+    fake.setNeedsMe([{ reason: "in_review", tickets: [{ id: "acme-4" }] }]);
+    renderApp(fake, `${needsOn}&hide=Done,Cancelled,Ready`);
+    await within(board()).findByRole("link", { name: /Old work/ });
+    expect(needsTitles()).toEqual(["Old work"]);
+    expect(within(board()).queryByRole("region", { name: "Ready" })).toBeNull();
+    expect(within(board()).queryByRole("link", { name: /Dropped/ })).toBeNull();
+  });
+
+  it("follows the Projects picker", async () => {
+    const fake = needing();
+    fake.setNeedsMe([
+      { reason: "needs_answer", tickets: [{ id: "acme-3" }, { id: "beta-1" }] },
+    ]);
+    renderApp(fake, "/?view=board&needs=1");
+    await within(board()).findByRole("link", { name: /Beta export/ });
+    expect(needsTitles()).toEqual(["Sign-up page", "Beta export"]);
+    await userEvent.selectOptions(within(board()).getByRole("combobox", { name: "Projects" }), "acme");
+    await waitFor(() => expect(needsTitles()).toEqual(["Sign-up page"]));
+  });
+
+  it("reads Nothing needs you when empty", async () => {
+    renderApp(world(), needsOn);
+    await loaded();
+    expect(needsCol()).toHaveTextContent("Nothing needs you");
+  });
+
+  it("opens a card's Focus popup on click", async () => {
+    renderApp(needing(), needsOn);
+    await loaded();
+    await userEvent.click(within(needsCol()).getByRole("link", { name: /Sign-up page/ }));
+    expect(await screen.findByRole("dialog", { name: "Focus popup" })).toBeInTheDocument();
+  });
+
+  it("moves a card in and out live, pulsing on joining even with no Ticket update", async () => {
+    const fake = world();
+    renderApp(fake, needsOn);
+    await loaded();
+    expect(needsTitles()).toEqual([]);
+    fake.setNeedsMe([{ reason: "ci_failed", tickets: [{ id: "acme-3" }] }]);
+    await act(async () => fake.emit({ type: "ticket.changed", project: "acme", id: "acme-3" }));
+    await waitFor(() => expect(needsTitles()).toEqual(["Sign-up page"]));
+    expect(within(needsCol()).getByRole("link")).toHaveAttribute("data-pulsing", "true");
+    expect(titles("In Progress")).toEqual([]);
+
+    fake.setNeedsMe([]);
+    await act(async () => fake.emit({ type: "ticket.changed", project: "acme", id: "acme-3" }));
+    await waitFor(() => expect(titles("In Progress")).toEqual(["Sign-up page"]));
+    expect(needsTitles()).toEqual([]);
+  });
+
+  it("doesn't pulse when the column is just shown", async () => {
+    renderApp(needing(), "/?view=board&project=acme");
+    await loaded();
+    await userEvent.click(columnsButton());
+    await userEvent.click(within(board()).getByRole("checkbox", { name: "Needs Me" }));
+    expect(within(needsCol()).getAllByRole("link").filter((c) => c.hasAttribute("data-pulsing"))).toEqual([]);
+  });
+
+  describe("By Spec", () => {
+    it("has a cell per lane, a collapsed lane's count, and a lane for a Spec with only a hidden needing Ticket", async () => {
+      const fake = needing();
+      fake.setNeedsMe([
+        { reason: "needs_answer", tickets: [{ id: "acme-3" }] },
+        { reason: "in_review", tickets: [{ id: "acme-4" }] },
+      ]);
+      const other = fake.addSpec("acme", { title: "Archive" }); // acme-7
+      fake.addTicket("acme", { title: "Cold storage", state: "Done", spec: { id: other.id, title: other.title }, created: at(9), updated: at(9) }); // acme-8
+      fake.setNeedsMe([
+        { reason: "needs_answer", tickets: [{ id: "acme-3" }] },
+        { reason: "in_review", tickets: [{ id: "acme-8" }] },
+      ]);
+      renderApp(fake, `${needsOn}&group=spec`);
+      await loaded();
+      const lanes = within(board()).getAllByRole("group", { name: /^Lane: / });
+      expect(lanes.map((l) => l.getAttribute("aria-label"))).toEqual(["Lane: Archive", "Lane: Login"]);
+      const login = within(board()).getByRole("group", { name: "Lane: Login" });
+      expect(within(within(login).getByRole("region", { name: "Needs Me" })).getAllByRole("link")).toHaveLength(1);
+      await userEvent.click(within(login).getByRole("button", { name: "Login" }));
+      expect(within(within(login).getByRole("region", { name: "Needs Me" })).getByText("1")).toBeInTheDocument();
+    });
+  });
+
+  it("counts needing Tickets in hidden States in the Board link while the browser has it on", async () => {
+    localStorage.setItem("code-central.board.needs", "1");
+    const fake = world();
+    fake.setNeedsMe([{ reason: "in_review", tickets: [{ id: "acme-4" }] }]);
+    renderApp(fake, "/?view=inbox&project=acme");
+    await waitFor(() => expect(boardLink()).toHaveTextContent("Board 4"));
   });
 });

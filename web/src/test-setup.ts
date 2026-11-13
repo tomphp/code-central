@@ -14,4 +14,7 @@ configure({ asyncUtilTimeout: 5000 });
 afterEach(() => {
   cleanup();
   window.history.replaceState(null, "", "/");
+  // Files share their worker's jsdom (isolate: false), so what one stores,
+  // such as the Board's column choices, must not reach the next.
+  localStorage.clear();
 });
