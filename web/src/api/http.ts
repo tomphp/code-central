@@ -64,8 +64,13 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       const qs = q.toString();
       return call("GET", `${p(project)}/specs${qs ? `?${qs}` : ""}`);
     },
-    submitRequirement: (project, text, map, draft) =>
-      call("POST", `${p(project)}/submit_requirement`, { text, ...(map && { map }), ...(draft && { draft }) }),
+    submitRequirement: (project, text, map, skipGrilling, draft) =>
+      call("POST", `${p(project)}/submit_requirement`, {
+        text,
+        ...(map && { map }),
+        ...(skipGrilling && { skip_grilling: true }),
+        ...(draft && { draft }),
+      }),
     submitMap: (project, text, draft) => call("POST", `${p(project)}/submit_map`, { text, ...(draft && { draft }) }),
     submitPrototype: (project, spec, text) => call("POST", `${p(project)}/submit_prototype`, { spec, text }),
     submitSmallChange: (project, text, draft) =>

@@ -34,6 +34,26 @@ describe("New requirement", () => {
     expect(params().get("requirement")).toBe("acme-1");
   });
 
+  it("offers Straight to Spec, off by default, and submits it skipping Grilling", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    renderApp(fake);
+
+    await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
+    const modal = screen.getByRole("dialog", { name: "New requirement" });
+    const box = within(modal).getByRole("checkbox", { name: "Straight to Spec (no grilling)" });
+    expect(box).not.toBeChecked();
+    expect(within(modal).getByText(/Grilling, Spec and Tickets Stages/)).toBeInTheDocument();
+    await userEvent.click(box);
+    expect(within(modal).getByText("Creates a Spec and its Spec and Tickets Stages. A Factory picks up Spec.")).toBeInTheDocument();
+    await userEvent.type(within(modal).getByRole("textbox", { name: "Requirement" }), "Dark mode");
+    await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(await within(detail()).findByText(/Grilling/)).toBeInTheDocument();
+    expect(fake.calls).toContain("submitRequirement");
+  });
+
   it("saves as Draft: Save as Draft writes every Stage Ticket as Draft", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
@@ -128,6 +148,21 @@ const pane = () => within(detail()).getByRole("region", { name: "Requirement" })
 const segment = (name: RegExp) => within(within(pane()).getByRole("list", { name: "Stages" })).getByRole("button", { name });
 
 describe("the Requirement pane", () => {
+  it("shows Grilling skipped and Spec current for a Requirement submitted Straight to Spec", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    await fake.submitRequirement("acme", "Export a Spec as Markdown", undefined, true);
+    renderApp(fake, "/?view=inbox&requirement=acme-1");
+
+    await within(detail()).findByRole("region", { name: "Requirement" });
+    const strip = within(within(pane()).getByRole("list", { name: "Stages" }));
+    expect(strip.getByText("Grilling").closest("li")).toHaveAttribute("data-progress", "skipped");
+    expect(strip.queryByText("Map")).toBeNull();
+    expect(segment(/^Spec/).closest("li")).toHaveAttribute("data-progress", "queued");
+    expect(segment(/^Spec/).closest("li")).toHaveAttribute("aria-current", "step");
+    expect(within(pane()).getByText("Waiting for a Factory to claim Spec. Nothing needs you yet.")).toBeInTheDocument();
+  });
+
   it("shows the header and strip, a queued Stage dashed, while the Requirement waits for a Factory", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");

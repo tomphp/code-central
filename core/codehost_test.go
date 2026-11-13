@@ -42,7 +42,7 @@ func TestPullRequestIsRefusedWithAFixWhenNoPushRemoteURLWasReported(t *testing.T
 func TestPullRequestIsRefusedForAnUnsupportedHost(t *testing.T) {
 	for _, url := range []string{"git@gitlab.com:acme/web.git", "https://github.example.com/acme/web.git", "https://dev.azure.com/acme/web"} {
 		f := newFixture(t)
-	f.project(t, "acme")
+		f.project(t, "acme")
 		f.pushRemote(t, url)
 		_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
 		if e, ok := err.(*core.Error); !ok || e.Code != core.Invalid || e.Fix == "" {
@@ -63,7 +63,7 @@ func TestPullRequestWorksOutTheCodeHostFromTheReportedURL(t *testing.T) {
 		{"acme@vs-ssh.visualstudio.com:v3/acme/shop/web", "azure_repos", "acme/shop/web"},
 	} {
 		f := newFixture(t)
-	f.project(t, "acme")
+		f.project(t, "acme")
 		f.pushRemote(t, c.url)
 		v, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest, Push: false, Remote: "origin"})
 		if err != nil {

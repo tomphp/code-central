@@ -1083,24 +1083,25 @@ export class FakeApi implements Api {
     );
   }
 
-  async submitRequirement(project: string, text: string, map?: string, draft?: boolean): Promise<SubmitRequirementResult> {
+  async submitRequirement(project: string, text: string, map?: string, skipGrilling?: boolean, draft?: boolean): Promise<SubmitRequirementResult> {
     this.calls.push("submitRequirement");
     this.writable(project);
     const title = text.trim().split("\n")[0].trim();
     if (!title) throw new ApiError(422, "invalid", "a Requirement needs text; its first line becomes the Spec's title", "text");
+    if (skipGrilling && map) throw new ApiError(422, "invalid", "skip_grilling can't be given with map: a Requirement written from a Map has no grilling Stage already", "skip_grilling");
     if (draft && map) throw new ApiError(422, "invalid", "Write the Spec, a Requirement made from a Map, is saved as Ready only", "draft");
     const from = map && this.finishedMap(project, map);
-    const { spec, stages } = this.addRequirement(project, { title, body: text, ...(from && { tags: { map: from } }) }, from, draft);
+    const { spec, stages } = this.addRequirement(project, { title, body: text, ...(from && { tags: { map: from } }) }, from, skipGrilling, draft);
     return { spec: acknowledgeSpecCreate(spec), stages: stages.map(acknowledgeTicketCreate) };
   }
 
   // addRequirement writes Spec seed as a Requirement with its Stage
   // Tickets: only the spec and tickets Stages when written from Map from.
-  private addRequirement(project: string, seed: SeedSpec, from?: string, draft?: boolean): { spec: SpecView; stages: TicketView[] } {
+  private addRequirement(project: string, seed: SeedSpec, from?: string, skipGrilling?: boolean, draft?: boolean): { spec: SpecView; stages: TicketView[] } {
     const spec = this.addSpec(project, seed);
     const title = seed.title;
     const stages: TicketView[] = [];
-    for (const s of from ? STAGES.slice(1) : STAGES) {
+    for (const s of from || skipGrilling ? STAGES.slice(1) : STAGES) {
       const prev = stages.at(-1);
       stages.push(
         this.addTicket(project, {
@@ -1111,7 +1112,9 @@ export class FakeApi implements Api {
           description:
             from && s.name === "spec"
               ? `Write the Spec for the Requirement in Spec [${spec.id}](${spec.id}), from its text and the Map [${from}](${from}): its Decisions so far and the resolution comments they link.\n`
-              : `The ${s.title} Stage of [${spec.id}](${spec.id}).\n`,
+              : skipGrilling && s.name === "spec"
+                ? `Write the Spec for the Requirement in Spec [${spec.id}](${spec.id}), from its text.\n`
+                : `The ${s.title} Stage of [${spec.id}](${spec.id}).\n`,
           blocked_by: prev ? [prev.id] : [],
           blockers: prev ? [{ id: prev.id, title: prev.title, state: prev.state, cleared: false }] : [],
           blocked: !!prev,

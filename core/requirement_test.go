@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"errors"
 	"reflect"
 	"slices"
 	"strings"
@@ -169,6 +170,43 @@ func TestSubmittingARequirementWithFullReturnsTheSpecAndStages(t *testing.T) {
 		if st["state"] != "Ready" || !reflect.DeepEqual(st["labels"], []any{label}) || st["moves"] == nil {
 			t.Fatalf("stage %d: %v", i, st)
 		}
+	}
+}
+
+func TestStraightToSpecCreatesOnlyTheSpecAndTicketsStages(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, SkipGrilling: true, Full: true})
+	if err != nil {
+		t.Fatalf("submit_requirement: %v", err)
+	}
+	if len(res.Stages) != 2 {
+		t.Fatalf("stages: %+v", res.Stages)
+	}
+	spec, tickets := res.Stages[0].Record, res.Stages[1].Record
+	if spec == nil || tickets == nil {
+		t.Fatalf("stages %+v", res.Stages)
+	}
+	if spec.State != store.Ready || len(tickets.BlockedBy) != 1 {
+		t.Fatalf("stages: %+v %+v", spec, tickets)
+	}
+	want := "Write the Spec for the Requirement in Spec [acme-1](acme-1), from its text.\n"
+	if spec.Description != want {
+		t.Fatalf("description %q, want %q", spec.Description, want)
+	}
+	sp, _ := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
+	if _, ok := sp.Tags[core.MapTag]; ok {
+		t.Fatalf("tags %v", sp.Tags)
+	}
+}
+
+func TestStraightToSpecCannotBeGivenWithAMap(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	_, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: darkMode, SkipGrilling: true, Map: "acme-1"})
+	var e *core.Error
+	if !errors.As(err, &e) || e.Code != core.Invalid || !strings.Contains(e.Message, "map") {
+		t.Fatalf("err %v", err)
 	}
 }
 

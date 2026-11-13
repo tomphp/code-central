@@ -141,6 +141,7 @@ describe("+ New ▾ in Focus Mode's header", () => {
     await userEvent.click(item("Map"));
     expect(screen.queryByRole("menu")).toBeNull();
     expect(screen.getByRole("dialog", { name: "New Map" })).toBeVisible();
+    expect(within(screen.getByRole("dialog")).queryByRole("checkbox")).toBeNull();
   });
 
   it("opens no modal on a key: there's no shortcut for + New", async () => {

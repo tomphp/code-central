@@ -31,7 +31,7 @@ const (
 // included, by Stage.
 var guideBudgets = map[string]int{
 	"grilling":       4200,
-	"spec":           3450,
+	"spec":           3600,
 	"tickets":        3700, // with Model Assignment on and aliases reported
 	"implementation": 3500,
 	"map-chart":      4000,

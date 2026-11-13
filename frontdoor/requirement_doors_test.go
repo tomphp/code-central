@@ -148,3 +148,26 @@ func TestTheSubmitRequirementCommandReadsTheTextFromAFile(t *testing.T) {
 	sp, _ := out["spec"].(map[string]any)
 	field("title", "Export to CSV")(t, sp)
 }
+
+// Straight to Spec (code-central-502): every door takes skip_grilling and
+// refuses it with map.
+func TestEveryDoorSubmitsAStraightToSpecRequirement(t *testing.T) {
+	srv := newServer(t)
+	s := connect(t, srv, "acme")
+	mcpRejected(t, s, "submit_requirement", map[string]any{"text": "Dark mode", "skip_grilling": true, "map": "acme-1"}, core.Invalid)
+	written := map[string]map[string]any{
+		"mcp":  mcpOK(t, s, "submit_requirement", map[string]any{"text": "Dark mode", "skip_grilling": true, "full": true}),
+		"http": httpOK(t, srv, httpCall{"POST", "/api/p/acme/submit_requirement", `{"text":"Dark mode","skip_grilling":true,"full":true}`}),
+		"cli":  cliOK(t, srv, []string{"submit-requirement", "--text", "Dark mode", "--skip-grilling", "--full"}),
+	}
+	for door, out := range written {
+		t.Run(door, func(t *testing.T) {
+			stages, _ := out["stages"].([]any)
+			if len(stages) != 2 {
+				t.Fatalf("stages %v", out["stages"])
+			}
+			labels("stage:spec")(t, stages[0].(map[string]any))
+			labels("stage:tickets")(t, stages[1].(map[string]any))
+		})
+	}
+}

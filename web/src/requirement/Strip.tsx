@@ -3,7 +3,8 @@
 // dashed. With onPick its segments are buttons that select the segment's
 // Ticket; without, it is a picture only (inside a row link). A Requirement
 // made from a Map has a done Map segment in place of Grilling, a link to
-// the Map with mapLink.
+// the Map with mapLink. One with neither a Grilling Stage nor a Map
+// (Straight to Spec) has a skipped Grilling segment, a picture only.
 import type { Link } from "../url";
 import type { Progress, Segment } from "./progress";
 
@@ -44,7 +45,7 @@ export function Strip({ p, onPick, current, mapLink }: StripProps) {
               <a {...mapLink(s.map)} title={`${s.name} ${s.map}: ${PROGRESS_TITLE[s.progress]}`}>
                 {label}
               </a>
-            ) : onPick && !s.map ? (
+            ) : onPick && !s.map && (s.ticket || s.stage === "build") ? (
               <button type="button" disabled={!s.ticket && !p.build.length} onClick={() => onPick(s)} title={segmentTitle(s)}>
                 {label}
               </button>

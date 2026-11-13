@@ -40,6 +40,9 @@ type SubmitRequirementInput struct {
 	// Map is the finished Map the Requirement is written from, if any
 	// (Write the Spec): its Decisions take the grilling Stage's place.
 	Map Ref `json:"map,omitempty"`
+	// SkipGrilling is Straight to Spec: no grilling Stage, so the spec
+	// Stage works from the text alone. It can't be given with Map.
+	SkipGrilling bool `json:"skip_grilling,omitempty"`
 	// Full asks for the Spec and Stage Tickets in place of their
 	// Acknowledgements.
 	Full bool `json:"full,omitempty"`
@@ -65,6 +68,10 @@ var stageTickets = map[string]struct{ title, description string }{
 	"tickets":  {"Tickets", "Slice the Spec [%[1]s](%[1]s) into implementation Tickets.\n"},
 }
 
+// straightSpecDescription is the spec Stage's description on a Requirement
+// with no grilling Stage and no Map, given the Spec's ID.
+const straightSpecDescription = "Write the Spec for the Requirement in Spec [%[1]s](%[1]s), from its text.\n"
+
 // MapTag is the Tag on a Requirement made from a Map, whose value is the
 // Map's ID.
 const MapTag = "map"
@@ -73,13 +80,16 @@ const MapTag = "map"
 // from a Map, given the Spec's ID and the Map's.
 const mapSpecDescription = "Write the Spec for the Requirement in Spec [%[1]s](%[1]s), from its text and the Map [%[2]s](%[2]s): its Decisions so far and the resolution comments they link.\n"
 
-// SubmitRequirement is submit_requirement(text, map?). It writes as human
+// SubmitRequirement is submit_requirement(text, map?, skip_grilling?). It writes as human
 // whoever calls, all its records or none. With map, the Requirement has
 // only the spec and tickets Stages, and its map Tag names the Map.
 func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequirementInput) (SubmitRequirementResult, error) {
 	title := titleLine(in.Text)
 	if title == "" {
 		return SubmitRequirementResult{}, invalid("text", "a Requirement needs text; its first line becomes the Spec's title")
+	}
+	if in.SkipGrilling && in.Map != "" {
+		return SubmitRequirementResult{}, invalid("skip_grilling", "skip_grilling can't be given with map: a Requirement written from a Map has no grilling Stage already")
 	}
 	if in.Draft && in.Map != "" {
 		return SubmitRequirementResult{}, invalid("draft", "Write the Spec, a Requirement made from a Map, is saved as Ready only")
@@ -90,6 +100,9 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 			return err
 		}
 		stages, mapID := Stages, ""
+		if in.SkipGrilling {
+			stages = Stages[1:]
+		}
 		if in.Map != "" {
 			m, err := finishedMap(w, key, in.Map)
 			if err != nil {
@@ -132,6 +145,8 @@ func (c *Core) requirementImport(r store.Reader, key string, sp store.Spec, stag
 		description := fmt.Sprintf(stageTickets[stage].description, specID)
 		if stage == "spec" && mapID != "" {
 			description = fmt.Sprintf(mapSpecDescription, specID, mapID)
+		} else if stage == "spec" && stages[0] == "spec" {
+			description = fmt.Sprintf(straightSpecDescription, specID)
 		}
 		im.Tickets = append(im.Tickets, store.Ticket{
 			Number: n, Title: stageTickets[stage].title + ": " + sp.Title, State: submitState(draft), Spec: specN,
