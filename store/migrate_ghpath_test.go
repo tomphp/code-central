@@ -32,7 +32,7 @@ func TestTheRealChainMigratesAFormat9StoreToTheGHPathFormat(t *testing.T) {
 		t.Errorf("store.yaml = %q", got)
 	}
 	s.View(func(r store.Reader) error {
-		if got, want := r.Options(), (store.Options{FocusClear: store.FocusAllClear}); got != want {
+		if got, want := r.Options(), (store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff}); got != want {
 			t.Errorf("options after migrating = %+v, want %+v", got, want)
 		}
 		return nil

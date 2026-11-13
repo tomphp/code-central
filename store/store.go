@@ -709,10 +709,38 @@ var FocusClears = []FocusClear{FocusActivityDashboard, FocusAllClear}
 // Valid reports whether f is one of the FocusClears.
 func (f FocusClear) Valid() bool { return slices.Contains(FocusClears, f) }
 
+// FocusPopup is whether a popup shows each new Focus Item on every view
+// but Focus Mode, Options and Project Options.
+type FocusPopup string
+
+// The two values of the Focus Pop-up Option.
+const (
+	FocusPopupOff FocusPopup = "off"
+	FocusPopupOn  FocusPopup = "on"
+)
+
+// FocusPopups lists every FocusPopup, the default first.
+var FocusPopups = []FocusPopup{FocusPopupOff, FocusPopupOn}
+
+// Valid reports whether f is one of the FocusPopups.
+func (f FocusPopup) Valid() bool { return slices.Contains(FocusPopups, f) }
+
+// FocusPopupNames is the FocusPopups as strings, for messages and the
+// schema.
+func FocusPopupNames() []string {
+	var out []string
+	for _, f := range FocusPopups {
+		out = append(out, string(f))
+	}
+	return out
+}
+
 // Options are the human's global preferences, set from the UI's Options
 // view. They are the store's one record that belongs to no Project.
 type Options struct {
 	FocusClear FocusClear
+	// FocusPopup is the Focus Pop-up Option.
+	FocusPopup FocusPopup
 	// GHPath is where gh, the GitHub CLI, is: the gh path Option. Empty
 	// finds it on the service's PATH, then in the usual install places.
 	GHPath string
@@ -720,7 +748,7 @@ type Options struct {
 
 // DefaultOptions are the Options of a store that has never had any
 // written.
-func DefaultOptions() Options { return Options{FocusClear: FocusClears[0]} }
+func DefaultOptions() Options { return Options{FocusClear: FocusClears[0], FocusPopup: FocusPopups[0]} }
 
 // FocusClearNames is the FocusClears as strings, for messages and the
 // schema.

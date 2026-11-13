@@ -1,11 +1,11 @@
 // The Focus Item view: one Focus Item, top to bottom, shared by Focus Mode
-// and the Board's Focus popup. Where it's from, why it waits, then its
-// Question with the answer form, or its reason's panel, and the Base
-// diverged and Base missing fixes. What differs by host is passed in: the
-// Api to act through, and the optional Skip and Open in Inbox.
+// and the Focus popup. Where it's from, why it waits, then its Question
+// with the answer form, or its reason's panel, and the Base diverged and
+// Base missing fixes. What differs by host is passed in: the Api to act
+// through, and the optional Skip and Open in Inbox.
 import type { Api } from "../api/api";
 import type { NeedsMeRow, TicketView } from "../api/types";
-import { duration, REASON_LABEL } from "../format";
+import { duration, REASON_LABEL, ticketOf } from "../format";
 import type { InboxData } from "../live";
 import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
@@ -29,6 +29,20 @@ export interface FocusItemViewProps {
   // inbox is where Open in Inbox goes; no link shows without it, or for an
   // item with no Ticket.
   inbox?: UiLocation;
+}
+
+// inboxOf is where Open in Inbox goes for a row, if it has a Ticket, on
+// the Project in scope: a Stage Ticket opens in its Requirement, with it
+// selected; a CI item opens on the first Ticket it lists.
+export function inboxOf(row: NeedsMeRow, project?: string): UiLocation | undefined {
+  const ticket = ticketOf(row);
+  if (!ticket) return undefined;
+  return {
+    view: "inbox" as const,
+    project,
+    requirement: row.requirement?.stage && row.requirement.spec,
+    ticket,
+  };
 }
 
 // FocusItemView is one Focus Item: where it's from, why it waits, then its

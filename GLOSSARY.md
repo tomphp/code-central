@@ -368,8 +368,12 @@ _Avoid_: Ticket line, State row
 A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, then the title, then its Spec's kind and title outside a lane. It pulses when it joins its column or its Ticket changes. Clicking it opens its Focus popup or Ticket popup.
 _Avoid_: Board card, Ticket tile
 
+**Focus Pop-up**:
+The Option that has the Focus popup open by itself, with the whole Needs Me queue in scope, on every view but Focus Mode, Options and Project Options, when a view loads with Focus Items or a new Focus Item arrives. Off unless the human turns it on.
+_Avoid_: auto popup, needs-me popup, auto focus
+
 **Focus popup**:
-The Board view's popup for a Ticket card whose Ticket needs the human. It shows that Ticket's Focus Items one at a time (its CI item's, for a Ticket listed in one) in the view Focus Mode also uses, and closes once none is left, whoever dealt with them.
+A popup showing Focus Items one at a time in the view Focus Mode also uses. It shows either a Board Ticket card's Ticket's Focus Items (its CI item's, for a Ticket listed in one) or, under Focus Pop-up, every Focus Item in the view's scope, with Skip and N left. It opens by itself only once no other popup is open and no text field has focus. It closes once none is left, whoever dealt with them, or, under Focus Pop-up, once only skipped ones are.
 _Avoid_: needs-me popup, action popup
 
 **Ticket popup**:

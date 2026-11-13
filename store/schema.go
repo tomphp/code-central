@@ -35,6 +35,7 @@ func Schema() string {
 		states = append(states, string(s))
 	}
 	values(fmt.Sprintf("  options focus_clear (default %s)", DefaultOptions().FocusClear), FocusClearNames())
+	values(fmt.Sprintf("  options focus_popup (default %s)", DefaultOptions().FocusPopup), FocusPopupNames())
 	values("  project landing.method (no landing: merge, push false, remote origin)", landingMethodNames())
 	values("  project ci.provider (no ci: tracking off, github_actions)", ciProviderNames())
 	values("  project models.kinds[].kind", ModelKinds)

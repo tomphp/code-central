@@ -1034,17 +1034,23 @@ export type ChangeEvent =
 export const FOCUS_CLEARS = ["activity_dashboard", "all_clear"] as const;
 export type FocusClear = (typeof FOCUS_CLEARS)[number];
 
+// FocusPopup is whether a popup shows each new Focus Item on every view
+// but Focus Mode, Options and Project Options. The default first.
+export const FOCUS_POPUPS = ["off", "on"] as const;
+export type FocusPopup = (typeof FOCUS_POPUPS)[number];
+
 // Options are the human's global preferences, kept by the service
 // (GET /api/options), each at its default until the human changes it.
 export interface Options {
   focus_clear: FocusClear;
+  focus_popup: FocusPopup;
   // gh_path is where gh, the GitHub CLI, is: an absolute path, or "" to
   // find it on the service's PATH, then in the usual install places.
   gh_path: string;
 }
 
 // DEFAULT_OPTIONS are the Options a fresh store reads.
-export const DEFAULT_OPTIONS: Options = { focus_clear: FOCUS_CLEARS[0], gh_path: "" };
+export const DEFAULT_OPTIONS: Options = { focus_clear: FOCUS_CLEARS[0], focus_popup: FOCUS_POPUPS[0], gh_path: "" };
 
 
 // ---- Usage (Spec code-central-201) ----

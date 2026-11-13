@@ -13,6 +13,8 @@ import { UsageView } from "./usage/UsageView";
 import { CIView } from "./ci/CIView";
 import { ActivityView } from "./activity/ActivityView";
 import { BoardView } from "./board/BoardView";
+import { FocusPopup } from "./board/FocusPopup";
+import { usePopupTrigger } from "./focus/popupTrigger";
 
 export interface AppProps {
   api: Api;
@@ -37,64 +39,85 @@ export function App({ api, now = () => new Date() }: AppProps) {
     loc.ticket ?? (requirement ? defaultTicket(progress(requirement.requirement, requirement.tickets, reasons)) : undefined);
   const ticket = useTicket(api, selected && projectOf(selected), selected, version);
   useNeedsMeTitle(inbox.data && needsMeCount(inbox.data.needsMe));
+  // Under Focus Pop-up, the Focus popup opens by itself over the view
+  // showing, scoped to its Project, from the same live Needs Me. Until the
+  // Options first load Focus Pop-up is off; a failed read later keeps the
+  // last one, so an open popup isn't lost to it.
+  const popup = usePopupTrigger({
+    option: options.data?.focus_popup ?? "off",
+    view: loc.view,
+    project: loc.project,
+    needsMe: inbox.data?.needsMe,
+  });
+
+  return (
+    <>
+      {view()}
+      {popup.open && inbox.data && (
+        <FocusPopup mode="queue" api={api} now={now()} version={version} data={inbox.data} project={loc.project} onClose={popup.close} navigate={navigate} />
+      )}
+    </>
+  );
 
   // Each view is a layout over the same live data, the Board included;
   // a later one is another case here, reusing the shared Ticket pane and
   // panels.
-  const banner = inbox.error && <p className="banner">{inbox.error.message}</p>;
-  switch (loc.view) {
-    case "focus":
-      return (
-        <>
-          {banner}
-          <Focus api={api} now={now()} version={version} data={inbox.data} focusClear={focusClear} loc={loc} navigate={navigate} />
-        </>
-      );
-    case "options":
-      return <OptionsView api={api} options={options} loc={loc} navigate={navigate} />;
-    case "usage":
-      return <UsageView api={api} projects={inbox.data?.projects} loc={loc} navigate={navigate} />;
-    case "ci":
-      return <CIView api={api} now={now()} version={version} projects={inbox.data?.projects} loc={loc} navigate={navigate} />;
-    case "activity":
-      return (
-        <>
-          {banner}
-          <ActivityView api={api} now={now()} version={version} data={inbox.data} loc={loc} navigate={navigate} />
-        </>
-      );
-    case "board":
-      return (
-        <>
-          {banner}
-          <BoardView api={api} now={now()} version={version} data={inbox.data} loc={loc} navigate={navigate} />
-        </>
-      );
-    case "project-options":
-      return (
-        <>
-          {banner}
-          <ProjectOptions api={api} now={now()} projects={inbox.data?.projects} project={loc.project} navigate={navigate} />
-        </>
-      );
-    case "inbox":
-      return (
-        <>
-          {banner}
-          <Inbox
-            api={api}
-            now={now()}
-            data={inbox.data}
-            loc={{ ...loc, ticket: selected }}
-            navigate={navigate}
-            requirement={requirement}
-            map={map}
-            spec={plain}
-            requirementError={spec.error && spec.data?.id !== loc.requirement ? spec.error.message : undefined}
-            ticket={ticket.data}
-            ticketError={ticket.error && ticket.data?.id !== selected ? ticket.error.message : undefined}
-          />
-        </>
-      );
+  function view() {
+    const banner = inbox.error && <p className="banner">{inbox.error.message}</p>;
+    switch (loc.view) {
+      case "focus":
+        return (
+          <>
+            {banner}
+            <Focus api={api} now={now()} version={version} data={inbox.data} focusClear={focusClear} loc={loc} navigate={navigate} />
+          </>
+        );
+      case "options":
+        return <OptionsView api={api} options={options} loc={loc} navigate={navigate} />;
+      case "usage":
+        return <UsageView api={api} projects={inbox.data?.projects} loc={loc} navigate={navigate} />;
+      case "ci":
+        return <CIView api={api} now={now()} version={version} projects={inbox.data?.projects} loc={loc} navigate={navigate} />;
+      case "activity":
+        return (
+          <>
+            {banner}
+            <ActivityView api={api} now={now()} version={version} data={inbox.data} loc={loc} navigate={navigate} />
+          </>
+        );
+      case "board":
+        return (
+          <>
+            {banner}
+            <BoardView api={api} now={now()} version={version} data={inbox.data} loc={loc} navigate={navigate} onFocusPopupGone={popup.dismiss} />
+          </>
+        );
+      case "project-options":
+        return (
+          <>
+            {banner}
+            <ProjectOptions api={api} now={now()} projects={inbox.data?.projects} project={loc.project} navigate={navigate} />
+          </>
+        );
+      case "inbox":
+        return (
+          <>
+            {banner}
+            <Inbox
+              api={api}
+              now={now()}
+              data={inbox.data}
+              loc={{ ...loc, ticket: selected }}
+              navigate={navigate}
+              requirement={requirement}
+              map={map}
+              spec={plain}
+              requirementError={spec.error && spec.data?.id !== loc.requirement ? spec.error.message : undefined}
+              ticket={ticket.data}
+              ticketError={ticket.error && ticket.data?.id !== selected ? ticket.error.message : undefined}
+            />
+          </>
+        );
+    }
   }
 }

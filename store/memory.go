@@ -230,6 +230,9 @@ func (w *writer) PutOptions(o Options) error {
 	if !o.FocusClear.Valid() {
 		return fmt.Errorf("%w: focus_clear %q", ErrInvalidOption, o.FocusClear)
 	}
+	if !o.FocusPopup.Valid() {
+		return fmt.Errorf("%w: focus_popup %q", ErrInvalidOption, o.FocusPopup)
+	}
 	if err := w.begin(o, ""); err != nil {
 		return err
 	}
