@@ -205,7 +205,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
 
 Each Project has a **Landing Method**: what the Factory does with an implementation Ticket's branch once you accept it. A new Project starts on **Merge** with **Push** off: the Factory merges the branch into the base locally and lands the Ticket, and nothing leaves the machine. Leave it there unless you want something else.
 
-To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=project-options&project=acme-api`, so you can bookmark it. On a wide screen a menu on the left lists the page's sections (Landing Method, CI, GitHub Issues, Models and Stage Guides) and stays in view as you scroll; choosing an entry jumps to that section. On a narrow screen the menu is hidden. Its **Landing Method** section starts with the **Base branch**, a text field showing the branch the Project's work is cut from and lands on (`main` until you change it; it is saved with the rest of the section, and Save refuses a name git would not accept). Below it are the three methods:
+To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=project-options&project=acme-api`, so you can bookmark it. On a wide screen a menu on the left lists the page's sections (Landing Method, CI, GitHub Issues, Models, Stage Guides and Focus) and stays in view as you scroll; choosing an entry jumps to that section. On a narrow screen the menu is hidden. Its **Landing Method** section starts with the **Base branch**, a text field showing the branch the Project's work is cut from and lands on (`main` until you change it; it is saved with the rest of the section, and Save refuses a name git would not accept). Below it are the three methods:
 
 - **Merge**: the Factory merges the accepted branch into the base and lands the Ticket. The default.
 - **Leave as a branch**: the Factory leaves the branch for you to merge, and lands the Ticket when it sees the merge in the base.
@@ -611,3 +611,7 @@ The service listens only on your machine's loopback, so an agent in a sandbox or
 ```console
 $ code-central help sandboxes
 ```
+
+## Focus
+
+The **Focus** section of the Project Options page, below Stage Guides, has a **Show in Focus** checkbox for each Needs Me reason, all checked to begin with. Uncheck a reason and **Save**: its items stay in Needs Me, its count, its dots and Notifications, but they don't show in Focus Mode or open the Focus popup. An Archived Project shows the section read-only.
