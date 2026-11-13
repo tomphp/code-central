@@ -269,6 +269,13 @@ func (s *FileStore) loadProject(key string) error {
 	p.CIResponses = rs
 	p.CIFixesSpec = pf.CIFixesSpec
 	p.SmallChangesSpec = pf.SmallChangesSpec
+	for i, k := range pf.AutoAccept {
+		kind := AutoAcceptKind(k)
+		if !kind.Valid() {
+			return &LoadError{File: rel, Field: fmt.Sprintf("auto_accept[%d]", i), Msg: fmt.Sprintf("unknown Auto-accept kind %q", k)}
+		}
+		p.SetAutoAccept(kind, true)
+	}
 	s.setProject(p)
 	if err := s.loadCIRuns(key); err != nil {
 		return err

@@ -50,6 +50,9 @@ type projectFile struct {
 	CIFixesSpec int `yaml:"ci_fixes_spec,omitempty"`
 	// SmallChangesSpec is the Small Changes Spec's number, left out until it exists.
 	SmallChangesSpec int `yaml:"small_changes_spec,omitempty"`
+	// AutoAccept is the Auto-accept kinds that are on, left out while
+	// every kind is off.
+	AutoAccept []string `yaml:"auto_accept,omitempty"`
 }
 
 // stageGuidesFile is a Project's Stage Guides settings.
@@ -303,6 +306,7 @@ type moveFile struct {
 	Claim  int    `yaml:"claim,omitempty"`
 	Via    string `yaml:"via,omitempty"`
 	Commit string `yaml:"commit,omitempty"` // a land's commit
+	Cause  string `yaml:"cause,omitempty"`  // an auto-accept's cause
 }
 
 // The fields an edit's previous values may name.
@@ -456,7 +460,10 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		t.Comments = append(t.Comments, cm)
 	}
 	for i, m := range f.Moves {
-		mv := Move{From: State(m.From), To: State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via, Commit: m.Commit}
+		mv := Move{From: State(m.From), To: State(m.To), Actor: m.Actor, Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: AutoAcceptCause(m.Cause)}
+		if mv.Cause != "" && !mv.Cause.Valid() {
+			return Ticket{}, &LoadError{Field: fmt.Sprintf("moves[%d].cause", i), Msg: fmt.Sprintf("unknown auto-accept cause %q", m.Cause)}
+		}
 		field := fmt.Sprintf("moves[%d]", i)
 		if m.From != "" && !mv.From.Valid() {
 			return Ticket{}, &LoadError{Field: field + ".from", Msg: fmt.Sprintf("unknown State %q", m.From)}
@@ -584,7 +591,7 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
 			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models),
-			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec})
+			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, AutoAccept: encodeAutoAccept(r.AutoAccept)})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath})
@@ -651,7 +658,7 @@ func encode(record any, project string) (string, []byte, error) {
 			f.Comments = append(f.Comments, commentFile{Number: c.Number, Actor: c.Actor, Time: formatTime(c.Time), Claim: c.Claim, Body: c.Body})
 		}
 		for _, m := range r.Moves {
-			f.Moves = append(f.Moves, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via, Commit: m.Commit})
+			f.Moves = append(f.Moves, moveFile{From: string(m.From), To: string(m.To), Actor: m.Actor, Time: formatTime(m.Time), Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: string(m.Cause)})
 		}
 		data, err = encodeYAML(f)
 	case CIRuns:
@@ -725,6 +732,15 @@ func encodeGitHubIssues(g GitHubIssues) *githubIssuesFile {
 		return nil
 	}
 	return &githubIssuesFile{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
+}
+
+// encodeAutoAccept is the on kinds as project.yaml holds them.
+func encodeAutoAccept(kinds []AutoAcceptKind) []string {
+	var out []string
+	for _, k := range kinds {
+		out = append(out, string(k))
+	}
+	return out
 }
 
 // encodeStageGuides leaves the Stage Guides settings out of project.yaml

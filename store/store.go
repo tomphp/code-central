@@ -86,7 +86,77 @@ type Project struct {
 	// SmallChangesSpec is the number of the Project's Small Changes Spec, the
 	// Long-lived Spec its Small Changes open on; 0 until the first one.
 	SmallChangesSpec int
+	// AutoAccept is the Project's Auto-accept setting: the kinds it is on
+	// for, in AutoAcceptKinds order (ADR 0037). It is stored as on, so a
+	// Project stored without it reads every kind off (ADR 0034).
+	AutoAccept []AutoAcceptKind
 }
+
+// AutoAcceptKind is an Auto-accept kind: the kind of Ticket a Project's
+// Auto-accept setting is switched on for. A Ticket's kind is worked out
+// on read from what it carries, never stored.
+type AutoAcceptKind string
+
+// The Auto-accept kinds, by their stable keys.
+const (
+	// AutoAcceptGrilling is Grilling outcomes: a grilling Stage.
+	AutoAcceptGrilling AutoAcceptKind = "grilling"
+	// AutoAcceptSpec is Spec recommendation: a spec Stage, accepted by
+	// its Spec recommendation.
+	AutoAcceptSpec AutoAcceptKind = "spec"
+	// AutoAcceptTickets is Tickets Stage: a tickets Stage.
+	AutoAcceptTickets AutoAcceptKind = "tickets"
+	// AutoAcceptImplementation is Implementation results: every Ticket
+	// that is none of the others and not a Prototype or a Map Ticket.
+	AutoAcceptImplementation AutoAcceptKind = "implementation"
+	// AutoAcceptMerge is Merge results: a Spec merge Ticket, by its mark.
+	AutoAcceptMerge AutoAcceptKind = "merge"
+)
+
+// AutoAcceptKinds lists every Auto-accept kind, in the order a Project
+// stores and shows them.
+var AutoAcceptKinds = []AutoAcceptKind{AutoAcceptGrilling, AutoAcceptSpec, AutoAcceptTickets, AutoAcceptImplementation, AutoAcceptMerge}
+
+// Valid reports whether k is one of the Auto-accept kinds.
+func (k AutoAcceptKind) Valid() bool { return slices.Contains(AutoAcceptKinds, k) }
+
+// AutoAccepts reports whether the Project's Auto-accept setting is on
+// for kind k.
+func (p Project) AutoAccepts(k AutoAcceptKind) bool { return slices.Contains(p.AutoAccept, k) }
+
+// SetAutoAccept turns the Project's Auto-accept setting on or off for
+// kind k, keeping AutoAccept in AutoAcceptKinds order.
+func (p *Project) SetAutoAccept(k AutoAcceptKind, on bool) {
+	var out []AutoAcceptKind
+	for _, each := range AutoAcceptKinds {
+		if each == k && on || each != k && p.AutoAccepts(each) {
+			out = append(out, each)
+		}
+	}
+	p.AutoAccept = out
+}
+
+// AutoAcceptCause is why a Move was made by an auto-accept: which switch
+// turned it on. Empty on every other Move.
+type AutoAcceptCause string
+
+// The auto-accept causes, in the order the first that applies is
+// recorded.
+const (
+	// CauseTicketLabel is the auto-accept Label on the Ticket.
+	CauseTicketLabel AutoAcceptCause = "ticket-label"
+	// CauseSpecLabel is the auto-accept Label on the Ticket's Spec.
+	CauseSpecLabel AutoAcceptCause = "spec-label"
+	// CauseProject is the Project's Auto-accept setting for the Ticket's
+	// kind.
+	CauseProject AutoAcceptCause = "project"
+)
+
+// AutoAcceptCauses lists every auto-accept cause.
+var AutoAcceptCauses = []AutoAcceptCause{CauseTicketLabel, CauseSpecLabel, CauseProject}
+
+// Valid reports whether c is one of the auto-accept causes.
+func (c AutoAcceptCause) Valid() bool { return slices.Contains(AutoAcceptCauses, c) }
 
 // StageGuides is a Project's Stage Guides settings (Spec
 // code-central-441), each the opposite of a named optional guide line, so
@@ -423,6 +493,9 @@ type Move struct {
 	Via   string
 	// Commit is the commit that put the work into the base, on a land.
 	Commit string
+	// Cause is why an auto-accept made the Move; empty on every other
+	// Move. Its Actor is still human (ADR 0037).
+	Cause AutoAcceptCause
 }
 
 // Claim is one agent's hold on a Ticket, from the claim until a move out

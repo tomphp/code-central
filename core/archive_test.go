@@ -257,6 +257,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetSubagentExploration(human, "acme", core.SetSubagentExplorationInput{On: false})
 		return err
 	},
+	"set_auto_accept": func(f fixture) error {
+		_, err := f.core.SetAutoAccept(human, "acme", core.SetAutoAcceptInput{Kinds: map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true}})
+		return err
+	},
 	"report_models": func(f fixture) error {
 		_, err := f.core.ReportModels(ctx, "acme", core.ReportModelsInput{EffortLevels: []string{"low"}})
 		return err
