@@ -47,6 +47,8 @@ type projectFile struct {
 	CIResponses []ciResponseFile `yaml:"ci_responses,omitempty"`
 	// CIFixesSpec is the CI Fixes Spec's number, left out until it exists.
 	CIFixesSpec int `yaml:"ci_fixes_spec,omitempty"`
+	// SmallChangesSpec is the Small Changes Spec's number, left out until it exists.
+	SmallChangesSpec int `yaml:"small_changes_spec,omitempty"`
 }
 
 // stageGuidesFile is a Project's Stage Guides settings.
@@ -576,7 +578,7 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
 			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models),
-			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec})
+			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), GHPath: r.GHPath})

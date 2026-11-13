@@ -262,6 +262,7 @@ func (s *FileStore) loadProject(key string) error {
 	}
 	p.CIResponses = rs
 	p.CIFixesSpec = pf.CIFixesSpec
+	p.SmallChangesSpec = pf.SmallChangesSpec
 	s.setProject(p)
 	if err := s.loadCIRuns(key); err != nil {
 		return err

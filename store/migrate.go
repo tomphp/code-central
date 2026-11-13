@@ -71,6 +71,7 @@ var migrations = []MigrationStep{
 	{From: 27, Name: "add a Project's CI responses, one per pushed commit"},
 	{From: 28, Name: "add a Project's CI Fixes Spec and a CI response's fix Ticket"},
 	{From: 29, Name: "add a Project's Model Assignment setting"},
+	{From: 30, Name: "add a Project's Small Changes Spec"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's
