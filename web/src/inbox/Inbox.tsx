@@ -22,7 +22,6 @@ import {
 import { duration, REASON_LABEL, rowDetail, ticketOf } from "../format";
 import { CIBadge } from "../ticket/CIBadge";
 import { PullRequestBadge } from "../ticket/PullRequestBadge";
-import { LinkBadge } from "../ticket/LinkBadge";
 import { PrototypeBadge } from "../ticket/PrototypeBadge";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { MapPane } from "../map/MapPane";
@@ -47,10 +46,10 @@ import { AllTicketsBySpec, AllTicketsByTicket, matchesId } from "./AllTickets";
 import { groupBySpec } from "./groupBySpec";
 import { SpecRow } from "./SpecRow";
 import { StateListBySpec } from "./StateListBySpec";
-import { StateRow, type InboxRowLinkFactory } from "./StateRow";
+import { TicketLine, type InboxRowLinkFactory, type RowLink } from "../ticket/TicketLine";
 import { storedFinished, storedGroup, storeFinished, storeGroup } from "./groupPreference";
 import { clickTo, hrefFor, type UiLocation } from "../url";
-import { OneProject, ShortId } from "./ShortId";
+import { OneProject } from "./ShortId";
 
 export interface InboxProps {
   api: Api;
@@ -546,8 +545,6 @@ function FilterButton(p: {
   );
 }
 
-type RowLink = ReturnType<InboxRowLinkFactory>;
-
 function NeedsMeLink({
   row,
   now,
@@ -585,28 +582,28 @@ function NeedsMeLink({
     );
   }
   return (
-    <a className="row" {...link}>
-      <span className="row-top">
-        <ShortId id={row.id} />
-        <span className="row-title">{row.title}</span>
-        {row.prototype && <PrototypeBadge />}
-        {row.link && <LinkBadge link={row.link} plain />}
-        <CIBadge result={row.ci_result} />
-        <PullRequestBadge pr={row.pull_request} inRowLink />
-        <span className="muted small">{duration(now, row.since)}</span>
-      </span>
-      <span className="row-detail">
-        {row.requirement && (
-          <span className="req-chip">↳ {row.requirement.title}</span>
-        )}
-        {row.spec && (
-          <span className="req-chip">
-            ↳ {row.spec.map ? `Map: ${row.spec.title}` : row.spec.title}
-          </span>
-        )}{" "}
-        {rowDetail(now, row)}
-      </span>
-    </a>
+    <TicketLine
+      t={row}
+      link={link}
+      detail={
+        <>
+          {row.requirement && (
+            <span className="req-chip">↳ {row.requirement.title}</span>
+          )}
+          {row.spec && (
+            <span className="req-chip">
+              ↳ {row.spec.map ? `Map: ${row.spec.title}` : row.spec.title}
+            </span>
+          )}{" "}
+          {rowDetail(now, row)}
+        </>
+      }
+    >
+      {row.prototype && <PrototypeBadge />}
+      <CIBadge result={row.ci_result} />
+      <PullRequestBadge pr={row.pull_request} inRowLink />
+      <span className="muted small">{duration(now, row.since)}</span>
+    </TicketLine>
   );
 }
 
@@ -626,12 +623,12 @@ function StateList({
 }) {
   const stages = tickets.filter(isStage);
   const row = (t: ProjectTicket) => (
-    <StateRow
+    <TicketLine
       key={t.id}
       t={t}
+      link={link(t.id)}
       needsYou={reasons.has(t.id)}
       now={now}
-      link={link}
     />
   );
   return (
@@ -658,12 +655,13 @@ function Drafts({
     <details className="quiet-group">
       <summary>Drafts ({drafts.length}): not waiting on anyone</summary>
       {drafts.map((t) => (
-        <a key={t.id} className="row quiet" {...link(t.id)}>
-          <span className="row-top">
-            <ShortId id={t.id} />
-            <span className="row-title">{t.title}</span>
-          </span>
-        </a>
+        // A Draft's row is its ID and title alone.
+        <TicketLine
+          key={t.id}
+          t={{ id: t.id, title: t.title, state: t.state }}
+          link={link(t.id)}
+          quiet
+        />
       ))}
     </details>
   );
