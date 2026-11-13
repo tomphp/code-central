@@ -24,6 +24,10 @@ export default defineConfig({
     include: ["src/**/*.test.{ts,tsx}"],
     exclude: ["src/**/*.e2e.test.ts"],
     setupFiles: ["src/test-setup.ts"],
+    // Longer than the 5s waitFor and findBy* wait in test-setup.ts, so a
+    // test that waits it out fails on what it waited for, and a loaded CI
+    // runner doesn't end a test that is still waiting.
+    testTimeout: 15_000,
     // Test files share their workers' module state rather than each
     // getting a fresh environment, which halves the suite's CPU. No file
     // mocks modules or globals, and the setup cleans up after each test,
