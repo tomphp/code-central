@@ -1,5 +1,8 @@
-// The Inbox's last grouping of a State list, kept per browser. The only
-// place the UI touches localStorage; where it is unavailable, By Ticket.
+// The Inbox's last grouping of a State list, kept per browser and shared
+// with the Board view. The only place the UI touches localStorage; where it
+// is unavailable, By Ticket.
+import { FINISHED, STATES, type State } from "../api/types";
+
 const KEY = "code-central.inbox.group";
 
 export type Group = "spec" | "ticket";
@@ -37,4 +40,32 @@ export function storeFinished(on: boolean): void {
   } catch {
     // The choice then lasts only as long as the URL.
   }
+}
+
+// The Board's hidden columns are kept beside them too, comma-separated;
+// none stored is undefined, for the Board's default, and an empty value is
+// every column shown.
+const HIDDEN_KEY = "code-central.board.hide";
+
+export function storedHidden(): State[] | undefined {
+  try {
+    const hidden = localStorage.getItem(HIDDEN_KEY)?.split(",");
+    return hidden && STATES.filter((s) => hidden.includes(s));
+  } catch {
+    return undefined;
+  }
+}
+
+export function storeHidden(hidden: readonly State[]): void {
+  try {
+    localStorage.setItem(HIDDEN_KEY, hidden.join(","));
+  } catch {
+    // The choice then lasts only as long as the URL.
+  }
+}
+
+// hiddenColumns is the Board's hidden columns in effect: the address's
+// hide, else the browser's last pick, else Done and Cancelled.
+export function hiddenColumns(hide?: readonly State[]): readonly State[] {
+  return hide ?? storedHidden() ?? FINISHED;
 }

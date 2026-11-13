@@ -8,6 +8,8 @@
 // returns to the view it was opened from.
 import { useRef } from "react";
 import type { Api } from "../api/api";
+import { ProjectPicker } from "../controls/ProjectPicker";
+import { ViewHeader } from "../controls/ViewHeader";
 import { CI_VIEW_DAYS, type CIProvider, type CIProjectStatus, type CIRunRow, type CIRunView, type ProjectRow } from "../api/types";
 import { usePulse } from "../focus/pulse";
 import { useFetch } from "../live";
@@ -34,24 +36,15 @@ export function CIView({ api, now, version, projects = [], loc, navigate }: CIVi
 
   return (
     <main aria-label="CI" className="ci">
-      <header className="ci-head">
-        <h1>CI</h1>
-        <label>
-          <span className="ci-picker-label">Projects</span>
-          <select value={loc.project ?? ""} onChange={(e) => navigate({ project: e.target.value || undefined })}>
-            <option value="">All Projects</option>
-            {projects.map((p) => (
-              <option key={p.key} value={p.key}>
-                {p.archived ? `${p.display_name} (Archived)` : p.display_name}
-              </option>
-            ))}
-            {loc.project && !projects.some((p) => p.key === loc.project) && <option value={loc.project}>{loc.project}</option>}
-          </select>
-        </label>
-        <button className="btn ci-back" onClick={() => navigate(loc.back ?? { view: "inbox" })}>
-          {BACK_LABEL[back]}
-        </button>
-      </header>
+      <ViewHeader
+        title="CI"
+        left={<ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />}
+        right={
+          <button className="btn" onClick={() => navigate(loc.back ?? { view: "inbox" })}>
+            {BACK_LABEL[back]}
+          </button>
+        }
+      />
       {/* Keyed by scope, so another scope starts from nothing and its first read doesn't pulse. */}
       <CIBody key={loc.project ?? ""} api={api} now={now} version={version} project={loc.project} projectName={projectName} navigate={navigate} />
     </main>

@@ -4,6 +4,8 @@
 // every active one, chosen with its Projects picker. Back returns to the
 // view it was opened from.
 import type { Api } from "../api/api";
+import { ProjectPicker } from "../controls/ProjectPicker";
+import { ViewHeader } from "../controls/ViewHeader";
 import type { ProjectRow } from "../api/types";
 import { ActivityDashboard } from "../focus/ActivityDashboard";
 import type { InboxData } from "../live";
@@ -27,24 +29,15 @@ export function ActivityView({ api, now, version, data, loc, navigate }: Activit
 
   return (
     <main aria-label="Activity" className="activity">
-      <header className="activity-head">
-        <h1>Activity</h1>
-        <label>
-          <span className="activity-picker-label">Projects</span>
-          <select value={loc.project ?? ""} onChange={(e) => navigate({ project: e.target.value || undefined })}>
-            <option value="">All Projects</option>
-            {projects.map((p) => (
-              <option key={p.key} value={p.key}>
-                {p.archived ? `${p.display_name} (Archived)` : p.display_name}
-              </option>
-            ))}
-            {loc.project && !projects.some((p) => p.key === loc.project) && <option value={loc.project}>{loc.project}</option>}
-          </select>
-        </label>
-        <button className="btn activity-back" onClick={() => navigate(loc.back ?? { view: "inbox" })}>
-          {back === "focus" ? "Back to Focus Mode" : "Back to the Inbox"}
-        </button>
-      </header>
+      <ViewHeader
+        title="Activity"
+        left={<ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />}
+        right={
+          <button className="btn" onClick={() => navigate(loc.back ?? { view: "inbox" })}>
+            {back === "focus" ? "Back to Focus Mode" : "Back to the Inbox"}
+          </button>
+        }
+      />
       {data ? <ActivityDashboard api={api} now={now} version={version} data={data} loc={loc} navigate={navigate} /> : <p className="muted">Loading…</p>}
     </main>
   );

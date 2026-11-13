@@ -12,7 +12,11 @@
 // or ?view=ci&project=<key>&back=<query> for the CI view, where project is
 // its scope (none = All Projects) and back as Usage's,
 // or ?view=activity&project=<key>&back=<query> for the Activity Dashboard
-// in a view of its own, the same.
+// in a view of its own, the same,
+// or ?view=board&project=<key>&group=spec&hide=<States>&back=<query> for
+// the Board view, where hide is the States whose columns it hides
+// (comma-separated; none = the browser's pick, an empty hide= = none
+// hidden), group and back as the Inbox's and Usage's.
 // group=spec is the Inbox's By Spec grouping of a State list (none = By
 // Ticket); it stays in the URL across lists and Projects.
 // view is the layout (anything else is the inbox); project, state and
@@ -24,9 +28,9 @@
 import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { STATES, USAGE_DAYS, type State, type UsageDays, type SessionUsageFilter } from "./api/types";
 
-export type View = "inbox" | "focus" | "options" | "project-options" | "usage" | "ci" | "activity";
-// A ReturnView is a view the Options view, Usage, the CI view and the Activity view return to.
-export type ReturnView = Exclude<View, "options" | "project-options" | "usage" | "ci" | "activity">;
+export type View = "inbox" | "focus" | "options" | "project-options" | "usage" | "ci" | "activity" | "board";
+// A ReturnView is a view the Options view, Usage, the CI view, the Activity view and the Board return to.
+export type ReturnView = Exclude<View, "options" | "project-options" | "usage" | "ci" | "activity" | "board">;
 export type List = "requirements" | "tickets";
 
 export interface UiLocation {
@@ -38,16 +42,19 @@ export interface UiLocation {
   list?: List;
   requirement?: string;
   ticket?: string;
-  // group is the Inbox's grouping of a State list; none is By Ticket.
+  // group is the Inbox's grouping of a State list, and the Board's; none is By Ticket.
   group?: "spec";
+  // hide is the States whose columns the Board hides, in workflow order;
+  // none is the browser's pick, and empty is every column shown.
+  hide?: State[];
   // finished shows Done and Cancelled Tickets in the All Tickets view.
   finished?: true;
   // days is Usage's range; none is the default, 7.
   days?: UsageDays;
   // session is the session Usage has open on its line chart.
   session?: SessionUsageFilter;
-  // back is where Usage, the CI view and the Activity view return to, a ReturnView with its
-  // parameters.
+  // back is where Usage, the CI view, the Activity view and the Board return to, a ReturnView
+  // with its parameters.
   back?: UiLocation;
 }
 
@@ -64,6 +71,16 @@ export function readLocation(search: string): UiLocation {
   }
   const view = q.get("view");
   if (view === "ci" || view === "activity") return { view, project: q.get("project") || undefined, back: readBack(q) };
+  if (view === "board") {
+    const hide = q.get("hide")?.split(",");
+    return {
+      view,
+      project: q.get("project") || undefined,
+      group: q.get("group") === "spec" ? "spec" : undefined,
+      hide: hide && STATES.filter((s) => hide.includes(s)),
+      back: readBack(q),
+    };
+  }
   if (view === "usage") {
     const days = Number(q.get("days")) as UsageDays;
     const [sessionProject, session, agent] = [q.get("session_project"), q.get("session"), q.get("agent")];
@@ -122,6 +139,11 @@ export function hrefFor(loc: UiLocation): string {
     return withBack(q, loc);
   }
   if (loc.view === "ci" || loc.view === "activity") return withBack(q, loc);
+  if (loc.view === "board") {
+    if (loc.group) q.set("group", loc.group);
+    if (loc.hide) q.set("hide", loc.hide.join(","));
+    return withBack(q, loc);
+  }
   if (loc.view !== "inbox") return `?${q}`;
   if (loc.state) q.set("state", loc.state);
   if (loc.list) q.set("list", loc.list);

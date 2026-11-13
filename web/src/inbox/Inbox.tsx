@@ -1,6 +1,7 @@
 // The triage inbox: on the left, a top row of the split "+ New" button
 // (New requirement, with Requirement and Map in its ▾ menu) and "◎ Focus",
-// then Projects and Views, then an Admin section linking Usage, CI and
+// then Projects and Views (the last of them linking the Board view), then
+// an Admin section linking Usage, CI and
 // Options; the list in the middle; the selected Requirement, Map or plain
 // Spec and Ticket on the right. A layout only: the data comes from live.ts and the
 // Ticket pane is shared with any later view.
@@ -38,8 +39,10 @@ import { OptionsLink } from "../options/OptionsLink";
 import { UsageLink } from "../usage/UsageLink";
 import { CILink } from "../ci/CILink";
 import { ActivityLink } from "../activity/ActivityLink";
+import { BoardLink } from "../board/BoardLink";
 import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
+import { ToggleGroup } from "../controls/ToggleGroup";
 import { AllTicketsBySpec, AllTicketsByTicket, matchesId } from "./AllTickets";
 import { groupBySpec } from "./groupBySpec";
 import { SpecRow } from "./SpecRow";
@@ -195,21 +198,15 @@ export function Inbox({
         onChange={(e) => setSearch(e.target.value)}
       />
     )}
-    <div
-      className="bs-toggle"
-      role="group"
-      aria-label="Group the list"
-    >
-      {(["ticket", "spec"] as const).map((g) => (
-        <button
-          key={g}
-          aria-pressed={grouping === g}
-          onClick={() => chooseGroup(g)}
-        >
-          {g === "spec" ? "Spec" : "Ticket"}
-        </button>
-      ))}
-    </div>
+    <ToggleGroup
+      label="Group the list"
+      options={[
+        { value: "ticket", label: "Ticket" },
+        { value: "spec", label: "Spec" },
+      ]}
+      value={grouping}
+      onChange={chooseGroup}
+    />
     {loc.list === "tickets" && (
       <div className="bs-toggle">
         <button
@@ -302,6 +299,7 @@ export function Inbox({
             onClick={() => navigate({ state: s, list: undefined })}
           />
         ))}
+        <BoardLink loc={loc} navigate={navigate} tickets={tickets} className="filter" />
         <h2>Admin</h2>
         <UsageLink loc={loc} navigate={navigate} className="filter" />
         <ActivityLink loc={loc} navigate={navigate} className="filter" />

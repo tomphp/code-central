@@ -51,7 +51,7 @@ export function TokenChart({ days, kinds }: TokenChartProps) {
     <>
       <div className="token-controls">
         <label>
-          <span className="usage-picker-label">Kind</span>
+          <span className="view-picker-label">Kind</span>
           <select value={kind} onChange={(e) => setKind(e.target.value)}>
             <option value="">All kinds</option>
             {kinds.map((k) => (

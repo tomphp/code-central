@@ -9,6 +9,8 @@
 // it was opened from.
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "../api/api";
+import { ProjectPicker } from "../controls/ProjectPicker";
+import { ViewHeader } from "../controls/ViewHeader";
 import {
   sessionKey,
   USAGE_DAYS,
@@ -49,22 +51,13 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
 
   return (
     <main aria-label="Usage" className="usage">
-      <header className="usage-head">
-        <h1>Usage</h1>
-        <label>
-          <span className="usage-picker-label">Projects</span>
-          <select value={loc.project ?? ""} onChange={(e) => navigate({ project: e.target.value || undefined })}>
-            <option value="">All Projects</option>
-            {projects.map((p) => (
-              <option key={p.key} value={p.key}>
-                {p.archived ? `${p.display_name} (Archived)` : p.display_name}
-              </option>
-            ))}
-            {loc.project && !projects.some((p) => p.key === loc.project) && <option value={loc.project}>{loc.project}</option>}
-          </select>
-        </label>
-        <label>
-          <span className="usage-picker-label">Range</span>
+      <ViewHeader
+        title="Usage"
+        left={
+          <>
+            <ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />
+            <label>
+          <span className="view-picker-label">Range</span>
           <select value={days} onChange={(e) => navigate({ days: Number(e.target.value) as UsageDays })}>
             {USAGE_DAYS.map((d) => (
               <option key={d} value={d}>
@@ -73,10 +66,14 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
             ))}
           </select>
         </label>
-        <button className="btn usage-back" onClick={() => navigate(loc.back ?? { view: "inbox" })}>
-          {back === "focus" ? "Back to Focus Mode" : "Back to the Inbox"}
-        </button>
-      </header>
+          </>
+        }
+        right={
+          <button className="btn" onClick={() => navigate(loc.back ?? { view: "inbox" })}>
+            {back === "focus" ? "Back to Focus Mode" : "Back to the Inbox"}
+          </button>
+        }
+      />
       <div className="usage-body">
         {usage.error && (
           <p role="alert" className="warning">

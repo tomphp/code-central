@@ -2,8 +2,3 @@
    Dashboard, whose own styles are focus.css's. Its styles hang off the
    layout's own classes, so none of them reach the other views. */
 .activity { min-height: 100vh; display: flex; flex-direction: column; }
-.activity-head { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
-.activity-head h1 { font-size: 18px; margin: 0; }
-.activity-head label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.activity-picker-label { color: var(--muted); }
-.activity-back { margin-left: auto; }

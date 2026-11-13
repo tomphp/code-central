@@ -405,3 +405,9 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .pr-conflicting, .pr-closed { color: var(--bad, inherit); }
 .pr-merged { opacity: 0.7; }
 .short-id { cursor: copy; }
+
+.view-head { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
+.view-head h1 { font-size: 18px; margin: 0; }
+.view-head label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.view-picker-label { color: var(--muted); }
+.view-head-spacer { margin-left: auto; }

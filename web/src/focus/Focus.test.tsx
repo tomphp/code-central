@@ -68,7 +68,7 @@ describe("entering and leaving Focus Mode", () => {
   });
 
   it("treats any other view as the Inbox", async () => {
-    renderApp(world(), "/?view=board");
+    renderApp(world(), "/?view=calendar");
     expect(screen.getByRole("navigation", { name: "Filters" })).toBeInTheDocument();
     expect(params().get("view")).toBe("inbox");
   });
