@@ -40,9 +40,12 @@ export interface BoardViewProps {
   data?: InboxData;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
+  // onFocusPopupGone hears a card's Focus popup close, however it closes,
+  // for the automatic Focus popup not to reopen for its Focus Items.
+  onFocusPopupGone?(keys: string[]): void;
 }
 
-export function BoardView({ api, now, version, data, loc, navigate }: BoardViewProps) {
+export function BoardView({ api, now, version, data, loc, navigate, onFocusPopupGone }: BoardViewProps) {
   const projects = data?.projects ?? [];
   const hidden = hiddenColumns(loc.hide);
   const shown = STATES.filter((s) => !hidden.includes(s));
@@ -166,7 +169,18 @@ export function BoardView({ api, now, version, data, loc, navigate }: BoardViewP
       </main>
       {/* At most one popup, chosen from popup=. */}
       {loc.popup && kind === "focus" && data && (
-        <FocusPopup key={loc.popup} mode="ticket" api={api} now={now} version={version} data={data} id={loc.popup} onClose={closePopup} navigate={navigate} />
+        <FocusPopup
+          key={loc.popup}
+          mode="ticket"
+          api={api}
+          now={now}
+          version={version}
+          data={data}
+          id={loc.popup}
+          onClose={closePopup}
+          onGone={onFocusPopupGone}
+          navigate={navigate}
+        />
       )}
       {loc.popup && kind === "spec" && (
         <SpecPopup

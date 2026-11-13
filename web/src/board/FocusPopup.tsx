@@ -15,7 +15,7 @@
 //
 // Either way it tells its host why it closed and the key of every Focus
 // Item in scope then. It changes no address of its own.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Api } from "../api/api";
 import { ticketOf } from "../format";
 import { useTicket, type InboxData } from "../live";
@@ -39,6 +39,9 @@ export type FocusPopupProps = {
   version: number;
   data: InboxData;
   onClose(closed: FocusPopupClose): void;
+  // onGone hears the popup leave the page however it goes, closed or
+  // unmounted by Back or another view, with the keys in scope then.
+  onGone?(keys: string[]): void;
   navigate(patch: Partial<UiLocation>): void;
 } & (
   | {
@@ -74,8 +77,11 @@ export function FocusPopup(props: FocusPopupProps) {
   useEffect(() => {
     if (item && item.key !== onScreen?.key) setOnScreen(item);
   }, [item, onScreen]);
-  const close = (why: FocusPopupClose["why"]) =>
-    onClose({ why, keys: focusKeys({ needsMe: data.needsMe, project, scope, ticket: ticket.data }) });
+  const keys = () => focusKeys({ needsMe: data.needsMe, project, scope, ticket: ticket.data });
+  const close = (why: FocusPopupClose["why"]) => onClose({ why, keys: keys() });
+  const gone = useRef(() => props.onGone?.(keys()));
+  gone.current = () => props.onGone?.(keys());
+  useEffect(() => () => gone.current(), []);
   // It closes once, as the queue turns clear or, in Queue mode, only
   // skipped Focus Items are left: close is a new function each render, so
   // it isn't a dependency.
@@ -91,8 +97,11 @@ export function FocusPopup(props: FocusPopupProps) {
   };
 
   return (
+    // Queue mode is the automatic Focus popup's, which doesn't wait on
+    // itself as another popup.
     <PopupShell
       label="Focus popup"
+      uncounted={queue}
       onClose={() => close("dismissed")}
       head={queue && !screen.clear && <span className="focus-left">{screen.remaining} left</span>}
     >
