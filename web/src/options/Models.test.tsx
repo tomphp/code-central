@@ -39,7 +39,7 @@ describe("the Models section", () => {
 
     await findModels();
     const sections = Array.from(page().querySelectorAll("fieldset.project-options-section > legend"), (l) => l.textContent);
-    expect(sections).toEqual(["Landing Method", "CI", "GitHub Issues", "Models", "Stage Guides", "Auto-accept", "Factories"]);
+    expect(sections).toEqual(["Landing Method", "CI", "GitHub Issues", "Models", "Stage Guides", "Auto-accept", "Focus", "Factories"]);
     expect(within(models()).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["Project default", ...KINDS]);
     for (const row of ["the Project default", ...KINDS]) {
       expect(model(row)).toHaveValue("");

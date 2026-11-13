@@ -395,6 +395,42 @@ func TestDefaultCISettingsLeaveProjectYAMLUnchanged(t *testing.T) {
 	}
 }
 
+func TestFocusKindsAreLeftOutOfProjectYAMLWhileEveryReasonIsOn(t *testing.T) {
+	dir := t.TempDir()
+	s := openFile(t, dir)
+	created := time.Date(2026, 11, 7, 9, 30, 0, 0, time.UTC)
+	put := func(off []string) {
+		mustUpdate(t, s, func(w store.Writer) error {
+			return w.PutProject(store.Project{Key: "acme", DisplayName: "Acme", Created: created, Mode: store.ModeCommitted, FocusKindsOff: off})
+		})
+	}
+	const plain = "key: acme\ndisplay_name: Acme\ncreated: 2026-11-07T09:30:00Z\nmode: committed\n"
+	put([]string{})
+	if got := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")); got != plain {
+		t.Fatalf("project.yaml = %q", got)
+	}
+	put([]string{"needs_answer", "in_review"})
+	want := plain + "focus_kinds_off:\n  - needs_answer\n  - in_review\n"
+	if got := readFile(t, filepath.Join(dir, "projects/acme/project.yaml")); got != want {
+		t.Fatalf("project.yaml = %q, want %q", got, want)
+	}
+}
+
+func TestFocusKindsReadBackInNeedsMeGroupOrder(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "store.yaml"), fmt.Sprintf("format: %d\n", store.Format))
+	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
+		"key: acme\ndisplay_name: Acme\ncreated: 2026-11-07T09:30:00Z\nmode: committed\nfocus_kinds_off:\n  - in_review\n  - needs_answer\n")
+	s := openFile(t, dir)
+	s.View(func(r store.Reader) error {
+		p, _ := r.Project("acme")
+		if want := []string{"needs_answer", "in_review"}; !slices.Equal(p.FocusKindsOff, want) {
+			t.Errorf("focus kinds off = %v, want %v", p.FocusKindsOff, want)
+		}
+		return nil
+	})
+}
+
 func listFiles(t *testing.T, dir string) []string {
 	t.Helper()
 	var out []string
@@ -441,6 +477,8 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 		{"multi-line reported alias", "projects/acme/project.yaml", project + "reported_models:\n  aliases: [\"opus\\nsonnet\"]\n", "reported_models.aliases[0]"},
 		{"multi-line model flag", "projects/acme/project.yaml", project + "reported_models:\n  model_flag: \"opus\\nsonnet\"\n", "reported_models.model_flag"},
 		{"reported not a time", "projects/acme/project.yaml", project + "reported_models:\n  effort_levels: [low]\n  reported: yesterday\n", "reported_models.reported"},
+		{"focus kind outside the Needs Me reasons", "projects/acme/project.yaml", project + "focus_kinds_off:\n  - answered\n  - lunch\n", "focus_kinds_off[1]"},
+		{"focus kind twice", "projects/acme/project.yaml", project + "focus_kinds_off:\n  - answered\n  - answered\n", "focus_kinds_off[1]"},
 		{"spec without frontmatter", "projects/acme/specs/3.md", "# just markdown\n", "frontmatter"},
 		{"spec id mismatch", "projects/acme/specs/3.md", "---\nid: 4\ntitle: S\nlabels: []\ntags: {}\ncreated: 2026-11-07T09:30:00Z\nupdated: 2026-11-07T09:30:00Z\n---\nbody\n", "id"},
 		{"unknown previous field", "projects/acme/tickets/2.yaml", ticket + "edits:\n  - number: 1\n    actor: agent\n    time: 2026-11-07T09:30:00Z\n    previous:\n      colour: red\n", "edits[0].previous.colour"},

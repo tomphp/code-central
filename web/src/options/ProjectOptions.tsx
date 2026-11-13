@@ -1,6 +1,6 @@
 // The Project Options page: one Project's settings, reached from its menu
 // in the left pane, a section each: the Landing Method, CI with its CI
-// Rules, GitHub Issues, Models, and Stage Guides.
+// Rules, GitHub Issues, Models, Stage Guides, and Focus.
 import type { MouseEvent } from "react";
 import type { Api } from "../api/api";
 import type { ProjectRow } from "../api/types";
@@ -12,6 +12,7 @@ import { LandingMethodSection } from "./LandingMethodSection";
 import { ModelsSection } from "./ModelsSection";
 import { StageGuidesSection } from "./StageGuidesSection";
 import { AutoAcceptSection } from "./AutoAcceptSection";
+import { FocusSection } from "./FocusSection";
 
 export interface ProjectOptionsProps {
   api: Api;
@@ -31,6 +32,7 @@ export const SECTIONS = [
   { id: "project-options-models", label: "Models" },
   { id: "project-options-stage-guides", label: "Stage Guides" },
   { id: "project-options-auto-accept", label: "Auto-accept" },
+  { id: "project-options-focus", label: "Focus" },
 ];
 
 // jumpTo scrolls to a section without changing the URL, which holds the view.
@@ -86,6 +88,7 @@ export function ProjectOptions({
               <ModelsSection api={api} project={project} />
               <StageGuidesSection api={api} project={project} />
               <AutoAcceptSection api={api} project={project} />
+              <FocusSection api={api} project={project} />
               <FactoriesSection project={project} now={now} />
             </div>
           </div>

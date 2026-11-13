@@ -97,6 +97,9 @@ type ProjectView struct {
 	// AutoAccept is the Project's Auto-accept setting, one entry per
 	// Auto-accept kind, always filled in.
 	AutoAccept AutoAcceptView `json:"auto_accept"`
+	// FocusKinds is the Project's Focus Kinds, always filled in: every
+	// Needs Me reason on by default.
+	FocusKinds FocusKindsView `json:"focus_kinds"`
 	// FactoryStatus is whether the Project's Factories are online, from
 	// their Heartbeats, always filled in.
 	FactoryStatus FactoryStatusView `json:"factory_status"`
@@ -640,7 +643,7 @@ func (c *Core) projectView(p store.Project) ProjectView {
 		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), AutoAccept: autoAcceptView(p),
-		FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
+		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at

@@ -91,6 +91,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     setSubagentExploration: (project, on) => call("POST", `${p(project)}/set_subagent_exploration`, { on, full: true }),
     setModelAssignment: (project, on) => call("POST", `${p(project)}/set_model_assignment`, { on, full: true }),
     setAutoAccept: (project, kinds) => call("POST", `${p(project)}/set_auto_accept`, { kinds, full: true }),
+    setFocusKinds: (project, off) => call("POST", `${p(project)}/set_focus_kinds`, { off, full: true }),
     addCIRule: (project, rule) => call("POST", `${p(project)}/add_ci_rule`, { ...rule, full: true }),
     editCIRule: (project, spec, rule) => call("POST", `${p(project)}/edit_ci_rule`, { ...rule, spec, full: true }),
     removeCIRule: (project, spec) => call("POST", `${p(project)}/remove_ci_rule`, { spec, full: true }),

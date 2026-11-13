@@ -224,6 +224,38 @@ describe("the Focus popup's Queue mode", () => {
     expect(await within(await item()).findByRole("region", { name: "Base missing" })).toBeInTheDocument();
   });
 
+  it("leaves out items of a reason off in their own Project, CI items, Base diverged and Base missing included", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    fake.addProject("beta", "Beta");
+    fake.addTicket("acme", { title: "Basket", state: "Accepted", branch: "acme-1", commit: "abc" }); // acme-1
+    await failCI(fake, "acme", ["acme-1"]);
+    fake.setNeedsMe([
+      ...fake.needsMeGroups,
+      { reason: "base_diverged", tickets: [{ id: "", project: "acme", title: "Base diverged", base_diverged: { base: "main", local: "aaa1111222", remote: "bbb2222333" } }] },
+      { reason: "base_missing", tickets: [{ id: "", project: "acme", title: "Base missing", base_missing: { base: "release", fix: "Create the branch release" } }] },
+      { reason: "base_missing", tickets: [{ id: "", project: "beta", title: "Base missing", base_missing: { base: "release", fix: "Create the branch release" } }] },
+    ]);
+    await fake.setFocusKinds("acme", ["ci_failed", "base_diverged", "base_missing"]);
+    const closed = renderQueue(fake);
+    expect(await within(await item()).findByRole("region", { name: "Base missing" })).toBeInTheDocument();
+    expect(within(popup()).getByText("1 left")).toBeInTheDocument();
+    await skip();
+    await waitFor(noPopup);
+    expect(closed.mock.calls[0][0]).toEqual({ why: "only_skipped", keys: ["beta base_missing"] });
+  });
+
+  it("closes by itself as cleared once only items of a reason off in their Project are left, with no keys in scope", async () => {
+    const fake = tickets();
+    await fake.setFocusKinds("acme", ["in_review"]);
+    const closed = renderQueue(fake, { project: "acme" });
+    await heading("Flaky build");
+    expect(within(popup()).getByText("1 left")).toBeInTheDocument();
+    change(fake, fake.needsMeGroups.filter((g) => g.reason !== "failed"), "acme-2");
+    await waitFor(noPopup);
+    expect(closed.mock.calls[0][0]).toEqual({ why: "cleared", keys: [] });
+  });
+
   it("follows a new Focus Item arriving while it's open in N left, keeping the one on screen", async () => {
     const fake = tickets();
     renderQueue(fake);

@@ -95,6 +95,8 @@ var Operations = []Op{
 	{Name: "set_model_assignment", Audience: HumanOnly, Write: true},
 	// Auto-accept (code-central-536): the human's alone, over HTTP only.
 	{Name: "set_auto_accept", Audience: HumanOnly, Write: true},
+	// Focus Kinds (Spec code-central-550).
+	{Name: "set_focus_kinds", Audience: HumanOnly, Write: true},
 
 	// The Integration contract (ticket 42).
 	{Name: "create_linked_spec", Audience: IntegrationOnly, Write: true},
