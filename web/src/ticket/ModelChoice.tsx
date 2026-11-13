@@ -9,6 +9,7 @@ import { CLAUDE_CODE_DEFAULT } from "../format";
 import { effortOptions, modelSuggestions, ModelSuggestions } from "../modelPickers";
 import { useAct } from "./useAct";
 import { Button } from "../controls/Button";
+import { Select } from "../controls/Select";
 
 // NO_REPORT stands in for the Reported Models until the Project is read:
 // the seeded levels, nothing to suggest and no Factory flags.
@@ -71,14 +72,14 @@ export function ModelChoice({ api, project, ticket: t, reported = NO_REPORT }: M
       </div>
       <div className="model-choice-row">
         <span data-testid="effort-applies">Effort: {applied(mc.effort, reported.effort_flag)}</span>
-        <select aria-label="Effort Tag" value={tag.effort} disabled={busy} onChange={(e) => setEffort(e.target.value)}>
-          <option value="">Project&apos;s settings</option>
-          {levels.map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
+        <Select
+          aria-label="Effort Tag"
+          value={tag.effort}
+          disabled={busy}
+          onChange={setEffort}
+          placeholder="Project's settings"
+          options={levels.map((l) => ({ value: l }))}
+        />
       </div>
       {error && (
         <p role="alert" className="warning">

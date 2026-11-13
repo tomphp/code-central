@@ -13,6 +13,7 @@ import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import type { ApiError, ProjectRow, SpecAcknowledgement, TicketAcknowledgement } from "../api/types";
 import { Button } from "../controls/Button";
+import { Select } from "../controls/Select";
 
 export interface NewRequirementProps {
   api: Api;
@@ -200,13 +201,11 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
           {ask && (
             <label className="modal-project small">
               Project{" "}
-              <select value={chosen} onChange={(e) => setPicked(e.target.value)}>
-                {projects.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.display_name}
-                  </option>
-                ))}
-              </select>
+              <Select
+                value={chosen}
+                onChange={setPicked}
+                options={projects.map((p) => ({ value: p.key, label: p.display_name }))}
+              />
             </label>
           )}
           <textarea

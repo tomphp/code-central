@@ -21,6 +21,7 @@ import { Triage } from "./Triage";
 import { ModelChoice } from "./ModelChoice";
 import { ShortId } from "../inbox/ShortId";
 import { Button } from "../controls/Button";
+import { Select } from "../controls/Select";
 
 export interface TicketPaneProps {
   api: Api;
@@ -232,11 +233,7 @@ function MoveControl({ api, project, ticket: t }: { api: Api; project: string; t
     >
       <label>
         <span className="muted small">Move to</span>{" "}
-        <select value={to} onChange={(e) => setTo(e.target.value as State)}>
-          {targets.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
+        <Select value={to} onChange={(v) => setTo(v as State)} options={targets.map((s) => ({ value: s }))} />
       </label>{" "}
       <Button  disabled={busy}>
         Move
