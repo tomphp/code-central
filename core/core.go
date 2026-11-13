@@ -432,7 +432,7 @@ func (c *Core) CreateSpec(_ context.Context, key string, in CreateSpecInput) (Wr
 
 // CreateTicket is create_ticket(spec, title, description, state, labels,
 // blocked_by, tags?, full?).
-func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput) (Written[TicketView], error) {
+func (c *Core) CreateTicket(ctx context.Context, key string, in CreateTicketInput) (Written[TicketView], error) {
 	if strings.TrimSpace(in.Title) == "" {
 		return Written[TicketView]{}, invalid("title", "a Ticket needs a title")
 	}
@@ -447,6 +447,9 @@ func (c *Core) CreateTicket(_ context.Context, key string, in CreateTicketInput)
 		return Written[TicketView]{}, invalid("spec", "every Ticket belongs to a Spec")
 	}
 	if err := checkTicketLabels("labels", in.Labels); err != nil {
+		return Written[TicketView]{}, err
+	}
+	if err := checkHumanLabels(ctx, "labels", in.Labels); err != nil {
 		return Written[TicketView]{}, err
 	}
 	if err := checkTagSyntax(in.Tags); err != nil {
