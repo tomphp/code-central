@@ -274,9 +274,12 @@ describe("the Board's cards", () => {
 describe("the Board's Ticket popup", () => {
   const popup = () => screen.getByRole("dialog", { name: "Ticket popup" });
   const noPopup = () => expect(screen.queryByRole("dialog")).toBeNull();
+  // popupHeading waits for the Ticket popup to show its Ticket's title.
+  const popupHeading = async (title: string) =>
+    within(await screen.findByRole("dialog", { name: "Ticket popup" })).findByRole("heading", { name: new RegExp(title) });
   const openCard = async (title: string) => {
     await userEvent.click(within(card(title)).getByText(title));
-    return within(popup()).findByRole("heading", { name: new RegExp(title) });
+    return popupHeading(title);
   };
 
   it("opens from a card that doesn't need the human, with the Ticket's pane and actions, in the address", async () => {
@@ -312,7 +315,7 @@ describe("the Board's Ticket popup", () => {
     fake.addProject("old", "Old", { archived: true });
     fake.addTicket("old", { title: "Legacy", state: "Draft" }); // old-1
     renderApp(fake, "/?view=board&project=old&popup=old-1");
-    expect(await within(await screen.findByRole("dialog", { name: "Ticket popup" })).findByRole("heading", { name: /Legacy/ })).toBeInTheDocument();
+    expect(await popupHeading("Legacy")).toBeInTheDocument();
     expect(within(popup()).queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
@@ -371,17 +374,17 @@ describe("the Board's Ticket popup", () => {
     expect(card("Login form")).toHaveFocus();
 
     act(() => window.history.forward());
-    expect(await within(await screen.findByRole("dialog", { name: "Ticket popup" })).findByRole("heading", { name: /Login form/ })).toBeInTheDocument();
+    expect(await popupHeading("Login form")).toBeInTheDocument();
   });
 
   it("reopens when the address with popup= is loaded", async () => {
     renderApp(world(), "/?view=board&project=acme&popup=acme-3");
-    expect(await within(await screen.findByRole("dialog", { name: "Ticket popup" })).findByRole("heading", { name: /Sign-up page/ })).toBeInTheDocument();
+    expect(await popupHeading("Sign-up page")).toBeInTheDocument();
   });
 
   it("opens on any Project's Ticket, whatever the picker is on", async () => {
     renderApp(world(), "/?view=board&project=acme&popup=beta-1");
-    expect(await within(await screen.findByRole("dialog", { name: "Ticket popup" })).findByRole("heading", { name: /Beta export/ })).toBeInTheDocument();
+    expect(await popupHeading("Beta export")).toBeInTheDocument();
   });
 
   it("opens nothing for an unknown ID, and leaves the address alone", async () => {

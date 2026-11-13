@@ -59,7 +59,7 @@ export function BoardView({ api, now, version, data, loc, navigate }: BoardViewP
     href: hrefFor({ ...loc, popup: t.id }),
     onClick: clickTo(navigate, { popup: t.id }),
   });
-  const popup = usePopupKind(loc.popup, data);
+  const kind = usePopupKind(loc.popup, data);
   const closePopup = () => navigate({ popup: undefined });
   // A lane's Spec row opens the Spec, as All Tickets' By Spec rows do.
   const specLink = (id: string) => {
@@ -168,7 +168,7 @@ export function BoardView({ api, now, version, data, loc, navigate }: BoardViewP
           (code-central-525), a Ticket that needs the human falls through to
           its Ticket popup; until the Spec popup lands (code-central-524), a
           Spec's ID opens nothing. */}
-      {loc.popup && (popup === "ticket" || popup === "focus") && (
+      {loc.popup && (kind === "ticket" || kind === "focus") && (
         <TicketPopup
           api={api}
           now={now}
