@@ -4,7 +4,9 @@
 // the view's scope wait, and again when a new one arrives; never over Focus
 // Mode, Options or Project Options. Closing it holds for the Focus Items
 // there then, for the tab's life. It never interrupts: it waits while
-// another popup is open or a text field has focus.
+// another popup is open or a text field has focus. It opens for, shows and
+// counts only Focus Items: rows of a reason on in their Project's Focus
+// Kinds.
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -209,6 +211,72 @@ describe("Focus Pop-up", () => {
       noPopup();
     },
   );
+});
+
+describe("Focus Pop-up and Focus Kinds", () => {
+  // projectRead waits for the Projects to be read again after a saved
+  // change to Focus Kinds, and for the App to render what it read.
+  async function projectRead(fake: FakeApi, change: () => Promise<unknown>) {
+    const read = vi.spyOn(fake, "listProjects");
+    await act(change);
+    await waitFor(() => expect(read).toHaveBeenCalled());
+    await act(async () => {});
+    read.mockRestore();
+  }
+
+  it("doesn't open for items of a reason turned off in their Project, though Needs Me counts them", async () => {
+    const fake = popupOn();
+    await fake.setFocusKinds("acme", ["failed", "in_review"]);
+    await settled(fake, "/?view=inbox&project=acme");
+    expect(document.title).toBe("(3) Code Central");
+    noPopup();
+  });
+
+  it("leaves them out and doesn't count them when another item opens it, while another Project's still show", async () => {
+    const fake = popupOn();
+    await fake.setFocusKinds("acme", ["in_review"]);
+    renderApp(fake, "/?view=board");
+    expect(await heading("Flaky build")).toBeInTheDocument();
+    expect(within(popup()).getByText("2 left")).toBeInTheDocument();
+    await userEvent.click(await within(popup()).findByRole("button", { name: "Skip" }));
+    expect(await heading("Beta search")).toBeInTheDocument();
+    expect(popup()).not.toHaveTextContent("Login page");
+  });
+
+  it("closes as cleared once only items of reasons turned off are left", async () => {
+    const fake = popupOn();
+    await fake.setFocusKinds("acme", ["in_review"]);
+    renderApp(fake, "/?view=activity&project=acme");
+    await heading("Flaky build");
+    change(fake, without(fake, "acme-2"), "acme-2");
+    await waitFor(noPopup);
+  });
+
+  it("closes as cleared when the reason of the only item left is turned off", async () => {
+    const fake = popupOn();
+    renderApp(fake, "/?view=activity&project=beta");
+    await heading("Beta search");
+    await projectRead(fake, () => fake.setFocusKinds("beta", ["in_review"]));
+    await waitFor(noPopup);
+  });
+
+  it("opens for items a reason turned back on brings back, unless they were dismissed in this tab", async () => {
+    const fake = popupOn();
+    await fake.setFocusKinds("acme", ["in_review"]);
+    renderApp(fake, "/?view=inbox&project=acme");
+    await heading("Flaky build");
+    expect(within(popup()).getByText("1 left")).toBeInTheDocument();
+    await close();
+
+    await projectRead(fake, () => fake.setFocusKinds("acme", []));
+    expect(await heading("Flaky build")).toBeInTheDocument();
+    expect(within(popup()).getByText("2 left")).toBeInTheDocument();
+    await close();
+
+    await projectRead(fake, () => fake.setFocusKinds("acme", ["in_review"]));
+    await projectRead(fake, () => fake.setFocusKinds("acme", []));
+    noPopup();
+  });
 });
 
 describe("Focus Pop-up never interrupts", () => {

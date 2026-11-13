@@ -1,12 +1,12 @@
 // Focus Mode tests: the real App against FakeApi, at ?view=focus. They
 // check what the human sees and does: the URL, the header, All clear,
-// loading and errors.
+// loading and errors, and the Projects' Focus Kinds.
 import { screen, within, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
-import { allClearOn, focus, renderApp } from "./focusTesting";
+import { allClearOn, focus, renderApp, waitingTickets } from "./focusTesting";
 import { ApiError } from "../api/types";
 
 function world() {
@@ -168,5 +168,73 @@ describe("live reads in Focus Mode", () => {
     fake.setNeedsMe([]);
     act(() => fake.emit({ type: "ticket.changed", project: "beta", id: "beta-1" }));
     await waitFor(() => expect(document.title).toBe("Code Central"));
+  });
+});
+
+describe("Focus Kinds in Focus Mode", () => {
+  // kinds is waitingTickets (acme-2 Failed, then acme-3 In Review) with
+  // beta-1 In Review after them, and In Review off in acme alone.
+  async function kinds() {
+    const fake = waitingTickets();
+    fake.addProject("beta", "Beta");
+    fake.addTicket("beta", { title: "Beta search", state: "In Review" }); // beta-1
+    fake.setNeedsMe(fake.needsMeGroups.map((g) => (g.reason === "in_review" ? { ...g, tickets: [...g.tickets, { id: "beta-1", summary: "Added search" }] } : g)));
+    await fake.setFocusKinds("acme", ["in_review"]);
+    return fake;
+  }
+  const heading = (name: string) => within(focus()).findByRole("heading", { name });
+  const skip = async () => userEvent.click(await within(focus()).findByRole("button", { name: "Skip" }));
+
+  it("leaves out a Project's items of a reason off there, and doesn't count them, while another Project's still show", async () => {
+    renderApp(await kinds(), "/?view=focus");
+    expect(await heading("Flaky build")).toBeInTheDocument();
+    expect(within(focus()).getByText("2 left")).toBeInTheDocument();
+    await skip();
+    expect(await heading("Beta search")).toBeInTheDocument();
+    expect(within(focus()).getByText("2 left")).toBeInTheDocument();
+    expect(within(focus()).queryByText("Login page")).toBeNull();
+  });
+
+  it("applies only the chosen Project's Focus Kinds with a Project chosen", async () => {
+    const fake = await kinds();
+    const { unmount } = renderApp(fake, "/?view=focus&project=acme");
+    expect(await heading("Flaky build")).toBeInTheDocument();
+    expect(within(focus()).getByText("1 left")).toBeInTheDocument();
+    unmount();
+
+    renderApp(fake, "/?view=focus&project=beta");
+    expect(await heading("Beta search")).toBeInTheDocument();
+    expect(within(focus()).getByText("1 left")).toBeInTheDocument();
+  });
+
+  it("shows All clear when only items of reasons turned off are left, though Needs Me still counts them", async () => {
+    const fake = await kinds();
+    fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason === "in_review").map((g) => ({ ...g, tickets: g.tickets.filter((t) => t.id === "acme-3") })));
+    renderApp(fake, "/?view=focus");
+    expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
+    expect(within(focus()).queryByText(/left/)).toBeNull();
+    expect(document.title).toBe("(1) Code Central");
+  });
+
+  it("shows the Activity Dashboard when only items of reasons turned off are left and it's chosen", async () => {
+    const fake = await kinds();
+    fake.seedOptions({ focus_clear: "activity_dashboard" });
+    fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason === "in_review").map((g) => ({ ...g, tickets: g.tickets.filter((t) => t.id === "acme-3") })));
+    renderApp(fake, "/?view=focus");
+    expect(await within(focus()).findByRole("region", { name: "Activity Dashboard" })).toBeInTheDocument();
+  });
+
+  it("follows a saved change without a reload: a reason turned off goes, and comes back once turned on", async () => {
+    const fake = await kinds();
+    renderApp(fake, "/?view=focus&project=acme");
+    expect(await within(focus()).findByText("1 left")).toBeInTheDocument();
+
+    await act(() => fake.setFocusKinds("acme", []));
+    expect(await within(focus()).findByText("2 left")).toBeInTheDocument();
+    await skip();
+    expect(await heading("Login page")).toBeInTheDocument();
+
+    await act(() => fake.setFocusKinds("acme", ["in_review", "failed"]));
+    expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
   });
 });

@@ -17,7 +17,7 @@ The short, permanent name that identifies a Project to anything connecting to Co
 _Avoid_: Slug, Project ID
 
 **Project Options**:
-The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models and Stage Guides. Unlike an Option, what it sets belongs to one Project.
+The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides and Focus. Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
 
 **Models**:
@@ -372,11 +372,11 @@ A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, th
 _Avoid_: Board card, Ticket tile
 
 **Focus Pop-up**:
-The Option that has the Focus popup open by itself, with the whole Needs Me queue in scope, on every view but Focus Mode, Options and Project Options, when a view loads with Focus Items or a new Focus Item arrives. Off unless the human turns it on.
+The Option that has the Focus popup open by itself, with every Focus Item in Needs Me in scope, on every view but Focus Mode, Options and Project Options, when a view loads with Focus Items or a new Focus Item arrives. A Needs Me reason its Project's Focus Kinds leave off neither opens it nor shows in it. Off unless the human turns it on.
 _Avoid_: auto popup, needs-me popup, auto focus
 
 **Focus popup**:
-A popup showing Focus Items one at a time in the view Focus Mode also uses. It shows either a Board Ticket card's Ticket's Focus Items (its CI item's, for a Ticket listed in one) or, under Focus Pop-up, every Focus Item in the view's scope, with Skip and N left. It opens by itself only once no other popup is open and no text field has focus. It closes once none is left, whoever dealt with them, or, under Focus Pop-up, once only skipped ones are.
+A popup showing Focus Items one at a time in the view Focus Mode also uses. It shows either a Board Ticket card's Ticket's Focus Items (its CI item's, for a Ticket listed in one), even of a reason its Project's Focus Kinds leave off, or, under Focus Pop-up, every Focus Item in the view's scope, with Skip and N left. It opens by itself only once no other popup is open and no text field has focus. It closes once none is left, whoever dealt with them, or, under Focus Pop-up, once only skipped ones are.
 _Avoid_: needs-me popup, action popup
 
 **Ticket popup**:
@@ -440,8 +440,12 @@ A view showing the human one Focus Item at a time from Needs Me, moving to the n
 _Avoid_: Zen mode, queue view
 
 **Focus Item**:
-One thing in Needs Me the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, or a Project's Base diverged or Base missing.
+One thing in Needs Me, of a reason its Project's Focus Kinds leave on, that the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, or a Project's Base diverged or Base missing.
 _Avoid_: Action, card, task
+
+**Focus Kinds**:
+The Project setting naming which Needs Me reasons are Focus Items for that Project. It is set in the Focus section of Project Options, with every reason on by default. A reason left off stays in Needs Me, its count, the needs-you dots and Notifications.
+_Avoid_: focus filter, muted kinds
 
 **Activity Dashboard**:
 What Focus Mode shows when nothing needs the human, unless the human has chosen All clear. The Inbox's Activity link, in its Admin section, also opens it in a view of its own, whatever needs the human, for the Project the Inbox has chosen (All Projects when none) and with a Project selector and a Back button. It shows how many Tickets are Ready and In Progress, and lists the In Progress Tickets. When a Project in its scope that isn't Archived has CI Tracking on, a CI Running block also counts the CI Runs still going that count towards a Ticket's CI result, and a CI Running list below the In Progress Tickets lists them, or says "No CI Runs running". Each entry shows the run's workflow, Ticket, branch, short commit and how long it has been going, opens its Ticket in the Inbox and carries the run's GitHub link. A count pulses when it changes, and an entry pulses when its Ticket changes.

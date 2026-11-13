@@ -576,6 +576,20 @@ describe("the Board's Focus popup", () => {
     expect(screen.queryByRole("dialog", { name: "Ticket popup" })).toBeNull();
   });
 
+  it("still opens from a card, with its item and needs-you dot, when its Project's Focus Kinds leave the reason off", async () => {
+    const fake = world();
+    fake.updateTicket("acme-3", { state: "Answered" });
+    fake.setNeedsMe([{ reason: "answered", tickets: [{ id: "acme-3", since: at(7) }] }]);
+    await fake.setFocusKinds("acme", ["answered"]);
+    renderApp(fake, "/?view=board&project=acme");
+    await loaded();
+    expect(within(card("Sign-up page")).getByRole("img", { name: "Needs you" })).toBeInTheDocument();
+    await userEvent.click(within(card("Sign-up page")).getByText("Sign-up page"));
+    expect(within(await item()).getByRole("heading", { name: "Sign-up page" })).toBeInTheDocument();
+    expect(window.location.search).toBe("?view=board&project=acme&popup=acme-3");
+    expect(screen.queryByRole("dialog", { name: "Ticket popup" })).toBeNull();
+  });
+
   it("gives focus back to the card when it closes", async () => {
     renderApp(asking(), "/?view=board&project=acme");
     await loaded();

@@ -6,12 +6,14 @@
 // through the plain Api. It has two modes:
 //
 //   - Ticket mode is the Board's popup for a Ticket that needs the human,
-//     scoped to the one Ticket, with no Skip, N left or Open in Inbox. It
-//     closes by itself once Needs Me has no row left for the Ticket.
-//   - Queue mode is scoped to a Project, or All Projects, over the whole
-//     Needs Me queue, with Skip, N left and Open in Inbox. It keeps its own
-//     skip list, and closes by itself once the queue is clear or only
-//     skipped Focus Items are left.
+//     scoped to the one Ticket, whatever its Project's Focus Kinds, with
+//     no Skip, N left or Open in Inbox. It closes by itself once Needs Me
+//     has no row left for the Ticket.
+//   - Queue mode is scoped to a Project, or All Projects, over every Focus
+//     Item in Needs Me, of a reason its Project's Focus Kinds leave on,
+//     with Skip, N left and Open in Inbox. It keeps its own skip list, and
+//     closes by itself once the queue is clear or only skipped Focus Items
+//     are left.
 //
 // Either way it tells its host why it closed and the key of every Focus
 // Item in scope then. It changes no address of its own.
@@ -68,7 +70,7 @@ export function FocusPopup(props: FocusPopupProps) {
   // A CI item has no Ticket of its own: its panel shows the first Ticket
   // it lists, whose options act on every one of them.
   const ticket = useTicket(api, onScreen?.row.project, onScreen && ticketOf(onScreen.row), version);
-  const screen = focusQueue({ needsMe: data.needsMe, project, scope, onScreen, ticket: ticket.data, skipped, acted: false });
+  const screen = focusQueue({ needsMe: data.needsMe, projects: data.projects, project, scope, onScreen, ticket: ticket.data, skipped, acted: false });
   const item = screen.item;
   // What's shown becomes what's on screen, so a later read keeps it there.
   // While nothing can be shown (a read Round with no open Question, before
@@ -77,7 +79,7 @@ export function FocusPopup(props: FocusPopupProps) {
   useEffect(() => {
     if (item && item.key !== onScreen?.key) setOnScreen(item);
   }, [item, onScreen]);
-  const keys = () => focusKeys({ needsMe: data.needsMe, project, scope, ticket: ticket.data });
+  const keys = () => focusKeys({ needsMe: data.needsMe, projects: data.projects, project, scope, ticket: ticket.data });
   const close = (why: FocusPopupClose["why"]) => onClose({ why, keys: keys() });
   const gone = useRef(() => props.onGone?.(keys()));
   gone.current = () => props.onGone?.(keys());

@@ -40,14 +40,16 @@ export function App({ api, now = () => new Date() }: AppProps) {
   const ticket = useTicket(api, selected && projectOf(selected), selected, version);
   useNeedsMeTitle(inbox.data && needsMeCount(inbox.data.needsMe));
   // Under Focus Pop-up, the Focus popup opens by itself over the view
-  // showing, scoped to its Project, from the same live Needs Me. Until the
-  // Options first load Focus Pop-up is off; a failed read later keeps the
-  // last one, so an open popup isn't lost to it.
+  // showing, scoped to its Project, from the same live Needs Me and the
+  // Projects' Focus Kinds. Until the Options first load Focus Pop-up is
+  // off; a failed read later keeps the last one, so an open popup isn't
+  // lost to it.
   const popup = usePopupTrigger({
     option: options.data?.focus_popup ?? "off",
     view: loc.view,
     project: loc.project,
     needsMe: inbox.data?.needsMe,
+    projects: inbox.data?.projects ?? [],
   });
 
   return (
