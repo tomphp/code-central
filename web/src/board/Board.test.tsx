@@ -6,10 +6,11 @@
 // ▾ and Back to the Inbox.
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
 import { ApiError, STATES } from "../api/types";
+import { failCI } from "../ciTesting";
 
 const at = (minutes: number) => new Date(Date.UTC(2026, 10, 7, 9, minutes)).toISOString();
 
@@ -45,6 +46,8 @@ const titles = (state: string) => cards(state).map((c) => c.querySelector(".boar
 const card = (title: string) => within(board()).getByRole("link", { name: new RegExp(title) });
 const columnsButton = () => within(board()).getByRole("button", { name: /^Columns/ });
 const loaded = () => within(board()).findByRole("link", { name: /Login form/ });
+// noPopup checks no popup, nor any other dialog, is open.
+const noPopup = () => expect(screen.queryByRole("dialog")).toBeNull();
 
 beforeEach(() => localStorage.clear());
 
@@ -274,7 +277,6 @@ describe("the Board's cards", () => {
 
 describe("the Board's Ticket popup", () => {
   const popup = () => screen.getByRole("dialog", { name: "Ticket popup" });
-  const noPopup = () => expect(screen.queryByRole("dialog")).toBeNull();
   // popupHeading waits for the Ticket popup to show its Ticket's title.
   const popupHeading = async (title: string) =>
     within(await screen.findByRole("dialog", { name: "Ticket popup" })).findByRole("heading", { name: new RegExp(title) });
@@ -414,7 +416,6 @@ describe("the Board's Ticket popup", () => {
 
 describe("the Board's Focus popup", () => {
   const popup = () => screen.getByRole("dialog", { name: "Focus popup" });
-  const noPopup = () => expect(screen.queryByRole("dialog")).toBeNull();
   const item = async () => within(await screen.findByRole("dialog", { name: "Focus popup" })).findByRole("article", { name: "Focus Item" });
   // question waits for the popup to show the Question titled title; each
   // Question is a new Focus Item, so it looks in the popup, not an item.
@@ -521,11 +522,15 @@ describe("the Board's Focus popup", () => {
     const fake = asking();
     const t = await fake.getTicket("acme", "acme-7");
     fake.updateTicket("acme-7", { rounds: t.rounds.map((r) => ({ ...r, questions: r.questions.map((q) => ({ ...q, status: "dismissed" as const })) })) });
+    const read = vi.spyOn(fake, "getTicket");
     renderApp(fake, "/?view=board&project=acme&popup=acme-7");
     await loaded();
     // Once read, the Round has nothing to show, so no Focus Item either.
     await waitFor(() => expect(within(popup()).queryByRole("article", { name: "Focus Item" })).toBeNull());
     expect(popup()).toHaveTextContent("Loading…");
+    // It waits on that read, rather than reading the Round again and again.
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    expect(read.mock.calls.length).toBeLessThan(5);
 
     fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason !== "needs_answer"));
     await act(async () => fake.emit({ type: "ticket.changed", project: "acme", id: "acme-7" }));
@@ -546,40 +551,17 @@ describe("the Board's Focus popup", () => {
   });
 
   it("opens for a Ticket listed in a CI item, with that item, whose options act on every Ticket it lists", async () => {
-    // acme-7 and acme-8 Accepted, both pushed as abc1234567, whose one run
-    // of ci.yml failed: one CI failed item listing both, as ciitem.test.tsx
-    // sets it up.
+    // acme-7 and acme-8 Accepted, pushed together, whose CI failed: one CI
+    // failed item listing both.
     const fake = world();
     const spec = { id: "acme-1", title: "Login" };
     fake.addTicket("acme", { title: "Basket", state: "Accepted", spec, branch: "acme-7", commit: "abc", created: at(7), updated: at(7) }); // acme-7
     fake.addTicket("acme", { title: "Checkout", state: "Accepted", spec, branch: "acme-8", commit: "def", created: at(8), updated: at(8) }); // acme-8
-    await fake.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
-    await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
-    await fake.reportPushedCommit("acme", "acme-7", "abc1234567", "main");
-    await fake.reportPushedCommit("acme", "acme-8", "abc1234567", "main");
-    await fake.reportCIRuns("acme", [
-      {
-        id: 1,
-        attempt: 1,
-        workflow: "ci.yml",
-        name: "CI",
-        branch: "main",
-        commit: "abc1234567",
-        status: "completed",
-        conclusion: "failure",
-        url: "https://github.com/acme/web/actions/runs/1",
-        jobs: [{ name: "test", conclusion: "failure", url: "https://github.com/acme/web/actions/runs/1/job/1" }],
-        ticket: "acme-7",
-      },
-    ]);
-    const ci_item = (await fake.getTicket("acme", "acme-7")).ci_item!;
-    fake.setNeedsMe([
-      { reason: "ci_failed", tickets: [{ id: "", project: "acme", title: "CI failed at abc1234", ci_result: "failed", ci_failure: { commit: "abc1234567", workflows: ["ci.yml"] }, ci_item }] },
-    ]);
+    await failCI(fake, "acme", ["acme-7", "acme-8"]);
     renderApp(fake, "/?view=board&project=acme&popup=acme-8");
-    const it = await item();
-    expect(within(it).getByRole("heading", { level: 2 })).toHaveTextContent("CI failed at abc1234");
-    const panel = await within(it).findByRole("region", { name: "CI failed" });
+    const ciItem = await item();
+    expect(within(ciItem).getByRole("heading", { level: 2 })).toHaveTextContent("CI failed at abc1234");
+    const panel = await within(ciItem).findByRole("region", { name: "CI failed" });
     await userEvent.click(within(within(panel).getByRole("group", { name: "Failure options" })).getByRole("button", { name: "Land anyway" }));
     for (const id of ["acme-7", "acme-8"]) expect((await fake.getTicket("acme", id)).land_anyway).toBe(true);
     await waitFor(noPopup);

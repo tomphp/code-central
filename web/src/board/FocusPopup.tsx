@@ -34,8 +34,11 @@ export function FocusPopup({ api, now, version, data, id, onClose, navigate }: F
   const screen = focusQueue({ needsMe: data.needsMe, scope: id, onScreen, ticket: ticket.data, skipped: [], acted: false });
   const item = screen.item;
   // What's shown becomes what's on screen, so a later read keeps it there.
+  // While nothing can be shown (a read Round with no open Question, before
+  // Needs Me catches up) the last item stays on screen: dropping it would
+  // drop its read, bring back the unread Round and read it again, forever.
   useEffect(() => {
-    if (item?.key !== onScreen?.key) setOnScreen(item);
+    if (item && item.key !== onScreen?.key) setOnScreen(item);
   }, [item, onScreen]);
   // It closes once, as the queue turns clear: onClose is a new function
   // each render, so it isn't a dependency.

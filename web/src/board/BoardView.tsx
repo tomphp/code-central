@@ -169,7 +169,7 @@ export function BoardView({ api, now, version, data, loc, navigate }: BoardViewP
       {/* At most one popup, chosen from popup=. Until the Spec popup lands
           (code-central-524), a Spec's ID opens nothing. */}
       {loc.popup && kind === "focus" && data && (
-        <FocusPopup api={api} now={now} version={version} data={data} id={loc.popup} onClose={closePopup} navigate={navigate} />
+        <FocusPopup key={loc.popup} api={api} now={now} version={version} data={data} id={loc.popup} onClose={closePopup} navigate={navigate} />
       )}
       {loc.popup && kind === "ticket" && (
         <TicketPopup
