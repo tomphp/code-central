@@ -22,6 +22,7 @@ import { ModelChoice } from "./ModelChoice";
 import { ShortId } from "../inbox/ShortId";
 import { Button } from "../controls/Button";
 import { Select } from "../controls/Select";
+import { moveText } from "./autoAccept";
 
 export interface TicketPaneProps {
   api: Api;
@@ -257,7 +258,7 @@ function History({ ticket: t, now }: { ticket: TicketView; now: Date }) {
       kind: "text",
       time: m.time,
       key: `m${i}`,
-      text: `${m.from ? `${m.from} → ` : ""}${m.to} by ${m.actor}`,
+      text: moveText(m, t),
     })),
     ...t.comments.map((c): HistoryItem => ({
       kind: "text",
