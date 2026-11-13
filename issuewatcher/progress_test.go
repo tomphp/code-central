@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/store"
 )
 
 // agent is the context an agent's writes are made in.
@@ -39,7 +40,11 @@ func (w *watching) workedDone(ticket, comment, commit string) {
 		branch = ticket
 	}
 	if err == nil {
-		_, err = w.srv.Core.Finish(agent, "acme", core.FinishInput{Ticket: core.Ref(ticket), ClaimID: c.ClaimID, Summary: "Finished " + ticket + ".", Branch: branch})
+		in := core.FinishInput{Ticket: core.Ref(ticket), ClaimID: c.ClaimID, Summary: "Finished " + ticket + ".", Branch: branch}
+		if core.StageOf(c.Ticket.Labels) == "spec" {
+			in.Recommendation = store.RecommendSplit
+		}
+		_, err = w.srv.Core.Finish(agent, "acme", in)
 	}
 	if err == nil {
 		_, err = w.srv.Core.Accept(human, "acme", core.TicketInput{Ticket: core.Ref(ticket)})

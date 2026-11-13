@@ -122,7 +122,7 @@ func TestFilesAreWrittenInFixedFieldOrder(t *testing.T) {
 		return w.PutTicket("acme", store.Ticket{
 			Number: 2, Title: "Form", State: store.Ready, Spec: 1, Labels: []string{"ui"},
 			Created: t0, Updated: t0.Add(90 * time.Second), Description: "Build it.\nWell.\n",
-			Branch: "acme-2", Commit: "abc123",
+			Branch: "acme-2", Commit: "abc123", Recommendation: store.RecommendSplit,
 			Moves:  []store.Move{{From: store.Accepted, To: store.Done, Actor: "agent", Time: t0, Via: "merge", Commit: "def456"}},
 			Claims: []store.Claim{{Number: 1, ID: "ABC", SessionID: "s1", WorkingDir: "/work/acme 2", ResumeCommand: "claude --resume s1 && echo 'back'", Model: "opus", Effort: "high", Started: t0, Ended: t0.Add(time.Minute), EndedBy: "finish"}},
 			Rounds: []store.Round{{Number: 1, Claim: 1, SessionID: "s1", Posted: t0, Questions: []store.Question{
@@ -178,6 +178,7 @@ description: |
   Well.
 branch: acme-2
 commit: abc123
+recommendation: split
 claims:
   - number: 1
     id: ABC
@@ -445,6 +446,7 @@ func TestInvalidFilesStopStartupNamingFileAndField(t *testing.T) {
 		{"unknown previous field", "projects/acme/tickets/2.yaml", ticket + "edits:\n  - number: 1\n    actor: agent\n    time: 2026-11-07T09:30:00Z\n    previous:\n      colour: red\n", "edits[0].previous.colour"},
 		{"bad comment time", "projects/acme/tickets/2.yaml", ticket + "comments:\n  - number: 1\n    actor: agent\n    time: soon\n    body: hi\n", "comments[0].time"},
 		{"bad question status", "projects/acme/tickets/2.yaml", ticket + "rounds:\n  - number: 1\n    claim: 1\n    posted: 2026-11-07T09:30:00Z\n    questions:\n      - number: 1\n        title: Q\n        body: B\n        status: maybe\n", "rounds[0].questions[0].status"},
+		{"bad recommendation", "projects/acme/tickets/2.yaml", ticket + "recommendation: maybe\n", "recommendation"},
 		{"bad external state", "projects/acme/tickets/2.yaml", ticket + "link:\n  integration: github\n  id: \"12\"\n  external_state: gone\n", "link.external_state"},
 		{"link without id", "projects/acme/tickets/2.yaml", ticket + "link:\n  integration: github\n  external_state: open\n", "link.id"},
 		{"badly named ticket file", "projects/acme/tickets/two.yaml", ticket, "file name"},

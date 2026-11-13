@@ -42,6 +42,10 @@ type FinishInput struct {
 	// Ticket with a branch is Accepted, not Done, when the human accepts it.
 	Branch string `json:"branch,omitempty"`
 	Commit string `json:"commit,omitempty"`
+	// Recommendation is the Spec recommendation, implement or split:
+	// required on a spec Stage and refused on any other Ticket. It
+	// replaces the one an earlier finish gave.
+	Recommendation store.Recommendation `json:"recommendation,omitempty"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -175,12 +179,25 @@ func claimTarget(rule blockRule, in ClaimInput) (t store.Ticket, found bool, err
 }
 
 // Finish is finish(ticket, claim_id, summary): the holder moves In
-// Progress to In Review, with the summary stored as a comment.
+// Progress to In Review, with the summary stored as a comment. A spec
+// Stage's finish also gives its Spec recommendation.
 func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishResult, error) {
 	if strings.TrimSpace(in.Summary) == "" {
 		return FinishResult{}, invalid("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
 	}
+	rec := store.Recommendation(strings.TrimSpace(string(in.Recommendation)))
+	if rec != "" && !rec.Valid() {
+		return FinishResult{}, invalid("recommendation", "recommendation %q is neither %q nor %q", in.Recommendation, store.RecommendImplement, store.RecommendSplit)
+	}
 	v, err := c.actThen(ctx, key, in.Ticket, in.Full, "finish", in.ClaimID, in.Summary, func(t *store.Ticket) error {
+		spec := StageOf(t.Labels) == "spec"
+		switch {
+		case spec && rec == "":
+			return invalid("recommendation", "finishing a spec Stage needs a recommendation: implement or split, with a one-line reason in the summary")
+		case !spec && rec != "":
+			return invalid("recommendation", "only a spec Stage takes a recommendation: finish again without it")
+		}
+		t.Recommendation = rec
 		if b := strings.TrimSpace(in.Branch); b != "" {
 			t.Branch = b
 		}

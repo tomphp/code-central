@@ -1,7 +1,8 @@
 // The In Review panel: the agent's finish summary, then Accept (on a spec
-// Stage, Split into Tickets and Implement), and Reject, which can't be sent
-// without a comment saying what to change.
-import { useState } from "react";
+// Stage, Split into Tickets and Implement, with the Spec recommendation
+// highlighted), and Reject, which can't be sent without a comment saying
+// what to change.
+import { useId, useState } from "react";
 import "../../api/actions/accept";
 import "../../api/actions/implement";
 import "../../api/actions/reject";
@@ -17,6 +18,11 @@ export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
   const { busy, error, run } = useAct();
   const summary = finishSummary(t);
   const canReject = comment.trim() !== "" && !busy;
+  const recommendedId = useId();
+  // On a spec Stage with a Spec recommendation, only the recommended
+  // choice is primary; with none, both are, as before there was one.
+  const choiceVariant = (choice: NonNullable<TicketView["recommendation"]>) =>
+    !t.recommendation || t.recommendation === choice ? "primary" : "default";
 
   return (
     <section aria-label="In Review" className="panel review-panel">
@@ -36,12 +42,32 @@ export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
       <p>
         {t.labels.includes("stage:spec") ? (
           <>
-            <Button type="button" variant="primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "accept", {}))}>
+            <Button
+              type="button"
+              variant={choiceVariant("split")}
+              aria-describedby={t.recommendation === "split" ? recommendedId : undefined}
+              disabled={busy}
+              onClick={() => run(() => api.act(project, t.id, "accept", {}))}
+            >
               Split into Tickets
             </Button>{" "}
-            <Button type="button" variant="primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "implement", {}))}>
+            <Button
+              type="button"
+              variant={choiceVariant("implement")}
+              aria-describedby={t.recommendation === "implement" ? recommendedId : undefined}
+              disabled={busy}
+              onClick={() => run(() => api.act(project, t.id, "implement", {}))}
+            >
               Implement
             </Button>
+            {t.recommendation && (
+              <>
+                {" "}
+                <span id={recommendedId} className="small muted">
+                  Recommended
+                </span>
+              </>
+            )}
           </>
         ) : (
           <Button type="button" variant="primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "accept", {}))}>

@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../../App";
 import { FakeApi } from "../../api/fake";
+import type { TicketView } from "../../api/types";
 import { ReviewPanel } from "./panel";
 
 const finished = "2026-11-07T08:00:00Z";
@@ -72,13 +73,13 @@ describe("the In Review panel", () => {
   });
 
   describe("on a spec Stage", () => {
-    async function specWorld() {
+    async function specWorld(recommendation?: TicketView["recommendation"]) {
       const fake = new FakeApi();
       fake.addProject("acme", "Acme");
       const r = await fake.submitRequirement("acme", "Offline mode");
       const [grilling, spec] = r.stages.map((s) => s.id);
       fake.updateTicket(grilling, { state: "Done" });
-      fake.updateTicket(spec, { state: "In Review" });
+      fake.updateTicket(spec, { state: "In Review", recommendation });
       return { fake, r, spec, tickets: r.stages[2].id };
     }
     async function renderSpec(fake: FakeApi, spec: string) {
@@ -93,6 +94,31 @@ describe("the In Review panel", () => {
       expect(within(panel).getByRole("button", { name: "Implement" })).toBeInTheDocument();
       expect(within(panel).queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
       expect(within(panel).getByRole("button", { name: "Reject" })).toBeInTheDocument();
+    });
+
+    it("with no recommendation, highlights neither choice", async () => {
+      const { fake, spec } = await specWorld();
+      const panel = await renderSpec(fake, spec);
+      for (const name of ["Split into Tickets", "Implement"]) {
+        const button = within(panel).getByRole("button", { name });
+        expect(button).toHaveClass("primary");
+        expect(button).not.toHaveAccessibleDescription();
+      }
+      expect(panel).not.toHaveTextContent("Recommended");
+    });
+
+    it.each([
+      ["implement", "Implement", "Split into Tickets"],
+      ["split", "Split into Tickets", "Implement"],
+    ] as const)("highlights the recommended choice: %s", async (recommendation, recommended, other) => {
+      const { fake, spec } = await specWorld(recommendation);
+      const panel = await renderSpec(fake, spec);
+      const highlighted = within(panel).getByRole("button", { name: recommended });
+      expect(highlighted).toHaveClass("primary");
+      expect(highlighted).toHaveAccessibleDescription("Recommended");
+      const plain = within(panel).getByRole("button", { name: other });
+      expect(plain).not.toHaveClass("primary");
+      expect(plain).not.toHaveAccessibleDescription();
     });
 
     it("Split into Tickets calls accept", async () => {

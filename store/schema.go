@@ -40,6 +40,11 @@ func Schema() string {
 	values("  project ci.provider (no ci: tracking off, github_actions)", ciProviderNames())
 	values("  project models.kinds[].kind", ModelKinds)
 	values("  ticket state, moves[].from, moves[].to", states)
+	var recommendations []string
+	for _, r := range Recommendations {
+		recommendations = append(recommendations, string(r))
+	}
+	values("  ticket recommendation (optional)", recommendations)
 	var statuses, conclusions []string
 	for _, s := range CIRunStatuses {
 		statuses = append(statuses, string(s))

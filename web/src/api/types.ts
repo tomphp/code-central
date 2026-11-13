@@ -916,6 +916,9 @@ export interface TicketView {
   // finish naming them gave them. Work with a branch is Accepted, then lands.
   branch?: string;
   commit?: string;
+  // recommendation is a spec Stage's Spec recommendation, as its last
+  // finish gave it: implement (Implement) or split (Split into Tickets).
+  recommendation?: "implement" | "split";
   // pushed_commit is the latest commit the Factory pushed while CI
   // Tracking was on, ci_result the Ticket's CI result and ci_commit the
   // pushed commit it comes from: under the CI gate one that passed, if

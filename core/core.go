@@ -208,6 +208,9 @@ type TicketView struct {
 	// last finish naming them gave them.
 	Branch string `json:"branch,omitempty"`
 	Commit string `json:"commit,omitempty"`
+	// Recommendation is a spec Stage's Spec recommendation, as its last
+	// finish gave it; empty on any other Ticket.
+	Recommendation store.Recommendation `json:"recommendation,omitempty"`
 	// PushedCommit is the latest commit the Factory pushed for the Ticket
 	// while CI Tracking was on, CIResult the Ticket's CI result and
 	// CICommit the pushed commit it comes from: under the CI gate one
@@ -644,7 +647,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		BlockedBy: displayIDs(key, t.BlockedBy), Replacements: displayIDs(key, t.Replacements),
 		Blockers: rule.blockerViews(t),
 		Created:  t.Created, Updated: t.Updated, Description: t.Description,
-		Branch: t.Branch, Commit: t.Commit,
+		Branch: t.Branch, Commit: t.Commit, Recommendation: t.Recommendation,
 		Claims: []ClaimView{}, Rounds: roundViews(t.Rounds), FailureReports: failureReportViews(t.FailureReports),
 		Comments: commentViews(t.Comments), Moves: []MoveView{}, Edits: editViews(t.Edits),
 		Blocked: rule.blocked(t), Link: linkView(t.Link),

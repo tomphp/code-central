@@ -438,10 +438,15 @@ func (h *Harness) ReadyTicket(title string) string {
 }
 
 // StageTicket creates a Ready Stage Ticket, marked by stage's Label, on
-// the same shared Spec, and returns its ID.
+// the same shared Spec, and returns its ID. A spec Stage's script, until
+// a test sets its own, finishes it recommending split.
 func (h *Harness) StageTicket(stage, title string) string {
 	h.t.Helper()
-	return h.readyTicket(title, core.StageLabel(stage))
+	id := h.readyTicket(title, core.StageLabel(stage))
+	if stage == "spec" {
+		h.Script(id, FinishSpec("Done.", "split"), Result("success"))
+	}
+	return id
 }
 
 // LabelledTicket creates a Ready Ticket carrying label, such as a
