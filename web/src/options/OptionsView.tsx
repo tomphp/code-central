@@ -38,8 +38,21 @@ const FOCUS_CLEAR: OptionDefinition<"focus_clear"> = {
   ],
 };
 
+const FOCUS_POPUP: OptionDefinition<"focus_popup"> = {
+  name: "focus_popup",
+  label: "Pop up Focus Items on other views",
+  choices: [
+    { value: "off", label: "Off", hint: "Needs Me waits for you in Focus Mode or a Board card." },
+    {
+      value: "on",
+      label: "On",
+      hint: "A popup shows each new Focus Item on every view but Focus Mode, Options and Project Options.",
+    },
+  ],
+};
+
 // OPTIONS is every Option chosen from a set, in the order shown.
-const OPTIONS = [FOCUS_CLEAR];
+const OPTIONS = [FOCUS_CLEAR, FOCUS_POPUP];
 
 export interface OptionsViewProps {
   api: Api;
