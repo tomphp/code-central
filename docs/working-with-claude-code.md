@@ -50,7 +50,7 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
 
    From a terminal, `code-central submit-requirement --text "…"` submits a Requirement too.
 
-   **Map**, in the **▾** menu beside **+ New**, opens the same dialog to start a Map instead: a destination you'll find the way to one decision at a time, before there is a Requirement to grill. Type where you want to get to and click **Submit map**. Code Central creates the Map, a Spec labelled `wayfinder:map` whose body is your text followed by the empty sections `Destination`, `Notes`, `Decisions so far`, `Not yet specified` and `Out of scope`, and one Ready Charting Ticket for an agent to claim. In the **Requirements** view the Map's row shows how many of its decisions are made, such as *0/1 decided*, in place of the Stage strip, and adds *· 1 needs you* when one of its Tickets does. From a terminal, `code-central submit-map` does the same. The same **+ New ▾** is in Focus Mode's header, beside **Exit**: submitting a Requirement or a Map there closes the dialog and keeps you in Focus Mode, on the item you were on, with a brief "Requirement added" or "Map added" note. Here it is in a new Project:
+   **Map**, in the **▾** menu beside **+ New**, opens the same dialog to start a Map instead: a destination you'll find the way to one decision at a time, before there is a Requirement to grill. Type where you want to get to and click **Submit map**. Code Central creates the Map, a Spec labelled `wayfinder:map` whose body is your text followed by the empty sections `Destination`, `Notes`, `Decisions so far`, `Not yet specified` and `Out of scope`, and one Ready Charting Ticket for an agent to claim. In the **Requirements** view the Map's row shows how many of its decisions are made, such as *0/1 decided*, in place of the Stage strip, and adds *· 1 needs you* when one of its Tickets does. From a terminal, `code-central submit-map` does the same. The same **+ New ▾** is in Focus Mode's header, beside **Exit**: submitting a Requirement, a Map or a Small Change there closes the dialog and keeps you in Focus Mode, on the item you were on, with a brief "Requirement added", "Map added" or "Small Change added" note. Here the Map is in a new Project:
 
    ```console
    $ code-central submit-map --text "Offline checkout
@@ -73,6 +73,29 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
      }
    }
    ```
+
+   **Small Change**, the third item in the **▾** menu, is for work too small for a Requirement, such as a typo or a one-line fix. Type what you want and click **Submit small change**; the first line becomes the Ticket's title and the whole text its description. Code Central opens one Ready Ticket, with no Stages, on the Project's **Small Changes Spec**, a Long-lived Spec it creates on first use, and opens that Ticket in the Ticket panel. A Factory claims it at once with the implementation Stage Guide, builds it on a branch of its own, and it lands on its own once you accept it, not with the rest of a Spec. From a terminal, `code-central submit-small-change` does the same:
+
+   ```console
+   $ code-central submit-small-change --text "Fix the typo in the checkout button
+
+   The button says \"Chekout\"; it should say \"Checkout\"."
+   {
+     "id": "acme-shop-2",
+     "updated": "2026-11-13T09:13:08Z",
+     "changed": [
+       "title",
+       "state",
+       "spec",
+       "description",
+       "moves",
+       "claimable"
+     ],
+     "state": "Ready"
+   }
+   ```
+
+   The Small Changes Spec, `acme-shop-1` here, was made by that first Small Change. Its Ticket is Ready.
 
    Selecting the Map opens the Map view where a Requirement's strip would be. Under the Map's title and count are the **Guided** toggle, **New Prototype** (see [Prototypes](#prototypes)) and its Destination, and below that its Tickets as a graph read left to right: each Blocker sits left of the Tickets it blocks, with an arrow to each. Each node shows the Ticket's type (`chart`, `grilling`, `research`, `task`, `prototype` or `ticket`), ID, title and State, and its top edge takes the strip's colours: green when done, the reason's colour when it needs you, solid blue while an agent is on it, dashed blue while it waits to be claimed, and grey while it is Draft or blocked. A Draft node that nothing blocks is on the frontier and has **Start**, which approves it to Ready. A dim **Not yet specified** node at the right edge shows that section of the Map when you click it. **Decisions so far** and **Out of scope** sit beside the graph and fold away. Clicking a node opens its Ticket below, as a Stage of a Requirement does. On a new Map there is only Charting, and the sections say *None yet.* until Charting fills them. Ticking **Guided** sets the Map's `guided` Tag to `on`: a running Factory then approves the next frontier Ticket itself whenever nothing on the Map is waiting on you or an agent (see [Running the Factory](running-the-factory.md#map-tickets-and-prototypes)). Unticking it removes the Tag.
 
