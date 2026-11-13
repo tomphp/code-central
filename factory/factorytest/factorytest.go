@@ -737,7 +737,14 @@ func (h *Harness) launch(dir string, args ...string) *Running {
 		defer close(r.done)
 		r.code = factory.Run(ctx, args, env)
 	}()
-	h.t.Cleanup(func() { r.Stop() })
+	h.t.Cleanup(func() {
+		r.Stop()
+		// A wait that timed out says what it waited for, not why: what
+		// the Factory said is the why.
+		if h.t.Failed() {
+			h.t.Logf("the Factory's stdout:\n%s\nits stderr:\n%s", r.stdout, r.stderr)
+		}
+	})
 	return r
 }
 
