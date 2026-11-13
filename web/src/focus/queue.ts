@@ -69,9 +69,7 @@ export interface FocusScreen {
 }
 
 export function focusQueue({ needsMe, project, scope, onScreen, ticket, skipped, acted }: FocusInput): FocusScreen {
-  // Needs Me's own order, Stage Tickets as themselves, unlike the Inbox.
-  const rows = needsMe.groups.flatMap((g) => g.tickets).filter((r) => !project || r.project === project)
-    .filter((r) => !scope || r.id === scope || !!r.ci_item?.tickets.some((t) => t.id === scope));
+  const rows = rowsIn({ needsMe, project, scope });
   const items = rows.flatMap((row) => itemsOf(row, ticket));
   // Skipped items go to the back, after every unskipped one. They come
   // back only when the human goes through them again, which clears the
@@ -86,6 +84,23 @@ export function focusQueue({ needsMe, project, scope, onScreen, ticket, skipped,
     unskipped[0];
   const remaining = rows.reduce((n, r) => n + (r.reason === "needs_answer" ? (r.round?.open ?? 1) : 1), 0);
   return { item, remaining, clear: rows.length === 0, onlySkipped: !item && items.length > 0, elsewhere: !acted && isGone(onScreen, items) };
+}
+
+// focusKeys is the key of every Focus Item in scope, given the latest read
+// of the on-screen item's Ticket. A Round is keyed as its row as well as
+// by each open Question, so it's known by the same key read or not.
+export function focusKeys({ needsMe, project, scope, ticket }: Pick<FocusInput, "needsMe" | "project" | "scope" | "ticket">): string[] {
+  return rowsIn({ needsMe, project, scope }).flatMap((row) => {
+    const keys = itemsOf(row, ticket).map((i) => i.key);
+    return row.reason === "needs_answer" ? [...new Set([roundKeyOf(row), ...keys])] : keys;
+  });
+}
+
+// rowsIn is Needs Me's rows in scope, in its own order, Stage Tickets as
+// themselves, unlike the Inbox.
+function rowsIn({ needsMe, project, scope }: Pick<FocusInput, "needsMe" | "project" | "scope">): NeedsMeRow[] {
+  return needsMe.groups.flatMap((g) => g.tickets).filter((r) => !project || r.project === project)
+    .filter((r) => !scope || r.id === scope || !!r.ci_item?.tickets.some((t) => t.id === scope));
 }
 
 // isGone is whether the item on screen has left the queue, skipped items
@@ -109,9 +124,7 @@ function itemsOf(row: NeedsMeRow, ticket?: TicketView): FocusItem[] {
   // A Base diverged item is a Project's, with no Ticket ID; a CI item is
   // a Project's pushed commit's.
   if (row.reason !== "needs_answer") return [{ key: `${row.id || row.project} ${row.reason}${row.ci_item ? ` ${row.ci_item.commit}` : ""}`, row }];
-  // The key comes from the row alone, so it's the same before and after
-  // the read; a row naming no Round means the Ticket's latest.
-  const roundKey = `${row.id} round ${row.round?.number ?? "latest"}`;
+  const roundKey = roundKeyOf(row);
   if (ticket?.id !== row.id) return [{ key: roundKey, row, roundKey }];
   const round = row.round ? ticket.rounds.find((r) => r.number === row.round?.number) : ticket.rounds.at(-1);
   if (!round) return [];
@@ -122,4 +135,11 @@ function itemsOf(row: NeedsMeRow, ticket?: TicketView): FocusItem[] {
       ? [{ key: `${roundKey} question ${q.number}`, row, roundKey, question: { q, round: round.number, place: i + 1, count: round.questions.length } }]
       : [],
   );
+}
+
+// roundKeyOf is a needs_answer row's Round's key. It comes from the row
+// alone, so it's the same before and after the read; a row naming no
+// Round means the Ticket's latest.
+function roundKeyOf(row: NeedsMeRow): string {
+  return `${row.id} round ${row.round?.number ?? "latest"}`;
 }

@@ -12,13 +12,13 @@
 // there's only ever one note, the latest.
 import { useEffect, useMemo, useState } from "react";
 import type { Api } from "../api/api";
-import type { FocusClear, NeedsMeRow } from "../api/types";
+import type { FocusClear } from "../api/types";
 import { ticketOf } from "../format";
 import { useTicket, type InboxData } from "../live";
 import { NewSplit } from "../requirement/NewSplit";
 import type { UiLocation } from "../url";
 import { ActivityDashboard } from "./ActivityDashboard";
-import { FocusItemView } from "./FocusItemView";
+import { FocusItemView, inboxOf } from "./FocusItemView";
 import { focusQueue, type FocusItem } from "./queue";
 import { Button } from "../controls/Button";
 import "./focus.css";
@@ -178,7 +178,7 @@ export function Focus({
           ticket={ticket.data?.id === ticketOf(item.row) ? ticket.data : undefined}
           navigate={navigate}
           skip={() => setSkipped([...skipped, item])}
-          inbox={inboxOf(item.row, loc)}
+          inbox={inboxOf(item.row, loc.project)}
         />
       ) : (
         <p className="focus-loading">Loading…</p>
@@ -225,18 +225,4 @@ function recordingWrites(
       };
     },
   });
-}
-
-// inboxOf is where Open in Inbox goes for a row, if it has a Ticket: a Stage
-// Ticket opens in its Requirement, with it selected; a CI item opens on the
-// first Ticket it lists.
-function inboxOf(row: NeedsMeRow, loc: UiLocation): UiLocation | undefined {
-  const ticket = ticketOf(row);
-  if (!ticket) return undefined;
-  return {
-    view: "inbox" as const,
-    project: loc.project,
-    requirement: row.requirement?.stage && row.requirement.spec,
-    ticket,
-  };
 }

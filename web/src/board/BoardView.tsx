@@ -166,7 +166,7 @@ export function BoardView({ api, now, version, data, loc, navigate }: BoardViewP
       </main>
       {/* At most one popup, chosen from popup=. */}
       {loc.popup && kind === "focus" && data && (
-        <FocusPopup key={loc.popup} api={api} now={now} version={version} data={data} id={loc.popup} onClose={closePopup} navigate={navigate} />
+        <FocusPopup key={loc.popup} mode="ticket" api={api} now={now} version={version} data={data} id={loc.popup} onClose={closePopup} navigate={navigate} />
       )}
       {loc.popup && kind === "spec" && (
         <SpecPopup

@@ -2,7 +2,8 @@
 // opened at a URL, and the helpers every Focus test reaches for.
 import { act, render, screen } from "@testing-library/react";
 import { App } from "../App";
-import type { FakeApi } from "../api/fake";
+import { FakeApi } from "../api/fake";
+import type { RoundView } from "../api/types";
 
 // renderApp renders the App at url, against fake and its clock.
 export function renderApp(fake: FakeApi, url = "/?view=focus") {
@@ -28,4 +29,41 @@ export function change(fake: FakeApi, groups: Parameters<FakeApi["setNeedsMe"]>[
 // clear itself: a fresh store shows the Activity Dashboard.
 export function allClearOn(fake: FakeApi) {
   fake.seedOptions({ focus_clear: "all_clear" });
+}
+
+// waiting has acme-1 waiting on Round 1 (Questions 1 and 2 open), then
+// acme-2 Failed and acme-3 In Review, in that Needs Me order, with All
+// clear on.
+export function waiting() {
+  const fake = new FakeApi();
+  allClearOn(fake);
+  fake.addProject("acme", "Acme");
+  const rounds: RoundView[] = [
+    {
+      number: 1,
+      claim: 1,
+      posted: fake.now.toISOString(),
+      questions: [
+        { number: 1, title: "Which colour?", body: "Red or blue", recommended: "Blue", status: "open" },
+        { number: 2, title: "Which size?", body: "S or M", status: "open" },
+      ],
+    },
+  ];
+  fake.addTicket("acme", { title: "Pick a colour", state: "Needs Answer", rounds }); // acme-1
+  fake.addTicket("acme", { title: "Flaky build", state: "Failed" }); // acme-2
+  fake.addTicket("acme", { title: "Login page", state: "In Review" }); // acme-3
+  fake.setNeedsMe([
+    { reason: "needs_answer", tickets: [{ id: "acme-1", round: { number: 1, open: 2, questions: 2 } }] },
+    { reason: "failed", tickets: [{ id: "acme-2" }] },
+    { reason: "in_review", tickets: [{ id: "acme-3", summary: "Added the login page" }] },
+  ]);
+  return fake;
+}
+
+// waitingTickets is waiting without its Round, so every Focus Item is a
+// Ticket's.
+export function waitingTickets() {
+  const fake = waiting();
+  fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason !== "needs_answer"));
+  return fake;
 }
