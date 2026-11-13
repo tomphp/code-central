@@ -12,6 +12,7 @@ import { useUiLocation } from "./url";
 import { UsageView } from "./usage/UsageView";
 import { CIView } from "./ci/CIView";
 import { ActivityView } from "./activity/ActivityView";
+import { BoardView } from "./board/BoardView";
 
 export interface AppProps {
   api: Api;
@@ -37,8 +38,9 @@ export function App({ api, now = () => new Date() }: AppProps) {
   const ticket = useTicket(api, selected && projectOf(selected), selected, version);
   useNeedsMeTitle(inbox.data && needsMeCount(inbox.data.needsMe));
 
-  // Each view is a layout over the same live data; a later one (a board)
-  // is another case here, reusing the shared Ticket pane and panels.
+  // Each view is a layout over the same live data, the Board included;
+  // a later one is another case here, reusing the shared Ticket pane and
+  // panels.
   const banner = inbox.error && <p className="banner">{inbox.error.message}</p>;
   switch (loc.view) {
     case "focus":
@@ -59,6 +61,13 @@ export function App({ api, now = () => new Date() }: AppProps) {
         <>
           {banner}
           <ActivityView api={api} now={now()} version={version} data={inbox.data} loc={loc} navigate={navigate} />
+        </>
+      );
+    case "board":
+      return (
+        <>
+          {banner}
+          <BoardView api={api} data={inbox.data} loc={loc} navigate={navigate} />
         </>
       );
     case "project-options":

@@ -1,0 +1,56 @@
+/* The Board view: one grid of State columns under the shared view header,
+   column heads stuck to the top while the cards scroll, and the whole grid
+   scrolling sideways once the columns reach their minimum width. Its
+   styles hang off the layout's own classes, so none of them reach the
+   other views. */
+.board { height: 100vh; display: flex; flex-direction: column; }
+.board-sep { width: 1px; height: 22px; background: var(--border); }
+.board-new { position: relative; }
+.board-new .new-menu { left: auto; min-width: 16rem; }
+.board-loading { padding: 14px 24px; }
+
+/* Columns ▾ and its popover of checkboxes. */
+.board-columns { position: relative; }
+.board-columns-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 12rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / .14); padding: 4px; display: flex; flex-direction: column; }
+.board-columns-menu[hidden] { display: none; }
+.view-head .board-columns-menu label { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+.board-columns-menu label:hover { background: var(--surface-2); }
+.board-swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--st); flex: none; }
+
+.board-scroll { flex: 1; min-height: 0; overflow: auto; }
+.board-grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(165px, 1fr)); column-gap: 8px; padding: 0 16px 24px; min-width: min-content; }
+.board-col-head { position: sticky; top: 0; z-index: 2; margin: 0; background: var(--bg); display: flex; align-items: center; gap: 8px; padding: 12px 8px 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border-bottom: 3px solid var(--st); }
+.board-col-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board-col-count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+.board-cell { display: flex; flex-direction: column; gap: 6px; padding: 8px 4px; min-width: 0; min-height: 60vh; border-radius: 0 0 8px 8px; background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
+.board-empty { color: var(--muted); font-size: 12px; text-align: center; margin: 16px 0; }
+
+/* Cards: a needs-you card has a left border in its reason's colour. */
+.board-card { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--border); border-radius: 6px; color: var(--text); text-decoration: none; min-width: 0; }
+.board-card:hover { border-color: var(--muted); }
+.board-card.needs { border-left-color: var(--rc); }
+.board-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; row-gap: 3px; min-width: 0; }
+.board-card .tid { flex: none; }
+.board-spacer { flex: 1; }
+.board-blocked { font-size: 11px; color: var(--r-blocked); white-space: nowrap; flex: none; }
+.board-card-title { font-weight: 500; min-width: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
+.board-card-spec { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.board-card-spec .kind-badge { font-size: 9.5px; padding: 0 4px; }
+
+/* A pulse: an accent glow fading over 1.4s, run twice, when a card's
+   Ticket changes; pulseTiming.board matches it. Two identical animations,
+   so a new pulse swaps between them and the browser restarts it
+   (focus/pulse.ts). */
+.board-card.dashboard-pulse-0 { animation: board-pulse-0 1.4s ease-out 2; }
+.board-card.dashboard-pulse-1 { animation: board-pulse-1 1.4s ease-out 2; }
+@keyframes board-pulse-0 {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
+  100% { box-shadow: 0 0 0 10px transparent; background: var(--surface); }
+}
+@keyframes board-pulse-1 {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
+  100% { box-shadow: 0 0 0 10px transparent; background: var(--surface); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-card.dashboard-pulse-0, .board-card.dashboard-pulse-1 { animation: none; outline: 2px solid var(--accent); }
+}

@@ -4,9 +4,10 @@
 import { useEffect, useState } from "react";
 
 // pulseTiming.ms is how long a pulse lasts; focus.css's animations match
-// it. Tests lengthen it, so a slow machine can't end a pulse before they
-// look for it.
-export const pulseTiming = { ms: 600 };
+// it. board is the Board view's longer one, its card glow run twice, as
+// board.css's animation. Tests lengthen both, so a slow machine can't end a
+// pulse before they look for it.
+export const pulseTiming = { ms: 600, board: 2800 };
 
 // Pulse is what a pulsing element spreads on itself: data-pulsing marks
 // that it is pulsing, and its class adds the one that runs the animation.
@@ -17,8 +18,9 @@ export interface Pulse {
 
 // usePulse gives an element of className its Pulse: it pulses whenever
 // trigger differs from the value it last saw, but not on its first
-// value, unless onMount says to pulse once then.
-export function usePulse(className: string, trigger: unknown, onMount = false): Pulse {
+// value, unless onMount says to pulse once then. lasts names the
+// pulseTiming it lasts for.
+export function usePulse(className: string, trigger: unknown, onMount = false, lasts: keyof typeof pulseTiming = "ms"): Pulse {
   const [seen, setSeen] = useState(trigger);
   // count is how many pulses have started; its parity picks between two
   // identical animations, so a new pulse swaps the animation's name and
@@ -33,8 +35,8 @@ export function usePulse(className: string, trigger: unknown, onMount = false): 
   }
   useEffect(() => {
     if (!on) return;
-    const timer = setTimeout(() => setOn(false), pulseTiming.ms);
+    const timer = setTimeout(() => setOn(false), pulseTiming[lasts]);
     return () => clearTimeout(timer);
-  }, [on, count]);
+  }, [on, count, lasts]);
   return on ? { "data-pulsing": "true", className: `${className} dashboard-pulse-${count % 2}` } : { className };
 }
