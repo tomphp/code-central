@@ -9,8 +9,8 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, PullRequestReport, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
-import { ApiError, TRIAGE_ACTIONS } from "./types";
+import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, NeedsMeReason, PullRequestReport, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
+import { ApiError, NEEDS_ME_REASONS, TRIAGE_ACTIONS } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
 
@@ -371,6 +371,34 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.listProjects())[0].stage_guides.model_assignment).toBe(true);
       expect((await d.api.setSubagentExploration("acme", false)).stage_guides).toEqual({ subagent_exploration: false, model_assignment: true });
       expect((await d.api.setModelAssignment("acme", false)).stage_guides).toEqual({ subagent_exploration: false, model_assignment: false });
+    });
+
+    it("sets a Project's Focus Kinds, every reason on to begin with, replacing the off list whole", async () => {
+      await d.createProject("acme", "Acme");
+      expect((await d.api.listProjects())[0].focus_kinds).toEqual({ off: [] });
+
+      // Kept in Needs Me's group order, each once.
+      const set = await d.api.setFocusKinds("acme", ["in_review", "answered", "in_review"]);
+      expect(set.focus_kinds).toEqual({ off: ["answered", "in_review"] });
+      expect((await d.api.listProjects())[0].focus_kinds).toEqual(set.focus_kinds);
+      expect((await d.api.setFocusKinds("acme", ["failed"])).focus_kinds).toEqual({ off: ["failed"] });
+
+      const bad = await d.api.setFocusKinds("acme", ["answered", "lunch" as NeedsMeReason]).catch((e) => e);
+      expect(bad).toBeInstanceOf(ApiError);
+      expect(bad).toMatchObject({ status: 422, code: "invalid", field: "off" });
+      expect(bad.message).toContain("lunch");
+      expect((await d.api.listProjects())[0].focus_kinds).toEqual({ off: ["failed"] });
+
+      // NEEDS_ME_REASONS are the service's reasons, in its group order.
+      expect((await d.api.setFocusKinds("acme", [...NEEDS_ME_REASONS])).focus_kinds).toEqual({ off: NEEDS_ME_REASONS });
+      expect((await d.api.setFocusKinds("acme", [])).focus_kinds).toEqual({ off: [] });
+
+      // An Archived Project refuses before the reasons are checked.
+      await d.api.archiveProject("acme");
+      for (const off of [["answered"], ["lunch"]] as NeedsMeReason[][]) {
+        const refused = await d.api.setFocusKinds("acme", off).catch((e) => e);
+        expect(refused).toMatchObject({ status: 409, code: "action_not_allowed", allowed_actions: ["unarchive_project"] });
+      }
     });
 
     it("sets a Project's Models, a row per kind of work, all at Default to begin with", async () => {

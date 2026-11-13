@@ -76,6 +76,10 @@ type Project struct {
 	// StageGuides is the Project's Stage Guides settings. A Project stored
 	// without them reads as the zero StageGuides: every optional line on.
 	StageGuides StageGuides
+	// FocusKindsOff are the Needs Me reasons the Project's Focus Kinds
+	// turn off (Spec code-central-550), in NeedsMeReasons order with no
+	// duplicates. A Project stored without them has every reason on.
+	FocusKindsOff []string
 	// CIResponses are the human's responses to pushed commits' CI
 	// results, one per commit (code-central-432). A Project stored
 	// without them has none.
@@ -342,6 +346,13 @@ type KindModels struct {
 // ModelKinds are the kinds of work a Models row may name: core's
 // GuideNames, which core's tests keep in step.
 var ModelKinds = []string{"grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"}
+
+// NeedsMeReasons are the Needs Me reasons a Project's Focus Kinds may
+// turn off, in group order: core's Needs Me reasons, which core's tests
+// keep in step.
+var NeedsMeReasons = []string{"needs_answer", "answered", "silent_claim", "long_claim", "failed", "in_review",
+	"ci_failed", "ci_cancelled", "base_diverged", "base_missing", "pull_request_closed", "to_merge", "ci_unavailable",
+	"accepted_not_landed", "blocked_by_cancelled", "new_issue", "closed_externally"}
 
 // IsZero reports whether m sets nothing.
 func (m Models) IsZero() bool { return m.Default == (ModelRow{}) && len(m.Kinds) == 0 }

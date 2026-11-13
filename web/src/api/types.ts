@@ -18,24 +18,28 @@ export type State = (typeof STATES)[number];
 // A finished Ticket is Done or Cancelled.
 export const FINISHED: readonly State[] = ["Done", "Cancelled"];
 
-export type NeedsMeReason =
-  | "needs_answer"
-  | "answered"
-  | "silent_claim"
-  | "long_claim"
-  | "failed"
-  | "in_review"
-  | "ci_failed"
-  | "ci_cancelled"
-  | "base_diverged"
-  | "base_missing"
-  | "pull_request_closed"
-  | "to_merge"
-  | "ci_unavailable"
-  | "accepted_not_landed"
-  | "blocked_by_cancelled"
-  | "new_issue"
-  | "closed_externally";
+// NEEDS_ME_REASONS are the Needs Me reasons in group order, as
+// get_workflow publishes them.
+export const NEEDS_ME_REASONS = [
+  "needs_answer",
+  "answered",
+  "silent_claim",
+  "long_claim",
+  "failed",
+  "in_review",
+  "ci_failed",
+  "ci_cancelled",
+  "base_diverged",
+  "base_missing",
+  "pull_request_closed",
+  "to_merge",
+  "ci_unavailable",
+  "accepted_not_landed",
+  "blocked_by_cancelled",
+  "new_issue",
+  "closed_externally",
+] as const;
+export type NeedsMeReason = (typeof NEEDS_ME_REASONS)[number];
 
 // A triage action the human may take on an Incoming Issue (Spec
 // code-central-279), each an operation's name.
@@ -222,6 +226,12 @@ export interface GitHubIssuesSettings extends GitHubIssuesChange {
 export interface StageGuides {
   subagent_exploration: boolean;
   model_assignment: boolean;
+}
+
+// A Project's Focus Kinds (Spec code-central-550): the Needs Me reasons
+// that are off, in group order. Only the focus queue reads them.
+export interface FocusKinds {
+  off: NeedsMeReason[];
 }
 
 // A Models row (Spec code-central-301): the model and effort it sets,
@@ -441,6 +451,8 @@ export interface ProjectView {
   reported_models: ReportedModels;
   // stage_guides is always filled in: Subagent Exploration on by default.
   stage_guides: StageGuides;
+  // focus_kinds is always filled in: every Needs Me reason on by default.
+  focus_kinds: FocusKinds;
   // factory_status is always filled in: offline, with no Factories,
   // until one sends a Heartbeat.
   factory_status: FactoryStatus;
