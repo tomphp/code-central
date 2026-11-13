@@ -34,6 +34,26 @@ describe("New requirement", () => {
     expect(params().get("requirement")).toBe("acme-1");
   });
 
+  it("offers Straight to Spec, off by default, and submits it skipping Grilling", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    renderApp(fake);
+
+    await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
+    const modal = screen.getByRole("dialog", { name: "New requirement" });
+    const box = within(modal).getByRole("checkbox", { name: "Straight to Spec (no grilling)" });
+    expect(box).not.toBeChecked();
+    expect(within(modal).getByText(/Grilling, Spec and Tickets Stages/)).toBeInTheDocument();
+    await userEvent.click(box);
+    expect(within(modal).getByText("Creates a Spec and its Spec and Tickets Stages. A Factory picks up Spec.")).toBeInTheDocument();
+    await userEvent.type(within(modal).getByRole("textbox", { name: "Requirement" }), "Dark mode");
+    await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(await within(detail()).findByText(/Grilling/)).toBeInTheDocument();
+    expect(fake.calls).toContain("submitRequirement");
+  });
+
   it("closes on Cancel without submitting", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");
