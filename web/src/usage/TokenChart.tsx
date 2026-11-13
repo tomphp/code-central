@@ -6,6 +6,7 @@
 import { useState } from "react";
 import type { UsageDay, UsageDayTokens } from "../api/types";
 import { count } from "../format";
+import { Select } from "../controls/Select";
 
 export interface TokenChartProps {
   days: UsageDay[];
@@ -52,14 +53,7 @@ export function TokenChart({ days, kinds }: TokenChartProps) {
       <div className="token-controls">
         <label>
           <span className="view-picker-label">Kind</span>
-          <select value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="">All kinds</option>
-            {kinds.map((k) => (
-              <option key={k} value={k}>
-                {k}
-              </option>
-            ))}
-          </select>
+          <Select value={kind} onChange={setKind} placeholder="All kinds" options={kinds.map((k) => ({ value: k }))} />
         </label>
         <ul className="token-legend">
           {TOKEN_TYPES.map((t) => (

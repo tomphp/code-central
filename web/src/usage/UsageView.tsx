@@ -29,6 +29,7 @@ import { clickTo, hrefFor, type UiLocation } from "../url";
 import { LineChart } from "./LineChart";
 import { TokenChart } from "./TokenChart";
 import "./usage.css";
+import { Select } from "../controls/Select";
 
 export interface UsageViewProps {
   api: Api;
@@ -58,13 +59,11 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
             <ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />
             <label>
           <span className="view-picker-label">Range</span>
-          <select value={days} onChange={(e) => navigate({ days: Number(e.target.value) as UsageDays })}>
-            {USAGE_DAYS.map((d) => (
-              <option key={d} value={d}>
-                Last {d} days
-              </option>
-            ))}
-          </select>
+          <Select
+            value={String(days)}
+            onChange={(v) => navigate({ days: Number(v) as UsageDays })}
+            options={USAGE_DAYS.map((d) => ({ value: String(d), label: `Last ${d} days` }))}
+          />
         </label>
           </>
         }
