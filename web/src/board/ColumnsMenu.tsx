@@ -3,8 +3,8 @@
 // with how many of the columns show appended while any is hidden.
 import { useEffect, useId, useRef, useState } from "react";
 import { STATES, type State } from "../api/types";
-import { stateSlug } from "../inbox/StateRow";
 import { Button } from "../controls/Button";
+import { stateSlug } from "../controls/StateChip";
 
 export interface ColumnsMenuProps {
   hidden: readonly State[];
