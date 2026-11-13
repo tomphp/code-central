@@ -3,6 +3,7 @@
 // out: remove the Blocker, To Draft, Cancel.
 import { useAct } from "../../ticket/useAct";
 import type { PanelProps } from "../ActionPanel";
+import { Button } from "../../controls/Button";
 
 export function Blocked({ api, project, ticket: t }: PanelProps) {
   const { busy, error, run } = useAct();
@@ -19,25 +20,25 @@ export function Blocked({ api, project, ticket: t }: PanelProps) {
               Blocked by <span className="tid">{b.id}</span> {b.title}
               {b.via && <> (replacing {b.via})</>}, Cancelled with no Replacement.
             </p>
-            <button
-              className="btn primary"
+            <Button
+              variant="primary"
               disabled={busy}
               onClick={() => run(() => api.act(project, t.id, "remove_blocker", { blocker: stored }))}
             >
               Remove {stored} as a Blocker
-            </button>
+            </Button>
           </div>
         );
       })}
       <p className="actions">
         {t.state !== "Draft" && (
-          <button className="btn" disabled={busy} onClick={() => run(() => api.act(project, t.id, "move", { to_state: "Draft" }))}>
+          <Button  disabled={busy} onClick={() => run(() => api.act(project, t.id, "move", { to_state: "Draft" }))}>
             To Draft
-          </button>
+          </Button>
         )}{" "}
-        <button className="btn danger" disabled={busy} onClick={() => run(() => api.act(project, t.id, "cancel", {}))}>
+        <Button variant="danger" disabled={busy} onClick={() => run(() => api.act(project, t.id, "cancel", {}))}>
           Cancel
-        </button>
+        </Button>
       </p>
       {error && (
         <p role="alert" className="warning">

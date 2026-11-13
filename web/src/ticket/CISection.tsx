@@ -13,6 +13,7 @@ import "../api/actions/send_back";
 import type { Api } from "../api/api";
 import type { CIConclusion, CIJobView, CIRunView, TicketView } from "../api/types";
 import { useAct } from "./useAct";
+import { Button } from "../controls/Button";
 
 // CONCLUSION_LABEL says how a finished run or job ended.
 const CONCLUSION_LABEL: Record<CIConclusion, string> = {
@@ -178,9 +179,9 @@ function CIFailureOptions({ api, project, ticket: t }: { api: Api; project: stri
         <>
           <p className="small">If it may be a flake, re-run the failed jobs: the CI Watcher asks GitHub to, and the Ticket waits on CI again.</p>
           <p>
-            <button type="button" className="btn" disabled={busy} onClick={() => run(() => api.act(project, t.id, "rerun_ci", {}))}>
+            <Button type="button"  disabled={busy} onClick={() => run(() => api.act(project, t.id, "rerun_ci", {}))}>
               Re-run failed jobs
-            </button>
+            </Button>
           </p>
         </>
       )}
@@ -188,9 +189,9 @@ function CIFailureOptions({ api, project, ticket: t }: { api: Api; project: stri
         <>
           <p className="small">If the failure is unrelated to this work, land it anyway: the Factory lands it on its next poll.</p>
           <p>
-            <button type="button" className="btn primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "land_anyway", {}))}>
+            <Button type="button" variant="primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "land_anyway", {}))}>
               Land anyway
-            </button>
+            </Button>
           </p>
         </>
       ) : (
@@ -217,24 +218,24 @@ function CIFailureOptions({ api, project, ticket: t }: { api: Api; project: stri
           </label>
           <p className="ci-fixes">
             {options.includes("send_back") && (
-              <button
+              <Button
                 type="button"
-                className="btn"
+
                 disabled={busy || noNote}
                 onClick={() => run(() => api.act(project, t.id, "send_back", { note: note.trim() }))}
               >
                 Send back to fix
-              </button>
+              </Button>
             )}
             {options.includes("new_fix_ticket") && (
-              <button
+              <Button
                 type="button"
-                className="btn"
+
                 disabled={busy || noNote}
                 onClick={() => run(() => api.act(project, t.id, "new_fix_ticket", { note: note.trim() }))}
               >
                 New fix Ticket
-              </button>
+              </Button>
             )}
           </p>
         </>

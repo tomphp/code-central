@@ -5,6 +5,7 @@
 // keyboard pattern. The menu is placed against the nearest positioned
 // ancestor, which the caller provides.
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import { Button } from "../controls/Button";
 import type { SpecAcknowledgement, TicketAcknowledgement } from "../api/types";
 import { NewMap, NewRequirement, NewSmallChange, type NewRequirementProps } from "./NewRequirement";
 
@@ -28,7 +29,7 @@ export function NewSplit({ variant, onSubmitted, ...newProps }: NewSplitProps) {
   const more = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const moreId = useId();
-  const btn = variant === "primary" ? "btn primary" : "btn";
+  const btn = variant === "primary" ? "primary" : "default";
   const made = (kind: "Requirement" | "Map") => (r: { spec: SpecAcknowledgement }) => onSubmitted({ kind, ...r });
 
   const items = () => Array.from(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
@@ -96,15 +97,16 @@ export function NewSplit({ variant, onSubmitted, ...newProps }: NewSplitProps) {
           {...newProps}
           onSubmitted={made("Requirement")}
           trigger={(show) => (
-            <button className={`${btn} new-main`} aria-label="New requirement" onClick={show}>
+            <Button variant={btn} className="new-main" aria-label="New requirement" onClick={show}>
               + New
-            </button>
+            </Button>
           )}
         />
-        <button
+        <Button
           id={moreId}
           ref={more}
-          className={`${btn} new-more`}
+          variant={btn}
+          className="new-more"
           aria-label="More to create"
           aria-haspopup="menu"
           aria-expanded={open}
@@ -112,7 +114,7 @@ export function NewSplit({ variant, onSubmitted, ...newProps }: NewSplitProps) {
           onKeyDown={onMoreKey}
         >
           ▾
-        </button>
+        </Button>
       </div>
       <div role="menu" aria-labelledby={moreId} className="new-menu" ref={menu} hidden={!open} onKeyDown={onMenuKey}>
         <NewRequirement

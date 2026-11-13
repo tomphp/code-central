@@ -9,6 +9,7 @@ import type { CommentView, TicketView } from "../../api/types";
 import { Markdown } from "../../Markdown";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { useAct } from "../../ticket/useAct";
+import { Button } from "../../controls/Button";
 import "./review.css";
 
 export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
@@ -35,17 +36,17 @@ export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
       <p>
         {t.labels.includes("stage:spec") ? (
           <>
-            <button type="button" className="btn primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "accept", {}))}>
+            <Button type="button" variant="primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "accept", {}))}>
               Split into Tickets
-            </button>{" "}
-            <button type="button" className="btn primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "implement", {}))}>
+            </Button>{" "}
+            <Button type="button" variant="primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "implement", {}))}>
               Implement
-            </button>
+            </Button>
           </>
         ) : (
-          <button type="button" className="btn primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "accept", {}))}>
+          <Button type="button" variant="primary" disabled={busy} onClick={() => run(() => api.act(project, t.id, "accept", {}))}>
             Accept
-          </button>
+          </Button>
         )}
       </p>
       <label className="reject-comment">
@@ -53,14 +54,14 @@ export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
         <textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
       </label>
       <p>
-        <button
+        <Button
           type="button"
-          className="btn danger"
+          variant="danger"
           disabled={!canReject}
           onClick={() => run(() => api.act(project, t.id, "reject", { comment: comment.trim() }))}
         >
           Reject
-        </button>
+        </Button>
       </p>
     </section>
   );

@@ -28,6 +28,7 @@ import { useFetch } from "../live";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { LineChart } from "./LineChart";
 import { TokenChart } from "./TokenChart";
+import { Button } from "../controls/Button";
 import "./usage.css";
 import { Select } from "../controls/Select";
 
@@ -68,9 +69,9 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
           </>
         }
         right={
-          <button className="btn" onClick={() => navigate(loc.back ?? { view: "inbox" })}>
+          <Button  onClick={() => navigate(loc.back ?? { view: "inbox" })}>
             {back === "focus" ? "Back to Focus Mode" : "Back to the Inbox"}
-          </button>
+          </Button>
         }
       />
       <div className="usage-body">
@@ -331,9 +332,9 @@ function SessionChart({ api, session, navigate }: SessionChartProps) {
             {count(responses.length)} {responses.length === 1 ? "response" : "responses"} · peak {count(peak)} tokens
           </span>
         ) : null}
-        <button className="btn usage-chart-close" onClick={() => navigate({ session: undefined })}>
+        <Button className="usage-chart-close" onClick={() => navigate({ session: undefined })}>
           Close session
-        </button>
+        </Button>
       </header>
       {read.error && (
         <p role="alert" className="warning">

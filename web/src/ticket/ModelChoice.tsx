@@ -8,6 +8,7 @@ import { EFFORT_LEVELS, type ChoiceValue, type ReportedModels, type TicketView }
 import { CLAUDE_CODE_DEFAULT } from "../format";
 import { effortOptions, modelSuggestions, ModelSuggestions } from "../modelPickers";
 import { useAct } from "./useAct";
+import { Button } from "../controls/Button";
 import { Select } from "../controls/Select";
 
 // NO_REPORT stands in for the Reported Models until the Project is read:
@@ -99,15 +100,15 @@ function ModelPicker(props: { tag: string; list?: string; busy: boolean; set(mod
   return (
     <form onSubmit={submit}>
       <input aria-label="Model Tag" list={props.list} value={draft} placeholder="Project's settings" onChange={(e) => setDraft(e.target.value)} />{" "}
-      <button type="submit" className="btn" aria-label="Set model" disabled={props.busy || !model || model === props.tag}>
+      <Button type="submit"  aria-label="Set model" disabled={props.busy || !model || model === props.tag}>
         Set
-      </button>
+      </Button>
       {props.tag && (
         <>
           {" "}
-          <button type="button" className="btn" aria-label="Clear model" disabled={props.busy} onClick={props.clear}>
+          <Button type="button"  aria-label="Clear model" disabled={props.busy} onClick={props.clear}>
             Clear
-          </button>
+          </Button>
         </>
       )}
     </form>
