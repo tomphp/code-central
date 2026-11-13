@@ -90,6 +90,9 @@ export interface Api {
   // submitPrototype asks for a Prototype on any Spec from the human's
   // text: a Ready prototype Ticket titled by its first line.
   submitPrototype(project: string, spec: string, text: string): Promise<TicketAcknowledgement>;
+  // submitSmallChange opens a Ready Ticket on the Project's Small Changes
+  // Spec from the human's text, titled by its first line.
+  submitSmallChange(project: string, text: string): Promise<TicketAcknowledgement>;
   // specQuestions rolls up a Spec's Questions: its Tickets' Rounds.
   specQuestions(project: string, spec: string): Promise<SpecQuestions>;
   act<A extends TicketAction>(

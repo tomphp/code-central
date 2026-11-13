@@ -410,19 +410,72 @@ describe("the sidebar's top row: + New and Focus", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
-  it("opens a menu of Requirement and Map from ▾, each with its hint", async () => {
+  it("opens a menu of Requirement, Map and Small Change from ▾, each with its hint", async () => {
     renderApp(world());
     await userEvent.click(await findMenuButton());
     expect(menuButton()).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("menu", { name: "More to create" })).toBeVisible();
     const items = within(screen.getByRole("menu")).getAllByRole("menuitem");
-    expect(items.map((i) => i.textContent)).toEqual([expect.stringContaining("Requirement"), expect.stringContaining("Map")]);
+    expect(items.map((i) => i.textContent)).toEqual([
+      expect.stringContaining("Requirement"),
+      expect.stringContaining("Map"),
+      expect.stringContaining("Small Change"),
+    ]);
     expect(item("Requirement")).toHaveAccessibleDescription(
       "Grilled into a Spec and Tickets",
     );
     expect(item("Map")).toHaveAccessibleDescription(
       "Charts the decisions to get somewhere",
     );
+    expect(item("Small Change")).toHaveAccessibleDescription("One Ticket, built and landed as it is");
+  });
+
+  it("opens Small Change's dialog from the menu, and submits to the new Ticket", async () => {
+    const fake = world();
+    renderApp(fake, "/?project=acme");
+    await userEvent.click(await findMenuButton());
+    await userEvent.click(item("Small Change"));
+
+    expect(screen.queryByRole("menu")).toBeNull();
+    const modal = screen.getByRole("dialog", { name: "New Small Change" });
+    const box = within(modal).getByRole("textbox", { name: "Small Change" });
+    expect(box).toHaveAttribute("placeholder", "Describe the change you want. The first line becomes the Ticket's title.");
+    expect(within(modal).getByText("Creates a Ready Ticket on the Small Changes Spec. A Factory builds it and it lands on its own.")).toBeVisible();
+    const submit = within(modal).getByRole("button", { name: "Submit small change" });
+    expect(submit).toBeDisabled();
+    await userEvent.type(box, "   ");
+    expect(submit).toBeDisabled();
+    await userEvent.type(box, "Rename the button");
+    await userEvent.click(submit);
+
+    expect(fake.calls).toContain("submitSmallChange");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(params().get("ticket")).toBe("acme-6");
+    expect(params().get("requirement")).toBeNull();
+    expect((await fake.getTicket("acme", "acme-6")).title).toBe("Rename the button");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("asks which Project for a Small Change when several are open and none is filtered", async () => {
+    renderApp(world());
+    await userEvent.click(await findMenuButton());
+    await userEvent.click(item("Small Change"));
+    expect(within(screen.getByRole("dialog")).getByRole("combobox")).toBeVisible();
+  });
+
+  it("keeps the text and shows the error when a Small Change is refused", async () => {
+    const fake = world();
+    fake.submitSmallChange = async () => {
+      throw new Error("the Project is archived");
+    };
+    renderApp(fake, "/?project=acme");
+    await userEvent.click(await findMenuButton());
+    await userEvent.click(item("Small Change"));
+    const modal = screen.getByRole("dialog");
+    await userEvent.type(within(modal).getByRole("textbox"), "Rename the button");
+    await userEvent.click(within(modal).getByRole("button", { name: "Submit small change" }));
+    expect(await within(modal).findByText("the Project is archived")).toBeVisible();
+    expect(within(modal).getByRole("textbox")).toHaveValue("Rename the button");
   });
 
   it.each([
@@ -491,11 +544,13 @@ describe("the sidebar's top row: + New and Focus", () => {
       await userEvent.keyboard("{ArrowDown}");
       expect(item("Map")).toHaveFocus();
       await userEvent.keyboard("{ArrowDown}");
+      expect(item("Small Change")).toHaveFocus();
+      await userEvent.keyboard("{ArrowDown}");
       expect(item("Requirement")).toHaveFocus();
+      await userEvent.keyboard("{ArrowUp}");
+      expect(item("Small Change")).toHaveFocus();
       await userEvent.keyboard("{ArrowUp}");
       expect(item("Map")).toHaveFocus();
-      await userEvent.keyboard("{ArrowUp}");
-      expect(item("Requirement")).toHaveFocus();
     });
 
     it.each([["{Enter}"], [" "]])("opens with %s on the first item", async (key) => {

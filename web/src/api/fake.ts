@@ -1179,6 +1179,26 @@ export class FakeApi implements Api {
     return acknowledgeTicketCreate(prototype);
   }
 
+  async submitSmallChange(project: string, text: string): Promise<TicketAcknowledgement> {
+    this.calls.push("submitSmallChange");
+    this.writable(project);
+    const title = specTitle(text);
+    if (!title) throw new ApiError(422, "invalid", "a Small Change needs text; its first line becomes the Ticket's title", "text");
+    const on =
+      this.allSpecs(project).find((s) => s.title === "Small Changes" && s.labels.includes("long-lived")) ??
+      this.addSpec(project, { title: "Small Changes", body: SMALL_CHANGES_SPEC_BODY, labels: ["long-lived"] });
+    const change = this.addTicket(project, {
+      title,
+      state: "Ready",
+      spec: { id: on.id, title: on.title },
+      labels: [],
+      description: text,
+      claimable: true,
+      moves: [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_small_change" }],
+    });
+    return acknowledgeTicketCreate(change);
+  }
+
   // specQuestions reads a Spec from its seeded Tickets' spec, so a Spec
   // no Ticket names is not found.
   async specQuestions(project: string, spec: string): Promise<SpecQuestions> {
@@ -2243,6 +2263,10 @@ function ruleOn(p: FakeProject, spec: string): CIRule {
 const CI_FIXES_SPEC_BODY =
   "This Spec holds the fix Tickets the human opens with New fix Ticket when a commit's CI failed. " +
   "Each fixes its failure forward, and the Tickets waiting on that commit land when a later commit passes CI.\n";
+
+const SMALL_CHANGES_SPEC_BODY =
+  "This Spec holds the Tickets the human opens with Small Change in + New. " +
+  "Each is built from the human's text as it is, with no Stages, and lands on its own as soon as it is accepted.\n";
 
 const CI_RULE_SPEC_BODY =
   "This Spec holds the fix Tickets of a CI Rule, which opens a Ticket to fix its workflow when it fails on its branch. " +
