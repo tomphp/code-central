@@ -492,10 +492,22 @@ Prototypes and Map Tickets have no kind and are never auto-accepted. An auto-acc
 Every Project read shows the setting as `auto_accept`, as in `{"grilling": false, "spec": false, "tickets": false, "implementation": true, "merge": false}`. Only you set it, over HTTP; agents have no tool or command for it, and a kind you leave out of the map keeps its value:
 
 ```sh
-curl -X POST localhost:7733/api/p/acme-api/set_auto_accept -d '{"kinds": {"implementation": true, "merge": true}}'
+curl -X POST localhost:7733/api/p/acme-api/set_auto_accept -H 'X-Code-Central-Actor: human' -d '{"kinds": {"implementation": true, "merge": true}}'
 ```
 
 Turning a kind on affects only Tickets that finish afterwards: nothing already In Review is accepted. [ADR 0037](adr/0037-auto-accept-happens-within-finish-on-the-humans-behalf-and-only-the-human-can-turn-it-on.md) records the decision.
+
+### The `auto-accept` Label
+
+To auto-accept one Ticket, or everything on one Spec, whatever the Project's switches say, give it the reserved `auto-accept` Label. On a Ticket or its Spec it turns every kind on for that Ticket, so a Requirement labelled `auto-accept` runs from grilling to its last implementation Ticket without you, and the Label on a Long-lived Spec such as Small Changes auto-accepts every Small Change. Prototypes and Map Tickets are still never auto-accepted. The Move's cause tells you which switch let a Ticket through: `ticket-label`, `spec-label` or `project`, in that order when more than one applies.
+
+Adding the Label also accepts, in the same write, every Ticket it now covers that is already In Review, except a spec Stage with no recommendation. Removing it changes nothing already accepted; only later finishes go back to In Review.
+
+The Label is yours alone. `add_labels`, `remove_labels`, `create_ticket` and an import refuse it as `invalid` from an agent or an Integration, so MCP and the CLI can't name it. Add or remove it over HTTP as the human:
+
+```sh
+curl -X POST localhost:7733/api/p/acme-api/add_labels -H 'X-Code-Central-Actor: human' -d '{"target": "acme-api-12", "labels": ["auto-accept"]}'
+```
 
 ## When `init` behaves differently
 
