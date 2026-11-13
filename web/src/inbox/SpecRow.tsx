@@ -14,6 +14,7 @@ import { KindBadge } from "../controls/KindBadge";
 import { StateChip } from "../controls/StateChip";
 import { countStates, describeSpec } from "./describeSpec";
 import { ShortId } from "./ShortId";
+import { ListCIBadge } from "../ticket/CIBadge";
 import { TicketLine, type InboxRowLinkFactory, type RowLink } from "../ticket/TicketLine";
 
 export interface SpecRowProps {
@@ -94,7 +95,9 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
       {open && (
         <div className="spec-row-tickets" role="group" aria-label={`Tickets of ${title}`}>
           {listed.map((t) => (
-            <TicketLine key={t.id} t={t} link={ticketLink(t.id)} badge={stageOf(t)} chip={!here} needsYou={reasons.has(t.id)} now={now} />
+            <TicketLine key={t.id} t={t} link={ticketLink(t.id)} badge={stageOf(t)} chip={!here} needsYou={reasons.has(t.id)} now={now}>
+              <ListCIBadge t={t} />
+            </TicketLine>
           ))}
         </div>
       )}

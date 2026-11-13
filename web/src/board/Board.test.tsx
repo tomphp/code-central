@@ -202,6 +202,21 @@ describe("the Board's cards", () => {
     expect(within(form).queryByRole("img", { name: "Needs you" })).toBeNull();
   });
 
+  it("show the CI badge of a not-Done Ticket, none for no CI result or a Done Ticket, and follow the live feed", async () => {
+    const fake = world();
+    fake.updateTicket("acme-2", { ci_result: "running" });
+    fake.updateTicket("acme-3", { ci_result: "failed" });
+    fake.updateTicket("acme-4", { ci_result: "passed" });
+    renderApp(fake, "/?view=board&project=acme&hide=Cancelled");
+    await loaded();
+    expect(card("Login form")).toHaveTextContent("CI running");
+    expect(card("Sign-up page")).toHaveTextContent("CI failed");
+    expect(card("Password reset")).not.toHaveTextContent("CI");
+    expect(card("Old work")).not.toHaveTextContent("CI");
+    await act(async () => fake.updateTicket("acme-2", { ci_result: "passed" }));
+    await waitFor(() => expect(card("Login form")).toHaveTextContent("CI passed"));
+  });
+
   it("show full IDs on All Projects, and no Spec line for a Ticket on no Spec", async () => {
     renderApp(world(), "/?view=board");
     await loaded();

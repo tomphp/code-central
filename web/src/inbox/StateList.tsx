@@ -1,6 +1,7 @@
 import type { NeedsMeReason } from "../api/types";
 import type { ProjectTicket } from "../live";
 import { isStage } from "../requirement/progress";
+import { ListCIBadge } from "../ticket/CIBadge";
 import { TicketLine, type InboxRowLinkFactory } from "../ticket/TicketLine";
 
 // StateList is one State's Tickets, flat, with its Stage Tickets folded
@@ -25,7 +26,9 @@ export function StateList({
       link={link(t.id)}
       needsYou={reasons.has(t.id)}
       now={now}
-    />
+    >
+      <ListCIBadge t={t} />
+    </TicketLine>
   );
   return (
     <>
