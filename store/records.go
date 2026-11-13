@@ -168,6 +168,7 @@ type ticketFile struct {
 	Description     string              `yaml:"description"`
 	Branch          string              `yaml:"branch,omitempty"`
 	Commit          string              `yaml:"commit,omitempty"`
+	Recommendation  string              `yaml:"recommendation,omitempty"`
 	PushedCommits   []pushedCommitFile  `yaml:"pushed_commits,omitempty"`
 	SpecMerge       *specMergeFile      `yaml:"spec_merge,omitempty"`
 	PullRequest     *pullRequestFile    `yaml:"pull_request,omitempty"`
@@ -353,7 +354,7 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	t := Ticket{
 		Number: n, Title: f.Title, State: State(f.State), Spec: f.Spec, Labels: f.Labels, Tags: f.Tags,
 		BlockedBy: f.BlockedBy, Replacements: f.Replacements, AwaitingTriage: f.AwaitingTriage, SpecMergeTicket: f.SpecMergeTicket, Description: f.Description,
-		Branch: f.Branch, Commit: f.Commit,
+		Branch: f.Branch, Commit: f.Commit, Recommendation: Recommendation(f.Recommendation),
 	}
 	if t.Title == "" {
 		return Ticket{}, &LoadError{Field: "title", Msg: "required"}
@@ -363,6 +364,9 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	}
 	if t.Spec < 1 {
 		return Ticket{}, &LoadError{Field: "spec", Msg: "required"}
+	}
+	if t.Recommendation != "" && !t.Recommendation.Valid() {
+		return Ticket{}, &LoadError{Field: "recommendation", Msg: fmt.Sprintf("unknown Spec recommendation %q", f.Recommendation)}
 	}
 	var lerr *LoadError
 	if t.Link, lerr = decodeLink(f.Link); lerr != nil {
@@ -595,7 +599,7 @@ func encode(record any, project string) (string, []byte, error) {
 			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
 			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: encodeLink(r.Link), AwaitingTriage: r.AwaitingTriage,
 			SpecMergeTicket: r.SpecMergeTicket, Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
-			Branch: r.Branch, Commit: r.Commit,
+			Branch: r.Branch, Commit: r.Commit, Recommendation: string(r.Recommendation),
 			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},
 			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
 		}

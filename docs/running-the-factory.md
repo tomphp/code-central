@@ -168,7 +168,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    Please check: that treating math.MinInt64 as in range (rather than out of range) and the 1.27 go directive are acceptable.
    ```
 
-   Check the Spec's body on `acme-shop-1`. The spec Stage's review offers **Split into Tickets** and **Implement**, and the summary ends with a recommendation and a one-line reason based on the Spec's size. **Implement** builds the Spec as one implementation Ticket and cancels the tickets Stage, which the strip shows as skipped, so the Factory goes straight to building it. Here, click **Split into Tickets** on `acme-shop-3`. The Factory claims the tickets Stage, `acme-shop-4`:
+   Check the Spec's body on `acme-shop-1`. The spec Stage's review offers **Split into Tickets** and **Implement**. The agent's `finish` recommended one of them by the Spec's size, so that button is highlighted and marked *Recommended*, and the summary ends with a one-line reason. **Implement** builds the Spec as one implementation Ticket and cancels the tickets Stage, which the strip shows as skipped, so the Factory goes straight to building it. Here, click **Split into Tickets** on `acme-shop-3`. The Factory claims the tickets Stage, `acme-shop-4`:
 
    ```text
    acme-shop-4 turn ended (tickets): "Tickets: Format prices for display": exit 0, success (completed); now In Review; ran 42s

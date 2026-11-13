@@ -134,6 +134,12 @@ func Finish(summary string) Step {
 	return CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", summary)
 }
 
+// FinishSpec finishes the run's spec Stage under its Claim with its Spec
+// recommendation.
+func FinishSpec(summary, recommendation string) Step {
+	return CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", summary, "--recommendation", recommendation)
+}
+
 // Result prints the stream-json result message with this subtype.
 func Result(subtype string) Step {
 	return Step{Stdout: `{"type":"result","subtype":"` + subtype + `","is_error":` + fmt.Sprint(subtype != "success") + `,"session_id":"{{session}}","result":"Turn over."}`}

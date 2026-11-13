@@ -520,6 +520,10 @@ type Ticket struct {
 	// work's branch and its head commit. Free-form, never parsed.
 	Branch string
 	Commit string
+	// Recommendation is the Spec recommendation the last finish of a spec
+	// Stage gave; empty on any other Ticket and on a spec Stage finished
+	// before there was one.
+	Recommendation Recommendation
 	// PushedCommits are the commits the Factory pushed for the Ticket
 	// while CI Tracking was on, oldest first: the latest is the one its CI
 	// result comes from, and the older ones stay as its history.
@@ -539,6 +543,25 @@ type Ticket struct {
 	Moves          []Move
 	Edits          []Edit
 }
+
+// Recommendation is a spec Stage's Spec recommendation: how its agent
+// recommends the human accepts it.
+type Recommendation string
+
+// The two Spec recommendations.
+const (
+	// RecommendImplement is Implement: one implementation Ticket builds
+	// the whole Spec.
+	RecommendImplement Recommendation = "implement"
+	// RecommendSplit is Split into Tickets: the tickets Stage runs.
+	RecommendSplit Recommendation = "split"
+)
+
+// Recommendations lists every Spec recommendation.
+var Recommendations = []Recommendation{RecommendImplement, RecommendSplit}
+
+// Valid reports whether r is one of the Spec recommendations.
+func (r Recommendation) Valid() bool { return slices.Contains(Recommendations, r) }
 
 // SpecMerge is the Spec Branch commit a Ticket's work was merged into, and
 // when Code Central heard of it.

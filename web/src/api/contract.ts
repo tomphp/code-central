@@ -9,7 +9,7 @@
 // numbers Specs and Tickets from one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, PullRequestReport, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
+import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, PullRequestReport, SessionEvent, State, TicketAcknowledgement, TicketView, UsageResponse } from "./types";
 import { ApiError, TRIAGE_ACTIONS } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -26,8 +26,13 @@ export interface Driver {
   reportFailure(key: string, id: string, report: FailureReportBody): Promise<void>;
   // finish claims a Ready Ticket as an agent and finishes it with the
   // summary, moving it to In Review. on names the work's branch and head
-  // commit (ticket 71).
-  finish(key: string, id: string, summary: string, on?: { branch: string; commit: string }): Promise<void>;
+  // commit (ticket 71), or a spec Stage's Spec recommendation.
+  finish(
+    key: string,
+    id: string,
+    summary: string,
+    on?: { branch: string; commit: string } | { recommendation: NonNullable<TicketView["recommendation"]> },
+  ): Promise<void>;
   // addBlocker makes id wait on blocker, as an agent's add_blocker.
   addBlocker(key: string, id: string, blocker: string): Promise<void>;
   // claim claims a Ready Ticket as an agent with a session ID, moving it
@@ -1222,7 +1227,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const r = await d.api.submitRequirement("acme", "Offline mode\nWorks on a plane.");
       const [grilling, spec, tickets] = r.stages.map((s) => s.id);
       await d.api.act("acme", grilling, "move", { to_state: "Done" });
-      await d.finish("acme", spec, "Wrote the Spec");
+      await d.finish("acme", spec, "Wrote the Spec", { recommendation: "implement" });
+      expect((await d.api.getTicket("acme", spec)).recommendation).toBe("implement");
 
       const ack = await d.api.act("acme", spec, "implement", {});
       wantAcknowledgement(ack, spec, "Done", ["state", "moves"]);

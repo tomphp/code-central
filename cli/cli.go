@@ -119,7 +119,7 @@ func init() {
 		"approve":       {op: "approve", usage: "approve <id> [--full]", run: runApprove},
 		"defer":         {op: "defer", usage: "defer <id> [--reason <text> | --file <path|->] [--full]", run: runDefer},
 		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>] [--working-dir <dir>] [--resume-command <command>]", run: runClaim},
-		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->] [--branch <branch>] [--commit <sha>] [--full]", run: runFinish},
+		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->] [--branch <branch>] [--commit <sha>] [--recommendation implement|split] [--full]", run: runFinish},
 
 		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>] [--full]  (session defaults to $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
 		"ping":        {usage: "ping [--session <id>]  mark this session active (reads hook JSON on stdin); always exits 0", run: runPing},
@@ -478,6 +478,7 @@ func runFinish(ctx context.Context, e Env, args []string) error {
 	file := fs.String("file", "", "")
 	branch := fs.String("branch", "", "")
 	commit := fs.String("commit", "", "")
+	recommendation := fs.String("recommendation", "", "")
 	full := fs.Bool("full", false, "")
 	pos, err := parse(fs, args)
 	if err != nil {
@@ -494,7 +495,7 @@ func runFinish(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Finish(ctx, sc.project, core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text, Branch: *branch, Commit: *commit, Full: *full})
+	v, err := sc.client.Finish(ctx, sc.project, core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text, Branch: *branch, Commit: *commit, Recommendation: store.Recommendation(*recommendation), Full: *full})
 	if err != nil {
 		return err
 	}
