@@ -1,6 +1,6 @@
 // The Board view: the Tickets in scope as cards in one column per State, in
 // workflow order, minus the columns Columns ▾ hides. By Spec splits the
-// columns into one lane per Spec, headed by its Spec row. It is read-only: a
+// columns into one lane per Spec, headed by its Lane header. It is read-only: a
 // card opens its Ticket in the Inbox's All Tickets view, on the Board's
 // Project. It reads only what the Inbox loads, and follows the live feed.
 // Back returns to the Inbox it was opened from.
@@ -14,7 +14,7 @@ import { kindLabel, newestFirst } from "../inbox/AllTickets";
 import { groupBySpec } from "../inbox/groupBySpec";
 import { hiddenColumns, storedGroup, storeGroup, storeHidden } from "../inbox/groupPreference";
 import { OneProject } from "../inbox/ShortId";
-import { SpecRow, specKindOf } from "../inbox/SpecRow";
+import { specKindOf } from "../inbox/describeSpec";
 import { stateSlug } from "../controls/StateChip";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { reasonsOf } from "../requirement/progress";
@@ -22,18 +22,18 @@ import { NewSplit } from "../requirement/NewSplit";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { TicketCard } from "../ticket/TicketCard";
 import { ColumnsMenu } from "./ColumnsMenu";
+import { LaneHeader } from "./LaneHeader";
 import { Button } from "../controls/Button";
 import "./board.css";
 
 export interface BoardViewProps {
   api: Api;
-  now: Date;
   data?: InboxData;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function BoardView({ api, now, data, loc, navigate }: BoardViewProps) {
+export function BoardView({ api, data, loc, navigate }: BoardViewProps) {
   const projects = data?.projects ?? [];
   const hidden = hiddenColumns(loc.hide);
   const shown = STATES.filter((s) => !hidden.includes(s));
@@ -139,18 +139,22 @@ export function BoardView({ api, now, data, loc, navigate }: BoardViewProps) {
               </div>
               {grouping === "spec" ? (
                 lanes(shown, inColumn).map((l) => (
-                  <div key={l.id} role="group" aria-label={`Lane: ${specs.get(l.id)?.title ?? l.id}`} className="board-lane">
-                    <div className="board-lane-head">
-                      <SpecRow
-                        id={l.id}
-                        spec={specs.get(l.id)}
-                        all={ticketsOf.get(l.id) ?? []}
-                        reasons={reasons}
-                        now={now}
-                        link={specLink(l.id)}
-                        lane={{ collapsed: collapsed.has(l.id), toggle: () => toggleLane(l.id) }}
-                      />
-                    </div>
+                  <div
+                    key={l.id}
+                    role="group"
+                    aria-label={`Lane: ${specs.get(l.id)?.title ?? l.id}`}
+                    className={`board-lane${collapsed.has(l.id) ? " collapsed" : ""}`}
+                  >
+                    <LaneHeader
+                      id={l.id}
+                      spec={specs.get(l.id)}
+                      all={ticketsOf.get(l.id) ?? []}
+                      shown={l.count}
+                      reasons={reasons}
+                      link={specLink(l.id)}
+                      collapsed={collapsed.has(l.id)}
+                      onToggle={() => toggleLane(l.id)}
+                    />
                     <Cells shown={shown} tickets={l.inColumn} counts={collapsed.has(l.id)} specs={specs} reasons={reasons} joined={joined} link={cardLink} inLane />
                   </div>
                 ))
@@ -183,6 +187,8 @@ type CardLink = { href: string; onClick: ReturnType<typeof clickTo> };
 interface Lane {
   id: string;
   inColumn: Map<State, ProjectTicket[]>;
+  // count is how many Tickets the lane shows, across its columns.
+  count: number;
 }
 
 // lanes splits the shown columns' Tickets (each column newest first) into
@@ -192,7 +198,7 @@ function lanes(shown: State[], inColumn: Map<State, ProjectTicket[]>): Lane[] {
   const ofSpec = groupBySpec(shown.flatMap((s) => inColumn.get(s)!));
   return ofSpec
     .sort((a, b) => b.tickets[0].project.localeCompare(a.tickets[0].project) || n(b.id) - n(a.id))
-    .map((g) => ({ id: g.id, inColumn: new Map(shown.map((s) => [s, g.tickets.filter((t) => t.state === s)])) }));
+    .map((g) => ({ id: g.id, inColumn: new Map(shown.map((s) => [s, g.tickets.filter((t) => t.state === s)])), count: g.tickets.length }));
 }
 
 // Cells is one row of the grid, a cell per shown column. In a lane that is
