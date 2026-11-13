@@ -166,6 +166,8 @@ func TestTheSpecGuideReplacesTheBodyInTheSpecTemplate(t *testing.T) {
 		// A Requirement made from a Map has no grilling Stage: it works from
 		// the Map instead.
 		"no grilling Stage", "`map` Tag", "Decisions so far", "resolution comments they link",
+		// Straight to Spec: no grilling Stage and no map, so the text alone.
+		"Straight to Spec", "from its text alone", "a Round may cover a real gap in the text",
 	)
 }
 

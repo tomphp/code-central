@@ -109,6 +109,8 @@ export function progress(req: RequirementView, tickets: TicketRow[], reasons: Ma
   segments.push(buildSeg);
   // A Requirement made from a Map has no grilling Stage: the Map did that.
   if (req.map) segments.unshift({ stage: "grilling", name: MAP_TITLE, progress: "done", map: req.map });
+  // One with neither was submitted Straight to Spec: its grilling was skipped.
+  else if (req.stages[0]?.name !== "grilling") segments.unshift({ stage: "grilling", name: STAGE_TITLE.grilling, progress: "skipped" });
   const needs = [
     ...segments.filter((s) => s.ticket && s.reason).map((s) => ({ ticket: s.ticket!, reason: s.reason!, stage: s.stage as StageName })),
     ...buildNeeds.map((t) => ({ ticket: t.id, reason: reasons.get(t.id)! })),

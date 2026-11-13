@@ -1431,6 +1431,23 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.getSpec("acme", r.spec.id)).map).toEqual({ decided: 1, total: 1, needs_you: 0, guided: false, can_write_spec: true, requirements: [] });
     });
 
+    it("submits Straight to Spec: only the spec and tickets Stages, written from the text, and no map Tag", async () => {
+      await d.createProject("acme", "Acme");
+      const m = await d.api.submitMap("acme", "Offline mode");
+      const conflict = await d.api.submitRequirement("acme", "Offline mode", m.spec.id, true).catch((e) => e);
+      expect(conflict).toMatchObject({ status: 422, code: "invalid", field: "skip_grilling" });
+      const r = await d.api.submitRequirement("acme", "Dark mode", undefined, true);
+      expect(r.stages).toHaveLength(2);
+      const [spec, tickets] = await Promise.all(r.stages.map((t) => d.api.getTicket("acme", t.id)));
+      expect([spec.labels, tickets.labels, tickets.blocked_by]).toEqual([["stage:spec"], ["stage:tickets"], [spec.id]]);
+      expect(spec.state).toBe("Ready");
+      expect(spec.description).toBe(`Write the Spec for the Requirement in Spec [${r.spec.id}](${r.spec.id}), from its text.\n`);
+      const s = await d.api.getSpec("acme", r.spec.id);
+      expect(s.tags).toEqual({});
+      expect(s.requirement?.map).toBeUndefined();
+      expect(s.requirement?.stages.map((st) => st.name)).toEqual(["spec", "tickets"]);
+    });
+
     it("writes the Spec from a finished Map: a Requirement with only the spec and tickets Stages, tagged with the Map", async () => {
       await d.createProject("acme", "Acme");
       const plain = await d.api.submitRequirement("acme", "Not a Map");

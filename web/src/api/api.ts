@@ -82,8 +82,10 @@ export interface Api {
   // submitRequirement creates a Requirement from the human's text: its
   // Spec and three Stage Tickets, Grilling ready for a Factory. With map,
   // a finished Map, it writes the Spec from that Map: only the Spec and
-  // Tickets Stages, Spec ready, and the Spec's map Tag names the Map.
-  submitRequirement(project: string, text: string, map?: string): Promise<SubmitRequirementResult>;
+  // Tickets Stages, Spec ready, and the Spec's map Tag names the Map. With
+  // skipGrilling (Straight to Spec) it makes only those two Stages, from the
+  // text alone, and no map Tag; it can't be given with map.
+  submitRequirement(project: string, text: string, map?: string, skipGrilling?: boolean): Promise<SubmitRequirementResult>;
   // submitMap creates a Map from the human's text: its Spec, with the
   // Map's empty sections, and a Charting Ticket ready for a Factory.
   submitMap(project: string, text: string): Promise<SubmitMapResult>;
