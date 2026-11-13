@@ -45,7 +45,7 @@ The Inbox's list of every Ticket in scope (`list=tickets`), of every kind and St
 _Avoid_: Ticket list, all Tickets page
 
 **Board view**:
-The view of the Tickets in scope as cards in one column per State (`view=board`). It is read-only. Its link is in the Inbox's View section, and a card opens its Ticket in the Inbox.
+The view of the Tickets in scope as cards in one column per State (`view=board`). Its link is in the Inbox's View section. It takes no action itself: a Ticket card opens its Focus popup or Ticket popup, and a Lane header its Spec popup, kept in the URL as `popup=`.
 _Avoid_: Kanban, Ticket board
 
 **Short ID**:
@@ -357,7 +357,7 @@ The one row the UI shows a Spec in, in the Requirements view, Needs Me and By Sp
 _Avoid_: Spec card, Requirement row, bs-card
 
 **Lane header**:
-The bar across the Board view that heads a By Spec lane, on one line: ID, kind, title, needs-you dot and headline, then how many Tickets the lane shows. It opens the Spec; its chevron folds the lane.
+The bar across the Board view that heads a By Spec lane, on one line: ID, kind, title, needs-you dot and headline, then how many Tickets the lane shows. It opens its Spec popup; its chevron folds the lane.
 _Avoid_: lane Spec row, lane bar
 
 **Ticket row**:
@@ -365,8 +365,20 @@ The one row the UI lists a Ticket in, in the State lists, All Tickets, Needs Me,
 _Avoid_: Ticket line, State row
 
 **Ticket card**:
-A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, then the title, then its Spec's kind and title outside a lane. It pulses when it joins its column or its Ticket changes.
+A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, then the title, then its Spec's kind and title outside a lane. It pulses when it joins its column or its Ticket changes. Clicking it opens its Focus popup or Ticket popup.
 _Avoid_: Board card, Ticket tile
+
+**Focus popup**:
+The Board view's popup for a Ticket card whose Ticket needs the human. It shows that Ticket's Focus Items one at a time (its CI item's, for a Ticket listed in one) in the view Focus Mode also uses, and closes once none is left, whoever dealt with them.
+_Avoid_: needs-me popup, action popup
+
+**Ticket popup**:
+The Board view's popup for a Ticket card whose Ticket doesn't need the human. It shows its Ticket pane as the Inbox shows it, actions included.
+_Avoid_: details popup, modal, quick view, peek
+
+**Spec popup**:
+The Board view's popup for a Lane header's Spec. It shows the Spec's pane as the Inbox shows it (Requirement, Map or Spec), actions included. Choosing one of its Tickets opens that Ticket's Focus popup or Ticket popup in its place.
+_Avoid_: lane popup
 
 **To merge**:
 The Needs Me reason of an Accepted Ticket under the Branch or Pull Request Landing Method, shown at once: the human merges its branch into the base, and the Factory lands it when it sees the merge. Under Pull Request it links the pull request and says conflicting while the Code Host reports so.

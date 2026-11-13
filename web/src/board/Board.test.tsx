@@ -1,14 +1,14 @@
 // Board view tests: the real App against FakeApi, at ?view=board. They
 // check what the human sees and does: the Board link and its count, the
 // columns and Columns ▾ with which columns are hidden and where that comes
-// from, the cards, opening a card in the Inbox and coming back, the shared
+// from, the cards, a card's Ticket popup and closing it, the shared
 // grouping, + New ▾ and Back to the Inbox.
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
-import { STATES } from "../api/types";
+import { ApiError, STATES } from "../api/types";
 
 const at = (minutes: number) => new Date(Date.UTC(2026, 10, 7, 9, minutes)).toISOString();
 
@@ -263,28 +263,151 @@ describe("the Board's cards", () => {
     expect(card("Old work")).not.toHaveAttribute("data-pulsing");
   });
 
-  it("link to their Ticket in All Tickets on the Board's Project, keeping the grouping", async () => {
+  it("link to the Board's own address with their popup, not into the Inbox", async () => {
     renderApp(world(), "/?view=board&project=acme&group=spec&hide=");
     await loaded();
-    expect(card("Login form")).toHaveAttribute("href", "?view=inbox&project=acme&list=tickets&ticket=acme-2&group=spec");
-    expect(card("Old work")).toHaveAttribute("href", "?view=inbox&project=acme&list=tickets&ticket=acme-4&group=spec&finished=1");
-    expect(card("Dropped")).toHaveAttribute("href", "?view=inbox&project=acme&list=tickets&ticket=acme-5&group=spec&finished=1");
+    expect(card("Login form")).toHaveAttribute("href", "?view=board&project=acme&group=spec&hide=&popup=acme-2");
+    expect(card("Old work")).toHaveAttribute("href", "?view=board&project=acme&group=spec&hide=&popup=acme-4");
+  });
+});
+
+describe("the Board's Ticket popup", () => {
+  const popup = () => screen.getByRole("dialog", { name: "Ticket popup" });
+  const noPopup = () => expect(screen.queryByRole("dialog")).toBeNull();
+  // popupHeading waits for the Ticket popup to show its Ticket's title.
+  const popupHeading = async (title: string) =>
+    within(await screen.findByRole("dialog", { name: "Ticket popup" })).findByRole("heading", { name: new RegExp(title) });
+  const openCard = async (title: string) => {
+    await userEvent.click(within(card(title)).getByText(title));
+    return popupHeading(title);
+  };
+
+  it("opens from a card that doesn't need the human, with the Ticket's pane and actions, in the address", async () => {
+    const fake = world();
+    fake.addTicket("acme", { title: "Rough idea", state: "Draft", created: at(7), updated: at(7) }); // acme-7
+    renderApp(fake, "/?view=board&project=acme&hide=Done");
+    await loaded();
+    expect(await openCard("Rough idea")).toBeInTheDocument();
+    expect(window.location.search).toBe("?view=board&project=acme&hide=Done&popup=acme-7");
+    expect(within(popup()).getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(within(popup()).getByRole("article", { name: "Ticket details" })).toBeInTheDocument();
+    expect(within(popup()).getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(within(popup()).queryByRole("link", { name: /Open in Inbox/ })).toBeNull();
+    expect(within(popup()).queryByRole("button", { name: /Open in Inbox|Skip/ })).toBeNull();
+    expect(popup()).not.toHaveTextContent(/\d+ left/);
+    // The Board stays behind it, as it was.
+    expect(heads()).toContain("Cancelled 1");
   });
 
-  it("open their Ticket in All Tickets with its pane, and the browser's Back restores the Board as it was", async () => {
+  it("shows Loading… until the read arrives, and the read's error if it fails", async () => {
+    const fake = world();
+    let fail: (e: Error) => void = () => {};
+    fake.getTicket = () => new Promise((_, reject) => (fail = reject));
+    renderApp(fake, "/?view=board&project=acme&popup=acme-2");
+    await loaded();
+    expect(popup()).toHaveTextContent("Loading…");
+    await act(async () => fail(new ApiError(404, "not_found", "Ticket acme-2 not found")));
+    expect(popup()).toHaveTextContent("Ticket acme-2 not found");
+  });
+
+  it("offers no edits for a Ticket of an Archived Project", async () => {
+    const fake = world();
+    fake.addProject("old", "Old", { archived: true });
+    fake.addTicket("old", { title: "Legacy", state: "Draft" }); // old-1
+    renderApp(fake, "/?view=board&project=old&popup=old-1");
+    expect(await popupHeading("Legacy")).toBeInTheDocument();
+    expect(within(popup()).queryByRole("button", { name: "Edit" })).toBeNull();
+  });
+
+  it("follows the live feed", async () => {
+    const fake = world();
+    renderApp(fake, "/?view=board&project=acme");
+    await loaded();
+    await openCard("Login form");
+    await act(async () => fake.updateTicket("acme-2", { title: "Login form, redone" }));
+    expect(await within(popup()).findByRole("heading", { name: /Login form, redone/ })).toBeInTheDocument();
+  });
+
+  it("stays a Ticket popup when its Ticket starts needing the human", async () => {
+    const fake = world();
+    renderApp(fake, "/?view=board&project=acme");
+    await loaded();
+    await openCard("Login form");
+    fake.setNeedsMe([{ reason: "needs_answer", tickets: [{ id: "acme-2" }] }]);
+    await act(async () => fake.updateTicket("acme-2", { state: "Needs Answer" }));
+    await waitFor(() => expect(within(board()).getByRole("img", { name: "Needs you" })).toBeInTheDocument());
+    expect(within(popup()).getByRole("heading", { name: /Login form/ })).toBeInTheDocument();
+  });
+
+  it("switches to its Spec's popup address from the Spec link", async () => {
+    renderApp(world(), "/?view=board&project=acme&group=spec");
+    await loaded();
+    await openCard("Login form");
+    await userEvent.click(within(popup()).getByRole("button", { name: "acme-1 Login" }));
+    expect(window.location.search).toBe("?view=board&project=acme&group=spec&popup=acme-1");
+  });
+
+  it.each([
+    ["×", () => userEvent.click(within(popup()).getByRole("button", { name: "Close" }))],
+    ["Escape", () => userEvent.keyboard("{Escape}")],
+    ["the backdrop", () => userEvent.click(popup().parentElement!)],
+  ])("closes on %s, pushing the Board's address without popup and keeping its grouping and hidden columns", async (_, close) => {
+    renderApp(world(), "/?view=board&project=acme&group=spec&hide=Draft");
+    await loaded();
+    const length = window.history.length;
+    await openCard("Login form");
+    await close();
+    noPopup();
+    expect(window.location.search).toBe("?view=board&project=acme&group=spec&hide=Draft");
+    expect(window.history.length).toBe(length + 2);
+    expect(heads()[0]).toBe("Ready 2");
+    expect(card("Login form")).toHaveFocus();
+  });
+
+  it("closes on the browser's Back, and Forward opens it again", async () => {
     renderApp(world(), "/?view=board&project=acme&hide=Draft");
     await loaded();
-    await userEvent.click(within(card("Old work")).getByText("Old work"));
-    expect(window.location.search).toBe("?view=inbox&project=acme&list=tickets&ticket=acme-4&finished=1");
-    const pane = screen.getByRole("complementary", { name: "Ticket" });
-    expect(await within(pane).findByRole("heading", { name: /Old work/ })).toBeInTheDocument();
-    expect(within(screen.getByRole("main", { name: "Tickets" })).getByText("Old work")).toBeInTheDocument();
-
+    await openCard("Login form");
     act(() => window.history.back());
-    await waitFor(() => expect(window.location.search).toBe("?view=board&project=acme&hide=Draft"));
-    expect(await loaded()).toBeInTheDocument();
-    expect(heads()[0]).toBe("Ready 2");
-    expect(heads()).toContain("Done 1");
+    await waitFor(noPopup);
+    expect(window.location.search).toBe("?view=board&project=acme&hide=Draft");
+    expect(card("Login form")).toHaveFocus();
+
+    act(() => window.history.forward());
+    expect(await popupHeading("Login form")).toBeInTheDocument();
+  });
+
+  it("reopens when the address with popup= is loaded", async () => {
+    renderApp(world(), "/?view=board&project=acme&popup=acme-3");
+    expect(await popupHeading("Sign-up page")).toBeInTheDocument();
+  });
+
+  it("opens on any Project's Ticket, whatever the picker is on", async () => {
+    renderApp(world(), "/?view=board&project=acme&popup=beta-1");
+    expect(await popupHeading("Beta export")).toBeInTheDocument();
+  });
+
+  it("opens nothing for an unknown ID, and leaves the address alone", async () => {
+    renderApp(world(), "/?view=board&project=acme&popup=acme-99");
+    await loaded();
+    noPopup();
+    expect(window.location.search).toBe("?view=board&project=acme&popup=acme-99");
+  });
+
+  it("shows nothing while the Inbox data loads", async () => {
+    const fake = world();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const needsMe = fake.needsMe.bind(fake);
+    fake.needsMe = async (...args) => {
+      await gate;
+      return needsMe(...args);
+    };
+    renderApp(fake, "/?view=board&project=acme&popup=acme-2");
+    expect(within(board()).getByText("Loading…")).toBeInTheDocument();
+    noPopup();
+    await act(async () => release());
+    expect(await screen.findByRole("dialog", { name: "Ticket popup" })).toBeInTheDocument();
   });
 });
 
@@ -390,6 +513,18 @@ describe("the Board's By Spec lanes", () => {
     expect(heads()).toContain("Ready 3");
     await userEvent.click(toggle);
     expect(within(lane("Login")).getByRole("link", { name: /Login form/ })).toBeInTheDocument();
+  });
+
+  it("keeps folded lanes across a card's popup opening and closing", async () => {
+    bySpec();
+    await loaded();
+    await userEvent.click(within(lane("Billing")).getByRole("button", { name: "Billing" }));
+    await userEvent.click(within(lane("Login")).getByText("Login form"));
+    await screen.findByRole("dialog", { name: "Ticket popup" });
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(lane("Billing")).getByRole("button", { name: "Billing" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(lane("Billing")).queryByRole("link", { name: /Invoice list/ })).toBeNull();
   });
 
   it("follows a Ticket moving column inside its lane", async () => {
