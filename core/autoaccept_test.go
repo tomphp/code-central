@@ -292,3 +292,136 @@ func TestASpecStageWithNoRecommendationStaysInReviewUnderAutoAccept(t *testing.T
 		t.Fatalf("spec Stage is %s, want still In Progress", spec.State)
 	}
 }
+
+// allKinds turns every Auto-accept kind on.
+func (f fixture) allKinds(t *testing.T) {
+	t.Helper()
+	kinds := map[store.AutoAcceptKind]bool{}
+	for _, k := range store.AutoAcceptKinds {
+		kinds[k] = true
+	}
+	f.setAutoAccept(t, kinds)
+}
+
+// finishTicket claims ref and finishes it with no branch.
+func (f fixture) finishTicket(t *testing.T, ref core.Ref) {
+	t.Helper()
+	res := f.claim(t, core.ClaimInput{Ticket: ref})
+	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: ref, ClaimID: res.ClaimID, Summary: "Finished " + string(ref) + "."}); err != nil {
+		t.Fatalf("finish %s: %v", ref, err)
+	}
+}
+
+func TestGrillingOutcomesAutoAcceptsAFinishedGrillingStage(t *testing.T) {
+	f := newFixture(t)
+	f.requirement(t)
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptGrilling: true})
+	f.finishTicket(t, "acme-3")
+	autoAccepted(t, f.get(t, "acme-3"), store.Done, store.CauseProject)
+	if spec := f.get(t, "acme-4"); spec.State != store.Ready {
+		t.Fatalf("spec Stage is %s, want Ready once the grilling Stage is Done", spec.State)
+	}
+}
+
+func TestTicketsStageAutoAcceptsAFinishedTicketsStage(t *testing.T) {
+	f := newFixture(t)
+	f.requirement(t)
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptTickets: true})
+	f.setState(t, 3, store.Done)
+	f.setState(t, 4, store.Done)
+	f.finishTicket(t, "acme-5")
+	autoAccepted(t, f.get(t, "acme-5"), store.Done, store.CauseProject)
+}
+
+func TestAStageIsNotAutoAcceptedUnderTheOtherKinds(t *testing.T) {
+	f := newFixture(t)
+	f.requirement(t)
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptSpec: true, store.AutoAcceptTickets: true, store.AutoAcceptImplementation: true, store.AutoAcceptMerge: true})
+	f.finishTicket(t, "acme-3")
+	if g := f.get(t, "acme-3"); g.State != store.InReview {
+		t.Fatalf("grilling Stage is %s, want In Review", g.State)
+	}
+}
+
+func TestMergeResultsAutoAcceptsOnlyASpecMergeTicket(t *testing.T) {
+	f := specMergeWorld(t)
+	f.openSpecMerge(t, "README")
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptMerge: true})
+	f.finishTicket(t, "acme-3")
+	autoAccepted(t, f.get(t, "acme-3"), store.Done, store.CauseProject)
+
+	// An ordinary Ticket is Implementation results, whatever its title.
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Merge the base into the Spec Branch of acme-1", State: store.Ready})
+	f.finishTicket(t, "acme-4")
+	if got := f.get(t, "acme-4"); got.State != store.InReview {
+		t.Fatalf("a Ticket titled like a Spec merge Ticket is %s under Merge results, want In Review", got.State)
+	}
+	f.finishTicket(t, "acme-2")
+	if got := f.get(t, "acme-2"); got.State != store.InReview {
+		t.Fatalf("an implementation Ticket is %s under Merge results, want In Review", got.State)
+	}
+}
+
+func TestImplementationResultsNeverAcceptsASpecMergeTicket(t *testing.T) {
+	f := specMergeWorld(t)
+	f.openSpecMerge(t, "README")
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true})
+	f.finishTicket(t, "acme-3")
+	if got := f.get(t, "acme-3"); got.State != store.InReview {
+		t.Fatalf("the Spec merge Ticket is %s under Implementation results, want In Review", got.State)
+	}
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Merge the base into the Spec Branch of acme-1", State: store.Ready})
+	f.finishTicket(t, "acme-4")
+	autoAccepted(t, f.get(t, "acme-4"), store.Done, store.CauseProject)
+}
+
+func TestPrototypesAndMapTicketsAreNeverAutoAccepted(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	f.spec(t, "acme", "Login")
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Try", State: store.Ready, Labels: []string{core.PrototypeLabel}})
+	f.allKinds(t)
+	f.finishTicket(t, "acme-2")
+	if got := f.get(t, "acme-2"); got.State != store.InReview {
+		t.Fatalf("the Prototype is %s with every kind on, want In Review", got.State)
+	}
+
+	g := newFixture(t)
+	g.mapWith(t, core.CreateTicketInput{Title: "Look into caching", State: store.Ready, Labels: []string{core.WayfinderPrefix + "research"}},
+		core.CreateTicketInput{Title: "Untyped", State: store.Ready})
+	g.allKinds(t)
+	for _, ref := range []core.Ref{"acme-2", "acme-3"} {
+		g.finishTicket(t, ref)
+		if got := g.get(t, ref); got.State != store.InReview {
+			t.Fatalf("Map Ticket %s is %s with every kind on, want In Review", ref, got.State)
+		}
+	}
+}
+
+func TestARedoIsAutoAcceptedLikeAnyOtherFinish(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready)
+	f.finishWork(t, "acme-2")
+	if _, err := f.core.Reject(human, "acme", core.RejectInput{Ticket: "acme-2", Comment: "Missing tests."}); err != nil {
+		t.Fatal(err)
+	}
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true})
+	res := f.claim(t, core.ClaimInput{Ticket: "acme-2"})
+	if _, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-2", ClaimID: res.ClaimID, Summary: "Tests added.", Branch: "acme-2"}); err != nil {
+		t.Fatal(err)
+	}
+	autoAccepted(t, f.get(t, "acme-2"), store.Accepted, store.CauseProject)
+}
+
+func TestTurningAKindOnAcceptsNothingAlreadyInReview(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready)
+	f.finishWork(t, "acme-2")
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true})
+	if got := f.get(t, "acme-2"); got.State != store.InReview {
+		t.Fatalf("ticket is %s after turning the kind on, want still In Review", got.State)
+	}
+	if a, _ := f.core.AttentionOf(ctx, "acme", "acme-2"); !a.NeedsMe {
+		t.Fatal("a Ticket In Review before the setting should still need me")
+	}
+}
