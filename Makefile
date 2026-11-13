@@ -5,7 +5,7 @@ TEST_BUDGET := 10
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test test-verbose typecheck vitest e2e build web clean hooks context-report ci-failures serve-components build-components
+.PHONY: test test-verbose typecheck vitest vitest-stress e2e build web clean hooks context-report ci-failures serve-components build-components
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
@@ -35,6 +35,13 @@ typecheck: $(WEB_DEPS) hooks
 
 vitest: $(WEB_DEPS) hooks
 	cd web && node node_modules/vitest/vitest.mjs run $(F:web/%=%)
+
+# Shows a flaky web test: vitest on one file (F=) N times (default 20)
+# while LOAD busy workers (default 4, 0 for none) take the CPU, the way a
+# loaded CI runner does. It prints a line per run and "N runs, F failures",
+# and fails if any run failed. Go, so the workers stop however it exits.
+vitest-stress: $(WEB_DEPS) hooks
+	go run ./internal/vitestress -n $(or $(N),20) -load $(or $(LOAD),4) $(F)
 
 # Turns on the committed commit-msg hook in .githooks/, which refuses a
 # message that isn't a conventional commit (see CLAUDE.md's Commits). The

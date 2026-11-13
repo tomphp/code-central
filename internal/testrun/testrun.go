@@ -105,7 +105,8 @@ func run(jobs []job, budget time.Duration, verbose bool, out io.Writer) bool {
 		fmt.Fprintf(out, "make test failed (%s) in %.2fs\n", strings.Join(statuses, ", "), elapsed)
 		return false
 	case elapsed > budget.Seconds():
-		fmt.Fprintf(out, "make test took %.2fs, over the %gs budget\n", elapsed, budget.Seconds())
+		fmt.Fprintf(out, "make test: all suites passed, but took %.2fs, over the %gs budget.\n", elapsed, budget.Seconds())
+		fmt.Fprintln(out, "A cold cache (after npm ci or a fresh worktree) or another process (a dev server, a stress run) inflates this; rerun once before treating it as a failure.")
 		return false
 	}
 	fmt.Fprintf(out, "make test: %.2fs (budget %gs)\n", elapsed, budget.Seconds())

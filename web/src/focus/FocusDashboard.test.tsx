@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
 import { ApiError, type CIRunView } from "../api/types";
-import { change, focus, renderApp } from "./focusTesting";
+import { change, focus, loadedDashboard, renderApp } from "./focusTesting";
 
 function world() {
   const fake = new FakeApi();
@@ -21,13 +21,8 @@ function world() {
   return fake;
 }
 
-// dashboard waits for the Activity Dashboard, then for its effects to run,
-// so a notice sent next reaches the subscription it makes on mounting.
-async function dashboard() {
-  const d = await within(focus()).findByRole("region", { name: "Activity Dashboard" });
-  await act(async () => {});
-  return d;
-}
+// dashboard waits for the Focus Mode region's Activity Dashboard and its effects.
+const dashboard = () => loadedDashboard(focus());
 // block is state's block, named by its State; count is the number on it.
 const block = (d: HTMLElement, state: string) => within(d).getByRole("group", { name: state });
 const count = (d: HTMLElement, state: string) => within(block(d, state)).getByTestId("count").textContent;

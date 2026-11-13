@@ -18,6 +18,15 @@ An operation lives in `core`; the front doors (MCP, the HTTP API, the CLI) only 
 
 When a second test needs the same setup (a test server, an SSE opener, a world fixture, a link-click check), extract one shared helper and have both tests use it. Look for an existing helper in the package, or in `codecentraltest` / `factory/factorytest`, before writing one.
 
+## A test waits for the loaded state before it interacts
+
+In a changed `*.test.tsx`, a component whose data arrives through a fetch or a subscription is not there yet when `render` returns:
+
+- Wait for its loaded state before interacting or asserting: a `findBy*` on the element that arrives last, or the file's `loaded()` helper (`loadedDashboard` for the Activity Dashboard), never a `getBy*` straight after `render`.
+- A click on an element inside a block that remounts when its data arrives waits for that data first (the settled count or text), then queries the link fresh.
+- A `waitFor` wraps one assertion, and a passing test never waits a timeout out (`web/src/test-setup.ts` says why).
+- Fix a flaky test by waiting for the thing it raced, never by a sleep or a longer timeout.
+
 ## Comments match their neighbours
 
 Each file opens with a comment on what it's for, and each exported or non-obvious declaration gets a short one stating what it is or why. Match the density and voice of the surrounding code. When the diff changes behaviour, the comments, ADRs and glossary entries that describe it change in the same commit.
