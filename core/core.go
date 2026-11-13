@@ -94,6 +94,9 @@ type ProjectView struct {
 	ReportedModels ReportedModelsView `json:"reported_models"`
 	// StageGuides is the Project's Stage Guides settings, always filled in.
 	StageGuides StageGuidesView `json:"stage_guides"`
+	// AutoAccept is the Project's Auto-accept setting, one entry per
+	// Auto-accept kind, always filled in.
+	AutoAccept AutoAcceptView `json:"auto_accept"`
 	// FactoryStatus is whether the Project's Factories are online, from
 	// their Heartbeats, always filled in.
 	FactoryStatus FactoryStatusView `json:"factory_status"`
@@ -164,6 +167,14 @@ type MoveView struct {
 	Via   string      `json:"via,omitempty"`
 	// Commit is the commit that put the work into the base, on a land.
 	Commit string `json:"commit,omitempty"`
+	// Cause is why an auto-accept made the Move (project, ticket-label or
+	// spec-label); left out on every other Move.
+	Cause store.AutoAcceptCause `json:"cause,omitempty"`
+}
+
+// moveView is one Move as reads show it.
+func moveView(m store.Move) MoveView {
+	return MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit, Cause: m.Cause}
 }
 
 // ClaimView is one Claim as reads show it: never with its Claim ID.
@@ -625,7 +636,8 @@ func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
 		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
-		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
+		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), AutoAccept: autoAcceptView(p),
+		FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at
@@ -665,7 +677,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		v.Claims = append(v.Claims, cv)
 	}
 	for _, m := range t.Moves {
-		v.Moves = append(v.Moves, MoveView{From: m.From, To: m.To, Actor: m.Actor, Time: m.Time, Claim: m.Claim, Via: m.Via, Commit: m.Commit})
+		v.Moves = append(v.Moves, moveView(m))
 	}
 	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = ticketCI(r, key, t, c.now())
 	v.PullRequest = pullRequestView(t.PullRequest)

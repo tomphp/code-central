@@ -378,6 +378,15 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect((await d.api.setModelAssignment("acme", false)).stage_guides).toEqual({ subagent_exploration: false, model_assignment: false });
     });
 
+    it("sets a Project's Auto-accept per kind, all off to begin with, keeping the kinds left out", async () => {
+      await d.createProject("acme", "Acme");
+      const off = { grilling: false, spec: false, tickets: false, implementation: false, merge: false };
+      expect((await d.api.listProjects())[0].auto_accept).toEqual(off);
+      expect((await d.api.setAutoAccept("acme", { implementation: true, merge: true })).auto_accept).toEqual({ ...off, implementation: true, merge: true });
+      expect((await d.api.setAutoAccept("acme", { merge: false, grilling: true })).auto_accept).toEqual({ ...off, implementation: true, grilling: true });
+      expect((await d.api.listProjects())[0].auto_accept).toEqual({ ...off, implementation: true, grilling: true });
+    });
+
     it("sets a Project's Models, a row per kind of work, all at Default to begin with", async () => {
       await d.createProject("acme", "Acme");
       const kinds = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"];

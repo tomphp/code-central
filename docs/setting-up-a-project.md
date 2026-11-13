@@ -475,6 +475,28 @@ A change applies from the next Claim and the next `get_stage_guide` call. A sess
 
 Another optional line follows the same pattern: one named setting, whose zero value may keep the line in or leave it out, and one fragment in `core/stageguides/fragments/`, which a placeholder line in the guide (`<!-- subagent-exploration -->`, `<!-- model-assignment -->`) marks the place of. [ADR 0034](adr/0034-a-stage-guide-can-vary-by-project-only-through-named-project-settings-that-the-human-sets.md) records the decision.
 
+## Auto-accept
+
+Auto-accept lets finished work you would accept anyway skip In Review: when a Ticket of a kind you have switched on finishes, `finish` moves it to In Review and, in the same write, carries out your accept, so it never shows in Needs Me. A Ticket's **Auto-accept kind** is worked out from what it carries, and each kind is one switch, all off by default:
+
+| Kind | Key | What it covers |
+|---|---|---|
+| Grilling outcomes | `grilling` | A finished grilling Stage, which goes on to its spec Stage |
+| Spec recommendation | `spec` | A finished spec Stage, accepted by the choice its agent recommended: Implement or Split into Tickets |
+| Tickets Stage | `tickets` | A finished tickets Stage, so the Tickets it wrote are built |
+| Implementation results | `implementation` | Every other finished Ticket: feature work, a Small Change, CI fix, CI Rule and Incoming Issue Tickets, and `Implement:` Tickets |
+| Merge results | `merge` | A Spec merge Ticket only, the one Code Central opens when a Spec Branch conflicts with the base |
+
+Prototypes and Map Tickets have no kind and are never auto-accepted. An auto-accepted Ticket goes where your own accept would take it, Accepted when its finish named a branch and Done otherwise, and the Move is recorded as yours with its cause, so the Factory lands it, CI Tracking gates it and Land per Spec gathers it unchanged. An auto-accepted Implement on a Requirement whose tickets Stage is still Draft creates its implementation Ticket as Draft. A spec Stage already In Review from before recommendations existed stays for you to accept.
+
+Every Project read shows the setting as `auto_accept`, as in `{"grilling": false, "spec": false, "tickets": false, "implementation": true, "merge": false}`. Only you set it, over HTTP; agents have no tool or command for it, and a kind you leave out of the map keeps its value:
+
+```sh
+curl -X POST localhost:7733/api/p/acme-api/set_auto_accept -d '{"kinds": {"implementation": true, "merge": true}}'
+```
+
+Turning a kind on affects only Tickets that finish afterwards: nothing already In Review is accepted. [ADR 0037](adr/0037-auto-accept-happens-within-finish-on-the-humans-behalf-and-only-the-human-can-turn-it-on.md) records the decision.
+
 ## When `init` behaves differently
 
 ### A repository you don't own: `init --local`

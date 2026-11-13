@@ -93,6 +93,8 @@ var Operations = []Op{
 	// Subagent Exploration (code-central-441).
 	{Name: "set_subagent_exploration", Audience: HumanOnly, Write: true},
 	{Name: "set_model_assignment", Audience: HumanOnly, Write: true},
+	// Auto-accept (code-central-536): the human's alone, over HTTP only.
+	{Name: "set_auto_accept", Audience: HumanOnly, Write: true},
 
 	// The Integration contract (ticket 42).
 	{Name: "create_linked_spec", Audience: IntegrationOnly, Write: true},
