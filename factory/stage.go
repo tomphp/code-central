@@ -103,7 +103,7 @@ func (f *factory) conflictFiles(stage string, tk core.TicketView) []string {
 	if err != nil {
 		// A Spec Branch's conflict Ticket has no branch yet: it is cut
 		// from the Spec Branch, which is what conflicts.
-		if !tk.SpecLanded || tk.Title != specConflictTitle(tk.Spec.ID) {
+		if !tk.SpecLanded || tk.Title != core.SpecMergeTitle(tk.Spec.ID) {
 			return nil
 		}
 		if head, err = f.specBranchTip(tk.Spec.ID); err != nil {

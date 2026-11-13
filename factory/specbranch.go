@@ -387,59 +387,23 @@ func joinIDs(tickets []core.TicketView) string {
 	return strings.Join(ids, ", ")
 }
 
-// specConflictTitle is the title of the Ticket that merges the base into
-// the Spec Branch of spec.
-func specConflictTitle(spec string) string {
-	return fmt.Sprintf("Merge the base into the Spec Branch of %s", spec)
-}
-
-// openSpecConflict opens a Ready Ticket on the Spec to merge the base
-// into its Spec Branch, or comments on the open one already there.
+// openSpecConflict asks Code Central to open the Spec merge Ticket that
+// merges the base into the Spec Branch, or to comment the conflict on the
+// open one already there.
 func (f *factory) openSpecConflict(ctx context.Context, spec core.SpecDetail, tip, baseTip string, conflicts []string) {
-	title := specConflictTitle(spec.ID)
-	var b strings.Builder
-	fmt.Fprintf(&b, "The Spec Branch %s conflicts with the base, %s, in these files:\n\n", specBranch(spec.ID), f.baseBranch())
-	for _, c := range conflicts {
-		fmt.Fprintf(&b, "- %s\n", c)
-	}
-	fmt.Fprintf(&b, "\nThe base's tip is %s and the Spec Branch's tip is %s. Merge the base into this branch and resolve the conflicts.\n", baseTip, tip)
-	body := b.String()
-
-	rows, err := f.client.FindTickets(ctx, f.project, core.FindTicketsInput{Spec: core.Ref(spec.ID), Title: title})
+	res, err := f.client.OpenSpecMerge(ctx, f.project, core.OpenSpecMergeInput{Spec: core.Ref(spec.ID), Conflicts: conflicts, BaseTip: baseTip, SpecBranchTip: tip})
 	if err != nil {
 		if ctx.Err() == nil {
-			f.printf("%s: find_tickets: %v", spec.ID, err)
+			f.printf("%s: open_spec_merge: %v", spec.ID, err)
 		}
 		return
 	}
-	for _, r := range rows {
-		if r.Title != title || r.State == store.Done || r.State == store.Cancelled {
-			continue
-		}
-		existing, err := f.client.GetTicket(ctx, f.project, core.Ref(r.ID))
-		if err != nil {
-			return
-		}
-		for _, c := range existing.Comments {
-			if c.Body == body {
-				return
-			}
-		}
-		if _, err := f.client.Comment(ctx, f.project, core.CommentInput{Ticket: core.Ref(r.ID), Body: body}); err != nil && ctx.Err() == nil {
-			f.printf("%s: comment: %v", r.ID, err)
-			return
-		}
-		f.printf("%s: %s conflicts with %s again: commented on %s", spec.ID, specBranch(spec.ID), f.baseBranch(), r.ID)
-		return
+	switch res.Outcome {
+	case core.SpecMergeOpened:
+		f.printf("%s: %s conflicts with %s in %s: opened %s to merge the base into it", spec.ID, specBranch(spec.ID), f.baseBranch(), strings.Join(conflicts, ", "), res.Ticket)
+	case core.SpecMergeCommented:
+		f.printf("%s: %s conflicts with %s again: commented on %s", spec.ID, specBranch(spec.ID), f.baseBranch(), res.Ticket)
 	}
-	made, err := f.client.CreateTicket(ctx, f.project, core.CreateTicketInput{Spec: core.Ref(spec.ID), Title: title, Description: body, State: store.Ready})
-	if err != nil {
-		if ctx.Err() == nil {
-			f.printf("%s: create_ticket: %v", spec.ID, err)
-		}
-		return
-	}
-	f.printf("%s: %s conflicts with %s in %s: opened %s to merge the base into it", spec.ID, specBranch(spec.ID), f.baseBranch(), strings.Join(conflicts, ", "), made.ID)
 }
 
 // specLanded reports whether a Ticket of spec has landed, which under

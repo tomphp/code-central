@@ -509,9 +509,13 @@ type Ticket struct {
 	// while New issues need me is on (Spec code-central-279), and cleared
 	// when the human triages it; never set again once cleared.
 	AwaitingTriage bool
-	Created        time.Time
-	Updated        time.Time
-	Description    string
+	// SpecMergeTicket marks a Spec merge Ticket: one Code Central opened
+	// with open_spec_merge to merge the base into a Spec Branch
+	// (code-central-542). Only that operation sets it; nothing clears it.
+	SpecMergeTicket bool
+	Created         time.Time
+	Updated         time.Time
+	Description     string
 	// Branch and Commit are what the last finish naming them gave: the
 	// work's branch and its head commit. Free-form, never parsed.
 	Branch string

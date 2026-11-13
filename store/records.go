@@ -153,29 +153,30 @@ type specFront struct {
 }
 
 type ticketFile struct {
-	Title          string              `yaml:"title"`
-	State          string              `yaml:"state"`
-	Spec           int                 `yaml:"spec"`
-	Labels         []string            `yaml:"labels"`
-	Tags           map[string]string   `yaml:"tags"`
-	BlockedBy      []int               `yaml:"blocked_by"`
-	Replacements   []int               `yaml:"replacements"`
-	Link           *linkFile           `yaml:"link,omitempty"`
-	AwaitingTriage bool                `yaml:"awaiting_triage,omitempty"`
-	Created        string              `yaml:"created"`
-	Updated        string              `yaml:"updated"`
-	Description    string              `yaml:"description"`
-	Branch         string              `yaml:"branch,omitempty"`
-	Commit         string              `yaml:"commit,omitempty"`
-	PushedCommits  []pushedCommitFile  `yaml:"pushed_commits,omitempty"`
-	SpecMerge      *specMergeFile      `yaml:"spec_merge,omitempty"`
-	PullRequest    *pullRequestFile    `yaml:"pull_request,omitempty"`
-	Claims         []claimFile         `yaml:"claims"`
-	Rounds         []roundFile         `yaml:"rounds"`
-	FailureReports []failureReportFile `yaml:"failure_reports"`
-	Comments       []commentFile       `yaml:"comments"`
-	Moves          []moveFile          `yaml:"moves"`
-	Edits          []editFile          `yaml:"edits"`
+	Title           string              `yaml:"title"`
+	State           string              `yaml:"state"`
+	Spec            int                 `yaml:"spec"`
+	Labels          []string            `yaml:"labels"`
+	Tags            map[string]string   `yaml:"tags"`
+	BlockedBy       []int               `yaml:"blocked_by"`
+	Replacements    []int               `yaml:"replacements"`
+	Link            *linkFile           `yaml:"link,omitempty"`
+	AwaitingTriage  bool                `yaml:"awaiting_triage,omitempty"`
+	SpecMergeTicket bool                `yaml:"spec_merge_ticket,omitempty"`
+	Created         string              `yaml:"created"`
+	Updated         string              `yaml:"updated"`
+	Description     string              `yaml:"description"`
+	Branch          string              `yaml:"branch,omitempty"`
+	Commit          string              `yaml:"commit,omitempty"`
+	PushedCommits   []pushedCommitFile  `yaml:"pushed_commits,omitempty"`
+	SpecMerge       *specMergeFile      `yaml:"spec_merge,omitempty"`
+	PullRequest     *pullRequestFile    `yaml:"pull_request,omitempty"`
+	Claims          []claimFile         `yaml:"claims"`
+	Rounds          []roundFile         `yaml:"rounds"`
+	FailureReports  []failureReportFile `yaml:"failure_reports"`
+	Comments        []commentFile       `yaml:"comments"`
+	Moves           []moveFile          `yaml:"moves"`
+	Edits           []editFile          `yaml:"edits"`
 }
 
 type specMergeFile struct {
@@ -351,7 +352,7 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	}
 	t := Ticket{
 		Number: n, Title: f.Title, State: State(f.State), Spec: f.Spec, Labels: f.Labels, Tags: f.Tags,
-		BlockedBy: f.BlockedBy, Replacements: f.Replacements, AwaitingTriage: f.AwaitingTriage, Description: f.Description,
+		BlockedBy: f.BlockedBy, Replacements: f.Replacements, AwaitingTriage: f.AwaitingTriage, SpecMergeTicket: f.SpecMergeTicket, Description: f.Description,
 		Branch: f.Branch, Commit: f.Commit,
 	}
 	if t.Title == "" {
@@ -593,7 +594,7 @@ func encode(record any, project string) (string, []byte, error) {
 		f := ticketFile{
 			Title: r.Title, State: string(r.State), Spec: r.Spec, Labels: r.Labels, Tags: r.Tags,
 			BlockedBy: r.BlockedBy, Replacements: r.Replacements, Link: encodeLink(r.Link), AwaitingTriage: r.AwaitingTriage,
-			Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
+			SpecMergeTicket: r.SpecMergeTicket, Created: formatTime(r.Created), Updated: formatTime(r.Updated), Description: r.Description,
 			Branch: r.Branch, Commit: r.Commit,
 			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},
 			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),

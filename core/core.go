@@ -262,6 +262,9 @@ type TicketView struct {
 	// AwaitingTriage is set on an Incoming Issue that came in while New
 	// issues need me was on and that the human hasn't triaged yet.
 	AwaitingTriage bool `json:"awaiting_triage,omitempty"`
+	// SpecMergeTicket marks a Spec merge Ticket, one open_spec_merge
+	// opened; left out on any other Ticket.
+	SpecMergeTicket bool `json:"spec_merge_ticket,omitempty"`
 	// TriageActions are the triage actions, each an operation's name, the
 	// human may take on an Incoming Issue; left out on any other Ticket.
 	// Computed on read.
@@ -680,6 +683,7 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = c.reasonOf(r, key, t)
 	v.AwaitingTriage, v.TriageActions = t.AwaitingTriage, ticketTriageActions(r, key, t)
+	v.SpecMergeTicket = t.SpecMergeTicket
 	return v
 }
 
