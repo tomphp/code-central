@@ -45,8 +45,11 @@ The Inbox's list of every Ticket in scope (`list=tickets`), of every kind and St
 _Avoid_: Ticket list, all Tickets page
 
 **Board view**:
-The view of the Tickets in scope as cards in one column per State (`view=board`). Its link is in the Inbox's View section. It takes no action itself: a Ticket card opens its Focus popup or Ticket popup, and a Lane header its Spec popup, kept in the URL as `popup=`.
+The view of the Tickets in scope as cards in one column per State, plus the Needs Me column while it's shown (`view=board`). Its link is in the Inbox's View section. It takes no action itself: a Ticket card opens its Focus popup or Ticket popup, and a Lane header its Spec popup, kept in the URL as `popup=`.
 _Avoid_: Kanban, Ticket board
+
+**Needs Me column**:
+The Board view's column, shown or hidden in Columns ▾ and off unless the human turns it on, that sits after In Progress and holds the Ticket card of every Ticket in scope that needs the human, in place of its State's column, whatever State columns are hidden. Each card there also shows its State and Needs Me reason. It is kept in the URL as `needs=` and per browser. _Avoid_: meta-column, needs-me lane
 
 **Short ID**:
 How the UI shows a Ticket's or Spec's ID while one Project is selected, its number alone as `#123`. With All Projects selected the full ID shows instead. Either way, clicking it copies the full ID.
@@ -349,7 +352,7 @@ The All Tickets view's checkbox, off by default, that brings back its Done and C
 _Avoid_: Show done, history toggle
 
 **Columns ▾**:
-The Board view's menu that shows or hides each State's column. It is kept in the URL as `hide=` and per browser.
+The Board view's menu that shows or hides each State's column and the Needs Me column. It is kept in the URL as `hide=` and per browser.
 _Avoid_: Column filter, column picker
 
 **Spec row**:
@@ -365,7 +368,7 @@ The one row the UI lists a Ticket in, in the State lists, All Tickets, Needs Me,
 _Avoid_: Ticket line, State row
 
 **Ticket card**:
-A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, then the title, then its Spec's kind and title outside a lane. It pulses when it joins its column or its Ticket changes. Clicking it opens its Focus popup or Ticket popup.
+A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, then the title, then its Spec's kind and title outside a lane. In the Needs Me column it also shows its State chip and Needs Me reason. It pulses when it joins its column (the Needs Me column too) or its Ticket changes. Clicking it opens its Focus popup or Ticket popup.
 _Avoid_: Board card, Ticket tile
 
 **Focus Pop-up**:

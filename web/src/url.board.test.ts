@@ -20,6 +20,7 @@ describe("the Board view's address", () => {
       project: undefined,
       group: undefined,
       hide: undefined,
+      needs: undefined,
       popup: undefined,
       back: readLocation("?view=inbox"),
     });
@@ -51,5 +52,14 @@ describe("the Board view's address", () => {
 
   it("returns to the Inbox when back names any other view", () => {
     expect(readLocation("?view=board&back=view%3Dusage").back).toEqual(readLocation("?view=inbox"));
+  });
+
+  it("reads and writes needs=1, needs=0 and none beside hide and popup", () => {
+    expect(readLocation("?view=board&needs=1").needs).toBe(true);
+    expect(readLocation("?view=board&needs=0").needs).toBe(false);
+    expect(readLocation("?view=board").needs).toBeUndefined();
+    expect(hrefFor({ view: "board", hide: ["Done"], needs: true, popup: "acme-7" })).toBe("?view=board&hide=Done&needs=1&popup=acme-7");
+    expect(hrefFor({ view: "board", needs: false })).toBe("?view=board&needs=0");
+    expect(hrefFor({ view: "board" })).toBe("?view=board");
   });
 });
