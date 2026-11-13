@@ -84,6 +84,7 @@ import {
   TRIAGE_ACTIONS,
   FINISHED,
   FOCUS_CLEARS,
+  FOCUS_POPUPS,
   GUIDED_ON,
   GUIDED_TAG,
   type ChangeEvent,
@@ -1880,6 +1881,10 @@ export class FakeApi implements Api {
     const { focus_clear } = change;
     if (focus_clear !== undefined && !FOCUS_CLEARS.includes(focus_clear)) {
       throw new ApiError(422, "invalid", `focus_clear "${focus_clear}" is not an Option's value; allowed: ${FOCUS_CLEARS.join(", ")}`, "focus_clear");
+    }
+    const { focus_popup } = change;
+    if (focus_popup !== undefined && !FOCUS_POPUPS.includes(focus_popup)) {
+      throw new ApiError(422, "invalid", `focus_popup "${focus_popup}" is not an Option's value; allowed: ${FOCUS_POPUPS.join(", ")}`, "focus_popup");
     }
     if (change.gh_path !== undefined) {
       const gh_path = change.gh_path.trim();

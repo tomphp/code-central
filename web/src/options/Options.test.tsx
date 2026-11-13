@@ -65,6 +65,30 @@ describe("opening and leaving the Options view", () => {
   });
 });
 
+describe("the Focus Pop-up Option", () => {
+  it("follows the Focus Mode entry, offers Off then On, and saves a choice at once", async () => {
+    const fake = world();
+    renderApp(fake, "/?view=options");
+    const group = await within(options()).findByRole("radiogroup", { name: "Pop up Focus Items on other views" });
+    const groups = within(options()).getAllByRole("radiogroup");
+    expect(groups.indexOf(group)).toBe(groups.indexOf(focusControl()) + 1);
+    expect(within(group).getAllByRole("radio").map((r) => r.getAttribute("value"))).toEqual(["off", "on"]);
+    await waitFor(() => expect(within(group).getByRole("radio", { name: "Off" })).toBeChecked());
+    expect(within(group).getByRole("radio", { name: "Off" })).toHaveAccessibleDescription("Needs Me waits for you in Focus Mode or a Board card.");
+    expect(within(group).getByRole("radio", { name: "On" })).toHaveAccessibleDescription(
+      "A popup shows each new Focus Item on every view but Focus Mode, Options and Project Options.",
+    );
+
+    await userEvent.click(within(group).getByRole("radio", { name: "On" }));
+    await waitFor(() => expect(within(group).getByRole("radio", { name: "On" })).toBeChecked());
+    expect(await fake.options()).toMatchObject({ focus_popup: "on" });
+
+    // A change made elsewhere is followed live.
+    await act(() => fake.setOptions({ focus_popup: "off" }));
+    await waitFor(() => expect(within(group).getByRole("radio", { name: "Off" })).toBeChecked());
+  });
+});
+
 describe("the Focus Mode Option", () => {
   it("offers Activity Dashboard first, then All clear, and saves a choice at once", async () => {
     const fake = world();
