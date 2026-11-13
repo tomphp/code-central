@@ -1,8 +1,9 @@
 // Board view tests: the real App against FakeApi, at ?view=board. They
 // check what the human sees and does: the Board link and its count, the
 // columns and Columns ▾ with which columns are hidden and where that comes
-// from, the cards, a card's Ticket popup and closing it, the shared
-// grouping, + New ▾ and Back to the Inbox.
+// from, the cards, a card's Ticket popup or Focus popup and closing it, the
+// Focus popup's Questions and closing by itself, the shared grouping, + New
+// ▾ and Back to the Inbox.
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -408,6 +409,197 @@ describe("the Board's Ticket popup", () => {
     noPopup();
     await act(async () => release());
     expect(await screen.findByRole("dialog", { name: "Ticket popup" })).toBeInTheDocument();
+  });
+});
+
+describe("the Board's Focus popup", () => {
+  const popup = () => screen.getByRole("dialog", { name: "Focus popup" });
+  const noPopup = () => expect(screen.queryByRole("dialog")).toBeNull();
+  const item = async () => within(await screen.findByRole("dialog", { name: "Focus popup" })).findByRole("article", { name: "Focus Item" });
+  // question waits for the popup to show the Question titled title; each
+  // Question is a new Focus Item, so it looks in the popup, not an item.
+  const question = async (title: string) =>
+    within(await screen.findByRole("dialog", { name: "Focus popup" })).findByRole("heading", { name: title });
+
+  // asking is world() with acme-7 asking Round 1, its three Questions open,
+  // and acme-3 In Review, both in Needs Me.
+  function asking() {
+    const fake = world();
+    const posted = at(7);
+    fake.addTicket("acme", {
+      title: "Pick a colour",
+      state: "Needs Answer",
+      created: posted,
+      updated: posted,
+      rounds: [
+        {
+          number: 1,
+          claim: 1,
+          posted,
+          questions: [
+            { number: 1, title: "Which colour?", body: "Red or blue", recommended: "Blue", status: "open" },
+            { number: 2, title: "Which font?", body: "Serif or sans", status: "open" },
+            { number: 3, title: "Which size?", body: "S or M", status: "open" },
+          ],
+        },
+      ],
+    }); // acme-7
+    fake.setNeedsMe([
+      { reason: "needs_answer", tickets: [{ id: "acme-7", since: posted, round: { number: 1, open: 3, questions: 3 } }] },
+      { reason: "in_review", tickets: [{ id: "acme-3", since: posted, summary: "Added the sign-up page" }] },
+    ]);
+    return fake;
+  }
+
+  it("opens from a card that needs the human, with its Focus Item and no Skip, N left or Open in Inbox", async () => {
+    renderApp(asking(), "/?view=board&project=acme");
+    await loaded();
+    await userEvent.click(within(card("Pick a colour")).getByText("Pick a colour"));
+    expect(await question("Which colour?")).toBeInTheDocument();
+    expect(window.location.search).toBe("?view=board&project=acme&popup=acme-7");
+    expect(within(popup()).getByText("Question 1 of 3 · Round 1")).toBeInTheDocument();
+    expect(within(popup()).getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(within(popup()).queryByRole("button", { name: "Skip" })).toBeNull();
+    expect(within(popup()).queryByRole("link", { name: /Open in Inbox/ })).toBeNull();
+    expect(within(popup()).queryByRole("button", { name: /New/ })).toBeNull();
+    expect(popup()).not.toHaveTextContent(/\d+ left/);
+    // Only the one Ticket's work: not acme-3's In Review.
+    expect(popup()).not.toHaveTextContent("Sign-up page");
+  });
+
+  it("shows Loading… until the Round is read", async () => {
+    const fake = asking();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    const getTicket = fake.getTicket.bind(fake);
+    fake.getTicket = async (...args) => {
+      await gate;
+      return getTicket(...args);
+    };
+    renderApp(fake, "/?view=board&project=acme&popup=acme-7");
+    await loaded();
+    expect(within(await item()).getByText("Pick a colour")).toBeInTheDocument();
+    expect(popup()).toHaveTextContent("Loading…");
+    expect(within(popup()).queryByRole("region", { name: "Question" })).toBeNull();
+    await act(async () => release());
+    expect(await question("Which colour?")).toBeInTheDocument();
+  });
+
+  it("shows the Round's Questions one at a time, goes on to the Ticket's next Focus Item, and closes once it needs nothing more", async () => {
+    const fake = asking();
+    renderApp(fake, "/?view=board&project=acme&hide=Draft");
+    await loaded();
+    await userEvent.click(within(card("Pick a colour")).getByText("Pick a colour"));
+    await question("Which colour?");
+    expect(within(popup()).getByText("Question 1 of 3 · Round 1")).toBeInTheDocument();
+    expect(within(popup()).queryByText("Which font?")).toBeNull();
+    await userEvent.click(within(popup()).getByRole("button", { name: "Answer" }));
+    expect(await question("Which font?")).toBeInTheDocument();
+    expect(within(popup()).getByText("Question 2 of 3 · Round 1")).toBeInTheDocument();
+    await userEvent.type(within(popup()).getByRole("textbox"), "Sans");
+    await userEvent.click(within(popup()).getByRole("button", { name: "Answer" }));
+    expect(await question("Which size?")).toBeInTheDocument();
+    await userEvent.click(within(popup()).getByRole("button", { name: "Dismiss" }));
+
+    // The Round is answered: its answers wait for the agent, which the
+    // human can end with Release.
+    const resume = await within(await item()).findByRole("region", { name: "Resume or release" });
+    expect((await fake.getTicket("acme", "acme-7")).rounds[0].questions.map((q) => [q.status, q.answer])).toEqual([
+      ["answered", "Blue"],
+      ["answered", "Sans"],
+      ["dismissed", undefined],
+    ]);
+    await userEvent.click(within(resume).getByRole("button", { name: "Release…" }));
+    await userEvent.click(within(resume).getByRole("button", { name: "Release Claim" }));
+    await waitFor(noPopup);
+    expect(window.location.search).toBe("?view=board&project=acme&hide=Draft");
+    expect(heads()[0]).toBe("Ready 3");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("shows Loading… while Needs Me still lists a read Round with no open Question, and closes once it catches up", async () => {
+    const fake = asking();
+    const t = await fake.getTicket("acme", "acme-7");
+    fake.updateTicket("acme-7", { rounds: t.rounds.map((r) => ({ ...r, questions: r.questions.map((q) => ({ ...q, status: "dismissed" as const })) })) });
+    renderApp(fake, "/?view=board&project=acme&popup=acme-7");
+    await loaded();
+    // Once read, the Round has nothing to show, so no Focus Item either.
+    await waitFor(() => expect(within(popup()).queryByRole("article", { name: "Focus Item" })).toBeNull());
+    expect(popup()).toHaveTextContent("Loading…");
+
+    fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason !== "needs_answer"));
+    await act(async () => fake.emit({ type: "ticket.changed", project: "acme", id: "acme-7" }));
+    await waitFor(noPopup);
+  });
+
+  it("closes quietly when the agent deals with its Ticket", async () => {
+    const fake = asking();
+    renderApp(fake, "/?view=board&project=acme&popup=acme-7");
+    await question("Which colour?");
+    const length = window.history.length;
+    fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason !== "needs_answer"));
+    await act(async () => fake.updateTicket("acme-7", { state: "In Progress" }));
+    await waitFor(noPopup);
+    expect(window.location.search).toBe("?view=board&project=acme");
+    expect(window.history.length).toBe(length + 1);
+    expect(screen.queryByText(/Dealt with elsewhere/)).toBeNull();
+  });
+
+  it("opens for a Ticket listed in a CI item, with that item, whose options act on every Ticket it lists", async () => {
+    // acme-7 and acme-8 Accepted, both pushed as abc1234567, whose one run
+    // of ci.yml failed: one CI failed item listing both, as ciitem.test.tsx
+    // sets it up.
+    const fake = world();
+    const spec = { id: "acme-1", title: "Login" };
+    fake.addTicket("acme", { title: "Basket", state: "Accepted", spec, branch: "acme-7", commit: "abc", created: at(7), updated: at(7) }); // acme-7
+    fake.addTicket("acme", { title: "Checkout", state: "Accepted", spec, branch: "acme-8", commit: "def", created: at(8), updated: at(8) }); // acme-8
+    await fake.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
+    await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+    await fake.reportPushedCommit("acme", "acme-7", "abc1234567", "main");
+    await fake.reportPushedCommit("acme", "acme-8", "abc1234567", "main");
+    await fake.reportCIRuns("acme", [
+      {
+        id: 1,
+        attempt: 1,
+        workflow: "ci.yml",
+        name: "CI",
+        branch: "main",
+        commit: "abc1234567",
+        status: "completed",
+        conclusion: "failure",
+        url: "https://github.com/acme/web/actions/runs/1",
+        jobs: [{ name: "test", conclusion: "failure", url: "https://github.com/acme/web/actions/runs/1/job/1" }],
+        ticket: "acme-7",
+      },
+    ]);
+    const ci_item = (await fake.getTicket("acme", "acme-7")).ci_item!;
+    fake.setNeedsMe([
+      { reason: "ci_failed", tickets: [{ id: "", project: "acme", title: "CI failed at abc1234", ci_result: "failed", ci_failure: { commit: "abc1234567", workflows: ["ci.yml"] }, ci_item }] },
+    ]);
+    renderApp(fake, "/?view=board&project=acme&popup=acme-8");
+    const it = await item();
+    expect(within(it).getByRole("heading", { level: 2 })).toHaveTextContent("CI failed at abc1234");
+    const panel = await within(it).findByRole("region", { name: "CI failed" });
+    await userEvent.click(within(within(panel).getByRole("group", { name: "Failure options" })).getByRole("button", { name: "Land anyway" }));
+    for (const id of ["acme-7", "acme-8"]) expect((await fake.getTicket("acme", id)).land_anyway).toBe(true);
+    await waitFor(noPopup);
+  });
+
+  it("reopens as a Focus popup when the address with popup= is loaded for a Ticket that needs the human", async () => {
+    renderApp(asking(), "/?view=board&project=acme&popup=acme-7");
+    expect(await question("Which colour?")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Ticket popup" })).toBeNull();
+  });
+
+  it("gives focus back to the card when it closes", async () => {
+    renderApp(asking(), "/?view=board&project=acme");
+    await loaded();
+    await userEvent.click(within(card("Pick a colour")).getByText("Pick a colour"));
+    await question("Which colour?");
+    await userEvent.click(within(popup()).getByRole("button", { name: "Close" }));
+    noPopup();
+    expect(window.location.search).toBe("?view=board&project=acme");
+    expect(card("Pick a colour")).toHaveFocus();
   });
 });
 

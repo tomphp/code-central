@@ -31,8 +31,6 @@ export interface FocusItemViewProps {
   inbox?: UiLocation;
 }
 
-// Item is one Focus Item, top to bottom: where it's from, why it waits,
-// then its Question with the answer form, or its reason's panel with the
 // FocusItemView is one Focus Item: where it's from, why it waits, then its
 // Question with the answer form, or its reason's panel with the panel's
 // own buttons, and Skip when given.

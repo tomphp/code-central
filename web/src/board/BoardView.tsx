@@ -1,10 +1,11 @@
 // The Board view: the Tickets in scope as cards in one column per State, in
 // workflow order, minus the columns Columns ▾ hides. By Spec splits the
 // columns into one lane per Spec, headed by its Lane header. It takes no
-// action itself: a card opens its Ticket's popup over the Board, kept in the
-// address as popup=, and only the popup acts. It reads only what the Inbox
-// loads, and follows the live feed. Back returns to the Inbox it was opened
-// from.
+// action itself: a card opens its Ticket's popup over the Board, its Focus
+// popup while the Ticket needs the human and its Ticket popup otherwise,
+// kept in the address as popup=, and only the popup acts. It reads only
+// what the Inbox loads, and follows the live feed. Back returns to the Inbox
+// it was opened from.
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Api } from "../api/api";
 import { STATES, type NeedsMeReason, type State } from "../api/types";
@@ -24,6 +25,7 @@ import { clickTo, hrefFor, type UiLocation } from "../url";
 import { TicketCard } from "../ticket/TicketCard";
 import { ColumnsMenu } from "./ColumnsMenu";
 import { LaneHeader } from "./LaneHeader";
+import { FocusPopup } from "./FocusPopup";
 import { usePopupKind } from "./popupKind";
 import { TicketPopup } from "./TicketPopup";
 import { Button } from "../controls/Button";
@@ -164,11 +166,12 @@ export function BoardView({ api, now, version, data, loc, navigate }: BoardViewP
           </div>
         )}
       </main>
-      {/* At most one popup, chosen from popup=. Until the Focus popup lands
-          (code-central-525), a Ticket that needs the human falls through to
-          its Ticket popup; until the Spec popup lands (code-central-524), a
-          Spec's ID opens nothing. */}
-      {loc.popup && (kind === "ticket" || kind === "focus") && (
+      {/* At most one popup, chosen from popup=. Until the Spec popup lands
+          (code-central-524), a Spec's ID opens nothing. */}
+      {loc.popup && kind === "focus" && data && (
+        <FocusPopup api={api} now={now} version={version} data={data} id={loc.popup} onClose={closePopup} navigate={navigate} />
+      )}
+      {loc.popup && kind === "ticket" && (
         <TicketPopup
           api={api}
           now={now}
