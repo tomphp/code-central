@@ -57,12 +57,22 @@
   .board-card.dashboard-pulse-0, .board-card.dashboard-pulse-1 { animation: none; outline: 2px solid var(--accent); }
 }
 
-/* By Spec lanes: each lane is headed by its Spec row, stuck to the left
-   while the columns scroll sideways; collapsed, a lane keeps one count per
-   column under its header. */
-.board-lane { margin-top: 12px; }
-.board-lane-head { position: sticky; left: 16px; width: min(440px, calc(100vw - 32px)); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 6px; }
-.board-lane-head .spec-row { border-bottom: 0; }
-.board-lane .board-cell { min-height: 0; }
-.board-counts .board-cell { min-height: 0; padding: 6px 4px; align-items: center; }
+/* By Spec lanes: each lane is headed by its Lane header, a bar across the
+   Board whose one line stays at the left while the columns scroll
+   sideways; its cells are bare, so the cards sit under the bar. Collapsed,
+   a lane keeps one count per column under its header. */
+.board-lane { margin-top: 10px; }
+.board-lane.collapsed { margin-top: 0; }
+.lane-header { background: var(--surface); border-top: 1px solid var(--border); }
+.lane-header.needs { border-left: 3px solid color-mix(in srgb, var(--r-answer) 55%, transparent); }
+.lane-header-line { position: sticky; left: 0; max-width: calc(100vw - 48px); display: flex; align-items: center; }
+.lane-header .chev { margin: 0 0 0 6px; }
+.lane-header-link { flex: 1; min-width: 0; display: flex; gap: 8px; align-items: center; padding: 8px 10px 8px 6px; border-left: 3px solid transparent; color: var(--text); text-decoration: none; }
+.lane-header-link .short-id { flex: none; }
+.lane-header-title { flex: 0 1 auto; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lane-header-link:hover .lane-header-title { text-decoration: underline; }
+.lane-header-headline { flex: 0 1 auto; min-width: 0; margin-left: 8px; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lane-header-count { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
+.board-lane .board-cell { min-height: 0; background: none; }
+.board-counts .board-cell { padding: 6px 4px; align-items: center; }
 .board-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
