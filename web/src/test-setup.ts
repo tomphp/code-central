@@ -5,6 +5,7 @@ import { pulseTiming } from "./focus/pulse";
 
 // A pulse lasts as long as a test, so one that checks it never races its end.
 pulseTiming.ms = 60_000;
+pulseTiming.board = 60_000;
 
 // waitFor and findBy* wait up to 1s by default, which a loaded CI runner
 // can use up before a change notice has refetched; a passing test never waits it out.

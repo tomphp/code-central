@@ -27,7 +27,7 @@ export function newestFirst(tickets: ProjectTicket[]): ProjectTicket[] {
 
 // kindLabel is the Stage name, "Prototype", or a Map node type other than
 // `ticket`; none for implementation and Fix Tickets.
-function kindLabel(t: ProjectTicket): string | undefined {
+export function kindLabel(t: ProjectTicket): string | undefined {
   if (stageOf(t)) return stageOf(t);
   if (t.labels.includes("prototype")) return "Prototype";
   return t.node_type && t.node_type !== "ticket" ? t.node_type : undefined;
