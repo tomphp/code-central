@@ -614,4 +614,4 @@ $ code-central help sandboxes
 
 ## Focus
 
-The **Focus** section of the Project Options page, below Stage Guides, has a **Show in Focus** checkbox for each Needs Me reason, all checked to begin with. Uncheck a reason and **Save**: its items stay in Needs Me, its count, its dots and Notifications, but they don't show in Focus Mode or open the Focus popup. An Archived Project shows the section read-only.
+The **Focus** section of the Project Options page, below Stage Guides, holds the Project's **Focus Kinds**: which Needs Me reasons are Focus Items for it. It lists each reason, with a **Show in Focus** checkbox, all checked to begin with. Uncheck a reason and **Save**: its items stay in Needs Me, with their count, their dots and their Notifications, but they don't show in Focus Mode and don't open the automatic Focus popup. A Board card's Focus popup still shows them for that Ticket, and checking the reason again and saving brings them back. Every open UI tab shows the change. An Archived Project shows the section read-only.
