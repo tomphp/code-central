@@ -21,7 +21,13 @@ function world() {
   return fake;
 }
 
-const dashboard = () => within(focus()).findByRole("region", { name: "Activity Dashboard" });
+// dashboard waits for the Activity Dashboard, then for its effects to run,
+// so a notice sent next reaches the subscription it makes on mounting.
+async function dashboard() {
+  const d = await within(focus()).findByRole("region", { name: "Activity Dashboard" });
+  await act(async () => {});
+  return d;
+}
 // block is state's block, named by its State; count is the number on it.
 const block = (d: HTMLElement, state: string) => within(d).getByRole("group", { name: state });
 const count = (d: HTMLElement, state: string) => within(block(d, state)).getByTestId("count").textContent;
