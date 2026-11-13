@@ -1,8 +1,9 @@
 // The Board view: the Tickets in scope as cards in one column per State, in
 // workflow order, minus the columns Columns ▾ hides. By Spec splits the
 // columns into one lane per Spec, headed by its Lane header. It takes no
-// action itself: a card opens its Ticket's popup over the Board, kept in the
-// address as popup=, and only the popup acts. It reads only what the Inbox
+// action itself: a card opens its Ticket's popup and a Lane header its
+// Spec's, over the Board, kept in the address as popup=, and only the popup
+// acts. It reads only what the Inbox
 // loads, and follows the live feed. Back returns to the Inbox it was opened
 // from.
 import { useEffect, useRef, useState, type CSSProperties } from "react";
@@ -25,6 +26,7 @@ import { TicketCard } from "../ticket/TicketCard";
 import { ColumnsMenu } from "./ColumnsMenu";
 import { LaneHeader } from "./LaneHeader";
 import { usePopupKind } from "./popupKind";
+import { SpecPopup } from "./SpecPopup";
 import { TicketPopup } from "./TicketPopup";
 import { Button } from "../controls/Button";
 import "./board.css";
@@ -54,18 +56,15 @@ export function BoardView({ api, now, version, data, loc, navigate }: BoardViewP
   // The lanes the human has collapsed, by Spec; page-only.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  // A card opens its Ticket's popup: the Board's address with popup=.
-  const cardLink = (t: ProjectTicket): CardLink => ({
-    href: hrefFor({ ...loc, popup: t.id }),
-    onClick: clickTo(navigate, { popup: t.id }),
+  // A card opens its Ticket's popup, a Lane header its Spec's: the Board's
+  // address with popup=.
+  const popupLink = (id: string) => ({
+    href: hrefFor({ ...loc, popup: id }),
+    onClick: clickTo(navigate, { popup: id }),
   });
+  const cardLink = (t: ProjectTicket): CardLink => popupLink(t.id);
   const kind = usePopupKind(loc.popup, data);
   const closePopup = () => navigate({ popup: undefined });
-  // A lane's Spec row opens the Spec, as All Tickets' By Spec rows do.
-  const specLink = (id: string) => {
-    const to: Partial<UiLocation> = { view: "inbox", project: loc.project, list: "tickets", requirement: id, group: "spec" };
-    return { href: hrefFor(to as UiLocation), onClick: clickTo(navigate, to), "data-id": id };
-  };
   // Every one of a Spec's Tickets, in every State and Project, for its row.
   const ticketsOf = new Map(groupBySpec(data?.tickets ?? []).map((g) => [g.id, g.tickets]));
   const toggleLane = (id: string) =>
@@ -150,7 +149,7 @@ export function BoardView({ api, now, version, data, loc, navigate }: BoardViewP
                       all={ticketsOf.get(l.id) ?? []}
                       shown={l.count}
                       reasons={reasons}
-                      link={specLink(l.id)}
+                      link={{ ...popupLink(l.id), "data-id": l.id }}
                       collapsed={collapsed.has(l.id)}
                       onToggle={() => toggleLane(l.id)}
                     />
@@ -166,8 +165,20 @@ export function BoardView({ api, now, version, data, loc, navigate }: BoardViewP
       </main>
       {/* At most one popup, chosen from popup=. Until the Focus popup lands
           (code-central-525), a Ticket that needs the human falls through to
-          its Ticket popup; until the Spec popup lands (code-central-524), a
-          Spec's ID opens nothing. */}
+          its Ticket popup. */}
+      {loc.popup && kind === "spec" && (
+        <SpecPopup
+          api={api}
+          now={now}
+          version={version}
+          id={loc.popup}
+          projects={projects}
+          reasons={reasons}
+          onClose={closePopup}
+          open={(id) => navigate({ popup: id })}
+          specLink={popupLink}
+        />
+      )}
       {loc.popup && (kind === "ticket" || kind === "focus") && (
         <TicketPopup
           api={api}
