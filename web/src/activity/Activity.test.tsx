@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
+import { loadedDashboard } from "../focus/focusTesting";
 
 function world() {
   const fake = new FakeApi();
@@ -44,7 +45,7 @@ describe("opening the Activity view from the Inbox", () => {
 });
 
 const activity = () => screen.getByRole("main", { name: "Activity" });
-const dashboard = () => within(activity()).findByRole("region", { name: "Activity Dashboard" });
+const dashboard = () => loadedDashboard(activity());
 
 describe("the Activity view", () => {
   it("shows the Activity Dashboard of its Project, whatever needs the human and whatever Focus Mode shows when nothing does", async () => {

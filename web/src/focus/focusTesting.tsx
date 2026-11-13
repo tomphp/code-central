@@ -1,6 +1,6 @@
 // Shared set-up for the Focus Mode tests: the real App against FakeApi,
 // opened at a URL, and the helpers every Focus test reaches for.
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
 import type { RoundView } from "../api/types";
@@ -66,4 +66,13 @@ export function waitingTickets() {
   const fake = waiting();
   fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason !== "needs_answer"));
   return fake;
+}
+
+// loadedDashboard waits for the Activity Dashboard in main, then for its
+// effects to run, so a notice sent next reaches the subscription it makes on
+// mounting.
+export async function loadedDashboard(main: HTMLElement) {
+  const d = await within(main).findByRole("region", { name: "Activity Dashboard" });
+  await act(async () => {});
+  return d;
 }
