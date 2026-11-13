@@ -45,13 +45,13 @@ func (c *Core) SetFocusKinds(ctx context.Context, key string, in SetFocusKindsIn
 	if err := humanOnly(ctx, "set_focus_kinds"); err != nil {
 		return Written[ProjectView]{}, err
 	}
-	off, err := checkedFocusKindsOff(in.Off)
-	if err != nil {
-		return Written[ProjectView]{}, err
-	}
 	var before, after ProjectView
-	err = c.store.Update(func(w store.Writer) error {
+	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
+			return err
+		}
+		off, err := checkedFocusKindsOff(in.Off)
+		if err != nil {
 			return err
 		}
 		p, _ := w.Project(key)

@@ -10,7 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
 import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, NeedsMeReason, PullRequestReport, SessionEvent, State, TicketAcknowledgement, UsageResponse } from "./types";
-import { ApiError, TRIAGE_ACTIONS } from "./types";
+import { ApiError, NEEDS_ME_REASONS, TRIAGE_ACTIONS } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
 
@@ -389,11 +389,16 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(bad.message).toContain("lunch");
       expect((await d.api.listProjects())[0].focus_kinds).toEqual({ off: ["failed"] });
 
+      // NEEDS_ME_REASONS are the service's reasons, in its group order.
+      expect((await d.api.setFocusKinds("acme", [...NEEDS_ME_REASONS])).focus_kinds).toEqual({ off: NEEDS_ME_REASONS });
       expect((await d.api.setFocusKinds("acme", [])).focus_kinds).toEqual({ off: [] });
 
+      // An Archived Project refuses before the reasons are checked.
       await d.api.archiveProject("acme");
-      const refused = await d.api.setFocusKinds("acme", ["answered"]).catch((e) => e);
-      expect(refused).toMatchObject({ status: 409, code: "action_not_allowed", allowed_actions: ["unarchive_project"] });
+      for (const off of [["answered"], ["lunch"]] as NeedsMeReason[][]) {
+        const refused = await d.api.setFocusKinds("acme", off).catch((e) => e);
+        expect(refused).toMatchObject({ status: 409, code: "action_not_allowed", allowed_actions: ["unarchive_project"] });
+      }
     });
 
     it("sets a Project's Models, a row per kind of work, all at Default to begin with", async () => {

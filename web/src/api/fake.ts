@@ -85,9 +85,9 @@ import {
   FINISHED,
   FOCUS_CLEARS,
   FOCUS_POPUPS,
-  NEEDS_ME_REASONS,
   GUIDED_ON,
   GUIDED_TAG,
+  NEEDS_ME_REASONS,
   type ChangeEvent,
   type FindSpecsFilter,
   type FindTicketsFilter,
@@ -1383,11 +1383,11 @@ export class FakeApi implements Api {
 
   async setFocusKinds(key: string, off: NeedsMeReason[]): Promise<ProjectView> {
     this.calls.push("setFocusKinds");
+    const p = this.writable(key);
     const unknown = off.find((r) => !NEEDS_ME_REASONS.includes(r));
     if (unknown !== undefined) {
       throw new ApiError(422, "invalid", `"${unknown}" isn't a Needs Me reason; the reasons are ${NEEDS_ME_REASONS.join(", ")}`, "off");
     }
-    const p = this.writable(key);
     const kept = NEEDS_ME_REASONS.filter((r) => off.includes(r));
     if (JSON.stringify(p.focus_kinds.off) !== JSON.stringify(kept)) {
       p.focus_kinds = { off: kept };
