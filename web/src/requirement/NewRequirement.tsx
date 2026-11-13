@@ -7,12 +7,12 @@
 // render its own opening control in place of the button, such as a menu
 // item; the modal goes in a portal on the body, so it outlives a menu that
 // closes behind it.
-import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useId, useState, type FormEvent, type ReactNode } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import type { ApiError, ProjectRow, SpecAcknowledgement, TicketAcknowledgement } from "../api/types";
 import { Button } from "../controls/Button";
+import { Modal as Shell } from "../controls/Modal";
 import { Select } from "../controls/Select";
 
 export interface NewRequirementProps {
@@ -188,12 +188,6 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
   const titleId = useId();
   const ask = !project && projects.length > 1;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   const send = (draft: boolean) => {
     if (!text.trim() || !chosen) return;
     setBusy(true);
@@ -208,9 +202,8 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
     send(false);
   };
 
-  return createPortal(
-    <div className="modal" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+  return (
+    <Shell labelledBy={titleId} onClose={onClose}>
         <h2 id={titleId}>{kind.button}</h2>
         <form onSubmit={submit}>
           {ask && (
@@ -252,8 +245,6 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
             </Button>
           </div>
         </form>
-      </div>
-    </div>,
-    document.body,
+    </Shell>
   );
 }

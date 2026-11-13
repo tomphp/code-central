@@ -36,6 +36,9 @@ export interface FocusInput {
   needsMe: NeedsMeView;
   // project is the Project in scope; none means every Project.
   project?: string;
+  // scope keeps only the rows for one Ticket: its own row, or the CI item
+  // row that lists it. None means every row.
+  scope?: string;
   // onScreen is the Focus Item on screen, if any.
   onScreen?: FocusItem;
   // ticket is the latest read of the on-screen item's Ticket, if any.
@@ -65,9 +68,10 @@ export interface FocusScreen {
   elsewhere: boolean;
 }
 
-export function focusQueue({ needsMe, project, onScreen, ticket, skipped, acted }: FocusInput): FocusScreen {
+export function focusQueue({ needsMe, project, scope, onScreen, ticket, skipped, acted }: FocusInput): FocusScreen {
   // Needs Me's own order, Stage Tickets as themselves, unlike the Inbox.
-  const rows = needsMe.groups.flatMap((g) => g.tickets).filter((r) => !project || r.project === project);
+  const rows = needsMe.groups.flatMap((g) => g.tickets).filter((r) => !project || r.project === project)
+    .filter((r) => !scope || r.id === scope || !!r.ci_item?.tickets.some((t) => t.id === scope));
   const items = rows.flatMap((row) => itemsOf(row, ticket));
   // Skipped items go to the back, after every unskipped one. They come
   // back only when the human goes through them again, which clears the

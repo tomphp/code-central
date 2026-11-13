@@ -1,12 +1,14 @@
 // The Board view: the Tickets in scope as cards in one column per State, in
 // workflow order, minus the columns Columns ▾ hides. By Spec splits the
-// columns into one lane per Spec, headed by its Lane header. It is read-only: a
-// card opens its Ticket in the Inbox's All Tickets view, on the Board's
-// Project. It reads only what the Inbox loads, and follows the live feed.
-// Back returns to the Inbox it was opened from.
+// columns into one lane per Spec, headed by its Lane header. It takes no
+// action itself: a card opens its Ticket's popup and a Lane header its
+// Spec's, over the Board, kept in the address as popup=, and only the popup
+// acts. A card opens its Focus popup while the Ticket needs the human and its
+// Ticket popup otherwise. It reads only what the Inbox loads, and follows the
+// live feed. Back returns to the Inbox it was opened from.
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Api } from "../api/api";
-import { FINISHED, STATES, type NeedsMeReason, type State } from "../api/types";
+import { STATES, type NeedsMeReason, type State } from "../api/types";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { ToggleGroup } from "../controls/ToggleGroup";
 import { ViewHeader } from "../controls/ViewHeader";
@@ -23,17 +25,24 @@ import { clickTo, hrefFor, type UiLocation } from "../url";
 import { TicketCard } from "../ticket/TicketCard";
 import { ColumnsMenu } from "./ColumnsMenu";
 import { LaneHeader } from "./LaneHeader";
+import { FocusPopup } from "./FocusPopup";
+import { usePopupKind } from "./popupKind";
+import { SpecPopup } from "./SpecPopup";
+import { TicketPopup } from "./TicketPopup";
 import { Button } from "../controls/Button";
 import "./board.css";
 
 export interface BoardViewProps {
   api: Api;
+  now: Date;
+  // version is the live feed's, which the popups read on.
+  version: number;
   data?: InboxData;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function BoardView({ api, data, loc, navigate }: BoardViewProps) {
+export function BoardView({ api, now, version, data, loc, navigate }: BoardViewProps) {
   const projects = data?.projects ?? [];
   const hidden = hiddenColumns(loc.hide);
   const shown = STATES.filter((s) => !hidden.includes(s));
@@ -48,25 +57,15 @@ export function BoardView({ api, data, loc, navigate }: BoardViewProps) {
   // The lanes the human has collapsed, by Spec; page-only.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  // A card opens its Ticket in All Tickets on the Board's Project, keeping
-  // the grouping, with Show finished on for a finished one.
-  const open = (t: ProjectTicket): Partial<UiLocation> => ({
-    view: "inbox",
-    project: loc.project,
-    list: "tickets",
-    ticket: t.id,
-    group: grouping === "spec" ? "spec" : undefined,
-    finished: FINISHED.includes(t.state) || undefined,
+  // A card opens its Ticket's popup, a Lane header its Spec's: the Board's
+  // address with popup=.
+  const popupLink = (id: string) => ({
+    href: hrefFor({ ...loc, popup: id }),
+    onClick: clickTo(navigate, { popup: id }),
   });
-  const cardLink = (t: ProjectTicket): CardLink => {
-    const to = open(t);
-    return { href: hrefFor(to as UiLocation), onClick: clickTo(navigate, to) };
-  };
-  // A lane's Spec row opens the Spec, as All Tickets' By Spec rows do.
-  const specLink = (id: string) => {
-    const to: Partial<UiLocation> = { view: "inbox", project: loc.project, list: "tickets", requirement: id, group: "spec" };
-    return { href: hrefFor(to as UiLocation), onClick: clickTo(navigate, to), "data-id": id };
-  };
+  const cardLink = (t: ProjectTicket): CardLink => popupLink(t.id);
+  const kind = usePopupKind(loc.popup, data);
+  const closePopup = () => navigate({ popup: undefined });
   // Every one of a Spec's Tickets, in every State and Project, for its row.
   const ticketsOf = new Map(groupBySpec(data?.tickets ?? []).map((g) => [g.id, g.tickets]));
   const toggleLane = (id: string) =>
@@ -151,7 +150,7 @@ export function BoardView({ api, data, loc, navigate }: BoardViewProps) {
                       all={ticketsOf.get(l.id) ?? []}
                       shown={l.count}
                       reasons={reasons}
-                      link={specLink(l.id)}
+                      link={{ ...popupLink(l.id), "data-id": l.id }}
                       collapsed={collapsed.has(l.id)}
                       onToggle={() => toggleLane(l.id)}
                     />
@@ -165,6 +164,34 @@ export function BoardView({ api, data, loc, navigate }: BoardViewProps) {
           </div>
         )}
       </main>
+      {/* At most one popup, chosen from popup=. */}
+      {loc.popup && kind === "focus" && data && (
+        <FocusPopup key={loc.popup} api={api} now={now} version={version} data={data} id={loc.popup} onClose={closePopup} navigate={navigate} />
+      )}
+      {loc.popup && kind === "spec" && (
+        <SpecPopup
+          api={api}
+          now={now}
+          version={version}
+          id={loc.popup}
+          projects={projects}
+          reasons={reasons}
+          onClose={closePopup}
+          open={(id) => navigate({ popup: id })}
+          specLink={popupLink}
+        />
+      )}
+      {loc.popup && kind === "ticket" && (
+        <TicketPopup
+          api={api}
+          now={now}
+          version={version}
+          id={loc.popup}
+          projects={projects}
+          onClose={closePopup}
+          openSpec={(id) => navigate({ popup: id })}
+        />
+      )}
     </OneProject.Provider>
   );
 }

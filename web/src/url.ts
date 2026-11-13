@@ -13,10 +13,11 @@
 // its scope (none = All Projects) and back as Usage's,
 // or ?view=activity&project=<key>&back=<query> for the Activity Dashboard
 // in a view of its own, the same,
-// or ?view=board&project=<key>&group=spec&hide=<States>&back=<query> for
-// the Board view, where hide is the States whose columns it hides
+// or ?view=board&project=<key>&group=spec&hide=<States>&popup=<id>&back=<query>
+// for the Board view, where hide is the States whose columns it hides
 // (comma-separated; none = the browser's pick, an empty hide= = none
-// hidden), group and back as the Inbox's and Usage's.
+// hidden), popup the ID of the Spec or Ticket whose popup is open, group
+// and back as the Inbox's and Usage's.
 // group=spec is the Inbox's By Spec grouping of a State list (none = By
 // Ticket); it stays in the URL across lists and Projects.
 // view is the layout (anything else is the inbox); project, state and
@@ -47,6 +48,8 @@ export interface UiLocation {
   // hide is the States whose columns the Board hides, in workflow order;
   // none is the browser's pick, and empty is every column shown.
   hide?: State[];
+  // popup is the ID of the Spec or Ticket whose popup the Board has open.
+  popup?: string;
   // finished shows Done and Cancelled Tickets in the All Tickets view.
   finished?: true;
   // days is Usage's range; none is the default, 7.
@@ -78,6 +81,7 @@ export function readLocation(search: string): UiLocation {
       project: q.get("project") || undefined,
       group: q.get("group") === "spec" ? "spec" : undefined,
       hide: hide && STATES.filter((s) => hide.includes(s)),
+      popup: q.get("popup") || undefined,
       back: readBack(q),
     };
   }
@@ -142,6 +146,7 @@ export function hrefFor(loc: UiLocation): string {
   if (loc.view === "board") {
     if (loc.group) q.set("group", loc.group);
     if (loc.hide) q.set("hide", loc.hide.join(","));
+    if (loc.popup) q.set("popup", loc.popup);
     return withBack(q, loc);
   }
   if (loc.view !== "inbox") return `?${q}`;
