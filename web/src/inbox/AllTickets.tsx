@@ -5,6 +5,7 @@
 import type { NeedsMeReason } from "../api/types";
 import type { ProjectSpec, ProjectTicket } from "../live";
 import { stageOf } from "../requirement/progress";
+import { ListCIBadge } from "../ticket/CIBadge";
 import { TicketLine, type InboxRowLinkFactory } from "../ticket/TicketLine";
 import { groupBySpec } from "./groupBySpec";
 import { ShortId } from "./ShortId";
@@ -73,7 +74,9 @@ export function AllTicketsByTicket({
                 <KindBadge kind={specKindOf(spec)} /> <ShortId id={t.spec} /> {spec?.title ?? ""}
               </>
             }
-          />
+          >
+            <ListCIBadge t={t} />
+          </TicketLine>
         );
       })}
     </>

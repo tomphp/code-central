@@ -7,16 +7,33 @@
 // only. As a Board lane's header the chevron instead collapses the lane,
 // and the row lists no Tickets.
 import { useEffect, useState } from "react";
-import { LONG_LIVED_LABEL, STATES, type NeedsMeReason, type StageName, type State, type StateSummary } from "../api/types";
+import {
+  LONG_LIVED_LABEL,
+  STATES,
+  type NeedsMeReason,
+  type StageName,
+  type State,
+  type StateSummary,
+} from "../api/types";
 import { REASON_LABEL } from "../format";
 import type { ProjectSpec, ProjectTicket } from "../live";
 import { mapCount } from "../map/mapCount";
-import { headline, progress, stageOf, type Progress } from "../requirement/progress";
+import {
+  headline,
+  progress,
+  stageOf,
+  type Progress,
+} from "../requirement/progress";
 import { Strip } from "../requirement/Strip";
 import { KindBadge } from "../controls/KindBadge";
 import { StateChip } from "../controls/StateChip";
 import { ShortId } from "./ShortId";
-import { TicketLine, type InboxRowLinkFactory, type RowLink } from "../ticket/TicketLine";
+import { ListCIBadge } from "../ticket/CIBadge";
+import {
+  TicketLine,
+  type InboxRowLinkFactory,
+  type RowLink,
+} from "../ticket/TicketLine";
 
 export interface SpecRowProps {
   id: string;
@@ -47,11 +64,26 @@ export interface SpecRowProps {
   lane?: { collapsed: boolean; toggle(): void };
 }
 
-export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticketLink, selectedTicket, quietWhenIdle, startOpen, lane }: SpecRowProps) {
+export function SpecRow({
+  id,
+  spec,
+  all,
+  shown,
+  here,
+  reasons,
+  now,
+  link,
+  ticketLink,
+  selectedTicket,
+  quietWhenIdle,
+  startOpen,
+  lane,
+}: SpecRowProps) {
   const listed = shown ?? stagesFirst(all);
   // The row holding the selected Ticket opens on its own, once per
   // selection, so the human can still close it.
-  const holdsSelected = !!selectedTicket && listed.some((t) => t.id === selectedTicket);
+  const holdsSelected =
+    !!selectedTicket && listed.some((t) => t.id === selectedTicket);
   const [listOpen, setListOpen] = useState(holdsSelected || !!startOpen);
   const open = lane ? !lane.collapsed : listOpen;
   useEffect(() => {
@@ -61,13 +93,27 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
   const title = spec?.title ?? id;
   const summary = spec?.state_summary ?? countStates(all);
   const total = STATES.reduce((n, s) => n + (summary[s] ?? 0), 0);
-  const { kind, progress: p, need, needsYou, headline } = describe(spec, all, summary, reasons);
+  const {
+    kind,
+    progress: p,
+    need,
+    needsYou,
+    headline,
+  } = describe(spec, all, summary, reasons);
   const quiet = quietWhenIdle && (spec?.finished || !needsYou);
 
   return (
-    <section className={`spec-row${needsYou ? " needs" : ""}${quiet ? " quiet" : ""}`} aria-label={title}>
+    <section
+      className={`spec-row${needsYou ? " needs" : ""}${quiet ? " quiet" : ""}`}
+      aria-label={title}
+    >
       <div className="spec-row-head">
-        <button className="chev" aria-expanded={open} aria-label={title} onClick={() => (lane ? lane.toggle() : setListOpen((o) => !o))}>
+        <button
+          className="chev"
+          aria-expanded={open}
+          aria-label={title}
+          onClick={() => (lane ? lane.toggle() : setListOpen((o) => !o))}
+        >
           {open ? "▾" : "▸"}
         </button>
         <a className="row" {...link}>
@@ -75,7 +121,13 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
             <ShortId id={id} />
             {kind !== "Requirement" && <KindBadge kind={kind} />}
             <span className="row-title">{title}</span>
-            {needsYou && <span className={`dot${need ? ` reason-${need}` : ""}`} role="img" aria-label="Needs you" />}
+            {needsYou && (
+              <span
+                className={`dot${need ? ` reason-${need}` : ""}`}
+                role="img"
+                aria-label="Needs you"
+              />
+            )}
           </span>
           {p ? (
             <Strip p={p} />
@@ -99,9 +151,23 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
         </a>
       </div>
       {open && !lane && ticketLink && (
-        <div className="spec-row-tickets" role="group" aria-label={`Tickets of ${title}`}>
+        <div
+          className="spec-row-tickets"
+          role="group"
+          aria-label={`Tickets of ${title}`}
+        >
           {listed.map((t) => (
-            <TicketLine key={t.id} t={t} link={ticketLink(t.id)} badge={stageOf(t)} chip={!here} needsYou={reasons.has(t.id)} now={now} />
+            <TicketLine
+              key={t.id}
+              t={t}
+              link={ticketLink(t.id)}
+              badge={stageOf(t)}
+              chip={!here}
+              needsYou={reasons.has(t.id)}
+              now={now}
+            >
+              <ListCIBadge t={t} />
+            </TicketLine>
           ))}
         </div>
       )}
@@ -113,7 +179,13 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
 export type SpecKind = "Requirement" | "Map" | "Long-lived" | "Spec";
 
 export const specKindOf = (spec?: ProjectSpec): SpecKind =>
-  spec?.requirement ? "Requirement" : spec?.map ? "Map" : spec?.labels.includes(LONG_LIVED_LABEL) ? "Long-lived" : "Spec";
+  spec?.requirement
+    ? "Requirement"
+    : spec?.map
+      ? "Map"
+      : spec?.labels.includes(LONG_LIVED_LABEL)
+        ? "Long-lived"
+        : "Spec";
 
 // describe is what a Spec row says of its Spec, by kind. A Requirement
 // has its Stage progress and today's headline, and needs the human when
@@ -127,29 +199,65 @@ function describe(
   all: ProjectTicket[],
   summary: StateSummary,
   reasons: Map<string, NeedsMeReason>,
-): { kind: SpecKind; progress?: Progress; need?: NeedsMeReason; needsYou: boolean; headline: string } {
+): {
+  kind: SpecKind;
+  progress?: Progress;
+  need?: NeedsMeReason;
+  needsYou: boolean;
+  headline: string;
+} {
   if (spec?.requirement) {
     const p = progress(spec.requirement, all, reasons);
-    return { kind: "Requirement", progress: p, need: p.needs[0]?.reason, needsYou: p.needs.length > 0, headline: headline(spec.finished, p) };
+    return {
+      kind: "Requirement",
+      progress: p,
+      need: p.needs[0]?.reason,
+      needsYou: p.needs.length > 0,
+      headline: headline(spec.finished, p),
+    };
   }
-  if (spec?.map) return { kind: "Map", needsYou: spec.map.needs_you > 0, headline: spec.finished ? "Finished" : mapCount(spec.map) };
+  if (spec?.map)
+    return {
+      kind: "Map",
+      needsYou: spec.map.needs_you > 0,
+      headline: spec.finished ? "Finished" : mapCount(spec.map),
+    };
   const need = firstNeed(all, reasons);
-  return { kind: specKindOf(spec), need, needsYou: !!need, headline: spec ? specHeadline(spec.finished, need, all, summary) : "" };
+  return {
+    kind: specKindOf(spec),
+    need,
+    needsYou: !!need,
+    headline: spec ? specHeadline(spec.finished, need, all, summary) : "",
+  };
 }
 
-function specHeadline(finished: boolean, need: NeedsMeReason | undefined, all: ProjectTicket[], summary: StateSummary): string {
+function specHeadline(
+  finished: boolean,
+  need: NeedsMeReason | undefined,
+  all: ProjectTicket[],
+  summary: StateSummary,
+): string {
   const done = summary.Done ?? 0;
   const total = STATES.reduce((n, s) => n + (summary[s] ?? 0), 0);
   if (finished) return `Finished · ${done} of ${total} Tickets Done`;
-  const doing = need ? REASON_LABEL[need] : all.some((t) => CLAIMED.includes(t.state)) ? "A Factory is on it" : undefined;
-  return [doing, total > 0 && `${done} of ${total} Done`].filter(Boolean).join(" · ");
+  const doing = need
+    ? REASON_LABEL[need]
+    : all.some((t) => CLAIMED.includes(t.state))
+      ? "A Factory is on it"
+      : undefined;
+  return [doing, total > 0 && `${done} of ${total} Done`]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 // CLAIMED is the States a Ticket holds a live Claim in.
 const CLAIMED: State[] = ["In Progress", "Needs Answer", "Answered"];
 
 // firstNeed is the reason of the first of the Tickets that needs the human.
-function firstNeed(tickets: ProjectTicket[], reasons: Map<string, NeedsMeReason>): NeedsMeReason | undefined {
+function firstNeed(
+  tickets: ProjectTicket[],
+  reasons: Map<string, NeedsMeReason>,
+): NeedsMeReason | undefined {
   for (const t of tickets) {
     const r = reasons.get(t.id);
     if (r) return r;
@@ -173,5 +281,7 @@ export function stagesFirst(tickets: ProjectTicket[]): ProjectTicket[] {
     const s = stageOf(t);
     return s ? STAGE_ORDER.indexOf(s) : STAGE_ORDER.length;
   };
-  return [...tickets].sort((a, b) => rank(a) - rank(b) || a.created.localeCompare(b.created));
+  return [...tickets].sort(
+    (a, b) => rank(a) - rank(b) || a.created.localeCompare(b.created),
+  );
 }

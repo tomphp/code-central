@@ -16,6 +16,7 @@ const card = (draw: (d: StoryTickets) => ReactNode): Story => ({
 export const Plain = card(({ plain }) => <TicketCard t={plain} link={storyLink(plain.id)} />);
 export const WithStage = card(({ stage }) => <TicketCard t={stage} link={storyLink(stage.id)} badge="Grilling" />);
 export const Blocked = card(({ linked }) => <TicketCard t={linked} link={storyLink(linked.id)} />);
+export const WithCI = card(({ plain }) => <TicketCard t={{ ...plain, state: "Accepted", ci_result: "running" }} link={storyLink(plain.id)} />);
 export const NeedsYou = card(({ stage }) => <TicketCard t={stage} link={storyLink(stage.id)} reason="needs_answer" />);
 // Outside a lane, the card names its Spec.
 export const WithSpec = card(({ plain }) => <TicketCard t={plain} link={storyLink(plain.id)} spec={{ kind: "Spec", title: "Sign-in" }} />);

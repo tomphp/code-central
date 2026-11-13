@@ -1169,3 +1169,37 @@ describe("the All Tickets view", () => {
     expect(await within(list()).findByText("No unfinished Tickets.")).toBeInTheDocument();
   });
 });
+
+describe("the CI badge on Ticket rows", () => {
+  // ciWorld is a Spec (acme-1) with an Accepted Ticket whose CI is running
+  // (acme-2), one with none (acme-3) and a Done one that passed (acme-4).
+  function ciWorld() {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    fake.addSpec("acme", { title: "Theming" });
+    const spec = { id: "acme-1", title: "Theming" };
+    fake.addTicket("acme", { title: "Palette", state: "Accepted", spec, ci_result: "running" });
+    fake.addTicket("acme", { title: "Fonts", state: "Accepted", spec });
+    fake.addTicket("acme", { title: "Icons", state: "Done", spec, ci_result: "passed" });
+    return fake;
+  }
+  const row = async (title: string) => (await within(list()).findByText(title)).closest("a")!;
+
+  it("shows on a State list's rows, and not on a row with no CI result", async () => {
+    renderApp(ciWorld(), "/?view=inbox&state=Accepted");
+    expect(await row("Palette")).toHaveTextContent("CI running");
+    expect(await row("Fonts")).not.toHaveTextContent("CI");
+  });
+
+  it("shows on the rows under a Spec row", async () => {
+    renderApp(ciWorld(), "/?view=inbox&state=Accepted&group=spec");
+    await userEvent.click(await within(list()).findByRole("button", { name: "Theming" }));
+    expect(await row("Palette")).toHaveTextContent("CI running");
+  });
+
+  it("shows in All Tickets, but not on a Done Ticket with Show finished on", async () => {
+    renderApp(ciWorld(), "/?view=inbox&list=tickets&finished=1");
+    expect(await row("Palette")).toHaveTextContent("CI running");
+    expect(await row("Icons")).not.toHaveTextContent("CI");
+  });
+});

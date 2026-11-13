@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { TicketCard } from "./TicketCard";
 
-const t = { id: "acme-7", title: "Add a login page", blocked: false, updated: "2026-11-07T09:00:00Z" };
+const t = { id: "acme-7", title: "Add a login page", blocked: false, state: "In Progress" as const, updated: "2026-11-07T09:00:00Z" };
 const link = { href: "/acme-7", onClick: () => {} };
 
 describe("TicketCard", () => {
@@ -25,6 +25,16 @@ describe("TicketCard", () => {
     expect(screen.getByTitle("Has open Blockers").textContent).toBe("⛔ Blocked");
     expect(screen.getByRole("img", { name: "Needs you" }).className).toBe("dot");
     expect(card.querySelector(".board-card-spec")!.textContent).toBe("Map Sign-in");
+  });
+
+  it("shows its CI badge before Blocked and the needs-you dot, and none when Done", () => {
+    const { rerender } = render(<TicketCard t={{ ...t, blocked: true, ci_result: "failed" }} link={link} reason="in_review" />);
+    const top = screen.getByRole("link").querySelector(".board-card-top")!;
+    const order = [".ci-badge", ".board-blocked", ".dot"].map((s) => Array.from(top.children).indexOf(top.querySelector(s)!));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(top.querySelector(".ci-badge")!.textContent).toBe("CI failed");
+    rerender(<TicketCard t={{ ...t, state: "Done", ci_result: "passed" }} link={link} />);
+    expect(screen.queryByText("CI passed")).toBeNull();
   });
 
   it("pulses when it joins its column", () => {

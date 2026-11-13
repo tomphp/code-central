@@ -1,5 +1,5 @@
 // The Ticket card: a Ticket on the Board. Its top line is the Short ID, an
-// optional Stage badge, Blocked and the needs-you dot; then its title, then
+// optional Stage badge, the CI badge (none on a Done Ticket), Blocked and the needs-you dot; then its title, then
 // its Spec's kind and title when given (a lane's cards leave it out). The
 // whole card is one link. It pulses when it joins its column, and when its
 // Ticket's last update changes.
@@ -9,11 +9,12 @@ import { KindBadge } from "../controls/KindBadge";
 import { StageBadge } from "../controls/StageBadge";
 import { usePulse } from "../focus/pulse";
 import { ShortId } from "../inbox/ShortId";
+import { ListCIBadge } from "./CIBadge";
 
 // TicketCardProps are a Ticket card's Ticket, its link, and the parts the
 // Board shows.
 export interface TicketCardProps {
-  t: Pick<TicketRow, "id" | "title" | "blocked" | "updated">;
+  t: Pick<TicketRow, "id" | "title" | "blocked" | "updated" | "state" | "ci_result">;
   link: { href: string; onClick(e: MouseEvent): void };
   // badge is the Ticket's Stage or other kind, as a Stage badge.
   badge?: string;
@@ -34,6 +35,7 @@ export function TicketCard({ t, link, badge, reason, spec, joined }: TicketCardP
         <ShortId id={t.id} />
         {badge && <StageBadge label={badge} />}
         <span className="board-spacer" />
+        <ListCIBadge t={t} />
         {t.blocked && (
           <span className="board-blocked" title="Has open Blockers">
             ⛔ Blocked
