@@ -69,6 +69,36 @@ func runFakeGit(data string, args []string) int {
 	return 0
 }
 
+// startupCheck answers the Factory's check of its Claude Args, a -p run
+// with no session flag and no prompt, as real claude does with empty
+// stdin: an unknown option for one a test named with ClaudeRejects, else
+// what ClaudeSays set, else that the input must be provided. It isn't a
+// Call. ok is false when args are a turn's.
+func startupCheck(data string, args []string) (code int, ok bool) {
+	if len(args) == 0 || args[0] != "-p" {
+		return 0, false
+	}
+	for _, a := range args {
+		if a == "--session-id" || a == "--resume" {
+			return 0, false
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(data, "rejects.txt")); err == nil {
+		for _, bad := range strings.Fields(string(b)) {
+			if slices.Contains(args, bad) {
+				fmt.Fprintf(os.Stderr, "error: unknown option '%s'\n(Did you mean --chrome?)\n", bad)
+				return 1, true
+			}
+		}
+	}
+	if b, err := os.ReadFile(filepath.Join(data, "says.txt")); err == nil {
+		os.Stdout.Write(b)
+		return 0, true
+	}
+	fmt.Fprintln(os.Stderr, "Error: Input must be provided either through stdin or as a prompt argument when using --print")
+	return 1, true
+}
+
 // runFakeClaude is the fake claude: claude [flags] <prompt>, or claude
 // --help, which prints the help ClaudeHelp set, else DefaultHelp, and
 // isn't a Call.
@@ -84,6 +114,9 @@ func runFakeClaude(data string, args []string) int {
 		}
 		os.Stdout.Write(help)
 		return 0
+	}
+	if code, ok := startupCheck(data, args); ok {
+		return code
 	}
 	wd, _ := os.Getwd()
 	c := Call{Args: args, Dir: wd}

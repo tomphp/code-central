@@ -103,6 +103,20 @@ func (h *Harness) ClaudeHelp(help string) {
 	must(h.t, os.WriteFile(filepath.Join(h.data, "help.txt"), []byte(help), 0o644))
 }
 
+// ClaudeRejects makes the fake claude name arg an unknown option when the
+// Factory checks its Claude Args, as real claude does for a typo.
+func (h *Harness) ClaudeRejects(arg string) {
+	h.t.Helper()
+	must(h.t, os.WriteFile(filepath.Join(h.data, "rejects.txt"), []byte(arg+"\n"), 0o644))
+}
+
+// ClaudeSays makes the fake claude print output, and exit 0, when the
+// Factory checks its Claude Args.
+func (h *Harness) ClaudeSays(output string) {
+	h.t.Helper()
+	must(h.t, os.WriteFile(filepath.Join(h.data, "says.txt"), []byte(output), 0o644))
+}
+
 // CLI calls the code-central CLI.
 func CLI(args ...string) Step { return Step{CLI: args} }
 
