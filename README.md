@@ -84,6 +84,10 @@ Read them in this order:
 4. [Running the Factory](docs/running-the-factory.md): taking the same Requirement through every Stage with `code-central-factory`, which claims the work and lands it by the Project's Landing Method, leaving you to answer Rounds and accept the work (and, under the Branch Landing Method, to merge it; under the Pull Request Landing Method, to merge the pull request that a Pull Request Watcher opens on GitHub or Azure Repos, after which the Factory fetches the base and lands the Ticket at the host's merge commit). Under Merge with Land per Spec, the accepted Tickets of every Spec but a Long-lived one (a Spec labelled `long-lived`, such as a CI Rule's) gather on a Spec Branch and land together once all are accepted. Under Merge + Push with CI Tracking on, accepted work lands only once its CI on GitHub Actions or Azure Pipelines has passed. While it runs, the Project's dot in the left pane shows its Factory Status.
 5. [Writing a Factory](docs/writing-a-factory.md): sending Heartbeats from your own Factory so the dot shows it.
 
+## Developing the UI
+
+`code-central serve` and `npm --prefix web run dev` run the app with hot reload (Vite serves the UI on :5173 and proxies `/api` to the service). `just serve-components` serves a component browser, a Storybook of the UI's shared components, on http://localhost:6006; `just build-components` builds it into `web/storybook-static` to check it. It needs [just](https://github.com/casey/just) and Node, and is a dev tool only: it isn't in the built UI or in `make test`. Each shared component has a `*.stories.tsx` beside it; see [Recipes](docs/agents/recipes.md).
+
 ## Running the service
 
 [Running Code Central as a service](docs/running-as-a-service.md) covers installing (download the archive for your OS and CPU from [GitHub Releases](https://github.com/tomphp/code-central/releases), or build from source), upgrading and downgrading the service, its versions, the Options you set in the UI, and [Usage](docs/running-as-a-service.md#usage), what agents have consumed.
