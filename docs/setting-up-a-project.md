@@ -487,7 +487,7 @@ Auto-accept lets finished work you would accept anyway skip In Review: when a Ti
 | Implementation results | `implementation` | Every other finished Ticket: feature work, a Small Change, CI fix, CI Rule and Incoming Issue Tickets, and `Implement:` Tickets |
 | Merge results | `merge` | A Spec merge Ticket only, the one Code Central opens when a Spec Branch conflicts with the base |
 
-Prototypes and Map Tickets have no kind and are never auto-accepted. An auto-accepted Ticket goes where your own accept would take it, Accepted when its finish named a branch and Done otherwise, and the Move is recorded as yours with its cause, so the Factory lands it, CI Tracking gates it and Land per Spec gathers it unchanged. An auto-accepted Implement on a Requirement whose tickets Stage is still Draft creates its implementation Ticket as Draft. A spec Stage finished before recommendations existed stays for you to accept.
+Prototypes and Map Tickets have no kind and are never auto-accepted. An auto-accepted Ticket goes where your own accept would take it, Accepted when its finish named a branch and Done otherwise, and the Move is recorded as yours with its cause, so the Factory lands it, CI Tracking gates it and Land per Spec gathers it unchanged. An auto-accepted Implement on a Requirement whose tickets Stage is still Draft creates its implementation Ticket as Draft. A spec Stage already In Review from before recommendations existed stays for you to accept.
 
 Every Project read shows the setting as `auto_accept`, as in `{"grilling": false, "spec": false, "tickets": false, "implementation": true, "merge": false}`. Only you set it, over HTTP; agents have no tool or command for it, and a kind you leave out of the map keeps its value:
 

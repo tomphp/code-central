@@ -264,6 +264,26 @@ func TestAnAutoAcceptedImplementCreatesADraftTicketWhileTheTicketsStageIsDraft(t
 	}
 }
 
+func TestASpecStageStaysInReviewWhenItsImplementIsNotAllowed(t *testing.T) {
+	f := newFixture(t)
+	f.requirement(t)
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptSpec: true})
+	// The tickets Stage can no longer run, so implement is not allowed:
+	// the finish still goes through, and the spec Stage waits for the human.
+	f.setState(t, 5, store.Cancelled)
+	res := f.finishSpecStage(t, store.RecommendImplement)
+	if res.Acknowledgement == nil || res.Acknowledgement.State != store.InReview {
+		t.Fatalf("finish result %+v", res)
+	}
+	spec := f.get(t, "acme-4")
+	if spec.State != store.InReview || spec.Recommendation != store.RecommendImplement || spec.Moves[len(spec.Moves)-1].Cause != "" {
+		t.Fatalf("spec Stage %s with moves %+v, want In Review with no auto-accept", spec.State, spec.Moves)
+	}
+	if _, err := f.core.GetTicket(ctx, "acme", whole("acme-6")); err == nil {
+		t.Fatal("a Ticket was created")
+	}
+}
+
 func TestTheHumansImplementStillCreatesAReadyTicketWhileTheTicketsStageIsDraft(t *testing.T) {
 	f := newFixture(t)
 	f.specInReview(t)
@@ -274,12 +294,10 @@ func TestTheHumansImplementStillCreatesAReadyTicketWhileTheTicketsStageIsDraft(t
 	}
 }
 
-func TestASpecStageWithNoRecommendationStaysInReviewUnderAutoAccept(t *testing.T) {
+func TestFinishingASpecStageStillNeedsARecommendationUnderAutoAccept(t *testing.T) {
 	f := newFixture(t)
 	f.requirement(t)
 	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptSpec: true})
-	// A spec Stage finished before recommendations existed: In Review
-	// with none, as a redo's finish would then find it.
 	f.setState(t, 3, store.Done)
 	f.setState(t, 4, store.Ready)
 	f.claim(t, core.ClaimInput{Ticket: "acme-4"})

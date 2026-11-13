@@ -3,6 +3,7 @@
 // FakeApi (fake.ts) is the in-memory fake the component and layout tests
 // use. contract.ts runs one suite against both.
 import type {
+  AutoAccept,
   ChangeEvent,
   CIOverviewFilter,
   CIOverview,
@@ -140,6 +141,10 @@ export interface Api {
   // setModelAssignment turns on or off the tickets guide's model and effort
   // assignment (human-only), off to begin with.
   setModelAssignment(project: string, on: boolean): Promise<ProjectView>;
+  // setAutoAccept turns the Project's Auto-accept setting on or off per
+  // kind (human-only), all off to begin with; a kind left out keeps its
+  // value.
+  setAutoAccept(project: string, kinds: Partial<AutoAccept>): Promise<ProjectView>;
   // addCIRule adds a CI Rule and creates its Spec, titled like "CI: ci.yml
   // on main"; editCIRule changes the rule on Spec spec, and
   // removeCIRule removes it, leaving its Spec as the record. Workflow and

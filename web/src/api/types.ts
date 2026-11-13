@@ -224,6 +224,19 @@ export interface StageGuides {
   model_assignment: boolean;
 }
 
+// An Auto-accept kind (Spec code-central-536): the kind of finished
+// Ticket a Project's Auto-accept setting is switched on for.
+export type AutoAcceptKind = "grilling" | "spec" | "tickets" | "implementation" | "merge";
+export const AUTO_ACCEPT_KINDS: AutoAcceptKind[] = ["grilling", "spec", "tickets", "implementation", "merge"];
+
+// A Project's Auto-accept setting: on or off per kind, all off to begin
+// with.
+export type AutoAccept = Record<AutoAcceptKind, boolean>;
+
+// Why an auto-accept made a Move: the Project's setting, or the
+// auto-accept Label on the Ticket or on its Spec.
+export type AutoAcceptCause = "project" | "ticket-label" | "spec-label";
+
 // A Models row (Spec code-central-301): the model and effort it sets,
 // each "" for Default, which leaves it to the tier below.
 export interface ModelRow {
@@ -441,6 +454,8 @@ export interface ProjectView {
   reported_models: ReportedModels;
   // stage_guides is always filled in: Subagent Exploration on by default.
   stage_guides: StageGuides;
+  // auto_accept is always filled in: every kind off by default.
+  auto_accept: AutoAccept;
   // factory_status is always filled in: offline, with no Factories,
   // until one sends a Heartbeat.
   factory_status: FactoryStatus;
@@ -890,6 +905,8 @@ export interface MoveView {
   via?: string;
   // commit is the commit that put the work into the base, on a land.
   commit?: string;
+  // cause is why an auto-accept made the Move; absent on every other.
+  cause?: AutoAcceptCause;
 }
 
 export interface EditView {

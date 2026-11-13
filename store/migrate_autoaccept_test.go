@@ -38,8 +38,12 @@ func TestTheRealChainMigratesAFormat34StoreToTheAutoAcceptFormat(t *testing.T) {
 				t.Errorf("auto-accept %s is on after migrating, want every kind off", k)
 			}
 		}
-		if tk, _ := r.Ticket("acme", 4); len(tk.Moves) != 1 || tk.Moves[0].Cause != "" {
+		tk, _ := r.Ticket("acme", 4)
+		if len(tk.Moves) != 1 || tk.Moves[0].Cause != "" {
 			t.Errorf("moves after migrating = %+v, want one with no cause", tk.Moves)
+		}
+		if tk.SpecMergeTicket || tk.Recommendation != "" {
+			t.Errorf("ticket after migrating = %+v, want no Spec merge mark and no recommendation", tk)
 		}
 		return nil
 	})
