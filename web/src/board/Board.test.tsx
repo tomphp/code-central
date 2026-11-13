@@ -2,14 +2,14 @@
 // check what the human sees and does: the Board link and its count, the
 // columns and Columns ▾ with which columns are hidden and where that comes
 // from, the cards, a card's Ticket popup or Focus popup and closing it, the
-// Focus popup's Questions and closing by itself, the shared grouping, + New
-// ▾ and Back to the Inbox.
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+// Focus popup's Questions and closing by itself, a Lane header's Spec popup,
+// the shared grouping, + New ▾ and Back to the Inbox.
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
-import { ApiError, STATES } from "../api/types";
+import { ApiError, MAP_LABEL, STATES } from "../api/types";
 import { failCI } from "../ciTesting";
 
 const at = (minutes: number) => new Date(Date.UTC(2026, 10, 7, 9, minutes)).toISOString();
@@ -641,18 +641,17 @@ describe("the Board's By Spec lanes", () => {
     expect(lanes()).toEqual(["Lane: Archive", "Lane: Billing", "Lane: Login"]);
   });
 
-  it("heads each lane with its Lane header, which opens the Spec", async () => {
+  it("heads each lane with its Lane header, which opens the Spec's popup", async () => {
     bySpec();
     await loaded();
     const row = within(lane("Login")).getByRole("region", { name: "Login" });
     // One line: the count of the Tickets the lane shows, and no State chips.
     expect(within(row).getByText("3 shown")).toBeInTheDocument();
     expect(row.querySelector(".state-chips, .strip")).toBeNull();
-    await userEvent.click(within(row).getByRole("link", { name: /Login/ }));
-    const q = new URLSearchParams(window.location.search);
-    expect(q.get("view")).toBe("inbox");
-    expect(q.get("project")).toBe("acme");
-    expect(q.get("requirement")).toBe("acme-1");
+    expect(within(row).getByRole("link")).toHaveAttribute("href", "?view=board&project=acme&group=spec&popup=acme-1");
+    await userEvent.click(within(row).getByRole("link"));
+    expect(await screen.findByRole("dialog", { name: "Spec popup" })).toBeInTheDocument();
+    expect(window.location.search).toBe("?view=board&project=acme&group=spec&popup=acme-1");
   });
 
   it("puts each Ticket's card in its lane's column, without the Spec line", async () => {
@@ -708,6 +707,143 @@ describe("the Board's By Spec lanes", () => {
     act(() => void fake.updateTicket("acme-2", { state: "In Progress" }));
     await waitFor(() => expect(within(within(lane("Login")).getByRole("region", { name: "In Progress" })).getByRole("link", { name: /Login form/ })).toBeInTheDocument());
     expect(heads()).toContain("In Progress 3");
+  });
+});
+
+describe("the Board's Spec popup", () => {
+  const popup = () => screen.getByRole("dialog", { name: "Spec popup" });
+  const noPopup = () => expect(screen.queryByRole("dialog")).toBeNull();
+  const lane = (title: string) => within(board()).getByRole("group", { name: `Lane: ${title}` });
+  const header = (title: string) => within(within(lane(title)).getByRole("region", { name: title })).getByRole("link");
+  const openLane = async (title: string) => {
+    await userEvent.click(header(title));
+    return screen.findByRole("dialog", { name: "Spec popup" });
+  };
+  const bySpec = "/?view=board&project=acme&group=spec&hide=Done";
+  const specPopup = () => screen.findByRole("dialog", { name: "Spec popup" });
+
+  // finishedMap seeds a Map whose every Ticket is Done: acme-1, its Ticket acme-2.
+  function finishedMap() {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    const body = ["Plan the year", "## Destination", "A plan.", "## Decisions so far", "## Not yet specified", "## Out of scope"].join("\n\n");
+    const map = fake.addSpec("acme", { title: "Plan the year", labels: [MAP_LABEL], body });
+    fake.addTicket("acme", { title: "Charting: Plan the year", state: "Done", spec: { id: map.id, title: map.title }, labels: ["wayfinder:chart"] });
+    return fake;
+  }
+
+  it("opens from a Lane header with the Spec's pane and its Tickets, and its chevron only folds", async () => {
+    renderApp(world(), bySpec);
+    await loaded();
+    const chevron = () => within(lane("Login")).getByRole("button", { name: "Login" });
+    await userEvent.click(chevron());
+    noPopup();
+    expect(chevron()).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(chevron());
+    noPopup();
+    await openLane("Login");
+    expect(within(popup()).getByRole("region", { name: "Spec" })).toBeInTheDocument();
+    expect(within(popup()).getByRole("heading", { name: "Login" })).toBeInTheDocument();
+    expect(within(popup()).getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(window.location.search).toBe("?view=board&project=acme&group=spec&hide=Done&popup=acme-1");
+    // The lane stays as it was behind it.
+    expect(chevron()).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("leaves a modified click on a Lane header to the browser", async () => {
+    renderApp(world(), bySpec);
+    await loaded();
+    expect(header("Login")).toHaveAttribute("href", "?view=board&project=acme&group=spec&hide=Done&popup=acme-1");
+    fireEvent.click(header("Login"), { metaKey: true });
+    fireEvent.click(header("Login"), { button: 1 });
+    noPopup();
+    expect(window.location.search).toBe(bySpec.slice(1));
+  });
+
+  it("shows a Requirement's pane even when one of its Stage Tickets needs the human", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    const { spec, stages } = await fake.submitRequirement("acme", "Offline mode");
+    fake.setNeedsMe([{ reason: "needs_answer", tickets: [{ id: stages[0].id }] }]);
+    fake.updateTicket(stages[0].id, { state: "Needs Answer" });
+    renderApp(fake, "/?view=board&project=acme&group=spec");
+    await within(board()).findByRole("group", { name: "Lane: Offline mode" });
+    await userEvent.click(header("Offline mode"));
+    expect(await within(await specPopup()).findByRole("region", { name: "Requirement" })).toBeInTheDocument();
+    expect(window.location.search).toBe(`?view=board&project=acme&group=spec&popup=${spec.id}`);
+  });
+
+  it("shows a Map's pane", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    const { spec } = await fake.submitMap("acme", "Plan the year");
+    renderApp(fake, "/?view=board&project=acme&group=spec");
+    await within(board()).findByRole("group", { name: "Lane: Plan the year" });
+    await userEvent.click(header("Plan the year"));
+    const dialog = await specPopup();
+    expect(await within(dialog).findByRole("region", { name: "Map" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: "Plan the year", level: 2 })).toBeInTheDocument();
+    expect(window.location.search).toContain(`popup=${spec.id}`);
+  });
+
+  it("switches to a Ticket's popup when a Ticket is chosen in it, and Back returns to the Spec popup", async () => {
+    renderApp(world(), bySpec);
+    await loaded();
+    await openLane("Login");
+    await userEvent.click(await within(popup()).findByRole("button", { name: /Login form/ }));
+    const ticket = await screen.findByRole("dialog", { name: "Ticket popup" });
+    expect(await within(ticket).findByRole("heading", { name: /Login form/ })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Spec popup" })).toBeNull();
+    expect(window.location.search).toBe("?view=board&project=acme&group=spec&hide=Done&popup=acme-2");
+    act(() => window.history.back());
+    expect(await specPopup()).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Ticket popup" })).toBeNull();
+    // No Ticket shows as selected.
+    expect(popup().querySelector("[aria-current]")).toBeNull();
+  });
+
+  it("switches to the Spec's popup from a Ticket popup's Spec link", async () => {
+    renderApp(world(), bySpec);
+    await loaded();
+    await userEvent.click(within(card("Login form")).getByText("Login form"));
+    await screen.findByRole("dialog", { name: "Ticket popup" });
+    await userEvent.click(await screen.findByRole("button", { name: "acme-1 Login" }));
+    expect(await specPopup()).toBeInTheDocument();
+    expect(window.location.search).toBe("?view=board&project=acme&group=spec&hide=Done&popup=acme-1");
+  });
+
+  it("switches to the Map's popup from a Requirement made from it", async () => {
+    const fake = finishedMap();
+    const { spec } = await fake.submitRequirement("acme", "Offline mode", "acme-1"); // acme-3
+    renderApp(fake, `/?view=board&project=acme&group=spec&popup=${spec.id}`);
+    await userEvent.click(await within(await specPopup()).findByRole("link", { name: /^Map/ }));
+    expect(await within(await specPopup()).findByRole("region", { name: "Map" })).toBeInTheDocument();
+    expect(window.location.search).toBe("?view=board&project=acme&group=spec&popup=acme-1");
+  });
+
+  it("switches to the new Requirement's popup after Write the Spec", async () => {
+    renderApp(finishedMap(), "/?view=board&project=acme&group=spec&popup=acme-1");
+    await userEvent.click(await within(await specPopup()).findByRole("button", { name: "Write the Spec" }));
+    await userEvent.click(within(await screen.findByRole("dialog", { name: "Write the Spec" })).getByRole("button", { name: "Submit requirement" }));
+    await waitFor(() => expect(window.location.search).toContain("popup=acme-3"));
+    expect(await within(await specPopup()).findByRole("region", { name: "Requirement" })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["×", () => userEvent.click(within(popup()).getByRole("button", { name: "Close" }))],
+    ["Escape", () => userEvent.keyboard("{Escape}")],
+    ["the backdrop", () => userEvent.click(popup().parentElement!)],
+    ["Back", () => act(() => window.history.back())],
+  ])("closes on %s, keeping the grouping, hidden columns and folded lanes", async (_, close) => {
+    renderApp(world(), bySpec);
+    await loaded();
+    await userEvent.click(within(lane("Login")).getByRole("button", { name: "Login" }));
+    await openLane("Login");
+    await close();
+    await waitFor(noPopup);
+    expect(window.location.search).toBe(bySpec.slice(1));
+    expect(within(lane("Login")).getByRole("button", { name: "Login" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(board()).queryByRole("region", { name: "Done" })).toBeNull();
   });
 });
 
