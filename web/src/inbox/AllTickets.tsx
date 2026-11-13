@@ -8,7 +8,8 @@ import { stageOf } from "../requirement/progress";
 import { TicketLine, type InboxRowLinkFactory } from "../ticket/TicketLine";
 import { groupBySpec } from "./groupBySpec";
 import { ShortId } from "./ShortId";
-import { SpecRow, specKindOf, stagesFirst, type SpecRowProps } from "./SpecRow";
+import { specKindOf } from "./describeSpec";
+import { SpecRow, stagesFirst, type SpecRowProps } from "./SpecRow";
 import { KindBadge } from "../controls/KindBadge";
 
 const numberOf = (id: string) => Number(id.slice(id.lastIndexOf("-") + 1));

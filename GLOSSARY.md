@@ -341,7 +341,7 @@ The default grouping of a State list: its Tickets alone, as a flat list. On the 
 _Avoid_: Flat view, list mode
 
 **By Spec**:
-The grouping of a State list that shows the Specs with Tickets in it as Spec rows, each expanding to those Tickets, instead of the Tickets alone. On the Board view, it splits the columns into one lane per Spec, each lane headed by its Spec row.
+The grouping of a State list that shows the Specs with Tickets in it as Spec rows, each expanding to those Tickets, instead of the Tickets alone. On the Board view, it splits the columns into one lane per Spec, each lane headed by its Lane header.
 _Avoid_: Spec-first view, tree view, Spec mode, swimlanes
 
 **Show finished**:
@@ -353,8 +353,12 @@ The Board view's menu that shows or hides each State's column. It is kept in the
 _Avoid_: Column filter, column picker
 
 **Spec row**:
-The one row the UI shows a Spec in, in the Requirements view, Needs Me, By Spec and the Board view's lanes: ID, kind, title and needs-you dot, then the Stage strip for a Requirement or the State chips for any other Spec, then the headline. It expands to the Spec's Tickets.
+The one row the UI shows a Spec in, in the Requirements view, Needs Me and By Spec: ID, kind, title and needs-you dot, then the Stage strip for a Requirement or the State chips for any other Spec, then the headline. It expands to the Spec's Tickets.
 _Avoid_: Spec card, Requirement row, bs-card
+
+**Lane header**:
+The bar across the Board view that heads a By Spec lane, on one line: ID, kind, title, needs-you dot and headline, then how many Tickets the lane shows. It opens the Spec; its chevron folds the lane.
+_Avoid_: lane Spec row, lane bar
 
 **Ticket row**:
 The one row the UI lists a Ticket in, in the State lists, All Tickets, Needs Me, Drafts and a Spec row's Tickets: Short ID, Stage badge, title, State chip, Link and Waiting badges and needs-you dot, then the latest Session Event or the list's own detail. The whole row opens the Ticket.

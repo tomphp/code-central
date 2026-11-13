@@ -329,10 +329,13 @@ describe("the Board's By Spec lanes", () => {
     expect(lanes()).toEqual(["Lane: Archive", "Lane: Billing", "Lane: Login"]);
   });
 
-  it("heads each lane with its Spec row, which opens the Spec", async () => {
+  it("heads each lane with its Lane header, which opens the Spec", async () => {
     bySpec();
     await loaded();
     const row = within(lane("Login")).getByRole("region", { name: "Login" });
+    // One line: the count of the Tickets the lane shows, and no State chips.
+    expect(within(row).getByText("3 shown")).toBeInTheDocument();
+    expect(row.querySelector(".state-chips, .strip")).toBeNull();
     await userEvent.click(within(row).getByRole("link", { name: /Login/ }));
     const q = new URLSearchParams(window.location.search);
     expect(q.get("view")).toBe("inbox");
