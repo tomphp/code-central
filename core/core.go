@@ -94,6 +94,9 @@ type ProjectView struct {
 	ReportedModels ReportedModelsView `json:"reported_models"`
 	// StageGuides is the Project's Stage Guides settings, always filled in.
 	StageGuides StageGuidesView `json:"stage_guides"`
+	// FocusKinds is the Project's Focus Kinds, always filled in: every
+	// Needs Me reason on by default.
+	FocusKinds FocusKindsView `json:"focus_kinds"`
 	// FactoryStatus is whether the Project's Factories are online, from
 	// their Heartbeats, always filled in.
 	FactoryStatus FactoryStatusView `json:"factory_status"`
@@ -619,7 +622,8 @@ func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
 		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
-		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
+		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides),
+		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at

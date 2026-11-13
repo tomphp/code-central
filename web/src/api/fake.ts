@@ -85,6 +85,7 @@ import {
   FINISHED,
   FOCUS_CLEARS,
   FOCUS_POPUPS,
+  NEEDS_ME_REASONS,
   GUIDED_ON,
   GUIDED_TAG,
   type ChangeEvent,
@@ -162,6 +163,7 @@ import {
   type ModelsReport,
   type ReportedModels,
   type StageGuides,
+  type FocusKinds,
   type UsageDay,
   type UsageDayTokens,
   type UsageFilter,
@@ -303,6 +305,7 @@ interface FakeProject {
   models: Models;
   reported_models: ReportedModels;
   stage_guides: StageGuides;
+  focus_kinds: FocusKinds;
   factory_status: FactoryStatus;
   next: number;
 }
@@ -467,6 +470,7 @@ export class FakeApi implements Api {
       models: { default: { model: "", effort: "" }, kinds: KINDS_OF_WORK.map((kind) => ({ kind, model: "", effort: "" })) },
       reported_models: { effort_levels: [...EFFORT_LEVELS], aliases: [], model_ids: [], model_flag: "", effort_flag: "" },
       stage_guides: { subagent_exploration: true, model_assignment: false },
+      focus_kinds: { off: [] },
       factory_status: { status: "offline", factories: [] },
       next: 1,
     });
@@ -1372,6 +1376,21 @@ export class FakeApi implements Api {
     const p = this.writable(key);
     if (p.stage_guides.model_assignment !== on) {
       p.stage_guides = { ...p.stage_guides, model_assignment: on };
+      this.emit({ type: "project.changed", project: key });
+    }
+    return this.projectView(p);
+  }
+
+  async setFocusKinds(key: string, off: NeedsMeReason[]): Promise<ProjectView> {
+    this.calls.push("setFocusKinds");
+    const unknown = off.find((r) => !NEEDS_ME_REASONS.includes(r));
+    if (unknown !== undefined) {
+      throw new ApiError(422, "invalid", `"${unknown}" isn't a Needs Me reason; the reasons are ${NEEDS_ME_REASONS.join(", ")}`, "off");
+    }
+    const p = this.writable(key);
+    const kept = NEEDS_ME_REASONS.filter((r) => off.includes(r));
+    if (JSON.stringify(p.focus_kinds.off) !== JSON.stringify(kept)) {
+      p.focus_kinds = { off: kept };
       this.emit({ type: "project.changed", project: key });
     }
     return this.projectView(p);

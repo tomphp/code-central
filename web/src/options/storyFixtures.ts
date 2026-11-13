@@ -64,6 +64,7 @@ export const storyProject = (patch: Partial<ProjectRow> = {}): ProjectRow => ({
     effort_flag: "",
   },
   stage_guides: { subagent_exploration: true, model_assignment: false },
+  focus_kinds: { off: [] },
   factory_status: {
     status: "online",
     factories: [
