@@ -10,39 +10,19 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type { Api } from "../api/api";
 import { FakeApi } from "../api/fake";
-import type { RoundView } from "../api/types";
 import { failCI } from "../ciTesting";
-import { change } from "../focus/focusTesting";
+import { change, waiting } from "../focus/focusTesting";
 import { useInboxData, useLiveVersion } from "../live";
 import { hrefFor, readLocation, type UiLocation } from "../url";
 import { FocusPopup, type FocusPopupClose } from "./FocusPopup";
 
-// world has acme-1 waiting on Round 1 (Questions 1 and 2 open), acme-2
-// Failed, beta-1 In Review and acme-3 In Review, in that Needs Me order.
+// world is waiting with beta-1 In Review after acme-3, so a Project's
+// scope leaves something out.
 function world() {
-  const fake = new FakeApi();
-  fake.addProject("acme", "Acme");
+  const fake = waiting();
   fake.addProject("beta", "Beta");
-  const rounds: RoundView[] = [
-    {
-      number: 1,
-      claim: 1,
-      posted: fake.now.toISOString(),
-      questions: [
-        { number: 1, title: "Which colour?", body: "Red or blue", recommended: "Blue", status: "open" },
-        { number: 2, title: "Which size?", body: "S or M", status: "open" },
-      ],
-    },
-  ];
-  fake.addTicket("acme", { title: "Pick a colour", state: "Needs Answer", rounds }); // acme-1
-  fake.addTicket("acme", { title: "Flaky build", state: "Failed" }); // acme-2
-  fake.addTicket("acme", { title: "Login page", state: "In Review" }); // acme-3
   fake.addTicket("beta", { title: "Beta search", state: "In Review" }); // beta-1
-  fake.setNeedsMe([
-    { reason: "needs_answer", tickets: [{ id: "acme-1", round: { number: 1, open: 2, questions: 2 } }] },
-    { reason: "failed", tickets: [{ id: "acme-2" }] },
-    { reason: "in_review", tickets: [{ id: "beta-1", summary: "Added search" }, { id: "acme-3", summary: "Added the login page" }] },
-  ]);
+  fake.setNeedsMe(fake.needsMeGroups.map((g) => (g.reason === "in_review" ? { ...g, tickets: [...g.tickets, { id: "beta-1", summary: "Added search" }] } : g)));
   return fake;
 }
 
@@ -119,10 +99,10 @@ describe("the Focus popup's Queue mode", () => {
     renderQueue(tickets());
     await heading("Flaky build");
     await skip();
-    expect(await heading("Beta search")).toBeInTheDocument();
+    expect(await heading("Login page")).toBeInTheDocument();
     expect(within(popup()).getByText("3 left")).toBeInTheDocument();
     await skip();
-    expect(await heading("Login page")).toBeInTheDocument();
+    expect(await heading("Beta search")).toBeInTheDocument();
   });
 
   it("is scoped to a Project, counting only its Focus Items", async () => {
@@ -162,7 +142,7 @@ describe("the Focus popup's Queue mode", () => {
     renderQueue(fake);
     await heading("Flaky build");
     change(fake, fake.needsMeGroups.filter((g) => g.reason !== "failed"), "acme-2");
-    expect(await heading("Beta search")).toBeInTheDocument();
+    expect(await heading("Login page")).toBeInTheDocument();
     expect(within(popup()).getByText("2 left")).toBeInTheDocument();
     expect(screen.queryByText(/Dealt with elsewhere/)).toBeNull();
   });

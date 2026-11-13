@@ -6,44 +6,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
-import { FakeApi } from "../api/fake";
-import { allClearOn, change, focus, renderApp } from "./focusTesting";
-import type { RoundView } from "../api/types";
-
-// world has acme-1 waiting on Round 1 (Questions 1 and 2 open), then
-// acme-2 Failed and acme-3 In Review, in that Needs Me order.
-function world() {
-  const fake = new FakeApi();
-  allClearOn(fake);
-  fake.addProject("acme", "Acme");
-  const rounds: RoundView[] = [
-    {
-      number: 1,
-      claim: 1,
-      posted: fake.now.toISOString(),
-      questions: [
-        { number: 1, title: "Which colour?", body: "Red or blue", recommended: "Blue", status: "open" },
-        { number: 2, title: "Which size?", body: "S or M", status: "open" },
-      ],
-    },
-  ];
-  fake.addTicket("acme", { title: "Pick a colour", state: "Needs Answer", rounds }); // acme-1
-  fake.addTicket("acme", { title: "Flaky build", state: "Failed" }); // acme-2
-  fake.addTicket("acme", { title: "Login page", state: "In Review" }); // acme-3
-  fake.setNeedsMe([
-    { reason: "needs_answer", tickets: [{ id: "acme-1", round: { number: 1, open: 2, questions: 2 } }] },
-    { reason: "failed", tickets: [{ id: "acme-2" }] },
-    { reason: "in_review", tickets: [{ id: "acme-3", summary: "Added the login page" }] },
-  ]);
-  return fake;
-}
-
-// tickets is world without its Round, so every Focus Item is a Ticket's.
-function tickets() {
-  const fake = world();
-  fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason !== "needs_answer"));
-  return fake;
-}
+import { change, focus, renderApp, waiting, waitingTickets } from "./focusTesting";
 
 const heading = (name: string) => within(focus()).findByRole("heading", { name });
 // skip waits for Skip, which shows once the Focus Item has loaded.
@@ -51,21 +14,21 @@ const skip = async () => userEvent.click(await within(focus()).findByRole("butto
 
 describe("Skip", () => {
   it("sits next to Answer, Dismiss and Prototype this on a Question Focus Item", async () => {
-    renderApp(world());
+    renderApp(waiting());
     await heading("Which colour?");
     const buttons = within(focus()).getByRole("button", { name: "Answer" }).parentElement!;
     expect(within(buttons).getAllByRole("button").map((b) => b.textContent)).toEqual(["Answer", "Dismiss", "Prototype this", "Skip"]);
   });
 
   it("sits with a Ticket Focus Item's panel buttons", async () => {
-    renderApp(tickets());
+    renderApp(waitingTickets());
     await heading("Flaky build");
     expect(await within(focus()).findByRole("button", { name: "Send back" })).toBeInTheDocument();
     expect(within(focus()).getByRole("button", { name: "Skip" })).toBeInTheDocument();
   });
 
   it("sends the item to the back of the queue and shows the next one, still counting it", async () => {
-    const fake = tickets();
+    const fake = waitingTickets();
     renderApp(fake);
     await heading("Flaky build");
     expect(within(focus()).getByText("2 left")).toBeInTheDocument();
@@ -77,7 +40,7 @@ describe("Skip", () => {
   });
 
   it("goes on to the Round's next open Question, and only the skipped one goes to the back of the whole queue", async () => {
-    renderApp(world());
+    renderApp(waiting());
     await heading("Which colour?");
     await skip();
     expect(await heading("Which size?")).toBeInTheDocument();
@@ -88,7 +51,7 @@ describe("Skip", () => {
   });
 
   it("keeps a skipped item behind one that arrives later", async () => {
-    const fake = tickets();
+    const fake = waitingTickets();
     renderApp(fake);
     await heading("Flaky build");
     await skip();
@@ -101,7 +64,7 @@ describe("Skip", () => {
   });
 
   it("has no single-key shortcut", async () => {
-    renderApp(tickets());
+    renderApp(waitingTickets());
     await heading("Flaky build");
     await userEvent.keyboard("s");
     await userEvent.keyboard("k");
@@ -111,7 +74,7 @@ describe("Skip", () => {
 
 describe("only skipped items left", () => {
   it("asks \"You skipped N, go through them again?\" instead of All clear, still counting them", async () => {
-    renderApp(tickets());
+    renderApp(waitingTickets());
     await heading("Flaky build");
     await skip();
     await heading("Login page");
@@ -124,7 +87,7 @@ describe("only skipped items left", () => {
   });
 
   it("counts a skipped Round's open Questions one each", async () => {
-    const fake = world();
+    const fake = waiting();
     fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason === "needs_answer"));
     renderApp(fake);
     await heading("Which colour?");
@@ -136,7 +99,7 @@ describe("only skipped items left", () => {
   });
 
   it("goes through them again from the front, in Needs Me order", async () => {
-    renderApp(world());
+    renderApp(waiting());
     await heading("Which colour?");
     await skip();
     await heading("Which size?");
@@ -154,7 +117,7 @@ describe("only skipped items left", () => {
   });
 
   it("shows a new Focus Item on its own when it arrives", async () => {
-    const fake = tickets();
+    const fake = waitingTickets();
     renderApp(fake);
     await heading("Flaky build");
     await skip();
@@ -168,7 +131,7 @@ describe("only skipped items left", () => {
   });
 
   it("is All clear once the skipped items are dealt with elsewhere", async () => {
-    const fake = tickets();
+    const fake = waitingTickets();
     renderApp(fake);
     await heading("Flaky build");
     await skip();
@@ -183,7 +146,7 @@ describe("only skipped items left", () => {
 
 describe("skips", () => {
   it("live only in this tab's memory: never sent, never in the URL or local storage", async () => {
-    const fake = tickets();
+    const fake = waitingTickets();
     renderApp(fake);
     await heading("Flaky build");
     await skip();
@@ -195,7 +158,7 @@ describe("skips", () => {
   });
 
   it("are forgotten on leaving Focus Mode", async () => {
-    renderApp(tickets());
+    renderApp(waitingTickets());
     await heading("Flaky build");
     await skip();
     await heading("Login page");
@@ -206,7 +169,7 @@ describe("skips", () => {
   });
 
   it("are forgotten on reload", async () => {
-    const fake = tickets();
+    const fake = waitingTickets();
     const { unmount } = renderApp(fake);
     await heading("Flaky build");
     await skip();
