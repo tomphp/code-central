@@ -108,12 +108,12 @@ projects/<key>/tickets/<n>.yaml
       outbound: bool (optional)
       written: []string (optional)
   awaiting_triage: bool (optional)
+  spec_merge_ticket: bool (optional)
   created: string
   updated: string
   description: string
   branch: string (optional)
   commit: string (optional)
-  recommendation: string (optional)
   pushed_commits: list of mappings (optional)
       commit: string
       branch: string (optional)
@@ -215,7 +215,6 @@ values
   project ci.provider (no ci: tracking off, github_actions): github_actions, azure_pipelines
   project models.kinds[].kind: grilling, spec, tickets, map-chart, map-grilling, map-research, map-task, prototype, implementation
   ticket state, moves[].from, moves[].to: Draft, Ready, In Progress, Needs Answer, Answered, Failed, In Review, Accepted, Done, Cancelled
-  ticket recommendation (optional): implement, split
   ci run status: queued, in_progress, completed
   ci run conclusion, jobs[].conclusion (optional): success, failure, cancelled, timed_out, skipped, neutral, partially_succeeded
   rounds[].questions[].status: open, answered, dismissed

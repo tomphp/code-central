@@ -73,7 +73,8 @@ var migrations = []MigrationStep{
 	{From: 29, Name: "add a Project's Model Assignment setting"},
 	{From: 30, Name: "add a Project's Small Changes Spec"},
 	{From: 31, Name: "add the Focus Pop-up Option"},
-	{From: 32, Name: "add a spec Stage's Spec recommendation"},
+	{From: 32, Name: "add a Ticket's Spec merge mark"},
+	{From: 33, Name: "add a spec Stage's Spec recommendation"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

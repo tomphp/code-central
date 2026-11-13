@@ -313,6 +313,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.ReportSpecMerge(ctx, "acme", core.ReportSpecMergeInput{Ticket: "acme-2", Commit: "abc123"})
 		return err
 	},
+	"open_spec_merge": func(f fixture) error {
+		_, err := f.core.OpenSpecMerge(ctx, "acme", core.OpenSpecMergeInput{Spec: "acme-1", Conflicts: []string{"README"}, BaseTip: "aaa111", SpecBranchTip: "bbb222"})
+		return err
+	},
 	"report_model_choice": func(f fixture) error {
 		_, err := f.core.ReportModelChoice(ctx, "acme", core.ReportModelChoiceInput{Ticket: "acme-2", ClaimID: "claim-1", Model: "opus"})
 		return err
