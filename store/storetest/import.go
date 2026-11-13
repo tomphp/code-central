@@ -130,6 +130,46 @@ func runImport(t *testing.T, f Factory) {
 		})
 	})
 
+	t.Run("an import rewrites the existing Specs it names along with its Tickets", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		put(t, s, func(w store.Writer) error {
+			return w.PutSpec("acme", store.Spec{Number: 1, Title: "Old", Created: t0, Updated: t0})
+		})
+		im := ImportBatch()
+		im.RewrittenSpecs = []store.Spec{{Number: 1, Title: "Old", Labels: []string{"auto-accept"}, Created: t0, Updated: t0}}
+		put(t, s, func(w store.Writer) error { return w.PutImport("acme", im) })
+		check := func(s store.Store) {
+			read(t, s, func(r store.Reader) {
+				if sp, _ := r.Spec("acme", 1); len(sp.Labels) != 1 {
+					t.Fatalf("spec 1: %+v, want it rewritten", sp)
+				}
+				if n := len(r.Specs("acme")); n != 3 {
+					t.Fatalf("%d specs, want 3", n)
+				}
+			})
+		}
+		check(s)
+		if f.Reopen != nil {
+			check(f.Reopen(t, s))
+		}
+	})
+
+	t.Run("an import that would rewrite a missing Spec writes nothing", func(t *testing.T) {
+		s := f.New(t)
+		seedProject(t, s)
+		im := ImportBatch()
+		im.RewrittenSpecs = []store.Spec{{Number: 1, Title: "Missing", Created: t0, Updated: t0}}
+		if err := s.Update(func(w store.Writer) error { return w.PutImport("acme", im) }); err == nil {
+			t.Fatal("an import rewriting a missing Spec was allowed")
+		}
+		read(t, s, func(r store.Reader) {
+			if len(r.Specs("acme")) != 0 || len(r.Tickets("acme")) != 0 {
+				t.Fatal("the refused import wrote records")
+			}
+		})
+	})
+
 	t.Run("an import into an unknown project writes nothing", func(t *testing.T) {
 		s := f.New(t)
 		seedProject(t, s)

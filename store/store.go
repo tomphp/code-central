@@ -885,7 +885,7 @@ type Writer interface {
 	PutSpec(project string, s Spec) error
 	PutTicket(project string, t Ticket) error
 	// PutImport is the one bulk write: every Spec and Ticket in im is new,
-	// but for the existing Tickets it rewrites, and they all land together
+	// but for the existing ones it rewrites, and they all land together
 	// or none does. It counts as the update's one write.
 	PutImport(project string, im Import) error
 	// PutOptions replaces the Options whole. It touches no Project.
@@ -901,6 +901,9 @@ type Import struct {
 	// Rewritten are existing Tickets written along with the new records,
 	// such as the Incoming Issue To Requirement Cancels.
 	Rewritten []Ticket
+	// RewrittenSpecs are existing Specs written along with them, such as
+	// a Spec given the auto-accept Label with the Tickets it accepts.
+	RewrittenSpecs []Spec
 }
 
 func (im Import) clone() Import {
@@ -913,6 +916,9 @@ func (im Import) clone() Import {
 	}
 	for _, t := range im.Rewritten {
 		out.Rewritten = append(out.Rewritten, t.clone())
+	}
+	for _, sp := range im.RewrittenSpecs {
+		out.RewrittenSpecs = append(out.RewrittenSpecs, sp.clone())
 	}
 	return out
 }
@@ -935,8 +941,9 @@ var (
 	ErrUnknownProject = errors.New("store: unknown project")
 	// ErrExists means an Import named a Spec or Ticket number already in use.
 	ErrExists = errors.New("store: an import may only add new records")
-	// ErrNotExists means an Import rewrote a Ticket that doesn't exist.
-	ErrNotExists = errors.New("store: an import may only rewrite existing Tickets")
+	// ErrNotExists means an Import rewrote a Ticket or Spec that doesn't
+	// exist.
+	ErrNotExists = errors.New("store: an import may only rewrite existing Tickets and Specs")
 	// ErrInvalidOption means an Option written was outside its set.
 	ErrInvalidOption = errors.New("store: an Option's value is outside its set")
 )

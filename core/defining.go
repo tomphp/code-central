@@ -196,18 +196,30 @@ type LabelsInput struct {
 }
 
 // AddLabels is add_labels(target, labels). A Label already present is
-// kept once.
-func (c *Core) AddLabels(_ context.Context, key string, in LabelsInput) (TargetView, error) {
+// kept once. Adding the auto-accept Label also accepts, in the same
+// write, every Ticket it now covers that is In Review and eligible.
+func (c *Core) AddLabels(ctx context.Context, key string, in LabelsInput) (TargetView, error) {
 	if err := checkLabels(in.Labels); err != nil {
 		return TargetView{}, err
 	}
 	if err := checkReservedNames("labels", in.Labels); err != nil {
 		return TargetView{}, err
 	}
-	return c.updateTarget(key, in.Target, func(onSpec bool, labels *[]string, _ map[string]string) error {
+	if err := checkHumanLabels(ctx, "labels", in.Labels); err != nil {
+		return TargetView{}, err
+	}
+	sweep := false
+	then := func(r store.Reader, target store.Import) (store.Import, error) {
+		if !sweep {
+			return target, nil
+		}
+		return c.sweepAutoAccept(ctx, r, key, target, c.now())
+	}
+	return c.updateTargetThen(key, in.Target, func(_ store.Reader, onSpec bool, labels *[]string, _ map[string]string) error {
 		if err := checkPlacement("labels", in.Labels, onSpec); err != nil {
 			return err
 		}
+		sweep = slices.Contains(in.Labels, AutoAcceptLabel) && !slices.Contains(*labels, AutoAcceptLabel)
 		for _, l := range in.Labels {
 			if !slices.Contains(*labels, l) {
 				*labels = append(*labels, l)
@@ -219,13 +231,16 @@ func (c *Core) AddLabels(_ context.Context, key string, in LabelsInput) (TargetV
 			return checkOneType("labels", *labels)
 		}
 		return nil
-	})
+	}, then)
 }
 
 // RemoveLabels is remove_labels(target, labels). A Label not present is
 // ignored.
-func (c *Core) RemoveLabels(_ context.Context, key string, in LabelsInput) (TargetView, error) {
+func (c *Core) RemoveLabels(ctx context.Context, key string, in LabelsInput) (TargetView, error) {
 	if err := checkLabels(in.Labels); err != nil {
+		return TargetView{}, err
+	}
+	if err := checkHumanLabels(ctx, "labels", in.Labels); err != nil {
 		return TargetView{}, err
 	}
 	return c.updateTarget(key, in.Target, func(_ bool, labels *[]string, _ map[string]string) error {
@@ -331,6 +346,14 @@ func (c *Core) updateTarget(key string, ref Ref, fn func(onSpec bool, labels *[]
 
 // updateTargetIn is updateTarget with fn given the store too.
 func (c *Core) updateTargetIn(key string, ref Ref, fn func(r store.Reader, onSpec bool, labels *[]string, tags map[string]string) error) (TargetView, error) {
+	return c.updateTargetThen(key, ref, fn, nil)
+}
+
+// updateTargetThen is updateTargetIn with then, when not nil, turning
+// the changed target, given as an Import that rewrites it alone, into
+// the records the write makes, so other records can change with it.
+func (c *Core) updateTargetThen(key string, ref Ref, fn func(r store.Reader, onSpec bool, labels *[]string, tags map[string]string) error,
+	then func(r store.Reader, target store.Import) (store.Import, error)) (TargetView, error) {
 	var v TargetView
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
@@ -350,6 +373,15 @@ func (c *Core) updateTargetIn(key string, ref Ref, fn func(r store.Reader, onSpe
 			}
 			return !slices.Equal(oldL, *labels) || !maps.Equal(oldT, *tags), nil
 		}
+		put := func(target store.Import) error {
+			if then != nil {
+				var err error
+				if target, err = then(w, target); err != nil {
+					return err
+				}
+			}
+			return putRecords(w, key, target)
+		}
 		if s, ok := w.Spec(key, n); ok {
 			changed, err := apply(true, &s.Labels, &s.Tags)
 			if err != nil {
@@ -357,7 +389,7 @@ func (c *Core) updateTargetIn(key string, ref Ref, fn func(r store.Reader, onSpe
 			}
 			if changed {
 				s.Updated = c.now()
-				if err := w.PutSpec(key, s); err != nil {
+				if err := put(store.Import{RewrittenSpecs: []store.Spec{s}}); err != nil {
 					return err
 				}
 			}
@@ -371,7 +403,7 @@ func (c *Core) updateTargetIn(key string, ref Ref, fn func(r store.Reader, onSpe
 			}
 			if changed {
 				t.Updated = c.now()
-				if err := w.PutTicket(key, t); err != nil {
+				if err := put(store.Import{Rewritten: []store.Ticket{t}}); err != nil {
 					return err
 				}
 			}
