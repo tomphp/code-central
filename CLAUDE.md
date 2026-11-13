@@ -20,8 +20,7 @@ To learn a Go API, read `go doc ./<pkg> <Name>` before the source.
 
 ## Checks
 
-While working, run `make typecheck` and `make vitest F=<file>` (they install web dependencies first in a fresh worktree); run `make test` once at the end (it prints only what failed; `make test-verbose` prints everything). `make ci-failures RUN=<id>` shows what failed in a CI run. Change a file with Edit, after a ranged Read.
-
+While working, run `make typecheck` and `make vitest F=<file>` (they install web dependencies first in a fresh worktree); run `make test` once at the end (it prints only what failed; `make test-verbose` prints everything). `make ci-failures RUN=<id>` shows what failed in a CI run.
 ## Context report
 
 To measure what agents load into context, compare the sessions since a change against the baseline: `make context-report ARGS="-baseline internal/contextreport/baseline.json -since <RFC 3339 time>"`. `docs/context-report.md` explains the figures.
