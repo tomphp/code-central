@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -119,14 +120,29 @@ func autoAcceptCause(r store.Reader, key string, t store.Ticket) (store.AutoAcce
 
 // autoAccept ends finish's write: when t, now In Review, is auto-accept
 // eligible it carries out the human's accept in the same write, else it
-// writes t as it is. The accepting Move's Actor is human, with the
-// cause.
+// writes t as it is. A spec Stage recommending implement is implemented,
+// unless implement isn't allowed just now, when it stays In Review; any
+// other eligible Ticket, including a spec Stage recommending split, is
+// accepted. The accepting Move's Actor is human, with the cause.
 func (c *Core) autoAccept(ctx context.Context, w store.Writer, key string, t store.Ticket, now time.Time) error {
 	cause, ok := autoAcceptCause(w, key, t)
 	if !ok {
 		return w.PutTicket(key, t)
 	}
-	if err := acceptStep(WithActor(ctx, Human), &t, key, cause, now); err != nil {
+	human := WithActor(ctx, Human)
+	if t.Recommendation == store.RecommendImplement {
+		spec := t
+		done, err := c.implementStep(human, w, key, &spec, cause, now)
+		var e *Error
+		if errors.As(err, &e) && e.Code == ActionNotAllowed {
+			return w.PutTicket(key, t)
+		}
+		if err != nil {
+			return err
+		}
+		return w.PutImport(key, done.records(spec))
+	}
+	if err := acceptStep(human, &t, key, cause, now); err != nil {
 		return err
 	}
 	return w.PutTicket(key, t)

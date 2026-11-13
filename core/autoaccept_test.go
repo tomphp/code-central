@@ -187,3 +187,108 @@ func TestFinishsResponseIsTheSameWhetherOrNotItAutoAccepts(t *testing.T) {
 		t.Errorf("finish's full result differs under auto-accept:\n%+v\n%+v", *fulls[0].Ticket, *fulls[1].Ticket)
 	}
 }
+
+// finishSpecStage claims the spec Stage acme-4 and finishes it with the
+// recommendation.
+func (f fixture) finishSpecStage(t *testing.T, rec store.Recommendation) core.FinishResult {
+	t.Helper()
+	f.setState(t, 3, store.Done)
+	f.setState(t, 4, store.Ready)
+	f.claim(t, core.ClaimInput{Ticket: "acme-4"})
+	res, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Spec written.", Recommendation: rec})
+	if err != nil {
+		t.Fatalf("finish: %v", err)
+	}
+	return res
+}
+
+func TestFinishAutoAcceptsASpecStageRecommendingImplementAsImplement(t *testing.T) {
+	f := newFixture(t)
+	f.requirement(t)
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptSpec: true})
+	res := f.finishSpecStage(t, store.RecommendImplement)
+	if res.Acknowledgement == nil || res.Acknowledgement.State != store.InReview || res.NextStep != "stop working this Ticket" {
+		t.Fatalf("finish result %+v, want finish's own", res)
+	}
+
+	spec := f.get(t, "acme-4")
+	autoAccepted(t, spec, store.Done, store.CauseProject)
+	if m := spec.Moves[len(spec.Moves)-1]; m.Via != "implement" {
+		t.Fatalf("accept's move %+v, want via implement", m)
+	}
+	build := f.get(t, "acme-6")
+	if build.Title != "Implement: Add a dark mode" || build.State != store.Ready || build.Spec.ID != "acme-2" {
+		t.Fatalf("implementation Ticket %+v", build)
+	}
+	if len(build.Moves) != 1 || build.Moves[0].To != store.Ready || build.Moves[0].Actor != "human" || build.Moves[0].Via != "implement" {
+		t.Fatalf("implementation Ticket moves %+v", build.Moves)
+	}
+	if tickets := f.get(t, "acme-5"); tickets.State != store.Cancelled || len(tickets.Replacements) != 1 || tickets.Replacements[0] != "acme-6" {
+		t.Fatalf("tickets Stage %+v", tickets)
+	}
+}
+
+func TestFinishAutoAcceptsASpecStageRecommendingSplitAsSplitIntoTickets(t *testing.T) {
+	f := newFixture(t)
+	f.requirement(t)
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptSpec: true})
+	f.finishSpecStage(t, store.RecommendSplit)
+
+	spec := f.get(t, "acme-4")
+	autoAccepted(t, spec, store.Done, store.CauseProject)
+	if m := spec.Moves[len(spec.Moves)-1]; m.Via != "" {
+		t.Fatalf("accept's move %+v, want no via", m)
+	}
+	if tickets := f.get(t, "acme-5"); tickets.State != store.Ready {
+		t.Fatalf("tickets Stage is %s, want Ready to run", tickets.State)
+	}
+	if _, err := f.core.GetTicket(ctx, "acme", whole("acme-6")); err == nil {
+		t.Fatal("split created a Ticket")
+	}
+}
+
+func TestAnAutoAcceptedImplementCreatesADraftTicketWhileTheTicketsStageIsDraft(t *testing.T) {
+	f := newFixture(t)
+	f.requirement(t)
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptSpec: true})
+	f.setState(t, 5, store.Draft)
+	f.finishSpecStage(t, store.RecommendImplement)
+
+	autoAccepted(t, f.get(t, "acme-4"), store.Done, store.CauseProject)
+	build := f.get(t, "acme-6")
+	if build.State != store.Draft || len(build.Moves) != 1 || build.Moves[0].To != store.Draft || build.Moves[0].Via != "implement" {
+		t.Fatalf("implementation Ticket %s with moves %+v, want Draft", build.State, build.Moves)
+	}
+	if tickets := f.get(t, "acme-5"); tickets.State != store.Cancelled {
+		t.Fatalf("tickets Stage is %s, want Cancelled", tickets.State)
+	}
+}
+
+func TestTheHumansImplementStillCreatesAReadyTicketWhileTheTicketsStageIsDraft(t *testing.T) {
+	f := newFixture(t)
+	f.specInReview(t)
+	f.setState(t, 5, store.Draft)
+	f.implement(t, "acme-4")
+	if build := f.get(t, "acme-6"); build.State != store.Ready || build.Moves[0].Cause != "" {
+		t.Fatalf("implementation Ticket %s with moves %+v, want Ready with no cause", build.State, build.Moves)
+	}
+}
+
+func TestASpecStageWithNoRecommendationStaysInReviewUnderAutoAccept(t *testing.T) {
+	f := newFixture(t)
+	f.requirement(t)
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptSpec: true})
+	// A spec Stage finished before recommendations existed: In Review
+	// with none, as a redo's finish would then find it.
+	f.setState(t, 3, store.Done)
+	f.setState(t, 4, store.Ready)
+	f.claim(t, core.ClaimInput{Ticket: "acme-4"})
+	_, err := f.core.Finish(ctx, "acme", core.FinishInput{Ticket: "acme-4", ClaimID: "claim-1", Summary: "Spec written."})
+	var e *core.Error
+	if !errors.As(err, &e) || e.Code != core.Invalid {
+		t.Fatalf("finish without a recommendation: %v, want invalid", err)
+	}
+	if spec := f.get(t, "acme-4"); spec.State != store.InProgress {
+		t.Fatalf("spec Stage is %s, want still In Progress", spec.State)
+	}
+}
