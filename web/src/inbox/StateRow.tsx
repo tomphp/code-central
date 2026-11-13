@@ -2,6 +2,8 @@
 // the Spec row: the latest Session Event under the title, and a dot when the
 // Ticket needs the human.
 import type { MouseEvent } from "react";
+import { StateChip, stateSlug } from "../controls/StateChip";
+import { StageBadge } from "../controls/StageBadge";
 import { RowLatestEvent } from "../LatestEvent";
 import type { ProjectTicket } from "../live";
 import { stageOf } from "../requirement/progress";
@@ -16,9 +18,8 @@ export type InboxRowLinkFactory = (id: string) => {
   "aria-current"?: "true";
 };
 
-// stateSlug is a State, or a Spec's kind, as a class name: "In Progress"
-// is in-progress.
-export const stateSlug = (s: string) => s.toLowerCase().replace(/\s+/g, "-");
+// stateSlug moved to controls/StateChip; re-exported until no importer is left.
+export { stateSlug };
 
 // stage shows the Ticket's Stage as a badge, for a Stage Ticket sitting
 // among its Requirement's Tickets; chip shows its State, in a list of
@@ -29,9 +30,9 @@ export function StateRow({ t, needsYou, now, link, stage, chip }: { t: ProjectTi
     <a className="row" {...link(t.id)}>
       <span className="row-top">
         <ShortId id={t.id} />
-        {name && <span className="stage-badge">{name}</span>}
+        {name && <StageBadge label={name} />}
         <span className="row-title">{t.title}</span>
-        {chip && <span className={`state-chip st-${stateSlug(t.state)}`}>{t.state}</span>}
+        {chip && <StateChip state={t.state} />}
         {t.link && <LinkBadge link={t.link} plain />}
         <WaitingBadge waiting={t.waiting_for_spec} />
         {needsYou && <span className="dot needs-you" role="img" aria-label="Needs you" />}

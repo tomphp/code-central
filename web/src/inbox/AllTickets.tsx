@@ -10,7 +10,10 @@ import { WaitingBadge } from "../ticket/WaitingBadge";
 import { groupBySpec } from "./groupBySpec";
 import { ShortId } from "./ShortId";
 import { SpecRow, specKindOf, stagesFirst, type SpecRowProps } from "./SpecRow";
-import { stateSlug, type InboxRowLinkFactory } from "./StateRow";
+import type { InboxRowLinkFactory } from "./StateRow";
+import { StateChip } from "../controls/StateChip";
+import { KindBadge } from "../controls/KindBadge";
+import { StageBadge } from "../controls/StageBadge";
 
 const numberOf = (id: string) => Number(id.slice(id.lastIndexOf("-") + 1));
 
@@ -66,15 +69,15 @@ export function AllTicketsByTicket({
           <a key={t.id} className="row" {...link(t.id)}>
             <span className="row-top">
               <ShortId id={t.id} />
-              {label && <span className="stage-badge">{label}</span>}
+              {label && <StageBadge label={label} />}
               <span className="row-title">{t.title}</span>
               {t.link && <LinkBadge link={t.link} plain />}
               <WaitingBadge waiting={t.waiting_for_spec} />
-              <span className={`state-chip st-${stateSlug(t.state)}`}>{t.state}</span>
+              <StateChip state={t.state} />
               {reasons.has(t.id) && <span className="dot needs-you" role="img" aria-label="Needs you" />}
             </span>
             <span className="row-detail">
-              <span className={`kind-badge kind-${stateSlug(specKindOf(spec))}`}>{specKindOf(spec)}</span> <ShortId id={t.spec} /> {spec?.title ?? ""}
+              <KindBadge kind={specKindOf(spec)} /> <ShortId id={t.spec} /> {spec?.title ?? ""}
             </span>
           </a>
         );

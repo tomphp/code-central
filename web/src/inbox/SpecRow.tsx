@@ -13,7 +13,9 @@ import type { ProjectSpec, ProjectTicket } from "../live";
 import { mapCount } from "../map/mapCount";
 import { headline, progress, stageOf, type Progress } from "../requirement/progress";
 import { Strip } from "../requirement/Strip";
-import { StateRow, stateSlug, type InboxRowLinkFactory } from "./StateRow";
+import { StateRow, type InboxRowLinkFactory } from "./StateRow";
+import { KindBadge } from "../controls/KindBadge";
+import { StateChip } from "../controls/StateChip";
 import { ShortId } from "./ShortId";
 
 export interface SpecRowProps {
@@ -71,7 +73,7 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
         <a className="row" {...link}>
           <span className="row-top">
             <ShortId id={id} />
-            {kind !== "Requirement" && <span className={`kind-badge kind-${stateSlug(kind)}`}>{kind}</span>}
+            {kind !== "Requirement" && <KindBadge kind={kind} />}
             <span className="row-title">{title}</span>
             {needsYou && <span className={`dot${need ? ` reason-${need}` : ""}`} role="img" aria-label="Needs you" />}
           </span>
@@ -80,9 +82,9 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
           ) : (
             <span className="state-chips">
               {STATES.filter((s) => summary[s]).map((s) => (
-                <span key={s} className={`state-chip st-${stateSlug(s)}${s === here ? " here" : ""}`} aria-current={s === here ? "true" : undefined}>
+                <StateChip key={s} state={s} here={s === here}>
                   {s} {summary[s]}
-                </span>
+                </StateChip>
               ))}
             </span>
           )}

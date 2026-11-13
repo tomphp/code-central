@@ -16,7 +16,9 @@ import { groupBySpec } from "../inbox/groupBySpec";
 import { hiddenColumns, storedGroup, storeGroup, storeHidden } from "../inbox/groupPreference";
 import { OneProject, ShortId } from "../inbox/ShortId";
 import { SpecRow, specKindOf } from "../inbox/SpecRow";
-import { stateSlug } from "../inbox/StateRow";
+import { stateSlug } from "../controls/StateChip";
+import { KindBadge } from "../controls/KindBadge";
+import { StageBadge } from "../controls/StageBadge";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { reasonsOf } from "../requirement/progress";
 import { NewSplit } from "../requirement/NewSplit";
@@ -249,7 +251,7 @@ function Card({ t, spec, reason, joined, link }: { t: ProjectTicket; spec?: Proj
     <a {...pulse} {...link}>
       <span className="board-card-top">
         <ShortId id={t.id} />
-        {label && <span className="stage-badge">{label}</span>}
+        {label && <StageBadge label={label} />}
         <span className="board-spacer" />
         {t.blocked && (
           <span className="board-blocked" title="Has open Blockers">
@@ -261,7 +263,7 @@ function Card({ t, spec, reason, joined, link }: { t: ProjectTicket; spec?: Proj
       <span className="board-card-title">{t.title}</span>
       {spec && (
         <span className="board-card-spec">
-          <span className={`kind-badge kind-${stateSlug(kind)}`}>{kind}</span>{" "}
+          <KindBadge kind={kind} />{" "}
           {spec.title}
         </span>
       )}
