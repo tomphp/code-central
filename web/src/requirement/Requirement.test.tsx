@@ -112,6 +112,21 @@ const pane = () => within(detail()).getByRole("region", { name: "Requirement" })
 const segment = (name: RegExp) => within(within(pane()).getByRole("list", { name: "Stages" })).getByRole("button", { name });
 
 describe("the Requirement pane", () => {
+  it("shows Grilling skipped and Spec current for a Requirement submitted Straight to Spec", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    await fake.submitRequirement("acme", "Export a Spec as Markdown", undefined, true);
+    renderApp(fake, "/?view=inbox&requirement=acme-1");
+
+    await within(detail()).findByRole("region", { name: "Requirement" });
+    const strip = within(within(pane()).getByRole("list", { name: "Stages" }));
+    expect(strip.getByText("Grilling").closest("li")).toHaveAttribute("data-progress", "skipped");
+    expect(strip.queryByText("Map")).toBeNull();
+    expect(segment(/^Spec/).closest("li")).toHaveAttribute("data-progress", "queued");
+    expect(segment(/^Spec/).closest("li")).toHaveAttribute("aria-current", "step");
+    expect(within(pane()).getByText("Waiting for a Factory to claim Spec. Nothing needs you yet.")).toBeInTheDocument();
+  });
+
   it("shows the header and strip, a queued Stage dashed, while the Requirement waits for a Factory", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");

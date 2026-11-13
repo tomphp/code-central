@@ -57,7 +57,7 @@ func TestASecondSmallChangeReusesTheSpecEvenAfterItIsRetitled(t *testing.T) {
 func TestASmallChangeIsWrittenAsHumanWhoeverCalls(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	res, err := f.core.SubmitSmallChange(ctx,"acme", core.SubmitSmallChangeInput{Text: "Fix it", Full: true})
+	res, err := f.core.SubmitSmallChange(ctx, "acme", core.SubmitSmallChangeInput{Text: "Fix it", Full: true})
 	if err != nil {
 		t.Fatal(err)
 	}
