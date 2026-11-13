@@ -11,6 +11,7 @@ import { GitHubIssuesSection } from "./GitHubIssuesSection";
 import { LandingMethodSection } from "./LandingMethodSection";
 import { ModelsSection } from "./ModelsSection";
 import { StageGuidesSection } from "./StageGuidesSection";
+import { AutoAcceptSection } from "./AutoAcceptSection";
 
 export interface ProjectOptionsProps {
   api: Api;
@@ -29,6 +30,7 @@ export const SECTIONS = [
   { id: "project-options-github-issues", label: "GitHub Issues" },
   { id: "project-options-models", label: "Models" },
   { id: "project-options-stage-guides", label: "Stage Guides" },
+  { id: "project-options-auto-accept", label: "Auto-accept" },
 ];
 
 // jumpTo scrolls to a section without changing the URL, which holds the view.
@@ -83,6 +85,7 @@ export function ProjectOptions({
               <GitHubIssuesSection api={api} project={project} />
               <ModelsSection api={api} project={project} />
               <StageGuidesSection api={api} project={project} />
+              <AutoAcceptSection api={api} project={project} />
               <FactoriesSection project={project} now={now} />
             </div>
           </div>
