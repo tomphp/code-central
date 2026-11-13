@@ -92,8 +92,8 @@ const conflictFinish = "Conflict Claim: the first prompt holds the work. When it
 
 // conflictFiles is the files merging the base's tip into the Ticket's
 // existing branch conflicts in, for an implementation Ticket; none for
-// any other, for a branch not yet cut (but a Spec Branch's conflict Ticket's,
-// checked at the Spec Branch), or when the merge is clean.
+// any other, for a branch not yet cut (but a Spec merge Ticket's, checked
+// at the Spec Branch), or when the merge is clean.
 func (f *factory) conflictFiles(stage string, tk core.TicketView) []string {
 	branch := workBranch(stage, tk.ID)
 	if stage != core.ImplementationStage || branch == "" {
@@ -101,8 +101,9 @@ func (f *factory) conflictFiles(stage string, tk core.TicketView) []string {
 	}
 	head, err := f.repository.commit("refs/heads/" + branch)
 	if err != nil {
-		// A Spec Branch's conflict Ticket has no branch yet: it is cut
-		// from the Spec Branch, which is what conflicts.
+		// A Spec merge Ticket, marked or one opened before the mark, has
+		// no branch yet: it is cut from the Spec Branch, which is what
+		// conflicts.
 		if !tk.SpecLanded || tk.Title != core.SpecMergeTitle(tk.Spec.ID) {
 			return nil
 		}

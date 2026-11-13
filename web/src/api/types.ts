@@ -958,6 +958,9 @@ export interface TicketView {
   // triage_actions are the triage actions offered on an Incoming Issue,
   // left out on any other Ticket (code-central-287).
   awaiting_triage?: boolean;
+  // spec_merge_ticket marks a Spec merge Ticket, one open_spec_merge
+  // opened; left out on any other Ticket (code-central-542).
+  spec_merge_ticket?: boolean;
   triage_actions?: TriageAction[];
   // model_choice is the model and effort the Ticket's next turn runs
   // with, each with its source; only the UI's read carries it (Spec
@@ -971,7 +974,7 @@ export const TICKET_FIELDS = [
   "id", "title", "state", "spec", "labels", "tags", "blocked_by", "blockers", "replacements",
   "created", "updated", "description", "branch", "commit", "pushed_commit", "pull_request", "ci_result", "ci_commit", "ci_runs", "land_anyway", "ci_item", "ci_failure_options", "claims", "rounds", "failure_reports",
   "comments", "moves", "edits", "blocked", "claimable", "silent_since", "needs_me_reason", "link",
-  "awaiting_triage", "triage_actions",
+  "awaiting_triage", "spec_merge_ticket", "triage_actions",
 ] as const satisfies readonly (keyof TicketView)[];
 
 // SPEC_FIELDS are SpecView's fields in the service's order, the order a

@@ -79,7 +79,7 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in OpenSpecMergeIn
 		id := DisplayID(key, sp.Number)
 		tickets := specTickets(w, key, sp.Number)
 		if why := whyNoSpecMerge(sp, tickets); why != "" {
-			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s %s: it has no Spec Branch to merge the base into", id, why)}
+			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s %s, so it takes no Spec merge Ticket", id, why)}
 		}
 		title, body := SpecMergeTitle(id), specMergeBody(id, p.Base(), in)
 		now := c.now()
@@ -109,12 +109,12 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in OpenSpecMergeIn
 func whyNoSpecMerge(spec store.Spec, tickets []store.Ticket) string {
 	switch {
 	case slices.Contains(spec.Labels, LongLivedLabel):
-		return "is Long-lived"
+		return "is Long-lived: its Tickets land one by one, with no Spec Branch"
 	case isMap(spec.Labels):
-		return "is a Map"
+		return "is a Map, with no Spec Branch"
 	}
 	if _, done := summarise(tickets); done {
-		return "is Finished"
+		return "is Finished: every Ticket on it is Done or Cancelled"
 	}
 	return ""
 }

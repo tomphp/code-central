@@ -161,7 +161,7 @@ func (f *factory) landSpecs(ctx context.Context, landing core.LandingView, polic
 // pushSpecs, under Pull Request with Land per Spec on, pushes the Spec
 // Branch of every Spec ready to land, once the base is level with the
 // remote's, for the Pull Request Watcher to open one pull request on. A
-// Spec Branch that conflicts with the base gets the conflict Ticket
+// Spec Branch that conflicts with the base gets its Spec merge Ticket
 // instead. A later merge into it is pushed again, which updates the
 // pull request.
 func (f *factory) pushSpecs(ctx context.Context, accepted []core.TicketView, landing core.LandingView, policy store.LandingPolicy) {
