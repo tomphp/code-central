@@ -65,8 +65,11 @@ func Main(m *testing.M) {
 	os.Exit(code)
 }
 
-// Timeout bounds every wait in the harness.
-const Timeout = 30 * time.Second
+// Timeout bounds every wait in the harness. A wait that holds returns at
+// once, so it only costs time when a test is already failing; it is long
+// because the Factory's tests start many processes, and a loaded CI
+// runner can take longer than 30s to run one.
+const Timeout = 2 * time.Minute
 
 // EventBatchEvery is how often the Factory under test posts waiting
 // Session Events.
