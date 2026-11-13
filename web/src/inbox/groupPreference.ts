@@ -69,3 +69,30 @@ export function storeHidden(hidden: readonly State[]): void {
 export function hiddenColumns(hide?: readonly State[]): readonly State[] {
   return hide ?? storedHidden() ?? FINISHED;
 }
+
+// Whether the Board shows its Needs Me column is kept beside them: off
+// unless chosen, and none stored is undefined.
+const NEEDS_KEY = "code-central.board.needs";
+
+export function storedNeedsMe(): boolean | undefined {
+  try {
+    const on = localStorage.getItem(NEEDS_KEY);
+    return on === null ? undefined : on === "1";
+  } catch {
+    return undefined;
+  }
+}
+
+export function storeNeedsMe(on: boolean): void {
+  try {
+    localStorage.setItem(NEEDS_KEY, on ? "1" : "0");
+  } catch {
+    // The choice then lasts only as long as the URL.
+  }
+}
+
+// needsMeColumn is whether the Board shows its Needs Me column: the
+// address's needs, else the browser's last pick, else off.
+export function needsMeColumn(needs?: boolean): boolean {
+  return needs ?? storedNeedsMe() ?? false;
+}

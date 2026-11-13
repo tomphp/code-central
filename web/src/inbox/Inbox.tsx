@@ -271,7 +271,7 @@ export function Inbox({
             onClick={() => navigate({ state: s, list: undefined })}
           />
         ))}
-        <BoardLink loc={loc} navigate={navigate} tickets={tickets} className="filter" />
+        <BoardLink loc={loc} navigate={navigate} tickets={tickets} reasons={reasons} className="filter" />
         <h2>Admin</h2>
         <UsageLink loc={loc} navigate={navigate} className="filter" />
         <ActivityLink loc={loc} navigate={navigate} className="filter" />

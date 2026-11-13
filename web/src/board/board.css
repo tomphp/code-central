@@ -84,3 +84,11 @@
 .popup-head > :not(.popup-close) { margin-right: auto; padding-left: 10px; }
 .popup-close { border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
 .popup-close:hover { color: var(--text); background: var(--surface-2); }
+
+/* The Needs Me column: its head has the needs-you dot and a bar in the
+   needs-you colour, its cells a faint tint of it; a card there adds its
+   State chip and reason label. */
+.board-col-head.needs-me { border-bottom-color: var(--r-answer); }
+.board-cell.needs-me { background: color-mix(in srgb, var(--r-answer) 7%, transparent); }
+.board-lane .board-cell.needs-me { background: color-mix(in srgb, var(--r-answer) 7%, transparent); }
+.board-reason { font-size: 11px; color: var(--rc); white-space: nowrap; flex: none; }
