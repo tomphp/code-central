@@ -3,11 +3,6 @@
    of them reach the other views; the status badges are the Ticket
    panel's CI section's. */
 .ci { min-height: 100vh; display: flex; flex-direction: column; }
-.ci-head { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
-.ci-head h1 { font-size: 18px; margin: 0; }
-.ci-head label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.ci-picker-label { color: var(--muted); }
-.ci-back { margin-left: auto; }
 .ci-body { width: 100%; max-width: 1100px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 18px; }
 .ci-body .warning, .ci-body .muted { font-size: 14px; }
 .ci-watchers p { margin: 0 0 4px; font-size: 14px; }

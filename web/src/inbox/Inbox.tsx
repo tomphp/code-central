@@ -40,6 +40,7 @@ import { CILink } from "../ci/CILink";
 import { ActivityLink } from "../activity/ActivityLink";
 import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
+import { ToggleGroup } from "../controls/ToggleGroup";
 import { AllTicketsBySpec, AllTicketsByTicket, matchesId } from "./AllTickets";
 import { groupBySpec } from "./groupBySpec";
 import { SpecRow } from "./SpecRow";
@@ -195,21 +196,15 @@ export function Inbox({
         onChange={(e) => setSearch(e.target.value)}
       />
     )}
-    <div
-      className="bs-toggle"
-      role="group"
-      aria-label="Group the list"
-    >
-      {(["ticket", "spec"] as const).map((g) => (
-        <button
-          key={g}
-          aria-pressed={grouping === g}
-          onClick={() => chooseGroup(g)}
-        >
-          {g === "spec" ? "Spec" : "Ticket"}
-        </button>
-      ))}
-    </div>
+    <ToggleGroup
+      label="Group the list"
+      options={[
+        { value: "ticket", label: "Ticket" },
+        { value: "spec", label: "Spec" },
+      ]}
+      value={grouping}
+      onChange={chooseGroup}
+    />
     {loc.list === "tickets" && (
       <div className="bs-toggle">
         <button
