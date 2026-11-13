@@ -10,8 +10,9 @@ import (
 )
 
 // Import is the one bulk write (ADR 0003), used by an Import, by a
-// submitted Requirement and by To Requirement, which also rewrites the
-// Incoming Issue it Cancels. Under the write lock, every file is written
+// submitted Requirement, by To Requirement, which also rewrites the
+// Incoming Issue it Cancels, and by the auto-accept Label, which rewrites
+// what it is added to and the Tickets it accepts. Under the write lock, every file is written
 // and fsynced into staging/<import-id>/; then a manifest naming each
 // file's final path is written and fsynced; then each file is renamed
 // into place; then the staging folder, manifest and all, is deleted.
@@ -47,6 +48,9 @@ func (s *FileStore) writeImport(project string, im Import) error {
 	}
 	for _, t := range im.Rewritten {
 		records = append(records, t)
+	}
+	for _, sp := range im.RewrittenSpecs {
+		records = append(records, sp)
 	}
 	step := 0
 	stop := func() bool {
