@@ -133,11 +133,11 @@ func (c *Core) autoAccept(ctx context.Context, w store.Writer, key string, t sto
 	p, _ := w.Project(key)
 	sp, _ := w.Spec(key, t.Spec)
 	if cause, ok := autoAcceptCause(p, sp, t); ok {
-		im, ok, err := c.acceptOnBehalf(ctx, w, key, t, cause, now)
+		im, accepted, err := c.acceptOnBehalf(ctx, w, key, t, cause, now)
 		if err != nil {
 			return err
 		}
-		if ok {
+		if accepted {
 			return putRecords(w, key, im)
 		}
 	}
@@ -148,10 +148,10 @@ func (c *Core) autoAccept(ctx context.Context, w store.Writer, key string, t sto
 // eligible for cause, as the records it rewrites and creates, t among
 // them; it writes nothing itself. A spec Stage recommending implement is
 // implemented, any other Ticket (a spec Stage recommending split too) is
-// accepted. The accepting Move's Actor is human, with the cause. ok is
-// false, with no records, when implement isn't allowed just now, so the
-// spec Stage stays In Review for the human.
-func (c *Core) acceptOnBehalf(ctx context.Context, r store.Reader, key string, t store.Ticket, cause store.AutoAcceptCause, now time.Time) (im store.Import, ok bool, err error) {
+// accepted. The accepting Move's Actor is human, with the cause.
+// accepted is false, with no records, when implement isn't allowed just
+// now, so the spec Stage stays In Review for the human.
+func (c *Core) acceptOnBehalf(ctx context.Context, r store.Reader, key string, t store.Ticket, cause store.AutoAcceptCause, now time.Time) (im store.Import, accepted bool, err error) {
 	human := WithActor(ctx, Human)
 	if t.Recommendation == store.RecommendImplement {
 		done, err := c.implementStep(human, r, key, &t, cause, now)
@@ -200,11 +200,11 @@ func (c *Core) sweepAutoAccept(ctx context.Context, r store.Reader, key string, 
 		if !ok {
 			continue
 		}
-		done, ok, err := c.acceptOnBehalf(ctx, r, key, t, cause, now)
+		done, accepted, err := c.acceptOnBehalf(ctx, r, key, t, cause, now)
 		if err != nil {
 			return store.Import{}, err
 		}
-		if ok {
+		if accepted {
 			im.Tickets = append(im.Tickets, done.Tickets...)
 			im.Rewritten = append(im.Rewritten, done.Rewritten...)
 		}
