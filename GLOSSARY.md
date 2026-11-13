@@ -61,11 +61,11 @@ A part of a Spec's body that starts at a heading and runs to the next heading at
 _Avoid_: Chapter, part, block
 
 **Requirement**:
-A Spec started from the human's free text and defined through Stages before it is built. Its free text is the Requirement's text.
+A Spec started from the human's free text and defined through Stages before it is built. Its free text is the Requirement's text. The human may save it as Draft, so every Stage Ticket is Draft and nothing is built until the human moves them to Ready.
 _Avoid_: Prompt, feature request, idea
 
 **Map**:
-A Spec that finds the way to a loosely-defined destination through decision Tickets worked one at a time, each marked by a reserved Wayfinder Label. Its body is the index of decisions made, the fog not yet specified and what is out of scope.
+A Spec that finds the way to a loosely-defined destination through decision Tickets worked one at a time, each marked by a reserved Wayfinder Label. Its body is the index of decisions made, the fog not yet specified and what is out of scope. The human may save it as Draft, so its Charting Ticket is Draft until the human moves it to Ready.
 _Avoid_: Wayfinder session, roadmap, journey
 
 **Frontier**:
@@ -105,7 +105,7 @@ A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to t
 _Avoid_: Spike, mock-up, demo
 
 **Small Change**:
-The human's choice in **+ New ▾**, and also `submit_small_change`. It opens one Ready implementation Ticket from the human's free text on the Project's Small Changes Spec, with no Stages, so the Ticket is built and lands on its own. The first line is the title and the whole text the description.
+The human's choice in **+ New ▾**, and also `submit_small_change`. It opens one implementation Ticket, Ready or, when the human saves it as Draft, Draft, from the human's free text on the Project's Small Changes Spec, with no Stages, so the Ticket is built and lands on its own. The first line is the title and the whole text the description.
 _Avoid_: Quick change, task, hotfix
 
 **Small Changes Spec**:
