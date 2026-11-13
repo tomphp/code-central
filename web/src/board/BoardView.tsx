@@ -1,5 +1,7 @@
 // The Board view: the Tickets in scope as cards in one column per State, in
-// workflow order, minus the columns Columns ▾ hides. By Spec splits the
+// workflow order, minus the columns Columns ▾ hides, and the Needs Me
+// column after In Progress while Columns ▾ shows it: it holds the card of
+// every Ticket that needs the human, whatever State columns are hidden. By Spec splits the
 // columns into one lane per Spec, headed by its Lane header. It takes no
 // action itself: a card opens its Ticket's popup and a Lane header its
 // Spec's, over the Board, kept in the address as popup=, and only the popup
@@ -14,7 +16,7 @@ import { ToggleGroup } from "../controls/ToggleGroup";
 import { ViewHeader } from "../controls/ViewHeader";
 import { kindLabel, newestFirst } from "../inbox/AllTickets";
 import { groupBySpec } from "../inbox/groupBySpec";
-import { hiddenColumns, storedGroup, storeGroup, storeHidden } from "../inbox/groupPreference";
+import { hiddenColumns, needsMeColumn, storedGroup, storeGroup, storeHidden, storeNeedsMe } from "../inbox/groupPreference";
 import { OneProject } from "../inbox/ShortId";
 import { specKindOf } from "../inbox/describeSpec";
 import { stateSlug } from "../controls/StateChip";
@@ -48,15 +50,30 @@ export interface BoardViewProps {
 export function BoardView({ api, now, version, data, loc, navigate, onFocusPopupGone }: BoardViewProps) {
   const projects = data?.projects ?? [];
   const hidden = hiddenColumns(loc.hide);
-  const shown = STATES.filter((s) => !hidden.includes(s));
+  const shownStates = STATES.filter((s) => !hidden.includes(s));
+  const needsMe = needsMeColumn(loc.needs);
+  // The columns: the shown States, with the Needs Me column after In Progress.
+  const shown: Col[] = STATES.flatMap((s): Col[] => [
+    ...(hidden.includes(s) ? [] : [s]),
+    ...(s === "In Progress" && needsMe ? [NEEDS_ME] : []),
+  ]);
   // The grouping in effect, shared with the Inbox's State lists: the
   // address's, else this browser's last pick.
   const grouping = loc.group ?? storedGroup();
   const tickets = newestFirst((data?.tickets ?? []).filter((t) => !loc.project || t.project === loc.project));
-  const inColumn = new Map(shown.map((s) => [s, tickets.filter((t) => t.state === s)]));
   const specs = new Map((data?.specs ?? []).map((s) => [s.id, s]));
   const reasons = reasonsOf(data?.needsMe);
-  const joined = useJoined(data?.tickets);
+  // While the Needs Me column shows, a Ticket that needs the human is
+  // there, in Needs Me's order, and in no State's column.
+  const byId = new Map(tickets.map((t) => [t.id, t]));
+  const needing = needsMe ? [...reasons.keys()].flatMap((id) => byId.get(id) ?? []) : [];
+  const inColumn = new Map<Col, ProjectTicket[]>(
+    shown.map((c) => [
+      c,
+      c === NEEDS_ME ? needing : tickets.filter((t) => t.state === c && !(needsMe && reasons.has(t.id))),
+    ]),
+  );
+  const joined = useJoined(data?.tickets, reasons);
   // The lanes the human has collapsed, by Spec; page-only.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -100,6 +117,11 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
               />
               <ColumnsMenu
                 hidden={hidden}
+                needsMe={needsMe}
+                onNeedsMe={(on) => {
+                  storeNeedsMe(on);
+                  navigate({ needs: on });
+                }}
                 onChange={(hide) => {
                   storeHidden(hide);
                   navigate({ hide });
@@ -134,7 +156,8 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
             <div className="board-grid">
               <div className="board-heads" style={{ "--cols": shown.length } as CSSProperties}>
                 {shown.map((s) => (
-                  <h2 key={s} className={`board-col-head st-${stateSlug(s)}`}>
+                  <h2 key={s} className={s === NEEDS_ME ? "board-col-head needs-me" : `board-col-head st-${stateSlug(s)}`}>
+                    {s === NEEDS_ME && <span className="dot" aria-hidden="true" />}
                     <span className="board-col-name">{s}</span> <span className="board-col-count">{inColumn.get(s)!.length}</span>
                   </h2>
                 ))}
@@ -214,32 +237,42 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
 // changed, or is new, since the Board last rendered its Tickets. A card that
 // moves column mounts again, so it pulses then; one in a column just shown,
 // or on the Board's first render, doesn't.
-function useJoined(tickets?: ProjectTicket[]): (t: ProjectTicket) => boolean {
+function useJoined(tickets: ProjectTicket[] | undefined, reasons: Map<string, NeedsMeReason>): (t: ProjectTicket) => boolean {
+  // A Ticket can start needing the human with no update of its own (CI
+  // failed on its commit), so its reason counts as a change too.
+  const key = (t: ProjectTicket) => `${t.updated}|${reasons.get(t.id) ?? ""}`;
   const seen = useRef<Map<string, string>>(undefined);
   const before = seen.current;
   useEffect(() => {
-    if (tickets) seen.current = new Map(tickets.map((t) => [t.id, t.updated]));
-  }, [tickets]);
-  return (t) => !!before && before.get(t.id) !== t.updated;
+    if (tickets) seen.current = new Map(tickets.map((t) => [t.id, key(t)]));
+  });
+  return (t) => !!before && before.get(t.id) !== key(t);
 }
+
+// NEEDS_ME is the Needs Me column, beside the State columns.
+const NEEDS_ME = "Needs Me" as const;
+type Col = State | typeof NEEDS_ME;
 
 type CardLink = { href: string; onClick: ReturnType<typeof clickTo> };
 
 interface Lane {
   id: string;
-  inColumn: Map<State, ProjectTicket[]>;
+  inColumn: Map<Col, ProjectTicket[]>;
   // count is how many Tickets the lane shows, across its columns.
   count: number;
 }
 
 // lanes splits the shown columns' Tickets (each column newest first) into
 // one lane per Spec, newest Spec first: by Project, then ID, descending.
-function lanes(shown: State[], inColumn: Map<State, ProjectTicket[]>): Lane[] {
+function lanes(shown: Col[], inColumn: Map<Col, ProjectTicket[]>): Lane[] {
   const n = (id: string) => Number(id.slice(id.lastIndexOf("-") + 1));
   const ofSpec = groupBySpec(shown.flatMap((s) => inColumn.get(s)!));
   return ofSpec
     .sort((a, b) => b.tickets[0].project.localeCompare(a.tickets[0].project) || n(b.id) - n(a.id))
-    .map((g) => ({ id: g.id, inColumn: new Map(shown.map((s) => [s, g.tickets.filter((t) => t.state === s)])), count: g.tickets.length }));
+    .map((g) => {
+      const ids = new Set(g.tickets.map((t) => t.id));
+      return { id: g.id, inColumn: new Map(shown.map((s) => [s, inColumn.get(s)!.filter((t) => ids.has(t.id))])), count: g.tickets.length };
+    });
 }
 
 // Cells is one row of the grid, a cell per shown column. In a lane that is
@@ -255,8 +288,8 @@ function Cells({
   link,
   inLane,
 }: {
-  shown: State[];
-  tickets: Map<State, ProjectTicket[]>;
+  shown: Col[];
+  tickets: Map<Col, ProjectTicket[]>;
   counts?: boolean;
   specs: Map<string, ProjectSpec>;
   reasons: Map<string, NeedsMeReason>;
@@ -269,11 +302,11 @@ function Cells({
       {shown.map((s) => {
         const here = tickets.get(s)!;
         return (
-          <section key={s} aria-label={s} className="board-cell">
+          <section key={s} aria-label={s} className={s === NEEDS_ME ? "board-cell needs-me" : "board-cell"}>
             {counts ? (
               <span className="board-count">{here.length}</span>
             ) : here.length === 0 ? (
-              !inLane && <p className="board-empty">No Tickets</p>
+              !inLane && <p className="board-empty">{s === NEEDS_ME ? "Nothing needs you" : "No Tickets"}</p>
             ) : (
               here.map((t) => {
                 const spec = inLane ? undefined : specs.get(t.spec);
@@ -286,6 +319,7 @@ function Cells({
                     reason={reasons.get(t.id)}
                     spec={spec && { kind: specKindOf(spec), title: spec.title }}
                     joined={joined(t)}
+                    inNeedsMe={s === NEEDS_ME}
                   />
                 );
               })
