@@ -20,6 +20,7 @@ import { CISection } from "./CISection";
 import { Triage } from "./Triage";
 import { ModelChoice } from "./ModelChoice";
 import { ShortId } from "../inbox/ShortId";
+import { Button } from "../controls/Button";
 import { Select } from "../controls/Select";
 
 export interface TicketPaneProps {
@@ -65,9 +66,9 @@ export function TicketPane(props: TicketPaneProps) {
           <>
             <h2>{t.title}</h2>
             {ticketEditable(t, !!props.archived) && (
-              <button type="button" className="btn" onClick={() => setEditing(true)}>
+              <Button type="button"  onClick={() => setEditing(true)}>
                 Edit
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -206,9 +207,9 @@ function LinkedNote({ api, project, ticket: t }: { api: Api; project: string; ti
   return (
     <div className="linked-note muted small">
       The title and description are read-only while linked: change them in {t.link!.integration}.{" "}
-      <button type="button" className="btn" disabled={busy} onClick={() => run(() => api.unlink(project, t.id))}>
+      <Button type="button"  disabled={busy} onClick={() => run(() => api.unlink(project, t.id))}>
         Unlink
-      </button>
+      </Button>
       {error && (
         <p role="alert" className="warning">
           {error}
@@ -234,9 +235,9 @@ function MoveControl({ api, project, ticket: t }: { api: Api; project: string; t
         <span className="muted small">Move to</span>{" "}
         <Select value={to} onChange={(v) => setTo(v as State)} options={targets.map((s) => ({ value: s }))} />
       </label>{" "}
-      <button className="btn" disabled={busy}>
+      <Button  disabled={busy}>
         Move
-      </button>
+      </Button>
       {error && (
         <p role="alert" className="warning">
           {error}

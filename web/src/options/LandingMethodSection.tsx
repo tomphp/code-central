@@ -6,6 +6,7 @@ import type {
   LandingMethod,
   ProjectRow,
 } from "../api/types";
+import { Button } from "../controls/Button";
 import { Refusal } from "./Refusal";
 import { WatcherStatus } from "./WatcherStatus";
 
@@ -184,9 +185,9 @@ export function LandingMethodSection({
         )}
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
-          <button type="submit" className="btn primary" disabled={!changed}>
+          <Button type="submit" variant="primary" disabled={!changed}>
             Save
-          </button>
+          </Button>
           {saved && !changed && (
             <span role="status" className="muted">
               Saved

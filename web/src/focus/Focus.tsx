@@ -23,6 +23,7 @@ import { PrototypeBadge } from "../ticket/PrototypeBadge";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { ActivityDashboard } from "./ActivityDashboard";
 import { focusQueue, type FocusItem } from "./queue";
+import { Button } from "../controls/Button";
 import "./focus.css";
 
 export interface FocusProps {
@@ -135,9 +136,9 @@ export function Focus({
             onSubmitted={({ kind }) => setNote({ text: `${kind} added` })}
           />
         </div>
-        <button className="btn" onClick={() => navigate({ view: "inbox" })}>
+        <Button  onClick={() => navigate({ view: "inbox" })}>
           Exit
-        </button>
+        </Button>
       </header>
       {note && (
         <p role="status" className="focus-note">
@@ -166,9 +167,9 @@ export function Focus({
           className="focus-clear"
         >
           <p>You skipped {screen.remaining}, go through them again?</p>
-          <button className="btn primary" onClick={() => setSkipped([])}>
+          <Button variant="primary" onClick={() => setSkipped([])}>
             Go through them again
-          </button>
+          </Button>
         </section>
       ) : item && itemApi ? (
         <Item
@@ -269,9 +270,9 @@ function Item({
   };
   const open = clickTo(navigate, inbox);
   const skipButton = (
-    <button type="button" className="btn" onClick={skip}>
+    <Button type="button"  onClick={skip}>
       Skip
-    </button>
+    </Button>
   );
 
   return (

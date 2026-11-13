@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import type { ApiError, ProjectRow, SpecAcknowledgement, TicketAcknowledgement } from "../api/types";
+import { Button } from "../controls/Button";
 import { Select } from "../controls/Select";
 
 export interface NewRequirementProps {
@@ -31,7 +32,7 @@ export interface NewRequirementProps {
 // which resolves to R.
 interface Kind<R> {
   button: string;
-  className: string;
+  variant: "default" | "primary";
   // noun names the text box.
   noun: string;
   placeholder: string;
@@ -43,7 +44,7 @@ interface Kind<R> {
 
 const REQUIREMENT: Kind<{ spec: SpecAcknowledgement }> = {
   button: "New requirement",
-  className: "btn primary",
+  variant: "primary",
   noun: "Requirement",
   placeholder: "Describe what you want built. The first line becomes the working title.",
   creates: "Creates a Spec and its Grilling, Spec and Tickets Stages. A Factory picks up Grilling.",
@@ -52,7 +53,7 @@ const REQUIREMENT: Kind<{ spec: SpecAcknowledgement }> = {
 
 const MAP: Kind<{ spec: SpecAcknowledgement }> = {
   button: "New Map",
-  className: "btn",
+  variant: "default",
   noun: "Map",
   placeholder: "Describe where you want to get to. The first line becomes the working title.",
   creates: "Creates a Map and its Charting Ticket. A Factory picks up Charting.",
@@ -61,7 +62,7 @@ const MAP: Kind<{ spec: SpecAcknowledgement }> = {
 
 const SMALL_CHANGE: Kind<TicketAcknowledgement> = {
   button: "New Small Change",
-  className: "btn",
+  variant: "default",
   noun: "Small Change",
   placeholder: "Describe the change you want. The first line becomes the Ticket's title.",
   creates: "Creates a Ready Ticket on the Small Changes Spec. A Factory builds it and it lands on its own.",
@@ -71,7 +72,7 @@ const SMALL_CHANGE: Kind<TicketAcknowledgement> = {
 // prototypeOn is New Prototype on spec.
 const prototypeOn = (spec: string): Kind<TicketAcknowledgement> => ({
   button: "New Prototype",
-  className: "btn",
+  variant: "default",
   noun: "Prototype",
   placeholder: "Describe what to try out, and the decision it should inform. The first line becomes the title.",
   creates: "Creates a Ready Prototype on this Spec. A Factory builds it on a branch that never lands.",
@@ -108,7 +109,7 @@ export function WriteTheSpec({ api, map, onSubmitted }: WriteTheSpecProps) {
   const kind: Kind<{ spec: SpecAcknowledgement }> = {
     ...REQUIREMENT,
     button: "Write the Spec",
-    className: "btn",
+    variant: "default",
     creates: "Creates a Spec and its Spec and Tickets Stages, from the Map's decisions. A Factory picks up Spec.",
     text: [map.title, `From the Map [${map.id}](${map.id}).`, map.destination].filter(Boolean).join("\n\n") + "\n",
     submit: (api, project, text) => api.submitRequirement(project, text, map.id),
@@ -143,9 +144,9 @@ function NewFromText<R>({ kind, api, projects, project, onSubmitted, trigger }: 
       {trigger ? (
         trigger(() => setOpen(true))
       ) : (
-        <button className={kind.className} onClick={() => setOpen(true)}>
+        <Button variant={kind.variant} onClick={() => setOpen(true)}>
           {kind.button}
-        </button>
+        </Button>
       )}
       {open && (
         <Modal
@@ -218,12 +219,12 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
           {error && <p className="warning">{error}</p>}
           <div className="modal-actions">
             <span className="muted small">{kind.creates}</span>
-            <button type="button" className="btn" onClick={onClose}>
+            <Button type="button"  onClick={onClose}>
               Cancel
-            </button>
-            <button type="submit" className="btn primary" disabled={busy || !text.trim() || !chosen}>
+            </Button>
+            <Button type="submit" variant="primary" disabled={busy || !text.trim() || !chosen}>
               Submit {kind.noun.toLowerCase()}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

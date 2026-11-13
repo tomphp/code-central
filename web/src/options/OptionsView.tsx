@@ -7,6 +7,7 @@ import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
 import type { ApiError, Options } from "../api/types";
 import { returnViewOf, type UiLocation } from "../url";
+import { Button } from "../controls/Button";
 import "./options.css";
 
 // An OptionChoice is one value an Option can take, as the human reads it.
@@ -76,9 +77,9 @@ export function OptionsView({ api, options, loc, navigate }: OptionsViewProps) {
     <main aria-label="Options" className="options">
       <header className="options-head">
         <h1>Options</h1>
-        <button className="btn options-back" onClick={() => navigate({ view: back })}>
+        <Button className="options-back" onClick={() => navigate({ view: back })}>
           {back === "focus" ? "Back to Focus Mode" : "Back to the Inbox"}
-        </button>
+        </Button>
       </header>
       <div className="options-body">
         {shownError && (
@@ -171,9 +172,9 @@ function GHPathOption({ value = "", disabled, invalid, onSave }: GHPathOptionPro
             setSaved(false);
           }}
         />{" "}
-        <button type="submit" className="btn" disabled={!changed}>
+        <Button type="submit"  disabled={!changed}>
           Save
-        </button>
+        </Button>
         {saved && !changed && (
           <span role="status" className="muted">
             {" "}

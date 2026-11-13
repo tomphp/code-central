@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, ty
 import type { Api } from "../api/api";
 import type { ApiError, ProjectRow } from "../api/types";
 import { FactoryStatusDot } from "../factory/FactoryStatus";
+import { Button } from "../controls/Button";
 
 export interface ProjectFilterProps {
   api: Api;
@@ -127,15 +128,15 @@ export function ProjectFilter({ api, project: p, now, on, onSelect, projectOptio
       {name !== undefined && (
         <form className="project-rename" onSubmit={save}>
           <input aria-label={`Display name for ${p.display_name}`} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          <button type="submit" className="btn primary">
+          <Button type="submit" variant="primary">
             Save
-          </button>
-          <button type="button" className="btn" onClick={() => {
+          </Button>
+          <Button type="button"  onClick={() => {
               setName(undefined);
               setError(undefined);
             }}>
             Cancel
-          </button>
+          </Button>
         </form>
       )}
       {error && (

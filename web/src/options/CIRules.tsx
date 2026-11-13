@@ -1,6 +1,7 @@
 import { useId, useState, type FormEvent } from "react";
 import type { Api } from "../api/api";
 import type { ApiError, CIRule, CIRuleChange, ProjectRow } from "../api/types";
+import { Button } from "../controls/Button";
 import { Field } from "../controls/Field";
 import { Select } from "../controls/Select";
 
@@ -90,23 +91,21 @@ function RuleRow({
       <span>
         <strong>{watches}</strong>: opens {rule.state} Tickets on {rule.spec}
       </span>{" "}
-      <button
+      <Button
         type="button"
-        className="btn"
         aria-label={`Edit ${watches}`}
         onClick={edit}
       >
         Edit
-      </button>{" "}
-      <button
+      </Button>{" "}
+      <Button
         type="button"
-        className="btn"
         aria-label={`Remove ${watches}`}
         aria-describedby={removeHint}
         onClick={() => remove().catch(setError)}
       >
         Remove
-      </button>
+      </Button>
       {error && (
         <p className="warning" role="alert">
           {error.message}
@@ -208,13 +207,13 @@ function RuleForm(props: {
         </p>
       )}
       <div className="project-options-actions">
-        <button type="submit" className="btn primary" disabled={!filled}>
+        <Button type="submit" variant="primary" disabled={!filled}>
           {submit}
-        </button>
+        </Button>
         {cancel && (
-          <button type="button" className="btn" onClick={cancel}>
+          <Button type="button" onClick={cancel}>
             Cancel
-          </button>
+          </Button>
         )}
       </div>
     </form>

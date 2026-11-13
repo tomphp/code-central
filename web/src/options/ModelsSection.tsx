@@ -8,6 +8,7 @@ import {
   modelSuggestions,
   ModelSuggestions,
 } from "../modelPickers";
+import { Button } from "../controls/Button";
 import { Refusal } from "./Refusal";
 
 // ModelsSection is the Project's Models (Spec code-central-301): the
@@ -144,9 +145,9 @@ export function ModelsSection({ api, project }: { api: Api; project: ProjectRow 
         <ModelSuggestions id={`${id}-models`} suggestions={suggestions} />
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
-          <button type="submit" className="btn primary" disabled={!changed}>
+          <Button type="submit" variant="primary" disabled={!changed}>
             Save
-          </button>
+          </Button>
           {saved && !changed && (
             <span role="status" className="muted">
               Saved

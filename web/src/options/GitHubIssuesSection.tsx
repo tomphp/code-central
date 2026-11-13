@@ -6,6 +6,7 @@ import type {
   GitHubIssuesSettings,
   ProjectRow,
 } from "../api/types";
+import { Button } from "../controls/Button";
 import { Field } from "../controls/Field";
 import { githubRepository } from "./githubRepository";
 import { Refusal } from "./Refusal";
@@ -159,9 +160,9 @@ export function GitHubIssuesSection({
         {spec && <p className="muted">Incoming Issues arrive on {spec}.</p>}
         {error && <Refusal id={`${id}-error`} error={error} />}
         <div className="project-options-actions">
-          <button type="submit" className="btn primary" disabled={!changed}>
+          <Button type="submit" variant="primary" disabled={!changed}>
             Save
-          </button>
+          </Button>
           {saved && !changed && (
             <span role="status" className="muted">
               Saved
