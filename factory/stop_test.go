@@ -1,6 +1,7 @@
 package factory_test
 
 import (
+	"fmt"
 	"os"
 	"runtime"
 	"slices"
@@ -18,7 +19,9 @@ func TestTheFirstCtrlCDrainsWaitingForRunningTurnsAndClaimingNoMore(t *testing.T
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	later := h.ReadyTicket("Later")
 	r := h.Start("--parallel", "1")
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WaitForDescribed(func() string {
+		return fmt.Sprintf("the turn (%d calls; %s is %s, %s is %s)", len(h.Calls()), id, h.Ticket(id).State, later, h.Ticket(later).State)
+	}, func() bool { return len(h.Calls()) == 1 })
 
 	r.Interrupt()
 	r.WaitForOutput("waiting on 1 running turn(s): " + id)
