@@ -93,7 +93,7 @@ describe("a CI item in Needs Me", () => {
     const { fake } = await world();
     renderApp(fake, "/?view=inbox&ticket=acme-3");
     const pane = await screen.findByRole("complementary", { name: "Ticket" });
-    expect(within(pane).getByText("CI failed", { selector: ".reason" })).toBeInTheDocument();
+    expect(await within(pane).findByText("CI failed", { selector: ".reason" })).toBeInTheDocument();
     const panel = await within(pane).findByRole("region", { name: "CI failed" });
     expect(within(panel).getByText(/is one Needs Me item/, { selector: ".ci-item" })).toHaveTextContent(
       "CI failed at abc1234 is one Needs Me item, listing 2 Tickets waiting on the commit. Your choice acts on all of them. Also waiting: acme-1.",
