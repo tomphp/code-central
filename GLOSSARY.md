@@ -112,6 +112,10 @@ _Avoid_: Quick change, task, hotfix
 The Long-lived Spec, one per Project, that Small Changes open their Ticket on. Code Central creates it on first use, titled `Small Changes` and labelled `long-lived`, as it does the CI Fixes Spec, and finds it by its stored number, so retitling it breaks nothing.
 _Avoid_: Changes Spec, Tasks Spec
 
+**Straight to Spec**:
+The human's choice, when submitting a Requirement, to have it start at the spec Stage, which works from the Requirement's text alone, with no grilling Stage. A Requirement with no grilling Stage that was not written from a Map shows its grilling Stage as skipped.
+_Avoid_: Skip grilling, no-grill, fast track
+
 **Implement**:
 The human's choice, when accepting a Requirement's spec Stage, to build the Spec as one implementation Ticket, without the tickets Stage. It accepts the spec Stage, creates the Ticket and Cancels the tickets Stage with that Ticket as its Replacement.
 _Avoid_: Skip tickets, fast path, direct build
@@ -121,7 +125,7 @@ The human's other choice when accepting a Requirement's spec Stage. It accepts t
 _Avoid_: Break down, slice
 
 **Stage**:
-One of the three fixed steps that turn a Requirement's text into implementation Tickets (grilling, spec and tickets), each done as its own Ticket. The human may skip the tickets Stage by choosing Implement.
+One of the three fixed steps that turn a Requirement's text into implementation Tickets (grilling, spec and tickets), each done as its own Ticket. The human may skip the grilling Stage by choosing Straight to Spec, and the tickets Stage by choosing Implement.
 _Avoid_: Phase, step, definition Ticket
 
 **Stage Guide**:
