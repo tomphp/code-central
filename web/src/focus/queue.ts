@@ -1,10 +1,10 @@
-// The focus queue: from Needs Me in scope, less the reasons each row's
-// Project's Focus Kinds leave off, the skip list, the Focus Item
-// on screen, its fetched Ticket and whether the human acted on it here,
-// which Focus Item Focus Mode shows, how many are left, whether all is
-// clear or only skipped Focus Items are left, and whether the one on
-// screen was dealt with elsewhere. No React; the Focus layout holds
-// what's on screen and feeds it back in.
+// The focus queue: from Needs Me in scope, the Projects' Focus Kinds, the
+// skip list, the Focus Item on screen, its fetched Ticket and whether the
+// human acted on it here, which Focus Item Focus Mode shows, how many are
+// left, whether all is clear or only skipped Focus Items are left, and
+// whether the one on screen was dealt with elsewhere. A row of a reason
+// its Project's Focus Kinds leave off is no Focus Item. No React; the
+// Focus layout holds what's on screen and feeds it back in.
 import type { NeedsMeRow, NeedsMeView, ProjectView, QuestionView, TicketView } from "../api/types";
 
 // A Focus Item is one Ticket waiting for one Needs Me reason, its key

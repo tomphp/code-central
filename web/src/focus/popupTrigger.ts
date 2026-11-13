@@ -5,7 +5,8 @@
 // dismisses every Focus Item in scope then, for the tab's life: only a new
 // Focus Item, a key not in Needs Me before, opens it again. It never
 // interrupts: it opens only once no other popup is open and no text field
-// has focus, and as soon as both clear.
+// has focus, and as soon as both clear. A row of a reason its Project's
+// Focus Kinds leave off is no Focus Item, so it never opens it.
 import { useEffect, useReducer, useState } from "react";
 import type { FocusPopup, NeedsMeView } from "../api/types";
 import type { FocusPopupClose } from "../board/FocusPopup";
