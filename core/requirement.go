@@ -46,6 +46,9 @@ type SubmitRequirementInput struct {
 	// Full asks for the Spec and Stage Tickets in place of their
 	// Acknowledgements.
 	Full bool `json:"full,omitempty"`
+	// Draft saves every Ticket the submit writes as Draft, not Ready, so
+	// nothing is claimed until the human moves them to Ready.
+	Draft bool `json:"draft,omitempty"`
 }
 
 // SubmitRequirementResult is the new Requirement: its Spec and its Stage
@@ -88,6 +91,9 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 	if in.SkipGrilling && in.Map != "" {
 		return SubmitRequirementResult{}, invalid("skip_grilling", "skip_grilling can't be given with map: a Requirement written from a Map has no grilling Stage already")
 	}
+	if in.Draft && in.Map != "" {
+		return SubmitRequirementResult{}, invalid("draft", "Write the Spec, a Requirement made from a Map, is saved as Ready only")
+	}
 	var res SubmitRequirementResult
 	err := c.store.Update(func(w store.Writer) error {
 		if err := writable(w, key); err != nil {
@@ -108,7 +114,7 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 		if mapID != "" {
 			sp.Tags = map[string]string{MapTag: mapID}
 		}
-		im, specN, stageNs := c.requirementImport(w, key, sp, stages, mapID)
+		im, specN, stageNs := c.requirementImport(w, key, sp, stages, mapID, in.Draft)
 		if err := w.PutImport(key, im); err != nil {
 			return err
 		}
@@ -123,7 +129,7 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 // body, Tags and Link, as a Requirement with these Stages, with the
 // Spec's number and its Stage Tickets'. mapID is the Map it is made
 // from, if any.
-func (c *Core) requirementImport(r store.Reader, key string, sp store.Spec, stages []string, mapID string) (store.Import, int, []int) {
+func (c *Core) requirementImport(r store.Reader, key string, sp store.Spec, stages []string, mapID string, draft bool) (store.Import, int, []int) {
 	now := c.now()
 	specN := r.NextNumber(key)
 	sp.Number, sp.Created, sp.Updated = specN, now, now
@@ -143,10 +149,10 @@ func (c *Core) requirementImport(r store.Reader, key string, sp store.Spec, stag
 			description = fmt.Sprintf(straightSpecDescription, specID)
 		}
 		im.Tickets = append(im.Tickets, store.Ticket{
-			Number: n, Title: stageTickets[stage].title + ": " + sp.Title, State: store.Ready, Spec: specN,
+			Number: n, Title: stageTickets[stage].title + ": " + sp.Title, State: submitState(draft), Spec: specN,
 			Labels: []string{StageLabel(stage)}, BlockedBy: blockedBy, Created: now, Updated: now,
 			Description: description,
-			Moves:       []store.Move{{To: store.Ready, Actor: string(Human), Time: now, Via: "submit_requirement"}},
+			Moves:       submitMoves(draft, now, "submit_requirement"),
 		})
 		stageNs = append(stageNs, n)
 	}

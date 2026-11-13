@@ -14,6 +14,7 @@ func init() {
 			"text":          text("The Requirement's text, in Markdown; its first line becomes the Spec's title."),
 			"map":           ref("A Map with no unfinished Tickets to write the Spec from: the Requirement gets only the spec and tickets Stages, and a map Tag naming the Map."),
 			"skip_grilling": flag("Straight to Spec: create no grilling Stage, so the spec Stage is written from the text alone. Can't be given with map."),
+			"draft":         flag("Save the Spec's Tickets as Draft instead of Ready, so nothing is claimed until the human moves them to Ready; not with map."),
 			"full":          flag("Return the whole Spec and Stage Tickets instead of their acknowledgements."),
 		}, "text"),
 		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.SubmitRequirementInput) (any, error) {

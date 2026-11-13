@@ -1083,20 +1083,21 @@ export class FakeApi implements Api {
     );
   }
 
-  async submitRequirement(project: string, text: string, map?: string, skipGrilling?: boolean): Promise<SubmitRequirementResult> {
+  async submitRequirement(project: string, text: string, map?: string, skipGrilling?: boolean, draft?: boolean): Promise<SubmitRequirementResult> {
     this.calls.push("submitRequirement");
     this.writable(project);
     const title = text.trim().split("\n")[0].trim();
     if (!title) throw new ApiError(422, "invalid", "a Requirement needs text; its first line becomes the Spec's title", "text");
     if (skipGrilling && map) throw new ApiError(422, "invalid", "skip_grilling can't be given with map: a Requirement written from a Map has no grilling Stage already", "skip_grilling");
+    if (draft && map) throw new ApiError(422, "invalid", "Write the Spec, a Requirement made from a Map, is saved as Ready only", "draft");
     const from = map && this.finishedMap(project, map);
-    const { spec, stages } = this.addRequirement(project, { title, body: text, ...(from && { tags: { map: from } }) }, from, skipGrilling);
+    const { spec, stages } = this.addRequirement(project, { title, body: text, ...(from && { tags: { map: from } }) }, from, skipGrilling, draft);
     return { spec: acknowledgeSpecCreate(spec), stages: stages.map(acknowledgeTicketCreate) };
   }
 
   // addRequirement writes Spec seed as a Requirement with its Stage
   // Tickets: only the spec and tickets Stages when written from Map from.
-  private addRequirement(project: string, seed: SeedSpec, from?: string, skipGrilling?: boolean): { spec: SpecView; stages: TicketView[] } {
+  private addRequirement(project: string, seed: SeedSpec, from?: string, skipGrilling?: boolean, draft?: boolean): { spec: SpecView; stages: TicketView[] } {
     const spec = this.addSpec(project, seed);
     const title = seed.title;
     const stages: TicketView[] = [];
@@ -1105,7 +1106,7 @@ export class FakeApi implements Api {
       stages.push(
         this.addTicket(project, {
           title: `${s.title}: ${title}`,
-          state: "Ready",
+          state: draft ? "Draft" : "Ready",
           spec: { id: spec.id, title },
           labels: [`stage:${s.name}`],
           description:
@@ -1117,8 +1118,8 @@ export class FakeApi implements Api {
           blocked_by: prev ? [prev.id] : [],
           blockers: prev ? [{ id: prev.id, title: prev.title, state: prev.state, cleared: false }] : [],
           blocked: !!prev,
-          claimable: !prev,
-          moves: [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_requirement" }],
+          claimable: !prev && !draft,
+          moves: draft ? [] : [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_requirement" }],
         }),
       );
     }
@@ -1143,7 +1144,7 @@ export class FakeApi implements Api {
     return id;
   }
 
-  async submitMap(project: string, text: string): Promise<SubmitMapResult> {
+  async submitMap(project: string, text: string, draft?: boolean): Promise<SubmitMapResult> {
     this.calls.push("submitMap");
     this.writable(project);
     const title = specTitle(text);
@@ -1152,12 +1153,12 @@ export class FakeApi implements Api {
     const spec = this.addSpec(project, { title, body, labels: [MAP_LABEL] });
     const charting = this.addTicket(project, {
       title: `Charting: ${title}`,
-      state: "Ready",
+      state: draft ? "Draft" : "Ready",
       spec: { id: spec.id, title },
       labels: ["wayfinder:chart"],
       description: `Chart the Map [${spec.id}](${spec.id}): settle its destination with the human, fill in its sections and create its first decision Tickets.\n`,
-      claimable: true,
-      moves: [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_map" }],
+      claimable: !draft,
+      moves: draft ? [] : [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_map" }],
     });
     return { spec: acknowledgeSpecCreate(spec), charting: acknowledgeTicketCreate(charting) };
   }
@@ -1182,7 +1183,7 @@ export class FakeApi implements Api {
     return acknowledgeTicketCreate(prototype);
   }
 
-  async submitSmallChange(project: string, text: string): Promise<TicketAcknowledgement> {
+  async submitSmallChange(project: string, text: string, draft?: boolean): Promise<TicketAcknowledgement> {
     this.calls.push("submitSmallChange");
     this.writable(project);
     const title = specTitle(text);
@@ -1192,12 +1193,12 @@ export class FakeApi implements Api {
       this.addSpec(project, { title: "Small Changes", body: SMALL_CHANGES_SPEC_BODY, labels: ["long-lived"] });
     const change = this.addTicket(project, {
       title,
-      state: "Ready",
+      state: draft ? "Draft" : "Ready",
       spec: { id: on.id, title: on.title },
       labels: [],
       description: text,
-      claimable: true,
-      moves: [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_small_change" }],
+      claimable: !draft,
+      moves: draft ? [] : [{ to: "Ready", actor: "human", time: this.now.toISOString(), via: "submit_small_change" }],
     });
     return acknowledgeTicketCreate(change);
   }
