@@ -34,6 +34,22 @@ describe("New requirement", () => {
     expect(params().get("requirement")).toBe("acme-1");
   });
 
+  it("saves as Draft: Save as Draft writes every Stage Ticket as Draft", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    renderApp(fake);
+
+    await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
+    const modal = screen.getByRole("dialog", { name: "New requirement" });
+    expect(within(modal).getByRole("button", { name: "Save as Draft" })).toBeDisabled();
+    await userEvent.type(within(modal).getByRole("textbox", { name: "Requirement" }), "Export a Spec as Markdown");
+    await userEvent.click(within(modal).getByRole("button", { name: "Save as Draft" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const tickets = (await fake.findTickets("acme")).filter((t) => t.spec === "acme-1");
+    expect(tickets.map((t) => t.state)).toEqual(["Draft", "Draft", "Draft"]);
+  });
+
   it("closes on Cancel without submitting", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");

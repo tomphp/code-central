@@ -96,3 +96,15 @@ func TestASmallChangeLandsOnItsOwnUnderLandPerSpec(t *testing.T) {
 		t.Error("the Small Changes Spec has a Land per Spec status")
 	}
 }
+
+func TestADraftSmallChangeIsADraftTicketWithNoMoves(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	res, err := f.core.SubmitSmallChange(ctx, "acme", core.SubmitSmallChangeInput{Text: fixTypo, Draft: true, Full: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tk := res.Record; tk.State != store.Draft || tk.Claimable || len(tk.Moves) != 0 {
+		t.Fatalf("Draft Small Change %+v", tk)
+	}
+}

@@ -171,3 +171,29 @@ func TestSubmittingARequirementWithFullReturnsTheSpecAndStages(t *testing.T) {
 		}
 	}
 }
+
+func TestADraftRequirementsStageTicketsAreAllDraft(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	res, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: "Offline mode\n", Draft: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Stages) != 3 {
+		t.Fatalf("stages %+v", res.Stages)
+	}
+	for _, s := range res.Stages {
+		if tk := f.get(t, core.Ref(s.ID)); tk.State != store.Draft || len(tk.Moves) != 0 {
+			t.Fatalf("stage %+v", tk)
+		}
+	}
+}
+
+func TestWriteTheSpecIsReadyOnly(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	_, err := f.core.SubmitRequirement(ctx, "acme", core.SubmitRequirementInput{Text: "x\n", Map: "acme-1", Draft: true})
+	if err == nil || !strings.Contains(err.Error(), "Ready only") {
+		t.Fatalf("err %v", err)
+	}
+}

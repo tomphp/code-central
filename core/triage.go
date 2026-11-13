@@ -156,7 +156,7 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 		extra := strings.TrimSpace(in.Context)
 		link := t.Link
 		link.Outbound, link.Written = true, slices.Clone(t.Link.Written)
-		im, _, stageNs := c.requirementImport(w, key, store.Spec{Title: t.Title, Body: requirementText(t, extra), Link: link}, Stages, "")
+		im, _, stageNs := c.requirementImport(w, key, store.Spec{Title: t.Title, Body: requirementText(t, extra), Link: link}, Stages, "", false)
 
 		// The grilling Stage is new and waits on nothing, so as the
 		// Replacement it can't make a cycle.

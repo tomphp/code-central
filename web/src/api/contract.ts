@@ -1595,6 +1595,27 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(blank).toMatchObject({ status: 422, code: "invalid", field: "text" });
     });
 
+    it("saves a Requirement, a Map and a Small Change as Draft: every Ticket Draft and none claimable", async () => {
+      await d.createProject("acme", "Acme");
+      const r = await d.api.submitRequirement("acme", "Offline mode", undefined, true);
+      expect(r.stages).toHaveLength(3);
+      for (const s of r.stages) {
+        const t = await d.api.getTicket("acme", s.id);
+        expect(t).toMatchObject({ state: "Draft", claimable: false });
+        expect(t.moves).toEqual([]);
+      }
+      const m = await d.api.submitMap("acme", "Dark mode", true);
+      expect(await d.api.getTicket("acme", m.charting.id)).toMatchObject({ state: "Draft", claimable: false });
+      const c = await d.api.submitSmallChange("acme", "Rename the button", true);
+      expect(await d.api.getTicket("acme", c.id)).toMatchObject({ state: "Draft", claimable: false });
+    });
+
+    it("refuses to save Write the Spec as Draft", async () => {
+      await d.createProject("acme", "Acme");
+      const e = await d.api.submitRequirement("acme", "Offline mode", "acme-1", true).catch((e) => e);
+      expect(e).toMatchObject({ status: 422, code: "invalid", field: "draft" });
+    });
+
     // ---- the Integration contract (ticket 42) ----
     it("edits a Ticket's title and description, recording one edit by human with only what changed", async () => {
       await d.createProject("acme", "Acme");
