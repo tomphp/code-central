@@ -611,3 +611,7 @@ The service listens only on your machine's loopback, so an agent in a sandbox or
 ```console
 $ code-central help sandboxes
 ```
+
+## Focus
+
+The **Focus** section of the Project Options page, below Stage Guides, has a **Show in Focus** checkbox for each Needs Me reason, all checked to begin with. Uncheck a reason and **Save**: its items stay in Needs Me, its count, its dots and Notifications, but they don't show in Focus Mode or open the Focus popup. An Archived Project shows the section read-only.
