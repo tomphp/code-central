@@ -116,6 +116,7 @@ describe("the In Review panel", () => {
       const highlighted = within(panel).getByRole("button", { name: recommended });
       expect(highlighted).toHaveClass("primary");
       expect(highlighted).toHaveAccessibleDescription("Recommended");
+      expect(highlighted.nextElementSibling).toHaveTextContent("Recommended");
       const plain = within(panel).getByRole("button", { name: other });
       expect(plain).not.toHaveClass("primary");
       expect(plain).not.toHaveAccessibleDescription();
