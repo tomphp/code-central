@@ -9,22 +9,9 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { FakeApi } from "./api/fake";
 import type { CIFailureOption, CIItem } from "./api/types";
+import { failCI, failedRun } from "./ciTesting";
 import { allClearOn, focus, renderApp } from "./focus/focusTesting";
 import { rowDetail } from "./format";
-
-const run = (ticket: string) => ({
-  id: 1,
-  attempt: 1,
-  workflow: "ci.yml",
-  name: "CI",
-  branch: "main",
-  commit: "abc1234567",
-  status: "completed" as const,
-  conclusion: "failure" as const,
-  url: "https://github.com/acme/web/actions/runs/1",
-  jobs: [{ name: "test", conclusion: "failure" as const, url: "https://github.com/acme/web/actions/runs/1/job/1" }],
-  ticket,
-});
 
 // world has acme-1 (on acme's first Spec) and acme-3 (on another) Accepted
 // under Merge + Push with CI Tracking, both pushed as abc1234567, whose
@@ -36,15 +23,7 @@ async function world() {
   fake.addTicket("acme", { title: "Login page", state: "Accepted", branch: "acme-1", commit: "abc" }); // acme-1
   fake.addSpec("acme", { title: "Shop" }); // acme-2
   fake.addTicket("acme", { title: "Basket", state: "Accepted", branch: "acme-3", commit: "def", spec: { id: "acme-2", title: "Shop" } }); // acme-3
-  await fake.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
-  await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
-  await fake.reportPushedCommit("acme", "acme-1", "abc1234567", "main");
-  await fake.reportPushedCommit("acme", "acme-3", "abc1234567", "main");
-  await fake.reportCIRuns("acme", [run("acme-1")]);
-  const item = (await fake.getTicket("acme", "acme-1")).ci_item!;
-  fake.setNeedsMe([
-    { reason: "ci_failed", tickets: [{ id: "", project: "acme", title: "CI failed at abc1234", ci_result: "failed", ci_failure: { commit: "abc1234567", workflows: ["ci.yml"] }, ci_item: item }] },
-  ]);
+  const item = await failCI(fake, "acme", ["acme-1", "acme-3"]);
   return { fake, item };
 }
 
@@ -105,7 +84,7 @@ describe("a CI item in Needs Me", () => {
   it("offers Send back to fix only when it lists one Ticket", async () => {
     const { fake } = await world();
     fake.updateTicket("acme-3", { state: "Done" });
-    await fake.reportCIRuns("acme", [run("acme-1")]);
+    await fake.reportCIRuns("acme", [failedRun("acme-1")]);
     const item = (await fake.getTicket("acme", "acme-1")).ci_item!;
     expect(item.tickets.map((t) => t.id)).toEqual(["acme-1"]);
     expect(item.options).toEqual(["rerun_ci", "land_anyway", "send_back", "new_fix_ticket"]);

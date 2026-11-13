@@ -3,9 +3,9 @@
 // columns into one lane per Spec, headed by its Lane header. It takes no
 // action itself: a card opens its Ticket's popup and a Lane header its
 // Spec's, over the Board, kept in the address as popup=, and only the popup
-// acts. It reads only what the Inbox
-// loads, and follows the live feed. Back returns to the Inbox it was opened
-// from.
+// acts. A card opens its Focus popup while the Ticket needs the human and its
+// Ticket popup otherwise. It reads only what the Inbox loads, and follows the
+// live feed. Back returns to the Inbox it was opened from.
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Api } from "../api/api";
 import { STATES, type NeedsMeReason, type State } from "../api/types";
@@ -25,6 +25,7 @@ import { clickTo, hrefFor, type UiLocation } from "../url";
 import { TicketCard } from "../ticket/TicketCard";
 import { ColumnsMenu } from "./ColumnsMenu";
 import { LaneHeader } from "./LaneHeader";
+import { FocusPopup } from "./FocusPopup";
 import { usePopupKind } from "./popupKind";
 import { SpecPopup } from "./SpecPopup";
 import { TicketPopup } from "./TicketPopup";
@@ -163,9 +164,10 @@ export function BoardView({ api, now, version, data, loc, navigate }: BoardViewP
           </div>
         )}
       </main>
-      {/* At most one popup, chosen from popup=. Until the Focus popup lands
-          (code-central-525), a Ticket that needs the human falls through to
-          its Ticket popup. */}
+      {/* At most one popup, chosen from popup=. */}
+      {loc.popup && kind === "focus" && data && (
+        <FocusPopup key={loc.popup} api={api} now={now} version={version} data={data} id={loc.popup} onClose={closePopup} navigate={navigate} />
+      )}
       {loc.popup && kind === "spec" && (
         <SpecPopup
           api={api}
@@ -179,7 +181,7 @@ export function BoardView({ api, now, version, data, loc, navigate }: BoardViewP
           specLink={popupLink}
         />
       )}
-      {loc.popup && (kind === "ticket" || kind === "focus") && (
+      {loc.popup && kind === "ticket" && (
         <TicketPopup
           api={api}
           now={now}
