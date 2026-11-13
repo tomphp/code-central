@@ -298,6 +298,24 @@ describe("the Board's grouping", () => {
 });
 
 describe("+ New ▾ on the Board", () => {
+  it("submits a Requirement and opens its Spec in the Requirements list", async () => {
+    const fake = world();
+    renderApp(fake, "/?view=board&project=acme");
+    await loaded();
+    await userEvent.click(within(board()).getByRole("button", { name: "More to create" }));
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Requirement" }));
+    const modal = screen.getByRole("dialog", { name: "New requirement" });
+    await userEvent.type(within(modal).getByRole("textbox"), "Offline mode");
+    await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const q = new URLSearchParams(window.location.search);
+    expect(q.get("view")).toBe("inbox");
+    expect(q.get("project")).toBe("acme");
+    expect(q.get("list")).toBe("requirements");
+    expect(q.get("requirement")).toBe("acme-7");
+  });
+
   it("submits a Small Change and opens its Ticket in the Inbox", async () => {
     const fake = world();
     renderApp(fake, "/?view=board&project=acme");

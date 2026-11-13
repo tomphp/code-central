@@ -11,7 +11,7 @@ import { ToggleGroup } from "../controls/ToggleGroup";
 import { ViewHeader } from "../controls/ViewHeader";
 import { usePulse } from "../focus/pulse";
 import { kindLabel, newestFirst } from "../inbox/AllTickets";
-import { storedGroup, storeGroup, storeHidden } from "../inbox/groupPreference";
+import { hiddenColumns, storedGroup, storeGroup, storeHidden } from "../inbox/groupPreference";
 import { OneProject, ShortId } from "../inbox/ShortId";
 import { specKindOf } from "../inbox/SpecRow";
 import { stateSlug } from "../inbox/StateRow";
@@ -19,7 +19,7 @@ import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { reasonsOf } from "../requirement/progress";
 import { NewSplit } from "../requirement/NewSplit";
 import { clickTo, hrefFor, type UiLocation } from "../url";
-import { ColumnsMenu, hiddenColumns } from "./ColumnsMenu";
+import { ColumnsMenu } from "./ColumnsMenu";
 import "./board.css";
 
 export interface BoardViewProps {
@@ -38,6 +38,7 @@ export function BoardView({ api, data, loc, navigate }: BoardViewProps) {
   // alone until its lanes are built.
   const grouping = loc.group ?? storedGroup();
   const tickets = newestFirst((data?.tickets ?? []).filter((t) => !loc.project || t.project === loc.project));
+  const inColumn = new Map(shown.map((s) => [s, tickets.filter((t) => t.state === s)]));
   const specs = new Map((data?.specs ?? []).map((s) => [s.id, s]));
   const reasons = reasonsOf(data?.needsMe);
   const joined = useJoined(data?.tickets);
@@ -109,14 +110,14 @@ export function BoardView({ api, data, loc, navigate }: BoardViewProps) {
             <div className="board-grid" style={{ "--cols": shown.length } as CSSProperties}>
               {shown.map((s) => (
                 <h2 key={s} className={`board-col-head st-${stateSlug(s)}`}>
-                  <span className="board-col-name">{s}</span> <span className="board-col-count">{tickets.filter((t) => t.state === s).length}</span>
+                  <span className="board-col-name">{s}</span> <span className="board-col-count">{inColumn.get(s)!.length}</span>
                 </h2>
               ))}
               {shown.map((s) => (
                 <Column
                   key={s}
                   state={s}
-                  tickets={tickets.filter((t) => t.state === s)}
+                  tickets={inColumn.get(s)!}
                   specs={specs}
                   reasons={reasons}
                   joined={joined}
@@ -200,9 +201,7 @@ function Card({ t, spec, reason, joined, link }: { t: ProjectTicket; spec?: Proj
       <span className="board-card-title">{t.title}</span>
       {spec && (
         <span className="board-card-spec">
-          <span className={`kind-badge kind-${stateSlug(kind)}`} title={kind}>
-            {kind === "Requirement" ? "Req" : kind}
-          </span>{" "}
+          <span className={`kind-badge kind-${stateSlug(kind)}`}>{kind}</span>{" "}
           {spec.title}
         </span>
       )}

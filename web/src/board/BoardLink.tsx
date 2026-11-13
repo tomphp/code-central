@@ -5,7 +5,7 @@
 // sits in.
 import type { ProjectTicket } from "../live";
 import { clickTo, hrefFor, type UiLocation } from "../url";
-import { hiddenColumns } from "./ColumnsMenu";
+import { hiddenColumns } from "../inbox/groupPreference";
 
 export interface BoardLinkProps {
   loc: UiLocation;

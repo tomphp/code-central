@@ -2,15 +2,8 @@
 // one checkbox per State in workflow order. Its button reads "Columns",
 // with how many of the columns show appended while any is hidden.
 import { useEffect, useId, useRef, useState } from "react";
-import { FINISHED, STATES, type State } from "../api/types";
-import { storedHidden } from "../inbox/groupPreference";
+import { STATES, type State } from "../api/types";
 import { stateSlug } from "../inbox/StateRow";
-
-// hiddenColumns is the hidden columns in effect: the address's hide, else
-// the browser's last pick, else Done and Cancelled.
-export function hiddenColumns(hide?: readonly State[]): readonly State[] {
-  return hide ?? storedHidden() ?? FINISHED;
-}
 
 export interface ColumnsMenuProps {
   hidden: readonly State[];
