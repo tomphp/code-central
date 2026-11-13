@@ -10,6 +10,8 @@ import { StageBadge } from "../controls/StageBadge";
 import { usePulse } from "../focus/pulse";
 import { ShortId } from "../inbox/ShortId";
 
+// TicketCardProps are a Ticket card's Ticket, its link, and the parts the
+// Board shows.
 export interface TicketCardProps {
   t: Pick<TicketRow, "id" | "title" | "blocked" | "updated">;
   link: { href: string; onClick(e: MouseEvent): void };
@@ -23,6 +25,7 @@ export interface TicketCardProps {
   joined?: boolean;
 }
 
+// TicketCard is the Ticket card.
 export function TicketCard({ t, link, badge, reason, spec, joined }: TicketCardProps) {
   const pulse = usePulse(reason ? `board-card needs reason-${reason}` : "board-card", t.updated, joined, "board");
   return (

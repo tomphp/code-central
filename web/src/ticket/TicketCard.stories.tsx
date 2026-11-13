@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { TicketCard } from "./TicketCard";
 import { storyLink, storyTickets, type StoryTickets } from "./storyTickets";
-import "../board/board.css";
 
 const meta = { title: "Ticket/TicketCard", loaders: [async () => ({ data: await storyTickets() })] } satisfies Meta;
 export default meta;

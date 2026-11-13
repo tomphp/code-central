@@ -6,6 +6,9 @@ import { STATES } from "../api/types";
 import type { ProjectTicket } from "../live";
 import type { RowLink } from "./TicketLine";
 
+// StoryTickets are the stories' Tickets: one with nothing optional, one In
+// Progress with a latest Session Event, one linked, Blocked and waiting for
+// its Spec, and a Stage Ticket. now is the fake API's time.
 export interface StoryTickets {
   now: Date;
   plain: ProjectTicket;
@@ -14,6 +17,8 @@ export interface StoryTickets {
   stage: ProjectTicket;
 }
 
+// storyTickets seeds a fake API and reads its Tickets back, as a story's
+// loader.
 export async function storyTickets(): Promise<StoryTickets> {
   const fake = new FakeApi();
   fake.addProject("acme", "Acme");

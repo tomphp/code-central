@@ -27,6 +27,8 @@ export type InboxRowLinkFactory = (id: string) => RowLink;
 // it too.
 export type TicketLineTicket = Pick<TicketRow, "id" | "title" | "state" | "link" | "waiting_for_spec" | "latest_event">;
 
+// TicketLineProps are a Ticket row's Ticket, its link, and the parts the
+// list shows.
 export interface TicketLineProps {
   t: TicketLineTicket;
   link: RowLink;
@@ -45,6 +47,7 @@ export interface TicketLineProps {
   children?: ReactNode;
 }
 
+// TicketLine is the Ticket row.
 export function TicketLine({ t, link, badge, chip, needsYou, quiet, now, detail, children }: TicketLineProps) {
   return (
     <a className={quiet ? "row quiet" : "row"} {...link}>
