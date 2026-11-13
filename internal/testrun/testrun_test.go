@@ -153,7 +153,10 @@ func TestTheSuiteFailsWhenItTakesLongerThanTheBudget(t *testing.T) {
 	if ok {
 		t.Fatalf("the suite passed:\n%s", out)
 	}
-	if !strings.Contains(out, "over the 0.05s budget") {
-		t.Errorf("output doesn't report the budget:\n%s", out)
+	if !strings.Contains(out, "all suites passed, but took") || !strings.Contains(out, "over the 0.05s budget.") {
+		t.Errorf("output doesn't lead with the result and report the budget:\n%s", out)
+	}
+	if !strings.Contains(out, "rerun once before treating it as a failure") {
+		t.Errorf("output doesn't name the usual causes:\n%s", out)
 	}
 }
