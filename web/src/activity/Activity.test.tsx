@@ -2,7 +2,7 @@
 // check what the human sees and does: opening the Activity Dashboard from
 // the Inbox's Admin section on the sidebar's Project or All Projects, its
 // Projects picker and Back, and that it shows whatever needs the human.
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
@@ -90,7 +90,10 @@ describe("the Activity view", () => {
     const fake = world();
     await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
     renderApp(fake, "/?view=activity&project=acme");
-    await userEvent.click(await within(await dashboard()).findByRole("link", { name: /CI Running/ }));
+    const d = await dashboard();
+    // The block remounts when the count arrives, so click its link only after that.
+    await waitFor(() => expect(within(within(d).getByRole("group", { name: "CI Running" })).getByTestId("count")).toHaveTextContent("0"));
+    await userEvent.click(within(d).getByRole("link", { name: /CI Running/ }));
     expect(window.location.search).toContain("view=ci");
 
     await userEvent.click(screen.getByRole("button", { name: "Back to Activity" }));
