@@ -74,6 +74,18 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    **Map**, in the **▾** menu beside **+ New**, starts a Map from the same dialog instead. Its one Ready Ticket, *Charting: …*, is claimed within a poll like a grilling Ticket, in a read-only Stage worktree, and grills you on the Map's destination through Rounds. The Map's row in the **Requirements** view counts its decisions, such as *0/1 decided*, in place of the Stage strip. The same **+ New ▾** is in Focus Mode's header, beside **Exit**, and submitting there keeps you in Focus Mode, on the item you were on, with a brief "Requirement added" or "Map added" note.
 
+   **Small Change**, the third item in the **▾** menu, opens one Ready Ticket from your text on the Project's Small Changes Spec, with no Stages, so there is no grilling to wait for. Within a poll the Factory claims it like any Ticket, with the implementation Stage Guide, in a worktree of its own on a branch named after it, and it lands on its own once you accept it, outside Land per Spec. From a terminal, `code-central submit-small-change --text "…"` (or `submit_small_change` over MCP) does the same, and prints the Ticket:
+
+   ```console
+   $ code-central submit-small-change --text "Fix the typo in the checkout button"
+   {
+     "id": "acme-shop-2",
+     "state": "Ready"
+   …
+   }
+   ```
+
+
 3. **Watch the session in the Claim's Live section.** In the Ticket detail, under the description, each Claim has a line and a **Live** section. The line says when the Claim started, its last activity, the latest thing its session did and the session's ID. While the Ticket is In Progress, Live is open and follows the session's Transcript as it goes: the Factory's own lines, marked `FACTORY`, each tool call on one line with its result collapsed beneath it, and the agent's text:
 
    ```text
