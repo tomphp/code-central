@@ -20,6 +20,7 @@ var ticketTypeLabels = map[string]string{
 	"wayfinder:research": "map-research",
 	"wayfinder:task":     "map-task",
 	"prototype":          "prototype",
+	"retro":              "retro",
 }
 
 func TestTheWayfinderLabelsAndPrototypeAreAcceptedWhereTheyBelong(t *testing.T) {
@@ -126,6 +127,9 @@ func TestATicketCarriesAtMostOneReservedTypeLabel(t *testing.T) {
 		{"wayfinder:chart", "wayfinder:grilling"},
 		{"wayfinder:research", "prototype"},
 		{"stage:tickets", "prototype"},
+		{"prototype", "retro"},
+		{"retro", "stage:spec"},
+		{"wayfinder:task", "retro"},
 	} {
 		_, err := f.core.CreateTicket(ctx, "acme", core.CreateTicketInput{Spec: "1", Title: "Two", Labels: append([]string{"ui"}, pair...)})
 		wantCode(t, err, core.Invalid, "labels")

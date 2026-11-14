@@ -453,6 +453,7 @@ The Factory runs every session with Claude Code's own default model and effort u
 | `grilling`, `spec`, `tickets` | A Requirement's Stages |
 | `map-chart`, `map-grilling`, `map-research`, `map-task` | A Map's Tickets |
 | `prototype` | Prototypes |
+| `retro` | Retros |
 | `implementation` | Every other Ticket |
 
 Each row has a **Model**, typed in as `claude --model` takes it, such as `opus` or `claude-opus-5-5`, and an **Effort**, one of the valid levels: `low`, `medium`, `high`, `xhigh` and `max` until the Factory reports the ones its `claude` accepts, and then those. Once the Factory has [reported what its `claude` accepts](running-the-factory.md#what-claude-accepts), the Model also suggests the model aliases it reported, such as `fable`, `opus` and `sonnet`, though you can still type any other. It suggests too each model ID the Factory's sessions have run with, such as `claude-opus-5-5`, as their usage arrives. Both start at **Default**: an empty Model, and the first Effort choice. Default says what it inherits: a kind's row inherits the Project default, as in `Default (opus)`, and the Project default shows the flag the Factory reported it was started with, as in `Default (Factory flag: sonnet)`, or else `Default (Claude Code's default)`. For example, to run Opus everywhere but implement at `xhigh` effort, set the Project default's Model to `opus` and the implementation row's Effort to `xhigh`.
