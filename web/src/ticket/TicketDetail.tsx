@@ -22,7 +22,9 @@ import { ModelChoice } from "./ModelChoice";
 import { ShortId } from "../inbox/ShortId";
 import { Button } from "../controls/Button";
 import { Select } from "../controls/Select";
-import { moveText } from "./autoAccept";
+import { useLiveVersion, useSpec } from "../live";
+import { AutoAcceptSwitch } from "./AutoAcceptSwitch";
+import { AUTO_ACCEPT_LABEL, canAutoAccept, moveText, wouldAutoAccept } from "./autoAccept";
 
 export interface TicketPaneProps {
   api: Api;
@@ -94,7 +96,7 @@ export type TicketDetailProps = TicketPaneProps & {
 // (in the action panel instead while CI failed), Claim activity with
 // each Claim's Live section, move, and a collapsed history of moves,
 // comments and edits merged by time.
-export function TicketDetail({ api, project, ticket: t, now, reported, openSpec, editing }: TicketDetailProps) {
+export function TicketDetail({ api, project, ticket: t, now, reported, openSpec, archived, editing }: TicketDetailProps) {
   const claims = [...t.claims].sort((a, b) => b.number - a.number);
   const specName = `${t.spec.id} ${t.spec.title}`;
   return (
@@ -117,6 +119,7 @@ export function TicketDetail({ api, project, ticket: t, now, reported, openSpec,
         <PullRequestBadge pr={t.pull_request} />
         <OpenExternal link={t.link} />
       </div>
+      <TicketAutoAccept api={api} project={project} ticket={t} openSpec={openSpec} archived={archived} />
       {t.link && !t.link.detached && <LinkedNote key={t.id} api={api} project={project} ticket={t} />}
       {/* A New issue's triage actions are its action panel, so they
           aren't shown here too. */}
@@ -178,6 +181,40 @@ export function TicketDetail({ api, project, ticket: t, now, reported, openSpec,
       <MoveControl key={`${t.id} ${t.state}`} api={api} project={project} ticket={t} />
       <History ticket={t} now={now} />
     </article>
+  );
+}
+
+// TicketAutoAccept is the Ticket's Auto-accept switch, offered unless the
+// Ticket can't be auto-accepted or is Accepted, Done or Cancelled. It
+// reflects only the Ticket's own Label; when its Spec carries the Label, a
+// note says so.
+function TicketAutoAccept({ api, project, ticket: t, openSpec, archived }: Pick<TicketDetailProps, "api" | "project" | "ticket" | "openSpec" | "archived">) {
+  const spec = useSpec(api, project, t.spec.id || undefined, useLiveVersion(api)).data;
+  if (!spec || !canAutoAccept(t, spec.labels) || t.state === "Accepted" || t.state === "Done" || t.state === "Cancelled") return null;
+  const specName = `${t.spec.id} ${t.spec.title}`;
+  return (
+    <AutoAcceptSwitch
+      api={api}
+      project={project}
+      target={t.id}
+      on={t.labels.includes(AUTO_ACCEPT_LABEL)}
+      accepts={t.state === "In Review" && wouldAutoAccept(t, spec.labels) ? 1 : 0}
+      archived={archived}
+      viaSpec={
+        spec.labels.includes(AUTO_ACCEPT_LABEL) && (
+          <>
+            Auto-accepted via its Spec's Label:{" "}
+            {openSpec ? (
+              <button className="link" onClick={() => openSpec(t.spec.id)}>
+                {specName}
+              </button>
+            ) : (
+              specName
+            )}
+          </>
+        )
+      }
+    />
   );
 }
 

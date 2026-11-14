@@ -495,6 +495,10 @@ _Avoid_: Auto-accept type, category
 The reserved `auto-accept` Label, which on a Ticket or its Spec makes the Ticket eligible whatever the Project's setting. Only the human may add or remove it. Adding it also accepts every eligible Ticket it now covers that is In Review; removing it changes nothing already accepted.
 _Avoid_: Auto label, opt-in Label
 
+**Auto-accept switch**:
+The control on a Ticket's detail or a Spec's page by which the human adds or removes that item's Auto-accept Label. It reflects only that item's own Label. It is offered only where the item can be auto-accepted, and asks first when turning it on would accept Tickets already In Review.
+_Avoid_: Auto-accept toggle, Label editor
+
 **Spec merge Ticket**:
 The Ready Ticket Code Central opens, at the Factory's request, on a Spec whose Spec Branch conflicts with the base, so an agent merges the base into the Spec Branch. It carries a stored mark set only by that operation, which gives it the Merge results Auto-accept kind. A Ticket opened before the mark existed stays unmarked and manual.
 _Avoid_: Conflict Ticket, merge Ticket
