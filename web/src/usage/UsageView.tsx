@@ -318,7 +318,9 @@ function SessionChart({ api, session, navigate }: SessionChartProps) {
   const read = useFetch(() => api.sessionUsage(session), [api, session.project, session.session, session.agent]);
   const ref = useRef<HTMLElement>(null);
   // Opened from a row far down the recent sessions, bring it into view.
-  useEffect(() => ref.current?.scrollIntoView?.({ block: "nearest" }), []);
+  useEffect(() => {
+    ref.current?.scrollIntoView?.({ block: "nearest" });
+  }, []);
   const responses = read.data?.responses;
   const name = `Session ${sessionName(session.session, session.agent)}`;
   const peak = Math.max(0, ...(responses ?? []).map((r) => r.context_size));
