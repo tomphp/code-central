@@ -105,7 +105,8 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 	}
 	var v SpecDetail
 	err = c.store.View(func(r store.Reader) error {
-		if _, ok := r.Project(key); !ok {
+		p, ok := r.Project(key)
+		if !ok {
 			return unknownProject(key)
 		}
 		s, err := resolveSpec(r, key, "get_spec", "spec", in.Spec)
@@ -120,9 +121,11 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 			Created: sv.Created, Updated: sv.Updated, Link: sv.Link,
 		}
 		v.StateSummary, v.Finished = summarise(tickets)
-		v.Requirement = c.requirementView(r, key, s, tickets)
+		// The evaluation is worked out only if a block below reads it.
+		e := c.evaluate(r, p)
+		v.Requirement = requirementView(e, s, tickets)
 		v.LandPerSpec = landPerSpecView(r, key, s, tickets)
-		v.Map = c.mapView(r, key, s, tickets)
+		v.Map = mapView(e, s, tickets)
 		if in.lighter() {
 			v.Outline = Outline(s.Body)
 		}
@@ -143,7 +146,7 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 			v.Tickets = []TicketRow{}
 			onMap := isMap(s.Labels)
 			for _, t := range tickets {
-				v.Tickets = append(v.Tickets, c.ticketRow(r, key, t, onMap))
+				v.Tickets = append(v.Tickets, c.ticketRow(r, e, t, onMap))
 			}
 		}
 		return nil
@@ -201,9 +204,13 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 	}
 	rows := []SpecRow{}
 	err := c.store.View(func(r store.Reader) error {
-		if _, ok := r.Project(key); !ok {
+		p, ok := r.Project(key)
+		if !ok {
 			return unknownProject(key)
 		}
+		// One evaluation for every Spec, worked out only if a Requirement
+		// or Map reads it.
+		e := c.evaluate(r, p)
 		for _, s := range r.Specs(key) {
 			if in.Title != "" && !strings.Contains(strings.ToLower(s.Title), strings.ToLower(in.Title)) {
 				continue
@@ -216,14 +223,14 @@ func (c *Core) FindSpecs(_ context.Context, key string, in FindSpecsInput) ([]Sp
 			if done && !in.Finished {
 				continue
 			}
-			req := c.requirementView(r, key, s, tickets)
+			req := requirementView(e, s, tickets)
 			if in.Requirements && req == nil {
 				continue
 			}
 			rows = append(rows, SpecRow{
 				ID: DisplayID(key, s.Number), Title: s.Title, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags),
 				StateSummary: summary, Finished: done, Updated: s.Updated, Link: linkView(s.Link),
-				Requirement: req, Map: c.mapView(r, key, s, tickets),
+				Requirement: req, Map: mapView(e, s, tickets),
 			})
 		}
 		return nil

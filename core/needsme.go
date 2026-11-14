@@ -73,6 +73,12 @@ func (r NeedsMeReason) isCIItem() bool {
 	return r == ReasonCIFailed || r == ReasonCICancelled || r == ReasonCIUnavailable
 }
 
+// timed reports whether time passing gives r: Silent Claim, Long Claim,
+// CI unavailable or Accepted but not landed.
+func (r NeedsMeReason) timed() bool {
+	return r == ReasonSilentClaim || r == ReasonLongClaim || r == ReasonCIUnavailable || r == ReasonAcceptedNotLanded
+}
+
 // needsMeReasons are the reasons in group order, each with what it means
 // for the published workflow.
 var needsMeReasons = []NeedsMeReasonView{
@@ -104,7 +110,12 @@ func groupIndex(r NeedsMeReason) int {
 // Project, in groups in group order (empty groups left out), each group
 // longest-waiting first. Every view renders this order as it comes.
 type NeedsMeView struct {
-	Count  int            `json:"count"`
+	// Count is the Needs Me count across every Project: the sum of
+	// Counts.
+	Count int `json:"count"`
+	// Counts is the Needs Me count of each Project, left out while it has
+	// nothing in Needs Me.
+	Counts map[string]int `json:"counts"`
 	Groups []NeedsMeGroup `json:"groups"`
 }
 
@@ -132,6 +143,9 @@ type NeedsMeRow struct {
 	State   store.State   `json:"state"`
 	Reason  NeedsMeReason `json:"reason"`
 	Since   time.Time     `json:"since"`
+	// FocusItem says the Project's Focus Kinds leave the row's reason on.
+	// Focus Kinds mark rows and filter nothing.
+	FocusItem bool `json:"focus_item"`
 	// Round is the latest Round (Needs Answer).
 	Round *RoundSummary `json:"round,omitempty"`
 	// Failure is the latest Failure Report (Failed).
@@ -184,13 +198,14 @@ type NeedsMeRequirement struct {
 	Stage string `json:"stage,omitempty"`
 }
 
-// needsMeRequirement is the Requirement t is on, or nil when its Spec
-// isn't one.
-func needsMeRequirement(r store.Reader, key string, t store.Ticket) *NeedsMeRequirement {
-	if !slices.ContainsFunc(specTickets(r, key, t.Spec), func(st store.Ticket) bool { return StageOf(st.Labels) != "" }) {
+// requirement is the Requirement t is on, or nil when its Spec isn't
+// one.
+func (e *evaluation) requirement(t store.Ticket) *NeedsMeRequirement {
+	if !e.evaluated().requirements[t.Spec] {
 		return nil
 	}
-	sp, _ := r.Spec(key, t.Spec)
+	key := e.p.Key
+	sp, _ := e.r.Spec(key, t.Spec)
 	return &NeedsMeRequirement{Spec: DisplayID(key, t.Spec), Title: sp.Title, Stage: StageOf(t.Labels)}
 }
 
@@ -230,35 +245,22 @@ type FailureSummary struct {
 	Reports  int    `json:"reports"`
 }
 
-// NeedsMe is needs_me, the human's read across every Project.
+// NeedsMe is needs_me, the human's read across every Project: one
+// evaluation of each.
 func (c *Core) NeedsMe(context.Context) (NeedsMeView, error) {
-	type waiting struct {
-		row NeedsMeRow
-		n   int
-		// commit orders a Project's CI items, which have no Ticket.
-		commit string
-	}
-	var all []waiting
+	var all []needsMeItem
+	counts := map[string]int{}
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
-			if row, ok := c.baseDivergedRow(p); ok {
-				all = append(all, waiting{row: row})
+			items := c.evaluate(r, p).items()
+			if n := needsMeCount(items); n > 0 {
+				counts[p.Key] = n
 			}
-			if row, ok := c.baseMissingRow(p); ok {
-				all = append(all, waiting{row: row})
-			}
-			for _, it := range c.ciItems(r, p) {
-				all = append(all, waiting{row: c.ciItemRow(r, p, it), commit: it.commit})
-			}
-			for _, t := range r.Tickets(p.Key) {
-				if row, ok := c.needsMeRow(r, p.Key, t); ok {
-					all = append(all, waiting{row: row, n: t.Number})
-				}
-			}
+			all = append(all, items...)
 		}
 		return nil
 	})
-	slices.SortFunc(all, func(a, b waiting) int {
+	slices.SortFunc(all, func(a, b needsMeItem) int {
 		return cmp.Or(
 			cmp.Compare(groupIndex(a.row.Reason), groupIndex(b.row.Reason)),
 			a.row.Since.Compare(b.row.Since),
@@ -267,31 +269,46 @@ func (c *Core) NeedsMe(context.Context) (NeedsMeView, error) {
 			cmp.Compare(a.commit, b.commit),
 		)
 	})
-	v := NeedsMeView{Count: len(all), Groups: []NeedsMeGroup{}}
-	for _, w := range all {
-		if len(v.Groups) == 0 || v.Groups[len(v.Groups)-1].Reason != w.row.Reason {
-			v.Groups = append(v.Groups, NeedsMeGroup{Reason: w.row.Reason})
+	v := NeedsMeView{Counts: counts, Groups: []NeedsMeGroup{}}
+	for _, n := range counts {
+		v.Count += n
+	}
+	for _, it := range all {
+		if len(v.Groups) == 0 || v.Groups[len(v.Groups)-1].Reason != it.row.Reason {
+			v.Groups = append(v.Groups, NeedsMeGroup{Reason: it.row.Reason})
 		}
 		g := &v.Groups[len(v.Groups)-1]
-		g.Tickets = append(g.Tickets, w.row)
+		g.Tickets = append(g.Tickets, it.row)
 	}
 	return v, nil
 }
 
-// needsMeRow is t's Needs Me row, if it waits on the human with a row
-// of its own: a Ticket a CI item lists has none.
-func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRow, bool) {
-	reason, since := c.reasonOf(r, key, t)
-	if reason == "" || reason.isCIItem() {
-		return NeedsMeRow{}, false
+// needsMeCount is the Needs Me count of one Project's items, as the human
+// sees it: each item counts once, except that a Requirement's Stage
+// Tickets count once in total, as their Requirement.
+func needsMeCount(items []needsMeItem) int {
+	requirements, n := map[string]bool{}, 0
+	for _, it := range items {
+		if rq := it.row.Requirement; rq != nil && rq.Stage != "" {
+			requirements[rq.Spec] = true
+		} else {
+			n++
+		}
 	}
-	req := needsMeRequirement(r, key, t)
+	return n + len(requirements)
+}
+
+// row is the Needs Me row of its own of t, which waits for tr and no CI
+// item lists.
+func (e *evaluation) row(t store.Ticket, tr ticketReason) NeedsMeRow {
+	key := e.p.Key
+	req := e.requirement(t)
 	row := NeedsMeRow{
-		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link),
-		Requirement: req, Spec: needsMeSpec(r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
-		CIResult: ticketCIResult(r, key, t, c.now()), PullRequest: pullRequestView(t.PullRequest),
+		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: tr.reason, Since: tr.since, Link: linkView(t.Link),
+		Requirement: req, Spec: needsMeSpec(e.r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
+		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(t.PullRequest),
 	}
-	switch reason {
+	switch tr.reason {
 	case ReasonNeedsAnswer:
 		if n := len(t.Rounds); n > 0 {
 			rd := t.Rounds[n-1]
@@ -312,10 +329,10 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 	case ReasonToMerge:
 		row.Branch = branchOf(t)
 	case ReasonBlockedByCancelled:
-		b, _ := cancelledBlocker(c.blockRule(r, key), t)
+		b, _ := cancelledBlocker(e.rule, t)
 		row.Blocker = &b
 	}
-	return row, true
+	return row
 }
 
 // finishSummary is the comment stored with t's last move into In Review,
@@ -333,51 +350,6 @@ func finishSummary(t store.Ticket) string {
 func firstLine(s string) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
 	return strings.TrimSpace(line)
-}
-
-// reasonOf is the Ticket's reason and since when it has waited.
-func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReason, time.Time) {
-	switch t.State {
-	case store.NeedsAnswer:
-		return ReasonNeedsAnswer, entered(t)
-	case store.Answered:
-		return ReasonAnswered, entered(t)
-	case store.InProgress, store.Accepted:
-		p, _ := r.Project(key) // t is in it, so it exists
-		if _, since, ok := ciFailure(r, key, t, c.now()); ok {
-			return ReasonCIFailed, since
-		}
-		if since, ok := ciCancelled(r, key, t, c.now()); ok {
-			return ReasonCICancelled, since
-		}
-		if lead, waiting := specPullRequestLead(r, key, t); waiting && !lead {
-			// A Spec's pull request is one item, on its lead Ticket.
-			return "", time.Time{}
-		}
-		if t.State == store.Accepted && p.Landing.Method == store.LandingPullRequest && t.PullRequest != nil && t.PullRequest.State == store.PRClosed {
-			return ReasonPullRequestClosed, entered(t)
-		}
-		if t.State == store.Accepted && (p.LandingPolicy().LandsOnHumanMerge()) {
-			return ReasonToMerge, entered(t)
-		}
-		if reason, since := c.timedReason(r, p, t); reason != "" {
-			return reason, since
-		}
-	case store.Failed:
-		return ReasonFailed, entered(t)
-	case store.InReview:
-		return ReasonInReview, entered(t)
-	}
-	if b, ok := cancelledBlocker(c.blockRule(r, key), t); ok {
-		return ReasonBlockedByCancelled, cancelledAt(r, key, b)
-	}
-	if since, ok := closedExternally(t); ok {
-		return ReasonClosedExternally, since
-	}
-	if since, ok := newIssue(r, key, t); ok {
-		return ReasonNewIssue, since
-	}
-	return "", time.Time{}
 }
 
 // entered is when t moved into its current State (its last write, if no

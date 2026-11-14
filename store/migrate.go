@@ -77,6 +77,7 @@ var migrations = []MigrationStep{
 	{From: 33, Name: "add a Ticket's Spec merge mark"},
 	{From: 34, Name: "add a spec Stage's Spec recommendation"},
 	{From: 35, Name: "add a Project's Auto-accept kinds and a Move's auto-accept cause"},
+	{From: 36, Name: "move the human's CI responses on pushed commits onto the Project", After: moveLegacyCIResponses},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

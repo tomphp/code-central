@@ -11,7 +11,8 @@ import (
 // Format 28 (code-central-432) added a Project's CI responses: the
 // human's Land anyway and Re-run request, once per pushed commit. The
 // real chain migrates a format-27 store, which has none and whose pushed
-// commits may still carry them, copying every file unchanged.
+// commits may still carry them, copying every file unchanged until format
+// 37 (code-central-585) moves those onto the Project.
 func TestTheRealChainMigratesAFormat27StoreToTheCIResponsesFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
 	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 27\n")
@@ -28,7 +29,7 @@ func TestTheRealChainMigratesAFormat27StoreToTheCIResponsesFormat(t *testing.T) 
 	}
 	after := snapshot(t, dir)
 	for rel, content := range before {
-		if rel != "store.yaml" && after[rel] != content {
+		if rel != "store.yaml" && rel != "projects/acme/project.yaml" && rel != "projects/acme/tickets/2.yaml" && after[rel] != content {
 			t.Errorf("%s changed:\n%s", rel, after[rel])
 		}
 	}
@@ -36,11 +37,11 @@ func TestTheRealChainMigratesAFormat27StoreToTheCIResponsesFormat(t *testing.T) 
 		t.Errorf("store.yaml = %q", got)
 	}
 	s.View(func(r store.Reader) error {
-		if p, _ := r.Project("acme"); len(p.CIResponses) != 0 {
-			t.Errorf("CI responses after migrating = %+v, want none", p.CIResponses)
+		if p, _ := r.Project("acme"); len(p.CIResponses) != 1 || p.CIResponses[0].Commit != "abc123" || p.CIResponses[0].LandAnyway.IsZero() {
+			t.Errorf("CI responses after migrating = %+v, want abc123's Land anyway kept", p.CIResponses)
 		}
-		if tk, _ := r.Ticket("acme", 2); len(tk.PushedCommits) != 1 || tk.PushedCommits[0].LandAnyway.IsZero() {
-			t.Errorf("pushed commits after migrating = %+v, want abc123 with its Land anyway kept", tk.PushedCommits)
+		if tk, _ := r.Ticket("acme", 2); len(tk.PushedCommits) != 1 || tk.PushedCommits[0].Commit != "abc123" {
+			t.Errorf("pushed commits after migrating = %+v, want abc123", tk.PushedCommits)
 		}
 		return nil
 	})

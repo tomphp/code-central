@@ -346,3 +346,53 @@ func TestGetTicketWithTheClaimsPartReturnsThemInFull(t *testing.T) {
 		t.Fatalf("Done Blocker %v, want its title", b)
 	}
 }
+
+func TestFindTicketViewsGivesEachTicketAsGetTicketDoes(t *testing.T) {
+	f := newFixture(t)
+	f.redone(t)
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Logout", State: store.Ready})
+	in := core.FindTicketsInput{State: store.States, Full: true}
+	for _, parts := range [][]string{nil, core.TicketParts} {
+		in.Parts = parts
+		views, err := f.core.FindTicketViews(ctx, "acme", in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := f.core.FindTickets(ctx, "acme", in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(views) != len(rows) || len(views) < 2 {
+			t.Fatalf("%d views for %d rows, want the same Tickets and at least two", len(views), len(rows))
+		}
+		for i, v := range views {
+			want, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: core.Ref(rows[i].ID), Parts: parts})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(v, want) {
+				t.Errorf("parts %v: find_tickets full %s = %+v, want get_ticket's %+v", parts, rows[i].ID, v, want)
+			}
+		}
+	}
+}
+
+func TestFindTicketViewsAreFilteredAsTheRowsAre(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready, store.Draft)
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Logout", State: store.Ready})
+	claimable := true
+	views, err := f.core.FindTicketViews(ctx, "acme", core.FindTicketsInput{Full: true, Claimable: &claimable, Title: "logout"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(views) != 1 || views[0].Title != "Logout" {
+		t.Fatalf("views %+v, want only the claimable Logout", views)
+	}
+	if _, err := f.core.FindTicketViews(ctx, "acme", core.FindTicketsInput{Full: true, State: []store.State{"Nope"}}); err == nil {
+		t.Error("an unknown State was accepted")
+	}
+	if _, err := f.core.FindTicketViews(ctx, "acme", core.FindTicketsInput{Full: true, Parts: []string{"nope"}}); err == nil {
+		t.Error("an unknown part was accepted")
+	}
+}

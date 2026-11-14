@@ -17,7 +17,12 @@ import (
 // acme-6, acme-6 blocked by acme-5, both Ready.
 func landWorld(t *testing.T, landPerSpec bool) fixture {
 	t.Helper()
-	f := newFixture(t)
+	return landWorldOn(t, newFixture(t), landPerSpec)
+}
+
+// landWorldOn builds landWorld on f.
+func landWorldOn(t *testing.T, f fixture, landPerSpec bool) fixture {
+	t.Helper()
 	f.project(t, "acme")
 	f.spec(t, "acme", "Requirement")
 	for _, stage := range core.Stages {

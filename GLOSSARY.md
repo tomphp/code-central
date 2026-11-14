@@ -343,6 +343,10 @@ _Avoid_: User, caller
 The Tickets waiting on the human before they can move, a Project's Base diverged or Base missing, and each pushed commit's CI failed, CI cancelled or CI unavailable, one item per commit listing the Tickets waiting on it.
 _Avoid_: Inbox, blocked
 
+**Needs Me count**:
+The number of things in Needs Me, as the human sees it. Each item counts once, except that a Requirement's Stage Tickets count once in total, as their Requirement. It is given for all Projects and per Project.
+_Avoid_: row count
+
 **By Ticket**:
 The default grouping of a State list: its Tickets alone, as a flat list. On the Board view, it shows the columns alone.
 _Avoid_: Flat view, list mode
@@ -436,7 +440,7 @@ A pushed commit's CI failed, CI cancelled or CI unavailable as Needs Me shows it
 _Avoid_: CI group, lead Ticket
 
 **CI response**:
-The human's Land anyway or Re-run request for one pushed commit, stored once on the Project for that commit, so every Ticket whose latest pushed commit it is reads it. A response stored on a Ticket's own pushed commit before CI items is still read.
+The human's Land anyway or Re-run request for one pushed commit, stored once on the Project for that commit, so every Ticket whose latest pushed commit it is reads it.
 _Avoid_: CI choice, override record
 
 **Focus Mode**:

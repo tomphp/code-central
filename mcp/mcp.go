@@ -79,7 +79,7 @@ var tools = map[string]tool{
 		}),
 	},
 	"find_tickets": {
-		description: "Find this Project's Tickets in claim order; every filter given must match.",
+		description: "Find this Project's Tickets in claim order; every filter given must match. Each row carries needs_me_reason when the Ticket waits on the human, the same as get_ticket. With full, each is the whole Ticket as get_ticket returns it (the default parts, brief), in place of the row.",
 		schema: object(map[string]any{
 			"state":     list("Only Tickets in one of these States."),
 			"title":     text("Only Tickets whose title contains this text."),
@@ -87,11 +87,15 @@ var tools = map[string]tool{
 			"tags":      tagFilter("Only Tickets with all of these Tags, as {key: value}."),
 			"spec":      ref("Only Tickets in this Spec."),
 			"claimable": flag("Only Tickets that are (true) or aren't (false) claimable."),
+			"full":      flag("Return each Ticket as get_ticket does, in place of the row."),
 		}),
 		call: func(ctx context.Context, c *core.Core, key string, args []byte) (any, error) {
 			var in core.FindTicketsInput
 			if err := core.Decode(ctx, args, &in); err != nil {
 				return nil, err
+			}
+			if in.Full {
+				return c.FindTicketViews(ctx, key, in)
 			}
 			return c.FindTickets(ctx, key, in)
 		},

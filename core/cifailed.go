@@ -44,87 +44,16 @@ type CIFailureSummary struct {
 	Workflows []string `json:"workflows"`
 }
 
-// ciFailure is t's failure while it is CI failed: an Accepted Ticket
-// whose latest pushed commit's CI result is failed and that the human
-// hasn't dealt with, from its runs kept at now. since is when its first
-// failed run finished.
-func ciFailure(r store.Reader, key string, t store.Ticket, now time.Time) (s CIFailureSummary, since time.Time, ok bool) {
-	latest, mine, ok := unhandledCI(r, key, t, CIFailed, now)
-	if !ok {
-		return CIFailureSummary{}, time.Time{}, false
-	}
-	if p, _ := r.Project(key); fixTicketOpen(r, p, latest.Commit) {
-		return CIFailureSummary{}, time.Time{}, false
-	}
-	s = CIFailureSummary{Commit: latest.Commit, Workflows: []string{}}
-	for _, run := range failedRuns(latest.Commit, mine) {
-		s.Workflows = append(s.Workflows, run.Workflow)
-		if at := run.Finished; !at.IsZero() && (since.IsZero() || at.Before(since)) {
-			since = at
-		}
-	}
-	slices.Sort(s.Workflows)
-	s.Workflows = slices.Compact(s.Workflows)
-	if since.IsZero() {
-		since = latest.Pushed
-	}
-	return s, since, true
-}
-
-// unhandledCI is t's latest pushed commit, with the Project's response
-// to it, and its runs when t is Accepted, the human hasn't chosen Land
-// anyway for the commit and t's CI result is result at now.
-func unhandledCI(r store.Reader, key string, t store.Ticket, result CIResult, now time.Time) (store.PushedCommit, []store.CIRun, bool) {
-	if t.State != store.Accepted || len(t.PushedCommits) == 0 {
-		return store.PushedCommit{}, nil, false
-	}
-	p, _ := r.Project(key)
-	latest := respondedLatest(p, t)
-	if !latest.LandAnyway.IsZero() {
-		return store.PushedCommit{}, nil, false
-	}
-	mine, _ := ticketRuns(r, key, t, now)
-	if _, got := ticketResult(r, key, t, mine, now); got != result {
-		return store.PushedCommit{}, nil, false
-	}
-	return latest, mine, true
-}
-
-// ciCancelled is when t's CI became cancelled while it is CI cancelled:
-// an Accepted Ticket whose latest pushed commit's CI result is cancelled
-// and that the human hasn't dealt with, since its first cancelled run
-// finished.
-func ciCancelled(r store.Reader, key string, t store.Ticket, now time.Time) (since time.Time, ok bool) {
-	latest, mine, ok := unhandledCI(r, key, t, CICancelled, now)
-	if !ok {
-		return time.Time{}, false
-	}
-	for _, run := range rerunnableRuns(latest.Commit, mine) {
-		if at := run.Finished; !at.IsZero() && (since.IsZero() || at.Before(since)) {
-			since = at
-		}
-	}
-	if since.IsZero() {
-		since = latest.Pushed
-	}
-	return since, true
-}
-
 // ciFailureOptions are the failure options the human may choose on t's
-// CI item while t is CI failed or CI cancelled, nil otherwise; see
-// ciItemOptions.
+// CI item while t is CI failed or CI cancelled, nil otherwise, from its
+// Project's evaluation.
 func (c *Core) ciFailureOptions(r store.Reader, key string, t store.Ticket) []string {
 	p, _ := r.Project(key)
-	it, ok := c.ciItemOf(r, p, t)
-	if !ok || it.reason == ReasonCIUnavailable {
-		return nil
-	}
-	return ciItemOptions(r, p, it)
+	return c.evaluate(r, p).failureOptions(t)
 }
 
 // latestPushed is t's latest pushed commit, the one its CI result comes
-// from, as stored; t must have one. respondedLatest adds the Project's
-// response to it.
+// from; t must have one.
 func latestPushed(t store.Ticket) store.PushedCommit {
 	return t.PushedCommits[len(t.PushedCommits)-1]
 }
@@ -152,9 +81,11 @@ func fixTicketOpen(r store.Reader, p store.Project, commit string) bool {
 // on the Project for the Ticket's latest pushed commit, so it acts on
 // every Ticket the item lists, each of which gets a change notice. done
 // says the response is already recorded, so choosing it again changes
-// nothing; whyNot says why op isn't offered.
-func (c *Core) respondCI(key, op string, ref Ref, full bool, done func(store.Project, store.Ticket, []store.CIRun) bool,
-	whyNot func(store.Reader, store.Ticket) string, apply func(*store.Project, store.PushedCommit, []store.CIRun)) (Written[TicketView], error) {
+// nothing; whyNot says why op isn't offered. Each reads the Project's CI
+// state as it was before the response, and the item and its options
+// come from the Project's evaluation then.
+func (c *Core) respondCI(key, op string, ref Ref, full bool, done func(*ciState, store.Ticket) bool,
+	whyNot func(*ciState, store.Ticket) string, apply func(p *store.Project, commit string, runs []store.CIRun)) (Written[TicketView], error) {
 	var v Written[TicketView]
 	var listed []int
 	err := c.store.Update(func(w store.Writer) error {
@@ -171,19 +102,19 @@ func (c *Core) respondCI(key, op string, ref Ref, full bool, done func(store.Pro
 		if !full {
 			before = c.ticketView(w, key, t)
 		}
-		runs, _ := ticketRuns(w, key, t, c.now())
-		if t.State == store.Accepted && len(t.PushedCommits) > 0 && done(p, t, runs) {
+		e := c.evaluate(w, p)
+		if t.State == store.Accepted && len(t.PushedCommits) > 0 && done(e.ci, t) {
 			v, err = acknowledge(before, c.ticketView(w, key, t), full)
 			return err
 		}
-		if !slices.Contains(c.ciFailureOptions(w, key, t), op) {
-			return &Error{Code: ActionNotAllowed, Message: whyNot(w, t)}
+		if !slices.Contains(e.failureOptions(t), op) {
+			return &Error{Code: ActionNotAllowed, Message: whyNot(e.ci, t)}
 		}
-		it, _ := c.ciItemOf(w, p, t)
+		it, _ := e.itemOf(t)
 		for _, o := range it.tickets {
 			listed = append(listed, o.Number)
 		}
-		apply(&p, respondedLatest(p, t), runs)
+		apply(&p, latestPushed(t).Commit, e.ci.ticket(t).runs)
 		if err := w.PutProject(p); err != nil {
 			return err
 		}
@@ -199,12 +130,6 @@ func (c *Core) respondCI(key, op string, ref Ref, full bool, done func(store.Pro
 	return v, nil
 }
 
-// choseLandAnyway reports whether the human chose Land anyway for t's
-// latest pushed commit.
-func choseLandAnyway(p store.Project, t store.Ticket) bool {
-	return len(t.PushedCommits) > 0 && !respondedLatest(p, t).LandAnyway.IsZero()
-}
-
 // LandAnyway is the human's land_anyway(ticket): it accepts the failed CI
 // result of an Accepted Ticket's latest pushed commit, recorded once on
 // the Project for that commit, so the Factory lands every Ticket its CI
@@ -215,25 +140,23 @@ func (c *Core) LandAnyway(ctx context.Context, key string, in TicketInput) (Writ
 		return Written[TicketView]{}, err
 	}
 	return c.respondCI(key, OptionLandAnyway, in.Ticket, in.Full,
-		func(p store.Project, t store.Ticket, _ []store.CIRun) bool { return choseLandAnyway(p, t) },
-		func(r store.Reader, t store.Ticket) string { return c.whyNotLandAnyway(r, key, t) },
-		func(p *store.Project, latest store.PushedCommit, _ []store.CIRun) {
-			acceptFailedCI(p, latest.Commit, c.now())
+		func(ci *ciState, t store.Ticket) bool { return ci.landAnyway(t) },
+		whyNotLandAnyway,
+		func(p *store.Project, commit string, _ []store.CIRun) {
+			acceptFailedCI(p, commit, c.now())
 		})
 }
 
 // whyNotLandAnyway says why t isn't offered Land anyway.
-func (c *Core) whyNotLandAnyway(r store.Reader, key string, t store.Ticket) string {
-	id := DisplayID(key, t.Number)
+func whyNotLandAnyway(ci *ciState, t store.Ticket) string {
+	id := DisplayID(ci.p.Key, t.Number)
 	if t.State != store.Accepted {
 		return fmt.Sprintf("%s is %s: only an Accepted Ticket whose CI failed lands anyway", id, t.State)
 	}
-	if _, _, ok := ciFailure(r, key, t, c.now()); !ok {
-		if _, ok := ciCancelled(r, key, t, c.now()); !ok {
-			return fmt.Sprintf("%s has no failed or cancelled CI result to land anyway", id)
-		}
+	if a := ci.ticket(t); a.failure == nil && !a.cancelled {
+		return fmt.Sprintf("%s has no failed or cancelled CI result to land anyway", id)
 	}
-	if p, _ := r.Project(key); p.Landing.Method == store.LandingPullRequest {
+	if ci.p.Landing.Method == store.LandingPullRequest {
 		return fmt.Sprintf("%s's Project lands by Pull Request, so your merge on the Code Host decides whether it lands, whatever its CI result", id)
 	}
 	return fmt.Sprintf("%s's Project lands by Branch, so your merge decides whether it lands, whatever its CI result", id)
@@ -252,12 +175,10 @@ func (c *Core) RerunCI(ctx context.Context, key string, in TicketInput) (Written
 		return Written[TicketView]{}, err
 	}
 	return c.respondCI(key, OptionRerunCI, in.Ticket, in.Full,
-		func(p store.Project, t store.Ticket, runs []store.CIRun) bool {
-			return rerunPending(p, t, runs, c.now())
-		},
-		func(_ store.Reader, t store.Ticket) string { return whyNotRerun(key, t) },
-		func(p *store.Project, latest store.PushedCommit, runs []store.CIRun) {
-			requestRerun(p, latest.Commit, runs, c.now())
+		func(ci *ciState, t store.Ticket) bool { return len(ci.ticket(t).reruns) > 0 },
+		func(_ *ciState, t store.Ticket) string { return whyNotRerun(key, t) },
+		func(p *store.Project, commit string, runs []store.CIRun) {
+			requestRerun(p, commit, runs, c.now())
 		})
 }
 
@@ -272,12 +193,6 @@ func requestRerun(p *store.Project, commit string, runs []store.CIRun, now time.
 		slices.SortFunc(res.Reruns, func(a, b store.CIRunAttempt) int { return cmp.Compare(a.ID, b.ID) })
 		res.Rerun = now
 	})
-}
-
-// rerunPending reports whether a Re-run request for t's latest pushed
-// commit waits on the CI Watcher, among t's runs at now.
-func rerunPending(p store.Project, t store.Ticket, runs []store.CIRun, now time.Time) bool {
-	return len(t.PushedCommits) > 0 && len(pendingReruns(respondedLatest(p, t), runs, now)) > 0
 }
 
 // whyNotRerun says why t isn't offered Re-run failed jobs.
@@ -367,10 +282,10 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 		return Written[TicketView]{}, err
 	}
 	_, err = c.respondCI(key, OptionNewFixTicket, in.Ticket, true,
-		func(store.Project, store.Ticket, []store.CIRun) bool { return false },
-		func(_ store.Reader, t store.Ticket) string { return whyNotNewFixTicket(key, t) },
-		func(p *store.Project, latest store.PushedCommit, _ []store.CIRun) {
-			respond(p, latest.Commit, func(res *store.CIResponse) { res.FixTicket = fix })
+		func(*ciState, store.Ticket) bool { return false },
+		func(_ *ciState, t store.Ticket) string { return whyNotNewFixTicket(key, t) },
+		func(p *store.Project, commit string, _ []store.CIRun) {
+			respond(p, commit, func(res *store.CIResponse) { res.FixTicket = fix })
 		})
 	if err != nil {
 		return Written[TicketView]{}, err

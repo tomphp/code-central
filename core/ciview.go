@@ -82,9 +82,10 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 		}
 		for _, p := range projects {
 			out.Projects = append(out.Projects, CIProjectStatus{Project: p.Key, Tracking: p.CI.Tracking, Provider: string(p.CI.Provider), Repository: p.CI.Repository, ProjectURL: p.CI.ProjectURL, Watcher: c.watchers.view(watcherKey{WatcherCI, p.Key})})
+			ci := c.ciStateOf(r, p)
 			for _, run := range latestAttempts(keptCIRuns(r.CIRuns(p.Key), now)) {
 				if in.Running {
-					if runningForTicket(r, p.Key, run) {
+					if runningForTicket(ci, run) {
 						rows = append(rows, listed{p.Key, run})
 					}
 					continue
@@ -122,11 +123,11 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 // the kept runs, counts as running towards a Ticket's CI result: it is
 // unfinished, tracked against a Ticket rather than a CI Rule, and on a
 // commit some Ticket's CI result reads.
-func runningForTicket(r store.Reader, key string, run store.CIRun) bool {
+func runningForTicket(ci *ciState, run store.CIRun) bool {
 	if run.Status != store.CIQueued && run.Status != store.CIInProgress || run.Ticket == 0 {
 		return false
 	}
-	return len(ticketsReading(r, key, run.Commit)) > 0 && !run.Ignored
+	return ci.reads(run.Commit) && !run.Ignored
 }
 
 // latestAttempts is runs with each run's latest attempt only.

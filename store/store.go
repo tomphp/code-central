@@ -178,7 +178,8 @@ type StageGuides struct {
 // CIResponse is the human's response to one pushed commit's CI result,
 // stored once per commit on the Project, whatever Tickets wait on it
 // (code-central-432): Land anyway, and a Re-run request with the failed
-// run attempts it asked for, as a PushedCommit carries them.
+// run attempts it asked for. Before code-central-585 a response could be
+// stored on the pushed commit itself; format 37 moved each one here.
 type CIResponse struct {
 	Commit string
 	// LandAnyway is when the human accepted the commit's failed CI
@@ -685,18 +686,6 @@ type PushedCommit struct {
 	// reported without one.
 	Branch string
 	Pushed time.Time
-	// LandAnyway is when the human accepted this commit's failed CI
-	// result, so the Factory lands it (code-central-261); zero until then.
-	// Since code-central-432 the response is stored once per commit on
-	// the Project (CIResponse); a value stored here before is still read.
-	LandAnyway time.Time
-	// Rerun is when the human last asked for this commit's failed jobs to
-	// be re-run (code-central-265); zero until then. Reruns are the failed
-	// run attempts it asked for: each waits until the CI Watcher reports
-	// a later attempt of its run. Stored on the Project since
-	// code-central-432, like LandAnyway.
-	Rerun  time.Time
-	Reruns []CIRunAttempt
 }
 
 // CIRunAttempt names one attempt of one CI Run.

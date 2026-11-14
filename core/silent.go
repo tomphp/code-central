@@ -121,8 +121,8 @@ func (c *Core) silentSince(t store.Ticket) *time.Time {
 
 // longSince is the Claim's last move when it has run long, else nil: In
 // Progress with a live Claim, and more than LongAfter since it last moved
-// into In Progress. Whether that makes it a Long Claim is timedReason's
-// call: Silent takes precedence.
+// into In Progress. Whether that makes it a Long Claim is the
+// evaluation's call: Silent takes precedence.
 func (c *Core) longSince(t store.Ticket) *time.Time {
 	if t.State != store.InProgress {
 		return nil
@@ -152,33 +152,6 @@ func (c *Core) notLandedSince(p store.Project, t store.Ticket) *time.Time {
 	return &accepted
 }
 
-// timedReason is the Needs Me reason time passing gives t in Project p,
-// and since when, or "": Silent Claim, else Long Claim, while In
-// Progress, and CI unavailable, else Accepted but not landed, while
-// Accepted; one the CI gate holds on a running CI result is never
-// Accepted but not landed, as landing waits on CI. Silent takes
-// precedence over Long here, for reads and for the watch alike.
-func (c *Core) timedReason(r store.Reader, p store.Project, t store.Ticket) (NeedsMeReason, time.Time) {
-	if s := c.silentSince(t); s != nil {
-		return ReasonSilentClaim, *s
-	}
-	if s := c.longSince(t); s != nil {
-		return ReasonLongClaim, *s
-	}
-	if waiting, unavailable := c.ciWaitingOn(r, p, t); unavailable != nil {
-		return ReasonCIUnavailable, unavailable.Pushed
-	} else if waiting {
-		return "", time.Time{}
-	}
-	if waitingForSpec(r, p.Landing, p.Key, t) {
-		return "", time.Time{}
-	}
-	if s := c.notLandedSince(p, t); s != nil {
-		return ReasonAcceptedNotLanded, *s
-	}
-	return "", time.Time{}
-}
-
 // WatchTimedReasons is the background ticker behind the timed reasons:
 // Silent and Long Claims, CI unavailable, and Accepted but not landed. On each tick it
 // reads every Project and calls changed(project, ticket ID) once for each
@@ -200,14 +173,18 @@ func (c *Core) WatchTimedReasons(ctx context.Context, ticks <-chan time.Time, ch
 }
 
 // timedReasonChanges returns the Claims and Accepted Tickets whose timed
-// reason changed since the last call, and remembers the new ones.
+// reason changed since the last call, and remembers the new ones. A
+// Ticket's timed reason is its reason in its Project's evaluation when
+// that is a timed one, so a Ticket waiting for an earlier reason, such
+// as a CI item's, has none.
 func (c *Core) timedReasonChanges() []markKey {
 	now := map[markKey]NeedsMeReason{}
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
-			for _, t := range r.Tickets(p.Key) {
-				reason, _ := c.timedReason(r, p, t)
-				if reason == "" {
+			e := c.evaluate(r, p)
+			for _, t := range e.tickets() {
+				reason, _ := e.reason(t)
+				if !reason.timed() {
 					continue
 				}
 				k := markKey{p.Key, t.Number, 0}

@@ -320,6 +320,9 @@ type TicketRow struct {
 	// WaitingForSpec says the Ticket is Accepted and waits for its Spec to
 	// land, for its badge (code-central-371).
 	WaitingForSpec bool `json:"waiting_for_spec,omitempty"`
+	// NeedsMeReason says why the Ticket waits on the human, if it does:
+	// the reason get_ticket gives, a CI item's for a Ticket it lists.
+	NeedsMeReason NeedsMeReason `json:"needs_me_reason,omitempty"`
 }
 
 // CreateProjectInput is create_project's input.
@@ -362,6 +365,16 @@ type FindTicketsInput struct {
 	Spec Ref               `json:"spec,omitempty"`
 	// Claimable, when given, keeps only Tickets that are (or aren't) claimable.
 	Claimable *bool `json:"claimable,omitempty"`
+	// Full asks for full Ticket views, as get_ticket returns them, in
+	// place of rows; FindTicketViews answers it.
+	Full bool `json:"full,omitempty"`
+	// Parts are the parts the views carry, as get_ticket's: the default
+	// parts, brief, when none are named. Only the HTTP API and the CLI
+	// name them; an agent's MCP read takes the default.
+	Parts []string `json:"-"`
+	// WithModelChoice adds each Ticket's Model Choice, as get_ticket's
+	// does for the UI's read over HTTP.
+	WithModelChoice bool `json:"-"`
 }
 
 var keyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
@@ -507,65 +520,43 @@ func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (Tick
 		if err != nil {
 			return err
 		}
-		if v = c.ticketView(r, key, t); len(in.Parts) == 0 {
-			v = defaultView(v)
-		} else {
-			v = v.only(parts)
-		}
-		if in.WithModelChoice {
-			mc := modelChoice(p, t)
-			v.ModelChoice = &mc
-		}
+		v = shapeView(c.ticketView(r, key, t), p, t, in.Parts, parts, in.WithModelChoice)
 		return nil
 	})
 	return v, err
+}
+
+// shapeView is v as a read asking for the parts asked, which parts is as
+// a set, returns it: the default view when it names none.
+func shapeView(v TicketView, p store.Project, t store.Ticket, asked []string, parts map[string]bool, withModelChoice bool) TicketView {
+	if len(asked) == 0 {
+		v = defaultView(v)
+	} else {
+		v = v.only(parts)
+	}
+	if withModelChoice {
+		mc := modelChoice(p, t)
+		v.ModelChoice = &mc
+	}
+	return v
 }
 
 // FindTickets is find_tickets(state?, title?, labels?, tags?, spec?, claimable?). Done and
 // Cancelled Tickets are left out unless the State filter names them.
 // Rows are in claim order: created, then number.
 func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) ([]TicketRow, error) {
-	for _, s := range in.State {
-		if !s.Valid() {
-			return nil, invalid("state", "unknown State %q", s)
-		}
-	}
-	if err := checkTagFilter(in.Tags); err != nil {
-		return nil, err
-	}
 	rows := []TicketRow{}
 	err := c.store.View(func(r store.Reader) error {
-		if _, ok := r.Project(key); !ok {
-			return unknownProject(key)
-		}
-		specN := 0
-		if in.Spec != "" {
-			n, err := in.Spec.number(key, "spec")
-			if err != nil {
-				return err
-			}
-			// A Ticket is rejected naming its Spec; a Spec that doesn't
-			// exist matches no Tickets.
-			if err := ticketNotSpec(r, key, "find_tickets", "spec", n); err != nil {
-				return err
-			}
-			specN = n
+		e, tickets, err := c.findIn(r, key, in)
+		if err != nil {
+			return err
 		}
 		maps := map[int]bool{}
 		for _, s := range r.Specs(key) {
 			maps[s.Number] = isMap(s.Labels)
 		}
-		tickets := r.Tickets(key)
-		slices.SortStableFunc(tickets, claimOrder)
 		for _, t := range tickets {
-			if !matches(t, in, specN) {
-				continue
-			}
-			row := c.ticketRow(r, key, t, maps[t.Spec])
-			if in.Claimable != nil && *in.Claimable != (t.State == store.Ready && !row.Blocked) {
-				continue
-			}
-			rows = append(rows, row)
+			rows = append(rows, c.ticketRow(r, e, t, maps[t.Spec]))
 		}
 		return nil
 	})
@@ -573,6 +564,75 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 		return nil, err
 	}
 	return rows, nil
+}
+
+// FindTicketViews is find_tickets with full: the Tickets find_tickets
+// would give as rows, each as get_ticket returns it, all read from one
+// evaluation of the Project.
+func (c *Core) FindTicketViews(_ context.Context, key string, in FindTicketsInput) ([]TicketView, error) {
+	parts, err := GetTicketInput{Parts: in.Parts}.parts()
+	if err != nil {
+		return nil, err
+	}
+	views := []TicketView{}
+	err = c.store.View(func(r store.Reader) error {
+		e, tickets, err := c.findIn(r, key, in)
+		if err != nil {
+			return err
+		}
+		for _, t := range tickets {
+			views = append(views, shapeView(c.ticketViewIn(r, e, t), e.p, t, in.Parts, parts, in.WithModelChoice))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return views, nil
+}
+
+// findIn is the Tickets of Project key matching in's filters, in claim
+// order, with the Project's evaluation they are read from.
+func (c *Core) findIn(r store.Reader, key string, in FindTicketsInput) (*evaluation, []store.Ticket, error) {
+	for _, s := range in.State {
+		if !s.Valid() {
+			return nil, nil, invalid("state", "unknown State %q", s)
+		}
+	}
+	if err := checkTagFilter(in.Tags); err != nil {
+		return nil, nil, err
+	}
+	p, ok := r.Project(key)
+	if !ok {
+		return nil, nil, unknownProject(key)
+	}
+	specN := 0
+	if in.Spec != "" {
+		n, err := in.Spec.number(key, "spec")
+		if err != nil {
+			return nil, nil, err
+		}
+		// A Ticket is rejected naming its Spec; a Spec that doesn't
+		// exist matches no Tickets.
+		if err := ticketNotSpec(r, key, "find_tickets", "spec", n); err != nil {
+			return nil, nil, err
+		}
+		specN = n
+	}
+	tickets := r.Tickets(key)
+	slices.SortStableFunc(tickets, claimOrder)
+	e := c.evaluate(r, p)
+	found := tickets[:0]
+	for _, t := range tickets {
+		if !matches(t, in, specN) {
+			continue
+		}
+		if in.Claimable != nil && *in.Claimable != (t.State == store.Ready && !e.rule.blocked(t)) {
+			continue
+		}
+		found = append(found, t)
+	}
+	return e, found, nil
 }
 
 func matches(t store.Ticket, in FindTicketsInput, specN int) bool {
@@ -608,17 +668,18 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 	return true
 }
 
-// ticketRow is t as a find_tickets row; onMap says t is on a Map, so the
-// row carries its node type.
-func (c *Core) ticketRow(r store.Reader, key string, t store.Ticket, onMap bool) TicketRow {
+// ticketRow is t as a find_tickets row, its CI and reason read from its
+// Project's evaluation e; onMap says t is on a Map, so the row carries
+// its node type.
+func (c *Core) ticketRow(r store.Reader, e *evaluation, t store.Ticket, onMap bool) TicketRow {
+	key := e.p.Key
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Created: t.Created, Updated: t.Updated, Link: linkView(t.Link),
-		CIResult: ticketCIResult(r, key, t, c.now()), PullRequest: pullRequestView(t.PullRequest),
+		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(t.PullRequest),
+		WaitingForSpec: waitingForSpec(r, e.p.Landing, key, t),
 	}
-	if p, ok := r.Project(key); ok {
-		row.WaitingForSpec = waitingForSpec(r, p.Landing, key, t)
-	}
+	row.NeedsMeReason, _ = e.reason(t)
 	if onMap {
 		row.NodeType = NodeType(t.Labels)
 		row.BlockedBy = displayIDs(key, t.BlockedBy)
@@ -659,8 +720,16 @@ func specView(key string, s store.Spec) SpecView {
 }
 
 func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView {
+	pr, _ := r.Project(key)
+	// A write's view of t may come before t is stored.
+	return c.ticketViewIn(r, c.evaluateWith(r, pr, t), t)
+}
+
+// ticketViewIn is t's view, read from its Project's evaluation e.
+func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) TicketView {
+	key, pr := e.p.Key, e.p
 	sp, _ := r.Spec(key, t.Spec)
-	rule := c.blockRule(r, key)
+	rule := e.rule
 	v := TicketView{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State,
 		Spec:   SpecRef{ID: DisplayID(key, t.Spec), Title: sp.Title},
@@ -685,24 +754,23 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	for _, m := range t.Moves {
 		v.Moves = append(v.Moves, moveView(m))
 	}
-	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = ticketCI(r, key, t, c.now())
+	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = e.ci.view(t)
 	v.PullRequest = pullRequestView(t.PullRequest)
-	pr, _ := r.Project(key)
 	if t.SpecMerge != nil {
 		v.SpecMerge = &SpecMergeView{Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}
 	}
 	v.SpecLanded = specLanded(r, pr.Landing, key, t)
 	v.WaitingForSpec = waitingForSpec(r, pr.Landing, key, t)
-	if it, ok := c.ciItemOf(r, pr, t); ok {
+	if it, ok := e.itemOf(t); ok {
 		v.CIItem = ciItemView(r, pr, it)
 		if it.reason != ReasonCIUnavailable {
 			v.CIFailureOptions = v.CIItem.Options
 		}
 	}
-	v.LandAnyway = choseLandAnyway(pr, t)
+	v.LandAnyway = e.ci.landAnyway(t)
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
-	v.NeedsMeReason, _ = c.reasonOf(r, key, t)
+	v.NeedsMeReason, _ = e.reason(t)
 	v.AwaitingTriage, v.TriageActions = t.AwaitingTriage, ticketTriageActions(r, key, t)
 	v.SpecMergeTicket = t.SpecMergeTicket
 	return v
