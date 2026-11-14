@@ -627,9 +627,11 @@ describe("the Admin section", () => {
     expect(follows(admin, lastState)).toBe(true);
     expect(follows(archived, admin)).toBe(true);
 
+    const ci = within(nav()).getByRole("link", { name: "CI" });
     const usage = within(nav()).getByRole("link", { name: "Usage" });
     const options = within(nav()).getByRole("link", { name: "Options" });
-    expect(follows(usage, admin)).toBe(true);
+    expect(follows(ci, admin)).toBe(true);
+    expect(follows(usage, ci)).toBe(true);
     expect(follows(options, usage)).toBe(true);
     expect(follows(archived, options)).toBe(true);
   });
