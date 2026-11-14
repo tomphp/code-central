@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/codecentraltest"
@@ -69,6 +70,32 @@ func TestASessionsResponsesReadBackInOrderWithTheirContextSize(t *testing.T) {
 
 	if got := sizes(readSession(t, srv, "?project=acme&session=s1&agent=toolu_a")); !reflect.DeepEqual(got, []int{9_003, 9_503}) {
 		t.Errorf("subagent toolu_a: %v, want [9003 9503]", got)
+	}
+}
+
+func TestASubagentsSessionReadNamesItByTheLatestNonEmptyAgentTypeAndDescription(t *testing.T) {
+	srv := newServer(t)
+	claim(t, srv, "acme", "s1")
+	postResponses(t, srv, "s1",
+		response{time: at(1), kind: "implementation", input: 5},
+		response{time: at(2), agent: "toolu_a", kind: "subagent", agentType: "Explore", description: "Old name", input: 5},
+		response{time: at(3), agent: "toolu_a", kind: "subagent", agentType: "Plan", description: "Map Usage", input: 5},
+		response{time: at(4), agent: "toolu_a", kind: "subagent", input: 5},
+		response{time: at(2), agent: "toolu_old", kind: "subagent", input: 5},
+	)
+
+	a := readSession(t, srv, "?project=acme&session=s1&agent=toolu_a")
+	if a.AgentType != "Plan" || a.Description != "Map Usage" {
+		t.Errorf("toolu_a is %q %q; want the latest non-empty, Plan and Map Usage", a.AgentType, a.Description)
+	}
+	for _, q := range []string{"&agent=toolu_old", ""} {
+		if v := readSession(t, srv, "?project=acme&session=s1"+q); v.AgentType != "" || v.Description != "" {
+			t.Errorf("session%s is %q %q; want neither", q, v.AgentType, v.Description)
+		}
+	}
+	_, b := httpDo(t, srv, httpCall{method: "GET", path: "/api/usage/session?project=acme&session=s1"})
+	if strings.Contains(string(b), "agent_type") || strings.Contains(string(b), "description") {
+		t.Errorf("main session read has the fields: %s", b)
 	}
 }
 

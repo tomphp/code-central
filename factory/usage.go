@@ -45,12 +45,18 @@ type streamUsage struct {
 type usageReader struct {
 	kind   string
 	now    func() time.Time
-	seen   map[string]bool   // message IDs already read
-	agents map[string]string // Agent calls' descriptions, by tool-use ID
+	seen   map[string]bool      // message IDs already read
+	agents map[string]agentCall // Agent calls, by tool-use ID
+}
+
+// agentCall is an Agent call's Agent Type and description, as its input
+// names them; either may be "".
+type agentCall struct {
+	agentType, description string
 }
 
 func newUsageReader(kind string, now func() time.Time) *usageReader {
-	return &usageReader{kind: kind, now: now, seen: map[string]bool{}, agents: map[string]string{}}
+	return &usageReader{kind: kind, now: now, seen: map[string]bool{}, agents: map[string]agentCall{}}
 }
 
 // read gives msg's model response, dated when it is read and with its
@@ -65,10 +71,11 @@ func (u *usageReader) read(msg streamMessage) (core.UsageResponse, bool) {
 	for _, c := range msg.Message.Content {
 		if c.Type == "tool_use" && (c.Name == "Agent" || c.Name == "Task") {
 			var in struct {
-				Description string `json:"description"`
+				Description  string `json:"description"`
+				SubagentType string `json:"subagent_type"`
 			}
 			_ = json.Unmarshal(c.Input, &in)
-			u.agents[c.ID] = in.Description
+			u.agents[c.ID] = agentCall{agentType: in.SubagentType, description: in.Description}
 		}
 	}
 	m := msg.Message
@@ -81,10 +88,12 @@ func (u *usageReader) read(msg streamMessage) (core.UsageResponse, bool) {
 		model = ""
 	}
 	return core.UsageResponse{
-		Time:  u.now(),
-		Agent: msg.ParentToolUseID,
-		Kind:  u.kindOf(msg.ParentToolUseID),
-		Model: model,
+		Time:        u.now(),
+		Agent:       msg.ParentToolUseID,
+		AgentType:   u.agents[msg.ParentToolUseID].agentType,
+		Description: u.agents[msg.ParentToolUseID].description,
+		Kind:        u.kindOf(msg.ParentToolUseID),
+		Model:       model,
 		Tokens: usage.Tokens{
 			InputTokens:      m.Usage.InputTokens,
 			CacheWriteTokens: m.Usage.CacheCreationInputTokens,
@@ -102,7 +111,7 @@ func (u *usageReader) kindOf(agent string) string {
 		return u.kind
 	}
 	for _, p := range reviewPrefixes {
-		if strings.HasPrefix(u.agents[agent], p) {
+		if strings.HasPrefix(u.agents[agent].description, p) {
 			return kindReview
 		}
 	}
