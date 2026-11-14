@@ -22,7 +22,7 @@ import type { InboxData } from "../live";
 import type { UiLocation } from "../url";
 import { FocusItemView, inboxOf } from "../focus/FocusItemView";
 import { useFocusSession, type FocusKey } from "../focus/session";
-import { PopupShell } from "./PopupShell";
+import { PopupShell } from "../controls/PopupShell";
 
 // FocusPopupClose is why the popup closed and the keys of the Focus Items
 // in scope then: "dismissed" by ×, Escape, a click outside or leaving
@@ -87,6 +87,7 @@ export function FocusPopup(props: FocusPopupProps) {
     // itself as another popup.
     <PopupShell
       label="Focus popup"
+      size="wide"
       uncounted={queue}
       onClose={() => close("dismissed")}
       head={queue && !session.clear && <span className="focus-left">{session.remaining} left</span>}

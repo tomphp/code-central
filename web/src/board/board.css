@@ -57,14 +57,6 @@
 .board-counts .board-cell { padding: 6px 4px; align-items: center; }
 .board-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
-/* The popups: × sits at the right of a header row above the pane, which
-   stays in view while the wide card's content scrolls. Anything else in
-   the row, such as the Focus popup's N left, sits at its left. */
-.popup-head { position: sticky; top: -18px; z-index: 1; display: flex; align-items: center; justify-content: flex-end; margin: -18px -20px 0; padding: 8px 10px 0; background: var(--surface); }
-.popup-head > :not(.popup-close) { margin-right: auto; padding-left: 10px; }
-.popup-close { border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
-.popup-close:hover { color: var(--text); background: var(--surface-2); }
-
 /* The Needs Me column: its head has the needs-you dot and a bar in the
    needs-you colour, its cells a faint tint of it; a card there adds its
    State chip and reason label. */
