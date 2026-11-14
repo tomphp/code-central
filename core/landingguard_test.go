@@ -64,28 +64,46 @@ type guardedPackage struct {
 	fset  *token.FileSet
 }
 
-// checkGuarded type-checks the files with the standard library alone,
-// importing from source. Packages share imp, so each import is compiled
-// once; the Factory's import of core is imp's own copy, since the
-// packages core reaches it through (client) import that one too.
-func checkGuarded(t *testing.T, fset *token.FileSet, imp types.Importer, path string, files map[string]*ast.File) guardedPackage {
+// guardLoader parses and type-checks packages of the repository at root
+// with the standard library alone. Its packages share one source
+// importer, so each import is compiled once.
+type guardLoader struct {
+	root string
+	fset *token.FileSet
+	imp  types.Importer
+}
+
+func newGuardLoader(t *testing.T) guardLoader {
+	t.Helper()
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	return guardLoader{root: root, fset: fset, imp: importer.ForCompiler(fset, "source", nil)}
+}
+
+// check type-checks the files as the package at path. Each file's imports
+// resolve from the directory its name is in.
+func (l guardLoader) check(t *testing.T, path string, files map[string]*ast.File) guardedPackage {
 	t.Helper()
 	info := &types.Info{Selections: map[*ast.SelectorExpr]*types.Selection{}}
 	var list []*ast.File
 	for _, name := range slices.Sorted(maps.Keys(files)) {
 		list = append(list, files[name])
 	}
-	if _, err := (&types.Config{Importer: imp}).Check(path, fset, list, info); err != nil {
+	if _, err := (&types.Config{Importer: l.imp}).Check(path, l.fset, list, info); err != nil {
 		t.Fatalf("type-check %s: %v", path, err)
 	}
-	return guardedPackage{files: files, info: info, fset: fset}
+	return guardedPackage{files: files, info: info, fset: l.fset}
 }
 
-// parseGuarded parses the non-test Go files of root/dir that build on
+// parse parses the non-test Go files of dir, under root, that build on
 // this platform.
-func parseGuarded(t *testing.T, fset *token.FileSet, root, dir string) map[string]*ast.File {
+func (l guardLoader) parse(t *testing.T, dir string) map[string]*ast.File {
 	t.Helper()
-	entries, err := os.ReadDir(filepath.Join(root, dir))
+	abs := filepath.Join(l.root, dir)
+	entries, err := os.ReadDir(abs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,13 +113,12 @@ func parseGuarded(t *testing.T, fset *token.FileSet, root, dir string) map[strin
 		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		abs := filepath.Join(root, dir)
 		if ok, err := build.Default.MatchFile(abs, name); err != nil {
 			t.Fatal(err)
 		} else if !ok {
 			continue
 		}
-		f, err := parser.ParseFile(fset, filepath.Join(abs, name), nil, parser.SkipObjectResolution)
+		f, err := parser.ParseFile(l.fset, filepath.Join(abs, name), nil, parser.SkipObjectResolution)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -110,9 +127,11 @@ func parseGuarded(t *testing.T, fset *token.FileSet, root, dir string) map[strin
 	return files
 }
 
-// landingReads finds every selection of a guarded field whose type is a
-// guarded type or a pointer to one. Composite-literal keys aren't
-// selections, and a same-named field on another type doesn't match.
+// landingReads finds every selection of a guarded field whose receiver is
+// a guarded type or a pointer to one, or embeds one the field is promoted
+// from. Composite-literal keys aren't selections, and a same-named field
+// on another type doesn't match. A read outside any function, in a
+// package-level var, has no fn: only a whole-file entry allows it.
 func landingReads(pkg guardedPackage) []landingRead {
 	var reads []landingRead
 	for _, file := range slices.Sorted(maps.Keys(pkg.files)) {
@@ -148,28 +167,29 @@ func fieldOwner(s *types.Selection) string {
 	t := s.Recv()
 	idx := s.Index()
 	for _, i := range idx[:len(idx)-1] {
-		st, ok := deref(t).Underlying().(*types.Struct)
+		st, ok := derefPointer(t).Underlying().(*types.Struct)
 		if !ok {
 			return ""
 		}
 		t = st.Field(i).Type()
 	}
-	named, ok := deref(t).(*types.Named)
+	named, ok := derefPointer(t).(*types.Named)
 	if !ok || named.Obj().Pkg() == nil {
 		return ""
 	}
 	return named.Obj().Pkg().Path() + "." + named.Obj().Name()
 }
 
-func deref(t types.Type) types.Type {
+// derefPointer is the type t points to, or t when it isn't a pointer.
+func derefPointer(t types.Type) types.Type {
 	if p, ok := t.Underlying().(*types.Pointer); ok {
 		return p.Elem()
 	}
 	return t
 }
 
-// allowed reports whether the allowlist covers the read.
-func allowed(allow []guardAllow, r landingRead) bool {
+// allowlisted reports whether the allowlist covers the read.
+func allowlisted(allow []guardAllow, r landingRead) bool {
 	return slices.ContainsFunc(allow, func(a guardAllow) bool {
 		return a.file == r.file && (a.fn == "" || a.fn == r.fn)
 	})
@@ -204,7 +224,7 @@ func staleEntries(allow []guardAllow, pkgs ...guardedPackage) []string {
 func guardFailure(allow []guardAllow, reads []landingRead) string {
 	var b strings.Builder
 	for _, r := range reads {
-		if allowed(allow, r) {
+		if allowlisted(allow, r) {
 			continue
 		}
 		fmt.Fprintf(&b, "\t%s:%d: %s of %s\n", r.file, r.line, r.field, r.owner)
@@ -217,15 +237,9 @@ func guardFailure(allow []guardAllow, reads []landingRead) string {
 }
 
 func TestNoLandingSettingIsReadOutsideThePolicy(t *testing.T) {
-	root, err := filepath.Abs("..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fset := token.NewFileSet()
-	imp := importer.ForCompiler(fset, "source", nil)
-
-	core := checkGuarded(t, fset, imp, "github.com/tomoram/code-central/core", parseGuarded(t, fset, root, "core"))
-	factory := checkGuarded(t, fset, imp, "github.com/tomoram/code-central/factory", parseGuarded(t, fset, root, "factory"))
+	l := newGuardLoader(t)
+	core := l.check(t, "github.com/tomoram/code-central/core", l.parse(t, "core"))
+	factory := l.check(t, "github.com/tomoram/code-central/factory", l.parse(t, "factory"))
 
 	if stale := staleEntries(landingGuardAllowlist, core, factory); len(stale) > 0 {
 		t.Errorf("the allowlist names what isn't there:\n\t%s", strings.Join(stale, "\n\t"))
@@ -239,34 +253,38 @@ func TestNoLandingSettingIsReadOutsideThePolicy(t *testing.T) {
 // reads the guard must let through.
 const guardFixture = `package fixture
 
-import "github.com/tomoram/code-central/store"
+import (
+	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/store"
+)
 
 // specView has a field named like a landing setting, on another type.
 type specView struct{ LandPerSpec bool }
+
+// wrapped promotes the Landing's fields.
+type wrapped struct{ store.Landing }
 
 func decides(p store.Project, s specView) bool {
 	_ = store.Landing{Method: store.LandingMerge, Push: true}
 	return p.Landing.Method == store.LandingMerge && s.LandPerSpec
 }
 
-func viaPointer(c *store.CI) bool {
-	return c.Tracking
-}
+func viaPointer(c *store.CI) bool { return c.Tracking }
+
+func viaEmbedding(w wrapped) bool { return w.Push }
+
+func viaView(v core.LandingView) bool { return v.LandPerSpec }
 `
 
 func checkGuardFixture(t *testing.T) guardedPackage {
 	t.Helper()
-	root, err := filepath.Abs("..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fset := token.NewFileSet()
+	l := newGuardLoader(t)
 	// The file is named as if in core, so its imports resolve from there.
-	f, err := parser.ParseFile(fset, filepath.Join(root, "core", "fixture.go"), guardFixture, parser.SkipObjectResolution)
+	f, err := parser.ParseFile(l.fset, filepath.Join(l.root, "core", "fixture.go"), guardFixture, parser.SkipObjectResolution)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return checkGuarded(t, fset, importer.ForCompiler(fset, "source", nil), "fixture", map[string]*ast.File{"fixture/fixture.go": f})
+	return l.check(t, "fixture", map[string]*ast.File{"fixture/fixture.go": f})
 }
 
 func TestTheLandingGuardFlagsAReadOfALandingSetting(t *testing.T) {
@@ -274,13 +292,18 @@ func TestTheLandingGuardFlagsAReadOfALandingSetting(t *testing.T) {
 	msg := guardFailure(landingGuardAllowlist, landingReads(pkg))
 	want := "these read a landing setting to decide; ask the Landing Policy instead " +
 		"(see docs/agents/recipes.md, \"Adding or changing a landing rule\"):\n" +
-		"\tfixture/fixture.go:10: Method of github.com/tomoram/code-central/store.Landing\n" +
-		"\tfixture/fixture.go:14: Tracking of github.com/tomoram/code-central/store.CI\n"
+		"\tfixture/fixture.go:16: Method of github.com/tomoram/code-central/store.Landing\n" +
+		"\tfixture/fixture.go:19: Tracking of github.com/tomoram/code-central/store.CI\n" +
+		"\tfixture/fixture.go:21: Push of github.com/tomoram/code-central/store.Landing\n" +
+		"\tfixture/fixture.go:23: LandPerSpec of github.com/tomoram/code-central/core.LandingView\n"
 	if msg != want {
 		t.Errorf("failure =\n%s\nwant\n%s", msg, want)
 	}
 
-	allow := []guardAllow{{file: "fixture/fixture.go", fn: "decides"}, {file: "fixture/fixture.go", fn: "viaPointer"}}
+	var allow []guardAllow
+	for _, fn := range []string{"decides", "viaPointer", "viaEmbedding", "viaView"} {
+		allow = append(allow, guardAllow{file: "fixture/fixture.go", fn: fn})
+	}
 	if msg := guardFailure(allow, landingReads(pkg)); msg != "" {
 		t.Errorf("allowlisted functions flagged:\n%s", msg)
 	}
