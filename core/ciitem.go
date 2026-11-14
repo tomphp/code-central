@@ -1,7 +1,6 @@
 package core
 
 import (
-	"cmp"
 	"slices"
 	"time"
 
@@ -12,9 +11,10 @@ import (
 // are each one Needs Me item per pushed commit, listing the Tickets
 // whose latest pushed commit it is and that wait on it, across Specs.
 // The item has no Ticket of its own, like Base diverged, and is worked
-// out on read, by the Project's CI state. A response, Land anyway or
-// Re-run failed jobs, is stored once per commit on the Project
-// (store.CIResponse) and acts on every listed Ticket.
+// out on read by the Project's evaluation, from the Tickets whose reason
+// is a CI item's, so each listed Ticket has the item's reason. A
+// response, Land anyway or Re-run failed jobs, is stored once per commit
+// on the Project (store.CIResponse) and acts on every listed Ticket.
 
 // CIItemView is a CI item as a Needs Me row and each listed Ticket's
 // view carry it: its reason, the pushed commit, the Tickets waiting on
@@ -45,70 +45,6 @@ type ciItem struct {
 	since       time.Time
 	failure     *CIFailureSummary
 	unavailable *CIUnavailableView
-}
-
-// items are the Project's CI items, in order of their first listed
-// Ticket, each listing its Tickets accepted earliest first: the Accepted
-// Tickets whose latest pushed commit's CI result is failed or cancelled
-// and that the human hasn't dealt with, or that are CI unavailable.
-// They are built once per CI state.
-func (s *ciState) items() []ciItem {
-	if !s.built {
-		s.ciItems, s.built = s.group(s.r.Tickets(s.p.Key)), true
-	}
-	return s.ciItems
-}
-
-// itemOf is the CI item listing t, if one does. Until every item is
-// built, it is built from the Tickets on t's latest pushed commit alone.
-func (s *ciState) itemOf(t store.Ticket) (ciItem, bool) {
-	reason, _, _, _ := s.reason(t)
-	if reason == "" {
-		return ciItem{}, false
-	}
-	commit := latestPushed(t).Commit
-	items := s.ciItems
-	if !s.built {
-		var on []store.Ticket
-		for _, o := range s.r.Tickets(s.p.Key) {
-			if len(o.PushedCommits) > 0 && latestPushed(o).Commit == commit {
-				on = append(on, o)
-			}
-		}
-		items = s.group(on)
-	}
-	for _, it := range items {
-		if it.reason == reason && it.commit == commit {
-			return it, true
-		}
-	}
-	return ciItem{}, false
-}
-
-// group is the CI items listing tickets, in order of their first listed
-// Ticket, each listing its Tickets accepted earliest first.
-func (s *ciState) group(tickets []store.Ticket) []ciItem {
-	slices.SortFunc(tickets, func(a, b store.Ticket) int {
-		return cmp.Or(entered(a).Compare(entered(b)), cmp.Compare(a.Number, b.Number))
-	})
-	var items []ciItem
-	for _, t := range tickets {
-		reason, since, failure, unavailable := s.reason(t)
-		if reason == "" {
-			continue
-		}
-		commit := latestPushed(t).Commit
-		i := slices.IndexFunc(items, func(it ciItem) bool { return it.commit == commit && it.reason == reason })
-		if i < 0 {
-			items = append(items, ciItem{reason: reason, commit: commit, since: since, failure: failure, unavailable: unavailable})
-			i = len(items) - 1
-		}
-		items[i].tickets = append(items[i].tickets, t)
-		if since.Before(items[i].since) {
-			items[i].since = since
-		}
-	}
-	return items
 }
 
 // ciItemView is it as the views carry it.
@@ -145,12 +81,23 @@ func ciItemOptions(r store.Reader, p store.Project, it ciItem) []string {
 	return options
 }
 
+// failureOptions are the failure options the human may choose on t's CI
+// item while t is CI failed or CI cancelled, nil otherwise; see
+// ciItemOptions.
+func (e *evaluation) failureOptions(t store.Ticket) []string {
+	it, ok := e.itemOf(t)
+	if !ok || it.reason == ReasonCIUnavailable {
+		return nil
+	}
+	return ciItemOptions(e.r, e.p, it)
+}
+
 // ciItemRow is it's Needs Me row: one per commit, with no Ticket.
-func ciItemRow(ci *ciState, it ciItem) NeedsMeRow {
+func (e *evaluation) ciItemRow(it ciItem) NeedsMeRow {
 	return NeedsMeRow{
-		Project: ci.p.Key, Title: needsMeTitle(it.reason) + " at " + shortCommit(it.commit), Reason: it.reason, Since: it.since,
-		CIFailure: it.failure, CIUnavailable: it.unavailable, CIItem: ciItemView(ci.r, ci.p, it),
-		CIResult: ci.ticket(it.tickets[0]).result,
+		Project: e.p.Key, Title: needsMeTitle(it.reason) + " at " + shortCommit(it.commit), Reason: it.reason, Since: it.since,
+		CIFailure: it.failure, CIUnavailable: it.unavailable, CIItem: ciItemView(e.r, e.p, it),
+		CIResult: e.ci.ticket(it.tickets[0]).result,
 	}
 }
 

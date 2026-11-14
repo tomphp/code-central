@@ -260,8 +260,9 @@ func StageOf(labels []string) string {
 }
 
 // requirementView is the requirement block for Spec s with these Tickets
-// (in claim order), or nil when none of them is a Stage Ticket.
-func (c *Core) requirementView(r store.Reader, key string, s store.Spec, tickets []store.Ticket) *RequirementView {
+// (in claim order), or nil when none of them is a Stage Ticket, reading
+// their reasons from their Project's evaluation e.
+func requirementView(e *evaluation, s store.Spec, tickets []store.Ticket) *RequirementView {
 	var stages, build []store.Ticket
 	for _, t := range tickets {
 		if StageOf(t.Labels) != "" {
@@ -276,12 +277,11 @@ func (c *Core) requirementView(r store.Reader, key string, s store.Spec, tickets
 	slices.SortStableFunc(stages, func(a, b store.Ticket) int {
 		return slices.Index(Stages, StageOf(a.Labels)) - slices.Index(Stages, StageOf(b.Labels))
 	})
-	rule := c.blockRule(r, key)
 	// claimable is a Ticket a Factory could claim now; one waiting on the
 	// human doesn't count.
 	claimable := func(t store.Ticket) bool {
-		reason, _ := c.reasonOf(r, key, t)
-		return t.State == store.Ready && !rule.blocked(t) && reason == ""
+		reason, _ := e.reason(t)
+		return t.State == store.Ready && !e.rule.blocked(t) && reason == ""
 	}
 	v := &RequirementView{Stages: []StageView{}}
 	if StageOf(stages[0].Labels) != "grilling" {
@@ -289,8 +289,8 @@ func (c *Core) requirementView(r store.Reader, key string, s store.Spec, tickets
 	}
 	current := -1
 	for i, t := range stages {
-		reason, _ := c.reasonOf(r, key, t)
-		v.Stages = append(v.Stages, StageView{Name: StageOf(t.Labels), Ticket: DisplayID(key, t.Number), State: t.State, NeedsMeReason: reason})
+		reason, _ := e.reason(t)
+		v.Stages = append(v.Stages, StageView{Name: StageOf(t.Labels), Ticket: DisplayID(e.p.Key, t.Number), State: t.State, NeedsMeReason: reason})
 		if current < 0 && t.State != store.Done && t.State != store.Cancelled {
 			current = i
 		}

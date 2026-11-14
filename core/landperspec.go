@@ -141,12 +141,24 @@ func (c *Core) ReportSpecMerge(_ context.Context, key string, in ReportSpecMerge
 // Spec-landed Tickets of t's Spec. It is nil when t isn't one of them.
 func specWork(r store.Reader, key string, t store.Ticket) []store.Ticket {
 	p, _ := r.Project(key)
-	if p.Landing.Method != store.LandingPullRequest || t.State != store.Accepted || !specLanded(r, p.Landing, key, t) {
+	if !inSpecWork(r, p, t) {
 		return nil
 	}
+	return specWorkOf(r, p, r.Tickets(key), t.Spec)
+}
+
+// inSpecWork reports whether t waits on its Spec's one pull request in
+// Project p: p is under Pull Request, and t is Accepted and Spec-landed.
+func inSpecWork(r store.Reader, p store.Project, t store.Ticket) bool {
+	return p.Landing.Method == store.LandingPullRequest && t.State == store.Accepted && specLanded(r, p.Landing, p.Key, t)
+}
+
+// specWorkOf is the work of Spec spec among tickets, Project p's: the
+// Tickets waiting on its one pull request, the lead first.
+func specWorkOf(r store.Reader, p store.Project, tickets []store.Ticket, spec int) []store.Ticket {
 	var group []store.Ticket
-	for _, o := range r.Tickets(key) {
-		if o.Spec == t.Spec && o.State == store.Accepted && specLanded(r, p.Landing, key, o) {
+	for _, o := range tickets {
+		if o.Spec == spec && inSpecWork(r, p, o) {
 			group = append(group, o)
 		}
 	}
@@ -164,7 +176,11 @@ func specWork(r store.Reader, key string, t store.Ticket) []store.Ticket {
 // Pull request closed item stands for the Spec; and whether t is a
 // Spec-waiting Ticket at all, which carries no item of its own.
 func specPullRequestLead(r store.Reader, key string, t store.Ticket) (lead, waiting bool) {
-	g := specWork(r, key, t)
+	return leadOf(specWork(r, key, t), t)
+}
+
+// leadOf is specPullRequestLead for t from g, the work of t's Spec.
+func leadOf(g []store.Ticket, t store.Ticket) (lead, waiting bool) {
 	if len(g) == 0 {
 		return false, false
 	}

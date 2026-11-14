@@ -9,15 +9,22 @@ import (
 )
 
 // Focus Kinds (Spec code-central-550): the human chooses per Project which
-// Needs Me reasons are Focus Items with set_focus_kinds. Only the web's
-// focus queue reads them; Needs Me, its count, the needs-you reason on
-// Tickets and Notifications don't.
+// Needs Me reasons are Focus Items with set_focus_kinds. The Project's
+// evaluation marks each Needs Me item a Focus Item or not, and filters
+// nothing: Needs Me, its count, the needs-you reason on Tickets and
+// Notifications still include the reasons that are off.
 
 // FocusKindsView is a Project's Focus Kinds as every Project read returns
 // them: the Needs Me reasons that are off, in group order, empty while
 // every reason is on.
 type FocusKindsView struct {
 	Off []NeedsMeReason `json:"off"`
+}
+
+// focusItem reports whether an item waiting for reason is a Focus Item
+// in Project p: whether p's Focus Kinds leave reason on.
+func focusItem(p store.Project, reason NeedsMeReason) bool {
+	return !slices.Contains(p.FocusKindsOff, string(reason))
 }
 
 func focusKindsView(off []string) FocusKindsView {
