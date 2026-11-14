@@ -108,7 +108,7 @@ A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to t
 _Avoid_: Spike, mock-up, demo
 
 **Retro**:
-A Ticket, on the Retros Spec, that looks back over the sessions that delivered a Finished Ticket or Spec, proposes changes to the agents' environment, and opens a Ticket for each change the human picks. Its work never lands.
+A Ticket, on the Retros Spec, that looks back over the sessions that delivered a Finished Ticket or Spec, proposes changes to the agents' environment, and opens a Ticket for each change the human picks. Its work never lands. Its `retro-of` Tag names the Ticket or Spec it looks back on, and its description lists the Claims to read: every Claim on that work, with its session.
 _Avoid_: Retrospective, post-mortem, review
 
 **Retros Spec**:

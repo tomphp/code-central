@@ -90,6 +90,9 @@ type Project struct {
 	// SmallChangesSpec is the number of the Project's Small Changes Spec, the
 	// Long-lived Spec its Small Changes open on; 0 until the first one.
 	SmallChangesSpec int
+	// RetrosSpec is the number of the Project's Retros Spec, the Long-lived
+	// Spec its Retros open on; 0 until the first one.
+	RetrosSpec int
 	// AutoAccept is the Project's Auto-accept setting: the kinds it is on
 	// for, in AutoAcceptKinds order (ADR 0037). It is stored as on, so a
 	// Project stored without it reads every kind off (ADR 0034).
