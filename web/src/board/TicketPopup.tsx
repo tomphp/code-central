@@ -29,20 +29,17 @@ export function TicketPopup({ api, now, version, id, projects, onClose, openSpec
   const row = projects.find((p) => p.key === project);
   return (
     <PopupShell label="Ticket popup" onClose={onClose}>
-      {ticket.data?.id === id ? (
-        <TicketPane
-          api={api}
-          project={project}
-          ticket={ticket.data}
-          now={now}
-          archived={!!row?.archived}
-          reported={row?.reported_models}
-          openSpec={openSpec}
-          openTicket={openTicket}
-        />
-      ) : (
-        <p className="empty">{ticket.error ? ticket.error.message : "Loading…"}</p>
-      )}
+      <TicketPane
+        api={api}
+        project={project}
+        ticket={ticket.data?.id === id ? ticket.data : undefined}
+        error={ticket.error?.message}
+        now={now}
+        archived={!!row?.archived}
+        reported={row?.reported_models}
+        openSpec={openSpec}
+        openTicket={openTicket}
+      />
     </PopupShell>
   );
 }

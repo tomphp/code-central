@@ -202,7 +202,7 @@ describe("the Requirement pane", () => {
     const items = within(build).getAllByRole("listitem").map((li) => li.textContent);
     expect(items).toEqual([
       "acme-5 store: archived flag Done",
-      "acme-6 Archive in the Project menu In Review",
+      "acme-6 Archive in the Project menu In ReviewIn Review",
       "acme-7 CLI: archive-project Ready",
       "acme-8 Dropped idea Cancelled",
     ]);
@@ -232,7 +232,7 @@ describe("the Requirement pane", () => {
     expect(within(items[4]).getByText("Edit: core/archive.go · 5m ago")).toHaveClass("latest-event");
     expect(items.map((li) => li.textContent)).toEqual([
       "acme-5 store: archived flag Done",
-      "acme-6 Archive in the Project menu In Review",
+      "acme-6 Archive in the Project menu In ReviewIn Review",
       "acme-7 CLI: archive-project Ready",
       "acme-8 Dropped idea Cancelled",
       "acme-9 Archive in the API In ProgressEdit: core/archive.go · 5m ago",

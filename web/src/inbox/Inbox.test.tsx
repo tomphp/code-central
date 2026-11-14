@@ -170,7 +170,7 @@ describe("the triage inbox", () => {
     const body = within(detail()).getByRole("article", { name: "Ticket details" });
     expect(slot.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(heading.closest("aside")).toBe(detail());
-    expect(within(detail()).getByText("Failed", { selector: ".state" })).toBeInTheDocument();
+    expect(within(detail()).getByText("Failed", { selector: ".state-chip" })).toBeInTheDocument();
   });
 
   it("refetches after each change notice", async () => {

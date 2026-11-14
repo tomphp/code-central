@@ -25,6 +25,7 @@ import { mapSection } from "./sections";
 import { ShortId } from "../inbox/ShortId";
 import { TicketName } from "../ticket/TicketLine";
 import { Button } from "../controls/Button";
+import { StateChip } from "../controls/StateChip";
 
 export interface MapPaneProps {
   api: Api;
@@ -118,7 +119,7 @@ export function MapPane({ api, spec, archived, now, ticket, select, specLink, wr
                   >
                     <span className="map-node-top">
                       <span className="map-node-type">{t.node_type ?? "ticket"}</span>
-                      <span className="state">{t.state}</span>
+                      <StateChip state={t.state} />
                     </span>
                     <button className="link map-node-title" aria-current={t.id === ticket ? "true" : undefined} onClick={() => select(t.id)}>
                       <TicketName t={t} />

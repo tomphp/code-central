@@ -419,7 +419,7 @@ The one row the UI lists a Ticket in, in the State lists, All Tickets, Needs Me,
 _Avoid_: Ticket line, State row
 
 **Ticket card**:
-A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, then the title, then its Spec's kind and title outside a lane. In the Needs Me column it also shows its State chip and Needs Me reason. It pulses when it joins its column (the Needs Me column too) or its Ticket changes. Clicking it opens its Focus popup or Ticket popup.
+A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, then the title, then its Spec's kind and title outside a lane. In the Needs Me column it also shows its State chip and Reason badge. It pulses when it joins its column (the Needs Me column too) or its Ticket changes. Clicking it opens its Focus popup or Ticket popup.
 _Avoid_: Board card, Ticket tile
 
 **Focus Pop-up**:
@@ -494,8 +494,12 @@ _Avoid_: Zen mode, queue view
 One thing in Needs Me, of a reason its Project's Focus Kinds leave on, that the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, or a Project's Base diverged or Base missing. It opens with a Focus badge naming its reason.
 _Avoid_: Action, card, task
 
+**Reason badge**:
+The badge, a dot and the words, that names a Ticket's Needs Me reason in the words of the Focus section of Project Options. It is shown in the Ticket pane, on Ticket cards and in a Spec's Ticket list.
+_Avoid_: reason label, reason dot
+
 **Focus badge**:
-The badge at the top of a Focus Item, "Focus: <reason>", that names its Needs Me reason in the words of the Focus section of Project Options.
+The Reason badge at the top of a Focus Item, with the "Focus: " prefix ("Focus: <reason>").
 _Avoid_: focus type, focus label
 
 **Auto-accept badge**:

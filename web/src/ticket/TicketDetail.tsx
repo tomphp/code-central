@@ -1,10 +1,10 @@
-// The selected Ticket, shared by every view: its header, the action panel
-// slot first, then the Ticket itself.
+// The selected Ticket, shared by every view: TicketPane reads what the
+// pane needs beyond the Ticket, and TicketDetail draws it from props.
 import { useState } from "react";
 import type { Api } from "../api/api";
 import { moveTargets } from "../api/actions/move";
 import type { EditView, ReportedModels, State, TicketView } from "../api/types";
-import { ago, CLAUDE_CODE_DEFAULT, REASON_LABEL } from "../format";
+import { ago, CLAUDE_CODE_DEFAULT } from "../format";
 import { Markdown } from "../Markdown";
 import { EditForm } from "../edit/EditForm";
 import { retroable, ticketEditable } from "../edit/editable";
@@ -23,16 +23,24 @@ import { Triage } from "./Triage";
 import { ModelChoice } from "./ModelChoice";
 import { ShortId } from "../inbox/ShortId";
 import { Button } from "../controls/Button";
+import { ReasonBadge } from "../controls/ReasonBadge";
 import { Select } from "../controls/Select";
+import { StateChip } from "../controls/StateChip";
 import { useLiveVersion, useSpec } from "../live";
 import { isCIItemReason } from "../needsme/model";
 import { AutoAcceptSwitch } from "./AutoAcceptSwitch";
 import { AUTO_ACCEPT_LABEL, canAutoAccept, moveText, wouldAutoAccept } from "./autoAccept";
 
-export interface TicketPaneProps {
+export interface TicketDetailProps {
   api: Api;
   project: string;
-  ticket: TicketView;
+  // ticket is the Ticket once read; until then the pane says Loading…, or
+  // shows error, the read's error.
+  ticket?: TicketView;
+  error?: string;
+  // specLabels are the Labels of the Ticket's Spec once read, which the
+  // Auto-accept switch waits for.
+  specLabels?: string[];
   now: Date;
   // reported is the Project's Reported Models, once read: what the Model
   // and effort pickers offer, and the Factory's flags.
@@ -48,21 +56,37 @@ export interface TicketPaneProps {
   archived?: boolean;
 }
 
+export type TicketPaneProps = Omit<TicketDetailProps, "specLabels">;
+
+// TicketPane is the Ticket pane's view: it reads the Ticket's Spec on the
+// live version, for its Labels, and draws TicketDetail.
 export function TicketPane(props: TicketPaneProps) {
-  const t = props.ticket;
+  const spec = useSpec(props.api, props.project, props.ticket?.spec.id || undefined, useLiveVersion(props.api)).data;
+  return <TicketDetail {...props} specLabels={spec?.labels} />;
+}
+
+// TicketDetail is the Ticket pane, drawn from its props: its header, the
+// action panel slot first, then the Ticket itself.
+export function TicketDetail(props: TicketDetailProps) {
   // The form owns its draft, so it stays open if the Ticket stops being
   // editable under it; Edit is offered only while it is closed.
   const [editing, setEditing] = useState(false);
+  const t = props.ticket;
+  if (!t) {
+    return props.error ? (
+      <p role="alert" className="warning">
+        {props.error}
+      </p>
+    ) : (
+      <p className="empty">Loading…</p>
+    );
+  }
   return (
     <>
       <header className="ticket-head">
-        <ShortId id={t.id} /> <span className="state">{t.state}</span>
+        <ShortId id={t.id} /> <StateChip state={t.state} />
         <WaitingBadge waiting={t.waiting_for_spec} />
-        {t.needs_me_reason && (
-          <span className={`reason reason-${t.needs_me_reason}`}>
-            <span className="dot" aria-hidden="true" /> {REASON_LABEL[t.needs_me_reason]}
-          </span>
-        )}
+        {t.needs_me_reason && <ReasonBadge reason={t.needs_me_reason} />}
         {editing ? (
           <EditForm
             title={t.title}
@@ -85,19 +109,20 @@ export function TicketPane(props: TicketPaneProps) {
           </>
         )}
       </header>
-      <ActionPanel {...props} />
-      <TicketDetail {...props} editing={editing} />
+      <ActionPanel api={props.api} project={props.project} ticket={t} now={props.now} />
+      <TicketBody {...props} ticket={t} editing={editing} />
     </>
   );
 }
 
-export type TicketDetailProps = TicketPaneProps & {
+type TicketBodyProps = Omit<TicketDetailProps, "ticket" | "error"> & {
+  ticket: TicketView;
   // editing is whether the pane's edit form is open, which holds the
   // description.
-  editing?: boolean;
+  editing: boolean;
 };
 
-// TicketDetail is everything about a Ticket below its action panel: Spec,
+// TicketBody is everything about a Ticket below its action panel: Spec,
 // Labels, an Incoming Issue's triage actions (in the action panel instead
 // while it is a New issue), description, Blockers (with a gated one's CI
 // result, and whether it no longer blocks), the model and effort its next
@@ -105,7 +130,7 @@ export type TicketDetailProps = TicketPaneProps & {
 // (in the action panel instead while CI failed), Claim activity with
 // each Claim's Live section, move, and a collapsed history of moves,
 // comments and edits merged by time.
-export function TicketDetail({ api, project, ticket: t, now, reported, openSpec, openTicket, archived, editing }: TicketDetailProps) {
+function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSpec, openTicket, archived, editing }: TicketBodyProps) {
   const claims = [...t.claims].sort((a, b) => b.number - a.number);
   const specName = `${t.spec.id} ${t.spec.title}`;
   return (
@@ -128,7 +153,7 @@ export function TicketDetail({ api, project, ticket: t, now, reported, openSpec,
         <PullRequestBadge pr={t.pull_request} />
         <OpenExternal link={t.link} />
       </div>
-      <TicketAutoAccept api={api} project={project} ticket={t} openSpec={openSpec} archived={archived} />
+      <TicketAutoAccept api={api} project={project} ticket={t} specLabels={specLabels} openSpec={openSpec} archived={archived} />
       {t.link && !t.link.detached && <LinkedNote key={t.id} api={api} project={project} ticket={t} />}
       {/* A New issue's triage actions are its action panel, so they
           aren't shown here too. */}
@@ -197,10 +222,9 @@ export function TicketDetail({ api, project, ticket: t, now, reported, openSpec,
 // TicketAutoAccept is the Ticket's Auto-accept switch, offered unless the
 // Ticket can't be auto-accepted or is Accepted, Done or Cancelled. It
 // reflects only the Ticket's own Label; when its Spec carries the Label, a
-// note says so.
-function TicketAutoAccept({ api, project, ticket: t, openSpec, archived }: Pick<TicketDetailProps, "api" | "project" | "ticket" | "openSpec" | "archived">) {
-  const spec = useSpec(api, project, t.spec.id || undefined, useLiveVersion(api)).data;
-  if (!spec || !canAutoAccept(t, spec.labels) || t.state === "Accepted" || t.state === "Done" || t.state === "Cancelled") return null;
+// note says so. It waits for the Spec's Labels.
+function TicketAutoAccept({ api, project, ticket: t, specLabels, openSpec, archived }: Pick<TicketBodyProps, "api" | "project" | "ticket" | "specLabels" | "openSpec" | "archived">) {
+  if (!specLabels || !canAutoAccept(t, specLabels) || t.state === "Accepted" || t.state === "Done" || t.state === "Cancelled") return null;
   const specName = `${t.spec.id} ${t.spec.title}`;
   return (
     <AutoAcceptSwitch
@@ -208,10 +232,10 @@ function TicketAutoAccept({ api, project, ticket: t, openSpec, archived }: Pick<
       project={project}
       target={t.id}
       on={t.labels.includes(AUTO_ACCEPT_LABEL)}
-      accepts={t.state === "In Review" && wouldAutoAccept(t, spec.labels) ? 1 : 0}
+      accepts={t.state === "In Review" && wouldAutoAccept(t, specLabels) ? 1 : 0}
       archived={archived}
       viaSpec={
-        spec.labels.includes(AUTO_ACCEPT_LABEL) && (
+        specLabels.includes(AUTO_ACCEPT_LABEL) && (
           <>
             Auto-accepted via its Spec's Label:{" "}
             {openSpec ? (
