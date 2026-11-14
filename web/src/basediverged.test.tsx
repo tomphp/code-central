@@ -1,38 +1,25 @@
 // Base diverged (code-central-394): a Project's own Needs Me item, with no
 // Ticket, in the Inbox and in Focus Mode, showing the local and remote
-// commits and the fix, against FakeApi.
-import { render, screen, within } from "@testing-library/react";
+// commits and the fix, on the WASM Core.
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { FakeApi } from "./api/fake";
-import { allClearOn, focus, renderApp } from "./focus/focusTesting";
+import { newWorld } from "./api/core/core";
+import { scenario } from "./api/scenario";
 import { rowDetail } from "./format";
+import { allClear, focus, renderApp } from "./worldTesting";
 
-function world() {
-  const fake = new FakeApi();
-  allClearOn(fake);
-  fake.addProject("acme", "Acme");
-  fake.addProject("beta", "Beta");
-  fake.addTicket("acme", { title: "Login form", state: "In Review" }); // acme-1
-  fake.setNeedsMe([
-    { reason: "in_review", tickets: [{ id: "acme-1" }] },
-    {
-      reason: "base_diverged",
-      tickets: [
-        {
-          id: "",
-          project: "acme",
-          title: "Base diverged",
-          base_diverged: {
-            base: "main",
-            local: "aaa1111222",
-            remote: "bbb2222333",
-          },
-        },
-      ],
-    },
-  ]);
-  return fake;
+// world has acme, whose base has diverged, and beta; acme also has a Ticket
+// In Review unless alone.
+async function world(alone = false) {
+  const w = await newWorld();
+  await allClear(w);
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  await s.project("beta", "Beta");
+  if (!alone) await s.ticket("acme", { title: "Login form", state: "In Review" });
+  await s.base("acme", "diverged");
+  return w;
 }
 
 const item = () =>
@@ -40,32 +27,15 @@ const item = () =>
 
 describe("Base diverged", () => {
   it("is a one-line detail with both commits", async () => {
-    const row = (await world().needsMe()).groups[1].tickets[0];
+    const groups = (await (await world()).api.needsMe()).groups;
+    const row = groups.find((g) => g.reason === "base_diverged")!.tickets[0];
     expect(rowDetail(new Date(), row)).toBe(
       "main is at aaa1111 and the remote's at bbb2222: reconcile them by hand",
     );
   });
 
   it("is a Focus Item for the Project with the commits and the fix, and no Ticket panel", async () => {
-    const fake = world();
-    fake.setNeedsMe([
-      {
-        reason: "base_diverged",
-        tickets: [
-          {
-            id: "",
-            project: "acme",
-            title: "Base diverged",
-            base_diverged: {
-              base: "main",
-              local: "aaa1111222",
-              remote: "bbb2222333",
-            },
-          },
-        ],
-      },
-    ]);
-    renderApp(fake);
+    renderApp(await world(true));
     const it = await item();
     // Its reason and its title.
     expect(within(it).getAllByText("Base diverged")).toHaveLength(1);

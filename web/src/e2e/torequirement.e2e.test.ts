@@ -1,6 +1,6 @@
 // End-to-end (`make e2e`): Playwright drives a real browser against the UI
 // embedded in the built binary, with the fake gh on the service's PATH,
-// for what FakeApi can't show: the real Issue Watcher bringing an issue
+// for what the WASM Core can't show: the real Issue Watcher bringing an issue
 // in and writing back to it (code-central-290). An issue arrives as a New
 // issue in Focus Mode, the human turns it To Requirement with context,
 // and the Issue Watcher posts the context to the issue and labels it

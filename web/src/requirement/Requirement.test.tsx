@@ -1,14 +1,35 @@
-// Requirement tests: the real App against FakeApi. "New requirement", the
-// Stage strip, the Requirement pane and the Requirements view.
+// Requirement tests: the real App on a WASM Core world. "New requirement",
+// the Stage strip, the Requirement pane and the Requirements view.
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
-import { FakeApi } from "../api/fake";
+import { newWorld, type World } from "../api/core/core";
+import { scenario, WORK, type Scenario } from "../api/scenario";
 
-function renderApp(fake: FakeApi, url = "/") {
+const HOUR = 3_600_000;
+
+function renderApp(w: World, url = "/") {
   window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
+  return render(<App api={w.api} now={w.now} />);
+}
+
+// acme is a world with the Project acme, and the scenario builder on it.
+async function acme(...more: string[]) {
+  const w = await newWorld();
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  for (const key of more) await s.project(key, key[0].toUpperCase() + key.slice(1));
+  return { w, s };
+}
+
+// done takes a Stage Ticket to Done: finished with no branch, as a Stage
+// is (a Spec Stage recommends implementing), and accepted.
+async function done(s: Scenario, id: string) {
+  const path = s.ticketPath("acme", id);
+  const recommendation = (await s.api.getTicket("acme", id)).title.startsWith("Spec:") ? "implement" : undefined;
+  await s.agent(`${path}/finish`, { claim_id: await s.claimFor("acme", id), summary: "Done the Stage", ...(recommendation && { recommendation }) });
+  await s.human(`${path}/accept`, {});
 }
 
 const nav = () => screen.getByRole("navigation", { name: "Filters" });
@@ -17,9 +38,8 @@ const params = () => new URLSearchParams(window.location.search);
 
 describe("New requirement", () => {
   it("opens a modal with one text box, submits it and selects the new Requirement", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake);
+    const { w } = await acme();
+    renderApp(w);
 
     await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
     const modal = screen.getByRole("dialog", { name: "New requirement" });
@@ -27,7 +47,7 @@ describe("New requirement", () => {
     await userEvent.type(within(modal).getByRole("textbox", { name: "Requirement" }), "Export a Spec as Markdown{Enter}One file.");
     await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
 
-    expect(fake.calls).toContain("submitRequirement");
+    expect(w.calls).toContain("submitRequirement");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(await within(detail()).findByText("Waiting for a Factory to claim Grilling. Nothing needs you yet.")).toBeInTheDocument();
     expect(within(detail()).getByRole("heading", { name: "Export a Spec as Markdown", level: 2 })).toBeInTheDocument();
@@ -35,9 +55,8 @@ describe("New requirement", () => {
   });
 
   it("offers Straight to Spec, off by default, and submits it skipping Grilling", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake);
+    const { w } = await acme();
+    renderApp(w);
 
     await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
     const modal = screen.getByRole("dialog", { name: "New requirement" });
@@ -51,13 +70,12 @@ describe("New requirement", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(await within(detail()).findByText(/Grilling/)).toBeInTheDocument();
-    expect(fake.calls).toContain("submitRequirement");
+    expect(w.calls).toContain("submitRequirement");
   });
 
   it("saves as Draft: Save as Draft writes every Stage Ticket as Draft", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake);
+    const { w } = await acme();
+    renderApp(w);
 
     await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
     const modal = screen.getByRole("dialog", { name: "New requirement" });
@@ -66,26 +84,23 @@ describe("New requirement", () => {
     await userEvent.click(within(modal).getByRole("button", { name: "Save as Draft" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    const tickets = (await fake.findTickets("acme")).filter((t) => t.spec === "acme-1");
+    const tickets = (await w.api.findTickets("acme")).filter((t) => t.spec === "acme-1");
     expect(tickets.map((t) => t.state)).toEqual(["Draft", "Draft", "Draft"]);
   });
 
   it("closes on Cancel without submitting", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake);
+    const { w } = await acme();
+    renderApp(w);
 
     await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(fake.calls).not.toContain("submitRequirement");
+    expect(w.calls).not.toContain("submitRequirement");
   });
 
   it("asks which Project when there are several and none is chosen, and goes to the chosen one", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    fake.addProject("beta", "Beta");
-    renderApp(fake);
+    const { w } = await acme("beta");
+    renderApp(w);
 
     await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
     const modal = screen.getByRole("dialog");
@@ -97,10 +112,8 @@ describe("New requirement", () => {
   });
 
   it("submits to the filtered Project without asking", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    fake.addProject("beta", "Beta");
-    renderApp(fake, "/?view=inbox&project=beta");
+    const { w } = await acme("beta");
+    renderApp(w, "/?view=inbox&project=beta");
 
     await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
     const modal = screen.getByRole("dialog");
@@ -111,9 +124,8 @@ describe("New requirement", () => {
   });
 
   it("won't submit blank text", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake);
+    const { w } = await acme();
+    renderApp(w);
 
     await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
     const modal = screen.getByRole("dialog");
@@ -122,26 +134,21 @@ describe("New requirement", () => {
   });
 });
 
-const hoursAgo = (fake: FakeApi, h: number) => new Date(fake.now.getTime() - h * 3_600_000);
-
 // building is a Requirement in Build: every Stage Done, one implementation
 // Ticket Done, one In Review (needing the human), one Ready, one Cancelled.
+// It was submitted 2 hours ago.
 async function building() {
-  const fake = new FakeApi();
-  fake.addProject("acme", "Acme");
-  const now = fake.now;
-  fake.now = hoursAgo(fake, 2);
+  const { w, s } = await acme();
   const title = "Archive finished Projects";
-  const r = await fake.submitRequirement("acme", `${title}\nOnce everything is Done.`); // acme-1, stages acme-2..4
-  fake.now = now;
-  for (const t of r.stages) fake.updateTicket(t.id, { state: "Done" });
-  const spec = { id: r.spec.id, title };
-  fake.addTicket("acme", { title: "store: archived flag", state: "Done", spec }); // acme-5
-  fake.addTicket("acme", { title: "Archive in the Project menu", state: "In Review", spec }); // acme-6
-  fake.addTicket("acme", { title: "CLI: archive-project", state: "Ready", spec }); // acme-7
-  fake.addTicket("acme", { title: "Dropped idea", state: "Cancelled", spec }); // acme-8
-  fake.setNeedsMe([{ reason: "in_review", tickets: [{ id: "acme-6", summary: "Menu item added" }] }]);
-  return fake;
+  const r = await w.api.submitRequirement("acme", `${title}\nOnce everything is Done.`); // acme-1, stages acme-2..4
+  for (const t of r.stages) await done(s, t.id);
+  const spec = r.spec.id;
+  await s.ticket("acme", { title: "store: archived flag", state: "Done", spec }); // acme-5
+  const review = await s.ticket("acme", { title: "Archive in the Project menu", state: "In Review", spec }); // acme-6
+  await s.ticket("acme", { title: "CLI: archive-project", state: "Ready", spec }); // acme-7
+  await s.ticket("acme", { title: "Dropped idea", state: "Cancelled", spec }); // acme-8
+  w.advance(2 * HOUR);
+  return { w, s, review };
 }
 
 const pane = () => within(detail()).getByRole("region", { name: "Requirement" });
@@ -149,10 +156,9 @@ const segment = (name: RegExp) => within(within(pane()).getByRole("list", { name
 
 describe("the Requirement pane", () => {
   it("shows Grilling skipped and Spec current for a Requirement submitted Straight to Spec", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    await fake.submitRequirement("acme", "Export a Spec as Markdown", undefined, true);
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w } = await acme();
+    await w.api.submitRequirement("acme", "Export a Spec as Markdown", undefined, true);
+    renderApp(w, "/?view=inbox&requirement=acme-1");
 
     await within(detail()).findByRole("region", { name: "Requirement" });
     const strip = within(within(pane()).getByRole("list", { name: "Stages" }));
@@ -164,10 +170,9 @@ describe("the Requirement pane", () => {
   });
 
   it("shows the header and strip, a queued Stage dashed, while the Requirement waits for a Factory", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    await fake.submitRequirement("acme", "Export a Spec as Markdown");
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w } = await acme();
+    await w.api.submitRequirement("acme", "Export a Spec as Markdown");
+    renderApp(w, "/?view=inbox&requirement=acme-1");
 
     await within(detail()).findByRole("region", { name: "Requirement" });
     expect(pane()).toHaveTextContent("acme-1");
@@ -181,8 +186,8 @@ describe("the Requirement pane", () => {
   });
 
   it("opens on the Ticket that needs the human, lists Build's Tickets with their States, and selects a Stage from the strip", async () => {
-    const fake = await building();
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w } = await building();
+    renderApp(w, "/?view=inbox&requirement=acme-1");
 
     expect(await within(detail()).findByRole("heading", { name: "Archive in the Project menu" })).toBeInTheDocument();
     expect(pane()).toHaveTextContent("submitted 2h ago");
@@ -213,13 +218,13 @@ describe("the Requirement pane", () => {
   });
 
   it("shows an In Progress Build Ticket's latest Session Event faintly, and nothing on one with none", async () => {
-    const fake = await building();
-    const spec = { id: "acme-1", title: "Archive finished Projects" };
-    const claim = (session_id: string) => [{ number: 1, session_id, started: fake.now.toISOString(), last_activity: fake.now.toISOString() }];
-    fake.addTicket("acme", { title: "Archive in the API", state: "In Progress", spec, claims: claim("s-busy") }); // acme-9
-    fake.addTicket("acme", { title: "Archive in the store", state: "In Progress", spec, claims: claim("s-quiet") }); // acme-10
-    fake.postSessionEvents("s-busy", [{ time: new Date(fake.now.getTime() - 5 * 60_000).toISOString(), kind: "tool_call", tool: "Edit", text: "Edit: core/archive.go" }]);
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w, s } = await building();
+    const spec = "acme-1";
+    const busy = await s.ticket("acme", { title: "Archive in the API", state: "Ready", spec }); // acme-9
+    const quiet = await s.ticket("acme", { title: "Archive in the store", state: "Ready", spec }); // acme-10
+    await s.factorySession("acme", busy, { session: "s-busy", events: [{ time: new Date(w.now().getTime() - 5 * 60_000).toISOString(), kind: "tool_call", tool: "Edit", text: "Edit: core/archive.go" }] });
+    await s.factorySession("acme", quiet, { session: "s-quiet" });
+    renderApp(w, "/?view=inbox&requirement=acme-1");
 
     await within(detail()).findByRole("region", { name: "Requirement" });
     const build = within(pane()).getByRole("list", { name: "Build" });
@@ -236,26 +241,24 @@ describe("the Requirement pane", () => {
   });
 
   it("updates an In Progress Build Ticket's latest Session Event on the live feed", async () => {
-    const fake = await building();
-    const spec = { id: "acme-1", title: "Archive finished Projects" };
-    const claims = [{ number: 1, session_id: "s-busy", started: fake.now.toISOString(), last_activity: fake.now.toISOString() }];
-    fake.addTicket("acme", { title: "Archive in the API", state: "In Progress", spec, claims }); // acme-9
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w, s } = await building();
+    const busy = await s.ticket("acme", { title: "Archive in the API", state: "Ready", spec: "acme-1" }); // acme-9
+    await s.factorySession("acme", busy, { session: "s-busy" });
+    renderApp(w, "/?view=inbox&requirement=acme-1");
 
     const build = await within(detail()).findByRole("list", { name: "Build" });
-    act(() => fake.postSessionEvents("s-busy", [{ time: fake.now.toISOString(), kind: "text", text: "Writing the test first." }]));
+    await act(() => s.postSessionEvents("s-busy", [{ time: w.now().toISOString(), kind: "text", text: "Writing the test first." }]));
     expect(await within(build).findByText("Writing the test first. · just now")).toHaveClass("latest-event");
   });
 
   it("shows a Cancelled tickets Stage as skipped, makes Build current and opens on the implementation Ticket", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    const r = await fake.submitRequirement("acme", "Export a Spec as Markdown");
-    fake.updateTicket(r.stages[0].id, { state: "Done" });
-    fake.updateTicket(r.stages[1].id, { state: "Done" });
-    fake.updateTicket(r.stages[2].id, { state: "Cancelled" });
-    fake.addTicket("acme", { title: "Implement the export", state: "Ready", spec: { id: r.spec.id, title: "Export a Spec as Markdown" } });
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w, s } = await acme();
+    const r = await w.api.submitRequirement("acme", "Export a Spec as Markdown");
+    await done(s, r.stages[0].id);
+    await done(s, r.stages[1].id);
+    await s.human(`${s.ticketPath("acme", r.stages[2].id)}/cancel`, {});
+    await s.ticket("acme", { title: "Implement the export", state: "Ready", spec: r.spec.id });
+    renderApp(w, "/?view=inbox&requirement=acme-1");
 
     await within(detail()).findByRole("region", { name: "Requirement" });
     const tickets = segment(/^Tickets/);
@@ -270,10 +273,10 @@ describe("the Requirement pane", () => {
   });
 
   it("says when Build waits for a Factory", async () => {
-    const fake = await building();
-    fake.updateTicket("acme-6", { state: "Done" });
-    fake.setNeedsMe([]);
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w, s, review } = await building();
+    await s.human(`${s.ticketPath("acme", review)}/accept`, {});
+    await s.human(`${s.ticketPath("acme", review)}/land`, { commit: WORK.commit });
+    renderApp(w, "/?view=inbox&requirement=acme-1");
 
     expect(await within(detail()).findByText("Waiting for a Factory to claim a Build Ticket. Nothing needs you yet.")).toBeInTheDocument();
     expect(segment(/^Build/)).toHaveTextContent("Build 2/3");
@@ -283,24 +286,25 @@ describe("the Requirement pane", () => {
 
 describe("the Requirements view", () => {
   it("lists every Requirement with its strip, finished ones included, and opens one", async () => {
-    const fake = await building(); // acme-1
-    const fresh = await fake.submitRequirement("acme", "Export a Spec"); // acme-9
-    const done = await fake.submitRequirement("acme", "Render Markdown"); // acme-13
-    for (const t of done.stages) fake.updateTicket(t.id, { state: "Done" });
-    fake.addTicket("acme", { title: "Plain work", state: "Ready", spec: { id: "acme-20", title: "Not a Requirement" } });
-    renderApp(fake);
+    const { w, s } = await building(); // acme-1
+    const fresh = await w.api.submitRequirement("acme", "Export a Spec"); // acme-9
+    const finished = await w.api.submitRequirement("acme", "Render Markdown"); // acme-13
+    for (const t of finished.stages) await done(s, t.id);
+    const notRequirement = await s.spec("acme", { title: "Not a Requirement" });
+    await s.ticket("acme", { title: "Plain work", state: "Ready", spec: notRequirement });
+    renderApp(w);
 
     await userEvent.click(await within(nav()).findByRole("button", { name: "Requirements 2" }));
     const list = screen.getByRole("main", { name: "Tickets" });
     const ids = () => [...list.querySelectorAll<HTMLElement>("a[data-id]")].map((a) => a.dataset.id);
-    await waitFor(() => expect(ids()).toEqual([fresh.spec.id, "acme-1", done.spec.id]));
+    await waitFor(() => expect(ids()).toEqual([fresh.spec.id, "acme-1", finished.spec.id]));
 
     const row = (id: string) => list.querySelector<HTMLElement>(`a[data-id="${id}"]`)!;
     expect(within(row("acme-1")).getByRole("list", { name: "Stages" })).toHaveTextContent("Build 1/3");
     expect(row("acme-1")).toHaveTextContent("Build: In Review");
     expect(within(row("acme-1")).getByLabelText("Needs you")).toBeInTheDocument();
     expect(row(fresh.spec.id)).toHaveTextContent("Grilling: waiting for a Factory");
-    expect(row(done.spec.id)).toHaveTextContent("Finished");
+    expect(row(finished.spec.id)).toHaveTextContent("Finished");
     expect(params().get("list")).toBe("requirements");
 
     await userEvent.click(row("acme-1"));

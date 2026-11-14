@@ -1,14 +1,37 @@
 import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { ProjectSpec } from "../live";
+import { storyWorld } from "../api/core/story";
+import { STATES } from "../api/types";
+import type { ProjectSpec, ProjectTicket } from "../live";
 import { Needing } from "../needsme/fixture";
-import { storyLink, storyTickets, type StoryTickets } from "../ticket/storyTickets";
+import { storyLink } from "../ticket/storyTickets";
 import { LaneHeader } from "./LaneHeader";
 
-const meta = { title: "Board/LaneHeader", loaders: [async () => ({ data: await storyTickets() })] } satisfies Meta;
+// On the WASM Core: a Spec with a Ticket in each of four States, read back
+// as the Inbox reads them.
+interface StoryTickets {
+  all: ProjectTicket[];
+  stage: ProjectTicket;
+}
+
+const meta = {
+  title: "Board/LaneHeader",
+  ...storyWorld(async (s, w): Promise<StoryTickets> => {
+    await s.project("acme", "Acme");
+    const spec = await s.spec("acme", { title: "Sign-in" });
+    await s.ticket("acme", { title: "Add a sign-in page", spec });
+    await s.ticket("acme", { title: "Rate-limit the sign-in endpoint", spec, state: "In Progress" });
+    await s.ticket("acme", { title: "Sync sign-ins with GitHub", spec, state: "Accepted" });
+    await s.ticket("acme", { title: "Grilling: Sign-in", spec, state: "Needs Answer", labels: ["stage:grilling"] });
+    const rows = await w.api.findTickets("acme", { state: [...STATES] });
+    const all = rows.map((r) => ({ ...r, project: "acme" }));
+    return { all, stage: all[3] };
+  }),
+} satisfies Meta;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+// spec is the row of the world's one Spec, the first ID Core hands out.
 const spec = (title: string, labels: string[] = []): ProjectSpec => ({
   id: "acme-1",
   project: "acme",
@@ -20,15 +43,14 @@ const spec = (title: string, labels: string[] = []): ProjectSpec => ({
   updated: "",
 });
 
-// header renders a story from the fake API's Tickets, as wide as a Board,
-// with Needs Me's reasons for them.
-const header = (draw: (d: StoryTickets, all: StoryTickets["plain"][]) => ReactNode, reasons: (d: StoryTickets) => Record<string, "needs_answer"> = () => ({})): Story => ({
+// header renders a story from the world's Tickets, as wide as a Board, with
+// Needs Me's reasons for them.
+const header = (draw: (d: StoryTickets, all: ProjectTicket[]) => ReactNode, reasons: (d: StoryTickets) => Record<string, "needs_answer"> = () => ({})): Story => ({
   render: (_, { loaded }) => {
-    const d = loaded.data as StoryTickets;
-    const all = [d.plain, d.working, d.linked, d.stage];
+    const d = loaded.world as StoryTickets;
     return (
-      <Needing tickets={all} reasons={reasons(d)}>
-        <div style={{ width: 900 }}>{draw(d, all)}</div>
+      <Needing tickets={d.all} reasons={reasons(d)}>
+        <div style={{ width: 900 }}>{draw(d, d.all)}</div>
       </Needing>
     );
   },

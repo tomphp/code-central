@@ -1,31 +1,48 @@
-// Edit tests: the real App against FakeApi. Edit on a Draft Ticket in the
+// Edit tests: the real App on a WASM Core world. Edit on a Draft Ticket in the
 // Ticket panel, and the body section, with Edit, on the Requirement view
 // and the plain Spec view.
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
-import { FakeApi } from "../api/fake";
-import type { LinkView } from "../api/types";
+import { newWorld, type World } from "../api/core/core";
+import { scenario } from "../api/scenario";
+import type { State } from "../api/types";
 
-function renderApp(fake: FakeApi, url: string) {
+async function setup() {
+  const w = await newWorld();
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  return { w, s };
+}
+
+function renderApp(w: World, url: string) {
   window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
+  return render(<App api={w.api} now={w.now} />);
 }
 
 const detail = () => screen.getByRole("complementary", { name: "Ticket" });
-const ticketUrl = (id = "acme-2") => `/?view=inbox&requirement=acme-1&ticket=${id}`;
+const specUrl = (spec: string) => `/?view=inbox&requirement=${spec}`;
 
-function draft(extra: Partial<Parameters<FakeApi["addTicket"]>[1]> = {}, project = "acme") {
-  const fake = new FakeApi();
-  fake.addProject("acme", "Acme", { archived: project === "archived" });
-  fake.addSpec("acme", { title: "Theming" }); // acme-1
-  fake.addTicket("acme", { title: "Dark palette", state: "Draft", description: "Use **navy**.", spec: { id: "acme-1", title: "Theming" }, ...extra }); // acme-2
-  return fake;
+const GH = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7" };
+
+// draft is the Ticket "Dark palette" under the Spec "Theming", a Draft
+// unless state says, or one linked to a GitHub issue, detached from it or not.
+async function draft(extra: { state?: State; link?: "owned" | "detached" } = {}) {
+  const { w, s } = await setup();
+  const spec = await s.spec("acme", { title: "Theming" });
+  let id: string;
+  if (extra.link) {
+    id = (await s.integration(`${s.projectPath("acme")}/integration/create_linked_ticket`, { spec, title: "Dark palette", description: "Use **navy**.", link: GH })).id;
+    if (extra.link === "detached") await w.api.unlink("acme", id);
+  } else {
+    id = await s.ticket("acme", { title: "Dark palette", state: extra.state ?? "Draft", description: "Use **navy**.", spec });
+  }
+  return { w, s, spec, id };
 }
 
-async function openTicket(fake: FakeApi, title = "Dark palette") {
-  renderApp(fake, ticketUrl());
+async function openTicket(d: { w: World; spec: string; id: string }, title = "Dark palette") {
+  renderApp(d.w, `/?view=inbox&requirement=${d.spec}&ticket=${d.id}`);
   await within(detail()).findByRole("heading", { name: title, level: 2 });
 }
 
@@ -34,8 +51,8 @@ const edit = () => within(detail().querySelector<HTMLElement>(".ticket-head")!).
 
 describe("Edit on a Ticket", () => {
   it("is offered on a Draft Ticket, and changes the title and description together", async () => {
-    const fake = draft();
-    await openTicket(fake);
+    const d = await draft();
+    await openTicket(d);
     await userEvent.click(edit()!);
     const title = within(detail()).getByRole("textbox", { name: "Title" });
     expect(title).toHaveValue("Dark palette");
@@ -57,8 +74,8 @@ describe("Edit on a Ticket", () => {
   });
 
   it("sends only the field that changed", async () => {
-    const fake = draft();
-    await openTicket(fake);
+    const d = await draft();
+    await openTicket(d);
     await userEvent.click(edit()!);
     await userEvent.type(within(detail()).getByRole("textbox", { name: "Description" }), " More.");
     await userEvent.click(within(detail()).getByRole("button", { name: "Save" }));
@@ -67,30 +84,30 @@ describe("Edit on a Ticket", () => {
   });
 
   it("writes nothing when Save changes nothing", async () => {
-    const fake = draft();
-    await openTicket(fake);
+    const d = await draft();
+    await openTicket(d);
     await userEvent.click(edit()!);
     await userEvent.click(within(detail()).getByRole("button", { name: "Save" }));
     expect(within(detail()).queryByRole("textbox", { name: "Title" })).toBeNull();
-    expect(fake.calls).not.toContain("edit_ticket");
-    expect((await fake.getTicket("acme", "acme-2")).edits).toEqual([]);
+    expect(d.w.actions()).not.toContain("edit_ticket");
+    expect((await d.w.api.getTicket("acme", d.id)).edits).toEqual([]);
   });
 
   it("drops the draft on Cancel", async () => {
-    const fake = draft();
-    await openTicket(fake);
+    const d = await draft();
+    await openTicket(d);
     await userEvent.click(edit()!);
     await userEvent.type(within(detail()).getByRole("textbox", { name: "Title" }), " v2");
     await userEvent.click(within(detail()).getByRole("button", { name: "Cancel" }));
     expect(within(detail()).getByRole("heading", { name: "Dark palette", level: 2 })).toBeInTheDocument();
     await userEvent.click(edit()!);
     expect(within(detail()).getByRole("textbox", { name: "Title" })).toHaveValue("Dark palette");
-    expect(fake.calls).not.toContain("edit_ticket");
+    expect(d.w.actions()).not.toContain("edit_ticket");
   });
 
   it("previews the Markdown, and goes back to the textarea with the text kept", async () => {
-    const fake = draft();
-    await openTicket(fake);
+    const d = await draft();
+    await openTicket(d);
     await userEvent.click(edit()!);
     await userEvent.type(within(detail()).getByRole("textbox", { name: "Description" }), " And _more_.");
     await userEvent.click(within(detail()).getByRole("button", { name: "Preview" }));
@@ -102,23 +119,23 @@ describe("Edit on a Ticket", () => {
   });
 
   it("refuses an empty title with the service's reason, keeping the form and the text", async () => {
-    const fake = draft();
-    await openTicket(fake);
+    const d = await draft();
+    await openTicket(d);
     await userEvent.click(edit()!);
     await userEvent.clear(within(detail()).getByRole("textbox", { name: "Title" }));
     await userEvent.type(within(detail()).getByRole("textbox", { name: "Description" }), " Extra.");
     await userEvent.click(within(detail()).getByRole("button", { name: "Save" }));
     expect(await within(detail()).findByRole("alert")).toHaveTextContent("a Ticket needs a title");
     expect(within(detail()).getByRole("textbox", { name: "Description" })).toHaveValue("Use **navy**. Extra.");
-    expect((await fake.getTicket("acme", "acme-2")).edits).toEqual([]);
+    expect((await d.w.api.getTicket("acme", d.id)).edits).toEqual([]);
   });
 
   it("keeps the form and the draft when the Ticket leaves Draft meanwhile, and Save still goes through", async () => {
-    const fake = draft();
-    await openTicket(fake);
+    const d = await draft();
+    await openTicket(d);
     await userEvent.click(edit()!);
     await userEvent.type(within(detail()).getByRole("textbox", { name: "Description" }), " Mine.");
-    fake.updateTicket("acme-2", { state: "Ready" });
+    await d.s.human(`${d.s.ticketPath("acme", d.id)}/move`, { to_state: "Ready" });
     await waitFor(() => expect(within(detail()).getByText("Ready")).toBeInTheDocument());
     expect(within(detail()).getByRole("textbox", { name: "Description" })).toHaveValue("Use **navy**. Mine.");
     await userEvent.click(within(detail()).getByRole("button", { name: "Save" }));
@@ -128,39 +145,37 @@ describe("Edit on a Ticket", () => {
   });
 
   it.each([["Ready"], ["Failed"], ["In Review"], ["Done"]] as const)("is not offered on a %s Ticket", async (state) => {
-    const fake = draft({ state });
-    await openTicket(fake);
+    const d = await draft({ state });
+    await openTicket(d);
     expect(edit()).toBeNull();
   });
 
-  it("is not offered on a Ticket whose Link owns its definition, but is once it is detached or outbound", async () => {
-    const link: LinkView = { integration: "github", id: "acme/web#7", external_state: "open", detached: false, outbound: false };
-    await openTicket(draft({ link }));
+  it("is not offered on a Ticket whose Link owns its definition, but is once it is detached", async () => {
+    await openTicket(await draft({ link: "owned" }));
     expect(edit()).toBeNull();
     expect(within(detail()).getByText(/read-only while linked/)).toBeInTheDocument();
   });
 
-  it.each([[{ detached: true, outbound: false }], [{ detached: false, outbound: true }]])("is offered when the Link is %o", async (flags) => {
-    const link: LinkView = { integration: "github", id: "acme/web#7", external_state: "open", ...flags };
-    await openTicket(draft({ link }));
+  it("is offered when the Link is detached", async () => {
+    await openTicket(await draft({ link: "detached" }));
     expect(edit()).not.toBeNull();
-  });
-
-  it("is not offered in an Archived Project", async () => {
-    await openTicket(draft({}, "archived"));
-    expect(edit()).toBeNull();
   });
 });
 
 describe("the Requirement view's body", () => {
   async function requirement(finishSpecStage = false) {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    const { stages } = await fake.submitRequirement("acme", "Offline mode\nWorks on a plane.");
-    if (finishSpecStage) fake.updateTicket(stages[1].id, { state: "Done" });
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w, s } = await setup();
+    const { spec, stages } = await w.api.submitRequirement("acme", "Offline mode\nWorks on a plane.");
+    if (finishSpecStage) {
+      // The Stages go in order: grilling, then spec.
+      for (const [i, { id }] of stages.slice(0, 2).entries()) {
+        await s.finish("acme", id, "Done; implement, it is small", i === 1 ? { recommendation: "implement" } : undefined);
+        await s.human(`${s.ticketPath("acme", id)}/accept`, {});
+      }
+    }
+    renderApp(w, specUrl(spec.id));
     const pane = await within(detail()).findByRole("region", { name: /Requirement's text|Spec/ });
-    return { fake, pane };
+    return { w, s, spec, stages, pane };
   }
 
   it("is collapsed by default, headed Requirement's text, and shows the text when opened", async () => {
@@ -176,7 +191,7 @@ describe("the Requirement view's body", () => {
   });
 
   it("is edited through Save, which updates the heading and the body", async () => {
-    const { fake, pane } = await requirement();
+    const { w, spec, pane } = await requirement();
     await userEvent.click(within(pane).getByRole("button", { name: "Edit" }));
     expect(within(pane).getByRole("textbox", { name: "Body" })).toHaveValue("Offline mode\nWorks on a plane.");
     const title = within(pane).getByRole("textbox", { name: "Title" });
@@ -186,13 +201,13 @@ describe("the Requirement view's body", () => {
     await userEvent.click(within(pane).getByRole("button", { name: "Save" }));
     expect(await within(detail()).findByRole("heading", { name: "Flight mode", level: 2 })).toBeInTheDocument();
     expect(within(pane).getByText("And trains.", { exact: false })).toBeInTheDocument();
-    expect((await fake.getSpec("acme", "acme-1")).edits.map((e) => e.actor)).toEqual(["human"]);
+    expect((await w.api.getSpec("acme", spec.id)).edits.map((e) => e.actor)).toEqual(["human"]);
   });
 
   it("offers Edit until every Ticket is finished, and none after", async () => {
-    const { fake, pane } = await requirement();
+    const { s, stages, pane } = await requirement();
     expect(within(pane).getByRole("button", { name: "Edit" })).toBeInTheDocument();
-    for (const id of ["acme-2", "acme-3", "acme-4"]) fake.updateTicket(id, { state: "Cancelled" });
+    for (const { id } of stages) await s.human(`${s.ticketPath("acme", id)}/cancel`, {});
     await waitFor(() => expect(within(pane).queryByRole("button", { name: "Edit" })).toBeNull());
     await userEvent.click(within(pane).getByRole("button", { name: "Requirement's text" }));
     expect(within(pane).getByText(/Works on a plane\./)).toBeInTheDocument();
@@ -200,20 +215,29 @@ describe("the Requirement view's body", () => {
 });
 
 describe("the plain Spec view's body", () => {
-  function world(extra: { link?: LinkView; labels?: string[]; tickets?: "none" | "finished" } = {}, archived = false) {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme", { archived });
-    fake.addSpec("acme", { title: "Theming", body: "How the app looks.", ...(extra.link && { link: extra.link }), ...(extra.labels && { labels: extra.labels }) }); // acme-1
-    if (extra.tickets === "finished") fake.addTicket("acme", { title: "Palette", state: "Done", spec: { id: "acme-1", title: "Theming" } });
-    return fake;
+  // world is the Spec "Theming" with a body, linked to a GitHub issue
+  // (detached from it, or not) when extra says, with a Done Ticket when
+  // tickets is "finished", in a Project archived if it can be.
+  async function world(extra: { link?: "owned" | "detached"; tickets?: "none" | "finished" } = {}, archived = false) {
+    const { w, s } = await setup();
+    let spec: string;
+    if (extra.link) {
+      spec = (await s.integration(`${s.projectPath("acme")}/integration/create_linked_spec`, { title: "Theming", body: "How the app looks.", link: GH })).id;
+      if (extra.link === "detached") await w.api.unlink("acme", spec);
+    } else {
+      spec = await s.spec("acme", { title: "Theming", body: "How the app looks." });
+    }
+    if (extra.tickets === "finished") await s.ticket("acme", { title: "Palette", state: "Done", spec });
+    if (archived) await w.api.archiveProject("acme");
+    return { w, s, spec };
   }
-  async function open(fake: FakeApi) {
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+  async function open({ w, spec }: { w: World; spec: string }) {
+    renderApp(w, specUrl(spec));
     return within(detail()).findByRole("region", { name: "Body" });
   }
 
   it("is a Body section with Edit on a Spec with no Tickets, closed until opened", async () => {
-    const pane = await open(world());
+    const pane = await open(await world());
     expect(within(pane).queryByText("How the app looks.")).toBeNull();
     await userEvent.click(within(pane).getByRole("button", { name: "Body" }));
     expect(within(pane).getByText("How the app looks.")).toBeInTheDocument();
@@ -223,40 +247,37 @@ describe("the plain Spec view's body", () => {
   });
 
   it("reads No body. for an empty body", async () => {
-    const fake = world();
-    fake.addSpec("acme", { title: "Empty" }); // acme-2
-    renderApp(fake, "/?view=inbox&requirement=acme-2");
+    const { w, s } = await world();
+    const empty = await s.spec("acme", { title: "Empty" });
+    renderApp(w, specUrl(empty));
     const pane = await within(detail()).findByRole("region", { name: "Body" });
     await userEvent.click(within(pane).getByRole("button", { name: "Body" }));
     expect(within(pane).getByText("No body.")).toBeInTheDocument();
   });
 
   it("shows a Finished Spec's body with no Edit", async () => {
-    const pane = await open(world({ tickets: "finished" }));
+    const pane = await open(await world({ tickets: "finished" }));
     expect(within(pane).queryByRole("button", { name: "Edit" })).toBeNull();
     await userEvent.click(within(pane).getByRole("button", { name: "Body" }));
     expect(within(pane).getByText("How the app looks.")).toBeInTheDocument();
   });
 
-  it("offers no Edit on a definition-owned linked Spec, but does on a detached one", async () => {
-    const link: LinkView = { integration: "github", id: "acme/web#7", external_state: "open", detached: false, outbound: false };
-    expect(within(await open(world({ link }))).queryByRole("button", { name: "Edit" })).toBeNull();
+  it("offers no Edit on a definition-owned linked Spec", async () => {
+    expect(within(await open(await world({ link: "owned" }))).queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
   it("offers Edit on a detached linked Spec", async () => {
-    const link: LinkView = { integration: "github", id: "acme/web#7", external_state: "open", detached: true, outbound: false };
-    expect(within(await open(world({ link }))).getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(within(await open(await world({ link: "detached" }))).getByRole("button", { name: "Edit" })).toBeInTheDocument();
   });
 
   it("offers no Edit in an Archived Project", async () => {
-    expect(within(await open(world({}, true))).queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(within(await open(await world({}, true))).queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
   it("has no body section on a Map", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    await fake.submitMap("acme", "Plan the year");
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w } = await setup();
+    const { spec } = await w.api.submitMap("acme", "Plan the year");
+    renderApp(w, specUrl(spec.id));
     await within(detail()).findByRole("region", { name: "Map" });
     expect(within(detail()).queryByRole("button", { name: "Edit" })).toBeNull();
     expect(within(detail()).queryByRole("region", { name: "Body" })).toBeNull();
