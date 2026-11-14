@@ -68,7 +68,8 @@ describe("Base diverged", () => {
     renderApp(fake);
     const it = await item();
     // Its reason and its title.
-    expect(within(it).getAllByText("Base diverged")).toHaveLength(2);
+    expect(within(it).getAllByText("Base diverged")).toHaveLength(1);
+    expect(within(it).getByText("Focus: Base diverged")).toBeInTheDocument();
     expect(within(it).getByText("aaa1111")).toBeInTheDocument();
     expect(within(it).getByText("bbb2222")).toBeInTheDocument();
     expect(

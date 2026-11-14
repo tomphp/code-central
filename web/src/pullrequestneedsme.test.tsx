@@ -37,7 +37,7 @@ describe("To merge under Pull Request", () => {
     const fake = await world("conflicting", "to_merge");
     renderApp(fake);
     const it = await item();
-    expect(within(it).getByText("To merge")).toBeInTheDocument();
+    expect(within(it).getByText("Focus: To merge")).toBeInTheDocument();
     const link = await within(it).findByRole("link", { name: "Pull request 7, conflicting" });
     expect(link).toHaveAttribute("href", PR_LINK);
 
@@ -55,7 +55,7 @@ describe("Pull request closed", () => {
     const fake = await world("closed", "pull_request_closed");
     renderApp(fake);
     const it = await item();
-    expect(within(it).getByText("Pull request closed", { selector: "span" })).toBeInTheDocument();
+    expect(within(it).getByText("Focus: Pull request closed")).toBeInTheDocument();
     expect(await within(it).findByRole("heading", { name: "Pull request closed" })).toBeInTheDocument();
     expect(await within(it).findByRole("link", { name: "Pull request 7, closed" })).toHaveAttribute("href", PR_LINK);
     expect(within(it).queryByRole("button", { name: /Land anyway/ })).toBeNull();

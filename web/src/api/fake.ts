@@ -77,7 +77,7 @@ import {
 } from "./api";
 import { codeHostOf } from "./codeHost";
 import { fakeActions } from "./fakeActions";
-import { AUTO_ACCEPT_LABEL, wouldAutoAccept } from "../ticket/autoAccept";
+import { AUTO_ACCEPT_LABEL, autoAcceptKindOf, canAutoAccept, wouldAutoAccept } from "../ticket/autoAccept";
 import {
   ApiError,
   type ChoiceValue,
@@ -1044,8 +1044,10 @@ export class FakeApi implements Api {
     const { models } = this.project(project);
     const name = kindOf(t.labels);
     const kind = models.kinds.find((k) => k.kind === name) ?? { model: "", effort: "" };
+    const specLabels = this.allSpecs(project).find((s) => s.id === t.spec.id)?.labels ?? [];
     return {
       ...this.view(t),
+      ...(canAutoAccept(t, specLabels) && { auto_accept_kind: autoAcceptKindOf(t) }),
       model_choice: {
         model: choose(t.tags.model, name, kind.model, models.default.model),
         effort: choose(t.tags.effort, name, kind.effort, models.default.effort),

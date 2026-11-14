@@ -49,6 +49,28 @@ async function renderSummaryInApp(body: string) {
 }
 
 describe("the In Review panel", () => {
+  it.each([
+    ["grilling", "Grilling outcomes"],
+    ["spec", "Spec recommendation"],
+    ["tickets", "Tickets Stage"],
+    ["implementation", "Implementation results"],
+    ["merge", "Merge results"],
+  ] as const)("names the %s Auto-accept kind beside its heading", async (kind, name) => {
+    const fake = world();
+    const ticket = { ...(await fake.getTicket("acme", "acme-1")), auto_accept_kind: kind };
+    render(<ReviewPanel api={fake} project="acme" ticket={ticket} now={fake.now} />);
+    const panel = screen.getByRole("region", { name: "In Review" });
+    expect(within(panel).getByText(`Auto-accept: ${name}`)).toBeInTheDocument();
+    expect(within(panel).getByRole("heading", { name: "Review the finished work" })).toBeInTheDocument();
+  });
+
+  it("says never when the Ticket has no Auto-accept kind", async () => {
+    const fake = world();
+    const ticket = { ...(await fake.getTicket("acme", "acme-1")), auto_accept_kind: undefined };
+    render(<ReviewPanel api={fake} project="acme" ticket={ticket} now={fake.now} />);
+    expect(within(screen.getByRole("region", { name: "In Review" })).getByText("Auto-accept: never")).toBeInTheDocument();
+  });
+
   it("shows the finish summary in full", async () => {
     const panel = await renderPanel(world());
     const summary = within(panel).getByLabelText("Summary");

@@ -289,6 +289,10 @@ type TicketView struct {
 	// ModelChoice is the model and effort the Ticket's next turn runs
 	// with, each with its source; only the UI's read carries it.
 	ModelChoice *ModelChoice `json:"model_choice,omitempty"`
+	// AutoAcceptKind is the Ticket's Auto-accept kind (grilling, spec,
+	// tickets, implementation or merge); left out when it has none. Only
+	// the UI's read carries it.
+	AutoAcceptKind store.AutoAcceptKind `json:"auto_accept_kind,omitempty"`
 }
 
 // TicketRow is one find_tickets result.
@@ -372,7 +376,8 @@ type FindTicketsInput struct {
 	// parts, brief, when none are named. Only the HTTP API and the CLI
 	// name them; an agent's MCP read takes the default.
 	Parts []string `json:"-"`
-	// WithModelChoice adds each Ticket's Model Choice, as get_ticket's
+	// WithModelChoice adds each Ticket's Model Choice and Auto-accept
+	// kind, as get_ticket's
 	// does for the UI's read over HTTP.
 	WithModelChoice bool `json:"-"`
 }
@@ -520,7 +525,7 @@ func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (Tick
 		if err != nil {
 			return err
 		}
-		v = shapeView(c.ticketView(r, key, t), p, t, in.Parts, parts, in.WithModelChoice)
+		v = shapeView(c.ticketView(r, key, t), r, p, t, in.Parts, parts, in.WithModelChoice)
 		return nil
 	})
 	return v, err
@@ -528,15 +533,17 @@ func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (Tick
 
 // shapeView is v as a read asking for the parts asked, which parts is as
 // a set, returns it: the default view when it names none.
-func shapeView(v TicketView, p store.Project, t store.Ticket, asked []string, parts map[string]bool, withModelChoice bool) TicketView {
+func shapeView(v TicketView, r store.Reader, p store.Project, t store.Ticket, asked []string, parts map[string]bool, withUIFields bool) TicketView {
 	if len(asked) == 0 {
 		v = defaultView(v)
 	} else {
 		v = v.only(parts)
 	}
-	if withModelChoice {
+	if withUIFields {
 		mc := modelChoice(p, t)
 		v.ModelChoice = &mc
+		sp, _ := r.Spec(p.Key, t.Spec)
+		v.AutoAcceptKind, _ = autoAcceptKind(sp, t)
 	}
 	return v
 }
@@ -581,7 +588,7 @@ func (c *Core) FindTicketViews(_ context.Context, key string, in FindTicketsInpu
 			return err
 		}
 		for _, t := range tickets {
-			views = append(views, shapeView(c.ticketViewIn(r, e, t), e.p, t, in.Parts, parts, in.WithModelChoice))
+			views = append(views, shapeView(c.ticketViewIn(r, e, t), r, e.p, t, in.Parts, parts, in.WithModelChoice))
 		}
 		return nil
 	})

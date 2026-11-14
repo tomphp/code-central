@@ -19,7 +19,8 @@
 .focus-ticket { margin: 16px 0 0; }
 .focus-ticket .tid { font-size: 20px; }
 .focus-requirement { margin: 0 0 8px; font-size: 20px; color: var(--muted); }
-.focus-badges { margin: 0 0 8px; }
+.focus-badges { margin: 0 0 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.focus-badge { color: var(--rc); border-color: var(--rc); display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; }
 .focus-why { margin: 0 0 24px; font-size: 20px; }
 .focus-open { margin: 24px 0 0; }
 /* A Question Focus Item: the Question reads largest, its Ticket's title

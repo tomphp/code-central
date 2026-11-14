@@ -10,6 +10,7 @@ import type { CommentView, TicketView } from "../../api/types";
 import { Markdown } from "../../Markdown";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { useAct } from "../../ticket/useAct";
+import { AutoAcceptBadge } from "../../ticket/AutoAcceptBadge";
 import { Button } from "../../controls/Button";
 import "./review.css";
 
@@ -30,7 +31,10 @@ export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
 
   return (
     <section aria-label="In Review" className="panel review-panel">
-      <h3>Review the finished work</h3>
+      <div className="review-heading">
+        <h3>Review the finished work</h3>
+        <AutoAcceptBadge kind={t.auto_accept_kind} />
+      </div>
       {summary ? (
         <div aria-label="Summary" className="summary">
           <Markdown>{summary.body}</Markdown>

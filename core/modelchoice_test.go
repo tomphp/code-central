@@ -259,3 +259,38 @@ func TestCreateTicketWithEmptyTagsIsAsBefore(t *testing.T) {
 		t.Errorf("tags = %v, want none", got)
 	}
 }
+
+func TestTheUIsTicketReadCarriesTheAutoAcceptKindAndTheMCPReadDoesNot(t *testing.T) {
+	f := specMergeWorld(t) // acme-1 with an implementation Ticket, acme-2
+	for _, stage := range []string{"grilling", "spec", "tickets"} {
+		f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: stage, Labels: []string{core.StagePrefix + stage}}) // acme-3 to acme-5
+	}
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Try", Labels: []string{core.PrototypeLabel}}) // acme-6
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Chart", Labels: []string{"wayfinder:chart"}}) // acme-7
+	merge := f.openSpecMerge(t, "README").Ticket
+	m, err := f.core.SubmitMap(ctx, "acme", core.SubmitMapInput{Text: "# Offline mode\n\nbody\n"})
+	if err != nil {
+		t.Fatalf("submit_map: %v", err)
+	}
+	mapTicket := f.ticket(t, "acme", core.CreateTicketInput{Spec: core.Ref(m.Spec.ID), Title: "In the map"}).ID
+
+	for ticket, want := range map[string]store.AutoAcceptKind{
+		"acme-2": "implementation", "acme-3": "grilling", "acme-4": "spec", "acme-5": "tickets",
+		merge: "merge", "acme-6": "", "acme-7": "", mapTicket: "",
+	} {
+		v, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: core.Ref(ticket), WithModelChoice: true})
+		if err != nil {
+			t.Fatalf("get_ticket %s: %v", ticket, err)
+		}
+		if v.AutoAcceptKind != want {
+			t.Errorf("%s: auto_accept_kind = %q, want %q", ticket, v.AutoAcceptKind, want)
+		}
+		plain, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: core.Ref(ticket)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plain.AutoAcceptKind != "" {
+			t.Errorf("%s: the MCP read carries auto_accept_kind %q", ticket, plain.AutoAcceptKind)
+		}
+	}
+}
