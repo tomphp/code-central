@@ -1,131 +1,121 @@
 // CI items (code-central-432): CI failed, CI cancelled and CI unavailable
 // are one Needs Me item per pushed commit, with no Ticket of its own,
-// listing the Tickets waiting on it across Specs. Against FakeApi: the
+// listing the Tickets waiting on it across Specs. On the WASM Core: the
 // Inbox row, its list and badge; the Focus Item with the list and the
 // failure options, which act on every listed Ticket; and a listed
 // Ticket's own view, which links the item.
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { FakeApi } from "./api/fake";
-import type { CIFailureOption, CIItem } from "./api/types";
-import { failedRun } from "./ciTesting";
-import { allClearOn, focus, renderApp } from "./focus/focusTesting";
+import { newWorld } from "./api/core/core";
+import { scenario } from "./api/scenario";
 import { rowDetail } from "./format";
+import { allClear, focus, renderApp } from "./worldTesting";
 
-// failCI puts project under Merge + Push with CI Tracking, reports tickets
-// (Accepted, each with a branch) pushed as abc1234567 and its run of
-// ci.yml failed, and seeds Needs Me with the one CI failed item listing
-// them, which it returns. It goes with this file's port to the WASM Core.
-async function failCI(fake: FakeApi, project: string, tickets: string[]): Promise<CIItem> {
-  await fake.setLandingMethod(project, { method: "merge", push: true, remote: "origin" });
-  await fake.setCITracking(project, { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
-  for (const id of tickets) await fake.reportPushedCommit(project, id, "abc1234567", "main");
-  await fake.reportCIRuns(project, [failedRun(tickets[0])]);
-  const item = (await fake.getTicket(project, tickets[0])).ci_item!;
-  fake.setNeedsMe([
-    { reason: "ci_failed", tickets: [{ id: "", project, title: "CI failed at abc1234", ci_result: "failed", ci_failure: { commit: "abc1234567", workflows: ["ci.yml"] }, ci_item: item }] },
-  ]);
-  return item;
-}
+const COMMIT = "abc1234567";
 
-// world has acme-1 (on acme's first Spec) and acme-3 (on another) Accepted
-// under Merge + Push with CI Tracking, both pushed as abc1234567, whose
-// one run of ci.yml failed: one CI failed item listing both.
+// world has two Accepted Tickets, one on each of two long-lived Specs
+// (whose Tickets land one by one), under Merge + Push with CI Tracking,
+// both pushed as abc1234567, whose one run of ci.yml failed: one CI failed
+// item listing both. Their IDs are the ones the writes returned.
 async function world() {
-  const fake = new FakeApi();
-  allClearOn(fake);
-  fake.addProject("acme", "Acme");
-  fake.addTicket("acme", { title: "Login page", state: "Accepted", branch: "acme-1", commit: "abc" }); // acme-1
-  fake.addSpec("acme", { title: "Shop" }); // acme-2
-  fake.addTicket("acme", { title: "Basket", state: "Accepted", branch: "acme-3", commit: "def", spec: { id: "acme-2", title: "Shop" } }); // acme-3
-  const item = await failCI(fake, "acme", ["acme-1", "acme-3"]);
-  return { fake, item };
+  const w = await newWorld();
+  await allClear(w);
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  const first = await s.spec("acme", { title: "Login", labels: ["long-lived"] });
+  const shop = await s.spec("acme", { title: "Shop", labels: ["long-lived"] });
+  const login = await s.ticket("acme", { title: "Login page", state: "Accepted", spec: first });
+  const basket = await s.ticket("acme", { title: "Basket", state: "Accepted", spec: shop });
+  await s.pushed("acme", login, COMMIT);
+  await s.pushed("acme", basket, COMMIT);
+  await s.ci("acme", login, "failed", COMMIT);
+  return { w, s, login, basket, first, shop };
 }
 
 describe("a CI item in Needs Me", () => {
   it("is one row per pushed commit with no Ticket, listing the Tickets waiting on it across Specs", async () => {
-    const { fake, item } = await world();
-    expect(item).toMatchObject({ reason: "ci_failed", commit: "abc1234567", options: ["rerun_ci", "land_anyway", "new_fix_ticket"] });
+    const { w, login, basket, first, shop } = await world();
+    const item = (await w.api.getTicket("acme", login)).ci_item!;
+    expect(item).toMatchObject({ reason: "ci_failed", commit: COMMIT, options: ["rerun_ci", "land_anyway", "new_fix_ticket"] });
     expect(item.tickets).toEqual([
-      { id: "acme-1", title: "Login page", spec: expect.any(String) },
-      { id: "acme-3", title: "Basket", spec: "acme-2" },
+      { id: login, title: "Login page", spec: first },
+      { id: basket, title: "Basket", spec: shop },
     ]);
-    const row = (await fake.needsMe()).groups[0].tickets[0];
-    expect(rowDetail(fake.now, row)).toBe("acme-1, acme-3 · ci.yml failed");
+    const row = (await w.api.needsMe()).groups[0].tickets[0];
+    expect(rowDetail(w.now(), row)).toBe(`${login}, ${basket} · ci.yml failed`);
 
-    renderApp(fake, "/?view=inbox");
+    renderApp(w, "/?view=inbox");
     const group = await within(screen.getByRole("main", { name: "Tickets" })).findByRole("region", { name: "CI failed" });
     expect(within(group).getByRole("heading", { level: 3 })).toHaveTextContent("CI failed 1");
     // The row opens on the first Ticket it lists, whose panel shows the item.
     const link = within(group).getByRole("link", { name: /CI failed at abc1234/ });
-    expect(link).toHaveAttribute("href", expect.stringContaining("ticket=acme-1"));
+    expect(link).toHaveAttribute("href", expect.stringContaining(`ticket=${login}`));
     expect(within(link).getByText("acme")).toHaveClass("tid");
-    expect(within(link).getByText("acme-1, acme-3 · ci.yml failed")).toBeInTheDocument();
+    expect(within(link).getByText(`${login}, ${basket} · ci.yml failed`)).toBeInTheDocument();
     expect(within(link).getByText("CI failed", { selector: ".ci-badge" })).toBeInTheDocument();
   });
 
   it("is one Focus Item whose panel lists the Tickets and whose options act on all of them", async () => {
-    const { fake } = await world();
-    renderApp(fake);
+    const { w, login, basket } = await world();
+    renderApp(w);
     const focusItem = await within(focus()).findByRole("article", { name: "Focus Item" });
     expect(within(focusItem).getByRole("heading", { level: 2 })).toHaveTextContent("CI failed at abc1234");
     expect(within(focusItem).getByText("Focus: CI failed")).toBeInTheDocument();
     const panel = await within(focusItem).findByRole("region", { name: "CI failed" });
-    expect(within(panel).getByText(/is one Needs Me item, listing 2 Tickets/)).toHaveTextContent("Also waiting: acme-3");
-    expect(within(panel).getByRole("link", { name: "acme-3" })).toHaveAttribute("href", expect.stringContaining("ticket=acme-3"));
+    expect(within(panel).getByText(/is one Needs Me item, listing 2 Tickets/)).toHaveTextContent(`Also waiting: ${basket}`);
+    expect(within(panel).getByRole("link", { name: basket })).toHaveAttribute("href", expect.stringContaining(`ticket=${basket}`));
     const options = within(panel).getByRole("group", { name: "Failure options" });
     expect(within(options).queryByRole("button", { name: /Send back to fix/ })).toBeNull();
     await userEvent.click(within(options).getByRole("button", { name: "Land anyway" }));
-    for (const id of ["acme-1", "acme-3"]) {
-      expect((await fake.getTicket("acme", id)).land_anyway).toBe(true);
+    for (const id of [login, basket]) {
+      await waitFor(async () => expect((await w.api.getTicket("acme", id)).land_anyway).toBe(true));
     }
-    expect((await fake.needsMe()).count).toBe(0);
+    await waitFor(async () => expect((await w.api.needsMe()).count).toBe(0));
     expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
   });
 
   it("is linked from each listed Ticket's own view, which shows its CI result", async () => {
-    const { fake } = await world();
-    renderApp(fake, "/?view=inbox&ticket=acme-3");
+    const { w, login, basket } = await world();
+    renderApp(w, `/?view=inbox&ticket=${basket}`);
     const pane = await screen.findByRole("complementary", { name: "Ticket" });
     expect(await within(pane).findByText("CI failed", { selector: ".reason" })).toBeInTheDocument();
     const panel = await within(pane).findByRole("region", { name: "CI failed" });
     expect(within(panel).getByText(/is one Needs Me item/, { selector: ".ci-item" })).toHaveTextContent(
-      "CI failed at abc1234 is one Needs Me item, listing 2 Tickets waiting on the commit. Your choice acts on all of them. Also waiting: acme-1.",
+      `CI failed at abc1234 is one Needs Me item, listing 2 Tickets waiting on the commit. Your choice acts on all of them. Also waiting: ${login}.`,
     );
-    expect(within(panel).getByRole("link", { name: "acme-1" })).toHaveAttribute("href", expect.stringContaining("ticket=acme-1"));
+    expect(within(panel).getByRole("link", { name: login })).toHaveAttribute("href", expect.stringContaining(`ticket=${login}`));
     expect(within(within(panel).getByRole("region", { name: "CI" })).getByRole("heading", { level: 3 })).toHaveTextContent("CI failed abc1234");
   });
 
   it("offers Send back to fix only when it lists one Ticket", async () => {
-    const { fake } = await world();
-    fake.updateTicket("acme-3", { state: "Done" });
-    await fake.reportCIRuns("acme", [failedRun("acme-1")]);
-    const item = (await fake.getTicket("acme", "acme-1")).ci_item!;
-    expect(item.tickets.map((t) => t.id)).toEqual(["acme-1"]);
+    const { w, s, login, basket } = await world();
+    await s.human(`${s.ticketPath("acme", basket)}/cancel`, {});
+    await s.ci("acme", login, "failed", COMMIT, 2);
+    const item = (await w.api.getTicket("acme", login)).ci_item!;
+    expect(item.tickets.map((t) => t.id)).toEqual([login]);
     expect(item.options).toEqual(["rerun_ci", "land_anyway", "send_back", "new_fix_ticket"]);
   });
 
   it("shows a CI unavailable item's cause and its Tickets, with no options", async () => {
-    const fake = new FakeApi();
-    allClearOn(fake);
-    fake.addProject("acme", "Acme");
-    fake.addTicket("acme", { title: "Login page", state: "Accepted", ci_result: "running" }); // acme-1
-    fake.addTicket("acme", { title: "Basket", state: "Accepted", ci_result: "running" }); // acme-2
-    const options: CIFailureOption[] = [];
-    const ci_item: CIItem = { reason: "ci_unavailable", commit: "abc1234567", tickets: [{ id: "acme-1", title: "Login page", spec: "acme-1" }, { id: "acme-2", title: "Basket", spec: "acme-1" }], options };
-    fake.updateTicket("acme-1", { ci_item, needs_me_reason: "ci_unavailable" });
-    const pushed = new Date(fake.now.getTime() - 12 * 60_000).toISOString();
-    fake.setNeedsMe([
-      { reason: "ci_unavailable", tickets: [{ id: "", project: "acme", title: "CI unavailable at abc1234", since: pushed, ci_unavailable: { cause: "no_ci_runs", commit: "abc1234567", pushed }, ci_item }] },
-    ]);
-    const row = (await fake.needsMe()).groups[0].tickets[0];
-    expect(rowDetail(fake.now, row)).toBe("acme-1, acme-2 · No CI Runs reported for abc1234 pushed 12m ago");
+    const w = await newWorld();
+    await allClear(w);
+    const s = scenario(w);
+    await s.project("acme", "Acme");
+    const spec = await s.spec("acme", { labels: ["long-lived"] });
+    const login = await s.ticket("acme", { title: "Login page", state: "Accepted", spec });
+    const basket = await s.ticket("acme", { title: "Basket", state: "Accepted", spec });
+    await s.pushed("acme", login, COMMIT);
+    await s.pushed("acme", basket, COMMIT);
+    await s.reportCIWatcherStatus("acme", { state: "watching" });
+    w.advance(12 * 60_000);
+    const row = (await w.api.needsMe()).groups[0].tickets[0];
+    expect(rowDetail(w.now(), row)).toBe(`${login}, ${basket} · No CI Runs reported for abc1234 pushed 12m ago`);
 
-    renderApp(fake);
+    renderApp(w);
     const focusItem = await within(focus()).findByRole("article", { name: "Focus Item" });
     const panel = await within(focusItem).findByRole("region", { name: "CI unavailable" });
-    expect(within(panel).getByText(/is one Needs Me item, listing 2 Tickets/)).toHaveTextContent("Also waiting: acme-2");
+    expect(within(panel).getByText(/is one Needs Me item, listing 2 Tickets/)).toHaveTextContent(`Also waiting: ${basket}`);
     expect(within(panel).queryByRole("group", { name: "Failure options" })).toBeNull();
   });
 });

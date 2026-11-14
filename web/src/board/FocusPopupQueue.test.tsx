@@ -110,7 +110,7 @@ function renderQueue({ w }: Fake, { project, url = "/?view=activity" }: { projec
   render(
     <>
       <App api={w.api} now={w.now} />
-      <Harness api={w.api} now={w.now()}project={project} onClose={onClose} />
+      <Harness api={w.api} now={w.now()} project={project} onClose={onClose} />
     </>,
   );
   return onClose;
