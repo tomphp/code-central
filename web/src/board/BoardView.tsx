@@ -29,6 +29,7 @@ import { TicketCard } from "../ticket/TicketCard";
 import { ColumnsMenu } from "./ColumnsMenu";
 import { LaneHeader } from "./LaneHeader";
 import { FocusPopup } from "./FocusPopup";
+import type { FocusKey } from "../focus/session";
 import { SpecPopup } from "./SpecPopup";
 import { TicketPopup } from "./TicketPopup";
 import { Button } from "../controls/Button";
@@ -44,7 +45,7 @@ export interface BoardViewProps {
   navigate(patch: Partial<UiLocation>): void;
   // onFocusPopupGone hears a card's Focus popup close, however it closes,
   // for the automatic Focus popup not to reopen for its Focus Items.
-  onFocusPopupGone?(keys: string[]): void;
+  onFocusPopupGone?(keys: FocusKey[]): void;
 }
 
 export function BoardView({ api, now, version, data, loc, navigate, onFocusPopupGone }: BoardViewProps) {
