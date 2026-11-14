@@ -1,17 +1,18 @@
 // The Focus section of Project Options (code-central-556): a "Show in
 // Focus" checkbox per Needs Me reason, in group order, all on by default;
-// Save sends the whole off list. Against FakeApi.
+// Save sends the whole off list. On the WASM Core.
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
-import { FakeApi } from "../api/fake";
+import { newWorld, type World } from "../api/core/core";
+import { scenario } from "../api/scenario";
 import { NEEDS_ME_REASONS } from "../api/types";
 import { REASON_LABEL } from "../format";
 
-function renderApp(fake: FakeApi) {
+function renderApp(w: World) {
   window.history.replaceState(null, "", "/?view=project-options&project=acme");
-  return render(<App api={fake} now={() => fake.now} />);
+  return render(<App api={w.api} now={w.now} />);
 }
 
 const page = () => screen.getByRole("main", { name: "Project Options" });
@@ -20,14 +21,17 @@ const findFocus = async () =>
   within(await screen.findByRole("main", { name: "Project Options" })).findByRole("group", { name: "Focus" });
 const box = (reason: string) => within(focus()).getByRole("checkbox", { name: reason });
 const save = () => userEvent.click(within(focus()).getByRole("button", { name: "Save" }));
-const fresh = (fake: FakeApi) => {
-  fake.addProject("acme", "Acme");
-  return fake;
+const fresh = async (opts: { archived?: boolean } = {}) => {
+  const w = await newWorld();
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  if (opts.archived) await s.archive("acme");
+  return w;
 };
 
 describe("the Focus section", () => {
   it("comes after Stage Guides, with a checked box per reason in group order", async () => {
-    renderApp(fresh(new FakeApi()));
+    renderApp(await fresh());
 
     await findFocus();
     const sections = Array.from(page().querySelectorAll("fieldset.project-options-section > legend"), (l) => l.textContent);
@@ -40,37 +44,35 @@ describe("the Focus section", () => {
   });
 
   it("saves the whole off list, and turns a reason back on", async () => {
-    const fake = fresh(new FakeApi());
-    renderApp(fake);
+    const w = await fresh();
+    renderApp(w);
 
     await findFocus();
     await userEvent.click(box("In Review"));
     await userEvent.click(box("Answered"));
     await save();
     await within(focus()).findByRole("status");
-    expect((await fake.listProjects())[0].focus_kinds.off).toEqual(["answered", "in_review"]);
+    expect((await w.api.listProjects())[0].focus_kinds.off).toEqual(["answered", "in_review"]);
     expect(within(focus()).getByRole("button", { name: "Save" })).toBeDisabled();
 
     await userEvent.click(box("Answered"));
     await save();
     await within(focus()).findByRole("status");
-    expect((await fake.listProjects())[0].focus_kinds.off).toEqual(["in_review"]);
+    expect((await w.api.listProjects())[0].focus_kinds.off).toEqual(["in_review"]);
   });
 
   it("follows the Project as read", async () => {
-    const fake = fresh(new FakeApi());
-    renderApp(fake);
+    const w = await fresh();
+    renderApp(w);
 
     await findFocus();
-    await fake.setFocusKinds("acme", ["failed"]);
+    await w.api.setFocusKinds("acme", ["failed"]);
     await within(focus()).findByRole("checkbox", { name: "Failed", checked: false });
     expect(box("Answered")).toBeChecked();
   });
 
   it("is disabled while the Project is archived", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme", { archived: true });
-    renderApp(fake);
+    renderApp(await fresh({ archived: true }));
 
     expect(await findFocus()).toBeDisabled();
   });
