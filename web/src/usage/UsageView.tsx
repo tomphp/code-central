@@ -2,12 +2,13 @@
 // Project, or in all of them, over the last 7, 30 or 90 days: the Code
 // Central calls table, one row per MCP operation, sortable by each
 // column; and Context Size, each kind of session's peaks and the recent
-// sessions, each linking to its Ticket and opening its Context Size,
-// response by response, on a line chart; and token usage, a bar per day
+// sessions, each a main session with its Subagents nested under it, each
+// linking to its Ticket and opening its Context Size, response by
+// response, on a line chart; and token usage, a bar per day
 // filtered by kind of session. It loads when opened and whenever its
 // scope, range or session changes, never live. Back returns to the view
 // it was opened from.
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { Api } from "../api/api";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { ViewHeader } from "../controls/ViewHeader";
@@ -194,10 +195,16 @@ function CallsTable({ operations }: { operations: UsageOperation[] }) {
 // exact figure, in tokens, on hover.
 function Tokens({ n }: { n: number }) {
   return (
-    <td className="num" title={`${count(n)} tokens`}>
-      {count(n)}
+    <td className="num">
+      <TokenCount n={n} />
     </td>
   );
+}
+
+// TokenCount is a token count with thousands separators and the exact
+// figure, in tokens, on hover.
+function TokenCount({ n }: { n: number }) {
+  return <span title={`${count(n)} tokens`}>{count(n)}</span>;
 }
 
 // KindsTable is Context Size by kind of session: how many sessions there
@@ -235,10 +242,18 @@ interface SessionsTableProps {
   navigate(patch: Partial<UiLocation>): void;
 }
 
-// SessionsTable is the recent sessions, newest first, each a Claim's
-// main session or one of its subagents, its Ticket a link to that Ticket
-// and its session a link that opens its line chart.
+// SessionsTable is the recent sessions, newest first, each a Claim's main
+// session with a disclosure, collapsed until opened, for its Subagents.
+// Each row's Ticket links to that Ticket and its session opens its line
+// chart. Which disclosures are open is the table's own, not the address's.
 function SessionsTable({ sessions, here, projectName, navigate }: SessionsTableProps) {
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (key: string) =>
+    setExpanded((open) => {
+      const next = new Set(open);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   return (
     <>
       <h3 className="usage-subhead">Recent sessions</h3>
@@ -253,44 +268,80 @@ function SessionsTable({ sessions, here, projectName, navigate }: SessionsTableP
             <th scope="col">Model</th>
             <th scope="col">Started</th>
             <th scope="col" className="num">Peak Context Size</th>
+            <th scope="col" className="num">Tokens</th>
             <th scope="col" className="num">Responses</th>
           </tr>
         </thead>
         <tbody>
           {sessions.map((s) => {
-            const to: Partial<UiLocation> = { view: "inbox", project: s.project, ticket: s.ticket };
-            const session: SessionUsageFilter = { project: s.project, session: s.session_id, ...(s.agent ? { agent: s.agent } : {}) };
-            const sessionTo: Partial<UiLocation> = { session };
-            const isOpen = here.session !== undefined && sessionKey(here.session) === sessionKey(session);
+            const key = sessionKey({ project: s.project, session: s.session_id });
+            const open = expanded.has(key);
             return (
-              <tr key={`${s.session_id} ${s.agent ?? ""}`} className={isOpen ? "usage-open" : undefined}>
-                <th scope="row">
-                  <a href={hrefFor({ view: "inbox", ...to })} onClick={clickTo(navigate, to)}>
-                    {s.ticket}
-                  </a>
-                </th>
-                <td>{projectName(s.project)}</td>
-                <td className="num">{s.claim}</td>
-                <td className="usage-session">
-                  <a
-                    href={hrefFor({ ...here, ...sessionTo })}
-                    aria-current={isOpen ? "true" : undefined}
-                    onClick={clickTo(navigate, sessionTo)}
-                  >
-                    {sessionName(s.session_id, s.agent)}
-                  </a>
-                </td>
-                <td>{s.kind}</td>
-                <td>{s.models.length > 0 ? s.models.join(", ") : "—"}</td>
-                <td title={s.started}>{started(s.started)}</td>
-                <Tokens n={s.peak} />
-                <td className="num">{count(s.responses)}</td>
-              </tr>
+              <Fragment key={key}>
+                <SessionRow s={s} here={here} projectName={projectName} navigate={navigate} open={open} onToggle={() => toggle(key)} />
+                {open && s.subagents.map((a) => <SessionRow key={a.agent} s={a} here={here} projectName={projectName} navigate={navigate} />)}
+              </Fragment>
             );
           })}
         </tbody>
       </table>
     </>
+  );
+}
+
+interface SessionRowProps {
+  s: UsageSession;
+  here: UiLocation;
+  projectName(key: string): string;
+  navigate(patch: Partial<UiLocation>): void;
+  // open is whether a main session's Subagents show, and onToggle shows
+  // or hides them; a Subagent's row has neither.
+  open?: boolean;
+  onToggle?(): void;
+}
+
+// SessionRow is one recent session's row: a main session's, with its
+// tokens and its Subagents' total and the disclosure for them, or a
+// Subagent's, indented under it.
+function SessionRow({ s, here, projectName, navigate, open, onToggle }: SessionRowProps) {
+  const to: Partial<UiLocation> = { view: "inbox", project: s.project, ticket: s.ticket };
+  const session: SessionUsageFilter = { project: s.project, session: s.session_id, ...(s.agent ? { agent: s.agent } : {}) };
+  const sessionTo: Partial<UiLocation> = { session };
+  const isOpen = here.session !== undefined && sessionKey(here.session) === sessionKey(session);
+  const n = s.subagents.length;
+  const className = [s.agent ? "usage-subagent" : "", isOpen ? "usage-open" : ""].filter(Boolean).join(" ");
+  return (
+    <tr className={className || undefined}>
+      <th scope="row">
+        <a href={hrefFor({ view: "inbox", ...to })} onClick={clickTo(navigate, to)}>
+          {s.ticket}
+        </a>
+      </th>
+      <td>{projectName(s.project)}</td>
+      <td className="num">{s.claim}</td>
+      <td className="usage-session">
+        <a href={hrefFor({ ...here, ...sessionTo })} aria-current={isOpen ? "true" : undefined} onClick={clickTo(navigate, sessionTo)}>
+          {s.agent ? subagentName(s) : s.session_id}
+        </a>
+        {onToggle && n > 0 && (
+          <button type="button" className="link usage-disclosure" aria-expanded={open} onClick={onToggle}>
+            <span aria-hidden="true">{open ? "▾" : "▸"}</span> {n} {n === 1 ? "subagent" : "subagents"}
+          </button>
+        )}
+      </td>
+      <td>{s.kind || "—"}</td>
+      <td>{s.models.length > 0 ? s.models.join(", ") : "—"}</td>
+      <td title={s.started}>{started(s.started)}</td>
+      <Tokens n={s.peak} />
+      {n ? (
+        <td className="num">
+          <TokenCount n={s.tokens} /> (<TokenCount n={s.total_tokens ?? s.tokens} /> with subagents)
+        </td>
+      ) : (
+        <Tokens n={s.tokens} />
+      )}
+      <td className="num">{count(s.responses)}</td>
+    </tr>
   );
 }
 
@@ -303,6 +354,13 @@ function started(at: string): string {
 // sessionName is a session's ID, with its subagent's after it.
 function sessionName(session: string, agent?: string): string {
   return agent ? `${session} · ${agent}` : session;
+}
+
+// subagentName is a Subagent's name: its Agent Type and description, as
+// "Explore · Map Usage sessions", or whichever of them it has, or else
+// its tool-use ID, agent.
+function subagentName({ agent, agent_type, description }: UsageSession): string {
+  return [agent_type, description].filter(Boolean).join(" · ") || (agent ?? "");
 }
 
 interface SessionChartProps {

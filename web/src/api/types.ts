@@ -1136,21 +1136,35 @@ export interface UsageKind {
 }
 
 // UsageSession is one recent session, a Claim's main session or one of its
-// subagents (agent), with the Claim and kind of its latest response; peak
-// is its largest Context Size, started its first response's time, and
-// models each distinct model its responses name, in order of first use
-// (empty when none does).
+// Subagents (agent), with the Claim and kind of its latest response; peak
+// is its largest Context Size, started its first response's time, tokens
+// all its responses' tokens, and models each distinct model its responses
+// name, in order of first use (empty when none does). A Subagent has the
+// latest non-empty Agent Type and description among its responses, each
+// left out when none gave one.
+//
+// A main session has its Subagents, oldest first, and total_tokens, its
+// tokens and theirs; a Subagent's subagents are empty and it has no
+// total_tokens. A main session whose only responses in the range are its
+// Subagents' has none of its own: no kind (""), models, peak or tokens,
+// its Subagents' first start, and the Project, Ticket and Claim of their
+// latest response.
 export interface UsageSession {
   project: string;
   ticket: string;
   claim: number;
   session_id: string;
   agent?: string;
+  agent_type?: string;
+  description?: string;
   kind: string;
   started: string;
   peak: number;
   responses: number;
   models: string[];
+  tokens: number;
+  total_tokens?: number;
+  subagents: UsageSession[];
 }
 
 // UsageDay is one local day's token usage (day is YYYY-MM-DD in the
@@ -1171,11 +1185,14 @@ export interface UsageDayTokens {
 }
 
 // UsageResponse is one model response's token usage as a Factory posts
-// it to POST /api/usage; agent is left out for the main session, and
-// model when the Factory has none.
+// it to POST /api/usage; agent, agent_type and description are left out
+// for the main session, agent_type and description for a Subagent whose
+// Agent call gave neither, and model when the Factory has none.
 export interface UsageResponse {
   time: string;
   agent?: string;
+  agent_type?: string;
+  description?: string;
   kind: string;
   model?: string;
   input_tokens: number;
@@ -1185,8 +1202,10 @@ export interface UsageResponse {
 }
 
 // UsageView is GET /api/usage: kinds, sessions and days come from the
-// token usage a Factory posts, sessions newest first and at most 50, and
-// days a row for every local day in the range, oldest first.
+// token usage a Factory posts: kinds over every session, main and
+// Subagent; sessions the main sessions, newest first and at most 50, each
+// with all its Subagents; and days a row for every local day in the
+// range, oldest first.
 export interface UsageView {
   operations: UsageOperation[];
   kinds: UsageKind[];
@@ -1220,7 +1239,10 @@ export interface SessionUsageResponse {
 }
 
 // SessionUsageView is GET /api/usage/session: one session's responses,
-// oldest first, over every day Usage keeps.
+// oldest first, over every day Usage keeps, and for a Subagent the latest
+// non-empty Agent Type and description among them.
 export interface SessionUsageView {
+  agent_type?: string;
+  description?: string;
   responses: SessionUsageResponse[];
 }
