@@ -49,6 +49,8 @@ type Core struct {
 	watchers *watchers
 	// heartbeats holds each Factory's latest Heartbeat, in memory only.
 	heartbeats *heartbeats
+	// chats holds each Project's current Conversation, in memory only.
+	chats *chats
 	// uiURL is the UI's address, which a comment written to an issue
 	// links back to; empty links relative to the UI.
 	uiURL string
@@ -65,6 +67,7 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
 	c.watchers = &watchers{all: map[watcherKey]watcherStatus{}}
 	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}, base: map[string]BaseView{}}
+	c.chats = newChats()
 	return c
 }
 

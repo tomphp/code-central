@@ -63,7 +63,9 @@ type UsageResponse struct {
 // PostUsage is POST /api/usage {session_id, responses}: it records the
 // responses under the newest Claim with that session ID, live or ended,
 // as Session Events are filed, and counts as a ping. With no such Claim
-// they are dropped. A response with no time is dated now. The models they
+// it records them under the current Conversation with that session ID,
+// with no Ticket and Claim 0, so they count at Project scope only; with
+// neither they are dropped. A response with no time is dated now. The models they
 // name join the Project's Reported Models. It never fails.
 func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []UsageResponse) {
 	if sessionID == "" {
@@ -75,11 +77,19 @@ func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []Usag
 	}
 	k, _, ok := c.newestClaim(sessionID)
 	if !ok {
-		return
+		// A Conversation's session's usage counts at Project scope:
+		// no Ticket and Claim 0 (Spec code-central-633).
+		if k.project, ok = c.chatSession(sessionID); !ok {
+			return
+		}
 	}
 	c.addModelIDs(k.project, responses)
 	if c.usage == nil {
 		return
+	}
+	ticket := ""
+	if k.ticket != 0 {
+		ticket = DisplayID(k.project, k.ticket)
 	}
 	rs := make([]usage.Response, len(responses))
 	for i, r := range responses {
@@ -87,7 +97,7 @@ func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []Usag
 			r.Time = c.now()
 		}
 		rs[i] = usage.Response{
-			Time: r.Time, Ticket: DisplayID(k.project, k.ticket), Claim: k.claim,
+			Time: r.Time, Ticket: ticket, Claim: k.claim,
 			SessionID: sessionID, Agent: r.Agent, Kind: r.Kind, Model: r.Model, Tokens: r.Tokens,
 		}
 	}
