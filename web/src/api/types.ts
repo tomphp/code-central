@@ -541,8 +541,7 @@ export interface NeedsMeRow {
   reason: NeedsMeReason;
   since: string;
   // focus_item says the Project's Focus Kinds leave the row's reason on.
-  // Core always sends it; the web doesn't read it yet.
-  focus_item?: boolean;
+  focus_item: boolean;
   round?: { number: number; open: number; questions: number };
   failure?: { headline: string; reports: number };
   summary?: string;
@@ -772,8 +771,7 @@ export interface NeedsMeView {
   // count is the Needs Me count across every Project, the sum of counts.
   count: number;
   // counts is the Needs Me count of each Project that has something in Needs Me.
-  // Core always sends it; the web still counts the rows itself.
-  counts?: Record<string, number>;
+  counts: Record<string, number>;
   groups: NeedsMeGroup[];
 }
 

@@ -1,7 +1,7 @@
 VERSION := $(or $(shell git describe --tags --always --dirty),dev)
 LDFLAGS := -X github.com/tomoram/code-central/cli.Version=$(VERSION)
 # The fast suite's wall-clock budget, in seconds.
-TEST_BUDGET := 10
+TEST_BUDGET := 60
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 

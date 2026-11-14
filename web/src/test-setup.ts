@@ -4,6 +4,17 @@ import { afterEach } from "vitest";
 import { dropWorlds } from "./api/core/core";
 import { pulseTiming } from "./focus/pulse";
 
+// A test never reaches the human's real service on 7733: fetch throws on
+// it, so a test that builds an API against the default fails at once.
+const realFetch = globalThis.fetch;
+globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+  const raw = input instanceof Request ? input.url : String(input);
+  if (new URL(raw, window.location.href).port === "7733") {
+    throw new Error(`a test fetched ${raw}, the real Code Central service; use the fake API or a test service on another port`);
+  }
+  return realFetch(input, init);
+}) as typeof fetch;
+
 // A pulse lasts as long as a test, so one that checks it never races its end.
 pulseTiming.ms = 60_000;
 pulseTiming.board = 60_000;

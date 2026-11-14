@@ -94,7 +94,7 @@ describe("end-to-end: the human answers a live Round in Focus Mode", () => {
     expect(await waited).toBe(0);
     expect(JSON.parse(waitOut)).toMatchObject({ state: "Answered" });
     await item.getByRole("region", { name: "Resume or release" }).waitFor();
-    await item.getByText("Answered", { exact: true }).waitFor();
+    await item.getByText("Focus: Answered", { exact: true }).waitFor();
     expect(await question.count()).toBe(0);
 
     const t = await (await fetch(`${svc.url}/api/p/acme/tickets/${n}`, { headers: { "X-Code-Central-Actor": "human" } })).json();

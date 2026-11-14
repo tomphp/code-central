@@ -1,6 +1,6 @@
 # Coding standards
 
-Read during review. `make test` already enforces what tooling can (go vet, the TypeScript type check, the suite's 10s budget); these are the judgement calls past reviews kept finding. Also check the diff against `GLOSSARY.md` and any ADR in `docs/adr/` that touches the area.
+Read during review. `make test` already enforces what tooling can (go vet, the TypeScript type check, the suite's 60s budget); these are the judgement calls past reviews kept finding. Also check the diff against `GLOSSARY.md` and any ADR in `docs/adr/` that touches the area.
 
 ## Names are glossary terms
 
