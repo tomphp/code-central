@@ -1,11 +1,11 @@
-// The focus queue: from Needs Me in scope, the Projects' Focus Kinds, the
-// skip list, the Focus Item on screen, its fetched Ticket and whether the
-// human acted on it here, which Focus Item Focus Mode shows, how many are
-// left, whether all is clear or only skipped Focus Items are left, and
-// whether the one on screen was dealt with elsewhere. A row of a reason
-// its Project's Focus Kinds leave off is no Focus Item. No React; the
-// Focus layout holds what's on screen and feeds it back in.
-import type { NeedsMeRow, NeedsMeView, ProjectView, QuestionView, TicketView } from "../api/types";
+// The focus queue: from the Needs Me read model's Focus Items in scope,
+// the skip list, the Focus Item on screen, its fetched Ticket and whether
+// the human acted on it here, which Focus Item Focus Mode shows, how many
+// are left, whether all is clear or only skipped Focus Items are left, and
+// whether the one on screen was dealt with elsewhere. No React; the Focus
+// layout holds what's on screen and feeds it back in.
+import type { NeedsMeRow, QuestionView, TicketView } from "../api/types";
+import type { NeedsMe } from "../needsme/model";
 
 // A Focus Item is one Ticket waiting for one Needs Me reason, its key
 // (Ticket ID, reason), or one open Question of a Round, its key (Ticket
@@ -33,19 +33,14 @@ export interface FocusQuestion {
   count: number;
 }
 
-// ProjectFocus is what the queue reads of a Project: its Focus Kinds.
-export type ProjectFocus = Pick<ProjectView, "key" | "focus_kinds">;
-
 export interface FocusInput {
-  needsMe: NeedsMeView;
-  // projects is every Project, whose Focus Kinds leave rows out unless
-  // scope is given.
-  projects: readonly ProjectFocus[];
+  // needsMe is the Needs Me read model, whose Focus Items the queue goes
+  // through.
+  needsMe: NeedsMe;
   // project is the Project in scope; none means every Project.
   project?: string;
   // scope keeps only the rows for one Ticket: its own row, or the CI item
-  // row that lists it, whatever its Project's Focus Kinds. None means
-  // every row of a reason on in its own Project.
+  // row that lists it, Focus Items or not. None means every Focus Item.
   scope?: string;
   // onScreen is the Focus Item on screen, if any.
   onScreen?: FocusItem;
@@ -76,8 +71,8 @@ export interface FocusScreen {
   elsewhere: boolean;
 }
 
-export function focusQueue({ needsMe, projects, project, scope, onScreen, ticket, skipped, acted }: FocusInput): FocusScreen {
-  const rows = rowsIn({ needsMe, projects, project, scope });
+export function focusQueue({ needsMe, project, scope, onScreen, ticket, skipped, acted }: FocusInput): FocusScreen {
+  const rows = needsMe.focusItems({ project, ticket: scope });
   const items = rows.flatMap((row) => itemsOf(row, ticket));
   // Skipped items go to the back, after every unskipped one. They come
   // back only when the human goes through them again, which clears the
@@ -97,22 +92,11 @@ export function focusQueue({ needsMe, projects, project, scope, onScreen, ticket
 // focusKeys is the key of every Focus Item in scope, given the latest read
 // of the on-screen item's Ticket. A Round is keyed as its row as well as
 // by each open Question, so it's known by the same key read or not.
-export function focusKeys({ needsMe, projects, project, scope, ticket }: Pick<FocusInput, "needsMe" | "projects" | "project" | "scope" | "ticket">): string[] {
-  return rowsIn({ needsMe, projects, project, scope }).flatMap((row) => {
+export function focusKeys({ needsMe, project, scope, ticket }: Pick<FocusInput, "needsMe" | "project" | "scope" | "ticket">): string[] {
+  return needsMe.focusItems({ project, ticket: scope }).flatMap((row) => {
     const keys = itemsOf(row, ticket).map((i) => i.key);
     return row.reason === "needs_answer" ? [...new Set([roundKeyOf(row), ...keys])] : keys;
   });
-}
-
-// rowsIn is Needs Me's rows in scope, in its own order, Stage Tickets as
-// themselves, unlike the Inbox. With no Ticket scope, a row whose reason
-// its own Project's Focus Kinds leave off isn't a Focus Item: every row,
-// Base diverged, Base missing and CI items too, belongs to a Project.
-function rowsIn({ needsMe, projects, project, scope }: Pick<FocusInput, "needsMe" | "projects" | "project" | "scope">): NeedsMeRow[] {
-  const rows = needsMe.groups.flatMap((g) => g.tickets).filter((r) => !project || r.project === project);
-  if (scope) return rows.filter((r) => r.id === scope || !!r.ci_item?.tickets.some((t) => t.id === scope));
-  const off = new Map(projects.map((p) => [p.key, p.focus_kinds.off]));
-  return rows.filter((r) => !off.get(r.project)?.includes(r.reason));
 }
 
 // isGone is whether the item on screen has left the queue, skipped items

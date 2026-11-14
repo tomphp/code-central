@@ -132,6 +132,53 @@ describe("needsMeOf", () => {
     expect(m.popupKind("acme-99")).toBeUndefined();
     expect(needsMeOf(undefined).popupKind("acme-2")).toBeUndefined();
   });
+
+  it("chooses a Focus popup for a Stage Ticket that needs the human", async () => {
+    const fake = await twoProjects();
+    fake.setNeedsMe([{ reason: "needs_answer", tickets: [{ id: "acme-6" }] }]);
+    const m = needsMeOf(await loadInbox(fake));
+    expect(m.popupKind("acme-6")).toBe("focus");
+    expect(m.popupKind("acme-5")).toBe("ticket");
+  });
+
+  it("lists the Focus Items in scope: Stage Tickets as themselves, in Needs Me's order", async () => {
+    const fake = await twoProjects();
+    fake.setNeedsMe([
+      { reason: "needs_answer", tickets: [{ id: "acme-6" }] },
+      { reason: "in_review", tickets: [{ id: "acme-2" }] },
+      { reason: "failed", tickets: [{ id: "beta-1" }] },
+    ]);
+    const m = needsMeOf(await loadInbox(fake));
+    expect(m.focusItems({}).map((r) => r.id)).toEqual(["acme-6", "acme-2", "beta-1"]);
+    expect(m.focusItems({ project: "acme" }).map((r) => r.id)).toEqual(["acme-6", "acme-2"]);
+    expect(m.focusItems({ project: "beta" }).map((r) => r.id)).toEqual(["beta-1"]);
+    expect(m.focusItems({ ticket: "acme-2" }).map((r) => r.id)).toEqual(["acme-2"]);
+    expect(needsMeOf(undefined).focusItems({})).toEqual([]);
+  });
+
+  it("leaves out a row that isn't a Focus Item, unless a Ticket scopes the Focus Items to it", async () => {
+    const fake = await twoProjects();
+    await fake.setFocusKinds("acme", ["in_review"]);
+    fake.setNeedsMe([
+      { reason: "in_review", tickets: [{ id: "acme-2" }] },
+      { reason: "failed", tickets: [{ id: "beta-1" }] },
+    ]);
+    const m = needsMeOf(await loadInbox(fake));
+    expect(m.focusItems({}).map((r) => r.id)).toEqual(["beta-1"]);
+    expect(m.focusItems({ project: "acme" })).toEqual([]);
+    expect(m.focusItems({ ticket: "acme-2" }).map((r) => r.id)).toEqual(["acme-2"]);
+  });
+
+  it("scopes the Focus Items to a Ticket a CI item lists through the item's row", async () => {
+    const fake = await twoProjects();
+    fake.updateTicket("acme-2", { state: "Accepted", branch: "acme-2", commit: "abc" });
+    fake.updateTicket("acme-3", { state: "Accepted", branch: "acme-3", commit: "def" });
+    await failCI(fake, "acme", ["acme-2", "acme-3"]);
+    await fake.setFocusKinds("acme", ["ci_failed"]);
+    const m = needsMeOf(await loadInbox(fake));
+    expect(m.focusItems({})).toEqual([]);
+    expect(m.focusItems({ ticket: "acme-3" }).map((r) => [r.reason, r.ci_item?.tickets.map((t) => t.id)])).toEqual([["ci_failed", ["acme-2", "acme-3"]]]);
+  });
 });
 
 describe("isCIItemReason", () => {

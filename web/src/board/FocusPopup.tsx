@@ -6,14 +6,13 @@
 // through the plain Api. It has two modes:
 //
 //   - Ticket mode is the Board's popup for a Ticket that needs the human,
-//     scoped to the one Ticket, whatever its Project's Focus Kinds, with
-//     no Skip, N left or Open in Inbox. It closes by itself once Needs Me
-//     has no row left for the Ticket.
+//     scoped to the one Ticket, Focus Item or not, with no Skip, N left or
+//     Open in Inbox. It closes by itself once Needs Me has no row left for
+//     the Ticket.
 //   - Queue mode is scoped to a Project, or All Projects, over every Focus
-//     Item in Needs Me, of a reason its Project's Focus Kinds leave on,
-//     with Skip, N left and Open in Inbox. It keeps its own skip list, and
-//     closes by itself once the queue is clear or only skipped Focus Items
-//     are left.
+//     Item in Needs Me, with Skip, N left and Open in Inbox. It keeps its
+//     own skip list, and closes by itself once the queue is clear or only
+//     skipped Focus Items are left.
 //
 // Either way it tells its host why it closed and the key of every Focus
 // Item in scope then. It changes no address of its own.
@@ -24,6 +23,7 @@ import { useTicket, type InboxData } from "../live";
 import type { UiLocation } from "../url";
 import { FocusItemView, inboxOf } from "../focus/FocusItemView";
 import { focusKeys, focusQueue, type FocusItem } from "../focus/queue";
+import { useNeedsMe } from "../needsme/context";
 import { PopupShell } from "./PopupShell";
 
 // FocusPopupClose is why the popup closed and the keys of the Focus Items
@@ -63,6 +63,7 @@ export function FocusPopup(props: FocusPopupProps) {
   const queue = props.mode === "queue";
   const project = queue ? props.project : undefined;
   const scope = queue ? undefined : props.id;
+  const needsMe = useNeedsMe();
   const [onScreen, setOnScreen] = useState<FocusItem>();
   // skipped lives here for the popup's life, as Focus Mode's does for a
   // visit; Ticket mode has no Skip, so it stays empty there.
@@ -70,7 +71,7 @@ export function FocusPopup(props: FocusPopupProps) {
   // A CI item has no Ticket of its own: its panel shows the first Ticket
   // it lists, whose options act on every one of them.
   const ticket = useTicket(api, onScreen?.row.project, onScreen && ticketOf(onScreen.row), version);
-  const screen = focusQueue({ needsMe: data.needsMe, projects: data.projects, project, scope, onScreen, ticket: ticket.data, skipped, acted: false });
+  const screen = focusQueue({ needsMe, project, scope, onScreen, ticket: ticket.data, skipped, acted: false });
   const item = screen.item;
   // What's shown becomes what's on screen, so a later read keeps it there.
   // While nothing can be shown (a read Round with no open Question, before
@@ -79,7 +80,7 @@ export function FocusPopup(props: FocusPopupProps) {
   useEffect(() => {
     if (item && item.key !== onScreen?.key) setOnScreen(item);
   }, [item, onScreen]);
-  const keys = () => focusKeys({ needsMe: data.needsMe, projects: data.projects, project, scope, ticket: ticket.data });
+  const keys = () => focusKeys({ needsMe, project, scope, ticket: ticket.data });
   const close = (why: FocusPopupClose["why"]) => onClose({ why, keys: keys() });
   const gone = useRef(() => props.onGone?.(keys()));
   gone.current = () => props.onGone?.(keys());

@@ -13,6 +13,8 @@ import { FakeApi } from "../api/fake";
 import { failCI } from "../ciTesting";
 import { change, waiting } from "../focus/focusTesting";
 import { useInboxData, useLiveVersion } from "../live";
+import { NeedsMeProvider } from "../needsme/context";
+import { needsMeOf } from "../needsme/model";
 import { hrefFor, readLocation, type UiLocation } from "../url";
 import { FocusPopup, type FocusPopupClose } from "./FocusPopup";
 
@@ -34,8 +36,8 @@ function tickets() {
 }
 
 // Harness renders the popup in Queue mode while open, over the live Inbox
-// data the App's views use, and navigates as the App does, by the
-// address.
+// data and its read model as the App's views have them, and navigates as
+// the App does, by the address.
 function Harness({ api, project, onClose }: { api: Api; project?: string; onClose(c: FocusPopupClose): void }) {
   const version = useLiveVersion(api);
   const inbox = useInboxData(api, version);
@@ -46,19 +48,21 @@ function Harness({ api, project, onClose }: { api: Api; project?: string; onClos
   };
   if (!open || !inbox.data) return null;
   return (
-    <FocusPopup
-      mode="queue"
-      api={api}
-      now={(api as FakeApi).now}
-      version={version}
-      data={inbox.data}
-      project={project}
-      navigate={navigate}
-      onClose={(c) => {
-        onClose(c);
-        setOpen(false);
-      }}
-    />
+    <NeedsMeProvider value={needsMeOf(inbox.data)}>
+      <FocusPopup
+        mode="queue"
+        api={api}
+        now={(api as FakeApi).now}
+        version={version}
+        data={inbox.data}
+        project={project}
+        navigate={navigate}
+        onClose={(c) => {
+          onClose(c);
+          setOpen(false);
+        }}
+      />
+    </NeedsMeProvider>
   );
 }
 

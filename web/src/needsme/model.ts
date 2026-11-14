@@ -3,10 +3,11 @@
 // answers are core's: a Ticket's reason is its find_tickets row's
 // needs_me_reason, and the counts are needs_me's count and counts. It owns
 // the per-view Stage rules: the Inbox shows a Requirement's Spec row in
-// place of its Stage Tickets, and the Board's Needs Me column shows them
-// as Ticket cards. It also scopes the data to a Project and groups every
-// Spec's Tickets by Spec, so the views start from ready rows.
-import type { NeedsMeGroup, NeedsMeReason } from "../api/types";
+// place of its Stage Tickets, Focus Mode and the Focus popup show them as
+// themselves, and the Board's Needs Me column shows them as Ticket cards.
+// It also scopes the data to a Project and groups every Spec's Tickets by
+// Spec, so the views start from ready rows.
+import type { NeedsMeGroup, NeedsMeReason, NeedsMeRow } from "../api/types";
 import { requirementList } from "../inbox/lists";
 import { groupBySpec } from "../inbox/groupBySpec";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
@@ -24,6 +25,16 @@ export interface NeedsMeRows {
   // groups is the rest of Needs Me's rows by reason, in its order, with
   // no empty group.
   groups: NeedsMeGroup[];
+}
+
+// FocusScope is which of Needs Me's rows Focus Mode or a Focus popup goes
+// through.
+export interface FocusScope {
+  // project is the Project in scope; none means every Project.
+  project?: string;
+  // ticket keeps only one Ticket's rows: its own, or the CI item's that
+  // lists it, whether or not they are Focus Items.
+  ticket?: string;
 }
 
 // NeedsMe is the questions every view asks of Needs Me.
@@ -45,6 +56,10 @@ export interface NeedsMe {
   maps(project?: string): ProjectSpec[];
   // ticketsOf is every one of a Spec's Tickets, in every State and Project.
   ticketsOf(spec: string): ProjectTicket[];
+  // focusItems is Needs Me's rows in scope, in its order, Stage Tickets as
+  // themselves: with no Ticket in scope, only the rows core marks as Focus
+  // Items. A needs_answer row stands for its Round's open Questions.
+  focusItems(scope: FocusScope): NeedsMeRow[];
   // popupKind is the popup an ID opens: its Spec popup for a Spec, its
   // Focus popup while a Ticket needs the human, else its Ticket popup.
   // None for any other ID, or before the data loads.
@@ -104,6 +119,11 @@ export function needsMeOf(data: InboxData | undefined): NeedsMe {
     requirements: (project) => (data?.requirements ?? []).filter(inProject(project)),
     maps: (project) => (data?.maps ?? []).filter(inProject(project)),
     ticketsOf,
+    focusItems: ({ project, ticket }) => {
+      const rows = groups.flatMap((g) => g.tickets).filter(inProject(project));
+      if (ticket) return rows.filter((r) => r.id === ticket || !!r.ci_item?.tickets.some((t) => t.id === ticket));
+      return rows.filter((r) => r.focus_item);
+    },
     popupKind: (id) => {
       if (!data) return undefined;
       if (specs.has(id)) return "spec";
