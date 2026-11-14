@@ -11,6 +11,12 @@ export function ticketEditable(t: TicketView, archived: boolean): boolean {
   return t.state === "Draft" && !owned(t.link) && !archived;
 }
 
+// A Ticket can be looked back on once it is Done or Cancelled, in a Project
+// that takes writes.
+export function retroable(t: TicketView, archived: boolean): boolean {
+  return (t.state === "Done" || t.state === "Cancelled") && !archived;
+}
+
 // A Spec until it is Finished, never a Map.
 export function specEditable(s: SpecDetail, archived: boolean): boolean {
   return !s.finished && !s.map && !owned(s.link) && !archived;

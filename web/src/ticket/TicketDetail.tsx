@@ -7,7 +7,8 @@ import type { EditView, ReportedModels, State, TicketView } from "../api/types";
 import { ago, CLAUDE_CODE_DEFAULT, REASON_LABEL } from "../format";
 import { Markdown } from "../Markdown";
 import { EditForm } from "../edit/EditForm";
-import { ticketEditable } from "../edit/editable";
+import { retroable, ticketEditable } from "../edit/editable";
+import { NewRetro } from "../requirement/NewRequirement";
 import { ActionPanel } from "../panels/ActionPanel";
 import { LatestEventLine } from "../LatestEvent";
 import { LinkBadge } from "./LinkBadge";
@@ -38,6 +39,9 @@ export interface TicketPaneProps {
   // openSpec opens the Ticket's Spec, where the view can show it; without
   // it the Spec is named only.
   openSpec?(spec: string): void;
+  // openTicket selects another Ticket, as a new Retro is; without it the
+  // Retro button isn't offered.
+  openTicket?(ticket: string): void;
   // archived is whether the Ticket's Project is Archived, which takes no
   // edits.
   archived?: boolean;
@@ -73,6 +77,9 @@ export function TicketPane(props: TicketPaneProps) {
               <Button type="button"  onClick={() => setEditing(true)}>
                 Edit
               </Button>
+            )}
+            {retroable(t, !!props.archived) && props.openTicket && (
+              <NewRetro api={props.api} target={t.id} onSubmitted={(r) => props.openTicket?.(r.id)} />
             )}
           </>
         )}

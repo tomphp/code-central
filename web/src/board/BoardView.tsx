@@ -223,6 +223,7 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
           projects={projects}
           onClose={closePopup}
           openSpec={(id) => navigate({ popup: id })}
+          openTicket={(id) => navigate({ popup: id })}
         />
       )}
     </OneProject.Provider>

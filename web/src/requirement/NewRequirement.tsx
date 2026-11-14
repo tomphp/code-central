@@ -1,7 +1,9 @@
-// "New requirement", "New Map", "New Small Change" and "New Prototype": buttons that each
+// "New requirement", "New Map", "New Small Change", "New Prototype" and "Retro": buttons that each
 // open the same modal, one free-text box. A new Requirement or Map goes to
 // the filtered Project, or the only one; with several and none filtered,
-// the modal asks which. A Prototype goes on the Spec whose view it is on.
+// the modal asks which. A Prototype goes on the Spec whose view it is on. A
+// Retro looks back on the finished work whose view it is on; its one text
+// box, the Note, is optional.
 // "Write the Spec", in a finished Map's header, opens the New requirement
 // modal prefilled from the Map and submits it with the Map. A caller can
 // render its own opening control in place of the button, such as a menu
@@ -44,6 +46,10 @@ interface Kind<R> {
   straight?: { creates: string };
   // draftable shows Save as Draft, which calls submit with draft true.
   draftable?: boolean;
+  // submitLabel is the submit button's words, in place of "Submit <noun>".
+  submitLabel?: string;
+  // optional lets the text be empty.
+  optional?: boolean;
   submit(api: Api, project: string, text: string, draft: boolean, straight: boolean): Promise<R>;
 }
 
@@ -86,6 +92,18 @@ const prototypeOn = (spec: string): Kind<TicketAcknowledgement> => ({
   placeholder: "Describe what to try out, and the decision it should inform. The first line becomes the title.",
   creates: "Creates a Ready Prototype on this Spec. A Factory builds it on a branch that never lands.",
   submit: (api, project, text) => api.submitPrototype(project, spec, text),
+});
+
+// retroOn is Retro on target, a Done or Cancelled Ticket: the note is optional.
+const retroOn = (target: string): Kind<TicketAcknowledgement> => ({
+  button: "Retro",
+  variant: "default",
+  noun: "Note",
+  placeholder: "Anything the Retro should look into, or leave this empty.",
+  creates: "Creates a Ready Retro. A Factory reads the work's session logs and suggests what to change.",
+  submitLabel: "Start retro",
+  optional: true,
+  submit: (api, project, text) => api.submitRetro(project, target, text.trim() || undefined),
 });
 
 export function NewRequirement(props: NewRequirementProps) {
@@ -139,6 +157,17 @@ export function NewPrototype({ api, spec, onSubmitted }: NewPrototypeProps) {
   return <NewFromText kind={prototypeOn(spec)} api={api} projects={[]} project={projectOf(spec)} onSubmitted={onSubmitted} />;
 }
 
+export interface NewRetroProps {
+  api: Api;
+  // target is the finished Ticket the Retro looks back on.
+  target: string;
+  onSubmitted(t: TicketAcknowledgement): void;
+}
+
+export function NewRetro({ api, target, onSubmitted }: NewRetroProps) {
+  return <NewFromText kind={retroOn(target)} api={api} projects={[]} project={projectOf(target)} onSubmitted={onSubmitted} />;
+}
+
 interface NewFromTextProps<R> {
   kind: Kind<R>;
   api: Api;
@@ -189,7 +218,7 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
   const ask = !project && projects.length > 1;
 
   const send = (draft: boolean) => {
-    if (!text.trim() || !chosen) return;
+    if ((!text.trim() && !kind.optional) || !chosen) return;
     setBusy(true);
     setError(undefined);
     kind.submit(api, chosen, text, draft, straight).then(onSubmitted, (e: ApiError) => {
@@ -240,8 +269,8 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
                 Save as Draft
               </Button>
             )}
-            <Button type="submit" variant="primary" disabled={busy || !text.trim() || !chosen}>
-              Submit {kind.noun.toLowerCase()}
+            <Button type="submit" variant="primary" disabled={busy || (!text.trim() && !kind.optional) || !chosen}>
+              {kind.submitLabel ?? `Submit ${kind.noun.toLowerCase()}`}
             </Button>
           </div>
         </form>

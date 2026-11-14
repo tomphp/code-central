@@ -99,6 +99,7 @@ export function InboxDetail({
               ?.reported_models
           }
           openSpec={(id) => navigate({ requirement: id })}
+          openTicket={(id) => navigate({ ticket: id })}
         />
       ) : (
         !loc.requirement && (
