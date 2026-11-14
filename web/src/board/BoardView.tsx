@@ -10,7 +10,7 @@
 // live feed. Back returns to the Inbox it was opened from.
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Api } from "../api/api";
-import { STATES, type NeedsMeReason, type State } from "../api/types";
+import { STATES, type State } from "../api/types";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { ToggleGroup } from "../controls/ToggleGroup";
 import { ViewHeader } from "../controls/ViewHeader";
@@ -21,14 +21,14 @@ import { OneProject } from "../inbox/ShortId";
 import { specKindOf } from "../inbox/describeSpec";
 import { stateSlug } from "../controls/StateChip";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
-import { reasonsOf } from "../requirement/progress";
+import { useNeedsMe } from "../needsme/context";
+import type { NeedsMe, PopupKind } from "../needsme/model";
 import { NewSplit } from "../requirement/NewSplit";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { TicketCard } from "../ticket/TicketCard";
 import { ColumnsMenu } from "./ColumnsMenu";
 import { LaneHeader } from "./LaneHeader";
 import { FocusPopup } from "./FocusPopup";
-import { usePopupKind } from "./popupKind";
 import { SpecPopup } from "./SpecPopup";
 import { TicketPopup } from "./TicketPopup";
 import { Button } from "../controls/Button";
@@ -60,20 +60,19 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
   // The grouping in effect, shared with the Inbox's State lists: the
   // address's, else this browser's last pick.
   const grouping = loc.group ?? storedGroup();
-  const tickets = newestFirst((data?.tickets ?? []).filter((t) => !loc.project || t.project === loc.project));
+  const model = useNeedsMe();
+  const tickets = newestFirst(model.tickets(loc.project));
   const specs = new Map((data?.specs ?? []).map((s) => [s.id, s]));
-  const reasons = reasonsOf(data?.needsMe);
   // While the Needs Me column shows, a Ticket that needs the human is
   // there, in Needs Me's order, and in no State's column.
-  const byId = new Map(tickets.map((t) => [t.id, t]));
-  const needing = needsMe ? [...reasons.keys()].flatMap((id) => byId.get(id) ?? []) : [];
+  const needing = needsMe ? model.needing(loc.project) : [];
   const inColumn = new Map<Col, ProjectTicket[]>(
     shown.map((c) => [
       c,
-      c === NEEDS_ME ? needing : tickets.filter((t) => t.state === c && !(needsMe && reasons.has(t.id))),
+      c === NEEDS_ME ? needing : tickets.filter((t) => t.state === c && !(needsMe && model.reasonOf(t.id))),
     ]),
   );
-  const joined = useJoined(data?.tickets, reasons);
+  const joined = useJoined(data?.tickets, model.reasonOf);
   // The lanes the human has collapsed, by Spec; page-only.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -84,10 +83,8 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
     onClick: clickTo(navigate, { popup: id }),
   });
   const cardLink = (t: ProjectTicket): CardLink => popupLink(t.id);
-  const kind = usePopupKind(loc.popup, data);
+  const kind = usePopupKind(loc.popup, model);
   const closePopup = () => navigate({ popup: undefined });
-  // Every one of a Spec's Tickets, in every State and Project, for its row.
-  const ticketsOf = new Map(groupBySpec(data?.tickets ?? []).map((g) => [g.id, g.tickets]));
   const toggleLane = (id: string) =>
     setCollapsed((c) => {
       const next = new Set(c);
@@ -173,18 +170,17 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
                     <LaneHeader
                       id={l.id}
                       spec={specs.get(l.id)}
-                      all={ticketsOf.get(l.id) ?? []}
+                      all={model.ticketsOf(l.id)}
                       shown={l.count}
-                      reasons={reasons}
                       link={{ ...popupLink(l.id), "data-id": l.id }}
                       collapsed={collapsed.has(l.id)}
                       onToggle={() => toggleLane(l.id)}
                     />
-                    <Cells shown={shown} tickets={l.inColumn} counts={collapsed.has(l.id)} specs={specs} reasons={reasons} joined={joined} link={cardLink} inLane />
+                    <Cells shown={shown} tickets={l.inColumn} counts={collapsed.has(l.id)} specs={specs} joined={joined} link={cardLink} inLane />
                   </div>
                 ))
               ) : (
-                <Cells shown={shown} tickets={inColumn} specs={specs} reasons={reasons} joined={joined} link={cardLink} />
+                <Cells shown={shown} tickets={inColumn} specs={specs} joined={joined} link={cardLink} />
               )}
             </div>
           </div>
@@ -212,7 +208,6 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
           version={version}
           id={loc.popup}
           projects={projects}
-          reasons={reasons}
           onClose={closePopup}
           open={(id) => navigate({ popup: id })}
           specLink={popupLink}
@@ -237,16 +232,27 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
 // changed, or is new, since the Board last rendered its Tickets. A card that
 // moves column mounts again, so it pulses then; one in a column just shown,
 // or on the Board's first render, doesn't.
-function useJoined(tickets: ProjectTicket[] | undefined, reasons: Map<string, NeedsMeReason>): (t: ProjectTicket) => boolean {
+function useJoined(tickets: ProjectTicket[] | undefined, reasonOf: NeedsMe["reasonOf"]): (t: ProjectTicket) => boolean {
   // A Ticket can start needing the human with no update of its own (CI
   // failed on its commit), so its reason counts as a change too.
-  const key = (t: ProjectTicket) => `${t.updated}|${reasons.get(t.id) ?? ""}`;
+  const key = (t: ProjectTicket) => `${t.updated}|${reasonOf(t.id) ?? ""}`;
   const seen = useRef<Map<string, string>>(undefined);
   const before = seen.current;
   useEffect(() => {
     if (tickets) seen.current = new Map(tickets.map((t) => [t.id, key(t)]));
   });
   return (t) => !!before && before.get(t.id) !== key(t);
+}
+
+// usePopupKind is the popup kind for the open ID, chosen when the ID
+// changes (a click, a load, Back or Forward) and then held while it stays
+// open, so a Ticket popup whose Ticket starts needing the human stays one.
+// Until an ID opens a popup, each render chooses again.
+function usePopupKind(id: string | undefined, model: NeedsMe): PopupKind | undefined {
+  const [held, setHeld] = useState<{ id?: string; kind?: PopupKind }>({});
+  const kind = held.id === id && held.kind ? held.kind : id ? model.popupKind(id) : undefined;
+  if (held.id !== id || held.kind !== kind) setHeld({ id, kind });
+  return kind;
 }
 
 // NEEDS_ME is the Needs Me column, beside the State columns.
@@ -283,7 +289,6 @@ function Cells({
   tickets,
   counts,
   specs,
-  reasons,
   joined,
   link,
   inLane,
@@ -292,7 +297,6 @@ function Cells({
   tickets: Map<Col, ProjectTicket[]>;
   counts?: boolean;
   specs: Map<string, ProjectSpec>;
-  reasons: Map<string, NeedsMeReason>;
   joined(t: ProjectTicket): boolean;
   link(t: ProjectTicket): CardLink;
   inLane?: boolean;
@@ -316,7 +320,6 @@ function Cells({
                     t={t}
                     link={link(t)}
                     badge={kindLabel(t)}
-                    reason={reasons.get(t.id)}
                     spec={spec && { kind: specKindOf(spec), title: spec.title }}
                     joined={joined(t)}
                     inNeedsMe={s === NEEDS_ME}

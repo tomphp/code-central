@@ -23,6 +23,7 @@ import { ShortId } from "../inbox/ShortId";
 import { Button } from "../controls/Button";
 import { Select } from "../controls/Select";
 import { useLiveVersion, useSpec } from "../live";
+import { isCIItemReason } from "../needsme/model";
 import { AutoAcceptSwitch } from "./AutoAcceptSwitch";
 import { AUTO_ACCEPT_LABEL, canAutoAccept, moveText, wouldAutoAccept } from "./autoAccept";
 
@@ -141,7 +142,7 @@ export function TicketDetail({ api, project, ticket: t, now, reported, openSpec,
       <ModelChoice api={api} project={project} ticket={t} reported={reported} />
       {/* A Ticket in a CI item has the CI section in its action panel,
           with the failure options, so it isn't shown here too. */}
-      {t.needs_me_reason !== "ci_failed" && t.needs_me_reason !== "ci_cancelled" && t.needs_me_reason !== "ci_unavailable" && (
+      {!isCIItemReason(t.needs_me_reason) && (
         <CISection ticket={t} api={api} project={project} />
       )}
       {claims.length > 0 && (

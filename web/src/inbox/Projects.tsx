@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, ty
 import type { Api } from "../api/api";
 import type { ApiError, ProjectRow } from "../api/types";
 import { FactoryStatusDot } from "../factory/FactoryStatus";
+import { useNeedsMe } from "../needsme/context";
 import { Button } from "../controls/Button";
 
 export interface ProjectFilterProps {
@@ -28,6 +29,8 @@ export function ProjectFilter({ api, project: p, now, on, onSelect, projectOptio
   const menuId = useId();
   const reasonId = useId();
   const label = `Menu for ${p.display_name}`;
+  // Its count is core's Needs Me count for the Project.
+  const needsMe = useNeedsMe().count(p.key);
 
   useEffect(() => {
     if (!open) return;
@@ -66,7 +69,7 @@ export function ProjectFilter({ api, project: p, now, on, onSelect, projectOptio
         aria-pressed={on}
         onClick={onSelect}
       >
-        {p.display_name} <span className={p.needs_me > 0 ? "count loud" : "count"}>{p.needs_me}</span>
+        {p.display_name} <span className={needsMe > 0 ? "count loud" : "count"}>{needsMe}</span>
       </button>
       <button
         className="menu-toggle"

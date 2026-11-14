@@ -1,17 +1,21 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import type { NeedsMeReason } from "../api/types";
 import type { ProjectSpec, ProjectTicket } from "../live";
+import { Needing } from "../needsme/fixture";
 import { LaneHeader } from "./LaneHeader";
 
 const spec: ProjectSpec = { id: "acme-1", project: "acme", title: "Sign-in", labels: [], tags: {}, state_summary: { Ready: 1, Done: 1 }, finished: false, updated: "" };
 const all = [
-  { id: "acme-2", state: "Ready" },
-  { id: "acme-3", state: "Done" },
+  { id: "acme-2", state: "Ready", spec: "acme-1", labels: [] as string[] },
+  { id: "acme-3", state: "Done", spec: "acme-1", labels: [] as string[] },
 ] as ProjectTicket[];
 const link = { href: "/acme-1", onClick: () => {}, "data-id": "acme-1" };
-const header = (props: Partial<Parameters<typeof LaneHeader>[0]> = {}) => (
-  <LaneHeader id="acme-1" spec={spec} all={all} shown={1} reasons={new Map()} link={link} collapsed={false} onToggle={() => {}} {...props} />
+const header = (props: Partial<Parameters<typeof LaneHeader>[0]> = {}, reasons: Record<string, NeedsMeReason> = {}) => (
+  <Needing tickets={all} reasons={reasons}>
+    <LaneHeader id="acme-1" spec={spec} all={all} shown={1} link={link} collapsed={false} onToggle={() => {}} {...props} />
+  </Needing>
 );
 
 describe("LaneHeader", () => {
@@ -33,7 +37,7 @@ describe("LaneHeader", () => {
   });
 
   it("marks a lane whose Tickets need the human", () => {
-    render(header({ reasons: new Map([["acme-2", "needs_answer"]]) }));
+    render(header({}, { "acme-2": "needs_answer" }));
     expect(screen.getByRole("region", { name: "Sign-in" }).className).toBe("lane-header needs");
     expect(screen.getByRole("img", { name: "Needs you" }).className).toBe("dot reason-needs_answer");
   });

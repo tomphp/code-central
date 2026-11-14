@@ -4,7 +4,8 @@
 // for, its body (the text, then the Spec) collapsed, and under Build the sums of its implementation Tickets' CI badges
 // and those Tickets with their States.
 import type { Api } from "../api/api";
-import type { NeedsMeReason, SpecDetail } from "../api/types";
+import type { SpecDetail } from "../api/types";
+import { useNeedsMe } from "../needsme/context";
 import { BodySection } from "../edit/BodySection";
 import { ago } from "../format";
 import { LandPerSpec } from "../spec/LandPerSpec";
@@ -22,7 +23,6 @@ import { ShortId } from "../inbox/ShortId";
 export interface RequirementPaneProps {
   api: Api;
   spec: SpecDetail & { requirement: NonNullable<SpecDetail["requirement"]> };
-  reasons: Map<string, NeedsMeReason>;
   // archived is whether the Requirement's Project is Archived, which takes no edits.
   archived?: boolean;
   now: Date;
@@ -33,8 +33,9 @@ export interface RequirementPaneProps {
   specLink(spec: string): Link;
 }
 
-export function RequirementPane({ api, spec, archived, reasons, now, ticket, select, specLink }: RequirementPaneProps) {
-  const p = progress(spec.requirement, spec.tickets, reasons);
+export function RequirementPane({ api, spec, archived, now, ticket, select, specLink }: RequirementPaneProps) {
+  const { reasonOf } = useNeedsMe();
+  const p = progress(spec.requirement, spec.tickets, reasonOf);
   const note = waitingNote(p);
   const specDone = spec.requirement.stages.some((s) => s.name === "spec" && s.state === "Done");
   return (
@@ -51,7 +52,7 @@ export function RequirementPane({ api, spec, archived, reasons, now, ticket, sel
         current={ticket}
         mapLink={specLink}
         onPick={(s) => {
-          const t = s.ticket ?? (p.build.find((t) => reasons.has(t.id)) ?? p.build[0])?.id;
+          const t = s.ticket ?? (p.build.find((t) => reasonOf(t.id)) ?? p.build[0])?.id;
           if (t) select(t);
         }}
       />
@@ -61,7 +62,7 @@ export function RequirementPane({ api, spec, archived, reasons, now, ticket, sel
       {/* The text is the Requirement's until its spec Stage has written the Spec. */}
       <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} archived={archived} />
       <CISums tickets={p.build} />
-      {p.build.length > 0 && <TicketList label="Build" tickets={p.build} reasons={reasons} now={now} ticket={ticket} select={select} />}
+      {p.build.length > 0 && <TicketList label="Build" tickets={p.build} now={now} ticket={ticket} select={select} />}
     </section>
   );
 }

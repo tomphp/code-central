@@ -8,9 +8,10 @@
 import { useId, useState } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
-import { GUIDED_ON, GUIDED_TAG, type MapView, type NeedsMeReason, type SpecDetail, type TicketRow } from "../api/types";
+import { GUIDED_ON, GUIDED_TAG, type MapView, type SpecDetail, type TicketRow } from "../api/types";
 import { ago } from "../format";
 import { Markdown } from "../Markdown";
+import { useNeedsMe } from "../needsme/context";
 import { NewPrototype, WriteTheSpec } from "../requirement/NewRequirement";
 import type { Link } from "../url";
 import { LinkBadge } from "../ticket/LinkBadge";
@@ -26,7 +27,6 @@ import { Button } from "../controls/Button";
 export interface MapPaneProps {
   api: Api;
   spec: SpecDetail & { map: MapView };
-  reasons: Map<string, NeedsMeReason>;
   now: Date;
   // ticket is the selected Ticket.
   ticket?: string;
@@ -37,7 +37,8 @@ export interface MapPaneProps {
   written(spec: string): void;
 }
 
-export function MapPane({ api, spec, reasons, now, ticket, select, specLink, written }: MapPaneProps) {
+export function MapPane({ api, spec, now, ticket, select, specLink, written }: MapPaneProps) {
+  const { reasonOf } = useNeedsMe();
   const [fogOpen, setFogOpen] = useState(false);
   const { busy, error, run } = useAct();
   const layout = layoutMap(spec.tickets);
@@ -103,7 +104,7 @@ export function MapPane({ api, spec, reasons, now, ticket, select, specLink, wri
             </g>
             {spec.tickets.map((t) => {
               const at = layout.nodes.get(t.id)!;
-              const reason = reasons.get(t.id);
+              const reason = reasonOf(t.id);
               const progress = nodeProgress(t, reason);
               return (
                 <foreignObject key={t.id} role="listitem" data-id={t.id} data-progress={progress} x={at.x} y={at.y} width={NODE.width} height={NODE.height}>

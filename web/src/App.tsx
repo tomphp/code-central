@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { Api } from "./api/api";
 import { projectOf } from "./api/api";
 import { Focus } from "./focus/Focus";
@@ -6,7 +7,9 @@ import type { FocusClear } from "./api/types";
 import { useInboxData, useLiveVersion, useOptions, useSpec, useTicket } from "./live";
 import { OptionsView } from "./options/OptionsView";
 import { ProjectOptions } from "./options/ProjectOptions";
-import { defaultTicket, needsMeCount, progress, reasonsOf } from "./requirement/progress";
+import { NeedsMeProvider } from "./needsme/context";
+import { needsMeOf } from "./needsme/model";
+import { defaultTicket, progress } from "./requirement/progress";
 import { useNeedsMeTitle } from "./title";
 import { useUiLocation } from "./url";
 import { UsageView } from "./usage/UsageView";
@@ -33,12 +36,13 @@ export function App({ api, now = () => new Date() }: AppProps) {
   const requirement = spec.data?.id === loc.requirement && spec.data?.requirement ? { ...spec.data, requirement: spec.data.requirement } : undefined;
   const map = spec.data?.id === loc.requirement && spec.data?.map ? { ...spec.data, map: spec.data.map } : undefined;
   const plain = spec.data?.id === loc.requirement && !requirement && !map ? spec.data : undefined;
-  const reasons = reasonsOf(inbox.data?.needsMe);
+  // The Needs Me read model every view asks, built once per Inbox load.
+  const needsMe = useMemo(() => needsMeOf(inbox.data), [inbox.data]);
   // Within a Requirement with no Ticket chosen, the pane opens on its default one.
   const selected =
-    loc.ticket ?? (requirement ? defaultTicket(progress(requirement.requirement, requirement.tickets, reasons)) : undefined);
+    loc.ticket ?? (requirement ? defaultTicket(progress(requirement.requirement, requirement.tickets, needsMe.reasonOf)) : undefined);
   const ticket = useTicket(api, selected && projectOf(selected), selected, version);
-  useNeedsMeTitle(inbox.data && needsMeCount(inbox.data.needsMe));
+  useNeedsMeTitle(inbox.data && needsMe.count());
   // Under Focus Pop-up, the Focus popup opens by itself over the view
   // showing, scoped to its Project, from the same live Needs Me and the
   // Projects' Focus Kinds. Until the Options first load Focus Pop-up is
@@ -53,12 +57,12 @@ export function App({ api, now = () => new Date() }: AppProps) {
   });
 
   return (
-    <>
+    <NeedsMeProvider value={needsMe}>
       {view()}
       {popup.open && inbox.data && (
         <FocusPopup mode="queue" api={api} now={now()} version={version} data={inbox.data} project={loc.project} onClose={popup.close} navigate={navigate} />
       )}
-    </>
+    </NeedsMeProvider>
   );
 
   // Each view is a layout over the same live data, the Board included;
