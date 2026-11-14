@@ -480,7 +480,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
     it("sets a Project's Models, a row per kind of work, all at Default to begin with", async () => {
       await d.createProject("acme", "Acme");
-      const kinds = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"];
+      const kinds = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "retro", "implementation"];
       const unset = { model: "", effort: "" };
       expect((await d.api.listProjects())[0].models).toEqual({ default: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
 

@@ -59,6 +59,7 @@ var stageSkills = map[string]guideSkill{
 	mapResearch:              {skill: "research"},
 	"map-task":               {},
 	core.PrototypeLabel:      {skill: "prototype"},
+	core.RetroLabel:          {skill: "retro"},
 	core.ImplementationStage: {skill: "implement"},
 }
 
@@ -83,6 +84,13 @@ func workBranch(guide, ticket string) string {
 	}
 	return ""
 }
+
+// sessionLogs tells a Retro where to read the sessions of the Claims it
+// looks back on. It is Claude Code's rule, so the Factory states it, as
+// the one place that names upstream tools, and the Guide doesn't. The
+// context report (internal/contextreport) finds sessions by the same
+// rule, but is a separate main package, so it isn't shared.
+const sessionLogs = "Claude Code keeps each session's log in its projects folder, `~/.claude/projects` (or `$CLAUDE_CONFIG_DIR/projects` when that is set), at `<projects folder>/<working_dir with every non-alphanumeric character replaced by '-'>/<session_id>.jsonl`, where working_dir and session_id are those of the Claim whose session you read; that session's subagents' logs are under `<session_id>/subagents/` beside it, one `.jsonl` each."
 
 // conflictFinish ends the system prompt of a conflict Claim, in place of
 // the Stage Guide. Its first words mark the session for the context
@@ -181,6 +189,9 @@ func systemPrompt(c claim, stage, wt string, g core.StageGuideView, conflicts []
 			what, writer = "this "+stage+" Ticket", "It"
 		}
 		fmt.Fprintf(&b, "You are running under code-central-factory, in a detached, read-only worktree at the base's tip, for %s. %s Finish the Ticket when it is done. %s writes nothing to the repository: no files, no commits and no branches.", what, claimed, writer)
+		if stage == core.RetroLabel {
+			b.WriteString("\n\n" + sessionLogs)
+		}
 	}
 	if len(conflicts) > 0 {
 		b.WriteString("\n\n" + conflictFinish)
