@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { Api } from "./api/api";
 import { projectOf } from "./api/api";
+import { ChatDock } from "./chat/ChatDock";
 import { Focus } from "./focus/Focus";
 import { Inbox } from "./inbox/Inbox";
 import type { FocusClear } from "./api/types";
@@ -57,6 +58,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
   return (
     <NeedsMeProvider value={needsMe}>
       {view()}
+      <ChatDock api={api} project={inbox.data?.projects.find((p) => p.key === loc.project)} version={version} />
       {popup.open && inbox.data && (
         <FocusPopup mode="queue" api={api} now={now()} version={version} data={inbox.data} project={loc.project} onClose={popup.close} navigate={navigate} />
       )}

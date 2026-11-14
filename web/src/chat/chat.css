@@ -1,0 +1,27 @@
+/* Chat: the floating icon and its pop-up in the lower right corner. */
+.btn.chat-icon { position: fixed; right: 20px; bottom: 20px; width: 48px; height: 48px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 2px 8px rgb(0 0 0 / .25); z-index: 30; }
+.chat-popup { position: fixed; right: 20px; bottom: 20px; width: 420px; max-width: calc(100vw - 40px); height: 560px; max-height: calc(100vh - 40px); display: flex; flex-direction: column; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 4px 20px rgb(0 0 0 / .25); z-index: 30; font-size: 14px; }
+.chat-header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.chat-header h2 { font-size: 15px; margin: 0; }
+.chat-header-actions { margin-left: auto; display: flex; gap: 6px; }
+.chat-header-actions .btn { padding: 2px 8px; font-size: 13px; }
+.chat-new { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.chat-new label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.chat-notice { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--r-blocked); }
+.chat-note { margin: 0; padding: 6px 12px; }
+.chat-log { flex: 1; overflow: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 10px; }
+.chat-log > .chat-note { padding: 0; }
+.chat-message p { margin: 0; }
+.chat-human { align-self: flex-end; max-width: 85%; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-claude { display: flex; flex-direction: column; gap: 6px; overflow-wrap: anywhere; }
+.chat-claude .markdown > :first-child { margin-top: 0; }
+.chat-claude .markdown > :last-child { margin-bottom: 0; }
+.chat-tool > summary { cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.chat-tool code { background: none; padding: 0; }
+.chat-tool pre { margin: 4px 0 0; max-height: 200px; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+.chat-mark { margin-left: 6px; font-size: 12px; color: var(--muted); }
+.chat-mark.chat-error, .chat-failed { color: var(--danger); }
+.chat-warning { color: var(--r-blocked); border-left: 3px solid var(--r-blocked); padding-left: 8px; }
+.chat-refusal { margin: 0; padding: 6px 12px; color: var(--danger); }
+.chat-input { display: flex; align-items: end; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--border); }
+.chat-input textarea { flex: 1; font: inherit; resize: none; }

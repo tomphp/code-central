@@ -33,7 +33,10 @@ import type {
   SessionUsageFilter,
   SessionUsageView,
   TargetView,
-  ChatMessage, ChatOutcome, Conversation,
+  ChatItem,
+  ChatMessage,
+  ChatOutcome,
+  Conversation,
   UsageView, GitHubIssuesChange, ModelsChange, NeedsMeReason
 } from "./types";
 
@@ -83,7 +86,7 @@ export interface ChatHandlers {
   // fills.
   onMessage?(m: ChatMessage): void;
   // onItem is a new item of the running reply.
-  onItem?(item: HeldSessionEvent): void;
+  onItem?(item: ChatItem): void;
   // onOutcome is the end of the running reply.
   onOutcome?(o: { outcome: ChatOutcome; error?: string }): void;
   // onSession is the session ID and Resume Command the Factory reported.
@@ -217,6 +220,17 @@ export interface Api {
   // subscribeTranscript follows Claim number claim's Transcript, even
   // after the Claim ends, and returns a function that stops it.
   subscribeTranscript(project: string, id: string, claim: number, handlers: TranscriptHandlers): () => void;
+  // getChat reads the Project's current Conversation; with none its
+  // availability is "none". The writes answer with the Conversation as it
+  // then stands. startConversation replaces the current one, an empty model
+  // or effort taking the Chat row's default. sendChatMessage with no
+  // Conversation starts one with the Chat row's defaults; it is refused
+  // while a reply runs and while the Conversation is unavailable.
+  // stopChatReply does nothing when no reply runs.
+  getChat(project: string): Promise<Conversation>;
+  startConversation(project: string, pick: { model: string; effort: string }): Promise<Conversation>;
+  sendChatMessage(project: string, text: string): Promise<Conversation>;
+  stopChatReply(project: string): Promise<Conversation>;
   // subscribeChat follows the Project's current Conversation (Spec
   // code-central-633) and returns a function that stops it.
   subscribeChat(project: string, handlers: ChatHandlers): () => void;
