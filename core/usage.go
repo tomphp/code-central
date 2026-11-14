@@ -49,14 +49,16 @@ func (c *Core) projectExists(key string) bool {
 }
 
 // UsageResponse is one model response's token usage, as a Factory posts
-// it: when it came, the subagent it was for ("" for the main session),
-// the kind of session, the model that gave it ("" when not posted), and
-// its four token counts.
+// it: when it came, the subagent it was for ("" for the main session)
+// with that Subagent's Agent Type and description, the kind of session,
+// the model that gave it ("" when not posted), and its four token counts.
 type UsageResponse struct {
-	Time  time.Time `json:"time"`
-	Agent string    `json:"agent,omitempty"`
-	Kind  string    `json:"kind"`
-	Model string    `json:"model,omitempty"`
+	Time        time.Time `json:"time"`
+	Agent       string    `json:"agent,omitempty"`
+	AgentType   string    `json:"agent_type,omitempty"`
+	Description string    `json:"description,omitempty"`
+	Kind        string    `json:"kind"`
+	Model       string    `json:"model,omitempty"`
 	usage.Tokens
 }
 
@@ -98,7 +100,7 @@ func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []Usag
 		}
 		rs[i] = usage.Response{
 			Time: r.Time, Ticket: ticket, Claim: k.claim,
-			SessionID: sessionID, Agent: r.Agent, Kind: r.Kind, Model: r.Model, Tokens: r.Tokens,
+			SessionID: sessionID, Agent: r.Agent, AgentType: r.AgentType, Description: r.Description, Kind: r.Kind, Model: r.Model, Tokens: r.Tokens,
 		}
 	}
 	c.usage.RecordResponses(k.project, rs)
@@ -144,21 +146,34 @@ type UsageKind struct {
 }
 
 // UsageSession is one recent session: a Claim's main session, or a
-// subagent of it (Agent), with the Project, Ticket, Claim and kind of its
+// Subagent of it (Agent), with the Project, Ticket, Claim and kind of its
 // latest response. Started is its first response's time, Peak the largest
-// Context Size among its responses, and Models each distinct model its
-// responses name, in order of first use.
+// Context Size among its responses, Tokens all their tokens, and Models
+// each distinct model its responses name, in order of first use. A
+// Subagent has the latest non-empty Agent Type and description among its
+// responses.
+//
+// A main session has its Subagents, oldest first, and TotalTokens, its
+// Tokens and theirs; a Subagent has no Subagents and no TotalTokens. A
+// main session whose only responses are its Subagents' has none of its
+// own: no kind, models, peak or tokens, its Subagents' first start and
+// the Project, Ticket and Claim of their latest response.
 type UsageSession struct {
-	Project   string    `json:"project"`
-	Ticket    string    `json:"ticket"`
-	Claim     int       `json:"claim"`
-	SessionID string    `json:"session_id"`
-	Agent     string    `json:"agent,omitempty"`
-	Kind      string    `json:"kind"`
-	Started   time.Time `json:"started"`
-	Peak      int       `json:"peak"`
-	Responses int       `json:"responses"`
-	Models    []string  `json:"models"`
+	Project     string         `json:"project"`
+	Ticket      string         `json:"ticket"`
+	Claim       int            `json:"claim"`
+	SessionID   string         `json:"session_id"`
+	Agent       string         `json:"agent,omitempty"`
+	AgentType   string         `json:"agent_type,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Kind        string         `json:"kind"`
+	Started     time.Time      `json:"started"`
+	Peak        int            `json:"peak"`
+	Responses   int            `json:"responses"`
+	Models      []string       `json:"models"`
+	Tokens      int            `json:"tokens"`
+	TotalTokens *int           `json:"total_tokens,omitempty"`
+	Subagents   []UsageSession `json:"subagents"`
 }
 
 // UsageDay is one local day's token usage, by kind of session: the kinds
@@ -187,12 +202,11 @@ func (c *Core) Usage(_ context.Context, in UsageInput) (UsageView, error) {
 		return UsageView{}, &Error{Code: NotFound, Message: fmt.Sprintf("no Project %q", in.Project)}
 	}
 	recs := c.usage.Read(in.Project, in.Days)
-	sessions := usageSessions(recs.Responses)
-	recent := sessions[:min(len(sessions), RecentSessions)]
+	all, mains := usageSessions(recs.Responses)
 	return UsageView{
 		Operations: operations(recs.Calls),
-		Kinds:      kinds(sessions),
-		Sessions:   recent,
+		Kinds:      kinds(all),
+		Sessions:   mains[:min(len(mains), RecentSessions)],
 		Days:       usageDays(recs.Days, recs.Responses),
 	}, nil
 }
@@ -206,9 +220,12 @@ type SessionUsageInput struct {
 }
 
 // SessionUsageView is one session's responses, oldest first, for its
-// line chart.
+// line chart. For a Subagent it also has its Agent Type and description,
+// the latest non-empty of each among its responses.
 type SessionUsageView struct {
-	Responses []SessionUsageResponse `json:"responses"`
+	AgentType   string                 `json:"agent_type,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Responses   []SessionUsageResponse `json:"responses"`
 }
 
 // SessionUsageResponse is one of a session's model responses: when it
@@ -242,47 +259,92 @@ func (c *Core) SessionUsage(_ context.Context, in SessionUsageInput) (SessionUsa
 	slices.SortStableFunc(mine, func(a, b usage.Response) int { return a.Time.Compare(b.Time) })
 	out := SessionUsageView{Responses: []SessionUsageResponse{}}
 	for _, r := range mine {
+		out.AgentType = cmp.Or(r.AgentType, out.AgentType)
+		out.Description = cmp.Or(r.Description, out.Description)
 		out.Responses = append(out.Responses, SessionUsageResponse{Time: r.Time, ContextSize: r.ContextSize(), Tokens: r.Tokens})
 	}
 	return out, nil
 }
 
-// RecentSessions is how many sessions a Usage read lists.
+// RecentSessions is how many main sessions a Usage read lists, each with
+// all of its Subagents.
 const RecentSessions = 50
 
-// usageSessions are the sessions the responses belong to, newest first.
-// A session is its session ID plus its agent, so each subagent is one of
-// its own, and a session resumed under a newer Claim stays one session.
-// The responses are taken oldest first, whatever order they were read in,
-// so each session starts at its first, takes its Claim and kind from its
-// latest, and lists its models in order of first use.
-func usageSessions(responses []usage.Response) []UsageSession {
+// usageSessions are the sessions the responses belong to: all of them,
+// main sessions and Subagents alike, in no order, and the main sessions,
+// newest first, each with its Subagents. A session is its session ID
+// plus its agent, so each Subagent is one of its own, and a session
+// resumed under a newer Claim stays one session. The responses are taken
+// oldest first, whatever order they were read in, so each session starts
+// at its first, takes its Claim and kind from its latest, and lists its
+// models in order of first use.
+func usageSessions(responses []usage.Response) (all, mains []UsageSession) {
 	responses = slices.Clone(responses)
 	slices.SortStableFunc(responses, func(a, b usage.Response) int { return a.Time.Compare(b.Time) })
 	type key struct{ session, agent string }
 	byKey := map[key]*UsageSession{}
+	// latestSubagent is each session ID's latest Subagent response.
+	latestSubagent := map[string]usage.Response{}
 	for _, r := range responses {
 		k := key{r.SessionID, r.Agent}
 		s := byKey[k]
 		if s == nil {
-			s = &UsageSession{SessionID: r.SessionID, Agent: r.Agent, Started: r.Time, Models: []string{}}
+			s = &UsageSession{SessionID: r.SessionID, Agent: r.Agent, Started: r.Time, Models: []string{}, Subagents: []UsageSession{}}
 			byKey[k] = s
 		}
 		s.Responses++
 		s.Peak = max(s.Peak, r.ContextSize())
+		s.Tokens += r.Total()
 		if r.Model != "" && !slices.Contains(s.Models, r.Model) {
 			s.Models = append(s.Models, r.Model)
 		}
 		s.Project, s.Ticket, s.Claim, s.Kind = r.Project, r.Ticket, r.Claim, r.Kind
+		if r.Agent != "" {
+			s.AgentType = cmp.Or(r.AgentType, s.AgentType)
+			s.Description = cmp.Or(r.Description, s.Description)
+			latestSubagent[r.SessionID] = r
+		}
 	}
-	sessions := []UsageSession{}
-	for _, s := range byKey {
-		sessions = append(sessions, *s)
+
+	byID := map[string]*UsageSession{}
+	for k, s := range byKey {
+		all = append(all, *s)
+		if k.agent == "" {
+			byID[k.session] = s
+		}
 	}
-	slices.SortFunc(sessions, func(a, b UsageSession) int {
-		return cmp.Or(b.Started.Compare(a.Started), cmp.Compare(a.SessionID, b.SessionID), cmp.Compare(a.Agent, b.Agent))
+	// A main session with no responses of its own in the range, because
+	// its turn started before it.
+	for id, r := range latestSubagent {
+		if byID[id] == nil {
+			byID[id] = &UsageSession{Project: r.Project, Ticket: r.Ticket, Claim: r.Claim, SessionID: id, Models: []string{}, Subagents: []UsageSession{}}
+		}
+	}
+	for k, s := range byKey {
+		if k.agent != "" {
+			m := byID[k.session]
+			m.Subagents = append(m.Subagents, *s)
+		}
+	}
+	mains = []UsageSession{}
+	for _, m := range byID {
+		slices.SortFunc(m.Subagents, func(a, b UsageSession) int {
+			return cmp.Or(a.Started.Compare(b.Started), cmp.Compare(a.Agent, b.Agent))
+		})
+		if m.Responses == 0 {
+			m.Started = m.Subagents[0].Started
+		}
+		total := m.Tokens
+		for _, s := range m.Subagents {
+			total += s.Tokens
+		}
+		m.TotalTokens = &total
+		mains = append(mains, *m)
+	}
+	slices.SortFunc(mains, func(a, b UsageSession) int {
+		return cmp.Or(b.Started.Compare(a.Started), cmp.Compare(a.SessionID, b.SessionID))
 	})
-	return sessions
+	return all, mains
 }
 
 // usageDays is a row for each of days, oldest first, with the responses'

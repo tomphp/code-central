@@ -18,14 +18,14 @@ import (
 
 // specLanded is whether t is a Spec-landed Ticket in Project p: p is under
 // Merge or Pull Request with Land per Spec on, t is an
-// implementation Ticket (not a Stage, Map or Prototype Ticket), and its
+// implementation Ticket (not a Stage, Map, Prototype or Retro Ticket), and its
 // Spec is neither a Map nor Long-lived (it doesn't carry the long-lived
 // Label). A Long-lived Spec's Tickets land Ticket by Ticket.
 func specLanded(r store.Reader, p store.Project, t store.Ticket) bool {
 	if !landingPolicyOf(p).LandPerSpecInForce() {
 		return false
 	}
-	if StageOf(t.Labels) != "" || isMap(t.Labels) || slices.Contains(t.Labels, PrototypeLabel) {
+	if StageOf(t.Labels) != "" || isMap(t.Labels) || slices.Contains(t.Labels, PrototypeLabel) || slices.Contains(t.Labels, RetroLabel) {
 		return false
 	}
 	spec, ok := r.Spec(p.Key, t.Spec)

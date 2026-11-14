@@ -259,7 +259,7 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 	if err != nil {
 		return Written[TicketView]{}, err
 	}
-	spec, err := c.ciFixesSpec(key)
+	spec, err := c.projectSpecNumber(key, ciFixesSpec)
 	if err != nil {
 		return Written[TicketView]{}, err
 	}
@@ -308,37 +308,6 @@ func (c *Core) NewFixTicket(ctx context.Context, key string, in NewFixTicketInpu
 // ciFixesSpecBody is the CI Fixes Spec's body.
 const ciFixesSpecBody = "This Spec holds the fix Tickets the human opens with New fix Ticket when a commit's CI failed. " +
 	"Each fixes its failure forward, and the Tickets waiting on that commit land when a later commit passes CI.\n"
-
-// ciFixesSpec is key's CI Fixes Spec, a Long-lived Spec created on first
-// use; the Spec is written before the Project names it.
-func (c *Core) ciFixesSpec(key string) (int, error) {
-	n := 0
-	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
-			return err
-		}
-		if p, _ := w.Project(key); p.CIFixesSpec != 0 {
-			n = p.CIFixesSpec
-			return nil
-		}
-		now := c.now()
-		n = w.NextNumber(key)
-		return w.PutSpec(key, store.Spec{Number: n, Title: "CI Fixes", Body: ciFixesSpecBody, Labels: []string{LongLivedLabel}, Created: now, Updated: now})
-	})
-	if err != nil {
-		return 0, err
-	}
-	err = c.store.Update(func(w store.Writer) error {
-		p, _ := w.Project(key)
-		if p.CIFixesSpec != 0 {
-			n = p.CIFixesSpec
-			return nil
-		}
-		p.CIFixesSpec = n
-		return w.PutProject(p)
-	})
-	return n, err
-}
 
 // whyNotNewFixTicket says why t isn't offered New fix Ticket.
 func whyNotNewFixTicket(key string, t store.Ticket) string {

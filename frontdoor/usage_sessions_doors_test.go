@@ -34,6 +34,7 @@ func postUsage(t *testing.T, srv *codecentraltest.Server, body string) {
 type response struct {
 	time                       time.Time
 	agent, kind, model         string
+	agentType, description     string
 	input, write, read, output int
 }
 
@@ -47,6 +48,12 @@ func postResponses(t *testing.T, srv *codecentraltest.Server, session string, rs
 		agent := ""
 		if r.agent != "" {
 			agent = fmt.Sprintf(`"agent":%q,`, r.agent)
+		}
+		if r.agentType != "" {
+			agent += fmt.Sprintf(`"agent_type":%q,`, r.agentType)
+		}
+		if r.description != "" {
+			agent += fmt.Sprintf(`"description":%q,`, r.description)
 		}
 		model := ""
 		if r.model != "" {
@@ -123,6 +130,7 @@ func TestPostedUsageGoesToTheNewestClaimWithThatSession(t *testing.T) {
 	want := []core.UsageSession{{
 		Project: "acme", Ticket: "acme-2", Claim: 1, SessionID: "s1", Kind: "implementation",
 		Started: at(1), Peak: 3510, Responses: 2, Models: []string{},
+		Tokens: 1111 + 3861, TotalTokens: new(1111 + 3861), Subagents: []core.UsageSession{},
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("sessions %+v, want %+v", got, want)
@@ -182,7 +190,7 @@ func TestContextSizeByKindWithSubagentsAsSessionsOfTheirOwn(t *testing.T) {
 		peak, responses     int
 	}
 	var got []row
-	for _, s := range u.Sessions {
+	for _, s := range everySession(u.Sessions) {
 		if s.SessionID != map[string]string{"acme-3": "impl", "acme-2": "spec"}[s.Ticket] || s.Project != "acme" || s.Claim != 1 {
 			t.Errorf("session %+v filed under the wrong Claim", s)
 		}
@@ -190,19 +198,19 @@ func TestContextSizeByKindWithSubagentsAsSessionsOfTheirOwn(t *testing.T) {
 	}
 	wantRows := []row{
 		{"acme-2", "", "spec", 30_002, 1},
-		{"acme-3", "toolu_e", "another", 201, 1},
-		{"acme-3", "toolu_d", "custom", 101, 1},
-		{"acme-3", "toolu_c", "subagent", 7_001, 1},
-		{"acme-3", "toolu_b", "review", 6_003, 1},
-		{"acme-3", "toolu_a", "review", 9_003, 1},
 		{"acme-3", "", "implementation", 61_005, 2},
+		{"acme-3", "toolu_a", "review", 9_003, 1},
+		{"acme-3", "toolu_b", "review", 6_003, 1},
+		{"acme-3", "toolu_c", "subagent", 7_001, 1},
+		{"acme-3", "toolu_d", "custom", 101, 1},
+		{"acme-3", "toolu_e", "another", 201, 1},
 	}
 	if !reflect.DeepEqual(got, wantRows) {
-		t.Fatalf("sessions, newest first:\n%+v\nwant\n%+v", got, wantRows)
+		t.Fatalf("sessions, newest first, each followed by its Subagents:\n%+v\nwant\n%+v", got, wantRows)
 	}
 }
 
-func TestRecentSessionsAreTheNewest50(t *testing.T) {
+func TestAMainSessionListsAllOfItsSubagents(t *testing.T) {
 	srv := newServer(t)
 	claim(t, srv, "acme", "s1")
 	var rs []response
@@ -212,10 +220,10 @@ func TestRecentSessionsAreTheNewest50(t *testing.T) {
 	postResponses(t, srv, "s1", rs...)
 
 	u := readUsage(t, srv, "")
-	if len(u.Sessions) != 50 || u.Sessions[0].Agent != "agent-59" || u.Sessions[49].Agent != "agent-10" {
-		t.Fatalf("%d sessions from %+v, want agent-59 back to agent-10", len(u.Sessions), u.Sessions[0])
+	if len(u.Sessions) != 1 || len(u.Sessions[0].Subagents) != 60 || u.Sessions[0].Subagents[59].Agent != "agent-59" {
+		t.Fatalf("%d sessions from %+v, want s1 with all 60 Subagents", len(u.Sessions), u.Sessions)
 	}
-	// The kinds still count every session, not only the 50 listed.
+	// The kinds count every session.
 	if want := []core.UsageKind{{Kind: "subagent", Sessions: 60, AveragePeak: 31, LargestPeak: 60}}; !reflect.DeepEqual(u.Kinds, want) {
 		t.Fatalf("kinds %+v, want %+v", u.Kinds, want)
 	}
@@ -241,7 +249,7 @@ func TestContextSizeForOneProjectOrAllOfThemOverTheRange(t *testing.T) {
 
 	sessions := func(query string) []string {
 		var out []string
-		for _, s := range readUsage(t, srv, query).Sessions {
+		for _, s := range everySession(readUsage(t, srv, query).Sessions) {
 			out = append(out, s.Ticket+"/"+s.Kind)
 		}
 		return out
@@ -272,8 +280,8 @@ func TestPostedUsageSurvivesARestart(t *testing.T) {
 	)
 
 	second := newServerWith(t, []codecentraltest.Option{codecentraltest.WithUsageDir(dir)})
-	got := readUsage(t, second, "?project=acme").Sessions
-	if len(got) != 2 || got[1].Peak != 42 || !reflect.DeepEqual(got[1].Models, []string{"claude-opus-4-7"}) || !reflect.DeepEqual(got[0].Models, []string{}) {
+	got := everySession(readUsage(t, second, "?project=acme").Sessions)
+	if len(got) != 2 || got[0].Peak != 42 || !reflect.DeepEqual(got[0].Models, []string{"claude-opus-4-7"}) || !reflect.DeepEqual(got[1].Models, []string{}) {
 		t.Fatalf("sessions %+v after a restart, want the one with peak 42 on claude-opus-4-7 and a subagent with no model", got)
 	}
 }
@@ -298,7 +306,7 @@ func TestASessionListsItsModelsInOrderOfFirstUse(t *testing.T) {
 	)
 
 	got := map[string][]string{}
-	for _, s := range readUsage(t, srv, "").Sessions {
+	for _, s := range everySession(readUsage(t, srv, "").Sessions) {
 		got[s.Agent] = s.Models
 	}
 	want := map[string][]string{

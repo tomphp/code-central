@@ -107,7 +107,7 @@ func TestTheResumedLineForACutOffClaimSaysSoAfterARestart(t *testing.T) {
 	id := h.StageTicket("tickets", "Cut it up")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
-	h.WaitFor(id+"'s turn", func() bool { return len(h.Calls()) == 1 })
+	r.WaitForTurn(id + "'s turn")
 	r.Signal(os.Interrupt)
 	r.Signal(os.Interrupt)
 	r.Exited()

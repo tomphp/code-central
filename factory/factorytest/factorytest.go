@@ -576,6 +576,19 @@ func (h *Harness) WaitForReply() core.ConversationView {
 	return cv
 }
 
+// SessionUsage reads one Usage session of the Project, agent being ""
+// for the main session.
+func (h *Harness) SessionUsage(session, agent string) core.SessionUsageView {
+	h.t.Helper()
+	q := url.Values{"project": {h.Project}, "session": {session}, "agent": {agent}}
+	resp, err := http.Get(h.Server.URL + "/api/usage/session?" + q.Encode())
+	must(h.t, err)
+	defer resp.Body.Close()
+	var v core.SessionUsageView
+	must(h.t, json.NewDecoder(resp.Body).Decode(&v))
+	return v
+}
+
 // Human is a client of the harness's Code Central acting as the human.
 func (h *Harness) Human() *client.Client {
 	c := client.New(h.Server.URL)
@@ -846,6 +859,24 @@ func (r *Running) Poll() {
 	r.Tick()
 	r.polls++
 	r.waitForPolls(r.polls + 1)
+}
+
+// WaitForTurn waits for the Factory to have started a turn. Its poll can
+// lose a claim to a dropped connection, which it retries only at its next
+// poll, so WaitForTurn makes that poll whenever a claim has failed.
+func (r *Running) WaitForTurn(what string) {
+	r.h.t.Helper()
+	failed := 0
+	r.h.WaitFor(what, func() bool {
+		if len(r.h.Calls()) > 0 {
+			return true
+		}
+		if n := strings.Count(r.stdout.String(), "claim: "); n > failed {
+			failed = n
+			r.Poll()
+		}
+		return false
+	})
 }
 
 func (r *Running) waitForPolls(n int64) {

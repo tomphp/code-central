@@ -236,6 +236,18 @@ describe("live arrivals", () => {
   });
 });
 
+describe("a Retro Focus Item", () => {
+  it("shows a Retro badge", async () => {
+    const { w, s } = await base();
+    const plain = await spec(s, "acme", "Login");
+    await s.ticket("acme", { title: "Retro: Login page", state: "In Review", spec: plain, labels: ["retro"] });
+    renderApp(w);
+    const it = await item();
+    expect(within(it).getByText("Retro")).toHaveClass("label", "retro-badge");
+    expect(within(it).queryByText("Prototype")).toBeNull();
+  });
+});
+
 describe("a Map Ticket or Prototype Focus Item", () => {
   // wayfinding is the Map "Find the way" with one In Review Ticket on it,
   // a Prototype or a Map grilling Ticket, or a Prototype on the plain Spec

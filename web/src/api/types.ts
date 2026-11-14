@@ -571,6 +571,8 @@ export interface NeedsMeRow {
   spec?: NeedsMeSpec;
   // prototype is set on a Ticket labelled prototype, for its badge.
   prototype?: boolean;
+  // retro is set on a Ticket labelled retro, for its badge.
+  retro?: boolean;
   // ci_result is the Ticket's CI result, whatever the reason, for its
   // badge; left out for a Ticket never pushed while CI Tracking was on.
   ci_result?: CIResult;
@@ -734,6 +736,9 @@ export interface SpecDetail extends SpecView {
   // Land per Spec on.
   land_per_spec?: LandPerSpecStatus;
   map?: MapView;
+  // retros are the Retros looking back on the Spec, oldest first, left
+  // out when there are none.
+  retros?: RetroView[];
 }
 
 // One find_specs result.
@@ -1019,6 +1024,16 @@ export interface TicketView {
   // auto_accept_kind is the Ticket's Auto-accept kind, left out when it has
   // none; only the UI's read carries it (code-central-597).
   auto_accept_kind?: AutoAcceptKind;
+  // retros are the Retros looking back on the Ticket, oldest first; only
+  // get_ticket sets it, left out when there are none.
+  retros?: RetroView[];
+}
+
+// RetroView is a Retro as a read of its target lists it.
+export interface RetroView {
+  id: string;
+  title: string;
+  state: State;
 }
 
 // TICKET_FIELDS are TicketView's fields in the service's order, the order
@@ -1150,21 +1165,35 @@ export interface UsageKind {
 }
 
 // UsageSession is one recent session, a Claim's main session or one of its
-// subagents (agent), with the Claim and kind of its latest response; peak
-// is its largest Context Size, started its first response's time, and
-// models each distinct model its responses name, in order of first use
-// (empty when none does).
+// Subagents (agent), with the Claim and kind of its latest response; peak
+// is its largest Context Size, started its first response's time, tokens
+// all its responses' tokens, and models each distinct model its responses
+// name, in order of first use (empty when none does). A Subagent has the
+// latest non-empty Agent Type and description among its responses, each
+// left out when none gave one.
+//
+// A main session has its Subagents, oldest first, and total_tokens, its
+// tokens and theirs; a Subagent's subagents are empty and it has no
+// total_tokens. A main session whose only responses in the range are its
+// Subagents' has none of its own: no kind (""), models, peak or tokens,
+// its Subagents' first start, and the Project, Ticket and Claim of their
+// latest response.
 export interface UsageSession {
   project: string;
   ticket: string;
   claim: number;
   session_id: string;
   agent?: string;
+  agent_type?: string;
+  description?: string;
   kind: string;
   started: string;
   peak: number;
   responses: number;
   models: string[];
+  tokens: number;
+  total_tokens?: number;
+  subagents: UsageSession[];
 }
 
 // UsageDay is one local day's token usage (day is YYYY-MM-DD in the
@@ -1185,11 +1214,14 @@ export interface UsageDayTokens {
 }
 
 // UsageResponse is one model response's token usage as a Factory posts
-// it to POST /api/usage; agent is left out for the main session, and
-// model when the Factory has none.
+// it to POST /api/usage; agent, agent_type and description are left out
+// for the main session, agent_type and description for a Subagent whose
+// Agent call gave neither, and model when the Factory has none.
 export interface UsageResponse {
   time: string;
   agent?: string;
+  agent_type?: string;
+  description?: string;
   kind: string;
   model?: string;
   input_tokens: number;
@@ -1199,8 +1231,10 @@ export interface UsageResponse {
 }
 
 // UsageView is GET /api/usage: kinds, sessions and days come from the
-// token usage a Factory posts, sessions newest first and at most 50, and
-// days a row for every local day in the range, oldest first.
+// token usage a Factory posts: kinds over every session, main and
+// Subagent; sessions the main sessions, newest first and at most 50, each
+// with all its Subagents; and days a row for every local day in the
+// range, oldest first.
 export interface UsageView {
   operations: UsageOperation[];
   kinds: UsageKind[];
@@ -1234,8 +1268,11 @@ export interface SessionUsageResponse {
 }
 
 // SessionUsageView is GET /api/usage/session: one session's responses,
-// oldest first, over every day Usage keeps.
+// oldest first, over every day Usage keeps, and for a Subagent the latest
+// non-empty Agent Type and description among them.
 export interface SessionUsageView {
+  agent_type?: string;
+  description?: string;
   responses: SessionUsageResponse[];
 }
 

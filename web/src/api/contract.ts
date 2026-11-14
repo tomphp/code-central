@@ -9,7 +9,7 @@
 // (Specs and Tickets share one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, Conversation, HeldSessionEvent, LandingMethod, ModelsReport, NeedsMeReason, PullRequestReport, SessionEvent, State, TicketAcknowledgement, TicketView, UsageResponse } from "./types";
+import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, Conversation, HeldSessionEvent, LandingMethod, ModelsReport, NeedsMeReason, PullRequestReport, SessionEvent, State, TicketAcknowledgement, TicketView, UsageResponse, UsageSession } from "./types";
 import { ApiError, NEEDS_ME_REASONS, TRIAGE_ACTIONS } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -68,6 +68,8 @@ export interface Driver {
   // postChatEvents is the Factory holding the Conversation posting its
   // reply: text items, and the outcome on the last post.
   postChatEvents(key: string, factory: string, conversation: string, texts: string[], outcome?: "done" | "stopped" | "failed"): Promise<void>; // no outcome leaves the reply running
+  // absolutePath is a path absolute where Core runs.
+  readonly absolutePath: string;
   // reportPushRemote reports the Push remote's URL as a Factory does when
   // it starts (code-central-251).
   reportPushRemote(key: string, url: string): Promise<void>;
@@ -121,6 +123,12 @@ export function wantAcknowledgement(ack: TicketAcknowledgement, id: string, stat
   expect(Number.isNaN(Date.parse(ack.updated))).toBe(false);
   expect(ack.changed).toEqual(expect.arrayContaining(changed));
   expect(ack.changed).not.toContain("updated");
+}
+
+// startedAt is a Usage session with its start, and its Subagents', in
+// milliseconds, so the service's and the fake's times compare.
+function startedAt(s: UsageSession): object {
+  return { ...s, started: Date.parse(s.started), subagents: s.subagents.map(startedAt) };
 }
 
 export const sampleReport: FailureReportBody = {
@@ -490,7 +498,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
     it("sets a Project's Models, a row per kind of work, all at Default to begin with", async () => {
       await d.createProject("acme", "Acme");
-      const kinds = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"];
+      const kinds = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "retro", "implementation"];
       const unset = { model: "", effort: "" };
       expect((await d.api.listProjects())[0].models).toEqual({ default: unset, chat: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
 
@@ -1765,6 +1773,39 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(nowhere).toMatchObject({ status: 422, code: "invalid", field: "spec" });
     });
 
+    // ---- Retros (code-central-646) ----
+    it("submits a Retro on a Cancelled Ticket as one Ready retro Ticket on the Retros Spec, with the note", async () => {
+      await d.createProject("acme", "Acme");
+      const target = (await d.api.submitSmallChange("acme", "Rename the button")).id;
+      await d.api.act("acme", target, "cancel", {});
+      const ack = await d.api.submitRetro("acme", target, "Why was it cancelled?");
+      wantAcknowledgement(ack, ack.id, "Ready", ["title", "state", "spec", "labels", "tags", "description", "moves", "claimable"]);
+
+      const t = await d.api.getTicket("acme", ack.id);
+      expect(t).toMatchObject({
+        title: "Retro: Rename the button",
+        state: "Ready",
+        spec: { title: "Retros" },
+        labels: ["retro"],
+        tags: { "retro-of": target },
+        claimable: true,
+      });
+      expect(t.description).toContain("Why was it cancelled?");
+      expect(t.moves).toMatchObject([{ to: "Ready", actor: "human", via: "submit_retro" }]);
+      const again = await d.api.submitRetro("acme", target);
+      expect((await d.api.getTicket("acme", again.id)).spec.id).toBe(t.spec.id);
+    });
+
+    it("refuses a Retro on unfinished work, or on nothing", async () => {
+      await d.createProject("acme", "Acme");
+      const open = (await d.api.submitSmallChange("acme", "Rename the button")).id;
+      const unfinished = await d.api.submitRetro("acme", open).catch((e) => e);
+      expect(unfinished).toBeInstanceOf(ApiError);
+      expect(unfinished).toMatchObject({ status: 422, code: "invalid", field: "target" });
+      const nowhere = await d.api.submitRetro("acme", "acme-99").catch((e) => e);
+      expect(nowhere).toMatchObject({ status: 422, code: "invalid", field: "target" });
+    });
+
     // ---- Small Changes (code-central-475) ----
     it("submits a Small Change as one Ready Ticket on the Small Changes Spec, titled by the text's first line", async () => {
       await d.createProject("acme", "Acme");
@@ -2441,6 +2482,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         peak: number,
         responses: number,
         models: string[],
+        tokens: number,
         agent?: string,
       ) => ({
         project,
@@ -2453,14 +2495,22 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         peak,
         responses,
         models,
+        tokens,
+        subagents: [],
       });
-      const sessions = (u: typeof all) => u.sessions.map((s) => ({ ...s, started: Date.parse(s.started) }));
+      const sessions = (u: typeof all) => u.sessions.map(startedAt);
       expect(sessions(all)).toEqual([
-        session("beta", spec, "sess-spec", "spec", Date.parse(at(5)), 30_002, 1, []),
-        session("acme", impl, "sess-impl", "custom", Date.parse(at(4)), 101, 1, [], "toolu_b"),
-        session("acme", impl, "sess-impl", "review", Date.parse(at(3)), 9_003, 1, ["claude-haiku-4-5"], "toolu_a"),
-        // Posted out of order: the Opus response came first.
-        session("acme", impl, "sess-impl", "implementation", Date.parse(at(1)), 61_005, 2, ["claude-opus-4-7", "claude-sonnet-4-6"]),
+        { ...session("beta", spec, "sess-spec", "spec", Date.parse(at(5)), 30_002, 1, [], 30_009), total_tokens: 30_009 },
+        {
+          // Posted out of order: the Opus response came first.
+          ...session("acme", impl, "sess-impl", "implementation", Date.parse(at(1)), 61_005, 2, ["claude-opus-4-7", "claude-sonnet-4-6"], 81_024),
+          total_tokens: 81_024 + 9_010 + 108,
+          // Oldest first, each with its own peak and tokens.
+          subagents: [
+            session("acme", impl, "sess-impl", "review", Date.parse(at(3)), 9_003, 1, ["claude-haiku-4-5"], 9_010, "toolu_a"),
+            session("acme", impl, "sess-impl", "custom", Date.parse(at(4)), 101, 1, [], 108, "toolu_b"),
+          ],
+        },
       ]);
       expect(sessions(await d.api.usage({ project: "beta", days: 30 }))).toEqual([sessions(all)[0]]);
       expect((await d.api.usage({ project: "acme" })).kinds.map((k) => k.kind)).toEqual(["implementation", "review", "custom"]);
@@ -2485,6 +2535,127 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         },
       ]);
       expect((await d.api.usage({ project: "beta", days: 30 })).days.filter((r) => r.kinds.length)).toEqual([{ day, kinds: [tokens("spec", 2, 30_000, 0, 7)] }]);
+    });
+
+    // ---- Nested Subagents (Spec code-central-638) ----
+
+    it("names each Subagent by its latest Agent Type and description, and lists a main session whose only responses in the range are its Subagents'", async () => {
+      await d.createProject("acme", "Acme");
+      const impl = await d.createTicket("acme", "Build it", "Ready");
+      await d.claim("acme", impl, "sess-impl");
+      const base = Date.parse((await d.api.getTicket("acme", impl)).claims[0].started);
+      const at = (s: number) => new Date(base + s * 1000).toISOString();
+      const resp = (s: number, kind: string, input: number, sub?: Pick<UsageResponse, "agent" | "agent_type" | "description">): UsageResponse => ({
+        time: at(s),
+        ...sub,
+        kind,
+        input_tokens: input,
+        cache_write_tokens: 0,
+        cache_read_tokens: 0,
+        output_tokens: 1,
+      });
+      await d.postUsage("sess-impl", [
+        // The turn started twenty days before: out of the 7 day range.
+        { ...resp(-20 * 86_400, "implementation", 500), model: "claude-opus-4-7" },
+        resp(2, "subagent", 10, { agent: "toolu_a", agent_type: "Explore", description: "Map it" }),
+        resp(3, "subagent", 20, { agent: "toolu_a", description: "Map it again" }),
+        // Recorded before Subagents were named.
+        resp(4, "subagent", 30, { agent: "toolu_old" }),
+        resp(5, "review", 40, { agent: "toolu_review", description: "Review the diff" }),
+      ]);
+
+      const sub = (agent: string, kind: string, started: number, peak: number, responses: number, tokens: number, named: Pick<UsageResponse, "agent_type" | "description">) => ({
+        project: "acme",
+        ticket: impl,
+        claim: 1,
+        session_id: "sess-impl",
+        agent,
+        ...named,
+        kind,
+        started: Date.parse(at(started)),
+        peak,
+        responses,
+        models: [],
+        tokens,
+        subagents: [],
+      });
+      const subagents = [
+        // Its Agent Type from the response that gave one, its description from the latest.
+        sub("toolu_a", "subagent", 2, 20, 2, 10 + 20 + 2, { agent_type: "Explore", description: "Map it again" }),
+        sub("toolu_old", "subagent", 4, 30, 1, 31, {}),
+        sub("toolu_review", "review", 5, 40, 1, 41, { description: "Review the diff" }),
+      ];
+      const week = await d.api.usage();
+      expect(week.sessions.map(startedAt)).toEqual([
+        {
+          project: "acme",
+          ticket: impl,
+          claim: 1,
+          session_id: "sess-impl",
+          kind: "",
+          started: Date.parse(at(2)),
+          peak: 0,
+          responses: 0,
+          models: [],
+          tokens: 0,
+          total_tokens: 32 + 31 + 41,
+          subagents,
+        },
+      ]);
+      // The kinds count only sessions with responses, Subagents as their own.
+      expect(week.kinds).toEqual([
+        { kind: "review", sessions: 1, average_peak: 40, largest_peak: 40 },
+        { kind: "subagent", sessions: 2, average_peak: 25, largest_peak: 30 },
+      ]);
+
+      // Over 30 days its own response is in range.
+      const month = await d.api.usage({ days: 30 });
+      expect(month.sessions.map(startedAt)).toEqual([
+        {
+          project: "acme",
+          ticket: impl,
+          claim: 1,
+          session_id: "sess-impl",
+          kind: "implementation",
+          started: Date.parse(at(-20 * 86_400)),
+          peak: 500,
+          responses: 1,
+          models: ["claude-opus-4-7"],
+          tokens: 501,
+          total_tokens: 501 + 32 + 31 + 41,
+          subagents,
+        },
+      ]);
+    });
+
+    it("lists the 50 newest main sessions, each with all its Subagents", async () => {
+      await d.createProject("acme", "Acme");
+      const first = await d.createTicket("acme", "Ticket 0", "Ready");
+      await d.claim("acme", first, "sess-00");
+      const base = Date.parse((await d.api.getTicket("acme", first)).claims[0].started);
+      const resp = (s: number, agent?: string): UsageResponse => ({
+        time: new Date(base + s * 1000).toISOString(),
+        ...(agent ? { agent } : {}),
+        kind: agent ? "subagent" : "implementation",
+        input_tokens: 1,
+        cache_write_tokens: 0,
+        cache_read_tokens: 0,
+        output_tokens: 0,
+      });
+      for (let i = 0; i < 51; i++) {
+        const session = `sess-${String(i).padStart(2, "0")}`;
+        if (i > 0) await d.claim("acme", await d.createTicket("acme", `Ticket ${i}`, "Ready"), session);
+        await d.postUsage(session, [resp(i), resp(i, "toolu_a"), resp(i, "toolu_b")]);
+      }
+
+      const u = await d.api.usage();
+      expect(u.sessions.map((s) => s.session_id)).toEqual(Array.from({ length: 50 }, (_, i) => `sess-${String(50 - i).padStart(2, "0")}`));
+      expect(u.sessions.every((s) => s.subagents.map((a) => a.agent).join() === "toolu_a,toolu_b")).toBe(true);
+      // Every session counts in the kinds, listed or not.
+      expect(u.kinds).toEqual([
+        { kind: "implementation", sessions: 51, average_peak: 1, largest_peak: 1 },
+        { kind: "subagent", sessions: 102, average_peak: 1, largest_peak: 1 },
+      ]);
     });
 
     it("reads one session's responses back in order, with each one's Context Size and token counts", async () => {
@@ -2524,6 +2695,36 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(unknown).toMatchObject({ status: 404, code: "not_found" });
     });
 
+    it("reads a Subagent's session with its latest Agent Type and description (Spec code-central-638)", async () => {
+      await d.createProject("acme", "Acme");
+      const impl = await d.createTicket("acme", "Build it", "Ready");
+      await d.claim("acme", impl, "sess-impl");
+      const base = Date.parse((await d.api.getTicket("acme", impl)).claims[0].started);
+      const resp = (s: number, sub?: Pick<UsageResponse, "agent" | "agent_type" | "description">): UsageResponse => ({
+        time: new Date(base + s * 1000).toISOString(),
+        ...sub,
+        kind: sub ? "subagent" : "implementation",
+        input_tokens: 5,
+        cache_write_tokens: 0,
+        cache_read_tokens: 0,
+        output_tokens: 7,
+      });
+      await d.postUsage("sess-impl", [
+        resp(1),
+        resp(2, { agent: "toolu_a", agent_type: "Explore", description: "Map it" }),
+        resp(3, { agent: "toolu_a", description: "Map it again" }),
+        resp(4, { agent: "toolu_old" }),
+      ]);
+
+      const named = async (agent?: string) => {
+        const { responses, ...rest } = await d.api.sessionUsage({ project: "acme", session: "sess-impl", ...(agent ? { agent } : {}) });
+        return { ...rest, responses: responses.length };
+      };
+      expect(await named("toolu_a")).toEqual({ agent_type: "Explore", description: "Map it again", responses: 2 });
+      expect(await named("toolu_old")).toEqual({ responses: 1 });
+      expect(await named()).toEqual({ responses: 1 });
+    });
+
     it("refuses Usage for an unknown Project and any range but 7, 30 or 90 days", async () => {
       const unknown = await d.api.usage({ project: "nope" }).catch((e) => e);
       expect(unknown).toBeInstanceOf(ApiError);
@@ -2555,8 +2756,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     });
 
     it("sets the gh path Option to an absolute path, and clears it", async () => {
-      // Absolute where the service runs: a Windows path isn't on Unix.
-      const gh = process.platform === "win32" ? "C:\\Tools\\gh.exe" : "/opt/tools/gh";
+      const gh = d.absolutePath;
       expect(await d.api.setOptions({ gh_path: ` ${gh} ` })).toEqual({ focus_clear: "activity_dashboard", focus_popup: "off", gh_path: gh });
       expect((await d.api.options()).gh_path).toBe(gh);
 

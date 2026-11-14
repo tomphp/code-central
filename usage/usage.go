@@ -56,6 +56,11 @@ type Response struct {
 	SessionID string `json:"session_id"`
 	// Agent is the subagent the response was for, "" for the main session.
 	Agent string `json:"agent,omitempty"`
+	// AgentType and Description are the Agent Type and description of the
+	// Agent call that started the subagent; both are "" for the main
+	// session and for a response recorded before they were posted.
+	AgentType   string `json:"agent_type,omitempty"`
+	Description string `json:"description,omitempty"`
 	// Kind is the kind of session, as the Factory named it.
 	Kind string `json:"kind"`
 	// Model is the model that gave the response, as Claude Code reported
@@ -83,6 +88,9 @@ func (t *Tokens) Add(o Tokens) {
 // ContextSize is how many tokens the model read for the response: how
 // full the session's context window was.
 func (t Tokens) ContextSize() int { return t.InputTokens + t.CacheWriteTokens + t.CacheReadTokens }
+
+// Total is all four counts as one number: what the response used.
+func (t Tokens) Total() int { return t.ContextSize() + t.OutputTokens }
 
 // Records are the records a read found, oldest file first, and Days the
 // local days it read, oldest first, as YYYY-MM-DD.
