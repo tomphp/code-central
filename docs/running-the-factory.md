@@ -289,6 +289,16 @@ While a Project is open (not in the all-Projects scope) and one of its Factories
 
 If the Conversation's Factory is no longer Online, or no Factory has Chat support, the open pop-up stays and says so, with Send off. It becomes usable again when the Factory is back Online, or after New conversation. When a long Conversation drops its oldest messages, the pop-up says `Older messages were dropped`.
 
+### The Chat worktree and Chat turns
+
+Each Conversation turn runs `claude -p` in the **Chat worktree**, `chat` in the Factory's worktrees folder beside the Tickets' (`~/src/acme-shop.worktrees/chat`); a Ticket ID is never `chat`, so the two can't clash. A Conversation's first turn moves the worktree to the base's tip, uses `--session-id` and prints `chat: starting a Conversation in <worktree>; resume: <command>`; later turns use `--resume`. The Factory keeps one `next_chat_work` call open and runs the turns it hands out one at a time.
+
+A Chat turn takes **no Claim slot**: it doesn't count against the Factory's concurrent turns, and a Conversation never waits for a Claim to end.
+
+- **Draining.** The first Ctrl-C closes the `next_chat_work` call, so no new Chat turn starts. A turn already running goes on, and the Factory exits once it has ended. While its Factory is Draining, the pop-up shows the Conversation as unavailable.
+- **Stopping.** A second Ctrl-C, SIGTERM or SIGHUP stops a running Chat turn as it stops a Claim's, and the reply ends `Stopped`. **Stop** in the pop-up stops just that reply: the Factory hears it on its `next_chat_work` call.
+- **`--no-chat`.** The Factory opens no `next_chat_work` call and reports `chat: false`, so Chat isn't available through it.
+
 ## Model and effort
 
 Before every turn, a first turn or a resume after answers, after a cut-off or after a restart, the Factory works out the model and effort the turn runs with. Each is worked out on its own, highest first:
