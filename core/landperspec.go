@@ -46,7 +46,7 @@ func waitingForSpec(r store.Reader, p store.Project, t store.Ticket) bool {
 	if t.State != store.Accepted || !specLanded(r, p, t) {
 		return false
 	}
-	if p.Landing.Method == store.LandingPullRequest {
+	if landingPolicyOf(p).LandsByPullRequest() {
 		// The Spec Branch is pushed and waits on its pull request.
 		return true
 	}
@@ -150,7 +150,7 @@ func specWork(r store.Reader, key string, t store.Ticket) []store.Ticket {
 // inSpecWork reports whether t waits on its Spec's one pull request in
 // Project p: p is under Pull Request, and t is Accepted and Spec-landed.
 func inSpecWork(r store.Reader, p store.Project, t store.Ticket) bool {
-	return p.Landing.Method == store.LandingPullRequest && t.State == store.Accepted && specLanded(r, p, t)
+	return landingPolicyOf(p).LandsByPullRequest() && t.State == store.Accepted && specLanded(r, p, t)
 }
 
 // specWorkOf is the work of Spec spec among tickets, Project p's: the

@@ -25,8 +25,8 @@ import (
 const (
 	// OptionRerunCI is rerun_ci, offered under both Push Landing Methods.
 	OptionRerunCI = "rerun_ci"
-	// OptionLandAnyway is land_anyway, offered only under Merge: under
-	// Branch the human's merge decides.
+	// OptionLandAnyway is land_anyway, offered only under Merge + Push:
+	// under Branch and Pull Request the human's merge decides.
 	OptionLandAnyway = "land_anyway"
 	// OptionSendBack is the human's send_back from Accepted: the next
 	// Claim fixes the work on its branch (code-central-264).
@@ -156,10 +156,15 @@ func whyNotLandAnyway(ci *ciState, t store.Ticket) string {
 	if a := ci.ticket(t); a.failure == nil && !a.cancelled {
 		return fmt.Sprintf("%s has no failed or cancelled CI result to land anyway", id)
 	}
-	if ci.p.Landing.Method == store.LandingPullRequest {
-		return fmt.Sprintf("%s's Project lands by Pull Request, so your merge on the Code Host decides whether it lands, whatever its CI result", id)
+	if lp := landingPolicyOf(ci.p); !lp.OffersLandAnyway() {
+		if lp.LandsByPullRequest() {
+			return fmt.Sprintf("%s's Project lands by Pull Request, so your merge on the Code Host decides whether it lands, whatever its CI result", id)
+		}
+		return fmt.Sprintf("%s's Project lands by Branch, so your merge decides whether it lands, whatever its CI result", id)
 	}
-	return fmt.Sprintf("%s's Project lands by Branch, so your merge decides whether it lands, whatever its CI result", id)
+	// Unreached: under Merge + Push an Accepted Ticket whose CI failed or
+	// was cancelled is on a CI item, which offers Land anyway.
+	return fmt.Sprintf("%s's CI item doesn't offer Land anyway", id)
 }
 
 // RerunCI is the human's rerun_ci(ticket): a Re-run request for each run

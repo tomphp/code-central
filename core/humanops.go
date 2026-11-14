@@ -185,7 +185,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		}
 	}
 	if err := c.store.View(func(r store.Reader) error {
-		v.Landing.OpenPullRequests = openPullRequests(r, key, v.Landing.Method)
+		v.Landing.OpenPullRequests = openPullRequests(r, key, v.LandingPolicy())
 		return nil
 	}); err != nil {
 		return v, err
@@ -214,7 +214,7 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 	err := c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			row := ProjectRow{ProjectView: c.projectView(p)}
-			row.Landing.OpenPullRequests = openPullRequests(r, p.Key, p.Landing.Method)
+			row.Landing.OpenPullRequests = openPullRequests(r, p.Key, landingPolicyOf(p))
 			e := c.evaluate(r, p)
 			row.NeedsMe = len(e.baseRows())
 			for _, t := range e.tickets() {

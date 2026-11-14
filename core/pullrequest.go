@@ -298,10 +298,11 @@ func pullRequestOpen(t store.Ticket) bool {
 
 // openPullRequests is the notice after a switch away from Pull Request:
 // the open pull request of each Accepted Ticket, by Ticket. A Spec's one
-// pull request shows for each of its Tickets. It is empty under Pull Request.
-func openPullRequests(r store.Reader, key string, method store.LandingMethod) []OpenPullRequest {
+// pull request shows for each of its Tickets. It is empty when lp lands by
+// Pull Request.
+func openPullRequests(r store.Reader, key string, lp LandingPolicy) []OpenPullRequest {
 	out := []OpenPullRequest{}
-	if method == store.LandingPullRequest {
+	if lp.LandsByPullRequest() {
 		return out
 	}
 	for _, t := range r.Tickets(key) {
