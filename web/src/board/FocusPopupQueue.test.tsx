@@ -18,8 +18,6 @@ import { needsMeOf } from "../needsme/model";
 import { hrefFor, readLocation, type UiLocation } from "../url";
 import { FocusPopup, type FocusPopupClose } from "./FocusPopup";
 
-const sorted = (keys: string[]) => [...keys].sort();
-
 // Fake is a world, its scenario builder and the Tickets of its Projects.
 interface Fake {
   w: World;
@@ -123,6 +121,7 @@ const item = () => waitFor(() => within(popup()).getByRole("article", { name: "F
 const heading = (name: string) => waitFor(() => within(popup()).getByRole("heading", { name }));
 const skip = async () => userEvent.click(await within(popup()).findByRole("button", { name: "Skip" }));
 const noPopup = () => expect(screen.queryByRole("dialog", { name: "Focus popup" })).toBeNull();
+const sorted = (keys: string[]) => [...keys].sort();
 
 describe("the Focus popup's Queue mode", () => {
   it("shows Needs Me's first Focus Item on All Projects, with N left, Skip and Open in Inbox, and no + New ▾", async () => {

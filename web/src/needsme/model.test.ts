@@ -3,8 +3,22 @@
 import { describe, expect, it } from "vitest";
 import { FakeApi } from "../api/fake";
 import { loadInbox } from "../live";
-import { failCIOnFake as failCI } from "../ciTesting";
+import { failedRun } from "../ciTesting";
 import { isCIItemReason, needsMeOf } from "./model";
+
+// failCI reports tickets (Accepted, each with a branch) pushed as abc1234567
+// and its run of ci.yml failed, through FakeApi's CI path, and seeds Needs Me
+// with the one CI failed item listing them.
+async function failCI(fake: FakeApi, project: string, tickets: string[]) {
+  await fake.setLandingMethod(project, { method: "merge", push: true, remote: "origin" });
+  await fake.setCITracking(project, { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+  for (const id of tickets) await fake.reportPushedCommit(project, id, "abc1234567", "main");
+  await fake.reportCIRuns(project, [failedRun(tickets[0])]);
+  const item = (await fake.getTicket(project, tickets[0])).ci_item!;
+  fake.setNeedsMe([
+    { reason: "ci_failed", tickets: [{ id: "", project, title: "CI failed at abc1234", ci_result: "failed", ci_failure: { commit: "abc1234567", workflows: ["ci.yml"] }, ci_item: item }] },
+  ]);
+}
 
 // twoProjects is acme with a plain Spec (acme-1) of two Tickets and a
 // Requirement (acme-4, Stages acme-5 to acme-7), and beta with one Ticket.
