@@ -570,15 +570,30 @@ func (h *Harness) WaitForDescribed(what func() string, cond func() bool) {
 	}
 }
 
-// WaitForState waits for the Ticket to reach state.
+// WaitForState waits for the Ticket to reach state. A Ticket that is
+// Failed or Cancelled instead fails the test at once: only the human
+// moves it on, so waiting would only time out.
 func (h *Harness) WaitForState(id string, state store.State) core.TicketView {
 	h.t.Helper()
 	var tk core.TicketView
 	h.WaitFor(fmt.Sprintf("%s to be %s", id, state), func() bool {
 		tk = h.Ticket(id)
+		if tk.State != state && (tk.State == store.Failed || tk.State == store.Cancelled) {
+			h.t.Fatalf("waiting for %s to be %s, it is %s%s", id, state, tk.State, lastFailure(tk))
+		}
 		return tk.State == state
 	})
 	return tk
+}
+
+// lastFailure is tk's latest Failure Report, for a failing test to show;
+// empty when it has none.
+func lastFailure(tk core.TicketView) string {
+	if len(tk.FailureReports) == 0 {
+		return ""
+	}
+	r := tk.FailureReports[len(tk.FailureReports)-1]
+	return fmt.Sprintf(": %s %s", r.WhatBroke, r.Why)
 }
 
 // Finished claims ticket outside the Factory and finishes it with this
