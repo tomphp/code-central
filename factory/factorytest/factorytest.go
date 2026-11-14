@@ -816,6 +816,24 @@ func (r *Running) Poll() {
 	r.waitForPolls(r.polls + 1)
 }
 
+// WaitForTurn waits for the Factory to have started a turn. Its poll can
+// lose a claim to a dropped connection, which it retries only at its next
+// poll, so WaitForTurn makes that poll whenever a claim has failed.
+func (r *Running) WaitForTurn(what string) {
+	r.h.t.Helper()
+	failed := 0
+	r.h.WaitFor(what, func() bool {
+		if len(r.h.Calls()) > 0 {
+			return true
+		}
+		if n := strings.Count(r.stdout.String(), "claim: "); n > failed {
+			failed = n
+			r.Poll()
+		}
+		return false
+	})
+}
+
 func (r *Running) waitForPolls(n int64) {
 	r.h.t.Helper()
 	r.h.WaitFor(fmt.Sprintf("poll %d to finish (stdout %q)", n, r.stdout), func() bool {
