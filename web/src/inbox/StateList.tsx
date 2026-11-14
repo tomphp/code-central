@@ -1,4 +1,3 @@
-import type { NeedsMeReason } from "../api/types";
 import type { ProjectTicket } from "../live";
 import { isStage } from "../requirement/progress";
 import { ListCIBadge } from "../ticket/CIBadge";
@@ -9,12 +8,10 @@ import { TicketLine, type InboxRowLinkFactory } from "../ticket/TicketLine";
 // row shows its latest Session Event under its title.
 export function StateList({
   tickets,
-  reasons,
   now,
   link,
 }: {
   tickets: ProjectTicket[];
-  reasons: Map<string, NeedsMeReason>;
   now: Date;
   link: InboxRowLinkFactory;
 }) {
@@ -24,7 +21,6 @@ export function StateList({
       key={t.id}
       t={t}
       link={link(t.id)}
-      needsYou={reasons.has(t.id)}
       now={now}
     >
       <ListCIBadge t={t} />

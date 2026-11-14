@@ -123,7 +123,7 @@ func (hs *heartbeats) baseView(project string, now time.Time) *BaseView {
 // divergedBase is project's reported base while it is diverged and the
 // Project is under Pull Request or Merge + Push.
 func (c *Core) divergedBase(p store.Project) (BaseView, bool) {
-	if !p.LandingPolicy().KeepsBaseLevel() || !p.Archived.IsZero() {
+	if !landingPolicyOf(p).KeepsBaseLevel() || !p.Archived.IsZero() {
 		return BaseView{}, false
 	}
 	hs := c.heartbeats

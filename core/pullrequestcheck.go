@@ -35,7 +35,7 @@ func (c *Core) SetPullRequestCheck(check PullRequestCheck) { c.pullRequestCheck 
 // the store's lock, as the check calls the Code Host. GitHub is checked
 // through gh, and Azure Repos with the PAT variable.
 func (c *Core) checkPullRequest(ctx context.Context, key string, l store.Landing) error {
-	if l.Method != store.LandingPullRequest || c.pullRequestCheck == nil {
+	if !landingPolicyOf(store.Project{Landing: l}).RunsPullRequestWatcher() || c.pullRequestCheck == nil {
 		return nil
 	}
 	var url, ghPath string
@@ -45,7 +45,7 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, l store.Landing
 			return err
 		}
 		p, _ := r.Project(key)
-		url, ghPath, already = p.CI.PushRemoteURL, r.Options().GHPath, p.Landing.Method == store.LandingPullRequest
+		url, ghPath, already = p.CI.PushRemoteURL, r.Options().GHPath, landingPolicyOf(p).RunsPullRequestWatcher()
 		return nil
 	})
 	if err != nil || already {

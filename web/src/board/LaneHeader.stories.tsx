@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { storyWorld } from "../api/core/story";
 import { STATES } from "../api/types";
 import type { ProjectSpec, ProjectTicket } from "../live";
+import { Needing } from "../needsme/fixture";
 import { storyLink } from "../ticket/storyTickets";
 import { LaneHeader } from "./LaneHeader";
 
@@ -42,35 +43,30 @@ const spec = (title: string, labels: string[] = []): ProjectSpec => ({
   updated: "",
 });
 
-// header renders a story from the world's Tickets, as wide as a Board.
-const header = (draw: (d: StoryTickets, all: ProjectTicket[]) => ReactNode): Story => ({
+// header renders a story from the world's Tickets, as wide as a Board, with
+// Needs Me's reasons for them.
+const header = (draw: (d: StoryTickets, all: ProjectTicket[]) => ReactNode, reasons: (d: StoryTickets) => Record<string, "needs_answer"> = () => ({})): Story => ({
   render: (_, { loaded }) => {
     const d = loaded.world as StoryTickets;
-    return <div style={{ width: 900 }}>{draw(d, d.all)}</div>;
+    return (
+      <Needing tickets={d.all} reasons={reasons(d)}>
+        <div style={{ width: 900 }}>{draw(d, d.all)}</div>
+      </Needing>
+    );
   },
 });
 
-const noReasons = new Map();
-
 export const Open = header((_, all) => (
-  <LaneHeader id="acme-1" spec={spec("Sign-in")} all={all} shown={3} reasons={noReasons} link={storyLink("acme-1")} collapsed={false} onToggle={() => {}} />
+  <LaneHeader id="acme-1" spec={spec("Sign-in")} all={all} shown={3} link={storyLink("acme-1")} collapsed={false} onToggle={() => {}} />
 ));
 export const Folded = header((_, all) => (
-  <LaneHeader id="acme-1" spec={spec("Sign-in")} all={all} shown={3} reasons={noReasons} link={storyLink("acme-1")} collapsed onToggle={() => {}} />
+  <LaneHeader id="acme-1" spec={spec("Sign-in")} all={all} shown={3} link={storyLink("acme-1")} collapsed onToggle={() => {}} />
 ));
 // One of its Tickets needs the human: the dot, a left border, and the need as the headline.
-export const NeedsYou = header(({ stage }, all) => (
-  <LaneHeader
-    id="acme-1"
-    spec={spec("Sign-in")}
-    all={all}
-    shown={3}
-    reasons={new Map([[stage.id, "needs_answer" as const]])}
-    link={storyLink("acme-1")}
-    collapsed={false}
-    onToggle={() => {}}
-  />
-));
+export const NeedsYou = header(
+  (_, all) => <LaneHeader id="acme-1" spec={spec("Sign-in")} all={all} shown={3} link={storyLink("acme-1")} collapsed={false} onToggle={() => {}} />,
+  ({ stage }) => ({ [stage.id]: "needs_answer" }),
+);
 // A long title gives way to the headline and the count.
 export const LongTitle = header((_, all) => (
   <LaneHeader
@@ -78,7 +74,6 @@ export const LongTitle = header((_, all) => (
     spec={spec("Search across Tickets and Specs with filters that remember what you last picked, per Project and per browser", ["long-lived"])}
     all={all}
     shown={4}
-    reasons={noReasons}
     link={storyLink("acme-1")}
     collapsed={false}
     onToggle={() => {}}

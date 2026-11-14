@@ -1,29 +1,61 @@
-// + New ▾ in Focus Mode: the real App against FakeApi, at ?view=focus. The
-// same split as the sidebar's sits in the header beside Exit, plain, on
+// + New ▾ in Focus Mode: the real App on a WASM Core world, at ?view=focus.
+// The same split as the sidebar's sits in the header beside Exit, plain, on
 // every Focus screen; submitting from it closes the modal and leaves Focus
 // Mode where it was, with a brief "Requirement added" or "Map added" note.
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FakeApi } from "../api/fake";
-import { allClearOn, change, focus, renderApp, without } from "./focusTesting";
+import type { World } from "../api/core/core";
+import { newWorld } from "../api/core/core";
+import { scenario, type TicketSeed } from "../api/scenario";
+import { allClearOn, focus, renderApp } from "./worldTesting";
 
-// world has acme-1 Failed, then acme-2 In Review, in that Needs Me order,
-// with beta active and old archived.
-function world() {
-  const fake = new FakeApi();
-  allClearOn(fake);
-  fake.addProject("acme", "Acme");
-  fake.addProject("beta", "Beta");
-  fake.addProject("old", "Old", { archived: true });
-  fake.addTicket("acme", { title: "Flaky build", state: "Failed" }); // acme-1
-  fake.addTicket("acme", { title: "Login page", state: "In Review" }); // acme-2
-  fake.setNeedsMe([
-    { reason: "failed", tickets: [{ id: "acme-1" }] },
-    { reason: "in_review", tickets: [{ id: "acme-2", summary: "Added the login page" }] },
-  ]);
-  return fake;
+// FLAKY is the Failed Ticket, acme-1 being acme's Spec.
+const FLAKY = "acme-2";
+
+// world has Flaky build (acme-2) Failed, then Login page (acme-3) In
+// Review, in that Needs Me order, with beta active and old archived. With
+// items false it has none of them, and tickets are made instead.
+async function world(items = true, tickets: TicketSeed[] = []) {
+  const w = await newWorld();
+  const s = scenario(w);
+  await allClearOn(w);
+  await s.project("acme", "Acme");
+  await s.project("beta", "Beta");
+  await s.project("old", "Old");
+  await w.api.archiveProject("old");
+  if (items) {
+    await s.ticket("acme", { title: "Flaky build", state: "Failed" });
+    await s.ticket("acme", { title: "Login page", state: "In Review" });
+  }
+  for (const t of tickets) await s.ticket("acme", t);
+  return w;
 }
+
+// dealtWith takes the Failed Ticket out of Needs Me, as cancelling it
+// elsewhere would.
+async function dealtWith(w: World) {
+  const s = scenario(w);
+  await act(() => s.human(`${s.ticketPath("acme", FLAKY)}/cancel`, {}));
+}
+
+// gateNeedsMe holds the next count reads of Needs Me back until the
+// returned release is called.
+function gateNeedsMe(w: World, times = 1) {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const needsMe = w.api.needsMe.bind(w.api);
+  const gated = async () => {
+    await gate;
+    return needsMe();
+  };
+  const spy = vi.spyOn(w.api, "needsMe");
+  if (times === 1) spy.mockImplementationOnce(gated);
+  else spy.mockImplementation(gated);
+  return release;
+}
+
+const refuseSubmit = (w: World) => vi.spyOn(w.api, "submitRequirement").mockRejectedValue(new Error("the Project is archived"));
 
 const params = () => new URLSearchParams(window.location.search);
 const heading = (name: string) => within(focus()).findByRole("heading", { name });
@@ -56,11 +88,11 @@ async function added(kind: "Requirement" | "Map" | "Small Change") {
 
 const note = () => within(focus()).queryByRole("status");
 
-// later moves FakeApi's clock and the timers on by ms, once React has
+// later moves the world's clock and the timers on by ms, once React has
 // run the effects that start them.
-async function later(fake: FakeApi, ms: number) {
+async function later(w: World, ms: number) {
   await act(() => new Promise((r) => setImmediate(r)));
-  fake.now = new Date(fake.now.getTime() + ms);
+  w.advance(ms);
   act(() => vi.advanceTimersByTime(ms));
 }
 
@@ -74,7 +106,7 @@ async function submit(dialog: string, button: string, text = "Offline mode") {
 
 describe("+ New ▾ in Focus Mode's header", () => {
   it("sits after the Project and N left, just before Exit, which stays at the far end", async () => {
-    renderApp(world(), "/?view=focus&project=acme");
+    renderApp(await world(), "/?view=focus&project=acme");
     await heading("Flaky build");
     expect(await headerButtons()).toEqual(["+ New", "▾", "Exit"]);
     const plus = await newButton();
@@ -84,21 +116,15 @@ describe("+ New ▾ in Focus Mode's header", () => {
   });
 
   it("is plain, like Exit, not primary", async () => {
-    renderApp(world());
+    renderApp(await world());
     expect(await newButton()).not.toHaveClass("primary");
     expect(menuButton()).not.toHaveClass("primary");
   });
 
   it("shows on Loading…, a Focus Item and You skipped N", async () => {
-    const fake = world();
-    let release!: () => void;
-    const gate = new Promise<void>((r) => (release = r));
-    const needsMe = fake.needsMe.bind(fake);
-    vi.spyOn(fake, "needsMe").mockImplementationOnce(async () => {
-      await gate;
-      return needsMe();
-    });
-    renderApp(fake);
+    const w = await world();
+    const release = gateNeedsMe(w);
+    renderApp(w);
     expect(within(focus()).getByText("Loading…")).toBeInTheDocument();
     expect(await headerButtons()).toEqual(["+ New", "▾", "Exit"]);
 
@@ -114,24 +140,21 @@ describe("+ New ▾ in Focus Mode's header", () => {
   });
 
   it("shows on All clear", async () => {
-    const fake = world();
-    fake.setNeedsMe([]);
-    renderApp(fake);
+    renderApp(await world(false));
     await within(focus()).findByRole("region", { name: "All clear" });
     expect(await headerButtons()).toEqual(["+ New", "▾", "Exit"]);
   });
 
   it("shows on the Activity Dashboard", async () => {
-    const fake = world();
-    fake.setNeedsMe([]);
-    await fake.setOptions({ focus_clear: "activity_dashboard" });
-    renderApp(fake);
+    const w = await world(false);
+    await w.api.setOptions({ focus_clear: "activity_dashboard" });
+    renderApp(w);
     expect(await within(focus()).findByRole("region", { name: "Activity Dashboard" })).toBeInTheDocument();
     expect(await headerButtons()).toEqual(["+ New", "▾", "Exit"]);
   });
 
   it("opens New requirement from + New, and New Map from the ▾ menu", async () => {
-    renderApp(world());
+    renderApp(await world());
     await userEvent.click(await newButton());
     expect(screen.getByRole("dialog", { name: "New requirement" })).toBeVisible();
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
@@ -145,7 +168,7 @@ describe("+ New ▾ in Focus Mode's header", () => {
   });
 
   it("opens no modal on a key: there's no shortcut for + New", async () => {
-    renderApp(world());
+    renderApp(await world());
     await heading("Flaky build");
     await userEvent.keyboard("n");
     await userEvent.keyboard("N");
@@ -159,7 +182,7 @@ describe("+ New ▾ in Focus Mode's header", () => {
     };
 
     it("opens with ↓ on the first item, and moves with the arrows, wrapping at either end", async () => {
-      renderApp(world());
+      renderApp(await world());
       await focusMenuButton();
       await userEvent.keyboard("{ArrowDown}");
       expect(menuButton()).toHaveAttribute("aria-expanded", "true");
@@ -175,7 +198,7 @@ describe("+ New ▾ in Focus Mode's header", () => {
     });
 
     it("closes on Esc and returns focus to ▾", async () => {
-      renderApp(world());
+      renderApp(await world());
       await focusMenuButton();
       await userEvent.keyboard("{ArrowDown}{Escape}");
       expect(screen.queryByRole("menu")).toBeNull();
@@ -183,7 +206,7 @@ describe("+ New ▾ in Focus Mode's header", () => {
     });
 
     it("closes when Tab leaves the menu", async () => {
-      renderApp(world());
+      renderApp(await world());
       await focusMenuButton();
       await userEvent.keyboard("{ArrowDown}");
       await userEvent.tab();
@@ -198,8 +221,8 @@ describe("+ New ▾ in Focus Mode's header", () => {
       ["Map", "New Map", "Submit map", "submitMap"],
       ["Small Change", "New Small Change", "Submit small change", "submitSmallChange"],
     ])("from %s closes the modal and leaves Focus Mode as it was, skipped list and all", async (from, dialog, button, call) => {
-      const fake = world();
-      renderApp(fake, "/?view=focus&project=acme");
+      const w = await world();
+      renderApp(w, "/?view=focus&project=acme");
       await heading("Flaky build");
       await skip();
       await heading("Login page");
@@ -211,7 +234,7 @@ describe("+ New ▾ in Focus Mode's header", () => {
       }
       await submit(dialog, button);
 
-      expect(fake.calls).toContain(call);
+      expect(w.calls).toContain(call);
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
       expect(within(focus()).getByRole("heading", { name: "Login page" })).toBeInTheDocument();
       expect(window.location.search).toBe("?view=focus&project=acme");
@@ -223,14 +246,11 @@ describe("+ New ▾ in Focus Mode's header", () => {
     });
 
     it("leaves a half-written answer on the Focus Item as it was", async () => {
-      const fake = world();
-      fake.addTicket("acme", {
-        title: "Pick a colour",
-        state: "Needs Answer",
-        rounds: [{ number: 1, claim: 1, posted: fake.now.toISOString(), questions: [{ number: 1, title: "Which colour?", body: "Red or blue", status: "open" }] }],
-      }); // acme-3
-      fake.setNeedsMe([{ reason: "needs_answer", tickets: [{ id: "acme-3", round: { number: 1, open: 1, questions: 1 } }] }]);
-      renderApp(fake);
+      const w = await world(false);
+      const s = scenario(w);
+      const id = await s.ticket("acme", { title: "Pick a colour" });
+      await s.askRound("acme", id, [{ title: "Which colour?", body: "Red or blue" }]);
+      renderApp(w);
       await heading("Which colour?");
       await userEvent.type(within(focus()).getByRole("textbox", { name: "Your answer" }), "Blue");
 
@@ -241,31 +261,22 @@ describe("+ New ▾ in Focus Mode's header", () => {
     });
 
     it("submits from a modal opened while Loading…, once the Projects arrive", async () => {
-      const fake = world();
-      fake.setNeedsMe([]);
-      let release!: () => void;
-      const gate = new Promise<void>((r) => (release = r));
-      const needsMe = fake.needsMe.bind(fake);
-      vi.spyOn(fake, "needsMe").mockImplementationOnce(async () => {
-        await gate;
-        return needsMe();
-      });
-      renderApp(fake);
+      const w = await world(false);
+      const release = gateNeedsMe(w);
+      renderApp(w);
       await userEvent.click(await newButton());
       release();
       await within(focus()).findByRole("region", { name: "All clear" });
 
       await submit("New requirement", "Submit requirement");
-      expect(fake.calls).toContain("submitRequirement");
+      expect(w.calls).toContain("submitRequirement");
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     });
 
     it("keeps the modal open with its error when the submit is refused", async () => {
-      const fake = world();
-      fake.submitRequirement = async () => {
-        throw new Error("the Project is archived");
-      };
-      renderApp(fake, "/?view=focus&project=acme");
+      const w = await world();
+      refuseSubmit(w);
+      renderApp(w, "/?view=focus&project=acme");
       await heading("Flaky build");
       await userEvent.click(await newButton());
       const modal = await submit("New requirement", "Submit requirement");
@@ -278,17 +289,17 @@ describe("+ New ▾ in Focus Mode's header", () => {
 
   describe("which Project", () => {
     it("preselects the Project Focus Mode is filtered to, without asking", async () => {
-      const fake = world();
-      renderApp(fake, "/?view=focus&project=beta");
+      const w = await world();
+      renderApp(w, "/?view=focus&project=beta");
       await userEvent.click(await newButton());
       expect(within(screen.getByRole("dialog")).queryByRole("combobox")).toBeNull();
       await submit("New requirement", "Submit requirement");
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-      expect((await fake.findSpecs("beta")).map((s) => s.title)).toContain("Offline mode");
+      expect((await w.api.findSpecs("beta")).map((s) => s.title)).toContain("Offline mode");
     });
 
     it("asks which active Project when Focus Mode isn't filtered to one, leaving out the Archived", async () => {
-      renderApp(world());
+      renderApp(await world());
       await userEvent.click(await newButton());
       const select = within(screen.getByRole("dialog")).getByRole("combobox", { name: "Project" });
       expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["Acme", "Beta"]);
@@ -300,23 +311,23 @@ describe("+ New ▾ in Focus Mode's header", () => {
     afterEach(() => vi.useRealTimers());
 
     it.each([["Requirement"], ["Map"], ["Small Change"]] as const)("reads %s added after a submit, and goes after 4 s", async (kind) => {
-      const fake = world();
-      renderApp(fake);
+      const w = await world();
+      renderApp(w);
       await heading("Flaky build");
       await added(kind);
 
       expect(await within(focus()).findByRole("status")).toHaveTextContent(`${kind} added`);
-      await later(fake, 3900);
+      await later(w, 3900);
       expect(note()).toHaveTextContent(`${kind} added`);
-      await later(fake, 100);
+      await later(w, 100);
       expect(note()).toBeNull();
     });
 
     it("sits where Dealt with elsewhere does, and looks like it", async () => {
-      const fake = world();
-      renderApp(fake);
+      const w = await world();
+      renderApp(w);
       await heading("Flaky build");
-      change(fake, without(fake, "acme-1"), "acme-1");
+      await dealtWith(w);
       const elsewhere = await within(focus()).findByRole("status");
       expect(elsewhere).toHaveTextContent("Dealt with elsewhere");
       const placement = (el: HTMLElement) => [el.parentElement, el.previousElementSibling, el.className];
@@ -328,26 +339,23 @@ describe("+ New ▾ in Focus Mode's header", () => {
     });
 
     it("shows on All clear", async () => {
-      const fake = world();
-      fake.setNeedsMe([]);
-      renderApp(fake);
+      renderApp(await world(false));
       await within(focus()).findByRole("region", { name: "All clear" });
       await added("Requirement");
       expect(await within(focus()).findByRole("status")).toHaveTextContent("Requirement added");
     });
 
     it("shows on the Activity Dashboard", async () => {
-      const fake = world();
-      fake.setNeedsMe([]);
-      await fake.setOptions({ focus_clear: "activity_dashboard" });
-      renderApp(fake);
+      const w = await world(false);
+      await w.api.setOptions({ focus_clear: "activity_dashboard" });
+      renderApp(w);
       await within(focus()).findByRole("region", { name: "Activity Dashboard" });
       await added("Map");
       expect(await within(focus()).findByRole("status")).toHaveTextContent("Map added");
     });
 
     it("shows on You skipped N", async () => {
-      renderApp(world());
+      renderApp(await world());
       await heading("Flaky build");
       await skip();
       await heading("Login page");
@@ -358,15 +366,9 @@ describe("+ New ▾ in Focus Mode's header", () => {
     });
 
     it("shows on Loading…", async () => {
-      const fake = world();
-      let release!: () => void;
-      const gate = new Promise<void>((r) => (release = r));
-      const needsMe = fake.needsMe.bind(fake);
-      vi.spyOn(fake, "needsMe").mockImplementation(async () => {
-        await gate;
-        return needsMe();
-      });
-      renderApp(fake, "/?view=focus&project=acme");
+      const w = await world();
+      const release = gateNeedsMe(w, Infinity);
+      renderApp(w, "/?view=focus&project=acme");
       await added("Requirement");
       expect(within(focus()).getByText("Loading…")).toBeInTheDocument();
       expect(note()).toHaveTextContent("Requirement added");
@@ -374,68 +376,65 @@ describe("+ New ▾ in Focus Mode's header", () => {
     });
 
     it("stays when the item on screen changes, until its own 4 s are up", async () => {
-      const fake = world();
-      renderApp(fake);
+      const w = await world();
+      renderApp(w);
       await heading("Flaky build");
       await added("Requirement");
-      await later(fake, 2000);
+      await later(w, 2000);
       await skip();
       await heading("Login page");
       expect(note()).toHaveTextContent("Requirement added");
-      await later(fake, 2000);
+      await later(w, 2000);
       expect(note()).toBeNull();
     });
 
     it("replaces Dealt with elsewhere, and starts its own 4 s", async () => {
-      const fake = world();
-      renderApp(fake);
+      const w = await world();
+      renderApp(w);
       await heading("Flaky build");
-      change(fake, without(fake, "acme-1"), "acme-1");
+      await dealtWith(w);
       expect(await within(focus()).findByRole("status")).toHaveTextContent("Dealt with elsewhere");
-      await later(fake, 3000);
+      await later(w, 3000);
 
       await added("Map");
       expect(within(focus()).getAllByRole("status").map((n) => n.textContent)).toEqual(["Map added"]);
-      await later(fake, 3000);
+      await later(w, 3000);
       expect(note()).toHaveTextContent("Map added");
-      await later(fake, 1000);
+      await later(w, 1000);
       expect(note()).toBeNull();
     });
 
     it("is replaced by Dealt with elsewhere, which starts its own 4 s", async () => {
-      const fake = world();
-      renderApp(fake);
+      const w = await world();
+      renderApp(w);
       await heading("Flaky build");
       await added("Requirement");
-      await later(fake, 3000);
+      await later(w, 3000);
 
-      change(fake, without(fake, "acme-1"), "acme-1");
+      await dealtWith(w);
       await heading("Login page");
       await within(focus()).findByText("Dealt with elsewhere");
       expect(within(focus()).getAllByRole("status").map((n) => n.textContent)).toEqual(["Dealt with elsewhere"]);
-      await later(fake, 3000);
+      await later(w, 3000);
       expect(note()).toHaveTextContent("Dealt with elsewhere");
-      await later(fake, 1000);
+      await later(w, 1000);
       expect(note()).toBeNull();
     });
 
     it("isn't replaced when the last item goes elsewhere to All clear, which shows no Dealt with elsewhere", async () => {
-      const fake = world();
-      fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason === "failed"));
-      renderApp(fake);
+      const w = await world(false, [{ title: "Flaky build", state: "Failed" }]);
+      renderApp(w);
       await heading("Flaky build");
       await added("Requirement");
-      change(fake, [], "acme-1");
+      await dealtWith(w);
       await within(focus()).findByRole("region", { name: "All clear" });
       expect(note()).toHaveTextContent("Requirement added");
     });
 
     it("isn't shown when the submit is refused", async () => {
-      const fake = world();
-      fake.submitRequirement = async () => {
-        throw new Error("the Project is archived");
-      };
-      renderApp(fake);
+      const w = await world();
+      refuseSubmit(w);
+      renderApp(w);
       await heading("Flaky build");
       await userEvent.click(await newButton());
       const modal = await submit("New requirement", "Submit requirement");

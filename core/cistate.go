@@ -86,7 +86,7 @@ func (s *ciState) ticket(t store.Ticket) *ticketCI {
 	s.tickets[t.Number] = a
 	// Under Pull Request without CI Tracking a push is recorded for its
 	// pull request alone: it has no CI result.
-	if len(t.PushedCommits) == 0 || !s.p.LandingPolicy().TracksCIResults() {
+	if len(t.PushedCommits) == 0 || !landingPolicyOf(s.p).TracksCIResults() {
 		return a
 	}
 	a.tracked, a.latest = true, latestPushed(t)
@@ -97,7 +97,7 @@ func (s *ciState) ticket(t store.Ticket) *ticketCI {
 		return a
 	}
 	s.unhandled(a)
-	if s.p.LandingPolicy().CIGateHolds() && a.result == CIRunning {
+	if landingPolicyOf(s.p).CIGateHolds() && a.result == CIRunning {
 		a.waiting, a.unavailable = true, s.unavailable(a)
 	}
 	return a
@@ -184,7 +184,7 @@ func (s *ciState) unavailable(a *ticketCI) *CIUnavailableView {
 // none since, its latest. t must have a pushed commit.
 func (s *ciState) resultCommits(t store.Ticket) []store.PushedCommit {
 	var out []store.PushedCommit
-	if s.p.LandingPolicy().CIGateHolds() {
+	if landingPolicyOf(s.p).CIGateHolds() {
 		since := backToReady(t)
 		for _, pc := range slices.Backward(t.PushedCommits) {
 			if !pc.Pushed.After(since) {

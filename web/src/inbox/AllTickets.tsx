@@ -2,7 +2,6 @@
 // first by creation, Stage Tickets inline. Each row is the State list's
 // two-line row with a State chip and a kind label, and names its Spec on the
 // second line.
-import type { NeedsMeReason } from "../api/types";
 import type { ProjectSpec, ProjectTicket } from "../live";
 import { stageOf } from "../requirement/progress";
 import { ListCIBadge } from "../ticket/CIBadge";
@@ -45,14 +44,12 @@ function Empty({ showFinished, search }: { showFinished: boolean; search: string
 export function AllTicketsByTicket({
   tickets,
   specs,
-  reasons,
   link,
   showFinished,
   search,
 }: {
   tickets: ProjectTicket[];
   specs: Map<string, ProjectSpec>;
-  reasons: Map<string, NeedsMeReason>;
   link: InboxRowLinkFactory;
   showFinished: boolean;
   search: string;
@@ -69,7 +66,6 @@ export function AllTicketsByTicket({
             link={link(t.id)}
             badge={kindLabel(t)}
             chip
-            needsYou={reasons.has(t.id)}
             detail={
               <>
                 <KindBadge kind={specKindOf(spec)} /> <ShortId id={t.spec} /> {spec?.title ?? ""}
@@ -91,7 +87,6 @@ export function AllTicketsBySpec({
   tickets,
   specs,
   ticketsOf,
-  reasons,
   now,
   link,
   specLink,
@@ -106,7 +101,6 @@ export function AllTicketsBySpec({
   specs: Map<string, ProjectSpec>;
   // ticketsOf is all of a Spec's Tickets, in every State.
   ticketsOf(spec: string): ProjectTicket[];
-  reasons: Map<string, NeedsMeReason>;
   now: Date;
   link: InboxRowLinkFactory;
   specLink(id: string): SpecRowProps["link"];
@@ -124,7 +118,6 @@ export function AllTicketsBySpec({
           spec={specs.get(g.id)}
           all={ticketsOf(g.id)}
           shown={stagesFirst(g.tickets)}
-          reasons={reasons}
           now={now}
           link={specLink(g.id)}
           ticketLink={link}

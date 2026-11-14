@@ -111,7 +111,7 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 			}
 			out.Rules = append(out.Rules, w)
 		}
-		if p.CI.Tracking {
+		if landingPolicyOf(p).RunsCIWatcher() {
 			ci := c.ciStateOf(r, p)
 			out.Waiting, out.Reruns = ciWaiting(ci), ciReruns(ci)
 			out.Pushed, out.Landed = ciTicketCommits(r, key)

@@ -159,6 +159,9 @@ _Avoid_: Merge, ship, deliver, complete
 A Project's choice of how accepted work reaches its base. It is Merge (the Factory merges the branch into the base), Branch (the Factory leaves the branch for the human to merge, and lands the Ticket when it sees the merge) or Pull Request (the Factory pushes the branch and a pull request is opened on the Code Host). Merge and Branch have Push as an option, and Pull Request implies it; Land per Spec applies under Merge and Pull Request, and has no effect under Branch.
 _Avoid_: Completion option, delivery mode, finish mode
 
+**Landing Policy**:
+The rules by which a Project's Landing Method, Push, Land per Spec and CI Tracking together decide how its accepted work lands: whether the CI gate holds, whether Land anyway is offered, whether a Ticket is To merge, whether the Pull Request Watcher runs, and the like. Every landing rule is one of its rules.
+
 **Pull Request**:
 The third Landing Method: the Factory pushes the accepted branch to the Push remote, a Pull Request Watcher opens a pull request into the base on the Code Host, and the Ticket lands when the host reports it merged. Push is implied.
 _Avoid_: PR, merge request
@@ -384,7 +387,7 @@ The Option that has the Focus popup open by itself, with every Focus Item in Nee
 _Avoid_: auto popup, needs-me popup, auto focus
 
 **Focus popup**:
-A popup showing Focus Items one at a time, each with its Focus badge, in the view Focus Mode also uses. It shows either a Board Ticket card's Ticket's Focus Items (its CI item's, for a Ticket listed in one), even of a reason its Project's Focus Kinds leave off, or, under Focus Pop-up, every Focus Item in the view's scope, with Skip and N left. It opens by itself only once no other popup is open and no text field has focus. It closes once none is left, whoever dealt with them, or, under Focus Pop-up, once only skipped ones are.
+A popup showing Focus Items one at a time, each with its Focus badge, in the view Focus Mode also uses. It shows either a Board Ticket card's Ticket's Focus Items (its CI item's, for a Ticket listed in one), even of a reason its Project's Focus Kinds leave off, or, under Focus Pop-up, every Focus Item in the view's scope, with Skip and N left. When the Focus Item on screen is dealt with, it shows the same notes as Focus Mode: it moves on silently when the human acted on it there, and with a brief "Dealt with elsewhere" note over the next item when someone else did. It opens by itself only once no other popup is open and no text field has focus. It closes once none is left, whoever dealt with them, or, under Focus Pop-up, once only skipped ones are.
 _Avoid_: needs-me popup, action popup
 
 **Ticket popup**:

@@ -146,7 +146,7 @@ func (c *Core) refuseSendBackOfShared(key string, ref Ref) error {
 		}
 		p, _ := r.Project(key)
 		id := DisplayID(key, t.Number)
-		if specLanded(r, p.Landing, key, t) {
+		if specLanded(r, p, t) {
 			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s's work is in the base with its Spec's, so there is no branch of its own to send back: land it anyway or open a fix Ticket", id)}
 		}
 		if it, ok := c.evaluate(r, p).itemOf(t); ok && it.reason != ReasonCIUnavailable && len(it.tickets) > 1 {

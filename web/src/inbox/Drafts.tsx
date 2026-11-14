@@ -18,6 +18,7 @@ export function Drafts({
           t={{ id: t.id, title: t.title, state: t.state }}
           link={link(t.id)}
           quiet
+          dotless
         />
       ))}
     </details>

@@ -104,13 +104,13 @@ func (f *factory) reportBaseState(ctx context.Context, in core.ReportBaseInput) 
 // nothing to merge lands at once, one whose pull request is merged lands
 // at the merge commit, and the rest have their branch pushed for the
 // Watcher to open a pull request on.
-func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, landing core.LandingView, policy store.LandingPolicy) {
+func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p core.ProjectView) {
 	if tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged {
-		f.landMerged(ctx, tk, landing.Remote)
+		f.landMerged(ctx, tk, p.Landing.Remote)
 		return
 	}
 	head, _, err := f.workOf(tk)
-	if err == nil && tk.PullRequest == nil && !f.pushedAlready(landing.Remote, tk.Branch) && f.baseCurrent && f.inBase(head) {
+	if err == nil && tk.PullRequest == nil && !f.pushedAlready(p.Landing.Remote, tk.Branch) && f.baseCurrent && f.inBase(head) {
 		f.printf("%s: nothing to merge into %s", tk.ID, f.baseBranch())
 		f.landAt(ctx, tk, head)
 		return
@@ -122,15 +122,15 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, landi
 	if tk.Branch == "" {
 		return
 	}
-	pushed, why := f.push(ctx, landing.Remote, tk.Branch, head)
+	pushed, why := f.push(ctx, p.Landing.Remote, tk.Branch, head)
 	if why != "" {
 		f.cantPushYet(ctx, tk, why)
 		return
 	}
 	if pushed {
-		f.printf("%s: pushed %s to %s", tk.ID, tk.Branch, landing.Remote)
+		f.printf("%s: pushed %s to %s", tk.ID, tk.Branch, p.Landing.Remote)
 	}
-	f.reportPushed(ctx, tk, policy, tk.Branch, f.remoteTip(landing.Remote, tk.Branch, head))
+	f.reportPushed(ctx, tk, p.LandingPolicy(), tk.Branch, f.remoteTip(p.Landing.Remote, tk.Branch, head))
 }
 
 // inOldBase reports whether the fetched remote holds commit on a base the

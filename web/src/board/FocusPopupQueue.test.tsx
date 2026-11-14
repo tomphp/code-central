@@ -2,7 +2,7 @@
 // popup rendered over it by a harness, as nothing opens it by itself yet.
 // It shows Needs Me's Focus Items in scope one at a time, with Skip, N left
 // and Open in Inbox, and reports why it closed and the Focus Item keys in
-// scope then.
+// scope then, counted here: their format is the Focus session's own.
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
@@ -13,6 +13,8 @@ import { newWorld, type World } from "../api/core/core";
 import { scenario, type Scenario } from "../api/scenario";
 import { failCI } from "../ciTesting";
 import { useInboxData, useLiveVersion } from "../live";
+import { NeedsMeProvider } from "../needsme/context";
+import { needsMeOf } from "../needsme/model";
 import { hrefFor, readLocation, type UiLocation } from "../url";
 import { FocusPopup, type FocusPopupClose } from "./FocusPopup";
 
@@ -68,8 +70,8 @@ async function cancel({ s }: Fake, key: string, ...ids: string[]) {
 }
 
 // Harness renders the popup in Queue mode while open, over the live Inbox
-// data the App's views use, and navigates as the App does, by the
-// address.
+// data and its read model as the App's views have them, and navigates as
+// the App does, by the address.
 function Harness({ api, now, project, onClose }: { api: Api; now: Date; project?: string; onClose(c: FocusPopupClose): void }) {
   const version = useLiveVersion(api);
   const inbox = useInboxData(api, version);
@@ -80,19 +82,21 @@ function Harness({ api, now, project, onClose }: { api: Api; now: Date; project?
   };
   if (!open || !inbox.data) return null;
   return (
-    <FocusPopup
-      mode="queue"
-      api={api}
-      now={now}
-      version={version}
-      data={inbox.data}
-      project={project}
-      navigate={navigate}
-      onClose={(c) => {
-        onClose(c);
-        setOpen(false);
-      }}
-    />
+    <NeedsMeProvider value={needsMeOf(inbox.data)}>
+      <FocusPopup
+        mode="queue"
+        api={api}
+        now={now}
+        version={version}
+        data={inbox.data}
+        project={project}
+        navigate={navigate}
+        onClose={(c) => {
+          onClose(c);
+          setOpen(false);
+        }}
+      />
+    </NeedsMeProvider>
   );
 }
 
@@ -175,14 +179,14 @@ describe("the Focus popup's Queue mode", () => {
     expect(closed.mock.calls).toEqual([[{ why: "cleared", keys: [] }]]);
   });
 
-  it("moves on quietly from a Focus Item dealt with elsewhere", async () => {
+  it("moves on from a Focus Item dealt with elsewhere with Focus Mode's note", async () => {
     const fake = await tickets();
     renderQueue(fake);
     await heading("Flaky build");
     await act(() => cancel(fake, "acme", fake.flaky));
     expect(await heading("Login page")).toBeInTheDocument();
     expect(within(popup()).getByText("2 left")).toBeInTheDocument();
-    expect(screen.queryByText(/Dealt with elsewhere/)).toBeNull();
+    expect(await within(popup()).findByText("Dealt with elsewhere")).toBeInTheDocument();
   });
 
   it("shows a Round's open Questions one at a time, as Focus Mode does, then the next Focus Item", async () => {
@@ -274,7 +278,7 @@ describe("the Focus popup's Queue mode", () => {
     expect(within(popup()).getByText("1 left")).toBeInTheDocument();
     await skip();
     await waitFor(noPopup);
-    expect(closed.mock.calls[0][0]).toEqual({ why: "only_skipped", keys: ["beta base_missing"] });
+    expect(closed.mock.calls[0][0]).toEqual({ why: "only_skipped", keys: [expect.any(String)] });
   });
 
   it("closes by itself as cleared once only items of a reason off in their Project are left, with no keys in scope", async () => {
