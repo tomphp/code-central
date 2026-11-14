@@ -10,7 +10,7 @@ Recipes for changes that touch many packages. Each one starts with a single edit
    - `TestMCPExposesExactlyTheAgentOperations` and `TestCLIExposesExactlyTheAgentOperations`, for `AgentAndHuman` only: a tool in `tools` (`mcp/mcp.go`, with a one-line description) and a kebab-case command in `cli/cli.go`, which calls the service through a `client/` method.
    - `TestEveryOperationHasACase`: a cross-door case. Put a feature's cases in their own `frontdoor/<feature>_doors_test.go`, registered from `init()` (see `frontdoor/modelchoice_doors_test.go`).
    - `TestAnArchivedProjectRefusesEveryWrite`, for a write: an entry in `writesOnAcme` in `core/archive_test.go`.
-3. When the UI uses it: add its types to `web/src/api/types.ts`, an action in `web/src/api/actions/`, its behaviour in `web/src/api/contract.ts` and the matching behaviour in `web/src/api/fake.ts`. `make vitest F=src/api/fake.test.ts` runs the contract against the fake.
+3. When the UI uses it: add its types to `web/src/api/types.ts`, an action in `web/src/api/actions/`, and its behaviour in `web/src/api/contract.ts`. `make vitest F=src/api/fake.test.ts` runs the contract on the WASM Core, the real Core built to WebAssembly. While `web/src/api/fake.ts` still has users, give it the matching behaviour too.
 
 Examples to copy: `02bd5d9` (`keep_as_draft`: a human operation with UI) and `8964c77` (`get_model_choice`: Factory-only, with a `client/` method).
 
@@ -32,6 +32,6 @@ How the Landing Method, Push, Land per Spec and CI Tracking combine lives in `st
 
 A component used across areas lives in `web/src/controls/`; one that belongs to an area lives beside it (`ticket/`, `board/`, ...). It is presentational: data and callbacks come in as props, and fetching and hooks like `useAct` stay at the call site. It keeps the global CSS class names it renders.
 
-1. Write the component, and a vitest test through its rendered output (role, accessible name, variant class).
-2. Put a `<Component>.stories.tsx` beside it, one story per variant, using `Meta` and `StoryObj` from `@storybook/react-vite` (see `controls/ToggleGroup.stories.tsx`). Where it needs a Ticket, build one with `api/fake.ts`. Area CSS the story needs is imported in `web/.storybook/preview.ts`.
+1. Write the component, and a vitest test through its rendered output (role, accessible name, variant class). Where it needs data, build it on a WASM Core world (`newWorld` in `api/core/core.ts`) with the scenario builder (`api/scenario.ts`), never with `api/fake.ts`; see `api/core/clock.test.tsx`.
+2. Put a `<Component>.stories.tsx` beside it, one story per variant, using `Meta` and `StoryObj` from `@storybook/react-vite` (see `controls/ToggleGroup.stories.tsx`). Where it needs a Ticket, build its world with the scenario builder through `storyWorld` (`api/core/story.ts`; see `options/ModelsSection.stories.tsx`). Area CSS the story needs is imported in `web/.storybook/preview.ts`.
 3. Run `make serve-components` to look at it, and `make build-components` to check Storybook still builds; both build `core.wasm` first (`make corewasm`). Storybook is a devDependency only: it is not in the embedded `dist` and `make test` doesn't run it.

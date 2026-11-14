@@ -1,12 +1,12 @@
-// The API contract suite: one set of tests run against FakeApi in the fast
-// suite (fake.test.ts) and against the real module and a real
-// `code-central serve --store <tmpdir>` in the e2e tier (http.e2e.test.ts),
-// so the fake can't drift from the service.
+// The API contract suite: one set of tests that pins createHttpApi
+// against the WASM Core in the fast suite (fake.test.ts) and against a
+// real `code-central serve --store <tmpdir>` in the e2e tier
+// (http.e2e.test.ts).
 //
-// A Driver sets up the world the way agents would: the fake's driver edits
-// the fake directly, the real one calls agent operations over HTTP. Tests
-// use the IDs the driver returns, never literal IDs (the real service
-// numbers Specs and Tickets from one counter).
+// A Driver sets up the world the way agents, integrations and the Factory
+// would, with their operations over HTTP; both halves use the one in
+// driver.ts. Tests use the IDs the driver returns, never literal IDs
+// (Specs and Tickets share one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
 import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, NeedsMeReason, PullRequestReport, SessionEvent, State, TicketAcknowledgement, TicketView, UsageResponse } from "./types";
@@ -19,8 +19,8 @@ export interface Driver {
   createProject(key: string, displayName: string): Promise<void>;
   createTicket(key: string, title: string, state: "Draft" | "Ready"): Promise<string>;
   // postRound claims a Ready Ticket as an agent and posts a Round of
-  // Questions, moving it to Needs Answer.
-  postRound(key: string, id: string, questions: { title: string; body: string; recommended?: string }[]): Promise<void>;
+  // Questions, moving it to Needs Answer, and returns the Round's number.
+  postRound(key: string, id: string, questions: { title: string; body: string; recommended?: string }[]): Promise<number>;
   // reportFailure claims a Ready Ticket as an agent (session
   // "contract-session") and posts a Failure Report, moving it to Failed.
   reportFailure(key: string, id: string, report: FailureReportBody): Promise<void>;
@@ -49,8 +49,7 @@ export interface Driver {
   postSessionEvents(sessionId: string, events: SessionEvent[]): Promise<void>;
   // mcpCall makes one agent MCP tool call to key's Project, as Claude Code
   // would, and returns the text the agent was given and, for a rejected
-  // call, its error code. The fake's driver plays find_tickets and
-  // get_ticket only (Spec code-central-201).
+  // call, its error code (Spec code-central-201).
   mcpCall(key: string, op: "find_tickets" | "get_ticket", args: Record<string, unknown>): Promise<{ text: string; error?: string }>;
   // postUsage posts a session's model responses' token usage as a Factory
   // would (Spec code-central-201): they go to the newest Claim with that
@@ -656,8 +655,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     it("reads the CI Watcher's status, forgotten when CI Tracking is turned off", async () => {
       await d.createProject("acme", "Acme");
       const refused = await d.reportCIWatcherStatus("acme", { state: "watching" }).catch((e) => e);
-      // The fake throws an ApiError; the service's driver, its JSON.
-      expect(String(refused.code ?? refused.message)).toContain("action_not_allowed");
+      expect(refused).toMatchObject({ code: "action_not_allowed" });
       await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
       expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "not_reported" });
 
@@ -677,12 +675,12 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const limitedError = await d
         .reportCIWatcherStatus("acme", { state: "error", message: "no", rate_limited_until: "2026-01-05T10:15:00Z" })
         .catch((e) => e);
-      expect(String(limitedError.code ?? limitedError.message)).toContain("invalid");
+      expect(limitedError).toMatchObject({ code: "invalid" });
       await d.reportCIWatcherStatus("acme", { state: "watching" });
       expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "watching", since: expect.any(String) });
       // Only the service reports a crash.
       const crashed = await d.reportCIWatcherStatus("acme", { state: "error", problem: "crashed", message: "crashed" }).catch((e) => e);
-      expect(String(crashed.code ?? crashed.message)).toContain("invalid");
+      expect(crashed).toMatchObject({ code: "invalid" });
 
       await d.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
       expect((await d.api.listProjects())[0].ci.watcher).toEqual({ state: "not_reported" });
@@ -700,7 +698,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       // Nothing was pushed as that branch yet.
       const early = await d.reportPullRequest("acme", { ...report, state: "open" }).catch((e) => e);
-      expect(String(early.code ?? early.message)).toContain("not_found");
+      expect(early).toMatchObject({ code: "not_found" });
 
       // Under Pull Request a push is recorded without CI Tracking.
       await d.reportPushedCommit("acme", id, "abc123", "impl-7");
@@ -712,7 +710,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.reportPullRequest("acme", { ...report, state: "closed" });
       await d.reportPullRequest("acme", { ...report, state: "open" });
       const bare = await d.reportPullRequest("acme", { ...report, state: "merged" }).catch((e) => e);
-      expect(String(bare.code ?? bare.message)).toContain("invalid");
+      expect(bare).toMatchObject({ code: "invalid" });
       await d.reportPullRequest("acme", { ...report, state: "merged", merge_commit: "def456" });
       expect(await d.api.getTicket("acme", id)).toMatchObject({ pull_request: { number: 7, state: "merged", merge_commit: "def456" } });
     });
@@ -727,14 +725,14 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       // Only an Accepted or In Review Ticket is pushed.
       const ready = await d.createTicket("acme", "Not yet", "Ready");
       const early = await d.reportPushedCommit("acme", ready, "abc123").catch((e) => e);
-      expect(String(early.code ?? early.message)).toContain("action_not_allowed");
+      expect(early).toMatchObject({ code: "action_not_allowed" });
 
       // With CI Tracking off, a push isn't tracked, and no runs are taken.
       await d.reportPushedCommit("acme", id, "abc123");
       expect(await d.api.getTicket("acme", id)).not.toHaveProperty("pushed_commit");
 
       const off = await d.reportCIRuns("acme", []).catch((e) => e);
-      expect(String(off.code ?? off.message)).toContain("action_not_allowed");
+      expect(off).toMatchObject({ code: "action_not_allowed" });
 
       await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["nightly.yml"] });
       await d.reportPushedCommit("acme", id, "abc123");
@@ -756,7 +754,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         ticket: id,
       });
       const concluded = await d.reportCIRuns("acme", [{ ...run(1, "ci.yml", "in_progress"), conclusion: "success" }]).catch((e) => e);
-      expect(String(concluded.code ?? concluded.message)).toContain("invalid");
+      expect(concluded).toMatchObject({ code: "invalid" });
       await d.reportCIRuns("acme", [run(1, "ci.yml", "in_progress"), run(2, "nightly.yml", "completed", "failure")]);
       const running = await d.api.getTicket("acme", id);
       expect(running.ci_result).toBe("running");

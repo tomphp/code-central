@@ -1,7 +1,8 @@
 // The one API module: everything the UI reads, every human action and the
-// live feed go through an Api. createHttpApi (http.ts) is the real one;
-// FakeApi (fake.ts) is the in-memory fake the component and layout tests
-// use. contract.ts runs one suite against both.
+// live feed go through an Api. createHttpApi (http.ts) is the real one,
+// which tests and stories run on the WASM Core (core/core.ts); FakeApi
+// (fake.ts) is the in-memory fake older tests still use. contract.ts pins
+// createHttpApi on the WASM Core and against the real service.
 import type {
   AutoAccept,
   ChangeEvent,

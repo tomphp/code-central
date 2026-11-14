@@ -12,7 +12,7 @@ An operation lives in `core`; the front doors (MCP, the HTTP API, the CLI) only 
 
 - every door that exposes it is covered in the cross-door suite, `frontdoor/doors_test.go`: one successful and one rejected call each;
 - a new HTTP route joins the shared handlers in `httpapi/httpapi.go` rather than getting its own decoding and error mapping;
-- the UI's `web/src/api/fake.ts` matches the service, and the behaviour is pinned in `web/src/api/contract.ts`, which runs against both the fake and the real service.
+- the behaviour is pinned in `web/src/api/contract.ts`, which runs on the WASM Core (the real Core built to WebAssembly) and against the real service; while the UI's `web/src/api/fake.ts` still has users, it matches the service. New UI tests run on the WASM Core only.
 
 ## One helper per setup
 
