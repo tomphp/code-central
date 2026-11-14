@@ -70,7 +70,7 @@ export function ActivityDashboard({ api, now, version, data, loc, navigate }: Ac
   );
 
   return (
-    <section aria-label="Activity Dashboard" className="dashboard">
+    <section aria-label="Activity Dashboard" className="view-body">
       <div className="dashboard-blocks">
         <StateCount state="Ready" count={inState("Ready").length} />
         <StateCount state="In Progress" count={inProgress.length} />

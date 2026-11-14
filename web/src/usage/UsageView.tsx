@@ -53,7 +53,7 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
   const projectName = (key: string) => projects.find((p) => p.key === key)?.display_name ?? key;
 
   return (
-    <main aria-label="Usage" className="usage">
+    <main aria-label="Usage" className="usage view-shell">
       <ViewHeader
         title="Usage"
         left={
@@ -75,7 +75,7 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
           </Button>
         }
       />
-      <div className="usage-body">
+      <div className="view-body">
         {usage.error && (
           <p role="alert" className="warning">
             {usage.error.message}
@@ -155,7 +155,7 @@ function CallsTable({ operations }: { operations: UsageOperation[] }) {
     setSort((s) => (s.key === key ? { key, descending: !s.descending } : { key, descending: key !== "op" }));
 
   return (
-    <table aria-label="Code Central calls" className="usage-table">
+    <table aria-label="Code Central calls" className="data-table data-table-mono">
       <thead>
         <tr>
           {COLUMNS.map((c) => (
@@ -211,7 +211,7 @@ function TokenCount({ n }: { n: number }) {
 // were, and the average and largest of their peaks.
 function KindsTable({ kinds }: { kinds: UsageKind[] }) {
   return (
-    <table aria-label="Context Size by kind" className="usage-table">
+    <table aria-label="Context Size by kind" className="data-table data-table-mono">
       <thead>
         <tr>
           <th scope="col">Kind</th>
@@ -260,7 +260,7 @@ function SessionsTable({ sessions, here, projectName, navigate }: SessionsTableP
   return (
     <>
       <h3 className="usage-subhead">Recent sessions</h3>
-      <table aria-label="Recent sessions" className="usage-table">
+      <table aria-label="Recent sessions" className="data-table data-table-mono">
         <thead>
           <tr>
             <th scope="col">Ticket</th>
