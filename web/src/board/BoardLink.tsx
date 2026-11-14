@@ -3,6 +3,7 @@
 // remembering loc so Back returns to it. Its count is the Tickets in scope
 // in the columns the Board opens with, and the needing Tickets in hidden States while its Needs Me column is on; className styles it as the row it
 // sits in.
+import { Count } from "../controls/Count";
 import { useNeedsMe } from "../needsme/context";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { hiddenColumns, needsMeColumn } from "../inbox/groupPreference";
@@ -20,7 +21,7 @@ export function BoardLink({ loc, navigate, className }: BoardLinkProps) {
   const needsMe = needsMeColumn();
   return (
     <a href={hrefFor({ ...loc, ...to })} onClick={clickTo(navigate, to)} className={className}>
-      Board <span className="count">{tickets(loc.project).filter((t) => !hidden.includes(t.state) || (needsMe && reasonOf(t.id))).length}</span>
+      Board <Count n={tickets(loc.project).filter((t) => !hidden.includes(t.state) || (needsMe && reasonOf(t.id))).length} />
     </a>
   );
 }

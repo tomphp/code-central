@@ -7,15 +7,17 @@
    lines up with the split's right edge, so it doesn't run off screen. */
 .focus-new { position: relative; margin-left: auto; }
 .focus-new .new-menu { left: auto; min-width: 16rem; }
-.focus-loading { margin: auto; color: var(--muted); }
+.focus > .empty { margin: auto; }
 .focus-clear { margin: auto; text-align: center; padding-bottom: 10vh; }
 .focus-clear h2 { font-size: 40px; font-weight: 600; margin: 0 0 8px; }
-.focus-clear p { margin: 0; font-size: 20px; color: var(--muted); }
+.focus-clear p:not(.empty) { margin: 0; font-size: 20px; color: var(--muted); }
+.focus-clear .empty { padding: 0; font-size: 20px; }
 .focus-left { color: var(--muted); font-variant-numeric: tabular-nums; }
 .focus-item { width: 100%; max-width: 760px; margin: 0 auto; padding: 40px 24px 10vh; box-sizing: border-box; }
 .focus-item h2 { font-size: 32px; line-height: 1.25; font-weight: 600; margin: 4px 0 8px; }
 .focus-from { margin: 0; font-size: 20px; }
 .focus-item-project { font-weight: 600; }
+.focus-item-project .muted { font-weight: 400; }
 .focus-ticket { margin: 16px 0 0; }
 .focus-ticket .tid { font-size: 20px; }
 .focus-requirement { margin: 0 0 8px; font-size: 20px; color: var(--muted); }
@@ -68,5 +70,4 @@
 .dashboard-ci-entry:hover { border-color: var(--muted); border-left-color: var(--ci-running); }
 .dashboard-ci-entry > a:first-child { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; color: var(--text); text-decoration: none; }
 .dashboard-ci-github { font-size: 15px; white-space: nowrap; }
-.dashboard-empty { margin: 0; text-align: center; color: var(--muted); font-size: 20px; }
 .dashboard-entry { --sc: var(--s-in-progress); border-radius: 10px; }
