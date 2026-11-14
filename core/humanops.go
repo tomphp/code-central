@@ -154,7 +154,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 				}
 			}
 		}
-		if p.Landing.Method == store.LandingPullRequest && l.Method != store.LandingPullRequest {
+		if landingPolicyOf(p).RunsPullRequestWatcher() && !NewLandingPolicy(l.Method, l.Push, l.LandPerSpec, p.CI.Tracking).RunsPullRequestWatcher() {
 			// What the Pull Request Watcher said was about the old method.
 			c.watchers.reset(watcherKey{WatcherPullRequests, key})
 			for _, t := range w.Tickets(key) {

@@ -78,7 +78,7 @@ func (c *Core) GetPullRequestWatch(_ context.Context, key string) (PullRequestWa
 			return unknownProject(key)
 		}
 		lv := landingView(p)
-		out = PullRequestWatch{Project: key, On: p.Landing.Method == store.LandingPullRequest, CodeHost: lv.CodeHost, Repository: lv.Repository,
+		out = PullRequestWatch{Project: key, On: landingPolicyOf(p).RunsPullRequestWatcher(), CodeHost: lv.CodeHost, Repository: lv.Repository,
 			Base: p.Base(), PATEnv: lv.PATEnv, GHPath: r.Options().GHPath, Work: []PushedWorkView{}}
 		if out.On {
 			out.Work = pushedWork(r, key)
