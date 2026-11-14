@@ -2,7 +2,7 @@
 // for Build, worked out from the service's requirement block, the
 // Requirement's implementation Tickets and what Needs Me says needs the human.
 import { REASON_LABEL } from "../format";
-import { FINISHED, type NeedsMeReason, type NeedsMeView, type RequirementView, type StageName, type TicketRow } from "../api/types";
+import { FINISHED, type NeedsMeReason, type RequirementView, type StageName, type TicketRow } from "../api/types";
 
 // MAP_TITLE names the segment a Requirement made from a Map has in
 // place of its grilling Stage.
@@ -46,25 +46,6 @@ export interface Progress {
   needs: { ticket: string; reason: NeedsMeReason; stage?: StageName }[];
 }
 
-// reasonsOf maps each Ticket in Needs Me to its reason: its own row's,
-// or that of the CI item listing it (code-central-432).
-export function reasonsOf(needsMe?: NeedsMeView): Map<string, NeedsMeReason> {
-  return new Map(
-    (needsMe?.groups ?? []).flatMap((g) =>
-      g.tickets.flatMap((r) => (r.id ? [[r.id, g.reason] as const] : (r.ci_item?.tickets ?? []).map((t) => [t.id, g.reason] as const))),
-    ),
-  );
-}
-
-// needsMeCount is the Needs Me count as the UI shows it, over the rows
-// inProject keeps: each Ticket row, with a Requirement's Stage Tickets
-// counted once, as its Requirement's row, never as themselves.
-export function needsMeCount(needsMe: NeedsMeView | undefined, inProject: (project: string) => boolean = () => true): number {
-  const rows = (needsMe?.groups ?? []).flatMap((g) => g.tickets).filter((r) => inProject(r.project));
-  const requirements = new Set(rows.flatMap((r) => (r.requirement?.stage ? [r.requirement.spec] : [])));
-  return requirements.size + rows.filter((r) => !r.requirement?.stage).length;
-}
-
 const STAGES: StageName[] = ["grilling", "spec", "tickets"];
 
 // isStage reports whether a Ticket is a Stage Ticket: one of its Labels is
@@ -74,11 +55,13 @@ export const isStage = (t: { labels: string[] }) => !!stageOf(t);
 // stageOf is a Stage Ticket's Stage, from its Label; none for any other Ticket.
 export const stageOf = (t: { labels: string[] }): StageName | undefined => STAGES.find((s) => t.labels.includes(`stage:${s}`));
 
-export function progress(req: RequirementView, tickets: TicketRow[], reasons: Map<string, NeedsMeReason>): Progress {
+// progress is a Requirement's progress, each Ticket's reason as reasonOf
+// (the Needs Me read model's) says.
+export function progress(req: RequirementView, tickets: TicketRow[], reasonOf: (id: string) => NeedsMeReason | undefined): Progress {
   const build = tickets.filter((t) => !isStage(t));
   const firstOpen = req.stages.findIndex((s) => s.state !== "Done" && s.state !== "Cancelled");
   const segments: Segment[] = req.stages.map((s, i) => {
-    const reason = s.needs_me_reason ?? reasons.get(s.ticket);
+    const reason = reasonOf(s.ticket);
     const segProgress: SegmentProgress =
       s.state === "Done"
         ? "done"
@@ -93,7 +76,10 @@ export function progress(req: RequirementView, tickets: TicketRow[], reasons: Ma
               : "running";
     return { stage: s.name, name: STAGE_TITLE[s.name], progress: segProgress, ticket: s.ticket, ...(reason && { reason }) };
   });
-  const buildNeeds = build.filter((t) => reasons.has(t.id));
+  const buildNeeds = build.flatMap((t) => {
+    const reason = reasonOf(t.id);
+    return reason ? [{ ticket: t.id, reason }] : [];
+  });
   const inBuild = firstOpen < 0;
   const buildProgress: SegmentProgress =
     req.build.total > 0 && req.build.done === req.build.total && !buildNeeds.length
@@ -105,7 +91,7 @@ export function progress(req: RequirementView, tickets: TicketRow[], reasons: Ma
           : inBuild && req.build.total > 0
             ? "running"
             : "waiting";
-  const buildSeg: Segment = { stage: "build", name: STAGE_TITLE.build, progress: buildProgress, ...(buildNeeds[0] && { reason: reasons.get(buildNeeds[0].id) }) };
+  const buildSeg: Segment = { stage: "build", name: STAGE_TITLE.build, progress: buildProgress, ...(buildNeeds[0] && { reason: buildNeeds[0].reason }) };
   segments.push(buildSeg);
   // A Requirement made from a Map has no grilling Stage: the Map did that.
   if (req.map) segments.unshift({ stage: "grilling", name: MAP_TITLE, progress: "done", map: req.map });
@@ -113,7 +99,7 @@ export function progress(req: RequirementView, tickets: TicketRow[], reasons: Ma
   else if (req.stages[0]?.name !== "grilling") segments.unshift({ stage: "grilling", name: STAGE_TITLE.grilling, progress: "skipped" });
   const needs = [
     ...segments.filter((s) => s.ticket && s.reason).map((s) => ({ ticket: s.ticket!, reason: s.reason!, stage: s.stage as StageName })),
-    ...buildNeeds.map((t) => ({ ticket: t.id, reason: reasons.get(t.id)! })),
+    ...buildNeeds,
   ];
   return {
     segments,

@@ -3,11 +3,11 @@
 // Requirement), the title, the needs-you dot and the headline, then how many
 // Tickets the lane shows. The line stays at the left while the columns
 // scroll sideways. The chevron folds the lane; the rest opens the Spec.
-import type { NeedsMeReason } from "../api/types";
 import { KindBadge } from "../controls/KindBadge";
 import { countStates, describeSpec } from "../inbox/describeSpec";
 import { ShortId } from "../inbox/ShortId";
 import type { ProjectSpec, ProjectTicket } from "../live";
+import { NeedsYouDot, useNeedsMe } from "../needsme/context";
 import type { RowLink } from "../ticket/TicketLine";
 
 export interface LaneHeaderProps {
@@ -19,17 +19,17 @@ export interface LaneHeaderProps {
   all: ProjectTicket[];
   // shown is how many of the Spec's Tickets the lane shows.
   shown: number;
-  reasons: Map<string, NeedsMeReason>;
   link: RowLink;
   collapsed: boolean;
   onToggle(): void;
 }
 
-export function LaneHeader({ id, spec, all, shown, reasons, link, collapsed, onToggle }: LaneHeaderProps) {
+export function LaneHeader({ id, spec, all, shown, link, collapsed, onToggle }: LaneHeaderProps) {
+  const { reasonOf } = useNeedsMe();
   const title = spec?.title ?? id;
-  const { kind, need, needsYou, headline } = describeSpec(spec, all, spec?.state_summary ?? countStates(all), reasons);
+  const { kind, headline } = describeSpec(spec, all, spec?.state_summary ?? countStates(all), reasonOf);
   return (
-    <section className={`lane-header${needsYou ? " needs" : ""}`} aria-label={title}>
+    <section className={`lane-header${reasonOf(id) ? " needs" : ""}`} aria-label={title}>
       <div className="lane-header-line">
         <button className="chev" aria-expanded={!collapsed} aria-label={title} onClick={onToggle}>
           {collapsed ? "▸" : "▾"}
@@ -38,7 +38,7 @@ export function LaneHeader({ id, spec, all, shown, reasons, link, collapsed, onT
           <ShortId id={id} />
           {kind !== "Requirement" && <KindBadge kind={kind} />}
           <span className="lane-header-title">{title}</span>
-          {needsYou && <span className={`dot${need ? ` reason-${need}` : ""}`} role="img" aria-label="Needs you" />}
+          <NeedsYouDot id={id} />
           <span className="lane-header-headline">{headline}</span>
           <span className="lane-header-count">{shown} shown</span>
         </a>

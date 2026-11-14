@@ -1,10 +1,12 @@
 // The Ticket row: the two-line row a list shows a Ticket in. Its first line
 // is the Short ID, an optional Stage badge, the title, an optional State
-// chip, the Link and Waiting badges, any badges the list adds, and a dot
-// when the Ticket needs the human; its second line is the latest Session
-// Event, or the detail the list gives. The whole row is one link.
+// chip, the Link and Waiting badges, any badges the list adds, and the
+// needs-you dot (none in Needs Me, where every row needs the human); its
+// second line is the latest Session Event, or the detail the list gives.
+// The whole row is one link.
 import type { MouseEvent, ReactNode } from "react";
 import type { TicketRow } from "../api/types";
+import { NeedsYouDot } from "../needsme/context";
 import { StageBadge } from "../controls/StageBadge";
 import { StateChip } from "../controls/StateChip";
 import { ShortId } from "../inbox/ShortId";
@@ -36,7 +38,8 @@ export interface TicketLineProps {
   badge?: string;
   // chip shows the Ticket's State, in a list of several States.
   chip?: boolean;
-  needsYou?: boolean;
+  // inNeedsMe is a row in Needs Me, which leaves out the needs-you dot.
+  inNeedsMe?: boolean;
   // quiet dims the row, as Drafts' rows are.
   quiet?: boolean;
   // now shows the latest Session Event on the second line; detail replaces
@@ -48,7 +51,7 @@ export interface TicketLineProps {
 }
 
 // TicketLine is the Ticket row.
-export function TicketLine({ t, link, badge, chip, needsYou, quiet, now, detail, children }: TicketLineProps) {
+export function TicketLine({ t, link, badge, chip, inNeedsMe, quiet, now, detail, children }: TicketLineProps) {
   return (
     <a className={quiet ? "row quiet" : "row"} {...link}>
       <span className="row-top">
@@ -59,7 +62,7 @@ export function TicketLine({ t, link, badge, chip, needsYou, quiet, now, detail,
         {t.link && <LinkBadge link={t.link} plain />}
         <WaitingBadge waiting={t.waiting_for_spec} />
         {children}
-        {needsYou && <span className="dot needs-you" role="img" aria-label="Needs you" />}
+        {!inNeedsMe && <NeedsYouDot id={t.id} />}
       </span>
       {detail !== undefined ? <span className="row-detail">{detail}</span> : now && <RowLatestEvent row={t} now={now} className="row-detail" />}
     </a>

@@ -6,8 +6,9 @@
 // the rest of the row opens the Spec. Whether it is open lives on the page
 // only. A Board lane is headed by a Lane header instead.
 import { useEffect, useState } from "react";
-import { STATES, type NeedsMeReason, type StageName, type State } from "../api/types";
+import { STATES, type StageName, type State } from "../api/types";
 import type { ProjectSpec, ProjectTicket } from "../live";
+import { NeedsYouDot, useNeedsMe } from "../needsme/context";
 import { stageOf } from "../requirement/progress";
 import { Strip } from "../requirement/Strip";
 import { KindBadge } from "../controls/KindBadge";
@@ -30,7 +31,6 @@ export interface SpecRowProps {
   // here is the State list the row is in, its chip marked; the Tickets it
   // lists then show no State chip of their own.
   here?: State;
-  reasons: Map<string, NeedsMeReason>;
   now: Date;
   link: RowLink;
   ticketLink: InboxRowLinkFactory;
@@ -42,7 +42,8 @@ export interface SpecRowProps {
   startOpen?: boolean;
 }
 
-export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticketLink, selectedTicket, quietWhenIdle, startOpen }: SpecRowProps) {
+export function SpecRow({ id, spec, all, shown, here, now, link, ticketLink, selectedTicket, quietWhenIdle, startOpen }: SpecRowProps) {
+  const { reasonOf } = useNeedsMe();
   const listed = shown ?? stagesFirst(all);
   // The row holding the selected Ticket opens on its own, once per
   // selection, so the human can still close it.
@@ -55,7 +56,8 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
   const title = spec?.title ?? id;
   const summary = spec?.state_summary ?? countStates(all);
   const total = STATES.reduce((n, s) => n + (summary[s] ?? 0), 0);
-  const { kind, progress: p, need, needsYou, headline } = describeSpec(spec, all, summary, reasons);
+  const { kind, progress: p, headline } = describeSpec(spec, all, summary, reasonOf);
+  const needsYou = !!reasonOf(id);
   const quiet = quietWhenIdle && (spec?.finished || !needsYou);
 
   return (
@@ -69,7 +71,7 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
             <ShortId id={id} />
             {kind !== "Requirement" && <KindBadge kind={kind} />}
             <span className="row-title">{title}</span>
-            {needsYou && <span className={`dot${need ? ` reason-${need}` : ""}`} role="img" aria-label="Needs you" />}
+            <NeedsYouDot id={id} />
           </span>
           {p ? (
             <Strip p={p} />
@@ -95,7 +97,7 @@ export function SpecRow({ id, spec, all, shown, here, reasons, now, link, ticket
       {open && (
         <div className="spec-row-tickets" role="group" aria-label={`Tickets of ${title}`}>
           {listed.map((t) => (
-            <TicketLine key={t.id} t={t} link={ticketLink(t.id)} badge={stageOf(t)} chip={!here} needsYou={reasons.has(t.id)} now={now}>
+            <TicketLine key={t.id} t={t} link={ticketLink(t.id)} badge={stageOf(t)} chip={!here} now={now}>
               <ListCIBadge t={t} />
             </TicketLine>
           ))}
