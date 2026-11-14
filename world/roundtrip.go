@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"runtime/debug"
 	"sync"
 
 	"github.com/tomoram/code-central/core"
@@ -40,6 +42,14 @@ func (w *World) RoundTrip(req *http.Request) (*http.Response, error) {
 	done := make(chan struct{})
 	go func() {
 		defer func() {
+			// A handler's panic fails its request alone, as net/http's
+			// does, rather than every world in the process.
+			if p := recover(); p != nil {
+				err := fmt.Errorf("panic serving %s %s: %v", in.Method, in.URL.Path, p)
+				fmt.Fprintf(os.Stderr, "world: %v\n%s", err, debug.Stack())
+				rw.fail(err)
+				pw.CloseWithError(err)
+			}
 			rw.WriteHeader(http.StatusOK)
 			pw.Close()
 			cancel()
@@ -70,6 +80,9 @@ func (w *World) RoundTrip(req *http.Request) (*http.Response, error) {
 		default:
 			return nil, ctx.Err()
 		}
+	}
+	if rw.err != nil {
+		return nil, rw.err
 	}
 	return &http.Response{
 		Status:        fmt.Sprintf("%d %s", rw.status, http.StatusText(rw.status)),
@@ -124,7 +137,17 @@ type responseWriter struct {
 	once    sync.Once
 	status  int
 	sent    http.Header
+	err     error
 	written chan struct{}
+}
+
+// fail ends a response before its status with err, so RoundTrip answers
+// err; after its status it does nothing.
+func (rw *responseWriter) fail(err error) {
+	rw.once.Do(func() {
+		rw.err = err
+		close(rw.written)
+	})
 }
 
 func (rw *responseWriter) Header() http.Header { return rw.header }

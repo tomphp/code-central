@@ -102,6 +102,8 @@ func (w *World) SetPullRequestCheck(res core.WatcherCheckResult) {
 	w.setAnswer(&w.pullRequestCheck, res)
 }
 
+// setAnswer and answer set and read one stand-in check's answer, which a
+// request's check reads while a test may set it.
 func (w *World) setAnswer(check *core.WatcherCheckResult, res core.WatcherCheckResult) {
 	w.mu.Lock()
 	defer w.mu.Unlock()

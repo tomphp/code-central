@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/world"
@@ -107,21 +108,36 @@ func TestAnAgentsMCPCallIsServedAndRecordedAsUsage(t *testing.T) {
 	}
 }
 
-func TestAFactorysUsageAndSessionEventsAreFiledUnderItsClaim(t *testing.T) {
+// claimedWorld is Project acme with acme-2 claimed by session s1, whose
+// Claim 1 files its Usage and Session Events.
+func claimedWorld(t *testing.T) *world.World {
+	t.Helper()
 	w := newWorld(t)
 	ok(t, w, "", "POST", "/api/projects/create_project", `{"key":"acme"}`)
 	ok(t, w, "agent", "POST", "/api/p/acme/create_spec", `{"title":"S"}`)
 	ok(t, w, "agent", "POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"A","state":"Ready"}`)
 	ok(t, w, "agent", "POST", "/api/p/acme/claim", `{"ticket":2,"session_id":"s1"}`)
+	return w
+}
+
+// postSessionEvent posts one text Session Event for session s1, as a
+// Factory does.
+func postSessionEvent(t *testing.T, w *world.World, text string) {
+	t.Helper()
+	if status, b := send(t, w, "integration", "POST", "/api/session-events",
+		`{"session_id":"s1","events":[{"time":"2026-11-14T09:00:00Z","kind":"text","text":"`+text+`"}]}`); status != http.StatusNoContent {
+		t.Fatalf("POST /api/session-events: %d %s", status, b)
+	}
+}
+
+func TestAFactorysUsageAndSessionEventsAreFiledUnderItsClaim(t *testing.T) {
+	w := claimedWorld(t)
 
 	if status, b := send(t, w, "integration", "POST", "/api/usage",
 		`{"session_id":"s1","responses":[{"kind":"main","model":"claude-opus-5-5","input_tokens":1200,"output_tokens":34}]}`); status != http.StatusNoContent {
 		t.Fatalf("POST /api/usage: %d %s", status, b)
 	}
-	if status, b := send(t, w, "integration", "POST", "/api/session-events",
-		`{"session_id":"s1","events":[{"time":"2026-11-14T09:00:00Z","kind":"text","text":"Reading the Spec"}]}`); status != http.StatusNoContent {
-		t.Fatalf("POST /api/session-events: %d %s", status, b)
-	}
+	postSessionEvent(t, w, "Reading the Spec")
 
 	if b := ok(t, w, "", "GET", "/api/usage/session?project=acme&session=s1", ""); !strings.Contains(b, `"input_tokens":1200`) {
 		t.Errorf("session Usage: %s, want the posted response", b)
@@ -158,9 +174,9 @@ var checkCases = []struct {
 	{"Pull Request", (*world.World).SetPullRequestCheck, "/api/p/acme/set_landing_method", `{"method":"pull_request"}`, "method"},
 }
 
-// checkedProject is Project acme with a GitHub Push remote, ready for
+// checkedWorld is Project acme with a GitHub Push remote, ready for
 // each check to run.
-func checkedProject(t *testing.T) *world.World {
+func checkedWorld(t *testing.T) *world.World {
 	t.Helper()
 	w := newWorld(t)
 	ok(t, w, "", "POST", "/api/projects/create_project", `{"key":"acme"}`)
@@ -171,7 +187,7 @@ func checkedProject(t *testing.T) *world.World {
 func TestEveryCheckPassesUntilSet(t *testing.T) {
 	for _, c := range checkCases {
 		t.Run(c.name, func(t *testing.T) {
-			ok(t, checkedProject(t), "", "POST", c.path, c.body)
+			ok(t, checkedWorld(t), "", "POST", c.path, c.body)
 		})
 	}
 }
@@ -179,7 +195,7 @@ func TestEveryCheckPassesUntilSet(t *testing.T) {
 func TestACheckRefusalReachesCoresCheckResult(t *testing.T) {
 	for _, c := range checkCases {
 		t.Run(c.name, func(t *testing.T) {
-			w := checkedProject(t)
+			w := checkedWorld(t)
 			c.set(w, core.WatcherCheckResult{Problem: core.ProblemRepositoryUnreadable, Reason: "gh can't read acme/app", Fix: "Grant gh access"})
 
 			status, b := send(t, w, "", "POST", c.path, c.body)
@@ -196,7 +212,7 @@ func TestACheckRefusalReachesCoresCheckResult(t *testing.T) {
 }
 
 func TestAWatcherCrashIsReportedToCore(t *testing.T) {
-	w := checkedProject(t)
+	w := checkedWorld(t)
 	ok(t, w, "", "POST", "/api/p/acme/set_ci_tracking", `{"tracking":true,"repository":"acme/app"}`)
 
 	w.ReportWatcherCrash(core.WatcherCI, "acme", core.WatcherCrash{Restarts: 1, LastLine: "panic: no gh", RestartAt: start.Add(time.Second)})
@@ -252,8 +268,11 @@ func ended(t *testing.T, r *bufio.Reader) {
 	}
 }
 
+// errStillOpen is readWithin's error for a stream with nothing to read.
 var errStillOpen = errors.New("nothing came within a second")
 
+// readWithin reads one line of a stream, or answers errStillOpen if none
+// comes within a second.
 func readWithin(r *bufio.Reader) (string, error) {
 	type read struct {
 		line string
@@ -272,30 +291,7 @@ func readWithin(r *bufio.Reader) (string, error) {
 	}
 }
 
-// eventually fails the test unless cond holds within a second.
-func eventually(t *testing.T, what string, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(time.Second)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("%s: not within a second", what)
-		}
-		time.Sleep(time.Millisecond)
-	}
-}
-
-// transcriptProject is Project acme with acme-2 claimed by session s1,
-// whose Claim 1 has a Transcript to stream.
-func transcriptProject(t *testing.T) *world.World {
-	t.Helper()
-	w := newWorld(t)
-	ok(t, w, "", "POST", "/api/projects/create_project", `{"key":"acme"}`)
-	ok(t, w, "agent", "POST", "/api/p/acme/create_spec", `{"title":"S"}`)
-	ok(t, w, "agent", "POST", "/api/p/acme/create_ticket", `{"spec":1,"title":"A","state":"Ready"}`)
-	ok(t, w, "agent", "POST", "/api/p/acme/claim", `{"ticket":2,"session_id":"s1"}`)
-	return w
-}
-
+// transcriptStreamPath follows claimedWorld's Claim's Transcript.
 const transcriptStreamPath = "/api/projects/acme/tickets/2/claims/1/transcript/stream"
 
 func TestTheChangeNoticeFeedStreamsAsCoreWrites(t *testing.T) {
@@ -310,14 +306,13 @@ func TestTheChangeNoticeFeedStreamsAsCoreWrites(t *testing.T) {
 }
 
 func TestATranscriptStreamStreamsAndClosingItEndsIt(t *testing.T) {
-	w := transcriptProject(t)
+	w := claimedWorld(t)
 	transcript, body := openStream(t, w, transcriptStreamPath)
 	if n := w.TranscriptStreams(); n != 1 {
 		t.Fatalf("open Transcript streams: %d, want 1", n)
 	}
 
-	send(t, w, "integration", "POST", "/api/session-events",
-		`{"session_id":"s1","events":[{"time":"2026-11-14T09:00:00Z","kind":"text","text":"Reading the Spec"}]}`)
+	postSessionEvent(t, w, "Reading the Spec")
 	readLine(t, transcript) // id
 	readLine(t, transcript) // event
 	if data := readLine(t, transcript); !strings.Contains(data, "Reading the Spec") {
@@ -325,7 +320,7 @@ func TestATranscriptStreamStreamsAndClosingItEndsIt(t *testing.T) {
 	}
 
 	body.Close()
-	eventually(t, "the closed stream's handler to end", func() bool { return w.TranscriptStreams() == 0 })
+	codecentraltest.Eventually(t, func() bool { return w.TranscriptStreams() == 0 }, "the closed stream's handler hasn't ended")
 }
 
 func TestCancellingARequestsContextEndsItsStream(t *testing.T) {
@@ -346,7 +341,7 @@ func TestCancellingARequestsContextEndsItsStream(t *testing.T) {
 }
 
 func TestDroppingStreamsEndsEveryOpenStreamAndTheWorldServesOn(t *testing.T) {
-	w := transcriptProject(t)
+	w := claimedWorld(t)
 	notices, _ := openStream(t, w, "/api/events")
 	transcript, _ := openStream(t, w, transcriptStreamPath)
 
@@ -354,7 +349,7 @@ func TestDroppingStreamsEndsEveryOpenStreamAndTheWorldServesOn(t *testing.T) {
 
 	ended(t, notices)
 	ended(t, transcript)
-	eventually(t, "the dropped Transcript stream's handler to end", func() bool { return w.TranscriptStreams() == 0 })
+	codecentraltest.Eventually(t, func() bool { return w.TranscriptStreams() == 0 }, "the dropped Transcript stream's handler hasn't ended")
 	openStream(t, w, transcriptStreamPath)
 	if n := w.TranscriptStreams(); n != 1 {
 		t.Errorf("open Transcript streams after reconnecting: %d, want 1", n)
@@ -362,7 +357,7 @@ func TestDroppingStreamsEndsEveryOpenStreamAndTheWorldServesOn(t *testing.T) {
 }
 
 func TestDroppingTheWorldEndsItsStreamsAndItServesNoMore(t *testing.T) {
-	w := transcriptProject(t)
+	w := claimedWorld(t)
 	notices, _ := openStream(t, w, "/api/events")
 	transcript, _ := openStream(t, w, transcriptStreamPath)
 
