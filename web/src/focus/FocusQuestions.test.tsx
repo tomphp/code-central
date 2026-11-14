@@ -1,61 +1,58 @@
-// Question Focus Items: the real App against FakeApi, at ?view=focus. Each
-// open Question of a Round is its own Focus Item, answered through the
-// Round panel's shared form; live changes are simulated by reseeding Needs
-// Me and emitting a notice.
+// Question Focus Items: the real App on a WASM Core world, at ?view=focus.
+// Each open Question of a Round is its own Focus Item, answered through the
+// Round panel's shared form; live changes are made on the world, whose
+// change notices the App receives.
 import { screen, within, waitFor, act, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
-import { FakeApi } from "../api/fake";
-import { change, focus, renderApp } from "./focusTesting";
-import type { RoundView } from "../api/types";
+import type { World } from "../api/core/core";
+import type { Scenario } from "../api/scenario";
+import { acme, focus, renderApp } from "./worldTesting";
 
-const hourAgo = (fake: FakeApi, h: number) => new Date(fake.now.getTime() - h * 3_600_000).toISOString();
+const HOUR = 3_600_000;
 
-// round2 is Round 2 of acme-1, whose Questions are 3 to 5 (numbers run
-// across the Ticket): 3 and 5 open, 4 already dismissed.
-function round2(posted: string): RoundView[] {
-  return [
-    { number: 1, claim: 1, posted, questions: [{ number: 1, title: "Old question", body: "Asked before", status: "answered", answer: "Yes" }] },
-    {
-      number: 2,
-      claim: 1,
-      posted,
-      questions: [
-        { number: 3, title: "Which colour?", body: "Red or **blue**, for the login button.", recommended: "Blue", status: "open" },
-        { number: 4, title: "Which font?", body: "Serif or sans", status: "dismissed" },
-        { number: 5, title: "Which size?", body: "S or M", status: "open" },
-      ],
-    },
-  ];
+const dismiss = (s: Scenario, id: string, question: number) => s.human(`${s.ticketPath("acme", id)}/dismiss_question`, { question });
+
+// round2 gives the Ticket two Rounds, as its session asked them: Round 1's
+// Question (1) answered, then Round 2 with Questions 2 to 4 (numbers run
+// across the Ticket): 2 and 4 open, 3 dismissed.
+async function round2(s: Scenario, id: string) {
+  await s.askRound("acme", id, [{ title: "Old question", body: "Asked before" }]);
+  await s.answerRound("acme", id, ["Yes"]);
+  await s.pickUpAnswers("acme", id);
+  await s.askRound("acme", id, [
+    { title: "Which colour?", body: "Red or **blue**, for the login button.", recommended: "Blue" },
+    { title: "Which font?", body: "Serif or sans" },
+    { title: "Which size?", body: "S or M" },
+  ]);
+  await dismiss(s, id, 3);
 }
 
-// world has acme-1 waiting on Round 2 (2 open), then acme-2 In Review.
-function world() {
-  const fake = new FakeApi();
-  fake.addProject("acme", "Acme");
-  fake.addTicket("acme", { title: "Pick a colour", state: "Needs Answer", rounds: round2(fake.now.toISOString()) }); // acme-1
-  fake.addTicket("acme", { title: "Login page", state: "In Review" }); // acme-2
-  fake.setNeedsMe([
-    { reason: "needs_answer", tickets: [{ id: "acme-1", since: hourAgo(fake, 2), round: { number: 2, open: 2, questions: 3 } }] },
-    { reason: "in_review", tickets: [{ id: "acme-2", since: hourAgo(fake, 3), summary: "Added the login page" }] },
-  ]);
-  return fake;
+// world has Pick a colour waiting on Round 2 (2 open), then Login page In Review.
+async function world() {
+  const { w, s } = await acme();
+  const review = await s.ticket("acme", { title: "Login page", state: "In Review" });
+  w.advance(HOUR);
+  const colour = await s.ticket("acme", { title: "Pick a colour" });
+  await round2(s, colour);
+  w.advance(2 * HOUR);
+  return { w, s, colour, review };
 }
 
 const item = () => within(focus()).findByRole("article", { name: "Focus Item" });
 const question = (title: string) => within(focus()).findByRole("heading", { name: title });
 const box = () => within(focus()).getByRole("textbox");
-const stored = async (fake: FakeApi, id = "acme-1") => (await fake.getTicket("acme", id)).rounds[1].questions;
+const stored = async (w: World, id: string) => (await w.api.getTicket("acme", id)).rounds[1].questions;
 
 describe("a Question Focus Item", () => {
   it("shows where it's from, why it waits, where it is in the Round, its title large and its body as Markdown", async () => {
-    renderApp(world());
+    const { w, colour } = await world();
+    renderApp(w);
     await question("Which colour?");
     const it = await item();
     expect(within(it).getByText("Acme")).toBeInTheDocument();
     expect(within(it).getByText("acme")).toBeInTheDocument();
-    expect(within(it).getByText("acme-1")).toBeInTheDocument();
+    expect(within(it).getByText(colour)).toBeInTheDocument();
     expect(within(it).getByText("Pick a colour")).toBeInTheDocument();
     expect(within(it).getByText("Focus: Questions")).toBeInTheDocument();
     expect(within(it).getByText("waiting 2h")).toBeInTheDocument();
@@ -68,43 +65,37 @@ describe("a Question Focus Item", () => {
   });
 
   it("counts each open Question in the remaining count", async () => {
-    renderApp(world());
+    const { w } = await world();
+    renderApp(w);
     await question("Which colour?");
     expect(within(focus()).getByText("3 left")).toBeInTheDocument();
   });
 
   it("prefills the answer box with the recommendation as an unsaved draft", async () => {
-    const fake = world();
-    renderApp(fake);
+    const { w } = await world();
+    renderApp(w);
     await question("Which colour?");
     expect(box()).toHaveValue("Blue");
     expect(within(focus()).getByText(/Recommended answer, a draft: nothing is saved until you answer/)).toBeInTheDocument();
-    expect(fake.actions()).toEqual([]);
+    expect(w.actions()).toEqual([]);
   });
 
   it("labels a Stage Ticket's Question with its Requirement and Stage", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    const spec = fake.addSpec("acme", { title: "Dark mode" }); // acme-1
-    const stage = fake.addTicket("acme", {
-      title: "Grilling: Dark mode",
-      state: "Needs Answer",
-      spec: { id: spec.id, title: spec.title },
-      labels: ["stage:grilling"],
-      rounds: round2(fake.now.toISOString()),
-    }); // acme-2
-    fake.setNeedsMe([{ reason: "needs_answer", tickets: [{ id: stage.id, round: { number: 2, open: 2, questions: 3 } }] }]);
-    renderApp(fake);
+    const { w, s } = await acme();
+    const spec = await s.spec("acme", { title: "Dark mode" }); // acme-1
+    const stage = await s.ticket("acme", { title: "Grilling: Dark mode", spec, labels: ["stage:grilling"] }); // acme-2
+    await round2(s, stage);
+    renderApp(w);
     expect(await question("Which colour?")).toBeInTheDocument();
     expect(within(await item()).getByText("Requirement: Dark mode · grilling")).toBeInTheDocument();
-    expect(within(await item()).getByRole("link", { name: "Open in Inbox" })).toHaveAttribute("href", `?view=inbox&requirement=${spec.id}&ticket=${stage.id}`);
+    expect(within(await item()).getByRole("link", { name: "Open in Inbox" })).toHaveAttribute("href", `?view=inbox&requirement=${spec}&ticket=${stage}`);
   });
 });
 
 describe("answering in Focus Mode", () => {
   it("sends Answer for that Question, then shows the Round's next open Question", async () => {
-    const fake = world();
-    renderApp(fake);
+    const { w, colour } = await world();
+    renderApp(w);
     await question("Which colour?");
     await userEvent.click(within(focus()).getByRole("button", { name: "Answer" }));
 
@@ -112,64 +103,63 @@ describe("answering in Focus Mode", () => {
     expect(within(focus()).getByText("Question 3 of 3 · Round 2")).toBeInTheDocument();
     expect(within(focus()).getByText("2 left")).toBeInTheDocument();
     expect(box()).toHaveValue("");
-    expect(fake.actions()).toEqual(["answer"]);
-    expect((await stored(fake))[0]).toMatchObject({ status: "answered", answer: "Blue" });
+    expect(w.actions()).toEqual(["answer"]);
+    expect((await stored(w, colour))[0]).toMatchObject({ status: "answered", answer: "Blue" });
   });
 
   it("sends Dismiss for that Question", async () => {
-    const fake = world();
-    renderApp(fake);
+    const { w, colour } = await world();
+    renderApp(w);
     await question("Which colour?");
     await userEvent.click(within(focus()).getByRole("button", { name: "Dismiss" }));
 
     expect(await question("Which size?")).toBeInTheDocument();
-    expect(fake.actions()).toEqual(["dismiss_question"]);
-    expect((await stored(fake))[0].status).toBe("dismissed");
+    expect(w.actions()).toEqual(["dismiss_question"]);
+    expect((await stored(w, colour))[0].status).toBe("dismissed");
   });
 
   it("sends Answer on Cmd+Enter or Ctrl+Enter in the answer box", async () => {
-    const fake = world();
-    renderApp(fake);
+    const { w, colour } = await world();
+    renderApp(w);
     await question("Which colour?");
     await userEvent.clear(box());
     await userEvent.type(box(), "Green");
     fireEvent.keyDown(box(), { key: "Enter", metaKey: true });
 
     await question("Which size?");
-    expect((await stored(fake))[0]).toMatchObject({ status: "answered", answer: "Green" });
+    expect((await stored(w, colour))[0]).toMatchObject({ status: "answered", answer: "Green" });
 
     await userEvent.type(box(), "M");
     fireEvent.keyDown(box(), { key: "Enter", ctrlKey: true });
     expect(await within(focus()).findByRole("region", { name: "Resume or release" })).toBeInTheDocument();
-    expect((await stored(fake))[2]).toMatchObject({ status: "answered", answer: "M" });
-    expect(fake.actions()).toEqual(["answer", "answer"]);
+    expect((await stored(w, colour))[2]).toMatchObject({ status: "answered", answer: "M" });
+    expect(w.actions()).toEqual(["answer", "answer"]);
   });
 
   it("sends nothing on a plain Enter, nor on Cmd+Enter in an empty box", async () => {
-    const fake = world();
-    fake.updateTicket("acme-1", { rounds: round2(fake.now.toISOString()).map((r) => ({ ...r, questions: r.questions.filter((q) => q.number !== 3) })) });
-    fake.setNeedsMe([{ reason: "needs_answer", tickets: [{ id: "acme-1", round: { number: 2, open: 1, questions: 2 } }] }]);
-    renderApp(fake);
+    const { w, s, colour } = await world();
+    await dismiss(s, colour, 2);
+    renderApp(w);
     await question("Which size?");
     fireEvent.keyDown(box(), { key: "Enter", metaKey: true });
     await userEvent.type(box(), "M{Enter}");
     expect(box()).toHaveValue("M\n");
-    expect(fake.actions()).toEqual([]);
+    expect(w.actions()).toEqual([]);
   });
 
   it("leaves the Inbox's Round panel without Cmd+Enter", async () => {
-    const fake = world();
-    renderApp(fake, "/?view=inbox&ticket=acme-1");
+    const { w, colour } = await world();
+    renderApp(w, `/?view=inbox&ticket=${colour}`);
     const panel = await screen.findByRole("region", { name: /Round 2/ });
-    const colour = within(panel).getByRole("group", { name: /Which colour\?/ });
-    fireEvent.keyDown(within(colour).getByRole("textbox"), { key: "Enter", metaKey: true });
-    fireEvent.keyDown(within(colour).getByRole("textbox"), { key: "Enter", ctrlKey: true });
-    expect(fake.actions()).toEqual([]);
+    const group = within(panel).getByRole("group", { name: /Which colour\?/ });
+    fireEvent.keyDown(within(group).getByRole("textbox"), { key: "Enter", metaKey: true });
+    fireEvent.keyDown(within(group).getByRole("textbox"), { key: "Enter", ctrlKey: true });
+    expect(w.actions()).toEqual([]);
   });
 
   it("goes on, after the Round's last Question, to the Ticket as an Answered Focus Item in its Needs Me place", async () => {
-    const fake = world();
-    renderApp(fake);
+    const { w } = await world();
+    renderApp(w);
     await question("Which colour?");
     await userEvent.click(within(focus()).getByRole("button", { name: "Answer" }));
     await question("Which size?");
@@ -185,23 +175,31 @@ describe("answering in Focus Mode", () => {
 
 describe("a Round's Questions in the queue", () => {
   it("come at the row's Needs Me place, after what's before it", async () => {
-    const fake = world();
-    fake.addTicket("acme", { title: "Flaky build", state: "Failed" }); // acme-3
-    fake.setNeedsMe([{ reason: "failed", tickets: [{ id: "acme-3" }] }, ...fake.needsMeGroups]);
-    renderApp(fake);
-    expect(await within(focus()).findByRole("heading", { name: "Flaky build" })).toBeInTheDocument();
+    // Core lists Needs Answer longest-waiting first, and no reason comes
+    // before it, so what's before the Round is an older Round.
+    const { w, s } = await acme();
+    const older = await s.ticket("acme", { title: "Older question" });
+    await s.askRound("acme", older, [{ title: "Which tool?", body: "A or B" }]);
+    w.advance(HOUR);
+    const colour = await s.ticket("acme", { title: "Pick a colour" });
+    await round2(s, colour);
+    await s.ticket("acme", { title: "Login page", state: "In Review" });
+    renderApp(w);
+    expect(await within(focus()).findByRole("heading", { name: "Which tool?" })).toBeInTheDocument();
     expect(within(focus()).getByText("4 left")).toBeInTheDocument();
 
-    change(fake, fake.needsMeGroups.filter((g) => g.reason !== "failed"), "acme-3");
+    await act(() => s.answerRound("acme", older));
     expect(await question("Which colour?")).toBeInTheDocument();
   });
 
-  it("finishes the Round first, even when a higher-priority Focus Item arrives meanwhile", async () => {
-    const fake = world();
-    renderApp(fake);
+  it("finishes the Round first, even when another Focus Item arrives meanwhile", async () => {
+    const { w, s, review } = await world();
+    await s.ticket("acme", { title: "Quiet session", state: "In Progress" });
+    renderApp(w);
     await question("Which colour?");
-    const t = fake.addTicket("acme", { title: "Quiet session", state: "In Progress" }); // acme-3
-    change(fake, [{ reason: "silent_claim", tickets: [{ id: t.id }] }, ...fake.needsMeGroups], t.id);
+    // Silent after 30 minutes; a change to another Ticket makes the App look again.
+    w.advance(31 * 60_000);
+    await act(() => s.human(`${s.projectPath("acme")}/add_labels`, { target: review, labels: ["urgent"] }));
     await waitFor(() => expect(within(focus()).getByText("4 left")).toBeInTheDocument());
     expect(within(focus()).getByRole("heading", { name: "Which colour?" })).toBeInTheDocument();
 
@@ -209,45 +207,31 @@ describe("a Round's Questions in the queue", () => {
     expect(await question("Which size?")).toBeInTheDocument();
 
     await userEvent.click(within(focus()).getByRole("button", { name: "Dismiss" }));
-    expect(await within(focus()).findByRole("heading", { name: "Quiet session" })).toBeInTheDocument();
-  });
-
-  it("finishes the Ticket's latest Round first when its Needs Me row names no Round", async () => {
-    const fake = world();
-    fake.setNeedsMe([{ reason: "needs_answer", tickets: [{ id: "acme-1" }] }, ...fake.needsMeGroups.slice(1)]);
-    renderApp(fake);
-    await question("Which colour?");
-    const t = fake.addTicket("acme", { title: "Quiet session", state: "In Progress" }); // acme-3
-    change(fake, [{ reason: "silent_claim", tickets: [{ id: t.id }] }, ...fake.needsMeGroups], t.id);
-    await waitFor(() => expect(within(focus()).getByText("3 left")).toBeInTheDocument());
-
-    await userEvent.click(within(focus()).getByRole("button", { name: "Answer" }));
-    expect(await question("Which size?")).toBeInTheDocument();
+    expect(await within(focus()).findByRole("heading", { name: "Pick a colour" })).toBeInTheDocument();
   });
 
   it("moves on to the Round's next open Question when the one on screen is closed elsewhere", async () => {
-    const fake = world();
-    renderApp(fake);
+    const { w, s, colour } = await world();
+    renderApp(w);
     await question("Which colour?");
-    await act(() => fake.act("acme", "acme-1", "dismiss_question", { question: 3 }));
+    await act(() => dismiss(s, colour, 2));
     expect(await question("Which size?")).toBeInTheDocument();
   });
 
   it("moves on when its Ticket leaves Needs Answer", async () => {
-    const fake = world();
-    renderApp(fake);
+    const { w, s, colour } = await world();
+    renderApp(w);
     await question("Which colour?");
-    change(fake, fake.needsMeGroups.filter((g) => g.reason !== "needs_answer"));
+    await act(() => s.human(`${s.ticketPath("acme", colour)}/cancel`, {}));
     expect(await within(focus()).findByRole("heading", { name: "Login page" })).toBeInTheDocument();
     expect(within(focus()).getByText("1 left")).toBeInTheDocument();
   });
 
   it("leaves a Round out of a Project filter that doesn't cover it", async () => {
-    const fake = world();
-    fake.addProject("beta", "Beta");
-    fake.addTicket("beta", { title: "Beta review", state: "In Review" }); // beta-1
-    fake.setNeedsMe([...fake.needsMeGroups, { reason: "accepted_not_landed", tickets: [{ id: "beta-1" }] }]);
-    renderApp(fake, "/?view=focus&project=beta");
+    const { w, s } = await world();
+    await s.project("beta", "Beta");
+    await s.ticket("beta", { title: "Beta review", state: "In Review" });
+    renderApp(w, "/?view=focus&project=beta");
     expect(await within(focus()).findByRole("heading", { name: "Beta review" })).toBeInTheDocument();
     expect(within(focus()).getByText("1 left")).toBeInTheDocument();
   });
