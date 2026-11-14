@@ -269,6 +269,7 @@ func Register(mux *http.ServeMux, c *core.Core) {
 	mux.HandleFunc(PostUsagePath, postUsage(c))
 	mux.HandleFunc(EventsPath, events(c))
 	mux.HandleFunc(TranscriptStreamPath, transcriptStream(c))
+	mux.HandleFunc(ChatStreamPath, chatStream(c))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {
 			// There is no PUT, PATCH or DELETE: writes are named POST actions.
