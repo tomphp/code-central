@@ -67,7 +67,9 @@ export class Scenario extends HttpDriver {
 
   // spec makes a Spec and returns its ID.
   async spec(key: string, s: { title?: string; body?: string; labels?: string[] } = {}): Promise<string> {
-    return (await this.agent(`${this.projectPath(key)}/create_spec`, { title: s.title ?? "A Spec", body: s.body ?? "", ...(s.labels && { labels: s.labels }) })).id;
+    const { id } = await this.agent(`${this.projectPath(key)}/create_spec`, { title: s.title ?? "A Spec", body: s.body ?? "" });
+    if (s.labels?.length) await this.api.addLabels(key, id, s.labels);
+    return id;
   }
 
   // ticket makes a Ticket and takes it to its State the way it gets
