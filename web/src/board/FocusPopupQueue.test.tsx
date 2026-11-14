@@ -64,6 +64,8 @@ async function withBase({ s }: Fake, key: string, state: "diverged" | "missing")
   await s.agent(`${s.projectPath(key)}/report_base`, state === "diverged" ? { state, local: "aaa1111222", remote: "bbb2222333" } : { state });
 }
 
+const sorted = (keys: string[]) => [...keys].sort();
+
 // cancel has the human cancel the Tickets, so they need nothing.
 async function cancel({ s }: Fake, key: string, ...ids: string[]) {
   for (const id of ids) await s.human(`${s.ticketPath(key, id)}/cancel`, {});
@@ -121,7 +123,6 @@ const item = () => waitFor(() => within(popup()).getByRole("article", { name: "F
 const heading = (name: string) => waitFor(() => within(popup()).getByRole("heading", { name }));
 const skip = async () => userEvent.click(await within(popup()).findByRole("button", { name: "Skip" }));
 const noPopup = () => expect(screen.queryByRole("dialog", { name: "Focus popup" })).toBeNull();
-const sorted = (keys: string[]) => [...keys].sort();
 
 describe("the Focus popup's Queue mode", () => {
   it("shows Needs Me's first Focus Item on All Projects, with N left, Skip and Open in Inbox, and no + New ▾", async () => {

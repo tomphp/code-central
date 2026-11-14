@@ -15,7 +15,7 @@
 // and Question numbers are Core's.
 import type { World } from "./core/core";
 import { HttpDriver, worldConnection } from "./driver";
-import type { CIRunView, IssueWatcherReport, PullRequestState, PullRequestWatcherReport, SessionEvent, State, UsageResponse } from "./types";
+import type { CIRunView, ExternalState, IssueWatcherReport, PullRequestState, PullRequestWatcherReport, SessionEvent, State, UsageResponse } from "./types";
 
 export interface QuestionSeed {
   title: string;
@@ -34,6 +34,14 @@ export interface TicketSeed {
   labels?: string[];
 }
 
+// LinkSeed is the external item an Integration links a Ticket or Spec to.
+export interface LinkSeed {
+  integration: string;
+  id: string;
+  url?: string;
+  external_state?: ExternalState;
+}
+
 // Work is the branch and head commit an agent finishes with.
 export interface Work {
   branch: string;
@@ -41,7 +49,7 @@ export interface Work {
 }
 
 // CIOutcome is how a pushed commit's CI run stands.
-export type CIOutcome = "running" | "passed" | "failed";
+export type CIOutcome = "running" | "passed" | "failed" | "cancelled";
 
 // scenario builds on a WASM Core world.
 export function scenario(w: World): Scenario {
@@ -68,7 +76,7 @@ export class Scenario extends HttpDriver {
   // spec makes a Spec and returns its ID.
   async spec(key: string, s: { title?: string; body?: string; labels?: string[] } = {}): Promise<string> {
     const { id } = await this.agent(`${this.projectPath(key)}/create_spec`, { title: s.title ?? "A Spec", body: s.body ?? "" });
-    if (s.labels) await this.agent(`${this.projectPath(key)}/add_labels`, { target: id, labels: s.labels });
+    if (s.labels?.length) await this.api.addLabels(key, id, s.labels);
     return id;
   }
 
@@ -119,6 +127,25 @@ export class Scenario extends HttpDriver {
         break;
     }
     return id;
+  }
+
+  // linkedTicket has an Integration make a Ticket linked to an external
+  // item, Draft unless state says Ready, and returns its ID.
+  async linkedTicket(key: string, t: { title: string; link: LinkSeed; spec?: string; state?: "Draft" | "Ready" }): Promise<string> {
+    const spec = t.spec ?? (await this.defaultSpec(key));
+    return (await this.integration(`${this.projectPath(key)}/integration/create_linked_ticket`, { spec, title: t.title, ...(t.state && { state: t.state }), link: t.link })).id;
+  }
+
+  // linkedSpec has an Integration make a Spec linked to an external item,
+  // and returns its ID.
+  async linkedSpec(key: string, title: string, link: LinkSeed): Promise<string> {
+    return (await this.integration(`${this.projectPath(key)}/integration/create_linked_spec`, { title, link })).id;
+  }
+
+  // modelChoice has the Factory report the model and effort its claude
+  // started the Ticket's latest turn with, claiming the Ticket first if it must.
+  async modelChoice(key: string, id: string, c: { model?: string; effort?: string }) {
+    await this.agent(`${this.ticketPath(key, id)}/report_model_choice`, { claim_id: await this.claimFor(key, id), ...c });
   }
 
   // askRound has the agent post a Round of questions, claiming the Ticket
@@ -179,7 +206,7 @@ export class Scenario extends HttpDriver {
   // ci has the CI Watcher report one run of the commit's workflow ci.yml
   // (run number run) as outcome says.
   async ci(key: string, id: string, outcome: CIOutcome, commit = WORK.commit, run = 1) {
-    const conclusion = outcome === "passed" ? "success" : outcome === "failed" ? "failure" : undefined;
+    const conclusion = { passed: "success", failed: "failure", cancelled: "cancelled", running: undefined }[outcome] as CIRunView["conclusion"];
     const r: Omit<CIRunView, "ignored"> = {
       id: run,
       attempt: 1,
