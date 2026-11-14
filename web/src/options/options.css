@@ -1,6 +1,5 @@
 /* The Options view: one readable column of Options. Its styles hang off
    the layout's own classes, so none of them reach the other views. */
-.options { min-height: 100vh; display: flex; flex-direction: column; }
 .options-head { display: flex; align-items: center; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--border); }
 .options-head h1 { font-size: 18px; margin: 0; }
 .options-back { margin-left: auto; }

@@ -36,7 +36,7 @@ export function CIView({ api, now, version, projects = [], loc, navigate }: CIVi
   const nameOf = (key: string) => projectName(projects, key);
 
   return (
-    <main aria-label="CI" className="ci">
+    <main aria-label="CI" className="ci view-shell">
       <ViewHeader
         title="CI"
         left={<ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />}
@@ -70,7 +70,7 @@ function CIBody({ api, now, version, project, projectName, navigate }: CIBodyPro
   if (data && !first.current) first.current = new Set(data.runs.map(runKey));
 
   return (
-    <div className="ci-body">
+    <div className="view-body">
       {ci.error && <ErrorBanner>{ci.error.message}</ErrorBanner>}
       {data && (
         <>
@@ -81,7 +81,7 @@ function CIBody({ api, now, version, project, projectName, navigate }: CIBodyPro
             ))}
           </section>
           {data.runs.length ? (
-            <table aria-label="CI Runs" className="ci-table">
+            <table aria-label="CI Runs" className="data-table">
               <thead>
                 <tr>
                   <th scope="col">Workflow</th>

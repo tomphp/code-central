@@ -411,3 +411,33 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .view-head-spacer { margin-left: auto; }
 .modal.modal-popup { padding-top: 6vh; }
 .modal-card.modal-wide { width: min(56rem, 96vw); max-height: calc(100vh - 6vh - 4vh); overflow-y: auto; overscroll-behavior: contain; }
+
+/* A view's shell: the full-height column its header and body stack in. */
+.view-shell { min-height: 100vh; display: flex; flex-direction: column; }
+/* A view's body: one centred 1100px column. */
+.view-body { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; }
+.view-body .warning { margin: 0; font-size: 14px; }
+.view-body .muted { font-size: 14px; }
+.view-body h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; }
+/* A data table: compact rows, numbers right-aligned; data-table-mono sets
+   the row headings in monospace. */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.data-table th, .data-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+.data-table tbody th { font-weight: 500; }
+.data-table-mono tbody th { font-family: ui-monospace, monospace; }
+.data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.data-table .label { margin-left: 6px; }
+/* A pulse: a brief background flash when what an element shows changes.
+   Two identical animations, so a new pulse swaps between them and the
+   browser restarts it (focus/pulse.ts). Under reduced motion it is a
+   brightness flash instead. */
+.pulse-0 { animation: pulse-0 600ms ease-out; }
+.pulse-1 { animation: pulse-1 600ms ease-out; }
+@keyframes pulse-0 { 30% { background: var(--surface-2); } }
+@keyframes pulse-1 { 30% { background: var(--surface-2); } }
+@media (prefers-reduced-motion: reduce) {
+  .pulse-0 { animation-name: flash-0; }
+  .pulse-1 { animation-name: flash-1; }
+  @keyframes flash-0 { 30% { filter: brightness(1.4); } }
+  @keyframes flash-1 { 30% { filter: brightness(1.4); } }
+}

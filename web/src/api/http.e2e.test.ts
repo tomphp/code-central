@@ -14,7 +14,8 @@ apiContract("HTTP API against code-central serve", async () => {
   // connection would (ticket 110).
   const streams = new Set<AbortController>();
   const cuttable: typeof fetch = (input, init) => {
-    if (!String(input).endsWith("/transcript/stream")) return fetch(input, init);
+    const url = String(input);
+    if (!url.endsWith("/transcript/stream") && !url.endsWith("/chat/stream")) return fetch(input, init);
     const cut = new AbortController();
     streams.add(cut);
     init?.signal?.addEventListener("abort", () => cut.abort());
