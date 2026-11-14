@@ -1,26 +1,18 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { GitHubIssuesSection } from "./GitHubIssuesSection";
-import { storyApi, storyProject } from "./storyFixtures";
+import { optionsWorld } from "./storyFixtures";
 
 const meta = {
   title: "Options/GitHubIssuesSection",
-  component: GitHubIssuesSection,
-  args: { api: storyApi(), project: storyProject() },
-} satisfies Meta<typeof GitHubIssuesSection>;
+  render: (_args, { loaded }) => <GitHubIssuesSection {...loaded.world} />,
+} satisfies Meta;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const On: Story = {};
-export const Off: Story = {
-  args: {
-    project: storyProject({
-      github_issues: {
-        on: false,
-        repository: "",
-        label: "",
-        new_issues_need_me: false,
-        watcher: { state: "not_reported" },
-      },
-    }),
-  },
+export const On: Story = {
+  ...optionsWorld(async (s, w) => {
+    await w.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "bug", new_issues_need_me: true });
+    await s.reportIssueWatcher("acme", { state: "watching" });
+  }),
 };
+export const Off: Story = { ...optionsWorld() };

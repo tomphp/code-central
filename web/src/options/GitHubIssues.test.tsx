@@ -2,17 +2,26 @@
 // Issues off by default, its repository prefilled from the Push remote,
 // the filter label and New issues need me, and a refused turn-on's
 // problem and fix in place; and while it is on, the Issue Watcher's status
-// (code-central-285). Against FakeApi.
+// (code-central-285). On the WASM Core.
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
-import { FakeApi } from "../api/fake";
+import { newWorld, type World } from "../api/core/core";
+import { scenario } from "../api/scenario";
 
-function renderApp(fake: FakeApi, url = "/?view=project-options&project=acme") {
+function renderApp(w: World, url = "/?view=project-options&project=acme") {
   window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
+  return render(<App api={w.api} now={w.now} />);
 }
+
+const fresh = async (opts: { archived?: boolean } = {}) => {
+  const w = await newWorld();
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  if (opts.archived) await s.archive("acme");
+  return { w, s };
+};
 
 const page = () => screen.getByRole("main", { name: "Project Options" });
 const issues = () => within(page()).getByRole("group", { name: "GitHub Issues" });
@@ -22,19 +31,18 @@ const toggle = (name: string) => within(issues()).getByRole("checkbox", { name }
 const save = () => userEvent.click(within(issues()).getByRole("button", { name: "Save" }));
 // settings is acme's GitHub Issues settings, without the Issue Watcher's
 // status.
-const settings = async (fake: FakeApi) => {
-  const { watcher: _, ...settings } = (await fake.listProjects())[0].github_issues;
+const settings = async (w: World) => {
+  const { watcher: _, ...settings } = (await w.api.listProjects())[0].github_issues;
   return settings;
 };
 const watcher = () => within(issues()).getByRole("region", { name: "Issue Watcher" });
 const findWatcher = async () => within(await findIssues()).findByRole("region", { name: "Issue Watcher" });
-const turnOn = (fake: FakeApi) => fake.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false });
+const turnOn = (w: World) => w.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false });
 
 describe("the GitHub Issues section", () => {
   it("comes after the CI section, off by default with nothing named", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake);
+    const { w } = await fresh();
+    renderApp(w);
 
     await findIssues();
     const sections = Array.from(page().querySelectorAll("fieldset.project-options-section > legend"), (l) => l.textContent);
@@ -53,10 +61,9 @@ describe("the GitHub Issues section", () => {
   });
 
   it("prefills the repository from a GitHub Push remote, and lets the human change it", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
-    renderApp(fake);
+    const { w, s } = await fresh();
+    await s.reportPushRemote("acme", "git@github.com:acme/web.git");
+    renderApp(w);
 
     await findIssues();
     const repository = field("GitHub repository");
@@ -70,15 +77,14 @@ describe("the GitHub Issues section", () => {
     await userEvent.type(repository, "acme/tracker");
     await save();
     expect(await within(issues()).findByRole("status")).toHaveTextContent("Saved");
-    expect(await settings(fake)).toEqual({ on: true, repository: "acme/tracker", label: "", new_issues_need_me: false, spec: "acme-1" });
+    expect(await settings(w)).toEqual({ on: true, repository: "acme/tracker", label: "", new_issues_need_me: false, spec: "acme-1" });
     expect(repository).not.toHaveAccessibleDescription(/Push remote/);
   });
 
   it("turns GitHub Issues on with a filter label and New issues need me, naming the Issues Spec", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    await fake.reportPushRemote("acme", "https://github.com/acme/web.git");
-    renderApp(fake);
+    const { w, s } = await fresh();
+    await s.reportPushRemote("acme", "https://github.com/acme/web.git");
+    renderApp(w);
 
     await findIssues();
     expect(within(issues()).queryByText(/Incoming Issues arrive on/)).toBeNull();
@@ -88,8 +94,8 @@ describe("the GitHub Issues section", () => {
     await save();
 
     expect(await within(issues()).findByRole("status")).toHaveTextContent("Saved");
-    expect(await settings(fake)).toEqual({ on: true, repository: "acme/web", label: "bug", new_issues_need_me: true, spec: "acme-1" });
-    expect((await fake.getSpec("acme", "acme-1")).title).toBe("GitHub Issues: acme/web");
+    expect(await settings(w)).toEqual({ on: true, repository: "acme/web", label: "bug", new_issues_need_me: true, spec: "acme-1" });
+    expect((await w.api.getSpec("acme", "acme-1")).title).toBe("GitHub Issues: acme/web");
     expect(field("Filter label")).toHaveValue("bug");
     expect(within(issues()).getByText(/Incoming Issues arrive on acme-1/)).toBeInTheDocument();
     expect(within(issues()).getByRole("button", { name: "Save" })).toBeDisabled();
@@ -97,19 +103,18 @@ describe("the GitHub Issues section", () => {
     // Turning it off keeps the settings, and the Issues Spec, for later.
     await userEvent.click(toggle("GitHub Issues"));
     await save();
-    await waitFor(async () => expect((await settings(fake)).on).toBe(false));
-    expect(await settings(fake)).toEqual({ on: false, repository: "acme/web", label: "bug", new_issues_need_me: true, spec: "acme-1" });
+    await waitFor(async () => expect((await settings(w)).on).toBe(false));
+    expect(await settings(w)).toEqual({ on: false, repository: "acme/web", label: "bug", new_issues_need_me: true, spec: "acme-1" });
   });
 
   it("shows a refused turn-on's problem and fix in place, leaving GitHub Issues off", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    fake.seedIssuesCheck({
+    const { w } = await fresh();
+    w.setIssuesCheck({
+      problem: "no_triage",
       reason: "The account gh is logged in as can't triage the issues of acme/web.",
       fix: "Give the account gh is logged in as triage permission or more on the repository.",
-      field: "repository",
     });
-    renderApp(fake);
+    renderApp(w);
 
     await findIssues();
     await userEvent.click(toggle("GitHub Issues"));
@@ -120,25 +125,24 @@ describe("the GitHub Issues section", () => {
     expect(alert).toHaveTextContent("Give the account gh is logged in as triage permission");
     expect(field("GitHub repository")).toHaveAttribute("aria-invalid", "true");
     expect(field("GitHub repository")).toHaveAccessibleDescription(/can't triage/);
-    expect(await settings(fake)).toEqual({ on: false, repository: "", label: "", new_issues_need_me: false });
+    expect(await settings(w)).toEqual({ on: false, repository: "", label: "", new_issues_need_me: false });
 
-    fake.seedIssuesCheck({ reason: "gh isn't logged in to GitHub.", fix: "Run gh auth login as the user the service runs as." });
+    w.setIssuesCheck({ problem: "logged_out", reason: "gh isn't logged in to GitHub.", fix: "Run gh auth login as the user the service runs as." });
     await save();
     await waitFor(() => expect(within(issues()).getByRole("alert")).toHaveTextContent("gh isn't logged in to GitHub."));
     expect(toggle("GitHub Issues")).toHaveAccessibleDescription(/gh isn't logged in/);
     expect(field("GitHub repository")).not.toHaveAttribute("aria-invalid");
 
-    fake.seedIssuesCheck();
+    w.setIssuesCheck();
     await save();
     expect(await within(issues()).findByRole("status")).toHaveTextContent("Saved");
     expect(within(issues()).queryByRole("alert")).toBeNull();
-    expect((await settings(fake)).on).toBe(true);
+    expect((await settings(w)).on).toBe(true);
   });
 
   it("shows the service's refusal of a missing repository on its field", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake);
+    const { w } = await fresh();
+    renderApp(w);
 
     await findIssues();
     await userEvent.click(toggle("GitHub Issues"));
@@ -150,12 +154,11 @@ describe("the GitHub Issues section", () => {
   });
 
   it("shows a change made elsewhere, as another tab would", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake);
+    const { w } = await fresh();
+    renderApp(w);
     await findIssues();
 
-    await fake.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "triage", new_issues_need_me: true });
+    await w.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "triage", new_issues_need_me: true });
     await waitFor(() => expect(toggle("GitHub Issues")).toBeChecked());
     expect(field("GitHub repository")).toHaveValue("acme/web");
     expect(field("Filter label")).toHaveValue("triage");
@@ -163,9 +166,8 @@ describe("the GitHub Issues section", () => {
   });
 
   it("is read-only on an Archived Project", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme", { archived: true });
-    renderApp(fake);
+    const { w } = await fresh({ archived: true });
+    renderApp(w);
     await findIssues();
     expect(toggle("GitHub Issues")).toBeDisabled();
     expect(field("GitHub repository")).toBeDisabled();
@@ -173,16 +175,15 @@ describe("the GitHub Issues section", () => {
 
   describe("the Issue Watcher's status", () => {
     it("shows while GitHub Issues is on, live: Starting, an error with its fix, then Watching", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      renderApp(fake);
+      const { w, s } = await fresh();
+      renderApp(w);
       await findIssues();
       expect(within(issues()).queryByRole("region", { name: "Issue Watcher" })).toBeNull();
 
-      await turnOn(fake);
+      await turnOn(w);
       expect(await findWatcher()).toHaveTextContent("Issue Watcher: Starting; it hasn't reported yet.");
 
-      await fake.reportIssueWatcherStatus("acme", {
+      await s.reportIssueWatcher("acme", {
         state: "error",
         problem: "no_triage",
         message: "The account gh is logged in as can't triage the issues of acme/web.",
@@ -193,21 +194,20 @@ describe("the GitHub Issues section", () => {
       expect(watcher()).toHaveTextContent("It tries again every 2 minutes, and goes back to Watching once the cause is fixed.");
       expect(watcher().querySelector(".warning")).not.toBeNull();
 
-      await fake.reportIssueWatcherStatus("acme", { state: "watching" });
+      await s.reportIssueWatcher("acme", { state: "watching" });
       await waitFor(() => expect(watcher()).toHaveTextContent("Issue Watcher: Watching acme/web."));
       expect(watcher()).not.toHaveTextContent("triage permission");
 
       // Turned off, it has no status to show.
-      await fake.setGitHubIssues("acme", { on: false, repository: "acme/web", label: "", new_issues_need_me: false });
+      await w.api.setGitHubIssues("acme", { on: false, repository: "acme/web", label: "", new_issues_need_me: false });
       await waitFor(() => expect(within(issues()).queryByRole("region", { name: "Issue Watcher" })).toBeNull());
     });
 
     it("shows until when GitHub rate-limits it, as Watching, not an error", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      await turnOn(fake);
-      await fake.reportIssueWatcherStatus("acme", { state: "watching", rate_limited_until: "2026-01-05T10:15:00Z" });
-      renderApp(fake);
+      const { w, s } = await fresh();
+      await turnOn(w);
+      await s.reportIssueWatcher("acme", { state: "watching", rate_limited_until: "2026-01-05T10:15:00Z" });
+      renderApp(w);
 
       const status = await findWatcher();
       expect(status).toHaveTextContent("Issue Watcher: Watching acme/web.");
@@ -217,11 +217,10 @@ describe("the GitHub Issues section", () => {
     });
 
     it("shows a crashing Issue Watcher's restarts and last line, which the service restarts by itself", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      await turnOn(fake);
-      fake.seedIssueWatcherCrash("acme", 2, "panic: boom");
-      renderApp(fake);
+      const { w } = await fresh();
+      await turnOn(w);
+      w.reportWatcherCrash("issues", "acme", { restarts: 2, lastLine: "panic: boom", restartAt: new Date(w.now().getTime() + 60_000) });
+      renderApp(w);
 
       const status = await findWatcher();
       expect(status).toHaveTextContent("Issue Watcher: Error. The Issue Watcher crashed, restarted 2 times; the last line it wrote: panic: boom");
@@ -230,12 +229,11 @@ describe("the GitHub Issues section", () => {
     });
 
     it("is the Issue Watcher's own, apart from the CI Watcher's", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      await fake.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
-      await fake.reportCIWatcherStatus("acme", { state: "error", problem: "logged_out", message: "gh isn't logged in to GitHub", fix: "Run gh auth login." });
-      await turnOn(fake);
-      renderApp(fake);
+      const { w, s } = await fresh();
+      await w.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
+      await s.reportCIWatcherStatus("acme", { state: "error", problem: "logged_out", message: "gh isn't logged in to GitHub", fix: "Run gh auth login." });
+      await turnOn(w);
+      renderApp(w);
 
       expect(await findWatcher()).toHaveTextContent("Issue Watcher: Starting");
       expect(watcher()).not.toHaveTextContent("gh auth login");

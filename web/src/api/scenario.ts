@@ -15,7 +15,7 @@
 // and Question numbers are Core's.
 import type { World } from "./core/core";
 import { HttpDriver, worldConnection } from "./driver";
-import type { CIRunView, ExternalState, SessionEvent, State, UsageResponse } from "./types";
+import type { CIRunView, ExternalState, IssueWatcherReport, PullRequestWatcherReport, SessionEvent, State, UsageResponse } from "./types";
 
 export interface QuestionSeed {
   title: string;
@@ -237,6 +237,32 @@ export class Scenario extends HttpDriver {
     if (s.events?.length) await this.postSessionEvents(s.session, s.events);
     if (s.usage?.length) await this.postUsage(s.session, s.usage);
     return claim;
+  }
+
+  // archive has the human put the Project away.
+  async archive(key: string) {
+    await this.api.archiveProject(key);
+  }
+
+  // reportIssueWatcher and reportPullRequestWatcher have the Watchers
+  // report their status, as the Issue Watcher and the Pull Request
+  // Watcher do on each poll.
+  async reportIssueWatcher(key: string, status: IssueWatcherReport) {
+    await this.integration(`${this.projectPath(key)}/integration/report_issue_watcher_status`, status);
+  }
+
+  async reportPullRequestWatcher(key: string, status: PullRequestWatcherReport) {
+    await this.agent(`${this.projectPath(key)}/report_pull_request_watcher_status`, status);
+  }
+
+  // modelIDs has a Factory's session on a Ticket post Usage naming each
+  // model, which is how Core collects a Project's Reported model IDs.
+  async modelIDs(key: string, ids: string[], session = "model-ids") {
+    const id = await this.ticket(key, { title: "Uses models" });
+    await this.factorySession(key, id, {
+      session,
+      usage: ids.map((model) => ({ time: "2026-11-07T09:00:00Z", kind: "implementation", model, input_tokens: 1, cache_write_tokens: 0, cache_read_tokens: 0, output_tokens: 1 })),
+    });
   }
 
   // defaultSpec is the Project's Spec for Tickets that name none: the one

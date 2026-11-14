@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { FakeApi } from "../api/fake";
 import { loadInbox } from "../live";
-import { failCI } from "../ciTesting";
+import { failCIFake as failCI } from "../ciTesting";
 import { isCIItemReason, needsMeOf } from "./model";
 
 // twoProjects is acme with a plain Spec (acme-1) of two Tickets and a
