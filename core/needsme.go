@@ -110,7 +110,12 @@ func groupIndex(r NeedsMeReason) int {
 // Project, in groups in group order (empty groups left out), each group
 // longest-waiting first. Every view renders this order as it comes.
 type NeedsMeView struct {
-	Count  int            `json:"count"`
+	// Count is the Needs Me count across every Project: the sum of
+	// Counts.
+	Count int `json:"count"`
+	// Counts is the Needs Me count of each Project, left out while it has
+	// nothing in Needs Me.
+	Counts map[string]int `json:"counts"`
 	Groups []NeedsMeGroup `json:"groups"`
 }
 
@@ -138,6 +143,9 @@ type NeedsMeRow struct {
 	State   store.State   `json:"state"`
 	Reason  NeedsMeReason `json:"reason"`
 	Since   time.Time     `json:"since"`
+	// FocusItem says the Project's Focus Kinds leave the row's reason on.
+	// Focus Kinds mark rows and filter nothing.
+	FocusItem bool `json:"focus_item"`
 	// Round is the latest Round (Needs Answer).
 	Round *RoundSummary `json:"round,omitempty"`
 	// Failure is the latest Failure Report (Failed).
@@ -241,9 +249,14 @@ type FailureSummary struct {
 // evaluation of each.
 func (c *Core) NeedsMe(context.Context) (NeedsMeView, error) {
 	var all []needsMeItem
+	counts := map[string]int{}
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
-			all = append(all, c.evaluate(r, p).items()...)
+			items := c.evaluate(r, p).items()
+			if n := needsMeCount(items); n > 0 {
+				counts[p.Key] = n
+			}
+			all = append(all, items...)
 		}
 		return nil
 	})
@@ -256,7 +269,10 @@ func (c *Core) NeedsMe(context.Context) (NeedsMeView, error) {
 			cmp.Compare(a.commit, b.commit),
 		)
 	})
-	v := NeedsMeView{Count: len(all), Groups: []NeedsMeGroup{}}
+	v := NeedsMeView{Counts: counts, Groups: []NeedsMeGroup{}}
+	for _, n := range counts {
+		v.Count += n
+	}
 	for _, it := range all {
 		if len(v.Groups) == 0 || v.Groups[len(v.Groups)-1].Reason != it.row.Reason {
 			v.Groups = append(v.Groups, NeedsMeGroup{Reason: it.row.Reason})
@@ -265,6 +281,21 @@ func (c *Core) NeedsMe(context.Context) (NeedsMeView, error) {
 		g.Tickets = append(g.Tickets, it.row)
 	}
 	return v, nil
+}
+
+// needsMeCount is the Needs Me count of one Project's items, as the human
+// sees it: each item counts once, except that a Requirement's Stage
+// Tickets count once in total, as their Requirement.
+func needsMeCount(items []needsMeItem) int {
+	requirements, n := map[string]bool{}, 0
+	for _, it := range items {
+		if rq := it.row.Requirement; rq != nil && rq.Stage != "" {
+			requirements[rq.Spec] = true
+		} else {
+			n++
+		}
+	}
+	return n + len(requirements)
 }
 
 // row is the Needs Me row of its own of t, which waits for tr and no CI

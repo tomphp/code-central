@@ -268,7 +268,9 @@ func (e *evaluation) items() []needsMeItem {
 	e.evaluated()
 	var out []needsMeItem
 	add := func(row NeedsMeRow, n int, commit string) {
-		out = append(out, needsMeItem{row: row, n: n, commit: commit, focus: focusItem(e.p, row.Reason)})
+		focus := focusItem(e.p, row.Reason)
+		row.FocusItem = focus
+		out = append(out, needsMeItem{row: row, n: n, commit: commit, focus: focus})
 	}
 	for _, row := range e.baseRows() {
 		add(row, 0, "")
