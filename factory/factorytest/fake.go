@@ -137,8 +137,12 @@ func runFakeClaude(data string, args []string) int {
 	} else if s, ok := c.Flag("--resume"); ok {
 		c.Session = s
 	}
-	steps := DefaultScript
-	if b, err := os.ReadFile(filepath.Join(data, "scripts", c.Ticket+".json")); err == nil {
+	// A Chat turn's prompts name no Ticket, so its runs go by Chat.
+	key, steps := c.Ticket, DefaultScript
+	if key == "" {
+		key, steps = Chat, DefaultChatScript
+	}
+	if b, err := os.ReadFile(filepath.Join(data, "scripts", key+".json")); err == nil {
 		steps = nil
 		if err := json.Unmarshal(b, &steps); err != nil {
 			fmt.Fprintln(os.Stderr, "fake claude:", err)
@@ -179,7 +183,7 @@ func runFakeClaude(data string, args []string) int {
 		case s.Exit != nil:
 			return *s.Exit
 		case s.Wait:
-			if code, stop := wait(data, c.Ticket, sigs); stop {
+			if code, stop := wait(data, key, sigs); stop {
 				return code
 			}
 		case s.Stdout != "":

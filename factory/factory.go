@@ -190,8 +190,15 @@ func Run(ctx context.Context, args []string, e Env) int {
 	go f.events.run()
 	go f.usage.run()
 	go f.heartbeats.run()
+	chatted := make(chan struct{})
+	go func() {
+		defer close(chatted)
+		f.chatLoop(ctx)
+	}()
 	f.restart(ctx)
 	f.loop(ctx)
+	// A running Chat reply ends before the last flushes.
+	<-chatted
 	// Stopping or draining makes one last flush of each, side by side, so
 	// a hung Code Central holds up the stop one postTimeout at most.
 	var flushed sync.WaitGroup
@@ -243,6 +250,7 @@ type factory struct {
 	// use it.
 	repository repo
 	project    string
+	host       string // the machine, as the Heartbeats name it
 	worktrees  string // <repo-parent>/<repo-dir>.worktrees
 	client     *client.Client
 	events     *sender[core.SessionEvent]  // posts Session Events
@@ -378,6 +386,7 @@ func start(e Env, o options) (*factory, error) {
 	if every <= 0 {
 		every = postEvery
 	}
+	f.host = hostname()
 	f.heartbeats = newFactoryHeartbeater(f)
 	timeout := e.EventPostTimeout
 	if timeout <= 0 {

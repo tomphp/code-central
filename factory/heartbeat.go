@@ -147,12 +147,18 @@ func (f *factory) stopNote() string {
 	return "stopped"
 }
 
-func newFactoryHeartbeater(f *factory) *heartbeater {
+// hostname is the machine the Factory runs on, as its Heartbeats and its
+// next_chat_work calls name it.
+func hostname() string {
 	host, _ := os.Hostname()
 	if host == "" {
 		host = "unknown"
 	}
-	base := core.ReportHeartbeatInput{Factory: factoryName, Host: host, IntervalSeconds: max(1, int(f.o.poll/time.Second)), Chat: !f.o.noChat}
+	return host
+}
+
+func newFactoryHeartbeater(f *factory) *heartbeater {
+	base := core.ReportHeartbeatInput{Factory: factoryName, Host: f.host, IntervalSeconds: max(1, int(f.o.poll/time.Second)), Chat: !f.o.noChat}
 	return newHeartbeater(func(ctx context.Context, in core.ReportHeartbeatInput) error {
 		_, err := f.client.ReportHeartbeat(ctx, f.project, in)
 		return err

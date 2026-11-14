@@ -74,12 +74,17 @@ func (f *factory) resumeArgs(c claim, mc turnChoice) []string {
 	return append([]string{"-p", "--resume", c.SessionID}, f.turnFlags(c, mc)...)
 }
 
-// turnFlags are the flags every start and resume passes: the output
-// format, the permission mode, the turn's model and effort when set, and
-// the Claim's allowed tools and its system prompt, then the Claude Args
-// and a -- that ends the flags, so that a flag taking several values
-// can't swallow the prompt that follows.
+// turnFlags are the flags every start and resume of c passes (flags).
 func (f *factory) turnFlags(c claim, mc turnChoice) []string {
+	return f.flags(mc, c.AllowedTools, c.SystemPrompt)
+}
+
+// flags are the flags every claude turn passes, a Claim's or a Chat's:
+// the output format, the permission mode, the turn's model and effort
+// when set, and the allowed tools and system prompt when there are any,
+// then the Claude Args and a -- that ends the flags, so that a flag
+// taking several values can't swallow the prompt that follows.
+func (f *factory) flags(mc turnChoice, allowedTools []string, systemPrompt string) []string {
 	args := []string{"--output-format", "stream-json", "--verbose"}
 	if f.o.bypass {
 		args = append(args, "--permission-mode", "bypassPermissions")
@@ -92,11 +97,11 @@ func (f *factory) turnFlags(c claim, mc turnChoice) []string {
 	if mc.effort != "" {
 		args = append(args, "--effort", mc.effort)
 	}
-	if len(c.AllowedTools) > 0 {
-		args = append(args, "--allowedTools", strings.Join(c.AllowedTools, ","))
+	if len(allowedTools) > 0 {
+		args = append(args, "--allowedTools", strings.Join(allowedTools, ","))
 	}
-	if c.SystemPrompt != "" {
-		args = append(args, "--append-system-prompt", c.SystemPrompt)
+	if systemPrompt != "" {
+		args = append(args, "--append-system-prompt", systemPrompt)
 	}
 	args = append(args, f.o.claudeArgs...)
 	return append(args, "--")
