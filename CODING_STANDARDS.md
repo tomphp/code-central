@@ -24,6 +24,7 @@ In a changed `*.test.tsx`, a component whose data arrives through a fetch or a s
 
 - Wait for its loaded state before interacting or asserting: a `findBy*` on the element that arrives last, or the file's `loaded()` helper (`loadedDashboard` for the Activity Dashboard), never a `getBy*` straight after `render`.
 - A click on an element inside a block that remounts when its data arrives waits for that data first (the settled count or text), then queries the link fresh.
+- A wait inside a container that can be replaced, such as a popup another popup of the same name takes over from, looks the container up again on each try (`waitFor(() => within(popup()).getByRole(…))`), never `within(await findBy…(container)).findBy…`, which waits on the first one after it has gone.
 - A `waitFor` wraps one assertion, and a passing test never waits a timeout out (`web/src/test-setup.ts` says why).
 - Fix a flaky test by waiting for the thing it raced, never by a sleep or a longer timeout.
 

@@ -280,9 +280,9 @@ describe("the Board's cards", () => {
 
 describe("the Board's Ticket popup", () => {
   const popup = () => screen.getByRole("dialog", { name: "Ticket popup" });
-  // popupHeading waits for the Ticket popup to show its Ticket's title.
-  const popupHeading = async (title: string) =>
-    within(await screen.findByRole("dialog", { name: "Ticket popup" })).findByRole("heading", { name: new RegExp(title) });
+  // popupHeading waits for the Ticket popup to show its Ticket's title,
+  // looking the popup up again each try, as another Ticket's can replace it.
+  const popupHeading = (title: string) => waitFor(() => within(popup()).getByRole("heading", { name: new RegExp(title) }));
   const openCard = async (title: string) => {
     await userEvent.click(within(card(title)).getByText(title));
     return popupHeading(title);
@@ -419,11 +419,12 @@ describe("the Board's Ticket popup", () => {
 
 describe("the Board's Focus popup", () => {
   const popup = () => screen.getByRole("dialog", { name: "Focus popup" });
-  const item = async () => within(await screen.findByRole("dialog", { name: "Focus popup" })).findByRole("article", { name: "Focus Item" });
+  // item and question look the popup up again each try, so a popup
+  // replaced mid-wait isn't waited on.
+  const item = () => waitFor(() => within(popup()).getByRole("article", { name: "Focus Item" }));
   // question waits for the popup to show the Question titled title; each
   // Question is a new Focus Item, so it looks in the popup, not an item.
-  const question = async (title: string) =>
-    within(await screen.findByRole("dialog", { name: "Focus popup" })).findByRole("heading", { name: title });
+  const question = (title: string) => waitFor(() => within(popup()).getByRole("heading", { name: title }));
 
   // asking is world() with acme-7 asking Round 1, its three Questions open,
   // and acme-3 In Review, both in Needs Me.

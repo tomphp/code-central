@@ -41,7 +41,9 @@ function go(url: string) {
 }
 
 const popup = () => screen.getByRole("dialog", { name: "Focus popup" });
-const heading = async (name: string) => within(await screen.findByRole("dialog", { name: "Focus popup" })).findByRole("heading", { name });
+// heading looks the popup up again each try: a card's Focus popup and the
+// automatic one share the name, and one can replace the other mid-wait.
+const heading = (name: string) => waitFor(() => within(popup()).getByRole("heading", { name }));
 const close = async () => userEvent.click(within(popup()).getByRole("button", { name: "Close" }));
 const noPopup = () => expect(screen.queryByRole("dialog", { name: "Focus popup" })).toBeNull();
 

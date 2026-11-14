@@ -77,8 +77,10 @@ function renderQueue(fake: FakeApi, { project, url = "/?view=activity" }: { proj
 }
 
 const popup = () => screen.getByRole("dialog", { name: "Focus popup" });
-const item = async () => within(await screen.findByRole("dialog", { name: "Focus popup" })).findByRole("article", { name: "Focus Item" });
-const heading = async (name: string) => within(await screen.findByRole("dialog", { name: "Focus popup" })).findByRole("heading", { name });
+// item and heading look the popup up again each try, so a popup replaced
+// mid-wait isn't waited on.
+const item = () => waitFor(() => within(popup()).getByRole("article", { name: "Focus Item" }));
+const heading = (name: string) => waitFor(() => within(popup()).getByRole("heading", { name }));
 const skip = async () => userEvent.click(await within(popup()).findByRole("button", { name: "Skip" }));
 const noPopup = () => expect(screen.queryByRole("dialog", { name: "Focus popup" })).toBeNull();
 const sorted = (keys: string[]) => [...keys].sort();
