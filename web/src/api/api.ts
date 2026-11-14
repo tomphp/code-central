@@ -33,6 +33,7 @@ import type {
   SessionUsageFilter,
   SessionUsageView,
   TargetView,
+  ChatMessage, ChatOutcome, Conversation,
   UsageView, GitHubIssuesChange, ModelsChange, NeedsMeReason
 } from "./types";
 
@@ -67,6 +68,29 @@ export interface TranscriptHandlers {
   onTail?(): void;
   // onOpen is called each time the stream is live: first with
   // reconnect=false, then reconnect=true after every reconnect.
+  onOpen?(info: { reconnect: boolean }): void;
+}
+
+// ChatHandlers hear the Conversation stream. A reconnect resumes after the
+// last event, so none is repeated or missed.
+export interface ChatHandlers {
+  // onConversation is called with the Conversation as it stands: first on
+  // opening, and again when the events a reconnect missed are no longer held
+  // or a new Conversation starts (after onReplaced). The client replaces
+  // what it holds.
+  onConversation(c: Conversation): void;
+  // onMessage is a new Chat Message: the human's, or the Claude one a reply
+  // fills.
+  onMessage?(m: ChatMessage): void;
+  // onItem is a new item of the running reply.
+  onItem?(item: HeldSessionEvent): void;
+  // onOutcome is the end of the running reply.
+  onOutcome?(o: { outcome: ChatOutcome; error?: string }): void;
+  // onSession is the session ID and Resume Command the Factory reported.
+  onSession?(s: { session_id: string; resume_command: string }): void;
+  // onReplaced says the Conversation was replaced; the new one follows as
+  // onConversation.
+  onReplaced?(): void;
   onOpen?(info: { reconnect: boolean }): void;
 }
 
@@ -193,6 +217,9 @@ export interface Api {
   // subscribeTranscript follows Claim number claim's Transcript, even
   // after the Claim ends, and returns a function that stops it.
   subscribeTranscript(project: string, id: string, claim: number, handlers: TranscriptHandlers): () => void;
+  // subscribeChat follows the Project's current Conversation (Spec
+  // code-central-633) and returns a function that stops it.
+  subscribeChat(project: string, handlers: ChatHandlers): () => void;
 }
 
 // projectOf is a display ID's Project Key: everything before the last "-".

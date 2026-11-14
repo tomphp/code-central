@@ -9,7 +9,7 @@
 // (Specs and Tickets share one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, NeedsMeReason, PullRequestReport, SessionEvent, State, TicketAcknowledgement, TicketView, UsageResponse } from "./types";
+import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, Conversation, HeldSessionEvent, LandingMethod, ModelsReport, NeedsMeReason, PullRequestReport, SessionEvent, State, TicketAcknowledgement, TicketView, UsageResponse } from "./types";
 import { ApiError, NEEDS_ME_REASONS, TRIAGE_ACTIONS } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -58,6 +58,16 @@ export interface Driver {
   // dropTranscriptStreams drops every open Transcript stream, as a flaky
   // connection would; each reconnects by itself (ticket 110).
   dropTranscriptStreams(): void;
+  // startConversation and sendChatMessage are the human's Chat actions;
+  // sendChatMessage returns once the turn is queued (Spec code-central-633).
+  startConversation(key: string): Promise<void>;
+  sendChatMessage(key: string, text: string): Promise<void>;
+  // takeChatTurn is a Factory's next_chat_work call, which takes the turn
+  // queued, binding the Conversation to it; it returns the Conversation ID.
+  takeChatTurn(key: string, factory: string): Promise<string>;
+  // postChatEvents is the Factory holding the Conversation posting its
+  // reply: text items, and the outcome on the last post.
+  postChatEvents(key: string, factory: string, conversation: string, texts: string[], outcome?: "done" | "stopped" | "failed"): Promise<void>; // no outcome leaves the reply running
   // reportPushRemote reports the Push remote's URL as a Factory does when
   // it starts (code-central-251).
   reportPushRemote(key: string, url: string): Promise<void>;
@@ -2199,6 +2209,86 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         await d.postSessionEvents("sess-busy", [said("2003")]);
         await expect.poll(() => order.length, { timeout: 5000 }).toBe(2002);
         expect(order.at(-1)).toBe("2003");
+      } finally {
+        stop();
+      }
+    });
+
+    // ---- the Conversation stream (Spec code-central-633) ----
+
+    const chatHeartbeat = { factory: "code-central-factory", host: "laptop", state: "online" as const, interval_seconds: 30, chat: true };
+
+    it("follows a Conversation: it opens as it stands, then each message, item and outcome, resuming after a dropped stream with no gaps or repeats", async () => {
+      await d.createProject("acme", "Acme");
+      await d.reportHeartbeat("acme", chatHeartbeat);
+      await d.sendChatMessage("acme", "What is acme?");
+      const conversation = await d.takeChatTurn("acme", "code-central-factory");
+      await d.postChatEvents("acme", "code-central-factory", conversation, ["one"]);
+
+      const heard: string[] = [];
+      const opens: boolean[] = [];
+      let opening: Conversation | undefined;
+      const stop = d.api.subscribeChat("acme", {
+        onConversation: (c) => {
+          opening = c;
+          heard.push("conversation");
+        },
+        onMessage: (m) => heard.push(`message from ${m.from}`),
+        onItem: (i) => heard.push(`item ${i.text}`),
+        onOutcome: (o) => heard.push(`outcome ${o.outcome}`),
+        onReplaced: () => heard.push("replaced"),
+        onOpen: ({ reconnect }) => opens.push(reconnect),
+      });
+      try {
+        await expect.poll(() => heard, { timeout: 5000 }).toEqual(["conversation"]);
+        expect(opening).toMatchObject({ availability: "available", running: true, messages: [{ from: "human", text: "What is acme?" }, { from: "claude", items: [{ text: "one" }] }] });
+
+        await d.postChatEvents("acme", "code-central-factory", conversation, ["two"]);
+        await expect.poll(() => heard.length, { timeout: 5000 }).toBe(2);
+
+        d.dropTranscriptStreams();
+        await d.postChatEvents("acme", "code-central-factory", conversation, ["three"], "done");
+        await expect.poll(() => opens, { timeout: 5000 }).toEqual([false, true]);
+        await expect.poll(() => heard.length, { timeout: 5000 }).toBe(4);
+        expect(heard).toEqual(["conversation", "item two", "item three", "outcome done"]);
+
+        // A second message streams as the human's, then the reply's.
+        await d.sendChatMessage("acme", "And?");
+        await expect.poll(() => heard.length, { timeout: 5000 }).toBe(6);
+        expect(heard.slice(4)).toEqual(["message from human", "message from claude"]);
+      } finally {
+        stop();
+      }
+    });
+
+    it("says replaced when the Conversation is replaced, then sends the new one", async () => {
+      await d.createProject("acme", "Acme");
+      await d.reportHeartbeat("acme", chatHeartbeat);
+      await d.sendChatMessage("acme", "Hello");
+
+      const heard: string[] = [];
+      let latest: Conversation | undefined;
+      const stop = d.api.subscribeChat("acme", {
+        onConversation: (c) => {
+          latest = c;
+          heard.push(`conversation of ${c.messages.length}`);
+        },
+        onReplaced: () => heard.push("replaced"),
+        onMessage: (m) => heard.push(`message from ${m.from}`),
+      });
+      try {
+        await expect.poll(() => heard, { timeout: 5000 }).toEqual(["conversation of 2"]);
+        const first = latest!.id;
+        await d.startConversation("acme");
+        await expect.poll(() => heard, { timeout: 5000 }).toEqual(["conversation of 2", "replaced", "conversation of 0"]);
+        expect(latest!.id).not.toBe(first);
+
+        // The stream goes on with the new Conversation, also across a drop.
+        d.dropTranscriptStreams();
+        await d.sendChatMessage("acme", "Again");
+        await expect.poll(() => heard.length, { timeout: 5000 }).toBe(5);
+        expect(heard.slice(3)).toEqual(["message from human", "message from claude"]);
+        expect(heard.filter((h) => h === "replaced")).toHaveLength(1);
       } finally {
         stop();
       }

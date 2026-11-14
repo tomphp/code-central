@@ -1235,3 +1235,32 @@ export interface SessionUsageResponse {
 export interface SessionUsageView {
   responses: SessionUsageResponse[];
 }
+
+// A Project's Conversation (Spec code-central-633), as the Conversation
+// stream sends it and get_chat returns it.
+export type ChatAvailability = "none" | "available" | "unavailable";
+export type ChatOutcome = "done" | "stopped" | "failed";
+
+// A Chat Message: the human's holds text; Claude's holds items in the
+// shape of Session Events, and an outcome once its reply has ended.
+export interface ChatMessage {
+  from: "human" | "claude";
+  time: string;
+  text?: string;
+  items?: HeldSessionEvent[];
+  outcome?: ChatOutcome;
+  error?: string;
+}
+
+export interface Conversation {
+  availability: ChatAvailability;
+  id?: string;
+  model?: string;
+  effort?: string;
+  factory?: { name: string; host: string };
+  running: boolean;
+  tail: boolean;
+  session_id?: string;
+  resume_command?: string;
+  messages: ChatMessage[];
+}

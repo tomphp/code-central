@@ -56,7 +56,7 @@ type request struct {
 // Transcript streams.
 var streams = func() *http.ServeMux {
 	mux := http.NewServeMux()
-	for _, pattern := range []string{httpapi.EventsPath, httpapi.TranscriptStreamPath} {
+	for _, pattern := range []string{httpapi.EventsPath, httpapi.TranscriptStreamPath, httpapi.ChatStreamPath} {
 		mux.Handle(pattern, http.NotFoundHandler())
 	}
 	return mux

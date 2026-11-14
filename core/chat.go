@@ -160,6 +160,11 @@ type conversation struct {
 	// asked to stop it.
 	running, queued, stopAsked bool
 	turn                       string
+	// base is the sequence number the Conversation's stream events start
+	// after, evSeq the last one given, and log the newest events held
+	// (see FollowChat).
+	base, evSeq int
+	log         []chatEvent
 }
 
 // chats holds each Project's current Conversation and the Factories'
@@ -174,11 +179,13 @@ type chats struct {
 	stops map[heartbeatKey][]string
 	// seen is each Project's availability as chat.changed last announced.
 	seen map[string]ChatAvailability
+	// feeds is each Project's followers (FollowChat).
+	feeds map[string]map[*ChatFeed]struct{}
 }
 
 // newChats is an empty holder.
 func newChats() *chats {
-	return &chats{all: map[string]*conversation{}, polls: map[heartbeatKey]*chatPoll{}, stops: map[heartbeatKey][]string{}, seen: map[string]ChatAvailability{}}
+	return &chats{all: map[string]*conversation{}, polls: map[heartbeatKey]*chatPoll{}, stops: map[heartbeatKey][]string{}, seen: map[string]ChatAvailability{}, feeds: map[string]map[*ChatFeed]struct{}{}}
 }
 
 // chatPoll is one open next_chat_work call. wake fires when there may be
@@ -330,6 +337,8 @@ func (c *Core) SendChatMessage(ctx context.Context, key string, in SendChatMessa
 	cv.messages = append(cv.messages,
 		ChatMessageView{From: ChatFromHuman, Time: now, Text: in.Text},
 		ChatMessageView{From: ChatFromClaude, Time: now})
+	cv.emit(ChatEventMessage, cv.messages[len(cv.messages)-2])
+	cv.emit(ChatEventMessage, cv.messages[len(cv.messages)-1])
 	cv.running, cv.queued, cv.stopAsked, cv.turn = true, true, false, in.Text
 	cv.bound()
 	c.chatChanged(key)
@@ -467,11 +476,9 @@ func (c *Core) PostChatEvents(_ context.Context, key string, in PostChatEventsIn
 	if cv == nil || cv.id != in.Conversation || cv.factory == nil || *cv.factory != from || !cv.running || cv.queued {
 		return
 	}
-	if in.SessionID != "" {
-		cv.sessionID = in.SessionID
-	}
-	if in.ResumeCommand != "" {
-		cv.resumeCommand = in.ResumeCommand
+	if (in.SessionID != "" && in.SessionID != cv.sessionID) || (in.ResumeCommand != "" && in.ResumeCommand != cv.resumeCommand) {
+		cv.sessionID, cv.resumeCommand = cmp.Or(in.SessionID, cv.sessionID), cmp.Or(in.ResumeCommand, cv.resumeCommand)
+		cv.emit(ChatEventSession, ChatSessionEvent{SessionID: cv.sessionID, ResumeCommand: cv.resumeCommand})
 	}
 	reply := &cv.messages[len(cv.messages)-1]
 	now := c.now()
@@ -481,7 +488,9 @@ func (c *Core) PostChatEvents(_ context.Context, key string, in PostChatEventsIn
 		}
 		e.Text, e.Truncated = cutText(e.Text, e.Truncated)
 		cv.lastSeq++
-		reply.Items = append(reply.Items, HeldSessionEvent{Seq: cv.lastSeq, SessionEvent: e})
+		held := HeldSessionEvent{Seq: cv.lastSeq, SessionEvent: e}
+		reply.Items = append(reply.Items, held)
+		cv.emit(ChatEventItem, held)
 	}
 	switch in.Outcome {
 	case ChatDone, ChatStopped, ChatFailed:
@@ -499,6 +508,7 @@ func (c *Core) PostChatEvents(_ context.Context, key string, in PostChatEventsIn
 		c.chatChanged(key)
 	}
 	cv.bound()
+	cs.wakeFeeds(key)
 }
 
 // conversationProject is the Project whose current Conversation has the
@@ -552,6 +562,15 @@ func (c *Core) newConversation(key string, row store.ModelRow, model, effort str
 		model:  cmp.Or(model, row.Model, DefaultChatModel),
 		effort: cmp.Or(effort, row.Effort),
 	}
+	// Events number on from the old Conversation's, so a follower's
+	// Last-Event-ID never matches the new one's. With none (after a
+	// restart), they start past any the last service gave.
+	if old := cs.all[key]; old != nil {
+		cv.base = old.evSeq + 1
+	} else {
+		cv.base = int(c.activity.started.UnixMilli())
+	}
+	cv.evSeq = cv.base
 	cs.all[key] = cv
 	// The new Conversation's notice covers its availability too.
 	cs.seen[key] = chatAvailability(cv, c.chatFactories(key))
@@ -674,12 +693,14 @@ func (c *Core) conversationView(cv *conversation, fs map[heartbeatKey]FactoryVie
 // chatChanged announces a change in the Project's Conversation.
 func (c *Core) chatChanged(key string) {
 	c.events.Publish(events.Event{Type: events.ChatChanged, Project: key})
+	c.chats.wakeFeeds(key)
 }
 
 // end ends cv's running reply with outcome, and error text when failed.
 func (cv *conversation) end(outcome ChatOutcome, errText string) {
 	reply := &cv.messages[len(cv.messages)-1]
 	reply.Outcome, reply.Error = outcome, errText
+	cv.emit(ChatEventOutcome, ChatOutcomeEvent{Outcome: outcome, Error: errText})
 	cv.running, cv.queued, cv.stopAsked, cv.turn = false, false, false, ""
 }
 
