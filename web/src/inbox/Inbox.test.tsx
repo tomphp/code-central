@@ -1,37 +1,79 @@
-// Inbox layout tests: the real App and panels against FakeApi. They check
-// layout only; what the service computes (group order, reasons) is the
-// fake's seeded data, rendered as received.
+// Inbox layout tests: the real App and panels on a WASM Core world built
+// with the scenario builder. They check layout only; what Core computes
+// (group order, reasons) is rendered as received.
 import { render, screen, within, waitFor, act, fireEvent, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
-import { FakeApi } from "../api/fake";
+import type { Api } from "../api/api";
+import { newWorld, type World } from "../api/core/core";
+import { scenario, type Scenario } from "../api/scenario";
+import type { SubmitRequirementResult } from "../api/types";
 
-const minutesAgo = (fake: FakeApi, m: number) => new Date(fake.now.getTime() - m * 60_000).toISOString();
+const minutes = (m: number) => m * 60_000;
 
-function world() {
-  const fake = new FakeApi();
-  fake.addProject("acme", "Acme");
-  fake.addProject("beta", "Beta");
-  fake.addTicket("acme", { title: "Pick a colour", state: "Needs Answer" }); // acme-1
-  fake.addTicket("acme", { title: "Fix login", state: "Failed" }); // acme-2
-  fake.addTicket("acme", { title: "Rough idea", state: "Draft" }); // acme-3
-  fake.addTicket("acme", { title: "Acme ready", state: "Ready" }); // acme-4
-  fake.addTicket("beta", { title: "Beta review", state: "In Review" }); // beta-1
-  fake.addTicket("beta", { title: "Beta ready", state: "Ready" }); // beta-2
-  fake.addTicket("beta", { title: "Beta sketch", state: "Draft" }); // beta-3
-  // Deliberately not the service's usual order: the UI must render as received.
-  fake.setNeedsMe([
-    { reason: "failed", tickets: [{ id: "acme-2", since: minutesAgo(fake, 90), failure: { headline: "Tests fail on CI", reports: 2 } }] },
-    { reason: "needs_answer", tickets: [{ id: "acme-1", since: minutesAgo(fake, 5), round: { number: 1, open: 1, questions: 2 } }] },
-    { reason: "in_review", tickets: [{ id: "beta-1", since: minutesAgo(fake, 3 * 60), summary: "Added the login page" }] },
-  ]);
-  return fake;
+// startWorld is a fresh world with Projects keys, and its scenario.
+async function startWorld(...keys: string[]) {
+  const w = await newWorld();
+  const s = scenario(w);
+  for (const k of keys) await s.project(k, k[0].toUpperCase() + k.slice(1));
+  return { w, s };
 }
 
-function renderApp(fake: FakeApi, url = "/") {
+// requirement submits a Requirement as the human: its Spec and Stage Tickets.
+async function requirement(s: Scenario, key: string, text: string): Promise<SubmitRequirementResult> {
+  return s.human(`${s.projectPath(key)}/submit_requirement`, { text });
+}
+
+// done takes a Ready Ticket to Done by hand.
+async function done(s: Scenario, key: string, id: string) {
+  await s.human(`${s.ticketPath(key, id)}/move`, { to_state: "Done" });
+}
+
+// doneStages takes every Stage Ticket of a Requirement to Done.
+async function doneStages(s: Scenario, key: string, r: SubmitRequirementResult) {
+  for (const t of r.stages) await done(s, key, t.id);
+}
+
+// world is Projects acme and beta. acme: acme-1 is its Spec, acme-2 Needs
+// Answer (Round 1 with one of two Questions open, 5m ago), acme-3 Failed
+// twice (90m ago), acme-4 a Draft, acme-5 Ready. beta: beta-1 is its Spec,
+// beta-2 In Review (3h ago), beta-3 Ready, beta-4 a Draft.
+async function world() {
+  const { w, s } = await startWorld("acme", "beta");
+  await s.ticket("acme", { title: "Pick a colour" }); // acme-2
+  await s.ticket("acme", { title: "Fix login" }); // acme-3
+  await s.ticket("acme", { title: "Rough idea", state: "Draft" }); // acme-4
+  await s.ticket("acme", { title: "Acme ready" }); // acme-5
+  await s.ticket("beta", { title: "Beta review" }); // beta-2
+  await s.ticket("beta", { title: "Beta ready" }); // beta-3
+  await s.ticket("beta", { title: "Beta sketch", state: "Draft" }); // beta-4
+  await s.inReview("beta", "beta-2", undefined, "Added the login page");
+  w.advance(minutes(90));
+  await s.fail("acme", "acme-3", { ...REPORT_OF, what_broke: "Tests fail on CI" });
+  await s.human(`${s.ticketPath("acme", "acme-3")}/send_back`, {});
+  await s.fail("acme", "acme-3", { ...REPORT_OF, what_broke: "Tests fail on CI" });
+  w.advance(minutes(85));
+  await s.askRound("acme", "acme-2", [
+    { title: "Which colour?", body: "Red or blue" },
+    { title: "Which size?", body: "S or M" },
+  ]);
+  await s.human(`${s.ticketPath("acme", "acme-2")}/answer`, { question: 1, text: "Blue" });
+  w.advance(minutes(5));
+  return w;
+}
+
+const REPORT_OF = { what_broke: "", why: "The fixture server never starts", what_to_fix: "Start the fixture in TestMain", where_work_stands: "Branch impl, tests red" };
+
+function renderApp(w: World, url = "/", api: Api = w.api) {
   window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
+  return render(<App api={api} now={w.now} />);
+}
+
+// cancelAll cancels the Tickets, as the human does to clear them from Needs Me.
+async function cancelAll(w: World, key: string, ids: string[]) {
+  const s = scenario(w);
+  for (const id of ids) await s.human(`${s.ticketPath(key, id)}/cancel`, {});
 }
 
 const list = () => screen.getByRole("main", { name: "Tickets" });
@@ -44,42 +86,44 @@ const params = () => new URLSearchParams(window.location.search);
 
 describe("the triage inbox", () => {
   it("renders Needs Me groups in the order the service returns, each row with its wait and detail", async () => {
-    renderApp(world());
-    await waitFor(() => expect(groupNames()).toEqual(["failed", "needs_answer", "in_review"]));
+    renderApp(await world());
+    await waitFor(() => expect(groupNames()).toEqual(["needs_answer", "failed", "in_review"]));
 
-    const row = within(list()).getByRole("link", { name: /acme-2/ });
+    const row = within(list()).getByRole("link", { name: /acme-3/ });
     expect(row).toHaveTextContent("Fix login");
     expect(row).toHaveTextContent("1h");
     expect(row).toHaveTextContent("Tests fail on CI · failed 2×");
-    expect(within(list()).getByRole("link", { name: /acme-1/ })).toHaveTextContent("1 of 2 open · Round 1");
+    expect(within(list()).getByRole("link", { name: /acme-2/ })).toHaveTextContent("1 of 2 open · Round 1");
   });
 
   it("keeps Drafts below in a collapsed group", async () => {
-    renderApp(world());
+    renderApp(await world());
     const drafts = await within(list()).findByText(/Drafts \(2\)/);
     const group = drafts.closest("details")!;
     expect(group).not.toHaveAttribute("open");
-    expect(within(group).getByRole("link", { name: /acme-3/, hidden: true })).not.toBeVisible();
+    expect(within(group).getByRole("link", { name: /acme-4/, hidden: true })).not.toBeVisible();
     // Drafts come after every Needs Me group.
     const sections = [...list().querySelectorAll("section, details")];
     expect(sections.at(-1)).toBe(group);
   });
 
   it("shows a State as a flat list with a dot on rows that need the human", async () => {
-    const fake = world();
-    fake.updateTicket("acme-4", { state: "Failed" }); // a second Failed Ticket, not in Needs Me
-    renderApp(fake);
+    // Core puts every Failed Ticket in Needs Me, so the row with no dot is a Ready one.
+    renderApp(await world());
     await userEvent.click(await within(nav()).findByRole("button", { name: /^Failed/ }));
 
-    await waitFor(() => expect(rowIds()).toEqual(["acme-2", "acme-4"]));
+    await waitFor(() => expect(rowIds()).toEqual(["acme-3"]));
     expect(groupNames()).toEqual([]);
-    expect(within(list()).getByRole("link", { name: /acme-2/ })).toContainElement(screen.getByLabelText("Needs you"));
-    expect(within(within(list()).getByRole("link", { name: /acme-4/ })).queryByLabelText("Needs you")).toBeNull();
+    expect(within(list()).getByRole("link", { name: /acme-3/ })).toContainElement(screen.getByLabelText("Needs you"));
     expect(params().get("state")).toBe("Failed");
+
+    await userEvent.click(within(nav()).getByRole("button", { name: /^Ready/ }));
+    await waitFor(() => expect(rowIds()).toEqual(["acme-5", "beta-3"]));
+    expect(within(within(list()).getByRole("link", { name: /acme-5/ })).queryByLabelText("Needs you")).toBeNull();
   });
 
   it("lists Projects with their Needs Me counts and a View list with counts", async () => {
-    renderApp(world());
+    renderApp(await world());
     await waitFor(() => expect(within(nav()).getByRole("button", { name: "Acme 2" })).toBeInTheDocument());
     expect(within(nav()).getByRole("button", { name: "Beta 1" })).toBeInTheDocument();
     expect(within(nav()).getByRole("button", { name: "All Projects 3" })).toBeInTheDocument();
@@ -89,38 +133,38 @@ describe("the triage inbox", () => {
   });
 
   it("combines the Project and View filters", async () => {
-    renderApp(world());
+    renderApp(await world());
     await userEvent.click(await within(nav()).findByRole("button", { name: /^Beta/ }));
-    await waitFor(() => expect(rowIds()).toEqual(["beta-1", "beta-3"])); // Needs Me, then Drafts
+    await waitFor(() => expect(rowIds()).toEqual(["beta-2", "beta-4"])); // Needs Me, then Drafts
     expect(within(nav()).getByRole("button", { name: "Needs Me 1" })).toBeInTheDocument();
     expect(within(nav()).getByRole("button", { name: "Ready 1" })).toBeInTheDocument();
 
     await userEvent.click(within(nav()).getByRole("button", { name: /^Ready/ }));
-    await waitFor(() => expect(rowIds()).toEqual(["beta-2"]));
+    await waitFor(() => expect(rowIds()).toEqual(["beta-3"]));
     expect(params().get("project")).toBe("beta");
     expect(params().get("state")).toBe("Ready");
 
     await userEvent.click(within(nav()).getByRole("button", { name: /^All Projects/ }));
-    await waitFor(() => expect(rowIds()).toEqual(["acme-4", "beta-2"]));
+    await waitFor(() => expect(rowIds()).toEqual(["acme-5", "beta-3"]));
   });
 
   it("puts the view and the selected Ticket in the URL, and opens them from it", async () => {
-    const fake = world();
-    const { unmount } = renderApp(fake);
-    await userEvent.click(await within(list()).findByRole("link", { name: /acme-1/ }));
+    const w = await world();
+    const { unmount } = renderApp(w);
+    await userEvent.click(await within(list()).findByRole("link", { name: /acme-2/ }));
     expect(params().get("view")).toBe("inbox");
-    expect(params().get("ticket")).toBe("acme-1");
+    expect(params().get("ticket")).toBe("acme-2");
     expect(await within(detail()).findByRole("heading", { name: "Pick a colour" })).toBeInTheDocument();
     unmount();
 
-    renderApp(fake, "/?view=inbox&state=Ready&ticket=beta-2");
+    renderApp(w, "/?view=inbox&state=Ready&ticket=beta-3");
     expect(await within(detail()).findByRole("heading", { name: "Beta ready" })).toBeInTheDocument();
-    await waitFor(() => expect(rowIds()).toEqual(["acme-4", "beta-2"]));
-    expect(within(list()).getByRole("link", { name: /beta-2/ })).toHaveAttribute("aria-current", "true");
+    await waitFor(() => expect(rowIds()).toEqual(["acme-5", "beta-3"]));
+    expect(within(list()).getByRole("link", { name: /beta-3/ })).toHaveAttribute("aria-current", "true");
   });
 
   it("shows the selected Ticket with its action panel slot first", async () => {
-    renderApp(world(), "/?view=inbox&ticket=acme-2");
+    renderApp(await world(), "/?view=inbox&ticket=acme-3");
     const heading = await within(detail()).findByRole("heading", { name: "Fix login" });
     const slot = within(detail()).getByRole("region", { name: "Action panel" });
     const body = within(detail()).getByRole("article", { name: "Ticket details" });
@@ -130,43 +174,44 @@ describe("the triage inbox", () => {
   });
 
   it("refetches after each change notice", async () => {
-    const fake = world();
-    renderApp(fake);
-    await waitFor(() => expect(rowIds()).toContain("acme-1"));
+    const w = await world();
+    renderApp(w);
+    await waitFor(() => expect(rowIds()).toContain("acme-2"));
 
-    const t = fake.addTicket("beta", { title: "Another sketch" }); // a Draft; sends ticket.changed
-    await waitFor(() => expect(rowIds()).toContain(t.id));
+    const id = await scenario(w).ticket("beta", { title: "Another sketch", state: "Draft" }); // sends ticket.changed
+    await waitFor(() => expect(rowIds()).toContain(id));
     expect(within(list()).getByText(/Drafts \(3\)/)).toBeInTheDocument();
   });
 
   it("refetches Needs Me after a notice and everything after a reconnect", async () => {
-    const fake = world();
-    renderApp(fake, "/?view=inbox&ticket=beta-2");
-    await waitFor(() => expect(rowIds()).toContain("acme-1"));
+    const w = await world();
+    renderApp(w, "/?view=inbox&ticket=beta-3");
+    await waitFor(() => expect(rowIds()).toContain("acme-2"));
     await within(detail()).findByRole("heading", { name: "Beta ready" });
 
-    fake.setNeedsMe([]);
-    act(() => fake.emit({ type: "ticket.changed", project: "acme", id: "acme-1" }));
+    await cancelAll(w, "acme", ["acme-2", "acme-3"]);
+    await cancelAll(w, "beta", ["beta-2"]);
     await waitFor(() => expect(groupNames()).toEqual([]));
     expect(screen.getByText("Nothing needs you.")).toBeInTheDocument();
 
     // A missed notice: the feed drops, the Ticket changes, the feed returns.
-    fake.updateTicket("beta-2", { title: "Beta renamed" });
-    fake.calls.length = 0;
-    act(() => fake.reconnect());
+    w.calls.length = 0;
+    w.dropStreams();
+    const s = scenario(w);
+    await s.human(`${s.ticketPath("beta", "beta-3")}/edit_ticket`, { title: "Beta renamed" });
     expect(await within(detail()).findByRole("heading", { name: "Beta renamed" })).toBeInTheDocument();
-    expect(fake.calls).toEqual(expect.arrayContaining(["listProjects", "needsMe", "findTickets", "getTicket"]));
+    expect(w.calls).toEqual(expect.arrayContaining(["listProjects", "needsMe", "findTickets", "getTicket"]));
   });
 
   it("shows the Needs Me count in the tab title and favicon", async () => {
-    const fake = world();
-    renderApp(fake);
+    const w = await world();
+    renderApp(w);
     await waitFor(() => expect(document.title).toBe("(3) Code Central"));
     const icon = () => document.querySelector<HTMLLinkElement>("link[rel=icon]")!;
     expect(decodeURIComponent(icon().href)).toContain(">3<");
 
-    fake.setNeedsMe([]);
-    act(() => fake.emit({ type: "ticket.changed", project: "acme", id: "acme-1" }));
+    await cancelAll(w, "acme", ["acme-2", "acme-3"]);
+    await cancelAll(w, "beta", ["beta-2"]);
     await waitFor(() => expect(document.title).toBe("Code Central"));
     expect(decodeURIComponent(icon().href)).not.toMatch(/>\d+</);
   });
@@ -175,33 +220,24 @@ describe("the triage inbox", () => {
 // requirements is a Project with three Requirements and a plain Ticket:
 // acme-1 at Spec, which needs an answer; acme-5 in Build, with two
 // implementation Tickets needing the human; acme-11 waiting for a Factory
-// to claim Grilling.
+// to claim Grilling. acme-15 is a plain Spec, with acme-16 Failed on it.
 async function requirements() {
-  const fake = new FakeApi();
-  fake.addProject("acme", "Acme");
-  await fake.submitRequirement("acme", "Export a Spec as Markdown"); // acme-1, stages acme-2..4
-  fake.updateTicket("acme-2", { state: "Done" });
-  fake.updateTicket("acme-3", { state: "Needs Answer" });
-  const title = "Archive finished Projects";
-  const building = await fake.submitRequirement("acme", title); // acme-5, stages acme-6..8
-  for (const t of building.stages) fake.updateTicket(t.id, { state: "Done" });
-  const spec = { id: building.spec.id, title };
-  fake.addTicket("acme", { title: "Archive in the Project menu", state: "In Review", spec }); // acme-9
-  fake.addTicket("acme", { title: "CLI: archive-project", state: "Failed", spec }); // acme-10
-  await fake.submitRequirement("acme", "Render Markdown"); // acme-11, stages acme-12..14
-  fake.addTicket("acme", { title: "Plain work", state: "Failed" }); // acme-15
-  fake.setNeedsMe([
-    { reason: "needs_answer", tickets: [{ id: "acme-3", round: { number: 1, open: 1, questions: 1 } }] },
-    {
-      reason: "failed",
-      tickets: [
-        { id: "acme-10", failure: { headline: "Tests fail", reports: 1 } },
-        { id: "acme-15", failure: { headline: "Lint", reports: 1 } },
-      ],
-    },
-    { reason: "in_review", tickets: [{ id: "acme-9", summary: "Menu item added" }] },
-  ]);
-  return fake;
+  const { w, s } = await startWorld("acme");
+  const first = await requirement(s, "acme", "Export a Spec as Markdown"); // acme-1, stages acme-2..4
+  await done(s, "acme", first.stages[0].id);
+  await s.askRound("acme", first.stages[1].id, [{ title: "Which format?", body: "CommonMark or GFM" }]);
+  const building = await requirement(s, "acme", "Archive finished Projects"); // acme-5, stages acme-6..8
+  await doneStages(s, "acme", building);
+  const spec = building.spec.id;
+  const review = await s.ticket("acme", { title: "Archive in the Project menu", spec }); // acme-9
+  const failed = await s.ticket("acme", { title: "CLI: archive-project", spec }); // acme-10
+  await requirement(s, "acme", "Render Markdown"); // acme-11, stages acme-12..14
+  const plain = await s.spec("acme", { title: "Plain" }); // acme-15
+  const lint = await s.ticket("acme", { title: "Plain work", spec: plain }); // acme-16
+  await s.inReview("acme", review, undefined, "Menu item added");
+  await s.fail("acme", failed, { ...REPORT_OF, what_broke: "Tests fail" });
+  await s.fail("acme", lint, { ...REPORT_OF, what_broke: "Lint" });
+  return w;
 }
 
 const groupHeads = () => within(list()).queryAllByRole("heading", { level: 3 }).map((h) => h.textContent);
@@ -219,10 +255,10 @@ describe("Requirements in Needs Me", () => {
   });
 
   it("keeps Requirements not waiting on the human in a collapsed in-flight group", async () => {
-    const fake = await requirements();
-    const done = await fake.submitRequirement("acme", "Finished work"); // acme-16
-    for (const t of done.stages) fake.updateTicket(t.id, { state: "Done" });
-    renderApp(fake);
+    const w = await requirements();
+    const s = scenario(w);
+    await doneStages(s, "acme", await requirement(s, "acme", "Finished work")); // acme-17
+    renderApp(w);
     const summary = await within(list()).findByText("Requirements in flight (1): not waiting on you");
     const group = summary.closest("details")!;
     expect(group).not.toHaveAttribute("open");
@@ -245,34 +281,22 @@ describe("Requirements in Needs Me", () => {
     renderApp(await requirements());
     const failed = await within(list()).findByRole("region", { name: "Failed" });
     expect(within(failed).getByRole("link", { name: /acme-10/ })).toHaveTextContent("↳ Archive finished Projects");
-    expect(within(failed).getByRole("link", { name: /acme-15/ })).not.toHaveTextContent("↳");
+    expect(within(failed).getByRole("link", { name: /acme-16/ })).not.toHaveTextContent("↳");
     const review = within(list()).getByRole("region", { name: "In Review" });
     expect(within(review).getByRole("link", { name: /acme-9/ })).toHaveTextContent("↳ Archive finished Projects");
   });
 
   it("counts a Requirement row once in Needs Me, in place of its Stage Ticket", async () => {
     renderApp(await requirements());
-    // acme-1's row, acme-9, acme-10 and acme-15.
+    // acme-1's row, acme-9, acme-10 and acme-16.
     await waitFor(() => expect(within(nav()).getByRole("button", { name: "Needs Me 4" })).toBeInTheDocument());
   });
 
   it("counts Requirement rows, not Stage Tickets, in the tab title and All Projects too", async () => {
-    const fake = await requirements();
-    // A second Stage Ticket of acme-1 needing the human is still one row.
-    fake.updateTicket("acme-2", { state: "Failed" });
-    fake.setNeedsMe([
-      { reason: "needs_answer", tickets: [{ id: "acme-3", round: { number: 1, open: 1, questions: 1 } }] },
-      {
-        reason: "failed",
-        tickets: [
-          { id: "acme-2", failure: { headline: "Lost", reports: 1 } },
-          { id: "acme-10", failure: { headline: "Tests fail", reports: 1 } },
-          { id: "acme-15", failure: { headline: "Lint", reports: 1 } },
-        ],
-      },
-      { reason: "in_review", tickets: [{ id: "acme-9", summary: "Menu item added" }] },
-    ]);
-    renderApp(fake);
+    const w = await requirements();
+    // Core runs a Requirement's Stages one at a time, so only one Stage Ticket
+    // of acme-1 can need the human; it is one row.
+    renderApp(w);
     await waitFor(() => expect(within(nav()).getByRole("button", { name: "Needs Me 4" })).toBeInTheDocument());
     expect(within(nav()).getByRole("button", { name: "All Projects 4" })).toBeInTheDocument();
     await waitFor(() => expect(document.title).toBe("(4) Code Central"));
@@ -294,54 +318,60 @@ describe("Stage Tickets in State views", () => {
   });
 
   it("lists other Tickets as before, the fold after them", async () => {
-    const fake = await requirements();
-    fake.addTicket("acme", { title: "Shipped", state: "Done" }); // acme-16
-    renderApp(fake, "/?view=inbox&state=Done");
-    // Besides acme-16, acme-2 and the three Stages of acme-5 are Done.
+    const w = await requirements();
+    const s = scenario(w);
+    await s.ticket("acme", { title: "Shipped", spec: "acme-15", state: "Done" }); // acme-17
+    renderApp(w, "/?view=inbox&state=Done");
+    // Besides acme-17, acme-2 and the three Stages of acme-5 are Done.
     await waitFor(() => expect(within(list()).getByText("Stage Tickets (4): run by a Factory")).toBeInTheDocument());
     expect(within(nav()).getByRole("button", { name: "Done 1" })).toBeInTheDocument();
-    expect(rowIds()[0]).toBe("acme-16");
+    expect(rowIds()[0]).toBe("acme-17");
     expect(rowIds()).toHaveLength(5);
-    expect(within(list()).getByRole("link", { name: /acme-16/ })).toBeVisible();
+    expect(within(list()).getByRole("link", { name: /acme-17/ })).toBeVisible();
   });
 });
 
 // inProgress is two In Progress Tickets with live Claims, and a Needs
 // Answer one whose live Claim has a latest event too.
-function inProgress() {
-  const fake = new FakeApi();
-  fake.addProject("acme", "Acme");
-  const claim = (session_id: string) => [{ number: 1, session_id, started: minutesAgo(fake, 30), last_activity: minutesAgo(fake, 1) }];
-  fake.addTicket("acme", { title: "Busy work", state: "In Progress", claims: claim("s-busy") }); // acme-1
-  fake.addTicket("acme", { title: "Quiet work", state: "In Progress", claims: claim("s-quiet") }); // acme-2
-  fake.addTicket("acme", { title: "Asking work", state: "Needs Answer", claims: claim("s-asking") }); // acme-3
-  fake.postSessionEvents("s-busy", [{ time: minutesAgo(fake, 2), kind: "tool_call", tool: "Read", text: "Read: core/core.go" }]);
-  fake.postSessionEvents("s-asking", [{ time: minutesAgo(fake, 2), kind: "factory", text: "acme-3 posted a Round" }]);
-  return fake;
+async function inProgress() {
+  const { w, s } = await startWorld("acme");
+  const busy = await s.ticket("acme", { title: "Busy work" }); // acme-2, on the Project's Spec acme-1
+  const quiet = await s.ticket("acme", { title: "Quiet work" }); // acme-3
+  const asking = await s.ticket("acme", { title: "Asking work" }); // acme-4
+  await s.factorySession("acme", busy, {
+    session: "s-busy",
+    events: [{ time: w.now().toISOString(), kind: "tool_call", tool: "Read", text: "Read: core/core.go" }],
+  });
+  await s.factorySession("acme", quiet, { session: "s-quiet" });
+  await s.factorySession("acme", asking, { session: "s-asking" });
+  await s.askRound("acme", asking);
+  await s.postSessionEvents("s-asking", [{ time: w.now().toISOString(), kind: "factory", text: "acme-4 posted a Round" }]);
+  w.advance(minutes(2));
+  return { w, s };
 }
 
 describe("the latest Session Event in the In Progress list", () => {
   it("shows each row's latest event faintly under its title, and nothing on a row with none", async () => {
-    renderApp(inProgress(), "/?view=inbox&state=In%20Progress");
-    const busy = await within(list()).findByRole("link", { name: /acme-1/ });
+    renderApp((await inProgress()).w, "/?view=inbox&state=In%20Progress");
+    const busy = await within(list()).findByRole("link", { name: /acme-2/ });
     const line = within(busy).getByText("Read: core/core.go · 2m ago");
     expect(line).toHaveClass("row-detail", "latest-event");
-    const quiet = within(list()).getByRole("link", { name: /acme-2/ });
-    expect(quiet.textContent).toBe("acme-2Quiet work");
+    const quiet = within(list()).getByRole("link", { name: /acme-3/ });
+    expect(quiet.textContent).toBe("acme-3Quiet work");
   });
 
   it("updates on the live feed without a reload", async () => {
-    const fake = inProgress();
-    renderApp(fake, "/?view=inbox&state=In%20Progress");
+    const { w, s } = await inProgress();
+    renderApp(w, "/?view=inbox&state=In%20Progress");
     await within(list()).findByText("Read: core/core.go · 2m ago");
-    act(() => fake.postSessionEvents("s-quiet", [{ time: fake.now.toISOString(), kind: "text", text: "Writing the test first." }]));
-    const quiet = within(list()).getByRole("link", { name: /acme-2/ });
+    await act(() => s.postSessionEvents("s-quiet", [{ time: w.now().toISOString(), kind: "text", text: "Writing the test first." }]));
+    const quiet = within(list()).getByRole("link", { name: /acme-3/ });
     expect(await within(quiet).findByText("Writing the test first. · just now")).toBeInTheDocument();
   });
 
   it("leaves it off rows in other States", async () => {
-    renderApp(inProgress(), "/?view=inbox&state=Needs%20Answer");
-    const asking = await within(list()).findByRole("link", { name: /acme-3/ });
+    renderApp((await inProgress()).w, "/?view=inbox&state=Needs%20Answer");
+    const asking = await within(list()).findByRole("link", { name: /acme-4/ });
     expect(asking).not.toHaveTextContent("posted a Round");
   });
 });
@@ -349,25 +379,22 @@ describe("the latest Session Event in the In Progress list", () => {
 // wayfinding is a Map acme-1 whose Charting Ticket acme-2 needs an answer
 // and whose Prototype acme-3 is In Review, and a Prototype acme-5 on the
 // plain Spec acme-4, also In Review.
-function wayfinding() {
-  const fake = new FakeApi();
-  fake.addProject("acme", "Acme");
-  const map = fake.addSpec("acme", { title: "Find the way", labels: ["wayfinder:map"] }); // acme-1
-  const onMap = { id: map.id, title: map.title };
-  fake.addTicket("acme", { title: "Charting: Find the way", state: "Needs Answer", spec: onMap, labels: ["wayfinder:chart"] }); // acme-2
-  fake.addTicket("acme", { title: "Prototype: the graph", state: "In Review", spec: onMap, labels: ["prototype"] }); // acme-3
-  const plain = fake.addSpec("acme", { title: "Login" }); // acme-4
-  fake.addTicket("acme", { title: "Prototype: the form", state: "In Review", spec: { id: plain.id, title: plain.title }, labels: ["prototype"] }); // acme-5
-  fake.setNeedsMe([
-    { reason: "needs_answer", tickets: [{ id: "acme-2", round: { number: 1, open: 1, questions: 1 } }] },
-    { reason: "in_review", tickets: [{ id: "acme-3" }, { id: "acme-5" }] },
-  ]);
-  return fake;
+async function wayfinding() {
+  const { w, s } = await startWorld("acme");
+  const map = await s.human(`${s.projectPath("acme")}/submit_map`, { text: "Find the way" }); // acme-1, Charting Ticket acme-2
+  await s.askRound("acme", map.charting.id);
+  const prototype = async (spec: string, text: string) => (await s.human(`${s.projectPath("acme")}/submit_prototype`, { spec, text })).id;
+  const graph = await prototype(map.spec.id, "Prototype: the graph"); // acme-3
+  const plain = await s.spec("acme", { title: "Login" }); // acme-4
+  const form = await prototype(plain, "Prototype: the form"); // acme-5
+  await s.inReview("acme", graph);
+  await s.inReview("acme", form);
+  return w;
 }
 
 describe("Map Tickets and Prototypes in Needs Me", () => {
   it("lists each as its own row with its Map's or Spec's name, and a Prototype badge on a Prototype", async () => {
-    renderApp(wayfinding());
+    renderApp(await wayfinding());
     await waitFor(() => expect(rowIds()).toEqual(["acme-2", "acme-3", "acme-5"]));
     expect(groupHeads()).toEqual(["Questions 1", "In Review 2"]);
     const row = (id: string) => within(list()).getByRole("link", { name: new RegExp(id) });
@@ -387,7 +414,7 @@ describe("the sidebar's top row: + New and Focus", () => {
   const item = (name: string) => within(screen.getByRole("menu")).getByRole("menuitem", { name });
 
   it("shows + New, its ▾ and Focus at the top of the sidebar", async () => {
-    renderApp(world());
+    renderApp(await world());
     const newButton = await within(nav()).findByRole("button", { name: "New requirement" });
     expect(newButton).toHaveTextContent("+ New");
     expect(menuButton()).toHaveAttribute("aria-haspopup", "menu");
@@ -398,20 +425,20 @@ describe("the sidebar's top row: + New and Focus", () => {
   });
 
   it("shows + New and its ▾ as primary", async () => {
-    renderApp(world());
+    renderApp(await world());
     expect(await within(nav()).findByRole("button", { name: "New requirement" })).toHaveClass("primary");
     expect(menuButton()).toHaveClass("primary");
   });
 
   it("opens the New requirement dialog from + New", async () => {
-    renderApp(world());
+    renderApp(await world());
     await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
     expect(screen.getByRole("dialog", { name: "New requirement" })).toBeVisible();
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
   it("opens a menu of Requirement, Map and Small Change from ▾, each with its hint", async () => {
-    renderApp(world());
+    renderApp(await world());
     await userEvent.click(await findMenuButton());
     expect(menuButton()).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("menu", { name: "More to create" })).toBeVisible();
@@ -431,8 +458,8 @@ describe("the sidebar's top row: + New and Focus", () => {
   });
 
   it("opens Small Change's dialog from the menu, and submits to the new Ticket", async () => {
-    const fake = world();
-    renderApp(fake, "/?project=acme");
+    const w = await world();
+    renderApp(w, "/?project=acme");
     await userEvent.click(await findMenuButton());
     await userEvent.click(item("Small Change"));
 
@@ -448,27 +475,31 @@ describe("the sidebar's top row: + New and Focus", () => {
     await userEvent.type(box, "Rename the button");
     await userEvent.click(submit);
 
-    expect(fake.calls).toContain("submitSmallChange");
+    expect(w.calls).toContain("submitSmallChange");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(params().get("ticket")).toBe("acme-6");
+    const created = (await w.api.findTickets("acme")).find((t) => t.title === "Rename the button")!;
+    expect(params().get("ticket")).toBe(created.id);
     expect(params().get("requirement")).toBeNull();
-    expect((await fake.getTicket("acme", "acme-6")).title).toBe("Rename the button");
     expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("asks which Project for a Small Change when several are open and none is filtered", async () => {
-    renderApp(world());
+    renderApp(await world());
     await userEvent.click(await findMenuButton());
     await userEvent.click(item("Small Change"));
     expect(within(screen.getByRole("dialog")).getByRole("combobox")).toBeVisible();
   });
 
   it("keeps the text and shows the error when a Small Change is refused", async () => {
-    const fake = world();
-    fake.submitSmallChange = async () => {
-      throw new Error("the Project is archived");
+    // Core would take this, so the refusal is the service's, injected.
+    const w = await world();
+    const refusing: Api = {
+      ...w.api,
+      submitSmallChange: async () => {
+        throw new Error("the Project is archived");
+      },
     };
-    renderApp(fake, "/?project=acme");
+    renderApp(w, "/?project=acme", refusing);
     await userEvent.click(await findMenuButton());
     await userEvent.click(item("Small Change"));
     const modal = screen.getByRole("dialog");
@@ -482,8 +513,8 @@ describe("the sidebar's top row: + New and Focus", () => {
     ["Requirement", "New requirement", "Submit requirement", "submitRequirement"],
     ["Map", "New Map", "Submit map", "submitMap"],
   ])("opens %s's dialog from the menu, which stays visible once the menu closes, and submits to the new Spec", async (name, dialog, submit, call) => {
-    const fake = world();
-    renderApp(fake, "/?project=acme");
+    const w = await world();
+    renderApp(w, "/?project=acme");
     await userEvent.click(await findMenuButton());
     await userEvent.click(item(name));
 
@@ -494,16 +525,16 @@ describe("the sidebar's top row: + New and Focus", () => {
     await userEvent.type(within(modal).getByRole("textbox"), "Offline mode");
     await userEvent.click(within(modal).getByRole("button", { name: submit }));
 
-    expect(fake.calls).toContain(call);
+    expect(w.calls).toContain(call);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(params().get("list")).toBe("requirements");
-    expect(params().get("requirement")).toBe("acme-5");
+    expect(params().get("requirement")).toBe("acme-6");
     // The note is Focus Mode's: the sidebar navigates instead.
     expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("closes the menu on Esc and on a click outside it", async () => {
-    renderApp(world());
+    renderApp(await world());
     await userEvent.click(await findMenuButton());
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).toBeNull();
@@ -516,7 +547,7 @@ describe("the sidebar's top row: + New and Focus", () => {
   });
 
   it("closes the menu when + New is clicked instead", async () => {
-    renderApp(world());
+    renderApp(await world());
     await userEvent.click(await findMenuButton());
     await userEvent.click(within(nav()).getByRole("button", { name: "New requirement" }));
     expect(screen.queryByRole("menu")).toBeNull();
@@ -525,7 +556,7 @@ describe("the sidebar's top row: + New and Focus", () => {
   });
 
   it("toggles the menu shut from ▾", async () => {
-    renderApp(world());
+    renderApp(await world());
     await userEvent.click(await findMenuButton());
     await userEvent.click(menuButton());
     expect(screen.queryByRole("menu")).toBeNull();
@@ -535,7 +566,7 @@ describe("the sidebar's top row: + New and Focus", () => {
     const focusMenuButton = async () => (await findMenuButton()).focus();
 
     it("opens with ↓ on the first item, and moves with the arrows, wrapping at either end", async () => {
-      renderApp(world());
+      renderApp(await world());
       await focusMenuButton();
       await userEvent.keyboard("{ArrowDown}");
       expect(menuButton()).toHaveAttribute("aria-expanded", "true");
@@ -554,14 +585,14 @@ describe("the sidebar's top row: + New and Focus", () => {
     });
 
     it.each([["{Enter}"], [" "]])("opens with %s on the first item", async (key) => {
-      renderApp(world());
+      renderApp(await world());
       await focusMenuButton();
       await userEvent.keyboard(key);
       expect(item("Requirement")).toHaveFocus();
     });
 
     it.each([["{Enter}"], [" "]])("picks the focused item with %s: the menu closes and its dialog opens", async (key) => {
-      renderApp(world());
+      renderApp(await world());
       await focusMenuButton();
       await userEvent.keyboard("{ArrowDown}{ArrowDown}");
       await userEvent.keyboard(key);
@@ -571,7 +602,7 @@ describe("the sidebar's top row: + New and Focus", () => {
     });
 
     it("leaves the arrows to the dialog an item opened", async () => {
-      renderApp(world());
+      renderApp(await world());
       await focusMenuButton();
       await userEvent.keyboard("{ArrowDown}{ArrowDown}{Enter}");
       const text = within(screen.getByRole("dialog", { name: "New Map" })).getByRole("textbox");
@@ -583,7 +614,7 @@ describe("the sidebar's top row: + New and Focus", () => {
     });
 
     it("closes on Esc and returns focus to ▾", async () => {
-      renderApp(world());
+      renderApp(await world());
       await focusMenuButton();
       await userEvent.keyboard("{ArrowDown}{ArrowDown}{Escape}");
       expect(screen.queryByRole("menu")).toBeNull();
@@ -592,7 +623,7 @@ describe("the sidebar's top row: + New and Focus", () => {
     });
 
     it("closes when Tab leaves the menu", async () => {
-      renderApp(world());
+      renderApp(await world());
       await focusMenuButton();
       await userEvent.keyboard("{ArrowDown}");
       await userEvent.tab();
@@ -602,7 +633,7 @@ describe("the sidebar's top row: + New and Focus", () => {
   });
 
   it("enters Focus Mode from Focus", async () => {
-    renderApp(world());
+    renderApp(await world());
     await userEvent.click(await within(nav()).findByRole("button", { name: "Focus" }));
     expect(params().get("view")).toBe("focus");
   });
@@ -611,16 +642,17 @@ describe("the sidebar's top row: + New and Focus", () => {
 describe("the Admin section", () => {
   const follows = (a: Element, b: Element) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
 
-  it("keeps the title row to the heading, with no Usage or Options links", () => {
-    renderApp(world());
+  it("keeps the title row to the heading, with no Usage or Options links", async () => {
+    renderApp(await world());
     const title = within(nav()).getByRole("heading", { level: 1, name: "Code Central" });
     expect(within(title.parentElement!).queryByRole("link")).toBeNull();
   });
 
   it("follows View's last State filter and precedes the Archived Projects", async () => {
-    const fake = world();
-    fake.addProject("old", "Old", { archived: true });
-    renderApp(fake);
+    const w = await world();
+    await scenario(w).project("old", "Old");
+    await w.api.archiveProject("old");
+    renderApp(w);
     const admin = within(nav()).getByRole("heading", { level: 2, name: "Admin" });
     const lastState = within(nav()).getByRole("button", { name: /^Cancelled/ });
     const archived = await within(nav()).findByText(/^Archived/);
@@ -636,15 +668,15 @@ describe("the Admin section", () => {
     expect(follows(archived, options)).toBe(true);
   });
 
-  it("links Usage and Options with real addresses that return to the Inbox", () => {
-    renderApp(world(), "/?view=inbox&project=acme&state=Ready");
+  it("links Usage and Options with real addresses that return to the Inbox", async () => {
+    renderApp(await world(), "/?view=inbox&project=acme&state=Ready");
     expect(within(nav()).getByRole("link", { name: "Usage" })).toHaveAttribute("href", "?view=usage&back=view%3Dinbox%26project%3Dacme%26state%3DReady");
     expect(within(nav()).getByRole("link", { name: "Options" })).toHaveAttribute("href", "?view=options&from=inbox&project=acme&state=Ready");
     expect(within(nav()).getByRole("link", { name: "Usage" })).not.toHaveAttribute("aria-current");
   });
 
   it("opens Usage and Options", async () => {
-    renderApp(world());
+    renderApp(await world());
     await userEvent.click(within(nav()).getByRole("link", { name: "Usage" }));
     expect(screen.getByRole("main", { name: "Usage" })).toBeInTheDocument();
 
@@ -657,25 +689,19 @@ describe("the Admin section", () => {
 // bySpecWorld seeds Tickets on a Requirement (acme-1, with its Stages
 // acme-2..4), a plain Spec and a Map, across States.
 async function bySpecWorld() {
-  const fake = new FakeApi();
-  fake.addProject("acme", "Acme");
-  fake.addProject("beta", "Beta");
-  await fake.submitRequirement("acme", "Export a Spec as Markdown"); // acme-1, Stages acme-2..4 (Ready)
-  fake.updateTicket("acme-2", { state: "Done" });
-  const plain = { id: "", title: "" };
-  const spec = fake.addSpec("acme", { title: "Archive finished Projects" }); // acme-5
-  Object.assign(plain, { id: spec.id, title: spec.title });
-  fake.addTicket("acme", { title: "Archive menu", state: "Ready", spec: plain }); // acme-6
-  fake.addTicket("acme", { title: "Archive CLI", state: "Failed", spec: plain }); // acme-7
-  fake.addTicket("acme", { title: "Archive docs", state: "Ready", spec: plain }); // acme-8
-  const map = fake.addSpec("acme", { title: "Wayfinding", labels: ["wayfinder:map"] }); // acme-9
-  const onMap = { id: map.id, title: map.title };
-  fake.addTicket("acme", { title: "Map question", state: "Ready", spec: onMap }); // acme-10
-  fake.addTicket("acme", { title: "Export button", state: "Ready", spec: { id: "acme-1", title: "Export a Spec as Markdown" } }); // acme-11
-  const other = fake.addSpec("beta", { title: "Beta plan" }); // beta-1
-  fake.addTicket("beta", { title: "Beta thing", state: "Ready", spec: { id: other.id, title: other.title } }); // beta-2
-  fake.setNeedsMe([{ reason: "failed", tickets: [{ id: "acme-7", failure: { headline: "Tests fail", reports: 1 } }] }]);
-  return fake;
+  const { w, s } = await startWorld("acme", "beta");
+  const req = await requirement(s, "acme", "Export a Spec as Markdown"); // acme-1, Stages acme-2..4 (Ready)
+  await done(s, "acme", req.stages[0].id);
+  const plain = await s.spec("acme", { title: "Archive finished Projects" }); // acme-5
+  await s.ticket("acme", { title: "Archive menu", spec: plain }); // acme-6
+  const cli = await s.ticket("acme", { title: "Archive CLI", spec: plain }); // acme-7
+  await s.ticket("acme", { title: "Archive docs", spec: plain }); // acme-8
+  await s.human(`${s.projectPath("acme")}/submit_map`, { text: "Wayfinding" }); // acme-9, Charting Ticket acme-10 (Ready)
+  await s.ticket("acme", { title: "Export button", spec: req.spec.id }); // acme-11
+  const other = await s.spec("beta", { title: "Beta plan" }); // beta-1
+  await s.ticket("beta", { title: "Beta thing", spec: other }); // beta-2
+  await s.fail("acme", cli, { ...REPORT_OF, what_broke: "Tests fail" });
+  return w;
 }
 
 const specRows = () => within(list()).queryAllByRole("region");
@@ -819,14 +845,15 @@ describe("State lists By Spec", () => {
   });
 
   it("renders only Spec rows for a long collapsed list, newest first inside a Done Spec row", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    const specs = ["A", "B", "C"].map((t) => fake.addSpec("acme", { title: `Spec ${t}` }));
+    const { w, s } = await startWorld("acme");
+    const specs = [];
+    for (const t of ["A", "B", "C"]) specs.push(await s.spec("acme", { title: `Spec ${t}` }));
     for (let i = 0; i < 60; i++) {
-      const s = specs[i % 3];
-      fake.addTicket("acme", { title: `Done ${i}`, state: "Done", spec: { id: s.id, title: s.title }, updated: new Date(fake.now.getTime() + i * 1000).toISOString() });
+      const id = await s.ticket("acme", { title: `Done ${i}`, spec: specs[i % 3] });
+      await done(s, "acme", id);
+      w.advance(1000);
     }
-    renderApp(fake, "/?view=inbox&state=Done&group=spec");
+    renderApp(w, "/?view=inbox&state=Done&group=spec");
     await waitFor(() => expect(specRows()).toHaveLength(3));
     expect(rowIds()).toHaveLength(3);
     // The newest Ticket (i=59, Spec C) is first, so its Spec row leads.
@@ -842,10 +869,11 @@ describe("State lists By Spec", () => {
   });
 
   it("loads every Spec with one findSpecs call per Project", async () => {
-    const fake = await bySpecWorld();
-    renderApp(fake);
+    const w = await bySpecWorld();
+    w.calls.length = 0;
+    renderApp(w);
     await within(nav()).findByRole("button", { name: /^Ready/ });
-    expect(fake.calls.filter((c) => c === "findSpecs")).toHaveLength(2);
+    expect(w.calls.filter((c) => c === "findSpecs")).toHaveLength(2);
   });
 });
 
@@ -854,16 +882,17 @@ describe("the Spec row", () => {
 
   // withLongLived adds a Long-lived Spec (acme-12) with a Ready Ticket
   // (acme-13) and one a Factory is on (acme-14).
-  function withLongLived(fake: FakeApi) {
-    const fixes = fake.addSpec("acme", { title: "CI Fixes", labels: ["long-lived"] }); // acme-12
-    const spec = { id: fixes.id, title: fixes.title };
-    fake.addTicket("acme", { title: "Fix the flaky test", state: "Ready", spec }); // acme-13
-    fake.addTicket("acme", { title: "Fix lint", state: "In Progress", spec }); // acme-14
-    return fake;
+  async function withLongLived(w: World) {
+    const s = scenario(w);
+    const spec = await s.spec("acme", { title: "CI Fixes" }); // acme-12
+    await w.api.addLabels("acme", spec, ["long-lived"]);
+    await s.ticket("acme", { title: "Fix the flaky test", spec }); // acme-13
+    await s.ticket("acme", { title: "Fix lint", spec, state: "In Progress" }); // acme-14
+    return w;
   }
 
   it("badges every kind but a Requirement, and shows the strip for a Requirement and State chips for the rest", async () => {
-    renderApp(withLongLived(await bySpecWorld()), "/?view=inbox&state=Ready&group=spec");
+    renderApp(await withLongLived(await bySpecWorld()), "/?view=inbox&state=Ready&group=spec");
     const req = await within(list()).findByRole("region", { name: "Export a Spec as Markdown" });
     expect(within(req).getByRole("list", { name: "Stages" })).toBeInTheDocument();
     expect(within(req).queryByText("Requirement")).toBeNull();
@@ -878,7 +907,7 @@ describe("the Spec row", () => {
   });
 
   it("heads a plain Spec with its first need, else a Factory on it, else its Done count alone", async () => {
-    renderApp(withLongLived(await bySpecWorld()), "/?view=inbox&state=Ready&group=spec");
+    renderApp(await withLongLived(await bySpecWorld()), "/?view=inbox&state=Ready&group=spec");
     const archive = await within(list()).findByRole("region", { name: "Archive finished Projects" });
     expect(archive).toHaveTextContent("Failed · 0 of 3 Done");
     expect(specRow("CI Fixes")).toHaveTextContent("A Factory is on it · 0 of 2 Done");
@@ -890,11 +919,10 @@ describe("the Spec row", () => {
   });
 
   it("heads a finished Spec with its Done count", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    const s = fake.addSpec("acme", { title: "Shipped" }); // acme-1
-    for (const state of ["Done", "Done", "Cancelled"] as const) fake.addTicket("acme", { title: state, state, spec: { id: s.id, title: s.title } });
-    renderApp(fake, "/?view=inbox&state=Done&group=spec");
+    const { w, s } = await startWorld("acme");
+    const spec = await s.spec("acme", { title: "Shipped" }); // acme-1
+    for (const state of ["Done", "Done", "Cancelled"] as const) await s.ticket("acme", { title: state, state, spec });
+    renderApp(w, "/?view=inbox&state=Done&group=spec");
     const row = await within(list()).findByRole("region", { name: "Shipped" });
     expect(row).toHaveTextContent("Finished · 2 of 3 Tickets Done");
     expect(row).toHaveTextContent("2 of 3");
@@ -924,7 +952,7 @@ describe("the Spec row", () => {
     const map = await within(list()).findByRole("region", { name: "Wayfinding" });
     expect(within(map).getByText("Map")).toBeInTheDocument();
     expect(within(map).getByText("Ready 1")).toBeInTheDocument();
-    expect(map).toHaveTextContent("0/0 decided");
+    expect(map).toHaveTextContent("0/1 decided"); // Core counts the Charting Ticket
     await userEvent.click(within(map).getByRole("button", { name: "Wayfinding" }));
     expect(openIds("Wayfinding")).toEqual(["acme-10"]);
   });
@@ -951,24 +979,24 @@ describe("Short IDs", () => {
   const idIn = (name: string) => within(list()).findByRole("button", { name });
 
   it("shows #n with one Project selected and the full ID with All Projects, the full ID on hover", async () => {
-    renderApp(world(), "/?state=Ready&project=acme");
-    const short = await idIn("acme-4");
-    expect(short).toHaveTextContent("#4");
-    expect(short).toHaveAttribute("title", "acme-4");
+    renderApp(await world(), "/?state=Ready&project=acme");
+    const short = await idIn("acme-5");
+    expect(short).toHaveTextContent("#5");
+    expect(short).toHaveAttribute("title", "acme-5");
     cleanup();
-    renderApp(world(), "/?state=Ready");
-    expect(await idIn("acme-4")).toHaveTextContent("acme-4");
+    renderApp(await world(), "/?state=Ready");
+    expect(await idIn("acme-5")).toHaveTextContent("acme-5");
   });
 
   it("copies the full ID on click, flashes Copied and leaves the URL alone", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-    renderApp(world(), "/?state=Ready&project=acme");
+    renderApp(await world(), "/?state=Ready&project=acme");
     const before = window.location.href;
-    const id = await idIn("acme-4");
+    const id = await idIn("acme-5");
     await user.click(id);
-    expect(writeText).toHaveBeenCalledWith("acme-4");
+    expect(writeText).toHaveBeenCalledWith("acme-5");
     expect(await within(list()).findByText("Copied")).toBeInTheDocument();
     expect(window.location.href).toBe(before);
   });
@@ -976,11 +1004,11 @@ describe("Short IDs", () => {
   it("does nothing when there is no clipboard", async () => {
     const user = userEvent.setup();
     Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
-    renderApp(world(), "/?state=Ready&project=acme");
+    renderApp(await world(), "/?state=Ready&project=acme");
     const before = window.location.href;
-    const id = await idIn("acme-4");
+    const id = await idIn("acme-5");
     await user.click(id);
-    expect(id).toHaveTextContent("#4");
+    expect(id).toHaveTextContent("#5");
     expect(window.location.href).toBe(before);
   });
 
@@ -988,12 +1016,12 @@ describe("Short IDs", () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockRejectedValue(new Error("denied"));
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
-    renderApp(world(), "/?state=Ready&project=acme");
+    renderApp(await world(), "/?state=Ready&project=acme");
     const before = window.location.href;
-    const id = await idIn("acme-4");
+    const id = await idIn("acme-5");
     await user.click(id);
     expect(writeText).toHaveBeenCalled();
-    expect(id).toHaveTextContent("#4");
+    expect(id).toHaveTextContent("#5");
     expect(window.location.href).toBe(before);
   });
 });
@@ -1002,13 +1030,16 @@ describe("the All Tickets view", () => {
   beforeEach(() => localStorage.clear());
 
   async function ticketsWorld() {
-    const fake = await bySpecWorld();
-    const at = (m: number) => new Date(fake.now.getTime() + m * 60_000).toISOString();
-    const plain = { id: "acme-5", title: "Archive finished Projects" };
-    fake.addTicket("acme", { title: "Sketch the menu", state: "Ready", labels: ["prototype"], spec: plain, created: at(10) }); // acme-12
-    fake.addTicket("beta", { title: "Beta newest", state: "Ready", spec: { id: "beta-1", title: "Beta plan" }, created: at(20) }); // beta-3
-    fake.addTicket("acme", { title: "Old and done", state: "Done", spec: plain, created: at(-30) }); // acme-13
-    return fake;
+    const w = await bySpecWorld();
+    const s = scenario(w);
+    // Core stamps a Ticket's creation with its clock, so each is made later than the last.
+    w.advance(minutes(10));
+    await s.ticket("acme", { title: "Old and done", spec: "acme-5", state: "Done" }); // acme-12
+    w.advance(minutes(10));
+    await s.human(`${s.projectPath("acme")}/submit_prototype`, { spec: "acme-5", text: "Sketch the menu" }); // acme-13
+    w.advance(minutes(10));
+    await s.ticket("beta", { title: "Beta newest", spec: "beta-1" }); // beta-3
+    return w;
   }
   const allTickets = () => userEvent.click(within(nav()).getByRole("button", { name: /^All Tickets/ }));
 
@@ -1032,12 +1063,12 @@ describe("the All Tickets view", () => {
     await allTickets();
     expect(params().get("list")).toBe("tickets");
     expect(rowIds()[0]).toBe("beta-3");
-    expect(rowIds()[1]).toBe("acme-12");
-    expect(rowIds().at(-1)).toBe("acme-13"); // the oldest created
+    expect(rowIds()[1]).toBe("acme-13");
+    expect(rowIds()[2]).toBe("acme-12"); // the oldest made after the rest
     expect(rowIds()).toContain("acme-3"); // a Stage Ticket, inline
     expect(within(list()).queryByText(/run by a Factory/)).toBeNull();
 
-    const proto = within(list()).getByRole("link", { name: /acme-12/ });
+    const proto = within(list()).getByRole("link", { name: /acme-13/ });
     expect(proto).toHaveTextContent("Prototype");
     expect(proto).toHaveTextContent("Ready");
     expect(proto).toHaveTextContent("Spec");
@@ -1068,13 +1099,13 @@ describe("the All Tickets view", () => {
   it("groups By Spec in the order of each Spec's newest Ticket, Stage Tickets first, with State chips", async () => {
     renderApp(await ticketsWorld(), "/?view=inbox&list=tickets&group=spec&project=acme&finished=1");
     const rows = await within(list()).findAllByRole("region");
-    // acme-5's newest Ticket (acme-12) is newer than any of the Requirement's.
+    // acme-5's newest Ticket (acme-13) is newer than any of the Requirement's.
     expect(rows[0]).toHaveAccessibleName("Archive finished Projects");
-    expect(within(rows[0]).queryByText("Sketch the menu")).toBeNull(); // collapsed
+    expect(within(rows[0]).queryByText("Prototype: Sketch the menu")).toBeNull(); // collapsed
     await userEvent.click(within(rows[0]).getByRole("button", { name: "Archive finished Projects" }));
     const plainIds = within(rows[0]).getAllByRole("link").map((a) => a.getAttribute("data-id")).filter(Boolean);
-    expect(plainIds.indexOf("acme-13")).toBeLessThan(plainIds.indexOf("acme-12")); // oldest first
-    expect(within(rows[0]).getByText("Sketch the menu").closest("a")).toHaveTextContent("Ready");
+    expect(plainIds.indexOf("acme-12")).toBeLessThan(plainIds.indexOf("acme-13")); // oldest first
+    expect(within(rows[0]).getByText("Prototype: Sketch the menu").closest("a")).toHaveTextContent("Ready");
 
     const req = within(list()).getByRole("region", { name: "Export a Spec as Markdown" });
     await userEvent.click(within(req).getByRole("button", { name: "Export a Spec as Markdown" }));
@@ -1094,10 +1125,10 @@ describe("the All Tickets view", () => {
   it("hides Done and Cancelled until Show finished, kept in the URL and per browser", async () => {
     renderApp(await ticketsWorld(), "/?view=inbox&list=tickets");
     await within(list()).findByRole("button", { name: "Show finished" });
-    await waitFor(() => expect(rowIds()).not.toContain("acme-13"));
+    await waitFor(() => expect(rowIds()).not.toContain("acme-12"));
     await userEvent.click(within(list()).getByRole("button", { name: "Show finished" }));
     expect(params().get("finished")).toBe("1");
-    await waitFor(() => expect(rowIds()).toContain("acme-13"));
+    await waitFor(() => expect(rowIds()).toContain("acme-12"));
     expect(localStorage.getItem("code-central.inbox.finished")).toBe("1");
 
     window.history.replaceState(null, "", "/?view=inbox&list=tickets");
@@ -1106,7 +1137,7 @@ describe("the All Tickets view", () => {
 
     await userEvent.click(within(list()).getByRole("button", { name: "Show finished" }));
     expect(params().has("finished")).toBe(false);
-    await waitFor(() => expect(rowIds()).not.toContain("acme-13"));
+    await waitFor(() => expect(rowIds()).not.toContain("acme-12"));
   });
 
   describe("search by ID", () => {
@@ -1117,7 +1148,7 @@ describe("the All Tickets view", () => {
       renderApp(await ticketsWorld(), "/?view=inbox&list=tickets");
       await within(list()).findByRole("searchbox", { name: "Ticket ID" });
       await search("ACME-1");
-      await waitFor(() => expect(rowIds()).toContain("acme-13")); // Done, Show finished off
+      await waitFor(() => expect(rowIds()).toContain("acme-12")); // Done, Show finished off
       expect(rowIds().every((id) => id?.includes("acme-1"))).toBe(true);
       await userEvent.clear(box());
       await search("3");
@@ -1136,9 +1167,9 @@ describe("the All Tickets view", () => {
     it("By Spec shows a Spec with its matching Tickets, or all its Tickets when its own ID matches, opened", async () => {
       renderApp(await ticketsWorld(), "/?view=inbox&list=tickets&group=spec");
       await within(list()).findByRole("searchbox", { name: "Ticket ID" });
-      await search("acme-13");
+      await search("acme-12");
       const row = await within(list()).findByRole("region", { name: "Archive finished Projects" });
-      expect(within(row).getAllByRole("link").map((a) => a.getAttribute("data-id")).filter(Boolean).slice(1)).toEqual(["acme-13"]); // after the Spec's own link
+      expect(within(row).getAllByRole("link").map((a) => a.getAttribute("data-id")).filter(Boolean).slice(1)).toEqual(["acme-12"]); // after the Spec's own link
       await userEvent.clear(box());
       await search("acme-5");
       const whole = await within(list()).findByRole("region", { name: "Archive finished Projects" });
@@ -1148,9 +1179,10 @@ describe("the All Tickets view", () => {
   });
 
   it("leaves out fully finished Specs By Spec", async () => {
-    const fake = await ticketsWorld();
-    fake.addTicket("beta", { title: "Beta shipped", state: "Done", spec: { id: "beta-9", title: "Shipped plan" } });
-    renderApp(fake, "/?view=inbox&list=tickets&group=spec");
+    const w = await ticketsWorld();
+    const s = scenario(w);
+    await s.ticket("beta", { title: "Beta shipped", spec: await s.spec("beta", { title: "Shipped plan" }), state: "Done" });
+    renderApp(w, "/?view=inbox&list=tickets&group=spec");
     await within(list()).findAllByRole("region");
     expect(within(list()).queryByRole("region", { name: "Shipped plan" })).toBeNull();
     await userEvent.click(within(list()).getByRole("button", { name: "Show finished" }));
@@ -1158,16 +1190,14 @@ describe("the All Tickets view", () => {
   });
 
   it("says No Tickets yet. with Show finished on and nothing there", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake, "/?view=inbox&list=tickets&finished=1");
+    const { w } = await startWorld("acme");
+    renderApp(w, "/?view=inbox&list=tickets&finished=1");
     expect(await within(list()).findByText("No Tickets yet.")).toBeInTheDocument();
   });
 
   it("says so when nothing is there", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake, "/?view=inbox&list=tickets");
+    const { w } = await startWorld("acme");
+    renderApp(w, "/?view=inbox&list=tickets");
     expect(await within(list()).findByText("No unfinished Tickets.")).toBeInTheDocument();
   });
 });
@@ -1175,32 +1205,40 @@ describe("the All Tickets view", () => {
 describe("the CI badge on Ticket rows", () => {
   // ciWorld is a Spec (acme-1) with an Accepted Ticket whose CI is running
   // (acme-2), one with none (acme-3) and a Done one that passed (acme-4).
-  function ciWorld() {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    fake.addSpec("acme", { title: "Theming" });
-    const spec = { id: "acme-1", title: "Theming" };
-    fake.addTicket("acme", { title: "Palette", state: "Accepted", spec, ci_result: "running" });
-    fake.addTicket("acme", { title: "Fonts", state: "Accepted", spec });
-    fake.addTicket("acme", { title: "Icons", state: "Done", spec, ci_result: "passed" });
-    return fake;
+  async function ciWorld() {
+    const { w, s } = await startWorld("acme");
+    const spec = await s.spec("acme", { title: "Theming" });
+    const accept = async (title: string, commit: string) => {
+      const id = await s.ticket("acme", { title, spec });
+      await s.accepted("acme", id, { branch: title.toLowerCase(), commit });
+      return id;
+    };
+    const palette = await accept("Palette", "aaa1111");
+    await s.pushed("acme", palette, "aaa1111");
+    await s.ci("acme", palette, "running", "aaa1111", 1);
+    await accept("Fonts", "bbb2222");
+    const icons = await accept("Icons", "ccc3333");
+    await s.pushed("acme", icons, "ccc3333");
+    await s.ci("acme", icons, "passed", "ccc3333", 2);
+    await s.human(`${s.ticketPath("acme", icons)}/land`, { commit: "ccc3333" });
+    return w;
   }
   const row = async (title: string) => (await within(list()).findByText(title)).closest("a")!;
 
   it("shows on a State list's rows, and not on a row with no CI result", async () => {
-    renderApp(ciWorld(), "/?view=inbox&state=Accepted");
+    renderApp(await ciWorld(), "/?view=inbox&state=Accepted");
     expect(await row("Palette")).toHaveTextContent("CI running");
     expect(await row("Fonts")).not.toHaveTextContent("CI");
   });
 
   it("shows on the rows under a Spec row", async () => {
-    renderApp(ciWorld(), "/?view=inbox&state=Accepted&group=spec");
+    renderApp(await ciWorld(), "/?view=inbox&state=Accepted&group=spec");
     await userEvent.click(await within(list()).findByRole("button", { name: "Theming" }));
     expect(await row("Palette")).toHaveTextContent("CI running");
   });
 
   it("shows in All Tickets, but not on a Done Ticket with Show finished on", async () => {
-    renderApp(ciWorld(), "/?view=inbox&list=tickets&finished=1");
+    renderApp(await ciWorld(), "/?view=inbox&list=tickets&finished=1");
     expect(await row("Palette")).toHaveTextContent("CI running");
     expect(await row("Icons")).not.toHaveTextContent("CI");
   });

@@ -1,34 +1,59 @@
-// CI status badge tests (code-central-259): the real App against FakeApi.
-// A Ticket with a CI result shows it as a badge on its rows in the Spec
-// view, Needs Me and the Activity Dashboard, and one with none shows none;
-// the Spec view sums its Tickets' badges per result.
+// CI status badge tests (code-central-259): the real App on a WASM Core
+// world. A Ticket with a CI result shows it as a badge on its rows in the
+// Spec view, Needs Me and the Activity Dashboard, and one with none shows
+// none; the Spec view sums its Tickets' badges per result.
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { App } from "../App";
+import { newWorld, type World } from "../api/core/core";
+import { scenario, type CIOutcome, type Scenario } from "../api/scenario";
 import { ListCIBadge } from "./CIBadge";
-import { FakeApi } from "../api/fake";
-import type { CIResult } from "../api/types";
-import { focus, renderApp } from "../focus/focusTesting";
+
+function renderApp(w: World, url: string) {
+  window.history.replaceState(null, "", url);
+  return render(<App api={w.api} now={w.now} />);
+}
 
 const detail = () => screen.getByRole("complementary", { name: "Ticket" });
+const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 
 // badgeOf is the row's CI badge text, or null when it has none.
 const badgeOf = (row: HTMLElement) => row.querySelector(".ci-badge")?.textContent ?? null;
 
-// theming is a plain Spec, acme-1, whose Tickets have the CI results given,
-// in order from acme-2; undefined is a Ticket with none.
-function theming(results: (CIResult | undefined)[]) {
-  const fake = new FakeApi();
-  fake.addProject("acme", "Acme");
-  fake.addSpec("acme", { title: "Theming" });
-  results.forEach((ci_result, i) =>
-    fake.addTicket("acme", { title: `Palette ${i + 1}`, state: "Accepted", spec: { id: "acme-1", title: "Theming" }, ...(ci_result && { ci_result }) }),
-  );
-  return fake;
+// accepted makes an Accepted Ticket under spec whose pushed commit has the
+// CI outcome given, or was never pushed for undefined.
+async function accepted(s: Scenario, title: string, outcome: CIOutcome | undefined, spec?: string) {
+  const id = await s.ticket("acme", { title, state: outcome ? "Ready" : "Accepted", spec });
+  if (outcome) {
+    await s.accepted("acme", id, { branch: id, commit: `c-${id}` });
+    await s.pushed("acme", id, `c-${id}`);
+    if (outcome !== "running") await s.ci("acme", id, outcome, `c-${id}`, Number(id.split("-")[1]));
+  }
+  return id;
+}
+
+// theming is a plain Spec whose Tickets have the CI results given, in
+// order; undefined is a Ticket with none.
+async function theming(results: (CIOutcome | undefined)[]) {
+  const w = await newWorld();
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  const spec = await s.spec("acme", { title: "Theming" });
+  for (const [i, outcome] of results.entries()) await accepted(s, `Palette ${i + 1}`, outcome, spec);
+  return { w, s, spec };
+}
+
+async function acme() {
+  const w = await newWorld();
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  return { w, s };
 }
 
 describe("the CI badge", () => {
   it("is on a Ticket's row in the Spec view when it has a CI result, and not when it has none", async () => {
-    renderApp(theming(["failed", "running", "passed", undefined]), "/?view=inbox&requirement=acme-1");
+    const { w, spec } = await theming(["failed", "running", "passed", undefined]);
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
 
     const pane = await within(detail()).findByRole("region", { name: "Spec" });
     const rows = within(within(pane).getByRole("list", { name: "Tickets" })).getAllByRole("listitem");
@@ -36,7 +61,8 @@ describe("the CI badge", () => {
   });
 
   it("shows a cancelled result in grey and a failed one in red", async () => {
-    renderApp(theming(["failed", "cancelled"]), "/?view=inbox&requirement=acme-1");
+    const { w, spec } = await theming(["failed", "cancelled"]);
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
 
     const pane = await within(detail()).findByRole("region", { name: "Spec" });
     const rows = within(within(pane).getByRole("list", { name: "Tickets" })).getAllByRole("listitem");
@@ -47,25 +73,26 @@ describe("the CI badge", () => {
   });
 
   it("is on a Ticket's row in Needs Me when it has a CI result, and not when it has none", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    fake.addTicket("acme", { title: "Login page", state: "Accepted", ci_result: "failed" }); // acme-1
-    fake.addTicket("acme", { title: "Sign-up page", state: "Accepted" }); // acme-2
-    fake.setNeedsMe([{ reason: "to_merge", tickets: [{ id: "acme-1" }, { id: "acme-2" }] }]);
-    renderApp(fake, "/?view=inbox");
+    const { w, s } = await acme();
+    const failed = await accepted(s, "Login page", "failed");
+    const none = await s.ticket("acme", { title: "Sign-up page", state: "In Review" });
+    renderApp(w, "/?view=inbox");
 
     const list = screen.getByRole("main", { name: "Tickets" });
-    expect(badgeOf(await within(list).findByRole("link", { name: /acme-1/ }))).toBe("CI failed");
-    expect(badgeOf(within(list).getByRole("link", { name: /acme-2/ }))).toBeNull();
+    expect(badgeOf(await within(list).findByRole("link", { name: new RegExp(failed) }))).toBe("CI failed");
+    expect(badgeOf(within(list).getByRole("link", { name: new RegExp(none) }))).toBeNull();
   });
 
   it("is on a Ticket's entry in the Activity Dashboard when it has a CI result, and not when it has none", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
+    const { w, s } = await acme();
     // Sent back to fix its CI: In Progress again with its last push's result.
-    fake.addTicket("acme", { title: "Login page", state: "In Progress", ci_result: "failed" }); // acme-1
-    fake.addTicket("acme", { title: "Sign-up page", state: "In Progress" }); // acme-2
-    renderApp(fake);
+    // A Long-lived Spec's Tickets land one by one, so this one has a branch to send back.
+    const spec = await s.spec("acme", { title: "Small Changes", labels: ["long-lived"] });
+    const failed = await accepted(s, "Login page", "failed", spec);
+    await w.api.act("acme", failed, "send_back", { note: "Fix the CI" });
+    await s.claimFor("acme", failed);
+    await s.ticket("acme", { title: "Sign-up page", state: "In Progress", spec });
+    renderApp(w, "/?view=focus");
 
     const d = await within(focus()).findByRole("region", { name: "Activity Dashboard" });
     const entries = within(within(d).getByRole("list", { name: "In Progress" })).getAllByRole("listitem");
@@ -75,7 +102,8 @@ describe("the CI badge", () => {
 
 describe("the Spec view's CI sums", () => {
   it("counts its Tickets' badges per result", async () => {
-    renderApp(theming(["failed", "passed", "passed", "running", undefined, "passed"]), "/?view=inbox&requirement=acme-1");
+    const { w, spec } = await theming(["failed", "passed", "passed", "running", undefined, "passed"]);
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
 
     const pane = await within(detail()).findByRole("region", { name: "Spec" });
     const sums = within(pane).getByRole("group", { name: "CI results" });
@@ -83,26 +111,26 @@ describe("the Spec view's CI sums", () => {
   });
 
   it("leaves out a result no Ticket has", async () => {
-    renderApp(theming(["passed", undefined]), "/?view=inbox&requirement=acme-1");
+    const { w, spec } = await theming(["passed", undefined]);
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
 
     const pane = await within(detail()).findByRole("region", { name: "Spec" });
     expect(within(pane).getByRole("group", { name: "CI results" })).toHaveTextContent(/^CI1 passed$/);
   });
 
   it("isn't shown when no Ticket has a CI result", async () => {
-    renderApp(theming([undefined, undefined]), "/?view=inbox&requirement=acme-1");
+    const { w, spec } = await theming([undefined, undefined]);
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
 
     const pane = await within(detail()).findByRole("region", { name: "Spec" });
     expect(within(pane).queryByRole("group", { name: "CI results" })).toBeNull();
   });
 
   it("is on a Requirement's view too, over its Build Tickets", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    await fake.submitRequirement("acme", "Dark mode"); // acme-1, Stages acme-2 to acme-4
-    const spec = { id: "acme-1", title: "Dark mode" };
-    fake.addTicket("acme", { title: "Dark palette", state: "Accepted", spec, ci_result: "failed" }); // acme-5
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w, s } = await acme();
+    const { spec } = await w.api.submitRequirement("acme", "Dark mode");
+    await accepted(s, "Dark palette", "failed", spec.id);
+    renderApp(w, `/?view=inbox&requirement=${spec.id}`);
 
     const pane = await within(detail()).findByRole("region", { name: "Requirement" });
     expect(within(pane).getByRole("group", { name: "CI results" })).toHaveTextContent("1 failed");
