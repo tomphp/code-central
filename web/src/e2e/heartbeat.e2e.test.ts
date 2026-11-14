@@ -19,7 +19,7 @@ describe("end-to-end: the documented Heartbeat", () => {
       fetch(`${svc.url}/api/p/acme/report_heartbeat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ factory: "sandcastle", host: "build-1", state, note, interval_seconds: 30 }),
+        body: JSON.stringify({ factory: "sandcastle", host: "build-1", state, note, interval_seconds: 30, chat: true }),
       });
     const status = async () => (await (await fetch(`${svc.url}/api/projects/acme`)).json()).factory_status;
 
@@ -29,7 +29,7 @@ describe("end-to-end: the documented Heartbeat", () => {
     let s = await status();
     expect(s.status).toBe("online");
     expect(s.factories).toMatchObject([
-      { name: "sandcastle", host: "build-1", status: "online", note: "2 of 3 turns running", interval_seconds: 30 },
+      { name: "sandcastle", host: "build-1", status: "online", note: "2 of 3 turns running", interval_seconds: 30, chat: true },
     ]);
 
     expect((await heartbeat("stopping", "stopped on SIGTERM")).status).toBe(200);

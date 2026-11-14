@@ -237,6 +237,22 @@ _Avoid_: PAT setting, token variable
 The signal a running Factory sends Code Central on each poll, naming its Project, itself and its host, its state, its note and when the next is due. Code Central keeps only the latest of each Factory, in memory.
 _Avoid_: ping, keepalive, check-in ("Ping" is already the session activity hook)
 
+**Chat**:
+Talking to Claude about a Project from the UI, outside any Ticket, through a floating icon and a pop-up.
+_Avoid_: chatbot, assistant, console
+
+**Conversation**:
+One Chat session, from its first Chat Message until the human starts a new one. Each message resumes the same session. A Project has at most one current Conversation, held by one Factory.
+_Avoid_: thread, chat session
+
+**Chat Message**:
+One turn in a Conversation, from the human or from Claude.
+_Avoid_: prompt, reply (as nouns for the record), Session Event
+
+**Chat support**:
+A Factory saying in its Heartbeat that it can run Conversations.
+_Avoid_: chat capability, chat mode
+
 **Factory Status**:
 Whether a Project's Factories are **Online**, **Draining** (claiming nothing new while it finishes running turns) or **Offline** (no Heartbeat for three of its intervals, at least 90 seconds, or a stopping Heartbeat), as Code Central reads it from their Heartbeats. A Project's combined status is Online if any Factory is, else Draining if any is, else Offline, which is also a Project with no Heartbeat since Code Central started.
 _Avoid_: health, presence, liveness
@@ -302,7 +318,7 @@ The identifier Code Central issues with a Claim, which proves the holder on ever
 _Avoid_: Token, holder ID
 
 **Resume Command**:
-The command, given by whoever claims, that brings a Claim's session back from its working directory.
+The command that brings a session back: a Claim's, given by whoever claims, from its working directory; or a Conversation's. A Conversation's Resume Command changes into the worktree itself, because the human runs it from anywhere.
 _Avoid_: Resume string, attach command
 
 **Silent Claim**:
@@ -314,12 +330,12 @@ A Claim on a Ticket in progress that is still active but hasn't moved for a long
 _Avoid_: Looping, runaway, stuck
 
 **Session Event**:
-One thing a Claim's session did, as posted to Code Central: agent text, a tool call, a tool result, or a Factory log line.
+One thing a Claim's session did, as posted to Code Central: agent text, a tool call, a tool result, or a Factory log line. A Conversation's events are not a Claim's Transcript.
 _Avoid_: Log entry, message, activity
 
 **Transcript**:
 The Session Events of one Claim, in order, as Code Central holds them. It may be only the tail of the session.
-_Avoid_: Log, conversation, stream
+_Avoid_: Log, stream
 
 **Context Report**:
 What agents load into context, measured from Claude Code's own session logs on the machine (not Transcripts): the size of tool results per kind of session (each Stage, implementation, and the review and other subagents), tool and operation, the largest results, the Specs and Tickets read more than once, and signs that a cut went too far, each with its change against a saved baseline.
@@ -331,7 +347,7 @@ The view of the CI Runs in a Project, or in all Projects with CI Tracking on: th
 _Avoid_: CI dashboard, build monitor
 
 **Usage**:
-The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used.
+The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. Its token kinds include `chat`.
 _Avoid_: Analytics dashboard, stats, metrics
 
 **Context Size**:

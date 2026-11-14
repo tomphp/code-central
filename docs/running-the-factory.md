@@ -45,6 +45,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    | `--model <model>` | The model for every session it starts or resumes, such as `--model opus`, unless the Ticket sets one. The default is Claude Code's own. See [Model and effort](#model-and-effort). |
    | `--effort <level>` | The effort for every session it starts or resumes, such as `--effort high`, unless the Ticket sets one. The default is Claude Code's own. It must be a level `claude --help` lists; see [What `claude` accepts](#what-claude-accepts). |
    | `--bypass-permissions` | Runs every session in `bypassPermissions` mode, with no permission checks. It prints a warning line at the start. |
+   | `--no-chat` | Turns off Chat support. The Factory reports `chat: true` in every Heartbeat by default, saying it can run Conversations for the Project's Chat; with `--no-chat` it reports `chat: false`. |
    | `-- <Claude Args>` | Everything after `--` is `claude` flags the Factory passes, as given, to every start and resume, such as `-- --chrome`. See [Claude Args](#claude-args). |
 
    Without `--bypass-permissions`, every session runs in auto mode with no permission prompts. Anything auto mode won't allow is denied and the turn carries on without it. If a turn ends on denied calls, the Factory posts a Round asking you about each one, and answering it lets the session try again. Allow rules for the repository go in its committed `.claude/settings.json`.
@@ -267,7 +268,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
 ## The Factory Status dot
 
-While `code-central-factory` runs, it sends Code Central a Heartbeat on every poll, and the Project's row in the left pane shows a dot before its name: green for Online, amber for Draining and grey for Offline. Hover or focus the dot to list each Factory as name on host, its status, its last Heartbeat and its note. Project Options has the same list under **Factories**. Archived Projects show no dot.
+While `code-central-factory` runs, it sends Code Central a Heartbeat on every poll, and the Project's row in the left pane shows a dot before its name: green for Online, amber for Draining and grey for Offline. Hover or focus the dot to list each Factory as name on host, its status, its last Heartbeat and its note, and whether it has Chat support. Project Options has the same list under **Factories**. Archived Projects show no dot.
 
 The notes code-central-factory sends:
 

@@ -20,6 +20,7 @@ Content-Type: application/json
 | `state` | Required. `online`, `draining` (claiming nothing new while it finishes running turns) or `stopping` (it is exiting). |
 | `note` | Optional. Free text for the human, cut to 200 characters. Code Central never interprets it. |
 | `interval_seconds` | Required. How often the Factory polls, from 1 to 86400. It sets when Code Central gives up on it, below. |
+| `chat` | Optional boolean, `false` when left out. **Chat support**: the Factory can run Conversations for the Project's Chat. Chat is available for the Project while an Online Factory reports it. A change in it counts as a change, so the UI refetches. |
 | `full` | Optional. Returns the Project in place of the acknowledgement. |
 
 ```console
@@ -83,4 +84,4 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 ```
 
-An end-to-end test (`web/src/e2e/heartbeat.e2e.test.ts`) sends these same bodies to a real service, so the example stays true. Read the result in any Project view: `factory_status` in `get_project` and `list_projects` holds the combined `status` and each Factory's `name`, `host`, `status`, `note`, `last_heartbeat` and `interval_seconds`.
+An end-to-end test (`web/src/e2e/heartbeat.e2e.test.ts`) sends these same bodies to a real service, so the example stays true. Read the result in any Project view: `factory_status` in `get_project` and `list_projects` holds the combined `status` and each Factory's `name`, `host`, `status`, `note`, `last_heartbeat`, `interval_seconds` and `chat`.

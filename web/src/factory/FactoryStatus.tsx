@@ -22,6 +22,7 @@ export function FactoryList({ status, now }: { status: FactoryStatus; now: Date 
           </strong>
           : {LABELS[f.status]}, last Heartbeat {ago(now, f.last_heartbeat)}
           {f.note && <span className="muted"> ({f.note})</span>}
+          <span className="muted"> · {f.chat ? "Chat support" : "no Chat support"}</span>
         </li>
       ))}
     </ul>

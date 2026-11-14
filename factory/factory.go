@@ -100,6 +100,7 @@ type options struct {
 	parallel int
 	poll     time.Duration
 	bypass   bool
+	noChat   bool
 	model    string
 	effort   string
 	project  string
@@ -116,6 +117,7 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.IntVar(&o.parallel, "parallel", 3, "the most claude turns running at once (at least 1)")
 	fs.DurationVar(&o.poll, "poll", 30*time.Second, "how often to look for work (at least 5s)")
 	fs.BoolVar(&o.bypass, "bypass-permissions", false, "run every session in bypassPermissions mode")
+	fs.BoolVar(&o.noChat, "no-chat", false, "don't report Chat support: the Project's Chat is unavailable through this Factory")
 	fs.StringVar(&o.model, "model", "", "the model for every start and resume a Ticket's model Tag doesn't set")
 	fs.StringVar(&o.effort, "effort", "", "the effort for every start and resume a Ticket's effort Tag doesn't set")
 	fs.String("base", "", "removed: the base is the Project's Base branch setting")
