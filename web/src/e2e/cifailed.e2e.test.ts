@@ -1,5 +1,5 @@
 // End-to-end (`make e2e`): Playwright drives a real browser against the UI
-// embedded in the built binary, for what FakeApi can't show: the real
+// embedded in the built binary, for what the WASM Core can't show: the real
 // Needs Me working CI failed out on read and the live feed driving Focus
 // Mode (code-central-261). Focus Mode is open at the Activity Dashboard,
 // an Accepted Ticket's pushed commit fails CI, its CI failed Focus Item

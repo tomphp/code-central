@@ -132,7 +132,8 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
   };
 }
 
-function toError(status: number, text: string): ApiError {
+// toError is a refused request's ApiError, from its status and body.
+export function toError(status: number, text: string): ApiError {
   try {
     const e = JSON.parse(text);
     if (typeof e?.code === "string") return new ApiError(status, e.code, e.message ?? "", e.field, e.allowed_actions, e.fix);

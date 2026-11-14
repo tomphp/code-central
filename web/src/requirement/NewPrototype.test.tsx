@@ -1,15 +1,25 @@
-// New Prototype tests: the real App against FakeApi. "New Prototype" on
+// New Prototype tests: the real App on a WASM Core world. "New Prototype" on
 // each Spec's view (Requirement, Map and plain Spec), and the plain Spec
 // view it sits on.
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
-import { FakeApi } from "../api/fake";
+import { newWorld, type World } from "../api/core/core";
+import { scenario } from "../api/scenario";
 
-function renderApp(fake: FakeApi, url = "/") {
+function renderApp(w: World, url = "/") {
   window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
+  return render(<App api={w.api} now={w.now} />);
+}
+
+// acme is a world with the Project acme, and the scenario builder on it.
+async function acme(...more: string[]) {
+  const w = await newWorld();
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  for (const key of more) await s.project(key, key[0].toUpperCase() + key.slice(1));
+  return { w, s };
 }
 
 const detail = () => screen.getByRole("complementary", { name: "Ticket" });
@@ -31,10 +41,10 @@ async function prototype(view: string, text: string) {
 
 // wantPrototype checks the new Prototype is a Ready prototype Ticket on
 // spec, and is the selected Ticket.
-async function wantPrototype(fake: FakeApi, spec: string, id: string, title: string) {
-  expect(fake.calls).toContain("submitPrototype");
+async function wantPrototype(w: World, spec: string, id: string, title: string) {
+  expect(w.calls).toContain("submitPrototype");
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  expect(await fake.getTicket("acme", id)).toMatchObject({ title, state: "Ready", spec: { id: spec }, labels: ["prototype"] });
+  expect(await w.api.getTicket("acme", id)).toMatchObject({ title, state: "Ready", spec: { id: spec }, labels: ["prototype"] });
   expect(params().get("requirement")).toBe(spec);
   expect(params().get("ticket")).toBe(id);
   expect(await within(detail()).findByRole("heading", { name: title, level: 2 })).toBeInTheDocument();
@@ -42,102 +52,94 @@ async function wantPrototype(fake: FakeApi, spec: string, id: string, title: str
 
 describe("New Prototype", () => {
   it("is on the Requirement view, and submits a Prototype on that Requirement", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    fake.addProject("beta", "Beta");
-    await fake.submitRequirement("acme", "Dark mode"); // acme-1, Stages acme-2 to acme-4
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w } = await acme("beta");
+    const { spec } = await w.api.submitRequirement("acme", "Dark mode");
+    renderApp(w, `/?view=inbox&requirement=${spec.id}`);
 
     await userEvent.click(await prototype("Requirement", "A theme picker{Enter}Would a picker beat a toggle?"));
-    await wantPrototype(fake, "acme-1", "acme-5", "Prototype: A theme picker");
-    expect((await fake.getTicket("acme", "acme-5")).description).toBe("A theme picker\nWould a picker beat a toggle?");
-  });
+    const id = (await w.api.findTickets("acme")).find((t) => t.title === "Prototype: A theme picker")!.id;
+    await wantPrototype(w, spec.id, id, "Prototype: A theme picker");
+    expect((await w.api.getTicket("acme", id)).description).toBe("A theme picker\nWould a picker beat a toggle?");  });
 
   it("is in the Map view's header, and submits a Prototype on that Map", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    await fake.submitMap("acme", "Offline mode"); // acme-1, Charting acme-2
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w } = await acme();
+    const { spec } = await w.api.submitMap("acme", "Offline mode");
+    renderApp(w, `/?view=inbox&requirement=${spec.id}`);
 
     const pane = await within(detail()).findByRole("region", { name: "Map" });
     const button = within(pane).getByRole("button", { name: "New Prototype" });
     expect(button.compareDocumentPosition(within(pane).getByRole("list", { name: "Map Tickets" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     await userEvent.click(await prototype("Map", "Try a local cache"));
-    await wantPrototype(fake, "acme-1", "acme-3", "Prototype: Try a local cache");
+    const id = (await w.api.findTickets("acme")).find((t) => t.title === "Prototype: Try a local cache")!.id;
+    await wantPrototype(w, spec.id, id, "Prototype: Try a local cache");
     const node = await within(within(pane).getByRole("list", { name: "Map Tickets" })).findByText(/Prototype: Try a local cache/);
     expect(node.closest("[role=listitem]")).toHaveTextContent("prototype");
   });
 
   it("is on the plain Spec view, and submits a Prototype on that Spec", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    fake.addSpec("acme", { title: "Theming", body: "How the app looks." }); // acme-1
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w, s } = await acme();
+    const spec = await s.spec("acme", { title: "Theming", body: "How the app looks." });
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
 
     await userEvent.click(await prototype("Spec", "A theme picker"));
-    await wantPrototype(fake, "acme-1", "acme-2", "Prototype: A theme picker");
+    const id = (await w.api.findTickets("acme")).find((t) => t.title === "Prototype: A theme picker")!.id;
+    await wantPrototype(w, spec, id, "Prototype: A theme picker");
   });
 
   it("closes on Cancel without submitting", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    fake.addSpec("acme", { title: "Theming" });
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w, s } = await acme();
+    const spec = await s.spec("acme", { title: "Theming" });
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
 
     await prototype("Spec", "A theme picker");
     await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(fake.calls).not.toContain("submitPrototype");
+    expect(w.calls).not.toContain("submitPrototype");
   });
 
   it("shows why a Prototype was refused, and keeps the text", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    fake.addSpec("acme", { title: "Theming" });
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w, s } = await acme();
+    const spec = await s.spec("acme", { title: "Theming" });
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
 
     const submit = await prototype("Spec", "A theme picker");
-    fake.submitPrototype = async () => {
-      throw new Error("the Project is archived");
-    };
+    // Core refuses every write to an archived Project.
+    await s.human("/api/p/acme/archive_project", {});
     await userEvent.click(submit);
     const modal = screen.getByRole("dialog", { name: "New Prototype" });
-    expect(await within(modal).findByText("the Project is archived")).toBeInTheDocument();
+    expect(await within(modal).findByText(/Project acme is archived/)).toBeInTheDocument();
     expect(within(modal).getByRole("textbox", { name: "Prototype" })).toHaveValue("A theme picker");
   });
 });
 
 describe("the plain Spec view", () => {
   it("shows a Spec that is neither a Requirement nor a Map: its header and its Tickets, each opening in the Ticket panel", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    fake.addSpec("acme", { title: "Theming", body: "How the app looks." }); // acme-1
-    const spec = { id: "acme-1", title: "Theming" };
-    fake.addTicket("acme", { title: "Dark palette", state: "In Review", spec }); // acme-2
-    fake.addTicket("acme", { title: "Light palette", state: "Ready", spec }); // acme-3
-    renderApp(fake, "/?view=inbox&requirement=acme-1");
+    const { w, s } = await acme();
+    const spec = await s.spec("acme", { title: "Theming", body: "How the app looks." });
+    await s.ticket("acme", { title: "Dark palette", state: "In Review", spec });
+    const light = await s.ticket("acme", { title: "Light palette", state: "Ready", spec });
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
 
     const pane = await within(detail()).findByRole("region", { name: "Spec" });
-    expect(pane).toHaveTextContent("acme-1");
+    expect(pane).toHaveTextContent(spec);
     expect(pane).toHaveTextContent("Spec · submitted just now");
     expect(within(pane).getByRole("heading", { name: "Theming", level: 2 })).toBeInTheDocument();
     const tickets = within(pane).getByRole("list", { name: "Tickets" });
-    expect(within(tickets).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["acme-2 Dark palette In Review", "acme-3 Light palette Ready"]);
+    expect(within(tickets).getAllByRole("listitem").map((li) => li.textContent)).toEqual([expect.stringMatching(/^\S+ Dark palette In Review$/), `${light} Light palette Ready`]);
     await userEvent.click(within(tickets).getByRole("button", { name: /Light palette/ }));
-    expect(params().get("ticket")).toBe("acme-3");
+    expect(params().get("ticket")).toBe(light);
     expect(await within(detail()).findByRole("heading", { name: "Light palette", level: 2 })).toBeInTheDocument();
   });
 
   it("opens from the Spec named in the Ticket panel", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    fake.addSpec("acme", { title: "Theming" }); // acme-1
-    fake.addTicket("acme", { title: "Dark palette", state: "Ready", spec: { id: "acme-1", title: "Theming" } }); // acme-2
-    renderApp(fake, "/?view=inbox&ticket=acme-2");
+    const { w, s } = await acme();
+    const spec = await s.spec("acme", { title: "Theming" });
+    const id = await s.ticket("acme", { title: "Dark palette", state: "Ready", spec });
+    renderApp(w, `/?view=inbox&ticket=${id}`);
 
-    await userEvent.click(await within(detail()).findByRole("button", { name: "acme-1 Theming" }));
-    expect(params().get("requirement")).toBe("acme-1");
-    expect(params().get("ticket")).toBe("acme-2");
+    await userEvent.click(await within(detail()).findByRole("button", { name: `${spec} Theming` }));
+    expect(params().get("requirement")).toBe(spec);
+    expect(params().get("ticket")).toBe(id);
     expect(await within(detail()).findByRole("region", { name: "Spec" })).toBeInTheDocument();
   });
 });
