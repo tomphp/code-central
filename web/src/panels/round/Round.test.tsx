@@ -1,58 +1,47 @@
-// The Round panel against FakeApi, inside the real App so each action's
+// The Round panel on the WASM Core, inside the real App so each action's
 // change notice refetches the Ticket the way the service's SSE does.
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../../App";
-import { FakeApi } from "../../api/fake";
-import type { QuestionView } from "../../api/types";
+import { newWorld } from "../../api/core/core";
+import { scenario, type QuestionSeed } from "../../api/scenario";
 
-// A Ticket waiting on Round 2, whose Questions are 3 and 4 (numbers run
-// across the Ticket), the first with a recommendation.
-function world(questions: Partial<QuestionView>[] = []) {
-  const fake = new FakeApi();
-  fake.addProject("acme", "Acme");
-  const posted = fake.now.toISOString();
-  fake.addTicket("acme", {
-    title: "Pick a colour",
-    state: "Needs Answer",
-    rounds: [
-      {
-        number: 1,
-        claim: 1,
-        posted,
-        questions: [{ number: 1, title: "Old question", body: "Asked before", status: "answered", answer: "Yes" }],
-      },
-      {
-        number: 2,
-        claim: 1,
-        posted,
-        questions: [
-          { number: 3, title: "Which colour?", body: "Red or **blue**, for the login button.", recommended: "Blue", status: "open" },
-          { number: 4, title: "Which size?", body: "S or M", status: "open" },
-          ...questions.map((q, i) => ({ number: 5 + i, title: `Extra ${i}`, body: "More", status: "open" as const, ...q })),
-        ],
-      },
-    ],
-  });
-  fake.setNeedsMe([{ reason: "needs_answer", tickets: [{ id: "acme-1", round: { number: 2, open: 2, questions: 2 } }] }]);
-  return fake;
+const COLOUR: QuestionSeed = { title: "Which colour?", body: "Red or **blue**, for the login button.", recommended: "Blue" };
+const SIZE: QuestionSeed = { title: "Which size?", body: "S or M" };
+
+// world has a Ticket waiting on Round 2, whose Questions are 3 and 4 (numbers
+// run across the Ticket), the first with a recommendation, then any extra
+// ones; Round 1 was answered.
+async function world(extra: Partial<QuestionSeed>[] = [], questions: QuestionSeed[] = [COLOUR, SIZE]) {
+  const w = await newWorld();
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  const id = await s.ticket("acme", { title: "Pick a colour" });
+  await s.askRound("acme", id, [{ title: "Old question", body: "Asked before" }]);
+  await s.answerRound("acme", id, ["Yes"]);
+  await s.pickUpAnswers("acme", id);
+  await s.askRound("acme", id, [...questions, ...extra.map((q, i) => ({ title: `Extra ${i}`, body: "More", ...q }))]);
+  w.calls.length = 0;
+  return { w, id };
 }
 
-function renderPanel(fake: FakeApi, round = 2) {
-  window.history.replaceState(null, "", "/?view=inbox&ticket=acme-1");
-  render(<App api={fake} now={() => fake.now} />);
+type Waiting = Awaited<ReturnType<typeof world>>;
+
+function renderPanel({ w, id }: Waiting, round = 2) {
+  window.history.replaceState(null, "", `/?view=inbox&ticket=${id}`);
+  render(<App api={w.api} now={w.now} />);
   return screen.findByRole("region", { name: new RegExp(`Round ${round}`) });
 }
 
 const question = (panel: HTMLElement, title: string) => within(panel).getByRole("group", { name: new RegExp(title) });
 const box = (q: HTMLElement) => within(q).getByRole("textbox");
-const stored = async (fake: FakeApi) => (await fake.getTicket("acme", "acme-1")).rounds[1].questions;
+const stored = async ({ w, id }: Waiting) => (await w.api.getTicket("acme", id)).rounds[1].questions;
 
 describe("the Round panel", () => {
   it("shows every Question of the open Round, each box pre-filled with its recommendation as an unsaved draft", async () => {
-    const fake = world();
-    const panel = await renderPanel(fake);
+    const x = await world();
+    const panel = await renderPanel(x);
 
     expect(within(panel).queryByText("Old question")).toBeNull();
     const colour = question(panel, "Which colour?");
@@ -68,12 +57,12 @@ describe("the Round panel", () => {
     expect(within(size).getByRole("button", { name: "Answer" })).toBeDisabled();
 
     expect(within(panel).getByText("2 of 2 open")).toBeInTheDocument();
-    expect(fake.actions()).toEqual([]);
+    expect(x.w.actions()).toEqual([]);
   });
 
   it("renders a Question's body as Markdown, keeping its title plain and its recommendation raw in the box", async () => {
-    const fake = world([{ title: "Pick _one_", body: "- left\n- [right](https://example.com)\n\n<b>loud</b>", recommended: "**left**" }]);
-    const panel = await renderPanel(fake);
+    const x = await world([{ title: "Pick _one_", body: "- left\n- [right](https://example.com)\n\n<b>loud</b>", recommended: "**left**" }]);
+    const panel = await renderPanel(x);
 
     const colour = question(panel, "Which colour?");
     expect(within(colour).getByText("blue").tagName).toBe("STRONG");
@@ -86,16 +75,16 @@ describe("the Round panel", () => {
   });
 
   it("answers one Question with the text in its box, and keeps it editable until the Round is complete", async () => {
-    const fake = world();
-    const panel = await renderPanel(fake);
+    const x = await world();
+    const panel = await renderPanel(x);
     const colour = question(panel, "Which colour?");
     await userEvent.clear(box(colour));
     await userEvent.type(box(colour), "Red");
     await userEvent.click(within(colour).getByRole("button", { name: "Answer" }));
 
     await waitFor(() => expect(within(question(panel, "Which colour?")).getByText("Answered")).toBeInTheDocument());
-    expect(fake.actions()).toEqual(["answer"]);
-    expect((await stored(fake))[0]).toMatchObject({ status: "answered", answer: "Red" });
+    expect(x.w.actions()).toEqual(["answer"]);
+    expect((await stored(x))[0]).toMatchObject({ status: "answered", answer: "Red" });
     expect(within(panel).getByText("1 of 2 open")).toBeInTheDocument();
 
     // Still editable: the box holds the saved answer, and saving again changes it.
@@ -104,28 +93,28 @@ describe("the Round panel", () => {
     expect(within(again).queryByText(/Recommended answer/)).toBeNull();
     await userEvent.type(box(again), " please");
     await userEvent.click(within(again).getByRole("button", { name: "Update answer" }));
-    await waitFor(async () => expect((await stored(fake))[0].answer).toBe("Red please"));
+    await waitFor(async () => expect((await stored(x))[0].answer).toBe("Red please"));
   });
 
   it("dismisses one Question", async () => {
-    const fake = world();
-    const panel = await renderPanel(fake);
+    const x = await world();
+    const panel = await renderPanel(x);
     await userEvent.click(within(question(panel, "Which size?")).getByRole("button", { name: "Dismiss" }));
 
     await waitFor(() => expect(within(question(panel, "Which size?")).getByText("Dismissed")).toBeInTheDocument());
-    expect(fake.actions()).toEqual(["dismiss_question"]);
-    expect((await stored(fake))[1].status).toBe("dismissed");
-    expect((await stored(fake))[0].status).toBe("open");
+    expect(x.w.actions()).toEqual(["dismiss_question"]);
+    expect((await stored(x))[1].status).toBe("dismissed");
+    expect((await stored(x))[0].status).toBe("open");
   });
 
   it("accepts every recommended answer in one click", async () => {
-    const fake = world([{ recommended: "Yes" }]);
-    const panel = await renderPanel(fake);
+    const x = await world([{ recommended: "Yes" }]);
+    const panel = await renderPanel(x);
     await userEvent.click(within(panel).getByRole("button", { name: "Accept all recommended" }));
 
     await waitFor(() => expect(within(panel).getByText("1 of 3 open")).toBeInTheDocument());
-    expect(fake.actions()).toEqual(["accept_recommended"]);
-    expect((await stored(fake)).map((q) => [q.status, q.answer])).toEqual([
+    expect(x.w.actions()).toEqual(["accept_recommended"]);
+    expect((await stored(x)).map((q) => [q.status, q.answer])).toEqual([
       ["answered", "Blue"],
       ["open", undefined],
       ["answered", "Yes"],
@@ -133,17 +122,13 @@ describe("the Round panel", () => {
   });
 
   it("offers Accept all recommended only while an open Question has a recommendation", async () => {
-    const fake = world();
-    fake.updateTicket("acme-1", {
-      rounds: [{ number: 1, claim: 1, posted: fake.now.toISOString(), questions: [{ number: 1, title: "Which size?", body: "S or M", status: "open" }] }],
-    });
-    const panel = await renderPanel(fake, 1);
+    const panel = await renderPanel(await world([], [SIZE]));
     expect(within(panel).queryByRole("button", { name: "Accept all recommended" })).toBeNull();
   });
 
   it("fills a Question's box with \"Prototype this: \" for the human to add a note to, saving nothing", async () => {
-    const fake = world();
-    const panel = await renderPanel(fake);
+    const x = await world();
+    const panel = await renderPanel(x);
     const colour = question(panel, "Which colour?");
     await userEvent.click(within(colour).getByRole("button", { name: "Prototype this" }));
 
@@ -151,16 +136,16 @@ describe("the Round panel", () => {
     expect(box(colour)).toHaveFocus();
     expect(within(colour).queryByText(/Recommended answer/)).toBeNull();
     expect(box(question(panel, "Which size?"))).toHaveValue("");
-    expect(fake.actions()).toEqual([]);
+    expect(x.w.actions()).toEqual([]);
 
     await userEvent.type(box(colour), "try both on the login page");
     await userEvent.click(within(colour).getByRole("button", { name: "Answer" }));
-    await waitFor(async () => expect((await stored(fake))[0].answer).toBe("Prototype this: try both on the login page"));
+    await waitFor(async () => expect((await stored(x))[0].answer).toBe("Prototype this: try both on the login page"));
   });
 
   it("shows the service's refusal", async () => {
-    const fake = world();
-    const panel = await renderPanel(fake);
+    const x = await world();
+    const panel = await renderPanel(x);
     const size = question(panel, "Which size?");
     await userEvent.type(box(size), "   ");
     await userEvent.click(within(size).getByRole("button", { name: "Answer" }));

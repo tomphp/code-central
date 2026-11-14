@@ -3,17 +3,18 @@
 // (free text, empty for Default, suggesting the Reported Models' aliases
 // and model IDs) and an effort picker (the valid levels, plus Default);
 // Default says what it inherits; a rejected effort shows the error.
-// Against FakeApi.
+// On the WASM Core.
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
-import { FakeApi } from "../api/fake";
+import { newWorld, type World } from "../api/core/core";
+import { scenario } from "../api/scenario";
 import { options, suggested } from "../testPickers";
 
-function renderApp(fake: FakeApi) {
+function renderApp(w: World) {
   window.history.replaceState(null, "", "/?view=project-options&project=acme");
-  return render(<App api={fake} now={() => fake.now} />);
+  return render(<App api={w.api} now={w.now} />);
 }
 
 const KINDS = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"];
@@ -27,15 +28,18 @@ const effort = (row: string) => within(models()).getByRole("combobox", { name: `
 const report = { effort_levels: [], aliases: [], model_flag: "", effort_flag: "" };
 const save = () => userEvent.click(within(models()).getByRole("button", { name: "Save" }));
 const unset = { model: "", effort: "" };
-const fresh = (fake: FakeApi) => {
-  fake.addProject("acme", "Acme");
-  return fake;
+const fresh = async (opts: { archived?: boolean } = {}) => {
+  const w = await newWorld();
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  if (opts.archived) await s.archive("acme");
+  return { w, s };
 };
 
 describe("the Models section", () => {
   it("comes after GitHub Issues, with the Project default row then a row per kind of work, all at Default", async () => {
-    const fake = fresh(new FakeApi());
-    renderApp(fake);
+    const { w } = await fresh();
+    renderApp(w);
 
     await findModels();
     const sections = Array.from(page().querySelectorAll("fieldset.project-options-section > legend"), (l) => l.textContent);
@@ -49,9 +53,9 @@ describe("the Models section", () => {
   });
 
   it("shows what Default inherits: Claude Code's default for the Project default, the Project default for a kind", async () => {
-    const fake = fresh(new FakeApi());
-    await fake.setModels("acme", { default: { model: "opus", effort: "" }, kinds: [] });
-    renderApp(fake);
+    const { w } = await fresh();
+    await w.api.setModels("acme", { default: { model: "opus", effort: "" }, kinds: [] });
+    renderApp(w);
 
     await findModels();
     expect(model("the Project default")).toHaveAttribute("placeholder", "Default (Claude Code's default)");
@@ -65,10 +69,10 @@ describe("the Models section", () => {
   });
 
   it("shows haiku as Chat's model, which neither the Project default nor the Factory's flags reach", async () => {
-    const fake = fresh(new FakeApi());
-    await fake.setModels("acme", { default: { model: "opus", effort: "high" }, kinds: [] });
-    await fake.reportModels("acme", { ...report, model_flag: "sonnet", effort_flag: "low" });
-    renderApp(fake);
+    const { w, s } = await fresh();
+    await w.api.setModels("acme", { default: { model: "opus", effort: "high" }, kinds: [] });
+    await s.reportModels("acme", { ...report, model_flag: "sonnet", effort_flag: "low" });
+    renderApp(w);
 
     await findModels();
     expect(model("Chat")).toHaveAttribute("placeholder", "haiku");
@@ -83,8 +87,8 @@ describe("the Models section", () => {
   });
 
   it("sets and reads Chat's model and effort, apart from the kinds of work", async () => {
-    const fake = fresh(new FakeApi());
-    renderApp(fake);
+    const { w } = await fresh();
+    renderApp(w);
 
     await findModels();
     await userEvent.type(model("Chat"), "sonnet");
@@ -92,26 +96,26 @@ describe("the Models section", () => {
     await save();
 
     await within(models()).findByRole("status");
-    const stored = (await fake.listProjects())[0].models;
+    const stored = (await w.api.listProjects())[0].models;
     expect(stored.chat).toEqual({ model: "sonnet", effort: "low" });
     expect(stored.default).toEqual(unset);
     expect(stored.kinds.every((k) => k.model === "" && k.effort === "")).toBe(true);
     expect(model("Chat")).toHaveValue("sonnet");
 
     // A change from another tab shows, and a row back at Default clears.
-    await fake.setModels("acme", { default: unset, chat: { model: "opus", effort: "" }, kinds: [] });
+    await w.api.setModels("acme", { default: unset, chat: { model: "opus", effort: "" }, kinds: [] });
     expect(await within(models()).findByDisplayValue("opus")).toBe(model("Chat"));
     await userEvent.clear(model("Chat"));
     await save();
     await within(models()).findByRole("status");
-    expect((await fake.listProjects())[0].models.chat).toEqual(unset);
+    expect((await w.api.listProjects())[0].models.chat).toEqual(unset);
   });
 
   it("shows a rejected Chat effort's error on Chat's picker", async () => {
-    const fake = fresh(new FakeApi());
-    await fake.setModels("acme", { default: unset, chat: { model: "", effort: "max" }, kinds: [] });
-    await fake.reportModels("acme", { ...report, effort_levels: ["low", "medium", "high"] });
-    renderApp(fake);
+    const { w, s } = await fresh();
+    await w.api.setModels("acme", { default: unset, chat: { model: "", effort: "max" }, kinds: [] });
+    await s.reportModels("acme", { ...report, effort_levels: ["low", "medium", "high"] });
+    renderApp(w);
 
     await findModels();
     await userEvent.type(model("Chat"), "sonnet");
@@ -122,17 +126,17 @@ describe("the Models section", () => {
   });
 
   it("offers the valid effort levels after Default", async () => {
-    const fake = fresh(new FakeApi());
-    renderApp(fake);
+    const { w } = await fresh();
+    renderApp(w);
 
     await findModels();
     expect(options(effort("spec")).slice(1)).toEqual(["low", "medium", "high", "xhigh", "max"]);
   });
 
   it("offers the effort levels the Factory reported, once it has", async () => {
-    const fake = fresh(new FakeApi());
-    await fake.reportModels("acme", { ...report, effort_levels: ["low", "high", "turbo"] });
-    renderApp(fake);
+    const { w, s } = await fresh();
+    await s.reportModels("acme", { ...report, effort_levels: ["low", "high", "turbo"] });
+    renderApp(w);
 
     await findModels();
     expect(options(effort("the Project default")).slice(1)).toEqual(["low", "high", "turbo"]);
@@ -140,18 +144,18 @@ describe("the Models section", () => {
   });
 
   it("suggests no models before any report: Default and free text only", async () => {
-    const fake = fresh(new FakeApi());
-    renderApp(fake);
+    const { w } = await fresh();
+    renderApp(w);
 
     await findModels();
     for (const row of ["the Project default", ...KINDS, "Chat"]) expect(suggested(model(row))).toEqual([]);
   });
 
   it("suggests the reported aliases and model IDs in every model picker", async () => {
-    const fake = fresh(new FakeApi());
-    await fake.reportModels("acme", { ...report, aliases: ["fable", "opus", "sonnet"] });
-    fake.seedModelIDs("acme", ["claude-opus-5-5", "opus"]);
-    renderApp(fake);
+    const { w, s } = await fresh();
+    await s.reportModels("acme", { ...report, aliases: ["fable", "opus", "sonnet"] });
+    await s.modelIDs("acme", ["claude-opus-5-5", "opus"]);
+    renderApp(w);
 
     await findModels();
     for (const row of ["the Project default", ...KINDS, "Chat"]) {
@@ -161,13 +165,13 @@ describe("the Models section", () => {
     await userEvent.type(model("spec"), "my-own-model");
     await save();
     await within(models()).findByRole("status");
-    expect((await fake.listProjects())[0].models.kinds.find((k) => k.kind === "spec")?.model).toBe("my-own-model");
+    expect((await w.api.listProjects())[0].models.kinds.find((k) => k.kind === "spec")?.model).toBe("my-own-model");
   });
 
   it("shows the Factory's reported flags as what the Project default's Default inherits", async () => {
-    const fake = fresh(new FakeApi());
-    await fake.reportModels("acme", { ...report, model_flag: "sonnet", effort_flag: "high" });
-    renderApp(fake);
+    const { w, s } = await fresh();
+    await s.reportModels("acme", { ...report, model_flag: "sonnet", effort_flag: "high" });
+    renderApp(w);
 
     await findModels();
     expect(model("the Project default")).toHaveAttribute("placeholder", "Default (Factory flag: sonnet)");
@@ -179,8 +183,8 @@ describe("the Models section", () => {
   });
 
   it("saves the rows whole, a model as typed and an effort as picked, and back to Default", async () => {
-    const fake = fresh(new FakeApi());
-    renderApp(fake);
+    const { w } = await fresh();
+    renderApp(w);
 
     await findModels();
     await userEvent.type(model("the Project default"), "opus");
@@ -189,7 +193,7 @@ describe("the Models section", () => {
     await save();
 
     await within(models()).findByRole("status");
-    const stored = (await fake.listProjects())[0].models;
+    const stored = (await w.api.listProjects())[0].models;
     expect(stored.default).toEqual({ model: "opus", effort: "" });
     expect(stored.kinds.find((k) => k.kind === "grilling")).toEqual({ kind: "grilling", model: "claude-fable-5-1", effort: "" });
     expect(stored.kinds.find((k) => k.kind === "implementation")).toEqual({ kind: "implementation", model: "", effort: "xhigh" });
@@ -199,17 +203,17 @@ describe("the Models section", () => {
     await userEvent.selectOptions(effort("implementation"), "");
     await save();
     await within(models()).findByRole("status");
-    const cleared = (await fake.listProjects())[0].models;
+    const cleared = (await w.api.listProjects())[0].models;
     expect(cleared.kinds.find((k) => k.kind === "grilling")).toEqual({ kind: "grilling", ...unset });
     expect(cleared.kinds.find((k) => k.kind === "implementation")).toEqual({ kind: "implementation", ...unset });
   });
 
   it("shows a rejected effort's error on its picker", async () => {
-    const fake = fresh(new FakeApi());
-    await fake.setModels("acme", { default: unset, kinds: [{ kind: "spec", model: "", effort: "max" }] });
+    const { w, s } = await fresh();
+    await w.api.setModels("acme", { default: unset, kinds: [{ kind: "spec", model: "", effort: "max" }] });
     // A later report dropped max, so saving the row again is refused.
-    await fake.reportModels("acme", { ...report, effort_levels: ["low", "medium", "high"] });
-    renderApp(fake);
+    await s.reportModels("acme", { ...report, effort_levels: ["low", "medium", "high"] });
+    renderApp(w);
 
     await findModels();
     expect(effort("spec")).toHaveValue("max");
@@ -223,19 +227,18 @@ describe("the Models section", () => {
   });
 
   it("follows the Project as read, so a change from another tab shows", async () => {
-    const fake = fresh(new FakeApi());
-    renderApp(fake);
+    const { w } = await fresh();
+    renderApp(w);
 
     await findModels();
-    await fake.setModels("acme", { default: unset, kinds: [{ kind: "tickets", model: "sonnet", effort: "low" }] });
+    await w.api.setModels("acme", { default: unset, kinds: [{ kind: "tickets", model: "sonnet", effort: "low" }] });
     expect(await within(models()).findByDisplayValue("sonnet")).toBe(model("tickets"));
     expect(effort("tickets")).toHaveValue("low");
   });
 
   it("is disabled while the Project is archived", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme", { archived: true });
-    renderApp(fake);
+    const { w } = await fresh({ archived: true });
+    renderApp(w);
 
     expect(await findModels()).toBeDisabled();
   });
