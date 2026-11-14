@@ -32,6 +32,9 @@ type result struct {
 // printed one, and the agent's last text.
 type turnEnd struct {
 	ExitCode int
+	// Signal is the signal that ended the turn, as "signal: killed";
+	// empty when it exited by itself.
+	Signal   string
 	Result   *result
 	LastText string
 	// APIError is the API error the turn ended on, such as "rate_limit",
@@ -41,7 +44,7 @@ type turnEnd struct {
 }
 
 func (t turnEnd) String() string {
-	s := fmt.Sprintf("exit %d", t.ExitCode)
+	s := t.exit()
 	if t.Result == nil {
 		return s + ", no result"
 	}
@@ -50,6 +53,15 @@ func (t turnEnd) String() string {
 		s += " (" + t.Result.TerminalReason + ")"
 	}
 	return s
+}
+
+// exit is how the turn's process ended: the signal that ended it, else
+// its exit code.
+func (t turnEnd) exit() string {
+	if t.Signal != "" {
+		return t.Signal
+	}
+	return fmt.Sprintf("exit %d", t.ExitCode)
 }
 
 // startArgs are a new session's flags.
@@ -224,6 +236,9 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, usage *usageReader, o
 	case err == nil:
 	case errors.As(err, &exit):
 		end.ExitCode = exit.ExitCode()
+		if end.ExitCode == -1 {
+			end.Signal = exit.ProcessState.String()
+		}
 	default:
 		end.ExitCode = -1
 	}

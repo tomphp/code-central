@@ -54,7 +54,7 @@ describe("a CI item in Needs Me", () => {
     renderApp(fake);
     const focusItem = await within(focus()).findByRole("article", { name: "Focus Item" });
     expect(within(focusItem).getByRole("heading", { level: 2 })).toHaveTextContent("CI failed at abc1234");
-    expect(within(focusItem).getByText("CI failed", { selector: ".reason span" })).toBeInTheDocument();
+    expect(within(focusItem).getByText("Focus: CI failed")).toBeInTheDocument();
     const panel = await within(focusItem).findByRole("region", { name: "CI failed" });
     expect(within(panel).getByText(/is one Needs Me item, listing 2 Tickets/)).toHaveTextContent("Also waiting: acme-3");
     expect(within(panel).getByRole("link", { name: "acme-3" })).toHaveAttribute("href", expect.stringContaining("ticket=acme-3"));

@@ -135,7 +135,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    acme-shop-2 turn ended (grilling): "Grilling: Format prices for display": exit 0, success (completed); now In Review; ran 2m21s
    ```
 
-5. **Review and accept the grilling Stage.** `acme-shop-2` is In Review, with the session's summary in *Review the finished work*:
+5. **Review and accept the grilling Stage.** `acme-shop-2` is In Review, with the session's summary in *Review the finished work*, beside an *Auto-accept: Grilling outcomes* badge:
 
    ```text
    Grilling took one Round of six Questions, and every recommendation was accepted. The full write-up is in the resolution comment on this Ticket. The Spec is retitled "Display string for a Price in pence", and its body is unchanged.

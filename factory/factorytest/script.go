@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/tomoram/code-central/core"
 )
@@ -63,7 +64,7 @@ func (h *Harness) Continue(ticket string) {
 // Signals is the signals runs of ticket got while in a Wait step, in
 // order: "INT" and "TERM" on Unix, "BREAK" on Windows.
 func (h *Harness) Signals(ticket string) []string {
-	b, err := os.ReadFile(filepath.Join(h.data, "signals", ticket))
+	b, err := readFile(filepath.Join(h.data, "signals", ticket))
 	if os.IsNotExist(err) {
 		return nil
 	}
@@ -332,11 +333,24 @@ func (h *Harness) Calls() []Call {
 	must(h.t, err)
 	var out []Call
 	for _, e := range entries {
-		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		b, err := readFile(filepath.Join(dir, e.Name()))
 		must(h.t, err)
 		var c Call
 		must(h.t, json.Unmarshal(b, &c))
 		out = append(out, c)
 	}
 	return out
+}
+
+// readFile reads a file a fake wrote, retrying for up to 2s while
+// another process holds it open.
+func readFile(name string) ([]byte, error) {
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		b, err := os.ReadFile(name)
+		if !inUse(err) || time.Now().After(deadline) {
+			return b, err
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }

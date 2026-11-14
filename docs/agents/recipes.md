@@ -22,11 +22,12 @@ Parallel Tickets each bump the format, so they collide at merge. When merging th
 
 ## Adding or changing a landing rule
 
-How the Landing Method, Push, Land per Spec and CI Tracking combine lives in `store.LandingPolicy` (`store/landingpolicy.go`), and nowhere else.
+Every landing rule is a method of `core.LandingPolicy` (`core/landingpolicy.go`), and no caller reads the Landing Method, Push, Land per Spec or CI Tracking to decide, not even one of them alone (ADR 0039).
 
-1. Add a method to `store.LandingPolicy`, or extend one, with a doc comment quoting the glossary rule it answers.
-2. Add or change its row in `TestLandingPolicyMatrix` (`store/landingpolicy_test.go`), which pins every Method × Push × Land per Spec × CI Tracking combination.
-3. Call it from core with `p.LandingPolicy()`, and from the Factory through the `core.ProjectView`'s four inputs. Don't combine Method, Push, Land per Spec or CI Tracking at a call site. A test of one input alone (`Method == X`, `CI.Tracking`) stays a plain comparison.
+1. Add a method to `core.LandingPolicy`, or extend one, with a doc comment quoting the glossary rule it answers.
+2. Add or change its column in `TestLandingPolicyMatrix` (`core/landingpolicy_test.go`), which pins every Method × Push × Land per Spec × CI Tracking combination. How the Factory lands one Ticket is `Route`, pinned by `TestLandingPolicyRoute`.
+3. Call it from core through the Project's policy, `landingPolicyOf(p)`, and from the Factory through `ProjectView.LandingPolicy()`.
+4. Run `go test ./core -run TestNoLandingSettingIsReadOutsideThePolicy`. It type-checks `core/` and `factory/` and fails on any read of `Method`, `Push`, `LandPerSpec` or `Tracking` on `store.Landing`, `store.CI` or `core.LandingView`, naming each by file and line. Its allowlist, `landingGuardAllowlist` (`core/landingguard_test.go`), names the only code that may read them: the policy's file, which builds the policy, and the code that saves the settings and builds their views. Ask the policy rather than add an entry.
 
 ## Add or change a UI component
 

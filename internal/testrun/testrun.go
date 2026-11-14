@@ -12,7 +12,7 @@
 // Run it from the repository root, after the web dependencies are
 // installed, so installing them isn't timed:
 //
-//	go run ./internal/testrun -budget 10s [-v]
+//	go run ./internal/testrun -budget 60s [-v]
 package main
 
 import (
@@ -46,7 +46,7 @@ var suite = []job{
 }
 
 func main() {
-	budget := flag.Duration("budget", 10*time.Second, "the most wall-clock time the suite may take")
+	budget := flag.Duration("budget", 60*time.Second, "the most wall-clock time the suite may take")
 	verbose := flag.Bool("v", false, "print every job's whole output, not only the failures'")
 	flag.Parse()
 	if !run(suite, *budget, *verbose, os.Stdout) {

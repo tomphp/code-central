@@ -266,7 +266,7 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted or In Review Ticket is pushed", DisplayID(key, t.Number), t.State)}
 		}
 		p, _ := r.Project(key)
-		if !p.LandingPolicy().RecordsPushedCommit() {
+		if !landingPolicyOf(p).RecordsPushedCommit() {
 			return false, nil
 		}
 		if n := len(t.PushedCommits); n > 0 && t.PushedCommits[n-1].Commit == commit {
@@ -315,7 +315,7 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 			return err
 		}
 		p, _ := w.Project(key)
-		if !p.CI.Tracking {
+		if !landingPolicyOf(p).RunsCIWatcher() {
 			return &Error{Code: ActionNotAllowed, Message: "CI Tracking is off on " + key + ", so it tracks no CI Runs"}
 		}
 		stored := w.CIRuns(key)

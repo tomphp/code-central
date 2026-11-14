@@ -14,7 +14,7 @@ export const AUTO_ACCEPT_KIND_NAME: Record<AutoAcceptKind, string> = {
 // autoAcceptKindOf is the kind of a Ticket as core works it out on read: a
 // Stage's own, merge on a Spec merge Ticket, else Implementation results.
 // (A Prototype or Map Ticket has none and is never auto-accepted.)
-function autoAcceptKindOf(t: Pick<TicketView, "labels" | "spec_merge_ticket">): AutoAcceptKind {
+export function autoAcceptKindOf(t: Pick<TicketView, "labels" | "spec_merge_ticket">): AutoAcceptKind {
   return stageOf(t) ?? (t.spec_merge_ticket ? "merge" : "implementation");
 }
 

@@ -1005,6 +1005,9 @@ export interface TicketView {
   // with, each with its source; only the UI's read carries it (Spec
   // code-central-301).
   model_choice?: ModelChoice;
+  // auto_accept_kind is the Ticket's Auto-accept kind, left out when it has
+  // none; only the UI's read carries it (code-central-597).
+  auto_accept_kind?: AutoAcceptKind;
 }
 
 // TICKET_FIELDS are TicketView's fields in the service's order, the order

@@ -142,7 +142,7 @@ apiContract("FakeApi", async (): Promise<Driver> => {
       let error: string | undefined;
       try {
         // Agents' get_ticket leaves the Model Choice out.
-        const result = op === "get_ticket" ? { ...(await fake.getTicket(key, String(args.ticket))), model_choice: undefined } : await fake.findTickets(key);
+        const result = op === "get_ticket" ? { ...(await fake.getTicket(key, String(args.ticket))), model_choice: undefined, auto_accept_kind: undefined } : await fake.findTickets(key);
         text = JSON.stringify(result);
       } catch (e) {
         error = (e as ApiError).code;
