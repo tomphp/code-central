@@ -39,24 +39,6 @@
 .board-card-spec { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .board-card-spec .kind-badge { font-size: 9.5px; padding: 0 4px; }
 
-/* A pulse: an accent glow fading over 1.4s, run twice, when a card's
-   Ticket changes; pulseTiming.board matches it. Two identical animations,
-   so a new pulse swaps between them and the browser restarts it
-   (focus/pulse.ts). */
-.board-card.dashboard-pulse-0 { animation: board-pulse-0 1.4s ease-out 2; }
-.board-card.dashboard-pulse-1 { animation: board-pulse-1 1.4s ease-out 2; }
-@keyframes board-pulse-0 {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
-  100% { box-shadow: 0 0 0 10px transparent; background: var(--surface); }
-}
-@keyframes board-pulse-1 {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
-  100% { box-shadow: 0 0 0 10px transparent; background: var(--surface); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .board-card.dashboard-pulse-0, .board-card.dashboard-pulse-1 { animation: none; outline: 2px solid var(--accent); }
-}
-
 /* By Spec lanes: each lane is headed by its Lane header, a bar across the
    Board whose one line stays at the left while the columns scroll
    sideways; its cells are bare, so the cards sit under the bar. Collapsed,

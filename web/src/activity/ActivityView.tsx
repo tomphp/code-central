@@ -12,7 +12,6 @@ import type { InboxData } from "../live";
 import type { UiLocation } from "../url";
 import { Button } from "../controls/Button";
 import "../focus/focus.css";
-import "./activity.css";
 
 export interface ActivityViewProps {
   api: Api;
@@ -29,7 +28,7 @@ export function ActivityView({ api, now, version, data, loc, navigate }: Activit
   const back = loc.back?.view === "focus" ? "focus" : "inbox";
 
   return (
-    <main aria-label="Activity" className="activity">
+    <main aria-label="Activity" className="activity view-shell">
       <ViewHeader
         title="Activity"
         left={<ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />}
