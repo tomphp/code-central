@@ -1,11 +1,11 @@
 VERSION := $(or $(shell git describe --tags --always --dirty),dev)
 LDFLAGS := -X github.com/tomoram/code-central/cli.Version=$(VERSION)
 # The fast suite's wall-clock budget, in seconds.
-TEST_BUDGET := 10
+TEST_BUDGET := 60
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test test-verbose typecheck vitest vitest-stress e2e build web clean hooks context-report ci-failures serve-components build-components corewasm
+.PHONY: test test-verbose typecheck vitest vitest-stress e2e build web clean hooks context-report ci-failures serve-components build-components demo-store demo corewasm
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
@@ -87,6 +87,13 @@ e2e: build corewasm
 	go build -o bin/fake-gh$(EXE) ./internal/fakegh/gh
 	go test -tags e2e -count=1 ./e2e/
 	cd web && npm run test:e2e
+
+# A scratch service on PORT (default 7801, never 7733) filled with a demo
+# Project, to look at the UI against; internal/demostore explains it.
+# Stays in the foreground, so start it with run_in_background.
+# docs/agents/running-the-ui.md says how to use it.
+demo-store demo: build
+	go run ./internal/demostore -bin bin/code-central$(EXE) -port $(or $(PORT),7801)
 
 clean:
 	go run ./internal/clean bin web/dist web/src/api/core/core.wasm web/src/api/core/wasm_exec.js

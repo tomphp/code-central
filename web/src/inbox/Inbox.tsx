@@ -18,12 +18,8 @@ import {
 } from "../api/types";
 import { REASON_LABEL, ticketOf } from "../format";
 import type { InboxData, ProjectSpec } from "../live";
-import {
-  isStage,
-  needsMeCount,
-  progress,
-  reasonsOf,
-} from "../requirement/progress";
+import { useNeedsMe } from "../needsme/context";
+import { isStage, progress } from "../requirement/progress";
 import { InboxDetail } from "./InboxDetail";
 import { OptionsLink } from "../options/OptionsLink";
 import { UsageLink } from "../usage/UsageLink";
@@ -33,7 +29,6 @@ import { BoardLink } from "../board/BoardLink";
 import { SidebarTop } from "./SidebarTop";
 import { ArchivedProjects, ProjectFilter } from "./Projects";
 import { AllTicketsBySpec, AllTicketsByTicket, matchesId } from "./AllTickets";
-import { groupBySpec } from "./groupBySpec";
 import { SpecRow } from "./SpecRow";
 import { StateListBySpec } from "./StateListBySpec";
 import { FilterButton } from "./FilterButton";
@@ -79,48 +74,26 @@ export function Inbox({
   ticket,
   ticketError,
 }: InboxProps) {
-  const inProject = (key: string) => !loc.project || key === loc.project;
+  const needsMe = useNeedsMe();
   const projects = data?.projects ?? [];
   const archived = projects.filter((p) => p.archived);
   const isArchived = (id: string) =>
     archived.some((p) => p.key === projectOf(id));
-  const shown = (data?.needsMe.groups ?? []).map((g) => ({
-    ...g,
-    tickets: g.tickets.filter((r) => inProject(r.project)),
-  }));
   // Stage Tickets are never Needs Me rows: their Requirement's row stands in.
-  const stageNeeds = new Set(
-    shown
-      .flatMap((g) => g.tickets)
-      .flatMap((r) => (r.requirement?.stage ? [r.requirement.spec] : [])),
-  );
-  const groups = shown
-    .map((g) => ({
-      ...g,
-      tickets: g.tickets.filter((r) => !r.requirement?.stage),
-    }))
-    .filter((g) => g.tickets.length > 0);
-  const reasons = reasonsOf(data?.needsMe);
-  const tickets = (data?.tickets ?? []).filter((t) => inProject(t.project));
-  // Every Spec's Tickets, in every State and Project, for its Spec row.
-  const bySpec = new Map(groupBySpec(data?.tickets ?? []).map((g) => [g.id, g.tickets]));
-  const ticketsOf = (spec: string) => bySpec.get(spec) ?? [];
-  const requirements = requirementList(
-    (data?.requirements ?? []).filter((s) => inProject(s.project)),
-  );
-  const maps = (data?.maps ?? []).filter((s) => inProject(s.project));
+  const { requirements: needingReqs, groups } = needsMe.rows(loc.project);
+  const tickets = needsMe.tickets(loc.project);
+  const requirements = requirementList(needsMe.requirements(loc.project));
   // The Requirements view lists Maps among the Requirements.
-  const listed = requirementList(byCreation([...requirements, ...maps]));
+  const listed = requirementList(byCreation([...requirements, ...needsMe.maps(loc.project)]));
   const progressOf = (s: ProjectSpec) =>
-    progress(s.requirement!, ticketsOf(s.id), reasons);
-  const needingReqs = requirements.filter((s) => stageNeeds.has(s.id));
+    progress(s.requirement!, needsMe.ticketsOf(s.id), needsMe.reasonOf);
   // In flight: unfinished, and nothing of it waits on the human.
   const inFlight = requirements.filter(
     (s) => !s.finished && !progressOf(s).needs.length,
   );
   const drafts = tickets.filter((t) => t.state === "Draft");
-  const shownCount = needsMeCount(data?.needsMe, inProject);
-  const totalCount = needsMeCount(data?.needsMe);
+  const shownCount = needsMe.count(loc.project);
+  const totalCount = needsMe.count();
 
   // Selecting a row: a Ticket row leaves any Requirement; a Requirement
   // row opens on its default Ticket.
@@ -149,8 +122,7 @@ export function Inbox({
       key={s.id}
       id={s.id}
       spec={s}
-      all={ticketsOf(s.id)}
-      reasons={reasons}
+      all={needsMe.ticketsOf(s.id)}
       now={now}
       link={requirementLink(s.id)}
       ticketLink={rowLink}
@@ -271,7 +243,7 @@ export function Inbox({
             onClick={() => navigate({ state: s, list: undefined })}
           />
         ))}
-        <BoardLink loc={loc} navigate={navigate} tickets={tickets} reasons={reasons} className="filter" />
+        <BoardLink loc={loc} navigate={navigate} className="filter" />
         <h2>Admin</h2>
         <UsageLink loc={loc} navigate={navigate} className="filter" />
         <ActivityLink loc={loc} navigate={navigate} className="filter" />
@@ -303,8 +275,7 @@ export function Inbox({
                 search={query}
                 showFinished={showFinished}
                 specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
-                ticketsOf={ticketsOf}
-                reasons={reasons}
+                ticketsOf={needsMe.ticketsOf}
                 now={now}
                 link={rowLink}
                 specLink={requirementLink}
@@ -316,7 +287,6 @@ export function Inbox({
                 search={query}
                 showFinished={showFinished}
                 specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
-                reasons={reasons}
                 link={rowLink}
               />
             )}
@@ -330,8 +300,7 @@ export function Inbox({
                 state={loc.state}
                 tickets={stateList(tickets, loc.state)}
                 specs={new Map((data.specs ?? []).map((s) => [s.id, s]))}
-                ticketsOf={ticketsOf}
-                reasons={reasons}
+                ticketsOf={needsMe.ticketsOf}
                 now={now}
                 link={rowLink}
                 specLink={requirementLink}
@@ -340,7 +309,6 @@ export function Inbox({
             ) : (
               <StateList
                 tickets={stateList(tickets, loc.state)}
-                reasons={reasons}
                 now={now}
                 link={rowLink}
               />
@@ -403,7 +371,6 @@ export function Inbox({
         requirementError={requirementError}
         ticket={ticket}
         ticketError={ticketError}
-        reasons={reasons}
         projects={projects}
         isArchived={isArchived}
         specLink={specLink}

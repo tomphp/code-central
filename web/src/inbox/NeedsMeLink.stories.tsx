@@ -13,6 +13,7 @@ const ticket: NeedsMeRow = {
   state: "In Review",
   reason: "in_review",
   since,
+  focus_item: true,
 };
 
 const meta = {

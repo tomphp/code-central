@@ -1,6 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { LatestEvent, LinkView } from "../api/types";
+import type { ProjectTicket } from "../live";
+import { Needing } from "../needsme/fixture";
 import { TicketLine, TicketName } from "./TicketLine";
 
 const now = new Date("2026-11-07T09:00:00Z");
@@ -29,9 +31,11 @@ describe("TicketLine", () => {
   it("shows the Stage badge, State chip, Link and Waiting badges, added badges and needs-you dot, in that order", () => {
     const linked = { ...t, link: issue, waiting_for_spec: true };
     render(
-      <TicketLine t={linked} link={link} badge="Spec" chip needsYou>
-        <span className="extra">Extra</span>
-      </TicketLine>,
+      <Needing tickets={[linked as ProjectTicket]} reasons={{ [t.id]: "in_review" }}>
+        <TicketLine t={linked} link={link} badge="Spec" chip>
+          <span className="extra">Extra</span>
+        </TicketLine>
+      </Needing>,
     );
     const top = screen.getByRole("link").firstElementChild!;
     expect([...top.children].map((c) => c.className)).toEqual([
@@ -42,7 +46,7 @@ describe("TicketLine", () => {
       "label link-badge",
       "label waiting-badge",
       "extra",
-      "dot needs-you",
+      "dot reason-in_review",
     ]);
     expect(screen.getByText("Spec")).toBeTruthy();
     expect(screen.getByText("Ready")).toBeTruthy();

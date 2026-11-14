@@ -77,7 +77,7 @@ describe("the Link badge", () => {
 
 describe("the closed-externally row detail", () => {
   const now = new Date("2026-11-07T09:00:00Z");
-  const row = { project: "acme", id: "acme-1", title: "Issue", state: "Ready" as const, reason: "closed_externally" as const, since: now.toISOString() };
+  const row = { project: "acme", id: "acme-1", title: "Issue", state: "Ready" as const, reason: "closed_externally" as const, since: now.toISOString(), focus_item: true };
   it("says what happened to which external item", () => {
     expect(rowDetail(now, { ...row, link: { ...link, external_state: "closed" } })).toBe("Closed in github acme/web#7 · still Ready");
     expect(rowDetail(now, { ...row, link: { ...link, external_state: "deleted" } })).toBe("Deleted in github acme/web#7 · still Ready");

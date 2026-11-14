@@ -3,7 +3,7 @@
 // Prototype), its body, collapsed, the sums of its Tickets' CI badges, then the Spec's Tickets
 // with their States.
 import type { Api } from "../api/api";
-import type { NeedsMeReason, SpecDetail } from "../api/types";
+import type { SpecDetail } from "../api/types";
 import { BodySection } from "../edit/BodySection";
 import { ago } from "../format";
 import { NewPrototype } from "../requirement/NewRequirement";
@@ -18,7 +18,6 @@ import { ShortId } from "../inbox/ShortId";
 export interface SpecPaneProps {
   api: Api;
   spec: SpecDetail;
-  reasons: Map<string, NeedsMeReason>;
   // archived is whether the Spec's Project is Archived, which takes no edits.
   archived?: boolean;
   now: Date;
@@ -27,7 +26,7 @@ export interface SpecPaneProps {
   select(ticket: string): void;
 }
 
-export function SpecPane({ api, spec, archived, reasons, now, ticket, select }: SpecPaneProps) {
+export function SpecPane({ api, spec, archived, now, ticket, select }: SpecPaneProps) {
   return (
     <section aria-label="Spec" className="req-head">
       <ShortId id={spec.id} /> <span className="muted small">Spec · submitted {ago(now, spec.created)}</span>
@@ -44,7 +43,7 @@ export function SpecPane({ api, spec, archived, reasons, now, ticket, select }: 
       {spec.tickets.length === 0 ? (
         <p className="muted">No Tickets yet.</p>
       ) : (
-        <TicketList label="Tickets" tickets={spec.tickets} reasons={reasons} now={now} ticket={ticket} select={select} />
+        <TicketList label="Tickets" tickets={spec.tickets} now={now} ticket={ticket} select={select} />
       )}
     </section>
   );

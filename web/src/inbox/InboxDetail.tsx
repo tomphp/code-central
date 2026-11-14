@@ -1,6 +1,6 @@
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
-import type { NeedsMeReason, ProjectRow } from "../api/types";
+import type { ProjectRow } from "../api/types";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { SpecPane } from "../spec/SpecPane";
@@ -21,7 +21,6 @@ export function InboxDetail({
   requirementError,
   ticket,
   ticketError,
-  reasons,
   projects,
   isArchived,
   specLink,
@@ -38,7 +37,6 @@ export function InboxDetail({
   | "ticket"
   | "ticketError"
 > & {
-  reasons: Map<string, NeedsMeReason>;
   projects: ProjectRow[];
   isArchived(id: string): boolean;
   specLink(id: string): Link;
@@ -53,7 +51,6 @@ export function InboxDetail({
             api={api}
             spec={requirement}
             archived={isArchived(requirement.id)}
-            reasons={reasons}
             now={now}
             ticket={loc.ticket}
             select={(id) => navigate({ ticket: id })}
@@ -63,7 +60,6 @@ export function InboxDetail({
           <MapPane
             api={api}
             spec={map}
-            reasons={reasons}
             now={now}
             ticket={loc.ticket}
             select={(id) => navigate({ ticket: id })}
@@ -82,7 +78,6 @@ export function InboxDetail({
             api={api}
             spec={spec}
             archived={isArchived(spec.id)}
-            reasons={reasons}
             now={now}
             ticket={loc.ticket}
             select={(id) => navigate({ ticket: id })}

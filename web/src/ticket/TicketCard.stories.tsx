@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { Needing } from "../needsme/fixture";
 import { TicketCard } from "./TicketCard";
 import { storyLink, storyTickets, type StoryTickets } from "./storyTickets";
 
@@ -17,11 +18,17 @@ export const Plain = card(({ plain }) => <TicketCard t={plain} link={storyLink(p
 export const WithStage = card(({ stage }) => <TicketCard t={stage} link={storyLink(stage.id)} badge="Grilling" />);
 export const Blocked = card(({ linked }) => <TicketCard t={linked} link={storyLink(linked.id)} />);
 export const WithCI = card(({ plain }) => <TicketCard t={{ ...plain, state: "Accepted", ci_result: "running" }} link={storyLink(plain.id)} />);
-export const NeedsYou = card(({ stage }) => <TicketCard t={stage} link={storyLink(stage.id)} reason="needs_answer" />);
+export const NeedsYou = card(({ stage }) => (
+  <Needing tickets={[stage]} reasons={{ [stage.id]: "needs_answer" }}>
+    <TicketCard t={stage} link={storyLink(stage.id)} />
+  </Needing>
+));
 // Outside a lane, the card names its Spec.
 export const WithSpec = card(({ plain }) => <TicketCard t={plain} link={storyLink(plain.id)} spec={{ kind: "Spec", title: "Sign-in" }} />);
 // A card that just joined its column pulses.
 export const Joined = card(({ plain }) => <TicketCard t={plain} link={storyLink(plain.id)} joined />);
 export const Everything = card(({ linked }) => (
-  <TicketCard t={linked} link={storyLink(linked.id)} badge="Prototype" reason="in_review" spec={{ kind: "Map", title: "Sign-in" }} />
+  <Needing tickets={[linked]} reasons={{ [linked.id]: "in_review" }}>
+    <TicketCard t={linked} link={storyLink(linked.id)} badge="Prototype" spec={{ kind: "Map", title: "Sign-in" }} />
+  </Needing>
 ));

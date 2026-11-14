@@ -78,7 +78,7 @@ func (c *Core) GetPullRequestWatch(_ context.Context, key string) (PullRequestWa
 			return unknownProject(key)
 		}
 		lv := landingView(p)
-		out = PullRequestWatch{Project: key, On: p.Landing.Method == store.LandingPullRequest, CodeHost: lv.CodeHost, Repository: lv.Repository,
+		out = PullRequestWatch{Project: key, On: landingPolicyOf(p).RunsPullRequestWatcher(), CodeHost: lv.CodeHost, Repository: lv.Repository,
 			Base: p.Base(), PATEnv: lv.PATEnv, GHPath: r.Options().GHPath, Work: []PushedWorkView{}}
 		if out.On {
 			out.Work = pushedWork(r, key)
@@ -133,7 +133,7 @@ func pushedWork(r store.Reader, key string) []PushedWorkView {
 			Title: t.Title, Body: ticketPullRequestBody(key, t, r), PullRequest: pullRequestView(t.PullRequest)})
 	}
 	for i, ts := range covered {
-		if !specLanded(r, p.Landing, key, ts[0]) {
+		if !specLanded(r, p, ts[0]) {
 			continue
 		}
 		spec, _ := r.Spec(key, ts[0].Spec)
@@ -298,10 +298,11 @@ func pullRequestOpen(t store.Ticket) bool {
 
 // openPullRequests is the notice after a switch away from Pull Request:
 // the open pull request of each Accepted Ticket, by Ticket. A Spec's one
-// pull request shows for each of its Tickets. It is empty under Pull Request.
-func openPullRequests(r store.Reader, key string, method store.LandingMethod) []OpenPullRequest {
+// pull request shows for each of its Tickets. It is empty when lp lands by
+// Pull Request.
+func openPullRequests(r store.Reader, key string, lp LandingPolicy) []OpenPullRequest {
 	out := []OpenPullRequest{}
-	if method == store.LandingPullRequest {
+	if lp.LandsByPullRequest() {
 		return out
 	}
 	for _, t := range r.Tickets(key) {
