@@ -3,3 +3,4 @@ web/dist/
 node_modules/
 web/storybook-static/
 __pycache__/
+/.claude/worktrees/
