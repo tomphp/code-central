@@ -49,14 +49,16 @@ func (c *Core) projectExists(key string) bool {
 }
 
 // UsageResponse is one model response's token usage, as a Factory posts
-// it: when it came, the subagent it was for ("" for the main session),
-// the kind of session, the model that gave it ("" when not posted), and
-// its four token counts.
+// it: when it came, the subagent it was for ("" for the main session)
+// with that Subagent's Agent Type and description, the kind of session,
+// the model that gave it ("" when not posted), and its four token counts.
 type UsageResponse struct {
-	Time  time.Time `json:"time"`
-	Agent string    `json:"agent,omitempty"`
-	Kind  string    `json:"kind"`
-	Model string    `json:"model,omitempty"`
+	Time        time.Time `json:"time"`
+	Agent       string    `json:"agent,omitempty"`
+	AgentType   string    `json:"agent_type,omitempty"`
+	Description string    `json:"description,omitempty"`
+	Kind        string    `json:"kind"`
+	Model       string    `json:"model,omitempty"`
 	usage.Tokens
 }
 
@@ -88,7 +90,7 @@ func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []Usag
 		}
 		rs[i] = usage.Response{
 			Time: r.Time, Ticket: DisplayID(k.project, k.ticket), Claim: k.claim,
-			SessionID: sessionID, Agent: r.Agent, Kind: r.Kind, Model: r.Model, Tokens: r.Tokens,
+			SessionID: sessionID, Agent: r.Agent, AgentType: r.AgentType, Description: r.Description, Kind: r.Kind, Model: r.Model, Tokens: r.Tokens,
 		}
 	}
 	c.usage.RecordResponses(k.project, rs)
@@ -196,9 +198,12 @@ type SessionUsageInput struct {
 }
 
 // SessionUsageView is one session's responses, oldest first, for its
-// line chart.
+// line chart. For a Subagent it also has its Agent Type and description,
+// the latest non-empty of each among its responses.
 type SessionUsageView struct {
-	Responses []SessionUsageResponse `json:"responses"`
+	AgentType   string                 `json:"agent_type,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Responses   []SessionUsageResponse `json:"responses"`
 }
 
 // SessionUsageResponse is one of a session's model responses: when it
@@ -232,6 +237,8 @@ func (c *Core) SessionUsage(_ context.Context, in SessionUsageInput) (SessionUsa
 	slices.SortStableFunc(mine, func(a, b usage.Response) int { return a.Time.Compare(b.Time) })
 	out := SessionUsageView{Responses: []SessionUsageResponse{}}
 	for _, r := range mine {
+		out.AgentType = cmp.Or(r.AgentType, out.AgentType)
+		out.Description = cmp.Or(r.Description, out.Description)
 		out.Responses = append(out.Responses, SessionUsageResponse{Time: r.Time, ContextSize: r.ContextSize(), Tokens: r.Tokens})
 	}
 	return out, nil

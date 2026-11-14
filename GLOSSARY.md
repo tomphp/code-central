@@ -331,8 +331,16 @@ The view of the CI Runs in a Project, or in all Projects with CI Tracking on: th
 _Avoid_: CI dashboard, build monitor
 
 **Usage**:
-The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used.
+The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. Subagents nest under their parent session.
 _Avoid_: Analytics dashboard, stats, metrics
+
+**Subagent**:
+A session that a Claim's session starts through the Agent tool. Usage records it as a session of its own under its parent session, named by its Agent Type and description.
+_Avoid_: Child session, sidechain, task
+
+**Agent Type**:
+The kind of agent a Subagent was started as, as its Agent call names it, such as Explore or general-purpose.
+_Avoid_: Subagent kind (Kind is already the Usage session kind)
 
 **Context Size**:
 How many tokens a session's model read for one response (input, cache write and cache read), which is how full its context window was.

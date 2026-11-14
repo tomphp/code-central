@@ -245,12 +245,17 @@ func Response(id, parent, model string, input, cacheWrite, cacheRead, output int
 }
 
 // AgentCall prints a stream-json assistant message calling the Agent tool
-// with this tool-use ID and description, starting a subagent.
-func AgentCall(id, description string) Step {
+// with this tool-use ID, Agent Type and description, starting a subagent.
+// An empty agentType leaves subagent_type out of the call's input.
+func AgentCall(id, agentType, description string) Step {
+	in := map[string]string{"description": description, "prompt": description}
+	if agentType != "" {
+		in["subagent_type"] = agentType
+	}
 	b, _ := json.Marshal(map[string]any{
 		"type": "assistant",
 		"message": map[string]any{"role": "assistant", "content": []map[string]any{
-			{"type": "tool_use", "id": id, "name": "Agent", "input": map[string]string{"description": description, "prompt": description}},
+			{"type": "tool_use", "id": id, "name": "Agent", "input": in},
 		}},
 	})
 	return Step{Stdout: string(b)}

@@ -61,8 +61,8 @@ func TestEachModelResponsesTokenUsageIsPostedOnceUnderItsKind(t *testing.T) {
 		// One response in two content blocks, each line carrying its usage.
 		factorytest.Response("msg_1", "", "", 100, 200, 300, 10),
 		factorytest.Response("msg_1", "", "", 100, 200, 300, 10),
-		factorytest.AgentCall("toolu_review", "Spec review of the branch"),
-		factorytest.AgentCall("toolu_explore", "Find the paint"),
+		factorytest.AgentCall("toolu_review", "general-purpose", "Spec review of the branch"),
+		factorytest.AgentCall("toolu_explore", "Explore", "Find the paint"),
 		factorytest.Response("msg_r1", "toolu_review", "", 1000, 0, 0, 5),
 		factorytest.Response("msg_e1", "toolu_explore", "", 50, 0, 0, 5),
 		factorytest.Response("msg_e2", "toolu_explore", "", 60, 0, 0, 5),
@@ -90,6 +90,50 @@ func TestEachModelResponsesTokenUsageIsPostedOnceUnderItsKind(t *testing.T) {
 	}
 }
 
+func TestEachSubagentsResponsesCarryItsAgentTypeAndDescriptionAndTheMainSessionsCarryNeither(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("Paint with helpers")
+	h.Script(id,
+		factorytest.Response("msg_1", "", "", 100, 0, 0, 10),
+		factorytest.AgentCall("toolu_explore", "Explore", "Find the paint"),
+		factorytest.AgentCall("toolu_review", "general-purpose", "Spec review of the branch"),
+		factorytest.AgentCall("toolu_typeless", "", "Stir the paint"),
+		factorytest.AgentCall("toolu_descless", "Plan", ""),
+		factorytest.Response("msg_e1", "toolu_explore", "", 50, 0, 0, 5),
+		factorytest.Response("msg_e2", "toolu_explore", "", 60, 0, 0, 5),
+		factorytest.Response("msg_r1", "toolu_review", "", 70, 0, 0, 5),
+		factorytest.Response("msg_t1", "toolu_typeless", "", 80, 0, 0, 5),
+		factorytest.Response("msg_d1", "toolu_descless", "", 90, 0, 0, 5),
+		factorytest.Finish("Done."),
+		factorytest.Result("success"),
+	)
+	h.Start()
+	h.WaitForState(id, store.InReview)
+	waitForUsage(h, 6)
+	session := h.Ticket(id).Claims[0].SessionID
+
+	for _, c := range []struct{ agent, kind, agentType, description string }{
+		{"", "implementation", "", ""},
+		{"toolu_explore", "subagent", "Explore", "Find the paint"},
+		{"toolu_review", "review", "general-purpose", "Spec review of the branch"},
+		{"toolu_typeless", "subagent", "", "Stir the paint"},
+		{"toolu_descless", "subagent", "Plan", ""},
+	} {
+		v := h.SessionUsage(session, c.agent)
+		if v.AgentType != c.agentType || v.Description != c.description {
+			t.Errorf("session %q has agent type %q and description %q; want %q and %q", c.agent, v.AgentType, v.Description, c.agentType, c.description)
+		}
+	}
+	kinds := map[string]string{}
+	for _, s := range h.Usage().Sessions {
+		kinds[s.Agent] = s.Kind
+	}
+	if kinds["toolu_review"] != "review" || kinds["toolu_explore"] != "subagent" {
+		t.Errorf("session kinds are %v; want the review posted as review", kinds)
+	}
+}
+
 func TestEachUsageSessionListsTheModelsOfItsResponsesInOrderOfFirstUse(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
@@ -98,7 +142,7 @@ func TestEachUsageSessionListsTheModelsOfItsResponsesInOrderOfFirstUse(t *testin
 		// One response in two content blocks counts its model once.
 		factorytest.Response("msg_1", "", "claude-opus-5-5", 100, 0, 0, 10),
 		factorytest.Response("msg_1", "", "claude-opus-5-5", 100, 0, 0, 10),
-		factorytest.AgentCall("toolu_explore", "Find the paint"),
+		factorytest.AgentCall("toolu_explore", "Explore", "Find the paint"),
 		factorytest.Response("msg_e1", "toolu_explore", "claude-haiku-5-5", 50, 0, 0, 5),
 		factorytest.Response("msg_2", "", "claude-sonnet-5-5", 200, 0, 0, 10),
 		factorytest.Response("msg_3", "", "claude-opus-5-5", 300, 0, 0, 10),
@@ -123,9 +167,9 @@ func TestASyntheticResponseIsPostedWithItsTokensButNoModel(t *testing.T) {
 	h.Script(id,
 		factorytest.Response("msg_1", "", "claude-opus-5-5", 100, 0, 0, 10),
 		factorytest.Response("msg_synthetic", "", "<synthetic>", 900, 0, 0, 0),
-		factorytest.AgentCall("toolu_explore", "Find the paint"),
+		factorytest.AgentCall("toolu_explore", "Explore", "Find the paint"),
 		factorytest.Response("msg_e1", "toolu_explore", "<synthetic>", 50, 0, 0, 0),
-		factorytest.AgentCall("toolu_plain", "Stir the paint"),
+		factorytest.AgentCall("toolu_plain", "", "Stir the paint"),
 		factorytest.Response("msg_p1", "toolu_plain", "", 60, 0, 0, 5),
 		factorytest.Finish("Done."),
 		factorytest.Result("success"),
