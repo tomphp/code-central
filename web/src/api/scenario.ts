@@ -142,6 +142,18 @@ export class Scenario extends HttpDriver {
     return (await this.integration(`${this.projectPath(key)}/integration/create_linked_spec`, { title, link })).id;
   }
 
+  // modelChoice has the Factory report the model and effort its claude
+  // started the Ticket's latest turn with, claiming the Ticket first if it must.
+  async modelChoice(key: string, id: string, c: { model?: string; effort?: string }) {
+    await this.agent(`${this.ticketPath(key, id)}/report_model_choice`, { claim_id: await this.claimFor(key, id), ...c });
+  }
+
+  // specMerged has the Factory report it merged an Accepted Spec-landed
+  // Ticket's work into its Spec Branch at commit.
+  async specMerged(key: string, id: string, commit = WORK.commit) {
+    await this.agent(`${this.ticketPath(key, id)}/report_spec_merge`, { commit });
+  }
+
   // askRound has the agent post a Round of questions, claiming the Ticket
   // first if it must, and returns the Round's number.
   askRound(key: string, id: string, questions: QuestionSeed[] = QUESTIONS): Promise<number> {
