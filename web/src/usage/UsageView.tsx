@@ -84,7 +84,7 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
         {empty && <p className="muted">No usage yet {over}.</p>}
         {/* The open session, above the rest so it shows whatever they hold,
             keyed so another session starts from nothing. */}
-        {loc.session && <SessionChart key={sessionKey(loc.session)} api={api} session={loc.session} navigate={navigate} />}
+        {loc.session && <SessionChart key={sessionKey(loc.session)} api={api} session={loc.session} here={loc} navigate={navigate} />}
         {data && !empty && (
           <>
             <section aria-labelledby="usage-calls">
@@ -247,7 +247,10 @@ interface SessionsTableProps {
 // Each row's Ticket links to that Ticket and its session opens its line
 // chart. Which disclosures are open is the table's own, not the address's.
 function SessionsTable({ sessions, here, projectName, navigate }: SessionsTableProps) {
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  // A Subagent's chart in the address starts its parent's disclosure open.
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() =>
+    new Set(here.session?.agent ? [sessionKey({ project: here.session.project, session: here.session.session })] : []),
+  );
   const toggle = (key: string) =>
     setExpanded((open) => {
       const next = new Set(open);
@@ -359,20 +362,21 @@ function sessionName(session: string, agent?: string): string {
 // subagentName is a Subagent's name: its Agent Type and description, as
 // "Explore · Map Usage sessions", or whichever of them it has, or else
 // its tool-use ID, agent.
-function subagentName({ agent, agent_type, description }: UsageSession): string {
+function subagentName({ agent, agent_type, description }: Pick<UsageSession, "agent" | "agent_type" | "description">): string {
   return [agent_type, description].filter(Boolean).join(" · ") || (agent ?? "");
 }
 
 interface SessionChartProps {
   api: Api;
   session: SessionUsageFilter;
+  here: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
 }
 
 // SessionChart is one session's Context Size, response by response, as
 // a line chart, each point's exact figures on hover. It reads every day
 // Usage keeps, whatever the range, and closes to Usage as it was.
-function SessionChart({ api, session, navigate }: SessionChartProps) {
+function SessionChart({ api, session, here, navigate }: SessionChartProps) {
   const read = useFetch(() => api.sessionUsage(session), [api, session.project, session.session, session.agent]);
   const ref = useRef<HTMLElement>(null);
   // Opened from a row far down the recent sessions, bring it into view.
@@ -380,13 +384,22 @@ function SessionChart({ api, session, navigate }: SessionChartProps) {
     ref.current?.scrollIntoView?.({ block: "nearest" });
   }, []);
   const responses = read.data?.responses;
-  const name = `Session ${sessionName(session.session, session.agent)}`;
+  // A Subagent is named from the read, so a bookmarked chart names it
+  // without the list; until it arrives, by its tool-use ID.
+  const subagent = session.agent ? subagentName({ agent: session.agent, ...read.data }) : undefined;
+  const name = `Session ${sessionName(session.session, subagent)}`;
+  const parent: Partial<UiLocation> = { session: { project: session.project, session: session.session } };
   const peak = Math.max(0, ...(responses ?? []).map((r) => r.context_size));
 
   return (
     <section ref={ref} aria-label={name} className="usage-chart">
       <header className="usage-chart-head">
         <h3 className="usage-subhead">{name}</h3>
+        {session.agent && (
+          <a href={hrefFor({ ...here, ...parent })} onClick={clickTo(navigate, parent)}>
+            Parent session {session.session}
+          </a>
+        )}
         {responses?.length ? (
           <span className="muted">
             {count(responses.length)} {responses.length === 1 ? "response" : "responses"} · peak {count(peak)} tokens

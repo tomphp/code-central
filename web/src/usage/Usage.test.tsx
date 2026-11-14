@@ -506,6 +506,29 @@ describe("a session's Context Size", () => {
     expect(points()[0]).toHaveAttribute("aria-label", "Response 1: 21,000 tokens");
     // Its parent stays expanded, its row marked open.
     expect(within(sessionsTable()).getByRole("link", { name: "toolu_review" })).toHaveAttribute("aria-current", "true");
+
+    // The header links to the parent, whose chart is the same address without agent.
+    const parent = within(panel()).getByRole("link", { name: "Parent session sess-impl" });
+    expect(parent).toHaveAttribute("href", "?view=usage&days=30&session_project=acme&session=sess-impl");
+    await userEvent.click(parent);
+    expect(window.location.search).toBe("?view=usage&days=30&session_project=acme&session=sess-impl");
+    await waitFor(() => expect(points()).toHaveLength(3));
+    expect(panel()).toHaveAccessibleName("Session sess-impl");
+    expect(within(panel()).queryByRole("link", { name: /Parent session/ })).toBeNull();
+  });
+
+  it("names a subagent's chart from the read and starts its parent expanded when loaded from the address", async () => {
+    const fake = seeded();
+    fake.postUsage("sess-impl", [{ ...response(fake, 5, "subagent", 10_000, "toolu_a"), agent_type: "Explore", description: "Map Usage sessions" }]);
+    renderApp(fake, "/?view=usage&session_project=acme&session=sess-impl&agent=toolu_a");
+    await waitFor(() => expect(panel()).toHaveAccessibleName("Session sess-impl · Explore · Map Usage sessions"));
+    const disclosure = within(sessionsTable()).getByRole("button", { name: "2 subagents" });
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    expect(within(sessionsTable()).getByRole("link", { name: "Explore · Map Usage sessions" })).toHaveAttribute("aria-current", "true");
+    // Collapsing is view state: the address keeps the chart and gains nothing.
+    await userEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    expect(window.location.search).toBe("?view=usage&session_project=acme&session=sess-impl&agent=toolu_a");
   });
 
   it("reopens the session from the address, whatever the scope", async () => {
