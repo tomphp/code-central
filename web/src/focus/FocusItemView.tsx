@@ -13,7 +13,7 @@ import { panelFor } from "../panels/ActionPanel";
 import { QuestionAnswer } from "../panels/round/QuestionAnswer";
 import { PrototypeBadge } from "../ticket/PrototypeBadge";
 import { clickTo, hrefFor, type UiLocation } from "../url";
-import type { FocusItem } from "./queue";
+import type { FocusItem } from "./session";
 import { Button } from "../controls/Button";
 import "./focus.css";
 

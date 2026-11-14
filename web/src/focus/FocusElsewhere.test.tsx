@@ -1,10 +1,12 @@
-// Dealt with elsewhere, in Focus Mode: the real App against FakeApi, at
-// ?view=focus. An item on screen that goes away without the human acting
-// on it here moves on with a brief note; one the human acted on moves on
-// silently; a refused action keeps the item on screen with its alert.
-import { screen, within, act } from "@testing-library/react";
+// Dealt with elsewhere, in Focus Mode and the Focus popup: the real App
+// against FakeApi, at ?view=focus, or with the popup over another view. An
+// item on screen that goes away without the human acting on it here moves
+// on with a brief note; one the human acted on moves on silently; a
+// refused action keeps the item on screen with its alert. A read Round
+// with no open Question left waits, in both, for Needs Me to catch up.
+import { screen, within, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import { FakeApi } from "../api/fake";
 import { allClearOn, change, focus, renderApp, without } from "./focusTesting";
@@ -209,5 +211,109 @@ describe("a refused action", () => {
 
     expect(await heading("Login page")).toBeInTheDocument();
     expect(await within(focus()).findByText("Dealt with elsewhere")).toBeInTheDocument();
+  });
+});
+
+describe("in the Focus popup", () => {
+  // popupOn is fake with Focus Pop-up on.
+  function popupOn(fake: FakeApi) {
+    fake.seedOptions({ focus_popup: "on" });
+    return fake;
+  }
+  const popup = () => screen.getByRole("dialog", { name: "Focus popup" });
+  const inPopup = (name: string) => waitFor(() => within(popup()).getByRole("heading", { name }));
+  const popupNote = () => within(popup()).queryByText("Dealt with elsewhere");
+
+  it("moves on with a brief note when the Ticket on screen leaves its reason in Needs Me", async () => {
+    const fake = popupOn(tickets());
+    renderApp(fake, "/?view=inbox");
+    await within(await screen.findByRole("dialog", { name: "Focus popup" })).findByRole("button", { name: "Send back" });
+    change(fake, without(fake, "acme-2"), "acme-2");
+
+    expect(await inPopup("Login page")).toBeInTheDocument();
+    expect(await within(popup()).findByText("Dealt with elsewhere")).toBeInTheDocument();
+  });
+
+  it("moves a card's Question on with the note when it's answered elsewhere", async () => {
+    const fake = world();
+    renderApp(fake, "/?view=board&project=acme&popup=acme-1");
+    await inPopup("Which colour?");
+    await act(() => fake.act("acme", "acme-1", "answer", { question: 1, text: "Green" }));
+
+    expect(await inPopup("Which size?")).toBeInTheDocument();
+    expect(await within(popup()).findByText("Dealt with elsewhere")).toBeInTheDocument();
+  });
+
+  it("moves on with no note after the human's own action", async () => {
+    const fake = popupOn(tickets());
+    fake.setNeedsMe([...fake.needsMeGroups].reverse());
+    renderApp(fake, "/?view=inbox");
+    await inPopup("Login page");
+    await userEvent.click(await within(popup()).findByRole("button", { name: "Accept" }));
+
+    expect(await inPopup("Flaky build")).toBeInTheDocument();
+    expect(popupNote()).toBeNull();
+  });
+
+  it("moves a Question on with no note after Answer", async () => {
+    renderApp(popupOn(world()), "/?view=inbox");
+    await inPopup("Which colour?");
+    await userEvent.click(within(popup()).getByRole("button", { name: "Answer" }));
+
+    expect(await inPopup("Which size?")).toBeInTheDocument();
+    expect(popupNote()).toBeNull();
+  });
+
+  it("doesn't count a refused action as the human's when the item then goes elsewhere", async () => {
+    const fake = popupOn(tickets());
+    fake.updateTicket("acme-2", { state: "Done" });
+    renderApp(fake, "/?view=inbox");
+    await inPopup("Flaky build");
+    await userEvent.click(await within(popup()).findByRole("button", { name: "Cancel" }));
+    await within(popup()).findByRole("alert");
+    change(fake, without(fake, "acme-2"), "acme-2");
+
+    expect(await inPopup("Login page")).toBeInTheDocument();
+    expect(await within(popup()).findByText("Dealt with elsewhere")).toBeInTheDocument();
+  });
+});
+
+describe("a read Round with no open Question left, before Needs Me catches up", () => {
+  // answeredRound is world with only its Round in Needs Me, every Question
+  // of which is already answered: Needs Me hasn't caught up yet.
+  async function answeredRound() {
+    const fake = world();
+    fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason === "needs_answer"));
+    const t = await fake.getTicket("acme", "acme-1");
+    fake.updateTicket("acme-1", { rounds: t.rounds.map((r) => ({ ...r, questions: r.questions.map((q) => ({ ...q, status: "answered" as const, answer: "Yes" })) })) });
+    return fake;
+  }
+
+  // waitsThenCatchesUp checks that region shows Loading… while it waits,
+  // without reading the Round again and again, then shows the Ticket as
+  // Answered once Needs Me catches up.
+  async function waitsThenCatchesUp(fake: FakeApi, region: () => HTMLElement) {
+    const read = vi.spyOn(fake, "getTicket");
+    await waitFor(() => expect(read).toHaveBeenCalled());
+    await waitFor(() => expect(region()).toHaveTextContent("Loading…"));
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    expect(read.mock.calls.length).toBeLessThan(5);
+    expect(within(region()).queryByRole("article", { name: "Focus Item" })).toBeNull();
+
+    change(fake, [{ reason: "answered", tickets: [{ id: "acme-1" }] }]);
+    expect(await within(region()).findByRole("region", { name: "Resume or release" })).toBeInTheDocument();
+  }
+
+  it("waits in Focus Mode", async () => {
+    const fake = await answeredRound();
+    renderApp(fake);
+    await waitsThenCatchesUp(fake, focus);
+  });
+
+  it("waits in the Focus popup, which stays open", async () => {
+    const fake = await answeredRound();
+    fake.seedOptions({ focus_popup: "on" });
+    renderApp(fake, "/?view=inbox");
+    await waitsThenCatchesUp(fake, () => screen.getByRole("dialog", { name: "Focus popup" }));
   });
 });

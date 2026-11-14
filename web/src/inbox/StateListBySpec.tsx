@@ -1,6 +1,6 @@
 // A State list grouped By Spec: one Spec row per Spec with Tickets in the
 // list, opening on those Tickets.
-import type { NeedsMeReason, State } from "../api/types";
+import type { State } from "../api/types";
 import type { ProjectSpec, ProjectTicket } from "../live";
 import { groupBySpec } from "./groupBySpec";
 import { SpecRow, type SpecRowProps } from "./SpecRow";
@@ -11,7 +11,6 @@ export function StateListBySpec({
   tickets,
   specs,
   ticketsOf,
-  reasons,
   now,
   link,
   specLink,
@@ -22,7 +21,6 @@ export function StateListBySpec({
   specs: Map<string, ProjectSpec>;
   // ticketsOf is all of a Spec's Tickets, in every State.
   ticketsOf(spec: string): ProjectTicket[];
-  reasons: Map<string, NeedsMeReason>;
   now: Date;
   link: InboxRowLinkFactory;
   specLink(id: string): SpecRowProps["link"];
@@ -40,7 +38,6 @@ export function StateListBySpec({
           all={ticketsOf(g.id)}
           shown={g.tickets}
           here={state}
-          reasons={reasons}
           now={now}
           link={specLink(g.id)}
           ticketLink={link}
