@@ -15,6 +15,7 @@ import type { Api } from "../api/api";
 import type { FocusClear } from "../api/types";
 import { ticketOf } from "../format";
 import { useTicket, type InboxData } from "../live";
+import { useNeedsMe } from "../needsme/context";
 import { NewSplit } from "../requirement/NewSplit";
 import type { UiLocation } from "../url";
 import { ActivityDashboard } from "./ActivityDashboard";
@@ -45,6 +46,7 @@ export function Focus({
   navigate,
 }: FocusProps) {
   const project = data?.projects.find((p) => p.key === loc.project);
+  const needsMe = useNeedsMe();
   const [onScreen, setOnScreen] = useState<FocusItem>();
   // skipped lives here for this visit only: leaving Focus Mode or
   // reloading forgets it, and it's never sent or put in the URL.
@@ -65,8 +67,7 @@ export function Focus({
   const screen =
     data &&
     focusQueue({
-      needsMe: data.needsMe,
-      projects: data.projects,
+      needsMe,
       project: loc.project,
       onScreen,
       ticket: ticket.data,
