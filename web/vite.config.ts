@@ -8,6 +8,12 @@ import react from "@vitejs/plugin-react";
 // started with CODE_CENTRAL_LISTEN=127.0.0.1:<port>.
 const service = process.env.CODE_CENTRAL_URL ?? "http://127.0.0.1:7733";
 
+// 7733 is the human's real service: a test run never proxies to it, so it
+// fails on a CODE_CENTRAL_URL that names it (the proxy itself is unused).
+if (process.env.VITEST && process.env.CODE_CENTRAL_URL && new URL(service).port === "7733") {
+  throw new Error(`vitest would proxy to the real service at ${service}; unset CODE_CENTRAL_URL or point it at a test service`);
+}
+
 export default defineConfig({
   plugins: [react()],
   // web/dist is what `go build -tags webdist` embeds; it is never committed.
