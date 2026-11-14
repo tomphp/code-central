@@ -384,7 +384,7 @@ The Option that has the Focus popup open by itself, with every Focus Item in Nee
 _Avoid_: auto popup, needs-me popup, auto focus
 
 **Focus popup**:
-A popup showing Focus Items one at a time in the view Focus Mode also uses. It shows either a Board Ticket card's Ticket's Focus Items (its CI item's, for a Ticket listed in one), even of a reason its Project's Focus Kinds leave off, or, under Focus Pop-up, every Focus Item in the view's scope, with Skip and N left. It opens by itself only once no other popup is open and no text field has focus. It closes once none is left, whoever dealt with them, or, under Focus Pop-up, once only skipped ones are.
+A popup showing Focus Items one at a time, each with its Focus badge, in the view Focus Mode also uses. It shows either a Board Ticket card's Ticket's Focus Items (its CI item's, for a Ticket listed in one), even of a reason its Project's Focus Kinds leave off, or, under Focus Pop-up, every Focus Item in the view's scope, with Skip and N left. It opens by itself only once no other popup is open and no text field has focus. It closes once none is left, whoever dealt with them, or, under Focus Pop-up, once only skipped ones are.
 _Avoid_: needs-me popup, action popup
 
 **Ticket popup**:
@@ -448,8 +448,16 @@ A view showing the human one Focus Item at a time from Needs Me, moving to the n
 _Avoid_: Zen mode, queue view
 
 **Focus Item**:
-One thing in Needs Me, of a reason its Project's Focus Kinds leave on, that the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, or a Project's Base diverged or Base missing.
+One thing in Needs Me, of a reason its Project's Focus Kinds leave on, that the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, or a Project's Base diverged or Base missing. It opens with a Focus badge naming its reason.
 _Avoid_: Action, card, task
+
+**Focus badge**:
+The badge at the top of a Focus Item, "Focus: <reason>", that names its Needs Me reason in the words of the Focus section of Project Options.
+_Avoid_: focus type, focus label
+
+**Auto-accept badge**:
+The badge in the In Review panel's heading, "Auto-accept: <kind>", that names the Ticket's Auto-accept kind in the words of the Auto-accept section of Project Options, or "never" for a Ticket with none.
+_Avoid_: accept page type, accept label
 
 **Focus Kinds**:
 The Project setting naming which Needs Me reasons are Focus Items for that Project. It is set in the Focus section of Project Options, with every reason on by default. A reason left off stays in Needs Me, its count, the needs-you dots and Notifications.
@@ -492,7 +500,7 @@ The human's accept carried out within `finish`, when the finished Ticket is auto
 _Avoid_: Auto-approve, auto-merge, system accept
 
 **Auto-accept kind**:
-The kind of Ticket a Project's Auto-accept setting is switched on for: Grilling outcomes (`grilling`), Spec recommendation (`spec`), Tickets Stage (`tickets`), Implementation results (`implementation`) or Merge results (`merge`). It is worked out on read from what a Ticket carries, never stored. Prototypes and Map Tickets have none and are never auto-accepted.
+The kind of Ticket a Project's Auto-accept setting is switched on for: Grilling outcomes (`grilling`), Spec recommendation (`spec`), Tickets Stage (`tickets`), Implementation results (`implementation`) or Merge results (`merge`). It is worked out on read from what a Ticket carries, never stored. Prototypes and Map Tickets have none and are never auto-accepted. The In Review panel names it in the Auto-accept badge.
 _Avoid_: Auto-accept type, category
 
 **Auto-accept Label**:

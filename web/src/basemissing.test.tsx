@@ -33,7 +33,8 @@ describe("Base missing", () => {
   it("is a Focus Item for the Project with a link to Project Options", async () => {
     renderApp(world());
     const it = await within(focus()).findByRole("article", { name: "Focus Item" });
-    expect(within(it).getAllByText("Base missing")).toHaveLength(2);
+    expect(within(it).getAllByText("Base missing")).toHaveLength(1);
+    expect(within(it).getByText("Focus: Base missing")).toBeInTheDocument();
     expect(within(it).getByText(/release/)).toBeInTheDocument();
     const link = within(it).getByRole("link", { name: "Project Options" });
     expect(link.getAttribute("href")).toContain("view=project-options");
