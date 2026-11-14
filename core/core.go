@@ -418,7 +418,7 @@ func (c *Core) GetProject(_ context.Context, key string) (ProjectView, error) {
 			return unknownProject(key)
 		}
 		v = c.projectView(p)
-		v.Landing.OpenPullRequests = openPullRequests(r, key, p.Landing.Method)
+		v.Landing.OpenPullRequests = openPullRequests(r, key, landingPolicyOf(p))
 		return nil
 	})
 	return v, err

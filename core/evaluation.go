@@ -139,7 +139,7 @@ func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
 			// A Spec's pull request is one item, on its lead Ticket.
 			return "", time.Time{}
 		}
-		if t.State == store.Accepted && p.Landing.Method == store.LandingPullRequest && t.PullRequest != nil && t.PullRequest.State == store.PRClosed {
+		if t.State == store.Accepted && landingPolicyOf(p).LandsByPullRequest() && t.PullRequest != nil && t.PullRequest.State == store.PRClosed {
 			return ReasonPullRequestClosed, entered(t)
 		}
 		if t.State == store.Accepted && landingPolicyOf(p).LandsOnHumanMerge() {
