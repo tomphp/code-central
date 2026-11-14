@@ -411,4 +411,5 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .view-head label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .view-picker-label { color: var(--muted); }
 .view-head-spacer { margin-left: auto; }
-.modal-card.modal-wide { width: min(56rem, 96vw); max-height: calc(100vh - 12vh - 4vh); overflow-y: auto; overscroll-behavior: contain; }
+.modal.modal-popup { padding-top: 6vh; }
+.modal-card.modal-wide { width: min(56rem, 96vw); max-height: calc(100vh - 6vh - 4vh); overflow-y: auto; overscroll-behavior: contain; }
