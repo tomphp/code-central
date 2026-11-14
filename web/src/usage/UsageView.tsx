@@ -195,13 +195,14 @@ function CallsTable({ operations }: { operations: UsageOperation[] }) {
 // exact figure, in tokens, on hover.
 function Tokens({ n }: { n: number }) {
   return (
-    <td className="num" title={`${count(n)} tokens`}>
-      {count(n)}
+    <td className="num">
+      <TokenCount n={n} />
     </td>
   );
 }
 
-// TokenCount is a token count within a cell, formatted as Tokens is.
+// TokenCount is a token count with thousands separators and the exact
+// figure, in tokens, on hover.
 function TokenCount({ n }: { n: number }) {
   return <span title={`${count(n)} tokens`}>{count(n)}</span>;
 }
@@ -277,7 +278,7 @@ function SessionsTable({ sessions, here, projectName, navigate }: SessionsTableP
             const open = expanded.has(key);
             return (
               <Fragment key={key}>
-                <SessionRow s={s} here={here} projectName={projectName} navigate={navigate} open={s.subagents.length ? open : undefined} onToggle={() => toggle(key)} />
+                <SessionRow s={s} here={here} projectName={projectName} navigate={navigate} open={open} onToggle={() => toggle(key)} />
                 {open && s.subagents.map((a) => <SessionRow key={a.agent} s={a} here={here} projectName={projectName} navigate={navigate} />)}
               </Fragment>
             );
@@ -293,7 +294,8 @@ interface SessionRowProps {
   here: UiLocation;
   projectName(key: string): string;
   navigate(patch: Partial<UiLocation>): void;
-  // open is whether a main session's Subagents show, left out when it has none.
+  // open is whether a main session's Subagents show, and onToggle shows
+  // or hides them; a Subagent's row has neither.
   open?: boolean;
   onToggle?(): void;
 }
@@ -319,9 +321,9 @@ function SessionRow({ s, here, projectName, navigate, open, onToggle }: SessionR
       <td className="num">{s.claim}</td>
       <td className="usage-session">
         <a href={hrefFor({ ...here, ...sessionTo })} aria-current={isOpen ? "true" : undefined} onClick={clickTo(navigate, sessionTo)}>
-          {s.agent ? subagentName(s.agent, s) : s.session_id}
+          {s.agent ? subagentName(s) : s.session_id}
         </a>
-        {open !== undefined && (
+        {onToggle && n > 0 && (
           <button type="button" className="link usage-disclosure" aria-expanded={open} onClick={onToggle}>
             <span aria-hidden="true">{open ? "▾" : "▸"}</span> {n} {n === 1 ? "subagent" : "subagents"}
           </button>
@@ -357,8 +359,8 @@ function sessionName(session: string, agent?: string): string {
 // subagentName is a Subagent's name: its Agent Type and description, as
 // "Explore · Map Usage sessions", or whichever of them it has, or else
 // its tool-use ID, agent.
-function subagentName(agent: string, { agent_type, description }: Pick<UsageSession, "agent_type" | "description">): string {
-  return [agent_type, description].filter(Boolean).join(" · ") || agent;
+function subagentName({ agent, agent_type, description }: UsageSession): string {
+  return [agent_type, description].filter(Boolean).join(" · ") || (agent ?? "");
 }
 
 interface SessionChartProps {
