@@ -2,17 +2,25 @@
 // left pane, it sets the Project's Landing Method (code-central-174) and
 // its CI settings (code-central-251), whose turn-on the CI check may
 // refuse (code-central-252), CI Rules (code-central-254) and the CI
-// Watcher's status (code-central-253). Against
-// FakeApi.
+// Watcher's status (code-central-253). On the WASM Core.
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
-import { FakeApi } from "../api/fake";
+import { newWorld, type World } from "../api/core/core";
+import { scenario } from "../api/scenario";
 
-function renderApp(fake: FakeApi, url = "/") {
+// acme is a WASM Core world with the Project acme, which has no Spec.
+async function acme() {
+  const w = await newWorld();
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  return { w, s };
+}
+
+function renderApp(w: World, url = "/") {
   window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
+  return render(<App api={w.api} now={w.now} />);
 }
 
 const nav = () => screen.getByRole("navigation", { name: "Filters" });
@@ -26,9 +34,8 @@ const addForm = () =>
 
 describe("Project Options", () => {
   it("opens from an active Project's menu, in the URL, so a reload keeps it", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    const { unmount } = renderApp(fake);
+    const { w } = await acme();
+    const { unmount } = renderApp(w);
 
     await userEvent.click(
       await within(nav()).findByRole("button", { name: "Menu for Acme" }),
@@ -49,7 +56,7 @@ describe("Project Options", () => {
     expect(window.location.search).toBe("?view=project-options&project=acme");
 
     unmount();
-    renderApp(fake, window.location.pathname + window.location.search);
+    renderApp(w, window.location.pathname + window.location.search);
     expect(
       await screen.findByRole("heading", { name: "Acme: Project Options" }),
     ).toBeInTheDocument();
@@ -64,9 +71,8 @@ describe("Project Options", () => {
   });
 
   it("offers Pull Request with no Push checkbox, the worked-out Code Host, and the PAT variable only for Azure Repos", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake, "/?view=project-options&project=acme");
+    const { w, s } = await acme();
+    renderApp(w, "/?view=project-options&project=acme");
     await screen.findByRole("group", { name: "Landing Method" });
 
     await userEvent.click(
@@ -82,7 +88,7 @@ describe("Project Options", () => {
     expect(alert).toHaveTextContent("Push remote's URL");
     expect(alert).toHaveTextContent("start the Factory once");
 
-    await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
+    await s.reportPushRemote("acme", "git@github.com:acme/web.git");
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(within(landing()).getByRole("status", { name: "Code Host" })).toHaveTextContent(
@@ -90,9 +96,9 @@ describe("Project Options", () => {
       ),
     );
     expect(within(landing()).queryByRole("textbox", { name: "PAT variable" })).toBeNull();
-    expect((await fake.listProjects())[0].landing).toMatchObject({ method: "pull_request", push: false });
+    expect((await w.api.listProjects())[0].landing).toMatchObject({ method: "pull_request", push: false });
 
-    await fake.reportPushRemote("acme", "https://dev.azure.com/acme/shop/_git/web");
+    await s.reportPushRemote("acme", "https://dev.azure.com/acme/shop/_git/web");
     const pat = await within(landing()).findByRole("textbox", { name: "PAT variable" });
     expect(pat).toHaveValue("ADO_PAT");
     expect(within(landing()).getByRole("status", { name: "Code Host" })).toHaveTextContent(
@@ -102,21 +108,20 @@ describe("Project Options", () => {
     await userEvent.type(pat, "REPOS_PAT");
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
     await waitFor(async () =>
-      expect((await fake.listProjects())[0].landing.pat_env).toBe("REPOS_PAT"),
+      expect((await w.api.listProjects())[0].landing.pat_env).toBe("REPOS_PAT"),
     );
   });
 
   it("saves Pull Request for an Azure Repos Push remote without sending the view-only fields", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    await fake.reportPushRemote("acme", "https://dev.azure.com/org/proj/_git/repo");
-    renderApp(fake, "/?view=project-options&project=acme");
+    const { w, s } = await acme();
+    await s.reportPushRemote("acme", "https://dev.azure.com/org/proj/_git/repo");
+    renderApp(w, "/?view=project-options&project=acme");
     await screen.findByRole("group", { name: "Landing Method" });
 
     await userEvent.click(within(landing()).getByRole("radio", { name: "Pull Request" }));
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
     await waitFor(async () =>
-      expect((await fake.listProjects())[0].landing).toMatchObject({
+      expect((await w.api.listProjects())[0].landing).toMatchObject({
         method: "pull_request",
         code_host: "azure_repos",
       }),
@@ -125,10 +130,9 @@ describe("Project Options", () => {
   });
 
   it("shows the Pull Request Watcher's status under Pull Request: Watching, rate-limited, or an error with its fix", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
-    renderApp(fake, "/?view=project-options&project=acme");
+    const { w, s } = await acme();
+    await s.reportPushRemote("acme", "git@github.com:acme/web.git");
+    renderApp(w, "/?view=project-options&project=acme");
     await screen.findByRole("group", { name: "Landing Method" });
     expect(within(landing()).queryByRole("region", { name: "Pull Request Watcher" })).toBeNull();
 
@@ -137,10 +141,10 @@ describe("Project Options", () => {
     const watcher = await within(landing()).findByRole("region", { name: "Pull Request Watcher" });
     expect(watcher).toHaveTextContent("Starting; it hasn't reported yet");
 
-    await fake.reportPullRequestWatcherStatus("acme", { state: "watching" });
+    await s.reportPullRequestWatcher("acme", { state: "watching" });
     await waitFor(() => expect(watcher).toHaveTextContent("Pull Request Watcher: Watching acme/web."));
 
-    await fake.reportPullRequestWatcherStatus("acme", {
+    await s.reportPullRequestWatcher("acme", {
       state: "error",
       problem: "no_write",
       message: "the account gh is logged in as can't write to acme/web",
@@ -154,13 +158,12 @@ describe("Project Options", () => {
     await userEvent.click(within(landing()).getByRole("radio", { name: "Merge" }));
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(within(landing()).queryByRole("region", { name: "Pull Request Watcher" })).toBeNull());
-    expect((await fake.listProjects())[0].landing.watcher).toEqual({ state: "not_reported" });
+    expect((await w.api.listProjects())[0].landing.watcher).toEqual({ state: "not_reported" });
   });
 
   it("shows Land per Spec on under Merge, disabled but kept under Branch, and saves it", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake, "/?view=project-options&project=acme");
+    const { w } = await acme();
+    renderApp(w, "/?view=project-options&project=acme");
 
     const box = await within(
       await screen.findByRole("group", { name: "Landing Method" }),
@@ -170,7 +173,7 @@ describe("Project Options", () => {
 
     await userEvent.click(box);
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
-    expect((await fake.listProjects())[0].landing.land_per_spec).toBe(false);
+    expect((await w.api.listProjects())[0].landing.land_per_spec).toBe(false);
 
     await userEvent.click(
       within(landing()).getByRole("radio", { name: "Leave as a branch" }),
@@ -180,14 +183,13 @@ describe("Project Options", () => {
   });
 
   it("shows the current setting, with Remote enabled only under Push", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    await fake.setLandingMethod("acme", {
+    const { w } = await acme();
+    await w.api.setLandingMethod("acme", {
       method: "branch",
       push: false,
       remote: "upstream",
     });
-    renderApp(fake, "/?view=project-options&project=acme");
+    renderApp(w, "/?view=project-options&project=acme");
 
     const merge = await within(
       await screen.findByRole("group", { name: "Landing Method" }),
@@ -218,10 +220,9 @@ describe("Project Options", () => {
   });
 
   it("shows the Base branch above the radios, sends it on every save, and shows its error", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    await fake.setLandingMethod("acme", { method: "merge", push: false, remote: "origin", base: "develop" });
-    renderApp(fake, "/?view=project-options&project=acme");
+    const { w } = await acme();
+    await w.api.setLandingMethod("acme", { method: "merge", push: false, remote: "origin", base: "develop" });
+    renderApp(w, "/?view=project-options&project=acme");
 
     await screen.findByRole("group", { name: "Landing Method" });
     const base = within(landing()).getByRole("textbox", { name: "Base branch" });
@@ -234,13 +235,13 @@ describe("Project Options", () => {
     await userEvent.click(within(landing()).getByRole("radio", { name: "Leave as a branch" }));
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
     await waitFor(async () =>
-      expect((await fake.listProjects())[0].landing).toMatchObject({ method: "branch", base: "develop" }),
+      expect((await w.api.listProjects())[0].landing).toMatchObject({ method: "branch", base: "develop" }),
     );
 
     await userEvent.clear(base);
     await userEvent.type(base, "release/1.0");
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
-    await waitFor(async () => expect((await fake.listProjects())[0].landing.base).toBe("release/1.0"));
+    await waitFor(async () => expect((await w.api.listProjects())[0].landing.base).toBe("release/1.0"));
 
     await userEvent.clear(base);
     await userEvent.type(base, "bad name");
@@ -248,13 +249,12 @@ describe("Project Options", () => {
     expect(await within(landing()).findByRole("alert")).toHaveTextContent("branch name");
     expect(base).toHaveAttribute("aria-invalid", "true");
     expect(base).toHaveAccessibleDescription(/branch name/);
-    expect((await fake.listProjects())[0].landing.base).toBe("release/1.0");
+    expect((await w.api.listProjects())[0].landing.base).toBe("release/1.0");
   });
 
   it("saves the Landing Method, and shows a field error from the service", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake, "/?view=project-options&project=acme");
+    const { w } = await acme();
+    renderApp(w, "/?view=project-options&project=acme");
 
     const save = await within(
       await screen.findByRole("group", { name: "Landing Method" }),
@@ -281,7 +281,7 @@ describe("Project Options", () => {
     );
     expect(remote).toHaveAccessibleDescription(/Push needs a git remote/);
     expect(remote).toHaveAttribute("aria-invalid", "true");
-    expect((await fake.listProjects())[0].landing).toEqual({
+    expect((await w.api.listProjects())[0].landing).toEqual({
       method: "merge",
       push: false,
       remote: "origin",
@@ -300,7 +300,7 @@ describe("Project Options", () => {
     expect(await within(landing()).findByRole("status")).toHaveTextContent(
       "Saved",
     );
-    expect((await fake.listProjects())[0].landing).toEqual({
+    expect((await w.api.listProjects())[0].landing).toEqual({
       method: "branch",
       push: true,
       remote: "upstream",
@@ -316,14 +316,13 @@ describe("Project Options", () => {
   });
 
   it("shows what was stored after a save the service tidied into no change", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    await fake.setLandingMethod("acme", {
+    const { w } = await acme();
+    await w.api.setLandingMethod("acme", {
       method: "merge",
       push: true,
       remote: "upstream",
     });
-    renderApp(fake, "/?view=project-options&project=acme");
+    renderApp(w, "/?view=project-options&project=acme");
 
     const remote = await within(
       await screen.findByRole("group", { name: "Landing Method" }),
@@ -342,16 +341,15 @@ describe("Project Options", () => {
   });
 
   it("shows a change made elsewhere, as another tab would", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake, "/?view=project-options&project=acme");
+    const { w } = await acme();
+    renderApp(w, "/?view=project-options&project=acme");
     expect(
       await within(
         await screen.findByRole("group", { name: "Landing Method" }),
       ).findByRole("radio", { name: "Merge" }),
     ).toBeChecked();
 
-    await fake.setLandingMethod("acme", {
+    await w.api.setLandingMethod("acme", {
       method: "branch",
       push: true,
       remote: "upstream",
@@ -370,9 +368,10 @@ describe("Project Options", () => {
   });
 
   it("offers no Options for an Archived Project, which takes no writes", async () => {
-    const fake = new FakeApi();
-    fake.addProject("old", "Old App", { archived: true });
-    renderApp(fake);
+    const { w, s } = await acme();
+    await s.project("old", "Old App");
+    await s.archive("old");
+    renderApp(w);
     await userEvent.click(
       await within(nav()).findByRole("button", {
         name: "Menu for Old App",
@@ -387,9 +386,10 @@ describe("Project Options", () => {
   });
 
   it("shows an Archived Project's options read-only, by its URL", async () => {
-    const fake = new FakeApi();
-    fake.addProject("old", "Old App", { archived: true });
-    renderApp(fake, "/?view=project-options&project=old");
+    const { w, s } = await acme();
+    await s.project("old", "Old App");
+    await s.archive("old");
+    renderApp(w, "/?view=project-options&project=old");
     expect(
       await within(page()).findByText(
         /archived: unarchive it to change its options/,
@@ -414,9 +414,8 @@ describe("Project Options", () => {
   });
 
   it("says when the URL names no such Project", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake, "/?view=project-options&project=nope");
+    const { w } = await acme();
+    renderApp(w, "/?view=project-options&project=nope");
     expect(
       await within(page()).findByText("There is no Project nope."),
     ).toBeInTheDocument();
@@ -427,9 +426,8 @@ describe("Project Options", () => {
 
   describe("the CI section", () => {
     it("shows CI Tracking off by default, on GitHub Actions, with nothing named", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      renderApp(fake, "/?view=project-options&project=acme");
+      const { w } = await acme();
+      renderApp(w, "/?view=project-options&project=acme");
 
       const group = await screen.findByRole("group", { name: "CI" });
       const tracking = within(group).getByRole("checkbox", {
@@ -467,10 +465,9 @@ describe("Project Options", () => {
     });
 
     it("prefills the repository from a GitHub Push remote the Factory reported, and lets the human change it", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
-      renderApp(fake, "/?view=project-options&project=acme");
+      const { w, s } = await acme();
+      await s.reportPushRemote("acme", "git@github.com:acme/web.git");
+      renderApp(w, "/?view=project-options&project=acme");
 
       const repository = await within(
         await screen.findByRole("group", { name: "CI" }),
@@ -491,26 +488,25 @@ describe("Project Options", () => {
       expect(await within(ci()).findByRole("status")).toHaveTextContent(
         "Saved",
       );
-      expect((await fake.listProjects())[0].ci).toMatchObject({
+      expect((await w.api.listProjects())[0].ci).toMatchObject({
         tracking: true,
         repository: "acme/website",
       });
     });
 
     it("prefills nothing from a Push remote that isn't GitHub's, and keeps a repository already set", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      fake.addProject("beta", "Beta");
-      await fake.reportPushRemote("acme", "git@gitlab.com:acme/web.git");
-      await fake.reportPushRemote("beta", "https://github.com/beta/app.git");
-      await fake.setCITracking("beta", {
+      const { w, s } = await acme();
+      await s.project("beta", "Beta");
+      await s.reportPushRemote("acme", "git@gitlab.com:acme/web.git");
+      await s.reportPushRemote("beta", "https://github.com/beta/app.git");
+      await w.api.setCITracking("beta", {
         tracking: false,
         provider: "github_actions",
         repository: "beta/fork",
         ignored_workflows: [],
       });
       const { unmount } = renderApp(
-        fake,
+        w,
         "/?view=project-options&project=acme",
       );
 
@@ -521,7 +517,7 @@ describe("Project Options", () => {
       expect(repository).not.toHaveAccessibleDescription(/Push remote/);
       unmount();
 
-      renderApp(fake, "/?view=project-options&project=beta");
+      renderApp(w, "/?view=project-options&project=beta");
       expect(
         await within(
           await screen.findByRole("group", { name: "CI" }),
@@ -530,9 +526,8 @@ describe("Project Options", () => {
     });
 
     it("shows each provider's fields, keeping the other's values when switching", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      renderApp(fake, "/?view=project-options&project=acme");
+      const { w } = await acme();
+      renderApp(w, "/?view=project-options&project=acme");
       const group = await screen.findByRole("group", { name: "CI" });
       expect(
         within(group).queryByRole("textbox", {
@@ -583,7 +578,7 @@ describe("Project Options", () => {
       expect(await within(group).findByRole("status")).toHaveTextContent(
         "Saved",
       );
-      expect((await fake.listProjects())[0].ci).toMatchObject({
+      expect((await w.api.listProjects())[0].ci).toMatchObject({
         provider: "azure_pipelines",
         repository: "acme/web",
         project_url: "https://dev.azure.com/acme/web",
@@ -600,18 +595,17 @@ describe("Project Options", () => {
     });
 
     it("prefills the project URL from an Azure Repos Push remote, only for Azure Pipelines with none stored", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      fake.addProject("beta", "Beta");
-      await fake.reportPushRemote(
+      const { w, s } = await acme();
+      await s.project("beta", "Beta");
+      await s.reportPushRemote(
         "acme",
         "git@ssh.dev.azure.com:v3/acme/web/app",
       );
-      await fake.reportPushRemote(
+      await s.reportPushRemote(
         "beta",
         "https://dev.azure.com/beta/app/_git/app",
       );
-      await fake.setCITracking("beta", {
+      await w.api.setCITracking("beta", {
         tracking: false,
         provider: "azure_pipelines",
         repository: "",
@@ -619,7 +613,7 @@ describe("Project Options", () => {
         ignored_workflows: [],
       });
       const { unmount } = renderApp(
-        fake,
+        w,
         "/?view=project-options&project=acme",
       );
 
@@ -638,7 +632,7 @@ describe("Project Options", () => {
       );
       unmount();
 
-      renderApp(fake, "/?view=project-options&project=beta");
+      renderApp(w, "/?view=project-options&project=beta");
       const stored = await within(
         await screen.findByRole("group", { name: "CI" }),
       ).findByRole("textbox", { name: "Azure DevOps project URL" });
@@ -647,13 +641,12 @@ describe("Project Options", () => {
     });
 
     it("prefills nothing from a Server SSH Push remote", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      await fake.reportPushRemote(
+      const { w, s } = await acme();
+      await s.reportPushRemote(
         "acme",
         "ssh://git@tfs.example.com:22/tfs/DefaultCollection/web/_git/app",
       );
-      renderApp(fake, "/?view=project-options&project=acme");
+      renderApp(w, "/?view=project-options&project=acme");
       const group = await screen.findByRole("group", { name: "CI" });
       await userEvent.selectOptions(
         within(group).getByRole("combobox", { name: "CI Provider" }),
@@ -667,9 +660,8 @@ describe("Project Options", () => {
     });
 
     it("shows field errors on the project URL and the PAT environment variable", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      renderApp(fake, "/?view=project-options&project=acme");
+      const { w } = await acme();
+      renderApp(w, "/?view=project-options&project=acme");
       const group = await screen.findByRole("group", { name: "CI" });
       await userEvent.selectOptions(
         within(group).getByRole("combobox", { name: "CI Provider" }),
@@ -703,17 +695,16 @@ describe("Project Options", () => {
     });
 
     it("shows Watching the project URL for Azure Pipelines", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      await fake.setCITracking("acme", {
+      const { w, s } = await acme();
+      await w.api.setCITracking("acme", {
         tracking: true,
         provider: "azure_pipelines",
         repository: "",
         project_url: "https://dev.azure.com/acme/web",
         ignored_workflows: [],
       });
-      await fake.reportCIWatcherStatus("acme", { state: "watching" });
-      renderApp(fake, "/?view=project-options&project=acme");
+      await s.reportCIWatcherStatus("acme", { state: "watching" });
+      renderApp(w, "/?view=project-options&project=acme");
       const watcher = await within(
         await screen.findByRole("group", { name: "CI" }),
       ).findByRole("region", { name: "CI Watcher" });
@@ -723,10 +714,9 @@ describe("Project Options", () => {
     });
 
     it("turns CI Tracking on with a prefilled repository and Ignored workflows", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      await fake.reportPushRemote("acme", "https://github.com/acme/web.git");
-      renderApp(fake, "/?view=project-options&project=acme");
+      const { w, s } = await acme();
+      await s.reportPushRemote("acme", "https://github.com/acme/web.git");
+      renderApp(w, "/?view=project-options&project=acme");
 
       const tracking = await within(
         await screen.findByRole("group", { name: "CI" }),
@@ -740,7 +730,7 @@ describe("Project Options", () => {
       expect(await within(ci()).findByRole("status")).toHaveTextContent(
         "Saved",
       );
-      expect((await fake.listProjects())[0].ci).toEqual({
+      expect((await w.api.listProjects())[0].ci).toEqual({
         tracking: true,
         provider: "github_actions",
         project_url: "",
@@ -759,15 +749,14 @@ describe("Project Options", () => {
       await userEvent.click(tracking);
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
       await waitFor(async () =>
-        expect((await fake.listProjects())[0].ci.tracking).toBe(false),
+        expect((await w.api.listProjects())[0].ci.tracking).toBe(false),
       );
-      expect((await fake.listProjects())[0].ci.repository).toBe("acme/web");
+      expect((await w.api.listProjects())[0].ci.repository).toBe("acme/web");
     });
 
     it("shows the CI Watcher's status while CI Tracking is on, live", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      renderApp(fake, "/?view=project-options&project=acme");
+      const { w, s } = await acme();
+      renderApp(w, "/?view=project-options&project=acme");
       await within(await screen.findByRole("group", { name: "CI" })).findByRole(
         "checkbox",
         { name: "CI Tracking" },
@@ -776,7 +765,7 @@ describe("Project Options", () => {
         within(ci()).queryByRole("region", { name: "CI Watcher" }),
       ).toBeNull();
 
-      await fake.setCITracking("acme", {
+      await w.api.setCITracking("acme", {
         tracking: true,
         provider: "github_actions",
         repository: "acme/web",
@@ -787,7 +776,7 @@ describe("Project Options", () => {
       });
       expect(watcher).toHaveTextContent("CI Watcher: Starting");
 
-      await fake.reportCIWatcherStatus("acme", {
+      await s.reportCIWatcherStatus("acme", {
         state: "error",
         problem: "logged_out",
         message: "gh isn't logged in to GitHub",
@@ -805,7 +794,7 @@ describe("Project Options", () => {
         within(ci()).getByRole("region", { name: "CI Watcher" }),
       ).toHaveTextContent("Run gh auth login.");
 
-      await fake.reportCIWatcherStatus("acme", { state: "watching" });
+      await s.reportCIWatcherStatus("acme", { state: "watching" });
       await waitFor(() =>
         expect(
           within(ci()).getByRole("region", { name: "CI Watcher" }),
@@ -817,19 +806,18 @@ describe("Project Options", () => {
     });
 
     it("shows until when GitHub rate-limits the CI Watcher, which is Watching, not an error", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      await fake.setCITracking("acme", {
+      const { w, s } = await acme();
+      await w.api.setCITracking("acme", {
         tracking: true,
         provider: "github_actions",
         repository: "acme/web",
         ignored_workflows: [],
       });
-      await fake.reportCIWatcherStatus("acme", {
+      await s.reportCIWatcherStatus("acme", {
         state: "watching",
         rate_limited_until: "2026-01-05T10:15:00Z",
       });
-      renderApp(fake, "/?view=project-options&project=acme");
+      renderApp(w, "/?view=project-options&project=acme");
       const watcher = await within(
         await screen.findByRole("group", { name: "CI" }),
       ).findByRole("region", { name: "CI Watcher" });
@@ -841,7 +829,7 @@ describe("Project Options", () => {
       );
       expect(watcher.querySelector(".warning")).toBeNull();
 
-      await fake.reportCIWatcherStatus("acme", { state: "watching" });
+      await s.reportCIWatcherStatus("acme", { state: "watching" });
       await waitFor(() =>
         expect(
           within(ci()).getByRole("region", { name: "CI Watcher" }),
@@ -850,16 +838,19 @@ describe("Project Options", () => {
     });
 
     it("shows a crashing CI Watcher's restarts and last line, which the service restarts by itself", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      await fake.setCITracking("acme", {
+      const { w } = await acme();
+      await w.api.setCITracking("acme", {
         tracking: true,
         provider: "github_actions",
         repository: "acme/web",
         ignored_workflows: [],
       });
-      fake.seedCIWatcherCrash("acme", 3, "panic: boom");
-      renderApp(fake, "/?view=project-options&project=acme");
+      w.reportWatcherCrash("ci", "acme", {
+        restarts: 3,
+        lastLine: "panic: boom",
+        restartAt: new Date(w.now().getTime() + 2 * 60_000),
+      });
+      renderApp(w, "/?view=project-options&project=acme");
 
       const watcher = await within(
         await screen.findByRole("group", { name: "CI" }),
@@ -872,9 +863,8 @@ describe("Project Options", () => {
     });
 
     it("shows the service's refusal on its field", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      renderApp(fake, "/?view=project-options&project=acme");
+      const { w } = await acme();
+      renderApp(w, "/?view=project-options&project=acme");
 
       await userEvent.click(
         await within(
@@ -892,7 +882,7 @@ describe("Project Options", () => {
       expect(repository).toHaveAccessibleDescription(
         /needs the GitHub repository/,
       );
-      expect((await fake.listProjects())[0].ci.tracking).toBe(false);
+      expect((await w.api.listProjects())[0].ci.tracking).toBe(false);
 
       await userEvent.type(repository, "acme/web");
       expect(within(ci()).queryByRole("alert")).toBeNull();
@@ -908,13 +898,13 @@ describe("Project Options", () => {
     });
 
     it("shows a refused turn-on's reason and its fix", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      fake.seedCICheck({
+      const { w } = await acme();
+      w.setCICheck({
+        problem: "logged_out",
         reason: "gh isn't logged in to GitHub.",
         fix: "Run gh auth login as the user the service runs as.",
       });
-      renderApp(fake, "/?view=project-options&project=acme");
+      renderApp(w, "/?view=project-options&project=acme");
 
       await userEvent.click(
         await within(
@@ -934,28 +924,27 @@ describe("Project Options", () => {
       expect(
         within(ci()).getByRole("checkbox", { name: "CI Tracking" }),
       ).toHaveAccessibleDescription(/gh isn't logged in/);
-      expect((await fake.listProjects())[0].ci.tracking).toBe(false);
+      expect((await w.api.listProjects())[0].ci.tracking).toBe(false);
 
-      fake.seedCICheck();
+      w.setCICheck();
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
       expect(await within(ci()).findByRole("status")).toHaveTextContent(
         "Saved",
       );
       expect(within(ci()).queryByRole("alert")).toBeNull();
-      expect((await fake.listProjects())[0].ci.tracking).toBe(true);
+      expect((await w.api.listProjects())[0].ci.tracking).toBe(true);
     });
 
     it("shows a change made elsewhere, as another tab would", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      renderApp(fake, "/?view=project-options&project=acme");
+      const { w } = await acme();
+      renderApp(w, "/?view=project-options&project=acme");
       expect(
         await within(
           await screen.findByRole("group", { name: "CI" }),
         ).findByRole("checkbox", { name: "CI Tracking" }),
       ).not.toBeChecked();
 
-      await fake.setCITracking("acme", {
+      await w.api.setCITracking("acme", {
         tracking: true,
         provider: "github_actions",
         repository: "acme/web",
@@ -977,19 +966,18 @@ describe("Project Options", () => {
 
   describe("the CI Rules", () => {
     it("lists the rules, each with its Spec and the State its Tickets open in", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      renderApp(fake, "/?view=project-options&project=acme");
+      const { w } = await acme();
+      renderApp(w, "/?view=project-options&project=acme");
       const group = await screen.findByRole("group", { name: "CI Rules" });
       expect(ci()).toContainElement(group);
       expect(within(group).getByText("No CI Rules yet.")).toBeInTheDocument();
 
-      await fake.addCIRule("acme", {
+      await w.api.addCIRule("acme", {
         workflow: "ci.yml",
         branch: "main",
         state: "Ready",
       });
-      await fake.addCIRule("acme", {
+      await w.api.addCIRule("acme", {
         workflow: "any",
         branch: "release",
         state: "Draft",
@@ -1015,9 +1003,8 @@ describe("Project Options", () => {
     });
 
     it("adds a rule, creating its Spec", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      renderApp(fake, "/?view=project-options&project=acme");
+      const { w } = await acme();
+      renderApp(w, "/?view=project-options&project=acme");
       await screen.findByRole("group", { name: "CI Rules" });
 
       const add = within(addForm()).getByRole("button", { name: "Add rule" });
@@ -1039,10 +1026,10 @@ describe("Project Options", () => {
       expect(
         await within(rules()).findByText(/opens Ready Tickets on acme-1/),
       ).toBeInTheDocument();
-      expect((await fake.listProjects())[0].ci.rules).toMatchObject([
+      expect((await w.api.listProjects())[0].ci.rules).toMatchObject([
         { spec: "acme-1", workflow: "ci.yml", branch: "main", state: "Ready" },
       ]);
-      expect((await fake.getSpec("acme", "acme-1")).title).toBe(
+      expect((await w.api.getSpec("acme", "acme-1")).title).toBe(
         "CI: ci.yml on main",
       );
       // The form is cleared for the next rule.
@@ -1058,9 +1045,8 @@ describe("Project Options", () => {
     });
 
     it("shows a refusal on the field it names", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      renderApp(fake, "/?view=project-options&project=acme");
+      const { w } = await acme();
+      renderApp(w, "/?view=project-options&project=acme");
       await screen.findByRole("group", { name: "CI Rules" });
 
       await userEvent.type(
@@ -1076,21 +1062,20 @@ describe("Project Options", () => {
         "a CI Rule's branch takes no globs",
       );
       expect(branch).toHaveAttribute("aria-invalid", "true");
-      expect((await fake.listProjects())[0].ci.rules).toEqual([]);
+      expect((await w.api.listProjects())[0].ci.rules).toEqual([]);
 
       await userEvent.clear(branch);
       expect(within(addForm()).queryByRole("alert")).toBeNull();
     });
 
     it("edits a rule in place, or cancels the edit", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      await fake.addCIRule("acme", {
+      const { w } = await acme();
+      await w.api.addCIRule("acme", {
         workflow: "ci.yml",
         branch: "main",
         state: "Draft",
       });
-      renderApp(fake, "/?view=project-options&project=acme");
+      renderApp(w, "/?view=project-options&project=acme");
 
       await userEvent.click(
         await within(
@@ -1110,7 +1095,7 @@ describe("Project Options", () => {
       expect(
         within(rules()).queryByRole("form", { name: "Edit ci.yml on main" }),
       ).toBeNull();
-      expect((await fake.listProjects())[0].ci.rules[0].workflow).toBe(
+      expect((await w.api.listProjects())[0].ci.rules[0].workflow).toBe(
         "ci.yml",
       );
 
@@ -1142,7 +1127,7 @@ describe("Project Options", () => {
         await within(rules()).findByText(/opens Ready Tickets on acme-1/),
       ).toHaveTextContent(/^ci\.yml on develop/);
       expect(within(rules()).queryByRole("form", { name: /^Edit/ })).toBeNull();
-      expect((await fake.listProjects())[0].ci.rules).toMatchObject([
+      expect((await w.api.listProjects())[0].ci.rules).toMatchObject([
         {
           spec: "acme-1",
           workflow: "ci.yml",
@@ -1153,14 +1138,13 @@ describe("Project Options", () => {
     });
 
     it("removes a rule, keeping its Spec as the record", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      await fake.addCIRule("acme", {
+      const { w } = await acme();
+      await w.api.addCIRule("acme", {
         workflow: "ci.yml",
         branch: "main",
         state: "Draft",
       });
-      renderApp(fake, "/?view=project-options&project=acme");
+      renderApp(w, "/?view=project-options&project=acme");
 
       const remove = await within(
         await screen.findByRole("group", { name: "CI Rules" }),
@@ -1170,22 +1154,22 @@ describe("Project Options", () => {
       expect(
         await within(rules()).findByText("No CI Rules yet."),
       ).toBeInTheDocument();
-      expect((await fake.listProjects())[0].ci.rules).toEqual([]);
-      expect((await fake.getSpec("acme", "acme-1")).title).toBe(
+      expect((await w.api.listProjects())[0].ci.rules).toEqual([]);
+      expect((await w.api.getSpec("acme", "acme-1")).title).toBe(
         "CI: ci.yml on main",
       );
     });
 
     it("can't be changed while the Project is archived", async () => {
-      const fake = new FakeApi();
-      fake.addProject("acme", "Acme");
-      await fake.addCIRule("acme", {
+      const { w, s } = await acme();
+      await w.api.addCIRule("acme", {
         workflow: "ci.yml",
         branch: "main",
         state: "Draft",
       });
-      fake.addProject("old", "Old", { archived: true });
-      renderApp(fake, "/?view=project-options&project=old");
+      await s.project("old", "Old");
+      await s.archive("old");
+      renderApp(w, "/?view=project-options&project=old");
       await screen.findByRole("group", { name: "CI Rules" });
       expect(
         within(addForm()).getByRole("textbox", { name: "Workflow" }),
@@ -1194,14 +1178,13 @@ describe("Project Options", () => {
   });
 
   it("notes the pull requests left open after a switch away from Pull Request, with links", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    fake.addTicket("acme", { title: "Login form", state: "Accepted" });
-    await fake.reportPushRemote("acme", "git@github.com:acme/web.git");
-    await fake.setLandingMethod("acme", { method: "pull_request", push: false, remote: "origin" });
-    await fake.reportPushedCommit("acme", "acme-1", "abc123", "acme-1");
-    await fake.reportPullRequest("acme", { branch: "acme-1", number: 7, link: "https://github.com/acme/web/pull/7", state: "open" });
-    renderApp(fake, "/?view=project-options&project=acme");
+    const { w, s } = await acme();
+    const id = await s.ticket("acme", { title: "Login form", state: "Accepted" });
+    await s.reportPushRemote("acme", "git@github.com:acme/web.git");
+    await w.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "origin" });
+    await s.reportPushedCommit("acme", id, "abc123", id);
+    await s.reportPullRequest("acme", { branch: id, number: 7, link: "https://github.com/acme/web/pull/7", state: "open" });
+    renderApp(w, "/?view=project-options&project=acme");
     await screen.findByRole("group", { name: "Landing Method" });
     expect(within(landing()).queryByRole("status", { name: "Open pull requests" })).toBeNull();
 
@@ -1216,9 +1199,8 @@ describe("Project Options", () => {
   });
 
   it("has a section menu whose entries jump to their sections", async () => {
-    const fake = new FakeApi();
-    fake.addProject("acme", "Acme");
-    renderApp(fake, "/?view=project-options&project=acme");
+    const { w } = await acme();
+    renderApp(w, "/?view=project-options&project=acme");
     await screen.findByRole("heading", { name: "Acme: Project Options" });
 
     const menu = within(page()).getByRole("navigation", { name: "Sections" });

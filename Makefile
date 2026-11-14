@@ -5,7 +5,7 @@ TEST_BUDGET := 60
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test test-verbose typecheck vitest vitest-stress e2e build web clean hooks context-report ci-failures serve-components build-components demo-store demo
+.PHONY: test test-verbose typecheck vitest vitest-stress e2e build web clean hooks context-report ci-failures serve-components build-components corewasm demo-store demo
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
@@ -17,13 +17,14 @@ endif
 # seconds of wall-clock time: internal/testrun runs `go test ./...`
 # (against the committed placeholder page, so no Vite build), `vitest run`
 # and the TypeScript type check in parallel. Installing web dependencies
-# (first run, or after the lockfile changes) happens before the clock
-# starts. It prints one line per passing job and the output of a failing
-# one; test-verbose prints every job's whole output.
-test: $(WEB_DEPS) hooks
+# (first run, or after the lockfile changes) and building core.wasm
+# happen before the clock starts. It prints one line per passing job and
+# the output of a failing one; test-verbose prints every job's whole
+# output.
+test: $(WEB_DEPS) hooks corewasm
 	@go run ./internal/testrun -budget $(TEST_BUDGET)s
 
-test-verbose: $(WEB_DEPS) hooks
+test-verbose: $(WEB_DEPS) hooks corewasm
 	@go run ./internal/testrun -budget $(TEST_BUDGET)s -v
 
 # The inner loop while working on the UI: the TypeScript type check, and
@@ -33,14 +34,14 @@ test-verbose: $(WEB_DEPS) hooks
 typecheck: $(WEB_DEPS) hooks
 	cd web && node node_modules/typescript/bin/tsc --noEmit
 
-vitest: $(WEB_DEPS) hooks
+vitest: $(WEB_DEPS) hooks corewasm
 	cd web && node node_modules/vitest/vitest.mjs run $(F:web/%=%)
 
 # Shows a flaky web test: vitest on one file (F=) N times (default 20)
 # while LOAD busy workers (default 4, 0 for none) take the CPU, the way a
 # loaded CI runner does. It prints a line per run and "N runs, F failures",
 # and fails if any run failed. Go, so the workers stop however it exits.
-vitest-stress: $(WEB_DEPS) hooks
+vitest-stress: $(WEB_DEPS) hooks corewasm
 	go run ./internal/vitestress -n $(or $(N),20) -load $(or $(LOAD),4) $(F)
 
 # Turns on the committed commit-msg hook in .githooks/, which refuses a
@@ -49,6 +50,13 @@ vitest-stress: $(WEB_DEPS) hooks
 # path is relative, so each runs its own checked-out copy.
 hooks:
 	@git config core.hooksPath .githooks
+
+# The WASM Core the UI's tests and stories run on: cmd/corewasm built to
+# js/wasm, with the same Go's wasm_exec.js, both into web/src/api/core/
+# (never committed, never in web/dist). Go's build cache makes a rebuild
+# with no change cheap. A Go helper, so it runs the same under cmd.exe.
+corewasm:
+	@go run ./internal/corewasm web/src/api/core
 
 $(WEB_DEPS): web/package.json web/package-lock.json
 	$(if $(shell npm --version),,$(error npm not found; the UI needs Node (go test ./... alone runs without it)))
@@ -70,11 +78,12 @@ build: web hooks
 # binaries, real store in a temporary folder, never port 7733): the Go
 # end-to-end tests and the real half of the UI's API contract suite. The
 # binaries' paths reach both through make's environment, not the shell.
-# The UI's service finds the fake gh, built here, on its PATH.
+# The UI's service finds the fake gh, built here, on its PATH. The UI's
+# e2e config shares the test setup, so it needs core.wasm too.
 e2e: export CODE_CENTRAL_BIN := $(CURDIR)/bin/code-central$(EXE)
 e2e: export CODE_CENTRAL_FACTORY_BIN := $(CURDIR)/bin/code-central-factory$(EXE)
 e2e: export CODE_CENTRAL_FAKE_GH_BIN := $(CURDIR)/bin/fake-gh$(EXE)
-e2e: build
+e2e: build corewasm
 	go build -o bin/fake-gh$(EXE) ./internal/fakegh/gh
 	go test -tags e2e -count=1 ./e2e/
 	cd web && npm run test:e2e
@@ -87,7 +96,7 @@ demo-store demo: build
 	go run ./internal/demostore -bin bin/code-central$(EXE) -port $(or $(PORT),7801)
 
 clean:
-	go run ./internal/clean bin web/dist
+	go run ./internal/clean bin web/dist web/src/api/core/core.wasm web/src/api/core/wasm_exec.js
 
 # Prints the Context Report from Claude Code's session logs of this
 # repository; flags go in ARGS, for example
@@ -107,8 +116,8 @@ ci-failures:
 # `make test` uses it. serve-components serves it on http://localhost:6006 with
 # hot reload; build-components builds it statically into web/storybook-static,
 # which checks it builds.
-serve-components: $(WEB_DEPS)
+serve-components: $(WEB_DEPS) corewasm
 	cd web && npm exec -- storybook dev -p 6006 --no-open
 
-build-components: $(WEB_DEPS)
+build-components: $(WEB_DEPS) corewasm
 	cd web && npm exec -- storybook build

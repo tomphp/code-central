@@ -1,7 +1,8 @@
 // Package usage is the usage recorder (ADR 0016): what agents consume,
 // kept beside the store as append-only JSON Lines files, one per Project
-// per local day, at projects/<key>/usage/<YYYY-MM-DD>.jsonl. Callers
-// record and read records; they never see the files.
+// per local day, at projects/<key>/usage/<YYYY-MM-DD>.jsonl, or in
+// memory beside the in-memory store. Callers record and read records;
+// they never see the files.
 //
 // Recording never fails its caller: an append that fails is written to
 // the service log and dropped. Reading skips a line it can't parse and
@@ -20,10 +21,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"os"
-	"path/filepath"
-	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -126,19 +123,40 @@ type responseLine struct {
 }
 
 // Recorder appends and reads usage records. Its zero value is not
-// usable; build one with New. A nil Recorder records nothing and reads
-// nothing.
+// usable; build one with New or NewMemory. A nil Recorder records nothing
+// and reads nothing.
 type Recorder struct {
-	dir   string
+	files dayFiles
 	clock clock.Clock
 	loc   *time.Location
 	log   io.Writer
 	// mu is the recorder's own lock, apart from the store-wide one, so an
 	// append never waits on a store write: appends take it to write,
-	// reads to read, so a read never sees half a line.
+	// reads to read, so a read never sees half a line. files is used
+	// only under it.
 	mu sync.RWMutex
 	// prunedOn is the day the old files were last deleted on, under mu.
 	prunedOn string
+}
+
+// dayFiles is where a Recorder keeps its files, one per Project per
+// local day, the day as YYYY-MM-DD: on disk or in memory.
+type dayFiles interface {
+	// append adds line to the end of project's file for day d.
+	append(project, d string, line []byte) error
+	// open opens project's file for day d; a missing one is
+	// fs.ErrNotExist.
+	open(project, d string) (io.ReadCloser, error)
+	// days is the days project has a file for; a Project with none may
+	// be fs.ErrNotExist.
+	days(project string) ([]string, error)
+	// remove deletes project's file for day d.
+	remove(project, d string) error
+	// projects is every Project with a usage folder, sorted.
+	projects() []string
+	// name is how the log names project's file for day d, or its folder
+	// when d is "".
+	name(project, d string) string
 }
 
 // New returns a Recorder keeping its files under dir (the store's
@@ -146,10 +164,21 @@ type Recorder struct {
 // clk, and writing failures and skipped lines to log. It deletes the
 // files older than KeepDays days before it returns.
 func New(dir string, clk clock.Clock, loc *time.Location, log io.Writer) *Recorder {
+	return newRecorder(onDisk{dir}, clk, loc, log)
+}
+
+// NewMemory returns a Recorder keeping its files in memory, as the
+// in-memory store keeps its records, and otherwise dating, reading and
+// deleting them as New's does.
+func NewMemory(clk clock.Clock, loc *time.Location, log io.Writer) *Recorder {
+	return newRecorder(inMemory{}, clk, loc, log)
+}
+
+func newRecorder(files dayFiles, clk clock.Clock, loc *time.Location, log io.Writer) *Recorder {
 	if log == nil {
 		log = io.Discard
 	}
-	r := &Recorder{dir: dir, clock: clk, loc: loc, log: log}
+	r := &Recorder{files: files, clock: clk, loc: loc, log: log}
 	r.prune()
 	return r
 }
@@ -178,9 +207,7 @@ func (r *Recorder) RecordResponses(project string, rs []Response) {
 	}
 }
 
-// append writes v as one line to the end of project's file for t's day,
-// opened for appending. There is no fsync: a crash may lose the last
-// records, which usage can afford.
+// append writes v as one line to the end of project's file for t's day.
 func (r *Recorder) append(project string, t time.Time, v any) error {
 	line, err := json.Marshal(v)
 	if err != nil {
@@ -191,16 +218,7 @@ func (r *Recorder) append(project string, t time.Time, v any) error {
 	if day(r.today()) != r.prunedOn {
 		r.prune()
 	}
-	dir := r.projectDir(project)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(filepath.Join(dir, day(t.In(r.loc))+".jsonl"), os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o644)
-	if err != nil {
-		return err
-	}
-	_, err = f.Write(append(line, '\n'))
-	return errors.Join(err, f.Close())
+	return r.files.append(project, day(t.In(r.loc)), append(line, '\n'))
 }
 
 // Read returns the records of the last days local days, today among
@@ -214,7 +232,7 @@ func (r *Recorder) Read(project string, days int) Records {
 	defer r.mu.RUnlock()
 	projects := []string{project}
 	if project == "" {
-		projects = r.projects()
+		projects = r.files.projects()
 	}
 	today := r.today()
 	for i := days - 1; i >= 0; i-- {
@@ -234,23 +252,20 @@ func (r *Recorder) prune() {
 	today := r.today()
 	r.prunedOn = day(today)
 	oldest := day(today.AddDate(0, 0, -KeepDays))
-	for _, p := range r.projects() {
-		dir := r.projectDir(p)
-		entries, err := os.ReadDir(dir)
+	for _, p := range r.files.projects() {
+		days, err := r.files.days(p)
 		if err != nil {
 			if !errors.Is(err, fs.ErrNotExist) {
-				fmt.Fprintf(r.log, "code-central serve: usage: cannot read %s: %v\n", dir, err)
+				fmt.Fprintf(r.log, "code-central serve: usage: cannot read %s: %v\n", r.files.name(p, ""), err)
 			}
 			continue
 		}
-		for _, e := range entries {
-			d, ok := strings.CutSuffix(e.Name(), ".jsonl")
-			if _, err := time.Parse(time.DateOnly, d); !ok || err != nil || d >= oldest {
+		for _, d := range days {
+			if _, err := time.Parse(time.DateOnly, d); err != nil || d >= oldest {
 				continue
 			}
-			path := filepath.Join(dir, e.Name())
-			if err := os.Remove(path); err != nil {
-				fmt.Fprintf(r.log, "code-central serve: usage: cannot delete %s: %v\n", path, err)
+			if err := r.files.remove(p, d); err != nil {
+				fmt.Fprintf(r.log, "code-central serve: usage: cannot delete %s: %v\n", r.files.name(p, d), err)
 			}
 		}
 	}
@@ -259,27 +274,12 @@ func (r *Recorder) prune() {
 // today is the clock's time in the service's time zone.
 func (r *Recorder) today() time.Time { return r.clock.Now().In(r.loc) }
 
-// projects is every Project with a usage folder.
-func (r *Recorder) projects() []string {
-	entries, err := os.ReadDir(filepath.Join(r.dir, "projects"))
-	if err != nil {
-		return nil
-	}
-	var keys []string
-	for _, e := range entries {
-		if e.IsDir() {
-			keys = append(keys, e.Name())
-		}
-	}
-	return slices.Sorted(slices.Values(keys))
-}
-
 // readFile adds the records of project's file for day d to out, skipping
 // and counting any line that doesn't parse. A missing file holds no
 // records.
 func (r *Recorder) readFile(project, d string, out *Records) {
-	path := filepath.Join(r.projectDir(project), d+".jsonl")
-	f, err := os.Open(path)
+	path := r.files.name(project, d)
+	f, err := r.files.open(project, d)
 	if errors.Is(err, fs.ErrNotExist) {
 		return
 	}
@@ -331,10 +331,6 @@ func appendRecord[T any](recs []T, line []byte) ([]T, error) {
 		return recs, err
 	}
 	return append(recs, rec), nil
-}
-
-func (r *Recorder) projectDir(project string) string {
-	return filepath.Join(r.dir, "projects", project, "usage")
 }
 
 // day is t's date as a file names it.

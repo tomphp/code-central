@@ -1,4 +1,4 @@
-// CI view tests (code-central-258): the real App against FakeApi, at
+// CI view tests (code-central-258): the real App on a WASM Core world, at
 // ?view=ci. They check what the human sees and does: opening it from the
 // Inbox's Admin section on the sidebar's Project or All Projects and going
 // Back, the scope picker, the CI Watchers' statuses on top, the runs'
@@ -7,23 +7,33 @@ import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
-import { FakeApi } from "../api/fake";
+import { newWorld, type World } from "../api/core/core";
+import { scenario, type Scenario } from "../api/scenario";
 import type { CIRunView } from "../api/types";
 
 const MINUTE = 60_000;
 
-function world() {
-  const fake = new FakeApi();
-  fake.addProject("acme", "Acme");
-  fake.addProject("beta", "Beta");
-  fake.addTicket("acme", { title: "Pick a colour", state: "Accepted" }); // acme-1
-  return fake;
+// Fake is a world, its scenario builder and acme's Accepted Ticket, which
+// the runs are tracked against.
+interface Fake {
+  w: World;
+  s: Scenario;
+  ticket: string;
+}
+
+async function world(): Promise<Fake> {
+  const w = await newWorld();
+  const s = scenario(w);
+  await s.project("acme", "Acme");
+  await s.project("beta", "Beta");
+  const ticket = await s.ticket("acme", { title: "Pick a colour", state: "Accepted" });
+  return { w, s, ticket };
 }
 
 // tracked turns CI Tracking on for key, watching repository, with
 // nightly.yml ignored.
-async function tracked(fake: FakeApi, key: string, repository = `${key}/web`) {
-  await fake.setCITracking(key, {
+async function tracked({ w }: Fake, key: string, repository = `${key}/web`) {
+  await w.api.setCITracking(key, {
     tracking: true,
     provider: "github_actions",
     repository,
@@ -32,18 +42,19 @@ async function tracked(fake: FakeApi, key: string, repository = `${key}/web`) {
 }
 
 // azure turns CI Tracking on for key, watching an Azure DevOps project.
-async function azure(fake: FakeApi, key: string) {
-  await fake.setCITracking(key, { tracking: true, provider: "azure_pipelines", repository: "", project_url: `https://dev.azure.com/${key}/web`, ignored_workflows: [] });
+async function azure({ w }: Fake, key: string) {
+  await w.api.setCITracking(key, { tracking: true, provider: "azure_pipelines", repository: "", project_url: `https://dev.azure.com/${key}/web`, ignored_workflows: [] });
 }
 
-// at is the fake's now moved by minutes.
-const at = (fake: FakeApi, minutes: number) =>
-  new Date(fake.now.getTime() + minutes * MINUTE).toISOString();
+// at is the world's now moved by minutes.
+const at = ({ w }: Fake, minutes: number) =>
+  new Date(w.now().getTime() + minutes * MINUTE).toISOString();
 
-// run is a run of workflow tracked against acme-1, started minutes ago and
-// still going, or finished at finished minutes from now with conclusion.
+// run is a run of workflow tracked against acme's Ticket, started minutes
+// ago and still going, or finished at finished minutes from now with
+// conclusion.
 function run(
-  fake: FakeApi,
+  fake: Fake,
   id: number,
   workflow: string,
   started: number,
@@ -64,13 +75,13 @@ function run(
     started: at(fake, started),
     url: `https://github.com/acme/web/actions/runs/${id}`,
     jobs: [],
-    ticket: "acme-1",
+    ticket: fake.ticket,
   };
 }
 
-function renderApp(fake: FakeApi, url = "/") {
+function renderApp({ w }: Fake, url = "/") {
   window.history.replaceState(null, "", url);
-  return render(<App api={fake} now={() => fake.now} />);
+  return render(<App api={w.api} now={w.now} />);
 }
 
 const ci = () => screen.getByRole("main", { name: "CI" });
@@ -92,7 +103,7 @@ const cells = (row: HTMLElement) =>
 
 describe("opening and leaving the CI view", () => {
   it("opens from the Admin section, before Usage, on the sidebar's Project, and returns to the Inbox", async () => {
-    renderApp(world(), "/?view=inbox&project=acme&state=Accepted");
+    renderApp(await world(), "/?view=inbox&project=acme&state=Accepted");
     const link = within(nav()).getByRole("link", { name: "CI" });
     const usage = within(nav()).getByRole("link", { name: "Usage" });
     expect(
@@ -116,7 +127,7 @@ describe("opening and leaving the CI view", () => {
   });
 
   it("opens on All Projects when the sidebar has none chosen", async () => {
-    renderApp(world(), "/?view=inbox");
+    renderApp(await world(), "/?view=inbox");
     expect(within(nav()).getByRole("link", { name: "CI" })).toHaveAttribute(
       "href",
       "?view=ci",
@@ -126,7 +137,7 @@ describe("opening and leaving the CI view", () => {
   });
 
   it("changes scope with the Projects picker, keeping the address", async () => {
-    renderApp(world(), "/?view=ci");
+    renderApp(await world(), "/?view=ci");
     await within(scope()).findByRole("option", { name: "Beta" });
     await userEvent.selectOptions(scope(), "beta");
     expect(window.location.search).toBe("?view=ci&project=beta");
@@ -135,11 +146,11 @@ describe("opening and leaving the CI view", () => {
 
 describe("the CI Watchers' statuses", () => {
   it("heads All Projects with each tracking Project's CI Watcher", async () => {
-    const fake = world();
+    const fake = await world();
     await tracked(fake, "acme");
     await tracked(fake, "beta");
-    await fake.reportCIWatcherStatus("acme", { state: "watching" });
-    await fake.reportCIWatcherStatus("beta", {
+    await fake.s.reportCIWatcherStatus("acme", { state: "watching" });
+    await fake.s.reportCIWatcherStatus("beta", {
       state: "error",
       problem: "logged_out",
       message: "gh isn't logged in.",
@@ -155,15 +166,9 @@ describe("the CI Watchers' statuses", () => {
   });
 
   it("shows the project URL an Azure Pipelines Project watches", async () => {
-    const fake = world();
-    await fake.setCITracking("acme", {
-      tracking: true,
-      provider: "azure_pipelines",
-      repository: "",
-      project_url: "https://dev.azure.com/acme/web",
-      ignored_workflows: [],
-    });
-    await fake.reportCIWatcherStatus("acme", { state: "watching" });
+    const fake = await world();
+    await azure(fake, "acme");
+    await fake.s.reportCIWatcherStatus("acme", { state: "watching" });
     renderApp(fake, "/?view=ci");
     expect(
       await within(ci()).findByText(
@@ -173,15 +178,15 @@ describe("the CI Watchers' statuses", () => {
   });
 
   it("watches the project URL of an Azure Pipelines Project", async () => {
-    const fake = world();
+    const fake = await world();
     await azure(fake, "acme");
-    await fake.reportCIWatcherStatus("acme", { state: "watching" });
+    await fake.s.reportCIWatcherStatus("acme", { state: "watching" });
     renderApp(fake, "/?view=ci&project=acme");
     expect(await within(ci()).findByText("Acme: Watching https://dev.azure.com/acme/web.")).toBeInTheDocument();
   });
 
   it("says when the CI Watcher hasn't reported yet", async () => {
-    const fake = world();
+    const fake = await world();
     await tracked(fake, "acme");
     renderApp(fake, "/?view=ci&project=acme");
     expect(
@@ -192,7 +197,7 @@ describe("the CI Watchers' statuses", () => {
   });
 
   it("says a Project has CI Tracking off, linking its Project Options", async () => {
-    renderApp(world(), "/?view=ci&project=beta");
+    renderApp(await world(), "/?view=ci&project=beta");
     expect(
       await within(ci()).findByText(/CI Tracking is off in Beta/),
     ).toBeInTheDocument();
@@ -203,7 +208,7 @@ describe("the CI Watchers' statuses", () => {
   });
 
   it("says when no Project has CI Tracking on", async () => {
-    renderApp(world(), "/?view=ci");
+    renderApp(await world(), "/?view=ci");
     expect(
       await within(ci()).findByText(/No Project has CI Tracking on/),
     ).toBeInTheDocument();
@@ -217,9 +222,9 @@ describe("the CI Watchers' statuses", () => {
 
 describe("the runs", () => {
   it("lists in-progress runs first, then the last 7 days' finished runs, newest first, with each row's fields", async () => {
-    const fake = world();
+    const fake = await world();
     await tracked(fake, "acme");
-    await fake.reportCIRuns("acme", [
+    await fake.s.reportCIRuns("acme", [
       run(fake, 1, "ci.yml", -30, { finished: -20, conclusion: "success" }),
       run(fake, 2, "lint.yml", -12, { finished: -10, conclusion: "failure" }),
       run(fake, 3, "deploy.yml", -3),
@@ -242,7 +247,7 @@ describe("the runs", () => {
       "3abcdef",
       "running",
       "3m 0s",
-      "acme-1",
+      fake.ticket,
       "View on GitHub",
     ]);
     expect(cells(shown[1])).toEqual([
@@ -251,7 +256,7 @@ describe("the runs", () => {
       "2abcdef",
       "failed",
       "2m 0s",
-      "acme-1",
+      fake.ticket,
       "View on GitHub",
     ]);
     expect(
@@ -259,20 +264,20 @@ describe("the runs", () => {
     ).toHaveAttribute("href", "https://github.com/acme/web/actions/runs/1");
 
     await userEvent.click(
-      within(shown[2]).getByRole("link", { name: "acme-1" }),
+      within(shown[2]).getByRole("link", { name: fake.ticket }),
     );
     expect(window.location.search).toBe(
-      "?view=inbox&project=acme&ticket=acme-1",
+      `?view=inbox&project=acme&ticket=${fake.ticket}`,
     );
   });
 
   it("labels an Azure Pipelines run's link from its Project's CI Provider", async () => {
-    const fake = world();
+    const fake = await world();
     await azure(fake, "acme");
     await tracked(fake, "beta");
-    await fake.reportCIRuns("acme", [{ ...run(fake, 1, "Build", -3), url: "https://dev.azure.com/acme/web/_build/results?buildId=1" }]);
-    fake.addTicket("beta", { title: "Other", state: "Accepted" });
-    await fake.reportCIRuns("beta", [{ ...run(fake, 2, "ci.yml", -3), ticket: "beta-1" }]);
+    await fake.s.reportCIRuns("acme", [{ ...run(fake, 1, "Build", -3), url: "https://dev.azure.com/acme/web/_build/results?buildId=1" }]);
+    const other = await fake.s.ticket("beta", { title: "Other", state: "Accepted" });
+    await fake.s.reportCIRuns("beta", [{ ...run(fake, 2, "ci.yml", -3), ticket: other }]);
     renderApp(fake, "/?view=ci");
     const [acme, beta] = (await rows()).sort((a, b) => a.getAttribute("aria-label")!.localeCompare(b.getAttribute("aria-label")!));
     expect(within(acme).getByRole("link", { name: "View on Azure DevOps" })).toHaveAttribute("href", "https://dev.azure.com/acme/web/_build/results?buildId=1");
@@ -280,9 +285,9 @@ describe("the runs", () => {
   });
 
   it("shows a partially succeeded run as passed with a warning mark", async () => {
-    const fake = world();
+    const fake = await world();
     await azure(fake, "acme");
-    await fake.reportCIRuns("acme", [run(fake, 1, "Build", -5, { finished: -3, conclusion: "partially_succeeded" })]);
+    await fake.s.reportCIRuns("acme", [run(fake, 1, "Build", -5, { finished: -3, conclusion: "partially_succeeded" })]);
     renderApp(fake, "/?view=ci&project=acme");
     const [row] = await rows();
     const status = within(row).getByText(/Partially succeeded/);
@@ -292,10 +297,11 @@ describe("the runs", () => {
   });
 
   it("names each run's Project in All Projects, and a CI Rule a run is tracked against", async () => {
-    const fake = world();
+    const fake = await world();
     await tracked(fake, "acme");
-    await fake.reportCIRuns("acme", [
-      { ...run(fake, 1, "ci.yml", -3), ticket: undefined, rule: "acme-9" },
+    const rule = (await fake.w.api.addCIRule("acme", { workflow: "ci.yml", branch: "main", state: "Draft" })).ci.rules[0].spec;
+    await fake.s.reportCIRuns("acme", [
+      { ...run(fake, 1, "ci.yml", -3), ticket: undefined, rule },
     ]);
     renderApp(fake, "/?view=ci");
     const [row] = await rows();
@@ -305,20 +311,20 @@ describe("the runs", () => {
       "1abcdef",
       "running",
       "3m 0s",
-      "CI Rule acme-9",
+      `CI Rule ${rule}`,
       "Acme",
       "View on GitHub",
     ]);
-    expect(within(row).getByRole("link", { name: "acme-9" })).toHaveAttribute(
+    expect(within(row).getByRole("link", { name: rule })).toHaveAttribute(
       "href",
-      "?view=inbox&project=acme&requirement=acme-9",
+      `?view=inbox&project=acme&requirement=${rule}`,
     );
   });
 
   it("greys an ignored run and marks it ignored", async () => {
-    const fake = world();
+    const fake = await world();
     await tracked(fake, "acme");
-    await fake.reportCIRuns("acme", [
+    await fake.s.reportCIRuns("acme", [
       run(fake, 1, "nightly.yml", -3),
       run(fake, 2, "ci.yml", -4),
     ]);
@@ -331,9 +337,9 @@ describe("the runs", () => {
   });
 
   it("shows a cancelled run in grey and a failed or timed out run in red", async () => {
-    const fake = world();
+    const fake = await world();
     await tracked(fake, "acme");
-    await fake.reportCIRuns("acme", [
+    await fake.s.reportCIRuns("acme", [
       run(fake, 1, "ci.yml", -30, { finished: -20, conclusion: "cancelled" }),
       run(fake, 2, "lint.yml", -12, { finished: -10, conclusion: "failure" }),
       run(fake, 3, "deploy.yml", -5, { finished: -4, conclusion: "timed_out" }),
@@ -351,9 +357,9 @@ describe("the runs", () => {
   });
 
   it("pulses a run that changes and one that joins, from the live feed, but not on opening", async () => {
-    const fake = world();
+    const fake = await world();
     await tracked(fake, "acme");
-    await fake.reportCIRuns("acme", [
+    await fake.s.reportCIRuns("acme", [
       run(fake, 1, "ci.yml", -3),
       run(fake, 2, "lint.yml", -4),
     ]);
@@ -362,7 +368,7 @@ describe("the runs", () => {
     expect(opened.filter((r) => r.hasAttribute("data-pulsing"))).toEqual([]);
 
     await act(() =>
-      fake.reportCIRuns("acme", [
+      fake.s.reportCIRuns("acme", [
         run(fake, 1, "ci.yml", -3, { finished: 0, conclusion: "success" }),
         run(fake, 3, "e2e.yml", -1),
       ]),
