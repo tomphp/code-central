@@ -12,7 +12,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { FakeApi } from "../api/fake";
 import type { NeedsMeReason } from "../api/types";
-import { failCI } from "../ciTesting";
+import { failCIOnFake as failCI } from "../ciTesting";
 import { change, renderApp, waiting, waitingTickets, without } from "./focusTesting";
 
 // popupOn is waitingTickets with Focus Pop-up on: acme-2 Failed, then acme-3
