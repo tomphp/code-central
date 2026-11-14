@@ -30,7 +30,7 @@ func (c *Core) SubmitSmallChange(_ context.Context, key string, in SubmitSmallCh
 	if title == "" {
 		return Written[TicketView]{}, invalid("text", "a Small Change needs text; its first line becomes the Ticket's title")
 	}
-	spec, err := c.smallChangesSpec(key)
+	spec, err := c.projectSpecNumber(key, smallChangesSpec)
 	if err != nil {
 		return Written[TicketView]{}, err
 	}
@@ -74,35 +74,3 @@ func submitMoves(draft bool, now time.Time, via string) []store.Move {
 // smallChangesSpecBody is the Small Changes Spec's body.
 const smallChangesSpecBody = "This Spec holds the Tickets the human opens with Small Change in + New. " +
 	"Each is built from the human's text as it is, with no Stages, and lands on its own as soon as it is accepted.\n"
-
-// smallChangesSpec is key's Small Changes Spec, a Long-lived Spec created
-// on first use and found only by its stored number; the Spec is written
-// before the Project names it.
-func (c *Core) smallChangesSpec(key string) (int, error) {
-	n := 0
-	err := c.store.Update(func(w store.Writer) error {
-		if err := writable(w, key); err != nil {
-			return err
-		}
-		if p, _ := w.Project(key); p.SmallChangesSpec != 0 {
-			n = p.SmallChangesSpec
-			return nil
-		}
-		now := c.now()
-		n = w.NextNumber(key)
-		return w.PutSpec(key, store.Spec{Number: n, Title: "Small Changes", Body: smallChangesSpecBody, Labels: []string{LongLivedLabel}, Created: now, Updated: now})
-	})
-	if err != nil {
-		return 0, err
-	}
-	err = c.store.Update(func(w store.Writer) error {
-		p, _ := w.Project(key)
-		if p.SmallChangesSpec != 0 {
-			n = p.SmallChangesSpec
-			return nil
-		}
-		p.SmallChangesSpec = n
-		return w.PutProject(p)
-	})
-	return n, err
-}
