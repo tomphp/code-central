@@ -20,6 +20,9 @@
 import { useEffect, useRef, useState } from "react";
 import { numberOf, type Api } from "../api/api";
 import type { ApiError, CIOverview, CIProvider, CIRunRow, State } from "../api/types";
+import { Empty } from "../controls/Empty";
+import { ErrorBanner } from "../controls/ErrorBanner";
+import { projectName } from "../controls/ProjectName";
 import { RowLatestEvent } from "../LatestEvent";
 import { useFetch, type InboxData, type ProjectTicket } from "../live";
 import { STAGE_TITLE, stageOf } from "../requirement/progress";
@@ -70,7 +73,7 @@ export function ActivityDashboard({ api, now, version, data, loc, navigate }: Ac
   );
 
   return (
-    <section aria-label="Activity Dashboard" className="dashboard">
+    <section aria-label="Activity Dashboard" className="view-body">
       <div className="dashboard-blocks">
         <StateCount state="Ready" count={inState("Ready").length} />
         <StateCount state="In Progress" count={inProgress.length} />
@@ -93,7 +96,7 @@ export function ActivityDashboard({ api, now, version, data, loc, navigate }: Ac
           ))}
         </ul>
       ) : (
-        <p className="dashboard-empty">Nothing in progress</p>
+        <Empty>Nothing in progress.</Empty>
       )}
       {ciTracked && <CIRunningList now={now} data={data} runs={ciRuns} loc={loc} navigate={navigate} />}
     </section>
@@ -144,11 +147,7 @@ function CIRunningList({ now, data, runs, loc, navigate }: CIRunningListProps) {
   const first = useRef<Set<string>>(undefined);
   if (runs.data && !first.current) first.current = new Set(runs.data.runs.map(runKey));
   if (runs.error) {
-    return (
-      <p role="alert" className="warning">
-        {runs.error.message}
-      </p>
-    );
+    return <ErrorBanner>{runs.error.message}</ErrorBanner>;
   }
   const overview = runs.data;
   if (!overview) return null;
@@ -159,7 +158,7 @@ function CIRunningList({ now, data, runs, loc, navigate }: CIRunningListProps) {
       ))}
     </ul>
   ) : (
-    <p className="dashboard-empty">No CI Runs running</p>
+    <Empty>No CI Runs running.</Empty>
   );
 }
 
@@ -186,7 +185,7 @@ function CIRunEntry({ now, data, run, provider, joined, loc, navigate }: CIRunEn
         <span className="dashboard-entry-top">
           <span className="tid">{run.ticket}</span>
           <span className="dashboard-entry-title">{runName(run)}</span>
-          {!loc.project && <span className="muted">{projectName(data, run.project)}</span>}
+          {!loc.project && <span className="muted">{nameOf(data, run.project)}</span>}
         </span>
         <span className="dashboard-entry-detail">
           {run.branch} · <code>{shortCommit(run.commit)}</code> · {runStatus(run)}
@@ -208,7 +207,7 @@ function inboxFor(data: InboxData, project: string, id: string, loc: UiLocation)
 }
 
 // projectName is a Project's display name, or its key until the Inbox data holds it.
-const projectName = (data: InboxData, key: string) => data.projects.find((p) => p.key === key)?.display_name ?? key;
+const nameOf = (data: InboxData, key: string) => projectName(data.projects, key);
 
 // InProgressEntry is one In Progress Ticket. It opens in the Inbox by
 // inboxFor. It pulses each time changes goes up, and on mounting
@@ -231,7 +230,7 @@ function InProgressEntry({ now, data, ticket: t, changes, joined, loc, navigate 
           <span className="tid">{t.id}</span>
           <span className="dashboard-entry-title">{t.title}</span>
           <CIBadge result={t.ci_result} />
-          {!loc.project && <span className="muted">{projectName(data, t.project)}</span>}
+          {!loc.project && <span className="muted">{nameOf(data, t.project)}</span>}
         </span>
         {stage && (
           <span className="dashboard-entry-detail">

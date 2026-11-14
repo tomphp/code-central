@@ -99,6 +99,12 @@ jobs:
         working-directory: web
         run: npm run build
 
+      # Storybook must keep building, as `make build-components` checks. It
+      # needs the WASM Core built above.
+      - name: Storybook build
+        working-directory: web
+        run: npm exec -- storybook build
+
       # As `make build`, with the OS's executable suffix (.exe on Windows,
       # empty elsewhere), and the fake gh `make e2e` builds. The absolute
       # paths go to the e2e steps.

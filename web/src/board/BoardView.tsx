@@ -33,6 +33,8 @@ import type { FocusKey } from "../focus/session";
 import { SpecPopup } from "./SpecPopup";
 import { TicketPopup } from "./TicketPopup";
 import { Button } from "../controls/Button";
+import { Count } from "../controls/Count";
+import { Loading } from "../controls/Empty";
 import "./board.css";
 
 export interface BoardViewProps {
@@ -148,7 +150,7 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
           }
         />
         {!data ? (
-          <p className="muted board-loading">Loading…</p>
+          <Loading />
         ) : (
           <div className="board-scroll">
             <div className="board-grid">
@@ -156,7 +158,7 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
                 {shown.map((s) => (
                   <h2 key={s} className={s === NEEDS_ME ? "board-col-head needs-me" : `board-col-head st-${stateSlug(s)}`}>
                     {s === NEEDS_ME && <span className="dot" aria-hidden="true" />}
-                    <span className="board-col-name">{s}</span> <span className="board-col-count">{inColumn.get(s)!.length}</span>
+                    <span className="board-col-name">{s}</span> <Count n={inColumn.get(s)!.length} />
                   </h2>
                 ))}
               </div>

@@ -5,7 +5,7 @@
 import type { Api } from "../api/api";
 import type { SpecDetail } from "../api/types";
 import { BodySection } from "../edit/BodySection";
-import { ago } from "../format";
+import { SpecPaneHeader } from "../controls/SpecPaneHeader";
 import { specRetroable } from "../edit/editable";
 import { NewPrototype, NewRetro } from "../requirement/NewRequirement";
 import { CISums } from "../ticket/CIBadge";
@@ -15,7 +15,6 @@ import { LandPerSpec } from "./LandPerSpec";
 import { SpecAutoAccept } from "./SpecAutoAccept";
 import { RetroList } from "./RetroList";
 import { TicketList } from "./TicketList";
-import { ShortId } from "../inbox/ShortId";
 
 export interface SpecPaneProps {
   api: Api;
@@ -31,8 +30,7 @@ export interface SpecPaneProps {
 export function SpecPane({ api, spec, archived, now, ticket, select }: SpecPaneProps) {
   return (
     <section aria-label="Spec" className="req-head">
-      <ShortId id={spec.id} /> <span className="muted small">Spec · submitted {ago(now, spec.created)}</span>
-      <h2>{spec.title}</h2>
+      <SpecPaneHeader id={spec.id} kind="Spec" title={spec.title} now={now} created={spec.created} />
       <div className="spec-actions">
         <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
         {specRetroable(spec, !!archived) && <NewRetro api={api} target={spec.id} onSubmitted={(t) => select(t.id)} />}

@@ -4,6 +4,8 @@
 // every active one, chosen with its Projects picker. Back returns to the
 // view it was opened from.
 import type { Api } from "../api/api";
+import { backLabel } from "../controls/backLabel";
+import { Loading } from "../controls/Empty";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { ViewHeader } from "../controls/ViewHeader";
 import type { ProjectRow } from "../api/types";
@@ -12,7 +14,6 @@ import type { InboxData } from "../live";
 import type { UiLocation } from "../url";
 import { Button } from "../controls/Button";
 import "../focus/focus.css";
-import "./activity.css";
 
 export interface ActivityViewProps {
   api: Api;
@@ -26,20 +27,19 @@ export interface ActivityViewProps {
 
 export function ActivityView({ api, now, version, data, loc, navigate }: ActivityViewProps) {
   const projects: ProjectRow[] = data?.projects ?? [];
-  const back = loc.back?.view === "focus" ? "focus" : "inbox";
 
   return (
-    <main aria-label="Activity" className="activity">
+    <main aria-label="Activity" className="activity view-shell">
       <ViewHeader
         title="Activity"
         left={<ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />}
         right={
           <Button  onClick={() => navigate(loc.back ?? { view: "inbox" })}>
-            {back === "focus" ? "Back to Focus Mode" : "Back to the Inbox"}
+            {backLabel(loc)}
           </Button>
         }
       />
-      {data ? <ActivityDashboard api={api} now={now} version={version} data={data} loc={loc} navigate={navigate} /> : <p className="muted">Loading…</p>}
+      {data ? <ActivityDashboard api={api} now={now} version={version} data={data} loc={loc} navigate={navigate} /> : <Loading />}
     </main>
   );
 }

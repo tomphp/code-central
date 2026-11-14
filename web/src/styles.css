@@ -100,7 +100,7 @@ a.filter { text-decoration: none; }
 .menu [role="menuitem"]:hover:not(:disabled) { background: var(--surface-2); }
 .menu [role="menuitem"]:disabled { color: var(--muted); cursor: default; }
 .menu-note { margin: 0; padding: 0 8px 5px; font-size: 12px; color: var(--muted); }
-.project-error { flex-basis: 100%; margin: 2px 0 4px; }
+.project-error { flex-basis: 100%; }
 .menu a[role="menuitem"] { text-decoration: none; box-sizing: border-box; }
 
 /* The Project Options page: sections in one column, with a section menu on the left on wide screens. */
@@ -135,7 +135,6 @@ a.filter { text-decoration: none; }
 .project-options-field input { min-width: 16rem; }
 .project-options-field + .project-options-hint { margin-left: 0; }
 .project-options-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
-.project-options-section .warning { margin: 10px 0 0; }
 .project-options-models-hint { margin-left: 0; }
 .project-options-models { border-collapse: collapse; margin-top: 12px; width: 100%; }
 .project-options-models th, .project-options-models td { text-align: left; padding: 4px 8px 4px 0; font-size: 14px; }
@@ -148,8 +147,8 @@ a.filter { text-decoration: none; }
 .archived-group { margin-top: auto; padding-top: 16px; }
 .archived-group > summary { cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 4px 8px; }
 .archived-group .filter { opacity: .7; }
-.filter .count { color: var(--muted); }
-.filter .count.loud { color: var(--r-answer); font-weight: 700; }
+.count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+.count.loud { color: var(--r-answer); font-weight: 700; }
 .inbox-list { border-right: 1px solid var(--border); overflow: auto; padding-bottom: 80px; }
 .group-head { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; padding: 14px 14px 6px; color: var(--rc); display: flex; justify-content: space-between; }
 .row { display: block; text-decoration: none; color: var(--text); border-left: 3px solid transparent; padding: 8px 14px; border-bottom: 1px solid var(--border); }
@@ -213,7 +212,7 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .transcript-factory { background: var(--surface-2); color: var(--muted); font-size: 12.5px; }
 .transcript-marker { font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-right: 4px; }
 .ticket-body .move { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.ticket-body .move .warning { flex-basis: 100%; margin: 4px 0 0; }
+.ticket-body .move .warning { flex-basis: 100%; }
 .history .previous { margin: 4px 0 8px 12px; padding: 6px 10px; border-left: 2px solid var(--border); color: var(--muted); }
 .panel .blocker p { margin: 0 0 8px; }
 .panel .actions { margin: 12px 0 0; }
@@ -235,7 +234,6 @@ a.link-badge:hover { text-decoration: underline; }
 .model-choice-row > span { min-width: 16em; }
 .model-choice-row form { display: flex; gap: 6px; align-items: center; }
 .model-choice input, .model-choice select { font: inherit; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
-.model-choice .warning { margin: 4px 0 0; }
 
 /* The Prototype badge on a Needs Me row and a Focus Item (Spec 213). */
 .prototype-badge, .retro-badge { color: var(--accent); border-color: var(--accent); white-space: nowrap; }
@@ -421,3 +419,33 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .view-head label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .view-picker-label { color: var(--muted); }
 .view-head-spacer { margin-left: auto; }
+
+/* A view's shell: the full-height column its header and body stack in. */
+.view-shell { min-height: 100vh; display: flex; flex-direction: column; }
+/* A view's body: one centred 1100px column. */
+.view-body { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; }
+.view-body .warning { margin: 0; font-size: 14px; }
+.view-body .muted { font-size: 14px; }
+.view-body h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; }
+/* A data table: compact rows, numbers right-aligned; data-table-mono sets
+   the row headings in monospace. */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.data-table th, .data-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+.data-table tbody th { font-weight: 500; }
+.data-table-mono tbody th { font-family: ui-monospace, monospace; }
+.data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.data-table .label { margin-left: 6px; }
+/* A pulse: a brief background flash when what an element shows changes.
+   Two identical animations, so a new pulse swaps between them and the
+   browser restarts it (focus/pulse.ts). Under reduced motion it is a
+   brightness flash instead. */
+.pulse-0 { animation: pulse-0 600ms ease-out; }
+.pulse-1 { animation: pulse-1 600ms ease-out; }
+@keyframes pulse-0 { 30% { background: var(--surface-2); } }
+@keyframes pulse-1 { 30% { background: var(--surface-2); } }
+@media (prefers-reduced-motion: reduce) {
+  .pulse-0 { animation-name: flash-0; }
+  .pulse-1 { animation-name: flash-1; }
+  @keyframes flash-0 { 30% { filter: brightness(1.4); } }
+  @keyframes flash-1 { 30% { filter: brightness(1.4); } }
+}

@@ -244,7 +244,7 @@ describe("the In Progress list", () => {
     const { w } = await dash();
     renderApp(w, "/?view=focus&project=beta");
     const d = await dashboard();
-    expect(within(d).getByText("Nothing in progress")).toBeInTheDocument();
+    expect(within(d).getByText("Nothing in progress.")).toBeInTheDocument();
     expect(within(d).queryByRole("listitem")).toBeNull();
     expect(count(d, "Ready")).toBe("1");
     expect(count(d, "In Progress")).toBe("0");
@@ -564,7 +564,7 @@ describe("the CI Running list", () => {
     renderApp(w, "/?view=focus&project=acme");
     const d = await dashboard();
     await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
-    expect(within(d).getByText("No CI Runs running")).toBeInTheDocument();
+    expect(within(d).getByText("No CI Runs running.")).toBeInTheDocument();
     expect(within(d).queryByRole("list", { name: "CI Running" })).toBeNull();
   });
 
@@ -573,7 +573,7 @@ describe("the CI Running list", () => {
     renderApp(w);
     const d = await dashboard();
     expect(within(d).queryByRole("list", { name: "CI Running" })).toBeNull();
-    expect(within(d).queryByText("No CI Runs running")).toBeNull();
+    expect(within(d).queryByText("No CI Runs running.")).toBeNull();
   });
 
   it("shows each entry's workflow, ID, Project, branch, short commit and how long it has been running", async () => {
@@ -650,7 +650,7 @@ describe("the CI Running list", () => {
     const c = await ciWorld();
     renderApp(c.w);
     const d = await dashboard();
-    await within(d).findByText("No CI Runs running");
+    await within(d).findByText("No CI Runs running.");
 
     await act(() => c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml"), ciRun(c, 2, "lint.yml")]));
     await waitFor(() => expect(labels(d)).toEqual(["ci.yml", "lint.yml"]));
@@ -752,7 +752,7 @@ describe("CI Running pulses", () => {
     const c = await ciWorld();
     renderApp(c.w);
     const d = await dashboard();
-    await within(d).findByText("No CI Runs running");
+    await within(d).findByText("No CI Runs running.");
 
     await act(() => c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml")]));
     await waitFor(() => expect(ciEntries(d)).toHaveLength(1));

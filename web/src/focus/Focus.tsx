@@ -16,6 +16,8 @@ import { ActivityDashboard } from "./ActivityDashboard";
 import { FocusItemView, inboxOf } from "./FocusItemView";
 import { useFocusSession } from "./session";
 import { Button } from "../controls/Button";
+import { Empty, Loading } from "../controls/Empty";
+import { ProjectName } from "../controls/ProjectName";
 import "./focus.css";
 
 export interface FocusProps {
@@ -50,8 +52,7 @@ export function Focus({
       <header className="focus-head">
         {loc.project && (
           <span className="focus-project">
-            {project?.display_name ?? loc.project}{" "}
-            <span className="muted">{loc.project}</span>
+            <ProjectName name={project?.display_name ?? loc.project} projectKey={loc.project} />
           </span>
         )}
         {data && !session.clear && (
@@ -78,7 +79,7 @@ export function Focus({
         </p>
       )}
       {!data ? (
-        <p className="focus-loading">Loading…</p>
+        <Loading />
       ) : session.clear && focusClear === "activity_dashboard" ? (
         <ActivityDashboard
           api={api}
@@ -91,7 +92,7 @@ export function Focus({
       ) : session.clear ? (
         <section aria-label="All clear" className="focus-clear">
           <h2>All clear</h2>
-          <p>Nothing needs you.</p>
+          <Empty>Nothing needs you.</Empty>
         </section>
       ) : session.onlySkipped ? (
         <section
@@ -116,7 +117,7 @@ export function Focus({
           inbox={inboxOf(item.row, loc.project)}
         />
       ) : (
-        <p className="focus-loading">Loading…</p>
+        <Loading />
       )}
     </main>
   );

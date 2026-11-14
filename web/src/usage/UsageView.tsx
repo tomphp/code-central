@@ -30,6 +30,9 @@ import { clickTo, hrefFor, type UiLocation } from "../url";
 import { LineChart } from "./LineChart";
 import { TokenChart } from "./TokenChart";
 import { Button } from "../controls/Button";
+import { backLabel } from "../controls/backLabel";
+import { ErrorBanner } from "../controls/ErrorBanner";
+import { projectName } from "../controls/ProjectName";
 import "./usage.css";
 import { Select } from "../controls/Select";
 
@@ -44,16 +47,15 @@ export interface UsageViewProps {
 export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps) {
   const days = loc.days ?? USAGE_DAYS[0];
   const usage = useFetch(() => api.usage({ project: loc.project, days }), [api, loc.project, days]);
-  const back = loc.back?.view === "focus" ? "focus" : "inbox";
-  const scopeName = loc.project ? (projects.find((p) => p.key === loc.project)?.display_name ?? loc.project) : "All Projects";
+  const scopeName = loc.project ? projectName(projects, loc.project) : "All Projects";
   // Rows answer the current scope and range only once they've loaded.
   const data = usage.data;
   const empty = data && !data.operations.length && !data.kinds.length && !data.sessions.length;
   const over = `in ${scopeName} over the last ${days} days`;
-  const projectName = (key: string) => projects.find((p) => p.key === key)?.display_name ?? key;
+  const nameOf = (key: string) => projectName(projects, key);
 
   return (
-    <main aria-label="Usage" className="usage">
+    <main aria-label="Usage" className="usage view-shell">
       <ViewHeader
         title="Usage"
         left={
@@ -71,16 +73,12 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
         }
         right={
           <Button  onClick={() => navigate(loc.back ?? { view: "inbox" })}>
-            {back === "focus" ? "Back to Focus Mode" : "Back to the Inbox"}
+            {backLabel(loc)}
           </Button>
         }
       />
-      <div className="usage-body">
-        {usage.error && (
-          <p role="alert" className="warning">
-            {usage.error.message}
-          </p>
-        )}
+      <div className="view-body">
+        {usage.error && <ErrorBanner>{usage.error.message}</ErrorBanner>}
         {empty && <p className="muted">No usage yet {over}.</p>}
         {/* The open session, above the rest so it shows whatever they hold,
             keyed so another session starts from nothing. */}
@@ -96,7 +94,7 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
               {data.sessions.length ? (
                 <>
                   <KindsTable kinds={data.kinds} />
-                  <SessionsTable sessions={data.sessions} here={loc} projectName={projectName} navigate={navigate} />
+                  <SessionsTable sessions={data.sessions} here={loc} projectName={nameOf} navigate={navigate} />
                 </>
               ) : (
                 <p className="muted">No sessions {over}. Only sessions the Factory runs are counted.</p>
@@ -155,7 +153,7 @@ function CallsTable({ operations }: { operations: UsageOperation[] }) {
     setSort((s) => (s.key === key ? { key, descending: !s.descending } : { key, descending: key !== "op" }));
 
   return (
-    <table aria-label="Code Central calls" className="usage-table">
+    <table aria-label="Code Central calls" className="data-table data-table-mono">
       <thead>
         <tr>
           {COLUMNS.map((c) => (
@@ -211,7 +209,7 @@ function TokenCount({ n }: { n: number }) {
 // were, and the average and largest of their peaks.
 function KindsTable({ kinds }: { kinds: UsageKind[] }) {
   return (
-    <table aria-label="Context Size by kind" className="usage-table">
+    <table aria-label="Context Size by kind" className="data-table data-table-mono">
       <thead>
         <tr>
           <th scope="col">Kind</th>
@@ -260,7 +258,7 @@ function SessionsTable({ sessions, here, projectName, navigate }: SessionsTableP
   return (
     <>
       <h3 className="usage-subhead">Recent sessions</h3>
-      <table aria-label="Recent sessions" className="usage-table">
+      <table aria-label="Recent sessions" className="data-table data-table-mono">
         <thead>
           <tr>
             <th scope="col">Ticket</th>
@@ -409,11 +407,7 @@ function SessionChart({ api, session, here, navigate }: SessionChartProps) {
           Close session
         </Button>
       </header>
-      {read.error && (
-        <p role="alert" className="warning">
-          {read.error.message}
-        </p>
-      )}
+      {read.error && <ErrorBanner>{read.error.message}</ErrorBanner>}
       {responses && !responses.length && <p className="muted">No responses for this session in the last {USAGE_KEPT_DAYS} days.</p>}
       {responses && responses.length > 0 && (
         <LineChart
