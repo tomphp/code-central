@@ -23,8 +23,9 @@ func (f *factory) landAndSweep(ctx context.Context) {
 	if ok && !f.paused() && !f.halted(ctx) && f.remoteReady(p) {
 		f.land(ctx, p)
 	}
-	f.sweep(ctx, p.Landing.Method)
-	f.sweepSpecBranches(ctx, p.Landing.Method == store.LandingPullRequest)
+	policy := p.LandingPolicy()
+	f.sweep(ctx, policy)
+	f.sweepSpecBranches(ctx, policy)
 }
 
 // landing reads the Project, whose Landing Method, with its Push option, the
@@ -93,16 +94,17 @@ func (f *factory) remoteReady(p core.ProjectView) bool {
 }
 
 // land lands Accepted Tickets one at a time, oldest accept first (ADR
-// 0006), by the Project's Landing Method, and detects merges made by
-// hand. Under Merge the Factory merges each into the base and, with Push
-// on, pushes the base before landing it; under Branch it leaves each for the human to
-// merge, and lands it once merged. The Factory never accepts: only the
-// human moves a Ticket to Accepted.
+// 0006), each by the route the Landing Policy gives it, and detects merges
+// made by hand. By Merge the Factory merges it into the base and, with
+// Push on, pushes the base before landing it; by Branch it leaves it for
+// the human to merge, and lands it once merged; by Pull Request it lands
+// it through its pull request; by Spec Branch it merges it into
+// its Spec Branch. The Factory never accepts: only the human moves a
+// Ticket to Accepted.
 func (f *factory) land(ctx context.Context, p core.ProjectView) {
 	accepted := f.landable(ctx, store.Accepted)
 	sort.SliceStable(accepted, func(i, j int) bool { return acceptedAt(accepted[i]).Before(acceptedAt(accepted[j])) })
 	held := f.landSpecsOff(ctx, accepted, p)
-	pullRequest := p.Landing.Method == store.LandingPullRequest
 	policy := p.LandingPolicy()
 	if policy.KeepsBaseLevel() {
 		// The base is brought up to the remote's before anything lands.
@@ -123,19 +125,21 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 		if held[tk.ID] {
 			continue
 		}
-		if p.Landing.Method == store.LandingBranch {
+		prMerged := tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged
+		switch policy.Route(f.waitsOnSpecBranch(tk), prMerged) {
+		case core.RouteBranch:
 			f.landMergedBranch(ctx, tk, p)
-		} else if pullRequest && (tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged || !f.waitsOnSpecBranch(tk, p)) {
+		case core.RoutePullRequest:
 			f.landPullRequest(ctx, tk, p)
-		} else if f.waitsOnSpecBranch(tk, p) {
+		case core.RouteSpecBranch:
 			if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
 				f.mergeIntoSpecBranch(ctx, tk)
 			}
-		} else {
+		case core.RouteMerge:
 			f.landAccepted(ctx, tk, p)
 		}
 	}
-	if pullRequest {
+	if policy.LandsByPullRequest() {
 		// A Spec Branch goes to the base through its own pull request,
 		// not by a merge here: it is pushed instead.
 		f.pushSpecs(ctx, accepted, p)
@@ -156,8 +160,8 @@ func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView, p co
 		f.landAt(ctx, tk, head)
 		return
 	}
-	if err == nil && p.Landing.Push {
-		f.pushBranch(ctx, tk, p.LandingPolicy(), p.Landing.Remote, head)
+	if policy := p.LandingPolicy(); err == nil && policy.PushesAcceptedBranch() {
+		f.pushBranch(ctx, tk, policy, p.Landing.Remote, head)
 	}
 	key := tk.ID + "@" + head
 	if f.leftOnBranch[key] {
@@ -212,7 +216,7 @@ func (f *factory) workOf(tk core.TicketView) (commit, what string, err error) {
 // the base is pushed. (land sees to Accepted ones.) A Ticket merged while in any other State
 // gets a warning line, once.
 func (f *factory) detectHandMerges(ctx context.Context, p core.ProjectView) {
-	if p.Landing.Method == store.LandingPullRequest {
+	if p.LandingPolicy().LandsByPullRequest() {
 		f.detectMergedPullRequests(ctx, p.Landing.Remote)
 		return
 	}
