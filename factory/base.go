@@ -13,27 +13,27 @@ import (
 // committed on a base found for the first time or changed. It returns
 // whether landing can go on: it can't while the base is missing. A held
 // .mcp.json doesn't stop landing; it only stops claims.
-func (f *factory) locateBase(ctx context.Context, landing core.LandingView, policy core.LandingPolicy) bool {
+func (f *factory) locateBase(ctx context.Context, p core.ProjectView) bool {
 	base := f.baseBranch()
 	ref := "refs/heads/" + base
 	tip, err := f.repository.commit(ref)
-	if err != nil && f.repository.hasRemote(landing.Remote) {
-		if out, ferr := f.repository.fetch(ctx, landing.Remote); ferr != nil {
+	if err != nil && f.repository.hasRemote(p.Landing.Remote) {
+		if out, ferr := f.repository.fetch(ctx, p.Landing.Remote); ferr != nil {
 			if ctx.Err() == nil {
-				f.printf("warning: can't fetch %s to look for the base, %s: %s", landing.Remote, base, firstLine(out))
+				f.printf("warning: can't fetch %s to look for the base, %s: %s", p.Landing.Remote, base, firstLine(out))
 			}
-		} else if theirs, rerr := f.repository.commit("refs/remotes/" + landing.Remote + "/" + base); rerr == nil {
+		} else if theirs, rerr := f.repository.commit("refs/remotes/" + p.Landing.Remote + "/" + base); rerr == nil {
 			if _, berr := f.gitOut(f.repo, "branch", "--no-track", base, theirs); berr != nil {
-				f.printf("warning: can't create the base, %s, from %s/%s: %v", base, landing.Remote, base, berr)
+				f.printf("warning: can't create the base, %s, from %s/%s: %v", base, p.Landing.Remote, base, berr)
 			} else {
-				f.printf("base: created %s at %s from %s/%s", base, short(theirs), landing.Remote, base)
+				f.printf("base: created %s at %s from %s/%s", base, short(theirs), p.Landing.Remote, base)
 				tip, err = theirs, nil
 			}
 		}
 	}
 	if err != nil {
 		if !f.baseMissing {
-			f.printf("warning: the base, %s, exists neither here nor on %s: nothing lands and no branch is cut until you create it or change the Base branch in Project Options", base, landing.Remote)
+			f.printf("warning: the base, %s, exists neither here nor on %s: nothing lands and no branch is cut until you create it or change the Base branch in Project Options", base, p.Landing.Remote)
 		}
 		f.baseMissing = true
 		f.mcpBase = ""
@@ -45,10 +45,10 @@ func (f *factory) locateBase(ctx context.Context, landing core.LandingView, poli
 	}
 	f.baseMissing = false
 	f.checkMCP(base)
-	if !policy.KeepsBaseLevel() {
+	if !p.LandingPolicy().KeepsBaseLevel() {
 		// Where the Factory keeps the base level, syncing it reports it.
 		remote := tip
-		if theirs, rerr := f.repository.commit("refs/remotes/" + landing.Remote + "/" + base); rerr == nil {
+		if theirs, rerr := f.repository.commit("refs/remotes/" + p.Landing.Remote + "/" + base); rerr == nil {
 			remote = theirs
 		}
 		f.reportBaseState(ctx, core.ReportBaseInput{State: core.BaseCurrent, Local: tip, Remote: remote})
