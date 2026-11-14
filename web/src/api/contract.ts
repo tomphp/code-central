@@ -163,7 +163,10 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     });
 
     it("reads Needs Me: empty, then grouped with each row's detail", async () => {
-      expect(await d.api.needsMe()).toEqual({ count: 0, groups: [] });
+      // counts is optional: Core always sends it, the fake leaves it out.
+      const empty = await d.api.needsMe();
+      expect(empty.count).toBe(0);
+      expect(empty.groups).toEqual([]);
 
       await d.createProject("acme", "Acme");
       const id = await d.createTicket("acme", "Pick a colour", "Ready");
