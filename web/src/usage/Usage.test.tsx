@@ -310,6 +310,13 @@ describe("Context Size", () => {
 
   const kindsTable = () => within(usage()).getByRole("table", { name: "Context Size by kind" });
   const sessionsTable = () => within(usage()).getByRole("table", { name: "Recent sessions" });
+  const sessionRows = () => within(sessionsTable()).getAllByRole("row").slice(1);
+  // cells are a recent session's cells' text, its Session cell its link's,
+  // leaving out its Subagents' disclosure.
+  const cells = (r: HTMLElement) =>
+    within(r)
+      .getAllByRole("cell")
+      .map((c) => (c.classList.contains("usage-session") ? within(c).getByRole("link").textContent : c.textContent));
   const rows = (table: HTMLElement) =>
     within(table)
       .getAllByRole("row")
@@ -341,29 +348,102 @@ describe("Context Size", () => {
     expect(within(kindsTable()).getAllByText("123,456")[0]).toHaveAttribute("title", "123,456 tokens");
   });
 
-  it("lists the recent sessions newest first, each subagent a session of its own", async () => {
+  it("lists the main sessions newest first, each with its tokens and its Subagents collapsed under it", async () => {
     const { w, impl, spec } = await withUsage();
     renderApp(w, "/?view=usage");
     await waitFor(() => expect(within(usage()).getByRole("table", { name: "Recent sessions" })).toBeInTheDocument());
-    expect(
-      within(sessionsTable())
-        .getAllByRole("columnheader")
-        .map((h) => h.textContent),
-    ).toEqual(["Ticket", "Project", "Claim", "Session", "Kind", "Model", "Started", "Peak Context Size", "Responses"]);
-    const sessions = within(sessionsTable()).getAllByRole("row").slice(1);
-    expect(sessions.map((r) => within(within(r).getByRole("rowheader")).getByRole("link").textContent)).toEqual([spec, impl, impl]);
-    expect(
-      sessions.map((r) =>
-        within(r)
-          .getAllByRole("cell")
-          .map((c) => c.textContent),
-      ),
-    ).toEqual([
-      ["Beta", "1", "sess-spec", "spec", "claude-opus-4-7", expect.any(String), "80,000", "1"],
-      ["Acme", "1", "sess-impl · toolu_review", "review", "—", expect.any(String), "21,000", "1"],
-      ["Acme", "1", "sess-impl", "implementation", "claude-sonnet-4-6, claude-opus-4-7", expect.any(String), "123,456", "2"],
+    expect(within(sessionsTable()).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+      "Ticket",
+      "Project",
+      "Claim",
+      "Session",
+      "Kind",
+      "Model",
+      "Started",
+      "Peak Context Size",
+      "Tokens",
+      "Responses",
     ]);
-    expect(within(sessions[2]).getByText("123,456")).toHaveAttribute("title", "123,456 tokens");
+    const sessions = sessionRows();
+    expect(sessions.map((r) => within(within(r).getByRole("rowheader")).getByRole("link").textContent)).toEqual([spec, impl]);
+    // Each response's tokens are its context and 50 output.
+    expect(sessions.map(cells)).toEqual([
+      ["Beta", "1", "sess-spec", "spec", "claude-opus-4-7", expect.any(String), "80,000", "80,050", "1"],
+      ["Acme", "1", "sess-impl", "implementation", "claude-sonnet-4-6, claude-opus-4-7", expect.any(String), "123,456", "163,556 (184,606 with subagents)", "2"],
+    ]);
+    expect(within(sessions[1]).getByText("123,456")).toHaveAttribute("title", "123,456 tokens");
+    expect(within(sessions[1]).getByText("163,556")).toHaveAttribute("title", "163,556 tokens");
+    expect(within(sessions[1]).getByText("184,606")).toHaveAttribute("title", "184,606 tokens");
+    expect(within(sessions[0]).getByText("80,050")).toHaveAttribute("title", "80,050 tokens");
+
+    // A session with no Subagents has no disclosure; one with them, collapsed.
+    expect(within(sessions[0]).queryByRole("button")).toBeNull();
+    expect(within(sessions[1]).getByRole("button", { name: "1 subagent" })).toHaveAttribute("aria-expanded", "false");
+    expect(within(sessionsTable()).queryByRole("link", { name: "toolu_review" })).toBeNull();
+  });
+
+  it("expands a main session to show its Subagents under it, oldest first, each named by its Agent Type and description", async () => {
+    const { w, s } = await projects();
+    const impl = await claimed(s, "acme", "Build it", "sess-impl", [
+      response(w, 1, "implementation", 40_000),
+      { ...response(w, 2, "subagent", 10_000, "toolu_a"), agent_type: "Explore", description: "Map Usage sessions", model: "claude-haiku-4-5" },
+      // Recorded before Subagents were named.
+      response(w, 3, "subagent", 11_000, "toolu_old"),
+      { ...response(w, 4, "review", 12_000, "toolu_review"), description: "Review the diff" },
+      { ...response(w, 5, "subagent", 13_000, "toolu_plan"), agent_type: "Plan" },
+    ]);
+    const spec = await claimed(s, "beta", "Write it", "sess-spec", [response(w, 6, "spec", 80_000)]);
+    renderApp(w, "/?view=usage");
+    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    const disclosure = within(sessionsTable()).getByRole("button", { name: "4 subagents" });
+    expect(disclosure).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    const rows = sessionRows();
+    expect(rows.map((r) => within(within(r).getByRole("rowheader")).getByRole("link").textContent)).toEqual([spec, impl, impl, impl, impl, impl]);
+    expect(rows.map(cells)).toEqual([
+      ["Beta", "1", "sess-spec", "spec", "—", expect.any(String), "80,000", "80,050", "1"],
+      ["Acme", "1", "sess-impl", "implementation", "—", expect.any(String), "40,000", "40,050 (86,250 with subagents)", "1"],
+      ["Acme", "1", "Explore · Map Usage sessions", "subagent", "claude-haiku-4-5", expect.any(String), "10,000", "10,050", "1"],
+      ["Acme", "1", "toolu_old", "subagent", "—", expect.any(String), "11,000", "11,050", "1"],
+      ["Acme", "1", "Review the diff", "review", "—", expect.any(String), "12,000", "12,050", "1"],
+      ["Acme", "1", "Plan", "subagent", "—", expect.any(String), "13,000", "13,050", "1"],
+    ]);
+    // Indented under their parent, with no disclosure of their own.
+    expect(rows.slice(2).every((r) => r.classList.contains("usage-subagent"))).toBe(true);
+    expect(rows.slice(2).every((r) => !within(r).queryByRole("button"))).toBe(true);
+
+    await userEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    expect(sessionRows()).toHaveLength(2);
+  });
+
+  it("opens and closes the Subagents from the keyboard", async () => {
+    renderApp((await withUsage()).w, "/?view=usage");
+    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    const disclosure = within(sessionsTable()).getByRole("button", { name: "1 subagent" });
+    expect(disclosure.tagName).toBe("BUTTON");
+    disclosure.focus();
+
+    await userEvent.keyboard("{Enter}");
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    expect(within(sessionsTable()).getByRole("link", { name: "toolu_review" })).toBeInTheDocument();
+    await userEvent.keyboard(" ");
+    expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    expect(within(sessionsTable()).queryByRole("link", { name: "toolu_review" })).toBeNull();
+  });
+
+  it("lists a main session whose only responses in the range are its Subagents', with none of its own", async () => {
+    const { w, s } = await projects();
+    await claimed(s, "acme", "Build it", "sess-impl", [
+      // The turn started twenty days before: out of the 7 day range.
+      response(w, -20 * 24 * 60, "implementation", 40_000),
+      response(w, 1, "subagent", 10_000, "toolu_a"),
+    ]);
+    renderApp(w, "/?view=usage");
+    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    expect(sessionRows().map(cells)).toEqual([["Acme", "1", "sess-impl", "—", "—", expect.any(String), "0", "0 (10,050 with subagents)", "0"]]);
   });
 
   it("opens a session's Ticket from its link", async () => {
@@ -477,9 +557,8 @@ describe("a session's Context Size", () => {
   it("opens a subagent's session with its agent in the address", async () => {
     renderApp(await withUsage(), "/?view=usage&days=30");
     await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
-    const link = within(sessionsTable()).getByRole("link", {
-      name: "sess-impl · toolu_review",
-    });
+    await userEvent.click(within(sessionsTable()).getByRole("button", { name: "1 subagent" }));
+    const link = within(sessionsTable()).getByRole("link", { name: "toolu_review" });
     // The link keeps the range too, for a new tab or a copied link.
     expect(link).toHaveAttribute("href", "?view=usage&days=30&session_project=acme&session=sess-impl&agent=toolu_review");
     await userEvent.click(link);
@@ -487,6 +566,31 @@ describe("a session's Context Size", () => {
     await waitFor(() => expect(points()).toHaveLength(1));
     expect(panel()).toHaveAccessibleName("Session sess-impl · toolu_review");
     expect(points()[0]).toHaveAttribute("aria-label", "Response 1: 21,000 tokens");
+    // Its parent stays expanded, its row marked open.
+    expect(within(sessionsTable()).getByRole("link", { name: "toolu_review" })).toHaveAttribute("aria-current", "true");
+
+    // The header links to the parent, whose chart is the same address without agent.
+    const parent = within(panel()).getByRole("link", { name: "Parent session sess-impl" });
+    expect(parent).toHaveAttribute("href", "?view=usage&days=30&session_project=acme&session=sess-impl");
+    await userEvent.click(parent);
+    expect(window.location.search).toBe("?view=usage&days=30&session_project=acme&session=sess-impl");
+    await waitFor(() => expect(points()).toHaveLength(3));
+    expect(panel()).toHaveAccessibleName("Session sess-impl");
+    expect(within(panel()).queryByRole("link", { name: /Parent session/ })).toBeNull();
+  });
+
+  it("names a subagent's chart from the read and starts its parent expanded when loaded from the address", async () => {
+    const w = await withUsage();
+    await scenario(w).postUsage("sess-impl", [{ ...response(w, 5, "subagent", 10_000, "toolu_a"), agent_type: "Explore", description: "Map Usage sessions" }]);
+    renderApp(w, "/?view=usage&session_project=acme&session=sess-impl&agent=toolu_a");
+    await waitFor(() => expect(panel()).toHaveAccessibleName("Session sess-impl · Explore · Map Usage sessions"));
+    const disclosure = within(sessionsTable()).getByRole("button", { name: "2 subagents" });
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    expect(within(sessionsTable()).getByRole("link", { name: "Explore · Map Usage sessions" })).toHaveAttribute("aria-current", "true");
+    // Collapsing is view state: the address keeps the chart and gains nothing.
+    await userEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    expect(window.location.search).toBe("?view=usage&session_project=acme&session=sess-impl&agent=toolu_a");
   });
 
   it("reopens the session from the address, whatever the scope", async () => {

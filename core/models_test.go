@@ -234,8 +234,8 @@ func guideLabels(guide string) []string {
 	switch {
 	case guide == core.ImplementationStage:
 		return nil
-	case guide == core.PrototypeLabel:
-		return []string{core.PrototypeLabel}
+	case guide == core.PrototypeLabel || guide == core.RetroLabel:
+		return []string{guide}
 	case strings.HasPrefix(guide, "map-"):
 		return []string{core.WayfinderPrefix + strings.TrimPrefix(guide, "map-")}
 	}

@@ -74,6 +74,8 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       }),
     submitMap: (project, text, draft) => call("POST", `${p(project)}/submit_map`, { text, ...(draft && { draft }) }),
     submitPrototype: (project, spec, text) => call("POST", `${p(project)}/submit_prototype`, { spec, text }),
+    submitRetro: (project, target, note) =>
+      call("POST", `${p(project)}/submit_retro`, { target, ...(note && { note }) }),
     submitSmallChange: (project, text, draft) =>
       call("POST", `${p(project)}/submit_small_change`, { text, ...(draft && { draft }) }),
     specQuestions: (project, spec) => call("GET", `${p(project)}/specs/${encodeURIComponent(numberOf(spec))}/questions`),

@@ -12,6 +12,7 @@ import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
 import { QuestionAnswer } from "../panels/round/QuestionAnswer";
 import { PrototypeBadge } from "../ticket/PrototypeBadge";
+import { RetroBadge } from "../ticket/RetroBadge";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import type { FocusItem } from "./session";
 import { Button } from "../controls/Button";
@@ -83,6 +84,7 @@ export function FocusItemView({
       <p className="focus-badges">
         <FocusBadge reason={row.reason} />
         {row.prototype && <PrototypeBadge />}
+        {row.retro && <RetroBadge />}
       </p>
       {row.id ? (
         <p className="focus-ticket">

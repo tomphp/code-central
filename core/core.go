@@ -292,6 +292,9 @@ type TicketView struct {
 	// ModelChoice is the model and effort the Ticket's next turn runs
 	// with, each with its source; only the UI's read carries it.
 	ModelChoice *ModelChoice `json:"model_choice,omitempty"`
+	// Retros are the Retros looking back on this Ticket, oldest first;
+	// left out when there are none. Only get_ticket sets it.
+	Retros []RetroView `json:"retros,omitempty"`
 	// AutoAcceptKind is the Ticket's Auto-accept kind (grilling, spec,
 	// tickets, implementation or merge); left out when it has none. Only
 	// the UI's read carries it.
@@ -529,6 +532,7 @@ func (c *Core) GetTicket(_ context.Context, key string, in GetTicketInput) (Tick
 			return err
 		}
 		v = shapeView(c.ticketView(r, key, t), r, p, t, in.Parts, parts, in.WithModelChoice)
+		v.Retros = retrosOf(r, key, DisplayID(key, t.Number))
 		return nil
 	})
 	return v, err

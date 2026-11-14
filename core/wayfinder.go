@@ -23,6 +23,9 @@ const MapLabel = WayfinderPrefix + "map"
 // PrototypeLabel marks a Ticket as a Prototype.
 const PrototypeLabel = "prototype"
 
+// RetroLabel marks a Ticket as a Retro (ADR 0040).
+const RetroLabel = "retro"
+
 // LongLivedLabel marks a Spec as a Long-lived Spec, one that never
 // finishes, such as a CI Rule's Spec or an Issues Spec.
 const LongLivedLabel = store.LongLivedLabel
@@ -48,8 +51,8 @@ var wayfinderLabelList = func() string {
 // carries at most one: a Stage, a Map Ticket type or prototype. ok is
 // false for any other Label.
 func typeGuide(l string) (guide string, ok bool) {
-	if l == PrototypeLabel {
-		return PrototypeLabel, true
+	if l == PrototypeLabel || l == RetroLabel {
+		return l, true
 	}
 	if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(WayfinderTypes, name) {
 		return mapGuidePrefix + name, true
@@ -110,6 +113,8 @@ func checkPlacement(field string, labels []string, onSpec bool) error {
 			return invalid(field, "%q marks a Spec as long-lived; it goes on a Spec, not a Ticket", l)
 		case onSpec && l == PrototypeLabel:
 			return invalid(field, "%q marks a Ticket as a Prototype; a Spec can't carry it", l)
+		case onSpec && l == RetroLabel:
+			return invalid(field, "%q marks a Ticket as a Retro; a Spec can't carry it", l)
 		case onSpec && l != MapLabel && strings.HasPrefix(l, WayfinderPrefix):
 			return invalid(field, "%q marks a Map's Ticket; a Spec can only carry %q", l, MapLabel)
 		}
@@ -127,7 +132,7 @@ func checkOneType(field string, labels []string) error {
 		}
 	}
 	if len(types) > 1 {
-		return invalid(field, "a Ticket carries at most one of the reserved type Labels (stage:*, wayfinder:* or prototype), not %s", strings.Join(types, " and "))
+		return invalid(field, "a Ticket carries at most one of the reserved type Labels (stage:*, wayfinder:*, prototype or retro), not %s", strings.Join(types, " and "))
 	}
 	return nil
 }

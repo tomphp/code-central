@@ -1,6 +1,6 @@
 // Where the UI offers Edit. The service takes an edit to any Spec or
 // Ticket in any State; this decides only where the human is offered one.
-import type { LinkView, SpecDetail, TicketView } from "../api/types";
+import { LONG_LIVED_LABEL, type LinkView, type SpecDetail, type TicketView } from "../api/types";
 
 // owned is whether the Link's Integration owns the definition, so the
 // service refuses the human's edit: attached, and not outbound.
@@ -9,6 +9,18 @@ const owned = (link?: LinkView) => !!link && !link.detached && !link.outbound;
 // A Ticket only while it is Draft.
 export function ticketEditable(t: TicketView, archived: boolean): boolean {
   return t.state === "Draft" && !owned(t.link) && !archived;
+}
+
+// A Ticket can be looked back on once it is Done or Cancelled, in a Project
+// that takes writes.
+export function retroable(t: TicketView, archived: boolean): boolean {
+  return (t.state === "Done" || t.state === "Cancelled") && !archived;
+}
+
+// A Spec can be looked back on once it is Finished, unless it is Long-lived,
+// in a Project that takes writes.
+export function specRetroable(s: SpecDetail, archived: boolean): boolean {
+  return s.finished && !s.labels.includes(LONG_LIVED_LABEL) && !archived;
 }
 
 // A Spec until it is Finished, never a Map.

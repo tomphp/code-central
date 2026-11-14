@@ -44,7 +44,7 @@ export function SpecPopup({ api, now, version, id, projects, onClose, open, spec
           specLink={specLink}
         />
       ) : data?.map ? (
-        <MapPane api={api} spec={{ ...data, map: data.map }} now={now} select={open} specLink={specLink} written={open} />
+        <MapPane api={api} spec={{ ...data, map: data.map }} archived={archived} now={now} select={open} specLink={specLink} written={open} />
       ) : data ? (
         <SpecPane api={api} spec={data} archived={archived} now={now} select={open} />
       ) : (

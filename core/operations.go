@@ -124,6 +124,8 @@ var Operations = []Op{
 	{Name: "submit_map", Audience: AgentAndHuman, Write: true},
 	{Name: "submit_prototype", Audience: AgentAndHuman, Write: true},
 	{Name: "submit_small_change", Audience: AgentAndHuman, Write: true},
+	// Retros (Spec code-central-646).
+	{Name: "submit_retro", Audience: AgentAndHuman, Write: true},
 
 	// Options, the human's global preferences (Spec code-central-160).
 	// HTTP only: no MCP tool and no CLI command.

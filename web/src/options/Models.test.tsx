@@ -17,7 +17,7 @@ function renderApp(w: World) {
   return render(<App api={w.api} now={w.now} />);
 }
 
-const KINDS = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"];
+const KINDS = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "retro", "implementation"];
 
 const page = () => screen.getByRole("main", { name: "Project Options" });
 const models = () => within(page()).getByRole("group", { name: "Models" });

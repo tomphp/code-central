@@ -31,6 +31,8 @@ apiContract("HTTP API against code-central serve", async () => {
       for (const cut of streams) cut.abort();
       streams.clear();
     },
+    // Absolute where the service runs: a Windows path isn't on Unix.
+    absolutePath: process.platform === "win32" ? "C:\\Tools\\gh.exe" : "/opt/tools/gh",
     close: svc.stop,
   });
 });

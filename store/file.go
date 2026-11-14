@@ -273,6 +273,7 @@ func (s *FileStore) loadProject(key string) error {
 	p.CIResponses = rs
 	p.CIFixesSpec = pf.CIFixesSpec
 	p.SmallChangesSpec = pf.SmallChangesSpec
+	p.RetrosSpec = pf.RetrosSpec
 	for i, k := range pf.AutoAccept {
 		kind := AutoAcceptKind(k)
 		if !kind.Valid() {

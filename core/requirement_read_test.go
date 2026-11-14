@@ -229,6 +229,31 @@ func TestNeedsMeListsMapTicketsAndPrototypesOneByOneWithTheirSpec(t *testing.T) 
 	}
 }
 
+func TestNeedsMeMarksARetroForItsBadge(t *testing.T) {
+	f := newFixture(t)
+	f.requirement(t)
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Retro: Login", Labels: []string{core.RetroLabel}, State: store.Ready})     // acme-6
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "1", Title: "Try the form", Labels: []string{core.PrototypeLabel}, State: store.Ready}) // acme-7
+	f.setState(t, 6, store.InReview)
+	f.setState(t, 7, store.InReview)
+	v, err := f.core.NeedsMe(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]core.NeedsMeRow{}
+	for _, g := range v.Groups {
+		for _, row := range g.Tickets {
+			got[row.ID] = row
+		}
+	}
+	if !got["acme-6"].Retro || got["acme-6"].Prototype {
+		t.Errorf("a Retro's row: %+v", got["acme-6"])
+	}
+	if got["acme-7"].Retro || !got["acme-7"].Prototype {
+		t.Errorf("a Prototype's row: %+v", got["acme-7"])
+	}
+}
+
 func TestACancelledTicketsStageCountsAsPassedSoBuildIsCurrent(t *testing.T) {
 	f := newFixture(t)
 	f.requirement(t)

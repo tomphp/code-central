@@ -45,9 +45,6 @@ projects/<key>/project.yaml
       default: mapping (optional)
           model: string (optional)
           effort: string (optional)
-      chat: mapping (optional)
-          model: string (optional)
-          effort: string (optional)
       kinds: list of mappings (optional)
           kind: string
           model: string (optional)
@@ -215,7 +212,7 @@ values
   options focus_popup (default off): off, on
   project landing.method (no landing: merge, push false, remote origin): merge, branch, pull_request
   project ci.provider (no ci: tracking off, github_actions): github_actions, azure_pipelines
-  project models.kinds[].kind: grilling, spec, tickets, map-chart, map-grilling, map-research, map-task, prototype, implementation
+  project models.kinds[].kind: grilling, spec, tickets, map-chart, map-grilling, map-research, map-task, prototype, retro, implementation
   project focus_kinds_off[]: needs_answer, answered, silent_claim, long_claim, failed, in_review, ci_failed, ci_cancelled, base_diverged, base_missing, pull_request_closed, to_merge, ci_unavailable, accepted_not_landed, blocked_by_cancelled, new_issue, closed_externally
   ticket state, moves[].from, moves[].to: Draft, Ready, In Progress, Needs Answer, Answered, Failed, In Review, Accepted, Done, Cancelled
   ticket recommendation (optional): implement, split

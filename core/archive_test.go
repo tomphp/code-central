@@ -377,6 +377,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SubmitSmallChange(ctx, "acme", core.SubmitSmallChangeInput{Text: "Fix the typo"})
 		return err
 	},
+	"submit_retro": func(f fixture) error {
+		_, err := f.core.SubmitRetro(ctx, "acme", core.SubmitRetroInput{Target: "acme-2"})
+		return err
+	},
 	"submit_map": func(f fixture) error {
 		_, err := f.core.SubmitMap(ctx, "acme", core.SubmitMapInput{Text: "Offline mode"})
 		return err
