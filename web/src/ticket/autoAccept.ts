@@ -1,6 +1,6 @@
 // Auto-accept as the UI shows it (Spec code-central-536): the names of the
 // Auto-accept kinds and the line a Move that an auto-accept made reads as.
-import type { AutoAcceptCause, AutoAcceptKind, MoveView, TicketView } from "../api/types";
+import { MAP_LABEL, type AutoAcceptCause, type AutoAcceptKind, type MoveView, type TicketView } from "../api/types";
 import { stageOf } from "../requirement/progress";
 
 export const AUTO_ACCEPT_KIND_NAME: Record<AutoAcceptKind, string> = {
@@ -16,6 +16,22 @@ export const AUTO_ACCEPT_KIND_NAME: Record<AutoAcceptKind, string> = {
 // (A Prototype or Map Ticket has none and is never auto-accepted.)
 function autoAcceptKindOf(t: Pick<TicketView, "labels" | "spec_merge_ticket">): AutoAcceptKind {
   return stageOf(t) ?? (t.spec_merge_ticket ? "merge" : "implementation");
+}
+
+export const AUTO_ACCEPT_LABEL = "auto-accept";
+
+// canAutoAccept mirrors core's autoAcceptKind: a Prototype, a Wayfinder-type
+// Ticket and a Map's Ticket are never auto-accepted. specLabels are the
+// Labels of the Ticket's Spec.
+export function canAutoAccept(t: { labels: string[] }, specLabels: string[]): boolean {
+  return !t.labels.some((l) => l === "prototype" || l.startsWith("wayfinder:")) && !specLabels.includes(MAP_LABEL);
+}
+
+// wouldAutoAccept is core's autoAcceptCause for the Label case, for a
+// Ticket In Review: canAutoAccept, and a spec Stage needs its Spec
+// recommendation.
+export function wouldAutoAccept(t: Pick<TicketView, "labels" | "recommendation">, specLabels: string[]): boolean {
+  return canAutoAccept(t, specLabels) && (stageOf(t) !== "spec" || !!t.recommendation);
 }
 
 function causeText(cause: AutoAcceptCause, t: Pick<TicketView, "labels" | "spec" | "spec_merge_ticket">): string {

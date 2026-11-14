@@ -505,7 +505,9 @@ To auto-accept one Ticket, or everything on one Spec, whatever the Project's swi
 
 Adding the Label also accepts, in the same write, every Ticket it now covers that is already In Review, except a spec Stage with no recommendation. Removing it changes nothing already accepted; only later finishes go back to In Review.
 
-The Label is yours alone. `add_labels`, `remove_labels`, `create_ticket` and an import refuse it as `invalid` from an agent or an Integration, so MCP and the CLI can't name it. Add or remove it over HTTP as the human:
+In the UI it is the **Auto-accept switch**: a switch labelled **Auto-accept** on a Ticket's detail and on a Spec's page (a Requirement's or a plain Spec's, including a Long-lived Spec such as Small Changes). It reads on exactly when that item carries the Label. Turning it off removes the Label at once. Turning it on writes at once when it would accept nothing, and otherwise first asks `This will accept 3 Tickets now In Review. Turn on?` with **Turn on** and **Cancel**: the count is every Ticket on the Spec that is In Review and not a Prototype or Map Ticket, and **Cancel** leaves the Label off. On a Ticket whose Spec carries the Label the switch reads off and a note beside it, `Auto-accepted via its Spec's Label`, links the Spec. The Ticket's switch means only that Ticket's own Label; the Project's setting stays on the Options page. There is no switch on a Prototype, a Map or a Map's Ticket, an Accepted, Done or Cancelled Ticket or a finished Spec, and an Archived Project shows it read-only. A refused write shows its error by the switch and leaves it as it was.
+
+The Label is yours alone. `add_labels`, `remove_labels`, `create_ticket` and an import refuse it as `invalid` from an agent or an Integration, so MCP and the CLI can't name it. To script it, add or remove it over HTTP as the human:
 
 ```sh
 curl -X POST localhost:7733/api/p/acme-api/add_labels -H 'X-Code-Central-Actor: human' -d '{"target": "acme-api-12", "labels": ["auto-accept"]}'

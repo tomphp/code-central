@@ -77,6 +77,7 @@ import {
 } from "./api";
 import { codeHostOf } from "./codeHost";
 import { fakeActions } from "./fakeActions";
+import { AUTO_ACCEPT_LABEL, wouldAutoAccept } from "../ticket/autoAccept";
 import {
   ApiError,
   type ChoiceValue,
@@ -165,6 +166,7 @@ import {
   type ReportedModels,
   type StageGuides,
   type AutoAccept,
+  type AutoAcceptCause,
   type FocusKinds,
   type UsageDay,
   type UsageDayTokens,
@@ -1883,6 +1885,65 @@ export class FakeApi implements Api {
   async removeTags(project: string, target: string, keys: string[]): Promise<TargetView> {
     this.calls.push("removeTags");
     return this.retag(project, target, (old) => Object.fromEntries(Object.entries(old).filter(([k]) => !keys.includes(k))));
+  }
+
+  async addLabels(project: string, target: string, labels: string[]): Promise<TargetView> {
+    this.calls.push("addLabels");
+    this.writable(project);
+    const id = this.specId(project, target);
+    const isSpec = this.allSpecs(project).some((s) => s.id === id);
+    if (labels.includes(LONG_LIVED_LABEL) && !isSpec) {
+      throw new ApiError(422, "invalid", `"long-lived" marks a Spec as long-lived; it goes on a Spec, not a Ticket`, "labels");
+    }
+    if (labels.includes("prototype") && isSpec) {
+      throw new ApiError(422, "invalid", `"prototype" marks a Ticket as a Prototype; it goes on a Ticket, not a Spec`, "labels");
+    }
+    const had = this.labelsOf(project, target).includes(AUTO_ACCEPT_LABEL);
+    const view = this.relabel(project, target, (old) => [...old, ...labels.filter((l, i) => !old.includes(l) && labels.indexOf(l) === i)]);
+    if (labels.includes(AUTO_ACCEPT_LABEL) && !had) this.sweepAutoAccept(project, view.kind === "spec" ? this.ticketsOf(view.id) : [this.ticket(project, view.id)]);
+    return view;
+  }
+
+  async removeLabels(project: string, target: string, labels: string[]): Promise<TargetView> {
+    this.calls.push("removeLabels");
+    return this.relabel(project, target, (old) => old.filter((l) => !labels.includes(l)));
+  }
+
+  private labelsOf(project: string, target: string): string[] {
+    const id = this.specId(project, target);
+    return this.allSpecs(project).find((s) => s.id === id)?.labels ?? this.ticket(project, target).labels;
+  }
+
+  // relabel replaces a Spec's or Ticket's Labels with change's.
+  private relabel(project: string, target: string, change: (old: string[]) => string[]): TargetView {
+    this.writable(project);
+    const id = this.specId(project, target);
+    // A Spec only a Ticket names becomes a seeded one when it is relabelled.
+    const s = this.allSpecs(project).find((s) => s.id === id);
+    if (s) {
+      this.specs.set(id, s);
+      Object.assign(s, { labels: change(s.labels), updated: this.now.toISOString() });
+      this.emit({ type: "spec.changed", project, id });
+      return structuredClone({ id, kind: "spec", labels: s.labels, tags: s.tags });
+    }
+    const old = this.ticket(project, target);
+    const t = this.updateTicket(old.id, { labels: change(old.labels) });
+    return structuredClone({ id: t.id, kind: "ticket", labels: t.labels, tags: t.tags });
+  }
+
+  // sweepAutoAccept accepts, as the human, each of tickets that is In
+  // Review and eligible, as core does when auto-accept is added.
+  private sweepAutoAccept(project: string, tickets: TicketView[]) {
+    for (const covered of tickets) {
+      const t = this.view(covered);
+      const specLabels = this.allSpecs(project).find((s) => s.id === t.spec.id)?.labels ?? [];
+      if (t.state !== "In Review" || !wouldAutoAccept(t, specLabels)) continue;
+      const cause: AutoAcceptCause = t.labels.includes(AUTO_ACCEPT_LABEL) ? "ticket-label" : "spec-label";
+      const action = stageOf(t) === "spec" && t.recommendation === "implement" ? "implement" : "accept";
+      const done = fakeActions[action]!(this, t, {});
+      const moves = done.moves.map((m, i) => (i === done.moves.length - 1 ? { ...m, cause } : m));
+      this.updateTicket(t.id, { moves });
+    }
   }
 
   // retag replaces a Spec's or Ticket's Tags with change's.
