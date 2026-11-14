@@ -45,6 +45,54 @@ Code Central works the status out on every read:
 
 The Project's dot is Online if any Factory is Online, else Draining if any is, else Offline. A stopped Factory keeps its note, so the tooltip still says why it stopped.
 
+## Running Chat turns
+
+A Factory that reports `chat: true` is expected to answer the Project's Conversation. Chat takes two calls, on the same terms as the Heartbeat (see Who may call it). Code Central never calls the Factory.
+
+### `next_chat_work`
+
+```text
+GET /api/p/{key}/chat/next-work?factory=sandcastle&host=build-1
+```
+
+`factory` and `host` are as in the Heartbeat. The call holds until there is work for this Factory, for at most Code Central's wait timeout, then answers. Keep one open at a time; a newer call from the same Factory replaces the older. The answer is JSON holding one of:
+
+| Field | |
+| --- | --- |
+| `turn` | One Chat Message to answer: `conversation` (its ID), `text`, `model`, `effort` (empty for Claude Code's default), `first` (true when it starts the Conversation's session) and, when not `first`, the `session_id` to resume. |
+| `stop` | `{"conversation": "<id>"}`: stop that Conversation's running reply. |
+| *(neither)* | The wait timed out. Call again. |
+
+Code Central hands out the next turn only after the reply before it has ended.
+
+### `post_chat_events`
+
+```text
+POST /api/p/{key}/chat/events
+Content-Type: application/json
+```
+
+The Factory that took the turn posts the reply as it arrives, as often as it likes:
+
+| Field | |
+| --- | --- |
+| `conversation` | Required. The turn's `conversation`. |
+| `factory`, `host` | Required. As in the Heartbeat; they must name the Factory holding the Conversation. |
+| `session_id`, `resume_command` | On the first post: the session, and the command that resumes it in the Factory's worktree. |
+| `items` | The reply's new items, in the shape of Session Events (`time`, `kind`, `text`, and for tools `tool`, `tool_use_id`, `is_error`). The pop-up streams them. |
+| `outcome` | On the last post only: `done`, `stopped` or `failed`. Leave it out while the reply runs. |
+| `error` | With `failed`: the text the pop-up shows. |
+
+It always answers 204, even for a post it drops, so a Factory never fails a turn on it. A reply whose Factory goes Offline ends with `the Factory stopped answering`. Conversations live in memory only, so a Code Central restart drops them.
+
+```console
+$ curl -s -X POST http://localhost:7733/api/p/acme-shop/chat/events \
+    -H 'Content-Type: application/json' \
+    -d '{"conversation":"<id>","factory":"sandcastle","host":"build-1","items":[{"time":"2026-11-14T10:00:00Z","kind":"text","text":"Hello"}],"outcome":"done"}'
+```
+
+An end-to-end test (`web/src/e2e/chat.e2e.test.ts`) runs this exchange against a real service.
+
 ## An example
 
 Send a Heartbeat on each poll, and a `stopping` one on the way out:
