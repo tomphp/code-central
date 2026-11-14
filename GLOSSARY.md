@@ -21,7 +21,7 @@ The page where the human sets a Project's settings, such as its Landing Method, 
 _Avoid_: Project settings, preferences, config
 
 **Models**:
-The section of Project Options where the human sets a model and effort for the Project default and for each kind of work (a Ticket's Stage Guide name).
+The section of Project Options where the human sets a model and effort for the Project default, for each kind of work (a Ticket's Stage Guide name) and for Chat. The Chat row is not a kind of work, and the Project default doesn't reach it.
 _Avoid_: Model config, AI settings
 
 **Model Choice**:

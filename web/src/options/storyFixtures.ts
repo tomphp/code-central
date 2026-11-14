@@ -51,6 +51,7 @@ export const storyProject = (patch: Partial<ProjectRow> = {}): ProjectRow => ({
   },
   models: {
     default: { model: "sonnet", effort: "" },
+    chat: { model: "", effort: "" },
     kinds: [
       { kind: "implementation", model: "", effort: "high" },
       { kind: "review", model: "", effort: "" },

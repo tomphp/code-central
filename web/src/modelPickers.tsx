@@ -1,6 +1,19 @@
 // What the model and effort pickers offer (Spec code-central-301), in
 // Project Options' Models section and on the Ticket panel alike.
-import type { ReportedModels } from "./api/types";
+import type { ModelRow, Models, ReportedModels } from "./api/types";
+
+// CHAT_DEFAULT_MODEL is the model Chat uses when neither the picker nor
+// the Chat row names one (Spec code-central-633).
+export const CHAT_DEFAULT_MODEL = "haiku";
+
+// chatDefaults are the model and effort a new conversation starts with:
+// the picker's value, then the Chat row, then haiku for the model and
+// none ("", Claude Code's default) for the effort. The Project default
+// row and the Factory's flags don't apply to Chat.
+export const chatDefaults = (models: Pick<Models, "chat">, picked: Partial<ModelRow> = {}): ModelRow => ({
+  model: picked.model || models.chat.model || CHAT_DEFAULT_MODEL,
+  effort: picked.effort || models.chat.effort,
+});
 
 // modelSuggestions are what a model picker suggests: the Reported
 // Models' aliases, then their model IDs, each once.

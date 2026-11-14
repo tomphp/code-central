@@ -160,6 +160,7 @@ import {
   sessionKey,
   type ModelRow,
   type Models,
+  type ModelsChange,
   type FactoryStatus,
   type HeartbeatReport,
   type ModelsReport,
@@ -475,7 +476,7 @@ export class FakeApi implements Api {
         watcher: { state: "not_reported" },
       },
       github_issues: { on: false, repository: "", label: "", new_issues_need_me: false, watcher: { state: "not_reported" } },
-      models: { default: { model: "", effort: "" }, kinds: KINDS_OF_WORK.map((kind) => ({ kind, model: "", effort: "" })) },
+      models: { default: { model: "", effort: "" }, chat: { model: "", effort: "" }, kinds: KINDS_OF_WORK.map((kind) => ({ kind, model: "", effort: "" })) },
       reported_models: { effort_levels: [...EFFORT_LEVELS], aliases: [], model_ids: [], model_flag: "", effort_flag: "" },
       stage_guides: { subagent_exploration: true, model_assignment: false },
       auto_accept: { grilling: false, spec: false, tickets: false, implementation: false, merge: false },
@@ -1432,7 +1433,7 @@ export class FakeApi implements Api {
     return this.projectView(p);
   }
 
-  async setModels(key: string, change: Models): Promise<ProjectView> {
+  async setModels(key: string, change: ModelsChange): Promise<ProjectView> {
     this.calls.push("setModels");
     const p = this.writable(key);
     const row = (field: string, name: string, r: ModelRow): ModelRow => {
@@ -1459,6 +1460,7 @@ export class FakeApi implements Api {
     }
     const next: Models = {
       default: row("default", "the Project default", change.default),
+      chat: row("chat", "the Chat row", change.chat ?? { model: "", effort: "" }),
       kinds: KINDS_OF_WORK.map((kind) => ({ kind, ...(kinds.get(kind) ?? { model: "", effort: "" }) })),
     };
     if (JSON.stringify(next) !== JSON.stringify(p.models)) {

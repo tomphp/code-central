@@ -91,6 +91,56 @@ func TestSetModelsReplacesTheRowsWhole(t *testing.T) {
 	wantModels(t, p.Models, row("", ""), kind("spec", "sonnet", ""))
 }
 
+func TestTheChatRowIsSeparateFromTheKindsOfWorkAndTheDefault(t *testing.T) {
+	f := newFixture(t)
+	f.readyTicket(t)
+	if p, _ := f.core.GetProject(ctx, "acme"); p.Models.Chat != row("", "") {
+		t.Fatalf("chat row = %+v, want it empty before it is set", p.Models.Chat)
+	}
+
+	p := f.setModels(t, core.SetModelsInput{Default: row("opus", "high"), Chat: row(" sonnet ", "low")})
+	if p.Models.Chat != row("sonnet", "low") {
+		t.Errorf("chat row = %+v, want sonnet at low", p.Models.Chat)
+	}
+	wantModels(t, p.Models, row("opus", "high"))
+
+	// The Chat row doesn't reach a Ticket's Model Choice, and the Project
+	// default doesn't reach Chat's row.
+	mc := f.modelChoice(t, "acme-2")
+	if mc.Model.Value != "opus" || mc.Effort.Value != "high" {
+		t.Errorf("model choice = %+v, want the default row's opus at high", mc)
+	}
+
+	// A Chat row alone survives, as the rows are replaced whole.
+	p = f.setModels(t, core.SetModelsInput{Chat: row("", "max")})
+	if p.Models.Chat != row("", "max") || p.Models.Default != row("", "") {
+		t.Errorf("models = %+v, want only a Chat effort", p.Models)
+	}
+	p = f.setModels(t, core.SetModelsInput{})
+	if p.Models.Chat != row("", "") {
+		t.Errorf("chat row = %+v, want it cleared by rows that leave it out", p.Models.Chat)
+	}
+}
+
+func TestSetModelsChecksTheChatRow(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	for _, c := range []struct {
+		name  string
+		in    core.SetModelsInput
+		field string
+	}{
+		{"a blank model", core.SetModelsInput{Chat: row("  ", "")}, "chat.model"},
+		{"a multi-line model", core.SetModelsInput{Chat: row("a\nb", "")}, "chat.model"},
+		{"an effort outside the levels", core.SetModelsInput{Chat: row("", "extreme")}, "chat.effort"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := f.core.SetModels(human, "acme", c.in)
+			wantCode(t, err, core.Invalid, c.field)
+		})
+	}
+}
+
 func TestSetModelsIsTheHumans(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
@@ -168,10 +218,13 @@ func TestSetModelsAddsNoMoveEditOrCommentAndSendsTheProjectsNotice(t *testing.T)
 func TestModelsSurviveAReload(t *testing.T) {
 	p, err := reloaded(t, func(f fixture) {
 		f.project(t, "acme")
-		f.setModels(t, core.SetModelsInput{Default: row("opus", ""), Kinds: []core.KindModelsView{kind("map-research", "sonnet", "low"), kind("grilling", "", "max")}})
+		f.setModels(t, core.SetModelsInput{Default: row("opus", ""), Chat: row("sonnet", "low"), Kinds: []core.KindModelsView{kind("map-research", "sonnet", "low"), kind("grilling", "", "max")}})
 	}).core.GetProject(ctx, "acme")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if p.Models.Chat != row("sonnet", "low") {
+		t.Errorf("chat row = %+v, want sonnet at low", p.Models.Chat)
 	}
 	wantModels(t, p.Models, row("opus", ""), kind("grilling", "", "max"), kind("map-research", "sonnet", "low"))
 }

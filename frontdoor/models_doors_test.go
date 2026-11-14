@@ -10,7 +10,7 @@ import (
 // the human's, so HTTP only.
 func init() {
 	cases["set_models"] = opCase{
-		ok: call{http: setModels(`{"default":{"model":"opus","effort":""},"kinds":[{"kind":"implementation","model":"","effort":"xhigh"}]}`)},
+		ok: call{http: setModels(`{"default":{"model":"opus","effort":""},"chat":{"model":"sonnet","effort":"low"},"kinds":[{"kind":"implementation","model":"","effort":"xhigh"}]}`)},
 		check: func(t *testing.T, out map[string]any) {
 			acknowledgement("acme", "models")(t, out)
 		},
@@ -19,6 +19,9 @@ func init() {
 			m, _ := out["models"].(map[string]any)
 			def, _ := m["default"].(map[string]any)
 			field("model", "opus")(t, def)
+			chat, _ := m["chat"].(map[string]any)
+			field("model", "sonnet")(t, chat)
+			field("effort", "low")(t, chat)
 			kinds, _ := m["kinds"].([]any)
 			if len(kinds) != len(core.GuideNames) {
 				t.Fatalf("kinds = %v, want a row per kind of work", m["kinds"])
@@ -27,7 +30,7 @@ func init() {
 			field("kind", "implementation")(t, impl)
 			field("effort", "xhigh")(t, impl)
 		},
-		bad:  call{http: setModels(`{"kinds":[{"kind":"implementation","effort":"extreme"}]}`)},
+		bad:  call{http: setModels(`{"chat":{"effort":"extreme"}}`)},
 		code: core.Invalid,
 	}
 	// report_models is the Factory's, over HTTP only (code-central-311).
