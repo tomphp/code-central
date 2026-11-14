@@ -158,18 +158,19 @@ func (c *Core) notLandedSince(p store.Project, t store.Ticket) *time.Time {
 // Accepted; one the CI gate holds on a running CI result is never
 // Accepted but not landed, as landing waits on CI. Silent takes
 // precedence over Long here, for reads and for the watch alike.
-func (c *Core) timedReason(r store.Reader, p store.Project, t store.Ticket) (NeedsMeReason, time.Time) {
+func (c *Core) timedReason(r store.Reader, ci *ciState, t store.Ticket) (NeedsMeReason, time.Time) {
 	if s := c.silentSince(t); s != nil {
 		return ReasonSilentClaim, *s
 	}
 	if s := c.longSince(t); s != nil {
 		return ReasonLongClaim, *s
 	}
-	if waiting, unavailable := c.ciWaitingOn(r, p, t); unavailable != nil {
-		return ReasonCIUnavailable, unavailable.Pushed
-	} else if waiting {
+	if a := ci.of(t); a.unavailable != nil {
+		return ReasonCIUnavailable, a.unavailable.Pushed
+	} else if a.waiting {
 		return "", time.Time{}
 	}
+	p := ci.p
 	if waitingForSpec(r, p.Landing, p.Key, t) {
 		return "", time.Time{}
 	}
@@ -205,8 +206,9 @@ func (c *Core) timedReasonChanges() []markKey {
 	now := map[markKey]NeedsMeReason{}
 	c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
+			ci := c.ciStateOf(r, p)
 			for _, t := range r.Tickets(p.Key) {
-				reason, _ := c.timedReason(r, p, t)
+				reason, _ := c.timedReason(r, ci, t)
 				if reason == "" {
 					continue
 				}

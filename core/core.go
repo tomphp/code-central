@@ -535,7 +535,8 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 	}
 	rows := []TicketRow{}
 	err := c.store.View(func(r store.Reader) error {
-		if _, ok := r.Project(key); !ok {
+		p, ok := r.Project(key)
+		if !ok {
 			return unknownProject(key)
 		}
 		specN := 0
@@ -557,11 +558,12 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 		}
 		tickets := r.Tickets(key)
 		slices.SortStableFunc(tickets, claimOrder)
+		ci := c.ciStateOf(r, p)
 		for _, t := range tickets {
 			if !matches(t, in, specN) {
 				continue
 			}
-			row := c.ticketRow(r, key, t, maps[t.Spec])
+			row := c.ticketRow(r, ci, t, maps[t.Spec])
 			if in.Claimable != nil && *in.Claimable != (t.State == store.Ready && !row.Blocked) {
 				continue
 			}
@@ -608,16 +610,16 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 	return true
 }
 
-// ticketRow is t as a find_tickets row; onMap says t is on a Map, so the
-// row carries its node type.
-func (c *Core) ticketRow(r store.Reader, key string, t store.Ticket, onMap bool) TicketRow {
+// ticketRow is t as a find_tickets row, its CI read from its Project's
+// CI state ci; onMap says t is on a Map, so the row carries its node
+// type.
+func (c *Core) ticketRow(r store.Reader, ci *ciState, t store.Ticket, onMap bool) TicketRow {
+	key := ci.p.Key
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Created: t.Created, Updated: t.Updated, Link: linkView(t.Link),
-		CIResult: ticketCIResult(r, key, t, c.now()), PullRequest: pullRequestView(t.PullRequest),
-	}
-	if p, ok := r.Project(key); ok {
-		row.WaitingForSpec = waitingForSpec(r, p.Landing, key, t)
+		CIResult: ci.of(t).result, PullRequest: pullRequestView(t.PullRequest),
+		WaitingForSpec: waitingForSpec(r, ci.p.Landing, key, t),
 	}
 	if onMap {
 		row.NodeType = NodeType(t.Labels)
@@ -685,24 +687,25 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 	for _, m := range t.Moves {
 		v.Moves = append(v.Moves, moveView(m))
 	}
-	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = ticketCI(r, key, t, c.now())
-	v.PullRequest = pullRequestView(t.PullRequest)
 	pr, _ := r.Project(key)
+	ci := c.ciStateOf(r, pr)
+	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = ci.view(t)
+	v.PullRequest = pullRequestView(t.PullRequest)
 	if t.SpecMerge != nil {
 		v.SpecMerge = &SpecMergeView{Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}
 	}
 	v.SpecLanded = specLanded(r, pr.Landing, key, t)
 	v.WaitingForSpec = waitingForSpec(r, pr.Landing, key, t)
-	if it, ok := c.ciItemOf(r, pr, t); ok {
+	if it, ok := ci.itemOf(t); ok {
 		v.CIItem = ciItemView(r, pr, it)
 		if it.reason != ReasonCIUnavailable {
 			v.CIFailureOptions = v.CIItem.Options
 		}
 	}
-	v.LandAnyway = choseLandAnyway(pr, t)
+	v.LandAnyway = ci.landAnyway(t)
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
-	v.NeedsMeReason, _ = c.reasonOf(r, key, t)
+	v.NeedsMeReason, _ = c.reasonIn(r, ci, t)
 	v.AwaitingTriage, v.TriageActions = t.AwaitingTriage, ticketTriageActions(r, key, t)
 	v.SpecMergeTicket = t.SpecMergeTicket
 	return v

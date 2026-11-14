@@ -56,20 +56,19 @@ type CIRerun struct {
 // once per run: Tickets sharing a pushed commit share its request, so
 // the CI Watcher asks for each run once (code-central-432). A Cancelled
 // Ticket's are left out.
-func ciReruns(r store.Reader, key string, now time.Time) []CIRerun {
+func ciReruns(ci *ciState) []CIRerun {
 	out := []CIRerun{}
-	p, _ := r.Project(key)
-	for _, t := range r.Tickets(key) {
+	key := ci.p.Key
+	for _, t := range ci.r.Tickets(key) {
 		if len(t.PushedCommits) == 0 || t.State == store.Cancelled {
 			continue
 		}
-		latest := respondedLatest(p, t)
-		mine, _ := ticketRuns(r, key, t, now)
-		for _, a := range pendingReruns(latest, mine, now) {
-			if slices.ContainsFunc(out, func(x CIRerun) bool { return x.Commit == latest.Commit && x.ID == a.ID && x.Attempt == a.Attempt }) {
+		commit := latestPushed(t).Commit
+		for _, a := range ci.of(t).reruns {
+			if slices.ContainsFunc(out, func(x CIRerun) bool { return x.Commit == commit && x.ID == a.ID && x.Attempt == a.Attempt }) {
 				continue
 			}
-			out = append(out, CIRerun{Ticket: DisplayID(key, t.Number), Commit: latest.Commit, ID: a.ID, Attempt: a.Attempt, Requested: latest.Rerun})
+			out = append(out, CIRerun{Ticket: DisplayID(key, t.Number), Commit: commit, ID: a.ID, Attempt: a.Attempt, Requested: ci.response(commit).Rerun})
 		}
 	}
 	return out
@@ -113,7 +112,8 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 			out.Rules = append(out.Rules, w)
 		}
 		if p.CI.Tracking {
-			out.Waiting, out.Reruns = ciWaiting(r, key, c.now()), ciReruns(r, key, c.now())
+			ci := c.ciStateOf(r, p)
+			out.Waiting, out.Reruns = ciWaiting(ci), ciReruns(ci)
 			out.Pushed, out.Landed = ciTicketCommits(r, key)
 		}
 		return nil

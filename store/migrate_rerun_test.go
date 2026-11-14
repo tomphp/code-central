@@ -36,8 +36,11 @@ func TestTheRealChainMigratesAFormat12StoreToTheRerunFormat(t *testing.T) {
 	}
 	s.View(func(r store.Reader) error {
 		tk, _ := r.Ticket("acme", 2)
-		if len(tk.PushedCommits) != 1 || tk.PushedCommits[0].Commit != "abc123" || !tk.PushedCommits[0].Rerun.IsZero() || tk.PushedCommits[0].Reruns != nil {
-			t.Errorf("pushed commits after migrating = %+v, want abc123 with no Re-run request", tk.PushedCommits)
+		if len(tk.PushedCommits) != 1 || tk.PushedCommits[0].Commit != "abc123" {
+			t.Errorf("pushed commits after migrating = %+v, want abc123", tk.PushedCommits)
+		}
+		if p, _ := r.Project("acme"); len(p.CIResponses) != 0 {
+			t.Errorf("CI responses after migrating = %+v, want no Re-run request", p.CIResponses)
 		}
 		return nil
 	})

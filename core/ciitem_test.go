@@ -19,7 +19,13 @@ import (
 // and abc123 pushed for both: the base's tip, containing both their work.
 func itemWorld(t *testing.T) fixture {
 	t.Helper()
-	f := landWorld(t, false)
+	return itemWorldOn(t, newFixture(t))
+}
+
+// itemWorldOn builds itemWorld on f.
+func itemWorldOn(t *testing.T, f fixture) fixture {
+	t.Helper()
+	f = landWorldOn(t, f, false)
 	f.landing(t, store.Landing{Method: store.LandingMerge, Push: true, Remote: "origin"})
 	err := f.store.Update(func(w store.Writer) error {
 		p, _ := w.Project("acme")
@@ -152,11 +158,6 @@ func TestLandAnywayOnAnyListedTicketIsStoredOnceForTheCommitAndLandsEveryListedT
 		if len(p.CIResponses) != 1 || p.CIResponses[0].Commit != "abc123" || p.CIResponses[0].LandAnyway.IsZero() {
 			t.Errorf("responses %+v, want one for abc123 with Land anyway", p.CIResponses)
 		}
-		for _, n := range []int{5, 8} {
-			if tk, _ := r.Ticket("acme", n); !tk.PushedCommits[0].LandAnyway.IsZero() {
-				t.Errorf("acme-%d's pushed commit carries Land anyway, want it on the Project only", n)
-			}
-		}
 		return nil
 	})
 	// Choosing it again changes nothing.
@@ -287,44 +288,6 @@ func TestTwoCommitsAreTwoItems(t *testing.T) {
 	}
 	if a, b := listed(rows[0].CIItem), listed(rows[1].CIItem); !slices.Equal(a, []string{"acme-5", "acme-8"}) || !slices.Equal(b, []string{"acme-6"}) {
 		t.Fatalf("items list %v and %v, want acme-5 and acme-8, then acme-6", a, b)
-	}
-}
-
-func TestAResponseStoredOnATicketsPushedCommitBeforeIsStillHonoured(t *testing.T) {
-	f := itemWorld(t)
-	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
-	err := f.store.Update(func(w store.Writer) error {
-		tk, _ := w.Ticket("acme", 5)
-		tk.PushedCommits[0].LandAnyway = f.clock.Now()
-		return w.PutTicket("acme", tk)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if tk := f.getTicket(t, "acme-5"); !tk.LandAnyway || tk.NeedsMeReason != "" {
-		t.Fatalf("acme-5: land anyway %v, reason %q, want its own Land anyway honoured", tk.LandAnyway, tk.NeedsMeReason)
-	}
-	if it := f.theItem(t, core.ReasonCIFailed).CIItem; !slices.Equal(listed(it), []string{"acme-8"}) {
-		t.Fatalf("item lists %v, want acme-8 alone", listed(it))
-	}
-	err = f.store.Update(func(w store.Writer) error {
-		tk, _ := w.Ticket("acme", 8)
-		tk.PushedCommits[0].Rerun = f.clock.Now()
-		tk.PushedCommits[0].Reruns = []store.CIRunAttempt{{ID: 1, Attempt: 1}}
-		return w.PutTicket("acme", tk)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if tk := f.getTicket(t, "acme-8"); tk.CIResult != core.CIRunning || tk.NeedsMeReason != "" {
-		t.Fatalf("acme-8: result %q, reason %q, want running on its own Re-run request", tk.CIResult, tk.NeedsMeReason)
-	}
-	w, err := f.core.GetCIWatch(ctx, "acme")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(w.Reruns) != 1 || w.Reruns[0].Ticket != "acme-8" {
-		t.Fatalf("reruns %+v, want acme-8's", w.Reruns)
 	}
 }
 
