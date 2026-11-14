@@ -55,6 +55,13 @@ export const isStage = (t: { labels: string[] }) => !!stageOf(t);
 // stageOf is a Stage Ticket's Stage, from its Label; none for any other Ticket.
 export const stageOf = (t: { labels: string[] }): StageName | undefined => STAGES.find((s) => t.labels.includes(`stage:${s}`));
 
+// stageRank orders a Requirement's Tickets: its Stage Tickets first, in
+// Stage order, then every other Ticket.
+export const stageRank = (t: { labels: string[] }): number => {
+  const s = stageOf(t);
+  return s ? STAGES.indexOf(s) : STAGES.length;
+};
+
 // progress is a Requirement's progress, each Ticket's reason as reasonOf
 // (the Needs Me read model's) says.
 export function progress(req: RequirementView, tickets: TicketRow[], reasonOf: (id: string) => NeedsMeReason | undefined): Progress {

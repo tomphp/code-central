@@ -6,6 +6,7 @@ import { needsMeOf, type NeedsMe } from "./model";
 
 const NeedsMeContext = createContext<NeedsMe>(needsMeOf(undefined));
 
+// NeedsMeProvider gives the views below it value, the last load's model.
 export function NeedsMeProvider({ value, children }: { value: NeedsMe; children: ReactNode }) {
   return <NeedsMeContext.Provider value={value}>{children}</NeedsMeContext.Provider>;
 }

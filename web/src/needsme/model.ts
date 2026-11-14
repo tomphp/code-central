@@ -10,7 +10,7 @@ import type { NeedsMeGroup, NeedsMeReason } from "../api/types";
 import { requirementList } from "../inbox/lists";
 import { groupBySpec } from "../inbox/groupBySpec";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
-import { stageOf } from "../requirement/progress";
+import { stageRank } from "../requirement/progress";
 
 // PopupKind is which popup the Board opens for an ID.
 export type PopupKind = "spec" | "focus" | "ticket";
@@ -26,6 +26,7 @@ export interface NeedsMeRows {
   groups: NeedsMeGroup[];
 }
 
+// NeedsMe is the questions every view asks of Needs Me.
 export interface NeedsMe {
   // reasonOf is why a Ticket needs the human, or a Spec: the first of its
   // Tickets that does, Stage Tickets first, in Stage order. None for an ID
@@ -58,8 +59,8 @@ const CI_ITEM_REASONS: NeedsMeReason[] = ["ci_failed", "ci_cancelled", "ci_unava
 // Ticket's own pane leaves to the item.
 export const isCIItemReason = (r: NeedsMeReason | undefined): boolean => !!r && CI_ITEM_REASONS.includes(r);
 
-const STAGE_ORDER = ["grilling", "spec", "tickets"];
-
+// needsMeOf builds the read model from one Inbox load; before the first,
+// it is the model of no data, which needs nothing.
 export function needsMeOf(data: InboxData | undefined): NeedsMe {
   const tickets = data?.tickets ?? [];
   const groups = data?.needsMe.groups ?? [];
@@ -68,15 +69,12 @@ export function needsMeOf(data: InboxData | undefined): NeedsMe {
   const bySpec = new Map(groupBySpec(tickets).map((g) => [g.id, g.tickets]));
   const specs = new Set((data?.specs ?? []).map((s) => s.id));
   const ticketsOf = (spec: string) => bySpec.get(spec) ?? [];
-  // Stage Tickets first, in Stage order, then the rest in list order.
-  const rank = (t: ProjectTicket) => {
-    const s = stageOf(t);
-    return s ? STAGE_ORDER.indexOf(s) : STAGE_ORDER.length;
-  };
+  // A Spec's reason is its Stage Tickets', in Stage order, then its other
+  // Tickets' in list order, as progress orders a Requirement's needs.
   const reasonOf = (id: string): NeedsMeReason | undefined => {
     const t = byId.get(id);
     if (t) return t.needs_me_reason;
-    return [...ticketsOf(id)].sort((a, b) => rank(a) - rank(b)).find((x) => x.needs_me_reason)?.needs_me_reason;
+    return [...ticketsOf(id)].sort((a, b) => stageRank(a) - stageRank(b)).find((x) => x.needs_me_reason)?.needs_me_reason;
   };
   // order is where each Ticket comes in Needs Me, a CI item's Tickets at
   // the item's place.

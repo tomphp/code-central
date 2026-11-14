@@ -9,6 +9,7 @@ import { needsMeOf } from "./model";
 
 export interface NeedingProps {
   tickets: ProjectTicket[];
+  // reasons is why each Ticket that needs the human does, by ID.
   reasons: Record<string, NeedsMeReason>;
   children: ReactNode;
 }

@@ -45,7 +45,7 @@ export function NeedsMeLink({
     <TicketLine
       t={row}
       link={link}
-      inNeedsMe
+      dotless
       detail={
         <>
           {row.requirement && (

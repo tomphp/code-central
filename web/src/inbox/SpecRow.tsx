@@ -6,10 +6,10 @@
 // the rest of the row opens the Spec. Whether it is open lives on the page
 // only. A Board lane is headed by a Lane header instead.
 import { useEffect, useState } from "react";
-import { STATES, type StageName, type State } from "../api/types";
+import { STATES, type State } from "../api/types";
 import type { ProjectSpec, ProjectTicket } from "../live";
 import { NeedsYouDot, useNeedsMe } from "../needsme/context";
-import { stageOf } from "../requirement/progress";
+import { stageOf, stageRank } from "../requirement/progress";
 import { Strip } from "../requirement/Strip";
 import { KindBadge } from "../controls/KindBadge";
 import { StateChip } from "../controls/StateChip";
@@ -107,15 +107,9 @@ export function SpecRow({ id, spec, all, shown, here, now, link, ticketLink, sel
   );
 }
 
-const STAGE_ORDER: StageName[] = ["grilling", "spec", "tickets"];
-
 // stagesFirst is a Spec's Tickets as an open row lists them all: a
 // Requirement's Stage Tickets first, in Stage order, then the rest oldest
 // first.
 export function stagesFirst(tickets: ProjectTicket[]): ProjectTicket[] {
-  const rank = (t: ProjectTicket) => {
-    const s = stageOf(t);
-    return s ? STAGE_ORDER.indexOf(s) : STAGE_ORDER.length;
-  };
-  return [...tickets].sort((a, b) => rank(a) - rank(b) || a.created.localeCompare(b.created));
+  return [...tickets].sort((a, b) => stageRank(a) - stageRank(b) || a.created.localeCompare(b.created));
 }
