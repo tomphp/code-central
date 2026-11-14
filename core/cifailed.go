@@ -25,8 +25,8 @@ import (
 const (
 	// OptionRerunCI is rerun_ci, offered under both Push Landing Methods.
 	OptionRerunCI = "rerun_ci"
-	// OptionLandAnyway is land_anyway, offered only under Merge: under
-	// Branch the human's merge decides.
+	// OptionLandAnyway is land_anyway, offered only under Merge + Push:
+	// under Branch and Pull Request the human's merge decides.
 	OptionLandAnyway = "land_anyway"
 	// OptionSendBack is the human's send_back from Accepted: the next
 	// Claim fixes the work on its branch (code-central-264).
