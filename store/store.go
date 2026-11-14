@@ -416,7 +416,7 @@ type KindModels struct {
 
 // ModelKinds are the kinds of work a Models row may name: core's
 // GuideNames, which core's tests keep in step.
-var ModelKinds = []string{"grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"}
+var ModelKinds = []string{"grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "retro", "implementation"}
 
 // NeedsMeReasons are the Needs Me reasons a Project's Focus Kinds may
 // turn off, in group order: core's Needs Me reasons, which core's tests
