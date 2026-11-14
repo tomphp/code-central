@@ -163,6 +163,12 @@ export interface Api {
   // the keys it names; removeTags removes the keys named.
   setTags(project: string, target: string, tags: Record<string, string>): Promise<TargetView>;
   removeTags(project: string, target: string, keys: string[]): Promise<TargetView>;
+  // addLabels adds Labels to a Spec or Ticket, each once; removeLabels
+  // removes those named. Only the human may add or remove auto-accept, and
+  // adding it accepts the In Review Tickets it now covers in the same
+  // write; removing it undoes nothing.
+  addLabels(project: string, target: string, labels: string[]): Promise<TargetView>;
+  removeLabels(project: string, target: string, labels: string[]): Promise<TargetView>;
   // options reads the human's Options; setOptions changes those given and
   // answers with them all as they now stand. An unknown Option or a value
   // outside its set is refused as invalid, naming it, and nothing changes.

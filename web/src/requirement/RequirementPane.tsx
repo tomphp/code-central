@@ -8,6 +8,7 @@ import type { NeedsMeReason, SpecDetail } from "../api/types";
 import { BodySection } from "../edit/BodySection";
 import { ago } from "../format";
 import { LandPerSpec } from "../spec/LandPerSpec";
+import { SpecAutoAccept } from "../spec/SpecAutoAccept";
 import { TicketList } from "../spec/TicketList";
 import { CISums } from "../ticket/CIBadge";
 import { LinkBadge } from "../ticket/LinkBadge";
@@ -55,6 +56,7 @@ export function RequirementPane({ api, spec, archived, reasons, now, ticket, sel
         }}
       />
       {note && <p className="panel muted waiting">{note}</p>}
+      <SpecAutoAccept api={api} spec={spec} archived={archived} />
       <LandPerSpec status={spec.land_per_spec} />
       {/* The text is the Requirement's until its spec Stage has written the Spec. */}
       <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} archived={archived} />
