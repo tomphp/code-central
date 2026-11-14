@@ -14,7 +14,7 @@ import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import type { ApiError, ProjectRow, SpecAcknowledgement, TicketAcknowledgement } from "../api/types";
 import { Button } from "../controls/Button";
-import { Modal as Shell } from "../controls/Modal";
+import { PopupShell } from "../controls/PopupShell";
 import { Select } from "../controls/Select";
 
 export interface NewRequirementProps {
@@ -190,7 +190,7 @@ function NewFromText<R>({ kind, api, projects, project, onSubmitted, trigger }: 
         </Button>
       )}
       {open && (
-        <Modal
+        <NewFromTextPopup
           kind={kind}
           api={api}
           projects={projects}
@@ -206,7 +206,8 @@ function NewFromText<R>({ kind, api, projects, project, onSubmitted, trigger }: 
   );
 }
 
-function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFromTextProps<R> & { onClose(): void }) {
+// NewFromTextPopup is the one free-text box's popup, with its actions.
+function NewFromTextPopup<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFromTextProps<R> & { onClose(): void }) {
   const [text, setText] = useState(kind.text ?? "");
   // Until the human picks one, the Project follows the props, so a modal
   // opened before the Projects are read still has one once they are.
@@ -215,7 +216,7 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [straight, setStraight] = useState(false);
-  const titleId = useId();
+  const formId = useId();
   const ask = !project && projects.length > 1;
 
   const send = (draft: boolean) => {
@@ -233,48 +234,52 @@ function Modal<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFro
   };
 
   return (
-    <Shell labelledBy={titleId} onClose={onClose}>
-        <h2 id={titleId}>{kind.button}</h2>
-        <form onSubmit={submit}>
-          {ask && (
-            <label className="modal-project small">
-              Project{" "}
-              <Select
-                value={chosen}
-                onChange={setPicked}
-                options={projects.map((p) => ({ value: p.key, label: p.display_name }))}
-              />
-            </label>
-          )}
-          <textarea
-            aria-label={kind.noun}
-            placeholder={kind.placeholder}
-            rows={8}
-            value={text}
-            autoFocus
-            onChange={(e) => setText(e.target.value)}
-          />
-          {kind.straight && (
-            <label className="small">
-              <input type="checkbox" checked={straight} onChange={(e) => setStraight(e.target.checked)} /> Straight to Spec (no grilling)
-            </label>
-          )}
-          {error && <p className="warning">{error}</p>}
-          <div className="modal-actions">
-            <span className="muted small">{kind.straight && straight ? kind.straight.creates : kind.creates}</span>
-            <Button type="button"  onClick={onClose}>
-              Cancel
+    <PopupShell
+      title={kind.button}
+      onClose={onClose}
+      actions={
+        <>
+          <span className="muted small">{kind.straight && straight ? kind.straight.creates : kind.creates}</span>
+          <Button type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          {kind.draftable && (
+            <Button type="button" disabled={busy || !text.trim() || !chosen} onClick={() => send(true)}>
+              Save as Draft
             </Button>
-            {kind.draftable && (
-              <Button type="button" disabled={busy || !text.trim() || !chosen} onClick={() => send(true)}>
-                Save as Draft
-              </Button>
-            )}
-            <Button type="submit" variant="primary" disabled={busy || (!text.trim() && !kind.optional) || !chosen}>
-              {kind.submitLabel ?? `Submit ${kind.noun.toLowerCase()}`}
-            </Button>
-          </div>
-        </form>
-    </Shell>
+          )}
+          <Button type="submit" form={formId} variant="primary" disabled={busy || (!text.trim() && !kind.optional) || !chosen}>
+            {kind.submitLabel ?? `Submit ${kind.noun.toLowerCase()}`}
+          </Button>
+        </>
+      }
+    >
+      <form id={formId} onSubmit={submit}>
+        {ask && (
+          <label className="modal-project small">
+            Project{" "}
+            <Select
+              value={chosen}
+              onChange={setPicked}
+              options={projects.map((p) => ({ value: p.key, label: p.display_name }))}
+            />
+          </label>
+        )}
+        <textarea
+          aria-label={kind.noun}
+          placeholder={kind.placeholder}
+          rows={8}
+          value={text}
+          autoFocus
+          onChange={(e) => setText(e.target.value)}
+        />
+        {kind.straight && (
+          <label className="small">
+            <input type="checkbox" checked={straight} onChange={(e) => setStraight(e.target.checked)} /> Straight to Spec (no grilling)
+          </label>
+        )}
+        {error && <p className="warning">{error}</p>}
+      </form>
+    </PopupShell>
   );
 }
