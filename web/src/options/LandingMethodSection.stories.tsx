@@ -1,28 +1,20 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { LandingMethodSection } from "./LandingMethodSection";
-import { storyApi, storyProject } from "./storyFixtures";
+import { optionsWorld } from "./storyFixtures";
 
 const meta = {
   title: "Options/LandingMethodSection",
-  component: LandingMethodSection,
-  args: { api: storyApi(), project: storyProject() },
-} satisfies Meta<typeof LandingMethodSection>;
+  render: (_args, { loaded }) => <LandingMethodSection {...loaded.world} />,
+} satisfies Meta;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Merge: Story = {};
+export const Merge: Story = { ...optionsWorld() };
 export const PullRequest: Story = {
-  args: {
-    project: storyProject({
-      landing: {
-        ...storyProject().landing,
-        method: "pull_request",
-        code_host: "github",
-        repository: "acme/web",
-        watcher: { state: "watching" },
-        open_pull_requests: [],
-      },
-    }),
-  },
+  ...optionsWorld(async (s, w) => {
+    await s.reportPushRemote("acme", "git@github.com:acme/web.git");
+    await w.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "origin" });
+    await s.reportPullRequestWatcher("acme", { state: "watching" });
+  }),
 };
-export const Archived: Story = { args: { project: storyProject({ archived: true }) } };
+export const Archived: Story = { ...optionsWorld(async (s) => s.archive("acme")) };

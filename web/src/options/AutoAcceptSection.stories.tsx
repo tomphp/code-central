@@ -1,20 +1,17 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { AutoAcceptSection } from "./AutoAcceptSection";
-import { storyApi, storyProject } from "./storyFixtures";
+import { optionsWorld } from "./storyFixtures";
 
 const meta = {
   title: "Options/AutoAcceptSection",
-  component: AutoAcceptSection,
-  args: { api: storyApi(), project: storyProject() },
-} satisfies Meta<typeof AutoAcceptSection>;
+  render: (_args, { loaded }) => <AutoAcceptSection {...loaded.world} />,
+} satisfies Meta;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+export const Default: Story = { ...optionsWorld() };
 export const SomeOn: Story = {
-  args: {
-    project: storyProject({
-      auto_accept: { grilling: true, spec: false, tickets: false, implementation: true, merge: false },
-    }),
-  },
+  ...optionsWorld(async (_s, w) => {
+    await w.api.setAutoAccept("acme", { grilling: true, implementation: true });
+  }),
 };
