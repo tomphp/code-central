@@ -19,10 +19,19 @@ type usageSession struct {
 	Models              []string
 }
 
+// everySession is each of u's main sessions and each of their Subagents.
+func everySession(u core.UsageView) []core.UsageSession {
+	var out []core.UsageSession
+	for _, m := range u.Sessions {
+		out = append(append(out, m), m.Subagents...)
+	}
+	return out
+}
+
 // usageSessions are the Usage sessions of session, by agent.
 func usageSessions(u core.UsageView, session string) []usageSession {
 	var out []usageSession
-	for _, s := range u.Sessions {
+	for _, s := range everySession(u) {
 		if s.SessionID == session {
 			out = append(out, usageSession{s.Ticket, s.Agent, s.Kind, s.Claim, s.Peak, s.Responses, s.Models})
 		}
@@ -45,7 +54,7 @@ func waitForUsage(h *factorytest.Harness, n int) core.UsageView {
 	h.WaitFor("Usage to hold the responses", func() bool {
 		u = h.Usage()
 		got := 0
-		for _, s := range u.Sessions {
+		for _, s := range everySession(u) {
 			got += s.Responses
 		}
 		return got >= n
@@ -126,7 +135,7 @@ func TestEachSubagentsResponsesCarryItsAgentTypeAndDescriptionAndTheMainSessions
 		}
 	}
 	kinds := map[string]string{}
-	for _, s := range h.Usage().Sessions {
+	for _, s := range everySession(h.Usage()) {
 		kinds[s.Agent] = s.Kind
 	}
 	if kinds["toolu_review"] != "review" || kinds["toolu_explore"] != "subagent" {

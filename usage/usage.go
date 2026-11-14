@@ -92,6 +92,9 @@ func (t *Tokens) Add(o Tokens) {
 // full the session's context window was.
 func (t Tokens) ContextSize() int { return t.InputTokens + t.CacheWriteTokens + t.CacheReadTokens }
 
+// Total is all four counts as one number: what the response used.
+func (t Tokens) Total() int { return t.ContextSize() + t.OutputTokens }
+
 // Records are the records a read found, oldest file first, and Days the
 // local days it read, oldest first, as YYYY-MM-DD.
 type Records struct {
