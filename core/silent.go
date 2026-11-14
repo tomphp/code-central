@@ -165,7 +165,7 @@ func (c *Core) timedReason(r store.Reader, ci *ciState, t store.Ticket) (NeedsMe
 	if s := c.longSince(t); s != nil {
 		return ReasonLongClaim, *s
 	}
-	if a := ci.of(t); a.unavailable != nil {
+	if a := ci.ticket(t); a.unavailable != nil {
 		return ReasonCIUnavailable, a.unavailable.Pushed
 	} else if a.waiting {
 		return "", time.Time{}

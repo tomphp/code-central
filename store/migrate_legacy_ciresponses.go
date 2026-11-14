@@ -13,6 +13,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// The format 36 to 37 migration: the human's CI responses still stored
+// on Tickets' pushed commits move onto their Projects, which hold every
+// response since.
+
 // legacyResponseKeys are the keys a pushed commit held the human's
 // response under before code-central-432 stored it on the Project, each
 // named as a ciResponseFile names it.
@@ -150,8 +154,8 @@ func mappingValue(n *yaml.Node, key string) *yaml.Node {
 
 // overlayLegacyResponse is rs with l folded into the response to its
 // commit, one added when there is none: Land anyway kept from either,
-// and the later Re-run request with its attempts, the pushed commit's on
-// a tie, as reads did.
+// the pushed commit's when both have one, and the later Re-run request
+// with its attempts, the pushed commit's on a tie, as reads did.
 func overlayLegacyResponse(rs []ciResponseFile, l ciResponseFile) ([]ciResponseFile, error) {
 	i := slices.IndexFunc(rs, func(r ciResponseFile) bool { return r.Commit == l.Commit })
 	if i < 0 {
@@ -159,7 +163,7 @@ func overlayLegacyResponse(rs []ciResponseFile, l ciResponseFile) ([]ciResponseF
 		i = len(rs) - 1
 	}
 	r := &rs[i]
-	if r.LandAnyway == "" {
+	if l.LandAnyway != "" {
 		r.LandAnyway = l.LandAnyway
 	}
 	if l.Rerun == "" {

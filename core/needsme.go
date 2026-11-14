@@ -291,7 +291,7 @@ func (c *Core) needsMeRow(r store.Reader, ci *ciState, t store.Ticket) (NeedsMeR
 	row := NeedsMeRow{
 		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link),
 		Requirement: req, Spec: needsMeSpec(r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
-		CIResult: ci.of(t).result, PullRequest: pullRequestView(t.PullRequest),
+		CIResult: ci.ticket(t).result, PullRequest: pullRequestView(t.PullRequest),
 	}
 	switch reason {
 	case ReasonNeedsAnswer:
@@ -353,7 +353,7 @@ func (c *Core) reasonIn(r store.Reader, ci *ciState, t store.Ticket) (NeedsMeRea
 		return ReasonAnswered, entered(t)
 	case store.InProgress, store.Accepted:
 		p := ci.p
-		if a := ci.of(t); a.failure != nil {
+		if a := ci.ticket(t); a.failure != nil {
 			return ReasonCIFailed, a.since
 		} else if a.cancelled {
 			return ReasonCICancelled, a.since

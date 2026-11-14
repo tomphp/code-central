@@ -7,8 +7,11 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// ciState is a Project's Ticket CI state (Spec code-central-568): its
-// Tickets' CI as every reader sees it, worked out from the Project's CI
+// The CI state: one Project's Tickets' CI, worked out once per read, so
+// every reader gets the same answer. It is the Ticket CI state of Spec
+// code-central-568, an implementation name kept out of the glossary.
+
+// ciState is a Project's CI state, worked out from the Project's CI
 // Runs, its CI responses and every Ticket's pushed commits as one read
 // has them. For each Ticket it answers its CI result and the commit the
 // result comes from, whether it is CI failed, CI cancelled or CI
@@ -16,9 +19,9 @@ import (
 // its pending Re-run requests and the CI item that lists it. Each
 // Ticket's answers are worked out the first time they are asked for and
 // kept for the rest of the read, as are the Project's runs and CI items,
-// so a reader of one Ticket pays for that Ticket and a reader of every
-// Ticket pays once. It is built inside one store read and never kept
-// past it.
+// so a reader of one Ticket pays for that Ticket and the Tickets sharing
+// its commit, and a reader of every Ticket pays once. It is built inside
+// one store read and never kept past it.
 type ciState struct {
 	c   *Core
 	r   store.Reader
@@ -77,8 +80,8 @@ func (s *ciState) response(commit string) store.CIResponse {
 	return responseOf(s.p, commit)
 }
 
-// of is t's answers.
-func (s *ciState) of(t store.Ticket) *ticketCI {
+// ticket is t's answers, worked out on the first ask.
+func (s *ciState) ticket(t store.Ticket) *ticketCI {
 	if a, ok := s.tickets[t.Number]; ok {
 		return a
 	}
@@ -181,7 +184,7 @@ func (s *ciState) unavailable(a *ticketCI) *CIUnavailableView {
 // reason is t's CI reason, since when, and its detail, while a CI item
 // lists t: CI failed, else CI cancelled, else CI unavailable.
 func (s *ciState) reason(t store.Ticket) (reason NeedsMeReason, since time.Time, failure *CIFailureSummary, unavailable *CIUnavailableView) {
-	a := s.of(t)
+	a := s.ticket(t)
 	switch {
 	case a.failure != nil:
 		return ReasonCIFailed, a.since, a.failure, nil
@@ -291,7 +294,7 @@ func (s *ciState) landAnyway(t store.Ticket) bool {
 // commit's first; all empty for a Ticket never pushed while CI Tracking
 // was on.
 func (s *ciState) view(t store.Ticket) (*PushedCommitView, CIResult, string, []CIRunView) {
-	a := s.of(t)
+	a := s.ticket(t)
 	if !a.tracked {
 		return nil, "", "", nil
 	}
@@ -300,7 +303,7 @@ func (s *ciState) view(t store.Ticket) (*PushedCommitView, CIResult, string, []C
 	order := func(commit string) int {
 		return len(t.PushedCommits) - 1 - slices.IndexFunc(t.PushedCommits, func(p store.PushedCommit) bool { return p.Commit == commit })
 	}
-	slices.SortStableFunc(mine, func(a, b store.CIRun) int { return order(a.Commit) - order(b.Commit) })
+	slices.SortStableFunc(mine, func(x, y store.CIRun) int { return order(x.Commit) - order(y.Commit) })
 	var runs []CIRunView
 	for _, run := range mine {
 		runs = append(runs, ciRunView(s.p.Key, run))

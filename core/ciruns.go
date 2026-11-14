@@ -474,7 +474,7 @@ func ciWaiting(ci *ciState) []CIWaitingCommit {
 		if len(t.PushedCommits) == 0 || t.State == store.Cancelled {
 			continue
 		}
-		mine := runsOf(ci.keptRuns(), t)
+		mine := ci.ticket(t).runs
 		for _, pc := range ci.resultCommits(t) {
 			if !ci.watched(pc, mine) {
 				continue

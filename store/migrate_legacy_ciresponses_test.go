@@ -24,7 +24,8 @@ func TestTheRealChainMigratesAFormat36StoreMovingPushedCommitResponsesOntoThePro
 		"  - commit: inproject\n    land_anyway: 2026-01-02T04:00:00Z\n"+
 		"  - commit: both\n    land_anyway: 2026-01-02T04:00:00Z\n"+
 		"  - commit: projectlater\n    rerun: 2026-01-02T06:00:00Z\n    reruns:\n      - id: 21\n        attempt: 2\n"+
-		"  - commit: pushedlater\n    rerun: 2026-01-02T05:00:00Z\n    reruns:\n      - id: 31\n        attempt: 1\n    fix_ticket: 9\n")
+		"  - commit: pushedlater\n    rerun: 2026-01-02T05:00:00Z\n    reruns:\n      - id: 31\n        attempt: 1\n    fix_ticket: 9\n"+
+		"  - commit: tie\n    rerun: 2026-01-02T05:00:00Z\n    reruns:\n      - id: 41\n        attempt: 1\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/tickets/2.yaml"), "title: Accepted\nstate: Accepted\nspec: 1\ncreated: 2026-01-02T03:04:05Z\nupdated: 2026-01-02T03:04:05Z\ndescription: \"\"\n"+
 		"pushed_commits:\n"+
 		"  - commit: onpushed\n    branch: main\n    pushed: 2026-01-02T03:04:05Z\n    land_anyway: 2026-01-02T03:05:05Z\n"+
@@ -33,7 +34,8 @@ func TestTheRealChainMigratesAFormat36StoreMovingPushedCommitResponsesOntoThePro
 	writeFile(t, filepath.Join(dir, "projects/acme/tickets/3.yaml"), "title: Also accepted\nstate: Accepted\nspec: 1\ncreated: 2026-01-02T03:04:05Z\nupdated: 2026-01-02T03:04:05Z\ndescription: \"\"\n"+
 		"pushed_commits:\n"+
 		"  - commit: projectlater\n    pushed: 2026-01-02T03:04:05Z\n    rerun: 2026-01-02T05:00:00Z\n    reruns:\n      - id: 20\n        attempt: 1\n"+
-		"  - commit: pushedlater\n    pushed: 2026-01-02T03:05:05Z\n    rerun: 2026-01-02T06:00:00Z\n    reruns:\n      - id: 30\n        attempt: 1\n      - id: 32\n        attempt: 3\n")
+		"  - commit: pushedlater\n    pushed: 2026-01-02T03:05:05Z\n    rerun: 2026-01-02T06:00:00Z\n    reruns:\n      - id: 30\n        attempt: 1\n      - id: 32\n        attempt: 3\n"+
+		"  - commit: tie\n    pushed: 2026-01-02T03:06:05Z\n    rerun: 2026-01-02T05:00:00Z\n    reruns:\n      - id: 40\n        attempt: 1\n")
 	untouched := "title: Never responded to\nstate: Accepted\nspec: 1\ncreated: 2026-01-02T03:04:05Z\nupdated: 2026-01-02T03:04:05Z\ndescription: \"\"\npushed_commits:\n  - commit: onpushed\n    pushed: 2026-01-02T03:04:05Z\n"
 	writeFile(t, filepath.Join(dir, "projects/acme/tickets/4.yaml"), untouched)
 
@@ -64,13 +66,16 @@ func TestTheRealChainMigratesAFormat36StoreMovingPushedCommitResponsesOntoThePro
 	want := []store.CIResponse{
 		// Only in CIResponses: kept as it was.
 		{Commit: "inproject", LandAnyway: at("2026-01-02T04:00:00Z")},
-		// On both: Land anyway stays.
-		{Commit: "both", LandAnyway: at("2026-01-02T04:00:00Z")},
+		// On both: Land anyway stays, the pushed commit's as reads took it.
+		{Commit: "both", LandAnyway: at("2026-01-02T03:08:05Z")},
 		// The Project's Re-run is the later: it and its attempts win.
 		{Commit: "projectlater", Rerun: at("2026-01-02T06:00:00Z"), Reruns: []store.CIRunAttempt{{ID: 21, Attempt: 2}}},
 		// The pushed commit's Re-run is the later: it and its attempts
 		// win, and the fix Ticket stays.
 		{Commit: "pushedlater", Rerun: at("2026-01-02T06:00:00Z"), Reruns: []store.CIRunAttempt{{ID: 30, Attempt: 1}, {ID: 32, Attempt: 3}}, FixTicket: 9},
+		// Asked at the same time on each side: the pushed commit's wins,
+		// as reads took it.
+		{Commit: "tie", Rerun: at("2026-01-02T05:00:00Z"), Reruns: []store.CIRunAttempt{{ID: 40, Attempt: 1}}},
 		// Only on the pushed commit: added.
 		{Commit: "onpushed", LandAnyway: at("2026-01-02T03:05:05Z")},
 	}

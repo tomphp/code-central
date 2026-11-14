@@ -15,7 +15,7 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// The Ticket CI state (Spec code-central-568) through core's public
+// A Project's CI state (Spec code-central-568) through core's public
 // operations: every reader sees the same CI for Tickets that share a
 // pushed commit, and a response on the Project covers them all.
 

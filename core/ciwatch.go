@@ -64,7 +64,7 @@ func ciReruns(ci *ciState) []CIRerun {
 			continue
 		}
 		commit := latestPushed(t).Commit
-		for _, a := range ci.of(t).reruns {
+		for _, a := range ci.ticket(t).reruns {
 			if slices.ContainsFunc(out, func(x CIRerun) bool { return x.Commit == commit && x.ID == a.ID && x.Attempt == a.Attempt }) {
 				continue
 			}

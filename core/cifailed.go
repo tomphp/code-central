@@ -113,7 +113,7 @@ func (c *Core) respondCI(key, op string, ref Ref, full bool, done func(*ciState,
 		for _, o := range it.tickets {
 			listed = append(listed, o.Number)
 		}
-		apply(&p, latestPushed(t).Commit, ci.of(t).runs)
+		apply(&p, latestPushed(t).Commit, ci.ticket(t).runs)
 		if err := w.PutProject(p); err != nil {
 			return err
 		}
@@ -152,7 +152,7 @@ func whyNotLandAnyway(ci *ciState, t store.Ticket) string {
 	if t.State != store.Accepted {
 		return fmt.Sprintf("%s is %s: only an Accepted Ticket whose CI failed lands anyway", id, t.State)
 	}
-	if a := ci.of(t); a.failure == nil && !a.cancelled {
+	if a := ci.ticket(t); a.failure == nil && !a.cancelled {
 		return fmt.Sprintf("%s has no failed or cancelled CI result to land anyway", id)
 	}
 	if ci.p.Landing.Method == store.LandingPullRequest {
@@ -174,7 +174,7 @@ func (c *Core) RerunCI(ctx context.Context, key string, in TicketInput) (Written
 		return Written[TicketView]{}, err
 	}
 	return c.respondCI(key, OptionRerunCI, in.Ticket, in.Full,
-		func(ci *ciState, t store.Ticket) bool { return len(ci.of(t).reruns) > 0 },
+		func(ci *ciState, t store.Ticket) bool { return len(ci.ticket(t).reruns) > 0 },
 		func(_ *ciState, t store.Ticket) string { return whyNotRerun(key, t) },
 		func(p *store.Project, commit string, runs []store.CIRun) {
 			requestRerun(p, commit, runs, c.now())

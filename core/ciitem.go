@@ -53,45 +53,62 @@ type ciItem struct {
 // and that the human hasn't dealt with, or that are CI unavailable.
 // They are built once per CI state.
 func (s *ciState) items() []ciItem {
-	if s.built {
-		return s.ciItems
+	if !s.built {
+		s.ciItems, s.built = s.group(s.r.Tickets(s.p.Key)), true
 	}
-	s.built = true
-	tickets := s.r.Tickets(s.p.Key)
+	return s.ciItems
+}
+
+// itemOf is the CI item listing t, if one does. Until every item is
+// built, it is built from the Tickets on t's latest pushed commit alone.
+func (s *ciState) itemOf(t store.Ticket) (ciItem, bool) {
+	reason, _, _, _ := s.reason(t)
+	if reason == "" {
+		return ciItem{}, false
+	}
+	commit := latestPushed(t).Commit
+	items := s.ciItems
+	if !s.built {
+		var on []store.Ticket
+		for _, o := range s.r.Tickets(s.p.Key) {
+			if len(o.PushedCommits) > 0 && latestPushed(o).Commit == commit {
+				on = append(on, o)
+			}
+		}
+		items = s.group(on)
+	}
+	for _, it := range items {
+		if it.reason == reason && it.commit == commit {
+			return it, true
+		}
+	}
+	return ciItem{}, false
+}
+
+// group is the CI items listing tickets, in order of their first listed
+// Ticket, each listing its Tickets accepted earliest first.
+func (s *ciState) group(tickets []store.Ticket) []ciItem {
 	slices.SortFunc(tickets, func(a, b store.Ticket) int {
 		return cmp.Or(entered(a).Compare(entered(b)), cmp.Compare(a.Number, b.Number))
 	})
+	var items []ciItem
 	for _, t := range tickets {
 		reason, since, failure, unavailable := s.reason(t)
 		if reason == "" {
 			continue
 		}
 		commit := latestPushed(t).Commit
-		i := slices.IndexFunc(s.ciItems, func(it ciItem) bool { return it.commit == commit && it.reason == reason })
+		i := slices.IndexFunc(items, func(it ciItem) bool { return it.commit == commit && it.reason == reason })
 		if i < 0 {
-			s.ciItems = append(s.ciItems, ciItem{reason: reason, commit: commit, since: since, failure: failure, unavailable: unavailable})
-			i = len(s.ciItems) - 1
+			items = append(items, ciItem{reason: reason, commit: commit, since: since, failure: failure, unavailable: unavailable})
+			i = len(items) - 1
 		}
-		s.ciItems[i].tickets = append(s.ciItems[i].tickets, t)
-		if since.Before(s.ciItems[i].since) {
-			s.ciItems[i].since = since
-		}
-	}
-	return s.ciItems
-}
-
-// itemOf is the CI item listing t, if one does.
-func (s *ciState) itemOf(t store.Ticket) (ciItem, bool) {
-	reason, _, _, _ := s.reason(t)
-	if reason == "" {
-		return ciItem{}, false
-	}
-	for _, it := range s.items() {
-		if it.reason == reason && it.commit == latestPushed(t).Commit {
-			return it, true
+		items[i].tickets = append(items[i].tickets, t)
+		if since.Before(items[i].since) {
+			items[i].since = since
 		}
 	}
-	return ciItem{}, false
+	return items
 }
 
 // ciItemView is it as the views carry it.
@@ -133,7 +150,7 @@ func ciItemRow(ci *ciState, it ciItem) NeedsMeRow {
 	return NeedsMeRow{
 		Project: ci.p.Key, Title: needsMeTitle(it.reason) + " at " + shortCommit(it.commit), Reason: it.reason, Since: it.since,
 		CIFailure: it.failure, CIUnavailable: it.unavailable, CIItem: ciItemView(ci.r, ci.p, it),
-		CIResult: ci.of(it.tickets[0]).result,
+		CIResult: ci.ticket(it.tickets[0]).result,
 	}
 }
 

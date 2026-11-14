@@ -618,7 +618,7 @@ func (c *Core) ticketRow(r store.Reader, ci *ciState, t store.Ticket, onMap bool
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Created: t.Created, Updated: t.Updated, Link: linkView(t.Link),
-		CIResult: ci.of(t).result, PullRequest: pullRequestView(t.PullRequest),
+		CIResult: ci.ticket(t).result, PullRequest: pullRequestView(t.PullRequest),
 		WaitingForSpec: waitingForSpec(r, ci.p.Landing, key, t),
 	}
 	if onMap {
