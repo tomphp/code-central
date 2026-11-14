@@ -247,11 +247,12 @@ func (c *Core) NeedsMe(context.Context) (NeedsMeView, error) {
 			if row, ok := c.baseMissingRow(p); ok {
 				all = append(all, waiting{row: row})
 			}
-			for _, it := range c.ciItems(r, p) {
-				all = append(all, waiting{row: c.ciItemRow(r, p, it), commit: it.commit})
+			ci := c.ciStateOf(r, p)
+			for _, it := range ci.items() {
+				all = append(all, waiting{row: ciItemRow(ci, it), commit: it.commit})
 			}
 			for _, t := range r.Tickets(p.Key) {
-				if row, ok := c.needsMeRow(r, p.Key, t); ok {
+				if row, ok := c.needsMeRow(r, ci, t); ok {
 					all = append(all, waiting{row: row, n: t.Number})
 				}
 			}
@@ -280,8 +281,9 @@ func (c *Core) NeedsMe(context.Context) (NeedsMeView, error) {
 
 // needsMeRow is t's Needs Me row, if it waits on the human with a row
 // of its own: a Ticket a CI item lists has none.
-func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRow, bool) {
-	reason, since := c.reasonOf(r, key, t)
+func (c *Core) needsMeRow(r store.Reader, ci *ciState, t store.Ticket) (NeedsMeRow, bool) {
+	key := ci.p.Key
+	reason, since := c.reasonIn(r, ci, t)
 	if reason == "" || reason.isCIItem() {
 		return NeedsMeRow{}, false
 	}
@@ -289,7 +291,7 @@ func (c *Core) needsMeRow(r store.Reader, key string, t store.Ticket) (NeedsMeRo
 	row := NeedsMeRow{
 		Project: key, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Reason: reason, Since: since, Link: linkView(t.Link),
 		Requirement: req, Spec: needsMeSpec(r, key, t, req), Prototype: slices.Contains(t.Labels, PrototypeLabel),
-		CIResult: ticketCIResult(r, key, t, c.now()), PullRequest: pullRequestView(t.PullRequest),
+		CIResult: ci.ticket(t).result, PullRequest: pullRequestView(t.PullRequest),
 	}
 	switch reason {
 	case ReasonNeedsAnswer:
@@ -337,18 +339,24 @@ func firstLine(s string) string {
 
 // reasonOf is the Ticket's reason and since when it has waited.
 func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReason, time.Time) {
+	p, _ := r.Project(key) // t is in it, so it exists
+	return c.reasonIn(r, c.ciStateOf(r, p), t)
+}
+
+// reasonIn is reasonOf reading t's CI from its Project's CI state ci.
+func (c *Core) reasonIn(r store.Reader, ci *ciState, t store.Ticket) (NeedsMeReason, time.Time) {
+	key := ci.p.Key
 	switch t.State {
 	case store.NeedsAnswer:
 		return ReasonNeedsAnswer, entered(t)
 	case store.Answered:
 		return ReasonAnswered, entered(t)
 	case store.InProgress, store.Accepted:
-		p, _ := r.Project(key) // t is in it, so it exists
-		if _, since, ok := ciFailure(r, key, t, c.now()); ok {
-			return ReasonCIFailed, since
-		}
-		if since, ok := ciCancelled(r, key, t, c.now()); ok {
-			return ReasonCICancelled, since
+		p := ci.p
+		if a := ci.ticket(t); a.failure != nil {
+			return ReasonCIFailed, a.since
+		} else if a.cancelled {
+			return ReasonCICancelled, a.since
 		}
 		if lead, waiting := specPullRequestLead(r, key, t); waiting && !lead {
 			// A Spec's pull request is one item, on its lead Ticket.
@@ -360,7 +368,7 @@ func (c *Core) reasonOf(r store.Reader, key string, t store.Ticket) (NeedsMeReas
 		if t.State == store.Accepted && (p.LandingPolicy().LandsOnHumanMerge()) {
 			return ReasonToMerge, entered(t)
 		}
-		if reason, since := c.timedReason(r, p, t); reason != "" {
+		if reason, since := c.timedReason(r, ci, t); reason != "" {
 			return reason, since
 		}
 	case store.Failed:

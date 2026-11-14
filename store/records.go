@@ -198,12 +198,9 @@ type pullRequestFile struct {
 }
 
 type pushedCommitFile struct {
-	Commit     string           `yaml:"commit"`
-	Branch     string           `yaml:"branch,omitempty"`
-	Pushed     string           `yaml:"pushed"`
-	LandAnyway string           `yaml:"land_anyway,omitempty"`
-	Rerun      string           `yaml:"rerun,omitempty"`
-	Reruns     []runAttemptFile `yaml:"reruns,omitempty"`
+	Commit string `yaml:"commit"`
+	Branch string `yaml:"branch,omitempty"`
+	Pushed string `yaml:"pushed"`
 }
 
 type runAttemptFile struct {
@@ -392,19 +389,6 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		}
 		if p.Pushed, err = parseTime(pc.Pushed); err != nil {
 			return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].pushed", i), Msg: err.Error()}
-		}
-		if pc.LandAnyway != "" {
-			if p.LandAnyway, err = parseTime(pc.LandAnyway); err != nil {
-				return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].land_anyway", i), Msg: err.Error()}
-			}
-		}
-		if pc.Rerun != "" {
-			if p.Rerun, err = parseTime(pc.Rerun); err != nil {
-				return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].rerun", i), Msg: err.Error()}
-			}
-		}
-		for _, ra := range pc.Reruns {
-			p.Reruns = append(p.Reruns, CIRunAttempt{ID: ra.ID, Attempt: ra.Attempt})
 		}
 		t.PushedCommits = append(t.PushedCommits, p)
 	}
@@ -613,17 +597,7 @@ func encode(record any, project string) (string, []byte, error) {
 			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
 		}
 		for _, pc := range r.PushedCommits {
-			pf := pushedCommitFile{Commit: pc.Commit, Branch: pc.Branch, Pushed: formatTime(pc.Pushed)}
-			if !pc.LandAnyway.IsZero() {
-				pf.LandAnyway = formatTime(pc.LandAnyway)
-			}
-			if !pc.Rerun.IsZero() {
-				pf.Rerun = formatTime(pc.Rerun)
-			}
-			for _, ra := range pc.Reruns {
-				pf.Reruns = append(pf.Reruns, runAttemptFile{ID: ra.ID, Attempt: ra.Attempt})
-			}
-			f.PushedCommits = append(f.PushedCommits, pf)
+			f.PushedCommits = append(f.PushedCommits, pushedCommitFile{Commit: pc.Commit, Branch: pc.Branch, Pushed: formatTime(pc.Pushed)})
 		}
 		if r.PullRequest != nil {
 			f.PullRequest = &pullRequestFile{Number: r.PullRequest.Number, Link: r.PullRequest.Link, State: string(r.PullRequest.State), MergeCommit: r.PullRequest.MergeCommit}

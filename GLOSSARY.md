@@ -436,7 +436,7 @@ A pushed commit's CI failed, CI cancelled or CI unavailable as Needs Me shows it
 _Avoid_: CI group, lead Ticket
 
 **CI response**:
-The human's Land anyway or Re-run request for one pushed commit, stored once on the Project for that commit, so every Ticket whose latest pushed commit it is reads it. A response stored on a Ticket's own pushed commit before CI items is still read.
+The human's Land anyway or Re-run request for one pushed commit, stored once on the Project for that commit, so every Ticket whose latest pushed commit it is reads it.
 _Avoid_: CI choice, override record
 
 **Focus Mode**:

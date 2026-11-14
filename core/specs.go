@@ -105,7 +105,8 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 	}
 	var v SpecDetail
 	err = c.store.View(func(r store.Reader) error {
-		if _, ok := r.Project(key); !ok {
+		p, ok := r.Project(key)
+		if !ok {
 			return unknownProject(key)
 		}
 		s, err := resolveSpec(r, key, "get_spec", "spec", in.Spec)
@@ -141,9 +142,9 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 		}
 		if parts[PartTickets] {
 			v.Tickets = []TicketRow{}
-			onMap := isMap(s.Labels)
+			onMap, ci := isMap(s.Labels), c.ciStateOf(r, p)
 			for _, t := range tickets {
-				v.Tickets = append(v.Tickets, c.ticketRow(r, key, t, onMap))
+				v.Tickets = append(v.Tickets, c.ticketRow(r, ci, t, onMap))
 			}
 		}
 		return nil
