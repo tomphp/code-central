@@ -89,6 +89,7 @@ type reportedModelsFile struct {
 // out.
 type modelsFile struct {
 	Default *modelRowFile   `yaml:"default,omitempty"`
+	Chat    *modelRowFile   `yaml:"chat,omitempty"`
 	Kinds   []kindModelFile `yaml:"kinds,omitempty"`
 }
 
@@ -761,6 +762,9 @@ func encodeModels(m Models) *modelsFile {
 	if m.Default != (ModelRow{}) {
 		f.Default = &modelRowFile{Model: m.Default.Model, Effort: m.Default.Effort}
 	}
+	if m.Chat != (ModelRow{}) {
+		f.Chat = &modelRowFile{Model: m.Chat.Model, Effort: m.Chat.Effort}
+	}
 	for _, k := range m.Kinds {
 		f.Kinds = append(f.Kinds, kindModelFile{Kind: k.Kind, Model: k.Model, Effort: k.Effort})
 	}
@@ -790,6 +794,13 @@ func decodeModels(f modelsFile) (Models, string, error) {
 			return Models{}, field, err
 		}
 		m.Default = r
+	}
+	if c := f.Chat; c != nil {
+		r, field, err := row("chat", c.Model, c.Effort)
+		if err != nil {
+			return Models{}, field, err
+		}
+		m.Chat = r
 	}
 	for i, k := range f.Kinds {
 		field := fmt.Sprintf("kinds[%d]", i)

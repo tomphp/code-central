@@ -16,12 +16,16 @@ const (
 	CIChanged = "ci.changed"
 	// OptionsChanged is about no Project: its Project and ID are empty.
 	OptionsChanged = "options.changed"
+	// ChatChanged is a Project's Conversation changing: a new one, a
+	// reply starting or ending, or its availability. Its ID is empty.
+	ChatChanged = "chat.changed"
 )
 
 // Event is one change notice. ID is the display ID of the Ticket or Spec
-// and is empty for project.changed and ci.changed. Project is empty for options.changed,
-// the one notice about no Project; a listener that reads Project treats
-// an empty one as not about any Project.
+// and is empty for project.changed, ci.changed and chat.changed. Project
+// is empty for options.changed, the one notice about no Project; a
+// listener that reads Project treats an empty one as not about any
+// Project.
 type Event struct {
 	Type    string `json:"type"`
 	Project string `json:"project"`

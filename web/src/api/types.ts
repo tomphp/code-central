@@ -258,12 +258,19 @@ export interface KindModels extends ModelRow {
   kind: string;
 }
 
-// A Project's Models: the Project default row, then a row for every kind
-// of work, in the guides' order.
+// A Project's Models: the Project default row, the Chat row (Spec
+// code-central-633), then a row for every kind of work, in the guides'
+// order. Chat is not a kind of work, and the Project default doesn't
+// apply to it.
 export interface Models {
   default: ModelRow;
+  chat: ModelRow;
   kinds: KindModels[];
 }
+
+// What set_models takes: the rows whole, with the Chat row left empty
+// when it is left out.
+export type ModelsChange = Omit<Models, "chat"> & { chat?: ModelRow };
 
 // EFFORT_LEVELS are the valid effort levels until a Factory reports its
 // claude's.
@@ -424,6 +431,8 @@ export interface FactoryView {
   note: string;
   last_heartbeat: string;
   interval_seconds: number;
+  // chat is Chat support: the Factory can run Conversations.
+  chat: boolean;
 }
 
 // A Project's Factory Status, worked out by Code Central: the UI only
@@ -440,6 +449,8 @@ export interface HeartbeatReport {
   state: "online" | "draining" | "stopping";
   note?: string;
   interval_seconds: number;
+  // chat defaults to false.
+  chat?: boolean;
 }
 
 export interface ProjectView {
@@ -1086,6 +1097,9 @@ export type ChangeEvent =
   | { type: "project.changed"; project: string }
   // ci.changed is a Project's CI Runs changing.
   | { type: "ci.changed"; project: string }
+  // chat.changed is a Project's Conversation changing: a new one, a reply
+  // starting or ending, or its availability changing.
+  | { type: "chat.changed"; project: string }
   // options.changed is about no Project: the Options changed.
   | { type: "options.changed" };
 
@@ -1260,4 +1274,40 @@ export interface SessionUsageView {
   agent_type?: string;
   description?: string;
   responses: SessionUsageResponse[];
+}
+
+// A Project's Conversation (Spec code-central-633), as the Conversation
+// stream sends it and get_chat returns it.
+export type ChatAvailability = "none" | "available" | "unavailable";
+export type ChatOutcome = "done" | "stopped" | "failed";
+
+// A reply's item: a Session Event, plus the log lines and the
+// permission_denials a Conversation holds as items of their own.
+export type ChatItemKind = SessionEventKind | "log" | "permission_denials";
+export interface ChatItem extends Omit<HeldSessionEvent, "kind"> {
+  kind: ChatItemKind;
+}
+
+// A Chat Message: the human's holds text; Claude's holds items in the
+// shape of Session Events, and an outcome once its reply has ended.
+export interface ChatMessage {
+  from: "human" | "claude";
+  time: string;
+  text?: string;
+  items?: ChatItem[];
+  outcome?: ChatOutcome;
+  error?: string;
+}
+
+export interface Conversation {
+  availability: ChatAvailability;
+  id?: string;
+  model?: string;
+  effort?: string;
+  factory?: { name: string; host: string };
+  running: boolean;
+  tail: boolean;
+  session_id?: string;
+  resume_command?: string;
+  messages: ChatMessage[];
 }

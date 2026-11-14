@@ -181,6 +181,14 @@ var Operations = []Op{
 	{Name: "report_heartbeat", Audience: FactoryOnly, Write: true},
 	// The Factory's base under Pull Request (code-central-394).
 	{Name: "report_base", Audience: FactoryOnly, Write: true},
+
+	// Chat (Spec code-central-633): the human's Conversation and the
+	// Factory's long-poll for its turns. Chat writes change only memory.
+	{Name: "get_chat", Audience: HumanOnly},
+	{Name: "start_conversation", Audience: HumanOnly, Write: true},
+	{Name: "send_chat_message", Audience: HumanOnly, Write: true},
+	{Name: "stop_chat_reply", Audience: HumanOnly, Write: true},
+	{Name: "next_chat_work", Audience: FactoryOnly},
 }
 
 // Operation looks an operation up by name.

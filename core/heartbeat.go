@@ -62,6 +62,9 @@ type FactoryView struct {
 	Note            string    `json:"note"`
 	LastHeartbeat   time.Time `json:"last_heartbeat"`
 	IntervalSeconds int       `json:"interval_seconds"`
+	// Chat is Chat support: the Factory can run Conversations. Chat is
+	// available for the Project while an Online Factory has it.
+	Chat bool `json:"chat"`
 }
 
 // heartbeat is a Factory's latest Heartbeat.
@@ -70,6 +73,7 @@ type heartbeat struct {
 	state      HeartbeatState
 	note       string
 	interval   int
+	chat       bool
 	at         time.Time
 }
 
@@ -107,7 +111,7 @@ func (hs *heartbeats) view(project string, now time.Time) FactoryStatusView {
 			continue
 		}
 		s := h.status(now)
-		v.Factories = append(v.Factories, FactoryView{Name: h.name, Host: h.host, Status: s, Note: h.note, LastHeartbeat: h.at, IntervalSeconds: h.interval})
+		v.Factories = append(v.Factories, FactoryView{Name: h.name, Host: h.host, Status: s, Note: h.note, LastHeartbeat: h.at, IntervalSeconds: h.interval, Chat: h.chat})
 		switch {
 		case s == FactoryOnline, s == FactoryDraining && v.Status == FactoryOffline:
 			v.Status = s
@@ -134,6 +138,9 @@ type ReportHeartbeatInput struct {
 	Note string `json:"note"`
 	// IntervalSeconds is the Factory's poll interval, 1 to 86400.
 	IntervalSeconds int `json:"interval_seconds"`
+	// Chat is Chat support: the Factory can run Conversations. It
+	// defaults to false, so a Factory that doesn't know Chat has none.
+	Chat bool `json:"chat"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -172,7 +179,7 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 	}
 	now := c.now()
 	k := heartbeatKey{key, name, host}
-	h := heartbeat{name: name, host: host, state: in.State, note: note, interval: in.IntervalSeconds, at: now}
+	h := heartbeat{name: name, host: host, state: in.State, note: note, interval: in.IntervalSeconds, chat: in.Chat, at: now}
 	hs := c.heartbeats
 	hs.mu.Lock()
 	prev, seen := hs.all[k]
@@ -183,9 +190,10 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 		delete(hs.base, key)
 	}
 	hs.mu.Unlock()
-	if !seen || prev.status(now) != h.status(now) || prev.note != note {
+	if !seen || prev.status(now) != h.status(now) || prev.note != note || prev.chat != in.Chat {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
 	}
+	c.chatAfterHeartbeat(key)
 	after := c.projectView(project)
 	return acknowledgeProject(before, after, in.Full, now)
 }
@@ -193,9 +201,10 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 // WatchFactoryStatus is the background ticker behind Going Offline with no
 // write. On each tick it compares every Project's Factory Status, combined
 // and per Factory, with what it saw last time and calls changed(project)
-// for each Project that differs, so live views refetch. The time comes from
-// the injected clock, not the tick; serve ticks every 10s. It returns when
-// ctx ends.
+// for each Project that differs, so live views refetch. It also settles
+// each Conversation (see settleChat), which sends its own chat.changed.
+// The time comes from the injected clock, not the tick; serve ticks every
+// 10s. It returns when ctx ends.
 func (c *Core) WatchFactoryStatus(ctx context.Context, ticks <-chan time.Time, changed func(project string)) {
 	for {
 		select {
@@ -205,6 +214,7 @@ func (c *Core) WatchFactoryStatus(ctx context.Context, ticks <-chan time.Time, c
 			for _, p := range c.factoryStatusChanges() {
 				changed(p)
 			}
+			c.watchChats()
 		}
 	}
 }

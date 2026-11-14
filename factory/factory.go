@@ -100,6 +100,7 @@ type options struct {
 	parallel int
 	poll     time.Duration
 	bypass   bool
+	noChat   bool
 	model    string
 	effort   string
 	project  string
@@ -116,6 +117,7 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs.IntVar(&o.parallel, "parallel", 3, "the most claude turns running at once (at least 1)")
 	fs.DurationVar(&o.poll, "poll", 30*time.Second, "how often to look for work (at least 5s)")
 	fs.BoolVar(&o.bypass, "bypass-permissions", false, "run every session in bypassPermissions mode")
+	fs.BoolVar(&o.noChat, "no-chat", false, "don't report Chat support: the Project's Chat is unavailable through this Factory")
 	fs.StringVar(&o.model, "model", "", "the model for every start and resume a Ticket's model Tag doesn't set")
 	fs.StringVar(&o.effort, "effort", "", "the effort for every start and resume a Ticket's effort Tag doesn't set")
 	fs.String("base", "", "removed: the base is the Project's Base branch setting")
@@ -188,8 +190,15 @@ func Run(ctx context.Context, args []string, e Env) int {
 	go f.events.run()
 	go f.usage.run()
 	go f.heartbeats.run()
+	chatDone := make(chan struct{})
+	go func() {
+		defer close(chatDone)
+		f.chatLoop(ctx)
+	}()
 	f.restart(ctx)
 	f.loop(ctx)
+	// A running Chat reply ends before the last flushes.
+	<-chatDone
 	// Stopping or draining makes one last flush of each, side by side, so
 	// a hung Code Central holds up the stop one postTimeout at most.
 	var flushed sync.WaitGroup
@@ -241,6 +250,7 @@ type factory struct {
 	// use it.
 	repository repo
 	project    string
+	host       string // the machine, as the Heartbeats name it
 	worktrees  string // <repo-parent>/<repo-dir>.worktrees
 	client     *client.Client
 	events     *sender[core.SessionEvent]  // posts Session Events
@@ -376,6 +386,7 @@ func start(e Env, o options) (*factory, error) {
 	if every <= 0 {
 		every = postEvery
 	}
+	f.host = hostname()
 	f.heartbeats = newFactoryHeartbeater(f)
 	timeout := e.EventPostTimeout
 	if timeout <= 0 {

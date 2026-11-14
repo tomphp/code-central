@@ -80,6 +80,7 @@ var migrations = []MigrationStep{
 	{From: 36, Name: "move the human's CI responses on pushed commits onto the Project", After: moveLegacyCIResponses},
 	{From: 37, Name: "add retro to the kinds of work a Models row may name"},
 	{From: 38, Name: "add a Project's Retros Spec"},
+	{From: 39, Name: "add a Project's Chat row in its Models"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

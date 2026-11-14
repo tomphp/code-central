@@ -33,7 +33,11 @@ import type {
   SessionUsageFilter,
   SessionUsageView,
   TargetView,
-  UsageView, GitHubIssuesChange, Models, NeedsMeReason
+  ChatItem,
+  ChatMessage,
+  ChatOutcome,
+  Conversation,
+  UsageView, GitHubIssuesChange, ModelsChange, NeedsMeReason
 } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
@@ -67,6 +71,29 @@ export interface TranscriptHandlers {
   onTail?(): void;
   // onOpen is called each time the stream is live: first with
   // reconnect=false, then reconnect=true after every reconnect.
+  onOpen?(info: { reconnect: boolean }): void;
+}
+
+// ChatHandlers hear the Conversation stream. A reconnect resumes after the
+// last event, so none is repeated or missed.
+export interface ChatHandlers {
+  // onConversation is called with the Conversation as it stands: first on
+  // opening, and again when the events a reconnect missed are no longer held
+  // or a new Conversation starts (after onReplaced). The client replaces
+  // what it holds.
+  onConversation(c: Conversation): void;
+  // onMessage is a new Chat Message: the human's, or the Claude one a reply
+  // fills.
+  onMessage?(m: ChatMessage): void;
+  // onItem is a new item of the running reply.
+  onItem?(item: ChatItem): void;
+  // onOutcome is the end of the running reply.
+  onOutcome?(o: { outcome: ChatOutcome; error?: string }): void;
+  // onSession is the session ID and Resume Command the Factory reported.
+  onSession?(s: { session_id: string; resume_command: string }): void;
+  // onReplaced says the Conversation was replaced; the new one follows as
+  // onConversation.
+  onReplaced?(): void;
   onOpen?(info: { reconnect: boolean }): void;
 }
 
@@ -135,9 +162,10 @@ export interface Api {
   // changed repository unless the human retitled it.
   setGitHubIssues(project: string, settings: GitHubIssuesChange): Promise<ProjectView>;
   // setModels replaces the Project's Models rows whole: a kind left out
-  // is set to Default. A model is trimmed and can't be blank or span
-  // lines; an effort must be one of the valid levels.
-  setModels(project: string, models: Models): Promise<ProjectView>;
+  // is set to Default, and so is the Chat row. A model is trimmed and
+  // can't be blank or span lines; an effort must be one of the valid
+  // levels.
+  setModels(project: string, models: ModelsChange): Promise<ProjectView>;
   // setSubagentExploration turns on or off the implementation guide's
   // subagent line, from the next Claim and the next get_stage_guide.
   setSubagentExploration(project: string, on: boolean): Promise<ProjectView>;
@@ -196,6 +224,20 @@ export interface Api {
   // subscribeTranscript follows Claim number claim's Transcript, even
   // after the Claim ends, and returns a function that stops it.
   subscribeTranscript(project: string, id: string, claim: number, handlers: TranscriptHandlers): () => void;
+  // getChat reads the Project's current Conversation; with none its
+  // availability is "none". The writes answer with the Conversation as it
+  // then stands. startConversation replaces the current one, an empty model
+  // or effort taking the Chat row's default. sendChatMessage with no
+  // Conversation starts one with the Chat row's defaults; it is refused
+  // while a reply runs and while the Conversation is unavailable.
+  // stopChatReply does nothing when no reply runs.
+  getChat(project: string): Promise<Conversation>;
+  startConversation(project: string, pick: { model: string; effort: string }): Promise<Conversation>;
+  sendChatMessage(project: string, text: string): Promise<Conversation>;
+  stopChatReply(project: string): Promise<Conversation>;
+  // subscribeChat follows the Project's current Conversation (Spec
+  // code-central-633) and returns a function that stops it.
+  subscribeChat(project: string, handlers: ChatHandlers): () => void;
 }
 
 // projectOf is a display ID's Project Key: everything before the last "-".

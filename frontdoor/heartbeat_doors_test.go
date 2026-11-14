@@ -10,7 +10,7 @@ import (
 // HTTP only, and the factory_status the Project reads carry.
 func init() {
 	cases["report_heartbeat"] = opCase{
-		ok: call{http: reportHeartbeat(`{"factory":"code-central-factory","host":"box","state":"online","note":"1 of 2 turns running","interval_seconds":10}`)},
+		ok: call{http: reportHeartbeat(`{"factory":"code-central-factory","host":"box","state":"online","note":"1 of 2 turns running","interval_seconds":10,"chat":true}`)},
 		check: func(t *testing.T, out map[string]any) {
 			t.Helper()
 			acknowledgement("acme")(t, out)
@@ -28,6 +28,9 @@ func init() {
 			field("host", "box")(t, f)
 			field("status", "online")(t, f)
 			field("note", "1 of 2 turns running")(t, f)
+			if f["chat"] != true {
+				t.Fatalf("chat = %v, want true", f["chat"])
+			}
 			if f["interval_seconds"] != float64(10) {
 				t.Fatalf("interval_seconds = %v", f["interval_seconds"])
 			}
@@ -73,6 +76,17 @@ func TestAHeartbeatShowsInTheProjectReads(t *testing.T) {
 		}
 	}
 	t.Fatal("acme not in list_projects")
+}
+
+func TestAHeartbeatWithoutChatReportsNoChatSupport(t *testing.T) {
+	srv := newServer(t)
+	httpOK(t, srv, reportHeartbeat(`{"factory":"a","host":"h","state":"online","interval_seconds":5}`))
+	get := httpOK(t, srv, httpCall{"GET", "/api/projects/acme", ""})
+	fs, _ := get["factory_status"].(map[string]any)
+	fl, _ := fs["factories"].([]any)
+	if len(fl) != 1 || fl[0].(map[string]any)["chat"] != false {
+		t.Fatalf("factories = %v, want chat false", fs["factories"])
+	}
 }
 
 func TestAnInvalidHeartbeatNamesTheField(t *testing.T) {

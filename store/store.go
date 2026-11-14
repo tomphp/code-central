@@ -397,9 +397,12 @@ type GitHubIssues struct {
 
 // Models is a Project's Models rows (Spec code-central-301): the model
 // and effort for the Project default and for each kind of work, as plain
-// strings, each empty when the row leaves it unset.
+// strings, each empty when the row leaves it unset. Chat is a row of its
+// own (Spec code-central-633), not a kind of work, so ModelKinds stays
+// equal to the guide names.
 type Models struct {
 	Default ModelRow
+	Chat    ModelRow
 	// Kinds holds only the rows that set something, one per kind of work
 	// at most, in ModelKinds order.
 	Kinds []KindModels
@@ -429,11 +432,11 @@ var NeedsMeReasons = []string{"needs_answer", "answered", "silent_claim", "long_
 	"accepted_not_landed", "blocked_by_cancelled", "new_issue", "closed_externally"}
 
 // IsZero reports whether m sets nothing.
-func (m Models) IsZero() bool { return m.Default == (ModelRow{}) && len(m.Kinds) == 0 }
+func (m Models) IsZero() bool { return m.Default == (ModelRow{}) && m.Chat == (ModelRow{}) && len(m.Kinds) == 0 }
 
 // Equal reports whether m and n set the same rows.
 func (m Models) Equal(n Models) bool {
-	return m.Default == n.Default && slices.Equal(m.Kinds, n.Kinds)
+	return m.Default == n.Default && m.Chat == n.Chat && slices.Equal(m.Kinds, n.Kinds)
 }
 
 // Kind is the row for the kind of work named kind, empty when it sets

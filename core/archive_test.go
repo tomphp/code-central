@@ -277,6 +277,18 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.ReportBase(ctx, "acme", core.ReportBaseInput{State: core.BaseCurrent, Local: "a", Remote: "a"})
 		return err
 	},
+	"start_conversation": func(f fixture) error {
+		_, err := f.core.StartConversation(human, "acme", core.StartConversationInput{})
+		return err
+	},
+	"send_chat_message": func(f fixture) error {
+		_, err := f.core.SendChatMessage(human, "acme", core.SendChatMessageInput{Text: "What is acme?"})
+		return err
+	},
+	"stop_chat_reply": func(f fixture) error {
+		_, err := f.core.StopChatReply(human, "acme", core.StopChatReplyInput{})
+		return err
+	},
 	"set_github_issues": func(f fixture) error {
 		_, err := f.core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repository: "acme/web"})
 		return err

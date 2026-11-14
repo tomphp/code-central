@@ -5,9 +5,10 @@ import {
   type EventHandlers,
   type TicketAction,
   type TicketActions,
+  type ChatHandlers,
   type TranscriptHandlers,
 } from "./api";
-import { ApiError, type ChangeEvent, type HeldSessionEvent } from "./types";
+import { ApiError, type ChangeEvent, type ChatOutcome, type Conversation, type ChatItem, type ChatMessage, type HeldSessionEvent } from "./types";
 
 export interface HttpApiOptions {
   // baseUrl is the service's origin; "" (the default) is the page's own.
@@ -89,7 +90,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     // Only the settings themselves: a Project's read adds spec and watcher.
     setGitHubIssues: (project, { on, repository, label, new_issues_need_me }) =>
       call("POST", `${p(project)}/set_github_issues`, { on, repository, label, new_issues_need_me, full: true }),
-    setModels: (project, models) => call("POST", `${p(project)}/set_models`, { default: models.default, kinds: models.kinds, full: true }),
+    setModels: (project, models) => call("POST", `${p(project)}/set_models`, { default: models.default, chat: models.chat ?? { model: "", effort: "" }, kinds: models.kinds, full: true }),
     setSubagentExploration: (project, on) => call("POST", `${p(project)}/set_subagent_exploration`, { on, full: true }),
     setModelAssignment: (project, on) => call("POST", `${p(project)}/set_model_assignment`, { on, full: true }),
     setAutoAccept: (project, kinds) => call("POST", `${p(project)}/set_auto_accept`, { kinds, full: true }),
@@ -131,6 +132,11 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       }),
     transcript: (project, id, claim) => call("GET", transcriptPath(project, id, claim)),
     subscribeTranscript: (project, id, claim, h) => subscribeTranscript(doFetch, base + transcriptPath(project, id, claim) + "/stream", retryMs, h),
+    getChat: (project) => call("GET", `${p(project)}/chat`),
+    startConversation: (project, pick) => call("POST", `${p(project)}/start_conversation`, pick),
+    sendChatMessage: (project, text) => call("POST", `${p(project)}/send_chat_message`, { text }),
+    stopChatReply: (project) => call("POST", `${p(project)}/stop_chat_reply`, {}),
+    subscribeChat: (project, h) => subscribeChat(doFetch, base + `/api/p/${encodeURIComponent(project)}/chat/stream`, retryMs, h),
   };
 }
 
@@ -158,6 +164,41 @@ function subscribeTranscript(doFetch: typeof fetch, url: string, retryMs: number
       else if (f.name === "session_event" && f.data) {
         if (f.id) last = f.id;
         h.onEvent(JSON.parse(f.data) as HeldSessionEvent);
+      }
+    },
+  });
+}
+
+// subscribeChat follows a Conversation stream, sending the last id it saw as
+// Last-Event-ID on each reconnect, so the stream resumes with no gap and no
+// repeats. A frame with no id (replaced) leaves it as it was.
+function subscribeChat(doFetch: typeof fetch, url: string, retryMs: number, h: ChatHandlers): () => void {
+  let last: string | undefined;
+  return follow(doFetch, url, retryMs, {
+    headers: (): Record<string, string> => (last ? { "Last-Event-ID": last } : {}),
+    onOpen: h.onOpen,
+    onFrame: (f) => {
+      if (f.id) last = f.id;
+      const data = f.data ? JSON.parse(f.data) : undefined;
+      switch (f.name) {
+        case "conversation":
+          h.onConversation(data as Conversation);
+          break;
+        case "message":
+          h.onMessage?.(data as ChatMessage);
+          break;
+        case "item":
+          h.onItem?.(data as ChatItem);
+          break;
+        case "outcome":
+          h.onOutcome?.(data as { outcome: ChatOutcome; error?: string });
+          break;
+        case "session":
+          h.onSession?.(data as { session_id: string; resume_command: string });
+          break;
+        case "replaced":
+          h.onReplaced?.();
+          break;
       }
     },
   });

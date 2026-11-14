@@ -9,7 +9,7 @@
 // (Specs and Tickets share one counter).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Api } from "./api";
-import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, HeldSessionEvent, LandingMethod, ModelsReport, NeedsMeReason, PullRequestReport, SessionEvent, State, TicketAcknowledgement, TicketView, UsageResponse, UsageSession } from "./types";
+import type { ChangeEvent, CIProvider, CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, Conversation, HeldSessionEvent, LandingMethod, ModelsReport, NeedsMeReason, PullRequestReport, SessionEvent, State, TicketAcknowledgement, TicketView, UsageResponse, UsageSession } from "./types";
 import { ApiError, NEEDS_ME_REASONS, TRIAGE_ACTIONS } from "./types";
 import { roundContract } from "./contract.rounds";
 import { MOVE_EXCEPT } from "./actions/move";
@@ -58,6 +58,16 @@ export interface Driver {
   // dropTranscriptStreams drops every open Transcript stream, as a flaky
   // connection would; each reconnects by itself (ticket 110).
   dropTranscriptStreams(): void;
+  // startConversation and sendChatMessage are the human's Chat actions;
+  // sendChatMessage returns once the turn is queued (Spec code-central-633).
+  startConversation(key: string): Promise<void>;
+  sendChatMessage(key: string, text: string): Promise<void>;
+  // takeChatTurn is a Factory's next_chat_work call, which takes the turn
+  // queued, binding the Conversation to it; it returns the Conversation ID.
+  takeChatTurn(key: string, factory: string): Promise<string>;
+  // postChatEvents is the Factory holding the Conversation posting its
+  // reply: text items, and the outcome on the last post.
+  postChatEvents(key: string, factory: string, conversation: string, texts: string[], outcome?: "done" | "stopped" | "failed"): Promise<void>; // no outcome leaves the reply running
   // absolutePath is a path absolute where Core runs.
   readonly absolutePath: string;
   // reportPushRemote reports the Push remote's URL as a Factory does when
@@ -490,13 +500,16 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       const kinds = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "retro", "implementation"];
       const unset = { model: "", effort: "" };
-      expect((await d.api.listProjects())[0].models).toEqual({ default: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
+      expect((await d.api.listProjects())[0].models).toEqual({ default: unset, chat: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
 
       const set = await d.api.setModels("acme", {
         default: { model: " opus ", effort: "high" },
+        chat: { model: " sonnet ", effort: "low" },
         kinds: [{ kind: "implementation", model: "", effort: "xhigh" }],
       });
       expect(set.models.default).toEqual({ model: "opus", effort: "high" });
+      // The Chat row is its own row, not one of the kinds of work.
+      expect(set.models.chat).toEqual({ model: "sonnet", effort: "low" });
       expect(set.models.kinds.map((k) => k.kind)).toEqual(kinds);
       expect(set.models.kinds.at(-1)).toEqual({ kind: "implementation", model: "", effort: "xhigh" });
       expect((await d.api.listProjects())[0].models).toEqual(set.models);
@@ -509,11 +522,15 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(blank).toMatchObject({ status: 422, code: "invalid", field: "default.model" });
       const other = await d.api.setModels("acme", { default: unset, kinds: [{ kind: "review", model: "opus", effort: "" }] }).catch((e) => e);
       expect(other).toMatchObject({ status: 422, code: "invalid", field: "kinds" });
+      const chatEffort = await d.api.setModels("acme", { default: unset, chat: { model: "", effort: "extreme" }, kinds: [] }).catch((e) => e);
+      expect(chatEffort).toMatchObject({ status: 422, code: "invalid", field: "chat.effort" });
+      const chatBlank = await d.api.setModels("acme", { default: unset, chat: { model: " ", effort: "" }, kinds: [] }).catch((e) => e);
+      expect(chatBlank).toMatchObject({ status: 422, code: "invalid", field: "chat.model" });
       expect((await d.api.listProjects())[0].models).toEqual(set.models);
 
-      // The rows are replaced whole.
+      // The rows are replaced whole, the Chat row too.
       const cleared = await d.api.setModels("acme", { default: unset, kinds: [] });
-      expect(cleared.models).toEqual({ default: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
+      expect(cleared.models).toEqual({ default: unset, chat: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
     });
 
     it("serves factory_status: offline with no Factories, then each Factory from its Heartbeat", async () => {
@@ -524,8 +541,11 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const online = (await d.api.listProjects())[0].factory_status;
       expect(online.status).toBe("online");
       expect(online.factories).toEqual([
-        { name: "code-central-factory", host: "laptop", status: "online", note: "1 of 3 turns running", last_heartbeat: expect.any(String), interval_seconds: 30 },
+        { name: "code-central-factory", host: "laptop", status: "online", note: "1 of 3 turns running", last_heartbeat: expect.any(String), interval_seconds: 30, chat: false },
       ]);
+
+      await d.reportHeartbeat("acme", { factory: "code-central-factory", host: "laptop", state: "online", interval_seconds: 30, chat: true });
+      expect((await d.api.listProjects())[0].factory_status.factories).toMatchObject([{ chat: true }]);
 
       await d.reportHeartbeat("acme", { factory: "code-central-factory", host: "laptop", state: "stopping", note: "stopped: drained", interval_seconds: 30 });
       const stopped = (await d.api.listProjects())[0].factory_status;
@@ -2233,6 +2253,130 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       } finally {
         stop();
       }
+    });
+
+    // ---- the Conversation stream (Spec code-central-633) ----
+
+    const chatHeartbeat = { factory: "code-central-factory", host: "laptop", state: "online" as const, interval_seconds: 30, chat: true };
+
+    it("follows a Conversation: it opens as it stands, then each message, item and outcome, resuming after a dropped stream with no gaps or repeats", async () => {
+      await d.createProject("acme", "Acme");
+      await d.reportHeartbeat("acme", chatHeartbeat);
+      await d.sendChatMessage("acme", "What is acme?");
+      const conversation = await d.takeChatTurn("acme", "code-central-factory");
+      await d.postChatEvents("acme", "code-central-factory", conversation, ["one"]);
+
+      const heard: string[] = [];
+      const opens: boolean[] = [];
+      let opening: Conversation | undefined;
+      const stop = d.api.subscribeChat("acme", {
+        onConversation: (c) => {
+          opening = c;
+          heard.push("conversation");
+        },
+        onMessage: (m) => heard.push(`message from ${m.from}`),
+        onItem: (i) => heard.push(`item ${i.text}`),
+        onOutcome: (o) => heard.push(`outcome ${o.outcome}`),
+        onReplaced: () => heard.push("replaced"),
+        onOpen: ({ reconnect }) => opens.push(reconnect),
+      });
+      try {
+        await expect.poll(() => heard, { timeout: 5000 }).toEqual(["conversation"]);
+        expect(opening).toMatchObject({ availability: "available", running: true, messages: [{ from: "human", text: "What is acme?" }, { from: "claude", items: [{ text: "one" }] }] });
+
+        await d.postChatEvents("acme", "code-central-factory", conversation, ["two"]);
+        await expect.poll(() => heard.length, { timeout: 5000 }).toBe(2);
+
+        d.dropTranscriptStreams();
+        await d.postChatEvents("acme", "code-central-factory", conversation, ["three"], "done");
+        await expect.poll(() => opens, { timeout: 5000 }).toEqual([false, true]);
+        await expect.poll(() => heard.length, { timeout: 5000 }).toBe(4);
+        expect(heard).toEqual(["conversation", "item two", "item three", "outcome done"]);
+
+        // A second message streams as the human's, then the reply's.
+        await d.sendChatMessage("acme", "And?");
+        await expect.poll(() => heard.length, { timeout: 5000 }).toBe(6);
+        expect(heard.slice(4)).toEqual(["message from human", "message from claude"]);
+      } finally {
+        stop();
+      }
+    });
+
+    it("says replaced when the Conversation is replaced, then sends the new one", async () => {
+      await d.createProject("acme", "Acme");
+      await d.reportHeartbeat("acme", chatHeartbeat);
+      await d.sendChatMessage("acme", "Hello");
+
+      const heard: string[] = [];
+      let latest: Conversation | undefined;
+      const stop = d.api.subscribeChat("acme", {
+        onConversation: (c) => {
+          latest = c;
+          heard.push(`conversation of ${c.messages.length}`);
+        },
+        onReplaced: () => heard.push("replaced"),
+        onMessage: (m) => heard.push(`message from ${m.from}`),
+      });
+      try {
+        await expect.poll(() => heard, { timeout: 5000 }).toEqual(["conversation of 2"]);
+        const first = latest!.id;
+        await d.startConversation("acme");
+        await expect.poll(() => heard, { timeout: 5000 }).toEqual(["conversation of 2", "replaced", "conversation of 0"]);
+        expect(latest!.id).not.toBe(first);
+
+        // The stream goes on with the new Conversation, also across a drop.
+        d.dropTranscriptStreams();
+        await d.sendChatMessage("acme", "Again");
+        await expect.poll(() => heard.length, { timeout: 5000 }).toBe(5);
+        expect(heard.slice(3)).toEqual(["message from human", "message from claude"]);
+        expect(heard.filter((h) => h === "replaced")).toHaveLength(1);
+      } finally {
+        stop();
+      }
+    });
+
+    // ---- Chat actions (Spec code-central-633) ----
+
+    it("reads no Conversation before one starts, and starts one with the Chat row's defaults on the first send", async () => {
+      await d.createProject("acme", "Acme");
+      await d.reportHeartbeat("acme", chatHeartbeat);
+      expect(await d.api.getChat("acme")).toMatchObject({ availability: "none", running: false, messages: [] });
+
+      await d.api.setModels("acme", { default: { model: "", effort: "" }, chat: { model: "sonnet", effort: "low" }, kinds: [] });
+      const sent = await d.api.sendChatMessage("acme", "Hello");
+      expect(sent).toMatchObject({ availability: "available", model: "sonnet", effort: "low", running: true, messages: [{ from: "human", text: "Hello" }, { from: "claude" }] });
+      expect(await d.api.getChat("acme")).toEqual(sent);
+    });
+
+    it("starts a Conversation with a picked model and effort, replacing the current one, and refuses a bad effort", async () => {
+      await d.createProject("acme", "Acme");
+      await d.reportHeartbeat("acme", chatHeartbeat);
+      const first = await d.api.startConversation("acme", { model: "", effort: "" });
+      expect(first).toMatchObject({ availability: "available", model: "haiku", running: false, messages: [] });
+
+      const second = await d.api.startConversation("acme", { model: "opus", effort: "high" });
+      expect(second).toMatchObject({ model: "opus", effort: "high" });
+      expect(second.id).not.toBe(first.id);
+
+      const refused = await d.api.startConversation("acme", { model: "opus", effort: "extreme" }).catch((e) => e);
+      expect(refused).toMatchObject({ status: 422, code: "invalid", field: "effort" });
+      expect((await d.api.getChat("acme")).id).toBe(second.id);
+    });
+
+    it("refuses a Chat Message while a reply runs, stops the reply, and refuses one with no Factory to answer", async () => {
+      await d.createProject("acme", "Acme");
+      const unavailable = await d.api.sendChatMessage("acme", "Hello").catch((e) => e);
+      expect(unavailable).toBeInstanceOf(ApiError);
+
+      await d.reportHeartbeat("acme", chatHeartbeat);
+      await d.api.sendChatMessage("acme", "Hello");
+      const busy = await d.api.sendChatMessage("acme", "Again").catch((e) => e);
+      expect(busy).toMatchObject({ status: 409, code: "action_not_allowed", allowed_actions: ["stop_chat_reply"] });
+
+      // No Factory has taken the turn, so Stop ends the reply at once.
+      const stopped = await d.api.stopChatReply("acme");
+      expect(stopped).toMatchObject({ running: false, messages: [{ from: "human" }, { from: "claude", outcome: "stopped" }] });
+      expect((await d.api.stopChatReply("acme")).running).toBe(false);
     });
 
     // ---- Usage (Spec code-central-201) ----

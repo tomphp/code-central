@@ -45,6 +45,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    | `--model <model>` | The model for every session it starts or resumes, such as `--model opus`, unless the Ticket sets one. The default is Claude Code's own. See [Model and effort](#model-and-effort). |
    | `--effort <level>` | The effort for every session it starts or resumes, such as `--effort high`, unless the Ticket sets one. The default is Claude Code's own. It must be a level `claude --help` lists; see [What `claude` accepts](#what-claude-accepts). |
    | `--bypass-permissions` | Runs every session in `bypassPermissions` mode, with no permission checks. It prints a warning line at the start. |
+   | `--no-chat` | Turns off Chat support. The Factory reports `chat: true` in every Heartbeat by default, saying it can run Conversations for the Project's Chat; with `--no-chat` it reports `chat: false`. |
    | `-- <Claude Args>` | Everything after `--` is `claude` flags the Factory passes, as given, to every start and resume, such as `-- --chrome`. See [Claude Args](#claude-args). |
 
    Without `--bypass-permissions`, every session runs in auto mode with no permission prompts. Anything auto mode won't allow is denied and the turn carries on without it. If a turn ends on denied calls, the Factory posts a Round asking you about each one, and answering it lets the session try again. Allow rules for the repository go in its committed `.claude/settings.json`.
@@ -267,7 +268,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
 ## The Factory Status dot
 
-While `code-central-factory` runs, it sends Code Central a Heartbeat on every poll, and the Project's row in the left pane shows a dot before its name: green for Online, amber for Draining and grey for Offline. Hover or focus the dot to list each Factory as name on host, its status, its last Heartbeat and its note. Project Options has the same list under **Factories**. Archived Projects show no dot.
+While `code-central-factory` runs, it sends Code Central a Heartbeat on every poll, and the Project's row in the left pane shows a dot before its name: green for Online, amber for Draining and grey for Offline. Hover or focus the dot to list each Factory as name on host, its status, its last Heartbeat and its note, and whether it has Chat support. Project Options has the same list under **Factories**. Archived Projects show no dot.
 
 The notes code-central-factory sends:
 
@@ -281,6 +282,22 @@ The notes code-central-factory sends:
 | a stop only you can fix, such as claude's login expiring | stopping | `stopped: <the reason it prints>` |
 
 A stopping Heartbeat shows Offline at once. A crash sends nothing, so the dot goes grey at the Factory's deadline: three polls, and at least 90 seconds. After Code Central restarts every dot is grey until the Factory's next poll. See [Writing a Factory](writing-a-factory.md) for sending Heartbeats from your own.
+
+### Chat in the UI
+
+While a Project is open (not in the all-Projects scope) and one of its Factories is Online with Chat support, a round Chat icon floats in the lower right corner. It opens a pop-up holding the Project's current Conversation, the same in every tab. Your messages show as plain text and Claude's as Markdown, streaming in as it writes. Each tool call is one collapsed line that opens to its result, a denied permission shows as a warning, and a stopped or failed reply ends with `Stopped` or its error. **Send** is off while a reply runs, and **Stop** shows then. Sending with no Conversation starts one with the Chat row's model and effort. **New conversation** asks for a model and effort first, filled from that row (haiku when it sets none), and drops the old Conversation. **Copy resume command** copies `cd <worktree> && claude --resume <session-id>` once the session is known.
+
+If the Conversation's Factory is no longer Online, or no Factory has Chat support, the open pop-up stays and says so, with Send off. It becomes usable again when the Factory is back Online, or after New conversation. When a long Conversation drops its oldest messages, the pop-up says `Older messages were dropped`.
+
+### The Chat worktree and Chat turns
+
+Each Conversation turn runs `claude -p` in the **Chat worktree**, `chat` in the Factory's worktrees folder beside the Tickets' (`~/src/acme-shop.worktrees/chat`); a Ticket ID is never `chat`, so the two can't clash. A Conversation's first turn moves the worktree to the base's tip, uses `--session-id` and prints `chat: starting a Conversation in <worktree>; resume: <command>`; later turns use `--resume`. The Factory keeps one `next_chat_work` call open and runs the turns it hands out one at a time.
+
+A Chat turn takes **no Claim slot**: it doesn't count against the Factory's concurrent turns, and a Conversation never waits for a Claim to end.
+
+- **Draining.** The first Ctrl-C closes the `next_chat_work` call, so no new Chat turn starts. A turn already running goes on, and the Factory exits once it has ended. While its Factory is Draining, the pop-up shows the Conversation as unavailable.
+- **Stopping.** A second Ctrl-C, SIGTERM or SIGHUP stops a running Chat turn as it stops a Claim's, and the reply ends `Stopped`. **Stop** in the pop-up stops just that reply: the Factory hears it on its `next_chat_work` call.
+- **`--no-chat`.** The Factory opens no `next_chat_work` call and reports `chat: false`, so Chat isn't available through it.
 
 ## Model and effort
 

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -107,7 +108,7 @@ type Harness struct {
 	down      atomic.Bool
 	failing   atomic.Value // string: a path suffix the proxy fails
 	refusedMu sync.Mutex
-	refused   map[string]int64 // requests refused while down, by path
+	refused   map[string]int64 // requests refused while down or failed, by path
 	data      string           // scripts/ and calls/
 	env       map[string]string
 	spec      string
@@ -233,8 +234,19 @@ func (h *Harness) startProxy() string {
 	target, err := url.Parse(h.Server.URL)
 	must(h.t, err)
 	rp := httputil.NewSingleHostReverseProxy(target)
+	rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		// A request its client gave up on, such as the Factory's Chat
+		// long-poll when it stops, is no error worth a line.
+		if r.Context().Err() == nil {
+			log.Printf("http: proxy error: %v", err)
+		}
+		w.WriteHeader(http.StatusBadGateway)
+	}
 	ps := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if suffix, _ := h.failing.Load().(string); suffix != "" && strings.HasSuffix(r.URL.Path, suffix) {
+			h.refusedMu.Lock()
+			h.refused[r.URL.Path]++
+			h.refusedMu.Unlock()
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprint(w, `{"code":"internal","message":"failing for the test"}`)
@@ -265,7 +277,7 @@ func (h *Harness) SetDown(down bool) { h.down.Store(down) }
 func (h *Harness) SetFailing(suffix string) { h.failing.Store(suffix) }
 
 // Refused is how many requests to path, such as "/api/session-events",
-// were refused while Code Central was down.
+// were refused while Code Central was down, or failed by SetFailing.
 func (h *Harness) Refused(path string) int64 {
 	h.refusedMu.Lock()
 	defer h.refusedMu.Unlock()
@@ -529,6 +541,39 @@ func (h *Harness) Usage() core.UsageView {
 	u, err := h.Server.Client.Usage(context.Background(), h.Project, 0)
 	must(h.t, err)
 	return u
+}
+
+// Chat reads the Project's current Conversation, as the human.
+func (h *Harness) Chat() core.ConversationView {
+	h.t.Helper()
+	cv, err := h.Human().GetChat(context.Background(), h.Project)
+	must(h.t, err)
+	return cv
+}
+
+// SendChat sends text as the human's Chat Message, as soon as Code
+// Central takes it: it refuses one until a Factory's Heartbeat reports
+// Chat support, and while a reply is running.
+func (h *Harness) SendChat(text string) {
+	h.t.Helper()
+	var last error
+	h.WaitForDescribed(func() string { return fmt.Sprintf("send_chat_message to be taken (last refused: %v)", last) }, func() bool {
+		_, last = h.Human().SendChatMessage(context.Background(), h.Project, core.SendChatMessageInput{Text: text})
+		return last == nil
+	})
+}
+
+// WaitForReply waits for the Conversation's last Chat Message, Claude's
+// reply, to end, and returns the Conversation.
+func (h *Harness) WaitForReply() core.ConversationView {
+	h.t.Helper()
+	var cv core.ConversationView
+	h.WaitForDescribed(func() string { return fmt.Sprintf("the Chat reply to end; the Conversation is %+v", cv) }, func() bool {
+		cv = h.Chat()
+		n := len(cv.Messages)
+		return !cv.Running && n > 0 && cv.Messages[n-1].Outcome != ""
+	})
+	return cv
 }
 
 // SessionUsage reads one Usage session of the Project, agent being ""

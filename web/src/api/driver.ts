@@ -221,6 +221,28 @@ export class HttpDriver implements Driver {
   letGHTriage: Driver["letGHTriage"] = (repository) => this.c.letGHTriage(repository);
   letGHWrite: Driver["letGHWrite"] = (repository) => this.c.letGHWrite(repository);
   dropTranscriptStreams: Driver["dropTranscriptStreams"] = () => this.c.dropTranscriptStreams();
+
+  // Spec code-central-633: the human's Chat actions, and a Factory's part
+  startConversation: Driver["startConversation"] = async (key) => {
+    await this.human(`${this.projectPath(key)}/start_conversation`, {});
+  };
+  sendChatMessage: Driver["sendChatMessage"] = async (key, text) => {
+    await this.human(`${this.projectPath(key)}/send_chat_message`, { text });
+  };
+  takeChatTurn: Driver["takeChatTurn"] = async (key, factory) => {
+    const work = await this.call<{ turn?: { conversation: string } }>("agent", "GET", `${this.projectPath(key)}/chat/next-work?factory=${factory}&host=laptop`);
+    if (!work.turn) throw new Error("the Factory was handed no turn");
+    return work.turn.conversation;
+  };
+  postChatEvents: Driver["postChatEvents"] = async (key, factory, conversation, texts, outcome) => {
+    await this.agent(`${this.projectPath(key)}/chat/events`, {
+      conversation,
+      factory,
+      host: "laptop",
+      items: texts.map((text) => ({ time: "2026-11-08T10:00:00Z", kind: "text", text })),
+      outcome: outcome ?? "",
+    });
+  };
   get absolutePath(): string {
     return this.c.absolutePath;
   }

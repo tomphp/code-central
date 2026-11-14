@@ -106,14 +106,20 @@ func (f *factory) postDenials(ctx context.Context, t *turn, ds []denial) bool {
 // denied, for a turn that ended its own way.
 func (f *factory) commentDenials(ctx context.Context, t *turn, ds []denial) {
 	c := t.claim
+	body := "code-central-factory: auto mode denied these calls during the last turn (session " + c.SessionID + "):\n" + denialList(ds)
+	if _, err := f.client.Comment(ctx, f.project, core.CommentInput{Ticket: core.Ref(c.Ticket), Body: body}); err != nil {
+		f.claimf(c, "%s: comment: %v", c.Ticket, err)
+	}
+}
+
+// denialList is the distinct denied calls' patterns, a Markdown list item
+// each, every one on a line of its own.
+func denialList(ds []denial) string {
 	var b strings.Builder
-	b.WriteString("code-central-factory: auto mode denied these calls during the last turn (session " + c.SessionID + "):\n")
 	for _, d := range distinct(ds) {
 		fmt.Fprintf(&b, "\n- `%s`", d.pattern())
 	}
-	if _, err := f.client.Comment(ctx, f.project, core.CommentInput{Ticket: core.Ref(c.Ticket), Body: b.String()}); err != nil {
-		f.claimf(c, "%s: comment: %v", c.Ticket, err)
-	}
+	return b.String()
 }
 
 // takeDenialAnswers reads the answers to c's Round about denied calls,
