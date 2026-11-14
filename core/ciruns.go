@@ -315,7 +315,7 @@ func (c *Core) ReportCIRuns(_ context.Context, key string, in ReportCIRunsInput)
 			return err
 		}
 		p, _ := w.Project(key)
-		if !p.CI.Tracking {
+		if !landingPolicyOf(p).RunsCIWatcher() {
 			return &Error{Code: ActionNotAllowed, Message: "CI Tracking is off on " + key + ", so it tracks no CI Runs"}
 		}
 		stored := w.CIRuns(key)
