@@ -190,15 +190,15 @@ func Run(ctx context.Context, args []string, e Env) int {
 	go f.events.run()
 	go f.usage.run()
 	go f.heartbeats.run()
-	chatted := make(chan struct{})
+	chatDone := make(chan struct{})
 	go func() {
-		defer close(chatted)
+		defer close(chatDone)
 		f.chatLoop(ctx)
 	}()
 	f.restart(ctx)
 	f.loop(ctx)
 	// A running Chat reply ends before the last flushes.
-	<-chatted
+	<-chatDone
 	// Stopping or draining makes one last flush of each, side by side, so
 	// a hung Code Central holds up the stop one postTimeout at most.
 	var flushed sync.WaitGroup

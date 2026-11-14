@@ -10,7 +10,6 @@ package factory
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -56,7 +55,7 @@ func (f *factory) chatLoop(ctx context.Context) {
 		case <-pollCtx.Done():
 		}
 	}()
-	var one sync.Mutex // held by the running turn
+	var turnRunning sync.Mutex // held by the running turn
 	failing := false
 	for pollCtx.Err() == nil {
 		w, err := f.client.NextChatWork(pollCtx, f.project, core.NextChatWorkInput{Factory: factoryName, Host: f.host})
@@ -83,8 +82,8 @@ func (f *factory) chatLoop(ctx context.Context) {
 			defer turns.Done()
 			// Code Central hands out a turn only once the reply before
 			// it has ended, which its turn posts just before it returns.
-			one.Lock()
-			defer one.Unlock()
+			turnRunning.Lock()
+			defer turnRunning.Unlock()
 			f.runChatTurn(ctx, t)
 		}(*w.Turn)
 	}
@@ -117,7 +116,12 @@ func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session, wt s
 		}
 	}
 	if !f.accepts.takesEffort(t.Effort) {
-		return core.ChatFailed, fmt.Sprintf("The effort `%s` isn't one this Factory's claude accepts (%s), so no reply was started. Start a new conversation with another effort, or set the Chat row's in Project Options → Models.", t.Effort, strings.Join(f.accepts.levels, ", "))
+		return core.ChatFailed, fmt.Sprintf("The effort `%s` isn't one this Factory's claude accepts (%s), so no reply was started. Pick another in New conversation, or set the Chat row's in Project Options → Models.", t.Effort, strings.Join(f.accepts.levels, ", "))
+	}
+	// A turn that waited on the one before it starts nothing once the
+	// Factory is stopping.
+	if ctx.Err() != nil {
+		return core.ChatStopped, ""
 	}
 	how := "--resume"
 	if t.First {
@@ -143,7 +147,8 @@ func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session, wt s
 	go func() {
 		select {
 		case <-ctx.Done():
-			f.stopChatTurn(cmd.Process, ended)
+			// As a Claim's turn is stopped.
+			f.stopProcess(cmd.Process, ended, func(err error) { f.printf("chat: can't stop the reply: %v", err) })
 		case <-ended:
 		}
 	}()
@@ -163,19 +168,6 @@ func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session, wt s
 	return chatOutcome(t, end)
 }
 
-// stopChatTurn takes the Chat turn's process through stopSteps, as a
-// Claim's turn is stopped, until it has ended.
-func (f *factory) stopChatTurn(proc *os.Process, ended <-chan struct{}) {
-	for _, stop := range stopSteps(proc) {
-		_ = stop()
-		select {
-		case <-ended:
-			return
-		case <-time.After(f.killGrace()):
-		}
-	}
-}
-
 // chatOutcome is how a Chat turn that ran ended: done, or failed with the
 // Factory's error text, naming a model claude rejected.
 func chatOutcome(t core.ChatTurn, end turnEnd) (core.ChatOutcome, string) {
@@ -184,7 +176,7 @@ func chatOutcome(t core.ChatTurn, end turnEnd) (core.ChatOutcome, string) {
 		if t.Model == "" {
 			model = "its default"
 		}
-		return core.ChatFailed, fmt.Sprintf("claude rejected the model %s (model_not_found): it doesn't exist, or this account can't use it. Start a new conversation with another model, or set the Chat row's in Project Options → Models.", model)
+		return core.ChatFailed, fmt.Sprintf("claude rejected the model %s (model_not_found): it doesn't exist, or this account can't use it. Pick another in New conversation, or set the Chat row's in Project Options → Models.", model)
 	}
 	if end.ExitCode == 0 && end.Signal == "" && end.Result != nil && !end.Result.IsError {
 		return core.ChatDone, ""
@@ -202,12 +194,7 @@ func chatOutcome(t core.ChatTurn, end turnEnd) (core.ChatOutcome, string) {
 // denialsItem is the item listing the distinct calls a Chat turn had
 // denied.
 func denialsItem(ds []denial, now time.Time) core.SessionEvent {
-	var b strings.Builder
-	b.WriteString("Auto mode denied these calls:\n")
-	for _, d := range distinct(ds) {
-		fmt.Fprintf(&b, "\n- `%s`", d.pattern())
-	}
-	return core.SessionEvent{Time: now, Kind: eventDenials, Text: b.String()}
+	return core.SessionEvent{Time: now, Kind: eventDenials, Text: "Auto mode denied these calls:\n" + denialList(ds)}
 }
 
 // chatWorktreeAtBase makes the Chat worktree wt detached at the base's
@@ -250,8 +237,9 @@ func chatPrompt(project, wt string) string {
 // or with the outcome when the reply didn't fail, so a first turn that
 // failed before claude said anything leaves the Conversation with no
 // session. The turn's usage waits until Code Central has the session,
-// since it files usage by session. A post that fails is dropped, but for
-// the session, which goes with the next: it never fails the turn.
+// since it files usage by session; if it never gets it, the usage is
+// dropped, as Code Central would drop it. A post that fails is dropped,
+// but for the session, which goes with the next: it never fails the turn.
 type chatPoster struct {
 	f       *factory
 	base    core.PostChatEventsInput // the Conversation, Factory and host
@@ -260,13 +248,13 @@ type chatPoster struct {
 	mu sync.Mutex
 	// items wait for the next post.
 	items []core.SessionEvent
-	// report says the session ID and Resume Command are yet to be
-	// posted; usage waits until they have been.
-	report        bool
-	resumeCommand string
-	usage         []core.UsageResponse
+	// sessionUnposted says the session ID and Resume Command are yet to
+	// be posted; usage waits until they have been.
+	sessionUnposted bool
+	resumeCommand   string
+	usage           []core.UsageResponse
 
-	ended chan core.PostChatEventsInput // the outcome, from end
+	ended chan chatEnd // the outcome, from end
 	done  chan struct{}
 }
 
@@ -274,8 +262,8 @@ func (f *factory) newChatPoster(t core.ChatTurn, session, wt string) *chatPoster
 	return &chatPoster{
 		f:       f,
 		base:    core.PostChatEventsInput{Conversation: t.Conversation, Factory: factoryName, Host: f.host},
-		session: session, report: t.First, resumeCommand: chatResumeCommand(wt, session),
-		ended: make(chan core.PostChatEventsInput), done: make(chan struct{}),
+		session: session, sessionUnposted: t.First, resumeCommand: chatResumeCommand(wt, session),
+		ended: make(chan chatEnd), done: make(chan struct{}),
 	}
 }
 
@@ -290,7 +278,7 @@ func (p *chatPoster) add(e core.SessionEvent) {
 // Code Central has the session.
 func (p *chatPoster) addUsage(r core.UsageResponse) {
 	p.mu.Lock()
-	if p.report {
+	if p.sessionUnposted {
 		p.usage = append(p.usage, r)
 		p.mu.Unlock()
 		return
@@ -308,29 +296,36 @@ func (p *chatPoster) run() {
 	for {
 		select {
 		case <-tick.C:
-			p.post(core.PostChatEventsInput{})
-		case out := <-p.ended:
-			p.post(out)
+			p.post(chatEnd{})
+		case e := <-p.ended:
+			p.post(e)
 			return
 		}
 	}
 }
 
+// chatEnd is how a reply ended: its outcome, with error text msg on a
+// failed one. The zero chatEnd is a reply still running.
+type chatEnd struct {
+	outcome core.ChatOutcome
+	msg     string
+}
+
 // end posts the outcome, with error text msg on a failed one, after the
 // items still waiting, and returns once it has been posted or dropped.
 func (p *chatPoster) end(outcome core.ChatOutcome, msg string) {
-	p.ended <- core.PostChatEventsInput{Outcome: outcome, Error: msg}
+	p.ended <- chatEnd{outcome, msg}
 	<-p.done
 }
 
-// post posts the waiting items, with out's outcome if it has one. Nothing
-// is posted when there is neither.
-func (p *chatPoster) post(out core.PostChatEventsInput) {
+// post posts the waiting items, with e's outcome if the reply has ended.
+// Nothing is posted when there is neither.
+func (p *chatPoster) post(e chatEnd) {
 	in := p.base
-	in.Outcome, in.Error = out.Outcome, out.Error
+	in.Outcome, in.Error = e.outcome, e.msg
 	p.mu.Lock()
 	in.Items, p.items = p.items, nil
-	reporting := p.report && (len(in.Items) > 0 || in.Outcome != "" && in.Outcome != core.ChatFailed)
+	reporting := p.sessionUnposted && (len(in.Items) > 0 || in.Outcome != "" && in.Outcome != core.ChatFailed)
 	if reporting {
 		in.SessionID, in.ResumeCommand = p.session, p.resumeCommand
 	}
@@ -346,7 +341,7 @@ func (p *chatPoster) post(out core.PostChatEventsInput) {
 	}
 	p.mu.Lock()
 	usage := p.usage
-	p.report, p.usage = false, nil
+	p.sessionUnposted, p.usage = false, nil
 	p.mu.Unlock()
 	for _, r := range usage {
 		p.f.usage.add(p.session, r)
