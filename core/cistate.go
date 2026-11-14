@@ -15,13 +15,13 @@ import (
 // Runs, its CI responses and every Ticket's pushed commits as one read
 // has them. For each Ticket it answers its CI result and the commit the
 // result comes from, whether it is CI failed, CI cancelled or CI
-// unavailable, whether the CI gate holds it waiting on a running result,
-// its pending Re-run requests and the CI item that lists it. Each
-// Ticket's answers are worked out the first time they are asked for and
-// kept for the rest of the read, as are the Project's runs and CI items,
-// so a reader of one Ticket pays for that Ticket and the Tickets sharing
-// its commit, and a reader of every Ticket pays once. It is built inside
-// one store read and never kept past it.
+// unavailable, whether the CI gate holds it waiting on a running result
+// and its pending Re-run requests; the Project's evaluation groups the
+// Tickets waiting on CI into CI items. Each Ticket's answers are worked
+// out the first time they are asked for and kept for the rest of the
+// read, as are the Project's runs, so a reader of one Ticket pays for
+// that Ticket, and a reader of every Ticket pays once. It is built
+// inside one store read and never kept past it.
 type ciState struct {
 	c   *Core
 	r   store.Reader
@@ -31,9 +31,6 @@ type ciState struct {
 	runs     []store.CIRun
 	runsRead bool
 	tickets  map[int]*ticketCI
-	// ciItems are the Project's CI items, built on first use.
-	ciItems []ciItem
-	built   bool
 }
 
 // ticketCI is one Ticket's answers in its Project's CI state.
@@ -181,21 +178,6 @@ func (s *ciState) unavailable(a *ticketCI) *CIUnavailableView {
 	return view
 }
 
-// reason is t's CI reason, since when, and its detail, while a CI item
-// lists t: CI failed, else CI cancelled, else CI unavailable.
-func (s *ciState) reason(t store.Ticket) (reason NeedsMeReason, since time.Time, failure *CIFailureSummary, unavailable *CIUnavailableView) {
-	a := s.ticket(t)
-	switch {
-	case a.failure != nil:
-		return ReasonCIFailed, a.since, a.failure, nil
-	case a.cancelled:
-		return ReasonCICancelled, a.since, nil, nil
-	case a.unavailable != nil:
-		return ReasonCIUnavailable, a.unavailable.Pushed, nil, a.unavailable
-	}
-	return "", time.Time{}, nil, nil
-}
-
 // resultCommits are the pushed commits t's CI result reads, newest
 // first: under the CI gate those pushed since it last moved back to
 // Ready, any of which passing passes t; otherwise, or when it has pushed
@@ -309,15 +291,4 @@ func (s *ciState) view(t store.Ticket) (*PushedCommitView, CIResult, string, []C
 		runs = append(runs, ciRunView(s.p.Key, run))
 	}
 	return &PushedCommitView{Commit: a.latest.Commit, Pushed: a.latest.Pushed}, a.result, a.commit, runs
-}
-
-// failureOptions are the failure options the human may choose on t's CI
-// item while t is CI failed or CI cancelled, nil otherwise; see
-// ciItemOptions.
-func (s *ciState) failureOptions(t store.Ticket) []string {
-	it, ok := s.itemOf(t)
-	if !ok || it.reason == ReasonCIUnavailable {
-		return nil
-	}
-	return ciItemOptions(s.r, s.p, it)
 }

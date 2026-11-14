@@ -124,20 +124,21 @@ const (
 func isMap(labels []string) bool { return slices.Contains(labels, MapLabel) }
 
 // mapView is the Map block for Spec s with these Tickets, or nil when s
-// isn't a Map.
-func (c *Core) mapView(r store.Reader, key string, s store.Spec, tickets []store.Ticket) *MapView {
+// isn't a Map, reading their reasons from their Project's evaluation e.
+func mapView(e *evaluation, s store.Spec, tickets []store.Ticket) *MapView {
 	if !isMap(s.Labels) {
 		return nil
 	}
+	key := e.p.Key
 	id := DisplayID(key, s.Number)
 	v := &MapView{Guided: s.Tags[GuidedTag] == GuidedOn, CanWriteSpec: true, Requirements: []string{}}
-	for _, sp := range r.Specs(key) {
+	for _, sp := range e.r.Specs(key) {
 		if sp.Tags[MapTag] == id {
 			v.Requirements = append(v.Requirements, DisplayID(key, sp.Number))
 		}
 	}
 	for _, t := range tickets {
-		if reason, _ := c.reasonOf(r, key, t); reason != "" {
+		if reason, _ := e.reason(t); reason != "" {
 			v.NeedsYou++
 		}
 		v.CanWriteSpec = v.CanWriteSpec && finished(t.State)

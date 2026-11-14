@@ -688,24 +688,25 @@ func (c *Core) ticketView(r store.Reader, key string, t store.Ticket) TicketView
 		v.Moves = append(v.Moves, moveView(m))
 	}
 	pr, _ := r.Project(key)
-	ci := c.ciStateOf(r, pr)
-	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = ci.view(t)
+	// A write's view of t may come before t is stored.
+	e := c.evaluateWith(r, pr, t)
+	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = e.ci.view(t)
 	v.PullRequest = pullRequestView(t.PullRequest)
 	if t.SpecMerge != nil {
 		v.SpecMerge = &SpecMergeView{Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}
 	}
 	v.SpecLanded = specLanded(r, pr.Landing, key, t)
 	v.WaitingForSpec = waitingForSpec(r, pr.Landing, key, t)
-	if it, ok := ci.itemOf(t); ok {
+	if it, ok := e.itemOf(t); ok {
 		v.CIItem = ciItemView(r, pr, it)
 		if it.reason != ReasonCIUnavailable {
 			v.CIFailureOptions = v.CIItem.Options
 		}
 	}
-	v.LandAnyway = ci.landAnyway(t)
+	v.LandAnyway = e.ci.landAnyway(t)
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
-	v.NeedsMeReason, _ = c.reasonIn(r, ci, t)
+	v.NeedsMeReason, _ = e.reason(t)
 	v.AwaitingTriage, v.TriageActions = t.AwaitingTriage, ticketTriageActions(r, key, t)
 	v.SpecMergeTicket = t.SpecMergeTicket
 	return v

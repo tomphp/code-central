@@ -46,10 +46,10 @@ type CIFailureSummary struct {
 
 // ciFailureOptions are the failure options the human may choose on t's
 // CI item while t is CI failed or CI cancelled, nil otherwise, from its
-// Project's CI state.
+// Project's evaluation.
 func (c *Core) ciFailureOptions(r store.Reader, key string, t store.Ticket) []string {
 	p, _ := r.Project(key)
-	return c.ciStateOf(r, p).failureOptions(t)
+	return c.evaluate(r, p).failureOptions(t)
 }
 
 // latestPushed is t's latest pushed commit, the one its CI result comes
@@ -82,7 +82,8 @@ func fixTicketOpen(r store.Reader, p store.Project, commit string) bool {
 // every Ticket the item lists, each of which gets a change notice. done
 // says the response is already recorded, so choosing it again changes
 // nothing; whyNot says why op isn't offered. Each reads the Project's CI
-// state as it was before the response.
+// state as it was before the response, and the item and its options
+// come from the Project's evaluation then.
 func (c *Core) respondCI(key, op string, ref Ref, full bool, done func(*ciState, store.Ticket) bool,
 	whyNot func(*ciState, store.Ticket) string, apply func(p *store.Project, commit string, runs []store.CIRun)) (Written[TicketView], error) {
 	var v Written[TicketView]
@@ -101,19 +102,19 @@ func (c *Core) respondCI(key, op string, ref Ref, full bool, done func(*ciState,
 		if !full {
 			before = c.ticketView(w, key, t)
 		}
-		ci := c.ciStateOf(w, p)
-		if t.State == store.Accepted && len(t.PushedCommits) > 0 && done(ci, t) {
+		e := c.evaluate(w, p)
+		if t.State == store.Accepted && len(t.PushedCommits) > 0 && done(e.ci, t) {
 			v, err = acknowledge(before, c.ticketView(w, key, t), full)
 			return err
 		}
-		if !slices.Contains(ci.failureOptions(t), op) {
-			return &Error{Code: ActionNotAllowed, Message: whyNot(ci, t)}
+		if !slices.Contains(e.failureOptions(t), op) {
+			return &Error{Code: ActionNotAllowed, Message: whyNot(e.ci, t)}
 		}
-		it, _ := ci.itemOf(t)
+		it, _ := e.itemOf(t)
 		for _, o := range it.tickets {
 			listed = append(listed, o.Number)
 		}
-		apply(&p, latestPushed(t).Commit, ci.ticket(t).runs)
+		apply(&p, latestPushed(t).Commit, e.ci.ticket(t).runs)
 		if err := w.PutProject(p); err != nil {
 			return err
 		}
