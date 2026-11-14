@@ -10,7 +10,9 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { FakeApi } from "../api/fake";
+import { FakeApi } from "../api/fake";
+import type { NeedsMeReason } from "../api/types";
+import { failCI } from "../ciTesting";
 import { change, renderApp, waiting, waitingTickets, without } from "./focusTesting";
 
 // popupOn is waitingTickets with Focus Pop-up on: acme-2 Failed, then acme-3
@@ -215,7 +217,121 @@ describe("Focus Pop-up", () => {
   );
 });
 
+describe("Focus Pop-up after a close", () => {
+  // roundOn is waiting with Focus Pop-up on and only acme-1's Round in
+  // Needs Me.
+  function roundOn() {
+    const fake = waiting();
+    fake.seedOptions({ focus_popup: "on" });
+    fake.setNeedsMe(fake.needsMeGroups.filter((g) => g.reason === "needs_answer"));
+    return fake;
+  }
+  // stillClosed sends a notice that changes nothing and waits for the
+  // App to read Needs Me again, so a popup that would open has had its
+  // chance.
+  async function stillClosed(fake: FakeApi) {
+    const read = vi.spyOn(fake, "needsMe");
+    change(fake, fake.needsMeGroups);
+    await waitFor(() => expect(read).toHaveBeenCalled());
+    await act(async () => {});
+    noPopup();
+  }
+
+  it("stays closed for a Round closed unread", async () => {
+    const fake = waiting();
+    fake.seedOptions({ focus_popup: "on" });
+    const [round, failed, inReview] = fake.needsMeGroups;
+    fake.setNeedsMe([failed, round, inReview]);
+    renderApp(fake, "/?view=inbox");
+    await heading("Flaky build");
+    await close();
+    await stillClosed(fake);
+  });
+
+  it("stays closed for a Round closed read", async () => {
+    const fake = roundOn();
+    renderApp(fake, "/?view=inbox");
+    await heading("Which colour?");
+    await close();
+    await stillClosed(fake);
+  });
+
+  it("opens again for a new Round on a Ticket it closed on", async () => {
+    const fake = roundOn();
+    renderApp(fake, "/?view=inbox");
+    await heading("Which colour?");
+    await close();
+
+    const t = await fake.getTicket("acme", "acme-1");
+    const answered = t.rounds.map((r) => ({ ...r, questions: r.questions.map((q) => ({ ...q, status: "answered" as const, answer: "Yes" })) }));
+    const next = { number: 2, claim: 1, posted: fake.now.toISOString(), questions: [{ number: 1, title: "Which shape?", body: "Round or square", status: "open" as const }] };
+    fake.updateTicket("acme-1", { rounds: [...answered, next] });
+    change(fake, [{ reason: "needs_answer", tickets: [{ id: "acme-1", round: { number: 2, open: 1, questions: 1 } }] }]);
+    expect(await heading("Which shape?")).toBeInTheDocument();
+  });
+
+  it("opens again for a Ticket it closed on, waiting for a new reason", async () => {
+    const fake = popupOn();
+    renderApp(fake, "/?view=inbox&project=acme");
+    await heading("Flaky build");
+    await close();
+
+    fake.updateTicket("acme-2", { state: "In Review" });
+    change(fake, [{ reason: "in_review", tickets: [{ id: "acme-2", summary: "Fixed the build" }, { id: "acme-3", summary: "Added the login page" }] }], "acme-2");
+    expect(await heading("Flaky build")).toBeInTheDocument();
+    expect(within(popup()).getByText("2 left")).toBeInTheDocument();
+  });
+
+  it("opens again for a new CI item of a Project it closed on", async () => {
+    const fake = new FakeApi();
+    fake.seedOptions({ focus_popup: "on" });
+    fake.addProject("acme", "Acme");
+    fake.addTicket("acme", { title: "Basket", state: "Accepted", branch: "acme-1", commit: "abc" }); // acme-1
+    const item = await failCI(fake, "acme", ["acme-1"]);
+    renderApp(fake, "/?view=inbox");
+    await heading("CI failed at abc1234");
+    await close();
+    await stillClosed(fake);
+
+    const [row] = fake.needsMeGroups[0].tickets;
+    change(fake, [{ reason: "ci_failed", tickets: [{ ...row, title: "CI failed at def5678", ci_item: { ...item, commit: "def5678901" } }] }]);
+    expect(await heading("CI failed at def5678")).toBeInTheDocument();
+  });
+});
+
 describe("Focus Pop-up and Focus Kinds", () => {
+  // Each row is a Focus Item or not by its own Project's Focus Kinds, as
+  // core marks it: here acme has Answered, CI failed and Base diverged
+  // off, beta has nothing off.
+  // rowOf is Needs Me's one row, of reason in project: a Ticket's, a CI
+  // item's or a Base diverged item's.
+  function rowOf(fake: FakeApi, reason: NeedsMeReason, project: string) {
+    if (reason === "ci_failed") return { id: "", project, title: "CI failed at aaa1111", ci_item: { reason, commit: "aaa1111222", tickets: [], options: [] } };
+    if (reason === "base_diverged") return { id: "", project, title: "Base diverged", base_diverged: { base: "main", local: "aaa1111222", remote: "bbb2222333" } };
+    return { id: fake.addTicket(project, { title: "Waiting", state: reason === "answered" ? "Answered" : "Failed" }).id };
+  }
+  it.each<[string, boolean, NeedsMeReason, string, string?]>([
+    ["an Answered Ticket in a Project with Answered off", false, "answered", "acme"],
+    ["the same, with that Project chosen", false, "answered", "acme", "acme"],
+    ["an Answered Ticket in another Project", true, "answered", "beta"],
+    ["a reason left on in that Project", true, "failed", "acme"],
+    ["a CI item of a reason off in its Project", false, "ci_failed", "acme"],
+    ["a CI item of that reason in another Project", true, "ci_failed", "beta"],
+    ["a Base diverged item of a Project with it off", false, "base_diverged", "acme"],
+    ["a Base diverged item of another Project", true, "base_diverged", "beta"],
+  ])("with %s, opens: %s", async (_, opens, reason, project, chosen) => {
+    const fake = new FakeApi();
+    fake.seedOptions({ focus_popup: "on" });
+    fake.addProject("acme", "Acme");
+    fake.addProject("beta", "Beta");
+    await fake.setFocusKinds("acme", ["answered", "ci_failed", "base_diverged"]);
+    fake.setNeedsMe([{ reason, tickets: [rowOf(fake, reason, project)] }]);
+    await settled(fake, `/?view=inbox${chosen ? `&project=${chosen}` : ""}`);
+    await act(async () => {});
+    if (opens) expect(await screen.findByRole("dialog", { name: "Focus popup" })).toBeInTheDocument();
+    else noPopup();
+  });
+
   // projectRead waits for the Projects to be read again after a saved
   // change to Focus Kinds, and for the App to render what it read.
   async function projectRead(fake: FakeApi, change: () => Promise<unknown>) {

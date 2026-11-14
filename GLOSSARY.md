@@ -384,7 +384,7 @@ The Option that has the Focus popup open by itself, with every Focus Item in Nee
 _Avoid_: auto popup, needs-me popup, auto focus
 
 **Focus popup**:
-A popup showing Focus Items one at a time in the view Focus Mode also uses. It shows either a Board Ticket card's Ticket's Focus Items (its CI item's, for a Ticket listed in one), even of a reason its Project's Focus Kinds leave off, or, under Focus Pop-up, every Focus Item in the view's scope, with Skip and N left. It opens by itself only once no other popup is open and no text field has focus. It closes once none is left, whoever dealt with them, or, under Focus Pop-up, once only skipped ones are.
+A popup showing Focus Items one at a time in the view Focus Mode also uses. It shows either a Board Ticket card's Ticket's Focus Items (its CI item's, for a Ticket listed in one), even of a reason its Project's Focus Kinds leave off, or, under Focus Pop-up, every Focus Item in the view's scope, with Skip and N left. When the Focus Item on screen is dealt with, it shows the same notes as Focus Mode: it moves on silently when the human acted on it there, and with a brief "Dealt with elsewhere" note over the next item when someone else did. It opens by itself only once no other popup is open and no text field has focus. It closes once none is left, whoever dealt with them, or, under Focus Pop-up, once only skipped ones are.
 _Avoid_: needs-me popup, action popup
 
 **Ticket popup**:

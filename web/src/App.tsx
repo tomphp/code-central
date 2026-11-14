@@ -17,7 +17,7 @@ import { CIView } from "./ci/CIView";
 import { ActivityView } from "./activity/ActivityView";
 import { BoardView } from "./board/BoardView";
 import { FocusPopup } from "./board/FocusPopup";
-import { usePopupTrigger } from "./focus/popupTrigger";
+import { usePopupTrigger } from "./focus/session";
 
 export interface AppProps {
   api: Api;
