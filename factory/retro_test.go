@@ -9,6 +9,10 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
+// sessionLogsRule opens what a Retro's system prompt says about where
+// Claude Code keeps session logs.
+const sessionLogsRule = "Claude Code keeps each session's log in its projects folder"
+
 func TestARetroStartsTheRetroSkillReadOnlyInADetachedWorktreeAtTheBasesTip(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
@@ -28,7 +32,7 @@ func TestARetroStartsTheRetroSkillReadOnlyInADetachedWorktreeAtTheBasesTip(t *te
 		"The Factory has already claimed this Ticket for you: Claim " + c.Claim + " is yours",
 		"in a detached, read-only worktree at the base's tip, for this retro Ticket.",
 		"It writes nothing to the repository: no files, no commits and no branches.",
-		"Claude Code keeps each session's log in its projects folder",
+		sessionLogsRule,
 		"`<projects folder>/<working_dir with every non-alphanumeric character replaced by '-'>/<session_id>.jsonl`",
 		"that session's subagents' logs are under `<session_id>/subagents/` beside it",
 		"The Stage Guide for retro follows: what this Ticket must produce and how to finish it.\n\n" + guide(t, h, core.RetroLabel),
@@ -69,7 +73,7 @@ func TestOnlyARetrosSystemPromptSaysWhereSessionLogsAre(t *testing.T) {
 	}
 
 	for _, c := range h.Calls() {
-		if strings.Contains(c.SystemPrompt, "session's log") {
+		if strings.Contains(c.SystemPrompt, sessionLogsRule) {
 			t.Errorf("%s: system prompt %q says where session logs are", c.Ticket, c.SystemPrompt)
 		}
 	}
