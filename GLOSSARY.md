@@ -159,6 +159,9 @@ _Avoid_: Merge, ship, deliver, complete
 A Project's choice of how accepted work reaches its base. It is Merge (the Factory merges the branch into the base), Branch (the Factory leaves the branch for the human to merge, and lands the Ticket when it sees the merge) or Pull Request (the Factory pushes the branch and a pull request is opened on the Code Host). Merge and Branch have Push as an option, and Pull Request implies it; Land per Spec applies under Merge and Pull Request, and has no effect under Branch.
 _Avoid_: Completion option, delivery mode, finish mode
 
+**Landing Policy**:
+The rules by which a Project's Landing Method, Push, Land per Spec and CI Tracking together decide how its accepted work lands: whether the CI gate holds, whether Land anyway is offered, whether a Ticket is To merge, whether the Pull Request Watcher runs, and the like. Every landing rule is one of its rules.
+
 **Pull Request**:
 The third Landing Method: the Factory pushes the accepted branch to the Push remote, a Pull Request Watcher opens a pull request into the base on the Code Host, and the Ticket lands when the host reports it merged. Push is implied.
 _Avoid_: PR, merge request
