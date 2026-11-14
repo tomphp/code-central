@@ -102,12 +102,12 @@ const cells = (row: HTMLElement) =>
   );
 
 describe("opening and leaving the CI view", () => {
-  it("opens from the Admin section, after Usage, on the sidebar's Project, and returns to the Inbox", async () => {
+  it("opens from the Admin section, before Usage, on the sidebar's Project, and returns to the Inbox", async () => {
     renderApp(await world(), "/?view=inbox&project=acme&state=Accepted");
     const link = within(nav()).getByRole("link", { name: "CI" });
     const usage = within(nav()).getByRole("link", { name: "Usage" });
     expect(
-      usage.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING,
+      link.compareDocumentPosition(usage) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(link).toHaveAttribute(
       "href",
