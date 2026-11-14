@@ -3,3 +3,5 @@ web/dist/
 node_modules/
 web/storybook-static/
 __pycache__/
+web/src/api/core/core.wasm
+web/src/api/core/wasm_exec.js

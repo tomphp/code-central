@@ -82,6 +82,11 @@ jobs:
       - name: go test
         run: go test -v ./...
 
+      # The WASM Core the UI's tests run on, as `make corewasm` builds it.
+      # A failing js build fails the run here.
+      - name: core.wasm
+        run: go run ./internal/corewasm web/src/api/core
+
       - name: vitest
         working-directory: web
         run: npx vitest run
