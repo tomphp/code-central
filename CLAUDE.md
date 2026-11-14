@@ -20,6 +20,8 @@ Never run `serve`, `init`, `service install/uninstall`, `pkill`, a restart or a 
 
 Adding or changing an operation, or a store file: see `docs/agents/recipes.md`.
 
+To run the UI and look at a change: see `docs/agents/running-the-ui.md`.
+
 To learn a Go API, read `go doc ./<pkg> <Name>` before the source.
 
 ## Checks
