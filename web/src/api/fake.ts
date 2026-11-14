@@ -202,7 +202,8 @@ interface FakeUsageRecord extends UsageResponse {
 // KIND_ORDER is the order Usage lists kinds of session in; any other kind follows, by name.
 const KIND_ORDER = ["grilling", "spec", "tickets", "implementation", "review", "subagent"];
 
-// RECENT_SESSIONS is how many sessions a Usage read lists.
+// RECENT_SESSIONS is how many main sessions a Usage read lists, each with
+// all of its Subagents.
 const RECENT_SESSIONS = 50;
 
 // localDay numbers t's day in the local time zone, as the service dates Usage.
@@ -220,27 +221,66 @@ function contextSize(r: UsageResponse): number {
   return r.input_tokens + r.cache_write_tokens + r.cache_read_tokens;
 }
 
-// usageSessions are the sessions the responses belong to, newest first, as
-// the service works them out: a session is its session ID plus its agent,
-// with the Claim and kind of its latest response, and its models in
-// order of first use, whatever order the responses were posted in.
-function usageSessions(responses: FakeUsageRecord[]): UsageSession[] {
+// usageSessions are the sessions the responses belong to as the service
+// works them out: all of them, main sessions and Subagents alike, and the
+// main sessions, newest first, each with its Subagents, oldest first. A
+// session is its session ID plus its agent, with the Claim and kind of its
+// latest response, its models in order of first use, and a Subagent's
+// latest non-empty Agent Type and description, whatever order the
+// responses were posted in. A main session with no responses of its own,
+// because its turn started before the range, takes its start from its
+// first Subagent and its Claim from their latest response.
+function usageSessions(responses: FakeUsageRecord[]): { all: UsageSession[]; mains: UsageSession[] } {
   const byKey = new Map<string, UsageSession>();
+  const newSession = (r: FakeUsageRecord, agent?: string): UsageSession => ({
+    project: r.project,
+    ticket: r.ticket,
+    claim: r.claim,
+    session_id: r.session_id,
+    ...(agent ? { agent } : {}),
+    kind: "",
+    started: r.time,
+    peak: 0,
+    responses: 0,
+    models: [],
+    tokens: 0,
+    subagents: [],
+  });
+  // latestSubagent is each session ID's latest Subagent response.
+  const latestSubagent = new Map<string, FakeUsageRecord>();
   for (const r of [...responses].sort((a, b) => Date.parse(a.time) - Date.parse(b.time))) {
     const key = `${r.session_id}\u0000${r.agent ?? ""}`;
     let s = byKey.get(key);
     if (!s) {
-      s = { project: "", ticket: "", claim: 0, session_id: r.session_id, ...(r.agent ? { agent: r.agent } : {}), kind: "", started: r.time, peak: 0, responses: 0, models: [] };
+      s = newSession(r, r.agent);
       byKey.set(key, s);
     }
     s.responses++;
     s.peak = Math.max(s.peak, contextSize(r));
+    s.tokens += contextSize(r) + r.output_tokens;
     if (r.model && !s.models.includes(r.model)) s.models.push(r.model);
     Object.assign(s, { project: r.project, ticket: r.ticket, claim: r.claim, kind: r.kind });
+    if (r.agent) {
+      if (r.agent_type) s.agent_type = r.agent_type;
+      if (r.description) s.description = r.description;
+      latestSubagent.set(r.session_id, r);
+    }
   }
+  const all = [...byKey.values()];
+  const byID = new Map(all.filter((s) => !s.agent).map((s) => [s.session_id, s]));
+  for (const [id, r] of latestSubagent) {
+    if (!byID.has(id)) byID.set(id, newSession(r));
+  }
+  for (const s of all) if (s.agent) byID.get(s.session_id)!.subagents.push(s);
   const by = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-  return [...byKey.values()]
-    .sort((a, b) => Date.parse(b.started) - Date.parse(a.started) || by(a.session_id, b.session_id) || by(a.agent ?? "", b.agent ?? ""));
+  const mains = [...byID.values()];
+  for (const m of mains) {
+    m.subagents.sort((a, b) => Date.parse(a.started) - Date.parse(b.started) || by(a.agent ?? "", b.agent ?? ""));
+    if (!m.responses) m.started = m.subagents[0].started;
+    m.total_tokens = m.tokens + m.subagents.reduce((n, s) => n + s.tokens, 0);
+  }
+  mains.sort((a, b) => Date.parse(b.started) - Date.parse(a.started) || by(a.session_id, b.session_id));
+  return { all, mains };
 }
 
 // usageKinds is each kind of session's Context Size figures, in KIND_ORDER.
@@ -2068,27 +2108,32 @@ export class FakeApi implements Api {
       .map((r) => ({ ...r, average_request_bytes: average(r.request_bytes, r.calls), average_response_bytes: average(r.response_bytes, r.calls) }))
       .sort((a, b) => b.calls - a.calls || (a.op < b.op ? -1 : 1));
     const responses = this.usageResponses.filter(inRange);
-    const sessions = usageSessions(responses);
-    return { operations, kinds: usageKinds(sessions), sessions: sessions.slice(0, RECENT_SESSIONS), days: usageDays(this.now, days, responses) };
+    const { all, mains } = usageSessions(responses);
+    return { operations, kinds: usageKinds(all), sessions: mains.slice(0, RECENT_SESSIONS), days: usageDays(this.now, days, responses) };
   }
 
   async sessionUsage({ project, session, agent }: SessionUsageFilter): Promise<SessionUsageView> {
     this.calls.push("sessionUsage");
     if (!this.projects.has(project)) throw new ApiError(404, "not_found", `no Project "${project}"`);
     const key = sessionKey({ project, session, agent });
-    const responses = this.usageResponses
+    const mine = this.usageResponses
       // Every day Usage keeps, whatever range the rest of Usage reads.
       .filter((r) => sessionKey({ project: r.project, session: r.session_id, agent: r.agent }) === key && this.withinDays(r.time, USAGE_KEPT_DAYS + 1))
-      .sort((a, b) => Date.parse(a.time) - Date.parse(b.time))
-      .map((r) => ({
+      .sort((a, b) => Date.parse(a.time) - Date.parse(b.time));
+    const out: SessionUsageView = { responses: [] };
+    for (const r of mine) {
+      if (r.agent_type) out.agent_type = r.agent_type;
+      if (r.description) out.description = r.description;
+      out.responses.push({
         time: r.time,
         context_size: contextSize(r),
         input_tokens: r.input_tokens,
         cache_write_tokens: r.cache_write_tokens,
         cache_read_tokens: r.cache_read_tokens,
         output_tokens: r.output_tokens,
-      }));
-    return { responses };
+      });
+    }
+    return out;
   }
 
   // ---- internals ----
