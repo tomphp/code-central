@@ -415,6 +415,17 @@ acme-shop-11 claimed (map-research): "Which colour libraries exist?" in Spec acm
 
 Its system prompt tells the session to commit its findings on that branch only, with no push and no PR, to record where they are in a `research` Tag (`research/acme-shop-11@9f8e7d6`), and to finish with no branch. Accepting it makes it Done straight away, whatever the Landing Method, with nothing merged, pushed or landed. The Factory removes its worktree once it is Done or Cancelled and never deletes the `research/` branch, so `git show research/acme-shop-11` still finds the findings.
 
+A **Retro** is a Ticket labelled `retro` on the Project's Retros Spec, a Long-lived Spec Code Central creates on first use. Ask for one on a finished Ticket (Done or Cancelled) or Spec with `code-central submit-retro <ticket|spec> [--note "…"]` (or `submit_retro` over MCP); it opens Ready, titled "Retro: " and the target's title, and its description lists every Claim on the work to read. The Factory claims it with `/retro`, as the table shows. It looks back over those sessions and proposes changes to the agents' environment, and its work never lands:
+
+```console
+$ code-central submit-retro acme-shop-4 --note "Why did this take three redos?"
+{
+  "id": "acme-shop-12",
+  "state": "Ready"
+…
+}
+```
+
 A Ticket with any of these Labels is never run as an implementation Ticket.
 
 Selecting the Map in the **Requirements** view opens the Map view: **New Prototype** and its Destination, then its Tickets as a graph read left to right, each Blocker before what it blocks, coloured like the Stage strip, and a dim **Not yet specified** node at the right edge that shows that section when clicked. A Draft Ticket that nothing blocks is on the frontier: click **Start** on its node to approve it to Ready, and the Factory claims it within a poll. Clicking a node opens its Ticket below. **Decisions so far** and **Out of scope** sit beside the graph.

@@ -8,6 +8,7 @@ Specs and Tickets for this repository live in Code Central, through the `code-ce
 | Fetch the relevant ticket | `get_ticket` (`parts` adds Rounds, moves and edits) or `get_spec` (which takes `parts` and `sections` to read less; `sections` without `parts` returns only the body) |
 | Search or list issues | `find_tickets` (`full`: whole Tickets) or `find_specs` |
 | Comment | `comment` |
+| Look back over finished work | `submit_retro` |
 | Apply or remove a label | `add_labels` or `remove_labels` |
 
 Triage roles are in `triage-labels.md`.
