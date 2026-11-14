@@ -1,8 +1,7 @@
 // The one API module: everything the UI reads, every human action and the
 // live feed go through an Api. createHttpApi (http.ts) is the real one,
-// which tests and stories run on the WASM Core (core/core.ts); FakeApi
-// (fake.ts) is the in-memory fake older tests still use. contract.ts pins
-// createHttpApi on the WASM Core and against the real service.
+// which tests and stories run on the WASM Core (core/core.ts). contract.ts
+// pins createHttpApi on the WASM Core and against the real service.
 import type {
   AutoAccept,
   ChangeEvent,
@@ -41,8 +40,7 @@ import type {
 // and result. Every one is `POST /api/p/{key}/tickets/{n}/{action}` with
 // that body, so adding an action needs no new Api method: a panel's
 // ticket declares its action by merging into this interface from its own
-// file under ./actions/ (actions/move.ts is the example), which also adds
-// the fake's behaviour with registerFakeAction (fakeActions.ts).
+// file under ./actions/ (actions/move.ts is the example).
 //
 //   declare module "../api" {
 //     interface TicketActions { answer: { body: { question: number; answer: string }; result: TicketView } }

@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { newWorld, type World } from "../api/core/core";
 import { scenario } from "../api/scenario";
-import { loadedDashboard } from "../focus/focusTesting";
+import { loadedDashboard } from "../focus/worldTesting";
 
 async function projects() {
   const w = await newWorld();

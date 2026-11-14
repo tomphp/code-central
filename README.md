@@ -86,7 +86,7 @@ Read them in this order:
 
 ## Developing the UI
 
-`code-central serve` and `npm --prefix web run dev` run the app with hot reload (Vite serves the UI on :5173 and proxies `/api` to the service). `make serve-components` serves a component browser, a Storybook of the UI's shared components, on http://localhost:6006; `make build-components` builds it into `web/storybook-static` to check it. It needs Node, and is a dev tool only: it isn't in the built UI or in `make test`. Each shared component has a `*.stories.tsx` beside it; see [Recipes](docs/agents/recipes.md). `make test`, `make vitest` and both component targets first run `make corewasm`, which builds the real Core to WebAssembly for the UI's tests and stories, into `web/src/api/core/core.wasm` (git-ignored, never in the built UI).
+`code-central serve` and `npm --prefix web run dev` run the app with hot reload (Vite serves the UI on :5173 and proxies `/api` to the service). `make serve-components` serves a component browser, a Storybook of the UI's shared components, on http://localhost:6006; `make build-components` builds it into `web/storybook-static` to check it. It needs Node, and is a dev tool only: it isn't in the built UI or in `make test`. Each shared component has a `*.stories.tsx` beside it, whose world the scenario builder makes on the WASM Core, with no service behind it; see [Recipes](docs/agents/recipes.md). `make test`, `make vitest` and both component targets first run `make corewasm`, which builds the real Core to WebAssembly for the UI's tests and stories, into `web/src/api/core/core.wasm` (git-ignored, never in the built UI).
 
 ## Running the service
 
