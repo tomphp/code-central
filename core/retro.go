@@ -150,3 +150,22 @@ func claimToRead(cl store.Claim) string {
 const retrosSpecBody = "This Spec holds the Retros the human opens on finished work. " +
 	"Each reads the sessions of that work's Claims and proposes changes to the agents' environment; " +
 	"the Tickets for the changes the human picks open here too.\n"
+
+// RetroView is a Retro as a read of its target lists it.
+type RetroView struct {
+	ID    string      `json:"id"`
+	Title string      `json:"title"`
+	State store.State `json:"state"`
+}
+
+// retrosOf lists the Retros whose retro-of Tag names target, oldest first,
+// or nil when there are none.
+func retrosOf(r store.Reader, key, target string) []RetroView {
+	var out []RetroView
+	for _, t := range r.Tickets(key) {
+		if t.Tags[RetroOfTag] == target && slices.Contains(t.Labels, RetroLabel) {
+			out = append(out, RetroView{ID: DisplayID(key, t.Number), Title: t.Title, State: t.State})
+		}
+	}
+	return out
+}
