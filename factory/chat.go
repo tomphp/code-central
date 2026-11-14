@@ -56,6 +56,9 @@ func (f *factory) chatLoop(ctx context.Context) {
 		}
 	}()
 	var turnRunning sync.Mutex // held by the running turn
+	// stops ends a Conversation's turn, by its ID, when a stop asks.
+	var stopsMu sync.Mutex
+	stops := map[string]context.CancelFunc{}
 	failing := false
 	for pollCtx.Err() == nil {
 		w, err := f.client.NextChatWork(pollCtx, f.project, core.NextChatWorkInput{Factory: factoryName, Host: f.host})
@@ -74,17 +77,35 @@ func (f *factory) chatLoop(ctx context.Context) {
 			continue
 		}
 		failing = false
+		if w.Stop != nil {
+			stopsMu.Lock()
+			if stop := stops[w.Stop.Conversation]; stop != nil {
+				stop()
+			}
+			stopsMu.Unlock()
+			continue
+		}
 		if w.Turn == nil {
 			continue
 		}
+		turnCtx, stop := context.WithCancel(ctx)
+		stopsMu.Lock()
+		stops[w.Turn.Conversation] = stop
+		stopsMu.Unlock()
 		turns.Add(1)
 		go func(t core.ChatTurn) {
 			defer turns.Done()
+			defer func() {
+				stopsMu.Lock()
+				delete(stops, t.Conversation)
+				stopsMu.Unlock()
+				stop()
+			}()
 			// Code Central hands out a turn only once the reply before
 			// it has ended, which its turn posts just before it returns.
 			turnRunning.Lock()
 			defer turnRunning.Unlock()
-			f.runChatTurn(ctx, t)
+			f.runChatTurn(turnCtx, t)
 		}(*w.Turn)
 	}
 }
