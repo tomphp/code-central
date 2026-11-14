@@ -285,6 +285,27 @@ export class Scenario extends HttpDriver {
     return claim;
   }
 
+  // chatReply has the Factory holding a Conversation (the one a turn was
+  // taken for) post items of the running reply and, when it says so, how
+  // the reply ended, with the session's Resume Command on the first post.
+  async chatReply(
+    key: string,
+    conversation: string,
+    items: { kind?: string; text: string; tool?: string; tool_use_id?: string; is_error?: boolean }[],
+    end: { outcome?: "done" | "stopped" | "failed"; error?: string; resume_command?: string } = {},
+  ) {
+    await this.agent(`${this.projectPath(key)}/chat/events`, {
+      conversation,
+      factory: "code-central-factory",
+      host: "laptop",
+      session_id: end.resume_command ? "session-1" : "",
+      resume_command: end.resume_command ?? "",
+      items: items.map((i) => ({ time: "2026-11-07T09:00:00Z", kind: "text", ...i })),
+      outcome: end.outcome ?? "",
+      error: end.error ?? "",
+    });
+  }
+
   // archive has the human put the Project away.
   async archive(key: string) {
     await this.api.archiveProject(key);

@@ -2294,6 +2294,50 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       }
     });
 
+    // ---- Chat actions (Spec code-central-633) ----
+
+    it("reads no Conversation before one starts, and starts one with the Chat row's defaults on the first send", async () => {
+      await d.createProject("acme", "Acme");
+      await d.reportHeartbeat("acme", chatHeartbeat);
+      expect(await d.api.getChat("acme")).toMatchObject({ availability: "none", running: false, messages: [] });
+
+      await d.api.setModels("acme", { default: { model: "", effort: "" }, chat: { model: "sonnet", effort: "low" }, kinds: [] });
+      const sent = await d.api.sendChatMessage("acme", "Hello");
+      expect(sent).toMatchObject({ availability: "available", model: "sonnet", effort: "low", running: true, messages: [{ from: "human", text: "Hello" }, { from: "claude" }] });
+      expect(await d.api.getChat("acme")).toEqual(sent);
+    });
+
+    it("starts a Conversation with a picked model and effort, replacing the current one, and refuses a bad effort", async () => {
+      await d.createProject("acme", "Acme");
+      await d.reportHeartbeat("acme", chatHeartbeat);
+      const first = await d.api.startConversation("acme", { model: "", effort: "" });
+      expect(first).toMatchObject({ availability: "available", model: "haiku", running: false, messages: [] });
+
+      const second = await d.api.startConversation("acme", { model: "opus", effort: "high" });
+      expect(second).toMatchObject({ model: "opus", effort: "high" });
+      expect(second.id).not.toBe(first.id);
+
+      const refused = await d.api.startConversation("acme", { model: "opus", effort: "extreme" }).catch((e) => e);
+      expect(refused).toMatchObject({ status: 422, code: "invalid", field: "effort" });
+      expect((await d.api.getChat("acme")).id).toBe(second.id);
+    });
+
+    it("refuses a Chat Message while a reply runs, stops the reply, and refuses one with no Factory to answer", async () => {
+      await d.createProject("acme", "Acme");
+      const unavailable = await d.api.sendChatMessage("acme", "Hello").catch((e) => e);
+      expect(unavailable).toBeInstanceOf(ApiError);
+
+      await d.reportHeartbeat("acme", chatHeartbeat);
+      await d.api.sendChatMessage("acme", "Hello");
+      const busy = await d.api.sendChatMessage("acme", "Again").catch((e) => e);
+      expect(busy).toMatchObject({ status: 409, code: "action_not_allowed", allowed_actions: ["stop_chat_reply"] });
+
+      // No Factory has taken the turn, so Stop ends the reply at once.
+      const stopped = await d.api.stopChatReply("acme");
+      expect(stopped).toMatchObject({ running: false, messages: [{ from: "human" }, { from: "claude", outcome: "stopped" }] });
+      expect((await d.api.stopChatReply("acme")).running).toBe(false);
+    });
+
     // ---- Usage (Spec code-central-201) ----
 
     it("reads no Usage before any agent call, with a row of no tokens for every day in the range", async () => {

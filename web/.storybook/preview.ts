@@ -5,6 +5,7 @@ import type { Preview } from "@storybook/react-vite";
 import "../src/styles.css";
 import "../src/activity/activity.css";
 import "../src/board/board.css";
+import "../src/chat/chat.css";
 import "../src/ci/ci.css";
 import "../src/focus/focus.css";
 import "../src/options/options.css";

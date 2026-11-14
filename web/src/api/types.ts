@@ -1082,6 +1082,9 @@ export type ChangeEvent =
   | { type: "project.changed"; project: string }
   // ci.changed is a Project's CI Runs changing.
   | { type: "ci.changed"; project: string }
+  // chat.changed is a Project's Conversation changing: a new one, a reply
+  // starting or ending, or its availability changing.
+  | { type: "chat.changed"; project: string }
   // options.changed is about no Project: the Options changed.
   | { type: "options.changed" };
 
@@ -1241,13 +1244,20 @@ export interface SessionUsageView {
 export type ChatAvailability = "none" | "available" | "unavailable";
 export type ChatOutcome = "done" | "stopped" | "failed";
 
+// A reply's item: a Session Event, plus the log lines and the
+// permission_denials a Conversation holds as items of their own.
+export type ChatItemKind = SessionEventKind | "log" | "permission_denials";
+export interface ChatItem extends Omit<HeldSessionEvent, "kind"> {
+  kind: ChatItemKind;
+}
+
 // A Chat Message: the human's holds text; Claude's holds items in the
 // shape of Session Events, and an outcome once its reply has ended.
 export interface ChatMessage {
   from: "human" | "claude";
   time: string;
   text?: string;
-  items?: HeldSessionEvent[];
+  items?: ChatItem[];
   outcome?: ChatOutcome;
   error?: string;
 }

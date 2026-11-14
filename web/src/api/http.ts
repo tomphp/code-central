@@ -8,7 +8,7 @@ import {
   type ChatHandlers,
   type TranscriptHandlers,
 } from "./api";
-import { ApiError, type ChangeEvent, type ChatOutcome, type Conversation, type ChatMessage, type HeldSessionEvent } from "./types";
+import { ApiError, type ChangeEvent, type ChatOutcome, type Conversation, type ChatItem, type ChatMessage, type HeldSessionEvent } from "./types";
 
 export interface HttpApiOptions {
   // baseUrl is the service's origin; "" (the default) is the page's own.
@@ -130,6 +130,10 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
       }),
     transcript: (project, id, claim) => call("GET", transcriptPath(project, id, claim)),
     subscribeTranscript: (project, id, claim, h) => subscribeTranscript(doFetch, base + transcriptPath(project, id, claim) + "/stream", retryMs, h),
+    getChat: (project) => call("GET", `${p(project)}/chat`),
+    startConversation: (project, pick) => call("POST", `${p(project)}/start_conversation`, pick),
+    sendChatMessage: (project, text) => call("POST", `${p(project)}/send_chat_message`, { text }),
+    stopChatReply: (project) => call("POST", `${p(project)}/stop_chat_reply`, {}),
     subscribeChat: (project, h) => subscribeChat(doFetch, base + `/api/p/${encodeURIComponent(project)}/chat/stream`, retryMs, h),
   };
 }
@@ -182,7 +186,7 @@ function subscribeChat(doFetch: typeof fetch, url: string, retryMs: number, h: C
           h.onMessage?.(data as ChatMessage);
           break;
         case "item":
-          h.onItem?.(data as HeldSessionEvent);
+          h.onItem?.(data as ChatItem);
           break;
         case "outcome":
           h.onOutcome?.(data as { outcome: ChatOutcome; error?: string });
