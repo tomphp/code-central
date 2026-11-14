@@ -1,17 +1,19 @@
 // The plain Spec pane, for a Spec that is neither a Requirement nor a Map,
 // above the shared Ticket pane: the header (ID, title, submitted time, New
-// Prototype), its body, collapsed, the sums of its Tickets' CI badges, then the Spec's Tickets
+// Prototype, Retro), its body, collapsed, the sums of its Tickets' CI badges, then the Spec's Tickets
 // with their States.
 import type { Api } from "../api/api";
 import type { SpecDetail } from "../api/types";
 import { BodySection } from "../edit/BodySection";
 import { ago } from "../format";
-import { NewPrototype } from "../requirement/NewRequirement";
+import { specRetroable } from "../edit/editable";
+import { NewPrototype, NewRetro } from "../requirement/NewRequirement";
 import { CISums } from "../ticket/CIBadge";
 import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
 import { LandPerSpec } from "./LandPerSpec";
 import { SpecAutoAccept } from "./SpecAutoAccept";
+import { RetroList } from "./RetroList";
 import { TicketList } from "./TicketList";
 import { ShortId } from "../inbox/ShortId";
 
@@ -33,6 +35,7 @@ export function SpecPane({ api, spec, archived, now, ticket, select }: SpecPaneP
       <h2>{spec.title}</h2>
       <div className="spec-actions">
         <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {specRetroable(spec, !!archived) && <NewRetro api={api} target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
       </div>
@@ -45,6 +48,7 @@ export function SpecPane({ api, spec, archived, now, ticket, select }: SpecPaneP
       ) : (
         <TicketList label="Tickets" tickets={spec.tickets} now={now} ticket={ticket} select={select} />
       )}
+      <RetroList retros={spec.retros} select={select} />
     </section>
   );
 }

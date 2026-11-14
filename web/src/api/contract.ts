@@ -488,7 +488,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
     it("sets a Project's Models, a row per kind of work, all at Default to begin with", async () => {
       await d.createProject("acme", "Acme");
-      const kinds = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"];
+      const kinds = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "retro", "implementation"];
       const unset = { model: "", effort: "" };
       expect((await d.api.listProjects())[0].models).toEqual({ default: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
 
@@ -1751,6 +1751,39 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(blank).toMatchObject({ status: 422, code: "invalid", field: "text" });
       const nowhere = await d.api.submitPrototype("acme", "acme-99", "A theme picker").catch((e) => e);
       expect(nowhere).toMatchObject({ status: 422, code: "invalid", field: "spec" });
+    });
+
+    // ---- Retros (code-central-646) ----
+    it("submits a Retro on a Cancelled Ticket as one Ready retro Ticket on the Retros Spec, with the note", async () => {
+      await d.createProject("acme", "Acme");
+      const target = (await d.api.submitSmallChange("acme", "Rename the button")).id;
+      await d.api.act("acme", target, "cancel", {});
+      const ack = await d.api.submitRetro("acme", target, "Why was it cancelled?");
+      wantAcknowledgement(ack, ack.id, "Ready", ["title", "state", "spec", "labels", "tags", "description", "moves", "claimable"]);
+
+      const t = await d.api.getTicket("acme", ack.id);
+      expect(t).toMatchObject({
+        title: "Retro: Rename the button",
+        state: "Ready",
+        spec: { title: "Retros" },
+        labels: ["retro"],
+        tags: { "retro-of": target },
+        claimable: true,
+      });
+      expect(t.description).toContain("Why was it cancelled?");
+      expect(t.moves).toMatchObject([{ to: "Ready", actor: "human", via: "submit_retro" }]);
+      const again = await d.api.submitRetro("acme", target);
+      expect((await d.api.getTicket("acme", again.id)).spec.id).toBe(t.spec.id);
+    });
+
+    it("refuses a Retro on unfinished work, or on nothing", async () => {
+      await d.createProject("acme", "Acme");
+      const open = (await d.api.submitSmallChange("acme", "Rename the button")).id;
+      const unfinished = await d.api.submitRetro("acme", open).catch((e) => e);
+      expect(unfinished).toBeInstanceOf(ApiError);
+      expect(unfinished).toMatchObject({ status: 422, code: "invalid", field: "target" });
+      const nowhere = await d.api.submitRetro("acme", "acme-99").catch((e) => e);
+      expect(nowhere).toMatchObject({ status: 422, code: "invalid", field: "target" });
     });
 
     // ---- Small Changes (code-central-475) ----

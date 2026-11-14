@@ -3,6 +3,7 @@ import type { NeedsMeRow } from "../api/types";
 import { CIBadge } from "../ticket/CIBadge";
 import { PullRequestBadge } from "../ticket/PullRequestBadge";
 import { PrototypeBadge } from "../ticket/PrototypeBadge";
+import { RetroBadge } from "../ticket/RetroBadge";
 import { TicketLine, type RowLink } from "../ticket/TicketLine";
 
 export function NeedsMeLink({
@@ -61,6 +62,7 @@ export function NeedsMeLink({
       }
     >
       {row.prototype && <PrototypeBadge />}
+      {row.retro && <RetroBadge />}
       <CIBadge result={row.ci_result} />
       <PullRequestBadge pr={row.pull_request} inRowLink />
       <span className="muted small">{duration(now, row.since)}</span>

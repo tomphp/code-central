@@ -107,6 +107,18 @@ _Avoid_: Issue (that word means only GitHub's item, which an Incoming Issue mirr
 A Ticket, on any Spec, that makes a cheap, throwaway artifact for the human to try and react to, so a decision can be made. Its work never lands. A Question answered "Prototype this" in a grilling or Charting Round becomes one, which blocks the asking Ticket until it is Done.
 _Avoid_: Spike, mock-up, demo
 
+**Retro**:
+A Ticket, on the Retros Spec, that looks back over the sessions that delivered a Finished Ticket or Spec, proposes changes to the agents' environment, and opens a Ticket for each change the human picks. Its work never lands. Its `retro-of` Tag names the Ticket or Spec it looks back on, and its description lists the Claims to read: every Claim on that work, with its session.
+_Avoid_: Retrospective, post-mortem, review
+
+**Retros Spec**:
+The Long-lived Spec, one per Project, that Retros open on. Code Central creates it on first use, titled `Retros` and labelled `long-lived`, and finds it by its stored number.
+_Avoid_: Retro Spec, Lessons Spec
+
+**Retro button**:
+The human's action on a Finished Ticket's or Finished Spec's view that opens a Retro on it, with an optional note.
+_Avoid_: Run retro, review
+
 **Small Change**:
 The human's choice in **+ New ▾**, and also `submit_small_change`. It opens one implementation Ticket, Ready or, when the human saves it as Draft, Draft, from the human's free text on the Project's Small Changes Spec, with no Stages, so the Ticket is built and lands on its own. The first line is the title and the whole text the description.
 _Avoid_: Quick change, task, hotfix
@@ -132,7 +144,7 @@ One of the three fixed steps that turn a Requirement's text into implementation 
 _Avoid_: Phase, step, definition Ticket
 
 **Stage Guide**:
-Code Central's instructions telling an agent what a Stage must produce, how to finish it and what to do when it can't carry on. Implementation Tickets, a Map's Tickets and Prototypes get one too, though they are not Stages. A Project can change what its guide says only through a named Project setting, such as Subagent Exploration or Model Assignment.
+Code Central's instructions telling an agent what a Stage must produce, how to finish it and what to do when it can't carry on. Implementation Tickets, a Map's Tickets, Prototypes and Retros get one too, though they are not Stages. A Project can change what its guide says only through a named Project setting, such as Subagent Exploration or Model Assignment.
 _Avoid_: Prompt, playbook, skill
 
 **Model Assignment**:
@@ -194,7 +206,7 @@ The Needs Me reason of a Project whose Factory can't bring the local base level 
 _Avoid_: Out of sync, base conflict
 
 **Land per Spec**:
-A Merge and Pull Request option, on by default and kept whatever the method, by which a Spec's work gathers on one Spec Branch and lands in the base together, instead of Ticket by Ticket. It covers a Spec's implementation Tickets, not Stage Tickets, Map Tickets, Prototypes or the Tickets of a Long-lived Spec, and under Branch it has no effect. A Requirement is ready to land once its tickets Stage is finished and each of its Tickets is Accepted, Done or Cancelled; any other Spec once each of its Tickets is, so a Ticket added after its Spec has landed lands with a second batch. Under Pull Request the Spec gets one pull request instead of landing Ticket by Ticket. Turning it on, or taking a Spec's `long-lived` Label off, affects only Tickets accepted afterwards; turning it off, or labelling a Spec `long-lived`, lands the Spec's waiting Tickets together at once, ready or not.
+A Merge and Pull Request option, on by default and kept whatever the method, by which a Spec's work gathers on one Spec Branch and lands in the base together, instead of Ticket by Ticket. It covers a Spec's implementation Tickets, not Stage Tickets, Map Tickets, Prototypes, Retros or the Tickets of a Long-lived Spec, and under Branch it has no effect. A Requirement is ready to land once its tickets Stage is finished and each of its Tickets is Accepted, Done or Cancelled; any other Spec once each of its Tickets is, so a Ticket added after its Spec has landed lands with a second batch. Under Pull Request the Spec gets one pull request instead of landing Ticket by Ticket. Turning it on, or taking a Spec's `long-lived` Label off, affects only Tickets accepted afterwards; turning it off, or labelling a Spec `long-lived`, lands the Spec's waiting Tickets together at once, ready or not.
 _Avoid_: Spec landing, batch landing, release train
 
 **Spec Branch**:
@@ -503,7 +515,7 @@ An agent's permanent record of what broke on a Ticket, why, and what to fix, pos
 _Avoid_: Error, incident
 
 **Label**:
-A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels, Wayfinder Labels, `prototype` and `long-lived` are reserved: they mark a Ticket's Stage, a Map or a Map's Ticket type, a Prototype, and a Long-lived Spec. `long-lived` goes only on a Spec. A Ticket carries at most one reserved type Label (a Stage Label, a Map Ticket type's Wayfinder Label or `prototype`), which chooses its Stage Guide. `auto-accept` is also reserved, goes on a Spec or a Ticket, and is not a type Label, so it doesn't count toward that limit.
+A free-form name on a Spec or Ticket, with no workflow meaning. Stage Labels, Wayfinder Labels, `prototype`, `retro` and `long-lived` are reserved: they mark a Ticket's Stage, a Map or a Map's Ticket type, a Prototype, a Retro, and a Long-lived Spec. `long-lived` goes only on a Spec. A Ticket carries at most one reserved type Label (a Stage Label, a Map Ticket type's Wayfinder Label, `prototype` or `retro`), which chooses its Stage Guide. `auto-accept` is also reserved, goes on a Spec or a Ticket, and is not a type Label, so it doesn't count toward that limit.
 _Avoid_: Category
 
 **Auto-accept**:

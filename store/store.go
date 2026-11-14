@@ -90,6 +90,9 @@ type Project struct {
 	// SmallChangesSpec is the number of the Project's Small Changes Spec, the
 	// Long-lived Spec its Small Changes open on; 0 until the first one.
 	SmallChangesSpec int
+	// RetrosSpec is the number of the Project's Retros Spec, the Long-lived
+	// Spec its Retros open on; 0 until the first one.
+	RetrosSpec int
 	// AutoAccept is the Project's Auto-accept setting: the kinds it is on
 	// for, in AutoAcceptKinds order (ADR 0037). It is stored as on, so a
 	// Project stored without it reads every kind off (ADR 0034).
@@ -416,7 +419,7 @@ type KindModels struct {
 
 // ModelKinds are the kinds of work a Models row may name: core's
 // GuideNames, which core's tests keep in step.
-var ModelKinds = []string{"grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"}
+var ModelKinds = []string{"grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "retro", "implementation"}
 
 // NeedsMeReasons are the Needs Me reasons a Project's Focus Kinds may
 // turn off, in group order: core's Needs Me reasons, which core's tests

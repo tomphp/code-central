@@ -39,6 +39,7 @@ var guideBudgets = map[string]int{
 	"map-research":   3300,
 	"map-task":       3000,
 	"prototype":      3300,
+	"retro":          3900,
 }
 
 func TestTheMCPInstructionsStayWithinAbout150Words(t *testing.T) {

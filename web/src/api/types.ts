@@ -560,6 +560,8 @@ export interface NeedsMeRow {
   spec?: NeedsMeSpec;
   // prototype is set on a Ticket labelled prototype, for its badge.
   prototype?: boolean;
+  // retro is set on a Ticket labelled retro, for its badge.
+  retro?: boolean;
   // ci_result is the Ticket's CI result, whatever the reason, for its
   // badge; left out for a Ticket never pushed while CI Tracking was on.
   ci_result?: CIResult;
@@ -723,6 +725,9 @@ export interface SpecDetail extends SpecView {
   // Land per Spec on.
   land_per_spec?: LandPerSpecStatus;
   map?: MapView;
+  // retros are the Retros looking back on the Spec, oldest first, left
+  // out when there are none.
+  retros?: RetroView[];
 }
 
 // One find_specs result.
@@ -1008,6 +1013,16 @@ export interface TicketView {
   // auto_accept_kind is the Ticket's Auto-accept kind, left out when it has
   // none; only the UI's read carries it (code-central-597).
   auto_accept_kind?: AutoAcceptKind;
+  // retros are the Retros looking back on the Ticket, oldest first; only
+  // get_ticket sets it, left out when there are none.
+  retros?: RetroView[];
+}
+
+// RetroView is a Retro as a read of its target lists it.
+export interface RetroView {
+  id: string;
+  title: string;
+  state: State;
 }
 
 // TICKET_FIELDS are TicketView's fields in the service's order, the order

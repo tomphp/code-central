@@ -52,6 +52,8 @@ type projectFile struct {
 	CIFixesSpec int `yaml:"ci_fixes_spec,omitempty"`
 	// SmallChangesSpec is the Small Changes Spec's number, left out until it exists.
 	SmallChangesSpec int `yaml:"small_changes_spec,omitempty"`
+	// RetrosSpec is the Retros Spec's number, left out until it exists.
+	RetrosSpec int `yaml:"retros_spec,omitempty"`
 	// AutoAccept is the Auto-accept kinds that are on, left out while
 	// every kind is off.
 	AutoAccept []string `yaml:"auto_accept,omitempty"`
@@ -577,7 +579,7 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
 			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models),
-			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, AutoAccept: encodeAutoAccept(r.AutoAccept)})
+			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, RetrosSpec: r.RetrosSpec, AutoAccept: encodeAutoAccept(r.AutoAccept)})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath})

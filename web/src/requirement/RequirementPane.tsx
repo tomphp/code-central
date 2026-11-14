@@ -1,5 +1,5 @@
 // The Requirement pane, above the shared Ticket pane: the header (ID,
-// title, submitted time, New Prototype), the clickable Stage strip (its
+// title, submitted time, New Prototype, Retro), the clickable Stage strip (its
 // Map segment linking to the Map it was made from, if any), what it waits
 // for, its body (the text, then the Spec) collapsed, and under Build the sums of its implementation Tickets' CI badges
 // and those Tickets with their States.
@@ -7,15 +7,17 @@ import type { Api } from "../api/api";
 import type { SpecDetail } from "../api/types";
 import { useNeedsMe } from "../needsme/context";
 import { BodySection } from "../edit/BodySection";
+import { specRetroable } from "../edit/editable";
 import { ago } from "../format";
 import { LandPerSpec } from "../spec/LandPerSpec";
 import { SpecAutoAccept } from "../spec/SpecAutoAccept";
+import { RetroList } from "../spec/RetroList";
 import { TicketList } from "../spec/TicketList";
 import { CISums } from "../ticket/CIBadge";
 import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
 import type { Link } from "../url";
-import { NewPrototype } from "./NewRequirement";
+import { NewPrototype, NewRetro } from "./NewRequirement";
 import { progress, waitingNote } from "./progress";
 import { Strip } from "./Strip";
 import { ShortId } from "../inbox/ShortId";
@@ -44,6 +46,7 @@ export function RequirementPane({ api, spec, archived, now, ticket, select, spec
       <h2>{spec.title}</h2>
       <div className="spec-actions">
         <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {specRetroable(spec, !!archived) && <NewRetro api={api} target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
       </div>
@@ -63,6 +66,7 @@ export function RequirementPane({ api, spec, archived, now, ticket, select, spec
       <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} archived={archived} />
       <CISums tickets={p.build} />
       {p.build.length > 0 && <TicketList label="Build" tickets={p.build} now={now} ticket={ticket} select={select} />}
+      <RetroList retros={spec.retros} select={select} />
     </section>
   );
 }

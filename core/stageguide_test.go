@@ -16,7 +16,7 @@ import (
 func TestEachStageHasAGuide(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")
-	for _, stage := range []string{"grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"} {
+	for _, stage := range []string{"grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "retro", "implementation"} {
 		g, err := f.core.GetStageGuide(ctx, "acme", core.StageGuideInput{Stage: stage})
 		if err != nil {
 			t.Fatalf("get_stage_guide %s: %v", stage, err)
@@ -219,6 +219,23 @@ func TestClaimCarriesTheGuideForTheTicketsStage(t *testing.T) {
 	}
 	if res.StageGuide == nil || res.StageGuide.Stage != "tickets" || res.StageGuide.Guide != guide(t, f, "tickets") {
 		t.Fatalf("the tickets Stage's claim carried %+v", res.StageGuide)
+	}
+}
+
+func TestClaimCarriesTheRetroGuideForATicketLabelledRetro(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	f.spec(t, "acme", "Retros")
+	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Look back", State: store.Ready, Labels: []string{"retro"}})
+	res, err := f.core.Claim(ctx, "acme", core.ClaimInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StageGuide == nil || res.StageGuide.Stage != "retro" || res.StageGuide.Guide != guide(t, f, "retro") {
+		t.Fatalf("claim carried %+v", res.StageGuide)
+	}
+	if !strings.Contains(res.StageGuide.Guide, "Create it") {
+		t.Errorf("the retro guide doesn't recommend \"Create it\": %s", res.StageGuide.Guide)
 	}
 }
 

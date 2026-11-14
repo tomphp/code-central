@@ -60,6 +60,7 @@ export function InboxDetail({
           <MapPane
             api={api}
             spec={map}
+            archived={isArchived(map.id)}
             now={now}
             ticket={loc.ticket}
             select={(id) => navigate({ ticket: id })}
@@ -99,6 +100,7 @@ export function InboxDetail({
               ?.reported_models
           }
           openSpec={(id) => navigate({ requirement: id })}
+          openTicket={(id) => navigate({ ticket: id })}
         />
       ) : (
         !loc.requirement && (
