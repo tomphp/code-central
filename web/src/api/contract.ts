@@ -58,6 +58,8 @@ export interface Driver {
   // dropTranscriptStreams drops every open Transcript stream, as a flaky
   // connection would; each reconnects by itself (ticket 110).
   dropTranscriptStreams(): void;
+  // absolutePath is a path absolute where Core runs.
+  readonly absolutePath: string;
   // reportPushRemote reports the Push remote's URL as a Factory does when
   // it starts (code-central-251).
   reportPushRemote(key: string, url: string): Promise<void>;
@@ -2411,8 +2413,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
     });
 
     it("sets the gh path Option to an absolute path, and clears it", async () => {
-      // Absolute where the service runs: a Windows path isn't on Unix.
-      const gh = process.platform === "win32" ? "C:\\Tools\\gh.exe" : "/opt/tools/gh";
+      const gh = d.absolutePath;
       expect(await d.api.setOptions({ gh_path: ` ${gh} ` })).toEqual({ focus_clear: "activity_dashboard", focus_popup: "off", gh_path: gh });
       expect((await d.api.options()).gh_path).toBe(gh);
 

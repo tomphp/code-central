@@ -27,6 +27,9 @@ export interface Connection {
   letGHTriage(repository: string): Promise<void>;
   letGHWrite(repository: string): Promise<void>;
   dropTranscriptStreams(): void;
+  // absolutePath is a path absolute where Core runs: a WASM Core judges
+  // paths as Unix does, whatever the host.
+  absolutePath: string;
   close(): Promise<void>;
 }
 
@@ -60,6 +63,7 @@ export function worldConnection(w: World): Connection {
     letGHTriage: async () => w.setIssuesCheck(),
     letGHWrite: async () => w.setPullRequestCheck(),
     dropTranscriptStreams: () => w.dropStreams(),
+    absolutePath: "/opt/tools/gh",
     close: async () => w.drop(),
   };
 }
@@ -217,5 +221,8 @@ export class HttpDriver implements Driver {
   letGHTriage: Driver["letGHTriage"] = (repository) => this.c.letGHTriage(repository);
   letGHWrite: Driver["letGHWrite"] = (repository) => this.c.letGHWrite(repository);
   dropTranscriptStreams: Driver["dropTranscriptStreams"] = () => this.c.dropTranscriptStreams();
+  get absolutePath(): string {
+    return this.c.absolutePath;
+  }
   close: Driver["close"] = () => this.c.close();
 }
