@@ -133,7 +133,7 @@ func pushedWork(r store.Reader, key string) []PushedWorkView {
 			Title: t.Title, Body: ticketPullRequestBody(key, t, r), PullRequest: pullRequestView(t.PullRequest)})
 	}
 	for i, ts := range covered {
-		if !specLanded(r, p.Landing, key, ts[0]) {
+		if !specLanded(r, p, ts[0]) {
 			continue
 		}
 		spec, _ := r.Spec(key, ts[0].Spec)

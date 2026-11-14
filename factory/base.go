@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/store"
 )
 
 // locateBase finds the Project's base on every poll, before anything is
@@ -14,7 +13,7 @@ import (
 // committed on a base found for the first time or changed. It returns
 // whether landing can go on: it can't while the base is missing. A held
 // .mcp.json doesn't stop landing; it only stops claims.
-func (f *factory) locateBase(ctx context.Context, landing core.LandingView, policy store.LandingPolicy) bool {
+func (f *factory) locateBase(ctx context.Context, landing core.LandingView, policy core.LandingPolicy) bool {
 	base := f.baseBranch()
 	ref := "refs/heads/" + base
 	tip, err := f.repository.commit(ref)

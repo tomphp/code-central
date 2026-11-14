@@ -72,7 +72,7 @@ func ciItemOptions(r store.Reader, p store.Project, it ciItem) []string {
 	if p.Landing.Method == store.LandingMerge {
 		options = append(options, OptionLandAnyway)
 	}
-	if len(it.tickets) == 1 && !specLanded(r, p.Landing, p.Key, it.tickets[0]) {
+	if len(it.tickets) == 1 && !specLanded(r, p, it.tickets[0]) {
 		options = append(options, OptionSendBack)
 	}
 	if it.reason == ReasonCIFailed {
