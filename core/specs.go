@@ -42,6 +42,9 @@ type SpecDetail struct {
 	// a Long-lived Spec or the Project isn't under Merge or Pull Request
 	// with Land per Spec on.
 	LandPerSpec *LandPerSpecView `json:"land_per_spec,omitempty"`
+	// Retros are the Retros looking back on this Spec, oldest first; left
+	// out when there are none.
+	Retros []RetroView `json:"retros,omitempty"`
 	// Map is set only when the Spec is a Map.
 	Map *MapView `json:"map,omitempty"`
 }
@@ -126,6 +129,7 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 		v.Requirement = requirementView(e, s, tickets)
 		v.LandPerSpec = landPerSpecView(r, key, s, tickets)
 		v.Map = mapView(e, s, tickets)
+		v.Retros = retrosOf(r, key, DisplayID(key, n))
 		if in.lighter() {
 			v.Outline = Outline(s.Body)
 		}

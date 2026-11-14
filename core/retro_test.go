@@ -1,8 +1,10 @@
 package core_test
 
 import (
+	"encoding/json"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
@@ -175,5 +177,49 @@ func TestARetroIsRefusedOnWorkThatIsMissingUnfinishedOrLongLived(t *testing.T) {
 				t.Fatalf("a refused Retro wrote a Spec: %+v", specs)
 			}
 		})
+	}
+}
+
+func TestTicketAndSpecReadsListTheirRetrosOldestFirstAndLeaveThemOutWhenThereAreNone(t *testing.T) {
+	f := newFixture(t)
+	f.finishedSpec(t)
+	tk, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "acme-2"})
+	if err != nil || tk.Retros != nil {
+		t.Fatalf("Ticket without Retros: %+v, %v", tk.Retros, err)
+	}
+	sp, err := f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
+	if err != nil || sp.Retros != nil {
+		t.Fatalf("Spec without Retros: %+v, %v", sp.Retros, err)
+	}
+	if b, _ := json.Marshal(tk); strings.Contains(string(b), "retros") {
+		t.Fatalf("retros not left out: %s", b)
+	}
+
+	first := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-2"})
+	second := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-2"})
+	onSpec := f.submitRetro(t, core.SubmitRetroInput{Target: "acme-1"})
+	f.move(t, core.Ref(second.ID), store.Done)
+
+	tk, err = f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "acme-2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []core.RetroView{
+		{ID: first.ID, Title: "Retro: Grill it", State: store.Ready},
+		{ID: second.ID, Title: "Retro: Grill it", State: store.Done},
+	}
+	if !slices.Equal(tk.Retros, want) {
+		t.Fatalf("Ticket Retros %+v, want %+v", tk.Retros, want)
+	}
+	sp, err = f.core.GetSpec(ctx, "acme", core.GetSpecInput{Spec: "acme-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wantSpec := []core.RetroView{{ID: onSpec.ID, Title: "Retro: Login", State: store.Ready}}; !slices.Equal(sp.Retros, wantSpec) {
+		t.Fatalf("Spec Retros %+v, want %+v", sp.Retros, wantSpec)
+	}
+	other, err := f.core.GetTicket(ctx, "acme", core.GetTicketInput{Ticket: "acme-4"})
+	if err != nil || other.Retros != nil {
+		t.Fatalf("another Ticket's Retros: %+v, %v", other.Retros, err)
 	}
 }
