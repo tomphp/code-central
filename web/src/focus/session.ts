@@ -102,7 +102,7 @@ export function useFocusSession({ api, version, project, scope }: FocusSessionIn
   // it lists, whose options act on every one of them.
   const read = useTicket(api, onScreen?.row.project, onScreen && ticketOf(onScreen.row), version);
   const acted = !!onScreen && actedOn === onScreen.key;
-  const queue = queueOf({ needsMe, project, scope, onScreen, ticket: read.data, skipped, acted });
+  const queue = focusQueue({ needsMe, project, scope, onScreen, ticket: read.data, skipped, acted });
   const { item, elsewhere } = queue;
   // What's shown becomes what's on screen, so a later read keeps it there.
   // While a read Round has no open Question left and Needs Me hasn't
@@ -116,7 +116,7 @@ export function useFocusSession({ api, version, project, scope }: FocusSessionIn
   const waiting = !item && !queue.clear && !queue.onlySkipped;
   useEffect(() => {
     if (waiting || item?.key === onScreen?.key) return;
-    const roundRead = !!onScreen?.roundKey && !onScreen.question && onScreen.roundKey === item?.roundKey;
+    const roundRead = !!onScreen && isUnreadRound(onScreen) && onScreen.roundKey === item?.roundKey;
     setOnScreen(item);
     setActedOn(undefined);
     if (roundRead) return;
@@ -191,6 +191,8 @@ function recordingWrites(api: Api, { onWrite, onRefused }: { onWrite(): void; on
   });
 }
 
+// QueueInput is what the focus queue goes through: needsMe's Focus Items
+// in the scope project and scope give, as useFocusSession's input does.
 interface QueueInput {
   needsMe: NeedsMe;
   project?: string;
@@ -205,7 +207,9 @@ interface QueueInput {
   acted: boolean;
 }
 
-interface Queue {
+// FocusQueue is the queue's answer: item, remaining, clear, onlySkipped
+// and keys as FocusSession's.
+interface FocusQueue {
   item?: FocusItem;
   remaining: number;
   clear: boolean;
@@ -217,10 +221,10 @@ interface Queue {
   keys: FocusKey[];
 }
 
-// queueOf is the focus queue: which Focus Item to show, how many are left,
-// whether all is clear or only skipped Focus Items are left, whether the
-// one on screen was dealt with elsewhere, and every key in scope.
-function queueOf({ needsMe, project, scope, onScreen, ticket, skipped, acted }: QueueInput): Queue {
+// focusQueue is which Focus Item to show, how many are left, whether all
+// is clear or only skipped Focus Items are left, whether the one on screen
+// was dealt with elsewhere, and every key in scope.
+function focusQueue({ needsMe, project, scope, onScreen, ticket, skipped, acted }: QueueInput): FocusQueue {
   const rows = needsMe.focusItems({ project, ticket: scope });
   const items = rows.flatMap((row) => itemsOf(row, ticket));
   // Skipped items go to the back, after every unskipped one. They come
@@ -241,14 +245,15 @@ function queueOf({ needsMe, project, scope, onScreen, ticket, skipped, acted }: 
     clear: rows.length === 0,
     onlySkipped: !item && items.length > 0,
     elsewhere: !acted && isGone(onScreen, items),
-    keys: keysOf(rows, ticket),
+    keys: focusKeys(rows, ticket),
   };
 }
 
-// keysOf is the key of every Focus Item of rows, given the latest read of
-// the on-screen item's Ticket. A Round is keyed as its row as well as by
+// focusKeys is the key of every Focus Item of rows, given the latest read
+// of the on-screen item's Ticket: the one place keys are made, for the
+// session and the trigger alike. A Round is keyed as its row as well as by
 // each open Question, so it's known by the same key read or not.
-function keysOf(rows: NeedsMeRow[], ticket?: TicketView): FocusKey[] {
+function focusKeys(rows: NeedsMeRow[], ticket?: TicketView): FocusKey[] {
   return rows.flatMap((row) => {
     const keys = itemsOf(row, ticket).map((i) => i.key);
     return row.reason === "needs_answer" ? [...new Set([roundKeyOf(row), ...keys])] : keys;
@@ -260,18 +265,25 @@ function keysOf(rows: NeedsMeRow[], ticket?: TicketView): FocusKey[] {
 // its open Questions.
 function isGone(onScreen: FocusItem | undefined, items: FocusItem[]): boolean {
   if (!onScreen) return false;
-  const unreadRound = onScreen.roundKey !== undefined && !onScreen.question;
-  return !items.some((i) => i.key === onScreen.key || (unreadRound && i.roundKey === onScreen.roundKey));
+  const unread = isUnreadRound(onScreen);
+  return !items.some((i) => i.key === onScreen.key || (unread && i.roundKey === onScreen.roundKey));
 }
 
 // isSkipped is whether the human skipped the item. A Round not on screen
 // is one unread Focus Item, skipped once any of its Questions was: a
 // layout only leaves a Round with open Questions when it skipped them all.
 function isSkipped(item: FocusItem, skipped: FocusItem[]): boolean {
-  const unreadRound = item.roundKey !== undefined && !item.question;
-  return skipped.some((s) => s.key === item.key || (unreadRound && s.roundKey === item.roundKey));
+  const unread = isUnreadRound(item);
+  return skipped.some((s) => s.key === item.key || (unread && s.roundKey === item.roundKey));
 }
 
+// isUnreadRound is whether the item is a whole Round, its Ticket not yet
+// read.
+const isUnreadRound = (item: FocusItem): boolean => item.roundKey !== undefined && !item.question;
+
+// itemsOf is a row's Focus Items: the row itself, or, for a needs_answer
+// row, its Round's open Questions once ticket is its Ticket's read, and
+// the whole Round as one until then.
 function itemsOf(row: NeedsMeRow, ticket?: TicketView): FocusItem[] {
   // A Base diverged item is a Project's, with no Ticket ID; a CI item is
   // a Project's pushed commit's.
@@ -296,6 +308,7 @@ function roundKeyOf(row: NeedsMeRow): FocusKey {
   return keyOf(`${row.id} round ${row.round?.number ?? "latest"}`);
 }
 
+// keyOf makes s a FocusKey: only this module's key format may.
 const keyOf = (s: string) => s as FocusKey;
 
 // The Focus Pop-up trigger: whether the automatic Focus popup is open over
@@ -343,7 +356,7 @@ interface CheckInput extends TriggerInput {
 function popupOpen({ option, view, project, needsMe, dismissed, open, otherPopup, typing }: CheckInput): boolean {
   if (option !== "on" || !POPUP_VIEWS.includes(view) || !needsMe) return false;
   if (open) return true;
-  return !otherPopup && !typing && keysOf(needsMe.focusItems({ project })).some((k) => !dismissed.has(k));
+  return !otherPopup && !typing && focusKeys(needsMe.focusItems({ project })).some((k) => !dismissed.has(k));
 }
 
 // usePopupTrigger holds the dismissed set and whether the popup is open
@@ -372,11 +385,15 @@ export function usePopupTrigger(input: TriggerInput): {
   };
 }
 
+// TriggerState is the dismissed set and whether the popup was last found
+// open.
 interface TriggerState {
   dismissed: ReadonlySet<FocusKey>;
   shown: boolean;
 }
 
+// TriggerAction is a check against the live signals, or the popup closing
+// or a card's Focus popup going, with the keys in scope then.
 type TriggerAction =
   | { type: "check"; input: Omit<CheckInput, "dismissed" | "open"> }
   | { type: "close" | "dismiss"; keys: FocusKey[] };
