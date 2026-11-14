@@ -34,6 +34,7 @@ func postUsage(t *testing.T, srv *codecentraltest.Server, body string) {
 type response struct {
 	time                       time.Time
 	agent, kind, model         string
+	agentType, description     string
 	input, write, read, output int
 }
 
@@ -47,6 +48,12 @@ func postResponses(t *testing.T, srv *codecentraltest.Server, session string, rs
 		agent := ""
 		if r.agent != "" {
 			agent = fmt.Sprintf(`"agent":%q,`, r.agent)
+		}
+		if r.agentType != "" {
+			agent += fmt.Sprintf(`"agent_type":%q,`, r.agentType)
+		}
+		if r.description != "" {
+			agent += fmt.Sprintf(`"description":%q,`, r.description)
 		}
 		model := ""
 		if r.model != "" {

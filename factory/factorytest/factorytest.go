@@ -531,6 +531,19 @@ func (h *Harness) Usage() core.UsageView {
 	return u
 }
 
+// SessionUsage reads one Usage session of the Project, agent being ""
+// for the main session.
+func (h *Harness) SessionUsage(session, agent string) core.SessionUsageView {
+	h.t.Helper()
+	q := url.Values{"project": {h.Project}, "session": {session}, "agent": {agent}}
+	resp, err := http.Get(h.Server.URL + "/api/usage/session?" + q.Encode())
+	must(h.t, err)
+	defer resp.Body.Close()
+	var v core.SessionUsageView
+	must(h.t, json.NewDecoder(resp.Body).Decode(&v))
+	return v
+}
+
 // Human is a client of the harness's Code Central acting as the human.
 func (h *Harness) Human() *client.Client {
 	c := client.New(h.Server.URL)

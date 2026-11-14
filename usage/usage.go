@@ -59,6 +59,11 @@ type Response struct {
 	SessionID string `json:"session_id"`
 	// Agent is the subagent the response was for, "" for the main session.
 	Agent string `json:"agent,omitempty"`
+	// AgentType and Description are the Agent Type and description of the
+	// Agent call that started the subagent; both are "" for the main
+	// session and for a response recorded before they were posted.
+	AgentType   string `json:"agent_type,omitempty"`
+	Description string `json:"description,omitempty"`
 	// Kind is the kind of session, as the Factory named it.
 	Kind string `json:"kind"`
 	// Model is the model that gave the response, as Claude Code reported
