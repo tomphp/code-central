@@ -21,7 +21,9 @@ export type PopupShellProps = (
 ) & {
   // size is Modal's: narrow for a form, wide for a Board popup.
   size?: "narrow" | "wide";
+  // head is what else the header row holds, such as the Focus popup's N left.
   head?: ReactNode;
+  // actions fill the actions row at the foot; none leaves it out.
   actions?: ReactNode;
   // uncounted is Modal's: the automatic Focus popup's own shell.
   uncounted?: boolean;

@@ -1,13 +1,13 @@
 // "New requirement", "New Map", "New Small Change", "New Prototype" and "Retro": buttons that each
-// open the same modal, one free-text box. A new Requirement or Map goes to
+// open the same popup, one free-text box. A new Requirement or Map goes to
 // the filtered Project, or the only one; with several and none filtered,
-// the modal asks which. A Prototype goes on the Spec whose view it is on. A
+// the popup asks which. A Prototype goes on the Spec whose view it is on. A
 // Retro looks back on the finished work whose view it is on; its one text
 // box, the Note, is optional.
 // "Write the Spec", in a finished Map's header, opens the New requirement
-// modal prefilled from the Map and submits it with the Map. A caller can
+// popup prefilled from the Map and submits it with the Map. A caller can
 // render its own opening control in place of the button, such as a menu
-// item; the modal goes in a portal on the body, so it outlives a menu that
+// item; the popup goes in a portal on the body, so it outlives a menu that
 // closes behind it.
 import { useId, useState, type FormEvent, type ReactNode } from "react";
 import type { Api } from "../api/api";
@@ -25,7 +25,7 @@ export interface NewRequirementProps {
   // project is the filtered Project, if any.
   project?: string;
   onSubmitted(r: { spec: SpecAcknowledgement }): void;
-  // trigger renders the control that opens the modal, given what opens
+  // trigger renders the control that opens the popup, given what opens
   // it, in place of the button.
   trigger?(open: () => void): ReactNode;
 }
@@ -209,7 +209,7 @@ function NewFromText<R>({ kind, api, projects, project, onSubmitted, trigger }: 
 // NewFromTextPopup is the one free-text box's popup, with its actions.
 function NewFromTextPopup<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFromTextProps<R> & { onClose(): void }) {
   const [text, setText] = useState(kind.text ?? "");
-  // Until the human picks one, the Project follows the props, so a modal
+  // Until the human picks one, the Project follows the props, so a popup
   // opened before the Projects are read still has one once they are.
   const [picked, setPicked] = useState<string>();
   const chosen = picked ?? project ?? projects[0]?.key ?? "";
