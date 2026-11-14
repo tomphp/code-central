@@ -315,3 +315,5 @@ A Question can also become a Prototype. In a Round from the grilling Stage, Char
 ## Retros
 
 A Retro looks back on finished work: a Ticket labelled `retro`, on the Project's Retros Spec. In the UI, select a Done or Cancelled Ticket and click **Retro** in its header, beside where **Edit** would be. A dialog titled **Retro** opens with one optional **Note** box: say what to look into, or leave it empty, and click **Start retro**. The new Retro opens in the Ticket panel, Ready for a Factory, and shows a small **Retro** badge in Needs Me and Focus when it needs you. The button is absent on unfinished Tickets and in an Archived Project.
+
+A Finished Requirement, Map or plain Spec has the same **Retro** button in its actions row, beside **New Prototype**; it is absent on an unfinished Spec, a Long-lived Spec and in an Archived Project. A Ticket or Spec that has Retros lists them under **Retros**, each with its ID, title and State; click one to open it.

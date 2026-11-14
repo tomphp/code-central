@@ -9,6 +9,7 @@ import { Markdown } from "../Markdown";
 import { EditForm } from "../edit/EditForm";
 import { retroable, ticketEditable } from "../edit/editable";
 import { NewRetro } from "../requirement/NewRequirement";
+import { RetroList } from "../spec/RetroList";
 import { ActionPanel } from "../panels/ActionPanel";
 import { LatestEventLine } from "../LatestEvent";
 import { LinkBadge } from "./LinkBadge";
@@ -104,7 +105,7 @@ export type TicketDetailProps = TicketPaneProps & {
 // (in the action panel instead while CI failed), Claim activity with
 // each Claim's Live section, move, and a collapsed history of moves,
 // comments and edits merged by time.
-export function TicketDetail({ api, project, ticket: t, now, reported, openSpec, archived, editing }: TicketDetailProps) {
+export function TicketDetail({ api, project, ticket: t, now, reported, openSpec, openTicket, archived, editing }: TicketDetailProps) {
   const claims = [...t.claims].sort((a, b) => b.number - a.number);
   const specName = `${t.spec.id} ${t.spec.title}`;
   return (
@@ -146,6 +147,7 @@ export function TicketDetail({ api, project, ticket: t, now, reported, openSpec,
           ))}
         </p>
       )}
+      {openTicket && <RetroList retros={t.retros} select={openTicket} />}
       <ModelChoice api={api} project={project} ticket={t} reported={reported} />
       {/* A Ticket in a CI item has the CI section in its action panel,
           with the failure options, so it isn't shown here too. */}
