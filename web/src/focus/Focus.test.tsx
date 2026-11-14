@@ -213,7 +213,7 @@ describe("Focus Kinds in Focus Mode", () => {
     renderApp(fake, "/?view=focus");
     expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
     expect(within(focus()).queryByText(/left/)).toBeNull();
-    expect(document.title).toBe("(1) Code Central");
+    await waitFor(() => expect(document.title).toBe("(1) Code Central"));
   });
 
   it("shows the Activity Dashboard when only items of reasons turned off are left and it's chosen", async () => {
