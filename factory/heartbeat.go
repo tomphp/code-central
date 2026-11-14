@@ -152,7 +152,7 @@ func newFactoryHeartbeater(f *factory) *heartbeater {
 	if host == "" {
 		host = "unknown"
 	}
-	base := core.ReportHeartbeatInput{Factory: factoryName, Host: host, IntervalSeconds: max(1, int(f.o.poll/time.Second))}
+	base := core.ReportHeartbeatInput{Factory: factoryName, Host: host, IntervalSeconds: max(1, int(f.o.poll/time.Second)), Chat: !f.o.noChat}
 	return newHeartbeater(func(ctx context.Context, in core.ReportHeartbeatInput) error {
 		_, err := f.client.ReportHeartbeat(ctx, f.project, in)
 		return err

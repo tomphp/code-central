@@ -424,6 +424,8 @@ export interface FactoryView {
   note: string;
   last_heartbeat: string;
   interval_seconds: number;
+  // chat is Chat support: the Factory can run Conversations.
+  chat: boolean;
 }
 
 // A Project's Factory Status, worked out by Code Central: the UI only
@@ -440,6 +442,8 @@ export interface HeartbeatReport {
   state: "online" | "draining" | "stopping";
   note?: string;
   interval_seconds: number;
+  // chat defaults to false.
+  chat?: boolean;
 }
 
 export interface ProjectView {
