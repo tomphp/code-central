@@ -104,7 +104,7 @@ func (f *factory) reportBaseState(ctx context.Context, in core.ReportBaseInput) 
 // nothing to merge lands at once, one whose pull request is merged lands
 // at the merge commit, and the rest have their branch pushed for the
 // Watcher to open a pull request on.
-func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, landing core.LandingView, policy store.LandingPolicy) {
+func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, landing core.LandingView, policy core.LandingPolicy) {
 	if tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged {
 		f.landMerged(ctx, tk, landing.Remote)
 		return

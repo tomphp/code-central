@@ -16,19 +16,19 @@ import (
 // Tickets are accepted. Core works out which Tickets this covers, in one
 // place, and when a Spec is ready; the Factory does the git.
 
-// specLanded is whether t is a Spec-landed Ticket in a Project with
-// landing: the Project is under Merge with Land per Spec on, t is an
+// specLanded is whether t is a Spec-landed Ticket in Project p: p is under
+// Merge or Pull Request with Land per Spec on, t is an
 // implementation Ticket (not a Stage, Map or Prototype Ticket), and its
 // Spec is neither a Map nor Long-lived (it doesn't carry the long-lived
 // Label). A Long-lived Spec's Tickets land Ticket by Ticket.
-func specLanded(r store.Reader, landing store.Landing, key string, t store.Ticket) bool {
-	if !store.NewLandingPolicy(landing.Method, landing.Push, landing.LandPerSpec, false).LandPerSpecInForce() {
+func specLanded(r store.Reader, p store.Project, t store.Ticket) bool {
+	if !landingPolicyOf(p).LandPerSpecInForce() {
 		return false
 	}
 	if StageOf(t.Labels) != "" || isMap(t.Labels) || slices.Contains(t.Labels, PrototypeLabel) {
 		return false
 	}
-	spec, ok := r.Spec(key, t.Spec)
+	spec, ok := r.Spec(p.Key, t.Spec)
 	return ok && !isMap(spec.Labels) && !slices.Contains(spec.Labels, LongLivedLabel)
 }
 
@@ -42,11 +42,11 @@ func specMergeCounts(t store.Ticket) bool {
 // the base: it waits for its Spec to land, and the Factory has pushed
 // nothing for it. Once its Spec is merged into the base and pushed under
 // CI Tracking, it has a pushed commit and waits on CI instead.
-func waitingForSpec(r store.Reader, landing store.Landing, key string, t store.Ticket) bool {
-	if t.State != store.Accepted || !specLanded(r, landing, key, t) {
+func waitingForSpec(r store.Reader, p store.Project, t store.Ticket) bool {
+	if t.State != store.Accepted || !specLanded(r, p, t) {
 		return false
 	}
-	if landing.Method == store.LandingPullRequest {
+	if p.Landing.Method == store.LandingPullRequest {
 		// The Spec Branch is pushed and waits on its pull request.
 		return true
 	}
@@ -77,7 +77,7 @@ type LandPerSpecView struct {
 // a Long-lived Spec.
 func landPerSpecView(r store.Reader, key string, s store.Spec, tickets []store.Ticket) *LandPerSpecView {
 	p, _ := r.Project(key)
-	if !p.LandingPolicy().LandPerSpecInForce() || slices.Contains(s.Labels, LongLivedLabel) {
+	if !landingPolicyOf(p).LandPerSpecInForce() || slices.Contains(s.Labels, LongLivedLabel) {
 		return nil
 	}
 	v := &LandPerSpecView{Waiting: []string{}}
@@ -93,7 +93,7 @@ func landPerSpecView(r store.Reader, key string, s store.Spec, tickets []store.T
 		switch t.State {
 		case store.Done, store.Cancelled:
 		case store.Accepted:
-			if waitingForSpec(r, p.Landing, key, t) {
+			if waitingForSpec(r, p, t) {
 				v.Waiting = append(v.Waiting, DisplayID(key, t.Number))
 				merged = merged || specMergeCounts(t)
 			}
@@ -125,7 +125,7 @@ func (c *Core) ReportSpecMerge(_ context.Context, key string, in ReportSpecMerge
 	}
 	return c.updateTicketIn(key, "report_spec_merge", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
 		p, _ := r.Project(key)
-		if t.State != store.Accepted || !specLanded(r, p.Landing, key, *t) {
+		if t.State != store.Accepted || !specLanded(r, p, *t) {
 			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s: only an Accepted Spec-landed Ticket is merged into its Spec Branch", DisplayID(key, t.Number), t.State)}
 		}
 		if t.SpecMerge != nil && t.SpecMerge.Commit == commit && specMergeCounts(*t) {
@@ -150,7 +150,7 @@ func specWork(r store.Reader, key string, t store.Ticket) []store.Ticket {
 // inSpecWork reports whether t waits on its Spec's one pull request in
 // Project p: p is under Pull Request, and t is Accepted and Spec-landed.
 func inSpecWork(r store.Reader, p store.Project, t store.Ticket) bool {
-	return p.Landing.Method == store.LandingPullRequest && t.State == store.Accepted && specLanded(r, p.Landing, p.Key, t)
+	return p.Landing.Method == store.LandingPullRequest && t.State == store.Accepted && specLanded(r, p, t)
 }
 
 // specWorkOf is the work of Spec spec among tickets, Project p's: the

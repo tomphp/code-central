@@ -32,16 +32,16 @@ func (f *factory) landAndSweep(ctx context.Context) {
 // Tracking is on. It returns the Landing Policy those make. ok is false when
 // it can't be read, and then nothing lands this poll. A poll that reads it
 // also makes the report of what claude accepts, until one is taken.
-func (f *factory) landing(ctx context.Context) (landing core.LandingView, policy store.LandingPolicy, ok bool) {
+func (f *factory) landing(ctx context.Context) (landing core.LandingView, policy core.LandingPolicy, ok bool) {
 	p, err := f.client.GetProject(ctx, f.project)
 	if err != nil {
 		if ctx.Err() == nil {
 			f.printf("warning: can't read the Project's Landing Method, so nothing lands this poll: %v", err)
 		}
-		return core.LandingView{}, store.LandingPolicy{}, false
+		return core.LandingView{}, core.LandingPolicy{}, false
 	}
 	f.setBase(p.Landing.Base)
-	policy = landingPolicy(p)
+	policy = p.LandingPolicy()
 	if !policy.KeepsBaseLevel() {
 		f.baseDiverged = false
 	}
@@ -53,7 +53,7 @@ func (f *factory) landing(ctx context.Context) (landing core.LandingView, policy
 
 // missingRemote says why landing can't go on when Push names a remote
 // this repository doesn't have, or is "".
-func (f *factory) missingRemote(remote string, policy store.LandingPolicy) string {
+func (f *factory) missingRemote(remote string, policy core.LandingPolicy) string {
 	if !policy.NeedsPushRemote() {
 		return ""
 	}
@@ -79,7 +79,7 @@ func (f *factory) reportPushRemote(remote string) {
 
 // remoteReady reports whether landing can go on this poll: it can't when
 // Push names a missing remote, and a warning says so once per remote.
-func (f *factory) remoteReady(landing core.LandingView, policy store.LandingPolicy) bool {
+func (f *factory) remoteReady(landing core.LandingView, policy core.LandingPolicy) bool {
 	why := f.missingRemote(landing.Remote, policy)
 	if why == "" {
 		// Back again: should it go missing later, that is warned of too.
@@ -99,7 +99,7 @@ func (f *factory) remoteReady(landing core.LandingView, policy store.LandingPoli
 // on, pushes the base before landing it; under Branch it leaves each for the human to
 // merge, and lands it once merged. The Factory never accepts: only the
 // human moves a Ticket to Accepted.
-func (f *factory) land(ctx context.Context, landing core.LandingView, policy store.LandingPolicy) {
+func (f *factory) land(ctx context.Context, landing core.LandingView, policy core.LandingPolicy) {
 	accepted := f.landable(ctx, store.Accepted)
 	sort.SliceStable(accepted, func(i, j int) bool { return acceptedAt(accepted[i]).Before(acceptedAt(accepted[j])) })
 	held := f.landSpecsOff(ctx, accepted, landing, policy)
@@ -149,7 +149,7 @@ func (f *factory) land(ctx context.Context, landing core.LandingView, policy sto
 // Method once its work is in the base: the human merged it. Until then it
 // is left as it is, with a line saying so once: never merged, never sent
 // back. With Push on, its branch is pushed to the remote meanwhile.
-func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView, landing core.LandingView, policy store.LandingPolicy) {
+func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView, landing core.LandingView, policy core.LandingPolicy) {
 	head, what, err := f.workOf(tk)
 	if err == nil && f.inBase(head) {
 		f.printf("%s: merged into %s by hand", tk.ID, f.baseBranch())
@@ -177,7 +177,7 @@ func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView, land
 
 // pushBranch makes sure tk's branch, holding commit, is on remote, and
 // comments when it can't be pushed yet, to be retried next poll.
-func (f *factory) pushBranch(ctx context.Context, tk core.TicketView, policy store.LandingPolicy, remote, commit string) {
+func (f *factory) pushBranch(ctx context.Context, tk core.TicketView, policy core.LandingPolicy, remote, commit string) {
 	if tk.Branch == "" {
 		f.cantPushYet(ctx, tk, "it was finished without a branch, so there is no branch to push.")
 		return
@@ -211,7 +211,7 @@ func (f *factory) workOf(tk core.TicketView) (commit, what string, err error) {
 // base: the human merged them. Under Merge + Push it lands each only once
 // the base is pushed. (land sees to Accepted ones.) A Ticket merged while in any other State
 // gets a warning line, once.
-func (f *factory) detectHandMerges(ctx context.Context, landing core.LandingView, policy store.LandingPolicy) {
+func (f *factory) detectHandMerges(ctx context.Context, landing core.LandingView, policy core.LandingPolicy) {
 	if landing.Method == store.LandingPullRequest {
 		f.detectMergedPullRequests(ctx, landing.Remote)
 		return
@@ -273,7 +273,7 @@ func acceptedAt(tk core.TicketView) time.Time {
 
 // landAccepted merges an Accepted Ticket's work into the base and lands
 // it.
-func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, landing core.LandingView, policy store.LandingPolicy) {
+func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, landing core.LandingView, policy core.LandingPolicy) {
 	if old, ok := f.mergedOnOldBase(tk.ID); ok {
 		// Merged before the base changed and not landed yet, so waiting on
 		// its push or CI: it finishes on the base it was merged into.
@@ -322,7 +322,7 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, landing 
 // tk where it is, commented, when the push fails. With CI Tracking on as
 // well, the CI gate holds: tk lands only once its CI result is passed,
 // at the pushed commit that passed (ADR 0019, ADR 0034).
-func (f *factory) landPushed(ctx context.Context, tk core.TicketView, landing core.LandingView, policy store.LandingPolicy, base, commit string) {
+func (f *factory) landPushed(ctx context.Context, tk core.TicketView, landing core.LandingView, policy core.LandingPolicy, base, commit string) {
 	if !policy.PushesBase() {
 		f.landAt(ctx, tk, commit)
 		return
@@ -417,7 +417,7 @@ func (f *factory) remoteTip(remote, branch, pushed string) string {
 // branch, as tk's pushed commit: the one CI runs on. It is reported once,
 // when it isn't tk's pushed commit already. ok is false when the report
 // failed.
-func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, policy store.LandingPolicy, branch, commit string) (ok bool) {
+func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, policy core.LandingPolicy, branch, commit string) (ok bool) {
 	if !policy.RecordsPushedCommit() {
 		return true
 	}
@@ -442,7 +442,7 @@ func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, policy s
 // the tip but is an ancestor of it: the tip contains the Ticket's work,
 // and if it passes, the Ticket lands (ADR 0034). A tip that doesn't
 // contain the work, as after a force push, is reported to no Ticket.
-func (f *factory) reportTip(ctx context.Context, remote string, policy store.LandingPolicy) {
+func (f *factory) reportTip(ctx context.Context, remote string, policy core.LandingPolicy) {
 	base := f.baseBranch()
 	tip, err := f.repository.commit("refs/remotes/" + remote + "/" + base)
 	if err != nil {
@@ -615,10 +615,4 @@ func short(commit string) string {
 		return commit[:12]
 	}
 	return commit
-}
-
-// landingPolicy is the Landing Policy of p's Landing Method, Push, Land per
-// Spec and CI Tracking.
-func landingPolicy(p core.ProjectView) store.LandingPolicy {
-	return store.NewLandingPolicy(p.Landing.Method, p.Landing.Push, p.Landing.LandPerSpec, p.CI.Tracking)
 }
