@@ -33,7 +33,12 @@ export function TicketList({ label, tickets, now, ticket, select }: TicketListPr
               <TicketName t={t} />
             </button>{" "}
             <StateChip state={t.state} />
-            {reason && <ReasonBadge reason={reason} />}
+            {reason && (
+              <>
+                {" "}
+                <ReasonBadge reason={reason} />
+              </>
+            )}
             <WaitingBadge waiting={t.waiting_for_spec} />
             <CIBadge result={t.ci_result} />
             <PullRequestBadge pr={t.pull_request} />

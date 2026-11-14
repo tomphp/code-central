@@ -406,4 +406,15 @@ describe("the Ticket pane's body", () => {
     await userEvent.click(screen.getByRole("button", { name: `${spec} Theming` }));
     expect(openSpec).toHaveBeenCalledWith(spec);
   });
+
+  it("opens a new Retro's Ticket through openTicket", async () => {
+    const { w, s } = await acme();
+    const id = await s.ticket("acme", { title: "Pick a theme", state: "Done" });
+    const openTicket = vi.fn();
+    render(<TicketDetail api={w.api} project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} openTicket={openTicket} />);
+    await userEvent.click(screen.getByRole("button", { name: "Retro" }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
+    const [retro] = (await w.api.getTicket("acme", id)).retros ?? [];
+    expect(openTicket).toHaveBeenCalledWith(retro.id);
+  });
 });

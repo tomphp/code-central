@@ -125,7 +125,7 @@ describe("the plain Spec view", () => {
     expect(pane).toHaveTextContent("Spec · submitted just now");
     expect(within(pane).getByRole("heading", { name: "Theming", level: 2 })).toBeInTheDocument();
     const tickets = within(pane).getByRole("list", { name: "Tickets" });
-    expect(within(tickets).getAllByRole("listitem").map((li) => li.textContent)).toEqual([expect.stringMatching(/^\S+ Dark palette In ReviewIn Review$/), `${light} Light palette Ready`]);
+    expect(within(tickets).getAllByRole("listitem").map((li) => li.textContent)).toEqual([expect.stringMatching(/^\S+ Dark palette In Review In Review$/), `${light} Light palette Ready`]);
     await userEvent.click(within(tickets).getByRole("button", { name: /Light palette/ }));
     expect(params().get("ticket")).toBe(light);
     expect(await within(detail()).findByRole("heading", { name: "Light palette", level: 2 })).toBeInTheDocument();
