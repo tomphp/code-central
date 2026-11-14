@@ -292,7 +292,7 @@ Before every turn, a first turn or a resume after answers, after a cut-off or af
 4. the Factory's `--model` or `--effort` flag;
 5. Claude Code's own default: the Factory passes no flag.
 
-Set tiers 2 and 3 in the [Models section of Project Options](setting-up-a-project.md#choosing-models-for-each-kind-of-work): a Project default row, and a row for each kind of work. A Ticket's kind of work comes from its Labels: `grilling`, `spec` or `tickets` for a Stage, `map-chart`, `map-grilling`, `map-research` or `map-task` for a Map Ticket, `prototype` for a Prototype, and `implementation` for any other Ticket. Override them for one Ticket with its Tags, from the Ticket panel, from an agent with `set_tags`, or by hand:
+Set tiers 2 and 3 in the [Models section of Project Options](setting-up-a-project.md#choosing-models-for-each-kind-of-work): a Project default row, and a row for each kind of work. A Ticket's kind of work comes from its Labels: `grilling`, `spec` or `tickets` for a Stage, `map-chart`, `map-grilling`, `map-research` or `map-task` for a Map Ticket, `prototype` for a Prototype, `retro` for a Retro, and `implementation` for any other Ticket. Override them for one Ticket with its Tags, from the Ticket panel, from an agent with `set_tags`, or by hand:
 
 ```sh
 code-central set-tags acme-shop-5 model=opus effort=high
@@ -378,7 +378,7 @@ If `claude` answers in a way the Factory doesn't recognise, it prints a warning 
 
 ## Map Tickets and Prototypes
 
-A Map's Tickets each carry a Wayfinder Label, and the Factory claims them like a Stage's Ticket, by the skill its Label names. A Prototype is claimed by its skill too:
+A Map's Tickets each carry a Wayfinder Label, and the Factory claims them like a Stage's Ticket, by the skill its Label names. A Prototype and a Retro are claimed by their skills too:
 
 | Label | Guide | Skill |
 | --- | --- | --- |
@@ -387,8 +387,9 @@ A Map's Tickets each carry a Wayfinder Label, and the Factory claims them like a
 | `wayfinder:research` | `map-research` | `/research` |
 | `wayfinder:task` | `map-task` | none: the session starts from the Guide alone |
 | `prototype` | `prototype` | `/prototype` |
+| `retro` | `retro` | `/retro` |
 
-A Map's Charting, grilling and task Tickets each run in a read-only worktree detached at the base's tip, as a Stage does, and write to Code Central, not to the repository. Each one's line names its Guide in place of the Stage:
+A Map's Charting, grilling and task Tickets and a Retro each run in a read-only worktree detached at the base's tip, as a Stage does, and write to Code Central, not to the repository. A Retro's system prompt also says where Claude Code keeps the logs of the sessions it reads. Each one's line names its Guide in place of the Stage:
 
 ```text
 acme-shop-9 claimed (map-chart): "Charting: Dark mode" in Spec acme-shop-8; worktree /Users/you/src/acme-shop.worktrees/acme-shop-9; resume: claude --resume …
