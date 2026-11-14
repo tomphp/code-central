@@ -148,7 +148,7 @@ describe("the CI failed panel", () => {
     const fake = await world();
     renderAt(fake, "/?view=focus");
     const item = await screen.findByRole("article", { name: "Focus Item" });
-    expect(within(item).getByText("CI failed", { selector: ".reason span" })).toBeInTheDocument();
+    expect(within(item).getByText("Focus: CI failed")).toBeInTheDocument();
     const panel = await within(item).findByRole("region", { name: "CI failed" });
     await userEvent.click(within(panel).getByRole("button", { name: "Land anyway" }));
     expect((await fake.getTicket("acme", "acme-1")).land_anyway).toBe(true);

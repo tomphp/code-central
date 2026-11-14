@@ -38,8 +38,9 @@ describe("a Ticket Focus Item", () => {
     expect(within(it).getByText("acme")).toBeInTheDocument();
     expect(within(it).getByText("acme-2")).toBeInTheDocument();
     expect(within(it).getByRole("heading", { name: "Flaky build" })).toBeInTheDocument();
-    expect(within(it).getByText("Failed")).toBeInTheDocument();
-    expect(within(it).getByText("waiting 1h")).toBeInTheDocument();
+    expect(within(it).getByText("Focus: Failed")).toBeInTheDocument();
+    // The waiting line no longer says the reason.
+    expect(within(it).getByText("waiting 1h")).toHaveTextContent(/^waiting 1h$/);
     expect(within(focus()).getAllByRole("article", { name: "Focus Item" })).toHaveLength(1);
   });
 
@@ -49,7 +50,7 @@ describe("a Ticket Focus Item", () => {
     renderApp(fake);
     const it = await item();
     expect(within(it).getByRole("heading", { name: "Beta land" })).toBeInTheDocument();
-    expect(within(it).getByText("To merge")).toBeInTheDocument();
+    expect(within(it).getByText("Focus: To merge")).toBeInTheDocument();
     const panel = await within(it).findByRole("region", { name: "Accepted" });
     expect(panel).toHaveTextContent("merge beta-1 into the base and the Factory lands it");
   });
@@ -232,6 +233,7 @@ describe("a Map Ticket or Prototype Focus Item", () => {
     const it = await item();
     expect(within(it).getByText("Map: Find the way")).toHaveClass("focus-requirement");
     expect(within(it).getByText("Prototype")).toHaveClass("label", "prototype-badge");
+    expect(within(it).getByText("Focus: In Review")).toBeInTheDocument();
     expect(within(it).getByRole("link", { name: "Open in Inbox" })).toHaveAttribute("href", "?view=inbox&ticket=acme-2");
   });
 

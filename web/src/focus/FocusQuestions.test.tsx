@@ -57,7 +57,7 @@ describe("a Question Focus Item", () => {
     expect(within(it).getByText("acme")).toBeInTheDocument();
     expect(within(it).getByText("acme-1")).toBeInTheDocument();
     expect(within(it).getByText("Pick a colour")).toBeInTheDocument();
-    expect(within(it).getByText("Questions")).toBeInTheDocument();
+    expect(within(it).getByText("Focus: Questions")).toBeInTheDocument();
     expect(within(it).getByText("waiting 2h")).toBeInTheDocument();
     expect(within(it).getByText("Question 1 of 3 · Round 2")).toBeInTheDocument();
     expect(within(it).getByText("blue").tagName).toBe("STRONG");
@@ -178,7 +178,7 @@ describe("answering in Focus Mode", () => {
     const it = await item();
     expect(await within(it).findByRole("region", { name: "Resume or release" })).toBeInTheDocument();
     expect(within(it).getByText("Pick a colour")).toBeInTheDocument();
-    expect(within(it).getByText("Answered")).toBeInTheDocument();
+    expect(within(it).getByText("Focus: Answered")).toBeInTheDocument();
     expect(within(focus()).getByText("2 left")).toBeInTheDocument();
   });
 });

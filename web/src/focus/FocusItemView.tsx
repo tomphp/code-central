@@ -5,7 +5,8 @@
 // through, and the optional Skip and Open in Inbox.
 import type { Api } from "../api/api";
 import type { NeedsMeRow, TicketView } from "../api/types";
-import { duration, REASON_LABEL, ticketOf } from "../format";
+import { duration, ticketOf } from "../format";
+import { FocusBadge } from "./FocusBadge";
 import type { InboxData } from "../live";
 import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
@@ -79,6 +80,10 @@ export function FocusItemView({
         </span>{" "}
         <span className="muted">{row.project}</span>
       </p>
+      <p className="focus-badges">
+        <FocusBadge reason={row.reason} />
+        {row.prototype && <PrototypeBadge />}
+      </p>
       {row.id ? (
         <p className="focus-ticket">
           <span className="tid">{row.id}</span>
@@ -107,18 +112,7 @@ export function FocusItemView({
       {row.spec && (
         <p className="focus-requirement">{`${row.spec.map ? "Map" : "Spec"}: ${row.spec.title}`}</p>
       )}
-      {row.prototype && (
-        <p className="focus-badges">
-          <PrototypeBadge />
-        </p>
-      )}
-      <p className="focus-why">
-        <span className={`reason reason-${row.reason}`}>
-          <span className="dot" aria-hidden="true" />{" "}
-          <span>{REASON_LABEL[row.reason]}</span>
-        </span>{" "}
-        · <span>{waited === "just now" ? waited : `waiting ${waited}`}</span>
-      </p>
+      <p className="focus-why">{waited === "just now" ? waited : `waiting ${waited}`}</p>
       {/* Keyed on the State too, as the Inbox's slot is, so a panel's local
           state never carries over to another State. */}
       {question ? (
