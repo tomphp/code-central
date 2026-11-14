@@ -389,6 +389,26 @@ describe("a session's Context Size", () => {
     expect(ys[2]).toBeLessThan(ys[0]);
   });
 
+  it("survives closing and switching a session when the browser's scrollIntoView returns a value", async () => {
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = (() => true) as unknown as typeof Element.prototype.scrollIntoView;
+    try {
+      const fake = seeded();
+      claimed(fake, "acme", "Other", "sess-other");
+      fake.postUsage("sess-other", [response(fake, 5, "implementation", 30_000)]);
+      renderApp(fake, "/?view=usage&session_project=acme&session=sess-impl");
+      await waitFor(() => expect(points()).toHaveLength(3));
+
+      await userEvent.click(within(sessionsTable()).getByRole("link", { name: "sess-other" }));
+      await waitFor(() => expect(panel()).toHaveAccessibleName("Session sess-other"));
+      await userEvent.click(within(panel()).getByRole("button", { name: "Close session" }));
+      expect(within(usage()).queryByRole("region", { name: /^Session / })).toBeNull();
+      expect(sessionsTable()).toBeInTheDocument();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it("opens a subagent's session with its agent in the address", async () => {
     renderApp(seeded(), "/?view=usage&days=30");
     await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
