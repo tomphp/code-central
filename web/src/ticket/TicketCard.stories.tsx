@@ -7,7 +7,7 @@ const meta = { title: "Ticket/TicketCard", loaders: [async () => ({ data: await 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// card renders a story from the fake API's Tickets, as wide as a Board column.
+// card renders a story from the world's Tickets, as wide as a Board column.
 const card = (draw: (d: StoryTickets) => ReactNode): Story => ({
   render: (_, { loaded }) => <div style={{ width: 240 }}>{draw(loaded.data as StoryTickets)}</div>,
 });

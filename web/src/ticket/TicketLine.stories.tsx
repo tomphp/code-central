@@ -9,7 +9,7 @@ const meta = { title: "Ticket/TicketLine", loaders: [async () => ({ data: await 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// row renders a story from the fake API's Tickets.
+// row renders a story from the world's Tickets.
 const row = (draw: (d: StoryTickets) => ReactNode): Story => ({
   render: (_, { loaded }) => <>{draw(loaded.data as StoryTickets)}</>,
 });
