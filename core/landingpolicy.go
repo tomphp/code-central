@@ -94,7 +94,8 @@ func (lp LandingPolicy) LandsOnHumanMerge() bool {
 
 // OffersLandAnyway answers Land anyway's "Offered under Merge + Push only:
 // under Branch + Push and under Pull Request the human's merge decides":
-// Merge and Push.
+// Merge and Push. Under Merge without Push it isn't offered, though no CI
+// item could offer it there anyway: no pushed commit is recorded.
 func (lp LandingPolicy) OffersLandAnyway() bool {
 	return lp.method == store.LandingMerge && lp.push
 }
@@ -154,9 +155,11 @@ func (lp LandingPolicy) PushesAcceptedBranch() bool {
 }
 
 // KeepsAcceptedWorktree answers whether the Factory keeps an Accepted
-// Ticket's worktree: under Branch the human merges the branch, so the
-// Factory is done with it. Merge or Pull Request. Whether a Spec-landed
-// Ticket's merge into its Spec Branch counts is the Ticket's own fact.
+// Ticket's worktree, because it still lands the Ticket itself: Merge or
+// Pull Request. Under Branch the human merges the branch, so the Factory
+// is done with it. A Spec-landed Ticket whose merge into its Spec Branch
+// counts is done with too, but that is a fact of the Ticket, not of the
+// policy.
 func (lp LandingPolicy) KeepsAcceptedWorktree() bool {
 	return lp.method != store.LandingBranch
 }
