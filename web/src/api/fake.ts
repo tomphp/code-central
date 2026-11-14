@@ -369,7 +369,10 @@ const specTitle = (text: string) =>
     .find((l) => l) ?? "";
 const nodeTypeOf = (t: { labels: string[] }): NodeType =>
   t.labels.includes("prototype") ? "prototype" : (WAYFINDER_TYPES.find((n) => t.labels.includes(`wayfinder:${n}`)) ?? "ticket");
-export type SeedRow = Partial<NeedsMeRow> & { id: string };
+// StoredRow is a seeded Needs Me row; its focus_item is worked out on read
+// unless seeded.
+type StoredRow = Omit<NeedsMeRow, "focus_item"> & { focus_item?: boolean };
+export type SeedRow = Partial<StoredRow> & { id: string };
 
 // LATEST_EVENT_LIMIT is the most characters the latest event's text keeps,
 // as core's LatestEventLimit.
@@ -436,7 +439,7 @@ export class FakeApi implements Api {
   // commit too.
   private reruns = new Map<string, { runs: { id: number; attempt: number }[] }>();
   private specs = new Map<string, SpecView>();
-  private groups: { reason: NeedsMeReason; tickets: NeedsMeRow[] }[] = [];
+  private groups: { reason: NeedsMeReason; tickets: StoredRow[] }[] = [];
   private subs = new Set<EventHandlers>();
   // transcripts is each Claim's Transcript, keyed by Ticket ID and Claim number.
   private transcripts = new Map<string, FakeTranscript>();
@@ -703,7 +706,7 @@ export class FakeApi implements Api {
 
   // needsMeGroups is what setNeedsMe last set, as full rows, for fake
   // actions that change Needs Me (read it, change it, set it back).
-  get needsMeGroups(): { reason: NeedsMeReason; tickets: NeedsMeRow[] }[] {
+  get needsMeGroups(): { reason: NeedsMeReason; tickets: StoredRow[] }[] {
     return structuredClone(this.groups);
   }
 
@@ -1019,13 +1022,27 @@ export class FakeApi implements Api {
   async needsMe(): Promise<NeedsMeView> {
     this.calls.push("needsMe");
     // A row's CI result is its Ticket's now, as core works it out on read.
-    const withCIResult = (r: NeedsMeRow) => {
+    const withCIResult = (r: StoredRow) => {
       const ci_result = this.tickets.get(r.id)?.ci_result;
       const pull_request = this.tickets.get(r.id)?.pull_request;
       return { ...r, ...(ci_result && { ci_result }), ...(pull_request && { pull_request }) };
     };
-    const groups = this.groups.filter((g) => g.tickets.length).map((g) => ({ ...g, tickets: g.tickets.map(withCIResult) }));
-    return structuredClone({ count: this.rows().length, groups });
+    // focus_item is the row's reason being on in its Project's Focus Kinds.
+    const focusItem = (r: StoredRow) => ({ ...r, focus_item: r.focus_item ?? !this.project(r.project).focus_kinds.off.includes(r.reason) });
+    const groups = this.groups.filter((g) => g.tickets.length).map((g) => ({ ...g, tickets: g.tickets.map((r) => focusItem(withCIResult(r))) }));
+    // counts is each Project's rows, a Requirement's Stage Tickets once
+    // in total, and a Project with nothing left out, as core works it out.
+    const counts: Record<string, number> = {};
+    const requirements = new Set<string>();
+    for (const r of this.rows()) {
+      if (r.requirement?.stage) {
+        if (requirements.has(r.requirement.spec)) continue;
+        requirements.add(r.requirement.spec);
+      }
+      counts[r.project] = (counts[r.project] ?? 0) + 1;
+    }
+    const count = Object.values(counts).reduce((a, b) => a + b, 0);
+    return structuredClone({ count, counts, groups });
   }
 
   async findTickets(project: string, filter: FindTicketsFilter = {}): Promise<TicketRow[]> {
@@ -2112,7 +2129,16 @@ export class FakeApi implements Api {
       ...(t.ci_result && { ci_result: t.ci_result }),
       ...(t.pull_request && { pull_request: { ...t.pull_request } }),
       ...(t.waiting_for_spec && { waiting_for_spec: true }),
+      ...this.reasonOf(t),
     }));
+  }
+
+  // reasonOf is a Ticket's needs_me_reason: its own Needs Me row's, or
+  // that of the CI item listing it (code-central-432).
+  private reasonOf(t: TicketView): { needs_me_reason?: NeedsMeReason } {
+    const listing = [...this.rows(), ...[...this.tickets.values()].map((o) => ({ id: o.id, reason: o.ci_item?.reason, ci_item: o.ci_item }))];
+    const reason = listing.find((r) => r.id === t.id || r.ci_item?.tickets.some((x) => x.id === t.id))?.reason;
+    return reason ? { needs_me_reason: reason } : {};
   }
 
   // liveLatest is a row's latest_event: its live Claim's, if it has one.
@@ -2284,9 +2310,7 @@ export class FakeApi implements Api {
   }
 
   private view(t: TicketView): TicketView {
-    // A Ticket's reason is its own row's, or that of the CI item listing
-    // it (code-central-432).
-    const reason = this.rows().find((r) => r.id === t.id || r.ci_item?.tickets.some((x) => x.id === t.id))?.reason;
+    const reason = this.reasonOf(t).needs_me_reason;
     const v = structuredClone(t);
     for (const c of v.claims) {
       const latest = this.latestEvent(t.id, c.number);

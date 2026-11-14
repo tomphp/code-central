@@ -52,7 +52,7 @@ apiContract("FakeApi", async (): Promise<Driver> => {
           },
         ],
       });
-      const needs = (await fake.needsMe()).groups;
+      const needs = fake.needsMeGroups;
       const group = needs.find((g) => g.reason === "needs_answer") ?? { reason: "needs_answer" as const, tickets: [] };
       group.tickets.push({
         project: key,
