@@ -423,7 +423,7 @@ func (c *Core) GetProject(_ context.Context, key string) (ProjectView, error) {
 			return unknownProject(key)
 		}
 		v = c.projectView(p)
-		v.Landing.OpenPullRequests = openPullRequests(r, key, p.Landing.Method)
+		v.Landing.OpenPullRequests = openPullRequests(r, key, landingPolicyOf(p))
 		return nil
 	})
 	return v, err
@@ -684,7 +684,7 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t store.Ticket, onMap bo
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Created: t.Created, Updated: t.Updated, Link: linkView(t.Link),
 		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(t.PullRequest),
-		WaitingForSpec: waitingForSpec(r, e.p.Landing, key, t),
+		WaitingForSpec: waitingForSpec(r, e.p, t),
 	}
 	row.NeedsMeReason, _ = e.reason(t)
 	if onMap {
@@ -766,8 +766,8 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 	if t.SpecMerge != nil {
 		v.SpecMerge = &SpecMergeView{Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}
 	}
-	v.SpecLanded = specLanded(r, pr.Landing, key, t)
-	v.WaitingForSpec = waitingForSpec(r, pr.Landing, key, t)
+	v.SpecLanded = specLanded(r, pr, t)
+	v.WaitingForSpec = waitingForSpec(r, pr, t)
 	if it, ok := e.itemOf(t); ok {
 		v.CIItem = ciItemView(r, pr, it)
 		if it.reason != ReasonCIUnavailable {

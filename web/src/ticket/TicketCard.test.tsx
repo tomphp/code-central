@@ -1,5 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import type { ProjectTicket } from "../live";
+import { Needing } from "../needsme/fixture";
 import { TicketCard } from "./TicketCard";
 
 const t = { id: "acme-7", title: "Add a login page", blocked: false, state: "In Progress" as const, updated: "2026-11-07T09:00:00Z" };
@@ -18,17 +20,25 @@ describe("TicketCard", () => {
   });
 
   it("shows its kind, Blocked, the needs-you dot and its Spec", () => {
-    render(<TicketCard t={{ ...t, blocked: true }} link={link} badge="Prototype" reason="in_review" spec={{ kind: "Map", title: "Sign-in" }} />);
+    render(
+      <Needing tickets={[t as ProjectTicket]} reasons={{ [t.id]: "in_review" }}>
+        <TicketCard t={{ ...t, blocked: true }} link={link} badge="Prototype" spec={{ kind: "Map", title: "Sign-in" }} />
+      </Needing>,
+    );
     const card = screen.getByRole("link");
     expect(card.className).toBe("board-card needs reason-in_review");
     expect(screen.getByText("Prototype").className).toBe("stage-badge");
     expect(screen.getByTitle("Has open Blockers").textContent).toBe("⛔ Blocked");
-    expect(screen.getByRole("img", { name: "Needs you" }).className).toBe("dot");
+    expect(screen.getByRole("img", { name: "Needs you" }).className).toBe("dot reason-in_review");
     expect(card.querySelector(".board-card-spec")!.textContent).toBe("Map Sign-in");
   });
 
   it("shows its CI badge before Blocked and the needs-you dot, and none when Done", () => {
-    const { rerender } = render(<TicketCard t={{ ...t, blocked: true, ci_result: "failed" }} link={link} reason="in_review" />);
+    const { rerender } = render(
+      <Needing tickets={[t as ProjectTicket]} reasons={{ [t.id]: "in_review" }}>
+        <TicketCard t={{ ...t, blocked: true, ci_result: "failed" }} link={link} />
+      </Needing>,
+    );
     const top = screen.getByRole("link").querySelector(".board-card-top")!;
     const order = [".ci-badge", ".board-blocked", ".dot"].map((s) => Array.from(top.children).indexOf(top.querySelector(s)!));
     expect(order).toEqual([...order].sort((a, b) => a - b));

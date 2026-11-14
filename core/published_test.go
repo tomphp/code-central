@@ -112,6 +112,14 @@ func TestTheInstructionsPointAtTheStageGuideAndTheRoundRule(t *testing.T) {
 	}
 }
 
+func TestTheInstructionsSayToReadASpecInParts(t *testing.T) {
+	for _, want := range []string{"`get_spec`", `parts: ["outline"]`, `["tickets"]`, "`sections`"} {
+		if !strings.Contains(core.Instructions, want) {
+			t.Errorf("MCP instructions do not say %q", want)
+		}
+	}
+}
+
 func action(t *testing.T, w core.WorkflowView, name string, who core.Who) core.ActionView {
 	t.Helper()
 	for _, a := range w.Actions {

@@ -12,9 +12,15 @@ Uses the five default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+### The real service
+
+Never run `serve`, `init`, `service install/uninstall`, `pkill`, a restart or a `curl` write against the service on 7733, or point `CODE_CENTRAL_URL` at it from a test or a demo: it is the human's, and the MCP server in `.mcp.json` is for tracker work only. For a running copy use `code-central serve --store <scratch> --port <spare>`. See `docs/agents/real-service.md`.
+
 ## Finding your way
 
 Adding or changing an operation, or a store file: see `docs/agents/recipes.md`.
+
+To run the UI and look at a change: see `docs/agents/running-the-ui.md`.
 
 To learn a Go API, read `go doc ./<pkg> <Name>` before the source.
 

@@ -151,7 +151,7 @@ func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
 			v := BlockerView{ID: DisplayID(key, m), Title: bt.Title, State: bt.State}
 			// Within a Spec, a Spec-landed Blocker clears once its work is
 			// merged into the Spec Branch.
-			if bt.Spec == t.Spec && bt.State == store.Accepted && specMergeCounts(bt) && specLanded(b.r, b.p.Landing, key, bt) {
+			if bt.Spec == t.Spec && bt.State == store.Accepted && specMergeCounts(bt) && specLanded(b.r, b.p, bt) {
 				v.Cleared = true
 			}
 			if m != n {

@@ -75,13 +75,14 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 			projects = []store.Project{p}
 		} else {
 			for _, p := range r.Projects() {
-				if p.CI.Tracking && p.Archived.IsZero() {
+				if landingPolicyOf(p).RunsCIWatcher() && p.Archived.IsZero() {
 					projects = append(projects, p)
 				}
 			}
 		}
 		for _, p := range projects {
-			out.Projects = append(out.Projects, CIProjectStatus{Project: p.Key, Tracking: p.CI.Tracking, Provider: string(p.CI.Provider), Repository: p.CI.Repository, ProjectURL: p.CI.ProjectURL, Watcher: c.watchers.view(watcherKey{WatcherCI, p.Key})})
+			v := ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key}))
+			out.Projects = append(out.Projects, CIProjectStatus{Project: p.Key, Tracking: v.Tracking, Provider: string(v.Provider), Repository: v.Repository, ProjectURL: v.ProjectURL, Watcher: v.Watcher})
 			ci := c.ciStateOf(r, p)
 			for _, run := range latestAttempts(keptCIRuns(r.CIRuns(p.Key), now)) {
 				if in.Running {

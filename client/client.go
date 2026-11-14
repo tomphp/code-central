@@ -309,6 +309,7 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 		}
 		body = bytes.NewReader(b)
 	}
+	refuseRealService(c.BaseURL)
 	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, body)
 	if err != nil {
 		return err

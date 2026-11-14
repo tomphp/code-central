@@ -5,8 +5,9 @@
 // State chip and the reason's label. It pulses when it joins its column, and when its
 // Ticket's last update changes.
 import type { MouseEvent } from "react";
-import type { NeedsMeReason, TicketRow } from "../api/types";
+import type { TicketRow } from "../api/types";
 import { KindBadge } from "../controls/KindBadge";
+import { NeedsYouDot, useNeedsMe } from "../needsme/context";
 import { StageBadge } from "../controls/StageBadge";
 import { usePulse } from "../focus/pulse";
 import { StateChip } from "../controls/StateChip";
@@ -21,8 +22,6 @@ export interface TicketCardProps {
   link: { href: string; onClick(e: MouseEvent): void };
   // badge is the Ticket's Stage or other kind, as a Stage badge.
   badge?: string;
-  // reason is why the Ticket needs the human, if it does.
-  reason?: NeedsMeReason;
   spec?: { kind: string; title: string };
   // joined pulses the card as it mounts: its Ticket changed, or is new,
   // since the Board last rendered.
@@ -33,7 +32,8 @@ export interface TicketCardProps {
 }
 
 // TicketCard is the Ticket card.
-export function TicketCard({ t, link, badge, reason, spec, joined, inNeedsMe }: TicketCardProps) {
+export function TicketCard({ t, link, badge, spec, joined, inNeedsMe }: TicketCardProps) {
+  const reason = useNeedsMe().reasonOf(t.id);
   const pulse = usePulse(reason ? `board-card needs reason-${reason}` : "board-card", t.updated, joined, "board");
   return (
     <a {...pulse} {...link}>
@@ -49,7 +49,7 @@ export function TicketCard({ t, link, badge, reason, spec, joined, inNeedsMe }: 
             ⛔ Blocked
           </span>
         )}
-        {reason && <span className="dot" role="img" aria-label="Needs you" />}
+        <NeedsYouDot id={t.id} />
       </span>
       <span className="board-card-title">{t.title}</span>
       {spec && (

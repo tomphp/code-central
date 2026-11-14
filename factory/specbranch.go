@@ -108,9 +108,10 @@ func (f *factory) reportSpecMerge(ctx context.Context, tk core.TicketView, branc
 // waitsOnSpecBranch reports whether an Accepted tk goes through its Spec
 // Branch rather than into the base: it is Spec-landed and its work isn't
 // in the base yet (such as work accepted before Land per Spec was turned
-// on, which lands as plain Merge).
-func (f *factory) waitsOnSpecBranch(tk core.TicketView, landing core.LandingView, policy store.LandingPolicy) bool {
-	if !tk.SpecLanded || !policy.LandPerSpecInForce() {
+// on, which lands as plain Merge). Core makes a Ticket Spec-landed only
+// with Land per Spec in force.
+func (f *factory) waitsOnSpecBranch(tk core.TicketView) bool {
+	if !tk.SpecLanded {
 		return false
 	}
 	head, _, err := f.workOf(tk)
@@ -138,8 +139,8 @@ func (f *factory) cutBranchWorktree(tk core.TicketView, branch, wt string) error
 // base and lands the Spec's waiting Tickets as a group, by the Push and
 // CI gate path. A Spec's Tickets are the Accepted ones the Factory has
 // merged into its Spec Branch and not yet landed.
-func (f *factory) landSpecs(ctx context.Context, landing core.LandingView, policy store.LandingPolicy) {
-	if landing.Method != store.LandingMerge || !policy.LandPerSpecInForce() {
+func (f *factory) landSpecs(ctx context.Context, p core.ProjectView) {
+	if !p.LandingPolicy().MergesSpecBranches() {
 		return
 	}
 	waiting := map[string]bool{}
@@ -154,7 +155,7 @@ func (f *factory) landSpecs(ctx context.Context, landing core.LandingView, polic
 		if f.halted(ctx) || f.paused() {
 			return
 		}
-		f.landSpec(ctx, id, landing, policy)
+		f.landSpec(ctx, id, p)
 	}
 }
 
@@ -164,8 +165,8 @@ func (f *factory) landSpecs(ctx context.Context, landing core.LandingView, polic
 // Spec Branch that conflicts with the base gets its Spec merge Ticket
 // instead. A later merge into it is pushed again, which updates the
 // pull request.
-func (f *factory) pushSpecs(ctx context.Context, accepted []core.TicketView, landing core.LandingView, policy store.LandingPolicy) {
-	if landing.Method != store.LandingPullRequest || !policy.LandPerSpecInForce() || !f.baseCurrent {
+func (f *factory) pushSpecs(ctx context.Context, accepted []core.TicketView, p core.ProjectView) {
+	if !p.LandingPolicy().PushesSpecBranches() || !f.baseCurrent {
 		return
 	}
 	seen := map[string]bool{}
@@ -177,13 +178,13 @@ func (f *factory) pushSpecs(ctx context.Context, accepted []core.TicketView, lan
 		if f.halted(ctx) || f.paused() {
 			return
 		}
-		f.pushSpec(ctx, tk.Spec.ID, landing, policy)
+		f.pushSpec(ctx, tk.Spec.ID, p)
 	}
 }
 
 // pushSpec pushes one Spec's Spec Branch when Code Central says the Spec
 // is ready.
-func (f *factory) pushSpec(ctx context.Context, id string, landing core.LandingView, policy store.LandingPolicy) {
+func (f *factory) pushSpec(ctx context.Context, id string, p core.ProjectView) {
 	spec, err := f.client.GetSpec(ctx, f.project, core.GetSpecInput{Spec: core.Ref(id), Parts: []string{"tickets"}})
 	if err != nil {
 		if ctx.Err() == nil {
@@ -227,7 +228,7 @@ func (f *factory) pushSpec(ctx context.Context, id string, landing core.LandingV
 		f.openSpecConflict(ctx, spec, tip, baseTip, conflicts)
 		return
 	}
-	pushed, why := f.push(ctx, landing.Remote, branch, tip)
+	pushed, why := f.push(ctx, p.Landing.Remote, branch, tip)
 	if why != "" {
 		for _, tk := range tickets {
 			f.cantPushYet(ctx, tk, why)
@@ -235,15 +236,15 @@ func (f *factory) pushSpec(ctx context.Context, id string, landing core.LandingV
 		return
 	}
 	if pushed {
-		f.printf("%s: pushed %s to %s", id, branch, landing.Remote)
+		f.printf("%s: pushed %s to %s", id, branch, p.Landing.Remote)
 	}
 	for _, tk := range tickets {
-		f.reportPushed(ctx, tk, policy, branch, f.remoteTip(landing.Remote, branch, tip))
+		f.reportPushed(ctx, tk, p.LandingPolicy(), branch, f.remoteTip(p.Landing.Remote, branch, tip))
 	}
 }
 
 // landSpec lands one Spec when Code Central says it is ready.
-func (f *factory) landSpec(ctx context.Context, id string, landing core.LandingView, policy store.LandingPolicy) {
+func (f *factory) landSpec(ctx context.Context, id string, p core.ProjectView) {
 	spec, err := f.client.GetSpec(ctx, f.project, core.GetSpecInput{Spec: core.Ref(id), Parts: []string{"tickets"}})
 	if err != nil {
 		if ctx.Err() == nil {
@@ -265,7 +266,7 @@ func (f *factory) landSpec(ctx context.Context, id string, landing core.LandingV
 		}
 		tickets = append(tickets, tk)
 	}
-	f.mergeSpec(ctx, spec, tickets, landing, policy)
+	f.mergeSpec(ctx, spec, tickets, p)
 }
 
 // mergeSpec merges the Spec Branch of spec into the base and lands its
@@ -273,7 +274,7 @@ func (f *factory) landSpec(ctx context.Context, id string, landing core.LandingV
 // this poll: false means the Spec Branch is already in the base or can't
 // be read, and the Tickets land through the plain path, as their work is
 // in the base.
-func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []core.TicketView, landing core.LandingView, policy store.LandingPolicy) (handled bool) {
+func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []core.TicketView, p core.ProjectView) (handled bool) {
 	id := spec.ID
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
 	ref := "refs/heads/" + specBranch(id)
@@ -285,7 +286,7 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 		// Merged before the base changed, so finishing on its push or CI:
 		// it lands on the base it was merged into.
 		for _, tk := range tickets {
-			f.landPushed(ctx, tk, landing, policy, old.base, old.commit)
+			f.landPushed(ctx, tk, p, old.base, old.commit)
 		}
 		return true
 	}
@@ -323,7 +324,7 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 	f.printf("%s: landing its Tickets: %s", id, joinIDs(tickets))
 	for _, tk := range tickets {
 		f.mergedOn[tk.ID] = mergeOn{f.baseBranch(), merge}
-		f.landPushed(ctx, tk, landing, policy, f.baseBranch(), merge)
+		f.landPushed(ctx, tk, p, f.baseBranch(), merge)
 	}
 	return true
 }
@@ -334,9 +335,9 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 // Spec no longer covers, goes into the base, ready or not, and those
 // Tickets land as a group. It returns the Tickets it handled, which the plain path
 // leaves alone this poll.
-func (f *factory) landSpecsOff(ctx context.Context, accepted []core.TicketView, landing core.LandingView, policy store.LandingPolicy) map[string]bool {
+func (f *factory) landSpecsOff(ctx context.Context, accepted []core.TicketView, p core.ProjectView) map[string]bool {
 	handled := map[string]bool{}
-	if landing.Method != store.LandingMerge {
+	if !p.LandingPolicy().MergesLeftoverSpecBranches() {
 		return handled
 	}
 	groups := map[string][]core.TicketView{}
@@ -345,7 +346,7 @@ func (f *factory) landSpecsOff(ctx context.Context, accepted []core.TicketView, 
 		if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
 			continue
 		}
-		if tk.SpecLanded && policy.LandPerSpecInForce() {
+		if tk.SpecLanded && p.LandingPolicy().LandPerSpecInForce() {
 			continue
 		}
 		if head, _, err := f.workOf(tk); err == nil && f.inBase(head) {
@@ -370,7 +371,7 @@ func (f *factory) landSpecsOff(ctx context.Context, accepted []core.TicketView, 
 			}
 			continue
 		}
-		if f.mergeSpec(ctx, spec, groups[id], landing, policy) {
+		if f.mergeSpec(ctx, spec, groups[id], p) {
 			for _, tk := range groups[id] {
 				handled[tk.ID] = true
 			}
@@ -421,7 +422,7 @@ func (f *factory) specLanded(spec core.SpecDetail) bool {
 // sweepSpecBranches deletes each Spec Branch that is in the base once
 // every Ticket on its Spec is Done or Cancelled. One not in the base, as
 // when the whole Spec is cancelled, is kept, with a line printed once.
-func (f *factory) sweepSpecBranches(ctx context.Context, underPullRequest bool) {
+func (f *factory) sweepSpecBranches(ctx context.Context, policy core.LandingPolicy) {
 	branches, err := f.repository.specBranches()
 	if err != nil {
 		return
@@ -449,7 +450,7 @@ func (f *factory) sweepSpecBranches(ctx context.Context, underPullRequest bool) 
 		if err != nil {
 			continue
 		}
-		if !f.inBase(tip) && !(underPullRequest && f.specLanded(spec)) {
+		if !f.inBase(tip) && !(policy.LandsByPullRequest() && f.specLanded(spec)) {
 			if !f.warned[ref] {
 				f.warned[ref] = true
 				f.printf("%s: every Ticket is finished but %s isn't in %s: kept", id, branch, f.baseBranch())

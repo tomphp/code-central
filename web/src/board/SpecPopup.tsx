@@ -6,7 +6,7 @@
 // Spec, switches the popup. No Ticket is shown as selected in it.
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
-import type { NeedsMeReason, ProjectRow } from "../api/types";
+import type { ProjectRow } from "../api/types";
 import { useSpec } from "../live";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
@@ -20,7 +20,6 @@ export interface SpecPopupProps {
   version: number;
   id: string;
   projects: ProjectRow[];
-  reasons: Map<string, NeedsMeReason>;
   onClose(): void;
   // open switches the popup to another Spec's or a Ticket's.
   open(id: string): void;
@@ -28,7 +27,7 @@ export interface SpecPopupProps {
   specLink(id: string): Link;
 }
 
-export function SpecPopup({ api, now, version, id, projects, reasons, onClose, open, specLink }: SpecPopupProps) {
+export function SpecPopup({ api, now, version, id, projects, onClose, open, specLink }: SpecPopupProps) {
   const project = projectOf(id);
   const spec = useSpec(api, project, id, version);
   const archived = !!projects.find((p) => p.key === project)?.archived;
@@ -40,15 +39,14 @@ export function SpecPopup({ api, now, version, id, projects, reasons, onClose, o
           api={api}
           spec={{ ...data, requirement: data.requirement }}
           archived={archived}
-          reasons={reasons}
           now={now}
           select={open}
           specLink={specLink}
         />
       ) : data?.map ? (
-        <MapPane api={api} spec={{ ...data, map: data.map }} reasons={reasons} now={now} select={open} specLink={specLink} written={open} />
+        <MapPane api={api} spec={{ ...data, map: data.map }} now={now} select={open} specLink={specLink} written={open} />
       ) : data ? (
-        <SpecPane api={api} spec={data} archived={archived} reasons={reasons} now={now} select={open} />
+        <SpecPane api={api} spec={data} archived={archived} now={now} select={open} />
       ) : (
         <p className="empty">{spec.error ? spec.error.message : "Loading…"}</p>
       )}
