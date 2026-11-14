@@ -110,9 +110,10 @@ func (f *factory) prune() {
 
 // sweep looks at every worktree `git worktree list` reports in the
 // Factory's folder. One whose Ticket is Done or Cancelled, or Accepted
-// under the Branch Landing Method, so the human can check its branch
-// out, or Accepted with its Spec merge recorded under Land per Spec, is removed with `git worktree remove` when clean, and left with a
-// warning line when dirty. Branches are never deleted, and anything else
+// where the Landing Policy doesn't keep it (under Branch, so the human
+// can check its branch out), or Accepted with its Spec merge recorded
+// under Land per Spec, is removed with `git worktree remove` when clean,
+// and left with a warning line when dirty. Branches are never deleted, and anything else
 // is kept.
 func (f *factory) sweep(ctx context.Context, policy core.LandingPolicy) {
 	list, err := f.repository.worktrees()

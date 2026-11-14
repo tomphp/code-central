@@ -94,11 +94,13 @@ func (f *factory) remoteReady(p core.ProjectView) bool {
 }
 
 // land lands Accepted Tickets one at a time, oldest accept first (ADR
-// 0006), by the Project's Landing Method, and detects merges made by
-// hand. Under Merge the Factory merges each into the base and, with Push
-// on, pushes the base before landing it; under Branch it leaves each for the human to
-// merge, and lands it once merged. The Factory never accepts: only the
-// human moves a Ticket to Accepted.
+// 0006), each by the route the Landing Policy gives it, and detects merges
+// made by hand. By Merge the Factory merges it into the base and, with
+// Push on, pushes the base before landing it; by Branch it leaves it for
+// the human to merge, and lands it once merged; by Pull Request it lands
+// it through its pull request; by Spec Branch it merges it into
+// its Spec Branch. The Factory never accepts: only the human moves a
+// Ticket to Accepted.
 func (f *factory) land(ctx context.Context, p core.ProjectView) {
 	accepted := f.landable(ctx, store.Accepted)
 	sort.SliceStable(accepted, func(i, j int) bool { return acceptedAt(accepted[i]).Before(acceptedAt(accepted[j])) })
