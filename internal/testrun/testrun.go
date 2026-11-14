@@ -42,6 +42,7 @@ var suite = []job{
 	{Name: "go test", Args: []string{"go", "test", "./..."}},
 	{Name: "vitest", Dir: "web", Args: []string{"node", "node_modules/vitest/vitest.mjs", "run"}},
 	{Name: "tsc", Dir: "web", Args: []string{"node", "node_modules/typescript/bin/tsc", "--noEmit"}},
+	{Name: "hooks", Args: []string{"python3", "-I", ".claude/hooks/prefer-edit_test.py"}},
 }
 
 func main() {
