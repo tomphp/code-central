@@ -152,6 +152,9 @@ type fetching struct {
 	// funcs are the JavaScript functions it made, freed when it ends.
 	funcs []js.Func
 	once  sync.Once
+	// cancelled is set once its body's reader cancels it, after which
+	// the stream refuses a chunk or a close with an exception.
+	cancelled bool
 }
 
 func newFetching(signal js.Value) *fetching {
@@ -213,6 +216,12 @@ func (f *fetching) response(res *http.Response) js.Value {
 		return promise(func() (js.Value, error) {
 			buf := make([]byte, 32<<10)
 			n, err := res.Body.Read(buf)
+			// A cancel can come between the read and here, and an
+			// exception from the stream would stop every world.
+			if f.cancelled {
+				f.end()
+				return js.Undefined(), nil
+			}
 			if n > 0 {
 				chunk := js.Global().Get("Uint8Array").New(n)
 				js.CopyBytesToJS(chunk, buf[:n])
@@ -229,6 +238,7 @@ func (f *fetching) response(res *http.Response) js.Value {
 		})
 	})
 	cancel := js.FuncOf(func(js.Value, []js.Value) any {
+		f.cancelled = true
 		res.Body.Close()
 		go f.end()
 		return nil
