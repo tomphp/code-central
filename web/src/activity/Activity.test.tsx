@@ -27,13 +27,15 @@ function renderApp(fake: FakeApi, url = "/") {
 const nav = () => screen.getByRole("navigation", { name: "Filters" });
 
 describe("opening the Activity view from the Inbox", () => {
-  it("links from the Admin section, between Usage and CI, on the sidebar's Project", () => {
+  it("links first in the View section, before Board and Needs Me, on the sidebar's Project", () => {
     renderApp(world(), "/?view=inbox&project=acme&state=Accepted");
     const link = within(nav()).getByRole("link", { name: "Activity" });
-    const usage = within(nav()).getByRole("link", { name: "Usage" });
-    const ci = within(nav()).getByRole("link", { name: "CI" });
-    expect(usage.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(link.compareDocumentPosition(ci) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const view = within(nav()).getByRole("heading", { level: 2, name: "View" });
+    const board = within(nav()).getByRole("link", { name: /^Board/ });
+    const needsMe = within(nav()).getByRole("button", { name: /^Needs Me/ });
+    expect(view.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(link.compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(link.compareDocumentPosition(needsMe) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(link).toHaveAttribute("href", "?view=activity&project=acme&back=view%3Dinbox%26project%3Dacme%26state%3DAccepted");
     expect(link).not.toHaveTextContent(/\d/);
   });

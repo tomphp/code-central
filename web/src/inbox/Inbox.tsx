@@ -1,7 +1,7 @@
 // The triage inbox: on the left, a top row of the split "+ New" button
 // (New requirement, with Requirement and Map in its ▾ menu) and "◎ Focus",
-// then Projects and Views (the last of them linking the Board view), then
-// an Admin section linking Usage, CI and
+// then Projects and Views (the first two linking the Activity and Board views), then
+// an Admin section linking CI, Usage and
 // Options; the list in the middle; the selected Requirement, Map or plain
 // Spec and Ticket on the right. A layout only: the data comes from live.ts and the
 // Ticket pane is shared with any later view.
@@ -214,6 +214,8 @@ export function Inbox({
         />
         {projects.filter((p) => !p.archived).map(projectFilter)}
         <h2>View</h2>
+        <ActivityLink loc={loc} navigate={navigate} className="filter" />
+        <BoardLink loc={loc} navigate={navigate} className="filter" />
         <FilterButton
           on={!loc.state && !loc.list}
           label="Needs Me"
@@ -243,11 +245,9 @@ export function Inbox({
             onClick={() => navigate({ state: s, list: undefined })}
           />
         ))}
-        <BoardLink loc={loc} navigate={navigate} className="filter" />
         <h2>Admin</h2>
-        <UsageLink loc={loc} navigate={navigate} className="filter" />
-        <ActivityLink loc={loc} navigate={navigate} className="filter" />
         <CILink loc={loc} navigate={navigate} className="filter" />
+        <UsageLink loc={loc} navigate={navigate} className="filter" />
         <OptionsLink loc={loc} navigate={navigate} className="filter" />
         <ArchivedProjects count={archived.length}>
           {archived.map(projectFilter)}

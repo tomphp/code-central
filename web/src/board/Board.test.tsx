@@ -52,15 +52,13 @@ const noPopup = () => expect(screen.queryByRole("dialog")).toBeNull();
 beforeEach(() => localStorage.clear());
 
 describe("the Board link", () => {
-  it("sits in the View section after All Tickets and its States, before Admin, on the Inbox's Project", async () => {
+  it("sits in the View section right after Activity, before Needs Me, on the Inbox's Project", async () => {
     renderApp(world(), "/?view=inbox&project=acme&list=tickets");
     const link = boardLink();
-    const allTickets = within(nav()).getByRole("button", { name: /^All Tickets/ });
-    const lastState = within(nav()).getByRole("button", { name: /^Cancelled/ });
-    const admin = within(nav()).getByRole("heading", { name: "Admin" });
-    expect(allTickets.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(lastState.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(link.compareDocumentPosition(admin) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const activity = within(nav()).getByRole("link", { name: "Activity" });
+    const needsMe = within(nav()).getByRole("button", { name: /^Needs Me/ });
+    expect(activity.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(link.compareDocumentPosition(needsMe) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(link).toHaveAttribute("href", "?view=board&project=acme&back=view%3Dinbox%26project%3Dacme%26list%3Dtickets");
   });
 
