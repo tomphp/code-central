@@ -95,16 +95,30 @@ func TestSetFocusKindsIsRejectedForAnAgent(t *testing.T) {
 	}
 }
 
-// Focus Kinds act only on the web's focus queue: Needs Me and its count
-// stay as they were with a reason off.
+// Focus Kinds mark Focus Items and filter nothing: Needs Me and its count
+// stay as they were with a reason off, but its rows say they aren't Focus
+// Items.
 func TestAReasonOffLeavesNeedsMeAndItsCountUnchanged(t *testing.T) {
 	srv := newServer(t)
 	ticketInReview(t, srv)
+	// focus sets every row's focus_item to want, to compare the rest.
+	focus := func(v map[string]any, want bool) map[string]any {
+		for _, g := range v["groups"].([]any) {
+			for _, row := range g.(map[string]any)["tickets"].([]any) {
+				row.(map[string]any)["focus_item"] = want
+			}
+		}
+		return v
+	}
 	before := httpOK(t, srv, httpCall{"GET", "/api/needs-me", ""})
 	beforeRows, _ := httpOK(t, srv, httpCall{"GET", "/api/projects", ""})["rows"].([]any)
 	httpOK(t, srv, setFocusKinds(`{"off":["in_review"]}`))
 	after := httpOK(t, srv, httpCall{"GET", "/api/needs-me", ""})
-	if !reflect.DeepEqual(after, before) || after["count"] != float64(1) {
+	row := after["groups"].([]any)[0].(map[string]any)["tickets"].([]any)[0].(map[string]any)
+	if row["focus_item"] != false {
+		t.Fatalf("the In Review row = %v, want focus_item false", row)
+	}
+	if !reflect.DeepEqual(focus(after, true), focus(before, true)) || after["count"] != float64(1) {
 		t.Fatalf("needs-me with In Review off = %v, want %v", after, before)
 	}
 	afterRows, _ := httpOK(t, srv, httpCall{"GET", "/api/projects", ""})["rows"].([]any)

@@ -54,6 +54,13 @@ func wantEverywhere(t *testing.T, f fixture, key, id string, want core.NeedsMeRe
 	if v.NeedsMeReason != want {
 		t.Errorf("get_ticket %s: needs_me_reason %q, want %q", id, v.NeedsMeReason, want)
 	}
+	rows, err := f.core.FindTickets(ctx, key, core.FindTicketsInput{State: store.States})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i := slices.IndexFunc(rows, func(r core.TicketRow) bool { return r.ID == id }); i < 0 || rows[i].NeedsMeReason != want {
+		t.Errorf("find_tickets %s: row %+v, want needs_me_reason %q", id, rows, want)
+	}
 	wantIn := []core.NeedsMeReason{}
 	if want != "" {
 		wantIn = append(wantIn, want)
@@ -418,6 +425,12 @@ func TestTurningFocusKindsOffChangesNoReader(t *testing.T) {
 		v, err := f.core.NeedsMe(human)
 		if err != nil {
 			t.Fatal(err)
+		}
+		// focus_item is what Focus Kinds change; the rest must not move.
+		for _, g := range v.Groups {
+			for i := range g.Tickets {
+				g.Tickets[i].FocusItem = true
+			}
 		}
 		out := reads{NeedsMe: v, Attention: f.core.Attention(ctx), Reasons: map[string]core.NeedsMeReason{}, Counts: map[string]int{}}
 		for _, a := range out.Attention {

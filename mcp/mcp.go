@@ -79,7 +79,7 @@ var tools = map[string]tool{
 		}),
 	},
 	"find_tickets": {
-		description: "Find this Project's Tickets in claim order; every filter given must match.",
+		description: "Find this Project's Tickets in claim order; every filter given must match. Each row carries needs_me_reason when the Ticket waits on the human, the same as get_ticket.",
 		schema: object(map[string]any{
 			"state":     list("Only Tickets in one of these States."),
 			"title":     text("Only Tickets whose title contains this text."),

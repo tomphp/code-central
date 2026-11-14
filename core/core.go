@@ -320,6 +320,9 @@ type TicketRow struct {
 	// WaitingForSpec says the Ticket is Accepted and waits for its Spec to
 	// land, for its badge (code-central-371).
 	WaitingForSpec bool `json:"waiting_for_spec,omitempty"`
+	// NeedsMeReason says why the Ticket waits on the human, if it does:
+	// the reason get_ticket gives, a CI item's for a Ticket it lists.
+	NeedsMeReason NeedsMeReason `json:"needs_me_reason,omitempty"`
 }
 
 // CreateProjectInput is create_project's input.
@@ -558,12 +561,12 @@ func (c *Core) FindTickets(_ context.Context, key string, in FindTicketsInput) (
 		}
 		tickets := r.Tickets(key)
 		slices.SortStableFunc(tickets, claimOrder)
-		ci := c.ciStateOf(r, p)
+		e := c.evaluate(r, p)
 		for _, t := range tickets {
 			if !matches(t, in, specN) {
 				continue
 			}
-			row := c.ticketRow(r, ci, t, maps[t.Spec])
+			row := c.ticketRow(r, e, t, maps[t.Spec])
 			if in.Claimable != nil && *in.Claimable != (t.State == store.Ready && !row.Blocked) {
 				continue
 			}
@@ -610,17 +613,18 @@ func hasAll(labels []string, tags map[string]string, wantLabels []string, wantTa
 	return true
 }
 
-// ticketRow is t as a find_tickets row, its CI read from its Project's
-// CI state ci; onMap says t is on a Map, so the row carries its node
-// type.
-func (c *Core) ticketRow(r store.Reader, ci *ciState, t store.Ticket, onMap bool) TicketRow {
-	key := ci.p.Key
+// ticketRow is t as a find_tickets row, its CI and reason read from its
+// Project's evaluation e; onMap says t is on a Map, so the row carries
+// its node type.
+func (c *Core) ticketRow(r store.Reader, e *evaluation, t store.Ticket, onMap bool) TicketRow {
+	key := e.p.Key
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Created: t.Created, Updated: t.Updated, Link: linkView(t.Link),
-		CIResult: ci.ticket(t).result, PullRequest: pullRequestView(t.PullRequest),
-		WaitingForSpec: waitingForSpec(r, ci.p.Landing, key, t),
+		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(t.PullRequest),
+		WaitingForSpec: waitingForSpec(r, e.p.Landing, key, t),
 	}
+	row.NeedsMeReason, _ = e.reason(t)
 	if onMap {
 		row.NodeType = NodeType(t.Labels)
 		row.BlockedBy = displayIDs(key, t.BlockedBy)

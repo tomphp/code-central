@@ -146,7 +146,7 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 			v.Tickets = []TicketRow{}
 			onMap := isMap(s.Labels)
 			for _, t := range tickets {
-				v.Tickets = append(v.Tickets, c.ticketRow(r, e.ci, t, onMap))
+				v.Tickets = append(v.Tickets, c.ticketRow(r, e, t, onMap))
 			}
 		}
 		return nil

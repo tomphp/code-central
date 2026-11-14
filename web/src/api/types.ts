@@ -540,6 +540,9 @@ export interface NeedsMeRow {
   state: State;
   reason: NeedsMeReason;
   since: string;
+  // focus_item says the Project's Focus Kinds leave the row's reason on.
+  // Core always sends it; the web doesn't read it yet.
+  focus_item?: boolean;
   round?: { number: number; open: number; questions: number };
   failure?: { headline: string; reports: number };
   summary?: string;
@@ -766,7 +769,11 @@ export interface NeedsMeGroup {
 }
 
 export interface NeedsMeView {
+  // count is the Needs Me count across every Project, the sum of counts.
   count: number;
+  // counts is the Needs Me count of each Project that has something in Needs Me.
+  // Core always sends it; the web still counts the rows itself.
+  counts?: Record<string, number>;
   groups: NeedsMeGroup[];
 }
 
@@ -797,6 +804,9 @@ export interface TicketRow {
   // waiting_for_spec is set on an Accepted Ticket that waits for its Spec
   // to land, for its badge (code-central-371).
   waiting_for_spec?: boolean;
+  // needs_me_reason says why the Ticket waits on the human, if it does:
+  // the reason get_ticket gives.
+  needs_me_reason?: NeedsMeReason;
 }
 
 export interface FindTicketsFilter {
