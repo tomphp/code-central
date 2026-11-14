@@ -14,10 +14,13 @@ import (
 // Ticket's Tags and above the Factory's flags.
 
 // ModelsView is a Project's Models as every Project read returns them:
-// the Project default row, then one row for every kind of work, in
-// GuideNames order, each empty where it sets nothing.
+// the Project default row, the Chat row, then one row for every kind of
+// work, in GuideNames order, each empty where it sets nothing. The Chat
+// row is not a kind of work (Spec code-central-633): Chat doesn't use the
+// default row, so a costly default doesn't make Chat costly.
 type ModelsView struct {
 	Default ModelRowView     `json:"default"`
+	Chat    ModelRowView     `json:"chat"`
 	Kinds   []KindModelsView `json:"kinds"`
 }
 
@@ -35,16 +38,18 @@ type KindModelsView struct {
 }
 
 func modelsView(m store.Models) ModelsView {
-	v := ModelsView{Default: ModelRowView(m.Default), Kinds: []KindModelsView{}}
+	v := ModelsView{Default: ModelRowView(m.Default), Chat: ModelRowView(m.Chat), Kinds: []KindModelsView{}}
 	for _, g := range GuideNames {
 		v.Kinds = append(v.Kinds, KindModelsView{Kind: g, ModelRowView: ModelRowView(m.Kind(g))})
 	}
 	return v
 }
 
-// SetModelsInput is the human's set_models(default, kinds, full?).
+// SetModelsInput is the human's set_models(default, chat, kinds, full?).
 type SetModelsInput struct {
 	Default ModelRowView `json:"default"`
+	// Chat is the Chat row's model and effort.
+	Chat ModelRowView `json:"chat"`
 	// Kinds are the rows for kinds of work; a kind left out, or a row
 	// setting nothing, sets nothing.
 	Kinds []KindModelsView `json:"kinds"`
@@ -90,6 +95,9 @@ func checkedModels(r store.Reader, key string, in SetModelsInput) (store.Models,
 	var m store.Models
 	var err error
 	if m.Default, err = modelRow(r, key, "default", "the Project default", in.Default); err != nil {
+		return store.Models{}, err
+	}
+	if m.Chat, err = modelRow(r, key, "chat", "the Chat row", in.Chat); err != nil {
 		return store.Models{}, err
 	}
 	seen := map[string]bool{}

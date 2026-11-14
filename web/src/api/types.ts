@@ -258,12 +258,19 @@ export interface KindModels extends ModelRow {
   kind: string;
 }
 
-// A Project's Models: the Project default row, then a row for every kind
-// of work, in the guides' order.
+// A Project's Models: the Project default row, the Chat row (Spec
+// code-central-633), then a row for every kind of work, in the guides'
+// order. Chat is not a kind of work, and the Project default doesn't
+// apply to it.
 export interface Models {
   default: ModelRow;
+  chat: ModelRow;
   kinds: KindModels[];
 }
+
+// What set_models takes: the rows whole, with the Chat row left empty
+// when it is left out.
+export type ModelsChange = Omit<Models, "chat"> & { chat?: ModelRow };
 
 // EFFORT_LEVELS are the valid effort levels until a Factory reports its
 // claude's.

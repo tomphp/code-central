@@ -87,7 +87,7 @@ export function createHttpApi(opts: HttpApiOptions = {}): Api {
     // Only the settings themselves: a Project's read adds spec and watcher.
     setGitHubIssues: (project, { on, repository, label, new_issues_need_me }) =>
       call("POST", `${p(project)}/set_github_issues`, { on, repository, label, new_issues_need_me, full: true }),
-    setModels: (project, models) => call("POST", `${p(project)}/set_models`, { default: models.default, kinds: models.kinds, full: true }),
+    setModels: (project, models) => call("POST", `${p(project)}/set_models`, { default: models.default, chat: models.chat ?? { model: "", effort: "" }, kinds: models.kinds, full: true }),
     setSubagentExploration: (project, on) => call("POST", `${p(project)}/set_subagent_exploration`, { on, full: true }),
     setModelAssignment: (project, on) => call("POST", `${p(project)}/set_model_assignment`, { on, full: true }),
     setAutoAccept: (project, kinds) => call("POST", `${p(project)}/set_auto_accept`, { kinds, full: true }),

@@ -482,13 +482,16 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       const kinds = ["grilling", "spec", "tickets", "map-chart", "map-grilling", "map-research", "map-task", "prototype", "implementation"];
       const unset = { model: "", effort: "" };
-      expect((await d.api.listProjects())[0].models).toEqual({ default: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
+      expect((await d.api.listProjects())[0].models).toEqual({ default: unset, chat: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
 
       const set = await d.api.setModels("acme", {
         default: { model: " opus ", effort: "high" },
+        chat: { model: " sonnet ", effort: "low" },
         kinds: [{ kind: "implementation", model: "", effort: "xhigh" }],
       });
       expect(set.models.default).toEqual({ model: "opus", effort: "high" });
+      // The Chat row is its own row, not one of the kinds of work.
+      expect(set.models.chat).toEqual({ model: "sonnet", effort: "low" });
       expect(set.models.kinds.map((k) => k.kind)).toEqual(kinds);
       expect(set.models.kinds.at(-1)).toEqual({ kind: "implementation", model: "", effort: "xhigh" });
       expect((await d.api.listProjects())[0].models).toEqual(set.models);
@@ -501,11 +504,15 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(blank).toMatchObject({ status: 422, code: "invalid", field: "default.model" });
       const other = await d.api.setModels("acme", { default: unset, kinds: [{ kind: "review", model: "opus", effort: "" }] }).catch((e) => e);
       expect(other).toMatchObject({ status: 422, code: "invalid", field: "kinds" });
+      const chatEffort = await d.api.setModels("acme", { default: unset, chat: { model: "", effort: "extreme" }, kinds: [] }).catch((e) => e);
+      expect(chatEffort).toMatchObject({ status: 422, code: "invalid", field: "chat.effort" });
+      const chatBlank = await d.api.setModels("acme", { default: unset, chat: { model: " ", effort: "" }, kinds: [] }).catch((e) => e);
+      expect(chatBlank).toMatchObject({ status: 422, code: "invalid", field: "chat.model" });
       expect((await d.api.listProjects())[0].models).toEqual(set.models);
 
-      // The rows are replaced whole.
+      // The rows are replaced whole, the Chat row too.
       const cleared = await d.api.setModels("acme", { default: unset, kinds: [] });
-      expect(cleared.models).toEqual({ default: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
+      expect(cleared.models).toEqual({ default: unset, chat: unset, kinds: kinds.map((kind) => ({ kind, ...unset })) });
     });
 
     it("serves factory_status: offline with no Factories, then each Factory from its Heartbeat", async () => {

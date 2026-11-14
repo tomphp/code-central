@@ -44,8 +44,8 @@ describe("the Models section", () => {
     await findModels();
     const sections = Array.from(page().querySelectorAll("fieldset.project-options-section > legend"), (l) => l.textContent);
     expect(sections).toEqual(["Landing Method", "CI", "GitHub Issues", "Models", "Stage Guides", "Auto-accept", "Focus", "Factories"]);
-    expect(within(models()).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["Project default", ...KINDS]);
-    for (const row of ["the Project default", ...KINDS]) {
+    expect(within(models()).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(["Project default", ...KINDS, "Chat"]);
+    for (const row of ["the Project default", ...KINDS, "Chat"]) {
       expect(model(row)).toHaveValue("");
       expect(effort(row)).toHaveValue("");
     }
@@ -66,6 +66,63 @@ describe("the Models section", () => {
     // It follows the Project default as typed.
     await userEvent.selectOptions(effort("the Project default"), "high");
     expect(options(effort("spec"))[0]).toBe("Default (high)");
+  });
+
+  it("shows haiku as Chat's model, which neither the Project default nor the Factory's flags reach", async () => {
+    const { w, s } = await fresh();
+    await w.api.setModels("acme", { default: { model: "opus", effort: "high" }, kinds: [] });
+    await s.reportModels("acme", { ...report, model_flag: "sonnet", effort_flag: "low" });
+    renderApp(w);
+
+    await findModels();
+    expect(model("Chat")).toHaveAttribute("placeholder", "haiku");
+    expect(options(effort("Chat"))[0]).toBe("Default (Claude Code's default)");
+    // A kind's row still inherits the Project default.
+    expect(model("spec")).toHaveAttribute("placeholder", "Default (opus)");
+    // Typing a Project default doesn't move Chat's placeholders.
+    await userEvent.type(model("the Project default"), "x");
+    await userEvent.selectOptions(effort("the Project default"), "max");
+    expect(model("Chat")).toHaveAttribute("placeholder", "haiku");
+    expect(options(effort("Chat"))[0]).toBe("Default (Claude Code's default)");
+  });
+
+  it("sets and reads Chat's model and effort, apart from the kinds of work", async () => {
+    const { w } = await fresh();
+    renderApp(w);
+
+    await findModels();
+    await userEvent.type(model("Chat"), "sonnet");
+    await userEvent.selectOptions(effort("Chat"), "low");
+    await save();
+
+    await within(models()).findByRole("status");
+    const stored = (await w.api.listProjects())[0].models;
+    expect(stored.chat).toEqual({ model: "sonnet", effort: "low" });
+    expect(stored.default).toEqual(unset);
+    expect(stored.kinds.every((k) => k.model === "" && k.effort === "")).toBe(true);
+    expect(model("Chat")).toHaveValue("sonnet");
+
+    // A change from another tab shows, and a row back at Default clears.
+    await w.api.setModels("acme", { default: unset, chat: { model: "opus", effort: "" }, kinds: [] });
+    expect(await within(models()).findByDisplayValue("opus")).toBe(model("Chat"));
+    await userEvent.clear(model("Chat"));
+    await save();
+    await within(models()).findByRole("status");
+    expect((await w.api.listProjects())[0].models.chat).toEqual(unset);
+  });
+
+  it("shows a rejected Chat effort's error on Chat's picker", async () => {
+    const { w, s } = await fresh();
+    await w.api.setModels("acme", { default: unset, chat: { model: "", effort: "max" }, kinds: [] });
+    await s.reportModels("acme", { ...report, effort_levels: ["low", "medium", "high"] });
+    renderApp(w);
+
+    await findModels();
+    await userEvent.type(model("Chat"), "sonnet");
+    await save();
+
+    await within(models()).findByRole("alert");
+    expect(effort("Chat")).toHaveAttribute("aria-invalid", "true");
   });
 
   it("offers the valid effort levels after Default", async () => {
@@ -91,7 +148,7 @@ describe("the Models section", () => {
     renderApp(w);
 
     await findModels();
-    for (const row of ["the Project default", ...KINDS]) expect(suggested(model(row))).toEqual([]);
+    for (const row of ["the Project default", ...KINDS, "Chat"]) expect(suggested(model(row))).toEqual([]);
   });
 
   it("suggests the reported aliases and model IDs in every model picker", async () => {
@@ -101,7 +158,7 @@ describe("the Models section", () => {
     renderApp(w);
 
     await findModels();
-    for (const row of ["the Project default", ...KINDS]) {
+    for (const row of ["the Project default", ...KINDS, "Chat"]) {
       expect(suggested(model(row))).toEqual(["fable", "opus", "sonnet", "claude-opus-5-5"]);
     }
     // Free text still goes.

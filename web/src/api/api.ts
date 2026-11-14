@@ -33,7 +33,7 @@ import type {
   SessionUsageFilter,
   SessionUsageView,
   TargetView,
-  UsageView, GitHubIssuesChange, Models, NeedsMeReason
+  UsageView, GitHubIssuesChange, ModelsChange, NeedsMeReason
 } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
@@ -131,9 +131,10 @@ export interface Api {
   // changed repository unless the human retitled it.
   setGitHubIssues(project: string, settings: GitHubIssuesChange): Promise<ProjectView>;
   // setModels replaces the Project's Models rows whole: a kind left out
-  // is set to Default. A model is trimmed and can't be blank or span
-  // lines; an effort must be one of the valid levels.
-  setModels(project: string, models: Models): Promise<ProjectView>;
+  // is set to Default, and so is the Chat row. A model is trimmed and
+  // can't be blank or span lines; an effort must be one of the valid
+  // levels.
+  setModels(project: string, models: ModelsChange): Promise<ProjectView>;
   // setSubagentExploration turns on or off the implementation guide's
   // subagent line, from the next Claim and the next get_stage_guide.
   setSubagentExploration(project: string, on: boolean): Promise<ProjectView>;
