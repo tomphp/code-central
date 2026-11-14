@@ -286,17 +286,25 @@ func (f *factory) killGrace() time.Duration {
 // then SIGTERM, then kill; on Windows Ctrl-Break, then kill.
 func (f *factory) stopTurn(t *turn) {
 	t.stopped.Store(true)
-	for _, stop := range stopSteps(t.proc) {
+	f.stopProcess(t.proc, t.done, func(err error) {
+		f.claimf(t.claim, "%s: can't stop the turn: %v", t.claim.Ticket, err)
+	})
+}
+
+// stopProcess takes a turn's process proc through stopSteps until ended
+// is closed, telling warn of a step that fails.
+func (f *factory) stopProcess(proc *os.Process, ended <-chan struct{}, warn func(error)) {
+	for _, stop := range stopSteps(proc) {
 		if err := stop(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-			f.claimf(t.claim, "%s: can't stop the turn: %v", t.claim.Ticket, err)
+			warn(err)
 		}
 		select {
-		case <-t.done:
+		case <-ended:
 			return
 		case <-time.After(f.killGrace()):
 		}
 	}
-	<-t.done
+	<-ended
 }
 
 // stopAll stops every running turn at once.

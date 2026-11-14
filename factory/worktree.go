@@ -68,36 +68,61 @@ func (f *factory) branchWorktree(branch, wt, from string) error {
 // it shouldn't have. Anything at wt but a detached worktree is a failure
 // too, and nothing is touched.
 func (f *factory) stageWorktree(wt string) error {
+	left, err := f.detachAtBase(wt)
+	switch {
+	case err != nil || left == nil:
+		return err
+	case left.stray:
+		return f.strayDirectory(wt)
+	case left.branch != "":
+		return f.wrongWorktree(wt, gitWorktree{wt, left.branch}, "detached")
+	}
+	head, _ := f.gitOut(wt, "rev-parse", "--short", "HEAD")
+	return &failure{core.ReportFailureInput{
+		WhatBroke:       fmt.Sprintf("The Stage's worktree is dirty, so the Factory can't start the Stage. Changed files:\n\n%s", left.dirty),
+		Why:             fmt.Sprintf("A Stage writes nothing to the repository, but %s has uncommitted changes, most likely written by an earlier Claim's session. The Factory moves a Stage's worktree to %s's tip at each new Claim only when it is clean.", wt, f.baseBranch()),
+		WhatToFix:       fmt.Sprintf("Look at the changes in %s and keep anything worth keeping elsewhere (a Stage's output belongs in Code Central). Then clean the worktree and send the Ticket back.", wt),
+		WhereWorkStands: fmt.Sprintf("No session ran under this Claim. The worktree %s is detached at %s, with the changes above left as they were.", wt, head),
+	}}
+}
+
+// leftAsItWas is why detachAtBase left what is at a worktree path as it
+// was: something that isn't a worktree is there (stray), the worktree is
+// on a branch, or it is dirty, with its changed files.
+type leftAsItWas struct {
+	stray  bool
+	branch string
+	dirty  string
+}
+
+// detachAtBase makes wt a worktree detached at the base's tip: added when
+// it isn't there, and moved to the current tip when it is a clean
+// detached one. Anything else is left as it was, and returned saying why.
+func (f *factory) detachAtBase(wt string) (*leftAsItWas, error) {
 	list, err := f.repository.worktrees()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	w, ok := find(list, wt)
 	if !ok {
 		if _, err := os.Stat(wt); err == nil {
-			return f.strayDirectory(wt)
+			return &leftAsItWas{stray: true}, nil
 		}
 		_, err := f.gitOut(f.repo, "worktree", "add", "-q", "--detach", wt, f.baseBranch())
-		return err
+		return nil, err
 	}
 	if w.branch != "" {
-		return f.wrongWorktree(wt, w, "detached")
+		return &leftAsItWas{branch: w.branch}, nil
 	}
 	status, err := f.repository.status(wt)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if status != "" {
-		head, _ := f.gitOut(wt, "rev-parse", "--short", "HEAD")
-		return &failure{core.ReportFailureInput{
-			WhatBroke:       fmt.Sprintf("The Stage's worktree is dirty, so the Factory can't start the Stage. Changed files:\n\n%s", status),
-			Why:             fmt.Sprintf("A Stage writes nothing to the repository, but %s has uncommitted changes, most likely written by an earlier Claim's session. The Factory moves a Stage's worktree to %s's tip at each new Claim only when it is clean.", wt, f.baseBranch()),
-			WhatToFix:       fmt.Sprintf("Look at the changes in %s and keep anything worth keeping elsewhere (a Stage's output belongs in Code Central). Then clean the worktree and send the Ticket back.", wt),
-			WhereWorkStands: fmt.Sprintf("No session ran under this Claim. The worktree %s is detached at %s, with the changes above left as they were.", wt, head),
-		}}
+		return &leftAsItWas{dirty: status}, nil
 	}
 	_, err = f.gitOut(wt, "checkout", "-q", "--detach", f.baseBranch())
-	return err
+	return nil, err
 }
 
 // prune runs `git worktree prune`, dropping worktrees whose folders are
@@ -114,7 +139,7 @@ func (f *factory) prune() {
 // can check its branch out), or Accepted with its Spec merge recorded
 // under Land per Spec, is removed with `git worktree remove` when clean,
 // and left with a warning line when dirty. Branches are never deleted, and anything else
-// is kept.
+// is kept, the Chat worktree among it.
 func (f *factory) sweep(ctx context.Context, policy core.LandingPolicy) {
 	list, err := f.repository.worktrees()
 	if err != nil {
@@ -129,7 +154,9 @@ func (f *factory) sweep(ctx context.Context, policy core.LandingPolicy) {
 			continue
 		}
 		id := filepath.Base(w.path)
-		if f.turnRunningOn(id) {
+		// The Chat worktree is no Ticket's, and stays so that a copied
+		// Resume Command keeps working.
+		if id == chatWorktreeName || f.turnRunningOn(id) {
 			continue
 		}
 		tk, err := f.client.GetTicket(ctx, f.project, core.Ref(id))

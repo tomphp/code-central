@@ -284,6 +284,18 @@ func Exit(code int) Step { return Step{Exit: &code} }
 // the Ticket, then end the turn with a success result.
 var DefaultScript = []Step{Finish("Done."), Result("success")}
 
+// Chat is the name Script, Continue and Signals take for the runs of the
+// Factory's Chat turns, whose prompts name no Ticket (a Ticket ID is
+// never chat).
+const Chat = "chat"
+
+// ChatReply is what the fake says on a Chat turn with no Script.
+const ChatReply = "Here is the answer."
+
+// DefaultChatScript is what the fake does for a Chat turn with no
+// Script: say ChatReply, then end the turn with a success result.
+var DefaultChatScript = []Step{Say(ChatReply), Result("success")}
+
 // Script sets what the fake does on every run for ticket.
 func (h *Harness) Script(ticket string, steps ...Step) {
 	b, err := json.Marshal(steps)

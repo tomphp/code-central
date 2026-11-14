@@ -253,6 +253,10 @@ _Avoid_: prompt, reply (as nouns for the record), Session Event
 A Factory saying in its Heartbeat that it can run Conversations.
 _Avoid_: chat capability, chat mode
 
+**Chat worktree**:
+The one worktree a Factory runs every Conversation in, `<repo>.worktrees/chat`, beside the Ticket worktrees. A Conversation's first turn moves it to the Base's tip when it is clean; the Factory never removes it, so a Conversation's Resume Command keeps working.
+_Avoid_: chat checkout, chat directory
+
 **Factory Status**:
 Whether a Project's Factories are **Online**, **Draining** (claiming nothing new while it finishes running turns) or **Offline** (no Heartbeat for three of its intervals, at least 90 seconds, or a stopping Heartbeat), as Code Central reads it from their Heartbeats. A Project's combined status is Online if any Factory is, else Draining if any is, else Offline, which is also a Project with no Heartbeat since Code Central started.
 _Avoid_: health, presence, liveness
