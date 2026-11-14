@@ -187,6 +187,34 @@ func TestAHeartbeatSendsTheProjectsNoticeOnlyWhenWhatTheHumanSeesChanges(t *test
 	expect("back from Offline", true)
 }
 
+func TestAChangeInChatSupportPublishesAndShowsInTheFactoryList(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	notices, stop := f.core.Events().Subscribe()
+	defer stop()
+	send := func(chat bool) {
+		t.Helper()
+		_, err := f.core.ReportHeartbeat(ctx, "acme", core.ReportHeartbeatInput{Factory: "cc", Host: "box", State: core.HeartbeatOnline, IntervalSeconds: 10, Chat: chat})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	send(false)
+	<-notices
+	if got := factoryStatus(f, t).Factories[0].Chat; got {
+		t.Fatal("Chat support is on by default")
+	}
+	send(false)
+	noNotice(t, notices)
+	send(true)
+	if got := <-notices; got != (events.Event{Type: events.ProjectChanged, Project: "acme"}) {
+		t.Fatalf("got %+v", got)
+	}
+	if !factoryStatus(f, t).Factories[0].Chat {
+		t.Fatal("Chat support not shown")
+	}
+}
+
 func TestAHeartbeatAcknowledgesWithoutFactoryStatusNoise(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")

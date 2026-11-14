@@ -76,6 +76,7 @@ export const storyProject = (patch: Partial<ProjectRow> = {}): ProjectRow => ({
         note: "",
         last_heartbeat: "2026-11-13T12:00:00Z",
         interval_seconds: 30,
+        chat: true,
       },
     ],
   },

@@ -1634,6 +1634,7 @@ export class FakeApi implements Api {
       note: (report.note ?? "").trim().slice(0, 200),
       last_heartbeat: this.now.toISOString(),
       interval_seconds: report.interval_seconds,
+      chat: report.chat ?? false,
     };
     const factories = [...p.factory_status.factories.filter((f) => f.name !== name || f.host !== host), factory].sort(
       (a, b) => a.name.localeCompare(b.name) || a.host.localeCompare(b.host),

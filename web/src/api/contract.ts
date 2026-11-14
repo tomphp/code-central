@@ -517,8 +517,11 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const online = (await d.api.listProjects())[0].factory_status;
       expect(online.status).toBe("online");
       expect(online.factories).toEqual([
-        { name: "code-central-factory", host: "laptop", status: "online", note: "1 of 3 turns running", last_heartbeat: expect.any(String), interval_seconds: 30 },
+        { name: "code-central-factory", host: "laptop", status: "online", note: "1 of 3 turns running", last_heartbeat: expect.any(String), interval_seconds: 30, chat: false },
       ]);
+
+      await d.reportHeartbeat("acme", { factory: "code-central-factory", host: "laptop", state: "online", interval_seconds: 30, chat: true });
+      expect((await d.api.listProjects())[0].factory_status.factories).toMatchObject([{ chat: true }]);
 
       await d.reportHeartbeat("acme", { factory: "code-central-factory", host: "laptop", state: "stopping", note: "stopped: drained", interval_seconds: 30 });
       const stopped = (await d.api.listProjects())[0].factory_status;

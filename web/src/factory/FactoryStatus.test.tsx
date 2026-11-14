@@ -82,6 +82,17 @@ describe("Project Options Factories section", () => {
     expect(group).toHaveTextContent("code-central-factory on laptop: Offline, last Heartbeat just now (stopped: drained)");
   });
 
+  it("shows Chat support on each Factory", async () => {
+    const fake = new FakeApi();
+    fake.addProject("acme", "Acme");
+    await fake.reportHeartbeat("acme", { ...beat, state: "online", chat: true });
+    await fake.reportHeartbeat("acme", { ...beat, factory: "other", state: "online" });
+    renderApp(fake, "/?view=project-options&project=acme");
+    const group = await screen.findByRole("group", { name: "Factories" });
+    expect(group).toHaveTextContent("code-central-factory on laptop: Online, last Heartbeat just now · Chat support");
+    expect(group).toHaveTextContent("other on laptop: Online, last Heartbeat just now · no Chat support");
+  });
+
   it("shows the empty line with links to the guides", async () => {
     const fake = new FakeApi();
     fake.addProject("acme", "Acme");

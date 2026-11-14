@@ -46,6 +46,9 @@ func TestEachPollSendsAnOnlineHeartbeatWithTheTurnsRunning(t *testing.T) {
 	if f.Name != "code-central-factory" || f.Host != host || f.IntervalSeconds != 20 {
 		t.Errorf("Factory %+v, want code-central-factory on %q with a 20s interval", f, host)
 	}
+	if !f.Chat {
+		t.Errorf("Factory %+v, want Chat support on by default", f)
+	}
 	h.Continue(id)
 	h.WaitForState(id, store.InReview)
 	// The turn's process may still be exiting after the Ticket is in
@@ -55,6 +58,16 @@ func TestEachPollSendsAnOnlineHeartbeatWithTheTurnsRunning(t *testing.T) {
 		fs := factories(t, h)
 		return fs.Status == core.FactoryOnline && len(fs.Factories) == 1 && strings.Contains(fs.Factories[0].Note, "0 of 2 turns running")
 	})
+}
+
+func TestNoChatReportsNoChatSupport(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.Start("--no-chat")
+	fs := waitForFactory(t, h, core.FactoryOnline, "turns running")
+	if fs.Factories[0].Chat {
+		t.Errorf("Factory %+v, want no Chat support with --no-chat", fs.Factories[0])
+	}
 }
 
 func TestAnOutagePauseStaysOnlineAndSaysWhenItResumes(t *testing.T) {
