@@ -107,7 +107,7 @@ func init() {
 		"create-spec":   {op: "create_spec", usage: "create-spec --title <t> [--body <md> | --file <path|->] [--full]", run: runCreateSpec},
 		"create-ticket": {op: "create_ticket", usage: "create-ticket --spec <id> --title <t> [--state Draft|Ready] [--label <l>]... [--blocked-by <id>]... [--tag <key>=<value>]... [--description <md> | --file <path|->] [--full]", run: runCreateTicket},
 		"get-ticket":    {op: "get_ticket", usage: "get-ticket <id> [--part claims|failure_reports|comments|rounds|moves|edits]...", run: runGetTicket},
-		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--spec <id>] [--claimable[=false]]", run: runFindTickets},
+		"find-tickets":  {op: "find_tickets", usage: "find-tickets [--state <s>]... [--title <t>] [--label <l>]... [--tag <key>=<value>]... [--spec <id>] [--claimable[=false]] [--full]", run: runFindTickets},
 
 		"edit-spec":     {op: "edit_spec", usage: "edit-spec <id> [--title <t>] [--body <md> | --file <path|->] [--full]", run: runEditSpec},
 		"edit-ticket":   {op: "edit_ticket", usage: "edit-ticket <id> [--title <t>] [--description <md> | --file <path|->] [--full]", run: runEditTicket},
@@ -411,6 +411,7 @@ func runFindTickets(ctx context.Context, e Env, args []string) error {
 	title := fs.String("title", "", "")
 	spec := fs.String("spec", "", "")
 	claimable := fs.Bool("claimable", false, "")
+	full := fs.Bool("full", false, "")
 	var states, labels, tags strs
 	fs.Var(&states, "state", "")
 	fs.Var(&labels, "label", "")
@@ -435,6 +436,17 @@ func runFindTickets(ctx context.Context, e Env, args []string) error {
 	}
 	if isSet(fs, "claimable") {
 		in.Claimable = claimable
+	}
+	if *full {
+		// As get-ticket does: the default parts, brief.
+		views, err := sc.client.FindTicketViews(ctx, sc.project, in, core.DefaultTicketParts...)
+		if err != nil {
+			return err
+		}
+		for i := range views {
+			views[i] = views[i].Brief()
+		}
+		return printJSON(e, views)
 	}
 	v, err := sc.client.FindTickets(ctx, sc.project, in)
 	if err != nil {

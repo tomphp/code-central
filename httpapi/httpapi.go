@@ -91,10 +91,10 @@ var handlers = map[string]handlerFunc{
 	},
 	"find_tickets": func(c *core.Core, r *http.Request) (any, error) {
 		q := r.URL.Query()
-		if err := onlyParams(q, "state", "title", "label", "tag", "spec", "claimable"); err != nil {
+		if err := onlyParams(q, "state", "title", "label", "tag", "spec", "claimable", "full", "part"); err != nil {
 			return nil, err
 		}
-		in := core.FindTicketsInput{Title: q.Get("title"), Labels: q["label"], Spec: core.Ref(q.Get("spec"))}
+		in := core.FindTicketsInput{Title: q.Get("title"), Labels: q["label"], Spec: core.Ref(q.Get("spec")), Parts: q["part"]}
 		for _, s := range q["state"] {
 			in.State = append(in.State, store.State(s))
 		}
@@ -105,7 +105,23 @@ var handlers = map[string]handlerFunc{
 		if in.Claimable, err = boolParam(q, "claimable"); err != nil {
 			return nil, err
 		}
-		return c.FindTickets(r.Context(), r.PathValue("key"), in)
+		full, err := boolParam(q, "full")
+		if err != nil {
+			return nil, err
+		}
+		if full == nil || !*full {
+			if len(in.Parts) > 0 {
+				return nil, &core.Error{Code: core.Invalid, Field: "part", Message: "part names the parts of full Tickets, so it needs full=true"}
+			}
+			return c.FindTickets(r.Context(), r.PathValue("key"), in)
+		}
+		// As get_ticket does, with no part named the HTTP API returns each
+		// whole Ticket, with its Model Choice.
+		in.Full = true
+		if len(in.Parts) == 0 {
+			in.Parts, in.WithModelChoice = core.TicketParts, true
+		}
+		return c.FindTicketViews(r.Context(), r.PathValue("key"), in)
 	},
 
 	"edit_spec": func(c *core.Core, r *http.Request) (any, error) {

@@ -83,7 +83,29 @@ func (c *Client) GetTicket(ctx context.Context, key string, ref core.Ref, parts 
 
 // FindTickets is find_tickets.
 func (c *Client) FindTickets(ctx context.Context, key string, in core.FindTicketsInput) ([]core.TicketRow, error) {
+	in.Full, in.Parts = false, nil
+	var out []core.TicketRow
+	return out, c.do(ctx, "GET", findPath(key, in), nil, &out)
+}
+
+// FindTicketViews is find_tickets with full: each Ticket as GetTicket
+// returns it, with the parts named, or whole with none, from one read.
+func (c *Client) FindTicketViews(ctx context.Context, key string, in core.FindTicketsInput, parts ...string) ([]core.TicketView, error) {
+	in.Full, in.Parts = true, parts
+	var out []core.TicketView
+	return out, c.do(ctx, "GET", findPath(key, in), nil, &out)
+}
+
+// findPath is find_tickets' path with in's filters, and full and its
+// parts when asked.
+func findPath(key string, in core.FindTicketsInput) string {
 	q := url.Values{}
+	if in.Full {
+		q.Set("full", "true")
+	}
+	for _, p := range in.Parts {
+		q.Add("part", p)
+	}
 	for _, s := range in.State {
 		q.Add("state", string(s))
 	}
@@ -104,8 +126,7 @@ func (c *Client) FindTickets(ctx context.Context, key string, in core.FindTicket
 	if len(q) > 0 {
 		path += "?" + q.Encode()
 	}
-	var out []core.TicketRow
-	return out, c.do(ctx, "GET", path, nil, &out)
+	return path
 }
 
 // Claim is claim.
