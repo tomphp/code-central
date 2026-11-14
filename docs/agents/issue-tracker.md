@@ -2,12 +2,12 @@
 
 # Issue tracker: Code Central
 
-Specs and Tickets for this repository live in Code Central, through the `code-central` MCP server (or the `code-central` CLI, with the same operations in kebab-case). A Claim's `stage_guide` has what you need to work it, and `get_workflow` holds the whole workflow; this file only maps the skills' operations to Code Central operations by name.
+Specs and Tickets for this repository live in Code Central, through the `code-central` MCP server (or the `code-central` CLI, with the same operations in kebab-case). The CLI reads the Project from `.mcp.json`, so run it from the repository root (or with `--project <key>`); `code-central <operation> --help` shows the flags. A Claim's `stage_guide` has what you need, and `get_workflow` the whole workflow.
 
 | When a skill says | Use |
 | --- | --- |
 | Publish to the issue tracker | `create_spec` for a spec, `create_ticket` for an issue |
-| Fetch the relevant ticket | `get_ticket` (its default leaves out Rounds, moves and edits; `parts` asks for them) or `get_spec` (which takes `parts` and `sections` to read less; `sections` without `parts` returns only the body) |
+| Fetch the relevant ticket | `get_ticket` (`parts` adds Rounds, moves and edits) or `get_spec` (which takes `parts` and `sections` to read less; `sections` without `parts` returns only the body) |
 | Search or list issues | `find_tickets` (`full`: whole Tickets) or `find_specs` |
 | Comment | `comment` |
 | Apply or remove a label | `add_labels` or `remove_labels` |
