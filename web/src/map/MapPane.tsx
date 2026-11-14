@@ -1,6 +1,6 @@
 // The Map view, in the pane a Requirement's view uses and above the
 // shared Ticket pane: the header (ID, title, submitted time, the Map's
-// count, the Guided toggle, New Prototype, Write the Spec once the Map is
+// count, the Guided toggle, New Prototype, Retro, Write the Spec once the Map is
 // finished, its Destination and links to the Requirements made from it),
 // then the Map's Tickets as a left-to-right graph with Blockers as edges and
 // the fog of what isn't specified yet on the right, beside its collapsible
@@ -12,7 +12,9 @@ import { GUIDED_ON, GUIDED_TAG, type MapView, type SpecDetail, type TicketRow } 
 import { ago } from "../format";
 import { Markdown } from "../Markdown";
 import { useNeedsMe } from "../needsme/context";
-import { NewPrototype, WriteTheSpec } from "../requirement/NewRequirement";
+import { specRetroable } from "../edit/editable";
+import { NewPrototype, NewRetro, WriteTheSpec } from "../requirement/NewRequirement";
+import { RetroList } from "../spec/RetroList";
 import type { Link } from "../url";
 import { LinkBadge } from "../ticket/LinkBadge";
 import { OpenExternal } from "../ticket/OpenExternal";
@@ -27,6 +29,8 @@ import { Button } from "../controls/Button";
 export interface MapPaneProps {
   api: Api;
   spec: SpecDetail & { map: MapView };
+  // archived is whether the Map's Project is Archived, which takes no Retro.
+  archived?: boolean;
   now: Date;
   // ticket is the selected Ticket.
   ticket?: string;
@@ -37,7 +41,7 @@ export interface MapPaneProps {
   written(spec: string): void;
 }
 
-export function MapPane({ api, spec, now, ticket, select, specLink, written }: MapPaneProps) {
+export function MapPane({ api, spec, archived, now, ticket, select, specLink, written }: MapPaneProps) {
   const { reasonOf } = useNeedsMe();
   const [fogOpen, setFogOpen] = useState(false);
   const { busy, error, run } = useAct();
@@ -62,6 +66,7 @@ export function MapPane({ api, spec, now, ticket, select, specLink, written }: M
       </label>
       <div className="spec-actions">
         <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {specRetroable(spec, !!archived) && <NewRetro api={api} target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
         {spec.map.can_write_spec && (
@@ -139,6 +144,7 @@ export function MapPane({ api, spec, now, ticket, select, specLink, written }: M
           <MapDetails title="Out of scope" text={mapSection(spec.body, "Out of scope")} />
         </div>
       </div>
+      <RetroList retros={spec.retros} select={select} />
       {fogOpen && (
         <section aria-label="Not yet specified" className="panel map-fog-text">
           <h3>Not yet specified</h3>

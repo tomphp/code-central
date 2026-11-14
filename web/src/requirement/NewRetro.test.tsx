@@ -135,3 +135,143 @@ describe("the Retro badge", () => {
     expect(within(await row(other)).queryByText("Retro")).toBeNull();
   });
 });
+
+// finish has every Ticket on the Spec cancelled, so the Spec is Finished.
+async function finish(w: World, spec: string) {
+  for (const t of (await w.api.getSpec("acme", spec)).tickets) await w.api.act("acme", t.id, "cancel", {});
+  expect((await w.api.getSpec("acme", spec)).finished).toBe(true);
+}
+
+const specRetro = (view: string) => within(detail()).findByRole("region", { name: view });
+
+describe("Retro on a Spec", () => {
+  it("is beside New Prototype on a Finished plain Spec, and submits a Retro on it with the note", async () => {
+    const { w, s, spec } = await acme();
+    await s.ticket("acme", { title: "Dark palette", state: "Done", spec });
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
+
+    const pane = await specRetro("Spec");
+    const retro = await within(pane).findByRole("button", { name: "Retro" });
+    expect(within(pane).getByRole("button", { name: "New Prototype" }).nextElementSibling).toBe(retro);
+    await userEvent.click(retro);
+    const modal = screen.getByRole("dialog", { name: "Retro" });
+    await userEvent.type(within(modal).getByRole("textbox", { name: "Note" }), "Was the split right?");
+    await userEvent.click(within(modal).getByRole("button", { name: "Start retro" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(w.calls).toContain("submitRetro");
+    const made = (await w.api.findTickets("acme")).find((t) => t.title === "Retro: Theming")!;
+    expect(await w.api.getTicket("acme", made.id)).toMatchObject({ state: "Ready", labels: ["retro"], tags: { "retro-of": spec } });
+    expect((await w.api.getTicket("acme", made.id)).description).toContain("Was the split right?");
+    expect(params().get("ticket")).toBe(made.id);
+    expect(await within(detail()).findByRole("heading", { name: "Retro: Theming", level: 2 })).toBeInTheDocument();
+  });
+
+  it("submits with an empty note", async () => {
+    const { w, s, spec } = await acme();
+    await s.ticket("acme", { title: "Dark palette", state: "Done", spec });
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
+
+    await userEvent.click(await within(await specRetro("Spec")).findByRole("button", { name: "Retro" }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const made = (await w.api.findTickets("acme")).find((t) => t.title === "Retro: Theming")!;
+    expect(params().get("ticket")).toBe(made.id);
+  });
+
+  it("is on a Finished Map's view", async () => {
+    const { w } = await acme();
+    const { spec } = await w.api.submitMap("acme", "Offline mode");
+    await finish(w, spec.id);
+    renderApp(w, `/?view=inbox&requirement=${spec.id}`);
+
+    await userEvent.click(await within(await specRetro("Map")).findByRole("button", { name: "Retro" }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    const made = (await w.api.findTickets("acme")).find((t) => t.title === "Retro: Offline mode")!;
+    expect(await w.api.getTicket("acme", made.id)).toMatchObject({ tags: { "retro-of": spec.id } });
+  });
+
+  it("is on a Finished Requirement's view", async () => {
+    const { w } = await acme();
+    const { spec } = await w.api.submitRequirement("acme", "Dark mode");
+    await finish(w, spec.id);
+    renderApp(w, `/?view=inbox&requirement=${spec.id}`);
+
+    await userEvent.click(await within(await specRetro("Requirement")).findByRole("button", { name: "Retro" }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(w.calls).toContain("submitRetro");
+  });
+
+  it("is absent on an unfinished Spec, Map and Requirement, and on a Finished Long-lived Spec", async () => {
+    const { w, s, spec } = await acme();
+    await s.ticket("acme", { title: "Dark palette", state: "Ready", spec });
+    const longLived = await s.spec("acme", { title: "Small changes", labels: ["long-lived"] });
+    await s.ticket("acme", { title: "Rename", state: "Done", spec: longLived });
+    const map = (await w.api.submitMap("acme", "Offline mode")).spec.id;
+    const req = (await w.api.submitRequirement("acme", "Dark mode")).spec.id;
+    expect((await w.api.getSpec("acme", longLived)).finished).toBe(true);
+
+    for (const [id, view] of [[spec, "Spec"], [longLived, "Spec"], [map, "Map"], [req, "Requirement"]] as const) {
+      const { unmount } = renderApp(w, `/?view=inbox&requirement=${id}`);
+      const pane = await specRetro(view);
+      expect(within(pane).getByRole("button", { name: "New Prototype" })).toBeInTheDocument();
+      expect(within(pane).queryByRole("button", { name: "Retro" })).toBeNull();
+      unmount();
+    }
+  });
+
+  it("is absent on a Finished Spec in an Archived Project", async () => {
+    const { w, s, spec } = await acme();
+    await s.ticket("acme", { title: "Dark palette", state: "Done", spec });
+    await s.archive("acme");
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
+
+    const pane = await specRetro("Spec");
+    expect(within(pane).getByRole("button", { name: "New Prototype" })).toBeInTheDocument();
+    expect(within(pane).queryByRole("button", { name: "Retro" })).toBeNull();
+  });
+});
+
+describe("the Retros list", () => {
+  it("lists a Spec's Retros as Ticket lines that select them, and a Ticket's too", async () => {
+    const { w, s, spec } = await acme();
+    const done = await s.ticket("acme", { title: "Dark palette", state: "Done", spec });
+    const onSpec = (await w.api.submitRetro("acme", spec)).id;
+    const onTicket = (await w.api.submitRetro("acme", done)).id;
+    renderApp(w, `/?view=inbox&requirement=${spec}&ticket=${done}`);
+
+    const specList = await within(await specRetro("Spec")).findByRole("list", { name: "Retros" });
+    expect(within(specList).getAllByRole("listitem").map((li) => li.textContent)).toEqual([`${onSpec} Retro: Theming Ready`]);
+    const ticketList = await within(screen.getByRole("article", { name: "Ticket details" })).findByRole("list", { name: "Retros" });
+    expect(within(ticketList).getAllByRole("listitem").map((li) => li.textContent)).toEqual([`${onTicket} Retro: Dark palette Ready`]);
+
+    await userEvent.click(within(ticketList).getByRole("button", { name: /Retro: Dark palette/ }));
+    expect(params().get("ticket")).toBe(onTicket);
+    expect(await within(detail()).findByRole("heading", { name: "Retro: Dark palette", level: 2 })).toBeInTheDocument();
+  });
+
+  it("is on a view only when the Spec has Retros", async () => {
+    const { w, spec } = await acme();
+    renderApp(w, `/?view=inbox&requirement=${spec}`);
+    await specRetro("Spec");
+    expect(within(detail()).queryByRole("list", { name: "Retros" })).toBeNull();
+  });
+
+  it("selects a Retro from a Map's and a Requirement's list", async () => {
+    const { w } = await acme();
+    const map = (await w.api.submitMap("acme", "Offline mode")).spec.id;
+    const req = (await w.api.submitRequirement("acme", "Dark mode")).spec.id;
+    for (const [id, view] of [[map, "Map"], [req, "Requirement"]] as const) {
+      await finish(w, id);
+      const retro = (await w.api.submitRetro("acme", id)).id;
+      const { unmount } = renderApp(w, `/?view=inbox&requirement=${id}`);
+      const list = await within(await specRetro(view)).findByRole("list", { name: "Retros" });
+      await userEvent.click(within(list).getByRole("button", { name: /Retro: / }));
+      expect(params().get("ticket")).toBe(retro);
+      unmount();
+    }
+  });
+});

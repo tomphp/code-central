@@ -94,7 +94,8 @@ const prototypeOn = (spec: string): Kind<TicketAcknowledgement> => ({
   submit: (api, project, text) => api.submitPrototype(project, spec, text),
 });
 
-// retroOn is Retro on target, a Done or Cancelled Ticket: the note is optional.
+// retroOn is Retro on target, a Done or Cancelled Ticket or a Finished Spec:
+// the note is optional.
 const retroOn = (target: string): Kind<TicketAcknowledgement> => ({
   button: "Retro",
   variant: "default",
@@ -159,7 +160,7 @@ export function NewPrototype({ api, spec, onSubmitted }: NewPrototypeProps) {
 
 export interface NewRetroProps {
   api: Api;
-  // target is the finished Ticket the Retro looks back on.
+  // target is the finished Ticket or Spec the Retro looks back on.
   target: string;
   onSubmitted(t: TicketAcknowledgement): void;
 }
