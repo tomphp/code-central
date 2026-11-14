@@ -88,7 +88,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className="modal"
+      className={`modal${size === "wide" ? " modal-popup" : ""}`}
       onClick={(e) => e.target === e.currentTarget && close.current()}
     >
       <div
