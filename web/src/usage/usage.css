@@ -4,7 +4,6 @@
    the other views. */
 .usage { min-height: 100vh; display: flex; flex-direction: column; }
 .usage-body { width: 100%; max-width: 960px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; }
-.usage-body .warning { margin: 0; font-size: 14px; }
 .usage-body h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; }
 .usage-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .usage-table th, .usage-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
@@ -24,7 +23,7 @@
 .usage-chart-head { display: flex; align-items: baseline; gap: 12px; font-size: 13px; }
 .usage-chart-head .usage-subhead { margin: 0; font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
 .usage-chart-close { margin-left: auto; }
-.usage-chart .warning, .usage-chart .muted { font-size: 13px; }
+.usage-chart .muted { font-size: 13px; }
 .line-chart { position: relative; margin-top: 10px; }
 .line-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
 .line-chart-grid line { stroke: var(--border); }

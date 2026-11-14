@@ -5,7 +5,6 @@
 .options-head h1 { font-size: 18px; margin: 0; }
 .options-back { margin-left: auto; }
 .options-body { width: 100%; max-width: 640px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; }
-.options-body .warning { margin: 0; font-size: 14px; }
 .option h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; }
 .option-choices { display: flex; flex-direction: column; gap: 8px; }
 .option-choice { border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }

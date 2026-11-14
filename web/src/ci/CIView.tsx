@@ -8,6 +8,9 @@
 // returns to the view it was opened from.
 import { useRef } from "react";
 import type { Api } from "../api/api";
+import { backLabel } from "../controls/backLabel";
+import { ErrorBanner } from "../controls/ErrorBanner";
+import { projectName } from "../controls/ProjectName";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { ViewHeader } from "../controls/ViewHeader";
 import { CI_VIEW_DAYS, type CIProvider, type CIProjectStatus, type CIRunRow, type CIRunView, type ProjectRow } from "../api/types";
@@ -29,11 +32,8 @@ export interface CIViewProps {
   navigate(patch: Partial<UiLocation>): void;
 }
 
-const BACK_LABEL = { inbox: "Back to the Inbox", focus: "Back to Focus Mode", activity: "Back to Activity" };
-
 export function CIView({ api, now, version, projects = [], loc, navigate }: CIViewProps) {
-  const back = loc.back?.view === "focus" || loc.back?.view === "activity" ? loc.back.view : "inbox";
-  const projectName = (key: string) => projects.find((p) => p.key === key)?.display_name ?? key;
+  const nameOf = (key: string) => projectName(projects, key);
 
   return (
     <main aria-label="CI" className="ci">
@@ -42,12 +42,12 @@ export function CIView({ api, now, version, projects = [], loc, navigate }: CIVi
         left={<ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />}
         right={
           <Button  onClick={() => navigate(loc.back ?? { view: "inbox" })}>
-            {BACK_LABEL[back]}
+            {backLabel(loc)}
           </Button>
         }
       />
       {/* Keyed by scope, so another scope starts from nothing and its first read doesn't pulse. */}
-      <CIBody key={loc.project ?? ""} api={api} now={now} version={version} project={loc.project} projectName={projectName} navigate={navigate} />
+      <CIBody key={loc.project ?? ""} api={api} now={now} version={version} project={loc.project} projectName={nameOf} navigate={navigate} />
     </main>
   );
 }
@@ -71,11 +71,7 @@ function CIBody({ api, now, version, project, projectName, navigate }: CIBodyPro
 
   return (
     <div className="ci-body">
-      {ci.error && (
-        <p role="alert" className="warning">
-          {ci.error.message}
-        </p>
-      )}
+      {ci.error && <ErrorBanner>{ci.error.message}</ErrorBanner>}
       {data && (
         <>
           <section aria-label="CI Watchers" className="ci-watchers">
