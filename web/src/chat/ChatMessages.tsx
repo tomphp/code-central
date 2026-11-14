@@ -9,8 +9,10 @@ import { Markdown } from "../Markdown";
 // AT_BOTTOM is how close to the bottom, in pixels, still counts as at it.
 const AT_BOTTOM = 8;
 
+// TAIL_NOTICE tops a Conversation that dropped its oldest Chat Messages.
 export const TAIL_NOTICE = "Older messages were dropped";
 
+// ChatMessages is the Conversation's Chat Messages, oldest first.
 export function ChatMessages({ conversation }: { conversation: Conversation }) {
   const box = useRef<HTMLDivElement>(null);
   const following = useRef(true);
@@ -32,6 +34,8 @@ export function ChatMessages({ conversation }: { conversation: Conversation }) {
   );
 }
 
+// Message is one Chat Message: the human's text, or Claude's items and how
+// the reply ended.
 function Message({ message: m }: { message: ChatMessage }) {
   if (m.from === "human") {
     return (
@@ -61,6 +65,7 @@ function Message({ message: m }: { message: ChatMessage }) {
   );
 }
 
+// Item is one item of a reply; a tool call carries its result, if held.
 function Item({ item, result }: { item: ChatItem; result?: ChatItem }) {
   switch (item.kind) {
     case "text":

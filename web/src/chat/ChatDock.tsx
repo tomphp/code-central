@@ -18,24 +18,33 @@ export interface ChatDockProps {
   api: Api;
   // project is the Project the view is scoped to; none in the all-Projects scope.
   project?: ProjectRow;
+  // version is the live version, which bumps on every change notice,
+  // chat.changed among them, and prompts a reread of the Conversation.
   version: number;
 }
 
+// ChatDock is the icon and pop-up for the view's Project, or nothing in the
+// all-Projects scope.
 export function ChatDock({ api, project, version }: ChatDockProps) {
   // Keyed by Project, so a pop-up never carries over to another one.
   return project ? <Dock key={project.key} api={api} project={project} version={version} /> : null;
 }
 
+// Dock holds the open state and the Conversation for one Project.
 function Dock({ api, project, version }: ChatDockProps & { project: ProjectRow }) {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<ApiError>();
   const conversation = useConversation(api, project.key, open, version);
   const available = chatAvailable(project);
 
-  // act runs one Chat write; the stream shows its effects, a refusal shows here.
+  // act runs one Chat write; the stream shows its effects, a refusal shows
+  // here and rejects the returned promise.
   const act = (write: () => Promise<unknown>) => {
     setError(undefined);
-    write().catch((e: ApiError) => setError(e));
+    return write().catch((e: ApiError) => {
+      setError(e);
+      throw e;
+    });
   };
 
   if (!open) {
@@ -57,8 +66,8 @@ function Dock({ api, project, version }: ChatDockProps & { project: ProjectRow }
       reported={project.reported_models}
       error={error}
       onSend={(text) => act(() => api.sendChatMessage(project.key, text))}
-      onStop={() => act(() => api.stopChatReply(project.key))}
-      onStart={(pick: ModelRow) => act(() => api.startConversation(project.key, pick))}
+      onStop={() => void act(() => api.stopChatReply(project.key)).catch(() => {})}
+      onStart={(pick: ModelRow) => void act(() => api.startConversation(project.key, pick)).catch(() => {})}
       onClose={() => {
         setError(undefined);
         setOpen(false);

@@ -2,27 +2,13 @@
 // Chat Messages as plain text and Markdown, collapsed tool lines, the
 // warning, ending and tail notices, Send and Stop, the unavailable notice,
 // New conversation's pickers and Copy resume command.
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { ChatItem, ChatMessage, Conversation } from "../api/types";
+import { ApiError, type Conversation } from "../api/types";
 import { options, suggested } from "../testPickers";
+import { claude, conversation, human, item, noConversation } from "./chatFixtures";
 import { ChatPopup, NO_CHAT_FACTORY, type ChatPopupProps } from "./ChatPopup";
-
-const T = "2026-11-07T09:00:00Z";
-let seq = 0;
-const item = (kind: ChatItem["kind"], text: string, more: Partial<ChatItem> = {}): ChatItem => ({ seq: ++seq, time: T, kind, text, ...more });
-const human = (text: string): ChatMessage => ({ from: "human", time: T, text });
-const claude = (items: ChatItem[], more: Partial<ChatMessage> = {}): ChatMessage => ({ from: "claude", time: T, items, ...more });
-const conversation = (messages: ChatMessage[], more: Partial<Conversation> = {}): Conversation => ({
-  availability: "available",
-  id: "c1",
-  model: "haiku",
-  running: false,
-  tail: false,
-  messages,
-  ...more,
-});
 
 function renderPopup(c: Conversation | undefined, props: Partial<ChatPopupProps> = {}) {
   const handlers = { onSend: vi.fn(), onStop: vi.fn(), onStart: vi.fn(), onClose: vi.fn() };
@@ -135,7 +121,18 @@ describe("Send and Stop", () => {
     await userEvent.click(send());
 
     expect(h.onSend).toHaveBeenCalledWith("Hello there");
-    expect(screen.getByRole("textbox", { name: "Chat Message" })).toHaveValue("");
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Chat Message" })).toHaveValue(""));
+  });
+
+  it("keeps the typed message in the input when it is refused", async () => {
+    const onSend = vi.fn().mockRejectedValue(new ApiError(409, "action_not_allowed", "a reply is running"));
+    renderPopup(conversation([]), { onSend });
+
+    await typeMessage("Hello there");
+    await userEvent.click(send());
+
+    expect(onSend).toHaveBeenCalledOnce();
+    expect(screen.getByRole("textbox", { name: "Chat Message" })).toHaveValue("Hello there");
   });
 
   it("sends on Enter, and keeps a newline for Shift+Enter", async () => {
@@ -163,7 +160,7 @@ describe("Send and Stop", () => {
   });
 
   it("lets the first message start a Conversation when there is none and Chat is available", async () => {
-    const h = renderPopup(conversation([], { availability: "none", id: undefined, model: undefined }));
+    const h = renderPopup(noConversation());
 
     await typeMessage("Hello");
     await userEvent.click(send());
@@ -172,7 +169,7 @@ describe("Send and Stop", () => {
   });
 
   it("shows a refusal", () => {
-    renderPopup(conversation([]), { error: { message: "a reply is running" } as never });
+    renderPopup(conversation([]), { error: new ApiError(409, "action_not_allowed", "a reply is running") });
 
     expect(screen.getByRole("alert")).toHaveTextContent("a reply is running");
   });
@@ -191,7 +188,7 @@ describe("when the Conversation can't answer", () => {
   });
 
   it("says no Factory has Chat support when there is no Conversation and Chat stopped being available", async () => {
-    renderPopup(conversation([], { availability: "none" }), { chatAvailable: false });
+    renderPopup(noConversation(), { chatAvailable: false });
 
     expect(screen.getByRole("status")).toHaveTextContent(NO_CHAT_FACTORY);
     await typeMessage("hello");

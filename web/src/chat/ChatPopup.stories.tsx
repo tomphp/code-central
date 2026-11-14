@@ -1,21 +1,8 @@
+// The Chat pop-up in each state it shows: a Conversation handed in as props,
+// so the stories need no Core.
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { ChatItem, ChatMessage, Conversation } from "../api/types";
+import { claude, conversation, human, item, noConversation } from "./chatFixtures";
 import { ChatPopup } from "./ChatPopup";
-
-const T = "2026-11-07T09:00:00Z";
-let seq = 0;
-const item = (kind: ChatItem["kind"], text: string, more: Partial<ChatItem> = {}): ChatItem => ({ seq: ++seq, time: T, kind, text, ...more });
-const human = (text: string): ChatMessage => ({ from: "human", time: T, text });
-const claude = (items: ChatItem[], more: Partial<ChatMessage> = {}): ChatMessage => ({ from: "claude", time: T, items, ...more });
-const conversation = (messages: ChatMessage[], more: Partial<Conversation> = {}): Conversation => ({
-  availability: "available",
-  id: "c1",
-  model: "haiku",
-  running: false,
-  tail: false,
-  messages,
-  ...more,
-});
 
 const meta = {
   title: "Chat/ChatPopup",
@@ -39,7 +26,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Empty: Story = {};
 
-export const NoConversationYet: Story = { args: { conversation: conversation([], { availability: "none", id: undefined, model: undefined }) } };
+export const NoConversationYet: Story = { args: { conversation: noConversation() } };
 
 export const Replying: Story = {
   args: {
@@ -99,7 +86,7 @@ export const FactoryNotOnline: Story = {
 };
 
 export const NoFactoryWithChat: Story = {
-  args: { chatAvailable: false, conversation: conversation([], { availability: "none", id: undefined, model: undefined }) },
+  args: { chatAvailable: false, conversation: noConversation() },
 };
 
 export const Loading: Story = { args: { conversation: undefined } };

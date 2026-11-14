@@ -283,6 +283,12 @@ The notes code-central-factory sends:
 
 A stopping Heartbeat shows Offline at once. A crash sends nothing, so the dot goes grey at the Factory's deadline: three polls, and at least 90 seconds. After Code Central restarts every dot is grey until the Factory's next poll. See [Writing a Factory](writing-a-factory.md) for sending Heartbeats from your own.
 
+### Chat in the UI
+
+While a Project is open (not in the all-Projects scope) and one of its Factories is Online with Chat support, a round Chat icon floats in the lower right corner. It opens a pop-up holding the Project's current Conversation, the same in every tab. Your messages show as plain text and Claude's as Markdown, streaming in as it writes. Each tool call is one collapsed line that opens to its result, a denied permission shows as a warning, and a stopped or failed reply ends with `Stopped` or its error. **Send** is off while a reply runs, and **Stop** shows then. Sending with no Conversation starts one with the Chat row's model and effort. **New conversation** asks for a model and effort first, filled from that row (haiku when it sets none), and drops the old Conversation. **Copy resume command** copies `cd <worktree> && claude --resume <session-id>` once the session is known.
+
+If the Conversation's Factory is no longer Online, or no Factory has Chat support, the open pop-up stays and says so, with Send off. It becomes usable again when the Factory is back Online, or after New conversation. When a long Conversation drops its oldest messages, the pop-up says `Older messages were dropped`.
+
 ## Model and effort
 
 Before every turn, a first turn or a resume after answers, after a cut-off or after a restart, the Factory works out the model and effort the turn runs with. Each is worked out on its own, highest first:

@@ -3,7 +3,7 @@
 // conversation), the Chat Messages, the notice for a Conversation or Chat
 // that can't answer, and the input with Send and Stop. It is presentational:
 // the Conversation and the actions come in as props.
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import type { ApiError, Conversation, ModelRow, ReportedModels } from "../api/types";
 import { Button } from "../controls/Button";
 import { Select } from "../controls/Select";
@@ -11,9 +11,11 @@ import { CLAUDE_CODE_DEFAULT } from "../format";
 import { CHAT_DEFAULT_MODEL, chatDefaults, effortOptions, modelSuggestions, ModelSuggestions } from "../modelPickers";
 import { ChatMessages } from "./ChatMessages";
 
+// NO_CHAT_FACTORY is the notice when nothing could answer a new Conversation.
 export const NO_CHAT_FACTORY = "No Factory of this Project is Online with Chat support.";
 
 export interface ChatPopupProps {
+  // project is the Project's name, for the prompt to ask.
   project: string;
   // conversation is the Conversation as followed; undefined until the
   // stream first sends it.
@@ -27,7 +29,8 @@ export interface ChatPopupProps {
   reported: ReportedModels;
   // error is the last refusal of a Send, Stop or New conversation.
   error?: ApiError;
-  onSend(text: string): void;
+  // onSend rejects when the message is refused; the input then keeps its text.
+  onSend(text: string): void | Promise<unknown>;
   onStop(): void;
   onStart(pick: ModelRow): void;
   onClose(): void;
@@ -35,6 +38,7 @@ export interface ChatPopupProps {
   copy?(text: string): void | Promise<void>;
 }
 
+// ChatPopup is the pop-up itself; ChatDock holds the Conversation it shows.
 export function ChatPopup(p: ChatPopupProps) {
   const [text, setText] = useState("");
   const [picking, setPicking] = useState(false);
@@ -45,16 +49,22 @@ export function ChatPopup(p: ChatPopupProps) {
   const running = !!c?.running;
   // Chat can't take a message when the Conversation can't be answered, or,
   // with none yet, when no Factory could start one.
-  const cannotSend = !c || unavailable || (!exists && !p.chatAvailable);
-  const reason = unavailable ? unavailableReason(c) : !exists && !p.chatAvailable ? NO_CHAT_FACTORY : undefined;
+  const noFactory = !exists && !p.chatAvailable;
+  const cannotSend = !c || unavailable || noFactory;
+  const reason = unavailable ? unavailableReason(c) : noFactory ? NO_CHAT_FACTORY : undefined;
+  // A new Conversation has not been copied.
+  useEffect(() => setCopied(false), [c?.id]);
 
   const send = (e: FormEvent) => {
     e.preventDefault();
     if (!text.trim() || cannotSend || running) return;
-    p.onSend(text);
-    setText("");
+    // A refused message stays in the input to be sent again.
+    Promise.resolve(p.onSend(text)).then(
+      () => setText(""),
+      () => {},
+    );
   };
-  const copy = async () => {
+  const copyResume = async () => {
     if (!c?.resume_command) return;
     await (p.copy ?? ((t) => navigator.clipboard.writeText(t)))(c.resume_command);
     setCopied(true);
@@ -72,7 +82,7 @@ export function ChatPopup(p: ChatPopupProps) {
         )}
         <span className="chat-header-actions">
           {exists && (
-            <Button type="button" disabled={!c.resume_command} onClick={copy}>
+            <Button type="button" disabled={!c.resume_command} onClick={copyResume}>
               {copied ? "Copied" : "Copy resume command"}
             </Button>
           )}
@@ -132,6 +142,8 @@ export function ChatPopup(p: ChatPopupProps) {
   );
 }
 
+// unavailableReason says why an unavailable Conversation can't answer: its
+// Factory, or before one took it, that no Factory could.
 function unavailableReason(c: Conversation): string {
   return c.factory
     ? `This Conversation's Factory, ${c.factory.name} on ${c.factory.host}, isn't Online. Start a new conversation, or wait for it to come back.`
