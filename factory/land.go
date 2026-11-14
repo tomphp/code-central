@@ -248,25 +248,15 @@ func (f *factory) inBase(commit string) bool {
 	return f.repository.isAncestor(commit, "refs/heads/"+f.baseBranch())
 }
 
-// landable is every Ticket in these States, read in full.
+// landable is every Ticket in these States, read in full by one
+// find_tickets call. If the call fails it lands nothing this poll.
 func (f *factory) landable(ctx context.Context, states ...store.State) []core.TicketView {
-	rows, err := f.client.FindTickets(ctx, f.project, core.FindTicketsInput{State: states})
+	out, err := f.client.FindTicketViews(ctx, f.project, core.FindTicketsInput{State: states})
 	if err != nil {
 		if ctx.Err() == nil {
 			f.printf("warning: can't find %v Tickets: %v", states, err)
 		}
 		return nil
-	}
-	var out []core.TicketView
-	for _, r := range rows {
-		tk, err := f.client.GetTicket(ctx, f.project, core.Ref(r.ID))
-		if err != nil {
-			if ctx.Err() == nil {
-				f.printf("%s: get_ticket: %v", r.ID, err)
-			}
-			continue
-		}
-		out = append(out, tk)
 	}
 	return out
 }

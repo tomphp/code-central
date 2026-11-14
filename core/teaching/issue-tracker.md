@@ -6,7 +6,7 @@ Specs and Tickets for this repository live in Code Central, through the `code-ce
 | --- | --- |
 | Publish to the issue tracker | `create_spec` for a spec, `create_ticket` for an issue |
 | Fetch the relevant ticket | `get_ticket` (its default leaves out Rounds, moves and edits; `parts` asks for them) or `get_spec` (which takes `parts` and `sections` to read less; `sections` without `parts` returns only the body) |
-| Search or list issues | `find_tickets` or `find_specs` |
+| Search or list issues | `find_tickets` (`full`: whole Tickets) or `find_specs` |
 | Comment | `comment` |
 | Apply or remove a label | `add_labels` or `remove_labels` |
 

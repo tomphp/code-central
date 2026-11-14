@@ -128,6 +128,10 @@ func TestWritesWithFullReturnTheRecordOnEveryDoor(t *testing.T) {
 	}
 }
 
+// readsWithFull are the reads that offer full, for the whole record in
+// place of the short form; find_full_doors_test.go checks them.
+var readsWithFull = []string{"find_tickets"}
+
 // TestEveryToolWithFullIsAWrite keeps a tool that offers full from
 // missing the two tests above: its case must check its call with full.
 func TestEveryToolWithFullIsAWrite(t *testing.T) {
@@ -137,7 +141,7 @@ func TestEveryToolWithFullIsAWrite(t *testing.T) {
 			t.Fatal(err)
 		}
 		schema, _ := json.Marshal(tool.InputSchema)
-		if strings.Contains(string(schema), `"full"`) && !slices.Contains(writes(), tool.Name) {
+		if strings.Contains(string(schema), `"full"`) && !slices.Contains(writes(), tool.Name) && !slices.Contains(readsWithFull, tool.Name) {
 			t.Errorf("tool %s offers full but its case has no full check", tool.Name)
 		}
 	}
