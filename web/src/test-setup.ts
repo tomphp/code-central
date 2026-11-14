@@ -10,7 +10,7 @@ const realFetch = globalThis.fetch;
 globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
   const raw = input instanceof Request ? input.url : String(input);
   if (new URL(raw, window.location.href).port === "7733") {
-    throw new Error(`a test fetched ${raw}, the real Code Central service; use the fake API or a test service on another port`);
+    throw new Error(`a test fetched ${raw}, the real Code Central service; use a WASM Core world or a test service on another port`);
   }
   return realFetch(input, init);
 }) as typeof fetch;

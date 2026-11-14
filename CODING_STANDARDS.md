@@ -6,13 +6,13 @@ Read during review. `make test` already enforces what tooling can (go vet, the T
 
 Name types, functions, props, CSS classes and test descriptions with the `GLOSSARY.md` noun for the concept (Claim, Round, Focus Item, Session Event, Transcript), not a synonym. A new concept in the diff gets a glossary entry in the same change. A name says what the thing is (`isSkipped`), not how it's computed.
 
-## Every door, and the fake, behave the same
+## Every door behaves the same, and the UI's tests run on the real Core
 
 An operation lives in `core`; the front doors (MCP, the HTTP API, the CLI) only translate. When the diff adds or changes an operation:
 
 - every door that exposes it is covered in the cross-door suite, `frontdoor/doors_test.go`: one successful and one rejected call each;
 - a new HTTP route joins the shared handlers in `httpapi/httpapi.go` rather than getting its own decoding and error mapping;
-- the behaviour is pinned in `web/src/api/contract.ts`, which runs on the WASM Core (the real Core built to WebAssembly) and against the real service; while the UI's `web/src/api/fake.ts` still has users, it matches the service. New UI tests run on the WASM Core only.
+- the UI's tests run on the real Core, built to WebAssembly (the WASM Core), and the contract, `web/src/api/contract.ts`, pins `createHttpApi` against it and against `serve`. A UI test reaches its state through the scenario builder (`web/src/api/scenario.ts`), never by seeding one.
 
 ## One helper per setup
 
