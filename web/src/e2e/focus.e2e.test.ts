@@ -1,5 +1,5 @@
 // End-to-end (`make e2e`): Playwright drives a real browser against the UI
-// embedded in the built binary, for what FakeApi can't show: the real Needs
+// embedded in the built binary, for what the WASM Core can't show: the real Needs
 // Me and the live feed driving Focus Mode. Focus Mode is open at the
 // Activity Dashboard, an agent posts a Round, its first Question appears
 // with no reload, the human answers each Question there in order, the

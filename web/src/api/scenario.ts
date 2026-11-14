@@ -15,7 +15,7 @@
 // and Question numbers are Core's.
 import type { World } from "./core/core";
 import { HttpDriver, worldConnection } from "./driver";
-import type { CIRunView, SessionEvent, State, UsageResponse } from "./types";
+import type { CIRunView, PullRequestState, SessionEvent, State, UsageResponse } from "./types";
 
 export interface QuestionSeed {
   title: string;
@@ -67,7 +67,9 @@ export class Scenario extends HttpDriver {
 
   // spec makes a Spec and returns its ID.
   async spec(key: string, s: { title?: string; body?: string; labels?: string[] } = {}): Promise<string> {
-    return (await this.agent(`${this.projectPath(key)}/create_spec`, { title: s.title ?? "A Spec", body: s.body ?? "", ...(s.labels && { labels: s.labels }) })).id;
+    const { id } = await this.agent(`${this.projectPath(key)}/create_spec`, { title: s.title ?? "A Spec", body: s.body ?? "" });
+    if (s.labels) await this.agent(`${this.projectPath(key)}/add_labels`, { target: id, labels: s.labels });
+    return id;
   }
 
   // ticket makes a Ticket and takes it to its State the way it gets
@@ -192,6 +194,58 @@ export class Scenario extends HttpDriver {
       ticket: id,
     };
     await this.reportCIRuns(key, [r]);
+  }
+
+  // requirement has the human submit text as a Requirement and each of
+  // its Stages be worked, accepted and landed, so it stands in Build. It
+  // returns the Requirement's Spec ID.
+  async requirement(key: string, text: string): Promise<string> {
+    const r = await this.api.submitRequirement(key, text);
+    for (const t of r.stages) {
+      const claim_id = await this.claimFor(key, t.id);
+      // Only the spec Stage takes a recommendation.
+      const spec = (await this.api.getTicket(key, t.id)).labels.includes("stage:spec");
+      await this.agent(`${this.ticketPath(key, t.id)}/finish`, { claim_id, summary: "Done the Stage", ...(spec && { recommendation: "implement" }), ...WORK });
+      await this.human(`${this.ticketPath(key, t.id)}/accept`, {});
+      await this.human(`${this.ticketPath(key, t.id)}/land`, { commit: WORK.commit });
+    }
+    return r.spec.id;
+  }
+
+  // specMerged has the Factory report it merged an Accepted Spec-landed
+  // Ticket's work into its Spec Branch at commit.
+  async specMerged(key: string, id: string, commit = WORK.commit) {
+    await this.agent(`${this.ticketPath(key, id)}/report_spec_merge`, { ticket: id, commit });
+  }
+
+  // landOn has the human set the Project's Landing Method.
+  async landOn(key: string, method: "merge" | "pull_request", push = method === "merge") {
+    await this.human(`${this.projectPath(key)}/set_landing_method`, { method, push, remote: "origin" });
+  }
+
+  // base has a Factory come online for the Project and report its base
+  // as state says. A diverged base shows only under Merge + Push or Pull
+  // Request, so landOn sets Merge + Push first unless the Project has one.
+  async base(key: string, state: "current" | "diverged" | "missing", commits: { local: string; remote: string } = { local: "aaa1111222", remote: "bbb2222333" }) {
+    const p = (await this.api.listProjects()).find((p) => p.key === key);
+    if (state === "diverged" && !p?.landing.push && p?.landing.method !== "pull_request") await this.landOn(key, "merge");
+    await this.reportHeartbeat(key, { factory: "code-central-factory", host: "laptop", state: "online", interval_seconds: 30 });
+    await this.agent(`${this.projectPath(key)}/report_base`, { state, ...commits });
+  }
+
+  // pullRequest takes an Accepted Ticket to the Pull Request Landing
+  // Method with its branch pushed and its pull request reported in state.
+  async pullRequest(key: string, id: string, state: PullRequestState = "open", number = 7) {
+    await this.reportPushRemote(key, "git@github.com:acme/web.git");
+    await this.landOn(key, "pull_request");
+    await this.reportPushedCommit(key, id, "abc123", id);
+    await this.reportPullRequest(key, {
+      branch: id,
+      number,
+      link: `https://github.com/acme/web/pull/${number}`,
+      state,
+      ...(state === "merged" && { merge_commit: "def456" }),
+    });
   }
 
   // factorySession has the Factory claim the Ticket in session and post
