@@ -560,6 +560,8 @@ export interface NeedsMeRow {
   spec?: NeedsMeSpec;
   // prototype is set on a Ticket labelled prototype, for its badge.
   prototype?: boolean;
+  // retro is set on a Ticket labelled retro, for its badge.
+  retro?: boolean;
   // ci_result is the Ticket's CI result, whatever the reason, for its
   // badge; left out for a Ticket never pushed while CI Tracking was on.
   ci_result?: CIResult;

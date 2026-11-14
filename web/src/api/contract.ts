@@ -1745,6 +1745,39 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(nowhere).toMatchObject({ status: 422, code: "invalid", field: "spec" });
     });
 
+    // ---- Retros (code-central-646) ----
+    it("submits a Retro on a Cancelled Ticket as one Ready retro Ticket on the Retros Spec, with the note", async () => {
+      await d.createProject("acme", "Acme");
+      const target = (await d.api.submitSmallChange("acme", "Rename the button")).id;
+      await d.api.act("acme", target, "cancel", {});
+      const ack = await d.api.submitRetro("acme", target, "Why was it cancelled?");
+      wantAcknowledgement(ack, ack.id, "Ready", ["title", "state", "spec", "labels", "tags", "description", "moves", "claimable"]);
+
+      const t = await d.api.getTicket("acme", ack.id);
+      expect(t).toMatchObject({
+        title: "Retro: Rename the button",
+        state: "Ready",
+        spec: { title: "Retros" },
+        labels: ["retro"],
+        tags: { "retro-of": target },
+        claimable: true,
+      });
+      expect(t.description).toContain("Why was it cancelled?");
+      expect(t.moves).toMatchObject([{ to: "Ready", actor: "human", via: "submit_retro" }]);
+      const again = await d.api.submitRetro("acme", target);
+      expect((await d.api.getTicket("acme", again.id)).spec.id).toBe(t.spec.id);
+    });
+
+    it("refuses a Retro on unfinished work, or on nothing", async () => {
+      await d.createProject("acme", "Acme");
+      const open = (await d.api.submitSmallChange("acme", "Rename the button")).id;
+      const unfinished = await d.api.submitRetro("acme", open).catch((e) => e);
+      expect(unfinished).toBeInstanceOf(ApiError);
+      expect(unfinished).toMatchObject({ status: 422, code: "invalid", field: "target" });
+      const nowhere = await d.api.submitRetro("acme", "acme-99").catch((e) => e);
+      expect(nowhere).toMatchObject({ status: 422, code: "invalid", field: "target" });
+    });
+
     // ---- Small Changes (code-central-475) ----
     it("submits a Small Change as one Ready Ticket on the Small Changes Spec, titled by the text's first line", async () => {
       await d.createProject("acme", "Acme");

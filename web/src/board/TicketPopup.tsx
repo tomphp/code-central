@@ -19,9 +19,11 @@ export interface TicketPopupProps {
   onClose(): void;
   // openSpec switches the popup to the Ticket's Spec.
   openSpec(id: string): void;
+  // openTicket switches the popup to another Ticket, as a new Retro is.
+  openTicket(id: string): void;
 }
 
-export function TicketPopup({ api, now, version, id, projects, onClose, openSpec }: TicketPopupProps) {
+export function TicketPopup({ api, now, version, id, projects, onClose, openSpec, openTicket }: TicketPopupProps) {
   const project = projectOf(id);
   const ticket = useTicket(api, project, id, version);
   const row = projects.find((p) => p.key === project);
@@ -36,6 +38,7 @@ export function TicketPopup({ api, now, version, id, projects, onClose, openSpec
           archived={!!row?.archived}
           reported={row?.reported_models}
           openSpec={openSpec}
+          openTicket={openTicket}
         />
       ) : (
         <p className="empty">{ticket.error ? ticket.error.message : "Loading…"}</p>
