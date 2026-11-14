@@ -14,7 +14,7 @@
 // IDs are what the writes returned (Specs and Tickets share one counter),
 // and Question numbers are Core's.
 import type { World } from "./core/core";
-import { HttpDriver, SESSION, worldConnection } from "./driver";
+import { HttpDriver, worldConnection } from "./driver";
 import type { CIRunView, SessionEvent, State, UsageResponse } from "./types";
 
 export interface QuestionSeed {
@@ -57,12 +57,9 @@ export const REPORT = {
   where_work_stands: "Branch impl, two commits, tests red",
 };
 
+// The helpers share the Driver's Claims and Projects' Specs, so they and
+// its own operations mix on one Ticket.
 export class Scenario extends HttpDriver {
-  // specOf is each Project's default Spec, once made.
-  private readonly specOf = new Map<string, string>();
-  // claims are each Ticket's live Claim ID, for the agent's next write.
-  private readonly claims = new Map<string, string>();
-
   // project makes a Project, as `code-central init` does.
   async project(key: string, displayName = key) {
     await this.agent("/api/projects/create_project", { key, display_name: displayName });
@@ -122,27 +119,15 @@ export class Scenario extends HttpDriver {
     return id;
   }
 
-  // claimFor claims a Ready Ticket as an agent in session, or returns the
-  // Claim it already has, and returns its Claim ID.
-  async claimFor(key: string, id: string, session = SESSION): Promise<string> {
-    let claim = this.claims.get(id);
-    if (!claim) {
-      claim = await this.claimed(key, id, session);
-      this.claims.set(id, claim);
-    }
-    return claim;
-  }
-
   // askRound has the agent post a Round of questions, claiming the Ticket
   // first if it must, and returns the Round's number.
-  async askRound(key: string, id: string, questions: QuestionSeed[] = QUESTIONS): Promise<number> {
-    await this.agent(`${this.ticketPath(key, id)}/post_round`, { claim_id: await this.claimFor(key, id), questions });
-    return (await this.api.getTicket(key, id)).rounds.at(-1)!.number;
+  askRound(key: string, id: string, questions: QuestionSeed[] = QUESTIONS): Promise<number> {
+    return this.postRound(key, id, questions);
   }
 
   // answerRound has the human answer the latest Round's open Questions in
-  // order, each with its answer or its recommendation, which completes
-  // the Round.
+  // order, each with its answer, else its recommendation, else "Yes",
+  // which completes the Round.
   async answerRound(key: string, id: string, answers: string[] = []) {
     const open = (await this.api.getTicket(key, id)).rounds.at(-1)!.questions.filter((q) => q.status === "open");
     for (const [i, q] of open.entries()) {
@@ -157,16 +142,14 @@ export class Scenario extends HttpDriver {
   }
 
   // fail has the agent report a failure, claiming the Ticket first if it must.
-  async fail(key: string, id: string, report = REPORT) {
-    await this.agent(`${this.ticketPath(key, id)}/report_failure`, { claim_id: await this.claimFor(key, id), ...report });
-    this.claims.delete(id);
+  fail(key: string, id: string, report = REPORT) {
+    return this.reportFailure(key, id, report);
   }
 
   // inReview has the agent finish the Ticket with work, claiming it first
   // if it must.
-  async inReview(key: string, id: string, work: Work = WORK, summary = "Done the work") {
-    await this.agent(`${this.ticketPath(key, id)}/finish`, { claim_id: await this.claimFor(key, id), summary, ...work });
-    this.claims.delete(id);
+  inReview(key: string, id: string, work: Work = WORK, summary = "Done the work") {
+    return this.finish(key, id, summary, work);
   }
 
   // accepted takes the Ticket In Review with work and has the human accept it.
@@ -221,11 +204,13 @@ export class Scenario extends HttpDriver {
     return claim;
   }
 
+  // defaultSpec is the Project's Spec for Tickets that name none: the one
+  // createProject made, else "A Spec", made the first time.
   private async defaultSpec(key: string): Promise<string> {
-    let spec = this.specOf.get(key);
+    let spec = this.specs.get(key);
     if (!spec) {
       spec = await this.spec(key);
-      this.specOf.set(key, spec);
+      this.specs.set(key, spec);
     }
     return spec;
   }

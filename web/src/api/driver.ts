@@ -66,9 +66,12 @@ export function worldConnection(w: World): Connection {
 
 export class HttpDriver implements Driver {
   readonly api: Api;
-  // specs are the Spec createProject made in each Project, which
-  // createTicket puts its Tickets under.
-  private readonly specs = new Map<string, string>();
+  // specs are each Project's Spec that createTicket puts its Tickets
+  // under: the one createProject made.
+  protected readonly specs = new Map<string, string>();
+  // claims are each Ticket's live Claim ID, kept as the agent holding it
+  // keeps it for its next write.
+  private readonly claims = new Map<string, string>();
 
   constructor(private readonly c: Connection) {
     this.api = c.api;
@@ -97,9 +100,16 @@ export class HttpDriver implements Driver {
   projectPath = (key: string) => `/api/p/${key}`;
   ticketPath = (key: string, id: string) => `/api/p/${key}/tickets/${id.slice(id.lastIndexOf("-") + 1)}`;
 
-  // claimed claims a Ready Ticket as an agent and returns its Claim ID.
-  async claimed(key: string, id: string, session_id = SESSION): Promise<string> {
-    return (await this.agent<{ claim_id: string }>(`${this.projectPath(key)}/claim`, { ticket: id, session_id })).claim_id;
+  // claimFor is the Ticket's live Claim ID, claiming the Ticket as an
+  // agent in session first when the Driver holds no Claim on it.
+  async claimFor(key: string, id: string, session = SESSION): Promise<string> {
+    return this.claims.get(id) ?? (await this.claimAs(key, id, session));
+  }
+
+  private async claimAs(key: string, id: string, session_id: string): Promise<string> {
+    const { claim_id } = await this.agent<{ claim_id: string }>(`${this.projectPath(key)}/claim`, { ticket: id, session_id });
+    this.claims.set(id, claim_id);
+    return claim_id;
   }
 
   // ---- the contract's Driver ----
@@ -113,25 +123,26 @@ export class HttpDriver implements Driver {
   createTicket: Driver["createTicket"] = async (key, title, state) =>
     (await this.agent(`${this.projectPath(key)}/create_ticket`, { spec: this.specs.get(key), title, state })).id;
 
-  postRound: Driver["postRound"] = async (key, id, questions) => {
-    await this.agent(`${this.ticketPath(key, id)}/post_round`, { claim_id: await this.claimed(key, id), questions });
-  };
+  postRound: Driver["postRound"] = async (key, id, questions) =>
+    (await this.agent(`${this.ticketPath(key, id)}/post_round`, { claim_id: await this.claimFor(key, id), questions })).round;
 
   reportFailure: Driver["reportFailure"] = async (key, id, report) => {
-    await this.agent(`${this.ticketPath(key, id)}/report_failure`, { claim_id: await this.claimed(key, id), ...report });
+    await this.agent(`${this.ticketPath(key, id)}/report_failure`, { claim_id: await this.claimFor(key, id), ...report });
+    this.claims.delete(id);
   };
 
   finish: Driver["finish"] = async (key, id, summary, on) => {
-    await this.agent(`${this.ticketPath(key, id)}/finish`, { claim_id: await this.claimed(key, id), summary, ...on });
+    await this.agent(`${this.ticketPath(key, id)}/finish`, { claim_id: await this.claimFor(key, id), summary, ...on });
+    this.claims.delete(id);
   };
 
   addBlocker: Driver["addBlocker"] = async (key, id, blocker) => {
     await this.agent(`${this.ticketPath(key, id)}/add_blocker`, { blocker });
   };
 
-  // ticket 35
+  // ticket 35: always a new Claim, as a Ticket's next session makes.
   claim: Driver["claim"] = async (key, id, session_id) => {
-    await this.claimed(key, id, session_id);
+    await this.claimAs(key, id, session_id);
   };
 
   // ticket 42

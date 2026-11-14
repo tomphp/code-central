@@ -107,7 +107,7 @@ export function dropWorlds() {
 
 export class World {
   // fetch serves a request inside the world: the way in for createHttpApi
-  // and the Driver. Only string bodies are sent.
+  // and the Driver. It takes a URL, not a Request, and a string body.
   readonly fetch: typeof fetch;
   // api is the real createHttpApi over fetch, recording each method called.
   readonly api: Api;
@@ -123,9 +123,10 @@ export class World {
       // A request still on its way when its test ends fails as a fetch
       // with no service behind it does.
       if (this.dropped) throw new TypeError("fetch failed: the world has been dropped");
-      if (init.body != null && typeof init.body !== "string") throw new Error("a world's fetch sends only string bodies");
-      const url = input instanceof Request ? input.url : String(input);
-      return await core.fetch(id, init.method ?? "GET", url, [...new Headers(init.headers)], init.body ?? undefined, init.signal ?? undefined);
+      if (input instanceof Request || (init.body != null && typeof init.body !== "string")) {
+        throw new Error("a world's fetch takes a URL and a string body");
+      }
+      return await core.fetch(id, init.method ?? "GET", String(input), [...new Headers(init.headers)], init.body ?? undefined, init.signal ?? undefined);
     };
     const api = createHttpApi({ fetch: this.fetch, retryMs: 50 });
     this.api = new Proxy(api, {

@@ -19,8 +19,8 @@ export interface Driver {
   createProject(key: string, displayName: string): Promise<void>;
   createTicket(key: string, title: string, state: "Draft" | "Ready"): Promise<string>;
   // postRound claims a Ready Ticket as an agent and posts a Round of
-  // Questions, moving it to Needs Answer.
-  postRound(key: string, id: string, questions: { title: string; body: string; recommended?: string }[]): Promise<void>;
+  // Questions, moving it to Needs Answer, and returns the Round's number.
+  postRound(key: string, id: string, questions: { title: string; body: string; recommended?: string }[]): Promise<number>;
   // reportFailure claims a Ready Ticket as an agent (session
   // "contract-session") and posts a Failure Report, moving it to Failed.
   reportFailure(key: string, id: string, report: FailureReportBody): Promise<void>;

@@ -5,17 +5,17 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { storyWorld } from "../api/core/story";
 import { ModelsSection } from "./ModelsSection";
 
+// No component: the world gives its props, so the story takes no args.
 const meta = {
   title: "Options/ModelsSection",
-  component: ModelsSection,
   ...storyWorld(async (s, w) => {
     await s.project("acme", "Acme");
     await s.reportModels("acme", { effort_levels: ["low", "medium", "high"], aliases: ["sonnet", "opus"], model_flag: "--model", effort_flag: "--effort" });
     return { api: w.api, project: (await w.api.listProjects())[0] };
   }),
   render: (_args, { loaded }) => <ModelsSection {...loaded.world} />,
-} satisfies Meta<typeof ModelsSection>;
+} satisfies Meta;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = { args: {} as never };
+export const Default: Story = {};
