@@ -110,11 +110,12 @@ func (f *factory) prune() {
 
 // sweep looks at every worktree `git worktree list` reports in the
 // Factory's folder. One whose Ticket is Done or Cancelled, or Accepted
-// under the Branch Landing Method, so the human can check its branch
-// out, or Accepted with its Spec merge recorded under Land per Spec, is removed with `git worktree remove` when clean, and left with a
-// warning line when dirty. Branches are never deleted, and anything else
+// where the Landing Policy doesn't keep it (under Branch, so the human
+// can check its branch out), or Accepted with its Spec merge recorded
+// under Land per Spec, is removed with `git worktree remove` when clean,
+// and left with a warning line when dirty. Branches are never deleted, and anything else
 // is kept.
-func (f *factory) sweep(ctx context.Context, method store.LandingMethod) {
+func (f *factory) sweep(ctx context.Context, policy core.LandingPolicy) {
 	list, err := f.repository.worktrees()
 	if err != nil {
 		f.printf("warning: can't list the worktrees: %v", err)
@@ -139,7 +140,7 @@ func (f *factory) sweep(ctx context.Context, method store.LandingMethod) {
 			}
 			continue
 		}
-		if !doneWithWorktree(tk, method) {
+		if !doneWithWorktree(tk, policy) {
 			continue
 		}
 		status, err := f.repository.status(w.path)
@@ -164,15 +165,15 @@ func (f *factory) sweep(ctx context.Context, method store.LandingMethod) {
 }
 
 // doneWithWorktree reports whether the Factory is done with the worktree
-// of a Ticket in state, under the Landing Method.
-func doneWithWorktree(tk core.TicketView, method store.LandingMethod) bool {
+// of tk, under the Landing Policy.
+func doneWithWorktree(tk core.TicketView, policy core.LandingPolicy) bool {
 	switch tk.State {
 	case store.Done, store.Cancelled:
 		return true
 	case store.Accepted:
 		// Under Land per Spec its work is safe in the Spec Branch once
 		// the merge is recorded.
-		return method == store.LandingBranch || tk.SpecLanded && tk.SpecMerge != nil && tk.SpecMerge.Counts
+		return !policy.KeepsAcceptedWorktree() || tk.SpecLanded && tk.SpecMerge != nil && tk.SpecMerge.Counts
 	}
 	return false
 }

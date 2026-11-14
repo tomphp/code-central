@@ -139,10 +139,11 @@ func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
 			// A Spec's pull request is one item, on its lead Ticket.
 			return "", time.Time{}
 		}
-		if t.State == store.Accepted && p.Landing.Method == store.LandingPullRequest && t.PullRequest != nil && t.PullRequest.State == store.PRClosed {
+		lp := landingPolicyOf(p)
+		if t.State == store.Accepted && lp.LandsByPullRequest() && t.PullRequest != nil && t.PullRequest.State == store.PRClosed {
 			return ReasonPullRequestClosed, entered(t)
 		}
-		if t.State == store.Accepted && p.LandingPolicy().LandsOnHumanMerge() {
+		if t.State == store.Accepted && lp.LandsOnHumanMerge() {
 			return ReasonToMerge, entered(t)
 		}
 		if s := c.silentSince(t); s != nil {
@@ -157,7 +158,7 @@ func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
 		// One the CI gate holds on a running CI result, or waiting for its
 		// Spec to land, is never Accepted but not landed: landing waits on
 		// them.
-		if s := c.notLandedSince(p, t); s != nil && !a.waiting && !waitingForSpec(e.r, p.Landing, key, t) {
+		if s := c.notLandedSince(p, t); s != nil && !a.waiting && !waitingForSpec(e.r, p, t) {
 			return ReasonAcceptedNotLanded, *s
 		}
 	case store.Failed:

@@ -23,3 +23,7 @@ func signalName(sig os.Signal) (name string, ends bool) {
 	}
 	return "INT", false
 }
+
+// inUse says err is a file held open by another process, which only
+// Windows refuses to read.
+func inUse(error) bool { return false }

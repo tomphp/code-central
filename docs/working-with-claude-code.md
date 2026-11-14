@@ -158,7 +158,7 @@ Type the slash command yourself. `/to-spec`, `/to-tickets` and `/implement` only
 
    If a Round's answers raise new Questions, the session posts another Round instead of finishing. Answer it the same way.
 
-6. **Accept the grilling Ticket.** In the UI, `acme-shop-2` is In Review, with a *Review the finished work* panel holding the session's summary. Read it, and the resolution comment in the Ticket's history, then click **Accept**. To send it back, write what to change in *What to change (required to reject)* and click **Reject**: the Ticket goes back to Ready, for your session (or a Factory) to claim again.
+6. **Accept the grilling Ticket.** In the UI, `acme-shop-2` is In Review, with a *Review the finished work* panel holding the session's summary and an *Auto-accept: Grilling outcomes* badge, which names the Auto-accept setting that would skip this review. Read it, and the resolution comment in the Ticket's history, then click **Accept**. To send it back, write what to change in *What to change (required to reject)* and click **Reject**: the Ticket goes back to Ready, for your session (or a Factory) to claim again.
 
    Check: the strip's Grilling segment is done, and the next Stage is waiting, `acme-shop-3 Spec: Format prices for display` in Ready.
 

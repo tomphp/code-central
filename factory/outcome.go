@@ -92,9 +92,10 @@ func (f *factory) reportStuck(ctx context.Context, t *turn, end turnEnd) bool {
 	}})
 }
 
-// how is how the turn ended: its exit code, subtype and terminal reason.
+// how is how the turn ended: its exit code or signal, subtype and
+// terminal reason.
 func (t turnEnd) how() string {
-	s := fmt.Sprintf("exit %d", t.ExitCode)
+	s := t.exit()
 	if t.Result == nil {
 		return s + ", with no result message"
 	}

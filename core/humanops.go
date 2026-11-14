@@ -154,7 +154,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 				}
 			}
 		}
-		if p.Landing.Method == store.LandingPullRequest && l.Method != store.LandingPullRequest {
+		if landingPolicyOf(p).RunsPullRequestWatcher() && !NewLandingPolicy(l.Method, l.Push, l.LandPerSpec, p.CI.Tracking).RunsPullRequestWatcher() {
 			// What the Pull Request Watcher said was about the old method.
 			c.watchers.reset(watcherKey{WatcherPullRequests, key})
 			for _, t := range w.Tickets(key) {
@@ -185,7 +185,7 @@ func (c *Core) SetLandingMethod(ctx context.Context, key string, in SetLandingMe
 		}
 	}
 	if err := c.store.View(func(r store.Reader) error {
-		v.Landing.OpenPullRequests = openPullRequests(r, key, v.Landing.Method)
+		v.Landing.OpenPullRequests = openPullRequests(r, key, v.LandingPolicy())
 		return nil
 	}); err != nil {
 		return v, err
@@ -214,7 +214,7 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 	err := c.store.View(func(r store.Reader) error {
 		for _, p := range r.Projects() {
 			row := ProjectRow{ProjectView: c.projectView(p)}
-			row.Landing.OpenPullRequests = openPullRequests(r, p.Key, p.Landing.Method)
+			row.Landing.OpenPullRequests = openPullRequests(r, p.Key, landingPolicyOf(p))
 			e := c.evaluate(r, p)
 			row.NeedsMe = len(e.baseRows())
 			for _, t := range e.tickets() {
