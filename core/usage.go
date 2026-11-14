@@ -65,8 +65,8 @@ type UsageResponse struct {
 // as Session Events are filed, and counts as a ping. With no such Claim
 // it records them under the current Conversation with that session ID,
 // with no Ticket and Claim 0, so they count at Project scope only; with
-// neither they are dropped. A response with no time is dated now. The models they
-// name join the Project's Reported Models. It never fails.
+// neither they are dropped. A response with no time is dated now. The
+// models they name join the Project's Reported Models. It never fails.
 func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []UsageResponse) {
 	if sessionID == "" {
 		return
@@ -79,7 +79,7 @@ func (c *Core) PostUsage(ctx context.Context, sessionID string, responses []Usag
 	if !ok {
 		// A Conversation's session's usage counts at Project scope:
 		// no Ticket and Claim 0 (Spec code-central-633).
-		if k.project, ok = c.chatSession(sessionID); !ok {
+		if k.project, ok = c.conversationProject(sessionID); !ok {
 			return
 		}
 	}

@@ -143,24 +143,19 @@ func conversationOf(t *testing.T, b []byte) core.ConversationView {
 
 func getChat(t *testing.T, srv *codecentraltest.Server) core.ConversationView {
 	t.Helper()
-	_, b := httpDo(t, srv, httpCall{"GET", "/api/p/acme/chat", ""})
-	return conversationOf(t, b)
+	return conversationOf(t, mustOK(t, srv, httpCall{"GET", "/api/p/acme/chat", ""}))
 }
 
 func sendChat(t *testing.T, srv *codecentraltest.Server, text string) core.ConversationView {
 	t.Helper()
 	body, _ := json.Marshal(core.SendChatMessageInput{Text: text})
-	status, b := httpDo(t, srv, sendChatMessage(string(body)))
-	if status != http.StatusOK {
-		t.Fatalf("send_chat_message: status %d: %s", status, b)
-	}
-	return conversationOf(t, b)
+	return conversationOf(t, mustOK(t, srv, sendChatMessage(string(body))))
 }
 
 // takeWork is factory's next_chat_work when work is already waiting for it.
 func takeWork(t *testing.T, srv *codecentraltest.Server, factory string) core.ChatWork {
 	t.Helper()
-	_, b := httpDo(t, srv, nextChatWork(factory))
+	b := mustOK(t, srv, nextChatWork(factory))
 	var w core.ChatWork
 	if err := json.Unmarshal(b, &w); err != nil {
 		t.Fatalf("not chat work: %v: %s", err, b)
@@ -408,6 +403,7 @@ func chatTurn(t *testing.T, srv *codecentraltest.Server, text string) *core.Chat
 	return w.Turn
 }
 
+// mustOK is httpOK for a result read into a core type: its raw body.
 func mustOK(t *testing.T, srv *codecentraltest.Server, c httpCall) []byte {
 	t.Helper()
 	status, b := httpDo(t, srv, c)
@@ -555,6 +551,19 @@ func TestStopEndsAReplyNoFactoryHasTakenAtOnceAndIsANoOpWithNoneRunning(t *testi
 	}
 	if v := conversationOf(t, mustOK(t, srv, stopChatReply())); lastMessage(v).Outcome != core.ChatStopped {
 		t.Fatalf("a second stop changed the reply: %+v", v)
+	}
+}
+
+func TestAStopIsDroppedOnceTheFactoryHasEndedTheReply(t *testing.T) {
+	srv := newServer(t, chatFactory)
+	turn := chatTurn(t, srv, "What is acme?")
+	httpOK(t, srv, stopChatReply())
+	// The reply ends before the Factory next asks for work.
+	reply(t, srv, "f", turn, "A Project.")
+	w := waitWork(t, srv, "f")
+	srv.Clock.Advance(core.WaitTimeout)
+	if got := received(t, w); got.Stop != nil {
+		t.Fatalf("a stop for an ended reply was handed out: %+v", got)
 	}
 }
 

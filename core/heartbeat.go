@@ -193,7 +193,7 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 	if !seen || prev.status(now) != h.status(now) || prev.note != note || prev.chat != in.Chat {
 		c.events.Publish(events.Event{Type: events.ProjectChanged, Project: key})
 	}
-	c.chatHeartbeat(key)
+	c.chatAfterHeartbeat(key)
 	after := c.projectView(project)
 	return acknowledgeProject(before, after, in.Full, now)
 }
@@ -203,9 +203,8 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 // and per Factory, with what it saw last time and calls changed(project)
 // for each Project that differs, so live views refetch. It also settles
 // each Conversation (see settleChat), which sends its own chat.changed.
-// The time comes from
-// the injected clock, not the tick; serve ticks every 10s. It returns when
-// ctx ends.
+// The time comes from the injected clock, not the tick; serve ticks every
+// 10s. It returns when ctx ends.
 func (c *Core) WatchFactoryStatus(ctx context.Context, ticks <-chan time.Time, changed func(project string)) {
 	for {
 		select {

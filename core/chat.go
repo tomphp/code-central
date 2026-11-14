@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -54,9 +55,12 @@ const (
 type ChatOutcome string
 
 const (
-	ChatDone    ChatOutcome = "done"
+	// ChatDone is a reply that ran to its end.
+	ChatDone ChatOutcome = "done"
+	// ChatStopped is a reply the human stopped.
 	ChatStopped ChatOutcome = "stopped"
-	ChatFailed  ChatOutcome = "failed"
+	// ChatFailed is a reply that went wrong, with its error text.
+	ChatFailed ChatOutcome = "failed"
 )
 
 // Who wrote a Chat Message.
@@ -172,6 +176,7 @@ type chats struct {
 	seen map[string]ChatAvailability
 }
 
+// newChats is an empty holder.
 func newChats() *chats {
 	return &chats{all: map[string]*conversation{}, polls: map[heartbeatKey]*chatPoll{}, stops: map[heartbeatKey][]string{}, seen: map[string]ChatAvailability{}}
 }
@@ -395,7 +400,7 @@ func (c *Core) NextChatWork(ctx context.Context, key string, in NextChatWorkInpu
 	}()
 	var timeout <-chan time.Time
 	for {
-		if w, ok := c.takeChatWork(k); ok {
+		if w, ok := c.takeChatWork(k, p); ok {
 			return w, nil
 		}
 		if timeout == nil {
@@ -413,12 +418,16 @@ func (c *Core) NextChatWork(ctx context.Context, key string, in NextChatWorkInpu
 	}
 }
 
-// takeChatWork hands Factory k its next piece of work, if there is one:
-// a stop first, then a queued turn.
-func (c *Core) takeChatWork(k heartbeatKey) (ChatWork, bool) {
+// takeChatWork hands Factory k's call p its next piece of work, if there
+// is one: a stop first, then a queued turn. A call a newer one has
+// replaced ends with none, so it can't take work nobody reads.
+func (c *Core) takeChatWork(k heartbeatKey, p *chatPoll) (ChatWork, bool) {
 	cs := c.chats
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
+	if cs.polls[k] != p {
+		return ChatWork{}, true
+	}
 	fs := c.settleChat(k.project)
 	if stops := cs.stops[k]; len(stops) > 0 {
 		cs.stops[k] = stops[1:]
@@ -481,14 +490,20 @@ func (c *Core) PostChatEvents(_ context.Context, key string, in PostChatEventsIn
 			msg = ""
 		}
 		cv.end(in.Outcome, msg)
+		// The Factory has ended the turn, so a stop not yet handed out
+		// is moot.
+		cs.stops[from] = slices.DeleteFunc(cs.stops[from], func(id string) bool { return id == cv.id })
+		if len(cs.stops[from]) == 0 {
+			delete(cs.stops, from)
+		}
 		c.chatChanged(key)
 	}
 	cv.bound()
 }
 
-// chatSession is the Project whose current Conversation has the session
-// ID, for filing its usage.
-func (c *Core) chatSession(sessionID string) (string, bool) {
+// conversationProject is the Project whose current Conversation has the
+// session ID, for filing its usage.
+func (c *Core) conversationProject(sessionID string) (string, bool) {
 	cs := c.chats
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
@@ -500,10 +515,10 @@ func (c *Core) chatSession(sessionID string) (string, bool) {
 	return "", false
 }
 
-// chatHeartbeat runs after a Heartbeat of the Project's: a Factory may now
-// take a waiting turn, or the Conversation's availability may have
-// changed.
-func (c *Core) chatHeartbeat(key string) {
+// chatAfterHeartbeat runs after a Heartbeat of the Project's: a Factory
+// may now take a waiting turn, or the Conversation's availability may
+// have changed.
+func (c *Core) chatAfterHeartbeat(key string) {
 	cs := c.chats
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
@@ -531,11 +546,15 @@ func (c *Core) newConversation(key string, row store.ModelRow, model, effort str
 		c.stopReply(key, old)
 	}
 	cv := &conversation{
+		// Random, not from c.ids, so Claim IDs stay predictable in tests
+		// and an ID never repeats across restarts.
 		id:     ids.Random{}.ClaimID(),
 		model:  cmp.Or(model, row.Model, DefaultChatModel),
 		effort: cmp.Or(effort, row.Effort),
 	}
 	cs.all[key] = cv
+	// The new Conversation's notice covers its availability too.
+	cs.seen[key] = chatAvailability(cv, c.chatFactories(key))
 	c.chatChanged(key)
 	return cv
 }
@@ -575,10 +594,11 @@ func (c *Core) settleChat(key string) map[heartbeatKey]FactoryView {
 			c.chatChanged(key)
 		}
 	}
-	if a := chatAvailability(cv, fs); a != cs.seen[key] {
-		if _, announced := cs.seen[key]; announced || a != ChatNone {
-			c.chatChanged(key)
-		}
+	// A Project that has never had a Conversation has nothing to announce,
+	// and a post naming any other key adds nothing here.
+	a := chatAvailability(cv, fs)
+	if prev, announced := cs.seen[key]; (announced || cv != nil) && a != prev {
+		c.chatChanged(key)
 		cs.seen[key] = a
 	}
 	return fs
@@ -692,6 +712,7 @@ func (cs *chats) wake(key string) {
 	}
 }
 
+// notify wakes p, at most once until it looks.
 func (p *chatPoll) notify() {
 	select {
 	case p.wake <- struct{}{}:
