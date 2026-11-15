@@ -36,6 +36,14 @@ _Avoid_: Available models, model catalogue
 A program outside Code Central that claims Tickets and runs agents on them to deliver work.
 _Avoid_: Controller, runner, orchestrator
 
+**Turn**:
+One run of claude the Factory starts, for a Claim or to answer a Chat Message. It ends done, failed, in an Outage, on a login failure, on a rejected model or effort, or stopped.
+_Avoid_: run, process, session (a session spans many Turns)
+
+**Outage**:
+Trouble that is the service's or the account's limits, not the Ticket's: a usage or rate limit, overload, or a server or network error. A Claim's Turn cut off by one pauses the Factory and is resumed later. A Chat reply cut off by one fails, naming it.
+_Avoid_: rate-limited (narrower), downtime
+
 **Spec**:
 The description of a piece of work, such as a feature or user story, delivered through one or more Tickets.
 _Avoid_: Epic, feature, PRD
@@ -262,7 +270,7 @@ One Chat session, from its first Chat Message until the human starts a new one. 
 _Avoid_: thread, chat session
 
 **Chat Message**:
-One turn in a Conversation, from the human or from Claude.
+One message in a Conversation, from the human or from Claude.
 _Avoid_: prompt, reply (as nouns for the record), Session Event
 
 **Chat support**:

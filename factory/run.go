@@ -166,14 +166,16 @@ func (f *factory) slotFree(ctx context.Context) bool {
 	return !f.halted(ctx) && f.running() < f.o.parallel && !f.paused()
 }
 
-// turn is one running `claude -p` process, for one Claim.
+// turn is one running Turn of claude, for one Claim.
 type turn struct {
 	claim   claim
 	dir     string
 	choice  turnChoice // the model and effort it was started with
 	started time.Time
-	proc    *os.Process
-	done    chan struct{} // closed once the turn has ended and been read
+	// cancel ends the Turn's stop context, which has the Turn runner stop
+	// claude.
+	cancel context.CancelFunc
+	done   chan struct{} // closed once the turn has ended and been read
 	// stopped is set when the Factory stops the turn, so its end is the
 	// Factory's doing, not an outcome to act on.
 	stopped atomic.Bool
@@ -272,39 +274,12 @@ func (f *factory) live(claimID string) bool {
 	return !f.ended[claimID]
 }
 
-// killGrace is how long a turn being stopped has after each stop step
-// but the last (stopSteps).
-func (f *factory) killGrace() time.Duration {
-	if f.e.KillGrace > 0 {
-		return f.e.KillGrace
-	}
-	return 10 * time.Second
-}
-
-// stopTurn takes t through stopSteps, moving to the next step if it
-// lingers past the grace period, and waits for it to end: on Unix SIGINT,
-// then SIGTERM, then kill; on Windows Ctrl-Break, then kill.
+// stopTurn stops t, which the Turn runner does through its stop ladder,
+// and waits for it to end.
 func (f *factory) stopTurn(t *turn) {
 	t.stopped.Store(true)
-	f.stopProcess(t.proc, t.done, func(err error) {
-		f.claimf(t.claim, "%s: can't stop the turn: %v", t.claim.Ticket, err)
-	})
-}
-
-// stopProcess takes a turn's process proc through stopSteps until ended
-// is closed, telling warn of a step that fails.
-func (f *factory) stopProcess(proc *os.Process, ended <-chan struct{}, warn func(error)) {
-	for _, stop := range stopSteps(proc) {
-		if err := stop(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-			warn(err)
-		}
-		select {
-		case <-ended:
-			return
-		case <-time.After(f.killGrace()):
-		}
-	}
-	<-ended
+	t.cancel()
+	<-t.done
 }
 
 // stopAll stops every running turn at once.
@@ -406,7 +381,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		return true
 	}
 	mc := f.withFlags(stage, res.ModelChoice)
-	f.startTurn(ctx, c, wt, mc, append(f.startArgs(c, mc), firstPrompt(c, stage, f.baseBranch(), conflicts)))
+	f.startTurn(ctx, c, turnInput{Dir: wt, Choice: mc, Prompt: firstPrompt(c, stage, f.baseBranch(), conflicts)})
 	return true
 }
 
@@ -439,7 +414,7 @@ func (f *factory) resumeAnswered(ctx context.Context, c claim) {
 	if decided != "" {
 		prompt += "\n" + decided + "\n"
 	}
-	f.startTurn(ctx, c, f.worktree(c.Ticket), mc, append(f.resumeArgs(c, mc), prompt))
+	f.startTurn(ctx, c, turnInput{Dir: f.worktree(c.Ticket), Resume: true, Choice: mc, Prompt: prompt})
 }
 
 // sessionHolder looks through the process list for a process other than

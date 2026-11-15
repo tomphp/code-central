@@ -352,8 +352,11 @@ func (h *Harness) Environ() []string {
 	return out
 }
 
+// Claude is the fake claude's path, as the Factory finds it on PATH.
+func (h *Harness) Claude() string { return filepath.Join(h.Bin, "claude"+exeSuffix) }
+
 // RemoveClaude takes the fake claude off PATH.
-func (h *Harness) RemoveClaude() { must(h.t, os.Remove(filepath.Join(h.Bin, "claude"+exeSuffix))) }
+func (h *Harness) RemoveClaude() { must(h.t, os.Remove(h.Claude())) }
 
 // ShimClaude puts a claude.cmd on PATH in place of the fake claude, as
 // installing claude with npm on Windows leaves.
