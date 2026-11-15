@@ -244,7 +244,7 @@ func TestACutOffTurnIsResumedWithBackoffUntilTheOutageIsOver(t *testing.T) {
 	turnsEnded(3)
 	r.WaitForOutput("the outage is over")
 	r.Poll()
-	h.WaitForState(next, store.InReview)
+	r.WaitForClaimed(next, store.InReview)
 	if len(tk.FailureReports) != 0 {
 		t.Errorf("a cut-off turn is never failed: %+v", tk.FailureReports)
 	}
