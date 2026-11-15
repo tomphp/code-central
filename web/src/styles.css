@@ -389,6 +389,9 @@ a.link-badge:hover { text-decoration: underline; }
 .bs-toggle button + button { border-left: 1px solid var(--border); }
 .bs-toggle button[aria-pressed="true"] { background: var(--accent); color: #fff; }
 .bs-toggle button:disabled { cursor: default; opacity: .6; }
+.bs-tabs [role="tablist"] { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.bs-tabs [role="tab"] { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font: inherit; font-size: 13px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+.bs-tabs [role="tab"][aria-selected="true"] { color: inherit; border-bottom-color: var(--accent); }
 /* The Spec row (code-central-458): a chevron, then a row link to the Spec. */
 .spec-row { border-bottom: 1px solid var(--border); }
 .spec-row.needs { border-left: 3px solid color-mix(in srgb, var(--r-answer) 55%, transparent); }

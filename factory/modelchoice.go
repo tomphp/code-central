@@ -72,15 +72,12 @@ func (s choiceFrom) describe(name, accepted string) (where, fix string) {
 		fmt.Sprintf("Set the Ticket's `%s` Tag, or a Models row in Project Options, to one that %s, then send the Ticket back.", name, accepted)
 }
 
-// effortAccepted reports whether tm's effort is one claude accepts, and
-// if not files a Failure Report naming it and where it was set, so no
-// turn starts: claude ignores an effort it doesn't accept and runs at its
-// default.
-func (f *factory) effortAccepted(ctx context.Context, c claim, dir string, tm turnChoice) bool {
-	if f.accepts.takesEffort(tm.effort) {
-		return true
-	}
-	list := strings.Join(f.accepts.levels, ", ")
+// reportRejectedEffort files a Failure Report for c, whose turn the Turn
+// runner didn't start because tm's effort isn't one of the levels claude
+// accepts, naming it and where it was set: claude ignores an effort it
+// doesn't accept and runs at its default.
+func (f *factory) reportRejectedEffort(ctx context.Context, c claim, dir string, tm turnChoice, levels []string) {
+	list := strings.Join(levels, ", ")
 	where, fix := tm.effortFrom.describe("effort", "claude accepts ("+list+")")
 	f.reportFailure(ctx, c, &failure{core.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("The effort `%s`, set by %s, isn't one this Factory's claude accepts (%s), so no turn was started.", tm.effort, where, list),
@@ -88,7 +85,6 @@ func (f *factory) effortAccepted(ctx context.Context, c claim, dir string, tm tu
 		WhatToFix:       fix,
 		WhereWorkStands: f.whereWorkStands(dir),
 	}})
-	return false
 }
 
 // reportRejectedModel files a Failure Report for t, whose turn claude

@@ -36,6 +36,14 @@ _Avoid_: Available models, model catalogue
 A program outside Code Central that claims Tickets and runs agents on them to deliver work.
 _Avoid_: Controller, runner, orchestrator
 
+**Turn**:
+One run of claude the Factory starts, for a Claim or to answer a Chat Message. It ends done, failed, in an Outage, on a login failure, on a rejected model or effort, or stopped.
+_Avoid_: run, process, session (a session spans many Turns)
+
+**Outage**:
+Trouble that is the service's or the account's limits, not the Ticket's: a usage or rate limit, overload, or a server or network error. A Claim's Turn cut off by one pauses the Factory and is resumed later. A Chat reply cut off by one fails, naming it.
+_Avoid_: rate-limited (narrower), downtime
+
 **Spec**:
 The description of a piece of work, such as a feature or user story, delivered through one or more Tickets.
 _Avoid_: Epic, feature, PRD
@@ -262,7 +270,7 @@ One Chat session, from its first Chat Message until the human starts a new one. 
 _Avoid_: thread, chat session
 
 **Chat Message**:
-One turn in a Conversation, from the human or from Claude.
+One message in a Conversation, from the human or from Claude.
 _Avoid_: prompt, reply (as nouns for the record), Session Event
 
 **Chat support**:
@@ -367,8 +375,12 @@ The view of the CI Runs in a Project, or in all Projects with CI Tracking on: th
 _Avoid_: CI dashboard, build monitor
 
 **Usage**:
-The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. Its token kinds include `chat`. Subagents nest under their parent session.
+The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. It shows its parts in three tabs, Token usage, Context Size and Code Central calls, in that order, with the open tab in the URL; a session opens in its Session popup. Its token kinds include `chat`. Subagents nest under their parent session.
 _Avoid_: Analytics dashboard, stats, metrics
+
+**Session popup**:
+Usage's popup for one session (a Claim's main session or a Subagent): its Context Size response by response as a line chart, opened from Recent sessions. It is kept in the URL. A Subagent's popup links to its parent session's in place.
+_Avoid_: session details, session modal, graph popup
 
 **Subagent**:
 A session that a Claim's session starts through the Agent tool. Usage records it as a session of its own under its parent session, named by its Agent Type and description.

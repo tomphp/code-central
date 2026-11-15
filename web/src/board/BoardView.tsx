@@ -21,6 +21,7 @@ import { OneProject } from "../inbox/ShortId";
 import { specKindOf } from "../inbox/describeSpec";
 import { stateSlug } from "../controls/StateChip";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
+import { useNote } from "../focus/useNote";
 import { useNeedsMe } from "../needsme/context";
 import type { NeedsMe, PopupKind } from "../needsme/model";
 import { useIdKind } from "../idLinks";
@@ -53,6 +54,7 @@ export interface BoardViewProps {
 }
 
 export function BoardView({ api, now, version, data, loc, navigate, onFocusPopupGone }: BoardViewProps) {
+  const { note, say } = useNote();
   const projects = data?.projects ?? [];
   const hidden = hiddenColumns(loc.hide);
   const shownStates = STATES.filter((s) => !hidden.includes(s));
@@ -138,13 +140,7 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
                   api={api}
                   projects={projects.filter((p) => !p.archived)}
                   project={scope}
-                  onSubmitted={(r) =>
-                    navigate(
-                      r.kind === "Small Change"
-                        ? { view: "inbox", project: loc.project, ticket: r.ticket.id }
-                        : { view: "inbox", project: loc.project, list: "requirements", requirement: r.spec.id },
-                    )
-                  }
+                  onSubmitted={({ kind }) => say(`${kind} added`)}
                 />
               </div>
               <Button  onClick={() => navigate(loc.back ?? { view: "inbox" })}>
@@ -153,6 +149,11 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
             </>
           }
         />
+        {note && (
+          <p role="status" className="board-note">
+            {note}
+          </p>
+        )}
         {!data ? (
           <Loading />
         ) : (

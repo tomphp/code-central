@@ -297,6 +297,7 @@ A Chat turn takes **no Claim slot**: it doesn't count against the Factory's conc
 
 - **Draining.** The first Ctrl-C closes the `next_chat_work` call, so no new Chat turn starts. A turn already running goes on, and the Factory exits once it has ended. While its Factory is Draining, the pop-up shows the Conversation as unavailable.
 - **Stopping.** A second Ctrl-C, SIGTERM or SIGHUP stops a running Chat turn as it stops a Claim's, and the reply ends `Stopped`. **Stop** in the pop-up stops just that reply: the Factory hears it on its `next_chat_work` call.
+- **An Outage or an expired login.** A reply cut off by an Outage (a usage or rate limit, overload, or a server or network error) or by an expired or missing login fails with text naming the cause: "claude hit an Outage (`rate_limit`): a usage or rate limit, overload, or a server or network error cut off the reply. Send the message again later." or "claude's login has expired or is missing (authentication_failed): log in with `claude /login` on the Factory's host, then send the message again." Chat doesn't pause or stop the Factory for either, and files no Failure Report.
 - **`--no-chat`.** The Factory opens no `next_chat_work` call and reports `chat: false`, so Chat isn't available through it.
 
 ## Model and effort
