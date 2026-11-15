@@ -5,7 +5,7 @@
 // through, and the optional Skip and Open in Inbox.
 import type { Api } from "../api/api";
 import type { NeedsMeRow, TicketView } from "../api/types";
-import { duration, ticketOf } from "../format";
+import { duration, shortCommit, ticketOf } from "../format";
 import { FocusBadge } from "./FocusBadge";
 import type { InboxData } from "../live";
 import { Markdown } from "../Markdown";
@@ -191,8 +191,8 @@ function BaseDivergedFix({ row }: { row: NeedsMeRow }) {
         doesn't. Nothing lands and no new branch is cut until they agree.
       </p>
       <p>
-        Local <code>{b.local.slice(0, 7)}</code> · remote{" "}
-        <code>{b.remote.slice(0, 7)}</code>
+        Local <code>{shortCommit(b.local)}</code> · remote{" "}
+        <code>{shortCommit(b.remote)}</code>
       </p>
       <p className="small">
         Reconcile {base} with the remote by hand, for example by resetting or
