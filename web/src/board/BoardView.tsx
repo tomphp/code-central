@@ -9,7 +9,6 @@
 // Ticket popup otherwise. It reads only what the Inbox loads, and follows the
 // live feed. Back returns to the Inbox it was opened from.
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import type { Api } from "../api/api";
 import { STATES, type State } from "../api/types";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { ToggleGroup } from "../controls/ToggleGroup";
@@ -20,7 +19,7 @@ import { hiddenColumns, needsMeColumn, storedGroup, storeGroup, storeHidden, sto
 import { OneProject } from "../inbox/ShortId";
 import { specKindOf } from "../inbox/describeSpec";
 import { stateSlug } from "../controls/StateChip";
-import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
+import { useApi, type InboxData, type ProjectSpec, type ProjectTicket } from "../live";
 import { useNote } from "../focus/useNote";
 import { useNeedsMe } from "../needsme/context";
 import type { NeedsMe, PopupKind } from "../needsme/model";
@@ -41,10 +40,7 @@ import { useProjectScope } from "../projectScope";
 import "./board.css";
 
 export interface BoardViewProps {
-  api: Api;
   now: Date;
-  // version is the live feed's, which the popups read on.
-  version: number;
   data?: InboxData;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
@@ -53,7 +49,8 @@ export interface BoardViewProps {
   onFocusPopupGone?(keys: FocusKey[]): void;
 }
 
-export function BoardView({ api, now, version, data, loc, navigate, onFocusPopupGone }: BoardViewProps) {
+export function BoardView({ now, data, loc, navigate, onFocusPopupGone }: BoardViewProps) {
+  const api = useApi();
   const { note, say } = useNote();
   const projects = data?.projects ?? [];
   const hidden = hiddenColumns(loc.hide);
@@ -137,7 +134,6 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
               <div className="board-new">
                 <NewSplit
                   variant="plain"
-                  api={api}
                   projects={projects.filter((p) => !p.archived)}
                   project={scope}
                   onSubmitted={({ kind }) => say(`${kind} added`)}
@@ -199,9 +195,7 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
         <FocusPopup
           key={loc.popup}
           mode="ticket"
-          api={api}
           now={now}
-          version={version}
           data={data}
           id={loc.popup}
           onClose={closePopup}
@@ -211,9 +205,7 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
       )}
       {loc.popup && kind === "spec" && (
         <SpecPopup
-          api={api}
           now={now}
-          version={version}
           id={loc.popup}
           projects={projects}
           onClose={closePopup}
@@ -223,9 +215,7 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
       )}
       {loc.popup && kind === "ticket" && (
         <TicketPopup
-          api={api}
           now={now}
-          version={version}
           id={loc.popup}
           projects={projects}
           onClose={closePopup}

@@ -1,13 +1,14 @@
 // Focus Mode's body's tests, through its props: its header, "N left", the
 // Focus Item on screen, All clear, only skipped and loading, in one Project
 // and in All Projects, with the data read from a WASM Core world.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newWorld, type World } from "../api/core/core";
 import { scenario } from "../api/scenario";
 import type { UiLocation } from "../url";
 import { FocusBody, type FocusBodyProps, type FocusBodySession } from "./FocusBody";
+import { renderLive } from "../worldTesting";
 import { focusData, focusSession, type FocusData } from "./storyData";
 
 let w: World;
@@ -21,7 +22,7 @@ afterEach(() => w.drop());
 function renderBody(more: Partial<FocusBodyProps> = {}, over: Partial<FocusBodySession> = {}) {
   const navigate = vi.fn<(patch: Partial<UiLocation>) => void>();
   const s = focusSession(f, { skip: vi.fn(), again: vi.fn(), say: vi.fn(), ...over });
-  render(<FocusBody api={f.api} now={f.now} data={f.data} session={s} loc={{ view: "focus" }} navigate={navigate} {...more} />);
+  renderLive(w, <FocusBody api={f.api} now={f.now} data={f.data} session={s} loc={{ view: "focus" }} navigate={navigate} {...more} />);
   return { navigate, session: s };
 }
 

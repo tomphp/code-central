@@ -13,9 +13,11 @@ import type { PanelDef, PanelProps } from "../ActionPanel";
 import { ResumeCommand } from "../resume/ResumeCommand";
 import { useAct } from "../../ticket/useAct";
 import { Button } from "../../controls/Button";
+import { useApi } from "../../live";
 import "./failed.css";
 
-export function FailedPanel({ api, project, ticket: t, now }: PanelProps) {
+export function FailedPanel({ project, ticket: t, now }: PanelProps) {
+  const api = useApi();
   const [note, setNote] = useState("");
   const { busy, error, run } = useAct();
   const reports = t.failure_reports ?? [];

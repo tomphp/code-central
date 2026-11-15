@@ -40,27 +40,26 @@ const popup = (button: string, draw: (w: World) => ReactNode): Story => ({
 
 const submitted = () => {};
 
-export const Requirement = popup("New requirement", ({ api, projects }) => <NewRequirement api={api} projects={projects} onSubmitted={submitted} />);
+export const Requirement = popup("New requirement", ({ projects }) => <NewRequirement projects={projects} onSubmitted={submitted} />);
 
 // With a Project filtered, it doesn't ask which.
-export const RequirementInOneProject = popup("New requirement", ({ api, projects }) => (
-  <NewRequirement api={api} projects={projects} project="acme" onSubmitted={submitted} />
+export const RequirementInOneProject = popup("New requirement", ({ projects }) => (
+  <NewRequirement projects={projects} project="acme" onSubmitted={submitted} />
 ));
 
 // Named so as not to hide the global Map.
-export const MapStory: Story = { ...popup("New Map", ({ api, projects }) => <NewMap api={api} projects={projects} onSubmitted={submitted} />), name: "Map" };
+export const MapStory: Story = { ...popup("New Map", ({ projects }) => <NewMap projects={projects} onSubmitted={submitted} />), name: "Map" };
 
-export const SmallChange = popup("New Small Change", ({ api, projects }) => <NewSmallChange api={api} projects={projects} onSubmitted={submitted} />);
+export const SmallChange = popup("New Small Change", ({ projects }) => <NewSmallChange projects={projects} onSubmitted={submitted} />);
 
-export const Prototype = popup("New Prototype", ({ api, spec }) => <NewPrototype api={api} spec={spec} onSubmitted={submitted} />);
+export const Prototype = popup("New Prototype", ({ spec }) => <NewPrototype spec={spec} onSubmitted={submitted} />);
 
 // Prefilled from the finished Map.
-export const WriteTheSpecFromAMap = popup("Write the Spec", ({ api }) => (
+export const WriteTheSpecFromAMap = popup("Write the Spec", () => (
   <WriteTheSpec
-    api={api}
     map={{ id: "acme-9", title: "Sign-in everywhere", destination: "Every app signs in through one service, with GitHub and Google." }}
     onSubmitted={submitted}
   />
 ));
 
-export const Retro = popup("Retro", ({ api, done }) => <NewRetro api={api} target={done} onSubmitted={submitted} />);
+export const Retro = popup("Retro", ({ done }) => <NewRetro target={done} onSubmitted={submitted} />);

@@ -2,7 +2,7 @@
 // Ticket's panel links to its external item, as its Link's URL, beside
 // its Link badge, which marks an outbound Link (code-central-290), on a
 // WASM Core world.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { newWorld, type World } from "../api/core/core";
 import { scenario } from "../api/scenario";
@@ -10,6 +10,7 @@ import type { LinkView, SpecDetail } from "../api/types";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { SpecPane } from "../spec/SpecPane";
+import { renderLive } from "../worldTesting";
 import { TicketDetail } from "./TicketDetail";
 
 const URL = "https://github.com/acme/web/issues/7";
@@ -24,7 +25,7 @@ async function world() {
 }
 
 async function ticketPanel(w: World, id: string) {
-  render(<TicketDetail api={w.api} project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} />);
+  renderLive(w, <TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} />);
   return screen.getByRole("article", { name: "Ticket details" });
 }
 
@@ -34,14 +35,14 @@ const noLinks = { reasons: new Map(), select: () => {}, specLink: (id: string) =
 function specPane(w: World, spec: SpecDetail) {
   const now = w.now();
   if (spec.requirement) {
-    render(<RequirementPane api={w.api} spec={{ ...spec, requirement: spec.requirement }} now={now} {...noLinks} />);
+    renderLive(w, <RequirementPane spec={{ ...spec, requirement: spec.requirement }} now={now} {...noLinks} />);
     return screen.getByRole("region", { name: "Requirement" });
   }
   if (spec.map) {
-    render(<MapPane api={w.api} spec={{ ...spec, map: spec.map }} now={now} written={() => {}} {...noLinks} />);
+    renderLive(w, <MapPane spec={{ ...spec, map: spec.map }} now={now} written={() => {}} {...noLinks} />);
     return screen.getByRole("region", { name: "Map" });
   }
-  render(<SpecPane api={w.api} spec={spec} now={now} {...noLinks} />);
+  renderLive(w, <SpecPane spec={spec} now={now} {...noLinks} />);
   return screen.getByRole("region", { name: "Spec" });
 }
 

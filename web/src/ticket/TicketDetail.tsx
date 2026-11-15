@@ -1,7 +1,6 @@
 // The selected Ticket, shared by every view: TicketPane reads what the
 // pane needs beyond the Ticket, and TicketDetail draws it from props.
 import { useState } from "react";
-import type { Api } from "../api/api";
 import { moveTargets } from "../api/actions/move";
 import type { EditView, ReportedModels, State, TicketView } from "../api/types";
 import { ago, CLAUDE_CODE_DEFAULT } from "../format";
@@ -26,13 +25,12 @@ import { Button } from "../controls/Button";
 import { ReasonBadge } from "../controls/ReasonBadge";
 import { Select } from "../controls/Select";
 import { StateChip } from "../controls/StateChip";
-import { useLiveVersion, useSpec } from "../live";
+import { useApi, useSpec } from "../live";
 import { isCIItemReason } from "../needsme/model";
 import { AutoAcceptSwitch } from "./AutoAcceptSwitch";
 import { AUTO_ACCEPT_LABEL, canAutoAccept, moveText, wouldAutoAccept } from "./autoAccept";
 
 export interface TicketDetailProps {
-  api: Api;
   project: string;
   // ticket is the Ticket once read; until then the pane says Loading…, or
   // shows error, the read's error.
@@ -61,13 +59,14 @@ export type TicketPaneProps = Omit<TicketDetailProps, "specLabels">;
 // TicketPane is the Ticket pane's view: it reads the Ticket's Spec on the
 // live version, for its Labels, and draws TicketDetail.
 export function TicketPane(props: TicketPaneProps) {
-  const spec = useSpec(props.api, props.project, props.ticket?.spec.id || undefined, useLiveVersion(props.api)).data;
+  const spec = useSpec(props.project, props.ticket?.spec.id || undefined).data;
   return <TicketDetail {...props} specLabels={spec?.labels} />;
 }
 
 // TicketDetail is the Ticket pane, drawn from its props: its header, the
 // action panel slot first, then the Ticket itself.
 export function TicketDetail(props: TicketDetailProps) {
+  const api = useApi();
   // The form owns its draft, so it stays open if the Ticket stops being
   // editable under it; Edit is offered only while it is closed.
   const [editing, setEditing] = useState(false);
@@ -93,7 +92,7 @@ export function TicketDetail(props: TicketDetailProps) {
             title={t.title}
             text={t.description}
             label="description"
-            save={({ title, text }) => props.api.act(props.project, t.id, "edit_ticket", { title, description: text })}
+            save={({ title, text }) => api.act(props.project, t.id, "edit_ticket", { title, description: text })}
             close={() => setEditing(false)}
           />
         ) : (
@@ -106,13 +105,13 @@ export function TicketDetail(props: TicketDetailProps) {
                 </Button>
               )}
               {retroable(t, !!props.archived) && props.openTicket && (
-                <NewRetro api={props.api} target={t.id} onSubmitted={(r) => props.openTicket?.(r.id)} />
+                <NewRetro target={t.id} onSubmitted={(r) => props.openTicket?.(r.id)} />
               )}
             </span>
           </>
         )}
       </header>
-      <ActionPanel api={props.api} project={props.project} ticket={t} now={props.now} />
+      <ActionPanel project={props.project} ticket={t} now={props.now} />
       <TicketBody {...props} ticket={t} editing={editing} />
     </>
   );
@@ -133,7 +132,7 @@ type TicketBodyProps = Omit<TicketDetailProps, "ticket" | "error"> & {
 // (in the action panel instead while CI failed), Claim activity with
 // each Claim's Live section, move, and a collapsed history of moves,
 // comments and edits merged by time.
-function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSpec, openTicket, archived, editing }: TicketBodyProps) {
+function TicketBody({ project, ticket: t, specLabels, now, reported, openSpec, openTicket, archived, editing }: TicketBodyProps) {
   const claims = [...(t.claims ?? [])].sort((a, b) => b.number - a.number);
   return (
     <article aria-label="Ticket details" className="ticket-body">
@@ -152,10 +151,10 @@ function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSp
         <PullRequestBadge pr={t.pull_request} />
         <OpenExternal link={t.link} />
       </div>
-      {t.link && !t.link.detached && <LinkedNote key={t.id} api={api} project={project} ticket={t} />}
+      {t.link && !t.link.detached && <LinkedNote key={t.id} project={project} ticket={t} />}
       {/* A New issue's triage actions are its action panel, so they
           aren't shown here too. */}
-      {t.triage_actions && t.needs_me_reason !== "new_issue" && <Triage api={api} project={project} ticket={t} />}
+      {t.triage_actions && t.needs_me_reason !== "new_issue" && <Triage project={project} ticket={t} />}
       {editing ? null : t.description ? <Markdown>{t.description}</Markdown> : <p className="muted">No description.</p>}
       {t.tags.prototype !== undefined && <PrototypeAt tag={t.tags.prototype} />}
       {t.blockers.length > 0 && (
@@ -176,14 +175,14 @@ function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSp
       {openTicket && <RetroList retros={t.retros} select={openTicket} />}
       {/* The controls share a grid, so each lines up after its label. */}
       <section aria-label="Ticket controls" className="ticket-controls">
-        <TicketAutoAccept api={api} project={project} ticket={t} specLabels={specLabels} openSpec={openSpec} archived={archived} />
-        <ModelChoice api={api} project={project} ticket={t} reported={reported} />
-        <MoveControl key={`${t.id} ${t.state}`} api={api} project={project} ticket={t} />
+        <TicketAutoAccept project={project} ticket={t} specLabels={specLabels} openSpec={openSpec} archived={archived} />
+        <ModelChoice project={project} ticket={t} reported={reported} />
+        <MoveControl key={`${t.id} ${t.state}`} project={project} ticket={t} />
       </section>
       {/* A Ticket in a CI item has the CI section in its action panel,
           with the failure options, so it isn't shown here too. */}
       {!isCIItemReason(t.needs_me_reason) && (
-        <CISection ticket={t} api={api} project={project} />
+        <CISection ticket={t} project={project} />
       )}
       {claims.length > 0 && (
         <ul aria-label="Claims" className="claims muted small">
@@ -209,7 +208,6 @@ function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSp
               </div>
               <Live
                 key={`${t.id}#${c.number}`}
-                api={api}
                 project={project}
                 id={t.id}
                 claim={c.number}
@@ -228,11 +226,10 @@ function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSp
 // Ticket can't be auto-accepted or is Accepted, Done or Cancelled. It
 // reflects only the Ticket's own Label; when its Spec carries the Label, a
 // note says so. It waits for the Spec's Labels.
-function TicketAutoAccept({ api, project, ticket: t, specLabels, openSpec, archived }: Pick<TicketBodyProps, "api" | "project" | "ticket" | "specLabels" | "openSpec" | "archived">) {
+function TicketAutoAccept({ project, ticket: t, specLabels, openSpec, archived }: Pick<TicketBodyProps, "project" | "ticket" | "specLabels" | "openSpec" | "archived">) {
   if (!specLabels || !canAutoAccept(t, specLabels) || t.state === "Accepted" || t.state === "Done" || t.state === "Cancelled") return null;
   return (
     <AutoAcceptSwitch
-      api={api}
       project={project}
       target={t.id}
       on={t.labels.includes(AUTO_ACCEPT_LABEL)}
@@ -286,7 +283,8 @@ function PrototypeAt({ tag }: { tag: string }) {
 
 // LinkedNote says a linked Ticket's definition belongs to its Integration
 // (ticket 42) and offers Unlink, which hands it back to Code Central.
-function LinkedNote({ api, project, ticket: t }: { api: Api; project: string; ticket: TicketView }) {
+function LinkedNote({ project, ticket: t }: { project: string; ticket: TicketView }) {
+  const api = useApi();
   const { busy, error, run } = useAct();
   return (
     <div className="linked-note muted small">
@@ -303,7 +301,8 @@ function LinkedNote({ api, project, ticket: t }: { api: Api; project: string; ti
   );
 }
 
-function MoveControl({ api, project, ticket: t }: { api: Api; project: string; ticket: TicketView }) {
+function MoveControl({ project, ticket: t }: { project: string; ticket: TicketView }) {
+  const api = useApi();
   const targets = moveTargets(t.state);
   const [to, setTo] = useState<State>(targets[0]);
   const { busy, error, run } = useAct();

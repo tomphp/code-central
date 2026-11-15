@@ -1,10 +1,9 @@
 // The Focus popup in each mode. On the WASM Core: acme with a Round of two
 // Questions waiting on "Pick a colour", "Flaky build" Failed and "Login
 // page" In Review, read back as the Inbox reads them and handed in as
-// props with Needs Me over them. The api is passed because the popup acts
-// on its Focus Item.
+// props with Needs Me over them. The popup acts on
+// its Focus Item through the story's <Live>.
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { Api } from "../api/api";
 import { storyWorld } from "../api/core/story";
 import { loadInbox, type InboxData } from "../live";
 import { NeedsMeProvider } from "../needsme/context";
@@ -12,7 +11,6 @@ import { needsMeOf } from "../needsme/model";
 import { FocusPopup } from "./FocusPopup";
 
 interface World {
-  api: Api;
   now: Date;
   data: InboxData;
   colour: string;
@@ -30,13 +28,13 @@ const meta = {
     ]);
     await s.ticket("acme", { title: "Flaky build", state: "Failed" });
     await s.ticket("acme", { title: "Login page", state: "In Review" });
-    return { api: w.api, now: w.now(), data: await loadInbox(w.api), colour };
+    return { now: w.now(), data: await loadInbox(w.api), colour };
   }),
 } satisfies Meta;
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-const props = ({ api, now, data }: World) => ({ api, now, data, version: 0, onClose: () => {}, navigate: () => {} });
+const props = ({ now, data }: World) => ({ now, data, onClose: () => {}, navigate: () => {} });
 
 // Ticket mode: scoped to the one Ticket, with no Skip, N left or Open in Inbox.
 export const TicketMode: Story = {

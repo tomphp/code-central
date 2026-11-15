@@ -8,6 +8,7 @@ import { newWorld } from "../api/core/core";
 import { scenario } from "../api/scenario";
 import type { ExternalState, LinkView } from "../api/types";
 import { rowDetail } from "../format";
+import { renderLive } from "../worldTesting";
 import { TicketDetail } from "./TicketDetail";
 
 const URL = "https://github.com/acme/web/issues/7";
@@ -26,7 +27,7 @@ async function world(opts: { external?: ExternalState; detached?: boolean } = {}
 
 async function renderDetail(w: Awaited<ReturnType<typeof world>>["w"], id: string) {
   const t = await w.api.getTicket("acme", id);
-  render(<TicketDetail api={w.api} project="acme" ticket={t} now={w.now()} />);
+  renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("article", { name: "Ticket details" });
 }
 

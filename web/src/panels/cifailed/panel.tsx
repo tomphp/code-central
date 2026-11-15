@@ -14,7 +14,7 @@ import { CISection } from "../../ticket/CISection";
 import { hrefFor } from "../../url";
 
 export function CIFailedPanel(props: PanelProps) {
-  const { api, project, ticket } = props;
+  const { project, ticket } = props;
   const reason = ticket.needs_me_reason;
   const title = reason === "ci_cancelled" ? "CI cancelled" : reason === "ci_unavailable" ? "CI unavailable" : "CI failed";
   return (
@@ -27,7 +27,7 @@ export function CIFailedPanel(props: PanelProps) {
             : `Its pushed commit's CI ${reason === "ci_cancelled" ? "was cancelled" : "failed"}, so it waits Accepted until you choose what to do.`}
         </p>
         {ticket.ci_item && <CIItemTickets item={ticket.ci_item} self={ticket.id} title={title} />}
-        <CISection api={api} project={project} ticket={ticket} />
+        <CISection project={project} ticket={ticket} />
       </section>
       <AcceptedPanel {...props} />
     </>

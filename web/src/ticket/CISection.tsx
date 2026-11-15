@@ -4,30 +4,29 @@
 // stay below, folded away. Ignored runs are greyed and marked ignored.
 // While the Ticket is CI failed it ends with the failure options
 // (code-central-261, code-central-264, code-central-265), when given the
-// Api to act with.
+// Project to act in.
 import { useState } from "react";
 import "../api/actions/land_anyway";
 import "../api/actions/new_fix_ticket";
 import "../api/actions/rerun_ci";
 import "../api/actions/send_back";
-import type { Api } from "../api/api";
 import type { CIConclusion, CIRunView, TicketView } from "../api/types";
 import { CIRunEntry } from "../ci/CIRunEntry";
 import { runName } from "../ci/RunParts";
 import { shortCommit } from "../format";
 import { useAct } from "./useAct";
 import { Button } from "../controls/Button";
+import { useApi } from "../live";
 
 export interface CISectionProps {
   ticket: TicketView;
-  // api and project, when given, let the human choose a failure option.
-  api?: Api;
+  // project, when given, lets the human choose a failure option.
   project?: string;
 }
 
 // CISection is the Ticket's CI section, or nothing while it has no CI
 // Runs.
-export function CISection({ ticket: t, api, project }: CISectionProps) {
+export function CISection({ ticket: t, project }: CISectionProps) {
   const runs = t.ci_runs ?? [];
   if (runs.length === 0) return null;
   const latest = t.pushed_commit?.commit;
@@ -49,7 +48,7 @@ export function CISection({ ticket: t, api, project }: CISectionProps) {
           <CIRuns runs={earlier} />
         </details>
       )}
-      {api && project && <CIFailureOptions api={api} project={project} ticket={t} />}
+      {project && <CIFailureOptions project={project} ticket={t} />}
     </section>
   );
 }
@@ -97,7 +96,8 @@ function fixNote(t: TicketView): string {
 // Send back to fix and New fix Ticket, which fix forward with
 // the note. Once the human accepted the failed result (Land anyway or
 // New fix Ticket, whose comment names the fix Ticket) it says so.
-function CIFailureOptions({ api, project, ticket: t }: { api: Api; project: string; ticket: TicketView }) {
+function CIFailureOptions({ project, ticket: t }: { project: string; ticket: TicketView }) {
+  const api = useApi();
   const { busy, error, run } = useAct();
   const [note, setNote] = useState(() => fixNote(t));
   if (t.land_anyway && t.ci_result === "failed") {

@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
-import type { Api } from "../api/api";
+import { useApi } from "../live";
 import {
   NEEDS_ME_REASONS,
   type ApiError,
@@ -14,7 +14,8 @@ import { Refusal } from "./Refusal";
 // "Show in Focus" checkbox per Needs Me reason, in Needs Me group order,
 // checked unless the reason is in the Project's off list. Save sends the
 // whole off list. Like the other sections it follows the Project as read.
-export function FocusSection({ api, project }: { api: Api; project: ProjectRow }) {
+export function FocusSection({ project }: { project: ProjectRow }) {
+  const api = useApi();
   const stored = JSON.stringify(project.focus_kinds.off);
   const [off, setOff] = useState<NeedsMeReason[]>(project.focus_kinds.off);
   const [error, setError] = useState<ApiError>();

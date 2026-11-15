@@ -50,7 +50,6 @@ export interface FocusQuestion {
 
 export interface FocusSessionInput {
   api: Api;
-  version: number;
   // project is the Project in scope; none means every Project.
   project?: string;
   // scope keeps only the rows for one Ticket: its own row, or the CI item
@@ -91,7 +90,7 @@ export interface FocusSession {
 
 // useFocusSession is one visit's Focus session: skipped and acted live
 // here for the session's life only, never sent or put in the URL.
-export function useFocusSession({ api, version, project, scope }: FocusSessionInput): FocusSession {
+export function useFocusSession({ api, project, scope }: FocusSessionInput): FocusSession {
   const needsMe = useNeedsMe();
   const [onScreen, setOnScreen] = useState<FocusItem>();
   const [skipped, setSkipped] = useState<FocusItem[]>([]);
@@ -101,7 +100,7 @@ export function useFocusSession({ api, version, project, scope }: FocusSessionIn
   const [note, setNote] = useState<Note>();
   // A CI item has no Ticket of its own: its panel shows the first Ticket
   // it lists, whose options act on every one of them.
-  const read = useTicket(api, onScreen?.row.project, onScreen && ticketOf(onScreen.row), version);
+  const read = useTicket(onScreen?.row.project, onScreen && ticketOf(onScreen.row));
   const acted = !!onScreen && actedOn === onScreen.key;
   const queue = focusQueue({ needsMe, project, scope, onScreen, ticket: read.data, skipped, acted });
   const { item, elsewhere } = queue;

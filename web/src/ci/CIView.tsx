@@ -7,7 +7,6 @@
 // ignored. It follows the live feed, and a run that changes pulses. Back
 // returns to the view it was opened from.
 import { useRef } from "react";
-import type { Api } from "../api/api";
 import { backLabel } from "../controls/backLabel";
 import { Empty, Loading } from "../controls/Empty";
 import { ErrorBanner } from "../controls/ErrorBanner";
@@ -16,24 +15,21 @@ import { ProjectPicker } from "../controls/ProjectPicker";
 import { useProjectScope } from "../projectScope";
 import { ViewHeader } from "../controls/ViewHeader";
 import { CI_VIEW_DAYS, type CIOverview, type CIProjectStatus, type ProjectRow } from "../api/types";
-import { useFetch } from "../live";
+import { useCIOverview } from "../live";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { Button } from "../controls/Button";
 import { CIRunEntry, runKey } from "./CIRunEntry";
 import "./ci.css";
 
 export interface CIViewProps {
-  api: Api;
   now: Date;
-  // version is the live feed's, so the runs follow every change.
-  version: number;
   // projects are every Project, Archived ones too, for the scope picker.
   projects?: ProjectRow[];
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function CIView({ api, now, version, projects = [], loc, navigate }: CIViewProps) {
+export function CIView({ now, projects = [], loc, navigate }: CIViewProps) {
   const { project, sole, resolved } = useProjectScope();
   const nameOf = (key: string) => projectName(projects, key);
 
@@ -49,15 +45,13 @@ export function CIView({ api, now, version, projects = [], loc, navigate }: CIVi
         }
       />
       {/* Keyed by scope, so another scope starts from nothing and its first read doesn't pulse. */}
-      <ScopedBody key={project ?? ""} api={api} now={now} version={version} resolved={resolved} project={project} projectName={nameOf} navigate={navigate} />
+      <ScopedBody key={project ?? ""} now={now} resolved={resolved} project={project} projectName={nameOf} navigate={navigate} />
     </main>
   );
 }
 
 interface ScopedBodyProps {
-  api: Api;
   now: Date;
-  version: number;
   // resolved says the scope is known; the first read waits for it.
   resolved: boolean;
   project?: string;
@@ -66,8 +60,8 @@ interface ScopedBodyProps {
 }
 
 // ScopedBody reads one scope's CI overview and hands it to CIBody.
-function ScopedBody({ api, now, version, resolved, project, projectName, navigate }: ScopedBodyProps) {
-  const ci = useFetch(resolved ? () => api.ciOverview({ project }) : null, [api, resolved, project, version]);
+function ScopedBody({ now, resolved, project, projectName, navigate }: ScopedBodyProps) {
+  const ci = useCIOverview(resolved ? { project } : undefined);
   return <CIBody overview={ci.data} error={ci.error?.message} now={now} project={project} projectName={projectName} navigate={navigate} />;
 }
 

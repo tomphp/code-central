@@ -2,7 +2,6 @@
 // in the left pane, a section each: the Landing Method, CI with its CI
 // Rules, GitHub Issues, Models, Stage Guides, and Focus.
 import type { MouseEvent } from "react";
-import type { Api } from "../api/api";
 import type { ProjectRow } from "../api/types";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { CISection } from "./CISection";
@@ -15,7 +14,6 @@ import { AutoAcceptSection } from "./AutoAcceptSection";
 import { FocusSection } from "./FocusSection";
 
 export interface ProjectOptionsProps {
-  api: Api;
   now: Date;
   // projects is every Project, once read; the page shows the one keyed project.
   projects?: ProjectRow[];
@@ -44,7 +42,6 @@ function jumpTo(id: string) {
 }
 
 export function ProjectOptions({
-  api,
   now,
   projects,
   project: key,
@@ -82,13 +79,13 @@ export function ProjectOptions({
               </ul>
             </nav>
             <div className="project-options-sections">
-              <LandingMethodSection api={api} project={project} />
-              <CISection api={api} project={project} />
-              <GitHubIssuesSection api={api} project={project} />
-              <ModelsSection api={api} project={project} />
-              <StageGuidesSection api={api} project={project} />
-              <AutoAcceptSection api={api} project={project} />
-              <FocusSection api={api} project={project} />
+              <LandingMethodSection project={project} />
+              <CISection project={project} />
+              <GitHubIssuesSection project={project} />
+              <ModelsSection project={project} />
+              <StageGuidesSection project={project} />
+              <AutoAcceptSection project={project} />
+              <FocusSection project={project} />
               <FactoriesSection project={project} now={now} />
             </div>
           </div>

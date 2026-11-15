@@ -8,6 +8,7 @@ import { App } from "../../App";
 import { newWorld } from "../../api/core/core";
 import { scenario } from "../../api/scenario";
 import type { ExternalState } from "../../api/types";
+import { renderLive } from "../../worldTesting";
 import { panel } from "./panel";
 
 const URL = "https://github.com/acme/web/issues/7";
@@ -24,7 +25,7 @@ type Linked = Awaited<ReturnType<typeof world>>;
 
 async function renderPanel({ w, id }: Linked) {
   const t = await w.api.getTicket("acme", id);
-  render(<panel.Component api={w.api} project="acme" ticket={t} now={w.now()} />);
+  renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("region", { name: "Closed externally" });
 }
 

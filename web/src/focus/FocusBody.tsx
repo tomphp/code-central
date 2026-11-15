@@ -71,7 +71,6 @@ export function FocusBody({ api, now, data, session, dashboard, loc, project: sc
             <div className="focus-new">
               <NewSplit
                 variant="plain"
-                api={api}
                 projects={data?.projects.filter((p) => !p.archived) ?? []}
                 project={scope}
                 onSubmitted={({ kind }) => session.say(`${kind} added`)}

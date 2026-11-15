@@ -3,15 +3,14 @@
 // Archived ones in a collapsed group at the bottom, each with a menu that
 // unarchives it (ticket 39).
 import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
-import type { Api } from "../api/api";
 import type { ApiError, ProjectRow } from "../api/types";
+import { useApi } from "../live";
 import { FactoryStatusDot } from "../factory/FactoryStatus";
 import { useNeedsMe } from "../needsme/context";
 import { Button } from "../controls/Button";
 import { Count } from "../controls/Count";
 
 export interface ProjectFilterProps {
-  api: Api;
   project: ProjectRow;
   now: Date;
   on: boolean;
@@ -21,7 +20,8 @@ export interface ProjectFilterProps {
 }
 
 // ProjectFilter is one Project's row: the filter button, then its menu.
-export function ProjectFilter({ api, project: p, now, on, onSelect, projectOptions }: ProjectFilterProps) {
+export function ProjectFilter({ project: p, now, on, onSelect, projectOptions }: ProjectFilterProps) {
+  const api = useApi();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
   // name is the rename box's text while the human is renaming.

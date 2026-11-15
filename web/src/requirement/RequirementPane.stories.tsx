@@ -27,7 +27,7 @@ const pane = (build: (api: Api, s: Parameters<Parameters<typeof storyWorld>[0]>[
   }),
   render: (_, { loaded }) => {
     const { api, now, spec } = loaded.world as Loaded;
-    return <RequirementPane api={api} spec={spec} now={now} select={() => {}} specLink={(id) => ({ href: `#${id}`, onClick: () => {} })} />;
+    return <RequirementPane spec={spec} now={now} select={() => {}} specLink={(id) => ({ href: `#${id}`, onClick: () => {} })} />;
   },
 });
 

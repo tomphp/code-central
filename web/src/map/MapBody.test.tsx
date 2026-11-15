@@ -1,11 +1,12 @@
 // MapBody takes a Map and the outcome of its actions as props: these tests
 // render it on a WASM Core world's Map, with the callbacks as spies.
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { newWorld } from "../api/core/core";
 import { scenario } from "../api/scenario";
 import type { MapView, SpecDetail } from "../api/types";
+import { renderLive } from "../worldTesting";
 import { MapBody, type MapBodyProps } from "./MapPane";
 
 async function map(populate = false) {
@@ -22,8 +23,9 @@ async function body(props: Partial<MapBodyProps> = {}, populate = false) {
   const { w, spec } = await map(populate);
   const start = vi.fn();
   const setGuided = vi.fn();
-  render(
-    <MapBody api={w.api} spec={spec} now={w.now()} busy={false} select={() => {}} specLink={() => ({ href: "#", onClick: () => {} })} written={() => {}} start={start} setGuided={setGuided} {...props} />,
+  renderLive(
+    w,
+    <MapBody spec={spec} now={w.now()} busy={false} select={() => {}} specLink={() => ({ href: "#", onClick: () => {} })} written={() => {}} start={start} setGuided={setGuided} {...props} />,
   );
   return { start, setGuided, spec };
 }

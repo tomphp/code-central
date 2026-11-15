@@ -1,6 +1,6 @@
-import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import type { ProjectRow } from "../api/types";
+import { useApi } from "../live";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { SpecPane } from "../spec/SpecPane";
@@ -12,7 +12,6 @@ import type { InboxProps } from "./Inbox";
 // InboxDetail is the Inbox's right-hand pane: the selected Requirement, Map
 // or Spec above the selected Ticket.
 export function InboxDetail({
-  api,
   now,
   loc,
   navigate,
@@ -27,7 +26,6 @@ export function InboxDetail({
   specLink,
 }: Pick<
   InboxProps,
-  | "api"
   | "now"
   | "loc"
   | "navigate"
@@ -42,6 +40,7 @@ export function InboxDetail({
   isArchived(id: string): boolean;
   specLink(id: string): Link;
 }) {
+  const api = useApi();
   // shown is the selected Ticket once read: one still being read is
   // another's.
   const shown = ticket && ticket.id === loc.ticket ? ticket : undefined;
@@ -52,7 +51,6 @@ export function InboxDetail({
           <SpecPaneNote error={requirementError} />
         ) : requirement ? (
           <RequirementPane
-            api={api}
             spec={requirement}
             archived={isArchived(requirement.id)}
             now={now}
@@ -62,7 +60,6 @@ export function InboxDetail({
           />
         ) : map ? (
           <MapPane
-            api={api}
             spec={map}
             archived={isArchived(map.id)}
             now={now}
@@ -80,7 +77,6 @@ export function InboxDetail({
           />
         ) : spec ? (
           <SpecPane
-            api={api}
             spec={spec}
             archived={isArchived(spec.id)}
             now={now}
@@ -94,7 +90,6 @@ export function InboxDetail({
           nothing rather than Loading…. */}
       {ticketError || (loc.ticket && (!loc.requirement || shown)) ? (
         <TicketPane
-          api={api}
           project={projectOf(loc.ticket ?? "")}
           ticket={ticketError ? undefined : shown}
           error={ticketError}

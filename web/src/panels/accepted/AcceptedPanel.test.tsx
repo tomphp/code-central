@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { App } from "../../App";
 import { newWorld } from "../../api/core/core";
 import { scenario } from "../../api/scenario";
+import { renderLive } from "../../worldTesting";
 import { AcceptedPanel } from "./panel";
 
 // world has acme's Login page Accepted, under Merge unless method says,
@@ -24,7 +25,7 @@ type Accepted = Awaited<ReturnType<typeof world>>;
 
 async function renderPanel({ w, id }: Accepted) {
   const ticket = await w.api.getTicket("acme", id);
-  render(<AcceptedPanel api={w.api} project="acme" ticket={ticket} now={w.now()} />);
+  renderLive(w, <AcceptedPanel project="acme" ticket={ticket} now={w.now()} />);
   return screen.getByRole("region", { name: "Accepted" });
 }
 

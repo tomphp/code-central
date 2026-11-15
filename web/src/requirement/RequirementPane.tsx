@@ -3,8 +3,8 @@
 // Map segment linking to the Map it was made from, if any), what it waits
 // for, its body (the text, then the Spec) collapsed, and under Build the sums of its implementation Tickets' CI badges
 // and those Tickets with their States.
-import type { Api } from "../api/api";
 import type { SpecDetail } from "../api/types";
+import { useApi } from "../live";
 import { useNeedsMe } from "../needsme/context";
 import { BodySection } from "../edit/BodySection";
 import { specRetroable } from "../edit/editable";
@@ -22,7 +22,6 @@ import { Strip } from "./Strip";
 import { SpecPaneHeader } from "../controls/SpecPaneHeader";
 
 export interface RequirementPaneProps {
-  api: Api;
   spec: SpecDetail & { requirement: NonNullable<SpecDetail["requirement"]> };
   // archived is whether the Requirement's Project is Archived, which takes no edits.
   archived?: boolean;
@@ -34,7 +33,8 @@ export interface RequirementPaneProps {
   specLink(spec: string): Link;
 }
 
-export function RequirementPane({ api, spec, archived, now, ticket, select, specLink }: RequirementPaneProps) {
+export function RequirementPane({ spec, archived, now, ticket, select, specLink }: RequirementPaneProps) {
+  const api = useApi();
   const { reasonOf } = useNeedsMe();
   const p = progress(spec.requirement, spec.tickets ?? [], reasonOf);
   const note = waitingNote(p);
@@ -43,8 +43,8 @@ export function RequirementPane({ api, spec, archived, now, ticket, select, spec
     <section aria-label="Requirement" className="req-head">
       <SpecPaneHeader id={spec.id} kind="Requirement" title={spec.title} now={now} created={spec.created} />
       <div className="spec-actions">
-        <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
-        {specRetroable(spec, !!archived) && <NewRetro api={api} target={spec.id} onSubmitted={(t) => select(t.id)} />}
+        <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {specRetroable(spec, !!archived) && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
       </div>
@@ -58,7 +58,7 @@ export function RequirementPane({ api, spec, archived, now, ticket, select, spec
         }}
       />
       {note && <p className="panel muted waiting">{note}</p>}
-      <SpecAutoAccept api={api} spec={spec} archived={archived} />
+      <SpecAutoAccept spec={spec} archived={archived} />
       <LandPerSpec status={spec.land_per_spec} />
       {/* The text is the Requirement's until its spec Stage has written the Spec. */}
       <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} archived={archived} />

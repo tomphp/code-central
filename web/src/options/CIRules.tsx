@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent } from "react";
-import type { Api } from "../api/api";
+import { useApi } from "../live";
 import type { ApiError, CIRule, CIRuleChange, ProjectRow } from "../api/types";
 import { Button } from "../controls/Button";
 import { Field } from "../controls/Field";
@@ -14,7 +14,8 @@ const NO_RULE: CIRuleChange = { workflow: "", branch: "", state: "Draft" };
 // CIRules, in the CI section, lists the Project's CI Rules ("when workflow
 // X fails on branch Y, open a Ticket to fix it") and adds, edits and
 // removes them. Each rule has its own Spec, which removing the rule keeps.
-export function CIRules({ api, project }: { api: Api; project: ProjectRow }) {
+export function CIRules({ project }: { project: ProjectRow }) {
+  const api = useApi();
   const [editing, setEditing] = useState<string>();
   const id = useId();
   const { rules } = project.ci;

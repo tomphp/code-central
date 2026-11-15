@@ -12,11 +12,13 @@ import type { PanelDef, PanelProps } from "../ActionPanel";
 import { QuestionAnswer } from "./QuestionAnswer";
 import { useAction } from "./useAction";
 import { Button } from "../../controls/Button";
+import { useApi } from "../../live";
 import "./round.css";
 
 export const panel: PanelDef = { reasons: ["needs_answer"], Component: RoundPanel };
 
-export function RoundPanel({ api, project, ticket }: PanelProps) {
+export function RoundPanel({ project, ticket }: PanelProps) {
+  const api = useApi();
   const accept = useAction();
   const round = ticket.rounds?.at(-1);
   if (!round) return null;
@@ -48,7 +50,7 @@ export function RoundPanel({ api, project, ticket }: PanelProps) {
           <div className="question-body">
             <Markdown>{q.body}</Markdown>
           </div>
-          <QuestionAnswer api={api} project={project} ticket={ticket.id} q={q} />
+          <QuestionAnswer project={project} ticket={ticket.id} q={q} />
         </fieldset>
       ))}
     </section>

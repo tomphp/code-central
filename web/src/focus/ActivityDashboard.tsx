@@ -8,7 +8,7 @@
 // live-feed change (code-central-277). ActivityDashboardBody shows it all.
 import { useEffect, useState } from "react";
 import type { Api } from "../api/api";
-import { useFetch, type InboxData } from "../live";
+import { useCIOverview, type InboxData } from "../live";
 import { useProjectScope } from "../projectScope";
 import type { UiLocation } from "../url";
 import { ActivityDashboardBody } from "./ActivityDashboardBody";
@@ -16,14 +16,12 @@ import { ActivityDashboardBody } from "./ActivityDashboardBody";
 export interface ActivityDashboardProps {
   api: Api;
   now: Date;
-  // version is the live feed's, so the running CI Runs follow every change.
-  version: number;
   data: InboxData;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function ActivityDashboard({ api, now, version, data, loc, navigate }: ActivityDashboardProps) {
+export function ActivityDashboard({ api, now, data, loc, navigate }: ActivityDashboardProps) {
   // changes counts the ticket.changed notices for each Ticket since the
   // dashboard showed: the version number alone doesn't say which Ticket
   // changed, so the dashboard follows the live feed itself.
@@ -37,7 +35,7 @@ export function ActivityDashboard({ api, now, version, data, loc, navigate }: Ac
   );
   const { project } = useProjectScope();
   const ciTracked = data.projects.some((p) => !p.archived && p.ci.tracking && (!project || p.key === project));
-  const ciRuns = useFetch(ciTracked ? () => api.ciOverview({ project, running: true }) : null, [api, project, ciTracked, version]);
+  const ciRuns = useCIOverview(ciTracked ? { project, running: true } : undefined);
 
   return (
     <ActivityDashboardBody now={now} data={data} changes={changes} ciRuns={ciTracked ? ciRuns : undefined} loc={loc} project={project} navigate={navigate} />

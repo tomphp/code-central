@@ -113,6 +113,8 @@ export class World {
   readonly api: Api;
   // calls records each Api method called by name, an action by its own.
   readonly calls: string[] = [];
+  // feeds counts the change feeds open on api, each until it is closed.
+  private feeds = 0;
   private dropped = false;
 
   constructor(
@@ -132,6 +134,7 @@ export class World {
     this.api = new Proxy(api, {
       get: (t, k: string) => {
         const v = t[k as keyof Api];
+        if (k === "subscribe") return this.counted(t.subscribe);
         if (typeof v !== "function" || k.startsWith("subscribe")) return v;
         return (...a: unknown[]) => {
           this.calls.push(k === "act" ? String(a[2]) : k);
@@ -139,6 +142,25 @@ export class World {
         };
       },
     });
+  }
+
+  // subscriptions counts the change feeds open on api now.
+  subscriptions(): number {
+    return this.feeds;
+  }
+
+  // counted is subscribe, counting each feed while it is open.
+  private counted(subscribe: Api["subscribe"]): Api["subscribe"] {
+    return (h) => {
+      const close = subscribe(h);
+      this.feeds++;
+      let open = true;
+      return () => {
+        if (open) this.feeds--;
+        open = false;
+        close();
+      };
+    };
   }
 
   // actions is calls without the reads: the writes made, in order.

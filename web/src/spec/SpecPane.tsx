@@ -2,8 +2,8 @@
 // above the shared Ticket pane: the header (ID, title, submitted time, New
 // Prototype, Retro), its body, collapsed, the sums of its Tickets' CI badges, then the Spec's Tickets
 // with their States.
-import type { Api } from "../api/api";
 import type { SpecDetail } from "../api/types";
+import { useApi } from "../live";
 import { BodySection } from "../edit/BodySection";
 import { SpecPaneHeader } from "../controls/SpecPaneHeader";
 import { specRetroable } from "../edit/editable";
@@ -17,7 +17,6 @@ import { RetroList } from "./RetroList";
 import { TicketList } from "./TicketList";
 
 export interface SpecPaneProps {
-  api: Api;
   spec: SpecDetail;
   // archived is whether the Spec's Project is Archived, which takes no edits.
   archived?: boolean;
@@ -27,18 +26,19 @@ export interface SpecPaneProps {
   select(ticket: string): void;
 }
 
-export function SpecPane({ api, spec, archived, now, ticket, select }: SpecPaneProps) {
+export function SpecPane({ spec, archived, now, ticket, select }: SpecPaneProps) {
+  const api = useApi();
   const tickets = spec.tickets ?? [];
   return (
     <section aria-label="Spec" className="req-head">
       <SpecPaneHeader id={spec.id} kind="Spec" title={spec.title} now={now} created={spec.created} />
       <div className="spec-actions">
-        <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
-        {specRetroable(spec, !!archived) && <NewRetro api={api} target={spec.id} onSubmitted={(t) => select(t.id)} />}
+        <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {specRetroable(spec, !!archived) && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
       </div>
-      <SpecAutoAccept api={api} spec={spec} archived={archived} />
+      <SpecAutoAccept spec={spec} archived={archived} />
       <LandPerSpec status={spec.land_per_spec} />
       <BodySection api={api} spec={spec} heading="Body" archived={archived} />
       <CISums tickets={tickets} />

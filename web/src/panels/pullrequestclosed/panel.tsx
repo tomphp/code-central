@@ -9,8 +9,10 @@ import type { PanelDef, PanelProps } from "../ActionPanel";
 import { PullRequestBadge } from "../../ticket/PullRequestBadge";
 import { useAct } from "../../ticket/useAct";
 import { Button } from "../../controls/Button";
+import { useApi } from "../../live";
 
-export function PullRequestClosedPanel({ api, project, ticket: t }: PanelProps) {
+export function PullRequestClosedPanel({ project, ticket: t }: PanelProps) {
+  const api = useApi();
   const { busy, error, run } = useAct();
   const [note, setNote] = useState("");
   return (

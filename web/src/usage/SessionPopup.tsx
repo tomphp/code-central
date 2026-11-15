@@ -5,21 +5,19 @@
 // closes with ×, Escape or a click outside. A Subagent's popup links to
 // its parent session's, which the address switches it to in place.
 // SessionPopupBody is the popup over a read handed in.
-import type { Api } from "../api/api";
 import { USAGE_KEPT_DAYS, type SessionUsageFilter, type SessionUsageResponse } from "../api/types";
 import { Loading } from "../controls/Empty";
 import { ErrorBanner } from "../controls/ErrorBanner";
 import { PopupShell } from "../controls/PopupShell";
 import { count } from "../format";
-import { useFetch } from "../live";
+import { useSessionUsage } from "../live";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { LineChart } from "./LineChart";
 import { started, subagentName } from "./SessionsTable";
 import "./usage.css";
 
 export interface SessionPopupProps {
-  api: Api;
-  session: SessionUsageFilter;
+  session:SessionUsageFilter;
   // here is Usage's address, the session among it.
   here: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
@@ -28,15 +26,15 @@ export interface SessionPopupProps {
 
 // SessionPopup reads the session and shows it. Key it by the session, so
 // another session starts from nothing.
-export function SessionPopup({ api, session, ...props }: SessionPopupProps) {
-  const read = useFetch(() => api.sessionUsage(session), [api, session.project, session.session, session.agent]);
+export function SessionPopup({ session, ...props }: SessionPopupProps) {
+  const read = useSessionUsage(session);
   // A Subagent is named from the read, so a bookmarked popup names it
   // without the list; until it arrives, by its tool-use ID.
   const subagent = session.agent ? subagentName({ agent: session.agent, ...read.data }) : undefined;
   return <SessionPopupBody {...props} session={session} responses={read.data?.responses} subagent={subagent} error={read.error?.message} />;
 }
 
-export interface SessionPopupBodyProps extends Omit<SessionPopupProps, "api"> {
+export interface SessionPopupBodyProps extends SessionPopupProps {
   // responses are the session's, oldest first; left out while they load.
   responses?: SessionUsageResponse[];
   // subagent is the Subagent's name, for a Subagent's session.

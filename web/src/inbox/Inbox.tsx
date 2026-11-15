@@ -3,10 +3,9 @@
 // then Projects and Views (the first two linking the Activity and Board views), then
 // an Admin section linking CI, Usage and
 // Options; the list in the middle; the selected Requirement, Map or plain
-// Spec and Ticket on the right. A layout only: the data comes from live.ts and the
+// Spec and Ticket on the right. A layout only: the data comes from live.tsx and the
 // Ticket pane is shared with any later view.
 import { useState } from "react";
-import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import {
   FINISHED,
@@ -43,7 +42,6 @@ import { clickTo, hrefFor, type UiLocation } from "../url";
 import { OneProject } from "./ShortId";
 
 export interface InboxProps {
-  api: Api;
   now: Date;
   data?: InboxData;
   loc: UiLocation;
@@ -63,7 +61,6 @@ export interface InboxProps {
 }
 
 export function Inbox({
-  api,
   now,
   data,
   loc,
@@ -170,7 +167,6 @@ export function Inbox({
   const projectFilter = (p: ProjectRow) => (
     <ProjectFilter
       key={p.key}
-      api={api}
       project={p}
       now={now}
       on={scope === p.key}
@@ -195,7 +191,6 @@ export function Inbox({
         </div>
         <SidebarTop
           newProps={{
-            api,
             projects: projects.filter((p) => !p.archived),
             project: scope,
             onSubmitted: (r) =>
@@ -359,7 +354,6 @@ export function Inbox({
       </main>
 
       <InboxDetail
-        api={api}
         now={now}
         loc={loc}
         navigate={navigate}
