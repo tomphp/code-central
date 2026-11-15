@@ -51,6 +51,9 @@ const (
 	ChatUnavailable ChatAvailability = "unavailable"
 )
 
+// ChatAvailabilities are the Chat availabilities.
+var ChatAvailabilities = []ChatAvailability{ChatNone, ChatAvailable, ChatUnavailable}
+
 // ChatOutcome is how a Claude Chat Message ended.
 type ChatOutcome string
 
@@ -63,11 +66,20 @@ const (
 	ChatFailed ChatOutcome = "failed"
 )
 
-// Who wrote a Chat Message.
+// ChatOutcomes are the ways a Claude Chat Message ends.
+var ChatOutcomes = []ChatOutcome{ChatDone, ChatStopped, ChatFailed}
+
+// ChatAuthor is who wrote a Chat Message.
+type ChatAuthor string
+
+// The authors of Chat Messages.
 const (
-	ChatFromHuman  = "human"
-	ChatFromClaude = "claude"
+	ChatFromHuman  ChatAuthor = "human"
+	ChatFromClaude ChatAuthor = "claude"
 )
+
+// ChatAuthors are the authors of Chat Messages.
+var ChatAuthors = []ChatAuthor{ChatFromHuman, ChatFromClaude}
 
 // ConversationView is a Project's current Conversation as get_chat and
 // the Chat writes return it. With none, Availability is none and the rest
@@ -104,7 +116,7 @@ type ChatFactory struct {
 // permission_denials as an item of their own), and its Outcome once the
 // reply has ended, with Error on a failed one.
 type ChatMessageView struct {
-	From    string             `json:"from"`
+	From    ChatAuthor         `json:"from"`
 	Time    time.Time          `json:"time"`
 	Text    string             `json:"text,omitempty"`
 	Items   []HeldSessionEvent `json:"items,omitempty"`

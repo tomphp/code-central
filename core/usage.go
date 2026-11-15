@@ -114,7 +114,11 @@ type UsageInput struct {
 	Days int
 }
 
-// UsageView is Usage as the read returns it.
+// UsageView is Usage as the read returns it. Kinds, Sessions and Days
+// come from the token usage a Factory posts: Kinds over every session,
+// main and Subagent; Sessions the main sessions, newest first and at
+// most RecentSessions, each with all its Subagents; and Days a row for
+// every local day in the range, oldest first.
 type UsageView struct {
 	Operations []UsageOperation `json:"operations"`
 	Kinds      []UsageKind      `json:"kinds"`
@@ -178,6 +182,7 @@ type UsageSession struct {
 
 // UsageDay is one local day's token usage, by kind of session: the kinds
 // with any usage that day, in kindOrder; none on a day with no usage.
+// Day is YYYY-MM-DD in the service's time zone.
 type UsageDay struct {
 	Day   string           `json:"day"`
 	Kinds []UsageDayTokens `json:"kinds"`

@@ -40,10 +40,10 @@ func pullRequestView(p *store.PullRequest) *PullRequestView {
 type PullRequestWatch struct {
 	Project string `json:"project"`
 	// On says the Landing Method is Pull Request.
-	On         bool   `json:"on"`
-	CodeHost   string `json:"code_host"`
-	Repository string `json:"repository"`
-	Base       string `json:"base"`
+	On         bool     `json:"on"`
+	CodeHost   CodeHost `json:"code_host"`
+	Repository string   `json:"repository"`
+	Base       string   `json:"base"`
 	// PATEnv names the environment variable holding the Azure Repos PAT.
 	PATEnv string `json:"pat_env"`
 	GHPath string `json:"gh_path"`

@@ -169,7 +169,7 @@ func wantOutcome(t *testing.T, r *bufio.Reader, outcome core.ChatOutcome) int {
 	return id
 }
 
-func wantMessages(t *testing.T, r *bufio.Reader, from ...string) {
+func wantMessages(t *testing.T, r *bufio.Reader, from ...core.ChatAuthor) {
 	t.Helper()
 	for _, want := range from {
 		fr := nextChatFrame(t, r)

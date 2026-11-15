@@ -27,9 +27,12 @@ const mapGuidePrefix = "map-"
 // GuideNames are the names with a guide: each Stage, each Map Ticket
 // type, prototype, retro, then implementation.
 var GuideNames = func() []string {
-	names := slices.Clone(Stages)
+	var names []string
+	for _, s := range Stages {
+		names = append(names, string(s))
+	}
 	for _, t := range WayfinderTypes {
-		names = append(names, mapGuidePrefix+t)
+		names = append(names, mapGuidePrefix+string(t))
 	}
 	return append(names, PrototypeLabel, RetroLabel, ImplementationStage)
 }()

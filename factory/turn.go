@@ -141,7 +141,7 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, mc turnCho
 		defer f.turnsDone.Done()
 		end := readTurn(cmd, stdout, dir, newUsageReader(f.claimInfo(c).stage, f.e.Now), func(e core.SessionEvent) {
 			f.events.add(c.SessionID, e)
-			if f.o.verbose && e.Kind == eventToolCall {
+			if f.o.verbose && e.Kind == core.EventToolCall {
 				f.printf("%s: %s", c.Ticket, e.Text)
 			}
 		}, func(r core.UsageResponse) { f.usage.add(c.SessionID, r) })
@@ -206,7 +206,7 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, usage *usageReader, o
 			onResponse(r)
 		}
 		for _, e := range streamEvents(msg, time.Now(), tools, dir) {
-			if e.Kind == eventText {
+			if e.Kind == core.EventText {
 				end.LastText = e.Text
 			}
 			onEvent(e)

@@ -127,7 +127,8 @@ func TestEveryGuideSaysWhatItProducesHowToFinishAndHowToRedo(t *testing.T) {
 
 func TestAStageNeverChangesRepositoryFiles(t *testing.T) {
 	f := newFixture(t)
-	for _, stage := range core.Stages {
+	for _, s := range core.Stages {
+		stage := string(s)
 		wantAll(t, stage, guide(t, f, stage),
 			"never changes repository files",
 			"pushes no branch",

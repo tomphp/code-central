@@ -12,10 +12,10 @@ import (
 // checks: that it can open and follow pull requests on the Code Host's
 // repository. On GitHub it goes through gh, found with the gh path Option.
 type PullRequestCheckInput struct {
-	CodeHost   string `json:"code_host"`
-	Repository string `json:"repository"`
-	GHPath     string `json:"gh_path,omitempty"`
-	PATEnv     string `json:"pat_env,omitempty"`
+	CodeHost   CodeHost `json:"code_host"`
+	Repository string   `json:"repository"`
+	GHPath     string   `json:"gh_path,omitempty"`
+	PATEnv     string   `json:"pat_env,omitempty"`
 	// ProjectURL, when set, is the Azure DevOps project URL to call instead
 	// of the one worked out from Repository, for tests.
 	ProjectURL string `json:"project_url,omitempty"`

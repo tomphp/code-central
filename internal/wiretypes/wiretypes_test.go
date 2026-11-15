@@ -302,3 +302,12 @@ func TestTwoRunsAreByteIdentical(t *testing.T) {
 		}
 	}
 }
+
+// The real roots reach only typed strings with a value list registered
+// in roots.go, and every list has its type's declared constants: Go owns
+// every enum the UI reaches.
+func TestTheRealRootsGenerate(t *testing.T) {
+	if _, err := Generate(roots, enums); err != nil {
+		t.Fatalf("make wiretypes would fail; give each typed string a value list and register it in roots.go:\n%v", err)
+	}
+}

@@ -33,7 +33,7 @@ func TestAnAcceptedTicketWhoseCIWasCancelledIsInNeedsMeAsCICancelled(t *testing.
 	if tk.CIResult != core.CICancelled || tk.NeedsMeReason != core.ReasonCICancelled {
 		t.Fatalf("ci result %q, reason %q, want cancelled", tk.CIResult, tk.NeedsMeReason)
 	}
-	if want := []string{"rerun_ci", "land_anyway", "send_back"}; !slices.Equal(tk.CIFailureOptions, want) {
+	if want := []core.CIFailureOption{"rerun_ci", "land_anyway", "send_back"}; !slices.Equal(tk.CIFailureOptions, want) {
 		t.Fatalf("options %v, want %v", tk.CIFailureOptions, want)
 	}
 	httpRejected(t, srv, httpCall{"POST", "/api/p/acme/tickets/3/new_fix_ticket", `{"note":"x"}`}, core.ActionNotAllowed)

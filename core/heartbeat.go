@@ -34,6 +34,9 @@ const (
 	FactoryOffline  FactoryStatusName = "offline"
 )
 
+// FactoryStatusNames are the Factory Statuses.
+var FactoryStatusNames = []FactoryStatusName{FactoryOnline, FactoryDraining, FactoryOffline}
+
 const (
 	maxHeartbeatNote       = 200
 	maxHeartbeatInterval   = 86400
@@ -53,7 +56,8 @@ type FactoryStatusView struct {
 	Base *BaseView `json:"base,omitempty"`
 }
 
-// FactoryView is one Factory as the Project view lists it.
+// FactoryView is one Factory as the Project view lists it, from its last
+// Heartbeat.
 type FactoryView struct {
 	Name   string            `json:"name"`
 	Host   string            `json:"host"`

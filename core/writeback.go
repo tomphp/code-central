@@ -126,9 +126,9 @@ func (c *Core) issueComment(target, open, key, text string) IssueComment {
 // triageComment is the comment the human's triage action via gave when
 // it Cancelled t, if it ever did: empty when it gave none. latest
 // reports whether that Cancel is still t's last Move.
-func triageComment(t store.Ticket, via string) (comment string, latest, ok bool) {
+func triageComment(t store.Ticket, via TriageAction) (comment string, latest, ok bool) {
 	for i, m := range slices.Backward(t.Moves) {
-		if m.To != store.Cancelled || m.Via != via {
+		if m.To != store.Cancelled || m.Via != string(via) {
 			continue
 		}
 		latest = i == len(t.Moves)-1 && t.State == store.Cancelled
@@ -182,7 +182,7 @@ func (c *Core) specIssueWrites(r store.Reader, key string, s store.Spec) (w Issu
 	}
 	due(CommentContext, requirementContext(r, key, s.Link))
 	tickets := specTickets(r, key, s.Number)
-	stages, stagesDone := map[string]store.Ticket{}, true
+	stages, stagesDone := map[StageName]store.Ticket{}, true
 	var landed []store.Ticket
 	for _, t := range tickets {
 		if stage := StageOf(t.Labels); stage != "" {

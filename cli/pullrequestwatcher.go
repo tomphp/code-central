@@ -32,7 +32,7 @@ func runPullRequestWatcher(ctx context.Context, e Env, args []string) error {
 	check := fs.Bool("check", false, "check access once and exit")
 	project := fs.String("project", "", "the Project to watch")
 	var in core.PullRequestCheckInput
-	fs.StringVar(&in.CodeHost, "code-host", core.CodeHostGitHub, "the Code Host")
+	codeHost := fs.String("code-host", string(core.CodeHostGitHub), "the Code Host")
 	fs.StringVar(&in.Repository, "repository", "", "the repository on the Code Host")
 	fs.StringVar(&in.GHPath, "gh-path", "", "the gh path Option")
 	fs.StringVar(&in.PATEnv, "pat-env", "", "the environment variable holding the Azure Repos PAT")
@@ -40,6 +40,7 @@ func runPullRequestWatcher(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
+	in.CodeHost = core.CodeHost(*codeHost)
 	switch {
 	case len(pos) > 0:
 		return usagef("unexpected argument %q", pos[0])

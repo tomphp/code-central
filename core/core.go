@@ -83,32 +83,39 @@ type ProjectView struct {
 	Archived    bool       `json:"archived"`
 	// ArchivedAt is when the human archived the Project, while it is.
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
-	// Landing is how the Project's accepted work lands, always filled in.
+	// Landing is how the Project's accepted work lands, always filled in:
+	// merge, push off, origin by default.
 	Landing LandingView `json:"landing"`
-	// CI is the Project's CI settings, always filled in.
+	// CI is the Project's CI settings, always filled in: CI Tracking off
+	// by default.
 	CI CIView `json:"ci"`
 	// GitHubIssues is the Project's GitHub Issues settings, always filled
-	// in.
+	// in: GitHub Issues off by default.
 	GitHubIssues GitHubIssuesView `json:"github_issues"`
-	// Models is the Project's Models rows, always filled in.
+	// Models is the Project's Models rows, always filled in: every row at
+	// Default to begin with.
 	Models ModelsView `json:"models"`
 	// ReportedModels is what the Factory last reported its claude
-	// accepts, always filled in.
+	// accepts, always filled in: no aliases or model IDs, and the seeded
+	// effort levels, until a Factory reports.
 	ReportedModels ReportedModelsView `json:"reported_models"`
-	// StageGuides is the Project's Stage Guides settings, always filled in.
+	// StageGuides is the Project's Stage Guides settings, always filled
+	// in: Subagent Exploration on by default.
 	StageGuides StageGuidesView `json:"stage_guides"`
 	// AutoAccept is the Project's Auto-accept setting, one entry per
-	// Auto-accept kind, always filled in.
+	// Auto-accept kind, always filled in: every kind off by default.
 	AutoAccept AutoAcceptView `json:"auto_accept"`
 	// FocusKinds is the Project's Focus Kinds, always filled in: every
 	// Needs Me reason on by default.
 	FocusKinds FocusKindsView `json:"focus_kinds"`
 	// FactoryStatus is whether the Project's Factories are online, from
-	// their Heartbeats, always filled in.
+	// their Heartbeats, always filled in: offline, with no Factories,
+	// until one sends a Heartbeat.
 	FactoryStatus FactoryStatusView `json:"factory_status"`
 }
 
-// LandingView is a Project's Landing Method with its Push option.
+// LandingView is a Project's Landing Method with its Push option and the
+// remote it uses.
 type LandingView struct {
 	Method store.LandingMethod `json:"method"`
 	Push   bool                `json:"push"`
@@ -119,8 +126,8 @@ type LandingView struct {
 	// CodeHost is the Code Host the reported Push remote URL names,
 	// github or azure_repos, empty while none is reported or it is
 	// unsupported. Repository is the host's name for the repository.
-	CodeHost   string `json:"code_host"`
-	Repository string `json:"repository"`
+	CodeHost   CodeHost `json:"code_host"`
+	Repository string   `json:"repository"`
 	// PATEnv is the environment variable holding the Azure Repos PAT,
 	// ADO_PAT unless the Project names another.
 	PATEnv string `json:"pat_env"`
@@ -222,11 +229,13 @@ type TicketView struct {
 	Updated      time.Time         `json:"updated"`
 	Description  string            `json:"description"`
 	// Branch and Commit are the work's branch and head commit, as the
-	// last finish naming them gave them.
+	// last finish naming them gave them. Work with a branch is Accepted,
+	// then lands.
 	Branch string `json:"branch,omitempty"`
 	Commit string `json:"commit,omitempty"`
 	// Recommendation is a spec Stage's Spec recommendation, as its last
-	// finish gave it; empty on any other Ticket.
+	// finish gave it: implement (Implement) or split (Split into
+	// Tickets); empty on any other Ticket.
 	Recommendation store.Recommendation `json:"recommendation,omitempty"`
 	// PushedCommit is the latest commit the Factory pushed for the Ticket
 	// while CI Tracking was on, CIResult the Ticket's CI result and
@@ -259,7 +268,7 @@ type TicketView struct {
 	// the human may choose on the Ticket's CI item while it is CI failed
 	// or CI cancelled, acting on every Ticket it lists; left out
 	// otherwise, and empty when none applies. Computed on read.
-	CIFailureOptions []string            `json:"ci_failure_options,omitzero"`
+	CIFailureOptions []CIFailureOption   `json:"ci_failure_options,omitzero"`
 	Claims           []ClaimView         `json:"claims,omitzero"`
 	Rounds           []RoundView         `json:"rounds,omitzero"`
 	FailureReports   []FailureReportView `json:"failure_reports,omitzero"`
@@ -288,7 +297,7 @@ type TicketView struct {
 	// TriageActions are the triage actions, each an operation's name, the
 	// human may take on an Incoming Issue; left out on any other Ticket.
 	// Computed on read.
-	TriageActions []string `json:"triage_actions,omitzero"`
+	TriageActions []TriageAction `json:"triage_actions,omitzero"`
 	// ModelChoice is the model and effort the Ticket's next turn runs
 	// with, each with its source; only the UI's read carries it.
 	ModelChoice *ModelChoice `json:"model_choice,omitempty"`
@@ -312,9 +321,9 @@ type TicketRow struct {
 	Created time.Time   `json:"created"`
 	Updated time.Time   `json:"updated"`
 	Link    *LinkView   `json:"link,omitempty"`
-	// NodeType is the Ticket's type on a Map (see NodeType); left out for
-	// a Ticket on any other Spec.
-	NodeType string `json:"node_type,omitempty"`
+	// NodeType is the Ticket's type on a Map (see NodeTypeOf); left out
+	// for a Ticket on any other Spec.
+	NodeType NodeType `json:"node_type,omitempty"`
 	// BlockedBy is the Ticket's Blockers on a Map, the Map view's edges;
 	// left out for a Ticket on any other Spec.
 	BlockedBy []string `json:"blocked_by,omitempty"`
@@ -695,7 +704,7 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t store.Ticket, onMap bo
 	}
 	row.NeedsMeReason, _ = e.reason(t)
 	if onMap {
-		row.NodeType = NodeType(t.Labels)
+		row.NodeType = NodeTypeOf(t.Labels)
 		row.BlockedBy = displayIDs(key, t.BlockedBy)
 	}
 	if cl, ok := liveClaim(t); ok {

@@ -178,11 +178,23 @@ func (c *Core) updateTicket(key, op string, ref Ref, full bool, fn func(t *store
 	return c.updateTicketIn(key, op, ref, full, func(_ store.Reader, t *store.Ticket) (bool, error) { return fn(t) })
 }
 
+// RecordKind says whether a record is a Spec or a Ticket.
+type RecordKind string
+
+// The kinds of record.
+const (
+	RecordSpec   RecordKind = "spec"
+	RecordTicket RecordKind = "ticket"
+)
+
+// RecordKinds are the kinds of record.
+var RecordKinds = []RecordKind{RecordSpec, RecordTicket}
+
 // TargetView is a Spec's or Ticket's Labels and Tags, as the Label and
-// Tag operations return them. Kind is "spec" or "ticket".
+// Tag operations return them.
 type TargetView struct {
 	ID     string            `json:"id"`
-	Kind   string            `json:"kind"`
+	Kind   RecordKind        `json:"kind"`
 	Labels []string          `json:"labels"`
 	Tags   map[string]string `json:"tags"`
 }
@@ -393,7 +405,7 @@ func (c *Core) updateTargetThen(key string, ref Ref, fn func(r store.Reader, onS
 					return err
 				}
 			}
-			v = TargetView{ID: DisplayID(key, n), Kind: "spec", Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags)}
+			v = TargetView{ID: DisplayID(key, n), Kind: RecordSpec, Labels: orEmpty(s.Labels), Tags: orEmptyMap(s.Tags)}
 			return nil
 		}
 		if t, ok := w.Ticket(key, n); ok {
@@ -407,7 +419,7 @@ func (c *Core) updateTargetThen(key string, ref Ref, fn func(r store.Reader, onS
 					return err
 				}
 			}
-			v = TargetView{ID: DisplayID(key, n), Kind: "ticket", Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags)}
+			v = TargetView{ID: DisplayID(key, n), Kind: RecordTicket, Labels: orEmpty(t.Labels), Tags: orEmptyMap(t.Tags)}
 			return nil
 		}
 		return notFound("there is no Spec or Ticket %s", DisplayID(key, n))

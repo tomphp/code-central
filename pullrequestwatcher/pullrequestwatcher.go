@@ -27,7 +27,7 @@ const Command = "pull-request-watcher"
 // CheckArgs are the arguments that run program's Pull Request Watcher in
 // its check mode for in, after the program itself.
 func CheckArgs(in core.PullRequestCheckInput) []string {
-	args := []string{Command, "--check", "--code-host", in.CodeHost, "--repository", in.Repository}
+	args := []string{Command, "--check", "--code-host", string(in.CodeHost), "--repository", in.Repository}
 	if in.GHPath != "" {
 		args = append(args, "--gh-path", in.GHPath)
 	}
