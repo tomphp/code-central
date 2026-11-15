@@ -185,7 +185,7 @@ type chats struct {
 	mu  sync.Mutex
 	all map[string]*conversation
 	// polls is each Factory's one open next_chat_work call per Project.
-	polls map[heartbeatKey]*chatPoll
+	polls map[heartbeatKey]*longPoll
 	// stops are the Conversations whose running turn each Factory is yet
 	// to be told to stop, oldest first.
 	stops map[heartbeatKey][]string
@@ -197,15 +197,7 @@ type chats struct {
 
 // newChats is an empty holder.
 func newChats() *chats {
-	return &chats{all: map[string]*conversation{}, polls: map[heartbeatKey]*chatPoll{}, stops: map[heartbeatKey][]string{}, seen: map[string]ChatAvailability{}, feeds: map[string]map[*ChatFeed]struct{}{}}
-}
-
-// chatPoll is one open next_chat_work call. wake fires when there may be
-// work for it; replaced is closed when a newer call from the same Factory
-// takes its place.
-type chatPoll struct {
-	wake     chan struct{}
-	replaced chan struct{}
+	return &chats{all: map[string]*conversation{}, polls: map[heartbeatKey]*longPoll{}, stops: map[heartbeatKey][]string{}, seen: map[string]ChatAvailability{}, feeds: map[string]map[*ChatFeed]struct{}{}}
 }
 
 // StartConversationInput is the human's start_conversation(model?,
@@ -388,24 +380,12 @@ func (c *Core) StopChatReply(ctx context.Context, key string, _ StopChatReplyInp
 // later turn or stop goes only to that Factory. Each is handed out once.
 // A newer call from the same Factory and host ends this one, empty.
 func (c *Core) NextChatWork(ctx context.Context, key string, in NextChatWorkInput) (ChatWork, error) {
-	name, host := strings.TrimSpace(in.Factory), strings.TrimSpace(in.Host)
-	switch {
-	case name == "":
-		return ChatWork{}, invalid("factory", "factory is required: the Factory's name, as its Heartbeat gives it")
-	case host == "":
-		return ChatWork{}, invalid("host", "host is required: the machine the Factory runs on, as its Heartbeat gives it")
-	}
-	if err := c.store.View(func(r store.Reader) error {
-		if _, ok := r.Project(key); !ok {
-			return unknownProject(key)
-		}
-		return nil
-	}); err != nil {
+	k, err := c.longPollKey(key, in.Factory, in.Host)
+	if err != nil {
 		return ChatWork{}, err
 	}
-	k := heartbeatKey{key, name, host}
 	cs := c.chats
-	p := &chatPoll{wake: make(chan struct{}, 1), replaced: make(chan struct{})}
+	p := newLongPoll()
 	cs.mu.Lock()
 	if old := cs.polls[k]; old != nil {
 		close(old.replaced)
@@ -442,7 +422,7 @@ func (c *Core) NextChatWork(ctx context.Context, key string, in NextChatWorkInpu
 // takeChatWork hands Factory k's call p its next piece of work, if there
 // is one: a stop first, then a queued turn. A call a newer one has
 // replaced ends with none, so it can't take work nobody reads.
-func (c *Core) takeChatWork(k heartbeatKey, p *chatPoll) (ChatWork, bool) {
+func (c *Core) takeChatWork(k heartbeatKey, p *longPoll) (ChatWork, bool) {
 	cs := c.chats
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
@@ -742,14 +722,6 @@ func (cs *chats) wake(key string) {
 		if k.project == key {
 			p.notify()
 		}
-	}
-}
-
-// notify wakes p, at most once until it looks.
-func (p *chatPoll) notify() {
-	select {
-	case p.wake <- struct{}{}:
-	default: // already woken
 	}
 }
 
