@@ -27,8 +27,10 @@ func TestTheStateFileHoldsEachClaimAfterItIsMade(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Work")
+	// Read while the turn runs: its ending wakes a poll that drops the Claim.
+	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
 	c := h.Calls()[0]
 
 	b, err := os.ReadFile(h.StateFile())
@@ -53,6 +55,8 @@ func TestTheStateFileHoldsEachClaimAfterItIsMade(t *testing.T) {
 	if got.Ticket != id || got.ClaimID != c.Claim || got.ClaimID == "" || got.SessionID != c.Session || got.AllowedTools == nil || len(got.AllowedTools) != 0 {
 		t.Errorf("state file %s; want %s under Claim %s and session %s, with no allowed tools", b, id, c.Claim, c.Session)
 	}
+	h.Continue(id)
+	h.WaitForState(id, store.InReview)
 }
 
 func TestWithNoHOMETheStateFileIsUnderTheProfileFolder(t *testing.T) {

@@ -38,6 +38,9 @@ func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 	f.mu.Unlock()
 	f.turnsDone.Add(1)
 	go func() {
+		// Last, whatever the outcome and even if no Ticket changed: the
+		// slot is free, so the poll loop polls at once.
+		defer f.wake()
 		defer f.turnsDone.Done()
 		defer close(t.done)
 		defer cancel()
