@@ -14,12 +14,11 @@
 // a session, and never live. Back returns to the view it was opened from.
 // The page below the header is UsageBody.
 import { useState } from "react";
-import type { Api } from "../api/api";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { useProjectScope } from "../projectScope";
 import { ViewHeader } from "../controls/ViewHeader";
 import { sessionKey, USAGE_DAYS, type ProjectRow, type UsageDays } from "../api/types";
-import { useFetch } from "../live";
+import { useUsage } from "../live";
 import { USAGE_TABS, type UiLocation } from "../url";
 import { SessionPopup } from "./SessionPopup";
 import { DEFAULT_SORT, nextSort, UsageBody } from "./UsageBody";
@@ -30,19 +29,18 @@ import "./usage.css";
 import { Select } from "../controls/Select";
 
 export interface UsageViewProps {
-  api: Api;
   // projects are every Project, Archived ones too, for the scope picker.
   projects?: ProjectRow[];
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps) {
+export function UsageView({ projects = [], loc, navigate }: UsageViewProps) {
   const { project, sole, resolved } = useProjectScope();
   const days = loc.days ?? USAGE_DAYS[0];
   // A session in the address opens over the Context Size tab, whatever tab= says.
   const tab = loc.session ? "context" : (loc.tab ?? USAGE_TABS[0]);
-  const usage = useFetch(resolved ? () => api.usage({ project, days }) : null, [api, resolved, project, days]);
+  const usage = useUsage(resolved ? { project, days } : undefined);
   const [sort, setSort] = useState(DEFAULT_SORT);
   const scopeName = project ? projectName(projects, project) : "All Projects";
 
@@ -86,7 +84,6 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
         <SessionPopup
           // Keyed so another session, such as a Subagent's parent, starts from nothing.
           key={sessionKey(loc.session)}
-          api={api}
           session={loc.session}
           here={loc}
           navigate={navigate}
