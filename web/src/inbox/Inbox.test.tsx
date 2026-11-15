@@ -729,8 +729,6 @@ describe("State lists By Spec", () => {
 
     await userEvent.click(within(nav()).getByRole("button", { name: /^Needs Me/ }));
     expect(within(list()).queryByRole("button", { name: "Spec" })).toBeNull();
-    await userEvent.click(within(nav()).getByRole("button", { name: /^Requirements/ }));
-    expect(within(list()).queryByRole("button", { name: "Spec" })).toBeNull();
   });
 
   it("groups into collapsed Spec rows in first-Ticket order, with kind, ID, n of m and chips", async () => {
@@ -1045,11 +1043,12 @@ describe("the All Tickets view", () => {
   }
   const allTickets = () => userEvent.click(within(nav()).getByRole("button", { name: /^All Tickets/ }));
 
-  it("sits after Requirements, counting unfinished Tickets and following the Project filter", async () => {
+  it("sits after Needs Me, counting unfinished Tickets and following the Project filter, with no Requirements link", async () => {
     renderApp(await ticketsWorld());
-    await within(nav()).findByRole("button", { name: /^Requirements/ });
+    await within(nav()).findByRole("button", { name: /^All Tickets/ });
     const names = within(nav()).getAllByRole("button").map((b) => b.textContent);
-    const at = names.findIndex((n) => /^Requirements/.test(n ?? ""));
+    expect(names.some((n) => /^Requirements/.test(n ?? ""))).toBe(false);
+    const at = names.findIndex((n) => /^Needs Me/.test(n ?? ""));
     expect(names[at + 1]).toMatch(/^All Tickets/);
     // acme: 4 Stages? seeded Tickets 1 Stage Done, the rest unfinished; the Done one and Done Stage excluded.
     const total = Number(within(nav()).getByRole("button", { name: /^All Tickets/ }).textContent!.replace(/\D/g, ""));

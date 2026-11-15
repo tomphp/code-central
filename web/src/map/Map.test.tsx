@@ -67,9 +67,8 @@ describe("a Map's row in the Requirements view", () => {
     await s.ticket("acme", { title: "Try a cache", state: "In Review", spec: busy.spec.id, labels: ["prototype"] });
     await s.ticket("acme", { title: "Dropped", state: "Cancelled", spec: busy.spec.id, labels: ["wayfinder:task"] });
     const req = await s.api.submitRequirement("acme", "Export a Spec");
-    renderApp(w);
+    renderApp(w, "/?view=inbox&list=requirements");
 
-    await userEvent.click(await within(nav()).findByRole("button", { name: "Requirements 3" }));
     const ids = () => [...list().querySelectorAll<HTMLElement>("a[data-id]")].map((a) => a.dataset.id);
     await waitFor(() => expect(ids()).toEqual([req.spec.id, busy.spec.id, quiet.spec.id]));
 
