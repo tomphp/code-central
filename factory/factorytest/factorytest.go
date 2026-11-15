@@ -879,6 +879,23 @@ func (r *Running) WaitForTurn(what string) {
 	})
 }
 
+// WaitForClaimed waits for id to be in state, re-polling whenever a claim
+// has failed to a dropped connection, as WaitForTurn does.
+func (r *Running) WaitForClaimed(id string, state store.State) {
+	r.h.t.Helper()
+	failed := 0
+	r.h.WaitFor(fmt.Sprintf("%s to be %s", id, state), func() bool {
+		if r.h.Ticket(id).State == state {
+			return true
+		}
+		if n := strings.Count(r.stdout.String(), "claim: "); n > failed {
+			failed = n
+			r.Poll()
+		}
+		return false
+	})
+}
+
 func (r *Running) waitForPolls(n int64) {
 	r.h.t.Helper()
 	r.h.WaitFor(fmt.Sprintf("poll %d to finish (stdout %q)", n, r.stdout), func() bool {
