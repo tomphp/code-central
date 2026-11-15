@@ -16,7 +16,7 @@
 // it has a CI result.
 import { useEffect, useRef, useState } from "react";
 import { numberOf } from "../api/api";
-import type { ApiError, CIOverview, CIProvider, CIRunRow, State } from "../api/types";
+import type { ApiError, CIOverview, State } from "../api/types";
 import { Count } from "../controls/Count";
 import { Empty } from "../controls/Empty";
 import { ErrorBanner } from "../controls/ErrorBanner";
@@ -25,10 +25,8 @@ import { RowLatestEvent } from "../LatestEvent";
 import type { InboxData, ProjectTicket } from "../live";
 import { STAGE_TITLE, stageOf } from "../requirement/progress";
 import { CILink } from "../ci/CILink";
-import { RunLink, runDuration } from "../ci/CIView";
+import { CIRunEntry, runKey } from "../ci/CIRunEntry";
 import { CIBadge } from "../ticket/CIBadge";
-import { shortCommit } from "../format";
-import { runName, runStatus } from "../ticket/CISection";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { usePulse } from "./pulse";
 
@@ -147,49 +145,26 @@ function CIRunningList({ now, data, runs, loc, navigate }: CIRunningListProps) {
   }
   const overview = runs.data;
   if (!overview) return null;
+  // Each run's card opens its Ticket as an In Progress entry does; the
+  // service lists only runs tracked against a Ticket.
   return overview.runs.length ? (
     <ul aria-label="CI Running" className="dashboard-list">
       {overview.runs.map((r) => (
-        <CIRunEntry key={runKey(r)} now={now} data={data} run={r} provider={overview.projects.find((p) => p.project === r.project)?.provider} joined={!first.current?.has(runKey(r))} loc={loc} navigate={navigate} />
+        <CIRunEntry
+          key={runKey(r)}
+          layout="card"
+          run={r}
+          provider={overview.projects.find((p) => p.project === r.project)?.provider}
+          now={now}
+          joined={!first.current?.has(runKey(r))}
+          projectName={loc.project ? undefined : nameOf(data, r.project)}
+          to={inboxFor(data, r.project, r.ticket!, loc)}
+          navigate={navigate}
+        />
       ))}
     </ul>
   ) : (
     <Empty>No CI Runs running.</Empty>
-  );
-}
-
-// runKey names a run across Projects; a re-run's next attempt is the same entry.
-const runKey = (r: CIRunRow) => `${r.project}/${r.id}`;
-
-// CIRunEntry is one running CI Run. Its Ticket link opens the run's Ticket
-// as an In Progress entry does, and its link to the CI system sits beside it, since
-// a link can't hold another. It pulses when the run's status or attempt
-// changes, and on mounting if it joined the list.
-interface CIRunEntryProps extends EntryProps {
-  run: CIRunRow;
-  provider?: CIProvider;
-  joined: boolean;
-}
-
-function CIRunEntry({ now, data, run, provider, joined, loc, navigate }: CIRunEntryProps) {
-  const pulse = usePulse("dashboard-ci-entry", `${run.status} ${run.attempt}`, joined);
-  // The service lists only runs tracked against a Ticket.
-  const inbox = inboxFor(data, run.project, run.ticket!, loc);
-  return (
-    <li aria-label={runName(run)} {...pulse}>
-      <a href={hrefFor(inbox)} onClick={clickTo(navigate, inbox)}>
-        <span className="dashboard-entry-top">
-          <span className="tid">{run.ticket}</span>
-          <span className="dashboard-entry-title">{runName(run)}</span>
-          {!loc.project && <span className="muted">{nameOf(data, run.project)}</span>}
-        </span>
-        <span className="dashboard-entry-detail">
-          {run.branch} · <code>{shortCommit(run.commit)}</code> · {runStatus(run)}
-          {run.started && ` ${runDuration(run, now)}`}
-        </span>
-      </a>
-      <RunLink run={run} provider={provider} className="dashboard-ci-github" />
-    </li>
   );
 }
 

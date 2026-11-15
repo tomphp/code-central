@@ -1,6 +1,5 @@
 /* The CI view: its picker in the header, the CI Watchers' statuses and
    the runs table. Its styles hang off the layout's own classes, so none
-   of them reach the other views; the status badges are the Ticket
-   panel's CI section's. */
+   of them reach the other views; the status badges and the ignored
+   greying are every CIRunEntry's, in styles.css. */
 .ci-watchers p { margin: 0 0 4px; font-size: 14px; }
-.ci-row.ignored, .ci-row.ignored a, .ci-row.ignored .ci-status { color: var(--muted); border-color: var(--border); }
