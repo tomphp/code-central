@@ -42,20 +42,36 @@ export interface MapPaneProps {
   written(spec: string): void;
 }
 
-export function MapPane({ api, spec, archived, now, ticket, select, specLink, written }: MapPaneProps) {
-  const { reasonOf } = useNeedsMe();
-  const [fogOpen, setFogOpen] = useState(false);
+// MapPane is the view: it acts (starts a Ticket, sets Guided) and hands the
+// outcome to MapBody, which only renders.
+export function MapPane({ api, spec, ...rest }: MapPaneProps) {
   const { busy, error, run } = useAct();
-  const layout = layoutMap(spec.tickets);
-  // The arrowhead's ID goes in url(#…), so it keeps only safe characters.
-  const arrow = `map-arrow-${useId().replace(/[^\w-]/g, "")}`;
-  const destination = mapSection(spec.body, "Destination");
-  const fog = mapSection(spec.body, "Not yet specified");
   const start = (t: TicketRow) => run(() => api.act(projectOf(t.id), t.id, "approve", {}));
   // Guided hands starting the next decision to the Factory: it approves
   // the first frontier Ticket whenever the Map is idle.
   const setGuided = (on: boolean) =>
     run(() => (on ? api.setTags(projectOf(spec.id), spec.id, { [GUIDED_TAG]: GUIDED_ON }) : api.removeTags(projectOf(spec.id), spec.id, [GUIDED_TAG])));
+  return <MapBody api={api} spec={spec} {...rest} busy={busy} error={error} start={start} setGuided={setGuided} />;
+}
+
+export interface MapBodyProps extends MapPaneProps {
+  // busy is whether an action is under way, which disables Start and Guided.
+  busy: boolean;
+  // error is why the last action failed.
+  error?: string;
+  // start approves a frontier Ticket.
+  start(ticket: TicketRow): void;
+  setGuided(on: boolean): void;
+}
+
+export function MapBody({ api, spec, archived, now, ticket, select, specLink, written, busy, error, start, setGuided }: MapBodyProps) {
+  const { reasonOf } = useNeedsMe();
+  const [fogOpen, setFogOpen] = useState(false);
+  const layout = layoutMap(spec.tickets);
+  // The arrowhead's ID goes in url(#…), so it keeps only safe characters.
+  const arrow = `map-arrow-${useId().replace(/[^\w-]/g, "")}`;
+  const destination = mapSection(spec.body, "Destination");
+  const fog = mapSection(spec.body, "Not yet specified");
 
   return (
     <section aria-label="Map" className="req-head map-view">
