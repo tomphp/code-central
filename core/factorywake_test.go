@@ -250,3 +250,27 @@ func TestNextFactoryWakeRejections(t *testing.T) {
 	_, err = f.core.NextFactoryWake(ctx, "nope", core.NextFactoryWakeInput{Factory: "cc", Host: "box"})
 	wantCode(t, err, core.UnknownProject, "")
 }
+
+// WaitingFactoryWakes counts the calls a wake would end now: open, on the
+// Project, and not yet woken.
+func TestWaitingFactoryWakesCountsTheOpenCallsNotYetWoken(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Draft)
+	if n := f.core.WaitingFactoryWakes("acme"); n != 0 {
+		t.Fatalf("with no call open, WaitingFactoryWakes = %d, want 0", n)
+	}
+	woken := f.wakeAsync("acme", "cc")
+	if n := f.core.WaitingFactoryWakes("acme"); n != 1 {
+		t.Fatalf("with one call open, WaitingFactoryWakes = %d, want 1", n)
+	}
+	if n := f.core.WaitingFactoryWakes("other"); n != 0 {
+		t.Fatalf("on another Project, WaitingFactoryWakes = %d, want 0", n)
+	}
+	f.approve(t, "2")
+	if w := f.ended(woken); !w.Woken {
+		t.Fatalf("next_factory_wake = %+v, want woken", w)
+	}
+	if n := f.core.WaitingFactoryWakes("acme"); n != 0 {
+		t.Fatalf("once the call is woken, WaitingFactoryWakes = %d, want 0", n)
+	}
+}

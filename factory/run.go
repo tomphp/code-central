@@ -20,8 +20,9 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// loop polls until ctx ends: the first poll is at once, the rest every
-// --poll. When ctx ends, running turns are stopped and waited for.
+// loop polls until ctx ends: the first poll is at once, the rest on a
+// wake or else every --poll, timed afresh after each poll. When ctx ends,
+// running turns are stopped and waited for.
 func (f *factory) loop(ctx context.Context) {
 	defer f.turnsDone.Wait()
 	defer f.stopAll()
@@ -34,6 +35,12 @@ func (f *factory) loop(ctx context.Context) {
 			f.drain(ctx)
 			return
 		case <-f.e.After(f.o.poll):
+		case <-f.wakeCh:
+			// A draining Factory ignores wakes.
+			if f.draining() {
+				f.drain(ctx)
+				return
+			}
 		}
 	}
 }

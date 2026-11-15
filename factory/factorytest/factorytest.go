@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -108,9 +109,12 @@ type Harness struct {
 	URL       string
 	down      atomic.Bool
 	failing   atomic.Value // string: a path suffix the proxy fails
+	missing   atomic.Value // string: a path suffix the proxy has no route for
 	refusedMu sync.Mutex
 	refused   map[string]int64 // requests refused while down or failed, by path
-	data      string           // scripts/ and calls/
+	holdMu    sync.Mutex
+	wakesHeld chan struct{} // closed by PassWakes
+	data      string        // scripts/ and calls/
 	env       map[string]string
 	spec      string
 }
@@ -136,6 +140,8 @@ func New(t testing.TB) *Harness {
 		Backoff: time.Millisecond,
 		Clock:   clock.NewFake(now),
 		refused: map[string]int64{},
+		// The Factory polls only on Tick until a test passes its wakes.
+		wakesHeld: make(chan struct{}),
 	}
 	template := filepath.Join(root, "git-template")
 	for _, d := range []string{h.Home, h.Bin, template, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
@@ -253,7 +259,20 @@ func (h *Harness) startProxy() string {
 			fmt.Fprint(w, `{"code":"internal","message":"failing for the test"}`)
 			return
 		}
+		if suffix, _ := h.missing.Load().(string); suffix != "" && strings.HasSuffix(r.URL.Path, suffix) {
+			h.refusedMu.Lock()
+			h.refused[r.URL.Path]++
+			h.refusedMu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprintf(w, `{"code":"not_found","message":"no API resource at %s %s"}`, r.Method, r.URL.Path)
+			return
+		}
 		if !h.down.Load() {
+			if strings.HasSuffix(r.URL.Path, wakeSuffix) {
+				h.serveWake(rp, w, r)
+				return
+			}
 			rp.ServeHTTP(w, r)
 			return
 		}
@@ -268,6 +287,42 @@ func (h *Harness) startProxy() string {
 	return ps.URL
 }
 
+// wakeSuffix ends the path of the Factory's next_factory_wake.
+const wakeSuffix = "/factory/next-wake"
+
+// serveWake proxies a next_factory_wake call, holding its answer back
+// until PassWakes.
+func (h *Harness) serveWake(rp http.Handler, w http.ResponseWriter, r *http.Request) {
+	rec := httptest.NewRecorder()
+	rp.ServeHTTP(rec, r)
+	h.holdMu.Lock()
+	held := h.wakesHeld
+	h.holdMu.Unlock()
+	if held != nil {
+		select {
+		case <-held:
+		case <-r.Context().Done():
+			return
+		}
+	}
+	maps.Copy(w.Header(), rec.Header())
+	w.WriteHeader(rec.Code)
+	w.Write(rec.Body.Bytes())
+}
+
+// PassWakes lets the Factory's wakes through. Until a test calls it, the
+// harness holds back every answer from next_factory_wake, so the Factory
+// polls only on Tick and what a test sets up, such as a Ready Ticket it
+// then claims itself, is first seen by the poll it ticks.
+func (h *Harness) PassWakes() {
+	h.holdMu.Lock()
+	defer h.holdMu.Unlock()
+	if h.wakesHeld != nil {
+		close(h.wakesHeld)
+		h.wakesHeld = nil
+	}
+}
+
 // SetDown takes Code Central down for the Factory and its sessions, or
 // brings it back up. The harness's own reads still reach it.
 func (h *Harness) SetDown(down bool) { h.down.Store(down) }
@@ -277,8 +332,14 @@ func (h *Harness) SetDown(down bool) { h.down.Store(down) }
 // stops failing them given "".
 func (h *Harness) SetFailing(suffix string) { h.failing.Store(suffix) }
 
+// SetMissing makes Code Central answer the Factory's and its sessions'
+// requests to every path ending in suffix, such as "/factory/next-wake",
+// as an older Code Central without that route does: not found.
+func (h *Harness) SetMissing(suffix string) { h.missing.Store(suffix) }
+
 // Refused is how many requests to path, such as "/api/session-events",
-// were refused while Code Central was down, or failed by SetFailing.
+// were refused while Code Central was down, or failed by SetFailing or
+// SetMissing.
 func (h *Harness) Refused(path string) int64 {
 	h.refusedMu.Lock()
 	defer h.refusedMu.Unlock()
@@ -516,10 +577,16 @@ func (h *Harness) MakePlainSpec() {
 
 func (h *Harness) readyTicket(title string, labels ...string) string {
 	h.t.Helper()
-	ctx := context.Background()
-	c := h.Server.Client
+	return h.NewTicket(core.CreateTicketInput{Title: title, State: store.Ready, Labels: labels})
+}
+
+// NewTicket creates the Ticket in describes, such as a Draft one or one
+// with Blockers, on the same shared Spec, and returns its ID.
+func (h *Harness) NewTicket(in core.CreateTicketInput) string {
+	h.t.Helper()
 	h.sharedSpec()
-	tk, err := c.CreateTicket(ctx, h.Project, core.CreateTicketInput{Spec: core.Ref(h.spec), Title: title, State: store.Ready, Labels: labels})
+	in.Spec = core.Ref(h.spec)
+	tk, err := h.Server.Client.CreateTicket(context.Background(), h.Project, in)
 	must(h.t, err)
 	return tk.ID
 }
@@ -778,16 +845,36 @@ type Running struct {
 	done           chan struct{}
 	code           int
 	stdout, stderr *buffer
-	ticks          chan time.Time
 	signals        chan os.Signal
 	waits          atomic.Int64 // times the Factory has waited for a poll
-	polls          int64        // ticks sent by Poll
+	waitMu         sync.Mutex
+	wait           *pollWait // the Factory's latest wait for a poll
+}
+
+// pollWait is one of the Factory's waits for its next poll: the nth, on
+// the channel its After returned. A wake can end a wait with no tick, so
+// the next wait closes replaced, and Tick sends to the latest wait only.
+type pollWait struct {
+	n        int64
+	tick     chan time.Time
+	replaced chan struct{}
+}
+
+// newWait is the Factory's next wait for a poll, replacing its last.
+func (r *Running) newWait() *pollWait {
+	r.waitMu.Lock()
+	defer r.waitMu.Unlock()
+	w := &pollWait{n: r.waits.Add(1), tick: make(chan time.Time), replaced: make(chan struct{})}
+	close(r.wait.replaced)
+	r.wait = w
+	return w
 }
 
 // Start runs the Factory in the repo with args until Stop or the end of
 // the test, and returns once its first poll has finished (or it has
 // exited), so whatever the test sets up next is first seen by a later
-// poll. Polls after the first happen only on Tick.
+// poll. Polls after the first happen only on Tick, or on a wake from
+// next_factory_wake.
 func (h *Harness) Start(args ...string) *Running {
 	h.t.Helper()
 	return h.StartIn(h.Repo, args...)
@@ -804,20 +891,17 @@ func (h *Harness) StartIn(dir string, args ...string) *Running {
 // launch runs the Factory in dir with args, without waiting.
 func (h *Harness) launch(dir string, args ...string) *Running {
 	ctx, cancel := context.WithCancel(context.Background())
-	r := &Running{h: h, cancel: cancel, done: make(chan struct{}), stdout: &buffer{}, stderr: &buffer{}, ticks: make(chan time.Time), signals: make(chan os.Signal, 2)}
+	r := &Running{h: h, cancel: cancel, done: make(chan struct{}), stdout: &buffer{}, stderr: &buffer{}, signals: make(chan os.Signal, 2), wait: &pollWait{replaced: make(chan struct{})}}
 	env := factory.Env{
 		Dir:         dir,
 		Environ:     h.Environ(),
 		UserHomeDir: func() (string, error) { return h.Home, nil },
 		Stdout:      r.stdout,
 		Stderr:      r.stderr,
-		After: func(time.Duration) <-chan time.Time {
-			r.waits.Add(1)
-			return r.ticks
-		},
-		Now:       h.Clock.Now,
-		KillGrace: KillGrace,
-		Backoff:   h.Backoff,
+		After:       func(time.Duration) <-chan time.Time { return r.newWait().tick },
+		Now:         h.Clock.Now,
+		KillGrace:   KillGrace,
+		Backoff:     h.Backoff,
 		// Session Events are posted often, so tests needn't wait a second.
 		EventBatchEvery: EventBatchEvery,
 		// A post that times out is dropped, so on a loaded machine a
@@ -861,11 +945,29 @@ func (h *Harness) RunIn(dir string, args ...string) (code int, stdout, stderr st
 
 // Tick lets the Factory make its next poll.
 func (r *Running) Tick() {
-	select {
-	case r.ticks <- time.Now():
-	case <-r.done:
-	case <-time.After(Timeout):
-		r.h.t.Fatal("the Factory didn't wait for its next poll")
+	r.h.t.Helper()
+	r.tick()
+}
+
+// tick sends the tick and returns the number of the wait that took it:
+// the poll it starts has finished once the Factory waits again. A wait a
+// wake ended first leaves the tick for the next one.
+func (r *Running) tick() int64 {
+	r.h.t.Helper()
+	timeout := time.After(Timeout)
+	for {
+		r.waitMu.Lock()
+		w := r.wait
+		r.waitMu.Unlock()
+		select {
+		case w.tick <- time.Now():
+			return w.n
+		case <-w.replaced:
+		case <-r.done:
+			return 0
+		case <-timeout:
+			r.h.t.Fatal("the Factory didn't wait for its next poll")
+		}
 	}
 }
 
@@ -874,10 +976,16 @@ func (r *Running) Tick() {
 // still be running.
 func (r *Running) Poll() {
 	r.h.t.Helper()
-	r.waitForPolls(r.polls + 1)
-	r.Tick()
-	r.polls++
-	r.waitForPolls(r.polls + 1)
+	r.waitForPolls(r.tick() + 1)
+}
+
+// WaitForLongPoll waits until the Factory holds a next_factory_wake call
+// open that no wake has ended yet, so a wake from here on reaches it.
+func (r *Running) WaitForLongPoll() {
+	r.h.t.Helper()
+	r.h.WaitFor("the Factory's next_factory_wake call", func() bool {
+		return r.h.Server.Core.WaitingFactoryWakes(r.h.Project) > 0
+	})
 }
 
 // WaitForTurn waits for the Factory to have started a turn. Its poll can
