@@ -14,3 +14,11 @@ export const WithSlots: Story = {
     right: <button>+ New</button>,
   },
 };
+
+// Focus Mode's: no title, its Project and count on the left.
+export const Untitled: Story = {
+  args: {
+    left: <span>Acme</span>,
+    right: <button>Exit</button>,
+  },
+};

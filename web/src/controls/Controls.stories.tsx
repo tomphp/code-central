@@ -19,6 +19,17 @@ export const Counts: Story = {
     </p>
   ),
 };
+// Focus Mode's "N left".
+export const CountOf: Story = { render: () => <Count n={2} of="left" /> };
+// A count block's number, as the Activity Dashboard's, and its dash before the count is known.
+export const BigCounts: Story = {
+  render: () => (
+    <div style={{ display: "flex", gap: 24, background: "var(--s-ready)", color: "#fff", padding: 24 }}>
+      <Count n={12} big />
+      <Count big />
+    </div>
+  ),
+};
 export const Project: Story = { render: () => <ProjectName name="Acme Web" projectKey="acme" /> };
 export const SpecHeader: Story = {
   render: () => <SpecPaneHeader id="acme-12" kind="Spec" title="Storybook coverage" now={new Date()} created={new Date(Date.now() - 3 * 3600_000).toISOString()} />,
