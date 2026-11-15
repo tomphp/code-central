@@ -4,7 +4,7 @@
 // same Driver as the WASM half (fake.test.ts). Outside Core it has the
 // fake gh and real connections. It never binds port 7733.
 import { serve } from "../e2e/serve";
-import { apiContract } from "./contract";
+import { apiContract } from "./contract/index";
 import { HttpDriver } from "./driver";
 import { createHttpApi } from "./http";
 
