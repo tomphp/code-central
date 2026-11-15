@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -410,14 +411,29 @@ func (h *Harness) GitIn(dir string, args ...string) string {
 	h.t.Helper()
 	git, err := realGit()
 	must(h.t, err)
-	cmd := exec.Command(git, args...)
-	cmd.Dir = dir
-	cmd.Env = h.Environ()
-	out, err := cmd.CombinedOutput()
+	var out []byte
+	for attempt := 0; ; attempt++ {
+		cmd := exec.Command(git, args...)
+		cmd.Dir = dir
+		cmd.Env = h.Environ()
+		out, err = cmd.CombinedOutput()
+		if err == nil || !failedToStart(err) || attempt == 4 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if err != nil {
 		h.t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// failedToStart reports whether err is Windows failing to initialise the
+// process (STATUS_DLL_INIT_FAILED, 0xc0000142), which happens when many
+// processes start at once. The program never ran, so running it again is safe.
+func failedToStart(err error) bool {
+	var exit *exec.ExitError
+	return runtime.GOOS == "windows" && errors.As(err, &exit) && uint32(exit.ExitCode()) == 0xc0000142
 }
 
 // WaitForWorktree waits until ticket's worktree is a usable git worktree: its
