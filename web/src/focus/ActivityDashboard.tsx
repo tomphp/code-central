@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import type { Api } from "../api/api";
 import { useFetch, type InboxData } from "../live";
+import { useProjectScope } from "../projectScope";
 import type { UiLocation } from "../url";
 import { ActivityDashboardBody } from "./ActivityDashboardBody";
 
@@ -34,10 +35,11 @@ export function ActivityDashboard({ api, now, version, data, loc, navigate }: Ac
       }),
     [api],
   );
-  const ciTracked = data.projects.some((p) => !p.archived && p.ci.tracking && (!loc.project || p.key === loc.project));
-  const ciRuns = useFetch(ciTracked ? () => api.ciOverview({ project: loc.project, running: true }) : null, [api, loc.project, ciTracked, version]);
+  const { project } = useProjectScope();
+  const ciTracked = data.projects.some((p) => !p.archived && p.ci.tracking && (!project || p.key === project));
+  const ciRuns = useFetch(ciTracked ? () => api.ciOverview({ project, running: true }) : null, [api, project, ciTracked, version]);
 
   return (
-    <ActivityDashboardBody now={now} data={data} changes={changes} ciRuns={ciTracked ? ciRuns : undefined} loc={loc} navigate={navigate} />
+    <ActivityDashboardBody now={now} data={data} changes={changes} ciRuns={ciTracked ? ciRuns : undefined} loc={loc} project={project} navigate={navigate} />
   );
 }

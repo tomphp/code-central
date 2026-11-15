@@ -18,6 +18,7 @@ async function acme() {
   const w = await newWorld();
   const s = scenario(w);
   await s.project("acme", "Acme");
+  await s.project("spare", "Spare"); // a second active Project, so All Projects stays offered
   const spec = await s.spec("acme", { title: "Theming" });
   return { w, s, spec };
 }

@@ -13,6 +13,7 @@ import { Empty, Loading } from "../controls/Empty";
 import { ErrorBanner } from "../controls/ErrorBanner";
 import { projectName } from "../controls/ProjectName";
 import { ProjectPicker } from "../controls/ProjectPicker";
+import { useProjectScope } from "../projectScope";
 import { ViewHeader } from "../controls/ViewHeader";
 import { CI_VIEW_DAYS, type CIOverview, type CIProjectStatus, type ProjectRow } from "../api/types";
 import { useFetch } from "../live";
@@ -33,13 +34,14 @@ export interface CIViewProps {
 }
 
 export function CIView({ api, now, version, projects = [], loc, navigate }: CIViewProps) {
+  const { project, sole, resolved } = useProjectScope();
   const nameOf = (key: string) => projectName(projects, key);
 
   return (
     <main aria-label="CI" className="ci view-shell">
       <ViewHeader
         title="CI"
-        left={<ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />}
+        left={<ProjectPicker projects={projects} value={project} withoutAll={sole} onChange={(project) => navigate({ project })} />}
         right={
           <Button  onClick={() => navigate(loc.back ?? { view: "inbox" })}>
             {backLabel(loc)}
@@ -47,7 +49,7 @@ export function CIView({ api, now, version, projects = [], loc, navigate }: CIVi
         }
       />
       {/* Keyed by scope, so another scope starts from nothing and its first read doesn't pulse. */}
-      <ScopedBody key={loc.project ?? ""} api={api} now={now} version={version} project={loc.project} projectName={nameOf} navigate={navigate} />
+      <ScopedBody key={project ?? ""} api={api} now={now} version={version} resolved={resolved} project={project} projectName={nameOf} navigate={navigate} />
     </main>
   );
 }
@@ -56,14 +58,16 @@ interface ScopedBodyProps {
   api: Api;
   now: Date;
   version: number;
+  // resolved says the scope is known; the first read waits for it.
+  resolved: boolean;
   project?: string;
   projectName(key: string): string;
   navigate(patch: Partial<UiLocation>): void;
 }
 
 // ScopedBody reads one scope's CI overview and hands it to CIBody.
-function ScopedBody({ api, now, version, project, projectName, navigate }: ScopedBodyProps) {
-  const ci = useFetch(() => api.ciOverview({ project }), [api, project, version]);
+function ScopedBody({ api, now, version, resolved, project, projectName, navigate }: ScopedBodyProps) {
+  const ci = useFetch(resolved ? () => api.ciOverview({ project }) : null, [api, resolved, project, version]);
   return <CIBody overview={ci.data} error={ci.error?.message} now={now} project={project} projectName={projectName} navigate={navigate} />;
 }
 

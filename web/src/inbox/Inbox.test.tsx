@@ -17,6 +17,8 @@ async function startWorld(...keys: string[]) {
   const w = await newWorld();
   const s = scenario(w);
   for (const k of keys) await s.project(k, k[0].toUpperCase() + k.slice(1));
+  // A lone Project would be the Sole Project; these tests are of the All Projects scope.
+  if (keys.length === 1) await s.project("spare", "Spare");
   return { w, s };
 }
 

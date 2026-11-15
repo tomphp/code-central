@@ -8,15 +8,17 @@ export interface ProjectPickerProps {
   // value is the chosen Project's key, undefined for All Projects.
   value?: string;
   onChange(key: string | undefined): void;
+  // withoutAll drops the All Projects choice, while there is a Sole Project.
+  withoutAll?: boolean;
 }
 
-export function ProjectPicker({ projects, value, onChange }: ProjectPickerProps) {
+export function ProjectPicker({ projects, value, onChange, withoutAll }: ProjectPickerProps) {
   return (
     <label>
       <span className="view-picker-label">Projects</span>
       <Select
         value={value ?? ""}
-        placeholder="All Projects"
+        placeholder={withoutAll ? undefined : "All Projects"}
         onChange={(v) => onChange(v || undefined)}
         options={[
           ...projects.map((p) => ({ value: p.key, label: p.archived ? `${p.display_name} (Archived)` : p.display_name })),

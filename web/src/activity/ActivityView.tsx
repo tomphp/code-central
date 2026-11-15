@@ -7,6 +7,7 @@ import type { Api } from "../api/api";
 import { backLabel } from "../controls/backLabel";
 import { Loading } from "../controls/Empty";
 import { ProjectPicker } from "../controls/ProjectPicker";
+import { useProjectScope } from "../projectScope";
 import { ViewHeader } from "../controls/ViewHeader";
 import type { ProjectRow } from "../api/types";
 import { ActivityDashboard } from "../focus/ActivityDashboard";
@@ -26,13 +27,14 @@ export interface ActivityViewProps {
 }
 
 export function ActivityView({ api, now, version, data, loc, navigate }: ActivityViewProps) {
+  const { project, sole } = useProjectScope();
   const projects: ProjectRow[] = data?.projects ?? [];
 
   return (
     <main aria-label="Activity" className="activity view-shell">
       <ViewHeader
         title="Activity"
-        left={<ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />}
+        left={<ProjectPicker projects={projects} value={project} withoutAll={sole} onChange={(project) => navigate({ project })} />}
         right={
           <Button  onClick={() => navigate(loc.back ?? { view: "inbox" })}>
             {backLabel(loc)}

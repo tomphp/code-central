@@ -58,6 +58,8 @@ describe("the Chat icon", () => {
 
   it("is hidden in the all-Projects scope", async () => {
     const { w } = await fresh();
+    // A lone Project would be the Sole Project.
+    await scenario(w).project("spare", "Spare");
     open(w, "/");
 
     await screen.findByRole("navigation", { name: "Filters" });

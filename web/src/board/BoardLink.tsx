@@ -5,6 +5,7 @@
 // sits in.
 import { Count } from "../controls/Count";
 import { useNeedsMe } from "../needsme/context";
+import { useProjectScope } from "../projectScope";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { hiddenColumns, needsMeColumn } from "../inbox/groupPreference";
 
@@ -16,12 +17,13 @@ export interface BoardLinkProps {
 
 export function BoardLink({ loc, navigate, className }: BoardLinkProps) {
   const { tickets, reasonOf } = useNeedsMe();
+  const { project } = useProjectScope();
   const to: Partial<UiLocation> = { view: "board", project: loc.project, group: loc.group, hide: undefined, needs: undefined, back: loc };
   const hidden = hiddenColumns();
   const needsMe = needsMeColumn();
   return (
     <a href={hrefFor({ ...loc, ...to })} onClick={clickTo(navigate, to)} className={className}>
-      Board <Count n={tickets(loc.project).filter((t) => !hidden.includes(t.state) || (needsMe && reasonOf(t.id))).length} />
+      Board <Count n={tickets(project).filter((t) => !hidden.includes(t.state) || (needsMe && reasonOf(t.id))).length} />
     </a>
   );
 }
