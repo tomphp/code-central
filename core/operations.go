@@ -189,6 +189,10 @@ var Operations = []Op{
 	{Name: "send_chat_message", Audience: HumanOnly, Write: true},
 	{Name: "stop_chat_reply", Audience: HumanOnly, Write: true},
 	{Name: "next_chat_work", Audience: FactoryOnly},
+
+	// The Factory's wake (Spec code-central-743): a long-poll that ends
+	// when a write its poll acts on reaches the Project.
+	{Name: "next_factory_wake", Audience: FactoryOnly},
 }
 
 // Operation looks an operation up by name.

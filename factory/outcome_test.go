@@ -93,7 +93,9 @@ func TestWhatTheHumanAllowsIsPassedAsAllowedToolsOnThatClaimsLaterRunsOnly(t *te
 	tk := h.WaitForState(id, store.NeedsAnswer)
 	r.WaitForOutput(id + " turn ended")
 
-	h.Script(id, factorytest.Finish("Installed."), factorytest.Result("success"))
+	// The resume waits so the state file is read while its Claim is held:
+	// the turn's ending wakes a poll that drops it.
+	h.Script(id, factorytest.Wait(), factorytest.Finish("Installed."), factorytest.Result("success"))
 	for i, answer := range []string{"allow", "deny it wipes my cache", "Allow Bash(curl:*)"} {
 		q := tk.Rounds[0].Questions[i]
 		if _, err := h.Human().Answer(context.Background(), h.Project, core.AnswerInput{Ticket: core.Ref(id), Question: q.Number, Text: answer}); err != nil {
@@ -101,7 +103,7 @@ func TestWhatTheHumanAllowsIsPassedAsAllowedToolsOnThatClaimsLaterRunsOnly(t *te
 		}
 	}
 	r.Poll()
-	h.WaitForState(id, store.InReview)
+	h.WaitFor("the resume", func() bool { return len(h.Calls()) == 2 })
 
 	resume := h.Calls()[1]
 	if got, _ := resume.Flag("--allowedTools"); got != "Bash(npm install),Bash(curl:*)" {
@@ -113,6 +115,8 @@ func TestWhatTheHumanAllowsIsPassedAsAllowedToolsOnThatClaimsLaterRunsOnly(t *te
 	if got := stateAllowedTools(t, h, resume.Claim); !slices.Equal(got, []string{"Bash(npm install)", "Bash(curl:*)"}) {
 		t.Errorf("the state file allows %q for the Claim", got)
 	}
+	h.Continue(id)
+	h.WaitForState(id, store.InReview)
 
 	other := h.ReadyTicket("Other work")
 	r.Poll()

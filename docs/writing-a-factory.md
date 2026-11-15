@@ -45,6 +45,35 @@ Code Central works the status out on every read:
 
 The Project's dot is Online if any Factory is Online, else Draining if any is, else Offline. A stopped Factory keeps its note, so the tooltip still says why it stopped.
 
+## Waking the poll
+
+A Factory polls for work on its own timer. It can also ask Code Central to say when a poll is worth running, so work is picked up at once instead of on the next tick. This is optional: a Factory that doesn't call it just polls, and Code Central loses nothing.
+
+### `next_factory_wake`
+
+```text
+GET /api/p/{key}/factory/next-wake?factory=sandcastle&host=build-1
+```
+
+`factory` and `host` are as in the Heartbeat, and are the only parameters. The call holds for at most Code Central's wait timeout, 60 seconds, then answers JSON:
+
+| Field | |
+| --- | --- |
+| `woken` | `true` if something happened that is worth a poll. `false` if the wait timed out, a newer call replaced this one or the request ended. |
+
+The answer carries no work: on `woken`, run your usual poll. Then call again at once, whatever the answer. Keep one open at a time; a newer call from the same Factory and host replaces the older, which answers `woken: false`. On the same terms as the Heartbeat (see Who may call it).
+
+A wake comes when a write that a poll acts on happens on the Project:
+
+- a Ticket moves into Ready, Answered, Accepted, Done or Cancelled;
+- a live Claim ends by a move its holder didn't make (cancel, send back, defer, release or a move by hand);
+- a Ticket's Blockers shrink;
+- a Project setting the Factory reads changes (the base, Landing, CI, Models, Stage Guides, Auto-accept or Archived);
+- an Import lands;
+- a Map's `guided` Tag is turned on.
+
+Comments, Session Events, Usage, Rounds being posted, `finish` to In Review, `claim`, CI Runs, Chat and Options don't wake it. A change between two calls can be missed, so keep polling on your timer as the fallback; a missed wake costs at most one interval. A Code Central too old to have the operation answers not found: stop calling it and poll only.
+
 ## Running Chat turns
 
 A Factory that reports `chat: true` is expected to answer the Project's Conversation. Chat takes two calls, on the same terms as the Heartbeat (see Who may call it). Code Central never calls the Factory.

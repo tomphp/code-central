@@ -42,15 +42,8 @@ func (f *factory) chatLoop(ctx context.Context) {
 	var turns sync.WaitGroup
 	defer turns.Wait()
 	// Draining closes the long-poll; a running turn goes on until ctx ends.
-	pollCtx, cancel := context.WithCancel(ctx)
+	pollCtx, cancel := f.untilDraining(ctx)
 	defer cancel()
-	go func() {
-		select {
-		case <-f.drainCh:
-			cancel()
-		case <-pollCtx.Done():
-		}
-	}()
 	var turnRunning sync.Mutex // held by the running turn
 	// stops ends a Conversation's turn, by its ID, when a stop asks.
 	var stopsMu sync.Mutex

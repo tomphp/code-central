@@ -51,6 +51,9 @@ type Core struct {
 	heartbeats *heartbeats
 	// chats holds each Project's current Conversation, in memory only.
 	chats *chats
+	// factoryWakes holds the Factories' open next_factory_wake calls, in
+	// memory only.
+	factoryWakes *factoryWakes
 	// uiURL is the UI's address, which a comment written to an issue
 	// links back to; empty links relative to the UI.
 	uiURL string
@@ -60,8 +63,8 @@ type Core struct {
 // issuing Claim IDs from idSource. Every write sends a change notice on
 // Events.
 func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
-	bus := events.New()
-	c := &Core{store: notifying{Store: archiveGuard{s}, bus: bus}, clock: clk, ids: idSource, events: bus}
+	bus, wakes := events.New(), newFactoryWakes()
+	c := &Core{store: notifying{Store: archiveGuard{s}, bus: bus, wakes: wakes}, clock: clk, ids: idSource, events: bus, factoryWakes: wakes}
 	c.activity = newActivity(c.now())
 	c.transcripts = &transcripts{all: map[markKey]*transcript{}, feeds: map[markKey]map[*TranscriptFeed]struct{}{}}
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}

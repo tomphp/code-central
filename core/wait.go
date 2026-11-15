@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/tomoram/code-central/events"
@@ -75,10 +76,13 @@ func (c *Core) waitResult(key string, ref Ref) (WaitResult, error) {
 }
 
 // notifying wraps a store so every successful Update sends a change
-// notice for the record it wrote, after the write is durable.
+// notice for the record it wrote, after the write is durable, and wakes
+// the Project's open next_factory_wake calls when the write is one the
+// Factory's poll acts on (wakesTheFactory).
 type notifying struct {
 	store.Store
-	bus *events.Bus
+	bus   *events.Bus
+	wakes *factoryWakes
 }
 
 func (n notifying) Update(fn func(store.Writer) error) error {
@@ -90,30 +94,55 @@ func (n notifying) Update(fn func(store.Writer) error) error {
 	if err == nil && w.notice != nil {
 		n.bus.Publish(*w.notice)
 	}
+	if err == nil && w.wake != "" {
+		n.wakes.wake(w.wake)
+	}
 	return err
 }
 
 type noticeWriter struct {
 	store.Writer
 	notice *events.Event
+	// wake is the Project whose Factories the write wakes, if any.
+	wake string
 }
 
+// PutProject, PutSpec, PutTicket and PutImport read the records as they
+// were before writing over them, to tell whether the write wakes the
+// Factories.
 func (w *noticeWriter) PutProject(p store.Project) error {
-	return w.put(w.Writer.PutProject(p), events.Event{Type: events.ProjectChanged, Project: p.Key})
+	wakes := projectWakesTheFactory(w.Writer, p)
+	return w.wakeIf(wakes, p.Key, w.put(w.Writer.PutProject(p), events.Event{Type: events.ProjectChanged, Project: p.Key}))
 }
 
 func (w *noticeWriter) PutSpec(key string, s store.Spec) error {
-	return w.put(w.Writer.PutSpec(key, s), events.Event{Type: events.SpecChanged, Project: key, ID: DisplayID(key, s.Number)})
+	wakes := specWakesTheFactory(w.Writer, key, s)
+	return w.wakeIf(wakes, key, w.put(w.Writer.PutSpec(key, s), events.Event{Type: events.SpecChanged, Project: key, ID: DisplayID(key, s.Number)}))
 }
 
 func (w *noticeWriter) PutTicket(key string, t store.Ticket) error {
-	return w.put(w.Writer.PutTicket(key, t), events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, t.Number)})
+	wakes := wakesTheFactory(w.Writer, key, t)
+	return w.wakeIf(wakes, key, w.put(w.Writer.PutTicket(key, t), events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, t.Number)}))
 }
 
 // PutImport sends one project.changed notice for the whole Import, so a
-// large one can't overrun a listener's buffer; listeners refetch.
+// large one can't overrun a listener's buffer; listeners refetch. It
+// wakes the Factories when it lands new records, which may be work, or
+// when a record it rewrites would on its own, as implement's do.
 func (w *noticeWriter) PutImport(key string, im store.Import) error {
-	return w.put(w.Writer.PutImport(key, im), events.Event{Type: events.ProjectChanged, Project: key})
+	wakes := len(im.Specs) > 0 || len(im.Tickets) > 0 ||
+		slices.ContainsFunc(im.Rewritten, func(t store.Ticket) bool { return wakesTheFactory(w.Writer, key, t) }) ||
+		slices.ContainsFunc(im.RewrittenSpecs, func(s store.Spec) bool { return specWakesTheFactory(w.Writer, key, s) })
+	return w.wakeIf(wakes, key, w.put(w.Writer.PutImport(key, im), events.Event{Type: events.ProjectChanged, Project: key}))
+}
+
+// wakeIf marks the write as waking Project key's Factories when wakes
+// and the write succeeded.
+func (w *noticeWriter) wakeIf(wakes bool, key string, err error) error {
+	if err == nil && wakes {
+		w.wake = key
+	}
+	return err
 }
 
 // PutOptions sends options.changed, which names no Project and no ID.

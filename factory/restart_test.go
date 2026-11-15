@@ -126,13 +126,18 @@ func TestALostStateFileLosesItsClaimsButNotTheFactory(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Read the state file while the turn runs: its ending wakes a poll
+	// that drops the Claim.
 	next := h.ReadyTicket("Next")
+	h.Script(next, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	h.Start()
-	h.WaitForState(next, store.InReview)
+	h.WaitFor("the new turn", func() bool { return len(callsFor(h, next)) == 1 })
 	if n := len(callsFor(h, held)); n != 1 {
 		t.Errorf("%s ran %d times; with the state file lost its Claim is never adopted", held, n)
 	}
 	if got := stateTickets(t, h); !slices.Equal(got, []string{next}) {
 		t.Errorf("state file holds %q, want only the new Claim on %s", got, next)
 	}
+	h.Continue(next)
+	h.WaitForState(next, store.InReview)
 }
