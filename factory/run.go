@@ -272,15 +272,6 @@ func (f *factory) live(claimID string) bool {
 	return !f.ended[claimID]
 }
 
-// killGrace is how long a turn being stopped has after each stop step
-// but the last (stopSteps).
-func (f *factory) killGrace() time.Duration {
-	if f.e.KillGrace > 0 {
-		return f.e.KillGrace
-	}
-	return 10 * time.Second
-}
-
 // stopTurn takes t through stopSteps, moving to the next step if it
 // lingers past the grace period, and waits for it to end: on Unix SIGINT,
 // then SIGTERM, then kill; on Windows Ctrl-Break, then kill.
@@ -291,20 +282,10 @@ func (f *factory) stopTurn(t *turn) {
 	})
 }
 
-// stopProcess takes a turn's process proc through stopSteps until ended
-// is closed, telling warn of a step that fails.
+// stopProcess takes a turn's process proc through the Turn runner's stop
+// ladder until ended is closed, telling warn of a step that fails.
 func (f *factory) stopProcess(proc *os.Process, ended <-chan struct{}, warn func(error)) {
-	for _, stop := range stopSteps(proc) {
-		if err := stop(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-			warn(err)
-		}
-		select {
-		case <-ended:
-			return
-		case <-time.After(f.killGrace()):
-		}
-	}
-	<-ended
+	f.runner.stop(proc, ended, warn)
 }
 
 // stopAll stops every running turn at once.

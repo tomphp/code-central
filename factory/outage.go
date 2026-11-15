@@ -8,56 +8,6 @@ import (
 	"time"
 )
 
-// outageErrors are the API errors that mean the trouble is the service's
-// or the account's limits, not the Ticket's: usage and rate limits,
-// overload, server and network errors. A turn cut off by one is resumed
-// later, never failed.
-//
-// Source: docs/research/agent-sdk-host.md (ticket 50, on branch
-// research/agent-sdk-host), section 5, names the stream-json
-// `system/api_retry` event's `error` values `rate_limit`,
-// `authentication_failed` and `billing_error` (the usage limit), from the
-// headless docs. The other codes here (overload, server, network and
-// timeout, and the `_error` spellings) are unverified: neither that note
-// nor docs/research/claude-code-session-host.md lists them, nor the
-// result's `terminal_reason` values.
-var outageErrors = map[string]bool{
-	"rate_limit":       true,
-	"rate_limit_error": true,
-	"billing_error":    true,
-	"overloaded":       true,
-	"overloaded_error": true,
-	"server_error":     true,
-	"api_error":        true,
-	"network_error":    true,
-	"connection_error": true,
-	"timeout":          true,
-}
-
-// authFailed is the API error of an expired or missing login, which only
-// the human can fix.
-const authFailed = "authentication_failed"
-
-// modelNotFound is the API error of a model claude rejects: the turn's
-// model, not the service or the Factory, is at fault, so its Claim fails.
-const modelNotFound = "model_not_found"
-
-// apiError is the API error the turn ended on, from its messages or its
-// result's terminal reason. An api_error with status 404 is a model
-// claude rejects, even with no message saying so.
-func (t turnEnd) apiError() string {
-	if t.APIError != "" {
-		return t.APIError
-	}
-	if t.Result != nil && t.Result.TerminalReason == "api_error" && t.Result.APIErrorStatus == 404 {
-		return modelNotFound
-	}
-	if t.Result != nil && (outageErrors[t.Result.TerminalReason] || t.Result.TerminalReason == authFailed) {
-		return t.Result.TerminalReason
-	}
-	return ""
-}
-
 // maxBackoff caps the wait between resumes of cut-off turns.
 const maxBackoff = 30 * time.Minute
 

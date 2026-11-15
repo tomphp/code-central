@@ -1,68 +1,16 @@
-// A turn's claude process: the flags that start or resume it, running it
-// in the worktree, and reading the stream-json it prints until it ends.
+// A Claim's turn: the flags that start or resume it, and running it in
+// the worktree, taking a slot until it ends.
 
 package factory
 
 import (
-	"bufio"
 	"context"
 	"crypto/rand"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"os/exec"
-	"strings"
-	"time"
 
 	"github.com/tomoram/code-central/core"
 )
-
-// result is the stream-json result message that ends a turn.
-type result struct {
-	Subtype           string   `json:"subtype"`
-	IsError           bool     `json:"is_error"`
-	TerminalReason    string   `json:"terminal_reason"`
-	APIErrorStatus    int      `json:"api_error_status"`
-	PermissionDenials []denial `json:"permission_denials"`
-	Result            string   `json:"result"`
-}
-
-// turnEnd is how a turn ended: its exit code, its result message if it
-// printed one, and the agent's last text.
-type turnEnd struct {
-	ExitCode int
-	// Signal is the signal that ended the turn, as "signal: killed";
-	// empty when it exited by itself.
-	Signal   string
-	Result   *result
-	LastText string
-	// APIError is the API error the turn ended on, such as "rate_limit",
-	// "authentication_failed" or "model_not_found"; empty when there was
-	// none.
-	APIError string
-}
-
-func (t turnEnd) String() string {
-	s := t.exit()
-	if t.Result == nil {
-		return s + ", no result"
-	}
-	s += ", " + t.Result.Subtype
-	if t.Result.TerminalReason != "" {
-		s += " (" + t.Result.TerminalReason + ")"
-	}
-	return s
-}
-
-// exit is how the turn's process ended: the signal that ended it, else
-// its exit code.
-func (t turnEnd) exit() string {
-	if t.Signal != "" {
-		return t.Signal
-	}
-	return fmt.Sprintf("exit %d", t.ExitCode)
-}
 
 // startArgs are a new session's flags.
 func (f *factory) startArgs(c claim, mc turnChoice) []string {
@@ -79,32 +27,10 @@ func (f *factory) turnFlags(c claim, mc turnChoice) []string {
 	return f.flags(mc, c.AllowedTools, c.SystemPrompt)
 }
 
-// flags are the flags every claude turn passes, a Claim's or a Chat's:
-// the output format, the permission mode, the turn's model and effort
-// when set, and the allowed tools and system prompt when there are any,
-// then the Claude Args and a -- that ends the flags, so that a flag
-// taking several values can't swallow the prompt that follows.
+// flags are the flags every claude turn passes, as the Turn runner
+// builds them.
 func (f *factory) flags(mc turnChoice, allowedTools []string, systemPrompt string) []string {
-	args := []string{"--output-format", "stream-json", "--verbose"}
-	if f.o.bypass {
-		args = append(args, "--permission-mode", "bypassPermissions")
-	} else {
-		args = append(args, "--permission-mode", "auto", "--permission-prompts", "none")
-	}
-	if mc.model != "" {
-		args = append(args, "--model", mc.model)
-	}
-	if mc.effort != "" {
-		args = append(args, "--effort", mc.effort)
-	}
-	if len(allowedTools) > 0 {
-		args = append(args, "--allowedTools", strings.Join(allowedTools, ","))
-	}
-	if systemPrompt != "" {
-		args = append(args, "--append-system-prompt", systemPrompt)
-	}
-	args = append(args, f.o.claudeArgs...)
-	return append(args, "--")
+	return f.runner.flags(mc, allowedTools, systemPrompt)
 }
 
 // startTurn runs `claude args...` in dir for c, taking a slot until it
@@ -156,98 +82,6 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, mc turnCho
 		f.forgetEnded(c)
 		close(t.done)
 	}()
-}
-
-// streamMessage is the part of a stream-json message the Factory reads.
-type streamMessage struct {
-	Type    string `json:"type"`
-	Subtype string `json:"subtype"`
-	// Error is an assistant message's API error, or an api_retry's.
-	Error string `json:"error"`
-	// ParentToolUseID is the Agent call a subagent's message runs under;
-	// empty for the main session's.
-	ParentToolUseID string `json:"parent_tool_use_id"`
-	Message         struct {
-		// ID, Model and Usage are an assistant message's model
-		// response's.
-		ID      string       `json:"id"`
-		Model   string       `json:"model"`
-		Usage   *streamUsage `json:"usage"`
-		Content []struct {
-			Type  string          `json:"type"`
-			Text  string          `json:"text"`
-			ID    string          `json:"id"`
-			Name  string          `json:"name"`
-			Input json.RawMessage `json:"input"`
-			// ToolUseID, Content and IsError are a tool result's.
-			ToolUseID string          `json:"tool_use_id"`
-			Content   json.RawMessage `json:"content"`
-			IsError   bool            `json:"is_error"`
-		} `json:"content"`
-	} `json:"message"`
-}
-
-// readTurn reads a started turn's stream-json to its end and waits for
-// it, giving how it ended. onEvent is called with each Session Event the
-// stream maps to, in order, and onResponse with each model response's
-// usage, as usage reads them; dir is the turn's worktree.
-func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, usage *usageReader, onEvent func(core.SessionEvent), onResponse func(core.UsageResponse)) turnEnd {
-	var end turnEnd
-	var retryErr string
-	tools := map[string]string{}
-	sc := bufio.NewScanner(stdout)
-	sc.Buffer(make([]byte, 64*1024), 16*1024*1024)
-	for sc.Scan() {
-		var msg streamMessage
-		if json.Unmarshal(sc.Bytes(), &msg) != nil {
-			continue
-		}
-		if r, ok := usage.read(msg); ok {
-			onResponse(r)
-		}
-		for _, e := range streamEvents(msg, time.Now(), tools, dir) {
-			if e.Kind == eventText {
-				end.LastText = e.Text
-			}
-			onEvent(e)
-		}
-		switch msg.Type {
-		case "system":
-			if msg.Subtype == "api_retry" && msg.Error != "" {
-				retryErr = msg.Error
-			}
-		case "assistant":
-			if msg.Error != "" {
-				end.APIError = msg.Error
-			}
-		case "result":
-			var r result
-			if json.Unmarshal(sc.Bytes(), &r) == nil {
-				end.Result = &r
-			}
-		}
-	}
-	if end.LastText == "" && end.Result != nil {
-		end.LastText = end.Result.Result
-	}
-	// A retry that later succeeded is no error; one the turn never got
-	// past is.
-	if end.APIError == "" && (end.Result == nil || end.Result.IsError) {
-		end.APIError = retryErr
-	}
-	err := cmd.Wait()
-	var exit *exec.ExitError
-	switch {
-	case err == nil:
-	case errors.As(err, &exit):
-		end.ExitCode = exit.ExitCode()
-		if end.ExitCode == -1 {
-			end.Signal = exit.ProcessState.String()
-		}
-	default:
-		end.ExitCode = -1
-	}
-	return end
 }
 
 // newSessionID is a random UUID (version 4), as claude --session-id takes.
