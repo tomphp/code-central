@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
-import type { Api } from "../api/api";
+import { useApi } from "../live";
 import type {
   ApiError,
   Landing,
@@ -32,13 +32,8 @@ const CODE_HOST_NAMES = { github: "GitHub", azure_repos: "Azure Repos" };
 
 // LandingMethodSection is how the Project's accepted work lands. It follows
 // the Project as read, so a change from another tab shows here too.
-export function LandingMethodSection({
-  api,
-  project,
-}: {
-  api: Api;
-  project: ProjectRow;
-}) {
+export function LandingMethodSection({ project }: { project: ProjectRow }) {
+  const api = useApi();
   const { method, push, remote, land_per_spec, pat_env, base, code_host, repository } = project.landing;
   const [draft, setDraft] = useState<Landing>(project.landing);
   const [error, setError] = useState<ApiError>();

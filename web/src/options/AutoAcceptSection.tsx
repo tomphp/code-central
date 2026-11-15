@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
-import type { Api } from "../api/api";
+import { useApi } from "../live";
 import { AUTO_ACCEPT_KINDS, type ApiError, type AutoAccept, type AutoAcceptKind, type ProjectRow } from "../api/types";
 import { Button } from "../controls/Button";
 import { AUTO_ACCEPT_KIND_NAME } from "../ticket/autoAccept";
@@ -8,7 +8,8 @@ import { Refusal } from "./Refusal";
 // AutoAcceptSection is the Project's Auto-accept setting (Spec
 // code-central-536): one checkbox per Auto-accept kind and one Save. Like
 // the other sections it follows the Project as read.
-export function AutoAcceptSection({ api, project }: { api: Api; project: ProjectRow }) {
+export function AutoAcceptSection({ project }: { project: ProjectRow }) {
+  const api = useApi();
   const stored = project.auto_accept;
   const [draft, setDraft] = useState<AutoAccept>(stored);
   const [error, setError] = useState<ApiError>();

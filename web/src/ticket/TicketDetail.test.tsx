@@ -8,6 +8,7 @@ import { newWorld, type World } from "../api/core/core";
 import { scenario, type Scenario } from "../api/scenario";
 import type { CIRunView, TicketView } from "../api/types";
 import { shortOf } from "../inbox/ShortId";
+import { renderLive } from "../worldTesting";
 import { TicketDetail } from "./TicketDetail";
 
 const MIN = 60_000;
@@ -415,7 +416,7 @@ describe("the Ticket pane's body", () => {
     const { w, s } = await acme();
     const id = await s.ticket("acme", { title: "Pick a theme", state: "Done" });
     const openTicket = vi.fn();
-    render(<TicketDetail api={w.api} project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} openTicket={openTicket} />);
+    renderLive(w, <TicketDetail api={w.api} project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} openTicket={openTicket} />);
     await userEvent.click(screen.getByRole("button", { name: "Retro" }));
     await userEvent.click(within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
     const [retro] = (await w.api.getTicket("acme", id)).retros ?? [];

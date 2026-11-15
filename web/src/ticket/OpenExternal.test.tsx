@@ -10,6 +10,7 @@ import type { LinkView, SpecDetail } from "../api/types";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { SpecPane } from "../spec/SpecPane";
+import { renderLive } from "../worldTesting";
 import { TicketDetail } from "./TicketDetail";
 
 const URL = "https://github.com/acme/web/issues/7";
@@ -34,11 +35,11 @@ const noLinks = { reasons: new Map(), select: () => {}, specLink: (id: string) =
 function specPane(w: World, spec: SpecDetail) {
   const now = w.now();
   if (spec.requirement) {
-    render(<RequirementPane api={w.api} spec={{ ...spec, requirement: spec.requirement }} now={now} {...noLinks} />);
+    renderLive(w, <RequirementPane spec={{ ...spec, requirement: spec.requirement }} now={now} {...noLinks} />);
     return screen.getByRole("region", { name: "Requirement" });
   }
   if (spec.map) {
-    render(<MapPane api={w.api} spec={{ ...spec, map: spec.map }} now={now} written={() => {}} {...noLinks} />);
+    renderLive(w, <MapPane spec={{ ...spec, map: spec.map }} now={now} written={() => {}} {...noLinks} />);
     return screen.getByRole("region", { name: "Map" });
   }
   render(<SpecPane api={w.api} spec={spec} now={now} {...noLinks} />);

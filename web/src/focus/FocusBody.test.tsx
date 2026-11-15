@@ -8,6 +8,7 @@ import { newWorld, type World } from "../api/core/core";
 import { scenario } from "../api/scenario";
 import type { UiLocation } from "../url";
 import { FocusBody, type FocusBodyProps, type FocusBodySession } from "./FocusBody";
+import { renderLive } from "../worldTesting";
 import { focusData, focusSession, type FocusData } from "./storyData";
 
 let w: World;
@@ -21,7 +22,7 @@ afterEach(() => w.drop());
 function renderBody(more: Partial<FocusBodyProps> = {}, over: Partial<FocusBodySession> = {}) {
   const navigate = vi.fn<(patch: Partial<UiLocation>) => void>();
   const s = focusSession(f, { skip: vi.fn(), again: vi.fn(), say: vi.fn(), ...over });
-  render(<FocusBody api={f.api} now={f.now} data={f.data} session={s} loc={{ view: "focus" }} navigate={navigate} {...more} />);
+  renderLive(w, <FocusBody api={f.api} now={f.now} data={f.data} session={s} loc={{ view: "focus" }} navigate={navigate} {...more} />);
   return { navigate, session: s };
 }
 

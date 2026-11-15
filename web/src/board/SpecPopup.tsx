@@ -47,7 +47,6 @@ export function SpecPopupView({ api, now, id, projects, spec, onClose, open, spe
     <PopupShell label="Spec popup" size="wide" onClose={onClose}>
       {data?.requirement ? (
         <RequirementPane
-          api={api}
           spec={{ ...data, requirement: data.requirement }}
           archived={archived}
           now={now}
@@ -55,7 +54,7 @@ export function SpecPopupView({ api, now, id, projects, spec, onClose, open, spe
           specLink={specLink}
         />
       ) : data?.map ? (
-        <MapPane api={api} spec={{ ...data, map: data.map }} archived={archived} now={now} select={open} specLink={specLink} written={open} />
+        <MapPane spec={{ ...data, map: data.map }} archived={archived} now={now} select={open} specLink={specLink} written={open} />
       ) : data ? (
         <SpecPane api={api} spec={data} archived={archived} now={now} select={open} />
       ) : (

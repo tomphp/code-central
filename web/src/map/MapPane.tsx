@@ -6,8 +6,8 @@
 // the fog of what isn't specified yet on the right, beside its collapsible
 // Decisions so far and Out of scope.
 import { useId, useState } from "react";
-import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
+import { useApi } from "../live";
 import { GUIDED_ON, GUIDED_TAG, type MapView, type SpecDetail, type TicketRow } from "../api/types";
 import { Markdown } from "../Markdown";
 import { useNeedsMe } from "../needsme/context";
@@ -28,7 +28,6 @@ import { Button } from "../controls/Button";
 import { StateChip } from "../controls/StateChip";
 
 export interface MapPaneProps {
-  api: Api;
   spec: SpecDetail & { map: MapView };
   // archived is whether the Map's Project is Archived, which takes no Retro.
   archived?: boolean;
@@ -44,14 +43,15 @@ export interface MapPaneProps {
 
 // MapPane is the view: it acts (starts a Ticket, sets Guided) and hands the
 // outcome to MapBody, which only renders.
-export function MapPane({ api, spec, ...rest }: MapPaneProps) {
+export function MapPane({ spec, ...rest }: MapPaneProps) {
+  const api = useApi();
   const { busy, error, run } = useAct();
   const start = (t: TicketRow) => run(() => api.act(projectOf(t.id), t.id, "approve", {}));
   // Guided hands starting the next decision to the Factory: it approves
   // the first frontier Ticket whenever the Map is idle.
   const setGuided = (on: boolean) =>
     run(() => (on ? api.setTags(projectOf(spec.id), spec.id, { [GUIDED_TAG]: GUIDED_ON }) : api.removeTags(projectOf(spec.id), spec.id, [GUIDED_TAG])));
-  return <MapBody api={api} spec={spec} {...rest} busy={busy} error={error} start={start} setGuided={setGuided} />;
+  return <MapBody spec={spec} {...rest} busy={busy} error={error} start={start} setGuided={setGuided} />;
 }
 
 export interface MapBodyProps extends MapPaneProps {
@@ -64,7 +64,7 @@ export interface MapBodyProps extends MapPaneProps {
   setGuided(on: boolean): void;
 }
 
-export function MapBody({ api, spec, archived, now, ticket, select, specLink, written, busy, error, start, setGuided }: MapBodyProps) {
+export function MapBody({ spec, archived, now, ticket, select, specLink, written, busy, error, start, setGuided }: MapBodyProps) {
   const { reasonOf } = useNeedsMe();
   const [fogOpen, setFogOpen] = useState(false);
   const { tickets = [], body = "" } = spec;
@@ -82,12 +82,12 @@ export function MapBody({ api, spec, archived, now, ticket, select, specLink, wr
         <input type="checkbox" checked={spec.map.guided} disabled={busy} onChange={(e) => setGuided(e.target.checked)} /> Guided
       </label>
       <div className="spec-actions">
-        <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
-        {specRetroable(spec, !!archived) && <NewRetro api={api} target={spec.id} onSubmitted={(t) => select(t.id)} />}
+        <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {specRetroable(spec, !!archived) && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
         {spec.map.can_write_spec && (
-          <WriteTheSpec api={api} map={{ id: spec.id, title: spec.title, destination }} onSubmitted={(r) => written(r.spec.id)} />
+          <WriteTheSpec map={{ id: spec.id, title: spec.title, destination }} onSubmitted={(r) => written(r.spec.id)} />
         )}
       </div>
       <div aria-label="Destination" className="map-destination">

@@ -33,8 +33,8 @@ export function SpecPane({ api, spec, archived, now, ticket, select }: SpecPaneP
     <section aria-label="Spec" className="req-head">
       <SpecPaneHeader id={spec.id} kind="Spec" title={spec.title} now={now} created={spec.created} />
       <div className="spec-actions">
-        <NewPrototype api={api} spec={spec.id} onSubmitted={(t) => select(t.id)} />
-        {specRetroable(spec, !!archived) && <NewRetro api={api} target={spec.id} onSubmitted={(t) => select(t.id)} />}
+        <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />
+        {specRetroable(spec, !!archived) && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}
         {spec.link && <LinkBadge link={spec.link} />}
         <OpenExternal link={spec.link} />
       </div>
