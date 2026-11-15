@@ -4,6 +4,7 @@ import type { ProjectRow } from "../api/types";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { SpecPane } from "../spec/SpecPane";
+import { SpecPaneNote } from "../spec/SpecPaneNote";
 import { TicketPane } from "../ticket/TicketDetail";
 import type { Link } from "../url";
 import type { InboxProps } from "./Inbox";
@@ -48,7 +49,7 @@ export function InboxDetail({
     <aside aria-label="Ticket" className="inbox-detail">
       {loc.requirement &&
         (requirementError ? (
-          <p className="empty">{requirementError}</p>
+          <SpecPaneNote error={requirementError} />
         ) : requirement ? (
           <RequirementPane
             api={api}
@@ -87,7 +88,7 @@ export function InboxDetail({
             select={(id) => navigate({ ticket: id })}
           />
         ) : (
-          <p className="empty">Loading…</p>
+          <SpecPaneNote />
         ))}
       {/* Under a Requirement, Map or Spec, a Ticket still loading shows
           nothing rather than Loading…. */}

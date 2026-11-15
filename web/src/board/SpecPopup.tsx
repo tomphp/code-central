@@ -12,6 +12,7 @@ import { useSpec } from "../live";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { SpecPane } from "../spec/SpecPane";
+import { SpecPaneNote } from "../spec/SpecPaneNote";
 import type { Link } from "../url";
 import { PopupShell } from "../controls/PopupShell";
 
@@ -58,7 +59,7 @@ export function SpecPopupView({ api, now, id, projects, spec, onClose, open, spe
       ) : data ? (
         <SpecPane api={api} spec={data} archived={archived} now={now} select={open} />
       ) : (
-        <p className="empty">{spec.error ? spec.error.message : "Loading…"}</p>
+        <SpecPaneNote error={spec.error?.message} />
       )}
     </PopupShell>
   );
