@@ -87,9 +87,7 @@ function Harness({ api, now, project, onClose }: { api: Api; now: Date; project?
     <NeedsMeProvider value={needsMeOf(inbox.data)}>
       <FocusPopup
         mode="queue"
-        api={api}
         now={now}
-        version={version}
         data={inbox.data}
         project={project}
         navigate={navigate}
