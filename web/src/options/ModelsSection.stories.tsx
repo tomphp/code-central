@@ -11,7 +11,7 @@ const meta = {
   ...storyWorld(async (s, w) => {
     await s.project("acme", "Acme");
     await s.reportModels("acme", { effort_levels: ["low", "medium", "high"], aliases: ["sonnet", "opus"], model_flag: "--model", effort_flag: "--effort" });
-    return { api: w.api, project: (await w.api.listProjects())[0] };
+    return { project: (await w.api.listProjects())[0] };
   }),
   render: (_args, { loaded }) => <ModelsSection {...loaded.world} />,
 } satisfies Meta;

@@ -44,7 +44,7 @@ describe("RequirementPane", () => {
     await s.project("acme", "Acme");
     const { spec } = await w.api.submitRequirement("acme", "Export a Spec");
     const read = await w.api.getSpec("acme", spec.id);
-    renderLive(w, <RequirementPane api={w.api} spec={{ ...read, requirement: read.requirement! }} now={w.now()} select={() => {}} specLink={link} />);
+    renderLive(w, <RequirementPane spec={{ ...read, requirement: read.requirement! }} now={w.now()} select={() => {}} specLink={link} />);
     expect(within(screen.getByRole("list", { name: "Stages" })).getAllByRole("listitem")).toHaveLength(4);
     expect(screen.queryByRole("list", { name: "Build" })).toBeNull();
   });

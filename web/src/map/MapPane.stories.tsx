@@ -40,7 +40,6 @@ const pane = (build: (api: Api, s: Parameters<Parameters<typeof storyWorld>[0]>[
     const { api, now, spec } = loaded.world as Loaded;
     return (
       <MapBody
-        api={api}
         spec={spec}
         now={now}
         busy={!!extra.busy}

@@ -129,7 +129,7 @@ function Views({ now }: { now: () => Date }) {
         return (
           <>
             {banner}
-            <ProjectOptions api={api} now={now()} projects={inbox.data?.projects} project={scope.project} navigate={navigate} />
+            <ProjectOptions now={now()} projects={inbox.data?.projects} project={scope.project} navigate={navigate} />
           </>
         );
       case "inbox":
@@ -137,7 +137,6 @@ function Views({ now }: { now: () => Date }) {
           <>
             {banner}
             <Inbox
-              api={api}
               now={now()}
               data={inbox.data}
               loc={{ ...loc, ticket: selected }}

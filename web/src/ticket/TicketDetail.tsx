@@ -105,7 +105,7 @@ export function TicketDetail(props: TicketDetailProps) {
                 </Button>
               )}
               {retroable(t, !!props.archived) && props.openTicket && (
-                <NewRetro api={api} target={t.id} onSubmitted={(r) => props.openTicket?.(r.id)} />
+                <NewRetro target={t.id} onSubmitted={(r) => props.openTicket?.(r.id)} />
               )}
             </span>
           </>

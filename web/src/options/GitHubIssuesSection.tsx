@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
-import type { Api } from "../api/api";
+import { useApi } from "../live";
 import type {
   ApiError,
   GitHubIssuesChange,
@@ -32,13 +32,8 @@ function issuesDraft(
 // Issue Watcher's check, whose refusal shows in place with its fix; while
 // it is on, the Issue Watcher's status shows below. Like the other
 // sections it follows the Project as read.
-export function GitHubIssuesSection({
-  api,
-  project,
-}: {
-  api: Api;
-  project: ProjectRow;
-}) {
+export function GitHubIssuesSection({ project }: { project: ProjectRow }) {
+  const api = useApi();
   const stored = issuesDraft(project.github_issues, project.ci.push_remote_url);
   const prefilled =
     !project.github_issues.repository && stored.repository !== "";

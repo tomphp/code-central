@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
-import type { Api } from "../api/api";
+import { useApi } from "../live";
 import type {
   ApiError,
   CIProvider,
@@ -55,7 +55,8 @@ const workflowNames = (ignored: string) =>
 
 // CISection is the Project's CI settings: CI Tracking, its CI Provider,
 // the GitHub repository or Azure DevOps project it watches, and the Ignored workflows. Like the Landing Method it follows the Project as read.
-export function CISection({ api, project }: { api: Api; project: ProjectRow }) {
+export function CISection({ project }: { project: ProjectRow }) {
+  const api = useApi();
   const stored = ciDraft(project.ci);
   const prefilled = !project.ci.repository && stored.repository !== "";
   const [draft, setDraft] = useState<CIDraft>(stored);
@@ -286,7 +287,7 @@ export function CISection({ api, project }: { api: Api; project: ProjectRow }) {
           watcher={project.ci.watcher}
         />
       )}
-      <CIRules api={api} project={project} />
+      <CIRules project={project} />
     </fieldset>
   );
 }

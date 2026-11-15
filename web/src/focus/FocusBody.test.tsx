@@ -7,8 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newWorld, type World } from "../api/core/core";
 import { scenario } from "../api/scenario";
 import type { UiLocation } from "../url";
+import { FocusBody, type FocusBodyProps, type FocusBodySession } from "./FocusBody";
 import { renderLive } from "../worldTesting";
-import { FocusBody,type FocusBodyProps, type FocusBodySession } from "./FocusBody";
 import { focusData, focusSession, type FocusData } from "./storyData";
 
 let w: World;

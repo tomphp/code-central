@@ -1,15 +1,12 @@
 // + New ▾, with its menu open, and the Small Change popup opened from it.
-// On the WASM Core: the Projects acme and beta, as props. The api is
-// passed because each popup submits.
+// On the WASM Core: the Projects acme and beta, as props.
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { userEvent, within } from "storybook/test";
-import type { Api } from "../api/api";
 import { storyWorld } from "../api/core/story";
 import type { ProjectRow } from "../api/types";
 import { NewSplit } from "./NewSplit";
 
 interface World {
-  api: Api;
   projects: ProjectRow[];
 }
 
@@ -18,7 +15,7 @@ const meta = {
   ...storyWorld(async (s, w): Promise<World> => {
     await s.project("acme", "Acme");
     await s.project("beta", "Beta");
-    return { api: w.api, projects: await w.api.listProjects() };
+    return { projects: await w.api.listProjects() };
   }),
   // The menu is placed against the nearest positioned ancestor.
   render: (_, { loaded }) => (

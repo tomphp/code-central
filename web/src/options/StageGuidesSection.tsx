@@ -5,7 +5,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import type { Api } from "../api/api";
+import { useApi } from "../live";
 import type { ApiError, ProjectRow } from "../api/types";
 import { Button } from "../controls/Button";
 import { Refusal } from "./Refusal";
@@ -14,7 +14,8 @@ import { Refusal } from "./Refusal";
 // code-central-441 and code-central-464): the Subagent Exploration and Model
 // Assignment checkboxes, each with its own Save. Like the other sections it
 // follows the Project as read.
-export function StageGuidesSection({ api, project }: { api: Api; project: ProjectRow }) {
+export function StageGuidesSection({ project }: { project: ProjectRow }) {
+  const api = useApi();
   return (
     <fieldset id="project-options-stage-guides" className="project-options-section" disabled={project.archived}>
       <legend>Stage Guides</legend>

@@ -12,13 +12,13 @@
 import { useId, useState, type FormEvent, type ReactNode } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
+import { useApi } from "../live";
 import type { ApiError, ProjectRow, SpecAcknowledgement, TicketAcknowledgement } from "../api/types";
 import { Button } from "../controls/Button";
 import { PopupShell } from "../controls/PopupShell";
 import { Select } from "../controls/Select";
 
 export interface NewRequirementProps {
-  api: Api;
   // projects are the Projects a Requirement, Map or Small Change can go to:
   // the active ones.
   projects: ProjectRow[];
@@ -124,7 +124,6 @@ export function NewSmallChange(props: NewSmallChangeProps) {
 }
 
 export interface WriteTheSpecProps {
-  api: Api;
   // map is the finished Map, with its Destination.
   map: { id: string; title: string; destination: string };
   onSubmitted(r: { spec: SpecAcknowledgement }): void;
@@ -133,7 +132,7 @@ export interface WriteTheSpecProps {
 // WriteTheSpec makes a Requirement from a finished Map, with no grilling
 // Stage: its text starts as the Map's title, a link to it and its
 // Destination.
-export function WriteTheSpec({ api, map, onSubmitted }: WriteTheSpecProps) {
+export function WriteTheSpec({ map, onSubmitted }: WriteTheSpecProps) {
   const kind: Kind<{ spec: SpecAcknowledgement }> = {
     ...REQUIREMENT,
     straight: undefined,
@@ -144,41 +143,38 @@ export function WriteTheSpec({ api, map, onSubmitted }: WriteTheSpecProps) {
     text: [map.title, `From the Map [${map.id}](${map.id}).`, map.destination].filter(Boolean).join("\n\n") + "\n",
     submit: (api, project, text) => api.submitRequirement(project, text, map.id),
   };
-  return <NewFromText kind={kind} api={api} projects={[]} project={projectOf(map.id)} onSubmitted={onSubmitted} />;
+  return <NewFromText kind={kind} projects={[]} project={projectOf(map.id)} onSubmitted={onSubmitted} />;
 }
 
 export interface NewPrototypeProps {
-  api: Api;
   // spec is the Spec the Prototype goes on.
   spec: string;
   onSubmitted(t: TicketAcknowledgement): void;
 }
 
-export function NewPrototype({ api, spec, onSubmitted }: NewPrototypeProps) {
-  return <NewFromText kind={prototypeOn(spec)} api={api} projects={[]} project={projectOf(spec)} onSubmitted={onSubmitted} />;
+export function NewPrototype({ spec, onSubmitted }: NewPrototypeProps) {
+  return <NewFromText kind={prototypeOn(spec)} projects={[]} project={projectOf(spec)} onSubmitted={onSubmitted} />;
 }
 
 export interface NewRetroProps {
-  api: Api;
   // target is the finished Ticket or Spec the Retro looks back on.
   target: string;
   onSubmitted(t: TicketAcknowledgement): void;
 }
 
-export function NewRetro({ api, target, onSubmitted }: NewRetroProps) {
-  return <NewFromText kind={retroOn(target)} api={api} projects={[]} project={projectOf(target)} onSubmitted={onSubmitted} />;
+export function NewRetro({ target, onSubmitted }: NewRetroProps) {
+  return <NewFromText kind={retroOn(target)} projects={[]} project={projectOf(target)} onSubmitted={onSubmitted} />;
 }
 
 interface NewFromTextProps<R> {
   kind: Kind<R>;
-  api: Api;
   projects: ProjectRow[];
   project?: string;
   onSubmitted(r: R): void;
   trigger?(open: () => void): ReactNode;
 }
 
-function NewFromText<R>({ kind, api, projects, project, onSubmitted, trigger }: NewFromTextProps<R>) {
+function NewFromText<R>({ kind, projects, project, onSubmitted, trigger }: NewFromTextProps<R>) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -192,7 +188,6 @@ function NewFromText<R>({ kind, api, projects, project, onSubmitted, trigger }: 
       {open && (
         <NewFromTextPopup
           kind={kind}
-          api={api}
           projects={projects}
           project={project}
           onClose={() => setOpen(false)}
@@ -207,7 +202,8 @@ function NewFromText<R>({ kind, api, projects, project, onSubmitted, trigger }: 
 }
 
 // NewFromTextPopup is the one free-text box's popup, with its actions.
-function NewFromTextPopup<R>({ kind, api, projects, project, onClose, onSubmitted }: NewFromTextProps<R> & { onClose(): void }) {
+function NewFromTextPopup<R>({ kind, projects, project, onClose, onSubmitted }: NewFromTextProps<R> & { onClose(): void }) {
+  const api = useApi();
   const [text, setText] = useState(kind.text ?? "");
   // Until the human picks one, the Project follows the props, so a popup
   // opened before the Projects are read still has one once they are.

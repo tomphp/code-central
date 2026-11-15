@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
-import type { Api } from "../api/api";
+import { useApi } from "../live";
 import type { ApiError, ModelRow, Models, ProjectRow } from "../api/types";
 import { Select } from "../controls/Select";
 import { CLAUDE_CODE_DEFAULT } from "../format";
@@ -19,7 +19,8 @@ import { Refusal } from "./Refusal";
 // aliases and model IDs the Factory reported, and its effort one of the
 // valid levels or Default; Default shows what it inherits. Save replaces
 // the rows whole. Like the other sections it follows the Project as read.
-export function ModelsSection({ api, project }: { api: Api; project: ProjectRow }) {
+export function ModelsSection({ project }: { project: ProjectRow }) {
+  const api = useApi();
   const stored = JSON.stringify(project.models);
   const [draft, setDraft] = useState<Models>(project.models);
   const [error, setError] = useState<ApiError>();

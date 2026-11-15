@@ -35,11 +35,11 @@ const noLinks = { reasons: new Map(), select: () => {}, specLink: (id: string) =
 function specPane(w: World, spec: SpecDetail) {
   const now = w.now();
   if (spec.requirement) {
-    renderLive(w, <RequirementPane api={w.api} spec={{ ...spec, requirement: spec.requirement }} now={now} {...noLinks} />);
+    renderLive(w, <RequirementPane spec={{ ...spec, requirement: spec.requirement }} now={now} {...noLinks} />);
     return screen.getByRole("region", { name: "Requirement" });
   }
   if (spec.map) {
-    renderLive(w, <MapPane api={w.api} spec={{ ...spec, map: spec.map }} now={now} written={() => {}} {...noLinks} />);
+    renderLive(w, <MapPane spec={{ ...spec, map: spec.map }} now={now} written={() => {}} {...noLinks} />);
     return screen.getByRole("region", { name: "Map" });
   }
   renderLive(w, <SpecPane spec={spec} now={now} {...noLinks} />);

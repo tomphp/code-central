@@ -134,7 +134,6 @@ export function BoardView({ now, data, loc, navigate, onFocusPopupGone }: BoardV
               <div className="board-new">
                 <NewSplit
                   variant="plain"
-                  api={api}
                   projects={projects.filter((p) => !p.archived)}
                   project={scope}
                   onSubmitted={({ kind }) => say(`${kind} added`)}
