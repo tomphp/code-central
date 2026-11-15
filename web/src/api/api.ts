@@ -1,6 +1,6 @@
 // The one API module: everything the UI reads, every human action and the
 // live feed go through an Api. createHttpApi (http.ts) is the real one,
-// which tests and stories run on the WASM Core (core/core.ts). contract.ts
+// which tests and stories run on the WASM Core (core/core.ts). contract/
 // pins createHttpApi on the WASM Core and against the real service.
 import type {
   AutoAccept,

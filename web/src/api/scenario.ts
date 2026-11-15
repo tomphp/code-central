@@ -15,7 +15,7 @@
 // and Question numbers are Core's.
 import type { World } from "./core/core";
 import { HttpDriver, worldConnection } from "./driver";
-import type { CIRunView, ExternalState, IssueWatcherReport, PullRequestState, PullRequestWatcherReport, SessionEvent, State, UsageResponse } from "./types";
+import type { CIRunView, CISettings, ExternalState, IssueWatcherReport, Landing, PullRequestState, PullRequestWatcherReport, SessionEvent, State, UsageResponse } from "./types";
 
 export interface QuestionSeed {
   title: string;
@@ -58,6 +58,43 @@ export function scenario(w: World): Scenario {
 
 export const QUESTIONS: QuestionSeed[] = [{ title: "Which colour?", body: "Red or blue", recommended: "Blue" }];
 export const WORK: Work = { branch: "impl", commit: "abc123" };
+
+// defaultLanding is the Landing row of a new Project, with overrides
+// applied: the one place a new default field is added for the cases that
+// compare a whole row.
+export function defaultLanding(overrides: Partial<Landing> = {}): Landing {
+  return {
+    method: "merge",
+    push: false,
+    remote: "origin",
+    land_per_spec: true,
+    code_host: "",
+    repository: "",
+    pat_env: "ADO_PAT",
+    base: "main",
+    watcher: { state: "not_reported" },
+    open_pull_requests: [],
+    ...overrides,
+  };
+}
+
+// defaultCI is the CI settings row of a new Project (CI Tracking off),
+// with overrides applied.
+export function defaultCI(overrides: Partial<CISettings> = {}): CISettings {
+  return {
+    tracking: false,
+    provider: "github_actions",
+    repository: "",
+    project_url: "",
+    pat_env: "ADO_PAT",
+    ignored_workflows: [],
+    push_remote_url: "",
+    rules: [],
+    watcher: { state: "not_reported" },
+    ...overrides,
+  };
+}
+
 export const REPORT = {
   what_broke: "Tests fail on CI\nlogin_test.go times out",
   why: "The fixture server never starts",

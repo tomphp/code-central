@@ -1,11 +1,12 @@
 // The contract cases for the human's Round actions (ticket 34): answer,
-// dismiss_question and accept_recommended. apiContract (contract.ts) runs
-// them with the same Driver as every other case.
+// dismiss_question and accept_recommended. apiContract (contract/index.ts)
+// runs them with the same Driver as every other case.
 import { describe, expect, it } from "vitest";
-import { wantAcknowledgement, type Driver } from "./contract";
-import "./actions/rounds";
+import type { Driver } from "../driver";
+import { wantAcknowledgement } from "./support";
+import "../actions/rounds";
 
-export function roundContract(driver: () => Driver) {
+export function roundsContract(driver: () => Driver) {
   describe("Round actions", () => {
     const questions = [
       { title: "Which colour?", body: "Red or blue", recommended: "Blue" },

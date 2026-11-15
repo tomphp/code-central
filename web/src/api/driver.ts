@@ -1,7 +1,8 @@
 // The Driver (Spec code-central-580): the one module that plays agents,
 // integrations and the Factory, by making their real operations over a
 // fetch, so every state a test or story reaches is the one Core derives.
-// It implements the contract's Driver (contract.ts), and the scenario
+// It implements the Driver below, the interface the contract suite (contract/)
+// runs against, and the scenario
 // builder (scenario.ts) is it plus helpers for whole flows.
 //
 // Its two adapters differ only in where the fetch goes and how what lies
@@ -10,9 +11,120 @@
 // `code-central serve` with its fake gh and real connections. A write's
 // ID is the one it returned, and a Question's number is Core's.
 import type { Api } from "./api";
-import type { Driver } from "./contract";
+import type { CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, ModelsReport, PullRequestReport, SessionEvent, TicketView, UsageResponse } from "./types";
 import type { World } from "./core/core";
 import { toError } from "./http";
+
+// The Driver sets up the world the way agents, integrations and the Factory
+// would, with their operations over HTTP. Tests use the IDs it returns,
+// never literal IDs (Specs and Tickets share one counter).
+export interface Driver {
+  api: Api;
+  createProject(key: string, displayName: string): Promise<void>;
+  createTicket(key: string, title: string, state: "Draft" | "Ready"): Promise<string>;
+  // postRound claims a Ready Ticket as an agent and posts a Round of
+  // Questions, moving it to Needs Answer, and returns the Round's number.
+  postRound(key: string, id: string, questions: { title: string; body: string; recommended?: string }[]): Promise<number>;
+  // reportFailure claims a Ready Ticket as an agent (session
+  // "contract-session") and posts a Failure Report, moving it to Failed.
+  reportFailure(key: string, id: string, report: FailureReportBody): Promise<void>;
+  // finish claims a Ready Ticket as an agent and finishes it with the
+  // summary, moving it to In Review. on names the work's branch and head
+  // commit (ticket 71), or a spec Stage's Spec recommendation.
+  finish(
+    key: string,
+    id: string,
+    summary: string,
+    on?: { branch: string; commit: string } | { recommendation: NonNullable<TicketView["recommendation"]> },
+  ): Promise<void>;
+  // addBlocker makes id wait on blocker, as an agent's add_blocker.
+  addBlocker(key: string, id: string, blocker: string): Promise<void>;
+  // claim claims a Ready Ticket as an agent with a session ID, moving it
+  // to In Progress (ticket 35).
+  claim(key: string, id: string, sessionId: string): Promise<void>;
+  // linkTicket creates a Draft Ticket linked to an external item as an
+  // Integration would, and records its external state (ticket 42).
+  linkTicket(key: string, title: string, link: { integration: string; id: string; url: string }, external: ExternalState): Promise<string>;
+  // incomingIssue creates a Draft Ticket on spec linked to a GitHub issue,
+  // as the Issue Watcher's create_linked_ticket does (code-central-287).
+  incomingIssue(key: string, spec: string, title: string, link: { integration: string; id: string; url: string }): Promise<string>;
+  // postSessionEvents posts a session's Session Events as a Factory would
+  // (ticket 109): they go to the newest Claim with that session ID.
+  postSessionEvents(sessionId: string, events: SessionEvent[]): Promise<void>;
+  // mcpCall makes one agent MCP tool call to key's Project, as Claude Code
+  // would, and returns the text the agent was given and, for a rejected
+  // call, its error code (Spec code-central-201).
+  mcpCall(key: string, op: "find_tickets" | "get_ticket", args: Record<string, unknown>): Promise<{ text: string; error?: string }>;
+  // postUsage posts a session's model responses' token usage as a Factory
+  // would (Spec code-central-201): they go to the newest Claim with that
+  // session ID.
+  postUsage(sessionId: string, responses: UsageResponse[]): Promise<void>;
+  // dropTranscriptStreams drops every open Transcript stream, as a flaky
+  // connection would; each reconnects by itself (ticket 110).
+  dropTranscriptStreams(): void;
+  // startConversation and sendChatMessage are the human's Chat actions;
+  // sendChatMessage returns once the turn is queued (Spec code-central-633).
+  startConversation(key: string): Promise<void>;
+  sendChatMessage(key: string, text: string): Promise<void>;
+  // takeChatTurn is a Factory's next_chat_work call, which takes the turn
+  // queued, binding the Conversation to it; it returns the Conversation ID.
+  takeChatTurn(key: string, factory: string): Promise<string>;
+  // postChatEvents is the Factory holding the Conversation posting its
+  // reply: text items, and the outcome on the last post.
+  postChatEvents(key: string, factory: string, conversation: string, texts: string[], outcome?: "done" | "stopped" | "failed"): Promise<void>; // no outcome leaves the reply running
+  // absolutePath is a path absolute where Core runs.
+  readonly absolutePath: string;
+  // reportPushRemote reports the Push remote's URL as a Factory does when
+  // it starts (code-central-251).
+  reportPushRemote(key: string, url: string): Promise<void>;
+  // reportModels reports what the Factory's claude accepts, with its
+  // flags, as a Factory does when it starts (code-central-311).
+  reportModels(key: string, report: ModelsReport): Promise<void>;
+  // reportHeartbeat sends a Factory's Heartbeat (code-central-324).
+  reportHeartbeat(key: string, report: HeartbeatReport): Promise<void>;
+  // logOutOfGH makes the gh the service finds logged out, so the CI check
+  // refuses turning CI Tracking on (code-central-252).
+  logOutOfGH(): Promise<void>;
+  // letGHTriage makes the gh the service finds able to triage
+  // repository's issues, so the Issues check passes (code-central-284).
+  letGHTriage(repository: string): Promise<void>;
+  // letGHWrite makes the gh the service finds able to write to
+  // repository, so the Pull Request check passes on GitHub
+  // (code-central-389).
+  letGHWrite(repository: string): Promise<void>;
+  // reportCIWatcherStatus reports the CI Watcher's status as the CI
+  // Watcher does on each poll (code-central-253).
+  reportCIWatcherStatus(key: string, status: CIWatcherReport): Promise<void>;
+  // reportPushedCommit reports the commit a Factory pushed for an
+  // Accepted Ticket, and reportCIRuns the CI Runs the CI Watcher saw
+  // (code-central-256).
+  // The branch it was pushed as is what the Pull Request Watcher opens a
+  // pull request from; under Pull Request a push is recorded with CI
+  // Tracking off too (code-central-388).
+  reportPushedCommit(key: string, id: string, commit: string, branch?: string): Promise<void>;
+  // reportPullRequest reports the pull request of the work pushed as
+  // branch, as the Pull Request Watcher does; it is recorded on every
+  // Ticket the work covers (code-central-388).
+  reportPullRequest(key: string, report: PullRequestReport): Promise<void>;
+  reportCIRuns(key: string, runs: Omit<CIRunView, "ignored">[]): Promise<void>;
+  close(): Promise<void>;
+}
+
+export interface FailureReportBody {
+  what_broke: string;
+  why: string;
+  what_to_fix: string;
+  where_work_stands: string;
+}
+
+
+export const sampleReport: FailureReportBody = {
+  what_broke: "Tests fail on CI\nlogin_test.go times out",
+  why: "The fixture server never starts",
+  what_to_fix: "Start the fixture in TestMain",
+  where_work_stands: "Branch impl/7, two commits, tests red",
+};
+
 
 // A Connection is where a Driver's requests go: an adapter.
 export interface Connection {
