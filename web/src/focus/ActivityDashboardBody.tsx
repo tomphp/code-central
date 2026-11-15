@@ -31,15 +31,22 @@ import { runName, runStatus, shortCommit } from "../ticket/CISection";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { usePulse } from "./pulse";
 
+// CIRunsRead is a read of the running CI Runs: neither data nor error
+// before the first read.
+export interface CIRunsRead {
+  data?: CIOverview;
+  error?: ApiError;
+}
+
 export interface ActivityDashboardBodyProps {
   now: Date;
   data: InboxData;
   // changes counts the ticket.changed notices for each Ticket since the
   // dashboard showed.
   changes: Record<string, number>;
-  // ciRuns is the read of the running CI Runs in scope: none without CI
-  // Tracking on in scope, and neither data nor error before the first read.
-  ciRuns?: { data?: CIOverview; error?: ApiError };
+  // ciRuns is the read of the running CI Runs in scope, none without CI
+  // Tracking on in scope.
+  ciRuns?: CIRunsRead;
   // loc's Project is the one in scope; none means All Projects.
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
@@ -92,7 +99,7 @@ export function ActivityDashboardBody({ now, data, changes, ciRuns, loc, navigat
   );
 }
 
-// EntryProps is what every entry and block reads from the body's props.
+// EntryProps is what the lists and their entries read from the body's props.
 type EntryProps = Pick<ActivityDashboardBodyProps, "now" | "data" | "loc" | "navigate">;
 
 // StateCount is one State's block: its count in big type, its State name under it.
@@ -128,7 +135,7 @@ function CIRunningCount({ count, loc, navigate }: { count?: number } & Pick<Entr
 // shows before the first read. The entries of the first read don't
 // pulse; one that joins later pulses once.
 interface CIRunningListProps extends EntryProps {
-  runs: { data?: CIOverview; error?: ApiError };
+  runs: CIRunsRead;
 }
 
 function CIRunningList({ now, data, runs, loc, navigate }: CIRunningListProps) {

@@ -1,14 +1,14 @@
 // Focus Mode's body's tests, through its props: its header, "N left", the
 // Focus Item on screen, All clear, only skipped and loading, in one Project
 // and in All Projects, with the data read from a WASM Core world.
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newWorld, type World } from "../api/core/core";
 import { scenario } from "../api/scenario";
 import type { UiLocation } from "../url";
-import { FocusBody, type FocusBodyProps } from "./FocusBody";
-import { focusData, type FocusData } from "./storyData";
+import { FocusBody, type FocusBodyProps, type FocusBodySession } from "./FocusBody";
+import { focusData, focusSession, type FocusData } from "./storyData";
 
 let w: World;
 let f: FocusData;
@@ -18,20 +18,9 @@ beforeEach(async () => {
 });
 afterEach(() => w.drop());
 
-function renderBody(more: Partial<FocusBodyProps> = {}, session: Partial<FocusBodyProps["session"]> = {}) {
+function renderBody(more: Partial<FocusBodyProps> = {}, over: Partial<FocusBodySession> = {}) {
   const navigate = vi.fn<(patch: Partial<UiLocation>) => void>();
-  const s: FocusBodyProps["session"] = {
-    item: f.item,
-    ticket: f.ticket,
-    api: f.api,
-    remaining: f.remaining,
-    clear: false,
-    onlySkipped: false,
-    skip: vi.fn(),
-    again: vi.fn(),
-    say: vi.fn(),
-    ...session,
-  };
+  const s = focusSession(f, { skip: vi.fn(), again: vi.fn(), say: vi.fn(), ...over });
   render(<FocusBody api={f.api} now={f.now} data={f.data} session={s} loc={{ view: "focus" }} navigate={navigate} {...more} />);
   return { navigate, session: s };
 }
@@ -67,6 +56,21 @@ describe("Focus Mode's body with a queue", () => {
   it("shows the session's note", () => {
     renderBody({}, { note: "Requirement added" });
     expect(within(focus()).getByRole("status")).toHaveTextContent("Requirement added");
+  });
+
+  it("has the session say what + New ▾ added", async () => {
+    const { session } = renderBody({ loc: { view: "focus", project: "acme" } });
+    await userEvent.click(within(header()).getByRole("button", { name: "New requirement" }));
+    const modal = screen.getByRole("dialog", { name: "New requirement" });
+    await userEvent.type(within(modal).getByRole("textbox"), "Offline mode");
+    await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
+    await waitFor(() => expect(session.say).toHaveBeenCalledWith("Requirement added"));
+  });
+
+  it("opens the item's Ticket in the Inbox", async () => {
+    const { navigate } = renderBody();
+    await userEvent.click(within(focus()).getByRole("link", { name: "Open in Inbox" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "inbox", project: undefined, requirement: undefined, ticket: f.item.row.id });
   });
 
   it("goes back to the Inbox on Exit", async () => {

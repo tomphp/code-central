@@ -35,9 +35,11 @@ describe("the Activity Dashboard body in All Projects", () => {
   it("lists the In Progress Tickets by Project, each with its Project's name", () => {
     renderBody();
     const items = inProgress();
-    expect(items.map((li) => li.querySelector(".tid")?.textContent)).toEqual([d.ids.signup, d.ids.betaExport]);
+    expect(items).toHaveLength(2);
+    expect(within(items[0]).getByText(d.ids.signup)).toBeInTheDocument();
     expect(items[0]).toHaveTextContent("Sign-up page");
     expect(items[0]).toHaveTextContent("Acme");
+    expect(within(items[1]).getByText(d.ids.betaExport)).toBeInTheDocument();
     expect(items[1]).toHaveTextContent("Beta export");
     expect(items[1]).toHaveTextContent("Beta");
   });

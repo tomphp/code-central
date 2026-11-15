@@ -7,6 +7,7 @@ import { SESSION } from "../api/driver";
 import { scenario, type Scenario } from "../api/scenario";
 import type { CIOverview, CIRunView, TicketView } from "../api/types";
 import { loadInbox, type InboxData } from "../live";
+import type { FocusBodySession } from "./FocusBody";
 import { itemsOf, type FocusItem } from "./session";
 
 // FocusData is Acme and Beta with Flaky build Failed in Acme and Login
@@ -38,6 +39,23 @@ export async function focusData(s: Scenario, w: World): Promise<FocusData> {
     item,
     ticket: await w.api.getTicket(item.row.project, item.row.id),
     remaining: rows.length,
+  };
+}
+
+// focusSession is f's session with its first Focus Item on screen, and
+// callbacks that do nothing, with over over it.
+export function focusSession(f: FocusData, over: Partial<FocusBodySession> = {}): FocusBodySession {
+  return {
+    item: f.item,
+    ticket: f.ticket,
+    api: f.api,
+    remaining: f.remaining,
+    clear: false,
+    onlySkipped: false,
+    skip: () => {},
+    again: () => {},
+    say: () => {},
+    ...over,
   };
 }
 

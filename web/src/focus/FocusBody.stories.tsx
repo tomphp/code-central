@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { storyWorld } from "../api/core/story";
 import type { UiLocation } from "../url";
 import { ActivityDashboardBody } from "./ActivityDashboardBody";
-import { FocusBody, type FocusBodyProps } from "./FocusBody";
-import { dashboardData, focusData, type DashboardData, type FocusData } from "./storyData";
+import { FocusBody, type FocusBodyProps, type FocusBodySession } from "./FocusBody";
+import { dashboardData, focusData, focusSession, type DashboardData, type FocusData } from "./storyData";
 
 // On the WASM Core: Flaky build Failed in Acme and Login page In Review in
 // Beta, read back as Focus Mode reads them. The world's Api is what the
@@ -20,25 +20,16 @@ type Story = StoryObj<typeof meta>;
 const ALL: UiLocation = { view: "focus" };
 const ACME: UiLocation = { view: "focus", project: "acme" };
 
-// body renders a story of the world's session, with more over its props,
-// from the world and whatever else the story loaded, and over its session.
-type More = (f: FocusData, loaded: Record<string, unknown>) => Partial<FocusBodyProps>;
-const body = (more: More = () => ({}), session: Partial<FocusBodyProps["session"]> = {}): Story => ({
+// body renders a story of the world's session with over over it, and with
+// props over the body's, made from the world and whatever else the story
+// loaded.
+type Props = (world: FocusData, loaded: Record<string, unknown>) => Partial<FocusBodyProps>;
+const body = (props: Props = () => ({}), over: Partial<FocusBodySession> = {}): Story => ({
   render: (_, { loaded }) => {
-    const f = loaded.world as FocusData;
-    const s: FocusBodyProps["session"] = {
-      item: f.item,
-      ticket: f.ticket,
-      api: f.api,
-      remaining: f.remaining,
-      clear: false,
-      onlySkipped: false,
-      skip: () => {},
-      again: () => {},
-      say: () => {},
-      ...session,
-    };
-    return <FocusBody api={f.api} now={f.now} data={f.data} session={s} loc={ALL} navigate={() => {}} {...more(f, loaded)} />;
+    const world = loaded.world as FocusData;
+    return (
+      <FocusBody api={world.api} now={world.now} data={world.data} session={focusSession(world, over)} loc={ALL} navigate={() => {}} {...props(world, loaded)} />
+    );
   },
 });
 
@@ -61,6 +52,8 @@ export const ActivityDashboardInPlace: Story = {
   }, clear),
 };
 export const OnlySkipped = body(() => ({}), { item: undefined, onlySkipped: true });
+// The next Focus Item on its way: the count, and Loading… under it.
+export const NextItemLoading = body(() => ({}), { item: undefined, ticket: undefined });
 // Before the Inbox data: no count yet.
 export const LoadingAllProjects = body(() => ({ data: undefined }), { item: undefined, remaining: 0 });
 export const LoadingOneProject = body(() => ({ data: undefined, loc: ACME }), { item: undefined, remaining: 0 });

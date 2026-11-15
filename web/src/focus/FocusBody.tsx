@@ -22,6 +22,10 @@ import { FocusItemView, inboxOf } from "./FocusItemView";
 import type { FocusSession } from "./session";
 import "./focus.css";
 
+// FocusBodySession is the session FocusBody lays out: what to show, and
+// the callbacks that change it.
+export type FocusBodySession = Omit<FocusSession, "keys">;
+
 export interface FocusBodyProps {
   // api is what + New ▾ submits through; the item on screen acts through
   // the session's.
@@ -29,7 +33,7 @@ export interface FocusBodyProps {
   now: Date;
   // data is the Inbox data, none while it loads.
   data?: InboxData;
-  session: Omit<FocusSession, "keys">;
+  session: FocusBodySession;
   // dashboard shows in place of All clear, when the human chose the
   // Activity Dashboard.
   dashboard?: ReactNode;
