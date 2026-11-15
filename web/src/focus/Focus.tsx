@@ -1,7 +1,7 @@
 // Focus Mode: one Focus Item at a time from Needs Me, filling the window
 // with no nav, list or side pane. A view over the Focus session, which
 // picks what to show and notes what happened to the item on screen; the
-// data comes from live.ts, as the Inbox's does. FocusBody lays it out. It
+// data comes from live.tsx, as the Inbox's does. FocusBody lays it out. It
 // never closes by itself.
 import type { Api } from "../api/api";
 import type { FocusClear } from "../api/types";
