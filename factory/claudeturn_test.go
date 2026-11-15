@@ -3,7 +3,6 @@ package factory_test
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -27,6 +26,9 @@ type turnTest struct {
 	lines  []string
 }
 
+// defaultLevels are the effort levels factorytest.DefaultHelp lists.
+var defaultLevels = []string{"low", "medium", "high", "xhigh", "max"}
+
 // runnerOpts are the Factory's flags a test's runner is built with.
 type runnerOpts struct {
 	bypass     bool
@@ -37,13 +39,8 @@ type runnerOpts struct {
 func newTurnTest(t *testing.T, o runnerOpts) *turnTest {
 	t.Helper()
 	h := factorytest.New(t)
-	claude := filepath.Join(h.Bin, "claude")
-	if runtime.GOOS == "windows" {
-		claude += ".exe"
-	}
 	e := factory.Env{Environ: h.Environ(), KillGrace: factorytest.KillGrace}
-	levels := []string{"low", "medium", "high", "xhigh", "max"} // factorytest.DefaultHelp's
-	return &turnTest{h: h, runner: factory.NewTurnRunner(claude, e, levels, o.bypass, o.claudeArgs, o.verbose)}
+	return &turnTest{h: h, runner: factory.NewTurnRunner(h.Claude(), e, defaultLevels, o.bypass, o.claudeArgs, o.verbose)}
 }
 
 // input is a Turn of id, whose script the fake runs, in the harness's
@@ -196,8 +193,8 @@ func TestAnEffortClaudeDoesntAcceptStartsNothing(t *testing.T) {
 	o := tt.runner.Run(context.Background(), in)
 
 	wantKind(t, o, "effort rejected")
-	if want := []string{"low", "medium", "high", "xhigh", "max"}; !slices.Equal(o.Levels, want) {
-		t.Errorf("the outcome has the levels %q, want %q", o.Levels, want)
+	if !slices.Equal(o.Levels, defaultLevels) {
+		t.Errorf("the outcome has the levels %q, want %q", o.Levels, defaultLevels)
 	}
 	if hooked {
 		t.Error("the before-start hook was called for a Turn that didn't start")

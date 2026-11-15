@@ -127,14 +127,16 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 		in.Linef("can't start claude: %v", err)
 		return turnOutcome{Kind: turnFailed, StartErr: err}
 	}
-	read := make(chan struct{})
-	stopper := make(chan struct{})
+	// streamRead is closed once claude has exited and its stream has been
+	// read; stopperDone once the goroutine stopping it has returned.
+	streamRead := make(chan struct{})
+	stopperDone := make(chan struct{})
 	go func() {
-		defer close(stopper)
+		defer close(stopperDone)
 		select {
 		case <-stop.Done():
-			r.stop(cmd.Process, read, func(err error) { in.Linef("can't stop the Turn: %v", err) })
-		case <-read:
+			r.stop(cmd.Process, streamRead, func(err error) { in.Linef("can't stop the Turn: %v", err) })
+		case <-streamRead:
 		}
 	}()
 	end := readTurn(cmd, stdout, in.Dir, newUsageReader(in.UsageKind, r.now), func(e core.SessionEvent) {
@@ -143,8 +145,8 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 			in.Linef("%s", e.Text)
 		}
 	}, in.OnUsage)
-	close(read)
-	<-stopper
+	close(streamRead)
+	<-stopperDone
 	return turnOutcome{Kind: end.kind(stop.Err() != nil), End: end}
 }
 
@@ -264,6 +266,20 @@ func (t turnEnd) exit() string {
 		return t.Signal
 	}
 	return fmt.Sprintf("exit %d", t.ExitCode)
+}
+
+// how is how the Turn ended, as Failure Reports and Chat say it: its
+// exit code or signal, subtype and terminal reason.
+func (t turnEnd) how() string {
+	s := t.exit()
+	if t.Result == nil {
+		return s + ", with no result message"
+	}
+	s += ", subtype " + t.Result.Subtype
+	if t.Result.TerminalReason != "" {
+		s += ", terminal_reason " + t.Result.TerminalReason
+	}
+	return s
 }
 
 // kind classifies the end, first match winning: stopped when its stop
