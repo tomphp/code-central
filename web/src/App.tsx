@@ -85,7 +85,7 @@ function Views({ now }: { now: () => Date }) {
         {view()}
         <ChatDock project={inbox.data?.projects.find((p) => p.key === scope.project)} />
         {popup.open && inbox.data && (
-          <FocusPopup mode="queue" api={api} now={now()} version={version} data={inbox.data} project={scope.project} onClose={popup.close} navigate={navigate} />
+          <FocusPopup mode="queue" now={now()} data={inbox.data} project={scope.project} onClose={popup.close} navigate={navigate} />
         )}
         </IdLinksContext.Provider>
       </NeedsMeProvider>
@@ -122,7 +122,7 @@ function Views({ now }: { now: () => Date }) {
         return (
           <>
             {banner}
-            <BoardView api={api} now={now()} version={version} data={inbox.data} loc={loc} navigate={navigate} onFocusPopupGone={popup.dismiss} />
+            <BoardView now={now()} data={inbox.data} loc={loc} navigate={navigate} onFocusPopupGone={popup.dismiss} />
           </>
         );
       case "project-options":

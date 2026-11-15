@@ -77,7 +77,6 @@ export function InboxDetail({
           />
         ) : spec ? (
           <SpecPane
-            api={api}
             spec={spec}
             archived={isArchived(spec.id)}
             now={now}
@@ -91,7 +90,6 @@ export function InboxDetail({
           nothing rather than Loading…. */}
       {ticketError || (loc.ticket && (!loc.requirement || shown)) ? (
         <TicketPane
-          api={api}
           project={projectOf(loc.ticket ?? "")}
           ticket={ticketError ? undefined : shown}
           error={ticketError}

@@ -4,15 +4,14 @@
 // and the Factory's own lines are set apart. It follows the newest event
 // while scrolled to the bottom.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Api } from "../api/api";
 import type { HeldSessionEvent } from "../api/types";
+import { useApi } from "../live";
 import { Markdown } from "../Markdown";
 
 // AT_BOTTOM is how close to the bottom, in pixels, still counts as at it.
 const AT_BOTTOM = 8;
 
 export interface LiveProps {
-  api: Api;
   project: string;
   id: string;
   claim: number;
@@ -22,7 +21,7 @@ export interface LiveProps {
   defaultOpen: boolean;
 }
 
-export function Live({ api, project, id, claim, defaultOpen }: LiveProps) {
+export function Live({ project, id, claim, defaultOpen }: LiveProps) {
   const [open, setOpen] = useState(defaultOpen);
   useEffect(() => {
     if (defaultOpen) setOpen(true);
@@ -30,7 +29,7 @@ export function Live({ api, project, id, claim, defaultOpen }: LiveProps) {
   return (
     <details aria-label="Live" className="live" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary>Live</summary>
-      {open && <TranscriptLog api={api} project={project} id={id} claim={claim} />}
+      {open && <TranscriptLog project={project} id={id} claim={claim} />}
     </details>
   );
 }
@@ -38,7 +37,8 @@ export function Live({ api, project, id, claim, defaultOpen }: LiveProps) {
 // TranscriptLog subscribes to the Claim's Transcript for as long as it is
 // mounted. The Transcript read says whether there is none, since the
 // stream can't say that nothing more is on its way.
-function TranscriptLog({ api, project, id, claim }: Omit<LiveProps, "defaultOpen">) {
+function TranscriptLog({ project, id, claim }: Omit<LiveProps, "defaultOpen">) {
+  const api = useApi();
   const [events, setEvents] = useState<HeldSessionEvent[]>([]);
   const [tail, setTail] = useState(false);
   const [noneHeld, setNoneHeld] = useState(false);

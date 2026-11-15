@@ -11,9 +11,11 @@ import type { PanelDef, PanelProps } from "../ActionPanel";
 import { PullRequestBadge } from "../../ticket/PullRequestBadge";
 import { useAct } from "../../ticket/useAct";
 import { Button } from "../../controls/Button";
+import { useApi } from "../../live";
 import "./accepted.css";
 
-export function AcceptedPanel({ api, project, ticket: t }: PanelProps) {
+export function AcceptedPanel({ project, ticket: t }: PanelProps) {
+  const api = useApi();
   const [commit, setCommit] = useState("");
   const { busy, error, run } = useAct();
   const canLand = commit.trim() !== "" && !busy;

@@ -5,10 +5,9 @@
 // as the Inbox's detail pane does. Choosing a Ticket, or a link to another
 // Spec, switches the popup. No Ticket is shown as selected in it.
 // SpecPopupView is the popup over a read handed in.
-import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import type { ApiError, ProjectRow, SpecDetail } from "../api/types";
-import { useSpec } from "../live";
+import { useApi, useSpec } from "../live";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { SpecPane } from "../spec/SpecPane";
@@ -17,9 +16,7 @@ import type { Link } from "../url";
 import { PopupShell } from "../controls/PopupShell";
 
 export interface SpecPopupProps {
-  api: Api;
   now: Date;
-  version: number;
   id: string;
   projects: ProjectRow[];
   onClose(): void;
@@ -29,17 +26,18 @@ export interface SpecPopupProps {
   specLink(id: string): Link;
 }
 
-export function SpecPopup({ version, ...props }: SpecPopupProps) {
-  const spec = useSpec(props.api, projectOf(props.id), props.id, version);
+export function SpecPopup(props: SpecPopupProps) {
+  const spec = useSpec(projectOf(props.id), props.id);
   return <SpecPopupView {...props} spec={spec} />;
 }
 
-export interface SpecPopupViewProps extends Omit<SpecPopupProps, "version"> {
+export interface SpecPopupViewProps extends SpecPopupProps {
   // spec is the read of the Spec: none yet while loading.
   spec: { data?: SpecDetail; error?: ApiError };
 }
 
-export function SpecPopupView({ api, now, id, projects, spec, onClose, open, specLink }: SpecPopupViewProps) {
+export function SpecPopupView({ now, id, projects, spec, onClose, open, specLink }: SpecPopupViewProps) {
+  const api = useApi();
   const project = projectOf(id);
   const archived = !!projects.find((p) => p.key === project)?.archived;
   const data = spec.data?.id === id ? spec.data : undefined;
@@ -56,7 +54,7 @@ export function SpecPopupView({ api, now, id, projects, spec, onClose, open, spe
       ) : data?.map ? (
         <MapPane spec={{ ...data, map: data.map }} archived={archived} now={now} select={open} specLink={specLink} written={open} />
       ) : data ? (
-        <SpecPane api={api} spec={data} archived={archived} now={now} select={open} />
+        <SpecPane spec={data} archived={archived} now={now} select={open} />
       ) : (
         <SpecPaneNote error={spec.error?.message} />
       )}

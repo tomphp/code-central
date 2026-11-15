@@ -10,6 +10,7 @@ import { newWorld, type World } from "../api/core/core";
 import { scenario } from "../api/scenario";
 import type { ReportedModels } from "../api/types";
 import { options, suggested } from "../testPickers";
+import { renderLive } from "../worldTesting";
 import { TicketDetail } from "./TicketDetail";
 
 const report = { effort_levels: [], aliases: [], model_flag: "", effort_flag: "" };
@@ -29,10 +30,10 @@ const reported = async (w: World): Promise<ReportedModels> => (await w.api.listP
 
 async function renderDetail(w: World, id: string) {
   const t = await w.api.getTicket("acme", id);
-  const r = render(<TicketDetail api={w.api} project="acme" ticket={t} reported={await reported(w)} now={w.now()} />);
+  const r = renderLive(w, <TicketDetail project="acme" ticket={t} reported={await reported(w)} now={w.now()} />);
   return {
     ...r,
-    rerender: async () => r.rerender(<TicketDetail api={w.api} project="acme" ticket={await w.api.getTicket("acme", id)} reported={await reported(w)} now={w.now()} />),
+    rerender: async () => r.rerender(<TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} reported={await reported(w)} now={w.now()} />),
   };
 }
 

@@ -7,7 +7,7 @@ import type { Api } from "../api/api";
 import type { NeedsMeRow, TicketView } from "../api/types";
 import { duration, shortCommit, ticketOf } from "../format";
 import { FocusBadge } from "./FocusBadge";
-import type { InboxData } from "../live";
+import { WithApi, type InboxData } from "../live";
 import { Markdown } from "../Markdown";
 import { panelFor } from "../panels/ActionPanel";
 import { QuestionAnswer } from "../panels/round/QuestionAnswer";
@@ -73,6 +73,7 @@ export function FocusItemView({
   );
 
   return (
+    <WithApi api={api}>
     <article
       aria-label="Focus Item"
       className={question ? "focus-item focus-item-question" : "focus-item"}
@@ -129,7 +130,6 @@ export function FocusItemView({
             <Markdown>{question.q.body}</Markdown>
           </div>
           <QuestionAnswer
-            api={api}
             project={row.project}
             ticket={row.id}
             q={question.q}
@@ -154,7 +154,6 @@ export function FocusItemView({
             Panel && (
               <Panel
                 key={ticket.state}
-                api={api}
                 project={row.project}
                 ticket={ticket}
                 now={now}
@@ -176,6 +175,7 @@ export function FocusItemView({
         </p>
       )}
     </article>
+    </WithApi>
   );
 }
 

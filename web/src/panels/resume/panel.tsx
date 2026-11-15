@@ -10,9 +10,10 @@ import { ago, duration } from "../../format";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { ResumeCommand, type Session } from "./ResumeCommand";
 import { Button } from "../../controls/Button";
+import { useApi } from "../../live";
 import "./resume.css";
 
-function ResumeRelease({ api, project, ticket: t, now }: PanelProps) {
+function ResumeRelease({ project, ticket: t, now }: PanelProps) {
   const answered = t.state === "Answered";
   const round = t.rounds?.at(-1);
   return (
@@ -26,7 +27,7 @@ function ResumeRelease({ api, project, ticket: t, now }: PanelProps) {
       </p>
       <ResumeCommand {...sessionOf(t)} />
       {answered && round && <Answers round={round} />}
-      <Release api={api} project={project} ticket={t} verb={answered ? "Release" : "Stop"} />
+      <Release project={project} ticket={t} verb={answered ? "Release" : "Stop"} />
     </section>
   );
 }
@@ -76,17 +77,8 @@ function Answers({ round }: { round: RoundView }) {
 
 // Release is the release action, labelled verb: "Release", or "Stop" on a
 // Silent or Long Claim. Either way it is the same release.
-function Release({
-  api,
-  project,
-  ticket: t,
-  verb,
-}: {
-  api: PanelProps["api"];
-  project: string;
-  ticket: TicketView;
-  verb: "Release" | "Stop";
-}) {
+function Release({ project, ticket: t, verb }: { project: string; ticket: TicketView; verb: "Release" | "Stop" }) {
+  const api = useApi();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);

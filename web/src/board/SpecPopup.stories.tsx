@@ -1,16 +1,14 @@
 // The Board's Spec popup, with the Spec pane and with the Requirement pane.
 // On the WASM Core: acme's Spec "Sign-in" with two Tickets, and a
-// Requirement standing in Build, read back and handed in as props. The api
-// is passed because the panes act.
+// Requirement standing in Build, read back and handed in as props. The panes
+// act through the story's <Live>.
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { Api } from "../api/api";
 import { storyWorld } from "../api/core/story";
 import { ApiError, type ProjectRow, type SpecDetail } from "../api/types";
 import type { Link } from "../url";
 import { SpecPopupView } from "./SpecPopup";
 
 interface World {
-  api: Api;
   now: Date;
   projects: ProjectRow[];
   spec: SpecDetail;
@@ -26,7 +24,6 @@ const meta = {
     await s.ticket("acme", { title: "Rate-limit the sign-in endpoint", spec, state: "In Progress" });
     const requirement = await s.requirement("acme", "Search across Tickets and Specs\n\nWith filters that remember what you last picked.");
     return {
-      api: w.api,
       now: w.now(),
       projects: await w.api.listProjects(),
       spec: await w.api.getSpec("acme", spec),
@@ -42,7 +39,7 @@ const nowhere = (id: string): Link => ({ href: `#${id}`, onClick: (e) => e.preve
 const popup = (pick: (w: World) => SpecDetail, read: (w: World) => { data?: SpecDetail; error?: ApiError }): Story => ({
   render: (_, { loaded }) => {
     const w = loaded.world as World;
-    return <SpecPopupView api={w.api} now={w.now} id={pick(w).id} projects={w.projects} spec={read(w)} onClose={() => {}} open={() => {}} specLink={nowhere} />;
+    return <SpecPopupView now={w.now} id={pick(w).id} projects={w.projects} spec={read(w)} onClose={() => {}} open={() => {}} specLink={nowhere} />;
   },
 });
 

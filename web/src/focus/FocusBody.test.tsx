@@ -1,7 +1,7 @@
 // Focus Mode's body's tests, through its props: its header, "N left", the
 // Focus Item on screen, All clear, only skipped and loading, in one Project
 // and in All Projects, with the data read from a WASM Core world.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newWorld, type World } from "../api/core/core";

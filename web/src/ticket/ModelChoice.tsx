@@ -3,13 +3,13 @@
 // comes from, and pickers that set or clear the Ticket's model and effort
 // Tags.
 import { useId, useState, type FormEvent } from "react";
-import type { Api } from "../api/api";
 import { EFFORT_LEVELS, type ChoiceValue, type ReportedModels, type TicketView } from "../api/types";
 import { CLAUDE_CODE_DEFAULT } from "../format";
 import { effortOptions, modelSuggestions, ModelSuggestions } from "../modelPickers";
 import { useAct } from "./useAct";
 import { Button } from "../controls/Button";
 import { Select } from "../controls/Select";
+import { useApi } from "../live";
 
 // NO_REPORT stands in for the Reported Models until the Project is read:
 // the seeded levels, nothing to suggest and no Factory flags.
@@ -32,7 +32,6 @@ function applied(v: ChoiceValue, flag: string): string {
 }
 
 export interface ModelChoiceProps {
-  api: Api;
   project: string;
   ticket: TicketView;
   // reported is the Project's Reported Models, once read.
@@ -44,7 +43,8 @@ export interface ModelChoiceProps {
 // Reported Models' aliases and model IDs, set with Set; the effort is one
 // of the valid levels, set on picking. Clearing either removes its Tag,
 // so the Ticket goes back to its Project's settings.
-export function ModelChoice({ api, project, ticket: t, reported = NO_REPORT }: ModelChoiceProps) {
+export function ModelChoice({ project, ticket: t, reported = NO_REPORT }: ModelChoiceProps) {
+  const api = useApi();
   const mc = t.model_choice;
   const id = useId();
   const { busy, error, run } = useAct();

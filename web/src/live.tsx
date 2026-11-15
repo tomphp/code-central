@@ -41,6 +41,15 @@ export function Live({ api, children }: { api: Api; children: ReactNode }) {
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>;
 }
 
+// WithApi gives the tree below it api in place of <Live>'s client, with the
+// live version unchanged, for a host that watches the writes its children
+// make (Focus Mode, which notes what the human acted on).
+export function WithApi({ api, children }: { api: Api; children: ReactNode }) {
+  const { version } = useLive("WithApi");
+  const value = useMemo(() => ({ api, version }), [api, version]);
+  return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>;
+}
+
 // useLive is what <Live> gives, or, outside it, a clear error naming hook.
 // An old-form call gives its own api and version, which win.
 function useLive(hook: string, given?: LiveValue): LiveValue {
