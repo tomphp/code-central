@@ -250,3 +250,268 @@ func TestNextFactoryWakeRejections(t *testing.T) {
 	_, err = f.core.NextFactoryWake(ctx, "nope", core.NextFactoryWakeInput{Factory: "cc", Host: "box"})
 	wantCode(t, err, core.UnknownProject, "")
 }
+
+// wakes says whether write, made with a next_factory_wake call open on
+// acme, woke it.
+func (f fixture) wakes(t *testing.T, write func(f fixture) error) bool {
+	t.Helper()
+	woken := f.wakeAsync("acme", "cc")
+	if err := write(f); err != nil {
+		t.Fatal(err)
+	}
+	return f.ended(woken).Woken
+}
+
+// A live Claim ended by a move its holder didn't make frees a slot the
+// Factory may be counting on, and stops a turn it should know about.
+func TestALiveClaimEndedByAMoveItsHolderDidNotMakeWakesTheFactory(t *testing.T) {
+	claimed := func(t *testing.T, f fixture) {
+		f.work(t, store.Ready)
+		f.claim(t, core.ClaimInput{})
+	}
+	for _, tc := range []struct {
+		name  string
+		setup func(t *testing.T, f fixture)
+		move  func(f fixture) error
+	}{
+		{"a move by hand to In Review", claimed, func(f fixture) error {
+			_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: store.InReview})
+			return err
+		}},
+		{"a move by hand to Draft", claimed, func(f fixture) error {
+			_, err := f.core.Move(human, "acme", core.MoveInput{Ticket: "2", ToState: store.Draft})
+			return err
+		}},
+		{"cancel", claimed, func(f fixture) error {
+			_, err := f.core.Cancel(human, "acme", core.CancelInput{Ticket: "2"})
+			return err
+		}},
+		{"release while Answered", func(t *testing.T, f fixture) {
+			f.asking(t, qDB)
+			if _, err := f.core.Answer(human, "acme", core.AnswerInput{Ticket: "2", Question: 1, Text: "SQLite"}); err != nil {
+				t.Fatal(err)
+			}
+		}, func(f fixture) error {
+			_, err := f.core.Release(human, "acme", core.ReleaseInput{Ticket: "2"})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			tc.setup(t, f)
+			if !f.wakes(t, tc.move) {
+				t.Fatal("next_factory_wake ended empty, want woken")
+			}
+		})
+	}
+}
+
+// The holder's own report_failure ends its Claim into Failed, which the
+// Factory's poll doesn't act on.
+func TestTheHoldersOwnReportFailureDoesNotWakeTheFactory(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready)
+	f.claim(t, core.ClaimInput{})
+	if f.wakes(t, func(f fixture) error {
+		_, err := f.core.ReportFailure(ctx, "acme", core.ReportFailureInput{Ticket: "2", ClaimID: "claim-1",
+			WhatBroke: "The build.", Why: "A missing tool.", WhatToFix: "Install it.", WhereWorkStands: "Nothing done."})
+		return err
+	}) {
+		t.Fatal("next_factory_wake woken, want empty")
+	}
+}
+
+func TestRemovingABlockerWakesTheFactory(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready, store.Ready)
+	if _, err := f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "3", Blocker: "2"}); err != nil {
+		t.Fatal(err)
+	}
+	if !f.wakes(t, func(f fixture) error {
+		_, err := f.core.RemoveBlocker(ctx, "acme", core.BlockerInput{Ticket: "3", Blocker: "2"})
+		return err
+	}) {
+		t.Fatal("next_factory_wake ended empty, want woken")
+	}
+}
+
+func TestAddingABlockerDoesNotWakeTheFactory(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready, store.Ready)
+	if f.wakes(t, func(f fixture) error {
+		_, err := f.core.AddBlocker(ctx, "acme", core.BlockerInput{Ticket: "3", Blocker: "2"})
+		return err
+	}) {
+		t.Fatal("next_factory_wake woken, want empty")
+	}
+}
+
+// Each Project setting the Factory reads wakes it when it changes.
+func TestChangingAProjectSettingTheFactoryReadsWakesIt(t *testing.T) {
+	base := "trunk"
+	for name, change := range map[string]func(f fixture) error{
+		"the base": func(f fixture) error {
+			_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingMerge, Base: &base})
+			return err
+		},
+		"Landing": func(f fixture) error {
+			_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingBranch})
+			return err
+		},
+		"CI": func(f fixture) error {
+			_, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"})
+			return err
+		},
+		"Models": func(f fixture) error {
+			_, err := f.core.SetModels(human, "acme", core.SetModelsInput{Default: core.ModelRowView{Model: "opus"}})
+			return err
+		},
+		"Stage Guides' subagent exploration": func(f fixture) error {
+			_, err := f.core.SetSubagentExploration(human, "acme", core.SetSubagentExplorationInput{On: false})
+			return err
+		},
+		"Stage Guides' Model Assignment": func(f fixture) error {
+			_, err := f.core.SetModelAssignment(human, "acme", core.SetModelAssignmentInput{On: true})
+			return err
+		},
+		"Auto-accept": func(f fixture) error {
+			_, err := f.core.SetAutoAccept(human, "acme", core.SetAutoAcceptInput{Kinds: map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true}})
+			return err
+		},
+		"Archived": func(f fixture) error {
+			_, err := f.core.ArchiveProject(human, "acme")
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			f.project(t, "acme")
+			if !f.wakes(t, change) {
+				t.Fatal("next_factory_wake ended empty, want woken")
+			}
+		})
+	}
+}
+
+func TestUnarchivingAProjectWakesTheFactory(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	f.archive(t, "acme")
+	if !f.wakes(t, func(f fixture) error {
+		_, err := f.core.UnarchiveProject(human, "acme")
+		return err
+	}) {
+		t.Fatal("next_factory_wake ended empty, want woken")
+	}
+}
+
+func TestAnImportWakesTheFactory(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	if !f.wakes(t, func(f fixture) error {
+		_, err := f.core.Import(human, "acme", core.ImportInput{Payload: core.ImportPayload{
+			Specs:   []core.ImportSpec{{Source: ".scratch/login/", Title: "Login"}},
+			Tickets: []core.ImportTicket{{Source: ".scratch/login/issues/01-form.md", Spec: ".scratch/login/", Title: "Form", State: store.Draft}},
+		}})
+		return err
+	}) {
+		t.Fatal("next_factory_wake ended empty, want woken")
+	}
+}
+
+// guidedMap is a Map at acme-1 with its guided Tag set to guided.
+func (f fixture) guidedMap(t *testing.T, guided string) {
+	t.Helper()
+	f.project(t, "acme")
+	if _, err := f.core.SubmitMap(ctx, "acme", core.SubmitMapInput{Text: "Offline mode"}); err != nil {
+		t.Fatal(err)
+	}
+	f.setGuided(t, guided)
+}
+
+func (f fixture) setGuided(t *testing.T, guided string) {
+	t.Helper()
+	if _, err := f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: "1", Tags: map[string]string{core.GuidedTag: guided}}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTurningAMapsGuidedTagOnWakesTheFactory(t *testing.T) {
+	f := newFixture(t)
+	f.guidedMap(t, "off")
+	if !f.wakes(t, func(f fixture) error {
+		_, err := f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: "1", Tags: map[string]string{core.GuidedTag: core.GuidedOn}})
+		return err
+	}) {
+		t.Fatal("next_factory_wake ended empty, want woken")
+	}
+}
+
+func TestTurningAMapsGuidedTagOffOrRetaggingAGuidedMapDoesNotWakeTheFactory(t *testing.T) {
+	for name, tags := range map[string]map[string]string{
+		"off":     {core.GuidedTag: "off"},
+		"another": {core.GuidedTag: core.GuidedOn, "type": "map"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			f.guidedMap(t, core.GuidedOn)
+			if f.wakes(t, func(f fixture) error {
+				_, err := f.core.SetTags(ctx, "acme", core.SetTagsInput{Target: "1", Tags: tags})
+				return err
+			}) {
+				t.Fatal("next_factory_wake woken, want empty")
+			}
+		})
+	}
+}
+
+// The Factory's own reports, UI-only settings, Usage, CI Runs, Chat and
+// Options aren't changes its poll acts on.
+func TestProjectWritesTheFactorysPollDoesNotActOnLeaveItAsleep(t *testing.T) {
+	for name, write := range map[string]func(f fixture) error{
+		"report_models": func(f fixture) error {
+			_, err := f.core.ReportModels(ctx, "acme", core.ReportModelsInput{EffortLevels: []string{"low"}, Aliases: []string{"opus"}})
+			return err
+		},
+		"report_push_remote": func(f fixture) error {
+			_, err := f.core.ReportPushRemote(ctx, "acme", core.ReportPushRemoteInput{URL: "git@github.com:acme/web.git"})
+			return err
+		},
+		"Focus Kinds": func(f fixture) error {
+			_, err := f.core.SetFocusKinds(human, "acme", core.SetFocusKindsInput{Off: []core.NeedsMeReason{core.ReasonAnswered}})
+			return err
+		},
+		"Usage": func(f fixture) error {
+			f.core.PostUsage(ctx, "s1", []core.UsageResponse{{Kind: "implementation", Model: "claude-opus-5-5"}})
+			return nil
+		},
+		"CI Runs": func(f fixture) error {
+			_, err := f.core.ReportCIRuns(ctx, "acme", core.ReportCIRunsInput{Runs: []core.CIRunView{{ID: 1, Attempt: 1, Workflow: "ci.yml", Commit: "abc123", Status: store.CIQueued, Ticket: "acme-2"}}})
+			return err
+		},
+		"Chat": func(f fixture) error {
+			_, err := f.core.SendChatMessage(human, "acme", core.SendChatMessageInput{Text: "What is acme?"})
+			return err
+		},
+		"Options": func(f fixture) error {
+			focus := store.FocusActivityDashboard
+			_, err := f.core.SetOptions(human, core.SetOptionsInput{FocusClear: &focus})
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			f.work(t, store.Ready)
+			f.claim(t, core.ClaimInput{SessionID: "s1"})
+			if _, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Repository: "acme/web"}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.core.ReportHeartbeat(ctx, "acme", core.ReportHeartbeatInput{Factory: "cc", Host: "box", State: core.HeartbeatOnline, IntervalSeconds: 10, Chat: true}); err != nil {
+				t.Fatal(err)
+			}
+			if f.wakes(t, write) {
+				t.Fatal("next_factory_wake woken, want empty")
+			}
+		})
+	}
+}
