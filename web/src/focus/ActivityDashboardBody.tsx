@@ -46,19 +46,24 @@ export interface ActivityDashboardBodyProps {
   // ciRuns is the read of the running CI Runs in scope, none without CI
   // Tracking on in scope.
   ciRuns?: CIRunsRead;
-  // loc's Project is the one in scope; none means All Projects.
+  // loc is the address, which the links keep; its Project is the one in
+  // scope unless project says otherwise.
   loc: UiLocation;
+  // project is the Project in scope, the Sole Project included; none means
+  // All Projects. Left out, loc's.
+  project?: string;
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function ActivityDashboardBody({ now, data, changes, ciRuns, loc, navigate }: ActivityDashboardBodyProps) {
+export function ActivityDashboardBody({ now, data, changes, ciRuns, loc, project: scoped, navigate }: ActivityDashboardBodyProps) {
+  const project = scoped ?? loc.project;
   // shown is whether the body has shown yet: an entry that mounts after
   // that has joined the list, and pulses once.
   const [shown, setShown] = useState(false);
   useEffect(() => setShown(true), []);
   const archived = new Set(data.projects.filter((p) => p.archived).map((p) => p.key));
   const ciRunningCount = ciRuns?.data?.runs.length;
-  const tickets = data.tickets.filter((t) => (!loc.project || t.project === loc.project) && !archived.has(t.project));
+  const tickets = data.tickets.filter((t) => (!project || t.project === project) && !archived.has(t.project));
   // Every Ticket in the State counts, Stage and blocked Tickets included,
   // so the In Progress count is the list's length.
   const inState = (s: State) => tickets.filter((t) => t.state === s);
@@ -86,6 +91,7 @@ export function ActivityDashboardBody({ now, data, changes, ciRuns, loc, navigat
               changes={changes[t.id] ?? 0}
               joined={shown}
               loc={loc}
+              project={project}
               navigate={navigate}
             />
           ))}
@@ -93,13 +99,13 @@ export function ActivityDashboardBody({ now, data, changes, ciRuns, loc, navigat
       ) : (
         <Empty>Nothing in progress.</Empty>
       )}
-      {ciRuns && <CIRunningList now={now} data={data} runs={ciRuns} loc={loc} navigate={navigate} />}
+      {ciRuns && <CIRunningList now={now} data={data} runs={ciRuns} loc={loc} project={project} navigate={navigate} />}
     </section>
   );
 }
 
 // EntryProps is what the lists and their entries read from the body's props.
-type EntryProps = Pick<ActivityDashboardBodyProps, "now" | "data" | "loc" | "navigate">;
+type EntryProps = Pick<ActivityDashboardBodyProps, "now" | "data" | "loc" | "navigate"> & { project?: string };
 
 // StateCount is one State's block: its count in big type, its State name under it.
 // It pulses when the count differs from the one it last showed.
@@ -137,7 +143,7 @@ interface CIRunningListProps extends EntryProps {
   runs: CIRunsRead;
 }
 
-function CIRunningList({ now, data, runs, loc, navigate }: CIRunningListProps) {
+function CIRunningList({ now, data, runs, loc, project, navigate }: CIRunningListProps) {
   const first = useRef<Set<string>>(undefined);
   if (runs.data && !first.current) first.current = new Set(runs.data.runs.map(runKey));
   if (runs.error) {
@@ -157,7 +163,7 @@ function CIRunningList({ now, data, runs, loc, navigate }: CIRunningListProps) {
           provider={overview.projects.find((p) => p.project === r.project)?.provider}
           now={now}
           joined={!first.current?.has(runKey(r))}
-          projectName={loc.project ? undefined : nameOf(data, r.project)}
+          projectName={project ? undefined : nameOf(data, r.project)}
           to={inboxFor(data, r.project, r.ticket!, loc)}
           navigate={navigate}
         />
@@ -189,7 +195,7 @@ interface InProgressEntryProps extends EntryProps {
   joined: boolean;
 }
 
-function InProgressEntry({ now, data, ticket: t, changes, joined, loc, navigate }: InProgressEntryProps) {
+function InProgressEntry({ now, data, ticket: t, changes, joined, loc, project, navigate }: InProgressEntryProps) {
   const pulse = usePulse("dashboard-entry", changes, joined);
   const stage = stageOf(t);
   const requirement = stage && data.requirements.find((s) => s.id === t.spec);
@@ -201,7 +207,7 @@ function InProgressEntry({ now, data, ticket: t, changes, joined, loc, navigate 
           <span className="tid">{t.id}</span>
           <span className="dashboard-entry-title">{t.title}</span>
           <CIBadge result={t.ci_result} />
-          {!loc.project && <span className="muted">{nameOf(data, t.project)}</span>}
+          {!project && <span className="muted">{nameOf(data, t.project)}</span>}
         </span>
         {stage && (
           <span className="dashboard-entry-detail">

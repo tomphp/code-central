@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "../api/api";
 import { ProjectPicker } from "../controls/ProjectPicker";
+import { useProjectScope } from "../projectScope";
 import { ViewHeader } from "../controls/ViewHeader";
 import { sessionKey, USAGE_DAYS, USAGE_KEPT_DAYS, type ProjectRow, type UsageDays, type SessionUsageFilter, type SessionUsageResponse } from "../api/types";
 import { count } from "../format";
@@ -34,10 +35,11 @@ export interface UsageViewProps {
 }
 
 export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps) {
+  const { project, sole, resolved } = useProjectScope();
   const days = loc.days ?? USAGE_DAYS[0];
-  const usage = useFetch(() => api.usage({ project: loc.project, days }), [api, loc.project, days]);
+  const usage = useFetch(resolved ? () => api.usage({ project, days }) : null, [api, resolved, project, days]);
   const [sort, setSort] = useState(DEFAULT_SORT);
-  const scopeName = loc.project ? projectName(projects, loc.project) : "All Projects";
+  const scopeName = project ? projectName(projects, project) : "All Projects";
 
   return (
     <main aria-label="Usage" className="usage view-shell">
@@ -45,7 +47,7 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
         title="Usage"
         left={
           <>
-            <ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />
+            <ProjectPicker projects={projects} value={project} withoutAll={sole} onChange={(project) => navigate({ project })} />
             <label>
               <span className="view-picker-label">Range</span>
               <Select

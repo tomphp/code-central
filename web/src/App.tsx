@@ -12,6 +12,7 @@ import { NeedsMeProvider } from "./needsme/context";
 import { needsMeOf } from "./needsme/model";
 import { defaultTicket, progress } from "./requirement/progress";
 import { useNeedsMeTitle } from "./title";
+import { projectScopeOf, ProjectScopeContext } from "./projectScope";
 import { useUiLocation } from "./url";
 import { UsageView } from "./usage/UsageView";
 import { CIView } from "./ci/CIView";
@@ -48,21 +49,24 @@ export function App({ api, now = () => new Date() }: AppProps) {
   // showing, scoped to its Project, from the same read model's Focus
   // Items. Until the Options first load Focus Pop-up is off; a failed read
   // later keeps the last one, so an open popup isn't lost to it.
+  const scope = projectScopeOf(loc.project, inbox.data?.projects, !!inbox.error);
   const popup = usePopupTrigger({
     option: options.data?.focus_popup ?? "off",
     view: loc.view,
-    project: loc.project,
+    project: scope.project,
     needsMe: inbox.data && needsMe,
   });
 
   return (
-    <NeedsMeProvider value={needsMe}>
-      {view()}
-      <ChatDock api={api} project={inbox.data?.projects.find((p) => p.key === loc.project)} version={version} />
-      {popup.open && inbox.data && (
-        <FocusPopup mode="queue" api={api} now={now()} version={version} data={inbox.data} project={loc.project} onClose={popup.close} navigate={navigate} />
-      )}
-    </NeedsMeProvider>
+    <ProjectScopeContext.Provider value={scope}>
+      <NeedsMeProvider value={needsMe}>
+        {view()}
+        <ChatDock api={api} project={inbox.data?.projects.find((p) => p.key === scope.project)} version={version} />
+        {popup.open && inbox.data && (
+          <FocusPopup mode="queue" api={api} now={now()} version={version} data={inbox.data} project={scope.project} onClose={popup.close} navigate={navigate} />
+        )}
+      </NeedsMeProvider>
+    </ProjectScopeContext.Provider>
   );
 
   // Each view is a layout over the same live data, the Board included;
@@ -102,7 +106,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
         return (
           <>
             {banner}
-            <ProjectOptions api={api} now={now()} projects={inbox.data?.projects} project={loc.project} navigate={navigate} />
+            <ProjectOptions api={api} now={now()} projects={inbox.data?.projects} project={scope.project} navigate={navigate} />
           </>
         );
       case "inbox":

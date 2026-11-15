@@ -37,13 +37,18 @@ export interface FocusBodyProps {
   // dashboard shows in place of All clear, when the human chose the
   // Activity Dashboard.
   dashboard?: ReactNode;
-  // loc's Project is the one in scope; none means All Projects.
+  // loc is the address, which links keep; its Project is the one in scope
+  // unless project says otherwise.
   loc: UiLocation;
+  // project is the Project in scope, the Sole Project included; none means
+  // All Projects. Left out, loc's.
+  project?: string;
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function FocusBody({ api, now, data, session, dashboard, loc, navigate }: FocusBodyProps) {
-  const project = data?.projects.find((p) => p.key === loc.project);
+export function FocusBody({ api, now, data, session, dashboard, loc, project: scoped, navigate }: FocusBodyProps) {
+  const scope = scoped ?? loc.project;
+  const project = data?.projects.find((p) => p.key === scope);
   const { item } = session;
 
   return (
@@ -51,9 +56,9 @@ export function FocusBody({ api, now, data, session, dashboard, loc, navigate }:
       <ViewHeader
         left={
           <>
-            {loc.project && (
+            {scope && (
               <span className="focus-project">
-                <ProjectName name={project?.display_name ?? loc.project} projectKey={loc.project} />
+                <ProjectName name={project?.display_name ?? scope} projectKey={scope} />
               </span>
             )}
             {data && !session.clear && <Count n={session.remaining} of="left" />}
@@ -68,7 +73,7 @@ export function FocusBody({ api, now, data, session, dashboard, loc, navigate }:
                 variant="plain"
                 api={api}
                 projects={data?.projects.filter((p) => !p.archived) ?? []}
-                project={loc.project}
+                project={scope}
                 onSubmitted={({ kind }) => session.say(`${kind} added`)}
               />
             </div>

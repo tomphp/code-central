@@ -22,6 +22,7 @@ async function silentWorld(session_id?: string, over: { working_dir?: string; re
   const w = await newWorld();
   const s = scenario(w);
   await s.project("acme", "Acme");
+  await s.project("spare", "Spare"); // a second active Project, so All Projects stays offered
   const id = await s.ticket("acme", { title: "Wire the API" });
   await claimAs(s, id, { session_id, ...over });
   w.advance(45 * MINUTE);
@@ -34,6 +35,7 @@ async function longWorld() {
   const w = await newWorld();
   const s = scenario(w);
   await s.project("acme", "Acme");
+  await s.project("spare", "Spare"); // a second active Project, so All Projects stays offered
   const id = await s.ticket("acme", { title: "Wire the API" });
   await claimAs(s, id, { session_id: "sess-42" });
   w.advance(73 * MINUTE);
@@ -49,6 +51,7 @@ async function answeredWorld(claimSession = true) {
   const w = await newWorld();
   const s = scenario(w);
   await s.project("acme", "Acme");
+  await s.project("spare", "Spare"); // a second active Project, so All Projects stays offered
   const id = await s.ticket("acme", { title: "Pick a colour" });
   await s.claim("acme", id, "sess-round");
   await s.askRound("acme", id, [{ title: "Old question", body: "Asked before" }]);

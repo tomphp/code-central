@@ -35,6 +35,7 @@ import { TicketPopup } from "./TicketPopup";
 import { Button } from "../controls/Button";
 import { Count } from "../controls/Count";
 import { Loading } from "../controls/Empty";
+import { useProjectScope } from "../projectScope";
 import "./board.css";
 
 export interface BoardViewProps {
@@ -64,11 +65,12 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
   // address's, else this browser's last pick.
   const grouping = loc.group ?? storedGroup();
   const model = useNeedsMe();
-  const tickets = newestFirst(model.tickets(loc.project));
+  const { project: scope, sole } = useProjectScope();
+  const tickets = newestFirst(model.tickets(scope));
   const specs = new Map((data?.specs ?? []).map((s) => [s.id, s]));
   // While the Needs Me column shows, a Ticket that needs the human is
   // there, in Needs Me's order, and in no State's column.
-  const needing = needsMe ? model.needing(loc.project) : [];
+  const needing = needsMe ? model.needing(scope) : [];
   const inColumn = new Map<Col, ProjectTicket[]>(
     shown.map((c) => [
       c,
@@ -96,11 +98,11 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
     });
 
   return (
-    <OneProject.Provider value={!!loc.project}>
+    <OneProject.Provider value={!!scope}>
       <main aria-label="Board" className="board">
         <ViewHeader
           title="Board"
-          left={<ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />}
+          left={<ProjectPicker projects={projects} value={scope} withoutAll={sole} onChange={(project) => navigate({ project })} />}
           right={
             <>
               <ToggleGroup
@@ -133,7 +135,7 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
                   variant="plain"
                   api={api}
                   projects={projects.filter((p) => !p.archived)}
-                  project={loc.project}
+                  project={scope}
                   onSubmitted={(r) =>
                     navigate(
                       r.kind === "Small Change"
