@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { CIRunEntry } from "./CIRunEntry";
 import { NOW, finished, running } from "./ciFixtures";
-import "../focus/focus.css";
 
 const meta = { title: "CI/CIRunEntry" } satisfies Meta;
 export default meta;
