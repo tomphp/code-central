@@ -54,6 +54,46 @@ for p in ['a.go', 'b.go']:
 EOF"""
         self.assertFalse(edits_one_file(cmd))
 
+    def test_perl_in_place_one_file(self):
+        self.assertTrue(edits_one_file("perl -0pi -e 's/foo/bar/' web/src/App.tsx"))
+        self.assertTrue(edits_one_file("perl -pi -e 's/foo/bar/' internal/x.go"))
+        self.assertTrue(edits_one_file("perl -i.bak -pe 's/foo/bar/' README.md"))
+        self.assertTrue(edits_one_file("grep -n foo a.go b.go && perl -i -pe 's/foo/bar/' c.go"))
+
+    def test_perl_in_place_several_files(self):
+        self.assertFalse(edits_one_file("perl -pi -e 's/foo/bar/' a.go b.go"))
+        self.assertFalse(edits_one_file("perl -pi -e 's/foo/bar/' *.go"))
+        self.assertFalse(edits_one_file("find . -name '*.go' | xargs perl -pi -e 's/x/y/'"))
+        self.assertFalse(edits_one_file("for f in a.go b.go; do perl -pi -e 's/x/y/' $f; done"))
+
+    def test_perl_without_in_place_passes(self):
+        self.assertFalse(edits_one_file("perl -ne 'print if /foo/' a.go"))
+        self.assertFalse(edits_one_file("perl -pe 's/foo/bar/' a.go > /tmp/out"))
+
+    def test_perl_script_rewriting_one_path(self):
+        cmd = """perl <<'EOF'
+my $p = 'GLOSSARY.md';
+open(my $in, '<', $p) or die;
+local $/; my $s = <$in>; close $in;
+$s =~ s/Implement/Build/g;
+open(my $out, '>', $p) or die;
+print $out $s;
+EOF"""
+        self.assertTrue(edits_one_file(cmd))
+        cmd = """cat > /tmp/docedit.pl <<'EOF'
+open(F, "<$file"); my $s = join('', <F>); close F;
+open(F, ">$file"); print F $s;
+EOF
+perl /tmp/docedit.pl"""
+        self.assertTrue(edits_one_file(cmd))
+
+    def test_perl_script_reading_one_path_and_writing_another_passes(self):
+        cmd = """perl <<'EOF'
+open(my $in, '<', $a) or die;
+open(my $out, '>', $b) or die;
+EOF"""
+        self.assertFalse(edits_one_file(cmd))
+
     def test_read_only_commands_pass(self):
         self.assertFalse(edits_one_file("go test ./..."))
         self.assertFalse(edits_one_file("python3 - <<'EOF'\nprint(open('a.md').read().replace('a','b'))\nEOF"))
