@@ -158,7 +158,7 @@ func (f *factory) resumeCutOff(ctx context.Context, c claim) bool {
 		return false
 	}
 	f.claimf(c, "%s resumed %s after being cut off", c.Ticket, f.about(c))
-	f.startTurn(ctx, c, f.worktree(c.Ticket), mc, true, cutOffPrompt(c))
+	f.startTurn(ctx, c, turnInput{Dir: f.worktree(c.Ticket), Resume: true, Choice: mc, Prompt: cutOffPrompt(c)})
 	return true
 }
 

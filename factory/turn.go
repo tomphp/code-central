@@ -11,15 +11,28 @@ import (
 	"github.com/tomoram/code-central/core"
 )
 
-// startTurn runs a Turn of claude for c in dir, taking a slot until it
-// ends: it starts c's session, or resumes it, with mc and sends prompt.
-// mc is recorded on the Claim just before claude starts. An effort
-// claude doesn't accept fails the Claim instead, and a Turn that never
-// ran gives its slot straight back.
-func (f *factory) startTurn(ctx context.Context, c claim, dir string, mc turnChoice, resume bool, prompt string) {
+// startTurn runs c's Turn in, which says where it runs, whether it
+// starts c's session or resumes it, its Model Choice and its prompt,
+// taking a slot until it ends. The Model Choice is recorded on the Claim
+// just before claude starts. An effort claude doesn't accept fails the
+// Claim instead, and a Turn that never ran gives its slot back with no
+// "turn ended" line.
+func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
+	in.Session = c.SessionID
+	in.AllowedTools, in.SystemPrompt = c.AllowedTools, c.SystemPrompt
+	in.UsageKind = f.claimInfo(c).stage
+	in.OnEvent = func(e core.SessionEvent) { f.events.add(c.SessionID, e) }
+	in.OnUsage = func(r core.UsageResponse) { f.usage.add(c.SessionID, r) }
+	in.Linef = func(format string, args ...any) {
+		f.claimf(c, "%s: %s", c.Ticket, fmt.Sprintf(format, args...))
+	}
+	in.Echo = func(toolCall string) { f.printf("%s: %s", c.Ticket, toolCall) }
+	// Before the Turn starts, which may end the Claim before a report
+	// after it could land.
+	in.BeforeStart = func() { f.reportChoice(ctx, c, in.Choice) }
 	// Not derived from ctx: a Claim's Turn is stopped only by stopTurn.
 	stop, cancel := context.WithCancel(context.Background())
-	t := &turn{claim: c, dir: dir, choice: mc, started: f.e.Now(), cancel: cancel, done: make(chan struct{})}
+	t := &turn{claim: c, dir: in.Dir, choice: in.Choice, started: f.e.Now(), cancel: cancel, done: make(chan struct{})}
 	f.mu.Lock()
 	f.turns[c.ClaimID] = t
 	f.mu.Unlock()
@@ -28,30 +41,14 @@ func (f *factory) startTurn(ctx context.Context, c claim, dir string, mc turnCho
 		defer f.turnsDone.Done()
 		defer close(t.done)
 		defer cancel()
-		out := f.runner.run(stop, turnInput{
-			Dir:          dir,
-			Session:      c.SessionID,
-			Resume:       resume,
-			Choice:       mc,
-			AllowedTools: c.AllowedTools,
-			SystemPrompt: c.SystemPrompt,
-			Prompt:       prompt,
-			UsageKind:    f.claimInfo(c).stage,
-			OnEvent:      func(e core.SessionEvent) { f.events.add(c.SessionID, e) },
-			OnUsage:      func(r core.UsageResponse) { f.usage.add(c.SessionID, r) },
-			Linef: func(format string, args ...any) {
-				f.claimf(c, "%s: %s", c.Ticket, fmt.Sprintf(format, args...))
-			},
-			Echo: func(toolCall string) { f.printf("%s: %s", c.Ticket, toolCall) },
-			// Before the Turn starts, which may end the Claim before a
-			// report after it could land.
-			BeforeStart: func() { f.reportChoice(ctx, c, mc) },
-		})
+		out := f.runner.run(stop, in)
 		if out.Kind == turnEffortRejected || out.StartErr != nil {
-			f.freeSlot(c)
+			// The slot is held while the report is filed, so no poll acts
+			// on the Claim meanwhile.
 			if out.Kind == turnEffortRejected {
-				f.reportRejectedEffort(ctx, c, dir, mc, out.Levels)
+				f.reportRejectedEffort(ctx, c, in.Dir, in.Choice, out.Levels)
 			}
+			f.freeSlot(c)
 			f.forgetEnded(c)
 			return
 		}
