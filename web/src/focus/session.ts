@@ -291,7 +291,7 @@ export function itemsOf(row: NeedsMeRow, ticket?: TicketView): FocusItem[] {
   if (row.reason !== "needs_answer") return [{ key: keyOf(`${row.id || row.project} ${row.reason}${row.ci_item ? ` ${row.ci_item.commit}` : ""}`), row }];
   const roundKey = roundKeyOf(row);
   if (ticket?.id !== row.id) return [{ key: roundKey, row, roundKey }];
-  const round = row.round ? ticket.rounds.find((r) => r.number === row.round?.number) : ticket.rounds.at(-1);
+  const round = row.round ? ticket.rounds?.find((r) => r.number === row.round?.number) : ticket.rounds?.at(-1);
   if (!round) return [];
   // A read Ticket with no open Question left in the Round has none to
   // show, though Needs Me may not have caught up yet.

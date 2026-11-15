@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -121,7 +122,7 @@ type Level int
 
 func generate(t *testing.T, roots []reflect.Type, enums ...Enum) string {
 	t.Helper()
-	out, err := Generate(roots, enums)
+	out, err := Generate(roots, enums, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -139,7 +140,7 @@ func contains(t *testing.T, out string, want ...string) {
 
 func fails(t *testing.T, roots []reflect.Type, enums []Enum, want ...string) {
 	t.Helper()
-	out, err := Generate(roots, enums)
+	out, err := Generate(roots, enums, nil)
 	if err == nil {
 		t.Fatalf("Generate succeeded, want an error; output:\n%s", out)
 	}
@@ -255,6 +256,32 @@ func TestEveryFailureIsReportedAtOnce(t *testing.T) {
 		"Palette.Shade", "HasCustom.Custom", "Medium")
 }
 
+func TestAFieldListIsAConstArrayOfJSONNamesInFieldOrder(t *testing.T) {
+	out, err := Generate(nil, nil, []Fields{fieldsOf[Row]("RowFields"), fieldsOf[Named]("NamedFields")})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	contains(t, out,
+		"// ROW_FIELDS are Row's JSON names in field order, the order\n"+
+			"// a write's Acknowledgement lists them in changed.\n"+
+			"export const ROW_FIELDS = [\n"+
+			"  \"id\",\n"+
+			"  \"note\",\n"+
+			"  \"count\",\n"+
+			"] as const;\n",
+		"export const NAMED_FIELDS = [\n"+
+			"  \"tagged\",\n"+
+			"  \"Untagged\",\n"+
+			"  \"level\",\n"+
+			"  \"raw\",\n"+
+			"  \"bytes\",\n"+
+			"  \"pair\",\n"+
+			"] as const;\n",
+		"export interface Row extends Base, Other {\n",
+		"export interface Named {\n",
+	)
+}
+
 func TestDocCommentsAreCarriedOver(t *testing.T) {
 	out := generate(t, []reflect.Type{reflect.TypeFor[Named](), reflect.TypeFor[Row]()})
 	contains(t, out,
@@ -303,11 +330,25 @@ func TestTwoRunsAreByteIdentical(t *testing.T) {
 	}
 }
 
+// wireGen is the committed file make wiretypes writes, from this
+// package's directory.
+const wireGen = "../../web/src/api/wire.gen.ts"
+
 // The real roots reach only typed strings with a value list registered
 // in roots.go, and every list has its type's declared constants: Go owns
-// every enum the UI reaches.
-func TestTheRealRootsGenerate(t *testing.T) {
-	if _, err := Generate(roots, enums); err != nil {
+// every enum the UI reaches. The committed wire.gen.ts is what they
+// generate, so a Go view can't change without the UI's types changing
+// with it (ADR 0042).
+func TestTheCommittedWireTypesAreCurrent(t *testing.T) {
+	want, err := Generate(roots, enums, fields)
+	if err != nil {
 		t.Fatalf("make wiretypes would fail; give each typed string a value list and register it in roots.go:\n%v", err)
+	}
+	got, err := os.ReadFile(wireGen)
+	if err != nil {
+		t.Fatalf("%v; run `make wiretypes` to write it", err)
+	}
+	if string(got) != want {
+		t.Fatal("web/src/api/wire.gen.ts isn't what the Go types generate: run `make wiretypes` and commit the result.")
 	}
 }

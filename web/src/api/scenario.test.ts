@@ -61,7 +61,7 @@ describe("the scenario builder", () => {
     await s.answerRound("acme", id, ["M"]);
     const t = await w.api.getTicket("acme", id);
     expect(t.state).toBe("Answered");
-    expect(t.rounds[1].questions.map((q) => [q.number, q.answer])).toEqual([
+    expect(t.rounds![1].questions.map((q) => [q.number, q.answer])).toEqual([
       [2, "M"],
       [3, "Sans"],
     ]);

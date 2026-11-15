@@ -1,104 +1,76 @@
-// The wire types: the JSON the HTTP API returns, mirroring core's view
-// types (core/*.go, snake_case tags). Times are RFC 3339 strings.
+// The wire types: the JSON the HTTP API returns. Every response shape is
+// generated from the Core's Go view types into wire.gen.ts by `make
+// wiretypes` (ADR 0042) and re-exported here, the UI's one place to
+// import them from. This file keeps only what isn't a response shape:
+// request bodies and filters, types the UI derives from the generated
+// ones, and UI-only constants.
 
-export const STATES = [
-  "Draft",
-  "Ready",
-  "In Progress",
-  "Needs Answer",
-  "Answered",
-  "Failed",
-  "In Review",
-  "Accepted",
-  "Done",
-  "Cancelled",
-] as const;
-export type State = (typeof STATES)[number];
+import {
+  FOCUS_CLEARS,
+  FOCUS_POPUPS,
+  type Acknowledgement,
+  type BaseDivergedView,
+  type BaseMissingView,
+  type ChatMessageView,
+  type CIItemView,
+  type CIProvider,
+  type CIRuleView,
+  type CIUnavailableView,
+  type CIView,
+  type ConversationView,
+  type FactoryStatusView,
+  type GitHubIssuesView,
+  type HeldSessionEvent,
+  type LandingView,
+  type LandPerSpecView,
+  type ModelRowView,
+  type ModelsView,
+  type OptionsView,
+  type ProjectView,
+  type PullRequestState,
+  type ReportedModelsView,
+  type SPEC_FIELDS,
+  type SpecRow,
+  type State,
+  type TICKET_FIELDS,
+  type TranscriptView,
+  type WatcherState,
+  type WatcherView,
+} from "./wire.gen";
+
+export * from "./wire.gen";
 
 // A finished Ticket is Done or Cancelled.
 export const FINISHED: readonly State[] = ["Done", "Cancelled"];
 
-// NEEDS_ME_REASONS are the Needs Me reasons in group order, as
-// get_workflow publishes them.
-export const NEEDS_ME_REASONS = [
-  "needs_answer",
-  "answered",
-  "silent_claim",
-  "long_claim",
-  "failed",
-  "in_review",
-  "ci_failed",
-  "ci_cancelled",
-  "base_diverged",
-  "base_missing",
-  "pull_request_closed",
-  "to_merge",
-  "ci_unavailable",
-  "accepted_not_landed",
-  "blocked_by_cancelled",
-  "new_issue",
-  "closed_externally",
-] as const;
-export type NeedsMeReason = (typeof NEEDS_ME_REASONS)[number];
+// ---- The UI's names for generated views whose Go names differ ----
 
-// A triage action the human may take on an Incoming Issue (Spec
-// code-central-279), each an operation's name.
-export type TriageAction = "keep_as_draft" | "to_requirement" | "wont_fix";
+export type Landing = LandingView;
+export type CISettings = CIView;
+export type CIRule = CIRuleView;
+export type GitHubIssuesSettings = GitHubIssuesView;
+export type CIWatcherStatus = WatcherView;
+export type IssueWatcherStatus = WatcherView;
+export type PullRequestWatcherStatus = WatcherView;
+export type AutoAccept = ProjectView["auto_accept"];
+export type ModelRow = ModelRowView;
+export type Models = ModelsView;
+export type ReportedModels = ReportedModelsView;
+export type FactoryStatus = FactoryStatusView;
+export type BaseDiverged = BaseDivergedView;
+export type BaseMissing = BaseMissingView;
+export type CIItem = CIItemView;
+export type CIUnavailable = CIUnavailableView;
+export type LandPerSpecStatus = LandPerSpecView;
+export type StateSummary = SpecRow["state_summary"];
+export type Transcript = TranscriptView;
+export type Options = OptionsView;
+export type ChatMessage = ChatMessageView;
+export type Conversation = ConversationView;
+// A reply's item: a Session Event as a Conversation holds it.
+export type ChatItem = HeldSessionEvent;
 
-// TRIAGE_ACTIONS are the triage actions, in the order they are offered.
-export const TRIAGE_ACTIONS: TriageAction[] = ["keep_as_draft", "to_requirement", "wont_fix"];
-
-// A Project's mode: where init puts its files.
-export type Mode = "committed" | "local";
-
-// A Landing Method: how a Project's accepted work reaches its base.
-export type LandingMethod = "merge" | "branch" | "pull_request";
-
-// A Code Host: where a Pull Request is opened, worked out from the Push remote URL.
-export type CodeHost = "github" | "azure_repos";
-
-// A Project's Landing Method with its Push option and the remote it uses.
-export interface Landing {
-  method: LandingMethod;
-  push: boolean;
-  remote: string;
-  // Land per Spec: under Merge, a Spec's work lands together. Shown and
-  // kept whatever the method.
-  land_per_spec: boolean;
-  // The Code Host and its repository, worked out from the reported Push
-  // remote URL: empty while none is reported or it is unsupported.
-  code_host: CodeHost | "";
-  repository: string;
-  // The environment variable holding the Azure Repos PAT, ADO_PAT by default.
-  pat_env: string;
-  // The branch the Project's work is cut from and lands on.
-  base: string;
-  // The Pull Request Watcher's status: not_reported unless the method is
-  // Pull Request.
-  watcher: PullRequestWatcherStatus;
-  // The pull requests left open on the Code Host after a switch away from
-  // Pull Request, one per Accepted Ticket; always empty under Pull Request.
-  open_pull_requests: OpenPullRequest[];
-}
-
-export interface OpenPullRequest {
-  ticket: string;
-  link: string;
-}
-
-// Why the Pull Request Watcher can't open and follow pull requests, each
-// with its own fix: the CI Watcher's problems, and a login that can't write
-// to the repository.
-export type PullRequestProblem = CIProblem | "no_write";
-
-// The Pull Request Watcher's status as it last reported it, as the CI
-// Watcher's is.
-export interface PullRequestWatcherStatus extends Omit<CIWatcherStatus, "problem"> {
-  problem?: PullRequestProblem;
-}
-
-// A Pull Request Watcher's report of its status: the service adds since.
-export type PullRequestWatcherReport = Omit<PullRequestWatcherStatus, "since"> & { state: "watching" | "error" };
+// ---- Landing ----
 
 // What setLandingMethod takes: the Code Host and repository are derived, and
 // leaving land_per_spec, pat_env or base out keeps the stored value.
@@ -108,8 +80,22 @@ export type LandingInput = Omit<Landing, "land_per_spec" | "code_host" | "reposi
   base?: string;
 };
 
-// A CI Provider: the CI system CI Tracking watches.
-export type CIProvider = "github_actions" | "azure_pipelines";
+// A Watcher's report of its status: the service adds since.
+export type CIWatcherReport = Omit<WatcherView, "since"> & { state: Exclude<WatcherState, "not_reported"> };
+export type IssueWatcherReport = CIWatcherReport;
+export type PullRequestWatcherReport = CIWatcherReport;
+
+// What the Pull Request Watcher reports of the pull request of the work
+// pushed as branch; merge_commit comes with the merged state alone.
+export interface PullRequestReport {
+  branch: string;
+  number: number;
+  link: string;
+  state: PullRequestState;
+  merge_commit?: string;
+}
+
+// ---- CI ----
 
 // The CI settings the human sets with setCITracking.
 export interface CITrackingChange {
@@ -142,52 +128,18 @@ export interface CIRuleChange {
   state: "Draft" | "Ready";
 }
 
-// A CI Rule, named by the ID of its own Spec, on which its Tickets open.
-export interface CIRule extends CIRuleChange {
-  spec: string;
-  created: string;
+// CI_VIEW_DAYS is how far back the CI view lists finished runs.
+export const CI_VIEW_DAYS = 7;
+
+// CIOverviewFilter is a CI view read: one Project, or every active Project with
+// CI Tracking on when project is left out. running keeps only the runs that
+// count as running towards a Ticket's CI result (code-central-276).
+export interface CIOverviewFilter {
+  project?: string;
+  running?: boolean;
 }
 
-// Why the CI Watcher can't watch its repository, each with its own fix.
-export type CIProblem =
-  | "gh_missing"
-  | "logged_out"
-  | "repository_unreadable"
-  | "pat_missing"
-  | "pat_rejected"
-  | "project_unreadable"
-  | "pat_scope"
-  | "check_failed"
-  | "crashed";
-
-// The CI Watcher's status as it last reported it (code-central-253):
-// not_reported until it has since the service started or CI Tracking was
-// turned on, then watching, or an error with its message and fix.
-export interface CIWatcherStatus {
-  state: "not_reported" | "watching" | "error";
-  problem?: CIProblem;
-  message?: string;
-  fix?: string;
-  // rate_limited_until is when GitHub lets a rate-limited CI Watcher call
-  // it again; it is still watching meanwhile, not in error.
-  rate_limited_until?: string;
-  // since is when it went into this state.
-  since?: string;
-}
-
-// A CI Watcher's report of its status: the service adds since.
-export type CIWatcherReport = Omit<CIWatcherStatus, "since"> & { state: "watching" | "error" };
-
-// A Project's CI settings, with the URL of the Push remote the Factory
-// last reported ("" until it has), the CI Rules, in the order added, and
-// the CI Watcher's status.
-export interface CISettings extends CITrackingChange {
-  project_url: string;
-  pat_env: string;
-  push_remote_url: string;
-  rules: CIRule[];
-  watcher: CIWatcherStatus;
-}
+// ---- GitHub Issues ----
 
 // The GitHub Issues settings the human sets with setGitHubIssues (Spec
 // code-central-279).
@@ -201,72 +153,7 @@ export interface GitHubIssuesChange {
   new_issues_need_me: boolean;
 }
 
-// Why the Issue Watcher can't work its repository's issues, each with its
-// own fix: the CI Watcher's problems, and issues turned off or a login
-// that can't triage them.
-export type IssuesProblem = CIProblem | "issues_disabled" | "no_triage";
-
-// The Issue Watcher's status as it last reported it (code-central-285),
-// as the CI Watcher's is.
-export interface IssueWatcherStatus extends Omit<CIWatcherStatus, "problem"> {
-  problem?: IssuesProblem;
-}
-
-// An Issue Watcher's report of its status: the service adds since.
-export type IssueWatcherReport = Omit<IssueWatcherStatus, "since"> & { state: "watching" | "error" };
-
-// A Project's GitHub Issues settings, with its Issues Spec's ID once
-// GitHub Issues has first been turned on, and the Issue Watcher's status.
-export interface GitHubIssuesSettings extends GitHubIssuesChange {
-  spec?: string;
-  watcher: IssueWatcherStatus;
-}
-
-// A Project's Stage Guides settings (Spec code-central-441).
-export interface StageGuides {
-  subagent_exploration: boolean;
-  model_assignment: boolean;
-}
-
-// An Auto-accept kind (Spec code-central-536): the kind of finished
-// Ticket a Project's Auto-accept setting is switched on for.
-export type AutoAcceptKind = "grilling" | "spec" | "tickets" | "implementation" | "merge";
-export const AUTO_ACCEPT_KINDS: AutoAcceptKind[] = ["grilling", "spec", "tickets", "implementation", "merge"];
-
-// A Project's Auto-accept setting: on or off per kind, all off to begin
-// with.
-export type AutoAccept = Record<AutoAcceptKind, boolean>;
-
-// Why an auto-accept made a Move: the Project's setting, or the
-// auto-accept Label on the Ticket or on its Spec.
-export type AutoAcceptCause = "project" | "ticket-label" | "spec-label";
-// A Project's Focus Kinds (Spec code-central-550): the Needs Me reasons
-// that are off, in group order. Only the focus queue reads them.
-export interface FocusKinds {
-  off: NeedsMeReason[];
-}
-
-// A Models row (Spec code-central-301): the model and effort it sets,
-// each "" for Default, which leaves it to the tier below.
-export interface ModelRow {
-  model: string;
-  effort: string;
-}
-
-// The Models row for one kind of work, a Stage Guide name.
-export interface KindModels extends ModelRow {
-  kind: string;
-}
-
-// A Project's Models: the Project default row, the Chat row (Spec
-// code-central-633), then a row for every kind of work, in the guides'
-// order. Chat is not a kind of work, and the Project default doesn't
-// apply to it.
-export interface Models {
-  default: ModelRow;
-  chat: ModelRow;
-  kinds: KindModels[];
-}
+// ---- Models and Factories ----
 
 // What set_models takes: the rows whole, with the Chat row left empty
 // when it is left out.
@@ -285,163 +172,6 @@ export interface ModelsReport {
   effort_flag: string;
 }
 
-// A Project's Reported Models: what its Factory last reported, plus the
-// model IDs its sessions' usage has shown. effort_levels are the valid
-// levels: the reported ones, or EFFORT_LEVELS until a report gives some.
-// reported is when the Factory last reported, missing before any report.
-export interface ReportedModels extends ModelsReport {
-  model_ids: string[];
-  reported?: string;
-}
-
-// Which tier set a Model Choice value: the Ticket's Tag, the Project's
-// Models row for its kind of work, the Project default row, or none of
-// them, which leaves it to the Factory's flag or Claude Code's default.
-export type ChoiceSource = "ticket_tag" | "project_kind" | "project_default" | "none";
-
-// A Model Choice value with its source; value is missing when the
-// source is none. kind names the kind of work whose Models row set it,
-// only when the source is project_kind.
-export interface ChoiceValue {
-  value?: string;
-  source: ChoiceSource;
-  kind?: string;
-}
-
-// The model and effort a Ticket's next turn runs with, as far as Code
-// Central sets them, each worked out on its own.
-export interface ModelChoice {
-  model: ChoiceValue;
-  effort: ChoiceValue;
-}
-
-// A Ticket's CI result (code-central-256), from the runs of its latest
-// pushed commit that aren't ignored: running while any is unfinished or
-// none is reported, failed if any concluded failure, cancelled or timed
-// out, passed otherwise.
-export type CIResult = "running" | "passed" | "failed" | "cancelled";
-
-// Where a CI Run stands, and how a finished run or job ended.
-export type CIRunStatus = "queued" | "in_progress" | "completed";
-export type CIConclusion = "success" | "failure" | "cancelled" | "timed_out" | "skipped" | "neutral" | "partially_succeeded";
-
-// A commit the Factory pushed for a Ticket while CI Tracking was on.
-// A pull request's state on its Code Host (code-central-388).
-export type PullRequestState = "open" | "conflicting" | "closed" | "merged";
-
-// A pull request the Pull Request Watcher reported; merge_commit is left
-// out until it is merged.
-export interface PullRequestView {
-  number: number;
-  link: string;
-  state: PullRequestState;
-  merge_commit?: string;
-}
-
-// What the Pull Request Watcher reports of the pull request of the work
-// pushed as branch; merge_commit comes with the merged state alone.
-export interface PullRequestReport {
-  branch: string;
-  number: number;
-  link: string;
-  state: PullRequestState;
-  merge_commit?: string;
-}
-
-export interface PushedCommitView {
-  commit: string;
-  pushed: string;
-}
-
-// One job of a CI Run; its conclusion is left out until it ends.
-export interface CIJobView {
-  name: string;
-  conclusion?: CIConclusion;
-  url: string;
-}
-
-// One attempt of one workflow run, as the CI Watcher reported it, tracked
-// against a Ticket or a CI Rule's Spec. An ignored run is of an Ignored
-// workflow, and never counts towards a CI result.
-export interface CIRunView {
-  id: number;
-  attempt: number;
-  // workflow is the workflow file's base name, such as ci.yml; name is
-  // the name it shows.
-  workflow: string;
-  name: string;
-  branch: string;
-  commit: string;
-  status: CIRunStatus;
-  conclusion?: CIConclusion;
-  started?: string;
-  finished?: string;
-  url: string;
-  jobs: CIJobView[];
-  ticket?: string;
-  rule?: string;
-  ignored: boolean;
-}
-
-// ---- The CI view (code-central-258) ----
-
-// CI_VIEW_DAYS is how far back the CI view lists finished runs.
-export const CI_VIEW_DAYS = 7;
-
-// CIOverviewFilter is a CI view read: one Project, or every active Project with
-// CI Tracking on when project is left out. running keeps only the runs that
-// count as running towards a Ticket's CI result (code-central-276).
-export interface CIOverviewFilter {
-  project?: string;
-  running?: boolean;
-}
-
-// A Project's CI Tracking and its CI Watcher's status, heading the CI view.
-export interface CIProjectStatus {
-  project: string;
-  tracking: boolean;
-  provider: CIProvider;
-  repository: string;
-  project_url: string;
-  watcher: CIWatcherStatus;
-}
-
-// One CI Run in the CI view, with its Project; a re-run lists its latest
-// attempt only.
-export interface CIRunRow extends CIRunView {
-  project: string;
-}
-
-// The CI view: the CI Watchers' statuses, then the runs, in-progress
-// ones first, newest started first, then those finished in the last
-// CI_VIEW_DAYS days, newest finished first.
-export interface CIOverview {
-  projects: CIProjectStatus[];
-  runs: CIRunRow[];
-}
-
-export type FactoryStatusName = "online" | "draining" | "offline";
-
-// A Factory as the Project view lists it, from its last Heartbeat.
-export interface FactoryView {
-  name: string;
-  host: string;
-  status: FactoryStatusName;
-  // note is "" when none; a stopped Factory keeps its last one.
-  note: string;
-  last_heartbeat: string;
-  interval_seconds: number;
-  // chat is Chat support: the Factory can run Conversations.
-  chat: boolean;
-}
-
-// A Project's Factory Status, worked out by Code Central: the UI only
-// renders it. status is the combined one (offline with no Factories).
-export interface FactoryStatus {
-  status: FactoryStatusName;
-  factories: FactoryView[];
-}
-
 // What a Factory sends as a Heartbeat.
 export interface HeartbeatReport {
   factory: string;
@@ -453,253 +183,12 @@ export interface HeartbeatReport {
   chat?: boolean;
 }
 
-export interface ProjectView {
-  key: string;
-  display_name: string;
-  created: string;
-  mode: Mode;
-  archived: boolean;
-  // archived_at is when the human archived the Project, while it is.
-  archived_at?: string;
-  // landing is always filled in: merge, push off, origin by default.
-  landing: Landing;
-  // ci is always filled in: CI Tracking off by default.
-  ci: CISettings;
-  // github_issues is always filled in: GitHub Issues off by default.
-  github_issues: GitHubIssuesSettings;
-  // models is always filled in: every row at Default to begin with.
-  models: Models;
-  // reported_models is always filled in: no aliases or model IDs, and
-  // the seeded effort levels, until a Factory reports.
-  reported_models: ReportedModels;
-  // stage_guides is always filled in: Subagent Exploration on by default.
-  stage_guides: StageGuides;
-  // auto_accept is always filled in: every kind off by default.
-  auto_accept: AutoAccept;
-  // focus_kinds is always filled in: every Needs Me reason on by default.
-  focus_kinds: FocusKinds;
-  // factory_status is always filled in: offline, with no Factories,
-  // until one sends a Heartbeat.
-  factory_status: FactoryStatus;
-}
-
-export interface ProjectRow extends ProjectView {
-  needs_me: number;
-  // unfinished counts the Tickets not Done or Cancelled; Archive waits for 0.
-  unfinished: number;
-}
-
-export type ExternalState = "open" | "closed" | "deleted" | "out_of_scope";
-
-// A linked Spec's or Ticket's Link (ticket 42): the external item its
-// Integration mirrors. While it isn't detached, the title and description
-// belong to the external system.
-export interface LinkView {
-  integration: string;
-  id: string;
-  url?: string;
-  external_state: ExternalState;
-  detached: boolean;
-  // outbound marks a Link that doesn't own the item's definition: Code
-  // Central owns it and only writes to the external item (To Requirement).
-  outbound: boolean;
-}
-
-// set_tags' and remove_tags' result: the Spec or Ticket with its Labels
-// and Tags as they now stand.
-export interface TargetView {
-  id: string;
-  kind: "spec" | "ticket";
-  labels: string[];
-  tags: Record<string, string>;
-}
-
-// unlink's result: the Spec or Ticket with its now detached Link.
-export interface LinkedRow {
-  kind: "spec" | "ticket";
-  id: string;
-  title: string;
-  state?: State;
-  link: LinkView;
-}
-
-export interface BlockerView {
-  id: string;
-  title: string;
-  state: State;
-  via?: string;
-  // cleared is whether the Blocker no longer blocks though it isn't Done,
-  // as one on the same Spec does once it is merged into the Spec Branch.
-  cleared: boolean;
-}
-
-export interface BaseDiverged {
-  base?: string;
-  local: string;
-  remote: string;
-}
-
-export interface BaseMissing {
-  base: string;
-  fix: string;
-}
-
-export interface NeedsMeRow {
-  project: string;
-  id: string;
-  title: string;
-  state: State;
-  reason: NeedsMeReason;
-  since: string;
-  // focus_item says the Project's Focus Kinds leave the row's reason on.
-  focus_item: boolean;
-  round?: { number: number; open: number; questions: number };
-  failure?: { headline: string; reports: number };
-  summary?: string;
-  // branch is the Ticket's branch, for the human to merge (to_merge).
-  branch?: string;
-  // ci_failure is what failed on the pushed commit (ci_failed).
-  ci_failure?: CIFailureSummary;
-  // ci_unavailable says why no word of its CI has come (ci_unavailable).
-  ci_unavailable?: CIUnavailable;
-  blocker?: BlockerView;
-  link?: LinkView;
-  // Set when the Ticket's Spec is a Requirement.
-  requirement?: NeedsMeRequirement;
-  // spec is a Map Ticket's or Prototype's Spec, as its context, set when
-  // that Spec isn't a Requirement.
-  spec?: NeedsMeSpec;
-  // prototype is set on a Ticket labelled prototype, for its badge.
-  prototype?: boolean;
-  // retro is set on a Ticket labelled retro, for its badge.
-  retro?: boolean;
-  // ci_result is the Ticket's CI result, whatever the reason, for its
-  // badge; left out for a Ticket never pushed while CI Tracking was on.
-  ci_result?: CIResult;
-  // pull_request is the Ticket's pull request, for its item's link; left
-  // out until the Pull Request Watcher reports one.
-  pull_request?: PullRequestView;
-  // base_diverged is the local and remote base commits (base_diverged,
-  // whose row has no Ticket: its id is empty).
-  base_diverged?: BaseDiverged;
-  // base_missing is the missing base's branch and the fix (base_missing,
-  // whose row has no Ticket either).
-  base_missing?: BaseMissing;
-  // ci_item is the pushed commit's item: the Tickets waiting on it and
-  // the failure options (ci_failed, ci_cancelled and ci_unavailable, whose
-  // row is one per commit with no Ticket of its own, code-central-432).
-  ci_item?: CIItem;
-}
-
-// What failed on a CI failed item's pushed commit: the commit and its
-// failed runs' workflow file names.
-export interface CIFailureSummary {
-  commit: string;
-  workflows: string[];
-}
-
-// A CI failed, CI cancelled or CI unavailable item (code-central-432): one
-// per pushed commit, listing the Tickets waiting on it, accepted earliest
-// first, across Specs, and the failure options the human may choose,
-// which act on all of them; none while CI unavailable.
-export interface CIItem {
-  reason: "ci_failed" | "ci_cancelled" | "ci_unavailable";
-  commit: string;
-  tickets: CIItemTicket[];
-  options: CIFailureOption[];
-}
-
-// One Ticket a CI item lists, with its Spec.
-export interface CIItemTicket {
-  id: string;
-  title: string;
-  spec: string;
-}
-
-// A failure option the human may choose on a CI failed or CI cancelled
-// item, named for its action (code-central-261, code-central-264,
-// code-central-265).
-export type CIFailureOption = "rerun_ci" | "land_anyway" | "send_back" | "new_fix_ticket";
-
-// Why a Ticket is CI unavailable: the CI Watcher isn't Watching (with
-// its error's message, if it has one), or no CI Runs have been reported
-// for its pushed commit.
-export interface CIUnavailable {
-  cause: "ci_watcher_not_watching" | "no_ci_runs";
-  commit: string;
-  pushed: string;
-  message?: string;
-}
-
-// The Spec a Needs Me row's Map Ticket or Prototype is on; map is set
-// when it is a Map.
-export interface NeedsMeSpec {
-  spec: string;
-  title: string;
-  map?: boolean;
-}
-
-// The Requirement a Needs Me row's Ticket is on; stage is set only on a
-// Stage Ticket.
-export interface NeedsMeRequirement {
-  spec: string;
-  title: string;
-  stage?: StageName;
-}
-
-export type StageName = "grilling" | "spec" | "tickets";
-
-// A Spec read's requirement block, present only on a Requirement (a Spec
-// with Stage Tickets). Nothing in it is stored.
-export interface RequirementView {
-  // map is the Map the Requirement was made from (Write the Spec), which
-  // then has no grilling Stage.
-  map?: string;
-  stages: StageView[];
-  build: { done: number; total: number };
-  waiting_for_factory: boolean;
-}
-
-// The Accepted Tickets waiting for the Spec to land, and whether it is
-// ready to: the Factory is merging it into the base.
-export interface LandPerSpecStatus {
-  waiting: string[];
-  ready: boolean;
-}
-
-export interface StageView {
-  name: StageName;
-  ticket: string;
-  state: State;
-  needs_me_reason?: NeedsMeReason;
-}
-
-// A Spec read's Map block, present only on a Map (a Spec labelled
-// wayfinder:map). Nothing in it is stored.
-export interface MapView {
-  // decided is the Map's Wayfinder Tickets that are Done.
-  decided: number;
-  // total is its Wayfinder Tickets that aren't Cancelled.
-  total: number;
-  // needs_you is its Tickets with a Needs Me reason, Prototypes included.
-  needs_you: number;
-  // guided is whether its guided Tag is on: the Factory then starts its
-  // next decision whenever the Map is idle.
-  guided: boolean;
-  // can_write_spec is whether it has no unfinished Tickets.
-  can_write_spec: boolean;
-  // requirements are the Specs Write the Spec made from it: those whose
-  // map Tag names it.
-  requirements: string[];
-}
+// ---- Specs and Tickets ----
 
 // GUIDED_TAG marks a Map as guided when its value is GUIDED_ON; a missing
 // Tag or any other value means off.
 export const GUIDED_TAG = "guided";
 export const GUIDED_ON = "on";
-
-// A Map Ticket's type, from its reserved Label; "ticket" when it has none.
-export type NodeType = "chart" | "grilling" | "research" | "task" | "prototype" | "ticket";
 
 // MAP_LABEL marks a Spec as a Map.
 export const MAP_LABEL = "wayfinder:map";
@@ -708,53 +197,6 @@ export const MAP_LABEL = "wayfinder:map";
 // by one under Land per Spec.
 export const LONG_LIVED_LABEL = "long-lived";
 
-// A Spec as get_spec and submit_requirement return it.
-export interface SpecView {
-  id: string;
-  title: string;
-  labels: string[];
-  tags: Record<string, string>;
-  created: string;
-  updated: string;
-  body: string;
-  edits: EditView[];
-  link?: LinkView;
-}
-
-// How many of a Spec's Tickets are in each State; States with none are left out.
-export type StateSummary = Partial<Record<State, number>>;
-
-// get_spec: the Spec, its Tickets (finished ones too) in claim order, and
-// its requirement block when it is a Requirement, or Map block when a Map.
-export interface SpecDetail extends SpecView {
-  state_summary: StateSummary;
-  finished: boolean;
-  tickets: TicketRow[];
-  requirement?: RequirementView;
-  // land_per_spec is the Land per Spec status, present only on a
-  // Requirement while the Project is under Merge or Pull Request with
-  // Land per Spec on.
-  land_per_spec?: LandPerSpecStatus;
-  map?: MapView;
-  // retros are the Retros looking back on the Spec, oldest first, left
-  // out when there are none.
-  retros?: RetroView[];
-}
-
-// One find_specs result.
-export interface SpecRow {
-  id: string;
-  title: string;
-  labels: string[];
-  tags: Record<string, string>;
-  state_summary: StateSummary;
-  finished: boolean;
-  updated: string;
-  link?: LinkView;
-  requirement?: RequirementView;
-  map?: MapView;
-}
-
 export interface FindSpecsFilter {
   // requirements keeps only Requirements.
   requirements?: boolean;
@@ -762,6 +204,24 @@ export interface FindSpecsFilter {
   labels?: string[];
   // finished includes finished Specs, which are otherwise left out.
   finished?: boolean;
+}
+
+export interface FindTicketsFilter {
+  state?: State[];
+}
+
+// SpecAcknowledgement is what a Spec write returns (ADR 0009): the names
+// of the fields it changed, never their values. A Spec has no State.
+export interface SpecAcknowledgement extends Omit<Acknowledgement, "state"> {
+  changed: (typeof SPEC_FIELDS)[number][];
+}
+
+// TicketAcknowledgement is what a Ticket write returns (ADR 0009): the
+// names of the fields it changed, never their values, and the Ticket's
+// State after it.
+export interface TicketAcknowledgement extends Acknowledgement {
+  changed: (typeof TICKET_FIELDS)[number][];
+  state: State;
 }
 
 // submit_requirement's result (ADR 0009): the acknowledgements of the
@@ -778,299 +238,7 @@ export interface SubmitMapResult {
   charting: TicketAcknowledgement;
 }
 
-export interface NeedsMeGroup {
-  reason: NeedsMeReason;
-  tickets: NeedsMeRow[];
-}
-
-export interface NeedsMeView {
-  // count is the Needs Me count across every Project, the sum of counts.
-  count: number;
-  // counts is the Needs Me count of each Project that has something in Needs Me.
-  counts: Record<string, number>;
-  groups: NeedsMeGroup[];
-}
-
-export interface TicketRow {
-  id: string;
-  title: string;
-  state: State;
-  spec: string;
-  labels: string[];
-  blocked: boolean;
-  created: string;
-  updated: string;
-  link?: LinkView;
-  // node_type is the Ticket's type on a Map; left out on any other Spec.
-  node_type?: NodeType;
-  // blocked_by is the Ticket's Blockers on a Map, the Map view's edges;
-  // left out on any other Spec.
-  blocked_by?: string[];
-  // latest_event is the latest Session Event of the Ticket's live Claim;
-  // left out when there is none.
-  latest_event?: LatestEvent;
-  // ci_result is the Ticket's CI result, for its badge; left out for a
-  // Ticket never pushed while CI Tracking was on.
-  ci_result?: CIResult;
-  // pull_request is the Ticket's pull request, for its row's badge; left
-  // out until the Pull Request Watcher reports one.
-  pull_request?: PullRequestView;
-  // waiting_for_spec is set on an Accepted Ticket that waits for its Spec
-  // to land, for its badge (code-central-371).
-  waiting_for_spec?: boolean;
-  // needs_me_reason says why the Ticket waits on the human, if it does:
-  // the reason get_ticket gives.
-  needs_me_reason?: NeedsMeReason;
-}
-
-export interface FindTicketsFilter {
-  state?: State[];
-}
-
-export interface QuestionView {
-  number: number;
-  title: string;
-  body: string;
-  recommended?: string;
-  status: "open" | "answered" | "dismissed";
-  answer?: string;
-  closed?: string;
-}
-
-export interface RoundView {
-  number: number;
-  claim: number;
-  session_id?: string;
-  posted: string;
-  questions: QuestionView[];
-}
-
-// The roll-up of a Spec's Questions (get_spec_questions): each of its
-// Tickets that has Rounds, in claim order.
-export interface SpecQuestions {
-  spec: string;
-  tickets: { id: string; title: string; state: State; rounds: RoundView[] }[];
-}
-
-export interface ClaimView {
-  number: number;
-  session_id?: string;
-  // As the holder last set them; left out when unset, never a default.
-  working_dir?: string;
-  resume_command?: string;
-  // What the Claim's latest turn ran with; left out for Claude Code's
-  // default.
-  model?: string;
-  effort?: string;
-  started: string;
-  last_activity: string;
-  ended?: string;
-  ended_by?: string;
-  // latest_event is the Claim's latest Session Event, shown short; left
-  // out when the Claim has none.
-  latest_event?: LatestEvent;
-}
-
-export type SessionEventKind = "text" | "tool_call" | "tool_result" | "factory";
-
-// A Session Event as a Factory posts it (POST /api/session-events): one
-// thing a Claim's session did. Code Central treats tool and text as
-// opaque strings.
-export interface SessionEvent {
-  time: string;
-  kind: SessionEventKind;
-  text: string;
-  tool?: string;
-  tool_use_id?: string;
-  is_error?: boolean;
-  truncated?: boolean;
-}
-
-// A Session Event as a Claim's Transcript holds it: seq rises within the
-// Transcript, and is the SSE id its stream resumes from.
-export interface HeldSessionEvent extends SessionEvent {
-  seq: number;
-}
-
-// A Claim's Transcript (GET .../claims/{c}/transcript): the held events,
-// oldest first. tail is true when it holds only part of the session:
-// Code Central keeps the last 2,000 and none from before its last restart.
-export interface Transcript {
-  events: HeldSessionEvent[];
-  tail: boolean;
-}
-
-// A Claim's latest Session Event, shown short: text is one line, cut as
-// core's LatestEventLimit says. Computed on read, never stored.
-export interface LatestEvent {
-  kind: SessionEventKind;
-  text: string;
-  time: string;
-}
-
-export interface FailureReportView {
-  number: number;
-  claim: number;
-  // Copies of the Claim's, made when the report was written.
-  session_id?: string;
-  working_dir?: string;
-  resume_command?: string;
-  actor: string;
-  time: string;
-  what_broke: string;
-  why: string;
-  what_to_fix: string;
-  where_work_stands: string;
-}
-
-export interface CommentView {
-  number: number;
-  actor: string;
-  time: string;
-  claim?: number;
-  body: string;
-}
-
-export interface MoveView {
-  from?: State;
-  to: State;
-  actor: string;
-  time: string;
-  claim?: number;
-  via?: string;
-  // commit is the commit that put the work into the base, on a land.
-  commit?: string;
-  // cause is why an auto-accept made the Move; absent on every other.
-  cause?: AutoAcceptCause;
-}
-
-export interface EditView {
-  number: number;
-  actor: string;
-  time: string;
-  previous: Record<string, string>;
-}
-
-export interface TicketView {
-  id: string;
-  title: string;
-  state: State;
-  spec: { id: string; title: string };
-  labels: string[];
-  tags: Record<string, string>;
-  blocked_by: string[];
-  blockers: BlockerView[];
-  replacements: string[];
-  created: string;
-  updated: string;
-  description: string;
-  // branch and commit are the work's branch and head commit, as the last
-  // finish naming them gave them. Work with a branch is Accepted, then lands.
-  branch?: string;
-  commit?: string;
-  // recommendation is a spec Stage's Spec recommendation, as its last
-  // finish gave it: implement (Implement) or split (Split into Tickets).
-  recommendation?: "implement" | "split";
-  // pushed_commit is the latest commit the Factory pushed while CI
-  // Tracking was on, ci_result the Ticket's CI result and ci_commit the
-  // pushed commit it comes from: under the CI gate one that passed, if
-  // any did, else the latest (code-central-430); ci_runs are every CI Run
-  // tracked against the Ticket, the latest pushed commit's first. All are
-  // left out while it has none (code-central-256).
-  pushed_commit?: PushedCommitView;
-  // pull_request is the pull request the Pull Request Watcher reported for
-  // the Ticket's pushed work (code-central-388).
-  pull_request?: PullRequestView;
-  ci_result?: CIResult;
-  ci_commit?: string;
-  ci_runs?: CIRunView[];
-  // land_anyway says the human accepted the latest pushed commit's failed
-  // CI result, so the Factory lands it; ci_failure_options are the
-  // failure options the human may choose on the Ticket's CI item while
-  // it is CI failed or CI cancelled, acting on every Ticket it lists,
-  // left out otherwise (code-central-261, code-central-432).
-  land_anyway?: boolean;
-  ci_failure_options?: CIFailureOption[];
-  // ci_item is the CI item listing the Ticket, with every other Ticket
-  // waiting on its pushed commit; waiting_for_spec is set while the
-  // Ticket is Accepted and waits for its Spec to land (code-central-371,
-  // code-central-432).
-  ci_item?: CIItem;
-  waiting_for_spec?: boolean;
-  claims: ClaimView[];
-  rounds: RoundView[];
-  failure_reports: FailureReportView[];
-  comments: CommentView[];
-  moves: MoveView[];
-  edits: EditView[];
-  blocked: boolean;
-  claimable: boolean;
-  silent_since?: string;
-  needs_me_reason?: NeedsMeReason;
-  link?: LinkView;
-  // awaiting_triage is set on an Incoming Issue that came in while New
-  // issues need me was on and that the human hasn't triaged yet;
-  // triage_actions are the triage actions offered on an Incoming Issue,
-  // left out on any other Ticket (code-central-287).
-  awaiting_triage?: boolean;
-  // spec_merge_ticket marks a Spec merge Ticket, one open_spec_merge
-  // opened; left out on any other Ticket (code-central-542).
-  spec_merge_ticket?: boolean;
-  triage_actions?: TriageAction[];
-  // model_choice is the model and effort the Ticket's next turn runs
-  // with, each with its source; only the UI's read carries it (Spec
-  // code-central-301).
-  model_choice?: ModelChoice;
-  // auto_accept_kind is the Ticket's Auto-accept kind, left out when it has
-  // none; only the UI's read carries it (code-central-597).
-  auto_accept_kind?: AutoAcceptKind;
-  // retros are the Retros looking back on the Ticket, oldest first; only
-  // get_ticket sets it, left out when there are none.
-  retros?: RetroView[];
-}
-
-// RetroView is a Retro as a read of its target lists it.
-export interface RetroView {
-  id: string;
-  title: string;
-  state: State;
-}
-
-// TICKET_FIELDS are TicketView's fields in the service's order, the order
-// a TicketAcknowledgement's changed lists them in.
-export const TICKET_FIELDS = [
-  "id", "title", "state", "spec", "labels", "tags", "blocked_by", "blockers", "replacements",
-  "created", "updated", "description", "branch", "commit", "pushed_commit", "pull_request", "ci_result", "ci_commit", "ci_runs", "land_anyway", "ci_item", "ci_failure_options", "claims", "rounds", "failure_reports",
-  "comments", "moves", "edits", "blocked", "claimable", "silent_since", "needs_me_reason", "link",
-  "awaiting_triage", "spec_merge_ticket", "triage_actions",
-] as const satisfies readonly (keyof TicketView)[];
-
-// SPEC_FIELDS are SpecView's fields in the service's order, the order a
-// SpecAcknowledgement's changed lists them in.
-export const SPEC_FIELDS = [
-  "id", "title", "labels", "tags", "created", "updated", "body", "edits", "link",
-] as const satisfies readonly (keyof SpecView)[];
-
-// SpecAcknowledgement is what a Spec write returns (ADR 0009): the names
-// of the fields it changed, never their values. edit is set when the
-// write recorded an edit.
-export interface SpecAcknowledgement {
-  id: string;
-  updated: string;
-  changed: (typeof SPEC_FIELDS)[number][];
-  edit?: number;
-}
-
-// TicketAcknowledgement is what a Ticket write returns (ADR 0009): the
-// names of the fields it changed, never their values, and the Ticket's
-// State after it. edit is set when the write recorded an edit.
-export interface TicketAcknowledgement {
-  id: string;
-  updated: string;
-  changed: (typeof TICKET_FIELDS)[number][];
-  edit?: number;
-  state: State;
-}
+// ---- Errors and change notices ----
 
 // The one error shape every door uses, plus the HTTP status.
 export class ApiError extends Error {
@@ -1103,29 +271,10 @@ export type ChangeEvent =
   // options.changed is about no Project: the Options changed.
   | { type: "options.changed" };
 
-// FocusClear is what Focus Mode shows when nothing needs the human.
-// The default first.
-export const FOCUS_CLEARS = ["activity_dashboard", "all_clear"] as const;
-export type FocusClear = (typeof FOCUS_CLEARS)[number];
-
-// FocusPopup is whether a popup shows each new Focus Item on every view
-// but Focus Mode, Options and Project Options. The default first.
-export const FOCUS_POPUPS = ["off", "on"] as const;
-export type FocusPopup = (typeof FOCUS_POPUPS)[number];
-
-// Options are the human's global preferences, kept by the service
-// (GET /api/options), each at its default until the human changes it.
-export interface Options {
-  focus_clear: FocusClear;
-  focus_popup: FocusPopup;
-  // gh_path is where gh, the GitHub CLI, is: an absolute path, or "" to
-  // find it on the service's PATH, then in the usual install places.
-  gh_path: string;
-}
+// ---- Options ----
 
 // DEFAULT_OPTIONS are the Options a fresh store reads.
 export const DEFAULT_OPTIONS: Options = { focus_clear: FOCUS_CLEARS[0], focus_popup: FOCUS_POPUPS[0], gh_path: "" };
-
 
 // ---- Usage (Spec code-central-201) ----
 
@@ -1141,76 +290,6 @@ export const USAGE_KEPT_DAYS = 90;
 export interface UsageFilter {
   project?: string;
   days?: UsageDays;
-}
-
-// UsageOperation is one MCP operation's row in the Code Central calls
-// table. Sizes are in bytes; averages are rounded to the nearest byte.
-export interface UsageOperation {
-  op: string;
-  calls: number;
-  request_bytes: number;
-  average_request_bytes: number;
-  response_bytes: number;
-  average_response_bytes: number;
-  errors: number;
-}
-
-// UsageKind is one kind of session's Context Size figures: its sessions,
-// and the average (to the nearest token) and largest of their peaks.
-export interface UsageKind {
-  kind: string;
-  sessions: number;
-  average_peak: number;
-  largest_peak: number;
-}
-
-// UsageSession is one recent session, a Claim's main session or one of its
-// Subagents (agent), with the Claim and kind of its latest response; peak
-// is its largest Context Size, started its first response's time, tokens
-// all its responses' tokens, and models each distinct model its responses
-// name, in order of first use (empty when none does). A Subagent has the
-// latest non-empty Agent Type and description among its responses, each
-// left out when none gave one.
-//
-// A main session has its Subagents, oldest first, and total_tokens, its
-// tokens and theirs; a Subagent's subagents are empty and it has no
-// total_tokens. A main session whose only responses in the range are its
-// Subagents' has none of its own: no kind (""), models, peak or tokens,
-// its Subagents' first start, and the Project, Ticket and Claim of their
-// latest response.
-export interface UsageSession {
-  project: string;
-  ticket: string;
-  claim: number;
-  session_id: string;
-  agent?: string;
-  agent_type?: string;
-  description?: string;
-  kind: string;
-  started: string;
-  peak: number;
-  responses: number;
-  models: string[];
-  tokens: number;
-  total_tokens?: number;
-  subagents: UsageSession[];
-}
-
-// UsageDay is one local day's token usage (day is YYYY-MM-DD in the
-// service's time zone): the kinds of session with any usage that day, in
-// the kinds' order; none on a day with no usage.
-export interface UsageDay {
-  day: string;
-  kinds: UsageDayTokens[];
-}
-
-// UsageDayTokens is one kind of session's tokens on one day, by token type.
-export interface UsageDayTokens {
-  kind: string;
-  input_tokens: number;
-  cache_write_tokens: number;
-  cache_read_tokens: number;
-  output_tokens: number;
 }
 
 // UsageResponse is one model response's token usage as a Factory posts
@@ -1230,18 +309,6 @@ export interface UsageResponse {
   output_tokens: number;
 }
 
-// UsageView is GET /api/usage: kinds, sessions and days come from the
-// token usage a Factory posts: kinds over every session, main and
-// Subagent; sessions the main sessions, newest first and at most 50, each
-// with all its Subagents; and days a row for every local day in the
-// range, oldest first.
-export interface UsageView {
-  operations: UsageOperation[];
-  kinds: UsageKind[];
-  sessions: UsageSession[];
-  days: UsageDay[];
-}
-
 // SessionUsageFilter is one session's read: its Project, its session ID,
 // and its subagent, left out for the main session.
 export interface SessionUsageFilter {
@@ -1253,61 +320,4 @@ export interface SessionUsageFilter {
 // sessionKey names one session, the same for every filter that reads it.
 export function sessionKey({ project, session, agent }: SessionUsageFilter): string {
   return `${project}\u0000${session}\u0000${agent ?? ""}`;
-}
-
-// SessionUsageResponse is one of a session's model responses: when it
-// came, its Context Size (input, cache write and cache read) and its four
-// token counts.
-export interface SessionUsageResponse {
-  time: string;
-  context_size: number;
-  input_tokens: number;
-  cache_write_tokens: number;
-  cache_read_tokens: number;
-  output_tokens: number;
-}
-
-// SessionUsageView is GET /api/usage/session: one session's responses,
-// oldest first, over every day Usage keeps, and for a Subagent the latest
-// non-empty Agent Type and description among them.
-export interface SessionUsageView {
-  agent_type?: string;
-  description?: string;
-  responses: SessionUsageResponse[];
-}
-
-// A Project's Conversation (Spec code-central-633), as the Conversation
-// stream sends it and get_chat returns it.
-export type ChatAvailability = "none" | "available" | "unavailable";
-export type ChatOutcome = "done" | "stopped" | "failed";
-
-// A reply's item: a Session Event, plus the log lines and the
-// permission_denials a Conversation holds as items of their own.
-export type ChatItemKind = SessionEventKind | "log" | "permission_denials";
-export interface ChatItem extends Omit<HeldSessionEvent, "kind"> {
-  kind: ChatItemKind;
-}
-
-// A Chat Message: the human's holds text; Claude's holds items in the
-// shape of Session Events, and an outcome once its reply has ended.
-export interface ChatMessage {
-  from: "human" | "claude";
-  time: string;
-  text?: string;
-  items?: ChatItem[];
-  outcome?: ChatOutcome;
-  error?: string;
-}
-
-export interface Conversation {
-  availability: ChatAvailability;
-  id?: string;
-  model?: string;
-  effort?: string;
-  factory?: { name: string; host: string };
-  running: boolean;
-  tail: boolean;
-  session_id?: string;
-  resume_command?: string;
-  messages: ChatMessage[];
 }

@@ -26,7 +26,7 @@ export function roundContract(driver: () => Driver) {
       wantAcknowledgement(ack, id, "Needs Answer", ["rounds"]);
       expect(ack.changed).not.toContain("state");
       let t = await d.api.getTicket("acme", id);
-      expect(t.rounds[0].questions.map((q) => [q.status, q.answer])).toEqual([
+      expect(t.rounds![0].questions.map((q) => [q.status, q.answer])).toEqual([
         ["answered", "Red"],
         ["open", undefined],
       ]);
@@ -34,7 +34,7 @@ export function roundContract(driver: () => Driver) {
 
       wantAcknowledgement(await d.api.act("acme", id, "answer", { question: 1, text: "Green" }), id, "Needs Answer", ["rounds"]);
       t = await d.api.getTicket("acme", id);
-      expect(t.rounds[0].questions[0]).toMatchObject({ status: "answered", answer: "Green" });
+      expect(t.rounds![0].questions[0]).toMatchObject({ status: "answered", answer: "Green" });
 
       wantAcknowledgement(await d.api.act("acme", id, "answer", { question: 2, text: "M" }), id, "Answered", ["state", "rounds", "moves", "needs_me_reason"]);
       expect((await d.api.getTicket("acme", id)).needs_me_reason).toBe("answered");
@@ -55,7 +55,7 @@ export function roundContract(driver: () => Driver) {
     it("dismisses one Question without moving the Ticket, unless it was the last open one", async () => {
       const { d, id } = await posted();
       wantAcknowledgement(await d.api.act("acme", id, "dismiss_question", { question: 2 }), id, "Needs Answer", ["rounds"]);
-      expect((await d.api.getTicket("acme", id)).rounds[0].questions[1].status).toBe("dismissed");
+      expect((await d.api.getTicket("acme", id)).rounds![0].questions[1].status).toBe("dismissed");
 
       wantAcknowledgement(await d.api.act("acme", id, "dismiss_question", { question: 1 }), id, "Answered", ["state", "rounds", "moves"]);
     });
@@ -64,7 +64,7 @@ export function roundContract(driver: () => Driver) {
       const { d, id } = await posted();
       wantAcknowledgement(await d.api.act("acme", id, "accept_recommended", { round: 1 }), id, "Needs Answer", ["rounds"]);
       const t = await d.api.getTicket("acme", id);
-      expect(t.rounds[0].questions.map((q) => [q.status, q.answer])).toEqual([
+      expect(t.rounds![0].questions.map((q) => [q.status, q.answer])).toEqual([
         ["answered", "Blue"],
         ["open", undefined],
       ]);

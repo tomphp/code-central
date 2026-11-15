@@ -36,7 +36,7 @@ function renderPanel({ w, id }: Waiting, round = 2) {
 
 const question = (panel: HTMLElement, title: string) => within(panel).getByRole("group", { name: new RegExp(title) });
 const box = (q: HTMLElement) => within(q).getByRole("textbox");
-const stored = async ({ w, id }: Waiting) => (await w.api.getTicket("acme", id)).rounds[1].questions;
+const stored = async ({ w, id }: Waiting) => (await w.api.getTicket("acme", id)).rounds![1].questions;
 
 describe("the Round panel", () => {
   it("shows every Question of the open Round, each box pre-filled with its recommendation as an unsaved draft", async () => {

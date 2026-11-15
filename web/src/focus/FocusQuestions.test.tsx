@@ -42,7 +42,7 @@ async function world() {
 const item = () => within(focus()).findByRole("article", { name: "Focus Item" });
 const question = (title: string) => within(focus()).findByRole("heading", { name: title });
 const box = () => within(focus()).getByRole("textbox");
-const stored = async (w: World, id: string) => (await w.api.getTicket("acme", id)).rounds[1].questions;
+const stored = async (w: World, id: string) => (await w.api.getTicket("acme", id)).rounds![1].questions;
 
 describe("a Question Focus Item", () => {
   it("shows where it's from, why it waits, where it is in the Round, its title large and its body as Markdown", async () => {

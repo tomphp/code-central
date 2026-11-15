@@ -43,7 +43,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
   const needsMe = useMemo(() => needsMeOf(inbox.data), [inbox.data]);
   // Within a Requirement with no Ticket chosen, the pane opens on its default one.
   const selected =
-    loc.ticket ?? (requirement ? defaultTicket(progress(requirement.requirement, requirement.tickets, needsMe.reasonOf)) : undefined);
+    loc.ticket ?? (requirement ? defaultTicket(progress(requirement.requirement, requirement.tickets ?? [], needsMe.reasonOf)) : undefined);
   const ticket = useTicket(api, selected && projectOf(selected), selected, version);
   useNeedsMeTitle(inbox.data && needsMe.count());
   // An ID Link asks the Inbox to open an ID whose kind isn't known; once it

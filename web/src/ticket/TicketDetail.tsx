@@ -134,7 +134,7 @@ type TicketBodyProps = Omit<TicketDetailProps, "ticket" | "error"> & {
 // each Claim's Live section, move, and a collapsed history of moves,
 // comments and edits merged by time.
 function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSpec, openTicket, archived, editing }: TicketBodyProps) {
-  const claims = [...t.claims].sort((a, b) => b.number - a.number);
+  const claims = [...(t.claims ?? [])].sort((a, b) => b.number - a.number);
   return (
     <article aria-label="Ticket details" className="ticket-body">
       <div className="meta">
@@ -336,26 +336,27 @@ type HistoryItem =
   | { kind: "edit"; time: string; key: string; edit: EditView };
 
 function History({ ticket: t, now }: { ticket: TicketView; now: Date }) {
+  const { moves = [], comments = [], edits = [] } = t;
   const items: HistoryItem[] = [
-    ...t.moves.map((m, i): HistoryItem => ({
+    ...moves.map((m, i): HistoryItem => ({
       kind: "text",
       time: m.time,
       key: `m${i}`,
       text: moveText(m, t),
     })),
-    ...t.comments.map((c): HistoryItem => ({
+    ...comments.map((c): HistoryItem => ({
       kind: "text",
       time: c.time,
       key: `c${c.number}`,
       text: `${c.actor}: ${c.body.split("\n")[0]}`,
     })),
-    ...t.edits.map((e): HistoryItem => ({ kind: "edit", time: e.time, key: `e${e.number}`, edit: e })),
+    ...edits.map((e): HistoryItem => ({ kind: "edit", time: e.time, key: `e${e.number}`, edit: e })),
   ].sort((a, b) => b.time.localeCompare(a.time));
   return (
     <details>
       <summary>
-        History ({plural(t.moves.length, "move")}, {plural(t.comments.length, "comment")},{" "}
-        {plural(t.edits.length, "edit")})
+        History ({plural(moves.length, "move")}, {plural(comments.length, "comment")},{" "}
+        {plural(edits.length, "edit")})
       </summary>
       <ul className="history">
         {items.map((h) => (

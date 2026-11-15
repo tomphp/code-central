@@ -139,7 +139,7 @@ describe("the Retro badge", () => {
 
 // finish has every Ticket on the Spec cancelled, so the Spec is Finished.
 async function finish(w: World, spec: string) {
-  for (const t of (await w.api.getSpec("acme", spec)).tickets) await w.api.act("acme", t.id, "cancel", {});
+  for (const t of (await w.api.getSpec("acme", spec)).tickets!) await w.api.act("acme", t.id, "cancel", {});
   expect((await w.api.getSpec("acme", spec)).finished).toBe(true);
 }
 

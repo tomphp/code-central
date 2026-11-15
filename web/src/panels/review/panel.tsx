@@ -97,9 +97,9 @@ export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
 // finishSummary is the finish comment: the non-human comment made at the
 // time of the latest move into In Review (finish stores both in one write).
 function finishSummary(t: TicketView): CommentView | undefined {
-  const entered = t.moves.filter((m) => m.to === "In Review").at(-1);
+  const entered = t.moves?.filter((m) => m.to === "In Review").at(-1);
   if (!entered) return undefined;
-  return t.comments.find((c) => c.time === entered.time && c.actor !== "human");
+  return t.comments?.find((c) => c.time === entered.time && c.actor !== "human");
 }
 
 export const panel: PanelDef = { reasons: ["in_review"], Component: ReviewPanel };

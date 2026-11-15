@@ -866,7 +866,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(rows.find((r) => r.id === id)?.ci_result).toBe("passed");
       expect(rows.find((r) => r.id === ready)).not.toHaveProperty("ci_result");
       const spec = await d.api.getSpec("acme", passed.spec.id);
-      expect(spec.tickets.find((r) => r.id === id)?.ci_result).toBe("passed");
+      expect(spec.tickets!.find((r) => r.id === id)?.ci_result).toBe("passed");
     });
 
     it("offers a CI failed Ticket Land anyway under Merge, and records the human's choice", async () => {
@@ -1031,7 +1031,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const sent = await d.api.act("acme", back, "send_back", { note: "CI failed: runs/1" });
       expect(sent).toMatchObject({ id: back, state: "Ready" });
       const ready = await d.api.getTicket("acme", back);
-      expect(ready.comments.at(-1)).toMatchObject({ actor: "human", body: "CI failed: runs/1" });
+      expect(ready.comments!.at(-1)).toMatchObject({ actor: "human", body: "CI failed: runs/1" });
       expect(ready).not.toHaveProperty("ci_failure_options");
 
       const fixed = await failedTicket("Sign-up page", 2);
@@ -1045,7 +1045,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(landing).toMatchObject({ state: "Accepted" });
       expect(landing.land_anyway).toBeFalsy();
       expect(landing).not.toHaveProperty("ci_failure_options");
-      expect(landing.comments.at(-1)?.body).toContain(ack.id);
+      expect(landing.comments!.at(-1)?.body).toContain(ack.id);
     });
 
     it("reads the CI view: each run's latest attempt, unfinished first, for one Project or All Projects (code-central-258)", async () => {
@@ -1158,7 +1158,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const t = await d.api.getTicket("acme", id);
       expect(t).toMatchObject({ id, title: "Pick a colour", state: "Needs Answer", needs_me_reason: "needs_answer" });
       expect(t.rounds).toHaveLength(1);
-      expect(t.rounds[0].questions[0]).toMatchObject({ number: 1, title: "Which colour?", recommended: "Blue", status: "open" });
+      expect(t.rounds![0].questions[0]).toMatchObject({ number: 1, title: "Which colour?", recommended: "Blue", status: "open" });
       expect(Array.isArray(t.labels) && Array.isArray(t.moves) && Array.isArray(t.comments)).toBe(true);
     });
 
@@ -1204,7 +1204,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const t = await d.api.getTicket("acme", id);
       expect(t).toMatchObject({ state: "Failed", needs_me_reason: "failed" });
       expect(t.failure_reports).toHaveLength(1);
-      expect(t.failure_reports[0]).toMatchObject({ number: 1, claim: 1, session_id: "contract-session", ...sampleReport });
+      expect(t.failure_reports![0]).toMatchObject({ number: 1, claim: 1, session_id: "contract-session", ...sampleReport });
       const v = await d.api.needsMe();
       expect(v.groups[0]).toMatchObject({ reason: "failed", tickets: [{ id, failure: { headline: "Tests fail on CI", reports: 1 } }] });
     });
@@ -1216,8 +1216,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       wantAcknowledgement(await d.api.act("acme", id, "send_back", { note: "Fixture fixed on main" }), id, "Ready", ["state", "comments", "moves"]);
       const t = await d.api.getTicket("acme", id);
-      expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Fixture fixed on main" });
-      expect(t.moves.at(-1)).toMatchObject({ from: "Failed", to: "Ready", actor: "human" });
+      expect(t.comments!.at(-1)).toMatchObject({ actor: "human", body: "Fixture fixed on main" });
+      expect(t.moves!.at(-1)).toMatchObject({ from: "Failed", to: "Ready", actor: "human" });
       expect((await d.api.needsMe()).count).toBe(0);
     });
 
@@ -1225,7 +1225,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       const id = await d.createTicket("acme", "Fix login", "Ready");
       await d.reportFailure("acme", id, sampleReport);
-      const before = (await d.api.getTicket("acme", id)).comments.length;
+      const before = (await d.api.getTicket("acme", id)).comments!.length;
 
       const ack = await d.api.act("acme", id, "send_back", {});
       wantAcknowledgement(ack, id, "Ready", ["state", "moves"]);
@@ -1270,9 +1270,9 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       const t = await d.api.getTicket("acme", id);
       expect(t).toMatchObject({ state: "In Review", needs_me_reason: "in_review" });
-      const entered = t.moves.at(-1)!;
+      const entered = t.moves!.at(-1)!;
       expect(entered).toMatchObject({ from: "In Progress", to: "In Review", actor: "agent" });
-      expect(t.comments.at(-1)).toMatchObject({
+      expect(t.comments!.at(-1)).toMatchObject({
         actor: "agent",
         time: entered.time,
         body: "Added the login page\nBranch impl/7; check the redirect",
@@ -1290,7 +1290,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       wantAcknowledgement(await d.api.act("acme", id, "accept", {}), id, "Done", ["state", "moves"]);
       const t = await d.api.getTicket("acme", id);
-      expect(t.moves.at(-1)).toMatchObject({ from: "In Review", to: "Done", actor: "human" });
+      expect(t.moves!.at(-1)).toMatchObject({ from: "In Review", to: "Done", actor: "human" });
       expect((await d.api.needsMe()).count).toBe(0);
     });
 
@@ -1326,7 +1326,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.api.addLabels("acme", spec, ["auto-accept"]);
       const t = await d.api.getTicket("acme", review);
       expect(t.state).toBe("Done");
-      expect(t.moves.at(-1)).toMatchObject({ from: "In Review", to: "Done", actor: "human", cause: "spec-label" });
+      expect(t.moves!.at(-1)).toMatchObject({ from: "In Review", to: "Done", actor: "human", cause: "spec-label" });
       expect((await d.api.getTicket("acme", other)).state).toBe("Ready");
 
       // Taking the Label off undoes nothing.
@@ -1344,7 +1344,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.api.addLabels("acme", id, ["auto-accept"]);
       const t = await d.api.getTicket("acme", id);
       expect(t.state).toBe("Accepted");
-      expect(t.moves.at(-1)).toMatchObject({ from: "In Review", to: "Accepted", actor: "human", cause: "ticket-label" });
+      expect(t.moves!.at(-1)).toMatchObject({ from: "In Review", to: "Accepted", actor: "human", cause: "ticket-label" });
       expect((await d.api.getTicket("acme", sibling)).state).toBe("In Review");
     });
 
@@ -1369,14 +1369,14 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       wantAcknowledgement(await d.api.act("acme", id, "accept", {}), id, "Accepted", ["state", "moves"]);
       const a = await d.api.getTicket("acme", id);
       expect(a).toMatchObject({ state: "Accepted", branch: "impl-7", commit: "abc123" });
-      expect(a.moves.at(-1)).toMatchObject({ from: "In Review", to: "Accepted", actor: "human" });
+      expect(a.moves!.at(-1)).toMatchObject({ from: "In Review", to: "Accepted", actor: "human" });
 
       const blank = await d.api.act("acme", id, "land", { commit: " " }).catch((e) => e);
       expect(blank).toMatchObject({ status: 422, code: "invalid", field: "commit" });
 
       wantAcknowledgement(await d.api.act("acme", id, "land", { commit: "def456" }), id, "Done", ["state", "moves"]);
       const t = await d.api.getTicket("acme", id);
-      expect(t.moves.at(-1)).toMatchObject({ from: "Accepted", to: "Done", actor: "human", via: "merge", commit: "def456" });
+      expect(t.moves!.at(-1)).toMatchObject({ from: "Accepted", to: "Done", actor: "human", via: "merge", commit: "def456" });
     });
 
     it("cancels an Accepted Ticket", async () => {
@@ -1400,7 +1400,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       wantAcknowledgement(await d.api.act("acme", id, "reject", { comment: "The redirect loops" }), id, "Ready", ["state", "comments", "moves"]);
       const t = await d.api.getTicket("acme", id);
-      expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "The redirect loops" });
+      expect(t.comments!.at(-1)).toMatchObject({ actor: "human", body: "The redirect loops" });
       expect((await d.api.needsMe()).count).toBe(0);
     });
 
@@ -1425,10 +1425,10 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const ack = await d.api.act("acme", spec, "implement", {});
       wantAcknowledgement(ack, spec, "Done", ["state", "moves"]);
       const done = await d.api.getTicket("acme", spec);
-      expect(done.moves.at(-1)).toMatchObject({ from: "In Review", to: "Done", actor: "human", via: "implement" });
+      expect(done.moves!.at(-1)).toMatchObject({ from: "In Review", to: "Done", actor: "human", via: "implement" });
 
       const s = await d.api.getSpec("acme", r.spec.id);
-      const build = s.tickets.find((t) => t.title === "Implement: Offline mode");
+      const build = s.tickets!.find((t) => t.title === "Implement: Offline mode");
       expect(build).toBeDefined();
       const b = await d.api.getTicket("acme", build!.id);
       expect(b).toMatchObject({ state: "Ready", labels: [], blocked_by: [] });
@@ -1438,8 +1438,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       );
       const cancelled = await d.api.getTicket("acme", tickets);
       expect(cancelled).toMatchObject({ state: "Cancelled", replacements: [b.id] });
-      expect(cancelled.moves.at(-1)).toMatchObject({ to: "Cancelled", actor: "human", via: "implement" });
-      expect(cancelled.comments.at(-1)).toMatchObject({ actor: "human", body: expect.stringContaining(b.id) });
+      expect(cancelled.moves!.at(-1)).toMatchObject({ to: "Cancelled", actor: "human", via: "implement" });
+      expect(cancelled.comments!.at(-1)).toMatchObject({ actor: "human", body: expect.stringContaining(b.id) });
     });
 
     it("refuses implement on a Ticket that isn't a spec Stage or isn't In Review, writing nothing", async () => {
@@ -1482,7 +1482,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       wantAcknowledgement(await d.api.act("acme", a, "cancel", {}), a, "Cancelled", ["state", "moves"]);
       const t = await d.api.getTicket("acme", a);
       expect(t).toMatchObject({ state: "Cancelled", replacements: [] });
-      expect(t.moves.at(-1)).toMatchObject({ from: "Ready", to: "Cancelled", actor: "human" });
+      expect(t.moves!.at(-1)).toMatchObject({ from: "Ready", to: "Cancelled", actor: "human" });
       const dep = await d.api.getTicket("acme", b);
       expect(dep).toMatchObject({ blocked: true, blockers: [{ id: a, title: "A", state: "Cancelled", cleared: false }] });
     });
@@ -1498,7 +1498,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       }
       wantAcknowledgement(await d.api.act("acme", id, "move", { to_state: "Done" }), id, "Done", ["state", "moves"]);
       const t = await d.api.getTicket("acme", id);
-      expect(t.moves.at(-1)).toMatchObject({ from: "Ready", to: "Done", actor: "human" });
+      expect(t.moves!.at(-1)).toMatchObject({ from: "Ready", to: "Done", actor: "human" });
     });
 
     // ---- release (ticket 35) ----
@@ -1510,9 +1510,9 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       wantAcknowledgement(await d.api.act("acme", id, "release", { note: "Session died" }), id, "Ready", ["state", "claims", "comments", "moves"]);
       const t = await d.api.getTicket("acme", id);
       expect(t.claims).toHaveLength(1);
-      expect(t.claims[0]).toMatchObject({ session_id: "sess-1", ended_by: "release" });
-      expect(t.claims[0].ended).toBeTruthy();
-      expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Session died" });
+      expect(t.claims![0]).toMatchObject({ session_id: "sess-1", ended_by: "release" });
+      expect(t.claims![0].ended).toBeTruthy();
+      expect(t.comments!.at(-1)).toMatchObject({ actor: "human", body: "Session died" });
 
       const again = await d.api.act("acme", id, "release", {}).catch((e) => e);
       expect(again).toMatchObject({ status: 409, code: "action_not_allowed" });
@@ -1555,7 +1555,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const s = await d.api.getSpec("acme", r.spec.id);
       expect(s).toMatchObject({ id: r.spec.id, title: "Export a Spec as Markdown", body: "Export a Spec as Markdown\nOne file, Tickets included.", finished: false });
       expect(Number.isNaN(Date.parse(s.created))).toBe(false);
-      expect(s.tickets.map((t) => t.id)).toEqual(r.stages.map((t) => t.id));
+      expect(s.tickets!.map((t) => t.id)).toEqual(r.stages.map((t) => t.id));
       expect(s.requirement).toEqual({
         stages: [
           { name: "grilling", ticket: r.stages[0].id, state: "Ready" },
@@ -1623,7 +1623,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       );
       expect(s.requirement).toBeUndefined();
       expect(s.map).toEqual({ decided: 0, total: 1, needs_you: 0, guided: false, can_write_spec: false, requirements: [] });
-      expect(s.tickets.map((t) => [t.id, t.node_type])).toEqual([[r.charting.id, "chart"]]);
+      expect(s.tickets!.map((t) => [t.id, t.node_type])).toEqual([[r.charting.id, "chart"]]);
 
       await d.api.act("acme", r.charting.id, "move", { to_state: "Done" });
       expect((await d.api.getSpec("acme", r.spec.id)).map).toEqual({ decided: 1, total: 1, needs_you: 0, guided: false, can_write_spec: true, requirements: [] });
@@ -1726,7 +1726,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.addBlocker("acme", r.charting.id, a);
 
       const s = await d.api.getSpec("acme", r.spec.id);
-      expect(s.tickets.map((t) => [t.id, t.blocked_by])).toEqual([[r.charting.id, [a]]]);
+      expect(s.tickets!.map((t) => [t.id, t.blocked_by])).toEqual([[r.charting.id, [a]]]);
       const rows = await d.api.findTickets("acme");
       expect(rows.find((t) => t.id === b)?.blocked_by).toBeUndefined();
       expect(rows.find((t) => t.id === r.charting.id)?.blocked_by).toEqual([a]);
@@ -1738,7 +1738,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const ready = await d.createTicket("acme", "B", "Ready");
 
       wantAcknowledgement(await d.api.act("acme", draft, "approve", {}), draft, "Ready", ["state", "moves"]);
-      expect((await d.api.getTicket("acme", draft)).moves.at(-1)).toMatchObject({ from: "Draft", to: "Ready", actor: "human" });
+      expect((await d.api.getTicket("acme", draft)).moves!.at(-1)).toMatchObject({ from: "Draft", to: "Ready", actor: "human" });
       const e = await d.api.act("acme", ready, "approve", {}).catch((e) => e);
       expect(e).toMatchObject({ status: 409, code: "action_not_allowed" });
     });
@@ -1760,7 +1760,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         claimable: true,
       });
       expect(t.moves).toMatchObject([{ to: "Ready", actor: "human", via: "submit_prototype" }]);
-      expect((await d.api.getSpec("acme", r.spec.id)).tickets.map((t) => t.id)).toContain(ack.id);
+      expect((await d.api.getSpec("acme", r.spec.id)).tickets!.map((t) => t.id)).toContain(ack.id);
     });
 
     it("refuses a Prototype with no text, or on no Spec", async () => {
@@ -1824,7 +1824,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       expect(t.moves).toMatchObject([{ to: "Ready", actor: "human", via: "submit_small_change" }]);
       const spec = await d.api.getSpec("acme", t.spec.id);
       expect(spec.labels).toContain("long-lived");
-      expect(spec.tickets.map((t) => t.id)).toContain(ack.id);
+      expect(spec.tickets!.map((t) => t.id)).toContain(ack.id);
     });
 
     it("reuses the Small Changes Spec for a second Small Change", async () => {
@@ -1878,7 +1878,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       const t = await d.api.getTicket("acme", id);
       expect(t).toMatchObject({ title: "Pick a shade", description: "Navy." });
-      expect(t.edits.map((e) => [e.actor, e.previous])).toEqual([
+      expect(t.edits!.map((e) => [e.actor, e.previous])).toEqual([
         ["human", { description: "" }],
         ["human", { title: "Pick a colour", description: "Blue." }],
       ]);
@@ -1919,7 +1919,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const before = await d.api.getSpec("acme", spec.id);
 
       const one = await d.api.editSpec("acme", spec.id, { body: "New body." });
-      expect(one).toMatchObject({ id: spec.id, edit: before.edits.length + 1 });
+      expect(one).toMatchObject({ id: spec.id, edit: before.edits!.length + 1 });
       expect(one.changed).toEqual(expect.arrayContaining(["body", "edits"]));
       expect(one.changed).not.toContain("title");
       const both = await d.api.editSpec("acme", spec.id, { title: "Flight mode", body: "Newer body." });
@@ -1927,11 +1927,11 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       const s = await d.api.getSpec("acme", spec.id);
       expect(s).toMatchObject({ title: "Flight mode", body: "Newer body." });
-      expect(s.edits.slice(before.edits.length).map((e) => [e.actor, Object.keys(e.previous).sort()])).toEqual([
+      expect(s.edits!.slice(before.edits!.length).map((e) => [e.actor, Object.keys(e.previous).sort()])).toEqual([
         ["human", ["body"]],
         ["human", ["body", "title"]],
       ]);
-      expect(s.edits.at(-1)!.previous.title).toBe("Offline mode");
+      expect(s.edits!.at(-1)!.previous.title).toBe("Offline mode");
     });
 
     it("writes no edit for a Spec change that changes nothing, and refuses an empty title", async () => {
@@ -2043,8 +2043,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       wantAcknowledgement(await d.api.act("acme", id, "wont_fix", { reason: "Works as intended." }), id, "Cancelled", ["state", "needs_me_reason", "awaiting_triage", "triage_actions"]);
       const t = await d.api.getTicket("acme", id);
-      expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Works as intended." });
-      expect(t.moves.at(-1)).toMatchObject({ to: "Cancelled", via: "wont_fix" });
+      expect(t.comments!.at(-1)).toMatchObject({ actor: "human", body: "Works as intended." });
+      expect(t.moves!.at(-1)).toMatchObject({ to: "Cancelled", via: "wont_fix" });
       expect(t.link).toMatchObject({ detached: false });
       expect(t.awaiting_triage).toBeUndefined();
       expect(t.triage_actions).toBeUndefined();
@@ -2072,8 +2072,8 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       const ack = await d.api.act("acme", id, "to_requirement", { context: "  Seen on every login.  " });
       wantAcknowledgement(ack, id, "Cancelled", ["state", "replacements", "comments", "moves", "needs_me_reason", "link", "awaiting_triage", "triage_actions"]);
       const t = await d.api.getTicket("acme", id);
-      expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Seen on every login." });
-      expect(t.moves.at(-1)).toMatchObject({ to: "Cancelled", via: "to_requirement" });
+      expect(t.comments!.at(-1)).toMatchObject({ actor: "human", body: "Seen on every login." });
+      expect(t.moves!.at(-1)).toMatchObject({ to: "Cancelled", via: "to_requirement" });
       expect(t.link).toMatchObject({ ...gh, detached: true, outbound: false });
       expect(t.awaiting_triage).toBeUndefined();
       expect(t.triage_actions).toBeUndefined();
@@ -2102,9 +2102,9 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.claim("acme", quiet, "sess-quiet");
       const spec = (await d.api.getTicket("acme", id)).spec.id;
       const rowOf = async (t: string) => (await d.api.findTickets("acme")).find((r) => r.id === t)!;
-      const specRowOf = async (t: string) => (await d.api.getSpec("acme", spec)).tickets.find((r) => r.id === t)!;
+      const specRowOf = async (t: string) => (await d.api.getSpec("acme", spec)).tickets!.find((r) => r.id === t)!;
 
-      expect((await d.api.getTicket("acme", id)).claims[0].latest_event).toBeUndefined();
+      expect((await d.api.getTicket("acme", id)).claims![0].latest_event).toBeUndefined();
       expect((await rowOf(id)).latest_event).toBeUndefined();
 
       await d.postSessionEvents("sess-busy", [
@@ -2112,10 +2112,10 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
         { time: "2026-11-08T10:00:05Z", kind: "tool_result", tool_use_id: "tu-1", text: "FAIL\nexit 1", is_error: true },
       ]);
       const failed = { kind: "tool_result", text: "Bash failed", time: "2026-11-08T10:00:05Z" };
-      expect((await d.api.getTicket("acme", id)).claims[0].latest_event).toEqual(failed);
+      expect((await d.api.getTicket("acme", id)).claims![0].latest_event).toEqual(failed);
       expect((await rowOf(id)).latest_event).toEqual(failed);
       expect((await specRowOf(id)).latest_event).toEqual(failed);
-      expect((await d.api.getTicket("acme", quiet)).claims[0].latest_event).toBeUndefined();
+      expect((await d.api.getTicket("acme", quiet)).claims![0].latest_event).toBeUndefined();
       expect((await rowOf(quiet)).latest_event).toBeUndefined();
       expect((await specRowOf(quiet)).latest_event).toBeUndefined();
 
@@ -2131,7 +2131,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
 
       // Once the Claim ends, it keeps its latest event; the rows have no live Claim to show.
       await d.api.act("acme", id, "release", {});
-      expect((await d.api.getTicket("acme", id)).claims[0].latest_event).toMatchObject({ kind: "factory" });
+      expect((await d.api.getTicket("acme", id)).claims![0].latest_event).toMatchObject({ kind: "factory" });
       expect((await rowOf(id)).latest_event).toBeUndefined();
       expect((await specRowOf(id)).latest_event).toBeUndefined();
     });
@@ -2446,7 +2446,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.claim("acme", impl, "sess-impl");
       await d.claim("beta", spec, "sess-spec");
       // The service's now, from the Claim, so the responses fall in range.
-      const base = Date.parse((await d.api.getTicket("acme", impl)).claims[0].started);
+      const base = Date.parse((await d.api.getTicket("acme", impl)).claims![0].started);
       const at = (s: number) => new Date(base + s * 1000).toISOString();
       const resp = (s: number, kind: string, input: number, write: number, read: number, agent?: string): UsageResponse => ({
         time: at(s),
@@ -2543,7 +2543,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       const impl = await d.createTicket("acme", "Build it", "Ready");
       await d.claim("acme", impl, "sess-impl");
-      const base = Date.parse((await d.api.getTicket("acme", impl)).claims[0].started);
+      const base = Date.parse((await d.api.getTicket("acme", impl)).claims![0].started);
       const at = (s: number) => new Date(base + s * 1000).toISOString();
       const resp = (s: number, kind: string, input: number, sub?: Pick<UsageResponse, "agent" | "agent_type" | "description">): UsageResponse => ({
         time: at(s),
@@ -2632,7 +2632,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       const first = await d.createTicket("acme", "Ticket 0", "Ready");
       await d.claim("acme", first, "sess-00");
-      const base = Date.parse((await d.api.getTicket("acme", first)).claims[0].started);
+      const base = Date.parse((await d.api.getTicket("acme", first)).claims![0].started);
       const resp = (s: number, agent?: string): UsageResponse => ({
         time: new Date(base + s * 1000).toISOString(),
         ...(agent ? { agent } : {}),
@@ -2662,7 +2662,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       const impl = await d.createTicket("acme", "Build it", "Ready");
       await d.claim("acme", impl, "sess-impl");
-      const base = Date.parse((await d.api.getTicket("acme", impl)).claims[0].started);
+      const base = Date.parse((await d.api.getTicket("acme", impl)).claims![0].started);
       const at = (s: number) => new Date(base + s * 1000).toISOString();
       const resp = (s: number, write: number, read: number, agent?: string): UsageResponse => ({
         time: at(s),
@@ -2699,7 +2699,7 @@ export function apiContract(name: string, newDriver: () => Promise<Driver>) {
       await d.createProject("acme", "Acme");
       const impl = await d.createTicket("acme", "Build it", "Ready");
       await d.claim("acme", impl, "sess-impl");
-      const base = Date.parse((await d.api.getTicket("acme", impl)).claims[0].started);
+      const base = Date.parse((await d.api.getTicket("acme", impl)).claims![0].started);
       const resp = (s: number, sub?: Pick<UsageResponse, "agent" | "agent_type" | "description">): UsageResponse => ({
         time: new Date(base + s * 1000).toISOString(),
         ...sub,

@@ -108,8 +108,8 @@ describe("Won't fix on a New issue", () => {
     expect(x.w.calls).toContain("wont_fix");
     const t = await x.w.api.getTicket("acme", x.issue);
     expect(t).toMatchObject({ state: "Cancelled" });
-    expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Works as intended." });
-    expect(t.moves.at(-1)).toMatchObject({ to: "Cancelled", via: "wont_fix" });
+    expect(t.comments!.at(-1)).toMatchObject({ actor: "human", body: "Works as intended." });
+    expect(t.moves!.at(-1)).toMatchObject({ to: "Cancelled", via: "wont_fix" });
     expect(t.awaiting_triage).toBeUndefined();
     expect(t.triage_actions).toBeUndefined();
     expect((await x.w.api.needsMe()).count).toBe(0);
@@ -160,7 +160,7 @@ describe("To Requirement on a New issue", () => {
     expect(x.w.calls).toContain("to_requirement");
     const t = await x.w.api.getTicket("acme", x.issue);
     expect(t).toMatchObject({ state: "Cancelled", link: { detached: true } });
-    expect(t.moves.at(-1)).toMatchObject({ to: "Cancelled", via: "to_requirement" });
+    expect(t.moves!.at(-1)).toMatchObject({ to: "Cancelled", via: "to_requirement" });
     expect(t.triage_actions).toBeUndefined();
     expect((await x.w.api.needsMe()).count).toBe(0);
     const sp = await requirementOf(x);
@@ -195,7 +195,7 @@ describe("a New issue in Focus Mode", () => {
     renderApp(x.w, "/?view=focus");
     const item = await within(focus()).findByRole("region", { name: "New issue" });
     await toRequirement(item, "Urgent.");
-    expect((await x.w.api.getTicket("acme", x.issue)).comments.at(-1)?.body).toBe("Urgent.");
+    expect((await x.w.api.getTicket("acme", x.issue)).comments!.at(-1)?.body).toBe("Urgent.");
     expect(await within(focus()).findByRole("heading", { name: "Next up" })).toBeInTheDocument();
   });
 
@@ -205,7 +205,7 @@ describe("a New issue in Focus Mode", () => {
     renderApp(x.w, "/?view=focus");
     const item = await within(focus()).findByRole("region", { name: "New issue" });
     await wontFix(item, "Not planned.");
-    expect((await x.w.api.getTicket("acme", x.issue)).comments.at(-1)?.body).toBe("Not planned.");
+    expect((await x.w.api.getTicket("acme", x.issue)).comments!.at(-1)?.body).toBe("Not planned.");
     expect(await within(focus()).findByRole("heading", { name: "Next up" })).toBeInTheDocument();
   });
 
@@ -235,7 +235,7 @@ describe("the triage actions in the Ticket panel", () => {
     await wontFix(within(d).getByRole("region", { name: "Triage" }), "Duplicate of #3.");
     const t = await w.api.getTicket("acme", issue);
     expect(t.state).toBe("Cancelled");
-    expect(t.comments.at(-1)?.body).toBe("Duplicate of #3.");
+    expect(t.comments!.at(-1)?.body).toBe("Duplicate of #3.");
   });
 
   it("include To Requirement with its context box", async () => {

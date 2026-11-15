@@ -158,7 +158,7 @@ export class Scenario extends HttpDriver {
   // order, each with its answer, else its recommendation, else "Yes",
   // which completes the Round.
   async answerRound(key: string, id: string, answers: string[] = []) {
-    const open = (await this.api.getTicket(key, id)).rounds.at(-1)!.questions.filter((q) => q.status === "open");
+    const open = (await this.api.getTicket(key, id)).rounds!.at(-1)!.questions.filter((q) => q.status === "open");
     for (const [i, q] of open.entries()) {
       await this.human(`${this.ticketPath(key, id)}/answer`, { question: q.number, text: answers[i] ?? q.recommended ?? "Yes" });
     }

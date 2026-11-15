@@ -315,6 +315,69 @@ export const CHAT_OUTCOMES = [
 ] as const;
 export type ChatOutcome = (typeof CHAT_OUTCOMES)[number];
 
+// TICKET_FIELDS are TicketView's JSON names in field order, the order
+// a write's Acknowledgement lists them in changed.
+export const TICKET_FIELDS = [
+  "id",
+  "title",
+  "state",
+  "spec",
+  "labels",
+  "tags",
+  "blocked_by",
+  "blockers",
+  "replacements",
+  "created",
+  "updated",
+  "description",
+  "branch",
+  "commit",
+  "recommendation",
+  "pushed_commit",
+  "pull_request",
+  "ci_result",
+  "ci_commit",
+  "ci_runs",
+  "land_anyway",
+  "spec_merge",
+  "spec_landed",
+  "ci_item",
+  "waiting_for_spec",
+  "ci_failure_options",
+  "claims",
+  "rounds",
+  "failure_reports",
+  "comments",
+  "moves",
+  "edits",
+  "left_out",
+  "blocked",
+  "claimable",
+  "silent_since",
+  "needs_me_reason",
+  "link",
+  "awaiting_triage",
+  "spec_merge_ticket",
+  "triage_actions",
+  "model_choice",
+  "retros",
+  "auto_accept_kind",
+] as const;
+
+// SPEC_FIELDS are SpecView's JSON names in field order, the order
+// a write's Acknowledgement lists them in changed.
+export const SPEC_FIELDS = [
+  "id",
+  "title",
+  "labels",
+  "tags",
+  "created",
+  "updated",
+  "body",
+  "edits",
+  "link",
+] as const;
+
 // ProjectView is a Project as every read returns it.
 export interface ProjectView {
   key: string;
@@ -673,6 +736,21 @@ export interface Acknowledgement {
   state?: State;
 }
 
+// SpecView is a Spec as every read returns it, and as its writes return
+// it with full.
+export interface SpecView {
+  id: string;
+  title: string;
+  labels: string[];
+  tags: Record<string, string>;
+  created: string;
+  updated: string;
+  body: string;
+  edits: EditView[];
+  // Link is set on a linked Spec (ticket 42).
+  link?: LinkView;
+}
+
 // LandingView is a Project's Landing Method with its Push option and the
 // remote it uses.
 export interface LandingView {
@@ -939,6 +1017,8 @@ export interface RoundView {
 export interface FailureReportView {
   number: number;
   claim: number;
+  // SessionID, WorkingDir and ResumeCommand are copies of the Claim's,
+  // made when the report was written.
   session_id?: string;
   working_dir?: string;
   resume_command?: string;

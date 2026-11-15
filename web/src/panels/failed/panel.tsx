@@ -18,7 +18,7 @@ import "./failed.css";
 export function FailedPanel({ api, project, ticket: t, now }: PanelProps) {
   const [note, setNote] = useState("");
   const { busy, error, run } = useAct();
-  const reports = t.failure_reports;
+  const reports = t.failure_reports ?? [];
   const latest = reports.at(-1);
   const earlier = reports.slice(0, -1).reverse();
   const n = reports.length;

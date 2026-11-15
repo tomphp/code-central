@@ -18,7 +18,7 @@ export const panel: PanelDef = { reasons: ["needs_answer"], Component: RoundPane
 
 export function RoundPanel({ api, project, ticket }: PanelProps) {
   const accept = useAction();
-  const round = ticket.rounds.at(-1);
+  const round = ticket.rounds?.at(-1);
   if (!round) return null;
   const open = round.questions.filter((q) => q.status === "open");
 

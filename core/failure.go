@@ -50,8 +50,10 @@ type StopResult = FinishResult
 
 // FailureReportView is one Failure Report as reads show it.
 type FailureReportView struct {
-	Number          int       `json:"number"`
-	Claim           int       `json:"claim"`
+	Number int `json:"number"`
+	Claim  int `json:"claim"`
+	// SessionID, WorkingDir and ResumeCommand are copies of the Claim's,
+	// made when the report was written.
 	SessionID       string    `json:"session_id,omitempty"`
 	WorkingDir      string    `json:"working_dir,omitempty"`
 	ResumeCommand   string    `json:"resume_command,omitempty"`
