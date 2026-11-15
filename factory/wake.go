@@ -63,17 +63,3 @@ func (f *factory) wake() {
 	default: // a poll is due already
 	}
 }
-
-// untilDraining is ctx, ended also by the first Ctrl-C: a long-poll's
-// context, as draining closes the long-polls.
-func (f *factory) untilDraining(ctx context.Context) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(ctx)
-	go func() {
-		select {
-		case <-f.drainCh:
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
-	return ctx, cancel
-}

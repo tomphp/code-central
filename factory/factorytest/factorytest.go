@@ -251,21 +251,11 @@ func (h *Harness) startProxy() string {
 	}
 	ps := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if suffix, _ := h.failing.Load().(string); suffix != "" && strings.HasSuffix(r.URL.Path, suffix) {
-			h.refusedMu.Lock()
-			h.refused[r.URL.Path]++
-			h.refusedMu.Unlock()
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprint(w, `{"code":"internal","message":"failing for the test"}`)
+			h.refuse(w, r, http.StatusInternalServerError, `{"code":"internal","message":"failing for the test"}`)
 			return
 		}
 		if suffix, _ := h.missing.Load().(string); suffix != "" && strings.HasSuffix(r.URL.Path, suffix) {
-			h.refusedMu.Lock()
-			h.refused[r.URL.Path]++
-			h.refusedMu.Unlock()
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNotFound)
-			fmt.Fprintf(w, `{"code":"not_found","message":"no API resource at %s %s"}`, r.Method, r.URL.Path)
+			h.refuse(w, r, http.StatusNotFound, fmt.Sprintf(`{"code":"not_found","message":"no API resource at %s %s"}`, r.Method, r.URL.Path))
 			return
 		}
 		if !h.down.Load() {
@@ -276,15 +266,27 @@ func (h *Harness) startProxy() string {
 			rp.ServeHTTP(w, r)
 			return
 		}
-		h.refusedMu.Lock()
-		h.refused[r.URL.Path]++
-		h.refusedMu.Unlock()
+		h.countRefused(r)
 		if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
 			conn.Close()
 		}
 	}))
 	h.t.Cleanup(ps.Close)
 	return ps.URL
+}
+
+// refuse answers r with status and the JSON error body, counting it.
+func (h *Harness) refuse(w http.ResponseWriter, r *http.Request, status int, body string) {
+	h.countRefused(r)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	fmt.Fprint(w, body)
+}
+
+func (h *Harness) countRefused(r *http.Request) {
+	h.refusedMu.Lock()
+	defer h.refusedMu.Unlock()
+	h.refused[r.URL.Path]++
 }
 
 // wakeSuffix ends the path of the Factory's next_factory_wake.

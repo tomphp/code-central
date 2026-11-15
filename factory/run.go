@@ -36,7 +36,10 @@ func (f *factory) loop(ctx context.Context) {
 			return
 		case <-f.e.After(f.o.poll):
 		case <-f.wakeCh:
-			// A draining Factory ignores wakes.
+			// A stopping or draining Factory ignores wakes.
+			if ctx.Err() != nil {
+				return
+			}
 			if f.draining() {
 				f.drain(ctx)
 				return
@@ -78,6 +81,20 @@ func (f *factory) draining() bool {
 	default:
 		return false
 	}
+}
+
+// untilDraining is ctx, ended also by the first Ctrl-C: a long-poll's
+// context, as draining closes the long-polls.
+func (f *factory) untilDraining(ctx context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		select {
+		case <-f.drainCh:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
 }
 
 // halted reports whether the Factory must start nothing more: it is
