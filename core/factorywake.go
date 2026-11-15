@@ -168,8 +168,14 @@ func wakesTheFactory(r store.Reader, key string, t store.Ticket) bool {
 	if !found {
 		return slices.Contains(wakingStates, t.State)
 	}
-	return was.State != t.State && slices.Contains(wakingStates, t.State) ||
-		claimWithdrawn(was, t) || slices.ContainsFunc(was.BlockedBy, func(n int) bool { return !slices.Contains(t.BlockedBy, n) })
+	movedIn := was.State != t.State && slices.Contains(wakingStates, t.State)
+	return movedIn || claimWithdrawn(was, t) || blockersShrank(was, t)
+}
+
+// blockersShrank says whether t has lost a Blocker was had, which may
+// leave it claimable.
+func blockersShrank(was, t store.Ticket) bool {
+	return slices.ContainsFunc(was.BlockedBy, func(n int) bool { return !slices.Contains(t.BlockedBy, n) })
 }
 
 // claimWithdrawn says whether the Claim live on was has ended on t by an
