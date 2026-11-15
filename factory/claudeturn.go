@@ -68,8 +68,12 @@ type turnInput struct {
 	OnEvent func(core.SessionEvent)
 	OnUsage func(core.UsageResponse)
 	// Linef prints a line about the Turn: a warning, or with verbose on
-	// a tool call.
+	// a tool call unless Echo is set.
 	Linef func(format string, args ...any)
+	// Echo, if set, prints the tool calls echoed with verbose on, in
+	// place of Linef: a Claim's go to stdout alone, as its Transcript has
+	// them already as Session Events.
+	Echo func(toolCall string)
 	// BeforeStart, if set, is called once the effort has passed its
 	// check, just before claude starts.
 	BeforeStart func()
@@ -142,7 +146,7 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 	end := readTurn(cmd, stdout, in.Dir, newUsageReader(in.UsageKind, r.now), func(e core.SessionEvent) {
 		in.OnEvent(e)
 		if r.verbose && e.Kind == eventToolCall {
-			in.Linef("%s", e.Text)
+			in.Echo(e.Text)
 		}
 	}, in.OnUsage)
 	close(streamRead)
@@ -151,7 +155,7 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 }
 
 // withDefaults is in with a no-op for each sink and line function it
-// leaves out.
+// leaves out, and Linef for an Echo it leaves out.
 func (in turnInput) withDefaults() turnInput {
 	if in.OnEvent == nil {
 		in.OnEvent = func(core.SessionEvent) {}
@@ -161,6 +165,10 @@ func (in turnInput) withDefaults() turnInput {
 	}
 	if in.Linef == nil {
 		in.Linef = func(string, ...any) {}
+	}
+	if in.Echo == nil {
+		linef := in.Linef
+		in.Echo = func(toolCall string) { linef("%s", toolCall) }
 	}
 	return in
 }
