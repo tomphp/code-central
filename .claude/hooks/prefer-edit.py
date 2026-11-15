@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """PreToolUse hook: refuse a Bash command that edits one file in place.
 
-`sed -i` and a `python3` heredoc that reads a file, `.replace()`s in it
-and writes it back are what agents reach for instead of the Edit tool.
+`sed -i`, `perl -i` and a `python3` or `perl` script that reads a file,
+replaces in it and writes it back are what agents reach for instead of the Edit tool.
 They hide the change from the harness, differ between BSD and GNU sed,
 and fail silently when the text isn't there. Edit does the same job, and
 it refuses a replacement that matches nothing. A command that rewrites
@@ -21,7 +21,12 @@ SED_INPLACE =re.compile(r"(?:^|[;&|\n]\s*)sed\s+(?:-\w+\s+)*-i\b")
 HEREDOC = re.compile(r"<<-?[ \t]*(['\"]?)(\w+)\1[^\n]*\n(.*?)^[ \t]*\2[ \t]*$", re.S | re.M)
 OPEN_CALL = re.compile(r"""\bopen\(\s*([^,()]+?)\s*(?:,\s*([^)]*))?\)""")
 TEXT_CALL = re.compile(r"(\w+(?:\([^()]*\))?)\.(read|write)_text\(")
-QUOTED = re.compile(r"""'[^']*'|"[^"]*\"""")
+PERL_INPLACE_FLAG = re.compile(r"-[0pnlasw0-9]*i\S*")
+PERL_INPLACE = re.compile(r"(?:^|[;&|\n]\s*)perl\s+(?:-\S+\s+)*?-[0pnlasw0-9]*i\S*")
+PERL_OPEN3 = re.compile(r"""\bopen\s*\(?\s*[^,;()]+,\s*['"]\s*([+<>]+)[^'"]*['"]\s*,\s*([^,);]+)""")
+PERL_OPEN2 = re.compile(r"""\bopen\s*\(?\s*[^,;()]+,\s*"\s*([+<>]+)\s*([^"]+)\"""")
+PERL_SLURP = re.compile(r"\b(read|write)_file\s*\(?\s*([^,;)]+)")
+QUOTED =re.compile(r"""'[^']*'|"[^"]*\"""")
 
 
 def split_heredocs(command):
@@ -55,16 +60,55 @@ def sed_operands(shell):
     return []
 
 
+def perl_rewrites_one_path(body):
+    """True when the Perl opens one path for reading and the same one for writing."""
+    reads, writes = set(), set()
+    for mode, path in PERL_OPEN3.findall(body) + PERL_OPEN2.findall(body):
+        (writes if ">" in mode else reads).add(path.strip())
+    for kind, path in PERL_SLURP.findall(body):
+        (writes if kind == "write" else reads).add(path.strip())
+    return bool(reads & writes)
+
+
+def perl_operands(shell):
+    """The file operands of the `perl -i` in the shell text: the words after its script."""
+    for segment in re.split(r"[;&|\n]", shell):
+        try:
+            words = shlex.split(segment)
+        except ValueError:
+            continue
+        if not words or words[0] != "perl" or not any(PERL_INPLACE_FLAG.fullmatch(w) for w in words[1:]):
+            continue
+        rest, scripted, skip = [], False, False
+        for w in words[1:]:
+            if skip:
+                skip = False
+            elif w.startswith("-"):
+                # `-e` and `-E` take the script as the next word; `-pie` is `-i` with extension `e`.
+                if re.fullmatch(r"-\w*[eE]", w) and "i" not in w:
+                    scripted = skip = True
+            else:
+                rest.append(w)
+        return rest if scripted else rest[1:]
+    return []
+
+
 def edits_one_file(command):
     shell, bodies = split_heredocs(command)
     if any("python" in shell and rewrites_one_path(b) for b in bodies) or (
             not bodies and re.search(r"\bpython3?\b", command) and rewrites_one_path(command)):
+        return True
+    if any("perl" in shell and perl_rewrites_one_path(b) for b in bodies) or (
+            not bodies and re.search(r"\bperl\b", command) and perl_rewrites_one_path(command)):
         return True
     unquoted = QUOTED.sub("''", shell)
     if re.search(r"\bxargs\b|\bfind\b|\bfor\b", unquoted):
         return False
     if SED_INPLACE.search(shell):
         operands = sed_operands(shell)
+        return len(operands) <= 1 and not any("*" in w for w in operands)
+    if PERL_INPLACE.search(shell):
+        operands = perl_operands(shell)
         return len(operands) <= 1 and not any("*" in w for w in operands)
     if len(set(SOURCE.findall(shell))) > 1 or "*" in unquoted:
         return False
@@ -82,7 +126,7 @@ def main():
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
             "permissionDecisionReason": (
-                "Edit the file with the Edit tool, not `sed -i` or a python replace. "
+                "Edit the file with the Edit tool, not `sed -i`, `perl -i` or a python or perl replace. "
                 "Read the lines you are changing first (Read with offset and limit, "
                 "which Edit accepts), then Edit. Edit fails when old_string isn't "
                 "found or isn't unique, so a missed change can't pass silently."
