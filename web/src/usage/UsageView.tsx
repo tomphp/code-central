@@ -1,13 +1,17 @@
 // Usage (Spec code-central-201): what agents have consumed in one
-// Project, or in all of them, over the last 7, 30 or 90 days: the Code
-// Central calls table, one row per MCP operation, sortable by each
-// column; and Context Size, each kind of session's peaks and the recent
-// sessions, each a main session with its Subagents nested under it, each
-// linking to its Ticket and opening its Context Size, response by
-// response, on a line chart; and token usage, a bar per day
-// filtered by kind of session. It loads when opened and whenever its
-// scope, range or session changes, never live. Back returns to the view
-// it was opened from. The page below the header is UsageBody.
+// Project, or in all of them, over the last 7, 30 or 90 days, in three
+// tabs in this order (Spec code-central-752): Token usage, a bar per day
+// filtered by kind of session; Context Size, each kind of session's peaks
+// and then the recent sessions, each a main session with its Subagents
+// nested under it, each linking to its Ticket and opening its Context
+// Size, response by response, on a line chart; and the Code Central calls
+// table, one row per MCP operation, sortable by each column. The scope
+// and range in the header apply to every tab. The open tab is in the
+// address as tab= (none = Token usage), and an open session shows over
+// the Context Size tab whatever tab= says. It loads when opened and
+// whenever its scope, range or session changes, never on switching tab
+// and never live. Back returns to the view it was opened from. The page
+// below the header is UsageBody.
 import { useEffect, useRef, useState } from "react";
 import type { Api } from "../api/api";
 import { ProjectPicker } from "../controls/ProjectPicker";
@@ -16,7 +20,7 @@ import { ViewHeader } from "../controls/ViewHeader";
 import { sessionKey, USAGE_DAYS, USAGE_KEPT_DAYS, type ProjectRow, type UsageDays, type SessionUsageFilter, type SessionUsageResponse } from "../api/types";
 import { count } from "../format";
 import { useFetch } from "../live";
-import { clickTo, hrefFor, type UiLocation } from "../url";
+import { clickTo, hrefFor, USAGE_TABS, type UiLocation } from "../url";
 import { LineChart } from "./LineChart";
 import { DEFAULT_SORT, nextSort, started, subagentName, UsageBody } from "./UsageBody";
 import { Button } from "../controls/Button";
@@ -37,6 +41,8 @@ export interface UsageViewProps {
 export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps) {
   const { project, sole, resolved } = useProjectScope();
   const days = loc.days ?? USAGE_DAYS[0];
+  // A session in the address opens over the Context Size tab, whatever tab= says.
+  const tab = loc.session ? "context" : (loc.tab ?? USAGE_TABS[0]);
   const usage = useFetch(resolved ? () => api.usage({ project, days }) : null, [api, resolved, project, days]);
   const [sort, setSort] = useState(DEFAULT_SORT);
   const scopeName = project ? projectName(projects, project) : "All Projects";
@@ -70,6 +76,11 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
         navigate={navigate}
         sort={sort}
         onSort={(key) => setSort((s) => nextSort(s, key))}
+        tab={tab}
+        // Switching tab closes the session, which shows over Context Size only.
+        onTab={(to) => {
+          if (to !== tab) navigate({ tab: to, session: undefined });
+        }}
         // The open session, keyed so another session starts from nothing.
         session={loc.session && <SessionChart key={sessionKey(loc.session)} api={api} session={loc.session} here={loc} navigate={navigate} />}
       />
@@ -121,7 +132,8 @@ function SessionChart({ api, session, here, navigate }: SessionChartProps) {
             {count(responses.length)} {responses.length === 1 ? "response" : "responses"} · peak {count(peak)} tokens
           </span>
         ) : null}
-        <Button className="usage-chart-close" onClick={() => navigate({ session: undefined })}>
+        {/* It closes to the Context Size tab it showed over, though the address left the tab out. */}
+        <Button className="usage-chart-close" onClick={() => navigate({ session: undefined, tab: "context" })}>
           Close session
         </Button>
       </header>
