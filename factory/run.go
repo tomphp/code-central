@@ -282,13 +282,6 @@ func (f *factory) stopTurn(t *turn) {
 	<-t.done
 }
 
-// stopProcess takes a Chat reply's process proc through the Turn
-// runner's stop ladder until ended is closed, telling warn of a step
-// that fails.
-func (f *factory) stopProcess(proc *os.Process, ended <-chan struct{}, warn func(error)) {
-	f.runner.stop(proc, ended, warn)
-}
-
 // stopAll stops every running turn at once.
 func (f *factory) stopAll() {
 	f.mu.Lock()

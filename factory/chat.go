@@ -10,7 +10,6 @@ package factory
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -136,72 +135,60 @@ func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session, wt s
 			return core.ChatFailed, err.Error()
 		}
 	}
-	if !f.accepts.takesEffort(t.Effort) {
-		return core.ChatFailed, fmt.Sprintf("The effort `%s` isn't one this Factory's claude accepts (%s), so no reply was started. Pick another in New conversation, or set the Chat row's in Project Options → Models.", t.Effort, strings.Join(f.accepts.levels, ", "))
-	}
 	// A turn that waited on the one before it starts nothing once the
 	// Factory is stopping.
 	if ctx.Err() != nil {
 		return core.ChatStopped, ""
 	}
-	how := "--resume"
 	if t.First {
-		how = "--session-id"
 		f.printf("chat: starting a Conversation in %s; resume: %s", wt, chatResumeCommand(wt, session))
 	}
-	args := append([]string{"-p", how, session}, f.runner.flags(turnChoice{model: t.Model, effort: t.Effort}, nil, chatPrompt(f.project, wt))...)
-	cmd := exec.Command(f.claude, append(args, t.Text)...)
-	cmd.Dir = wt
-	cmd.Env = f.e.Environ
-	cmd.Stderr = f.e.Stderr
-	// Its own process group, as a Claim's turn is, so the terminal's
-	// Ctrl-C reaches only the Factory.
-	startInOwnGroup(cmd)
-	stdout, err := cmd.StdoutPipe()
-	if err == nil {
-		err = cmd.Start()
+	out := f.runner.run(ctx, turnInput{
+		Dir:          wt,
+		Session:      session,
+		Resume:       !t.First,
+		Choice:       turnChoice{model: t.Model, effort: t.Effort},
+		SystemPrompt: chatPrompt(f.project, wt),
+		Prompt:       t.Text,
+		UsageKind:    kindChat,
+		OnEvent:      p.add,
+		OnUsage:      p.addUsage,
+		Linef:        func(format string, args ...any) { f.printf("chat: "+format, args...) },
+	})
+	if out.End.Result != nil && len(out.End.Result.PermissionDenials) > 0 {
+		p.add(denialsItem(out.End.Result.PermissionDenials, f.e.Now()))
 	}
-	if err != nil {
-		return core.ChatFailed, fmt.Sprintf("The Factory couldn't start claude: %v", err)
-	}
-	ended := make(chan struct{})
-	go func() {
-		select {
-		case <-ctx.Done():
-			// As a Claim's turn is stopped.
-			f.stopProcess(cmd.Process, ended, func(err error) { f.printf("chat: can't stop the reply: %v", err) })
-		case <-ended:
-		}
-	}()
-	end := readTurn(cmd, stdout, wt, newUsageReader(kindChat, f.e.Now), func(e core.SessionEvent) {
-		p.add(e)
-		if f.o.verbose && e.Kind == eventToolCall {
-			f.printf("chat: %s", e.Text)
-		}
-	}, p.addUsage)
-	close(ended)
-	if end.Result != nil && len(end.Result.PermissionDenials) > 0 {
-		p.add(denialsItem(end.Result.PermissionDenials, f.e.Now()))
-	}
-	if ctx.Err() != nil {
-		return core.ChatStopped, ""
-	}
-	return chatOutcome(t, end)
+	return chatOutcome(t, out)
 }
 
-// chatOutcome is how a Chat turn that ran ended: done, or failed with the
-// Factory's error text, naming a model claude rejected.
-func chatOutcome(t core.ChatTurn, end turnEnd) (core.ChatOutcome, string) {
-	if end.apiError() == modelNotFound {
+// chatOutcome is how a Chat turn ended: done, stopped, or failed with the
+// Factory's error text, naming the cause when it was a rejected model or
+// effort, an Outage or an expired login. Chat never retries, pauses or
+// stops the Factory for any of them.
+func chatOutcome(t core.ChatTurn, out turnOutcome) (core.ChatOutcome, string) {
+	const pick = "Pick another in New conversation, or set the Chat row's in Project Options → Models."
+	switch out.Kind {
+	case turnStopped:
+		return core.ChatStopped, ""
+	case turnDone:
+		return core.ChatDone, ""
+	case turnEffortRejected:
+		return core.ChatFailed, fmt.Sprintf("The effort `%s` isn't one this Factory's claude accepts (%s), so no reply was started. %s", t.Effort, strings.Join(out.Levels, ", "), pick)
+	case turnModelRejected:
 		model := "`" + t.Model + "`"
 		if t.Model == "" {
 			model = "its default"
 		}
-		return core.ChatFailed, fmt.Sprintf("claude rejected the model %s (model_not_found): it doesn't exist, or this account can't use it. Pick another in New conversation, or set the Chat row's in Project Options → Models.", model)
+		return core.ChatFailed, fmt.Sprintf("claude rejected the model %s (model_not_found): it doesn't exist, or this account can't use it. %s", model, pick)
+	case turnOutage:
+		return core.ChatFailed, fmt.Sprintf("claude hit an Outage (`%s`): a usage or rate limit, overload, or a server or network error cut off the reply. Send the message again later.", out.End.apiError())
+	case turnLoginFailed:
+		return core.ChatFailed, "claude's login has expired or is missing (authentication_failed): log in with `claude /login` on the Factory's host, then send the message again."
 	}
-	if end.ExitCode == 0 && end.Signal == "" && end.Result != nil && !end.Result.IsError {
-		return core.ChatDone, ""
+	if out.StartErr != nil {
+		return core.ChatFailed, fmt.Sprintf("The Factory couldn't start claude: %v", out.StartErr)
 	}
+	end := out.End
 	msg := "claude ended the reply with " + end.how()
 	if api := end.apiError(); api != "" {
 		msg += ", API error " + api
