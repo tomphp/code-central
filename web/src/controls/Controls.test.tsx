@@ -6,6 +6,7 @@ import { Empty, Loading } from "./Empty";
 import { ErrorBanner } from "./ErrorBanner";
 import { ProjectName, projectName } from "./ProjectName";
 import { SpecPaneHeader } from "./SpecPaneHeader";
+import { ViewHeader } from "./ViewHeader";
 
 describe("Empty", () => {
   it("renders its note in the empty style", () => {
@@ -34,6 +35,18 @@ describe("Count", () => {
     expect(screen.getByText("3").className).toBe("count");
     rerender(<Count n={3} loud />);
     expect(screen.getByText("3").className).toBe("count loud");
+  });
+
+  it("names what it counts after the number", () => {
+    render(<Count n={2} of="left" />);
+    expect(screen.getByText("2 left")).toHaveClass("count");
+  });
+
+  it("as a block's number, shows a dash until the count is known", () => {
+    const { rerender } = render(<Count big />);
+    expect(screen.getByTestId("count")).toHaveTextContent("–");
+    rerender(<Count n={0} big />);
+    expect(screen.getByTestId("count")).toHaveTextContent("0");
   });
 });
 
@@ -68,5 +81,20 @@ describe("SpecPaneHeader", () => {
     expect(screen.getByRole("heading", { level: 2, name: "The plan" })).toBeInTheDocument();
     expect(screen.getByText(/^Map · submitted .+ ago$/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "acme-1" })).toBeInTheDocument();
+  });
+});
+
+describe("ViewHeader", () => {
+  it("shows its title as the view's heading, then its slots", () => {
+    render(<ViewHeader title="Board" left={<span>left</span>} right={<button>Back</button>} />);
+    expect(screen.getByRole("banner")).toHaveTextContent("Boardleft");
+    expect(screen.getByRole("heading", { level: 1, name: "Board" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+  });
+
+  it("has no heading without a title, as Focus Mode's", () => {
+    render(<ViewHeader left={<span>2 left</span>} right={<button>Exit</button>} />);
+    expect(screen.queryByRole("heading")).toBeNull();
+    expect(screen.getByRole("banner")).toHaveTextContent("2 leftExit");
   });
 });
