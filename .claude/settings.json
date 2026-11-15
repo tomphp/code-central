@@ -30,6 +30,10 @@
           {
             "command": "python3 -I \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/prefer-edit.py",
             "type": "command"
+          },
+          {
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/refuse-bare-stash.py",
+            "type": "command"
           }
         ],
         "matcher": "Bash|Read"
