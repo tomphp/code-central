@@ -367,7 +367,7 @@ The view of the CI Runs in a Project, or in all Projects with CI Tracking on: th
 _Avoid_: CI dashboard, build monitor
 
 **Usage**:
-The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. Its token kinds include `chat`. Subagents nest under their parent session.
+The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. It shows its parts in three tabs, Token usage, Context Size and Code Central calls, in that order, with the open tab in the URL. Its token kinds include `chat`. Subagents nest under their parent session.
 _Avoid_: Analytics dashboard, stats, metrics
 
 **Subagent**:
