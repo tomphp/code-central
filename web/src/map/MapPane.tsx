@@ -9,7 +9,6 @@ import { useId, useState } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import { GUIDED_ON, GUIDED_TAG, type MapView, type SpecDetail, type TicketRow } from "../api/types";
-import { ago } from "../format";
 import { Markdown } from "../Markdown";
 import { useNeedsMe } from "../needsme/context";
 import { specRetroable } from "../edit/editable";
@@ -22,9 +21,11 @@ import { useAct } from "../ticket/useAct";
 import { FOG, isFrontier, layoutMap, NODE, nodeProgress } from "./graph";
 import { mapCount } from "./mapCount";
 import { mapSection } from "./sections";
-import { ShortId } from "../inbox/ShortId";
+import { ErrorBanner } from "../controls/ErrorBanner";
+import { SpecPaneHeader } from "../controls/SpecPaneHeader";
 import { TicketName } from "../ticket/TicketLine";
 import { Button } from "../controls/Button";
+import { StateChip } from "../controls/StateChip";
 
 export interface MapPaneProps {
   api: Api;
@@ -41,25 +42,40 @@ export interface MapPaneProps {
   written(spec: string): void;
 }
 
-export function MapPane({ api, spec, archived, now, ticket, select, specLink, written }: MapPaneProps) {
-  const { reasonOf } = useNeedsMe();
-  const [fogOpen, setFogOpen] = useState(false);
+// MapPane is the view: it acts (starts a Ticket, sets Guided) and hands the
+// outcome to MapBody, which only renders.
+export function MapPane({ api, spec, ...rest }: MapPaneProps) {
   const { busy, error, run } = useAct();
-  const layout = layoutMap(spec.tickets);
-  // The arrowhead's ID goes in url(#…), so it keeps only safe characters.
-  const arrow = `map-arrow-${useId().replace(/[^\w-]/g, "")}`;
-  const destination = mapSection(spec.body, "Destination");
-  const fog = mapSection(spec.body, "Not yet specified");
   const start = (t: TicketRow) => run(() => api.act(projectOf(t.id), t.id, "approve", {}));
   // Guided hands starting the next decision to the Factory: it approves
   // the first frontier Ticket whenever the Map is idle.
   const setGuided = (on: boolean) =>
     run(() => (on ? api.setTags(projectOf(spec.id), spec.id, { [GUIDED_TAG]: GUIDED_ON }) : api.removeTags(projectOf(spec.id), spec.id, [GUIDED_TAG])));
+  return <MapBody api={api} spec={spec} {...rest} busy={busy} error={error} start={start} setGuided={setGuided} />;
+}
+
+export interface MapBodyProps extends MapPaneProps {
+  // busy is whether an action is under way, which disables Start and Guided.
+  busy: boolean;
+  // error is why the last action failed.
+  error?: string;
+  // start approves a frontier Ticket.
+  start(ticket: TicketRow): void;
+  setGuided(on: boolean): void;
+}
+
+export function MapBody({ api, spec, archived, now, ticket, select, specLink, written, busy, error, start, setGuided }: MapBodyProps) {
+  const { reasonOf } = useNeedsMe();
+  const [fogOpen, setFogOpen] = useState(false);
+  const layout = layoutMap(spec.tickets);
+  // The arrowhead's ID goes in url(#…), so it keeps only safe characters.
+  const arrow = `map-arrow-${useId().replace(/[^\w-]/g, "")}`;
+  const destination = mapSection(spec.body, "Destination");
+  const fog = mapSection(spec.body, "Not yet specified");
 
   return (
     <section aria-label="Map" className="req-head map-view">
-      <ShortId id={spec.id} /> <span className="muted small">Map · submitted {ago(now, spec.created)}</span>
-      <h2>{spec.title}</h2>
+      <SpecPaneHeader id={spec.id} kind="Map" title={spec.title} now={now} created={spec.created} />
       <p className="map-count">{mapCount(spec.map)}</p>
       <label className="map-guided" title="The Factory starts the next decision whenever the Map is idle">
         <input type="checkbox" checked={spec.map.guided} disabled={busy} onChange={(e) => setGuided(e.target.checked)} /> Guided
@@ -89,11 +105,7 @@ export function MapPane({ api, spec, archived, now, ticket, select, specLink, wr
           ))}
         </p>
       )}
-      {error && (
-        <p role="alert" className="warning">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
       <div className="map-body">
         <div className="map-graph">
           <svg width={layout.width} height={layout.height} role="list" aria-label="Map Tickets">
@@ -118,7 +130,7 @@ export function MapPane({ api, spec, archived, now, ticket, select, specLink, wr
                   >
                     <span className="map-node-top">
                       <span className="map-node-type">{t.node_type ?? "ticket"}</span>
-                      <span className="state">{t.state}</span>
+                      <StateChip state={t.state} />
                     </span>
                     <button className="link map-node-title" aria-current={t.id === ticket ? "true" : undefined} onClick={() => select(t.id)}>
                       <TicketName t={t} />

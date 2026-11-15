@@ -5,7 +5,7 @@
 // through, and the optional Skip and Open in Inbox.
 import type { Api } from "../api/api";
 import type { NeedsMeRow, TicketView } from "../api/types";
-import { duration, ticketOf } from "../format";
+import { duration, shortCommit, ticketOf } from "../format";
 import { FocusBadge } from "./FocusBadge";
 import type { InboxData } from "../live";
 import { Markdown } from "../Markdown";
@@ -16,6 +16,8 @@ import { RetroBadge } from "../ticket/RetroBadge";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import type { FocusItem } from "./session";
 import { Button } from "../controls/Button";
+import { Loading } from "../controls/Empty";
+import { ProjectName } from "../controls/ProjectName";
 import "./focus.css";
 
 export interface FocusItemViewProps {
@@ -77,9 +79,8 @@ export function FocusItemView({
     >
       <p className="focus-from">
         <span className="focus-item-project">
-          {project?.display_name ?? row.project}
-        </span>{" "}
-        <span className="muted">{row.project}</span>
+          <ProjectName name={project?.display_name ?? row.project} projectKey={row.project} />
+        </span>
       </p>
       <p className="focus-badges">
         <FocusBadge reason={row.reason} />
@@ -160,7 +161,7 @@ export function FocusItemView({
               />
             )
           ) : (
-            <p className="muted">Loading…</p>
+            <Loading />
           )}
           {/* Skip waits for the read, so a Round is never skipped whole
               before its Questions are known. */}
@@ -190,8 +191,8 @@ function BaseDivergedFix({ row }: { row: NeedsMeRow }) {
         doesn't. Nothing lands and no new branch is cut until they agree.
       </p>
       <p>
-        Local <code>{b.local.slice(0, 7)}</code> · remote{" "}
-        <code>{b.remote.slice(0, 7)}</code>
+        Local <code>{shortCommit(b.local)}</code> · remote{" "}
+        <code>{shortCommit(b.remote)}</code>
       </p>
       <p className="small">
         Reconcile {base} with the remote by hand, for example by resetting or

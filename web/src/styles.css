@@ -46,7 +46,6 @@ a { color: var(--accent); }
 .empty { color: var(--muted); padding: 2rem; text-align: center; }
 .banner { margin: 0; padding: 6px 14px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 .tid { font: 600 12px ui-monospace, Menlo, monospace; color: var(--muted); }
-.state { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 4px; background: var(--surface-2); }
 .label { font-size: 11px; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--border); }
 
 /* Shared by panels (tickets 34-37). */
@@ -78,7 +77,8 @@ textarea { width: 100%; resize: vertical; }
 .reason-new_issue { --rc: var(--r-external); }
 .reason-closed_externally { --rc: var(--r-external); }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--rc, var(--r-answer)); flex: none; }
-.reason { font-size: 11px; color: var(--rc); display: inline-flex; gap: 4px; align-items: center; margin-left: 6px; }
+.reason { font-size: 11px; color: var(--rc); display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; flex: none; }
+.ticket-head .reason, .impl-list .reason { margin-left: 6px; }
 
 /* The triage inbox. */
 .inbox { display: grid; grid-template-columns: 14rem 24rem 1fr; height: 100vh; }
@@ -100,7 +100,7 @@ a.filter { text-decoration: none; }
 .menu [role="menuitem"]:hover:not(:disabled) { background: var(--surface-2); }
 .menu [role="menuitem"]:disabled { color: var(--muted); cursor: default; }
 .menu-note { margin: 0; padding: 0 8px 5px; font-size: 12px; color: var(--muted); }
-.project-error { flex-basis: 100%; margin: 2px 0 4px; }
+.project-error { flex-basis: 100%; }
 .menu a[role="menuitem"] { text-decoration: none; box-sizing: border-box; }
 
 /* The Project Options page: sections in one column, with a section menu on the left on wide screens. */
@@ -135,7 +135,6 @@ a.filter { text-decoration: none; }
 .project-options-field input { min-width: 16rem; }
 .project-options-field + .project-options-hint { margin-left: 0; }
 .project-options-actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
-.project-options-section .warning { margin: 10px 0 0; }
 .project-options-models-hint { margin-left: 0; }
 .project-options-models { border-collapse: collapse; margin-top: 12px; width: 100%; }
 .project-options-models th, .project-options-models td { text-align: left; padding: 4px 8px 4px 0; font-size: 14px; }
@@ -148,8 +147,10 @@ a.filter { text-decoration: none; }
 .archived-group { margin-top: auto; padding-top: 16px; }
 .archived-group > summary { cursor: pointer; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 4px 8px; }
 .archived-group .filter { opacity: .7; }
-.filter .count { color: var(--muted); }
-.filter .count.loud { color: var(--r-answer); font-weight: 700; }
+.count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+.count.loud { color: var(--r-answer); font-weight: 700; }
+/* A count block's number: big, in the block's own colour. */
+.count.big { color: inherit; font-size: clamp(72px, 14vw, 160px); font-weight: 700; line-height: 1; }
 .inbox-list { border-right: 1px solid var(--border); overflow: auto; padding-bottom: 80px; }
 .group-head { font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; padding: 14px 14px 6px; color: var(--rc); display: flex; justify-content: space-between; }
 .row { display: block; text-decoration: none; color: var(--text); border-left: 3px solid transparent; padding: 8px 14px; border-bottom: 1px solid var(--border); }
@@ -175,7 +176,7 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ticket-body .claims > li { margin-bottom: 4px; }
 /* The latest Session Event, shown short and faintly. */
 .latest-event { color: var(--muted); }
-/* A Ticket's CI section (code-central-256): ignored runs greyed. */
+/* A Ticket's CI section (code-central-256), and the CI Run status badges. */
 .ci-section h3 { font-size: 13px; margin: 14px 0 6px; }
 .ci-options { margin-top: 8px; }
 .ci-fix-note { display: grid; gap: 4px; margin-top: 8px; }
@@ -193,7 +194,8 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .ci-runs { list-style: none; padding: 0; margin: 4px 0; font-size: 13px; }
 .ci-run { margin-bottom: 6px; }
 .ci-run .label { margin-left: 6px; }
-.ci-run.ignored, .ci-run.ignored a, .ci-run.ignored .ci-status { color: var(--muted); border-color: var(--border); }
+/* Any CIRunEntry of an ignored workflow is greyed, in every layout. */
+.ci-entry.ignored, .ci-entry.ignored a, .ci-entry.ignored .ci-status { color: var(--muted); border-color: var(--border); }
 .ci-jobs { list-style: none; padding-left: 14px; margin: 2px 0; }
 /* A Claim's Live section: its Transcript, following the newest event (ticket 111). */
 .ticket-body .live > summary { margin: 4px 0; }
@@ -213,7 +215,7 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .transcript-factory { background: var(--surface-2); color: var(--muted); font-size: 12.5px; }
 .transcript-marker { font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-right: 4px; }
 .ticket-body .move { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.ticket-body .move .warning { flex-basis: 100%; margin: 4px 0 0; }
+.ticket-body .move .warning { flex-basis: 100%; }
 .history .previous { margin: 4px 0 8px 12px; padding: 6px 10px; border-left: 2px solid var(--border); color: var(--muted); }
 .panel .blocker p { margin: 0 0 8px; }
 .panel .actions { margin: 12px 0 0; }
@@ -235,7 +237,6 @@ a.link-badge:hover { text-decoration: underline; }
 .model-choice-row > span { min-width: 16em; }
 .model-choice-row form { display: flex; gap: 6px; align-items: center; }
 .model-choice input, .model-choice select { font: inherit; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
-.model-choice .warning { margin: 4px 0 0; }
 
 /* The Prototype badge on a Needs Me row and a Focus Item (Spec 213). */
 .prototype-badge, .retro-badge { color: var(--accent); border-color: var(--accent); white-space: nowrap; }
@@ -282,6 +283,16 @@ a.link-badge:hover { text-decoration: underline; }
 .modal-project { display: block; margin-bottom: 8px; }
 .modal-actions { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .modal-actions .muted { flex: 1; }
+.modal.modal-popup { padding-top: 6vh; }
+.modal-card.modal-wide { width: min(56rem, 96vw); max-height: calc(100vh - 6vh - 4vh); overflow-y: auto; overscroll-behavior: contain; }
+/* PopupShell's header row: its title, anything else it holds such as the
+   Focus popup's N left, then × at the right. It stays in view while a wide
+   card's content scrolls. */
+.popup-head { position: sticky; top: -18px; z-index: 1; display: flex; align-items: center; margin: -18px -20px 0; padding: 8px 10px 0; background: var(--surface); }
+.popup-head > :not(.popup-close) { padding-left: 10px; }
+.popup-head h2 { margin: 10px 0; }
+.popup-close { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
+.popup-close:hover { color: var(--text); background: var(--surface-2); }
 .strip { list-style: none; display: flex; gap: 3px; padding: 0; margin: 6px 0 2px; }
 .seg { flex: 1; min-width: 0; }
 .seg > button, .seg > span { width: 100%; border: 0; border-top: 4px solid var(--border); background: transparent; color: var(--muted); font: 11px system-ui; padding: 3px 2px 0; text-align: left; display: flex; justify-content: space-between; white-space: nowrap; }
@@ -304,7 +315,6 @@ a.link-badge:hover { text-decoration: underline; }
 .impl-list .latest-event { display: block; padding-left: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .impl-list button.link { font-size: 12.5px; color: var(--text); text-align: left; }
 .impl-list button.link[aria-current="true"] { font-weight: 600; }
-.loud-state { color: var(--rc); }
 .reason-requirements { --rc: var(--accent); }
 
 /* The Map view: its Destination, the graph of its Tickets in the strip's progress colours, the fog node, and its sections beside the graph */
@@ -325,7 +335,6 @@ a.link-badge:hover { text-decoration: underline; }
 .map-node.progress-running { border-top-color: var(--accent); }
 .map-node.progress-queued { border-top-style: dashed; border-top-color: var(--accent); }
 .map-node.progress-needs { border-top-color: var(--rc); }
-.map-node.progress-needs .state { color: var(--rc); }
 .map-node.progress-waiting { color: var(--muted); }
 .map-node.cancelled { opacity: .55; }
 .map-node.cancelled .map-node-title { text-decoration: line-through; }
@@ -411,5 +420,33 @@ a.pr-badge:hover, span.pr-badge:hover { text-decoration: underline; }
 .view-head label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .view-picker-label { color: var(--muted); }
 .view-head-spacer { margin-left: auto; }
-.modal.modal-popup { padding-top: 6vh; }
-.modal-card.modal-wide { width: min(56rem, 96vw); max-height: calc(100vh - 6vh - 4vh); overflow-y: auto; overscroll-behavior: contain; }
+
+/* A view's shell: the full-height column its header and body stack in. */
+.view-shell { min-height: 100vh; display: flex; flex-direction: column; }
+/* A view's body: one centred 1100px column. */
+.view-body { flex: 1; width: 100%; max-width: 1100px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; }
+.view-body .warning { margin: 0; font-size: 14px; }
+.view-body .muted { font-size: 14px; }
+.view-body h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; }
+/* A data table: compact rows, numbers right-aligned; data-table-mono sets
+   the row headings in monospace. */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.data-table th, .data-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+.data-table tbody th { font-weight: 500; }
+.data-table-mono tbody th { font-family: ui-monospace, monospace; }
+.data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.data-table .label { margin-left: 6px; }
+/* A pulse: a brief background flash when what an element shows changes.
+   Two identical animations, so a new pulse swaps between them and the
+   browser restarts it (focus/pulse.ts). Under reduced motion it is a
+   brightness flash instead. */
+.pulse-0 { animation: pulse-0 600ms ease-out; }
+.pulse-1 { animation: pulse-1 600ms ease-out; }
+@keyframes pulse-0 { 30% { background: var(--surface-2); } }
+@keyframes pulse-1 { 30% { background: var(--surface-2); } }
+@media (prefers-reduced-motion: reduce) {
+  .pulse-0 { animation-name: flash-0; }
+  .pulse-1 { animation-name: flash-1; }
+  @keyframes flash-0 { 30% { filter: brightness(1.4); } }
+  @keyframes flash-1 { 30% { filter: brightness(1.4); } }
+}

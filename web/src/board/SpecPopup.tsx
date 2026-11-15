@@ -4,15 +4,17 @@
 // version, so it follows the feed, and shows Loading… or the read's error
 // as the Inbox's detail pane does. Choosing a Ticket, or a link to another
 // Spec, switches the popup. No Ticket is shown as selected in it.
+// SpecPopupView is the popup over a read handed in.
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
-import type { ProjectRow } from "../api/types";
+import type { ApiError, ProjectRow, SpecDetail } from "../api/types";
 import { useSpec } from "../live";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { SpecPane } from "../spec/SpecPane";
+import { SpecPaneNote } from "../spec/SpecPaneNote";
 import type { Link } from "../url";
-import { PopupShell } from "./PopupShell";
+import { PopupShell } from "../controls/PopupShell";
 
 export interface SpecPopupProps {
   api: Api;
@@ -27,13 +29,22 @@ export interface SpecPopupProps {
   specLink(id: string): Link;
 }
 
-export function SpecPopup({ api, now, version, id, projects, onClose, open, specLink }: SpecPopupProps) {
+export function SpecPopup({ version, ...props }: SpecPopupProps) {
+  const spec = useSpec(props.api, projectOf(props.id), props.id, version);
+  return <SpecPopupView {...props} spec={spec} />;
+}
+
+export interface SpecPopupViewProps extends Omit<SpecPopupProps, "version"> {
+  // spec is the read of the Spec: none yet while loading.
+  spec: { data?: SpecDetail; error?: ApiError };
+}
+
+export function SpecPopupView({ api, now, id, projects, spec, onClose, open, specLink }: SpecPopupViewProps) {
   const project = projectOf(id);
-  const spec = useSpec(api, project, id, version);
   const archived = !!projects.find((p) => p.key === project)?.archived;
   const data = spec.data?.id === id ? spec.data : undefined;
   return (
-    <PopupShell label="Spec popup" onClose={onClose}>
+    <PopupShell label="Spec popup" size="wide" onClose={onClose}>
       {data?.requirement ? (
         <RequirementPane
           api={api}
@@ -48,7 +59,7 @@ export function SpecPopup({ api, now, version, id, projects, onClose, open, spec
       ) : data ? (
         <SpecPane api={api} spec={data} archived={archived} now={now} select={open} />
       ) : (
-        <p className="empty">{spec.error ? spec.error.message : "Loading…"}</p>
+        <SpecPaneNote error={spec.error?.message} />
       )}
     </PopupShell>
   );

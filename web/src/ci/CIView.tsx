@@ -8,14 +8,17 @@
 // returns to the view it was opened from.
 import { useRef } from "react";
 import type { Api } from "../api/api";
+import { backLabel } from "../controls/backLabel";
+import { Empty, Loading } from "../controls/Empty";
+import { ErrorBanner } from "../controls/ErrorBanner";
+import { projectName } from "../controls/ProjectName";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { ViewHeader } from "../controls/ViewHeader";
-import { CI_VIEW_DAYS, type CIProvider, type CIProjectStatus, type CIRunRow, type CIRunView, type ProjectRow } from "../api/types";
-import { usePulse } from "../focus/pulse";
+import { CI_VIEW_DAYS, type CIOverview, type CIProjectStatus, type ProjectRow } from "../api/types";
 import { useFetch } from "../live";
-import { RunStatusBadge, runStatus, shortCommit } from "../ticket/CISection";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { Button } from "../controls/Button";
+import { CIRunEntry, runKey } from "./CIRunEntry";
 import "./ci.css";
 
 export interface CIViewProps {
@@ -29,30 +32,27 @@ export interface CIViewProps {
   navigate(patch: Partial<UiLocation>): void;
 }
 
-const BACK_LABEL = { inbox: "Back to the Inbox", focus: "Back to Focus Mode", activity: "Back to Activity" };
-
 export function CIView({ api, now, version, projects = [], loc, navigate }: CIViewProps) {
-  const back = loc.back?.view === "focus" || loc.back?.view === "activity" ? loc.back.view : "inbox";
-  const projectName = (key: string) => projects.find((p) => p.key === key)?.display_name ?? key;
+  const nameOf = (key: string) => projectName(projects, key);
 
   return (
-    <main aria-label="CI" className="ci">
+    <main aria-label="CI" className="ci view-shell">
       <ViewHeader
         title="CI"
         left={<ProjectPicker projects={projects} value={loc.project} onChange={(project) => navigate({ project })} />}
         right={
           <Button  onClick={() => navigate(loc.back ?? { view: "inbox" })}>
-            {BACK_LABEL[back]}
+            {backLabel(loc)}
           </Button>
         }
       />
       {/* Keyed by scope, so another scope starts from nothing and its first read doesn't pulse. */}
-      <CIBody key={loc.project ?? ""} api={api} now={now} version={version} project={loc.project} projectName={projectName} navigate={navigate} />
+      <ScopedBody key={loc.project ?? ""} api={api} now={now} version={version} project={loc.project} projectName={nameOf} navigate={navigate} />
     </main>
   );
 }
 
-interface CIBodyProps {
+interface ScopedBodyProps {
   api: Api;
   now: Date;
   version: number;
@@ -61,21 +61,33 @@ interface CIBodyProps {
   navigate(patch: Partial<UiLocation>): void;
 }
 
+// ScopedBody reads one scope's CI overview and hands it to CIBody.
+function ScopedBody({ api, now, version, project, projectName, navigate }: ScopedBodyProps) {
+  const ci = useFetch(() => api.ciOverview({ project }), [api, project, version]);
+  return <CIBody overview={ci.data} error={ci.error?.message} now={now} project={project} projectName={projectName} navigate={navigate} />;
+}
+
+export interface CIBodyProps {
+  // overview is the read, or undefined while it loads.
+  overview?: CIOverview;
+  error?: string;
+  now: Date;
+  // project is the scope's Project; left out, the scope is All Projects.
+  project?: string;
+  projectName(key: string): string;
+  navigate(patch: Partial<UiLocation>): void;
+}
+
 // CIBody is one scope's CI Watchers and runs. The rows of its first read
 // don't pulse; a run that joins later pulses once.
-function CIBody({ api, now, version, project, projectName, navigate }: CIBodyProps) {
-  const ci = useFetch(() => api.ciOverview({ project }), [api, project, version]);
-  const data = ci.data;
+export function CIBody({ overview: data, error, now, project, projectName, navigate }: CIBodyProps) {
   const first = useRef<Set<string>>(undefined);
   if (data && !first.current) first.current = new Set(data.runs.map(runKey));
 
   return (
-    <div className="ci-body">
-      {ci.error && (
-        <p role="alert" className="warning">
-          {ci.error.message}
-        </p>
-      )}
+    <div className="view-body">
+      {error && <ErrorBanner>{error}</ErrorBanner>}
+      {!data && !error && <Loading />}
       {data && (
         <>
           <section aria-label="CI Watchers" className="ci-watchers">
@@ -85,7 +97,7 @@ function CIBody({ api, now, version, project, projectName, navigate }: CIBodyPro
             ))}
           </section>
           {data.runs.length ? (
-            <table aria-label="CI Runs" className="ci-table">
+            <table aria-label="CI Runs" className="data-table">
               <thead>
                 <tr>
                   <th scope="col">Workflow</th>
@@ -100,8 +112,9 @@ function CIBody({ api, now, version, project, projectName, navigate }: CIBodyPro
               </thead>
               <tbody>
                 {data.runs.map((r) => (
-                  <RunRow
+                  <CIRunEntry
                     key={runKey(r)}
+                    layout="row"
                     run={r}
                     provider={data.projects.find((p) => p.project === r.project)?.provider}
                     now={now}
@@ -113,16 +126,13 @@ function CIBody({ api, now, version, project, projectName, navigate }: CIBodyPro
               </tbody>
             </table>
           ) : (
-            <p className="muted">No CI Runs in progress or finished in the last {CI_VIEW_DAYS} days.</p>
+            <Empty>No CI Runs in progress or finished in the last {CI_VIEW_DAYS} days.</Empty>
           )}
         </>
       )}
     </div>
   );
 }
-
-// runKey names a run across Projects; a re-run's next attempt is the same run.
-const runKey = (r: CIRunRow) => `${r.project}/${r.id}`;
 
 interface WatcherStatusProps {
   status: CIProjectStatus;
@@ -167,80 +177,4 @@ function WatcherStatus({ status: { project, tracking, provider, repository, proj
         </p>
       );
   }
-}
-
-interface RunRowProps {
-  run: CIRunRow;
-  provider?: CIProvider;
-  now: Date;
-  // joined is a run that wasn't in the view's first read: it pulses once.
-  joined: boolean;
-  // projectName is the run's Project's name, in All Projects only.
-  projectName?: string;
-  navigate(patch: Partial<UiLocation>): void;
-}
-
-// RunRow is one run's row. It pulses when the run's status, conclusion
-// or attempt changes.
-function RunRow({ run, provider, now, joined, projectName, navigate }: RunRowProps) {
-  const status = runStatus(run);
-  const pulse = usePulse(run.ignored ? "ci-row ignored" : "ci-row", `${run.status} ${run.conclusion ?? ""} ${run.attempt}`, joined);
-  const tracked = run.ticket ?? run.rule;
-  const to: Partial<UiLocation> = run.ticket
-    ? { view: "inbox", project: run.project, ticket: run.ticket }
-    : { view: "inbox", project: run.project, requirement: run.rule };
-  return (
-    <tr {...pulse} aria-label={run.name || run.workflow}>
-      <th scope="row">
-        {run.name || run.workflow} <span className="muted small">{run.workflow}</span>
-      </th>
-      <td>{run.branch}</td>
-      <td>
-        <code>{shortCommit(run.commit)}</code>
-      </td>
-      <td>
-        <RunStatusBadge status={status} />
-        {run.attempt > 1 && <span className="muted small"> · attempt {run.attempt}</span>}
-        {run.ignored && <span className="label">ignored</span>}
-      </td>
-      <td className="num">{runDuration(run, now)}</td>
-      <td>
-        {tracked && (
-          <>
-            {run.rule && "CI Rule "}
-            <a href={hrefFor({ view: "inbox", ...to })} onClick={clickTo(navigate, to)}>
-              {tracked}
-            </a>
-          </>
-        )}
-      </td>
-      {projectName !== undefined && <td>{projectName}</td>}
-      <td>
-        <RunLink run={run} provider={provider} />
-      </td>
-    </tr>
-  );
-}
-
-// RunLink opens a run on its CI system, named from the Project's CI
-// Provider, in a new tab: in the CI view's rows and the Activity
-// Dashboard's CI Running entries.
-export function RunLink({ run, provider, className }: { run: CIRunView; provider?: CIProvider; className?: string }) {
-  return (
-    <a href={run.url} target="_blank" rel="noreferrer" className={className}>
-      {provider === "azure_pipelines" ? "View on Azure DevOps" : "View on GitHub"}
-    </a>
-  );
-}
-
-// runDuration is how long a run took, or has taken so far: "45s",
-// "3m 12s", "1h 5m"; "–" before it starts.
-export function runDuration(run: CIRunRow, now: Date): string {
-  if (!run.started) return "–";
-  const end = run.status === "completed" && run.finished ? Date.parse(run.finished) : now.getTime();
-  const s = Math.max(0, Math.round((end - Date.parse(run.started)) / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
 }

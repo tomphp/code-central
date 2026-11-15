@@ -1,8 +1,9 @@
 // The Ticket detail on a WASM Core world: what it shows below the action
-// panel, its merged history, edits' "show previous" and move.
+// panel, its merged history, edits' "show previous" and move, and its
+// header and loading and error states.
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { newWorld, type World } from "../api/core/core";
 import { scenario, type Scenario } from "../api/scenario";
 import type { CIRunView, TicketView } from "../api/types";
@@ -349,5 +350,71 @@ describe("the Ticket detail's CI section", () => {
     expect(within(ci).getByRole("heading")).toHaveTextContent("CI passed def4567");
     await userEvent.click(earlier);
     expect(ci).toHaveTextContent("abc1234");
+  });
+});
+
+// TicketDetail through its props alone: its loading and error states, its
+// header, and the parts it shows only once the view has read its Spec.
+describe("the Ticket pane's body", () => {
+  it("says Loading… until the Ticket is read", async () => {
+    const { w } = await acme();
+    render(<TicketDetail api={w.api} project="acme" now={w.now()} />);
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: "Ticket details" })).toBeNull();
+  });
+
+  it("shows the read's error", async () => {
+    const { w } = await acme();
+    render(<TicketDetail api={w.api} project="acme" now={w.now()} error="acme-9 not found" />);
+    expect(screen.getByRole("alert")).toHaveTextContent("acme-9 not found");
+    expect(screen.queryByText("Loading…")).toBeNull();
+  });
+
+  it("heads the Ticket with its State chip and Reason badge", async () => {
+    const { w, s } = await acme();
+    const id = await s.ticket("acme", { title: "Pick a theme", state: "Needs Answer" });
+    render(<TicketDetail api={w.api} project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} />);
+    expect(screen.getByText("Needs Answer", { selector: ".state-chip" })).toHaveClass("st-needs-answer");
+    expect(screen.getByText("Questions", { selector: ".reason" })).toHaveClass("reason-needs_answer");
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Pick a theme");
+  });
+
+  it("has no Reason badge when the Ticket doesn't need the human", async () => {
+    const { w, s } = await acme();
+    const id = await s.ticket("acme", { title: "Pick a theme" });
+    render(<TicketDetail api={w.api} project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} />);
+    expect(screen.getByText("Ready", { selector: ".state-chip" })).toBeInTheDocument();
+    expect(document.querySelector(".reason")).toBeNull();
+  });
+
+  it("offers the Auto-accept switch only once its Spec's Labels are given", async () => {
+    const { w, s } = await acme();
+    const id = await s.ticket("acme", { title: "Pick a theme" });
+    const t = await w.api.getTicket("acme", id);
+    const { rerender } = render(<TicketDetail api={w.api} project="acme" ticket={t} now={w.now()} />);
+    expect(screen.queryByRole("switch")).toBeNull();
+    rerender(<TicketDetail api={w.api} project="acme" ticket={t} now={w.now()} specLabels={[]} />);
+    expect(screen.getByRole("switch")).toBeInTheDocument();
+  });
+
+  it("opens its Spec through openSpec", async () => {
+    const { w, s } = await acme();
+    const spec = await s.spec("acme", { title: "Theming" });
+    const id = await s.ticket("acme", { title: "Pick a theme", spec });
+    const openSpec = vi.fn();
+    render(<TicketDetail api={w.api} project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} openSpec={openSpec} />);
+    await userEvent.click(screen.getByRole("button", { name: `${spec} Theming` }));
+    expect(openSpec).toHaveBeenCalledWith(spec);
+  });
+
+  it("opens a new Retro's Ticket through openTicket", async () => {
+    const { w, s } = await acme();
+    const id = await s.ticket("acme", { title: "Pick a theme", state: "Done" });
+    const openTicket = vi.fn();
+    render(<TicketDetail api={w.api} project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} openTicket={openTicket} />);
+    await userEvent.click(screen.getByRole("button", { name: "Retro" }));
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
+    const [retro] = (await w.api.getTicket("acme", id)).retros ?? [];
+    expect(openTicket).toHaveBeenCalledWith(retro.id);
   });
 });

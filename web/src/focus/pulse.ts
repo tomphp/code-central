@@ -1,13 +1,11 @@
-// Pulses: a brief scale-and-glow that marks something on the Activity
-// Dashboard as just changed. A new trigger restarts the animation, and
+// Pulses: a brief background flash that marks something as just changed. A new trigger restarts the animation, and
 // triggers arriving mid-animation don't queue.
 import { useEffect, useState } from "react";
 
-// pulseTiming.ms is how long a pulse lasts; focus.css's animations match
-// it. board is the Board view's longer one, its card glow run twice, as
-// board.css's animation. Tests lengthen both, so a slow machine can't end a
-// pulse before they look for it.
-export const pulseTiming = { ms: 600, board: 2800 };
+// pulseTiming.ms is how long a pulse lasts; styles.css's animations match
+// it. board is the Board view's, the same length. Tests lengthen both, so a
+// slow machine can't end a pulse before they look for it.
+export const pulseTiming = { ms: 600, board: 600 };
 
 // Pulse is what a pulsing element spreads on itself: data-pulsing marks
 // that it is pulsing, and its class adds the one that runs the animation.
@@ -38,5 +36,5 @@ export function usePulse(className: string, trigger: unknown, onMount = false, l
     const timer = setTimeout(() => setOn(false), pulseTiming[lasts]);
     return () => clearTimeout(timer);
   }, [on, count, lasts]);
-  return on ? { "data-pulsing": "true", className: `${className} dashboard-pulse-${count % 2}` } : { className };
+  return on ? { "data-pulsing": "true", className: `${className} pulse-${count % 2}` } : { className };
 }

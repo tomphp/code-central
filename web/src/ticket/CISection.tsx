@@ -11,48 +11,12 @@ import "../api/actions/new_fix_ticket";
 import "../api/actions/rerun_ci";
 import "../api/actions/send_back";
 import type { Api } from "../api/api";
-import type { CIConclusion, CIJobView, CIRunView, TicketView } from "../api/types";
+import type { CIConclusion, CIRunView, TicketView } from "../api/types";
+import { CIRunEntry } from "../ci/CIRunEntry";
+import { runName } from "../ci/RunParts";
+import { shortCommit } from "../format";
 import { useAct } from "./useAct";
 import { Button } from "../controls/Button";
-
-// CONCLUSION_LABEL says how a finished run or job ended.
-const CONCLUSION_LABEL: Record<CIConclusion, string> = {
-  success: "passed",
-  failure: "failed",
-  cancelled: "cancelled",
-  timed_out: "timed out",
-  skipped: "skipped",
-  neutral: "neutral",
-  partially_succeeded: "Partially succeeded",
-};
-
-// runStatus is a run's status as the CI section says it.
-export function runStatus(run: CIRunView): string {
-  if (run.status === "queued") return "queued";
-  if (run.status === "in_progress" || !run.conclusion) return "running";
-  return CONCLUSION_LABEL[run.conclusion];
-}
-
-// statusClass is the CSS class of a status label, such as "ci-timed-out".
-const statusClass = (status: string) => `ci-${status.toLowerCase().replace(" ", "-")}`;
-
-// RunStatusBadge is a status as a badge. A partially succeeded one has the
-// passed styling plus a warning mark.
-export function RunStatusBadge({ status }: { status: string }) {
-  return (
-    <span className={`ci-status ${statusClass(status)}`}>
-      {status === CONCLUSION_LABEL.partially_succeeded && <span aria-hidden="true">⚠ </span>}
-      {status}
-    </span>
-  );
-}
-
-// runName is the name a run shows: its workflow's display name, or its file.
-export const runName = (run: CIRunView) => run.name || run.workflow;
-// shortCommit is a commit as runs show it: its first 7 characters.
-export const shortCommit = (commit: string) => commit.slice(0, 7);
-
-const jobStatus = (job: CIJobView) => (job.conclusion ? CONCLUSION_LABEL[job.conclusion] : "running");
 
 export interface CISectionProps {
   ticket: TicketView;
@@ -93,34 +57,9 @@ export function CISection({ ticket: t, api, project }: CISectionProps) {
 function CIRuns({ runs }: { runs: CIRunView[] }) {
   return (
     <ul className="ci-runs">
-      {runs.map((run) => {
-        const status = runStatus(run);
-        return (
-          <li key={`${run.id}/${run.attempt}`} className={run.ignored ? "ci-run ignored" : "ci-run"} aria-label={runName(run)}>
-            <div>
-              <a href={run.url} target="_blank" rel="noreferrer">
-                {runName(run)}
-              </a>{" "}
-              <span className="muted small">{run.workflow}</span> <RunStatusBadge status={status} />
-              {run.attempt > 1 && <span className="muted small"> · attempt {run.attempt}</span>}
-              {run.commit && <span className="muted small"> · {shortCommit(run.commit)}</span>}
-              {run.ignored && <span className="label">ignored</span>}
-            </div>
-            {run.jobs.length > 0 && (
-              <ul className="ci-jobs small">
-                {run.jobs.map((job, i) => (
-                  <li key={i}>
-                    <a href={job.url} target="_blank" rel="noreferrer">
-                      {job.name}
-                    </a>{" "}
-                    <span className="muted">{jobStatus(job)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </li>
-        );
-      })}
+      {runs.map((run) => (
+        <CIRunEntry key={`${run.id}/${run.attempt}`} layout="item" run={run} />
+      ))}
     </ul>
   );
 }

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Markdown } from "../Markdown";
 import { useAct } from "../ticket/useAct";
 import { Button } from "../controls/Button";
+import { ErrorBanner } from "../controls/ErrorBanner";
 
 export interface EditFormProps {
   title: string;
@@ -59,11 +60,7 @@ export function EditForm({ title, text, label, save, close }: EditFormProps) {
           Preview
         </Button>
       </div>
-      {error && (
-        <p role="alert" className="warning">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
     </form>
   );
 }

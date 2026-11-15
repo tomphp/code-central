@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { STATES } from "../api/types";
+import { NEEDS_ME_REASONS, STATES } from "../api/types";
 import { KindBadge } from "./KindBadge";
+import { ReasonBadge } from "./ReasonBadge";
 import { StageBadge } from "./StageBadge";
 import { StateChip } from "./StateChip";
 
@@ -17,6 +18,30 @@ export const States: Story = {
     </div>
   ),
 };
+
+// A State chip marking the State a row is listed under, and one with a count.
+export const StateHere: Story = {
+  render: () => (
+    <div style={{ display: "flex", gap: 8 }}>
+      <StateChip state="In Progress" here />
+      <StateChip state="Ready">Ready 3</StateChip>
+    </div>
+  ),
+};
+
+// The Reason badge for every Needs Me reason.
+export const Reasons: Story = {
+  render: () => (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {NEEDS_ME_REASONS.map((r) => (
+        <ReasonBadge key={r} reason={r} />
+      ))}
+    </div>
+  ),
+};
+
+// The Focus badge: the Reason badge with the "Focus: " prefix.
+export const Focus: Story = { render: () => <ReasonBadge reason="needs_answer" prefix="Focus: " /> };
 
 export const Kinds: Story = {
   render: () => (

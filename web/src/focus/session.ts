@@ -283,8 +283,9 @@ const isUnreadRound = (item: FocusItem): boolean => item.roundKey !== undefined 
 
 // itemsOf is a row's Focus Items: the row itself, or, for a needs_answer
 // row, its Round's open Questions once ticket is its Ticket's read, and
-// the whole Round as one until then.
-function itemsOf(row: NeedsMeRow, ticket?: TicketView): FocusItem[] {
+// the whole Round as one until then. The bodies' stories and tests make
+// their Focus Items with it.
+export function itemsOf(row: NeedsMeRow, ticket?: TicketView): FocusItem[] {
   // A Base diverged item is a Project's, with no Ticket ID; a CI item is
   // a Project's pushed commit's.
   if (row.reason !== "needs_answer") return [{ key: keyOf(`${row.id || row.project} ${row.reason}${row.ci_item ? ` ${row.ci_item.commit}` : ""}`), row }];

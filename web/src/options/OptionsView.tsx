@@ -87,7 +87,7 @@ export function OptionsView({ api, options, loc, navigate }: OptionsViewProps) {
 
   const shownError = error ?? (!shown ? options.error : undefined);
   return (
-    <main aria-label="Options" className="options">
+    <main aria-label="Options" className="options view-shell">
       <header className="options-head">
         <h1>Options</h1>
         <Button className="options-back" onClick={() => navigate({ view: back })}>
