@@ -3,13 +3,13 @@
 // as Draft, To Requirement with its context box, and Won't fix with its
 // reason box.
 import { useState } from "react";
-import type { Api } from "../api/api";
 import "../api/actions/keep_as_draft";
 import "../api/actions/to_requirement";
 import "../api/actions/wont_fix";
 import type { TicketView } from "../api/types";
 import { useAct } from "./useAct";
 import { Button } from "../controls/Button";
+import { useApi } from "../live";
 
 // BOXES are the triage actions that open a box before confirming: the
 // box's label, the field its text is sent as, and what it says.
@@ -32,7 +32,8 @@ const BOXES = {
 
 type BoxAction = keyof typeof BOXES;
 
-export function TriageActions({ api, project, ticket: t }: { api: Api; project: string; ticket: TicketView }) {
+export function TriageActions({ project, ticket: t }: { project: string; ticket: TicketView }) {
+  const api = useApi();
   const { busy, error, run } = useAct();
   // open is the triage action whose box is open, if any.
   const [open, setOpen] = useState<BoxAction>();
@@ -100,7 +101,7 @@ export function TriageActions({ api, project, ticket: t }: { api: Api; project: 
 
 // Triage is an Incoming Issue's triage actions in its Ticket details,
 // where its action panel doesn't already offer them.
-export function Triage(props: { api: Api; project: string; ticket: TicketView }) {
+export function Triage(props: { project: string; ticket: TicketView }) {
   return (
     <section aria-label="Triage">
       <p className="muted small">

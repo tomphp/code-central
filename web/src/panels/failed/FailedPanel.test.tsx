@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { App } from "../../App";
 import { newWorld } from "../../api/core/core";
 import { scenario } from "../../api/scenario";
+import { renderLive } from "../../worldTesting";
 import { FailedPanel } from "./panel";
 
 // A Report is what an agent failed with, and the Claim it held: its
@@ -53,7 +54,7 @@ type Failed = Awaited<ReturnType<typeof world>>;
 
 async function renderPanel({ w, id }: Failed) {
   const ticket = await w.api.getTicket("acme", id);
-  render(<FailedPanel api={w.api} project="acme" ticket={ticket} now={w.now()} />);
+  renderLive(w, <FailedPanel project="acme" ticket={ticket} now={w.now()} />);
   return screen.getByRole("region", { name: "Failed" });
 }
 

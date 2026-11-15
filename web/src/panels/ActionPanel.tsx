@@ -5,11 +5,9 @@
 // reason (Accepted); the slot finds them all on its own, so adding a
 // panel edits no shared list. See the UI note.
 import type { ComponentType } from "react";
-import type { Api } from "../api/api";
 import type { NeedsMeReason, State, TicketView } from "../api/types";
 
 export interface PanelProps {
-  api: Api;
   project: string;
   ticket: TicketView;
   now: Date;

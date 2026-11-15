@@ -4,8 +4,10 @@
 import { useAct } from "../../ticket/useAct";
 import type { PanelProps } from "../ActionPanel";
 import { Button } from "../../controls/Button";
+import { useApi } from "../../live";
 
-export function Blocked({ api, project, ticket: t }: PanelProps) {
+export function Blocked({ project, ticket: t }: PanelProps) {
+  const api = useApi();
   const { busy, error, run } = useAct();
   // An open Blocker shown Cancelled is a dead end: either the stored
   // Blocker itself, or (via set) where its Replacement chain ended.

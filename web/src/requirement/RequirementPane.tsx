@@ -58,7 +58,7 @@ export function RequirementPane({ api, spec, archived, now, ticket, select, spec
         }}
       />
       {note && <p className="panel muted waiting">{note}</p>}
-      <SpecAutoAccept api={api} spec={spec} archived={archived} />
+      <SpecAutoAccept spec={spec} archived={archived} />
       <LandPerSpec status={spec.land_per_spec} />
       {/* The text is the Requirement's until its spec Stage has written the Spec. */}
       <BodySection api={api} spec={spec} heading={specDone ? "Spec" : "Requirement's text"} archived={archived} />

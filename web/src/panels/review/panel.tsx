@@ -12,6 +12,7 @@ import type { PanelDef, PanelProps } from "../ActionPanel";
 import { useAct } from "../../ticket/useAct";
 import { AutoAcceptBadge } from "../../ticket/AutoAcceptBadge";
 import { Button } from "../../controls/Button";
+import { useApi } from "../../live";
 import "./review.css";
 
 // specChoices are a spec Stage's two ways to accept, each with the Spec
@@ -22,7 +23,8 @@ const specChoices = [
   { recommendation: "implement", action: "implement", label: "Implement" },
 ] as const satisfies readonly { recommendation: NonNullable<TicketView["recommendation"]>; action: string; label: string }[];
 
-export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
+export function ReviewPanel({ project, ticket: t }: PanelProps) {
+  const api = useApi();
   const [comment, setComment] = useState("");
   const { busy, error, run } = useAct();
   const summary = finishSummary(t);

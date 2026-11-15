@@ -2,7 +2,6 @@
 // view does. Loading and the read's error are what SpecPaneNote shows in the
 // pane's place.
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { Api } from "../api/api";
 import { storyWorld } from "../api/core/story";
 import type { SpecDetail } from "../api/types";
 import { SpecPane } from "./SpecPane";
@@ -13,7 +12,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 interface Loaded {
-  api: Api;
   now: Date;
   spec: SpecDetail;
 }
@@ -21,11 +19,11 @@ interface Loaded {
 const pane = (build: (s: Parameters<Parameters<typeof storyWorld>[0]>[0]) => Promise<string>, archived = false): Story => ({
   ...storyWorld(async (s, w): Promise<Loaded> => {
     await s.project("acme", "Acme");
-    return { api: w.api, now: w.now(), spec: await w.api.getSpec("acme", await build(s)) };
+    return { now: w.now(), spec: await w.api.getSpec("acme", await build(s)) };
   }),
   render: (_, { loaded }) => {
-    const { api, now, spec } = loaded.world as Loaded;
-    return <SpecPane api={api} spec={spec} archived={archived} now={now} select={() => {}} />;
+    const { now, spec } = loaded.world as Loaded;
+    return <SpecPane spec={spec} archived={archived} now={now} select={() => {}} />;
   },
 });
 

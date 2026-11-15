@@ -12,7 +12,7 @@ import type { Api } from "../api/api";
 import { newWorld, type World } from "../api/core/core";
 import { scenario, type Scenario } from "../api/scenario";
 import { failCI } from "../ciTesting";
-import { useInboxData, useLiveVersion } from "../live";
+import { Live, useInbox, useVersion } from "../live";
 import { NeedsMeProvider } from "../needsme/context";
 import { needsMeOf } from "../needsme/model";
 import { hrefFor, readLocation, type UiLocation } from "../url";
@@ -75,8 +75,8 @@ async function cancel({ s }: Fake, key: string, ...ids: string[]) {
 // data and its read model as the App's views have them, and navigates as
 // the App does, by the address.
 function Harness({ api, now, project, onClose }: { api: Api; now: Date; project?: string; onClose(c: FocusPopupClose): void }) {
-  const version = useLiveVersion(api);
-  const inbox = useInboxData(api, version);
+  const version = useVersion();
+  const inbox = useInbox();
   const [open, setOpen] = useState(true);
   const navigate = (patch: Partial<UiLocation>) => {
     window.history.pushState(null, "", hrefFor({ ...readLocation(window.location.search), ...patch }));
@@ -110,7 +110,9 @@ function renderQueue({ w }: Fake, { project, url = "/?view=activity" }: { projec
   render(
     <>
       <App api={w.api} now={w.now} />
-      <Harness api={w.api} now={w.now()} project={project} onClose={onClose} />
+      <Live api={w.api}>
+        <Harness api={w.api} now={w.now()} project={project} onClose={onClose} />
+      </Live>
     </>,
   );
   return onClose;

@@ -6,7 +6,7 @@ import { LinkBadge } from "../../ticket/LinkBadge";
 import { TriageActions } from "../../ticket/Triage";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 
-export function NewIssue({ api, project, ticket: t }: PanelProps) {
+export function NewIssue({ project, ticket: t }: PanelProps) {
   return (
     <section aria-label="New issue" className="panel">
       <p>
@@ -15,7 +15,7 @@ export function NewIssue({ api, project, ticket: t }: PanelProps) {
         with your context, and from then on writes the work's progress to the issue. Won't fix Cancels it and closes the
         issue as not planned, with your reason as a comment.
       </p>
-      <TriageActions api={api} project={project} ticket={t} />
+      <TriageActions project={project} ticket={t} />
     </section>
   );
 }

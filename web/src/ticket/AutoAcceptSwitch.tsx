@@ -3,14 +3,13 @@
 // auto-accept Label. Turning it off writes at once; turning it on asks
 // first when it would accept Tickets now In Review.
 import { useEffect, useState } from "react";
-import type { Api } from "../api/api";
 import { Button } from "../controls/Button";
+import { useApi } from "../live";
 import { ToggleGroup } from "../controls/ToggleGroup";
 import { AUTO_ACCEPT_LABEL } from "./autoAccept";
 import { useAct } from "./useAct";
 
 export interface AutoAcceptSwitchProps {
-  api: Api;
   project: string;
   // target is the Ticket or Spec the Label goes on.
   target: string;
@@ -24,7 +23,8 @@ export interface AutoAcceptSwitchProps {
   viaSpec?: React.ReactNode;
 }
 
-export function AutoAcceptSwitch({ api, project, target, on, accepts, archived, viaSpec }: AutoAcceptSwitchProps) {
+export function AutoAcceptSwitch({ project, target, on, accepts, archived, viaSpec }: AutoAcceptSwitchProps) {
+  const api = useApi();
   const { busy, error, run } = useAct();
   // shown is the switch as the last write left it; the item read again
   // follows it.

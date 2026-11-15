@@ -7,6 +7,7 @@ import { LinkBadge } from "../../ticket/LinkBadge";
 import { useAct } from "../../ticket/useAct";
 import type { PanelProps } from "../ActionPanel";
 import { Button } from "../../controls/Button";
+import { useApi } from "../../live";
 
 const WHAT: Record<ExternalState, string> = {
   open: "is open",
@@ -15,7 +16,8 @@ const WHAT: Record<ExternalState, string> = {
   out_of_scope: "left the Integration's query",
 };
 
-export function ClosedExternally({ api, project, ticket: t }: PanelProps) {
+export function ClosedExternally({ project, ticket: t }: PanelProps) {
+  const api = useApi();
   const { busy, error, run } = useAct();
   const l = t.link;
   return (

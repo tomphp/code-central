@@ -1,12 +1,13 @@
 // The Live section under each Claim in the Ticket detail, on a WASM Core
 // world: open or closed by default, each Session Event kind and its marks,
 // following the newest event, the tail note and the empty Transcript.
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { newWorld, type World } from "../api/core/core";
 import { scenario, type Scenario } from "../api/scenario";
 import type { SessionEvent, State } from "../api/types";
+import { renderLive } from "../worldTesting";
 import { TicketDetail } from "./TicketDetail";
 
 const at = (w: World, minutesAgo: number) => new Date(w.now().getTime() - minutesAgo * 60_000).toISOString();
@@ -27,7 +28,7 @@ async function seeded(state: State = "In Progress") {
 
 async function renderDetail(w: World, id: string) {
   const t = await w.api.getTicket("acme", id);
-  render(<TicketDetail api={w.api} project="acme" ticket={t} now={w.now()} />);
+  renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
   const claims = within(screen.getByRole("article", { name: "Ticket details" })).getByRole("list", { name: "Claims" });
   return within(claims).getAllByRole("listitem");
 }
@@ -227,11 +228,11 @@ describe("the Live section", () => {
   it("opens when its Ticket goes back to In Progress with the Claim still live", async () => {
     const { w, id } = await seeded("Needs Answer");
     const view = await w.api.getTicket("acme", id);
-    const { rerender } = render(<TicketDetail api={w.api} project="acme" ticket={view} now={w.now()} />);
+    const { rerender } = renderLive(w, <TicketDetail project="acme" ticket={view} now={w.now()} />);
     const row = () => within(screen.getByRole("list", { name: "Claims" })).getAllByRole("listitem")[0];
     expect(live(row())).not.toHaveAttribute("open");
 
-    rerender(<TicketDetail api={w.api} project="acme" ticket={{ ...view, state: "In Progress" }} now={w.now()} />);
+    rerender(<TicketDetail project="acme" ticket={{ ...view, state: "In Progress" }} now={w.now()} />);
     expect(live(row())).toHaveAttribute("open");
     expect(await transcript(row())).toBeInTheDocument();
   });
