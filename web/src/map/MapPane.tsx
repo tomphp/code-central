@@ -9,7 +9,6 @@ import { useId, useState } from "react";
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
 import { GUIDED_ON, GUIDED_TAG, type MapView, type SpecDetail, type TicketRow } from "../api/types";
-import { ago } from "../format";
 import { Markdown } from "../Markdown";
 import { useNeedsMe } from "../needsme/context";
 import { specRetroable } from "../edit/editable";
@@ -22,7 +21,8 @@ import { useAct } from "../ticket/useAct";
 import { FOG, isFrontier, layoutMap, NODE, nodeProgress } from "./graph";
 import { mapCount } from "./mapCount";
 import { mapSection } from "./sections";
-import { ShortId } from "../inbox/ShortId";
+import { ErrorBanner } from "../controls/ErrorBanner";
+import { SpecPaneHeader } from "../controls/SpecPaneHeader";
 import { TicketName } from "../ticket/TicketLine";
 import { Button } from "../controls/Button";
 import { StateChip } from "../controls/StateChip";
@@ -59,8 +59,7 @@ export function MapPane({ api, spec, archived, now, ticket, select, specLink, wr
 
   return (
     <section aria-label="Map" className="req-head map-view">
-      <ShortId id={spec.id} /> <span className="muted small">Map · submitted {ago(now, spec.created)}</span>
-      <h2>{spec.title}</h2>
+      <SpecPaneHeader id={spec.id} kind="Map" title={spec.title} now={now} created={spec.created} />
       <p className="map-count">{mapCount(spec.map)}</p>
       <label className="map-guided" title="The Factory starts the next decision whenever the Map is idle">
         <input type="checkbox" checked={spec.map.guided} disabled={busy} onChange={(e) => setGuided(e.target.checked)} /> Guided
@@ -90,11 +89,7 @@ export function MapPane({ api, spec, archived, now, ticket, select, specLink, wr
           ))}
         </p>
       )}
-      {error && (
-        <p role="alert" className="warning">
-          {error}
-        </p>
-      )}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
       <div className="map-body">
         <div className="map-graph">
           <svg width={layout.width} height={layout.height} role="list" aria-label="Map Tickets">

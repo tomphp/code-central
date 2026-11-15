@@ -8,6 +8,7 @@ import type { ApiError, ProjectRow } from "../api/types";
 import { FactoryStatusDot } from "../factory/FactoryStatus";
 import { useNeedsMe } from "../needsme/context";
 import { Button } from "../controls/Button";
+import { Count } from "../controls/Count";
 
 export interface ProjectFilterProps {
   api: Api;
@@ -69,7 +70,7 @@ export function ProjectFilter({ api, project: p, now, on, onSelect, projectOptio
         aria-pressed={on}
         onClick={onSelect}
       >
-        {p.display_name} <span className={needsMe > 0 ? "count loud" : "count"}>{needsMe}</span>
+        {p.display_name} <Count n={needsMe} loud={needsMe > 0} />
       </button>
       <button
         className="menu-toggle"

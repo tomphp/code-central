@@ -2,18 +2,10 @@
    Context Size's tables, and an open session's line chart.
    Its styles hang off the layout's own classes, so none of them reach
    the other views. */
-.usage { min-height: 100vh; display: flex; flex-direction: column; }
-.usage-body { width: 100%; max-width: 960px; margin: 0 auto; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; }
-.usage-body .warning { margin: 0; font-size: 14px; }
-.usage-body h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; }
-.usage-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-.usage-table th, .usage-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: left; }
-.usage-table tbody th { font-weight: 500; font-family: ui-monospace, monospace; }
-.usage-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .usage-sort { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600; padding: 0; cursor: pointer; }
-.usage-table th[aria-sort] .usage-sort { color: var(--text); }
-.usage-table th[aria-sort="ascending"] .usage-sort::after { content: " ▲"; }
-.usage-table th[aria-sort="descending"] .usage-sort::after { content: " ▼"; }
+.usage th[aria-sort] .usage-sort { color: var(--text); }
+.usage th[aria-sort="ascending"] .usage-sort::after { content: " ▲"; }
+.usage th[aria-sort="descending"] .usage-sort::after { content: " ▼"; }
 .usage-subhead { font-size: 13.5px; font-weight: 600; margin: 18px 0 8px; }
 .usage-session { font-family: ui-monospace, monospace; font-size: 12.5px; overflow-wrap: anywhere; }
 .usage-session a { color: inherit; }
@@ -24,7 +16,7 @@
 .usage-chart-head { display: flex; align-items: baseline; gap: 12px; font-size: 13px; }
 .usage-chart-head .usage-subhead { margin: 0; font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
 .usage-chart-close { margin-left: auto; }
-.usage-chart .warning, .usage-chart .muted { font-size: 13px; }
+.usage-chart .muted { font-size: 13px; }
 .line-chart { position: relative; margin-top: 10px; }
 .line-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
 .line-chart-grid line { stroke: var(--border); }

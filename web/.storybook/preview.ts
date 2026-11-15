@@ -3,7 +3,6 @@
 // a badge's rules can live in the area file of the view that first used it.
 import type { Preview } from "@storybook/react-vite";
 import "../src/styles.css";
-import "../src/activity/activity.css";
 import "../src/board/board.css";
 import "../src/chat/chat.css";
 import "../src/ci/ci.css";

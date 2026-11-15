@@ -2,13 +2,13 @@
 // human: the Inbox's Ticket pane, unchanged and with its actions, in the
 // wide modal shell. It reads the Ticket on the live version, so it follows
 // the feed, and shows Loading… or the read's error as the Inbox's detail
-// pane does.
+// pane does. TicketPopupView is the popup over a read handed in.
 import type { Api } from "../api/api";
 import { projectOf } from "../api/api";
-import type { ProjectRow } from "../api/types";
+import type { ApiError, ProjectRow, TicketView } from "../api/types";
 import { useTicket } from "../live";
 import { TicketPane } from "../ticket/TicketDetail";
-import { PopupShell } from "./PopupShell";
+import { PopupShell } from "../controls/PopupShell";
 
 export interface TicketPopupProps {
   api: Api;
@@ -23,12 +23,21 @@ export interface TicketPopupProps {
   openTicket(id: string): void;
 }
 
-export function TicketPopup({ api, now, version, id, projects, onClose, openSpec, openTicket }: TicketPopupProps) {
+export function TicketPopup({ version, ...props }: TicketPopupProps) {
+  const ticket = useTicket(props.api, projectOf(props.id), props.id, version);
+  return <TicketPopupView {...props} ticket={ticket} />;
+}
+
+export interface TicketPopupViewProps extends Omit<TicketPopupProps, "version"> {
+  // ticket is the read of the Ticket: none yet while loading.
+  ticket: { data?: TicketView; error?: ApiError };
+}
+
+export function TicketPopupView({ api, now, id, projects, ticket, onClose, openSpec, openTicket }: TicketPopupViewProps) {
   const project = projectOf(id);
-  const ticket = useTicket(api, project, id, version);
   const row = projects.find((p) => p.key === project);
   return (
-    <PopupShell label="Ticket popup" onClose={onClose}>
+    <PopupShell label="Ticket popup" size="wide" onClose={onClose}>
       <TicketPane
         api={api}
         project={project}

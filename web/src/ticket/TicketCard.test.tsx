@@ -61,7 +61,7 @@ describe("TicketCard", () => {
     render(<TicketCard t={t} link={link} joined />);
     const card = screen.getByRole("link");
     expect(card.getAttribute("data-pulsing")).toBe("true");
-    expect(card.className).toBe("board-card dashboard-pulse-1");
+    expect(card.className).toBe("board-card pulse-1");
   });
 
   it("pulses when its Ticket is updated", () => {

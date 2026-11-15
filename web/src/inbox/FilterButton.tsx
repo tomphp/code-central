@@ -1,3 +1,5 @@
+import { Count } from "../controls/Count";
+
 export function FilterButton(p: {
   on: boolean;
   label: string;
@@ -15,9 +17,7 @@ export function FilterButton(p: {
       onClick={p.onClick}
     >
       {p.label}{" "}
-      <span className={p.loud && p.count > 0 ? "count loud" : "count"}>
-        {p.count}
-      </span>
+      <Count n={p.count} loud={p.loud && p.count > 0} />
     </button>
   );
 }

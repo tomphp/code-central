@@ -7,7 +7,6 @@
 .board-sep { width: 1px; height: 22px; background: var(--border); }
 .board-new { position: relative; }
 .board-new .new-menu { left: auto; min-width: 16rem; }
-.board-loading { padding: 14px 24px; }
 
 /* Columns ▾ and its popover of checkboxes. */
 .board-columns { position: relative; }
@@ -23,7 +22,6 @@
 .board-heads { position: sticky; top: 0; z-index: 2; background: var(--bg); }
 .board-col-head { margin: 0; background: var(--bg); display: flex; align-items: center; gap: 8px; padding: 12px 8px 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border-bottom: 3px solid var(--st); }
 .board-col-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.board-col-count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 500; }
 .board-cell { display: flex; flex-direction: column; gap: 6px; padding: 8px 4px; min-width: 0; min-height: 60vh; border-radius: 0 0 8px 8px; background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
 .board-empty { color: var(--muted); font-size: 12px; text-align: center; margin: 16px 0; }
 
@@ -38,24 +36,6 @@
 .board-card-title { font-weight: 500; min-width: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
 .board-card-spec { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .board-card-spec .kind-badge { font-size: 9.5px; padding: 0 4px; }
-
-/* A pulse: an accent glow fading over 1.4s, run twice, when a card's
-   Ticket changes; pulseTiming.board matches it. Two identical animations,
-   so a new pulse swaps between them and the browser restarts it
-   (focus/pulse.ts). */
-.board-card.dashboard-pulse-0 { animation: board-pulse-0 1.4s ease-out 2; }
-.board-card.dashboard-pulse-1 { animation: board-pulse-1 1.4s ease-out 2; }
-@keyframes board-pulse-0 {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
-  100% { box-shadow: 0 0 0 10px transparent; background: var(--surface); }
-}
-@keyframes board-pulse-1 {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
-  100% { box-shadow: 0 0 0 10px transparent; background: var(--surface); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .board-card.dashboard-pulse-0, .board-card.dashboard-pulse-1 { animation: none; outline: 2px solid var(--accent); }
-}
 
 /* By Spec lanes: each lane is headed by its Lane header, a bar across the
    Board whose one line stays at the left while the columns scroll
@@ -76,14 +56,6 @@
 .board-lane .board-cell { min-height: 0; background: none; }
 .board-counts .board-cell { padding: 6px 4px; align-items: center; }
 .board-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-
-/* The popups: × sits at the right of a header row above the pane, which
-   stays in view while the wide card's content scrolls. Anything else in
-   the row, such as the Focus popup's N left, sits at its left. */
-.popup-head { position: sticky; top: -18px; z-index: 1; display: flex; align-items: center; justify-content: flex-end; margin: -18px -20px 0; padding: 8px 10px 0; background: var(--surface); }
-.popup-head > :not(.popup-close) { margin-right: auto; padding-left: 10px; }
-.popup-close { border: 0; background: none; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 8px; border-radius: 6px; cursor: pointer; }
-.popup-close:hover { color: var(--text); background: var(--surface-2); }
 
 /* The Needs Me column: its head has the needs-you dot and a bar in the
    needs-you colour, its cells a faint tint of it; a card there adds its
