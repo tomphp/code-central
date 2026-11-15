@@ -20,6 +20,9 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   closed_externally: "Closed externally",
 };
 
+// shortCommit is a commit as the UI shows it: its first 7 characters.
+export const shortCommit = (commit: string) => commit.slice(0, 7);
+
 // ticketOf is the Ticket a Needs Me row opens on: its own, or the first
 // a CI item lists (code-central-432); "" for a Project's item.
 export function ticketOf(r: NeedsMeRow): string {
@@ -72,7 +75,7 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
     }
     case "base_diverged":
       return r.base_diverged
-        ? `${r.base_diverged.base ?? "The base"} is at ${r.base_diverged.local.slice(0, 7)} and the remote's at ${r.base_diverged.remote.slice(0, 7)}: reconcile them by hand`
+        ? `${r.base_diverged.base ?? "The base"} is at ${shortCommit(r.base_diverged.local)} and the remote's at ${shortCommit(r.base_diverged.remote)}: reconcile them by hand`
         : "The local base has diverged from the remote's";
     case "base_missing":
       return r.base_missing?.fix ?? "The base branch doesn't exist";
@@ -110,7 +113,7 @@ function ciUnavailableDetail(now: Date, r: NeedsMeRow): string {
   const u = r.ci_unavailable;
   const listed = r.ci_item ? `${listedTickets(r)} · ` : "";
   if (!u) return `${listed}CI unavailable since ${ago(now, r.since)}`;
-  const at = `${u.commit.slice(0, 7)} pushed ${ago(now, u.pushed)}`;
+  const at = `${shortCommit(u.commit)} pushed ${ago(now, u.pushed)}`;
   if (u.cause === "no_ci_runs") return `${listed}No CI Runs reported for ${at}`;
   return u.message
     ? `${listed}CI Watcher not Watching: ${u.message} · ${at}`
