@@ -122,7 +122,13 @@ type Level int
 
 func generate(t *testing.T, roots []reflect.Type, enums ...Enum) string {
 	t.Helper()
-	out, err := Generate(roots, enums, nil)
+	return generateWith(t, roots, enums, nil)
+}
+
+// generateWith is generate with field lists too.
+func generateWith(t *testing.T, roots []reflect.Type, enums []Enum, fields []Fields) string {
+	t.Helper()
+	out, err := Generate(roots, enums, fields)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -257,10 +263,7 @@ func TestEveryFailureIsReportedAtOnce(t *testing.T) {
 }
 
 func TestAFieldListIsAConstArrayOfJSONNamesInFieldOrder(t *testing.T) {
-	out, err := Generate(nil, nil, []Fields{fieldsOf[Row]("RowFields"), fieldsOf[Named]("NamedFields")})
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
+	out := generateWith(t, nil, nil, []Fields{fieldsOf[Row]("RowFields"), fieldsOf[Named]("NamedFields")})
 	contains(t, out,
 		"// ROW_FIELDS are Row's JSON names in field order, the order\n"+
 			"// a write's Acknowledgement lists them in changed.\n"+

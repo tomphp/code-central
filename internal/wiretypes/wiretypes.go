@@ -2,10 +2,12 @@
 // ADR 0042): the TypeScript the UI reads the HTTP API's responses as,
 // generated from the Core's Go view types for `make wiretypes`. Shapes
 // come from reflection over the root types in roots.go and every type
-// they reach, with JSON names as the Core's jsonNames reads them; doc
+// they reach, with JSON names as the Core's JSONNames reads them; doc
 // comments come from the Go source. Each typed string the roots reach
 // is a union with its value array, from the Go value list registered
-// beside the roots. It uses only the standard library and, like
+// beside the roots. Each record view registered there for a field list,
+// such as TICKET_FIELDS, gives an array of the JSON names a write's
+// changed lists. It uses only the standard library and, like
 // internal/corewasm, is a developer tool for the Makefile, not a
 // shipped command.
 //
@@ -24,6 +26,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/tomoram/code-central/core"
 )
 
 func main() {
@@ -226,42 +230,23 @@ func (g *generator) enum(e Enum) string {
 	return b.String()
 }
 
-// fieldList is f's array of its view's JSON names.
+// fieldList is f's array of its view's JSON names, as the Core's
+// JSONNames lists them, so it names exactly what a write's changed can.
 func fieldList(f Fields) string {
 	array := screamingSnake(f.List)
 	var b strings.Builder
 	fmt.Fprintf(&b, "// %s are %s's JSON names in field order, the order\n", array, f.Type.Name())
 	b.WriteString("// a write's Acknowledgement lists them in changed.\n")
 	fmt.Fprintf(&b, "export const %s = [\n", array)
-	for _, name := range jsonNames(f.Type) {
+	for _, name := range core.JSONNames(f.Type) {
 		fmt.Fprintf(&b, "  %s,\n", quote(name))
 	}
 	b.WriteString("] as const;\n")
 	return b.String()
 }
 
-// jsonNames are struct t's JSON names in field order, with an embedded
-// struct's in its place, read as the Core's jsonNames reads them: the
-// names, and their order, a write's changed lists.
-func jsonNames(t reflect.Type) []string {
-	var out []string
-	for f := range t.Fields() {
-		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
-		switch {
-		case name == "-" || !f.IsExported() && !f.Anonymous:
-		case f.Anonymous && name == "" && f.Type.Kind() == reflect.Struct:
-			out = append(out, jsonNames(f.Type)...)
-		case name == "":
-			out = append(out, f.Name)
-		default:
-			out = append(out, name)
-		}
-	}
-	return out
-}
-
 // iface is struct t's interface. Its fields are t's JSON names in field
-// order, read as the Core's jsonNames reads them; an embedded struct
+// order, read as the Core's JSONNames reads them; an embedded struct
 // with no JSON name is extended instead.
 func (g *generator) iface(t reflect.Type) string {
 	src, err := g.source(t.PkgPath())
@@ -291,7 +276,7 @@ func (g *generator) iface(t reflect.Type) string {
 			extends = append(extends, f.Type.Name())
 			continue
 		case f.Anonymous && name == "" && f.Type.Kind() == reflect.Pointer:
-			g.fail("%s embeds a pointer, which the Core's jsonNames doesn't read", at)
+			g.fail("%s embeds a pointer, which the Core's JSONNames doesn't read", at)
 			continue
 		case name == "":
 			name = f.Name
