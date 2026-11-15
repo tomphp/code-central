@@ -51,10 +51,8 @@ export function WithApi({ api, children }: { api: Api; children: ReactNode }) {
 }
 
 // useLive is what <Live> gives, or, outside it, a clear error naming hook.
-// An old-form call gives its own api and version, which win.
-function useLive(hook: string, given?: LiveValue): LiveValue {
-  const value = useContext(LiveContext);
-  const live = given ?? value;
+function useLive(hook: string): LiveValue {
+  const live = useContext(LiveContext);
   if (!live) throw new Error(`${hook} is used outside <Live>: render it inside <Live api={api}>`);
   return live;
 }
@@ -71,9 +69,8 @@ export function useVersion(): number {
   return useLive("useVersion").version;
 }
 
-// useLiveVersion opens a feed of its own. Only <Live> should; it stays
-// until the views that call it move onto <Live>.
-export function useLiveVersion(api: Api): number {
+// useLiveVersion opens the feed; only <Live> calls it.
+function useLiveVersion(api: Api): number {
   const [version, setVersion] = useState(0);
   useEffect(
     () =>
@@ -87,8 +84,9 @@ export function useLiveVersion(api: Api): number {
 }
 
 // useFetch runs load whenever its deps change and keeps the latest result;
-// a response that arrives after a newer request started is dropped.
-export function useFetch<T>(load: (() => Promise<T>) | null, deps: unknown[]): { data?: T; error?: ApiError } {
+// a response that arrives after a newer request started is dropped. It is
+// private: a view reads through a named hook below.
+function useFetch<T>(load: (() => Promise<T>) | null, deps: unknown[]): { data?: T; error?: ApiError } {
   const [state, setState] = useState<{ data?: T; error?: ApiError }>({});
   useEffect(() => {
     if (!load) {
@@ -154,12 +152,6 @@ type ReadResult<T> = { data?: T; error?: ApiError };
 // useInbox reads every Project's Inbox data, live.
 export function useInbox(): ReadResult<InboxData> {
   const { api, version } = useLive("useInbox");
-  return useInboxData(api, version);
-}
-
-// useInboxData is useInbox's old form, taking api and version; it stays
-// until its callers move onto <Live>.
-export function useInboxData(api: Api, version: number): ReadResult<InboxData> {
   return useFetch(() => loadInbox(api), [api, version]);
 }
 
@@ -167,41 +159,21 @@ export function useInboxData(api: Api, version: number): ReadResult<InboxData> {
 // read of one never holds back the other. options.changed bumps the
 // version like every notice, so an open view follows a change made
 // elsewhere.
-//
-// The old forms of useOptions, useSpec and useTicket take api first and
-// version last; they stay until their callers move onto <Live>.
-export function useOptions(): ReadResult<Options>;
-export function useOptions(api: Api, version: number): ReadResult<Options>;
-export function useOptions(...a: [] | [Api, number]): ReadResult<Options> {
-  const { api, version } = useLive("useOptions", a.length ? { api: a[0], version: a[1] } : undefined);
+export function useOptions(): ReadResult<Options> {
+  const { api, version } = useLive("useOptions");
   return useFetch(() => api.options(), [api, version]);
 }
 
 // useSpec reads a Spec, live; it reads nothing until given both.
-export function useSpec(project: string | undefined, id: string | undefined): ReadResult<SpecDetail>;
-export function useSpec(api: Api, project: string | undefined, id: string | undefined, version: number): ReadResult<SpecDetail>;
-export function useSpec(...a: IDArgs): ReadResult<SpecDetail> {
-  const [given, project, id] = splitIDArgs(a);
-  const { api, version } = useLive("useSpec", given);
+export function useSpec(project: string | undefined, id: string | undefined): ReadResult<SpecDetail> {
+  const { api, version } = useLive("useSpec");
   return useFetch(project && id ? () => api.getSpec(project, id) : null, [api, project, id, version]);
 }
 
 // useTicket reads a Ticket, live; it reads nothing until given both.
-export function useTicket(project: string | undefined, id: string | undefined): ReadResult<TicketView>;
-export function useTicket(api: Api, project: string | undefined, id: string | undefined, version: number): ReadResult<TicketView>;
-export function useTicket(...a: IDArgs): ReadResult<TicketView> {
-  const [given, project, id] = splitIDArgs(a);
-  const { api, version } = useLive("useTicket", given);
+export function useTicket(project: string | undefined, id: string | undefined): ReadResult<TicketView> {
+  const { api, version } = useLive("useTicket");
   return useFetch(project && id ? () => api.getTicket(project, id) : null, [api, project, id, version]);
-}
-
-// IDArgs is useSpec's and useTicket's arguments, in either form.
-type IDArgs = [string | undefined, string | undefined] | [Api, string | undefined, string | undefined, number];
-
-// splitIDArgs is the api and version an old-form call gives, if it is one,
-// and the Project and ID.
-function splitIDArgs(a: IDArgs): [LiveValue | undefined, string | undefined, string | undefined] {
-  return a.length === 4 ? [{ api: a[0], version: a[3] }, a[1], a[2]] : [undefined, a[0], a[1]];
 }
 
 // useCIOverview reads the CI overview for filter, live. With no filter, as

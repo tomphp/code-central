@@ -102,7 +102,7 @@ function Views({ now }: { now: () => Date }) {
         return (
           <>
             {banner}
-            <Focus api={api} now={now()} version={version} data={inbox.data} focusClear={focusClear} loc={loc} navigate={navigate} />
+            <Focus api={api} now={now()}data={inbox.data} focusClear={focusClear} loc={loc} navigate={navigate} />
           </>
         );
       case "options":
@@ -115,7 +115,7 @@ function Views({ now }: { now: () => Date }) {
         return (
           <>
             {banner}
-            <ActivityView api={api} now={now()} version={version} data={inbox.data} loc={loc} navigate={navigate} />
+            <ActivityView api={api} now={now()}data={inbox.data} loc={loc} navigate={navigate} />
           </>
         );
       case "board":
