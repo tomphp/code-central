@@ -1,10 +1,9 @@
 // UsageBody is Usage's page below its header, presentational: the figures
-// the view read, the sort of the calls table, the open tab and the open
-// session's chart come in as props, and the view fetches them. The
-// loading and error banners sit above the tab strip, and each tab's
-// panel shows its part or says it has nothing to show. Its parts are
-// components of their own in this folder.
-import type { ReactNode } from "react";
+// the view read, the sort of the calls table and the open tab come in as
+// props, and the view fetches them. The loading and error banners sit
+// above the tab strip, and each tab's panel shows its part or says it has
+// nothing to show. Its parts are components of their own in this folder;
+// the Session popup the view shows over it is SessionPopup.
 import type { UsageOperation, UsageView } from "../api/types";
 import { Empty, Loading } from "../controls/Empty";
 import { ErrorBanner } from "../controls/ErrorBanner";
@@ -12,11 +11,11 @@ import { Tabs } from "../controls/Tabs";
 import { USAGE_TABS, type UiLocation, type UsageTab } from "../url";
 import { CallsTable, DEFAULT_SORT, nextSort, type Sort } from "./CallsTable";
 import { KindsTable } from "./KindsTable";
-import { SessionsTable, started, subagentName } from "./SessionsTable";
+import { SessionsTable } from "./SessionsTable";
 import { TokenChart } from "./TokenChart";
 import "./usage.css";
 
-export { DEFAULT_SORT, nextSort, started, subagentName };
+export { DEFAULT_SORT, nextSort };
 export type { Sort };
 
 // TAB_LABELS are the labels of Usage's tabs.
@@ -35,7 +34,7 @@ export interface UsageBodyProps {
   days: number;
   // scopeName is the Project's name, or "All Projects".
   scopeName: string;
-  // here is Usage's address, the session open on the line chart among it.
+  // here is Usage's address, the session open in its Session popup among it.
   here: UiLocation;
   projectName(key: string): string;
   navigate(patch: Partial<UiLocation>): void;
@@ -44,17 +43,14 @@ export interface UsageBodyProps {
   // tab is the open tab, and onTab switches it.
   tab: UsageTab;
   onTab(tab: UsageTab): void;
-  // session is the open session's chart, shown above the tabs.
-  session?: ReactNode;
 }
 
-export function UsageBody({ data, error, days, scopeName, here, projectName, navigate, sort, onSort, tab, onTab, session }: UsageBodyProps) {
+export function UsageBody({ data, error, days, scopeName, here, projectName, navigate, sort, onSort, tab, onTab }: UsageBodyProps) {
   const over = `in ${scopeName} over the last ${days} days`;
   return (
     <div className="view-body">
       {error && <ErrorBanner>{error}</ErrorBanner>}
       {!data && !error && <Loading />}
-      {session}
       <Tabs label="Usage" tabs={TABS} value={tab} onChange={onTab}>
         {data && tab === "tokens" &&
           (data.kinds.length ? (

@@ -8,7 +8,7 @@
 // for Usage, where project is Usage's scope (none = All Projects), days its
 // range (none = 7), tab its open tab (none = Token usage, so tokens is left
 // out and an unknown tab reads as none), session_project, session and agent the
-// session open on its line chart (agent none for a main session), and back
+// session open in its Session popup (agent none for a main session), and back
 // the query of the view it returns to (none = the Inbox),
 // or ?view=ci&project=<key>&back=<query> for the CI view, where project is
 // its scope (none = All Projects) and back as Usage's,
@@ -70,7 +70,7 @@ export interface UiLocation {
   days?: UsageDays;
   // tab is Usage's open tab; none is the default, Token usage.
   tab?: UsageTab;
-  // session is the session Usage has open on its line chart.
+  // session is the session Usage has open in its Session popup.
   session?: SessionUsageFilter;
   // back is where Usage, the CI view, the Activity view and the Board return to, a ReturnView
   // with its parameters.
