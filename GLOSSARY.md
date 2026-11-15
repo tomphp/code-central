@@ -375,8 +375,12 @@ The view of the CI Runs in a Project, or in all Projects with CI Tracking on: th
 _Avoid_: CI dashboard, build monitor
 
 **Usage**:
-The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. Its token kinds include `chat`. Subagents nest under their parent session.
+The view of what agents have consumed in a Project, or in all Projects: their Code Central calls and the tokens their sessions used. It shows its parts in three tabs, Token usage, Context Size and Code Central calls, in that order, with the open tab in the URL; a session opens in its Session popup. Its token kinds include `chat`. Subagents nest under their parent session.
 _Avoid_: Analytics dashboard, stats, metrics
+
+**Session popup**:
+Usage's popup for one session (a Claim's main session or a Subagent): its Context Size response by response as a line chart, opened from Recent sessions. It is kept in the URL. A Subagent's popup links to its parent session's in place.
+_Avoid_: session details, session modal, graph popup
 
 **Subagent**:
 A session that a Claim's session starts through the Agent tool. Usage records it as a session of its own under its parent session, named by its Agent Type and description.

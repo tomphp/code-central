@@ -77,7 +77,8 @@ export function LineChart({ label, values, pointLabel, tip, xLabel }: LineChartP
       {active !== undefined && (
         <div
           role="tooltip"
-          className="line-chart-tip"
+          // Below a point in the upper half, so the popup it sits in doesn't clip it.
+          className={y(values[active]) < HEIGHT / 2 ? "line-chart-tip below" : "line-chart-tip"}
           style={{ left: `${(x(active) / WIDTH) * 100}%`, top: `${(y(values[active]) / HEIGHT) * 100}%` }}
         >
           {tip(active)}

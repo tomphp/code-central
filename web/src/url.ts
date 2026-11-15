@@ -4,11 +4,12 @@
 // or ?view=options&from=<inbox|focus>&... for the Options view, which keeps
 // the parameters of the view it came from, to return to it,
 // or ?view=project-options&project=<key> for a Project's Project Options page,
-// or ?view=usage&project=<key>&days=<30|90>&session_project=<key>&session=<id>&agent=<id>&back=<query>
+// or ?view=usage&project=<key>&days=<30|90>&tab=<context|calls>&session_project=<key>&session=<id>&agent=<id>&back=<query>
 // for Usage, where project is Usage's scope (none = All Projects), days its
-// range (none = 7), session_project, session and agent the session open
-// on its line chart (agent none for a main session), and back the query
-// of the view it returns to (none = the Inbox),
+// range (none = 7), tab its open tab (none = Token usage, so tokens is left
+// out and an unknown tab reads as none), session_project, session and agent the
+// session open in its Session popup (agent none for a main session), and back
+// the query of the view it returns to (none = the Inbox),
 // or ?view=ci&project=<key>&back=<query> for the CI view, where project is
 // its scope (none = All Projects) and back as Usage's,
 // or ?view=activity&project=<key>&back=<query> for the Activity Dashboard
@@ -37,6 +38,9 @@ export type View = "inbox" | "focus" | "options" | "project-options" | "usage" |
 // A ReturnView is a view the Options view, Usage, the CI view, the Activity view and the Board return to.
 export type ReturnView = Exclude<View, "options" | "project-options" | "usage" | "ci" | "activity" | "board">;
 export type List = "requirements" | "tickets";
+// USAGE_TABS are Usage's tabs, in order; the first is the default.
+export const USAGE_TABS = ["tokens", "context", "calls"] as const;
+export type UsageTab = (typeof USAGE_TABS)[number];
 
 export interface UiLocation {
   view: View;
@@ -64,7 +68,9 @@ export interface UiLocation {
   finished?: true;
   // days is Usage's range; none is the default, 7.
   days?: UsageDays;
-  // session is the session Usage has open on its line chart.
+  // tab is Usage's open tab; none is the default, Token usage.
+  tab?: UsageTab;
+  // session is the session Usage has open in its Session popup.
   session?: SessionUsageFilter;
   // back is where Usage, the CI view, the Activity view and the Board return to, a ReturnView
   // with its parameters.
@@ -98,11 +104,13 @@ export function readLocation(search: string): UiLocation {
   }
   if (view === "usage") {
     const days = Number(q.get("days")) as UsageDays;
+    const tab = q.get("tab") as UsageTab;
     const [sessionProject, session, agent] = [q.get("session_project"), q.get("session"), q.get("agent")];
     return {
       view,
       project: q.get("project") || undefined,
       days: USAGE_DAYS.includes(days) && days !== USAGE_DAYS[0] ? days : undefined,
+      tab: USAGE_TABS.includes(tab) && tab !== USAGE_TABS[0] ? tab : undefined,
       session: sessionProject && session ? { project: sessionProject, session, ...(agent ? { agent } : {}) } : undefined,
       back: readBack(q),
     };
@@ -147,6 +155,7 @@ export function hrefFor(loc: UiLocation): string {
   if (loc.project) q.set("project", loc.project);
   if (loc.view === "usage") {
     if (loc.days && loc.days !== USAGE_DAYS[0]) q.set("days", String(loc.days));
+    if (loc.tab && loc.tab !== USAGE_TABS[0]) q.set("tab", loc.tab);
     if (loc.session) {
       q.set("session_project", loc.session.project);
       q.set("session", loc.session.session);

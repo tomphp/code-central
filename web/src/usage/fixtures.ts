@@ -1,5 +1,6 @@
-// Fixed Usage figures for UsageBody's stories and prop tests.
-import type { UsageSession, UsageView } from "../api/types";
+// Fixed Usage figures for UsageBody's and the Session popup's stories and
+// prop tests.
+import type { SessionUsageResponse, UsageSession, UsageView } from "../api/types";
 
 const session = (over: Partial<UsageSession>): UsageSession => ({
   project: "acme",
@@ -50,3 +51,14 @@ export const manyProjects: UsageView = {
     session({ project: "initech", ticket: "initech-3", session_id: "s4" }),
   ],
 };
+
+// sessionResponses are one session's responses, oldest first, its context
+// filling up and then compacted, for the Session popup.
+export const sessionResponses:SessionUsageResponse[] = [12_000, 34_000, 58_000, 80_000, 41_000, 63_000].map((context_size, i) => ({
+  time: `2026-11-07T09:${String(i * 4).padStart(2, "0")}:00Z`,
+  context_size,
+  input_tokens: 40 + i,
+  cache_write_tokens: 2_000,
+  cache_read_tokens: context_size - 2_040 - i,
+  output_tokens: 600 + 50 * i,
+}));
