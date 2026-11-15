@@ -228,12 +228,6 @@ export function Inbox({
           onClick={() => navigate({ state: undefined, list: undefined })}
         />
         <FilterButton
-          on={loc.list === "requirements"}
-          label="Requirements"
-          count={listed.filter((s) => !s.finished).length}
-          onClick={() => navigate({ list: "requirements", state: undefined })}
-        />
-        <FilterButton
           on={loc.list === "tickets"}
           label="All Tickets"
           count={tickets.filter((t) => !FINISHED.includes(t.state)).length}

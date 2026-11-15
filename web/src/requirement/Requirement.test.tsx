@@ -293,9 +293,8 @@ describe("the Requirements view", () => {
     for (const t of finished.stages) await done(s, t.id);
     const notRequirement = await s.spec("acme", { title: "Not a Requirement" });
     await s.ticket("acme", { title: "Plain work", state: "Ready", spec: notRequirement });
-    renderApp(w);
+    renderApp(w, "/?view=inbox&list=requirements");
 
-    await userEvent.click(await within(nav()).findByRole("button", { name: "Requirements 2" }));
     const list = screen.getByRole("main", { name: "Tickets" });
     const ids = () => [...list.querySelectorAll<HTMLElement>("a[data-id]")].map((a) => a.dataset.id);
     await waitFor(() => expect(ids()).toEqual([fresh.spec.id, "acme-1", finished.spec.id]));
