@@ -149,7 +149,7 @@ func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session, wt s
 		how = "--session-id"
 		f.printf("chat: starting a Conversation in %s; resume: %s", wt, chatResumeCommand(wt, session))
 	}
-	args := append([]string{"-p", how, session}, f.flags(turnChoice{model: t.Model, effort: t.Effort}, nil, chatPrompt(f.project, wt))...)
+	args := append([]string{"-p", how, session}, f.runner.flags(turnChoice{model: t.Model, effort: t.Effort}, nil, chatPrompt(f.project, wt))...)
 	cmd := exec.Command(f.claude, append(args, t.Text)...)
 	cmd.Dir = wt
 	cmd.Env = f.e.Environ

@@ -1,5 +1,5 @@
-// A Claim's turn: the flags that start or resume it, and running it in
-// the worktree, taking a slot until it ends.
+// A Claim's turn: running it through the Turn runner in the worktree,
+// taking a slot until it ends.
 
 package factory
 
@@ -7,81 +7,69 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"os/exec"
 
 	"github.com/tomoram/code-central/core"
 )
 
-// startArgs are a new session's flags.
-func (f *factory) startArgs(c claim, mc turnChoice) []string {
-	return append([]string{"-p", "--session-id", c.SessionID}, f.turnFlags(c, mc)...)
-}
-
-// resumeArgs are the flags that resume c's session.
-func (f *factory) resumeArgs(c claim, mc turnChoice) []string {
-	return append([]string{"-p", "--resume", c.SessionID}, f.turnFlags(c, mc)...)
-}
-
-// turnFlags are the flags every start and resume of c passes (flags).
-func (f *factory) turnFlags(c claim, mc turnChoice) []string {
-	return f.flags(mc, c.AllowedTools, c.SystemPrompt)
-}
-
-// flags are the flags every claude turn passes, as the Turn runner
-// builds them.
-func (f *factory) flags(mc turnChoice, allowedTools []string, systemPrompt string) []string {
-	return f.runner.flags(mc, allowedTools, systemPrompt)
-}
-
-// startTurn runs `claude args...` in dir for c, taking a slot until it
-// ends. args start the turn with mc, which is recorded on the Claim. An
-// effort claude doesn't accept fails the Claim instead.
-func (f *factory) startTurn(ctx context.Context, c claim, dir string, mc turnChoice, args []string) {
-	if !f.effortAccepted(ctx, c, dir, mc) {
-		return
-	}
-	// Before the turn starts, which may end the Claim before a report
-	// after it could land.
-	f.reportChoice(ctx, c, mc)
-	cmd := exec.Command(f.claude, args...)
-	cmd.Dir = dir
-	cmd.Env = f.e.Environ
-	cmd.Stderr = f.e.Stderr
-	// Its own process group, so the terminal's Ctrl-C reaches only the
-	// Factory, which drains rather than interrupting the turn.
-	startInOwnGroup(cmd)
-	stdout, err := cmd.StdoutPipe()
-	if err == nil {
-		err = cmd.Start()
-	}
-	if err != nil {
-		f.claimf(c, "%s: can't start claude: %v", c.Ticket, err)
-		return
-	}
-	t := &turn{claim: c, dir: dir, choice: mc, proc: cmd.Process, started: f.e.Now(), done: make(chan struct{})}
+// startTurn runs a Turn of claude for c in dir, taking a slot until it
+// ends: it starts c's session, or resumes it, with mc and sends prompt.
+// mc is recorded on the Claim just before claude starts. An effort
+// claude doesn't accept fails the Claim instead, and a Turn that never
+// ran gives its slot straight back.
+func (f *factory) startTurn(ctx context.Context, c claim, dir string, mc turnChoice, resume bool, prompt string) {
+	// Not derived from ctx: a Claim's Turn is stopped only by stopTurn.
+	stop, cancel := context.WithCancel(context.Background())
+	t := &turn{claim: c, dir: dir, choice: mc, started: f.e.Now(), cancel: cancel, done: make(chan struct{})}
 	f.mu.Lock()
 	f.turns[c.ClaimID] = t
 	f.mu.Unlock()
 	f.turnsDone.Add(1)
 	go func() {
 		defer f.turnsDone.Done()
-		end := readTurn(cmd, stdout, dir, newUsageReader(f.claimInfo(c).stage, f.e.Now), func(e core.SessionEvent) {
-			f.events.add(c.SessionID, e)
-			if f.o.verbose && e.Kind == eventToolCall {
-				f.printf("%s: %s", c.Ticket, e.Text)
+		defer close(t.done)
+		defer cancel()
+		out := f.runner.run(stop, turnInput{
+			Dir:          dir,
+			Session:      c.SessionID,
+			Resume:       resume,
+			Choice:       mc,
+			AllowedTools: c.AllowedTools,
+			SystemPrompt: c.SystemPrompt,
+			Prompt:       prompt,
+			UsageKind:    f.claimInfo(c).stage,
+			OnEvent:      func(e core.SessionEvent) { f.events.add(c.SessionID, e) },
+			OnUsage:      func(r core.UsageResponse) { f.usage.add(c.SessionID, r) },
+			Linef: func(format string, args ...any) {
+				f.claimf(c, "%s: %s", c.Ticket, fmt.Sprintf(format, args...))
+			},
+			Echo: func(toolCall string) { f.printf("%s: %s", c.Ticket, toolCall) },
+			// Before the Turn starts, which may end the Claim before a
+			// report after it could land.
+			BeforeStart: func() { f.reportChoice(ctx, c, mc) },
+		})
+		if out.Kind == turnEffortRejected || out.StartErr != nil {
+			f.freeSlot(c)
+			if out.Kind == turnEffortRejected {
+				f.reportRejectedEffort(ctx, c, dir, mc, out.Levels)
 			}
-		}, func(r core.UsageResponse) { f.usage.add(c.SessionID, r) })
+			f.forgetEnded(c)
+			return
+		}
 		ran := f.e.Now().Sub(t.started)
 		// The turn keeps its slot until its outcome is acted on, and
 		// "turn ended" is printed once the slot is free.
-		state := f.afterTurn(ctx, t, end)
-		f.mu.Lock()
-		delete(f.turns, c.ClaimID)
-		f.mu.Unlock()
-		f.turnEnded(t, end, state, ran)
+		state := f.afterTurn(ctx, t, out)
+		f.freeSlot(c)
+		f.turnEnded(t, out.End, state, ran)
 		f.forgetEnded(c)
-		close(t.done)
 	}()
+}
+
+// freeSlot gives c's turn's slot up.
+func (f *factory) freeSlot(c claim) {
+	f.mu.Lock()
+	delete(f.turns, c.ClaimID)
+	f.mu.Unlock()
 }
 
 // newSessionID is a random UUID (version 4), as claude --session-id takes.

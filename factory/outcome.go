@@ -13,17 +13,17 @@ import (
 // was left in, as the Factory read it or moved it; "" when it read none.
 // A turn the Factory stopped, or one that ended because the Factory is
 // stopping, is left alone.
-func (f *factory) afterTurn(ctx context.Context, t *turn, end turnEnd) store.State {
-	if ctx.Err() != nil || t.stopped.Load() {
+func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) store.State {
+	if ctx.Err() != nil || out.Kind == turnStopped || t.stopped.Load() {
 		return ""
 	}
 	c := t.claim
-	apiErr := end.apiError()
-	if apiErr == authFailed {
+	end := out.End
+	if out.Kind == turnLoginFailed {
 		f.stopFor(fmt.Sprintf("claude's login has expired or is missing (authentication_failed, on %s): log in with `claude /login`, then start the Factory again", c.Ticket))
 		return ""
 	}
-	if !outageErrors[apiErr] {
+	if out.Kind != turnOutage {
 		f.turnWentWell(t)
 	}
 	tk, err := f.client.GetTicket(ctx, f.project, core.Ref(c.Ticket))
@@ -49,24 +49,21 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, end turnEnd) store.Sta
 	if !f.live(c.ClaimID) {
 		return tk.State
 	}
-	if outageErrors[apiErr] {
-		f.cutOff(c, apiErr)
-		return tk.State
-	}
-	if apiErr == modelNotFound {
+	switch {
+	case out.Kind == turnOutage:
+		f.cutOff(c, end.apiError())
+	case out.Kind == turnModelRejected:
 		if f.reportRejectedModel(ctx, t, end) {
 			return store.Failed
 		}
-		return tk.State
-	}
-	if len(denials) > 0 {
+	case len(denials) > 0:
 		if f.postDenials(ctx, t, denials) {
 			return store.NeedsAnswer
 		}
-		return tk.State
-	}
-	if f.reportStuck(ctx, t, end) {
-		return store.Failed
+	default:
+		if f.reportStuck(ctx, t, end) {
+			return store.Failed
+		}
 	}
 	return tk.State
 }

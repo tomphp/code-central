@@ -356,6 +356,24 @@ func TestVerboseEchoesEachToolCallThroughTheLineFunction(t *testing.T) {
 	}
 }
 
+func TestVerboseEchoesToolCallsThroughEchoInPlaceOfTheLineFunctionWhenSet(t *testing.T) {
+	t.Parallel()
+	tt := newTurnTest(t, runnerOpts{verbose: true})
+	tt.h.Script("turn-1", factorytest.ToolUse("Bash", `{"command":"go test ./..."}`), factorytest.Result("success"))
+	in := tt.input("turn-1")
+	var echoed []string
+	in.Echo = func(toolCall string) { echoed = append(echoed, toolCall) }
+
+	tt.runner.Run(context.Background(), in)
+
+	if want := []string{"Bash: go test ./..."}; !slices.Equal(echoed, want) {
+		t.Errorf("Echo got %q, want %q", echoed, want)
+	}
+	if got := tt.gotLines(); len(got) != 0 {
+		t.Errorf("the line function got %q, want nothing", got)
+	}
+}
+
 func TestTheBeforeStartHookRunsOnceBeforeClaudeStarts(t *testing.T) {
 	t.Parallel()
 	tt := newTurnTest(t, runnerOpts{})
