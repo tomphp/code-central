@@ -25,7 +25,7 @@
 .line-chart-point.active { fill: var(--accent); }
 .line-chart-tip { position: absolute; transform: translate(-50%, calc(-100% - 12px)); pointer-events: none; z-index: 1; min-width: 170px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); font-size: 12.5px; white-space: nowrap; }
 .line-chart-tip.below { transform: translate(-50%, 12px); }
-.line-chart-tip dl {display: grid; grid-template-columns: auto auto; gap: 2px 14px; margin: 6px 0 0; }
+.line-chart-tip dl { display: grid; grid-template-columns: auto auto; gap: 2px 14px; margin: 6px 0 0; }
 .line-chart-tip dl div { display: contents; }
 .line-chart-tip dt { color: var(--muted); }
 .line-chart-tip dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }

@@ -726,7 +726,7 @@ describe("the Session popup", () => {
     await waitFor(() => expect(points()).toHaveLength(3));
   });
 
-  it("shows a point's exact figures on hover, with thousands separators", async () => {
+  it("shows a point's exact figures on hover or focus, with thousands separators", async () => {
     renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-impl");
     await waitFor(() => expect(points()).toHaveLength(3));
     expect(within(popup()).queryByRole("tooltip")).toBeNull();
@@ -742,6 +742,10 @@ describe("the Session popup", () => {
 
     await userEvent.unhover(points()[1]);
     expect(within(popup()).queryByRole("tooltip")).toBeNull();
+
+    // And on focus, from the keyboard.
+    act(() => points()[2].focus());
+    expect(within(popup()).getByRole("tooltip")).toHaveTextContent("Response 3");
   });
 
   it.each([
@@ -764,6 +768,10 @@ describe("the Session popup", () => {
     expect(within(sessionsTable()).getByRole("link", { name: "toolu_review" })).not.toHaveAttribute("aria-current");
     // Focus goes back to the row it was opened from.
     expect(within(sessionsTable()).getByRole("link", { name: "toolu_review" })).toHaveFocus();
+    // Collapsing is the table's own state: the address gains nothing.
+    await userEvent.click(disclosure);
+    expect(disclosure).toHaveAttribute("aria-expanded", "false");
+    expect(window.location.search).toBe("?view=usage&project=acme&days=30&tab=context");
   });
 
   it("closes to the Context Size tab it showed over when the address named no tab", async () => {
@@ -804,7 +812,7 @@ describe("the Session popup", () => {
 
   it("says when a session has no responses in the days Usage keeps", async () => {
     renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-gone");
-    expect(await within(popup()).findByText("No responses for this session in the 90 days Usage keeps.")).toBeInTheDocument();
+    await waitFor(() => expect(within(popup()).getByText("No responses for this session in the 90 days Usage keeps.")).toBeInTheDocument());
     expect(within(popup()).queryByRole("img")).toBeNull();
   });
 });

@@ -1,13 +1,13 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { SessionPopupBody } from "./SessionPopup";
-import { responses } from "./fixtures";
+import { sessionResponses } from "./fixtures";
 
 const meta = {
   title: "Usage/SessionPopup",
   component: SessionPopupBody,
   args: {
     session: { project: "acme", session: "s1" },
-    responses,
+    responses: sessionResponses,
     here: { view: "usage", tab: "context" },
     navigate: () => {},
     onClose: () => {},
@@ -24,7 +24,7 @@ export const Subagent: Story = {
   args: {
     session: { project: "acme", session: "s1", agent: "a1" },
     subagent: "Explore · Map Usage",
-    responses: responses.slice(0, 3),
+    responses: sessionResponses.slice(0, 3),
   },
 };
 

@@ -76,7 +76,8 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
         sort={sort}
         onSort={(key) => setSort((s) => nextSort(s, key))}
         tab={tab}
-        // Switching tab closes the session, which shows over Context Size only.
+        // The Session popup covers the tabs, but a switch under it would close
+        // the session too, since it shows over Context Size only.
         onTab={(to) => {
           if (to !== tab) navigate({ tab: to, session: undefined });
         }}
