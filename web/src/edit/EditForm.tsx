@@ -3,6 +3,7 @@
 // update to the record doesn't touch it; Save sends only the fields that
 // differ from what the form opened with, and the last write wins.
 import { useState } from "react";
+import { IdLinksContext, NO_ID_LINKS, useIdLinks } from "../idLinks";
 import { Markdown } from "../Markdown";
 import { useAct } from "../ticket/useAct";
 import { Button } from "../controls/Button";
@@ -24,6 +25,8 @@ export function EditForm({ title, text, label, save, close }: EditFormProps) {
   const [draftText, setText] = useState(text);
   const [preview, setPreview] = useState(false);
   const { busy, error, run } = useAct();
+  // The preview opens ID Links in a new tab, so following one keeps the draft.
+  const parentLinks = useIdLinks();
   const name = label[0].toUpperCase() + label.slice(1);
   return (
     <form
@@ -44,7 +47,9 @@ export function EditForm({ title, text, label, save, close }: EditFormProps) {
       <input aria-label="Title" value={draftTitle} onChange={(e) => setTitle(e.target.value)} />
       {preview ? (
         <div className="edit-preview" aria-label={`${name} preview`}>
-          {draftText ? <Markdown>{draftText}</Markdown> : <p className="muted">No {label}.</p>}
+          <IdLinksContext.Provider value={{ ...(parentLinks ?? NO_ID_LINKS), newTab: true }}>
+            {draftText ? <Markdown>{draftText}</Markdown> : <p className="muted">No {label}.</p>}
+          </IdLinksContext.Provider>
         </div>
       ) : (
         <textarea aria-label={name} rows={12} value={draftText} onChange={(e) => setText(e.target.value)} />

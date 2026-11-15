@@ -23,6 +23,7 @@ import { stateSlug } from "../controls/StateChip";
 import type { InboxData, ProjectSpec, ProjectTicket } from "../live";
 import { useNeedsMe } from "../needsme/context";
 import type { NeedsMe, PopupKind } from "../needsme/model";
+import { useIdKind } from "../idLinks";
 import { NewSplit } from "../requirement/NewSplit";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { TicketCard } from "../ticket/TicketCard";
@@ -88,7 +89,8 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
     onClick: clickTo(navigate, { popup: id }),
   });
   const cardLink = (t: ProjectTicket): CardLink => popupLink(t.id);
-  const kind = usePopupKind(loc.popup, model);
+  const resolved = useIdKind(api, loc.popup, model, !!data);
+  const kind = usePopupKind(loc.popup, resolved);
   const closePopup = () => navigate({ popup: undefined });
   const toggleLane = (id: string) =>
     setCollapsed((c) => {
@@ -254,9 +256,9 @@ function useJoined(tickets: ProjectTicket[] | undefined, reasonOf: NeedsMe["reas
 // changes (a click, a load, Back or Forward) and then held while it stays
 // open, so a Ticket popup whose Ticket starts needing the human stays one.
 // Until an ID opens a popup, each render chooses again.
-function usePopupKind(id: string | undefined, model: NeedsMe): PopupKind | undefined {
+function usePopupKind(id: string | undefined, resolved: PopupKind | undefined): PopupKind | undefined {
   const [held, setHeld] = useState<{ id?: string; kind?: PopupKind }>({});
-  const kind = held.id === id && held.kind ? held.kind : id ? model.popupKind(id) : undefined;
+  const kind = held.id === id && held.kind ? held.kind : id ? resolved : undefined;
   if (held.id !== id || held.kind !== kind) setHeld({ id, kind });
   return kind;
 }
