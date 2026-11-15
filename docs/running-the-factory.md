@@ -52,6 +52,8 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    The first Ctrl-C drains: the Factory claims, resumes and lands nothing more, lets the running turns finish, then exits. A second Ctrl-C stops the running turns. Either way the Claims are kept, and the Factory picks them up when you start it again. Step 8 shows it.
 
+   The Factory keeps a request open to Code Central and starts its poll at once when work appears: a new or approved Ticket, an Accept or Reject, answered Questions. `--poll <duration>` (default 30s, at least 5s) remains the fallback for what Code Central can't see happen, such as CI results and merged Pull Requests, and sets the Heartbeat cadence.
+
    Check: the Factory is still running, and its only line is `base: main`.
 
 2. **Submit the Requirement from the UI.** Open <http://localhost:7733>, click **+ New**, type the same Requirement's text and click **Submit requirement**:
@@ -62,7 +64,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    Add a Go function that turns a price in pence into the string a customer sees, so 1999 shows as £19.99 and 5 shows as £0.05.
    ```
 
-   The UI opens the Requirement, `acme-shop-1 Format prices for display`, with its grilling Ticket, `acme-shop-2`, in Ready and *Waiting for a Factory to claim Grilling. Nothing needs you yet.* Within a poll, the Factory claims it:
+   The UI opens the Requirement, `acme-shop-1 Format prices for display`, with its grilling Ticket, `acme-shop-2`, in Ready and *Waiting for a Factory to claim Grilling. Nothing needs you yet.* The Factory claims it at once:
 
    ```text
    acme-shop-2 claimed (grilling): "Grilling: Format prices for display" in Spec acme-shop-1; worktree /Users/you/src/acme-shop.worktrees/acme-shop-2; resume: claude --resume 37f7978d-a171-4aee-b737-220845e8b7a8
@@ -76,9 +78,9 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    To skip grilling, tick **Straight to Spec (no grilling)** in the dialog before you submit. The line at the foot changes to say it creates only the Spec and Tickets Stages, and the new Requirement opens with Grilling shown as skipped and Spec Ready for a Factory. The checkbox is off by default and only the New requirement dialog has it.
 
-   **Map**, in the **▾** menu beside **+ New**, starts a Map from the same dialog instead. Its one Ready Ticket, *Charting: …*, is claimed within a poll like a grilling Ticket, in a read-only Stage worktree, and grills you on the Map's destination through Rounds. The Map's row in the **Requirements** view counts its decisions, such as *0/1 decided*, in place of the Stage strip. **Small Change**, the third item, opens one Ready Ticket on the Project's `Small Changes` Spec, which a Factory builds like any implementation Ticket. The same **+ New ▾** is in Focus Mode's header, beside **Exit**, and submitting there keeps you in Focus Mode, on the item you were on, with a brief "Requirement added", "Map added" or "Small Change added" note.
+   **Map**, in the **▾** menu beside **+ New**, starts a Map from the same dialog instead. Its one Ready Ticket, *Charting: …*, is claimed at once like a grilling Ticket, in a read-only Stage worktree, and grills you on the Map's destination through Rounds. The Map's row in the **Requirements** view counts its decisions, such as *0/1 decided*, in place of the Stage strip. **Small Change**, the third item, opens one Ready Ticket on the Project's `Small Changes` Spec, which a Factory builds like any implementation Ticket. The same **+ New ▾** is in Focus Mode's header, beside **Exit**, and submitting there keeps you in Focus Mode, on the item you were on, with a brief "Requirement added", "Map added" or "Small Change added" note.
 
-   **Small Change**, the third item in the **▾** menu, opens one Ready Ticket from your text on the Project's Small Changes Spec, with no Stages, so there is no grilling to wait for. Within a poll the Factory claims it like any Ticket, with the implementation Stage Guide, in a worktree of its own on a branch named after it, and it lands on its own once you accept it, outside Land per Spec. From a terminal, `code-central submit-small-change --text "…"` (or `submit_small_change` over MCP) does the same, and prints the Ticket:
+   **Small Change**, the third item in the **▾** menu, opens one Ready Ticket from your text on the Project's Small Changes Spec, with no Stages, so there is no grilling to wait for. The Factory claims it at once like any Ticket, with the implementation Stage Guide, in a worktree of its own on a branch named after it, and it lands on its own once you accept it, outside Land per Spec. From a terminal, `code-central submit-small-change --text "…"` (or `submit_small_change` over MCP) does the same, and prints the Ticket:
 
    ```console
    $ code-central submit-small-change --text "Fix the typo in the checkout button"
@@ -128,7 +130,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Answer it as in step 4 of [Working with Claude Code](working-with-claude-code.md#working-a-requirement): each Question has the agent's recommended answer as a draft, which you can edit and **Answer**, or **Dismiss**. In this run, **Accept all recommended** answered all six.
 
-   There is nothing to tell a session. Here the session had left `code-central wait` running, so it picked the answers up itself. If its turn had ended instead, the Factory would resume it with the answers on its next poll, and print a line such as `acme-shop-2 resumed (grilling): "Grilling: Format prices for display" with the answers to Round 1`. If the answers raise new Questions, another Round comes. Answer it the same way.
+   There is nothing to tell a session. Here the session had left `code-central wait` running, so it picked the answers up itself. If its turn had ended instead, the Factory would resume it with the answers at once, and print a line such as `acme-shop-2 resumed (grilling): "Grilling: Format prices for display" with the answers to Round 1`. If the answers raise new Questions, another Round comes. Answer it the same way.
 
    Check: **Needs Me** is back to 0, and the Factory prints the turn's end:
 
@@ -146,7 +148,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    …
    ```
 
-   Read it, and the resolution comment in the Ticket's history, then click **Accept**. To send it back, write what to change in *What to change (required to reject)* and click **Reject**: the Ticket goes back to Ready, and the Factory claims it again on its next poll. Your note is kept as a comment on the Ticket, for the new session to work from.
+   Read it, and the resolution comment in the Ticket's history, then click **Accept**. To send it back, write what to change in *What to change (required to reject)* and click **Reject**: the Ticket goes back to Ready, and the Factory claims it again at once. Your note is kept as a comment on the Ticket, for the new session to work from.
 
    The Factory removes the Ticket's worktree and claims the next Stage:
 
@@ -220,7 +222,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
     4 files changed, 80 insertions(+)
    ```
 
-   Then click **Accept**. This run uses the default Landing Method, Merge, so you don't merge or land: within a poll, the Factory merges the branch into `main`, lands the Ticket, removes its worktree, and claims `acme-shop-6`, which was waiting on it:
+   Then click **Accept**. This run uses the default Landing Method, Merge, so you don't merge or land: at once, the Factory merges the branch into `main`, lands the Ticket, removes its worktree, and claims `acme-shop-6`, which was waiting on it:
 
    ```text
    acme-shop-5: landed on main at f90edae47659
@@ -250,7 +252,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    - If the branch conflicts with the base, it sends the Ticket back to Ready with a comment naming the conflicting files, and its next Claim merges the base in first. The Factory itself checks, at that Claim, whether the Ticket's existing branch still conflicts with the base's tip; if it does, the session's first prompt is not `/implement` but the instructions to merge the base in and resolve the conflicting files, which it names, and its system prompt leaves out the implementation Stage Guide for a short instruction to `finish` with the branch and its head commit. A Ticket sent back for any other reason, or whose branch no longer conflicts, starts as an ordinary `/implement` Claim.
    - If it can't move the base, say because uncommitted changes in `~/src/acme-shop` are in the way, the Ticket stays Accepted with a comment saying why, and the Factory tries again on every poll.
 
-   You can still merge an In Review Ticket's branch yourself: the Factory notices it on its next poll and lands the Ticket.
+   You can still merge an In Review Ticket's branch yourself: the Factory notices it and lands the Ticket.
 
    Check: both Tickets are Done, Build shows *2/2*, and the Requirement's row reads *Finished · 2 of 2 Tickets Done*.
 
@@ -446,7 +448,7 @@ $ code-central submit-retro acme-shop-4 --note "Why did this take three redos?"
 
 A Ticket with any of these Labels is never run as an implementation Ticket.
 
-Selecting the Map in the **Requirements** view opens the Map view: **New Prototype** and its Destination, then its Tickets as a graph read left to right, each Blocker before what it blocks, coloured like the Stage strip, and a dim **Not yet specified** node at the right edge that shows that section when clicked. A Draft Ticket that nothing blocks is on the frontier: click **Start** on its node to approve it to Ready, and the Factory claims it within a poll. Clicking a node opens its Ticket below. **Decisions so far** and **Out of scope** sit beside the graph.
+Selecting the Map in the **Requirements** view opens the Map view: **New Prototype** and its Destination, then its Tickets as a graph read left to right, each Blocker before what it blocks, coloured like the Stage strip, and a dim **Not yet specified** node at the right edge that shows that section when clicked. A Draft Ticket that nothing blocks is on the frontier: click **Start** on its node to approve it to Ready, and the Factory claims it at once. Clicking a node opens its Ticket below. **Decisions so far** and **Out of scope** sit beside the graph.
 
 To let the Factory find the way for you, tick **Guided** in the Map view's header. It sets the Map's `guided` Tag to `on`, and from then on, on each poll, the Factory checks whether the Map is idle: every Ticket on it that isn't research is Draft, Done or Cancelled. When it is, the Factory approves the Map's first frontier Ticket in created order, one per poll, and claims it as usual:
 
@@ -457,7 +459,7 @@ acme-shop-12 claimed (map-grilling): "Which store?" in Spec acme-shop-8; worktre
 
 Any Ticket on the Map that is Ready, In Progress, Needs Answer, Answered, Failed, In Review or Accepted holds it, so you are never asked two things about one Map at once; a research Ticket running in the background doesn't. The Factory starts nothing while it is paused for an outage or draining. Untick **Guided** to remove the Tag and hand the Map back to your **Start** buttons.
 
-Once every Ticket on the Map is Done or Cancelled, the Map view's header has **Write the Spec**. It opens the **New requirement** dialog with the Map's title, a link to the Map and its Destination already filled in. Edit the text if you like, then click **Submit requirement**. Code Central creates a new Requirement with only the spec and tickets Stages, and its spec Stage is Ready straight away. Its spec Stage's review has the same choice, **Split into Tickets** or **Implement**. The Factory claims it within a poll like any spec Stage, and the agent works from the Map's Decisions so far and the resolution comments they link, in place of a grilling Ticket. The Requirement's strip shows a done **Map** segment where Grilling would be, linking back to the Map. The Map stays as the record, and its header links each Requirement written from it. From a terminal, `code-central submit-requirement --map <map> --text "…"` does the same.
+Once every Ticket on the Map is Done or Cancelled, the Map view's header has **Write the Spec**. It opens the **New requirement** dialog with the Map's title, a link to the Map and its Destination already filled in. Edit the text if you like, then click **Submit requirement**. Code Central creates a new Requirement with only the spec and tickets Stages, and its spec Stage is Ready straight away. Its spec Stage's review has the same choice, **Split into Tickets** or **Implement**. The Factory claims it at once like any spec Stage, and the agent works from the Map's Decisions so far and the resolution comments they link, in place of a grilling Ticket. The Requirement's strip shows a done **Map** segment where Grilling would be, linking back to the Map. The Map stays as the record, and its header links each Requirement written from it. From a terminal, `code-central submit-requirement --map <map> --text "…"` does the same.
 
 When a Map's Ticket asks you a Round or finishes into In Review, it waits on you in **Needs Me** and Focus Mode as its own entry, not folded into a row as a Stage Ticket is. Its row reads `↳ Map: Dark mode` under its title, and its Focus Item reads *Map: Dark mode*. A Prototype also carries a **Prototype** badge, and on a plain Spec its row names that Spec instead.
 
@@ -466,7 +468,7 @@ When a Map's Ticket asks you a Round or finishes into In Review, it waits on you
 Each Project has a **Landing Method**, which you set on its **Project Options** page, from the three-dots menu on the Project. The Factory reads it again on every poll, before it lands anything, so a change applies from its next poll to every Ticket still waiting to land, with no restart.
 
 - **Merge**, the default, is what step 7 shows. The Factory merges an accepted Ticket's branch into the base and lands it. When the branch conflicts with the base it sends the Ticket back to Ready; when it can't move the base it leaves the Ticket Accepted with a comment and tries again on every poll. It keeps an Accepted Ticket's worktree until the Ticket lands, since a Ticket sent back is worked in it again.
-- **Branch** ("Leave as a branch") leaves the merging to you. The Factory never merges an Accepted Ticket and never sends it back for conflicts: a conflict in a branch you merge is yours to resolve. Within a poll of your **Accept**, it says so once and removes the Ticket's worktree, keeping its branch, so you can check the branch out:
+- **Branch** ("Leave as a branch") leaves the merging to you. The Factory never merges an Accepted Ticket and never sends it back for conflicts: a conflict in a branch you merge is yours to resolve. At once on your **Accept**, it says so once and removes the Ticket's worktree, keeping its branch, so you can check the branch out:
 
   ```text
   acme-shop-5: Accepted under the Branch Landing Method: merge acme-shop-5 into main and the Factory lands it
