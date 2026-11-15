@@ -3,29 +3,28 @@
 // tabs in this order (Spec code-central-752): Token usage, a bar per day
 // filtered by kind of session; Context Size, each kind of session's peaks
 // and then the recent sessions, each a main session with its Subagents
-// nested under it, each linking to its Ticket and opening its Context
-// Size, response by response, on a line chart; and the Code Central calls
-// table, one row per MCP operation, sortable by each column. The scope
-// and range in the header apply to every tab. The open tab is in the
-// address as tab= (none = Token usage), and an open session shows over
-// the Context Size tab whatever tab= says. It loads when opened and
-// whenever its scope, range or session changes, never on switching tab
-// and never live. Back returns to the view it was opened from. The page
-// below the header is UsageBody.
-import { useEffect, useRef, useState } from "react";
+// nested under it, each linking to its Ticket and opening its Session
+// popup; and the Code Central calls table, one row per MCP operation,
+// sortable by each column. The scope and range in the header apply to
+// every tab. The open tab is in the address as tab= (none = Token usage),
+// and so is the open session, whose Session popup shows over the Context
+// Size tab whatever tab= says. ×, Escape or a click outside closes it to
+// Usage as it was, on the Context Size tab. Usage loads when opened and
+// whenever its scope or range changes, never on switching tab or opening
+// a session, and never live. Back returns to the view it was opened from.
+// The page below the header is UsageBody.
+import { useState } from "react";
 import type { Api } from "../api/api";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { useProjectScope } from "../projectScope";
 import { ViewHeader } from "../controls/ViewHeader";
-import { sessionKey, USAGE_DAYS, USAGE_KEPT_DAYS, type ProjectRow, type UsageDays, type SessionUsageFilter, type SessionUsageResponse } from "../api/types";
-import { count } from "../format";
+import { sessionKey, USAGE_DAYS, type ProjectRow, type UsageDays } from "../api/types";
 import { useFetch } from "../live";
-import { clickTo, hrefFor, USAGE_TABS, type UiLocation } from "../url";
-import { LineChart } from "./LineChart";
-import { DEFAULT_SORT, nextSort, started, subagentName, UsageBody } from "./UsageBody";
+import { USAGE_TABS, type UiLocation } from "../url";
+import { SessionPopup } from "./SessionPopup";
+import { DEFAULT_SORT, nextSort, UsageBody } from "./UsageBody";
 import { Button } from "../controls/Button";
 import { backLabel } from "../controls/backLabel";
-import { ErrorBanner } from "../controls/ErrorBanner";
 import { projectName } from "../controls/ProjectName";
 import "./usage.css";
 import { Select } from "../controls/Select";
@@ -81,98 +80,19 @@ export function UsageView({ api, projects = [], loc, navigate }: UsageViewProps)
         onTab={(to) => {
           if (to !== tab) navigate({ tab: to, session: undefined });
         }}
-        // The open session, keyed so another session starts from nothing.
-        session={loc.session && <SessionChart key={sessionKey(loc.session)} api={api} session={loc.session} here={loc} navigate={navigate} />}
       />
-    </main>
-  );
-}
-
-// sessionName is a session's ID, with its subagent's after it.
-function sessionName(session: string, agent?: string): string {
-  return agent ? `${session} · ${agent}` : session;
-}
-
-interface SessionChartProps {
-  api: Api;
-  session: SessionUsageFilter;
-  here: UiLocation;
-  navigate(patch: Partial<UiLocation>): void;
-}
-
-// SessionChart is one session's Context Size, response by response, as
-// a line chart, each point's exact figures on hover. It reads every day
-// Usage keeps, whatever the range, and closes to Usage as it was.
-function SessionChart({ api, session, here, navigate }: SessionChartProps) {
-  const read = useFetch(() => api.sessionUsage(session), [api, session.project, session.session, session.agent]);
-  const ref = useRef<HTMLElement>(null);
-  // Opened from a row far down the recent sessions, bring it into view.
-  useEffect(() => {
-    ref.current?.scrollIntoView?.({ block: "nearest" });
-  }, []);
-  const responses = read.data?.responses;
-  // A Subagent is named from the read, so a bookmarked chart names it
-  // without the list; until it arrives, by its tool-use ID.
-  const subagent = session.agent ? subagentName({ agent: session.agent, ...read.data }) : undefined;
-  const name = `Session ${sessionName(session.session, subagent)}`;
-  const parent: Partial<UiLocation> = { session: { project: session.project, session: session.session } };
-  const peak = Math.max(0, ...(responses ?? []).map((r) => r.context_size));
-
-  return (
-    <section ref={ref} aria-label={name} className="usage-chart">
-      <header className="usage-chart-head">
-        <h3 className="usage-subhead">{name}</h3>
-        {session.agent && (
-          <a href={hrefFor({ ...here, ...parent })} onClick={clickTo(navigate, parent)}>
-            Parent session {session.session}
-          </a>
-        )}
-        {responses?.length ? (
-          <span className="muted">
-            {count(responses.length)} {responses.length === 1 ? "response" : "responses"} · peak {count(peak)} tokens
-          </span>
-        ) : null}
-        {/* It closes to the Context Size tab it showed over, though the address left the tab out. */}
-        <Button className="usage-chart-close" onClick={() => navigate({ session: undefined, tab: "context" })}>
-          Close session
-        </Button>
-      </header>
-      {read.error && <ErrorBanner>{read.error.message}</ErrorBanner>}
-      {responses && !responses.length && <p className="muted">No responses for this session in the last {USAGE_KEPT_DAYS} days.</p>}
-      {responses && responses.length > 0 && (
-        <LineChart
-          label="Context Size per response"
-          xLabel="Response"
-          values={responses.map((r) => r.context_size)}
-          pointLabel={(i) => `Response ${i + 1}: ${count(responses[i].context_size)} tokens`}
-          tip={(i) => <ResponseFigures n={i + 1} r={responses[i]} />}
+      {loc.session && (
+        <SessionPopup
+          // Keyed so another session, such as a Subagent's parent, starts from nothing.
+          key={sessionKey(loc.session)}
+          api={api}
+          session={loc.session}
+          here={loc}
+          navigate={navigate}
+          // It closes to the Context Size tab it showed over, though the address may have left the tab out.
+          onClose={() => navigate({ session: undefined, tab: "context" })}
         />
       )}
-    </section>
-  );
-}
-
-// ResponseFigures is one response's exact figures: when it came, its
-// Context Size and its four token counts.
-function ResponseFigures({ n, r }: { n: number; r: SessionUsageResponse }) {
-  const rows: [string, string][] = [
-    ["Context Size", `${count(r.context_size)} tokens`],
-    ["Input", count(r.input_tokens)],
-    ["Cache write", count(r.cache_write_tokens)],
-    ["Cache read", count(r.cache_read_tokens)],
-    ["Output", count(r.output_tokens)],
-  ];
-  return (
-    <>
-      <strong>Response {n}</strong> <span className="muted">{started(r.time)}</span>
-      <dl>
-        {rows.map(([label, figure]) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>{figure}</dd>
-          </div>
-        ))}
-      </dl>
-    </>
+    </main>
   );
 }

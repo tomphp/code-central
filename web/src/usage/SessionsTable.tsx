@@ -8,7 +8,7 @@ import { TokenCount, Tokens } from "./TokenCount";
 
 export interface SessionsTableProps {
   sessions: UsageSession[];
-  // here is Usage's address, the session open on the line chart among it.
+  // here is Usage's address, the session open in its Session popup among it.
   here: UiLocation;
   projectName(key: string): string;
   navigate(patch: Partial<UiLocation>): void;
@@ -16,10 +16,11 @@ export interface SessionsTableProps {
 
 // SessionsTable is the recent sessions, newest first, each a Claim's main
 // session with a disclosure, collapsed until opened, for its Subagents.
-// Each row's Ticket links to that Ticket and its session opens its line
-// chart. Which disclosures are open is the table's own, not the address's.
+// Each row's Ticket links to that Ticket and its session opens its Session
+// popup. Which disclosures are open is the table's own, not the address's,
+// and the table stays mounted under the popup, so they stay as they were.
 export function SessionsTable({ sessions, here, projectName, navigate }: SessionsTableProps) {
-  // A Subagent's chart in the address starts its parent's disclosure open.
+  // A Subagent's popup in the address starts its parent's disclosure open.
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() =>
     new Set(here.session?.agent ? [sessionKey({ project: here.session.project, session: here.session.session })] : []),
   );

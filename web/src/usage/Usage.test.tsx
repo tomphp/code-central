@@ -3,7 +3,8 @@
 // section and going Back, the address keeping the scope, range and
 // tab, the tabs, the scope and range pickers, the Code Central calls table and
 // its sorting, the Context Size table and the recent sessions with their
-// Ticket links, the empty states, and loading only when opened or changed.
+// Ticket links, the Session popup, the empty states, and loading only when
+// opened or changed.
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -614,7 +615,7 @@ describe("Context Size", () => {
   });
 });
 
-describe("a session's Context Size", () => {
+describe("the Session popup", () => {
   async function withUsage() {
     const { w, s } = await projects();
     await claimed(s, "acme", "Build it", "sess-impl", [
@@ -627,12 +628,13 @@ describe("a session's Context Size", () => {
   }
 
   const sessionsTable = () => within(usage()).getByRole("table", { name: "Recent sessions" });
-  const panel = () => within(usage()).getByRole("region", { name: /^Session / });
-  const chart = () => within(panel()).getByRole("img", { name: "Context Size per response" });
+  const popup = () => screen.getByRole("dialog", { name: /^Session / });
+  const noPopup = () => expect(screen.queryByRole("dialog")).toBeNull();
+  const chart = () => within(popup()).getByRole("img", { name: "Context Size per response" });
   const points = () => within(chart()).getAllByRole("button");
   const search = () => new URLSearchParams(window.location.search);
 
-  it("opens a session from the recent sessions as a line chart of its Context Size per response", async () => {
+  it("opens a session from the recent sessions as a popup of its Context Size per response, over the table", async () => {
     renderApp(await withUsage(), "/?view=usage");
     await openTab("Context Size");
     await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
@@ -646,35 +648,18 @@ describe("a session's Context Size", () => {
     expect(search().get("session_project")).toBe("acme");
     expect(search().get("agent")).toBeNull();
     await waitFor(() => expect(points()).toHaveLength(3));
-    expect(panel()).toHaveAccessibleName("Session sess-impl");
-    expect(within(panel()).getByText("3 responses · peak 123,456 tokens")).toBeInTheDocument();
+    expect(popup()).toHaveAccessibleName("Session sess-impl");
+    expect(within(popup()).getByText("3 responses · peak 123,456 tokens")).toBeInTheDocument();
     expect(points().map((p) => p.getAttribute("aria-label"))).toEqual(["Response 1: 40,000 tokens", "Response 2: 123,456 tokens", "Response 3: 98,765 tokens"]);
     // The highest point is drawn highest, the lowest lowest.
     const ys = points().map((p) => Number(p.getAttribute("cy")));
     expect(ys[1]).toBeLessThan(ys[2]);
     expect(ys[2]).toBeLessThan(ys[0]);
+    // Recent sessions stays where it was, under the popup.
+    expect(sessionsTable()).toBeInTheDocument();
   });
 
-  it("survives closing and switching a session when the browser's scrollIntoView returns a value", async () => {
-    const original = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = (() => true) as unknown as typeof Element.prototype.scrollIntoView;
-    try {
-      const w = await withUsage();
-      await claimed(scenario(w), "acme", "Other", "sess-other", [response(w, 5, "implementation", 30_000)]);
-      renderApp(w, "/?view=usage&session_project=acme&session=sess-impl");
-      await waitFor(() => expect(points()).toHaveLength(3));
-      await within(usage()).findByRole("table", { name: "Recent sessions" });
-      await userEvent.click(within(sessionsTable()).getByRole("link", { name: "sess-other" }));
-      await waitFor(() => expect(panel()).toHaveAccessibleName("Session sess-other"));
-      await userEvent.click(within(panel()).getByRole("button", { name: "Close session" }));
-      expect(within(usage()).queryByRole("region", { name: /^Session / })).toBeNull();
-      expect(sessionsTable()).toBeInTheDocument();
-    } finally {
-      Element.prototype.scrollIntoView = original;
-    }
-  });
-
-  it("opens a subagent's session with its agent in the address", async () => {
+  it("opens a Subagent's popup with its agent in the address, and its parent link switches the popup in place", async () => {
     renderApp(await withUsage(), "/?view=usage&days=30");
     await openTab("Context Size");
     await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
@@ -685,34 +670,32 @@ describe("a session's Context Size", () => {
     await userEvent.click(link);
     expect(window.location.search).toBe("?view=usage&days=30&tab=context&session_project=acme&session=sess-impl&agent=toolu_review");
     await waitFor(() => expect(points()).toHaveLength(1));
-    expect(panel()).toHaveAccessibleName("Session sess-impl · toolu_review");
+    expect(popup()).toHaveAccessibleName("Session sess-impl · toolu_review");
     expect(points()[0]).toHaveAttribute("aria-label", "Response 1: 21,000 tokens");
     // Its parent stays expanded, its row marked open.
     expect(within(sessionsTable()).getByRole("link", { name: "toolu_review" })).toHaveAttribute("aria-current", "true");
 
-    // The header links to the parent, whose chart is the same address without agent.
-    const parent = within(panel()).getByRole("link", { name: "Parent session sess-impl" });
+    // The popup links to the parent, whose popup is the same address without agent.
+    const parent = within(popup()).getByRole("link", { name: "Parent session sess-impl" });
     expect(parent).toHaveAttribute("href", "?view=usage&days=30&tab=context&session_project=acme&session=sess-impl");
     await userEvent.click(parent);
     expect(window.location.search).toBe("?view=usage&days=30&tab=context&session_project=acme&session=sess-impl");
     await waitFor(() => expect(points()).toHaveLength(3));
-    expect(panel()).toHaveAccessibleName("Session sess-impl");
-    expect(within(panel()).queryByRole("link", { name: /Parent session/ })).toBeNull();
+    // The popup switched in place: still one, now the parent's.
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(popup()).toHaveAccessibleName("Session sess-impl");
+    expect(within(popup()).queryByRole("link", { name: /Parent session/ })).toBeNull();
   });
 
-  it("names a subagent's chart from the read and starts its parent expanded when loaded from the address", async () => {
+  it("names a Subagent's popup from the read and starts its parent expanded when loaded from the address", async () => {
     const w = await withUsage();
     await scenario(w).postUsage("sess-impl", [{ ...response(w, 5, "subagent", 10_000, "toolu_a"), agent_type: "Explore", description: "Map Usage sessions" }]);
     renderApp(w, "/?view=usage&session_project=acme&session=sess-impl&agent=toolu_a");
-    await waitFor(() => expect(panel()).toHaveAccessibleName("Session sess-impl · Explore · Map Usage sessions"));
+    await waitFor(() => expect(popup()).toHaveAccessibleName("Session sess-impl · Explore · Map Usage sessions"));
     await within(usage()).findByRole("table", { name: "Recent sessions" });
     const disclosure = within(sessionsTable()).getByRole("button", { name: "2 subagents" });
     expect(disclosure).toHaveAttribute("aria-expanded", "true");
     expect(within(sessionsTable()).getByRole("link", { name: "Explore · Map Usage sessions" })).toHaveAttribute("aria-current", "true");
-    // Collapsing is view state: the address keeps the chart and gains nothing.
-    await userEvent.click(disclosure);
-    expect(disclosure).toHaveAttribute("aria-expanded", "false");
-    expect(window.location.search).toBe("?view=usage&session_project=acme&session=sess-impl&agent=toolu_a");
   });
 
   it("opens a session from the address over the Context Size tab, whatever tab= says", async () => {
@@ -730,7 +713,7 @@ describe("a session's Context Size", () => {
     expect(w.calls.filter((c) => c === "sessionUsage")).toHaveLength(1);
   });
 
-  it("shows the session even when the rest of Usage can't be read", async () => {
+  it("opens even when the rest of Usage can't be read", async () => {
     const w = await withUsage();
     const down: Api = {
       ...w.api,
@@ -746,10 +729,10 @@ describe("a session's Context Size", () => {
   it("shows a point's exact figures on hover, with thousands separators", async () => {
     renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-impl");
     await waitFor(() => expect(points()).toHaveLength(3));
-    expect(within(panel()).queryByRole("tooltip")).toBeNull();
+    expect(within(popup()).queryByRole("tooltip")).toBeNull();
 
     await userEvent.hover(points()[1]);
-    const tip = within(panel()).getByRole("tooltip");
+    const tip = within(popup()).getByRole("tooltip");
     expect(tip).toHaveTextContent("Response 2");
     expect(tip).toHaveTextContent("Context Size123,456 tokens");
     expect(tip).toHaveTextContent("Input4");
@@ -758,27 +741,41 @@ describe("a session's Context Size", () => {
     expect(tip).toHaveTextContent("Output50");
 
     await userEvent.unhover(points()[1]);
-    expect(within(panel()).queryByRole("tooltip")).toBeNull();
+    expect(within(popup()).queryByRole("tooltip")).toBeNull();
   });
 
-  it("closes the session to the Context Size tab, leaving the scope and range in the address", async () => {
-    renderApp(await withUsage(), "/?view=usage&project=acme&days=30&session_project=acme&session=sess-impl");
-    await waitFor(() => expect(points()).toHaveLength(3));
-    await userEvent.click(within(panel()).getByRole("button", { name: "Close session" }));
+  it.each([
+    ["×", () => userEvent.click(within(popup()).getByRole("button", { name: "Close" }))],
+    ["Escape", () => userEvent.keyboard("{Escape}")],
+    ["a click outside", () => userEvent.click(popup().parentElement!)],
+  ])("closes on %s to Usage as it was: the Context Size tab, scope, range and expanded Subagents", async (_, close) => {
+    renderApp(await withUsage(), "/?view=usage&project=acme&days=30&tab=context");
+    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    const disclosure = within(sessionsTable()).getByRole("button", { name: "1 subagent" });
+    await userEvent.click(disclosure);
+    await userEvent.click(within(sessionsTable()).getByRole("link", { name: "toolu_review" }));
+    await waitFor(() => expect(points()).toHaveLength(1));
+
+    await close();
+    noPopup();
     expect(window.location.search).toBe("?view=usage&project=acme&days=30&tab=context");
-    expect(within(usage()).queryByRole("region", { name: /^Session / })).toBeNull();
+    expect(within(usage()).getByRole("tab", { selected: true })).toHaveTextContent("Context Size");
+    expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    expect(within(sessionsTable()).getByRole("link", { name: "toolu_review" })).not.toHaveAttribute("aria-current");
+    // Focus goes back to the row it was opened from.
+    expect(within(sessionsTable()).getByRole("link", { name: "toolu_review" })).toHaveFocus();
+  });
+
+  it("closes to the Context Size tab it showed over when the address named no tab", async () => {
+    renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-impl");
+    await waitFor(() => expect(points()).toHaveLength(3));
+    await userEvent.keyboard("{Escape}");
+    noPopup();
+    expect(window.location.search).toBe("?view=usage&tab=context");
     expect(within(usage()).getByRole("tab", { selected: true })).toHaveTextContent("Context Size");
   });
 
-  it("closes the session on switching tab", async () => {
-    renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-impl");
-    await waitFor(() => expect(points()).toHaveLength(3));
-    await openTab("Code Central calls");
-    expect(window.location.search).toBe("?view=usage&tab=calls");
-    expect(within(usage()).queryByRole("region", { name: /^Session / })).toBeNull();
-  });
-
-  it("closes the session on the browser's Back, and leaves Usage on the next", async () => {
+  it("closes on the browser's Back, and leaves Usage on the next", async () => {
     renderApp(await withUsage(), "/?view=inbox&project=acme");
     await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("link", { name: "Usage" }));
     await openTab("Context Size");
@@ -787,7 +784,7 @@ describe("a session's Context Size", () => {
     await waitFor(() => expect(points()).toHaveLength(3));
 
     act(() => window.history.back());
-    await waitFor(() => expect(within(usage()).queryByRole("region", { name: /^Session / })).toBeNull());
+    await waitFor(noPopup);
     expect(search().get("session")).toBeNull();
     expect(within(usage()).getByRole("tab", { selected: true })).toHaveTextContent("Context Size");
 
@@ -797,17 +794,18 @@ describe("a session's Context Size", () => {
     expect(await screen.findByRole("navigation", { name: "Filters" })).toBeInTheDocument();
   });
 
-  it("returns to where Usage was opened from with a session open", async () => {
+  it("returns to where Usage was opened from once the popup is closed", async () => {
     renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-impl&back=view%3Dfocus%26project%3Dacme");
     await waitFor(() => expect(points()).toHaveLength(3));
+    await userEvent.keyboard("{Escape}");
     await userEvent.click(within(usage()).getByRole("button", { name: "Back to Focus Mode" }));
     expect(window.location.search).toBe("?view=focus&project=acme");
   });
 
-  it("says when a session has no responses", async () => {
+  it("says when a session has no responses in the days Usage keeps", async () => {
     renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-gone");
-    expect(await within(usage()).findByText("No responses for this session in the last 90 days.")).toBeInTheDocument();
-    expect(within(panel()).queryByRole("img")).toBeNull();
+    expect(await within(popup()).findByText("No responses for this session in the 90 days Usage keeps.")).toBeInTheDocument();
+    expect(within(popup()).queryByRole("img")).toBeNull();
   });
 });
 
