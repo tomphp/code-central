@@ -594,6 +594,10 @@ _Avoid_: Import, connector, sync
 The connection between a Spec or Ticket and the external item it mirrors through an Integration. A Link is owned, the external system owning the item's definition, or an Outbound Link, Code Central owning it.
 _Avoid_: Mapping, sync, reference
 
+**ID Link**:
+A link in Markdown text whose target is a Spec's or a Ticket's full ID, such as `[code-central-706](code-central-706)`. In the UI it opens that Spec or Ticket in place. Not a **Link**, the connection to an external item through an Integration.
+_Avoid_: Ticket link (it may name a Spec), reference, mention
+
 **GitHub Issues**:
 A Project's opt-in, off by default, to link its GitHub repository's issues through an Integration. The human turns it on in the GitHub Issues section of Project Options, naming the repository, an optional filter label, and whether New issues need me; turning it on first checks `gh` can triage the repository's issues, and the first time creates the Issues Spec. Turning it off leaves every Link as it is. It is the first Integration.
 _Avoid_: Issue sync, GitHub integration

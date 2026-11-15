@@ -21,6 +21,9 @@
 // and back as the Inbox's and Usage's.
 // group=spec is the Inbox's By Spec grouping of a State list (none = By
 // Ticket); it stays in the URL across lists and Projects.
+// The Inbox also takes open=<id>, a Spec or Ticket an ID Link asked it to
+// select, whose kind isn't known yet; the App replaces it with requirement=
+// or ticket= once it is, and no other view keeps it.
 // view is the layout (anything else is the inbox); project, state and
 // list are the left pane's filters (no state and no list = Needs Me;
 // list=requirements is the Requirements view, list=tickets the All Tickets
@@ -44,6 +47,9 @@ export interface UiLocation {
   list?: List;
   requirement?: string;
   ticket?: string;
+  // open is the ID of a Spec or Ticket the Inbox is to select, once its
+  // kind is known.
+  open?: string;
   // group is the Inbox's grouping of a State list, and the Board's; none is By Ticket.
   group?: "spec";
   // hide is the States whose columns the Board hides, in workflow order;
@@ -110,6 +116,7 @@ export function readLocation(search: string): UiLocation {
     list: q.get("list") === "requirements" || q.get("list") === "tickets" ? (q.get("list") as List) : undefined,
     requirement: q.get("requirement") || undefined,
     ticket: q.get("ticket") || undefined,
+    open: q.get("open") || undefined,
     group: q.get("group") === "spec" ? "spec" : undefined,
     finished: q.get("finished") === "1" ? true : undefined,
   };
@@ -160,6 +167,7 @@ export function hrefFor(loc: UiLocation): string {
   if (loc.list) q.set("list", loc.list);
   if (loc.requirement) q.set("requirement", loc.requirement);
   if (loc.ticket) q.set("ticket", loc.ticket);
+  if (loc.open) q.set("open", loc.open);
   if (loc.group) q.set("group", loc.group);
   if (loc.finished) q.set("finished", "1");
   return `?${q}`;
@@ -179,9 +187,32 @@ export function returnViewOf(loc: UiLocation): ReturnView {
   return view === "focus" ? "focus" : "inbox";
 }
 
+// ID_LINK is a Spec's or Ticket's full ID: a Project Key, "-" and a positive number.
+const ID_LINK = /^[a-z0-9][a-z0-9._-]*-[1-9][0-9]*$/;
+
+// isIdLink reports whether a Markdown link target is exactly a full ID.
+export function isIdLink(target: string): boolean {
+  return ID_LINK.test(target);
+}
+
+// idLinkPatch is the change to loc that opens the Spec or Ticket id in
+// place: on the Board its popup, replacing any open; in any other view the
+// Inbox with it to select, in its Project when loc is scoped to one.
+export function idLinkPatch(loc: UiLocation, id: string): Partial<UiLocation> {
+  if (loc.view === "board") return { popup: id };
+  return {
+    view: "inbox",
+    project: loc.project && id.slice(0, id.lastIndexOf("-")),
+    open: id,
+    requirement: undefined,
+    ticket: undefined,
+  };
+}
+
 // useUiLocation reads the URL and returns a navigate that pushes a change
-// onto the history, so Back returns to the previous filter or Ticket.
-export function useUiLocation(): [UiLocation, (patch: Partial<UiLocation>) => void] {
+// onto the history, so Back returns to the previous filter or Ticket, and a
+// replace that changes the current entry instead.
+export function useUiLocation(): [UiLocation, (patch: Partial<UiLocation>) => void, (patch: Partial<UiLocation>) => void] {
   const [loc, setLoc] = useState(() => readLocation(window.location.search));
   useEffect(() => {
     const onPop = () => setLoc(readLocation(window.location.search));
@@ -190,12 +221,14 @@ export function useUiLocation(): [UiLocation, (patch: Partial<UiLocation>) => vo
     window.history.replaceState(null, "", hrefFor(readLocation(window.location.search)));
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-  const navigate = useCallback((patch: Partial<UiLocation>) => {
+  const go = useCallback((how: "pushState" | "replaceState", patch: Partial<UiLocation>) => {
     const href = hrefFor({ ...readLocation(window.location.search), ...patch });
-    window.history.pushState(null, "", href);
+    window.history[how](null, "", href);
     setLoc(readLocation(href));
   }, []);
-  return [loc, navigate];
+  const navigate = useCallback((patch: Partial<UiLocation>) => go("pushState", patch), [go]);
+  const replace = useCallback((patch: Partial<UiLocation>) => go("replaceState", patch), [go]);
+  return [loc, navigate, replace];
 }
 
 // opensInPlace reports whether a click on a link is a plain one, for the

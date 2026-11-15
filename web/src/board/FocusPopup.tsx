@@ -17,6 +17,7 @@
 // Either way it tells its host why it closed and the key of every Focus
 // Item in scope then. It changes no address of its own.
 import { useEffect, useRef } from "react";
+import { IdLinksContext, NO_ID_LINKS, useIdLinks } from "../idLinks";
 import type { Api } from "../api/api";
 import type { InboxData } from "../live";
 import type { UiLocation } from "../url";
@@ -82,9 +83,14 @@ export function FocusPopup(props: FocusPopupProps) {
     navigate(patch);
   };
 
+  // An ID Link in a Queue mode popup, which opens over any view, closes it.
+  const parentLinks = useIdLinks();
+  const links = queue ? { ...(parentLinks ?? NO_ID_LINKS), onNavigate: () => close("dismissed") } : parentLinks;
+
   return (
-    // Queue mode is the automatic Focus popup's, which doesn't wait on
-    // itself as another popup.
+    <IdLinksContext.Provider value={links}>
+    {/* Queue mode is the automatic Focus popup's, which doesn't wait on
+        itself as another popup. */}
     <PopupShell
       label="Focus popup"
       size="wide"
@@ -113,5 +119,6 @@ export function FocusPopup(props: FocusPopupProps) {
         <p className="empty">Loading…</p>
       )}
     </PopupShell>
+    </IdLinksContext.Provider>
   );
 }
