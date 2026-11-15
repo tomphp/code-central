@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { KindBadge } from "./KindBadge";
+import { ReasonBadge } from "./ReasonBadge";
 import { StageBadge } from "./StageBadge";
 import { StateChip, stateSlug } from "./StateChip";
 
@@ -19,6 +20,18 @@ describe("badges", () => {
     const el = screen.getByText("Ready 3");
     expect(el.className).toBe("state-chip st-ready here");
     expect(el.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("names a Needs Me reason in the Focus section's words, after a dot", () => {
+    render(<ReasonBadge reason="needs_answer" />);
+    const el = screen.getByText("Questions");
+    expect(el.className).toBe("reason reason-needs_answer");
+    expect(el.querySelector(".dot")!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("puts a prefix before the reason's words", () => {
+    render(<ReasonBadge reason="blocked_by_cancelled" prefix="Focus: " />);
+    expect(screen.getByText("Focus: Blocked by a Cancelled Ticket")).toBeInTheDocument();
   });
 
   it("renders a kind badge", () => {

@@ -9,14 +9,16 @@
 import { useRef } from "react";
 import type { Api } from "../api/api";
 import { backLabel } from "../controls/backLabel";
+import { Empty, Loading } from "../controls/Empty";
 import { ErrorBanner } from "../controls/ErrorBanner";
 import { projectName } from "../controls/ProjectName";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { ViewHeader } from "../controls/ViewHeader";
-import { CI_VIEW_DAYS, type CIProvider, type CIProjectStatus, type CIRunRow, type CIRunView, type ProjectRow } from "../api/types";
+import { CI_VIEW_DAYS, type CIOverview, type CIProvider, type CIProjectStatus, type CIRunRow, type CIRunView, type ProjectRow } from "../api/types";
 import { usePulse } from "../focus/pulse";
 import { useFetch } from "../live";
-import { RunStatusBadge, runStatus, shortCommit } from "../ticket/CISection";
+import { shortCommit } from "../format";
+import { RunStatusBadge, runStatus } from "../ticket/CISection";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { Button } from "../controls/Button";
 import "./ci.css";
@@ -47,12 +49,12 @@ export function CIView({ api, now, version, projects = [], loc, navigate }: CIVi
         }
       />
       {/* Keyed by scope, so another scope starts from nothing and its first read doesn't pulse. */}
-      <CIBody key={loc.project ?? ""} api={api} now={now} version={version} project={loc.project} projectName={nameOf} navigate={navigate} />
+      <ScopedBody key={loc.project ?? ""} api={api} now={now} version={version} project={loc.project} projectName={nameOf} navigate={navigate} />
     </main>
   );
 }
 
-interface CIBodyProps {
+interface ScopedBodyProps {
   api: Api;
   now: Date;
   version: number;
@@ -61,17 +63,33 @@ interface CIBodyProps {
   navigate(patch: Partial<UiLocation>): void;
 }
 
+// ScopedBody reads one scope's CI overview and hands it to CIBody.
+function ScopedBody({ api, now, version, project, projectName, navigate }: ScopedBodyProps) {
+  const ci = useFetch(() => api.ciOverview({ project }), [api, project, version]);
+  return <CIBody overview={ci.data} error={ci.error?.message} now={now} project={project} projectName={projectName} navigate={navigate} />;
+}
+
+export interface CIBodyProps {
+  // overview is the read, or undefined while it loads.
+  overview?: CIOverview;
+  error?: string;
+  now: Date;
+  // project is the scope's Project; left out, the scope is All Projects.
+  project?: string;
+  projectName(key: string): string;
+  navigate(patch: Partial<UiLocation>): void;
+}
+
 // CIBody is one scope's CI Watchers and runs. The rows of its first read
 // don't pulse; a run that joins later pulses once.
-function CIBody({ api, now, version, project, projectName, navigate }: CIBodyProps) {
-  const ci = useFetch(() => api.ciOverview({ project }), [api, project, version]);
-  const data = ci.data;
+export function CIBody({ overview: data, error, now, project, projectName, navigate }: CIBodyProps) {
   const first = useRef<Set<string>>(undefined);
   if (data && !first.current) first.current = new Set(data.runs.map(runKey));
 
   return (
     <div className="view-body">
-      {ci.error && <ErrorBanner>{ci.error.message}</ErrorBanner>}
+      {error && <ErrorBanner>{error}</ErrorBanner>}
+      {!data && !error && <Loading />}
       {data && (
         <>
           <section aria-label="CI Watchers" className="ci-watchers">
@@ -109,7 +127,7 @@ function CIBody({ api, now, version, project, projectName, navigate }: CIBodyPro
               </tbody>
             </table>
           ) : (
-            <p className="muted">No CI Runs in progress or finished in the last {CI_VIEW_DAYS} days.</p>
+            <Empty>No CI Runs in progress or finished in the last {CI_VIEW_DAYS} days.</Empty>
           )}
         </>
       )}

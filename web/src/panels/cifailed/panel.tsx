@@ -9,6 +9,7 @@
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { AcceptedPanel } from "../accepted/panel";
 import type { CIItem } from "../../api/types";
+import { shortCommit } from "../../format";
 import { CISection } from "../../ticket/CISection";
 import { hrefFor } from "../../url";
 
@@ -39,7 +40,7 @@ function CIItemTickets({ item, self, title }: { item: CIItem; self: string; titl
   const others = item.tickets.filter((t) => t.id !== self);
   return (
     <p className="small ci-item">
-      {title} at <code>{item.commit.slice(0, 7)}</code> is one Needs Me item
+      {title} at <code>{shortCommit(item.commit)}</code> is one Needs Me item
       {others.length === 0 ? (
         <>, listing this Ticket alone.</>
       ) : (

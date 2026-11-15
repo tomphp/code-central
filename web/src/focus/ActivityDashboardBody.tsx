@@ -27,7 +27,8 @@ import { STAGE_TITLE, stageOf } from "../requirement/progress";
 import { CILink } from "../ci/CILink";
 import { RunLink, runDuration } from "../ci/CIView";
 import { CIBadge } from "../ticket/CIBadge";
-import { runName, runStatus, shortCommit } from "../ticket/CISection";
+import { shortCommit } from "../format";
+import { runName, runStatus } from "../ticket/CISection";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { usePulse } from "./pulse";
 

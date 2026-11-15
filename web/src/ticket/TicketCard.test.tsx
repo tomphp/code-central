@@ -47,6 +47,16 @@ describe("TicketCard", () => {
     expect(screen.queryByText("CI passed")).toBeNull();
   });
 
+  it("shows its State chip and Reason badge in the Needs Me column", () => {
+    render(
+      <Needing tickets={[t as ProjectTicket]} reasons={{ [t.id]: "silent_claim" }}>
+        <TicketCard t={t} link={link} inNeedsMe />
+      </Needing>,
+    );
+    expect(screen.getByText("In Progress").className).toBe("state-chip st-in-progress");
+    expect(screen.getByText("Silent Claim").className).toBe("reason reason-silent_claim");
+  });
+
   it("pulses when it joins its column", () => {
     render(<TicketCard t={t} link={link} joined />);
     const card = screen.getByRole("link");
