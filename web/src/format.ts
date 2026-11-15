@@ -1,4 +1,4 @@
-import type { NeedsMeReason, NeedsMeRow } from "./api/types";
+import type { CIRunView, NeedsMeReason, NeedsMeRow } from "./api/types";
 
 export const REASON_LABEL: Record<NeedsMeReason, string> = {
   needs_answer: "Questions",
@@ -22,6 +22,18 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
 
 // shortCommit is a commit as the UI shows it: its first 7 characters.
 export const shortCommit = (commit: string) => commit.slice(0, 7);
+
+// runDuration is how long a CI Run took, or has taken so far: "45s",
+// "3m 12s", "1h 5m"; "–" before it starts.
+export function runDuration(run: Pick<CIRunView, "status" | "started" | "finished">, now: Date): string {
+  if (!run.started) return "–";
+  const end = run.status === "completed" && run.finished ? Date.parse(run.finished) : now.getTime();
+  const s = Math.max(0, Math.round((end - Date.parse(run.started)) / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
 
 // ticketOf is the Ticket a Needs Me row opens on: its own, or the first
 // a CI item lists (code-central-432); "" for a Project's item.

@@ -14,13 +14,11 @@ import { ErrorBanner } from "../controls/ErrorBanner";
 import { projectName } from "../controls/ProjectName";
 import { ProjectPicker } from "../controls/ProjectPicker";
 import { ViewHeader } from "../controls/ViewHeader";
-import { CI_VIEW_DAYS, type CIOverview, type CIProvider, type CIProjectStatus, type CIRunRow, type CIRunView, type ProjectRow } from "../api/types";
-import { usePulse } from "../focus/pulse";
+import { CI_VIEW_DAYS, type CIOverview, type CIProjectStatus, type ProjectRow } from "../api/types";
 import { useFetch } from "../live";
-import { shortCommit } from "../format";
-import { RunStatusBadge, runStatus } from "../ticket/CISection";
 import { clickTo, hrefFor, type UiLocation } from "../url";
 import { Button } from "../controls/Button";
+import { CIRunEntry, runKey } from "./CIRunEntry";
 import "./ci.css";
 
 export interface CIViewProps {
@@ -114,8 +112,9 @@ export function CIBody({ overview: data, error, now, project, projectName, navig
               </thead>
               <tbody>
                 {data.runs.map((r) => (
-                  <RunRow
+                  <CIRunEntry
                     key={runKey(r)}
+                    layout="row"
                     run={r}
                     provider={data.projects.find((p) => p.project === r.project)?.provider}
                     now={now}
@@ -134,9 +133,6 @@ export function CIBody({ overview: data, error, now, project, projectName, navig
     </div>
   );
 }
-
-// runKey names a run across Projects; a re-run's next attempt is the same run.
-const runKey = (r: CIRunRow) => `${r.project}/${r.id}`;
 
 interface WatcherStatusProps {
   status: CIProjectStatus;
@@ -181,80 +177,4 @@ function WatcherStatus({ status: { project, tracking, provider, repository, proj
         </p>
       );
   }
-}
-
-interface RunRowProps {
-  run: CIRunRow;
-  provider?: CIProvider;
-  now: Date;
-  // joined is a run that wasn't in the view's first read: it pulses once.
-  joined: boolean;
-  // projectName is the run's Project's name, in All Projects only.
-  projectName?: string;
-  navigate(patch: Partial<UiLocation>): void;
-}
-
-// RunRow is one run's row. It pulses when the run's status, conclusion
-// or attempt changes.
-function RunRow({ run, provider, now, joined, projectName, navigate }: RunRowProps) {
-  const status = runStatus(run);
-  const pulse = usePulse(run.ignored ? "ci-row ignored" : "ci-row", `${run.status} ${run.conclusion ?? ""} ${run.attempt}`, joined);
-  const tracked = run.ticket ?? run.rule;
-  const to: Partial<UiLocation> = run.ticket
-    ? { view: "inbox", project: run.project, ticket: run.ticket }
-    : { view: "inbox", project: run.project, requirement: run.rule };
-  return (
-    <tr {...pulse} aria-label={run.name || run.workflow}>
-      <th scope="row">
-        {run.name || run.workflow} <span className="muted small">{run.workflow}</span>
-      </th>
-      <td>{run.branch}</td>
-      <td>
-        <code>{shortCommit(run.commit)}</code>
-      </td>
-      <td>
-        <RunStatusBadge status={status} />
-        {run.attempt > 1 && <span className="muted small"> · attempt {run.attempt}</span>}
-        {run.ignored && <span className="label">ignored</span>}
-      </td>
-      <td className="num">{runDuration(run, now)}</td>
-      <td>
-        {tracked && (
-          <>
-            {run.rule && "CI Rule "}
-            <a href={hrefFor({ view: "inbox", ...to })} onClick={clickTo(navigate, to)}>
-              {tracked}
-            </a>
-          </>
-        )}
-      </td>
-      {projectName !== undefined && <td>{projectName}</td>}
-      <td>
-        <RunLink run={run} provider={provider} />
-      </td>
-    </tr>
-  );
-}
-
-// RunLink opens a run on its CI system, named from the Project's CI
-// Provider, in a new tab: in the CI view's rows and the Activity
-// Dashboard's CI Running entries.
-export function RunLink({ run, provider, className }: { run: CIRunView; provider?: CIProvider; className?: string }) {
-  return (
-    <a href={run.url} target="_blank" rel="noreferrer" className={className}>
-      {provider === "azure_pipelines" ? "View on Azure DevOps" : "View on GitHub"}
-    </a>
-  );
-}
-
-// runDuration is how long a run took, or has taken so far: "45s",
-// "3m 12s", "1h 5m"; "–" before it starts.
-export function runDuration(run: CIRunRow, now: Date): string {
-  if (!run.started) return "–";
-  const end = run.status === "completed" && run.finished ? Date.parse(run.finished) : now.getTime();
-  const s = Math.max(0, Math.round((end - Date.parse(run.started)) / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
 }

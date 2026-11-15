@@ -1,4 +1,5 @@
-// Plain CI overview data for CIBody's stories and prop tests.
+// Plain CI overview data for the CI stories and prop tests: CIBody's,
+// CIRunEntry's and the CI Run parts'.
 import type { CIProjectStatus, CIRunRow } from "../api/types";
 
 export const NOW = new Date("2026-03-01T12:00:00Z");
