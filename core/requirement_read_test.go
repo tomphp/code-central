@@ -34,7 +34,7 @@ func (f fixture) requirementOf(t *testing.T, spec core.Ref) *core.RequirementVie
 func stageLines(r *core.RequirementView) []string {
 	var out []string
 	for _, s := range r.Stages {
-		out = append(out, s.Name+" "+s.Ticket+" "+string(s.State)+" "+string(s.NeedsMeReason))
+		out = append(out, string(s.Name)+" "+s.Ticket+" "+string(s.State)+" "+string(s.NeedsMeReason))
 	}
 	return out
 }

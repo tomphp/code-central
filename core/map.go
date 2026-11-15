@@ -142,7 +142,7 @@ func mapView(e *evaluation, s store.Spec, tickets []store.Ticket) *MapView {
 			v.NeedsYou++
 		}
 		v.CanWriteSpec = v.CanWriteSpec && finished(t.State)
-		if !slices.Contains(WayfinderTypes, NodeType(t.Labels)) || t.State == store.Cancelled {
+		if !slices.Contains(WayfinderTypes, NodeTypeOf(t.Labels)) || t.State == store.Cancelled {
 			continue
 		}
 		v.Total++
@@ -153,17 +153,17 @@ func mapView(e *evaluation, s store.Spec, tickets []store.Ticket) *MapView {
 	return v
 }
 
-// NodeType is a Map Ticket's type, from its reserved Label: one of the
+// NodeTypeOf is a Map Ticket's type, from its reserved Label: one of the
 // WayfinderTypes, prototype, or ticket for a Ticket with neither.
-func NodeType(labels []string) string {
+func NodeTypeOf(labels []string) NodeType {
 	for _, l := range labels {
 		guide, _ := typeGuide(l)
 		if guide == PrototypeLabel {
-			return guide
+			return NodePrototype
 		}
 		if name, ok := strings.CutPrefix(guide, mapGuidePrefix); ok {
-			return name
+			return NodeType(name)
 		}
 	}
-	return "ticket"
+	return NodeTicket
 }

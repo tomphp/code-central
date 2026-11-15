@@ -16,17 +16,27 @@ import (
 // StagePrefix is the reserved Label prefix that marks a Stage Ticket.
 const StagePrefix = "stage:"
 
-// Stages are the three Stages in order, each named as its Label's suffix.
-var Stages = []string{"grilling", "spec", "tickets"}
+// StageName is a Stage's name, its Label's suffix.
+type StageName string
+
+// The Stages' names.
+const (
+	StageGrilling StageName = "grilling"
+	StageSpec     StageName = "spec"
+	StageTickets  StageName = "tickets"
+)
+
+// Stages are the three Stages in order.
+var Stages = []StageName{StageGrilling, StageSpec, StageTickets}
 
 // StageLabel is the Label that marks a Ticket as the named Stage.
-func StageLabel(stage string) string { return StagePrefix + stage }
+func StageLabel(stage StageName) string { return StagePrefix + string(stage) }
 
 // checkStageLabels rejects a reserved stage:* Label that names no Stage.
 func checkStageLabels(field string, labels []string) error {
 	for _, l := range labels {
 		name, ok := strings.CutPrefix(l, StagePrefix)
-		if ok && !slices.Contains(Stages, name) {
+		if ok && !slices.Contains(Stages, StageName(name)) {
 			return invalid(field, "%q uses the reserved %q prefix; the only Stage Labels are stage:grilling, stage:spec and stage:tickets", l, StagePrefix)
 		}
 	}
@@ -62,7 +72,7 @@ type SubmitRequirementResult struct {
 // stageTickets are what submit_requirement writes for each Stage: its
 // Ticket's title, before the Requirement's, and its description, given
 // the Spec's ID. Each Stage's guide is stageguides/<name>.md.
-var stageTickets = map[string]struct{ title, description string }{
+var stageTickets = map[StageName]struct{ title, description string }{
 	"grilling": {"Grilling", "Grill the human on the Requirement in Spec [%[1]s](%[1]s), until every decision, new term and open point is settled.\n"},
 	"spec":     {"Spec", "Write the Spec for the Requirement in Spec [%[1]s](%[1]s), from its text and the grilling Ticket's Rounds and resolution.\n"},
 	"tickets":  {"Tickets", "Slice the Spec [%[1]s](%[1]s) into implementation Tickets.\n"},
@@ -129,7 +139,7 @@ func (c *Core) SubmitRequirement(_ context.Context, key string, in SubmitRequire
 // body, Tags and Link, as a Requirement with these Stages, with the
 // Spec's number and its Stage Tickets'. mapID is the Map it is made
 // from, if any.
-func (c *Core) requirementImport(r store.Reader, key string, sp store.Spec, stages []string, mapID string, draft bool) (store.Import, int, []int) {
+func (c *Core) requirementImport(r store.Reader, key string, sp store.Spec, stages []StageName, mapID string, draft bool) (store.Import, int, []int) {
 	now := c.now()
 	specN := r.NextNumber(key)
 	sp.Number, sp.Created, sp.Updated = specN, now, now
@@ -235,7 +245,7 @@ type RequirementView struct {
 // StageView is one Stage Ticket: its Stage name, Ticket ID, State and
 // Needs Me reason, if any.
 type StageView struct {
-	Name          string        `json:"name"`
+	Name          StageName     `json:"name"`
 	Ticket        string        `json:"ticket"`
 	State         store.State   `json:"state"`
 	NeedsMeReason NeedsMeReason `json:"needs_me_reason,omitempty"`
@@ -250,10 +260,10 @@ type BuildProgress struct {
 
 // StageOf is the Stage a Ticket's Labels mark it as, or "" for an
 // implementation Ticket.
-func StageOf(labels []string) string {
+func StageOf(labels []string) StageName {
 	for _, l := range labels {
-		if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages, name) {
-			return name
+		if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages, StageName(name)) {
+			return StageName(name)
 		}
 	}
 	return ""

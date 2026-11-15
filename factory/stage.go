@@ -185,7 +185,7 @@ func systemPrompt(c claim, stage, wt string, g core.StageGuideView, conflicts []
 			fmt.Fprintf(&b, "Run /%s alongside /%s, to sharpen the terms as you grill.\n\n", sk.alongside, sk.skill)
 		}
 		what, writer := "the "+stage+" Stage", "A Stage"
-		if !slices.Contains(core.Stages, stage) {
+		if !slices.Contains(core.Stages, core.StageName(stage)) {
 			what, writer = "this "+stage+" Ticket", "It"
 		}
 		fmt.Fprintf(&b, "You are running under code-central-factory, in a detached, read-only worktree at the base's tip, for %s. %s Finish the Ticket when it is done. %s writes nothing to the repository: no files, no commits and no branches.", what, claimed, writer)

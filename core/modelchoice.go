@@ -37,6 +37,9 @@ const (
 	SourceNone           ChoiceSource = "none"
 )
 
+// ChoiceSources are the sources.
+var ChoiceSources = []ChoiceSource{SourceTicketTag, SourceProjectKind, SourceProjectDefault, SourceNone}
+
 // ChoiceValue is one of a Model Choice's values with its source; Value is
 // empty when the source is none. Kind names the kind of work whose
 // Models row set it, only when the source is project_kind.

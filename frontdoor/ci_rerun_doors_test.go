@@ -142,11 +142,11 @@ func TestRerunCIAsksForEachFailedRun(t *testing.T) {
 // A Re-run request is offered under both Push Landing Methods.
 func TestRerunCIIsOfferedUnderMergeAndBranch(t *testing.T) {
 	srv := newServer(t, failedCI)
-	if tk := ticket3(t, srv); !slices.Equal(tk.CIFailureOptions, []string{"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"}) {
+	if tk := ticket3(t, srv); !slices.Equal(tk.CIFailureOptions, []core.CIFailureOption{"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"}) {
 		t.Fatalf("options %v under Merge + Push, want Re-run failed jobs, Land anyway and the fixes", tk.CIFailureOptions)
 	}
 	httpOK(t, srv, setLandingMethod(`{"method":"branch","push":true,"remote":"origin"}`))
-	if tk := ticket3(t, srv); !slices.Equal(tk.CIFailureOptions, []string{"rerun_ci", "send_back", "new_fix_ticket"}) {
+	if tk := ticket3(t, srv); !slices.Equal(tk.CIFailureOptions, []core.CIFailureOption{"rerun_ci", "send_back", "new_fix_ticket"}) {
 		t.Fatalf("options %v under Branch + Push, want Re-run failed jobs and the fixes", tk.CIFailureOptions)
 	}
 	httpOK(t, srv, rerunCI("3"))

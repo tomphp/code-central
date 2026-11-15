@@ -113,7 +113,9 @@ func (v TicketView) Brief() TicketView {
 	if v.Blockers != nil {
 		v.Blockers = slices.Clone(v.Blockers)
 		for i := range v.Blockers {
-			v.Blockers[i].brief = v.Blockers[i].State == store.Done
+			if b := &v.Blockers[i]; b.State == store.Done {
+				b.Title, b.Via, b.Cleared = "", "", nil
+			}
 		}
 	}
 	if v.Claims != nil {

@@ -26,7 +26,7 @@ func landWorldOn(t *testing.T, f fixture, landPerSpec bool) fixture {
 	f.project(t, "acme")
 	f.spec(t, "acme", "Requirement")
 	for _, stage := range core.Stages {
-		f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: stage, Labels: []string{core.StageLabel(stage)}})
+		f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: string(stage), Labels: []string{core.StageLabel(stage)}})
 	}
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "First"})
 	f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Second", BlockedBy: []core.Ref{"acme-5"}})
@@ -204,7 +204,7 @@ func TestASameSpecBlockerClearsOnceItsSpecMergeIsReported(t *testing.T) {
 	f.clock.Advance(time.Minute)
 	f.specMerge(t, "acme-5", "def456")
 	v := f.getTicket(t, "acme-6")
-	if v.Blocked || len(v.Blockers) != 1 || !v.Blockers[0].Cleared || !v.Claimable {
+	if v.Blocked || len(v.Blockers) != 1 || !*v.Blockers[0].Cleared || !v.Claimable {
 		t.Errorf("acme-6 = blocked %v, blockers %+v, claimable %v; want cleared and claimable", v.Blocked, v.Blockers, v.Claimable)
 	}
 }
@@ -217,7 +217,7 @@ func TestABlockerOnAnotherSpecDoesNotClearOnASpecMerge(t *testing.T) {
 	dependant := f.ticket(t, "acme", core.CreateTicketInput{Spec: "acme-1", Title: "Dependant", BlockedBy: []core.Ref{core.Ref(other.ID)}})
 	f.moveTo(t, 8, store.Accepted)
 	f.specMerge(t, other.ID, "def456")
-	if v := f.getTicket(t, dependant.ID); !v.Blocked || v.Blockers[0].Cleared {
+	if v := f.getTicket(t, dependant.ID); !v.Blocked || *v.Blockers[0].Cleared {
 		t.Errorf("dependant = blocked %v, blockers %+v; want blocked by the other Spec's Blocker", v.Blocked, v.Blockers)
 	}
 }

@@ -26,9 +26,6 @@ const (
 	// kindChat is the kind a Chat turn's model responses are posted
 	// under in Usage.
 	kindChat = "chat"
-	// eventDenials is the kind of the item listing the calls a Chat
-	// turn had denied, from its result's permission_denials.
-	eventDenials = "permission_denials"
 	// chatRetry is how long the Chat loop waits after a next_chat_work
 	// that failed before it calls again.
 	chatRetry = 5 * time.Second
@@ -175,7 +172,7 @@ func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session, wt s
 	}()
 	end := readTurn(cmd, stdout, wt, newUsageReader(kindChat, f.e.Now), func(e core.SessionEvent) {
 		p.add(e)
-		if f.o.verbose && e.Kind == eventToolCall {
+		if f.o.verbose && e.Kind == core.EventToolCall {
 			f.printf("chat: %s", e.Text)
 		}
 	}, p.addUsage)
@@ -215,7 +212,7 @@ func chatOutcome(t core.ChatTurn, end turnEnd) (core.ChatOutcome, string) {
 // denialsItem is the item listing the distinct calls a Chat turn had
 // denied.
 func denialsItem(ds []denial, now time.Time) core.SessionEvent {
-	return core.SessionEvent{Time: now, Kind: eventDenials, Text: "Auto mode denied these calls:\n" + denialList(ds)}
+	return core.SessionEvent{Time: now, Kind: core.EventPermissionDenials, Text: "Auto mode denied these calls:\n" + denialList(ds)}
 }
 
 // chatWorktreeAtBase makes the Chat worktree wt detached at the base's

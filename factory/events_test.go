@@ -14,8 +14,9 @@ import (
 
 // event is a Session Event without its time and seq, for comparing.
 type event struct {
-	Kind, Text, Tool, ToolUseID string
-	IsError, Truncated          bool
+	Kind                  core.SessionEventKind
+	Text, Tool, ToolUseID string
+	IsError, Truncated    bool
 }
 
 func events(tr core.TranscriptView) []event {

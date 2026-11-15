@@ -120,7 +120,7 @@ func TestCIFailedUnderPullRequestNeverOffersLandAnyway(t *testing.T) {
 
 	v := f.getTicket(t, "acme-2")
 	wantReason(t, f.get(t, "2"), core.ReasonCIFailed)
-	if want := []string{"rerun_ci", "send_back", "new_fix_ticket"}; !slices.Equal(v.CIFailureOptions, want) {
+	if want := []core.CIFailureOption{"rerun_ci", "send_back", "new_fix_ticket"}; !slices.Equal(v.CIFailureOptions, want) {
 		t.Fatalf("options %v, want %v", v.CIFailureOptions, want)
 	}
 	_, err := f.core.LandAnyway(human, "acme", core.TicketInput{Ticket: "acme-2"})
@@ -137,7 +137,7 @@ func TestCICancelledUnderPullRequestOffersRerunAndSendBack(t *testing.T) {
 	f.reportRun(t, "acme-2", store.CICompleted, store.CICancelled)
 
 	wantReason(t, f.get(t, "2"), core.ReasonCICancelled)
-	if want := []string{"rerun_ci", "send_back"}; !slices.Equal(f.getTicket(t, "acme-2").CIFailureOptions, want) {
+	if want := []core.CIFailureOption{"rerun_ci", "send_back"}; !slices.Equal(f.getTicket(t, "acme-2").CIFailureOptions, want) {
 		t.Fatalf("options %v, want %v", f.getTicket(t, "acme-2").CIFailureOptions, want)
 	}
 }

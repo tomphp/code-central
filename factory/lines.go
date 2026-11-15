@@ -56,7 +56,7 @@ func (f *factory) claimInfo(c claim) claimInfo {
 func (f *factory) claimf(c claim, format string, args ...any) {
 	line := fmt.Sprintf(format, args...)
 	f.printf("%s", line)
-	f.events.add(c.SessionID, core.SessionEvent{Time: time.Now(), Kind: eventFactory, Text: line})
+	f.events.add(c.SessionID, core.SessionEvent{Time: time.Now(), Kind: core.EventFactory, Text: line})
 }
 
 // claimed prints the line for a new Claim on tk, once its worktree is

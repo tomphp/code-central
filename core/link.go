@@ -17,9 +17,11 @@ import (
 // operations are deliberately minimal: the first real Integration will
 // settle their signatures.
 
-// LinkView is a Spec's or Ticket's Link as reads show it. Outbound marks
-// a Link that doesn't own the item's definition: Code Central owns it
-// and only writes to the external item.
+// LinkView is a Spec's or Ticket's Link as reads show it: the external
+// item its Integration mirrors. While it isn't detached, the title and
+// description belong to the external system. Outbound marks a Link that
+// doesn't own the item's definition: Code Central owns it and only
+// writes to the external item.
 type LinkView struct {
 	Integration   string              `json:"integration"`
 	ID            string              `json:"id"`
@@ -328,9 +330,9 @@ func (c *Core) recordEdit(ctx context.Context, edits *[]store.Edit, prev map[str
 }
 
 // LinkedRow is a linked Spec or Ticket as the link operations return it.
-// Kind is "spec" or "ticket"; State is set for a Ticket.
+// State is set for a Ticket.
 type LinkedRow struct {
-	Kind  string      `json:"kind"`
+	Kind  RecordKind  `json:"kind"`
 	ID    string      `json:"id"`
 	Title string      `json:"title"`
 	State store.State `json:"state,omitempty"`
@@ -444,11 +446,11 @@ func (c *Core) updateLink(ctx context.Context, key string, ref Ref, fn func(l *s
 }
 
 func specLinkedRow(key string, s store.Spec) LinkedRow {
-	return LinkedRow{Kind: "spec", ID: DisplayID(key, s.Number), Title: s.Title, Link: *linkView(s.Link)}
+	return LinkedRow{Kind: RecordSpec, ID: DisplayID(key, s.Number), Title: s.Title, Link: *linkView(s.Link)}
 }
 
 func ticketLinkedRow(key string, t store.Ticket) LinkedRow {
-	return LinkedRow{Kind: "ticket", ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Link: *linkView(t.Link)}
+	return LinkedRow{Kind: RecordTicket, ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Link: *linkView(t.Link)}
 }
 
 // FindLinkedInput is find_linked's filters: the Integration, and

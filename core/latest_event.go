@@ -23,11 +23,12 @@ const LatestEventLimit = 120
 // when it ends, so the last change is never lost.
 const LatestEventThrottle = 5 * time.Second
 
-// LatestEvent is a Claim's latest Session Event, shown short.
+// LatestEvent is a Claim's latest Session Event, shown short: its text is
+// one line, cut to LatestEventLimit. Computed on read, never stored.
 type LatestEvent struct {
-	Kind string    `json:"kind"`
-	Text string    `json:"text"`
-	Time time.Time `json:"time"`
+	Kind SessionEventKind `json:"kind"`
+	Text string           `json:"text"`
+	Time time.Time        `json:"time"`
 }
 
 // latestEvent is Claim number claim's latest event, or nil when its

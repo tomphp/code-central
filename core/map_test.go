@@ -191,11 +191,11 @@ func TestEachTicketRowOnAMapCarriesItsNodeType(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var got []string
+	var got []core.NodeType
 	for _, row := range sp.Tickets {
 		got = append(got, row.NodeType)
 	}
-	want := []string{"chart", "grilling", "research", "task", "prototype", "ticket"}
+	want := []core.NodeType{"chart", "grilling", "research", "task", "prototype", "ticket"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("node types %q, want %q", got, want)
 	}

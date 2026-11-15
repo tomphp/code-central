@@ -24,6 +24,9 @@ const (
 	CINoRuns CIUnavailableCause = "no_ci_runs"
 )
 
+// CIUnavailableCauses are the causes.
+var CIUnavailableCauses = []CIUnavailableCause{CIWatcherNotWatching, CINoRuns}
+
 // CIUnavailableView is a CI unavailable row's detail: the cause, the
 // pushed commit and when it was pushed, and, while the CI Watcher is in
 // error, its message.

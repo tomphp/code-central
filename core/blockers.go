@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -29,28 +28,21 @@ type BlockerInput struct {
 
 // BlockerView is one Blocker as get_ticket shows it, after following
 // Replacements. Via names the Cancelled Blocker it stands in for, if any.
+// A brief view shows a Done Blocker as its ID and State only
+// (TicketView.Brief), leaving out its title, via and cleared.
 type BlockerView struct {
 	ID    string      `json:"id"`
-	Title string      `json:"title"`
+	Title string      `json:"title,omitempty"`
 	State store.State `json:"state"`
 	Via   string      `json:"via,omitempty"`
-	// Cleared is whether it no longer blocks though it isn't Done.
-	Cleared bool `json:"cleared"`
-	// brief shows the Blocker as its ID and State only (TicketView.Brief).
-	brief bool
+	// Cleared is whether it no longer blocks though it isn't Done, as one
+	// on the same Spec does once it is merged into the Spec Branch. It is
+	// always set, except on a brief view's Done Blocker.
+	Cleared *bool `json:"cleared,omitempty"`
 }
 
-// MarshalJSON shows a brief Blocker as its ID and State only.
-func (b BlockerView) MarshalJSON() ([]byte, error) {
-	if b.brief {
-		return json.Marshal(struct {
-			ID    string      `json:"id"`
-			State store.State `json:"state"`
-		}{b.ID, b.State})
-	}
-	type plain BlockerView
-	return json.Marshal(plain(b))
-}
+// cleared reports whether b no longer blocks though it isn't Done.
+func (b BlockerView) cleared() bool { return b.Cleared != nil && *b.Cleared }
 
 // AddBlocker is add_blocker(ticket, blocker). A link already there
 // writes nothing; one that would form a cycle is rejected with cycle.
@@ -133,7 +125,7 @@ func (b blockRule) openBlockers(t store.Ticket) []BlockerView {
 	if finished(t.State) {
 		return nil
 	}
-	return slices.DeleteFunc(b.blockerViews(t), func(v BlockerView) bool { return v.State == store.Done || v.Cleared })
+	return slices.DeleteFunc(b.blockerViews(t), func(v BlockerView) bool { return v.State == store.Done || v.cleared() })
 }
 
 // blockerViews lists t's Blockers after following Replacements, each once.
@@ -148,12 +140,10 @@ func (b blockRule) blockerViews(t store.Ticket) []BlockerView {
 			}
 			seen[m] = true
 			bt, _ := b.r.Ticket(key, m)
-			v := BlockerView{ID: DisplayID(key, m), Title: bt.Title, State: bt.State}
 			// Within a Spec, a Spec-landed Blocker clears once its work is
 			// merged into the Spec Branch.
-			if bt.Spec == t.Spec && bt.State == store.Accepted && specMergeCounts(bt) && specLanded(b.r, b.p, bt) {
-				v.Cleared = true
-			}
+			cleared := bt.Spec == t.Spec && bt.State == store.Accepted && specMergeCounts(bt) && specLanded(b.r, b.p, bt)
+			v := BlockerView{ID: DisplayID(key, m), Title: bt.Title, State: bt.State, Cleared: &cleared}
 			if m != n {
 				v.Via = DisplayID(key, n)
 			}
