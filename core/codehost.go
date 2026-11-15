@@ -8,11 +8,21 @@ import (
 // The Code Host a Pull Request lands through (code-central-387): worked
 // out from the Push remote URL the Factory reported, never configured.
 
+// CodeHost is the Code Host a Pull Request is opened on, worked out from
+// the Push remote URL, or none.
+type CodeHost string
+
 // The Code Hosts.
 const (
-	CodeHostGitHub     = "github"
-	CodeHostAzureRepos = "azure_repos"
+	CodeHostGitHub     CodeHost = "github"
+	CodeHostAzureRepos CodeHost = "azure_repos"
+	// CodeHostNone is no Push remote URL reported, or one naming a Code
+	// Host Code Central doesn't support.
+	CodeHostNone CodeHost = ""
 )
+
+// CodeHosts are the Code Hosts, then none.
+var CodeHosts = []CodeHost{CodeHostGitHub, CodeHostAzureRepos, CodeHostNone}
 
 var (
 	githubRemote = regexp.MustCompile(`^(?:(?:https?|ssh|git)://(?:[^@/]+@)?github\.com(?::\d+)?/|[^@/\s]+@github\.com:)([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\.git)?/?$`)
@@ -26,7 +36,7 @@ var (
 // codeHostOf works out the Code Host and repository a Push remote URL
 // names, or "" when it is none Code Central supports. An Azure Repos
 // repository reads <organization>/<project>/<repository>.
-func codeHostOf(url string) (host, repository string) {
+func codeHostOf(url string) (host CodeHost, repository string) {
 	url = strings.TrimSpace(url)
 	if m := githubRemote.FindStringSubmatch(url); m != nil {
 		return CodeHostGitHub, m[1] + "/" + m[2]

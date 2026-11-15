@@ -62,7 +62,7 @@ describe("the closed-externally panel", () => {
     await userEvent.click(within(p).getByRole("button", { name: "Mark Done" }));
     const t = await x.w.api.getTicket("acme", x.id);
     expect(t.state).toBe("Done");
-    expect(t.moves.at(-1)).toMatchObject({ to: "Done", actor: "human" });
+    expect(t.moves!.at(-1)).toMatchObject({ to: "Done", actor: "human" });
   });
 
   it("unlinks", async () => {

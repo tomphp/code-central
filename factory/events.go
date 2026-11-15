@@ -15,14 +15,6 @@ import (
 // Posting never blocks a turn and never fails one: events wait in a
 // bounded queue, and a batch that can't be posted is dropped.
 
-// The kinds of Session Event the Factory posts.
-const (
-	eventText       = "text"
-	eventToolCall   = "tool_call"
-	eventToolResult = "tool_result"
-	eventFactory    = "factory"
-)
-
 // toolResultMax is the most bytes of a tool result's text posted.
 const toolResultMax = 4 << 10
 
@@ -37,13 +29,13 @@ func streamEvents(msg streamMessage, now time.Time, tools map[string]string, wt 
 	for _, c := range msg.Message.Content {
 		switch {
 		case msg.Type == "assistant" && c.Type == "text" && strings.TrimSpace(c.Text) != "":
-			out = append(out, core.SessionEvent{Time: now, Kind: eventText, Text: c.Text})
+			out = append(out, core.SessionEvent{Time: now, Kind: core.EventText, Text: c.Text})
 		case msg.Type == "assistant" && c.Type == "tool_use":
 			tools[c.ID] = c.Name
-			out = append(out, core.SessionEvent{Time: now, Kind: eventToolCall, Text: toolCall(c.Name, c.Input, wt), Tool: c.Name, ToolUseID: c.ID})
+			out = append(out, core.SessionEvent{Time: now, Kind: core.EventToolCall, Text: toolCall(c.Name, c.Input, wt), Tool: c.Name, ToolUseID: c.ID})
 		case msg.Type == "user" && c.Type == "tool_result":
 			text, cut := cutResult(resultText(c.Content))
-			out = append(out, core.SessionEvent{Time: now, Kind: eventToolResult, Text: text, Tool: tools[c.ToolUseID], ToolUseID: c.ToolUseID, IsError: c.IsError, Truncated: cut})
+			out = append(out, core.SessionEvent{Time: now, Kind: core.EventToolResult, Text: text, Tool: tools[c.ToolUseID], ToolUseID: c.ToolUseID, IsError: c.IsError, Truncated: cut})
 		}
 	}
 	return out

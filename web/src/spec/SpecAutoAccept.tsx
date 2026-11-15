@@ -15,7 +15,7 @@ export function SpecAutoAccept({ api, spec, archived }: { api: Api; spec: SpecDe
       project={projectOf(spec.id)}
       target={spec.id}
       on={spec.labels.includes(AUTO_ACCEPT_LABEL)}
-      accepts={spec.tickets.filter((t) => t.state === "In Review" && canAutoAccept(t, spec.labels)).length}
+      accepts={(spec.tickets ?? []).filter((t) => t.state === "In Review" && canAutoAccept(t, spec.labels)).length}
       archived={archived}
     />
   );

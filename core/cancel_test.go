@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 
@@ -96,10 +97,10 @@ func TestAnythingBlockedByACancelledTicketIsBlockedByItsReplacements(t *testing.
 		t.Fatalf("blocked %v blocked_by %v updated %v (dependant must not be rewritten)", v.Blocked, v.BlockedBy, v.Updated)
 	}
 	want := []core.BlockerView{
-		{ID: "acme-4", Title: "Tc", State: store.Draft, Via: "acme-3"},
-		{ID: "acme-5", Title: "Td", State: store.Draft, Via: "acme-3"},
+		{ID: "acme-4", Title: "Tc", State: store.Draft, Via: "acme-3", Cleared: boolPtr(false)},
+		{ID: "acme-5", Title: "Td", State: store.Draft, Via: "acme-3", Cleared: boolPtr(false)},
 	}
-	if !slices.Equal(v.Blockers, want) {
+	if !reflect.DeepEqual(v.Blockers, want) {
 		t.Fatalf("blockers %+v, want %+v", v.Blockers, want)
 	}
 	f.setState(t, 4, store.Done)

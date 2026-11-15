@@ -52,7 +52,7 @@ describe("the Accepted panel", () => {
     expect(x.w.calls).toContain("land");
     const t = await x.w.api.getTicket("acme", x.id);
     expect(t.state).toBe("Done");
-    expect(t.moves.at(-1)).toMatchObject({ from: "Accepted", to: "Done", actor: "human", via: "merge", commit: "def456" });
+    expect(t.moves!.at(-1)).toMatchObject({ from: "Accepted", to: "Done", actor: "human", via: "merge", commit: "def456" });
   });
 
   it("cancels", async () => {

@@ -17,15 +17,19 @@ import (
 // actions are the human's, offered on every Incoming Issue, awaiting
 // triage or not.
 
-// The triage actions, each an operation's name.
+// TriageAction is a triage action the human may take on an Incoming Issue
+// (Spec code-central-279), named for its operation.
+type TriageAction string
+
+// The triage actions.
 const (
-	OptionKeepAsDraft   = "keep_as_draft"
-	OptionToRequirement = "to_requirement"
-	OptionWontFix       = "wont_fix"
+	OptionKeepAsDraft   TriageAction = "keep_as_draft"
+	OptionToRequirement TriageAction = "to_requirement"
+	OptionWontFix       TriageAction = "wont_fix"
 )
 
-// triageActions are the triage actions in the order they are offered.
-var triageActions = []string{OptionKeepAsDraft, OptionToRequirement, OptionWontFix}
+// TriageActions are the triage actions in the order they are offered.
+var TriageActions = []TriageAction{OptionKeepAsDraft, OptionToRequirement, OptionWontFix}
 
 // issuesSpec is the number of key's Issues Spec, 0 when it has none.
 func issuesSpec(r store.Reader, key string) int {
@@ -57,11 +61,11 @@ func whyNotIncoming(r store.Reader, key string, t store.Ticket) string {
 
 // ticketTriageActions are the triage actions offered on t: every one on
 // an Incoming Issue, none otherwise.
-func ticketTriageActions(r store.Reader, key string, t store.Ticket) []string {
+func ticketTriageActions(r store.Reader, key string, t store.Ticket) []TriageAction {
 	if whyNotIncoming(r, key, t) != "" {
 		return nil
 	}
-	return triageActions
+	return TriageActions
 }
 
 // newIssue is when t became a New issue, if it is one: an Incoming Issue
@@ -81,10 +85,10 @@ func newIssue(r store.Reader, key string, t store.Ticket) (time.Time, bool) {
 // issue reason never comes back for it. It writes nothing to GitHub.
 // Keeping one that isn't awaiting triage changes nothing.
 func (c *Core) KeepAsDraft(ctx context.Context, key string, in TicketInput) (Written[TicketView], error) {
-	if err := humanOnly(ctx, OptionKeepAsDraft); err != nil {
+	if err := humanOnly(ctx, string(OptionKeepAsDraft)); err != nil {
 		return Written[TicketView]{}, err
 	}
-	return c.updateTicketIn(key, OptionKeepAsDraft, in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, string(OptionKeepAsDraft), in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
 		if why := whyNotIncoming(r, key, *t); why != "" {
 			return false, &Error{Code: ActionNotAllowed, Message: why}
 		}
@@ -131,7 +135,7 @@ func requirementText(t store.Ticket, extra string) string {
 // so the context comment is due on the issue (writeback.go). Its result
 // is the Incoming Issue's, whose Replacement leads to the Requirement.
 func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementInput) (Written[TicketView], error) {
-	if err := humanOnly(ctx, OptionToRequirement); err != nil {
+	if err := humanOnly(ctx, string(OptionToRequirement)); err != nil {
 		return Written[TicketView]{}, err
 	}
 	var res Written[TicketView]
@@ -139,7 +143,7 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		t, err := resolveTicket(w, key, OptionToRequirement, "ticket", in.Ticket)
+		t, err := resolveTicket(w, key, string(OptionToRequirement), "ticket", in.Ticket)
 		if err != nil {
 			return err
 		}
@@ -179,12 +183,12 @@ func (c *Core) ToRequirement(ctx context.Context, key string, in ToRequirementIn
 // triageCancel Cancels t, an Incoming Issue, via the triage action via,
 // with comment, if any, as the human's comment, and clears its awaiting
 // triage.
-func (c *Core) triageCancel(ctx context.Context, key string, t *store.Ticket, via, comment string) error {
+func (c *Core) triageCancel(ctx context.Context, key string, t *store.Ticket, via TriageAction, comment string) error {
 	now := c.now()
 	if err := transition(ctx, t, key, "cancel", "", now); err != nil {
 		return err
 	}
-	t.Moves[len(t.Moves)-1].Via = via
+	t.Moves[len(t.Moves)-1].Via = string(via)
 	if comment = strings.TrimSpace(comment); comment != "" {
 		addComment(t, Human, now, 0, comment)
 	}
@@ -206,10 +210,10 @@ type WontFixInput struct {
 // closing its issue as not planned is due, with the reason, if given, as
 // the wont-fix comment (writeback.go). Its Link stays attached.
 func (c *Core) WontFix(ctx context.Context, key string, in WontFixInput) (Written[TicketView], error) {
-	if err := humanOnly(ctx, OptionWontFix); err != nil {
+	if err := humanOnly(ctx, string(OptionWontFix)); err != nil {
 		return Written[TicketView]{}, err
 	}
-	return c.updateTicketIn(key, OptionWontFix, in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+	return c.updateTicketIn(key, string(OptionWontFix), in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
 		if why := whyNotIncoming(r, key, *t); why != "" {
 			return false, &Error{Code: ActionNotAllowed, Message: why}
 		}

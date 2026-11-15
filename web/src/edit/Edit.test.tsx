@@ -201,7 +201,7 @@ describe("the Requirement view's body", () => {
     await userEvent.click(within(pane).getByRole("button", { name: "Save" }));
     expect(await within(detail()).findByRole("heading", { name: "Flight mode", level: 2 })).toBeInTheDocument();
     expect(within(pane).getByText("And trains.", { exact: false })).toBeInTheDocument();
-    expect((await w.api.getSpec("acme", spec.id)).edits.map((e) => e.actor)).toEqual(["human"]);
+    expect((await w.api.getSpec("acme", spec.id)).edits!.map((e) => e.actor)).toEqual(["human"]);
   });
 
   it("offers Edit until every Ticket is finished, and none after", async () => {

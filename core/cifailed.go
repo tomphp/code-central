@@ -21,21 +21,29 @@ import (
 // listed Ticket and recorded once on the Project for the commit
 // (code-central-432).
 
-// The failure options, each named for its operation.
+// CIFailureOption is a failure option the human may choose on a CI item,
+// named for its operation.
+type CIFailureOption string
+
+// The failure options.
 const (
 	// OptionRerunCI is rerun_ci, offered under both Push Landing Methods.
-	OptionRerunCI = "rerun_ci"
+	OptionRerunCI CIFailureOption = "rerun_ci"
 	// OptionLandAnyway is land_anyway, offered only under Merge + Push:
 	// under Branch and Pull Request the human's merge decides.
-	OptionLandAnyway = "land_anyway"
+	OptionLandAnyway CIFailureOption = "land_anyway"
 	// OptionSendBack is the human's send_back from Accepted: the next
 	// Claim fixes the work on its branch (code-central-264).
-	OptionSendBack = "send_back"
+	OptionSendBack CIFailureOption = "send_back"
 	// OptionNewFixTicket is new_fix_ticket: a Ready Ticket on the
 	// CI Fixes Spec fixes it forward, and the failed Tickets keep
 	// waiting for a later commit that passes (code-central-433).
-	OptionNewFixTicket = "new_fix_ticket"
+	OptionNewFixTicket CIFailureOption = "new_fix_ticket"
 )
+
+// CIFailureOptions are the failure options, in the order they are
+// offered.
+var CIFailureOptions = []CIFailureOption{OptionRerunCI, OptionLandAnyway, OptionSendBack, OptionNewFixTicket}
 
 // CIFailureSummary is what failed on a CI failed item's pushed commit:
 // the commit and its failed runs' workflow file names.
@@ -47,7 +55,7 @@ type CIFailureSummary struct {
 // ciFailureOptions are the failure options the human may choose on t's
 // CI item while t is CI failed or CI cancelled, nil otherwise, from its
 // Project's evaluation.
-func (c *Core) ciFailureOptions(r store.Reader, key string, t store.Ticket) []string {
+func (c *Core) ciFailureOptions(r store.Reader, key string, t store.Ticket) []CIFailureOption {
 	p, _ := r.Project(key)
 	return c.evaluate(r, p).failureOptions(t)
 }
@@ -84,7 +92,7 @@ func fixTicketOpen(r store.Reader, p store.Project, commit string) bool {
 // nothing; whyNot says why op isn't offered. Each reads the Project's CI
 // state as it was before the response, and the item and its options
 // come from the Project's evaluation then.
-func (c *Core) respondCI(key, op string, ref Ref, full bool, done func(*ciState, store.Ticket) bool,
+func (c *Core) respondCI(key string, op CIFailureOption, ref Ref, full bool, done func(*ciState, store.Ticket) bool,
 	whyNot func(*ciState, store.Ticket) string, apply func(p *store.Project, commit string, runs []store.CIRun)) (Written[TicketView], error) {
 	var v Written[TicketView]
 	var listed []int
@@ -92,7 +100,7 @@ func (c *Core) respondCI(key, op string, ref Ref, full bool, done func(*ciState,
 		if err := writable(w, key); err != nil {
 			return err
 		}
-		t, err := resolveTicket(w, key, op, "ticket", ref)
+		t, err := resolveTicket(w, key, string(op), "ticket", ref)
 		if err != nil {
 			return err
 		}

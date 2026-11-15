@@ -101,6 +101,16 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonClosedExternally, "Closed externally: its linked item was closed, deleted or left its Integration's query; cancel, mark Done or unlink it"},
 }
 
+// NeedsMeReasons are the reasons in group order, as get_workflow
+// publishes them; store.NeedsMeReasons is the same list as strings.
+var NeedsMeReasons = func() []NeedsMeReason {
+	out := make([]NeedsMeReason, len(needsMeReasons))
+	for i, r := range needsMeReasons {
+		out[i] = r.Reason
+	}
+	return out
+}()
+
 // groupIndex is a reason's place in the group order.
 func groupIndex(r NeedsMeReason) int {
 	return slices.IndexFunc(needsMeReasons, func(x NeedsMeReasonView) bool { return x.Reason == r })
@@ -195,9 +205,9 @@ type NeedsMeRow struct {
 // its Spec ID and title, and the Ticket's Stage, set only on a Stage
 // Ticket.
 type NeedsMeRequirement struct {
-	Spec  string `json:"spec"`
-	Title string `json:"title"`
-	Stage string `json:"stage,omitempty"`
+	Spec  string    `json:"spec"`
+	Title string    `json:"title"`
+	Stage StageName `json:"stage,omitempty"`
 }
 
 // requirement is the Requirement t is on, or nil when its Spec isn't

@@ -37,6 +37,9 @@ const (
 	SpecMergeUnchanged SpecMergeOutcome = "unchanged"
 )
 
+// SpecMergeOutcomes are the open_spec_merge outcomes.
+var SpecMergeOutcomes = []SpecMergeOutcome{SpecMergeOpened, SpecMergeCommented, SpecMergeUnchanged}
+
 // OpenSpecMergeResult is open_spec_merge's result: the Spec merge Ticket
 // and what was done to it.
 type OpenSpecMergeResult struct {

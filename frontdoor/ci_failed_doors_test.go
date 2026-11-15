@@ -85,7 +85,7 @@ func TestAnAcceptedTicketWhoseCIFailedIsInNeedsMeAsCIFailed(t *testing.T) {
 	if row.ID != "" || row.Title != "CI failed at abc123" || row.CIItem == nil || len(row.CIItem.Tickets) != 1 || row.CIItem.Tickets[0].ID != "acme-3" {
 		t.Fatalf("row %+v, want the item for abc123 listing acme-3 with no Ticket of its own", row)
 	}
-	if want := []string{"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"}; !slices.Equal(row.CIItem.Options, want) {
+	if want := []core.CIFailureOption{"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"}; !slices.Equal(row.CIItem.Options, want) {
 		t.Fatalf("item options %v, want %v", row.CIItem.Options, want)
 	}
 	tk := ticket3(t, srv)

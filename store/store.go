@@ -47,8 +47,11 @@ const (
 	ModeLocal     Mode = "local"
 )
 
+// Modes are the two modes.
+var Modes = []Mode{ModeCommitted, ModeLocal}
+
 // Valid reports whether m is one of the two modes.
-func (m Mode) Valid() bool { return m == ModeCommitted || m == ModeLocal }
+func (m Mode) Valid() bool { return slices.Contains(Modes, m) }
 
 // Project is one tracked repository.
 type Project struct {
@@ -564,6 +567,9 @@ const (
 	QuestionDismissed QuestionStatus = "dismissed"
 )
 
+// QuestionStatuses are the three Question statuses.
+var QuestionStatuses = []QuestionStatus{QuestionOpen, QuestionAnswered, QuestionDismissed}
+
 // Question is one query in a Round. Questions are numbered across the
 // Ticket, so a number names one Question on its Ticket.
 type Question struct {
@@ -801,6 +807,7 @@ func (rs CIRuns) clone() CIRuns {
 }
 
 // FocusClear is what Focus Mode shows when nothing needs the human.
+// FocusClears has the default first.
 type FocusClear string
 
 // The two things Focus Mode can show when nothing needs the human.
@@ -816,7 +823,8 @@ var FocusClears = []FocusClear{FocusActivityDashboard, FocusAllClear}
 func (f FocusClear) Valid() bool { return slices.Contains(FocusClears, f) }
 
 // FocusPopup is whether a popup shows each new Focus Item on every view
-// but Focus Mode, Options and Project Options.
+// but Focus Mode, Options and Project Options. FocusPopups has the
+// default first.
 type FocusPopup string
 
 // The two values of the Focus Pop-up Option.

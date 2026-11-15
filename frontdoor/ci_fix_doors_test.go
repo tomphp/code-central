@@ -46,7 +46,7 @@ func quote(s string) string {
 }
 
 func TestACIFailedTicketIsOfferedBothFixesUnderMergeAndBranch(t *testing.T) {
-	for method, want := range map[string][]string{
+	for method, want := range map[string][]core.CIFailureOption{
 		`{"method":"merge","push":true,"remote":"origin"}`:  {"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"},
 		`{"method":"branch","push":true,"remote":"origin"}`: {"rerun_ci", "send_back", "new_fix_ticket"},
 	} {

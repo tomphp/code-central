@@ -14,7 +14,7 @@ import "./resume.css";
 
 function ResumeRelease({ api, project, ticket: t, now }: PanelProps) {
   const answered = t.state === "Answered";
-  const round = t.rounds.at(-1);
+  const round = t.rounds?.at(-1);
   return (
     <section aria-label="Resume or release" className="panel">
       <p>
@@ -33,26 +33,26 @@ function ResumeRelease({ api, project, ticket: t, now }: PanelProps) {
 
 // answeredAt is when the Ticket last moved to Answered.
 function answeredAt(t: TicketView): string {
-  return t.moves.filter((m) => m.to === "Answered").at(-1)?.time ?? t.updated;
+  return t.moves?.filter((m) => m.to === "Answered").at(-1)?.time ?? t.updated;
 }
 
 // movedAt is when the Long Claim last moved into In Progress.
 function movedAt(t: TicketView): string {
-  return t.moves.filter((m) => m.to === "In Progress").at(-1)?.time ?? t.claims.find((c) => !c.ended)?.started ?? t.updated;
+  return t.moves?.filter((m) => m.to === "In Progress").at(-1)?.time ?? t.claims?.find((c) => !c.ended)?.started ?? t.updated;
 }
 
 // quietSince is the Silent Claim's last activity.
 function quietSince(t: TicketView): string {
-  return t.silent_since ?? t.claims.find((c) => !c.ended)?.last_activity ?? t.updated;
+  return t.silent_since ?? t.claims?.find((c) => !c.ended)?.last_activity ?? t.updated;
 }
 
 // sessionOf is the session to resume: the live Claim's (set_session keeps
 // it current), its session ID falling back to the one that posted the
 // latest Round.
 function sessionOf(t: TicketView): Session {
-  const live = t.claims.find((c) => !c.ended);
+  const live = t.claims?.find((c) => !c.ended);
   return {
-    sessionId: live?.session_id || t.rounds.at(-1)?.session_id || undefined,
+    sessionId: live?.session_id || t.rounds?.at(-1)?.session_id || undefined,
     workingDir: live?.working_dir,
     resumeCommand: live?.resume_command,
   };

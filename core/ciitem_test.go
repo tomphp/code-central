@@ -99,7 +99,7 @@ func TestCIFailedIsOneItemPerCommitListingTheTicketsWaitingOnItAcrossSpecs(t *te
 	if it.Tickets[1].Spec != "acme-7" || it.Tickets[1].Title != "Third" {
 		t.Fatalf("listed %+v, want acme-8 on acme-7 titled Third", it.Tickets[1])
 	}
-	if want := []string{"rerun_ci", "land_anyway", "new_fix_ticket"}; !slices.Equal(it.Options, want) {
+	if want := []core.CIFailureOption{"rerun_ci", "land_anyway", "new_fix_ticket"}; !slices.Equal(it.Options, want) {
 		t.Fatalf("options %v, want %v with Send back to fix left out for two Tickets", it.Options, want)
 	}
 	for _, id := range []string{"acme-5", "acme-8"} {
@@ -115,12 +115,12 @@ func TestAnItemListingOneTicketOffersSendBackUnlessItIsSpecLanded(t *testing.T) 
 	f.moveTo(t, 8, store.Done)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CIFailure)
 	it := f.theItem(t, core.ReasonCIFailed).CIItem
-	if want := []string{"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"}; !slices.Equal(it.Options, want) || !slices.Equal(listed(it), []string{"acme-5"}) {
+	if want := []core.CIFailureOption{"rerun_ci", "land_anyway", "send_back", "new_fix_ticket"}; !slices.Equal(it.Options, want) || !slices.Equal(listed(it), []string{"acme-5"}) {
 		t.Fatalf("item %+v, want acme-5 alone offered %v", it, want)
 	}
 	f.landing(t, store.Landing{Method: store.LandingMerge, Push: true, Remote: "origin", LandPerSpec: true})
 	it = f.theItem(t, core.ReasonCIFailed).CIItem
-	if want := []string{"rerun_ci", "land_anyway", "new_fix_ticket"}; !slices.Equal(it.Options, want) {
+	if want := []core.CIFailureOption{"rerun_ci", "land_anyway", "new_fix_ticket"}; !slices.Equal(it.Options, want) {
 		t.Fatalf("options %v, want %v for a Spec-landed Ticket", it.Options, want)
 	}
 	_, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "acme-5", Note: "fix it"})
@@ -256,7 +256,7 @@ func TestCICancelledIsOneItemPerCommitWithNoNewFixTicket(t *testing.T) {
 	f := itemWorld(t)
 	f.ciRun(t, 1, "ci.yml", "abc123", "acme-5", store.CICompleted, store.CICancelled)
 	it := f.theItem(t, core.ReasonCICancelled).CIItem
-	if want := []string{"rerun_ci", "land_anyway"}; !slices.Equal(it.Options, want) || !slices.Equal(listed(it), []string{"acme-5", "acme-8"}) {
+	if want := []core.CIFailureOption{"rerun_ci", "land_anyway"}; !slices.Equal(it.Options, want) || !slices.Equal(listed(it), []string{"acme-5", "acme-8"}) {
 		t.Fatalf("item %+v, want acme-5 and acme-8 offered %v", it, want)
 	}
 }

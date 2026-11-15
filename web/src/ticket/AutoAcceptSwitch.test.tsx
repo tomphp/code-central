@@ -81,7 +81,7 @@ describe("the Auto-accept switch on a Ticket", () => {
     await turn(sw, "On");
     await userEvent.click(within(screen.getByRole("form", { name: "Turn on auto-accept" })).getByRole("button", { name: "Turn on" }));
     await waitFor(async () => expect((await w.api.getTicket("acme", id)).state).toBe("Accepted"));
-    expect((await w.api.getTicket("acme", id)).moves.at(-1)).toMatchObject({ actor: "human", cause: "ticket-label" });
+    expect((await w.api.getTicket("acme", id)).moves!.at(-1)).toMatchObject({ actor: "human", cause: "ticket-label" });
   });
 
   it("notes that the Spec's Label covers the Ticket, linking the Spec, while the switch reads off", async () => {
@@ -148,7 +148,7 @@ describe("the Auto-accept switch on a Spec", () => {
 
     await waitFor(async () => expect((await w.api.getTicket("acme", a)).state).toBe("Accepted"));
     expect((await w.api.getTicket("acme", b)).state).toBe("Accepted");
-    expect((await w.api.getTicket("acme", a)).moves.at(-1)).toMatchObject({ cause: "spec-label" });
+    expect((await w.api.getTicket("acme", a)).moves!.at(-1)).toMatchObject({ cause: "spec-label" });
     expect(isOn(await switchIn(pane))).toBe(true);
   });
 

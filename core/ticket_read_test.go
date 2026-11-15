@@ -304,6 +304,18 @@ func TestGetTicketByDefaultShowsADoneBlockerAsItsIDAndStateOnly(t *testing.T) {
 	}
 }
 
+func TestGetTicketByDefaultShowsADoneReplacementBlockerAsItsIDAndStateOnly(t *testing.T) {
+	f := newFixture(t)
+	f.work(t, store.Ready, store.Ready, store.Ready) // acme-2..acme-4
+	f.addBlocker(t, "acme-2", "acme-3")
+	f.cancel(t, core.CancelInput{Ticket: "acme-3", Replacements: []core.Ref{"acme-4"}})
+	f.setState(t, 4, store.Done)
+	v := f.readTicket(t, core.GetTicketInput{Ticket: "acme-2"})
+	if want := []any{map[string]any{"id": "acme-4", "state": "Done"}}; !reflect.DeepEqual(v["blockers"], want) {
+		t.Fatalf("blockers %v, want %v", v["blockers"], want)
+	}
+}
+
 func TestGetTicketByDefaultLeavesOutTheClaimsSessionFieldsAndCountsThem(t *testing.T) {
 	f := newFixture(t)
 	f.claimedThenBlocked(t)

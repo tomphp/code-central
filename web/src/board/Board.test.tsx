@@ -539,7 +539,7 @@ describe("the Board's Focus popup", () => {
     // The Round is answered: its answers wait for the agent, which the
     // human can end with Release.
     const resume = await within(await item()).findByRole("region", { name: "Resume or release" });
-    expect((await fake.w.api.getTicket("acme", fake.pick)).rounds[0].questions.map((q) => [q.status, q.answer])).toEqual([
+    expect((await fake.w.api.getTicket("acme", fake.pick)).rounds![0].questions.map((q) => [q.status, q.answer])).toEqual([
       ["answered", "Blue"],
       ["answered", "Sans"],
       ["dismissed", undefined],

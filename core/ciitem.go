@@ -22,10 +22,10 @@ import (
 // choose, each an operation's name, which act on every one of them;
 // none while CI unavailable.
 type CIItemView struct {
-	Reason  NeedsMeReason  `json:"reason"`
-	Commit  string         `json:"commit"`
-	Tickets []CIItemTicket `json:"tickets"`
-	Options []string       `json:"options"`
+	Reason  NeedsMeReason     `json:"reason"`
+	Commit  string            `json:"commit"`
+	Tickets []CIItemTicket    `json:"tickets"`
+	Options []CIFailureOption `json:"options"`
 }
 
 // CIItemTicket is one Ticket a CI item lists, with its Spec.
@@ -63,8 +63,8 @@ func ciItemView(r store.Reader, p store.Project, it ciItem) *CIItemView {
 // exactly one Ticket and that Ticket isn't Spec-landed, whose work is in
 // the base with its Spec's; and for a failure New fix Ticket, since a
 // cancelled run has nothing to fix forward.
-func ciItemOptions(r store.Reader, p store.Project, it ciItem) []string {
-	options := []string{}
+func ciItemOptions(r store.Reader, p store.Project, it ciItem) []CIFailureOption {
+	options := []CIFailureOption{}
 	if it.reason == ReasonCIUnavailable {
 		return options
 	}
@@ -84,7 +84,7 @@ func ciItemOptions(r store.Reader, p store.Project, it ciItem) []string {
 // failureOptions are the failure options the human may choose on t's CI
 // item while t is CI failed or CI cancelled, nil otherwise; see
 // ciItemOptions.
-func (e *evaluation) failureOptions(t store.Ticket) []string {
+func (e *evaluation) failureOptions(t store.Ticket) []CIFailureOption {
 	it, ok := e.itemOf(t)
 	if !ok || it.reason == ReasonCIUnavailable {
 		return nil

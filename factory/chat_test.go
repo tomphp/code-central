@@ -35,7 +35,7 @@ func reply(cv core.ConversationView) core.ChatMessageView { return cv.Messages[l
 func itemsOf(m core.ChatMessageView) []string {
 	var out []string
 	for _, it := range m.Items {
-		out = append(out, it.Kind+": "+it.Text)
+		out = append(out, string(it.Kind)+": "+it.Text)
 	}
 	return out
 }
@@ -162,7 +162,7 @@ func TestTheChatTurnsItemsReachGetChatAsTheyArrive(t *testing.T) {
 	}
 	kinds := []string{}
 	for _, it := range r.Items {
-		kinds = append(kinds, it.Kind)
+		kinds = append(kinds, string(it.Kind))
 	}
 	if want := []string{"text", "tool_call", "tool_result", "text"}; !slicesEqual(kinds, want) {
 		t.Errorf("reply items %q, want %q", itemsOf(r), want)

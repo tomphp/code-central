@@ -5,7 +5,7 @@ TEST_BUDGET := 60
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test test-verbose typecheck vitest vitest-stress e2e build web clean hooks context-report ci-failures serve-components build-components corewasm demo-store demo
+.PHONY: test test-verbose typecheck vitest vitest-stress e2e build web clean hooks context-report ci-failures serve-components build-components corewasm wiretypes demo-store demo
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
@@ -57,6 +57,12 @@ hooks:
 # with no change cheap. A Go helper, so it runs the same under cmd.exe.
 corewasm:
 	@go run ./internal/corewasm web/src/api/core
+
+# The UI's wire types: web/src/api/wire.gen.ts, generated from the
+# Core's Go view types (ADR 0042) and committed. Run it after changing a
+# view the UI reads.
+wiretypes:
+	@go run ./internal/wiretypes web/src/api/wire.gen.ts
 
 $(WEB_DEPS): web/package.json web/package-lock.json
 	$(if $(shell npm --version),,$(error npm not found; the UI needs Node (go test ./... alone runs without it)))

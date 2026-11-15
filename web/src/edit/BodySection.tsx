@@ -42,7 +42,7 @@ export function BodySection({ api, spec, heading, archived = false }: BodySectio
       {editing ? (
         <EditForm
           title={spec.title}
-          text={spec.body}
+          text={spec.body ?? ""}
           label="body"
           save={({ title, text }) => api.editSpec(project, spec.id, { title, body: text })}
           close={() => setEditing(false)}

@@ -16,7 +16,8 @@ import (
 // checks effort against the levels, and the Models pickers offer them.
 
 // ReportedModelsView is a Project's Reported Models as every Project read
-// returns them.
+// returns them: what its Factory last reported, plus the model IDs its
+// sessions' usage has shown.
 type ReportedModelsView struct {
 	// EffortLevels are the valid effort levels: the reported ones, or the
 	// seeded ones until a report has given some.

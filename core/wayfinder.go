@@ -30,12 +30,36 @@ const RetroLabel = "retro"
 // finishes, such as a CI Rule's Spec or an Issues Spec.
 const LongLivedLabel = store.LongLivedLabel
 
+// NodeType is a Ticket's type on a Map (NodeTypeOf): one of the
+// WayfinderTypes, prototype, or ticket for a Ticket with neither.
+type NodeType string
+
+// The node types.
+const (
+	NodeChart     NodeType = "chart"
+	NodeGrilling  NodeType = "grilling"
+	NodeResearch  NodeType = "research"
+	NodeTask      NodeType = "task"
+	NodePrototype NodeType = "prototype"
+	NodeTicket    NodeType = "ticket"
+)
+
 // WayfinderTypes are the Map's Ticket types, each named as its Label's
 // suffix.
-var WayfinderTypes = []string{"chart", "grilling", "research", "task"}
+var WayfinderTypes = []NodeType{NodeChart, NodeGrilling, NodeResearch, NodeTask}
+
+// NodeTypes are the node types: the WayfinderTypes, then prototype and
+// ticket.
+var NodeTypes = append(slices.Clone(WayfinderTypes), NodePrototype, NodeTicket)
 
 // wayfinderNames are every name the wayfinder: prefix allows.
-var wayfinderNames = append([]string{"map"}, WayfinderTypes...)
+var wayfinderNames = func() []string {
+	names := []string{"map"}
+	for _, t := range WayfinderTypes {
+		names = append(names, string(t))
+	}
+	return names
+}()
 
 // wayfinderLabelList is the valid Wayfinder Labels, as the error that
 // rejects another one lists them.
@@ -54,10 +78,10 @@ func typeGuide(l string) (guide string, ok bool) {
 	if l == PrototypeLabel || l == RetroLabel {
 		return l, true
 	}
-	if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(WayfinderTypes, name) {
+	if name, ok := strings.CutPrefix(l, WayfinderPrefix); ok && slices.Contains(WayfinderTypes, NodeType(name)) {
 		return mapGuidePrefix + name, true
 	}
-	if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages, name) {
+	if name, ok := strings.CutPrefix(l, StagePrefix); ok && slices.Contains(Stages, StageName(name)) {
 		return name, true
 	}
 	return "", false

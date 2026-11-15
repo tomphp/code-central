@@ -6,7 +6,7 @@ import { Field } from "../controls/Field";
 import { Select } from "../controls/Select";
 
 // ruleWatches is what a CI Rule watches, as its Spec's title says it.
-const ruleWatches = (r: CIRuleChange) =>
+const ruleWatches = (r: Pick<CIRuleChange, "workflow" | "branch">) =>
   `${r.workflow === "any" ? "any workflow" : r.workflow} on ${r.branch}`;
 
 const NO_RULE: CIRuleChange = { workflow: "", branch: "", state: "Draft" };
@@ -115,10 +115,11 @@ function RuleRow({
   );
 }
 
-// RuleForm is a CI Rule's fields: adding one, or editing one in place.
+// RuleForm is a CI Rule's fields: adding one, or editing one in place. A
+// rule's Tickets open in Draft or Ready, so any other State starts as Draft.
 function RuleForm(props: {
   label: string;
-  initial: CIRuleChange;
+  initial: Pick<CIRule, "workflow" | "branch" | "state">;
   submit: string;
   save(change: CIRuleChange): Promise<unknown>;
   cancel?(): void;
@@ -128,7 +129,7 @@ function RuleForm(props: {
   const [draft, setDraft] = useState<CIRuleChange>({
     workflow: initial.workflow,
     branch: initial.branch,
-    state: initial.state,
+    state: initial.state === "Ready" ? "Ready" : "Draft",
   });
   const [error, setError] = useState<ApiError>();
   const id = useId();

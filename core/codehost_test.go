@@ -52,7 +52,11 @@ func TestPullRequestIsRefusedForAnUnsupportedHost(t *testing.T) {
 }
 
 func TestPullRequestWorksOutTheCodeHostFromTheReportedURL(t *testing.T) {
-	for _, c := range []struct{ url, host, repo string }{
+	for _, c := range []struct {
+		url  string
+		host core.CodeHost
+		repo string
+	}{
 		{"git@github.com:acme/web.git", "github", "acme/web"},
 		{"https://tok@github.com/acme/web", "github", "acme/web"},
 		{"https://dev.azure.com/acme/shop/_git/web", "azure_repos", "acme/shop/web"},

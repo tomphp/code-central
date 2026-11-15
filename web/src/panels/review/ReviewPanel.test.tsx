@@ -214,7 +214,7 @@ describe("the In Review panel", () => {
     expect(x.w.calls).toContain("reject");
     const t = await x.w.api.getTicket("acme", x.id);
     expect(t.state).toBe("Ready");
-    expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "The redirect loops" });
+    expect(t.comments!.at(-1)).toMatchObject({ actor: "human", body: "The redirect loops" });
   });
 
   it("says when no summary was recorded", async () => {

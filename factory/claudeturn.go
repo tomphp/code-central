@@ -145,7 +145,7 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 	}()
 	end := readTurn(cmd, stdout, in.Dir, newUsageReader(in.UsageKind, r.now), func(e core.SessionEvent) {
 		in.OnEvent(e)
-		if r.verbose && e.Kind == eventToolCall {
+		if r.verbose && e.Kind == core.EventToolCall {
 			in.Echo(e.Text)
 		}
 	}, in.OnUsage)
@@ -408,7 +408,7 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, usage *usageReader, o
 			onResponse(r)
 		}
 		for _, e := range streamEvents(msg, time.Now(), tools, dir) {
-			if e.Kind == eventText {
+			if e.Kind == core.EventText {
 				end.LastText = e.Text
 			}
 			onEvent(e)

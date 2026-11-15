@@ -121,7 +121,7 @@ describe("the Failed panel", () => {
     expect(x.w.calls).toContain("send_back");
     const t = await x.w.api.getTicket("acme", x.id);
     expect(t.state).toBe("Ready");
-    expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Fixed the fixture on main" });
+    expect(t.comments!.at(-1)).toMatchObject({ actor: "human", body: "Fixed the fixture on main" });
   });
 
   it("sends back with no note, saying that means nothing has changed", async () => {
