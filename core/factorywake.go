@@ -123,6 +123,23 @@ func (fw *factoryWakes) wake(key string) {
 	}
 }
 
+// WaitingFactoryWakes is how many next_factory_wake calls on Project key
+// are open and not yet woken: those a write the Factory's poll acts on
+// would wake now. It is for tests, which must know a wake will reach a
+// Factory before they make one.
+func (c *Core) WaitingFactoryWakes(key string) int {
+	fw := c.factoryWakes
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+	n := 0
+	for k, p := range fw.polls {
+		if k.project == key && len(p.wake) == 0 {
+			n++
+		}
+	}
+	return n
+}
+
 // NextFactoryWake is the Factory's next_factory_wake long-poll. It holds
 // until a write the Factory's poll acts on reaches the Project, and then
 // returns woken; or, for at most WaitTimeout on the injected clock or

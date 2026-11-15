@@ -124,7 +124,7 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 	fs := flag.NewFlagSet("code-central-factory", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.IntVar(&o.parallel, "parallel", 3, "the most claude turns running at once (at least 1)")
-	fs.DurationVar(&o.poll, "poll", 30*time.Second, "how often to look for work (at least 5s)")
+	fs.DurationVar(&o.poll, "poll", 30*time.Second, "how often to look for work when no wake from Code Central comes sooner (at least 5s)")
 	fs.BoolVar(&o.bypass, "bypass-permissions", false, "run every session in bypassPermissions mode")
 	fs.BoolVar(&o.noChat, "no-chat", false, "don't report Chat support: the Project's Chat is unavailable through this Factory")
 	fs.StringVar(&o.model, "model", "", "the model for every start and resume a Ticket's model Tag doesn't set")
@@ -204,10 +204,16 @@ func Run(ctx context.Context, args []string, e Env) int {
 		defer close(chatDone)
 		f.chatLoop(ctx)
 	}()
+	wakeDone := make(chan struct{})
+	go func() {
+		defer close(wakeDone)
+		f.wakeLoop(ctx)
+	}()
 	f.restart(ctx)
 	f.loop(ctx)
 	// A running Chat reply ends before the last flushes.
 	<-chatDone
+	<-wakeDone
 	// Stopping or draining makes one last flush of each, side by side, so
 	// a hung Code Central holds up the stop one postTimeout at most.
 	var flushed sync.WaitGroup
@@ -349,12 +355,15 @@ type factory struct {
 	// or landing, and the Factory exits once its running turns end.
 	drainCh   chan struct{}
 	drainOnce sync.Once
+	// wakeCh holds a wake for the poll loop: one at most, so any number
+	// of wakes during a poll make one more poll.
+	wakeCh chan struct{}
 }
 
 // newFactory is a factory with nothing found out yet: start fills in the
 // rest.
 func newFactory(e Env, o options) *factory {
-	return &factory{e: e, o: o, drainCh: make(chan struct{}), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, mergedOn: map[string]mergeOn{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
+	return &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan struct{}, 1), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, mergedOn: map[string]mergeOn{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
 }
 
 // start makes every start-up check, refusing with the reason.
