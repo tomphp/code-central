@@ -107,34 +107,38 @@ type noticeWriter struct {
 	wake string
 }
 
+// PutProject, PutSpec, PutTicket and PutImport read the records as they
+// were before writing over them, to tell whether the write wakes the
+// Factories.
 func (w *noticeWriter) PutProject(p store.Project) error {
-	return w.put(w.Writer.PutProject(p), events.Event{Type: events.ProjectChanged, Project: p.Key})
+	wakes := projectWakesTheFactory(w.Writer, p)
+	return w.wakeIf(wakes, p.Key, w.put(w.Writer.PutProject(p), events.Event{Type: events.ProjectChanged, Project: p.Key}))
 }
 
 func (w *noticeWriter) PutSpec(key string, s store.Spec) error {
-	return w.put(w.Writer.PutSpec(key, s), events.Event{Type: events.SpecChanged, Project: key, ID: DisplayID(key, s.Number)})
+	wakes := specWakesTheFactory(w.Writer, key, s)
+	return w.wakeIf(wakes, key, w.put(w.Writer.PutSpec(key, s), events.Event{Type: events.SpecChanged, Project: key, ID: DisplayID(key, s.Number)}))
 }
 
-// PutTicket reads the record as it was before writing over it, to tell
-// whether the write wakes the Factories.
 func (w *noticeWriter) PutTicket(key string, t store.Ticket) error {
 	wakes := wakesTheFactory(w.Writer, key, t)
-	err := w.put(w.Writer.PutTicket(key, t), events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, t.Number)})
-	if err == nil && wakes {
-		w.wake = key
-	}
-	return err
+	return w.wakeIf(wakes, key, w.put(w.Writer.PutTicket(key, t), events.Event{Type: events.TicketChanged, Project: key, ID: DisplayID(key, t.Number)}))
 }
 
 // PutImport sends one project.changed notice for the whole Import, so a
-// large one can't overrun a listener's buffer; listeners refetch. Like
-// PutTicket, it wakes the Factories when any Ticket it writes moves, as
-// implement's do.
+// large one can't overrun a listener's buffer; listeners refetch. It
+// wakes the Factories when it lands new records, which may be work, or
+// when a record it rewrites would on its own, as implement's do.
 func (w *noticeWriter) PutImport(key string, im store.Import) error {
-	wakes := slices.ContainsFunc(slices.Concat(im.Tickets, im.Rewritten), func(t store.Ticket) bool {
-		return wakesTheFactory(w.Writer, key, t)
-	})
-	err := w.put(w.Writer.PutImport(key, im), events.Event{Type: events.ProjectChanged, Project: key})
+	wakes := len(im.Specs) > 0 || len(im.Tickets) > 0 ||
+		slices.ContainsFunc(im.Rewritten, func(t store.Ticket) bool { return wakesTheFactory(w.Writer, key, t) }) ||
+		slices.ContainsFunc(im.RewrittenSpecs, func(s store.Spec) bool { return specWakesTheFactory(w.Writer, key, s) })
+	return w.wakeIf(wakes, key, w.put(w.Writer.PutImport(key, im), events.Event{Type: events.ProjectChanged, Project: key}))
+}
+
+// wakeIf marks the write as waking Project key's Factories when wakes
+// and the write succeeded.
+func (w *noticeWriter) wakeIf(wakes bool, key string, err error) error {
 	if err == nil && wakes {
 		w.wake = key
 	}

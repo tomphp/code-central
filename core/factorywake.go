@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"sync"
 
@@ -169,16 +170,71 @@ func (c *Core) NextFactoryWake(ctx context.Context, key string, in NextFactoryWa
 	return FactoryWake{}, nil
 }
 
+// wakingStates are the States a move into wakes the Factories: Ready
+// (claimable again), Answered (to resume), Accepted (to land), and Done
+// and Cancelled (which may clear another Ticket's last Blocker).
+var wakingStates = []store.State{store.Ready, store.Answered, store.Accepted, store.Done, store.Cancelled}
+
 // wakesTheFactory says whether writing Ticket t, over the record r holds
 // before the write, is a change the Factory's poll acts on: t moves into
-// Ready (claimable again), Answered (to resume), Accepted (to land), or
-// Done or Cancelled (which may clear another Ticket's last Blocker). A
-// new Ticket counts as moving into its State.
+// one of the wakingStates (a new Ticket counts as moving into its
+// State), a live Claim on it ends by a move its holder didn't make, or
+// its Blockers shrink.
 func wakesTheFactory(r store.Reader, key string, t store.Ticket) bool {
-	switch t.State {
-	case store.Ready, store.Answered, store.Accepted, store.Done, store.Cancelled:
-		was, found := r.Ticket(key, t.Number)
-		return !found || was.State != t.State
+	was, found := r.Ticket(key, t.Number)
+	if !found {
+		return slices.Contains(wakingStates, t.State)
+	}
+	movedIn := was.State != t.State && slices.Contains(wakingStates, t.State)
+	return movedIn || claimWithdrawn(was, t) || blockersShrank(was, t)
+}
+
+// blockersShrank says whether t has lost a Blocker was had, which may
+// leave it claimable.
+func blockersShrank(was, t store.Ticket) bool {
+	return slices.ContainsFunc(was.BlockedBy, func(n int) bool { return !slices.Contains(t.BlockedBy, n) })
+}
+
+// claimWithdrawn says whether the Claim live on was has ended on t by an
+// action other than its holder's own, such as cancel, release or a move
+// by hand: the Factory may be running its turn, and has a slot back.
+func claimWithdrawn(was, t store.Ticket) bool {
+	live, ok := liveClaim(was)
+	if !ok {
+		return false
+	}
+	for _, c := range t.Claims {
+		if c.Number == live.Number {
+			return !c.Live() && !isHolderAction(c.EndedBy)
+		}
 	}
 	return false
+}
+
+// projectWakesTheFactory says whether writing Project p, over the record
+// r holds before the write, changes a setting the Factory reads: the
+// base, Landing, CI, Models, Stage Guides, Auto-accept or Archived. The
+// Push remote the Factory reports, its Reported Models and UI-only
+// settings such as Focus Kinds don't count.
+func projectWakesTheFactory(r store.Reader, p store.Project) bool {
+	was, found := r.Project(p.Key)
+	if !found {
+		return false
+	}
+	ci := func(c store.CI) store.CI {
+		c.PushRemoteURL = ""
+		return c
+	}
+	return was.Base() != p.Base() || was.Landing != p.Landing || !ci(was.CI).Equal(ci(p.CI)) ||
+		!was.Models.Equal(p.Models) || was.StageGuides != p.StageGuides ||
+		!slices.Equal(was.AutoAccept, p.AutoAccept) || !was.Archived.Equal(p.Archived)
+}
+
+// specWakesTheFactory says whether writing Spec s, over the record r
+// holds before the write, turns a Map's guided Tag on: the Factory then
+// starts its next decision.
+func specWakesTheFactory(r store.Reader, key string, s store.Spec) bool {
+	guided := func(s store.Spec) bool { return isMap(s.Labels) && s.Tags[GuidedTag] == GuidedOn }
+	was, found := r.Spec(key, s.Number)
+	return guided(s) && !(found && guided(was))
 }
