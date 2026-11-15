@@ -62,7 +62,7 @@ export function FocusPopup(props: FocusPopupProps) {
   const project = queue ? props.project : undefined;
   // The session lives for the popup's life; Ticket mode has no Skip, so
   // its skip list stays empty.
-  const session = useFocusSession({ api, version, project, scope: queue ? undefined : props.id });
+  const session = useFocusSession({ api, project, scope: queue ? undefined : props.id });
   const { item } = session;
   const close = (why: FocusPopupClose["why"]) => onClose({ why, keys: session.keys });
   const gone = useRef(() => props.onGone?.(session.keys));

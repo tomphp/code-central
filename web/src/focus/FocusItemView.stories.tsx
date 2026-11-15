@@ -46,7 +46,7 @@ interface Loaded {
 // Shown is Focus Mode's layout over the Focus session's item, without the
 // header: the item as Focus Mode shows it.
 function Shown({ api, now, data, scope, whole }: Loaded) {
-  const session = useFocusSession({ api, version: 0, project: "acme", scope });
+  const session = useFocusSession({ api, project: "acme", scope });
   const item = session.item && whole ? { ...session.item, question: undefined } : session.item;
   return (
     <main aria-label="Focus Mode" className="focus">

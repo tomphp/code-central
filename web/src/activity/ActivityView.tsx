@@ -19,14 +19,12 @@ import "../focus/focus.css";
 export interface ActivityViewProps {
   api: Api;
   now: Date;
-  // version is the live feed's, so the dashboard follows every change.
-  version: number;
   data?: InboxData;
   loc: UiLocation;
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function ActivityView({ api, now, version, data, loc, navigate }: ActivityViewProps) {
+export function ActivityView({ api, now, data, loc, navigate }: ActivityViewProps) {
   const { project, sole } = useProjectScope();
   const projects: ProjectRow[] = data?.projects ?? [];
 
@@ -41,7 +39,7 @@ export function ActivityView({ api, now, version, data, loc, navigate }: Activit
           </Button>
         }
       />
-      {data ? <ActivityDashboard api={api} now={now} version={version} data={data} loc={loc} navigate={navigate} /> : <Loading />}
+      {data ? <ActivityDashboard api={api} now={now} data={data} loc={loc} navigate={navigate} /> : <Loading />}
     </main>
   );
 }
