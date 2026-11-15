@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { IdLinksContext, useIdKind } from "./idLinks";
 import type { Api } from "./api/api";
 import { projectOf } from "./api/api";
 import { ChatDock } from "./chat/ChatDock";
@@ -28,7 +29,7 @@ export interface AppProps {
 }
 
 export function App({ api, now = () => new Date() }: AppProps) {
-  const [loc, navigate] = useUiLocation();
+  const [loc, navigate, replace] = useUiLocation();
   const version = useLiveVersion(api);
   const inbox = useInboxData(api, version);
   const options = useOptions(api, version);
@@ -45,6 +46,16 @@ export function App({ api, now = () => new Date() }: AppProps) {
     loc.ticket ?? (requirement ? defaultTicket(progress(requirement.requirement, requirement.tickets, needsMe.reasonOf)) : undefined);
   const ticket = useTicket(api, selected && projectOf(selected), selected, version);
   useNeedsMeTitle(inbox.data && needsMe.count());
+  // An ID Link asks the Inbox to open an ID whose kind isn't known; once it
+  // is, the address is replaced with the Spec or Ticket it selects, so Back
+  // skips the open= address.
+  const opening = loc.view === "inbox" ? loc.open : undefined;
+  const openKind = useIdKind(api, opening, needsMe, !!inbox.data);
+  useEffect(() => {
+    if (!opening || !openKind) return;
+    replace({ open: undefined, ...(openKind === "spec" ? { requirement: opening } : { ticket: opening }) });
+  }, [opening, openKind, replace]);
+  const idLinks = useMemo(() => ({ loc, navigate }), [loc, navigate]);
   // Under Focus Pop-up, the Focus popup opens by itself over the view
   // showing, scoped to its Project, from the same read model's Focus
   // Items. Until the Options first load Focus Pop-up is off; a failed read
@@ -60,11 +71,13 @@ export function App({ api, now = () => new Date() }: AppProps) {
   return (
     <ProjectScopeContext.Provider value={scope}>
       <NeedsMeProvider value={needsMe}>
+        <IdLinksContext.Provider value={idLinks}>
         {view()}
         <ChatDock api={api} project={inbox.data?.projects.find((p) => p.key === scope.project)} version={version} />
         {popup.open && inbox.data && (
           <FocusPopup mode="queue" api={api} now={now()} version={version} data={inbox.data} project={scope.project} onClose={popup.close} navigate={navigate} />
         )}
+        </IdLinksContext.Provider>
       </NeedsMeProvider>
     </ProjectScopeContext.Provider>
   );
