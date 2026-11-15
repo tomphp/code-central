@@ -19,6 +19,7 @@ import {
 import { REASON_LABEL, ticketOf } from "../format";
 import type { InboxData, ProjectSpec } from "../live";
 import { useNeedsMe } from "../needsme/context";
+import { useProjectScope } from "../projectScope";
 import { isStage, progress } from "../requirement/progress";
 import { InboxDetail } from "./InboxDetail";
 import { OptionsLink } from "../options/OptionsLink";
@@ -75,16 +76,17 @@ export function Inbox({
   ticketError,
 }: InboxProps) {
   const needsMe = useNeedsMe();
+  const { project: scope, sole } = useProjectScope();
   const projects = data?.projects ?? [];
   const archived = projects.filter((p) => p.archived);
   const isArchived = (id: string) =>
     archived.some((p) => p.key === projectOf(id));
   // Stage Tickets are never Needs Me rows: their Requirement's row stands in.
-  const { requirements: needingReqs, groups } = needsMe.rows(loc.project);
-  const tickets = needsMe.tickets(loc.project);
-  const requirements = requirementList(needsMe.requirements(loc.project));
+  const { requirements: needingReqs, groups } = needsMe.rows(scope);
+  const tickets = needsMe.tickets(scope);
+  const requirements = requirementList(needsMe.requirements(scope));
   // The Requirements view lists Maps among the Requirements.
-  const listed = requirementList(byCreation([...requirements, ...needsMe.maps(loc.project)]));
+  const listed = requirementList(byCreation([...requirements, ...needsMe.maps(scope)]));
   const progressOf = (s: ProjectSpec) =>
     progress(s.requirement!, needsMe.ticketsOf(s.id), needsMe.reasonOf);
   // In flight: unfinished, and nothing of it waits on the human.
@@ -92,7 +94,7 @@ export function Inbox({
     (s) => !s.finished && !progressOf(s).needs.length,
   );
   const drafts = tickets.filter((t) => t.state === "Draft");
-  const shownCount = needsMe.count(loc.project);
+  const shownCount = needsMe.count(scope);
   const totalCount = needsMe.count();
 
   // Selecting a row: a Ticket row leaves any Requirement; a Requirement
@@ -171,7 +173,7 @@ export function Inbox({
       api={api}
       project={p}
       now={now}
-      on={loc.project === p.key}
+      on={scope === p.key}
       onSelect={() => navigate({ project: p.key })}
       projectOptions={
         p.archived
@@ -185,7 +187,7 @@ export function Inbox({
   );
 
   return (
-    <OneProject.Provider value={!!loc.project}>
+    <OneProject.Provider value={!!scope}>
     <div className="inbox">
       <nav aria-label="Filters" className="inbox-nav">
         <div className="inbox-title">
@@ -195,7 +197,7 @@ export function Inbox({
           newProps={{
             api,
             projects: projects.filter((p) => !p.archived),
-            project: loc.project,
+            project: scope,
             onSubmitted: (r) =>
               navigate(
                 r.kind === "Small Change"
@@ -205,13 +207,15 @@ export function Inbox({
           }}
           onFocusMode={() => navigate({ view: "focus" })}
         />
-        <FilterButton
-          on={!loc.project}
-          label="All Projects"
-          count={totalCount}
-          loud
-          onClick={() => navigate({ project: undefined })}
-        />
+        {!sole && (
+          <FilterButton
+            on={!scope}
+            label="All Projects"
+            count={totalCount}
+            loud
+            onClick={() => navigate({ project: undefined })}
+          />
+        )}
         {projects.filter((p) => !p.archived).map(projectFilter)}
         <h2>View</h2>
         <ActivityLink loc={loc} navigate={navigate} className="filter" />

@@ -51,8 +51,12 @@ _Avoid_: Kanban, Ticket board
 **Needs Me column**:
 The Board view's column, shown or hidden in Columns ▾ and off unless the human turns it on, that sits after In Progress and holds the Ticket card of every Ticket in scope that needs the human, in place of its State's column, whatever State columns are hidden. Each card there also shows its State and Needs Me reason. It is kept in the URL as `needs=` and per browser. _Avoid_: meta-column, needs-me lane
 
+**Sole Project**:
+The only Project that isn't Archived. While there is one and the URL names no Project, the UI treats it as the selected Project: every view is scoped to it, IDs show as Short IDs, its Chat is offered and All Projects isn't offered. The UI works this out and never writes it into the URL. With no Project, or two or more Projects that aren't Archived, there is no Sole Project. A Project the URL names, an Archived one included, always wins.
+_Avoid_: Only Project, Default Project
+
 **Short ID**:
-How the UI shows a Ticket's or Spec's ID while one Project is selected, its number alone as `#123`. With All Projects selected the full ID shows instead. Either way, clicking it copies the full ID.
+How the UI shows a Ticket's or Spec's ID while one Project is selected, or there is a Sole Project, its number alone as `#123`. With All Projects selected the full ID shows instead. Either way, clicking it copies the full ID.
 _Avoid_: Ticket number, short key
 
 **Long-lived Spec**:

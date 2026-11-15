@@ -14,6 +14,7 @@ async function world(method: "merge" | "branch" = "merge") {
   const w = await newWorld();
   const s = scenario(w);
   await s.project("acme", "Acme");
+  await s.project("spare", "Spare"); // a second active Project, so All Projects stays offered
   await s.human(`${s.projectPath("acme")}/set_landing_method`, { method, push: false, remote: "origin", land_per_spec: false });
   const id = await s.ticket("acme", { title: "Login page", state: "Accepted" });
   return { w, s, id };

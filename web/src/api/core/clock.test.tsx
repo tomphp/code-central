@@ -10,6 +10,7 @@ it("shows how long a Ticket has waited by the world's clock", async () => {
   const w = await newWorld();
   const s = scenario(w);
   await s.project("acme", "Acme");
+  await s.project("spare", "Spare"); // a second active Project, so All Projects stays offered
   const id = await s.ticket("acme", { title: "Pick a colour", state: "Needs Answer" });
   w.advance(3 * 60 * 60_000);
 

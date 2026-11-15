@@ -543,7 +543,7 @@ describe("a session's Context Size", () => {
       await claimed(scenario(w), "acme", "Other", "sess-other", [response(w, 5, "implementation", 30_000)]);
       renderApp(w, "/?view=usage&session_project=acme&session=sess-impl");
       await waitFor(() => expect(points()).toHaveLength(3));
-
+      await within(usage()).findByRole("table", { name: "Recent sessions" });
       await userEvent.click(within(sessionsTable()).getByRole("link", { name: "sess-other" }));
       await waitFor(() => expect(panel()).toHaveAccessibleName("Session sess-other"));
       await userEvent.click(within(panel()).getByRole("button", { name: "Close session" }));
@@ -584,6 +584,7 @@ describe("a session's Context Size", () => {
     await scenario(w).postUsage("sess-impl", [{ ...response(w, 5, "subagent", 10_000, "toolu_a"), agent_type: "Explore", description: "Map Usage sessions" }]);
     renderApp(w, "/?view=usage&session_project=acme&session=sess-impl&agent=toolu_a");
     await waitFor(() => expect(panel()).toHaveAccessibleName("Session sess-impl · Explore · Map Usage sessions"));
+    await within(usage()).findByRole("table", { name: "Recent sessions" });
     const disclosure = within(sessionsTable()).getByRole("button", { name: "2 subagents" });
     expect(disclosure).toHaveAttribute("aria-expanded", "true");
     expect(within(sessionsTable()).getByRole("link", { name: "Explore · Map Usage sessions" })).toHaveAttribute("aria-current", "true");

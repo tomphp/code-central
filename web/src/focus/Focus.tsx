@@ -6,6 +6,7 @@
 import type { Api } from "../api/api";
 import type { FocusClear } from "../api/types";
 import type { InboxData } from "../live";
+import { useProjectScope } from "../projectScope";
 import type { UiLocation } from "../url";
 import { ActivityDashboard } from "./ActivityDashboard";
 import { FocusBody } from "./FocusBody";
@@ -26,11 +27,12 @@ export interface FocusProps {
 export function Focus({ api, now, version, data, focusClear, loc, navigate }: FocusProps) {
   // The session lives for this visit only: leaving Focus Mode or reloading
   // forgets its skips.
-  const session = useFocusSession({ api, version, project: loc.project });
+  const { project } = useProjectScope();
+  const session = useFocusSession({ api, version, project });
   const dashboard =
     data && focusClear === "activity_dashboard" ? (
       <ActivityDashboard api={api} now={now} version={version} data={data} loc={loc} navigate={navigate} />
     ) : undefined;
 
-  return <FocusBody api={api} now={now} data={data} session={session} dashboard={dashboard} loc={loc} navigate={navigate} />;
+  return <FocusBody api={api} now={now} data={data} session={session} dashboard={dashboard} loc={loc} project={project} navigate={navigate} />;
 }

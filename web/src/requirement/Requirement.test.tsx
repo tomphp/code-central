@@ -19,6 +19,7 @@ async function acme(...more: string[]) {
   const w = await newWorld();
   const s = scenario(w);
   await s.project("acme", "Acme");
+  await s.project("spare", "Spare"); // a second active Project, so All Projects stays offered
   for (const key of more) await s.project(key, key[0].toUpperCase() + key.slice(1));
   return { w, s };
 }

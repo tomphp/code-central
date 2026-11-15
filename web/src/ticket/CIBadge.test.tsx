@@ -38,6 +38,7 @@ async function theming(results: (CIOutcome | undefined)[]) {
   const w = await newWorld();
   const s = scenario(w);
   await s.project("acme", "Acme");
+  await s.project("spare", "Spare"); // a second active Project, so All Projects stays offered
   const spec = await s.spec("acme", { title: "Theming" });
   for (const [i, outcome] of results.entries()) await accepted(s, `Palette ${i + 1}`, outcome, spec);
   return { w, s, spec };
@@ -47,6 +48,7 @@ async function acme() {
   const w = await newWorld();
   const s = scenario(w);
   await s.project("acme", "Acme");
+  await s.project("spare", "Spare"); // a second active Project, so All Projects stays offered
   return { w, s };
 }
 
