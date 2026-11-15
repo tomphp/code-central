@@ -419,7 +419,7 @@ The one row the UI lists a Ticket in, in the State lists, All Tickets, Needs Me,
 _Avoid_: Ticket line, State row
 
 **Ticket card**:
-A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, then the title, then its Spec's kind and title outside a lane. In the Needs Me column it also shows its State chip and Needs Me reason. It pulses when it joins its column (the Needs Me column too) or its Ticket changes. Clicking it opens its Focus popup or Ticket popup.
+A Ticket on the Board view: Short ID, Stage badge, Blocked and needs-you dot, then the title, then its Spec's kind and title outside a lane. In the Needs Me column it also shows its State chip and Reason badge. It pulses when it joins its column (the Needs Me column too) or its Ticket changes. Clicking it opens its Focus popup or Ticket popup.
 _Avoid_: Board card, Ticket tile
 
 **Focus Pop-up**:

@@ -41,6 +41,9 @@ export function InboxDetail({
   isArchived(id: string): boolean;
   specLink(id: string): Link;
 }) {
+  // shown is the selected Ticket once read: one still being read is
+  // another's.
+  const shown = ticket && ticket.id === loc.ticket ? ticket : undefined;
   return (
     <aside aria-label="Ticket" className="inbox-detail">
       {loc.requirement &&
@@ -86,28 +89,25 @@ export function InboxDetail({
         ) : (
           <p className="empty">Loading…</p>
         ))}
-      {ticketError ? (
-        <p className="empty">{ticketError}</p>
-      ) : ticket && loc.ticket && ticket.id === loc.ticket ? (
+      {/* Under a Requirement, Map or Spec, a Ticket still loading shows
+          nothing rather than Loading…. */}
+      {ticketError || (loc.ticket && (!loc.requirement || shown)) ? (
         <TicketPane
           api={api}
-          project={projectOf(ticket.id)}
-          ticket={ticket}
+          project={projectOf(loc.ticket ?? "")}
+          ticket={ticketError ? undefined : shown}
+          error={ticketError}
           now={now}
-          archived={isArchived(ticket.id)}
+          archived={!!loc.ticket && isArchived(loc.ticket)}
           reported={
-            projects.find((p) => p.key === projectOf(ticket.id))
+            projects.find((p) => p.key === projectOf(loc.ticket ?? ""))
               ?.reported_models
           }
           openSpec={(id) => navigate({ requirement: id })}
           openTicket={(id) => navigate({ ticket: id })}
         />
       ) : (
-        !loc.requirement && (
-          <p className="empty">
-            {loc.ticket ? "Loading…" : "Select a Ticket."}
-          </p>
-        )
+        !loc.requirement && <p className="empty">Select a Ticket.</p>
       )}
     </aside>
   );

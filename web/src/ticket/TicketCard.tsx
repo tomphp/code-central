@@ -2,7 +2,7 @@
 // optional Stage badge, the CI badge (none on a Done Ticket), Blocked and the needs-you dot; then its title, then
 // its Spec's kind and title when given (a lane's cards leave it out). The
 // whole card is one link. In the Needs Me column the top line also has the
-// State chip and the reason's label. It pulses when it joins its column, and when its
+// State chip and the Reason badge. It pulses when it joins its column, and when its
 // Ticket's last update changes.
 import type { MouseEvent } from "react";
 import type { TicketRow } from "../api/types";
@@ -10,8 +10,8 @@ import { KindBadge } from "../controls/KindBadge";
 import { NeedsYouDot, useNeedsMe } from "../needsme/context";
 import { StageBadge } from "../controls/StageBadge";
 import { usePulse } from "../focus/pulse";
+import { ReasonBadge } from "../controls/ReasonBadge";
 import { StateChip } from "../controls/StateChip";
-import { REASON_LABEL } from "../format";
 import { ShortId } from "../inbox/ShortId";
 import { ListCIBadge } from "./CIBadge";
 
@@ -27,7 +27,7 @@ export interface TicketCardProps {
   // since the Board last rendered.
   joined?: boolean;
   // inNeedsMe is a card in the Board's Needs Me column: its top line adds
-  // the Ticket's State chip and its reason's label.
+  // the Ticket's State chip and its Reason badge.
   inNeedsMe?: boolean;
 }
 
@@ -40,7 +40,7 @@ export function TicketCard({ t, link, badge, spec, joined, inNeedsMe }: TicketCa
       <span className="board-card-top">
         <ShortId id={t.id} />
         {inNeedsMe && <StateChip state={t.state} />}
-        {inNeedsMe && reason && <span className="board-reason">{REASON_LABEL[reason]}</span>}
+        {inNeedsMe && reason && <ReasonBadge reason={reason} />}
         {badge && <StageBadge label={badge} />}
         <span className="board-spacer" />
         <ListCIBadge t={t} />

@@ -63,4 +63,3 @@
 .board-col-head.needs-me { border-bottom-color: var(--r-answer); }
 .board-cell.needs-me { background: color-mix(in srgb, var(--r-answer) 7%, transparent); }
 .board-lane .board-cell.needs-me { background: color-mix(in srgb, var(--r-answer) 7%, transparent); }
-.board-reason { font-size: 11px; color: var(--rc); white-space: nowrap; flex: none; }
