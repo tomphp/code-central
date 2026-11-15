@@ -6,7 +6,7 @@ import { ChatDock } from "./chat/ChatDock";
 import { Focus } from "./focus/Focus";
 import { Inbox } from "./inbox/Inbox";
 import type { FocusClear } from "./api/types";
-import { useInboxData, useLiveVersion, useOptions, useSpec, useTicket } from "./live";
+import { Live, useApi, useInbox, useOptions, useSpec, useTicket, useVersion } from "./live";
 import { OptionsView } from "./options/OptionsView";
 import { ProjectOptions } from "./options/ProjectOptions";
 import { NeedsMeProvider } from "./needsme/context";
@@ -28,14 +28,24 @@ export interface AppProps {
   now?: () => Date;
 }
 
+// App mounts <Live>, the UI's one change feed, and reads through it.
 export function App({ api, now = () => new Date() }: AppProps) {
+  return (
+    <Live api={api}>
+      <Views now={now} />
+    </Live>
+  );
+}
+
+function Views({ now }: { now: () => Date }) {
+  const api = useApi();
+  const version = useVersion();
   const [loc, navigate, replace] = useUiLocation();
-  const version = useLiveVersion(api);
-  const inbox = useInboxData(api, version);
-  const options = useOptions(api, version);
+  const inbox = useInbox();
+  const options = useOptions();
   // While the Options load, or when the last read failed, Focus Mode shows All clear.
   const focusClear: FocusClear = (!options.error && options.data?.focus_clear) || "all_clear";
-  const spec = useSpec(api, loc.requirement && projectOf(loc.requirement), loc.requirement, version);
+  const spec = useSpec(loc.requirement && projectOf(loc.requirement), loc.requirement);
   const requirement = spec.data?.id === loc.requirement && spec.data?.requirement ? { ...spec.data, requirement: spec.data.requirement } : undefined;
   const map = spec.data?.id === loc.requirement && spec.data?.map ? { ...spec.data, map: spec.data.map } : undefined;
   const plain = spec.data?.id === loc.requirement && !requirement && !map ? spec.data : undefined;
@@ -44,7 +54,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
   // Within a Requirement with no Ticket chosen, the pane opens on its default one.
   const selected =
     loc.ticket ?? (requirement ? defaultTicket(progress(requirement.requirement, requirement.tickets ?? [], needsMe.reasonOf)) : undefined);
-  const ticket = useTicket(api, selected && projectOf(selected), selected, version);
+  const ticket = useTicket(selected && projectOf(selected), selected);
   useNeedsMeTitle(inbox.data && needsMe.count());
   // An ID Link asks the Inbox to open an ID whose kind isn't known; once it
   // is, the address is replaced with the Spec or Ticket it selects, so Back

@@ -3,7 +3,7 @@
 // then Projects and Views (the first two linking the Activity and Board views), then
 // an Admin section linking CI, Usage and
 // Options; the list in the middle; the selected Requirement, Map or plain
-// Spec and Ticket on the right. A layout only: the data comes from live.ts and the
+// Spec and Ticket on the right. A layout only: the data comes from live.tsx and the
 // Ticket pane is shared with any later view.
 import { useState } from "react";
 import type { Api } from "../api/api";
