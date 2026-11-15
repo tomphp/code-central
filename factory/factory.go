@@ -69,6 +69,15 @@ func (e Env) getenv(key string) string {
 	return ""
 }
 
+// killGrace is how long a turn being stopped has after each stop step
+// but the last (stopSteps).
+func (e Env) killGrace() time.Duration {
+	if e.KillGrace > 0 {
+		return e.KillGrace
+	}
+	return 10 * time.Second
+}
+
 // home is where the state file is found.
 func (e Env) home() home.Lookup {
 	return home.Lookup{Getenv: e.getenv, UserHomeDir: e.UserHomeDir}
@@ -314,6 +323,8 @@ type factory struct {
 	unreported map[string]string
 	// accepts is what claude --help said claude accepts, read at startup.
 	accepts claudeAccepts
+	// runner runs the claude Turns, built at startup once accepts is read.
+	runner *turnRunner
 	// modelsReported is whether Code Central has taken the report of
 	// accepts; until it has, each poll that reads the Project tries.
 	modelsReported bool
@@ -417,6 +428,7 @@ func start(e Env, o options) (*factory, error) {
 	if err := f.checkEffortFlag(); err != nil {
 		return nil, err
 	}
+	f.runner = newTurnRunner(f.claude, e, f.accepts, o.bypass, o.claudeArgs, o.verbose)
 	if err := f.checkClaudeArgsAccepted(); err != nil {
 		return nil, err
 	}

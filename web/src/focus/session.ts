@@ -15,6 +15,7 @@ import { useTicket } from "../live";
 import { useNeedsMe } from "../needsme/context";
 import type { NeedsMe } from "../needsme/model";
 import type { View } from "../url";
+import { NOTE_MS } from "./useNote";
 
 declare const focusKey: unique symbol;
 
@@ -162,9 +163,6 @@ interface Note {
   text: string;
   elsewhere?: boolean;
 }
-
-// NOTE_MS is how long a note stays.
-const NOTE_MS = 4000;
 
 // WRITES are the Api calls a panel or the Question form makes to act on
 // a Ticket.

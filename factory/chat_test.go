@@ -281,6 +281,53 @@ func TestAFailingChatTurnEndsFailedWithNoFailureReport(t *testing.T) {
 	}
 }
 
+func TestAChatReplyCutOffByAnOutageEndsFailedAndTheFactoryGoesOn(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.Script(factorytest.Chat, factorytest.Say("Partway."), factorytest.APIError("rate_limit"), factorytest.Result("error_during_execution"), factorytest.Exit(1))
+	r := h.Start()
+
+	h.SendChat("Hi")
+	got := reply(h.WaitForReply())
+
+	if got.Outcome != core.ChatFailed || !strings.Contains(got.Error, "claude hit an Outage (`rate_limit`)") || !strings.Contains(got.Error, "Send the message again later.") {
+		t.Errorf("reply ended %q (%q), want failed with the Outage text naming rate_limit", got.Outcome, got.Error)
+	}
+	if out := r.Stdout(); strings.Contains(out, "report_failure") || strings.Contains(out, ": Failed: ") {
+		t.Errorf("stdout %q, want no Failure Report", out)
+	}
+	// Not paused: a Ready Ticket is still claimed.
+	id := h.ReadyTicket("After the Outage")
+	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
+	r.Poll()
+	h.WaitForState(id, store.InProgress)
+	h.Continue(id)
+	h.WaitForState(id, store.InReview)
+}
+
+func TestAChatReplyWithAnExpiredLoginEndsFailedAndTheFactoryKeepsRunning(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.Script(factorytest.Chat, factorytest.APIError("authentication_failed"), factorytest.Result("error_during_execution"), factorytest.Exit(1))
+	r := h.Start()
+
+	h.SendChat("Hi")
+	got := reply(h.WaitForReply())
+
+	if got.Outcome != core.ChatFailed || !strings.Contains(got.Error, "(authentication_failed)") || !strings.Contains(got.Error, "`claude /login`") {
+		t.Errorf("reply ended %q (%q), want failed with the login text naming claude /login", got.Outcome, got.Error)
+	}
+	if out := r.Stdout(); strings.Contains(out, "report_failure") || strings.Contains(out, ": Failed: ") {
+		t.Errorf("stdout %q, want no Failure Report", out)
+	}
+	// The Factory keeps running: it answers the next message.
+	h.Script(factorytest.Chat, factorytest.DefaultChatScript...)
+	h.SendChat("Again")
+	if again := reply(h.WaitForReply()); again.Outcome != core.ChatDone {
+		t.Errorf("next reply ended %q (%q), want done", again.Outcome, again.Error)
+	}
+}
+
 func TestARejectedChatModelEndsFailedNamingTheModel(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
