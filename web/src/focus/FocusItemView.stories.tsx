@@ -69,9 +69,9 @@ function Shown({ api, now, data, scope, whole }: Loaded) {
   );
 }
 
-// item is a story of the Focus Item of the Ticket that build makes in the
-// Project "acme", returning its ID; without an ID it is the Project's own.
-const item = (build: (s: Scenario, w: World) => Promise<string | undefined>, whole = false): Story => ({
+// focusItem is a story of the Focus Item of the Ticket that build makes in
+// the Project "acme", returning its ID; without an ID it is the Project's own.
+const focusItem = (build: (s: Scenario, w: World) => Promise<string | undefined>, { whole = false } = {}): Story => ({
   ...storyWorld(async (s, w): Promise<Loaded> => {
     await s.project("acme", "Acme");
     const scope = await build(s, w);
@@ -135,23 +135,23 @@ async function accepted(s: Scenario) {
 
 // A Round no Question of which is shown yet: the Focus Item Needs Me has
 // for it, with the Round's panel.
-export const NeedsAnswer = item(async (s) => {
+export const NeedsAnswer = focusItem(async (s) => {
   const id = await s.ticket("acme", { title: "Pick a colour" });
   await s.askRound("acme", id, QUESTIONS);
   return id;
-}, true);
+}, { whole: true });
 
-export const Answered = item((s) => s.ticket("acme", { title: "Pick a colour", state: "Answered" }));
+export const Answered = focusItem((s) => s.ticket("acme", { title: "Pick a colour", state: "Answered" }));
 
 // In Progress with no word from its session for 45 minutes.
-export const SilentClaim = item(async (s, w) => {
+export const SilentClaim = focusItem(async (s, w) => {
   const id = await s.ticket("acme", { title: "Wire the API", state: "In Progress" });
   w.advance(45 * MIN);
   return id;
 });
 
 // In Progress for over an hour, its session busy all along.
-export const LongClaim = item(async (s, w) => {
+export const LongClaim = focusItem(async (s, w) => {
   const id = await s.ticket("acme", { title: "Wire the API", state: "In Progress" });
   w.advance(73 * MIN);
   await s.postSessionEvents(SESSION, [{ time: w.now().toISOString(), kind: "tool_call", tool: "Bash", tool_use_id: "tu-1", text: "Bash: make test" }]);
@@ -159,14 +159,14 @@ export const LongClaim = item(async (s, w) => {
   return id;
 });
 
-export const Failed = item((s) => s.ticket("acme", { title: "Flaky build", state: "Failed" }));
+export const Failed = focusItem((s) => s.ticket("acme", { title: "Flaky build", state: "Failed" }));
 
-export const InReview = item((s) => s.ticket("acme", { title: "Login page", state: "In Review" }));
+export const InReview = focusItem((s) => s.ticket("acme", { title: "Login page", state: "In Review" }));
 
 // CI failed under Merge + Push, which offers Land anyway.
-export const CIFailed = item((s) => ciFailed(s, "merge"));
+export const CIFailed = focusItem((s) => ciFailed(s, "merge"));
 
-export const CICancelled = item(async (s) => {
+export const CICancelled = focusItem(async (s) => {
   const id = await s.ticket("acme", { title: "Login page", state: "Accepted" });
   await s.pushed("acme", id);
   await s.ci("acme", id, "cancelled");
@@ -174,31 +174,31 @@ export const CICancelled = item(async (s) => {
 });
 
 // A Project's item: both commits, and the fix is the human's by hand.
-export const BaseDiverged = item(async (s) => {
+export const BaseDiverged = focusItem(async (s) => {
   await s.base("acme", "diverged");
   return undefined;
 });
 
 // A Project's item: the branch that exists neither locally nor remotely.
-export const BaseMissing = item(async (s) => {
+export const BaseMissing = focusItem(async (s) => {
   await s.base("acme", "missing");
   return undefined;
 });
 
-export const PullRequestClosed = item(async (s) => {
+export const PullRequestClosed = focusItem(async (s) => {
   const id = await accepted(s);
   await s.pullRequest("acme", id, "closed");
   return id;
 });
 
 // To merge under Branch: the human merges the branch into the base.
-export const ToMerge = item(async (s) => {
+export const ToMerge = focusItem(async (s) => {
   await s.human(`${s.projectPath("acme")}/set_landing_method`, { method: "branch", push: false, remote: "origin", land_per_spec: false });
   return s.ticket("acme", { title: "Login page", state: "Accepted" });
 });
 
 // No word of a pushed commit's CI 12 minutes after its push.
-export const CIUnavailable = item(async (s, w) => {
+export const CIUnavailable = focusItem(async (s, w) => {
   const id = await s.ticket("acme", { title: "Login page", state: "Accepted" });
   await s.pushed("acme", id);
   await s.reportCIWatcherStatus("acme", { state: "watching" });
@@ -206,14 +206,14 @@ export const CIUnavailable = item(async (s, w) => {
   return id;
 });
 
-export const AcceptedNotLanded = item(async (s, w) => {
+export const AcceptedNotLanded = focusItem(async (s, w) => {
   await s.human(`${s.projectPath("acme")}/set_landing_method`, { method: "merge", push: false, remote: "origin", land_per_spec: false });
   const id = await s.ticket("acme", { title: "Login page", state: "Accepted" });
   w.advance(25 * MIN);
   return id;
 });
 
-export const BlockedByCancelled = item(async (s) => {
+export const BlockedByCancelled = focusItem(async (s) => {
   const cancelled = await s.ticket("acme", { title: "Old plan", state: "Cancelled" });
   const blocked = await s.ticket("acme", { title: "Build on it" });
   await s.addBlocker("acme", blocked, cancelled);
@@ -221,17 +221,17 @@ export const BlockedByCancelled = item(async (s) => {
 });
 
 // An Incoming Issue awaiting triage.
-export const NewIssue = item(async (s, w) => {
+export const NewIssue = focusItem(async (s, w) => {
   const on = await w.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: true });
   return s.incomingIssue("acme", on.github_issues.spec!, "Login is broken", ISSUE);
 });
 
-export const ClosedExternally = item((s) => s.linkedTicket("acme", { title: "Login is broken", link: { ...ISSUE, external_state: "closed" } }));
+export const ClosedExternally = focusItem((s) => s.linkedTicket("acme", { title: "Login is broken", link: { ...ISSUE, external_state: "closed" } }));
 
 // --- A Round's Question. ---
 
 // One open Question of a Round of two, with its answer form.
-export const Question = item(async (s) => {
+export const Question = focusItem(async (s) => {
   const id = await s.ticket("acme", { title: "Pick a colour" });
   await s.askRound("acme", id, QUESTIONS);
   return id;
@@ -240,15 +240,15 @@ export const Question = item(async (s) => {
 // --- Landing Method variants that change the options. ---
 
 // CI failed under Branch + Push: no Land anyway, since the human's merge decides.
-export const CIFailedBranch = item((s) => ciFailed(s, "branch"));
+export const CIFailedBranch = focusItem((s) => ciFailed(s, "branch"));
 
 // CI failed under Pull Request: no Land anyway; Send back to fix and New
 // fix Ticket stay, and the pull request is the merge that decides.
-export const CIFailedPullRequest = item((s) => ciFailed(s, "pull_request"));
+export const CIFailedPullRequest = focusItem((s) => ciFailed(s, "pull_request"));
 
 // CI failed for a Spec landing together: the item lists every Ticket
 // waiting on the Spec's pushed commit, and offers no Send back to fix.
-export const CIFailedLandPerSpec = item(async (s) => {
+export const CIFailedLandPerSpec = focusItem(async (s) => {
   await s.landOn("acme", "merge", false);
   const spec = await s.requirement("acme", "Export a Spec\nAs Markdown.");
   const ids = [
@@ -265,7 +265,7 @@ export const CIFailedLandPerSpec = item(async (s) => {
 });
 
 // To merge under Pull Request: the pull request's link, here conflicting.
-export const ToMergePullRequest = item(async (s) => {
+export const ToMergePullRequest = focusItem(async (s) => {
   const id = await accepted(s);
   await s.pullRequest("acme", id, "conflicting");
   return id;
