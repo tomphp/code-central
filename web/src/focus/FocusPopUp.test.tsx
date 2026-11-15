@@ -180,7 +180,7 @@ describe("Focus Pop-up", () => {
     go("/?view=inbox");
     await screen.findByRole("complementary", { name: "Ticket" });
     noPopup();
-    expect((await w.api.getTicket("acme", round)).rounds[0].questions.map((q) => q.status)).toEqual(["answered", "open"]);
+    expect((await w.api.getTicket("acme", round)).rounds![0].questions.map((q) => q.status)).toEqual(["answered", "open"]);
   });
 
   it("holds a close only for the Focus Items in scope then", async () => {

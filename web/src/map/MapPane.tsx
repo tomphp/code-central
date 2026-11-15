@@ -67,11 +67,12 @@ export interface MapBodyProps extends MapPaneProps {
 export function MapBody({ api, spec, archived, now, ticket, select, specLink, written, busy, error, start, setGuided }: MapBodyProps) {
   const { reasonOf } = useNeedsMe();
   const [fogOpen, setFogOpen] = useState(false);
-  const layout = layoutMap(spec.tickets);
+  const { tickets = [], body = "" } = spec;
+  const layout = layoutMap(tickets);
   // The arrowhead's ID goes in url(#…), so it keeps only safe characters.
   const arrow = `map-arrow-${useId().replace(/[^\w-]/g, "")}`;
-  const destination = mapSection(spec.body, "Destination");
-  const fog = mapSection(spec.body, "Not yet specified");
+  const destination = mapSection(body, "Destination");
+  const fog = mapSection(body, "Not yet specified");
 
   return (
     <section aria-label="Map" className="req-head map-view">
@@ -119,7 +120,7 @@ export function MapBody({ api, spec, archived, now, ticket, select, specLink, wr
                 <path key={`${e.from}>${e.to}`} data-edge={`${e.from}>${e.to}`} d={e.d} className="map-edge" markerEnd={`url(#${arrow})`} />
               ))}
             </g>
-            {spec.tickets.map((t) => {
+            {tickets.map((t) => {
               const at = layout.nodes.get(t.id)!;
               const reason = reasonOf(t.id);
               const progress = nodeProgress(t, reason);
@@ -152,8 +153,8 @@ export function MapBody({ api, spec, archived, now, ticket, select, specLink, wr
           </svg>
         </div>
         <div className="map-side">
-          <MapDetails title="Decisions so far" text={mapSection(spec.body, "Decisions so far")} />
-          <MapDetails title="Out of scope" text={mapSection(spec.body, "Out of scope")} />
+          <MapDetails title="Decisions so far" text={mapSection(body, "Decisions so far")} />
+          <MapDetails title="Out of scope" text={mapSection(body, "Out of scope")} />
         </div>
       </div>
       <RetroList retros={spec.retros} select={select} />

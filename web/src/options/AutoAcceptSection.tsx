@@ -16,12 +16,14 @@ export function AutoAcceptSection({ api, project }: { api: Api; project: Project
   const id = useId();
   useEffect(() => setDraft(stored), [stored]);
 
-  const changed = AUTO_ACCEPT_KINDS.filter((k) => draft[k] !== stored[k]);
+  // A kind the setting leaves out is off.
+  const isOn = (setting: AutoAccept, kind: AutoAcceptKind) => setting[kind] ?? false;
+  const changed = AUTO_ACCEPT_KINDS.filter((k) => isOn(draft, k) !== isOn(stored, k));
   const save = (e: FormEvent) => {
     e.preventDefault();
     setError(undefined);
-    const kinds: Partial<AutoAccept> = {};
-    for (const k of changed) kinds[k] = draft[k];
+    const kinds: AutoAccept = {};
+    for (const k of changed) kinds[k] = isOn(draft, k);
     api.setAutoAccept(project.key, kinds).then(
       (v) => {
         setDraft(v.auto_accept);
@@ -50,7 +52,7 @@ export function AutoAcceptSection({ api, project }: { api: Api; project: Project
             <label>
               <input
                 type="checkbox"
-                checked={draft[kind]}
+                checked={isOn(draft, kind)}
                 onChange={(e) => toggle(kind, e.target.checked)}
                 aria-describedby={`${id}-hint`}
               />{" "}

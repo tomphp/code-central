@@ -202,7 +202,7 @@ describe("the Focus popup's Queue mode", () => {
     expect(within(popup()).getByText("Question 2 of 2 · Round 1")).toBeInTheDocument();
     await skip();
     expect(await heading("Flaky build")).toBeInTheDocument();
-    expect((await fake.w.api.getTicket("acme", fake.colour!)).rounds[0].questions.map((q) => [q.status, q.answer])).toEqual([
+    expect((await fake.w.api.getTicket("acme", fake.colour!)).rounds![0].questions.map((q) => [q.status, q.answer])).toEqual([
       ["answered", "Blue"],
       ["open", undefined],
     ]);

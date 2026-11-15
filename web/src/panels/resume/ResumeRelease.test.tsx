@@ -62,7 +62,7 @@ async function answeredWorld(claimSession = true) {
     { title: "Which size?", body: "S or M" },
     { title: "Rounded corners?", body: "Or square" },
   ]);
-  const [, size] = (await w.api.getTicket("acme", id)).rounds[1].questions;
+  const [, size] = (await w.api.getTicket("acme", id)).rounds![1].questions;
   await s.human(`${s.ticketPath("acme", id)}/answer`, { question: size.number - 1, text: "Blue" });
   await s.human(`${s.ticketPath("acme", id)}/dismiss_question`, { question: size.number });
   await s.human(`${s.ticketPath("acme", id)}/answer`, { question: size.number + 1, text: "**yes**, `4px`" });
@@ -205,8 +205,8 @@ describe("the Resume-then-Release panel", () => {
     await waitFor(() => expect(w.calls).toContain("release"));
     const t = await w.api.getTicket("acme", id);
     expect(t.state).toBe("Ready");
-    expect(t.comments.at(-1)).toMatchObject({ actor: "human", body: "Session died overnight" });
-    expect(t.claims[0]).toMatchObject({ ended_by: "release" });
+    expect(t.comments!.at(-1)).toMatchObject({ actor: "human", body: "Session died overnight" });
+    expect(t.claims![0]).toMatchObject({ ended_by: "release" });
   });
 
   it("releases without a note, and can be backed out of", async () => {

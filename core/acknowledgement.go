@@ -89,7 +89,7 @@ func written[V any](before, after V, full bool, unlisted ...string) (Written[V],
 		return Written[V]{}, err
 	}
 	ack := Acknowledgement{Changed: []string{}}
-	for _, name := range jsonNames(reflect.TypeFor[V]()) {
+	for _, name := range JSONNames(reflect.TypeFor[V]()) {
 		if !bytes.Equal(b[name], a[name]) && !slices.Contains(unlisted, name) {
 			ack.Changed = append(ack.Changed, name)
 		}
@@ -134,16 +134,18 @@ func topLevel(v any) (map[string]json.RawMessage, error) {
 	return out, json.Unmarshal(j, &out)
 }
 
-// jsonNames are the JSON field names of struct type t, in field order,
-// with embedded structs' fields in their place.
-func jsonNames(t reflect.Type) []string {
+// JSONNames are the JSON field names of struct type t, in field order,
+// with embedded structs' fields in their place: for a record's view, the
+// names its writes' changed can list, in that order. The UI's generated
+// field lists (internal/wiretypes) are made with it.
+func JSONNames(t reflect.Type) []string {
 	var out []string
 	for f := range t.Fields() {
 		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
 		switch {
 		case name == "-" || !f.IsExported() && !f.Anonymous:
 		case f.Anonymous && name == "" && f.Type.Kind() == reflect.Struct:
-			out = append(out, jsonNames(f.Type)...)
+			out = append(out, JSONNames(f.Type)...)
 		case name == "":
 			out = append(out, f.Name)
 		default:

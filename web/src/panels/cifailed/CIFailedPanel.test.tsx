@@ -185,7 +185,7 @@ describe("the CI failed panel", () => {
     await waitFor(() => expect(x.w.actions()).toContain("send_back"));
     const t = await x.w.api.getTicket("acme", x.id);
     expect(t.state).toBe("Ready");
-    expect(t.comments.at(-1)?.body).toMatch(/^CI failed at abc1234:[\s\S]*runs\/1\)[\s\S]*Also check the login test\.$/);
+    expect(t.comments!.at(-1)?.body).toMatch(/^CI failed at abc1234:[\s\S]*runs\/1\)[\s\S]*Also check the login test\.$/);
     expect((await x.w.api.needsMe()).count).toBe(0);
   });
 
@@ -201,7 +201,7 @@ describe("the CI failed panel", () => {
     const t = await x.w.api.getTicket("acme", x.id);
     expect(t.state).toBe("Accepted");
     expect(t.land_anyway).toBeFalsy();
-    expect(t.comments.at(-1)?.body).toContain(fix.id);
+    expect(t.comments!.at(-1)?.body).toContain(fix.id);
     expect((await x.w.api.needsMe()).count).toBe(0);
     await waitFor(() => expect(p).toHaveTextContent(`${fix.id} fixes this CI failure forward`));
   });

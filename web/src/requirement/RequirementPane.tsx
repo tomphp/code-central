@@ -36,7 +36,7 @@ export interface RequirementPaneProps {
 
 export function RequirementPane({ api, spec, archived, now, ticket, select, specLink }: RequirementPaneProps) {
   const { reasonOf } = useNeedsMe();
-  const p = progress(spec.requirement, spec.tickets, reasonOf);
+  const p = progress(spec.requirement, spec.tickets ?? [], reasonOf);
   const note = waitingNote(p);
   const specDone = spec.requirement.stages.some((s) => s.name === "spec" && s.state === "Done");
   return (

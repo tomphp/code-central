@@ -32,6 +32,13 @@ var roots = []reflect.Type{
 	reflect.TypeFor[core.Acknowledgement](),
 }
 
+// fields are the record views a write acknowledges, each written as an
+// array of its JSON names, which the UI narrows changed to.
+var fields = []Fields{
+	fieldsOf[core.TicketView]("TicketFields"),
+	fieldsOf[core.SpecView]("SpecFields"),
+}
+
 // enums are the value lists of the typed strings the roots reach, each
 // written as a union with its value array, in the list's order.
 var enums = []Enum{

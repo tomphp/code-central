@@ -28,6 +28,7 @@ export interface SpecPaneProps {
 }
 
 export function SpecPane({ api, spec, archived, now, ticket, select }: SpecPaneProps) {
+  const tickets = spec.tickets ?? [];
   return (
     <section aria-label="Spec" className="req-head">
       <SpecPaneHeader id={spec.id} kind="Spec" title={spec.title} now={now} created={spec.created} />
@@ -40,11 +41,11 @@ export function SpecPane({ api, spec, archived, now, ticket, select }: SpecPaneP
       <SpecAutoAccept api={api} spec={spec} archived={archived} />
       <LandPerSpec status={spec.land_per_spec} />
       <BodySection api={api} spec={spec} heading="Body" archived={archived} />
-      <CISums tickets={spec.tickets} />
-      {spec.tickets.length === 0 ? (
+      <CISums tickets={tickets} />
+      {tickets.length === 0 ? (
         <p className="muted">No Tickets yet.</p>
       ) : (
-        <TicketList label="Tickets" tickets={spec.tickets} now={now} ticket={ticket} select={select} />
+        <TicketList label="Tickets" tickets={tickets} now={now} ticket={ticket} select={select} />
       )}
       <RetroList retros={spec.retros} select={select} />
     </section>
