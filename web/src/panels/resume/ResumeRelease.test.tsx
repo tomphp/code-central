@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { App } from "../../App";
 import { newWorld, type World } from "../../api/core/core";
 import { scenario, type Scenario } from "../../api/scenario";
+import { renderLive } from "../../worldTesting";
 import { panel as resumePanel } from "./panel";
 
 const MINUTE = 60_000;
@@ -235,7 +236,7 @@ describe("the Resume-then-Release panel", () => {
     // meanwhile, and the notice hasn't arrived yet.
     const stale = await w.api.getTicket("acme", id);
     await s.human(`${s.ticketPath("acme", id)}/release`, {});
-    render(<resumePanel.Component api={w.api} project="acme" ticket={stale} now={w.now()} />);
+    renderLive(w, <resumePanel.Component project="acme" ticket={stale} now={w.now()} />);
     const p = await panel();
     await user.click(within(p).getByRole("button", { name: "Stop…" }));
     await user.click(within(p).getByRole("button", { name: "Stop Claim" }));

@@ -7,15 +7,14 @@
 // the caller adds; and the refusal alert. The caller wraps it with the
 // Question's title and body.
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import type { Api } from "../../api/api";
 import "../../api/actions/rounds";
 import type { QuestionView } from "../../api/types";
+import { useApi } from "../../live";
 import "./round.css";
 import { useAction } from "./useAction";
 import { Button } from "../../controls/Button";
 
 export interface QuestionAnswerProps {
-  api: Api;
   project: string;
   ticket: string;
   q: QuestionView;
@@ -25,7 +24,8 @@ export interface QuestionAnswerProps {
   children?: ReactNode;
 }
 
-export function QuestionAnswer({ api, project, ticket, q, submitOnModEnter, children }: QuestionAnswerProps) {
+export function QuestionAnswer({ project, ticket, q, submitOnModEnter, children }: QuestionAnswerProps) {
+  const api = useApi();
   const { busy, alert, run } = useAction();
   // draft is what the human typed since the last save; until then the box
   // shows the saved answer, else the recommendation.

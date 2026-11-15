@@ -57,7 +57,7 @@ export function SpecPopupView({ api, now, id, projects, spec, onClose, open, spe
       ) : data?.map ? (
         <MapPane api={api} spec={{ ...data, map: data.map }} archived={archived} now={now} select={open} specLink={specLink} written={open} />
       ) : data ? (
-        <SpecPane api={api} spec={data} archived={archived} now={now} select={open} />
+        <SpecPane spec={data} archived={archived} now={now} select={open} />
       ) : (
         <SpecPaneNote error={spec.error?.message} />
       )}

@@ -11,6 +11,7 @@ import { newWorld, type World } from "../../api/core/core";
 import { scenario, type Scenario } from "../../api/scenario";
 import { TRIAGE_ACTIONS } from "../../api/types";
 import { TicketDetail } from "../../ticket/TicketDetail";
+import { renderLive } from "../../worldTesting";
 import { panel } from "./panel";
 
 const ISSUE = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7" };
@@ -44,13 +45,13 @@ const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 
 async function renderPanel({ w, issue }: Issues) {
   const t = await w.api.getTicket("acme", issue);
-  render(<panel.Component api={w.api} project="acme" ticket={t} now={w.now()} />);
+  renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("region", { name: "New issue" });
 }
 
 async function renderDetail(w: World, id: string) {
   const t = await w.api.getTicket("acme", id);
-  render(<TicketDetail api={w.api} project="acme" ticket={t} now={w.now()} />);
+  renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("article", { name: "Ticket details" });
 }
 

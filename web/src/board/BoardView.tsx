@@ -223,9 +223,7 @@ export function BoardView({ api, now, version, data, loc, navigate, onFocusPopup
       )}
       {loc.popup && kind === "ticket" && (
         <TicketPopup
-          api={api}
           now={now}
-          version={version}
           id={loc.popup}
           projects={projects}
           onClose={closePopup}

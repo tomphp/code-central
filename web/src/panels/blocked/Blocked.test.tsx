@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { App } from "../../App";
 import { newWorld } from "../../api/core/core";
 import { scenario } from "../../api/scenario";
+import { renderLive } from "../../worldTesting";
 import { panel } from "./panel";
 
 // world has a Cancelled and a Done Ticket and a Ticket blocked by both.
@@ -25,7 +26,7 @@ type Blocked = Awaited<ReturnType<typeof world>>;
 
 async function renderPanel({ w, blocked }: Blocked) {
   const t = await w.api.getTicket("acme", blocked);
-  render(<panel.Component api={w.api} project="acme" ticket={t} now={w.now()} />);
+  renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("region", { name: "Blocked" });
 }
 
@@ -70,7 +71,7 @@ describe("the Blocked panel", () => {
     await x.s.addBlocker("acme", dependant, stage);
 
     const t = await x.w.api.getTicket("acme", dependant);
-    render(<panel.Component api={x.w.api} project="acme" ticket={t} now={x.w.now()} />);
+    renderLive(x.w, <panel.Component project="acme" ticket={t} now={x.w.now()} />);
     const p = screen.getByRole("region", { name: "Blocked" });
     expect(p).toHaveTextContent(`${gone} Implement: Offline mode`);
     expect(p).toHaveTextContent(`replacing ${stage}`);
