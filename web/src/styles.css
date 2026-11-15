@@ -166,10 +166,14 @@ a.filter { text-decoration: none; }
 .inbox-detail { overflow: auto; padding: 20px 24px 100px; }
 .ticket-head h2 { font-size: 19px; margin-top: 6px; }
 .ticket-body { margin-top: 16px; }
-.ticket-body .auto-accept-switch { margin: 12px 0 6px; }
 .auto-accept-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-/* On a Ticket it lines up with the Model and Effort rows below it. */
-.ticket-body .auto-accept-row > span:first-child { min-width: 16em; }
+/* A Ticket's controls, set apart from its description: each row is a
+   label, its control and a note, on one grid so the controls line up. */
+.ticket-controls { display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); gap: 8px 12px; align-items: center; margin: 14px 0; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; font-size: 12.5px; }
+.ticket-controls > *, .ticket-controls .auto-accept-row, .ticket-controls .model-choice-row { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; justify-items: start; margin: 0; row-gap: 8px; }
+.ticket-controls .warning, .ticket-controls form[aria-label] { grid-column: 1 / -1; }
+.ticket-control, .ticket-controls .model-choice-row form { display: flex; gap: 6px; align-items: center; }
+.ticket-controls .muted.small { font-size: inherit; }
 .ticket-body .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
 .history { list-style: none; padding: 0; font-size: 12.5px; }
 .ticket-body details > summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin: 8px 0; }
@@ -218,8 +222,6 @@ button.link { border: 0; background: none; padding: 0; font: inherit; font-size:
 .transcript-error { color: var(--danger); border-color: var(--danger); }
 .transcript-factory { background: var(--surface-2); color: var(--muted); font-size: 12.5px; }
 .transcript-marker { font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; margin-right: 4px; }
-.ticket-body .move { margin: 12px 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.ticket-body .move .warning { flex-basis: 100%; }
 .history .previous { margin: 4px 0 8px 12px; padding: 6px 10px; border-left: 2px solid var(--border); color: var(--muted); }
 .panel .blocker p { margin: 0 0 8px; }
 .panel .actions { margin: 12px 0 0; }
@@ -236,10 +238,6 @@ a.link-badge:hover { text-decoration: underline; }
 .link-badge.detached { opacity: 0.6; }
 .linked-note { margin: 6px 0; }
 /* A Ticket's model and effort with their Tag pickers (code-central-313). */
-.model-choice { border: 0; padding: 0; margin: 10px 0; }
-.model-choice-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 4px; }
-.model-choice-row > span { min-width: 16em; }
-.model-choice-row form { display: flex; gap: 6px; align-items: center; }
 .model-choice input, .model-choice select { font: inherit; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 
 /* The Prototype badge on a Needs Me row and a Focus Item (Spec 213). */
@@ -364,6 +362,8 @@ a.link-badge:hover { text-decoration: underline; }
 .ticket-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .ticket-head h2 { display: inline; margin: 0; }
 .ticket-head > .edit-form { flex-basis: 100%; }
+.ticket-head-actions { margin-left: auto; display: flex; gap: 6px; }
+.ticket-head-actions:empty { display: none; }
 .edit-form { display: flex; flex-direction: column; gap: 8px; margin: 6px 0; }
 .edit-form input { font: inherit; font-size: 16px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 .edit-form .edit-preview { border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; min-height: 120px; }

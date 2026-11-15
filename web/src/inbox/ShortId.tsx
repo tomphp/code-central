@@ -7,6 +7,11 @@ import { createContext, useContext, useEffect, useRef, useState, type MouseEvent
 // a pane or row needs no extra prop; outside the Inbox IDs show in full.
 export const OneProject = createContext(false);
 
+// shortOf is an ID's Short ID within its Project: `#452` for acme-452.
+export function shortOf(id: string): string {
+  return `#${id.slice(id.lastIndexOf("-") + 1)}`;
+}
+
 export function ShortId({ id }: { id: string }) {
   const one = useContext(OneProject);
   const [copied, setCopied] = useState(false);
@@ -33,7 +38,7 @@ export function ShortId({ id }: { id: string }) {
   return (
     <span className="tid short-id" role="button" tabIndex={0} title={id} aria-label={id} onClick={copy}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") copy(e as unknown as MouseEvent); }}>
-      {copied ? "Copied" : one ? `#${id.slice(id.lastIndexOf("-") + 1)}` : id}
+      {copied ? "Copied" : one ? shortOf(id) : id}
     </span>
   );
 }

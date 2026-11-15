@@ -90,3 +90,6 @@ export const CIFailed = pane(async (s) => {
 
 // In Review: the review panel, the Auto-accept switch and the move controls.
 export const InReview = pane((s) => s.ticket("acme", { title: "Add a sign-in page", state: "In Review" }));
+
+// Draft: Edit at the right of the header.
+export const Draft = pane((s) => s.ticket("acme", { title: "Add a sign-in page", state: "Draft" }));

@@ -56,9 +56,11 @@ export function ModelChoice({ api, project, ticket: t, reported = NO_REPORT }: M
     run(() => (effort ? api.setTags(project, t.id, { effort }) : api.removeTags(project, t.id, ["effort"])));
 
   return (
-    <fieldset className="model-choice small" aria-label="Model and effort">
+    // A group rather than a fieldset, which can't take part in the
+    // controls' grid.
+    <div role="group" className="model-choice small" aria-label="Model and effort">
       <div className="model-choice-row">
-        <span data-testid="model-applies">Model: {applied(mc.model, reported.model_flag)}</span>
+        <span>Model</span>
         {/* Keyed on the Tag, so the picker follows a change made elsewhere. */}
         <ModelPicker
           key={tag.model}
@@ -69,24 +71,32 @@ export function ModelChoice({ api, project, ticket: t, reported = NO_REPORT }: M
           clear={() => run(() => api.removeTags(project, t.id, ["model"]))}
         />
         <ModelSuggestions id={`${id}-models`} suggestions={suggestions} />
+        <span className="muted">
+          Using <span data-testid="model-applies">{applied(mc.model, reported.model_flag)}</span>
+        </span>
       </div>
       <div className="model-choice-row">
-        <span data-testid="effort-applies">Effort: {applied(mc.effort, reported.effort_flag)}</span>
-        <Select
-          aria-label="Effort Tag"
-          value={tag.effort}
-          disabled={busy}
-          onChange={setEffort}
-          placeholder="Project's settings"
-          options={levels.map((l) => ({ value: l }))}
-        />
+        <span>Effort</span>
+        <span className="ticket-control">
+          <Select
+            aria-label="Effort Tag"
+            value={tag.effort}
+            disabled={busy}
+            onChange={setEffort}
+            placeholder="Project's settings"
+            options={levels.map((l) => ({ value: l }))}
+          />
+        </span>
+        <span className="muted">
+          Using <span data-testid="effort-applies">{applied(mc.effort, reported.effort_flag)}</span>
+        </span>
       </div>
       {error && (
         <p role="alert" className="warning">
           {error}
         </p>
       )}
-    </fieldset>
+    </div>
   );
 }
 

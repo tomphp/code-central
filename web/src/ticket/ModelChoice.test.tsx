@@ -2,7 +2,7 @@
 // effort the Ticket's next turn runs with, each with its source, and
 // pickers that write the Ticket's model and effort Tags or clear them.
 // On a WASM Core world.
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
@@ -37,7 +37,7 @@ async function renderDetail(w: World, id: string) {
 }
 
 const section = () => screen.getByRole("group", { name: "Model and effort" });
-// applies is what a value's line says applies, with its source.
+// applies is what a value's note says is used, with its source.
 const applies = (what: "Model" | "Effort") => within(section()).getByTestId(`${what.toLowerCase()}-applies`).textContent;
 const modelPicker = () => within(section()).getByLabelText("Model Tag");
 const effortPicker = () => within(section()).getByRole("combobox", { name: "Effort Tag" });
@@ -46,16 +46,16 @@ describe("the Ticket detail's Model and effort", () => {
   it("shows Claude Code's default when nothing sets them and the Factory reported no flag", async () => {
     const { w, fix } = await seeded();
     await renderDetail(w, fix);
-    expect(applies("Model")).toBe("Model: Claude Code's default");
-    expect(applies("Effort")).toBe("Effort: Claude Code's default");
+    expect(applies("Model")).toBe("Claude Code's default");
+    expect(applies("Effort")).toBe("Claude Code's default");
   });
 
   it("shows the Factory's flag when nothing in Code Central sets them", async () => {
     const { w, s, fix } = await seeded();
     await s.reportModels("acme", { ...report, model_flag: "sonnet", effort_flag: "medium" });
     await renderDetail(w, fix);
-    expect(applies("Model")).toBe("Model: sonnet (Factory flag)");
-    expect(applies("Effort")).toBe("Effort: medium (Factory flag)");
+    expect(applies("Model")).toBe("sonnet (Factory flag)");
+    expect(applies("Effort")).toBe("medium (Factory flag)");
   });
 
   it("names the Project's row for the Ticket's kind of work, or the Project default", async () => {
@@ -63,8 +63,8 @@ describe("the Ticket detail's Model and effort", () => {
     await s.reportModels("acme", { ...report, model_flag: "sonnet" });
     await w.api.setModels("acme", { default: { model: "", effort: "low" }, kinds: [{ kind: "grilling", model: "opus", effort: "" }] });
     await renderDetail(w, grill);
-    expect(applies("Model")).toBe("Model: opus (the Project's grilling row)");
-    expect(applies("Effort")).toBe("Effort: low (Project default)");
+    expect(applies("Model")).toBe("opus (the Project's grilling row)");
+    expect(applies("Effort")).toBe("low (Project default)");
   });
 
   it("shows the Ticket's Tags first", async () => {
@@ -72,8 +72,8 @@ describe("the Ticket detail's Model and effort", () => {
     await w.api.setModels("acme", { default: { model: "sonnet", effort: "low" }, kinds: [] });
     await w.api.setTags("acme", fix, { model: "claude-opus-5-5", effort: "max" });
     await renderDetail(w, fix);
-    expect(applies("Model")).toBe("Model: claude-opus-5-5 (Ticket Tag)");
-    expect(applies("Effort")).toBe("Effort: max (Ticket Tag)");
+    expect(applies("Model")).toBe("claude-opus-5-5 (Ticket Tag)");
+    expect(applies("Effort")).toBe("max (Ticket Tag)");
     expect(modelPicker()).toHaveValue("claude-opus-5-5");
     expect(effortPicker()).toHaveValue("max");
   });
@@ -112,11 +112,11 @@ describe("the Ticket detail's Model and effort", () => {
     expect((await w.api.getTicket("acme", fix)).tags).toEqual({ model: "some-future-model[1m]" });
 
     await r.rerender();
-    expect(applies("Model")).toBe("Model: some-future-model[1m] (Ticket Tag)");
+    expect(applies("Model")).toBe("some-future-model[1m] (Ticket Tag)");
     await userEvent.click(within(section()).getByRole("button", { name: "Clear model" }));
     expect((await w.api.getTicket("acme", fix)).tags).toEqual({});
     await r.rerender();
-    expect(applies("Model")).toBe("Model: sonnet (Project default)");
+    expect(applies("Model")).toBe("sonnet (Project default)");
     expect(modelPicker()).toHaveValue("");
   });
 
@@ -147,14 +147,14 @@ describe("the Ticket panel's Model and effort, live", () => {
     const { w, s, fix } = await seeded();
     window.history.replaceState(null, "", `/?view=inbox&ticket=${fix}`);
     render(<App api={w.api} now={w.now} />);
-    const line = async (text: string) => expect(await screen.findByText(text)).toBeInTheDocument();
-    await line("Model: Claude Code's default");
+    const line = (text: string) => waitFor(() => expect(applies("Model")).toBe(text));
+    await line("Claude Code's default");
 
     await s.reportModels("acme", { ...report, model_flag: "sonnet" });
-    await line("Model: sonnet (Factory flag)");
+    await line("sonnet (Factory flag)");
     await w.api.setModels("acme", { default: { model: "", effort: "" }, kinds: [{ kind: "implementation", model: "opus", effort: "" }] });
-    await line("Model: opus (the Project's implementation row)");
+    await line("opus (the Project's implementation row)");
     await w.api.setTags("acme", fix, { model: "fable" });
-    await line("Model: fable (Ticket Tag)");
+    await line("fable (Ticket Tag)");
   });
 });

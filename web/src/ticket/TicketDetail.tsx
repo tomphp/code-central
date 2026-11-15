@@ -21,7 +21,7 @@ import { useAct } from "./useAct";
 import { CISection } from "./CISection";
 import { Triage } from "./Triage";
 import { ModelChoice } from "./ModelChoice";
-import { ShortId } from "../inbox/ShortId";
+import { ShortId, shortOf } from "../inbox/ShortId";
 import { Button } from "../controls/Button";
 import { ReasonBadge } from "../controls/ReasonBadge";
 import { Select } from "../controls/Select";
@@ -99,14 +99,16 @@ export function TicketDetail(props: TicketDetailProps) {
         ) : (
           <>
             <h2>{t.title}</h2>
-            {ticketEditable(t, !!props.archived) && (
-              <Button type="button"  onClick={() => setEditing(true)}>
-                Edit
-              </Button>
-            )}
-            {retroable(t, !!props.archived) && props.openTicket && (
-              <NewRetro api={props.api} target={t.id} onSubmitted={(r) => props.openTicket?.(r.id)} />
-            )}
+            <span className="ticket-head-actions">
+              {ticketEditable(t, !!props.archived) && (
+                <Button type="button"  onClick={() => setEditing(true)}>
+                  Edit
+                </Button>
+              )}
+              {retroable(t, !!props.archived) && props.openTicket && (
+                <NewRetro api={props.api} target={t.id} onSubmitted={(r) => props.openTicket?.(r.id)} />
+              )}
+            </span>
           </>
         )}
       </header>
@@ -133,18 +135,14 @@ type TicketBodyProps = Omit<TicketDetailProps, "ticket" | "error"> & {
 // comments and edits merged by time.
 function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSpec, openTicket, archived, editing }: TicketBodyProps) {
   const claims = [...t.claims].sort((a, b) => b.number - a.number);
-  const specName = `${t.spec.id} ${t.spec.title}`;
   return (
     <article aria-label="Ticket details" className="ticket-body">
       <div className="meta">
-        {t.spec.id &&
-          (openSpec ? (
-            <button className="link" onClick={() => openSpec(t.spec.id)}>
-              {specName}
-            </button>
-          ) : (
-            <span>{specName}</span>
-          ))}
+        {t.spec.id && (
+          <>
+            Spec <SpecRef ticket={t} openSpec={openSpec} />
+          </>
+        )}
         {t.labels.map((l) => (
           <span key={l} className="label">
             {l}
@@ -166,15 +164,22 @@ function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSp
           {t.blockers.map((b, i) => (
             <span key={b.id}>
               {i > 0 && ", "}
-              {b.id} {b.title} ({b.state}
+              <span className="tid" title={`${b.id} ${b.title}`}>
+                {shortOf(b.id)}
+              </span>{" "}
+              ({b.state}
               {b.cleared && <> · no longer blocking</>})
             </span>
           ))}
         </p>
       )}
       {openTicket && <RetroList retros={t.retros} select={openTicket} />}
-      <TicketAutoAccept api={api} project={project} ticket={t} specLabels={specLabels} openSpec={openSpec} archived={archived} />
-      <ModelChoice api={api} project={project} ticket={t} reported={reported} />
+      {/* The controls share a grid, so each lines up after its label. */}
+      <section aria-label="Ticket controls" className="ticket-controls">
+        <TicketAutoAccept api={api} project={project} ticket={t} specLabels={specLabels} openSpec={openSpec} archived={archived} />
+        <ModelChoice api={api} project={project} ticket={t} reported={reported} />
+        <MoveControl key={`${t.id} ${t.state}`} api={api} project={project} ticket={t} />
+      </section>
       {/* A Ticket in a CI item has the CI section in its action panel,
           with the failure options, so it isn't shown here too. */}
       {!isCIItemReason(t.needs_me_reason) && (
@@ -214,7 +219,6 @@ function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSp
           ))}
         </ul>
       )}
-      <MoveControl key={`${t.id} ${t.state}`} api={api} project={project} ticket={t} />
       <History ticket={t} now={now} />
     </article>
   );
@@ -226,7 +230,6 @@ function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSp
 // note says so. It waits for the Spec's Labels.
 function TicketAutoAccept({ api, project, ticket: t, specLabels, openSpec, archived }: Pick<TicketBodyProps, "api" | "project" | "ticket" | "specLabels" | "openSpec" | "archived">) {
   if (!specLabels || !canAutoAccept(t, specLabels) || t.state === "Accepted" || t.state === "Done" || t.state === "Cancelled") return null;
-  const specName = `${t.spec.id} ${t.spec.title}`;
   return (
     <AutoAcceptSwitch
       api={api}
@@ -238,18 +241,26 @@ function TicketAutoAccept({ api, project, ticket: t, specLabels, openSpec, archi
       viaSpec={
         specLabels.includes(AUTO_ACCEPT_LABEL) && (
           <>
-            Auto-accepted via its Spec's Label:{" "}
-            {openSpec ? (
-              <button className="link" onClick={() => openSpec(t.spec.id)}>
-                {specName}
-              </button>
-            ) : (
-              specName
-            )}
+            Auto-accepted via its Spec's Label: <SpecRef ticket={t} openSpec={openSpec} />
           </>
         )
       }
     />
+  );
+}
+
+// SpecRef is the Ticket's Spec by its Short ID, always in the Ticket's
+// Project, with its title on hover; a link where openSpec can open it.
+function SpecRef({ ticket: t, openSpec }: { ticket: TicketView; openSpec?(spec: string): void }) {
+  const name = `${t.spec.id} ${t.spec.title}`;
+  return openSpec ? (
+    <button className="link" title={name} aria-label={name} onClick={() => openSpec(t.spec.id)}>
+      {shortOf(t.spec.id)}
+    </button>
+  ) : (
+    <span className="tid" title={name}>
+      {shortOf(t.spec.id)}
+    </span>
   );
 }
 
@@ -304,13 +315,13 @@ function MoveControl({ api, project, ticket: t }: { api: Api; project: string; t
         run(() => api.act(project, t.id, "move", { to_state: to }));
       }}
     >
-      <label>
-        <span className="muted small">Move to</span>{" "}
-        <Select value={to} onChange={(v) => setTo(v as State)} options={targets.map((s) => ({ value: s }))} />
-      </label>{" "}
-      <Button  disabled={busy}>
-        Move
-      </Button>
+      <span>Move to</span>
+      <span className="ticket-control">
+        <Select aria-label="Move to" value={to} onChange={(v) => setTo(v as State)} options={targets.map((s) => ({ value: s }))} />
+        <Button  disabled={busy}>
+          Move
+        </Button>
+      </span>
       {error && (
         <p role="alert" className="warning">
           {error}

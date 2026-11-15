@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { newWorld, type World } from "../api/core/core";
 import { scenario, type Scenario } from "../api/scenario";
 import type { CIRunView, TicketView } from "../api/types";
+import { shortOf } from "../inbox/ShortId";
 import { TicketDetail } from "./TicketDetail";
 
 const MIN = 60_000;
@@ -57,7 +58,8 @@ describe("the Ticket detail", () => {
   it("shows the Spec, Labels, description and Claim activity", async () => {
     const { w, id, spec } = await seeded();
     const d = await detailOf(w, id);
-    expect(d).toHaveTextContent(`${spec} Accounts`);
+    // The Spec by its Short ID, with its title on hover.
+    expect(within(d).getByText(shortOf(spec))).toHaveAttribute("title", `${spec} Accounts`);
     expect(within(d).getByText("auth")).toBeInTheDocument();
     expect(within(d).getByText("bug")).toBeInTheDocument();
     expect(d).toHaveTextContent("Login fails after the session expires.");
@@ -133,8 +135,10 @@ describe("the Ticket detail", () => {
     const id = await s.ticket("acme", { title: "Login page", spec });
     for (const b of [api, sessions, cookies]) await s.addBlocker("acme", id, b);
     expect(await detailOf(w, id)).toHaveTextContent(
-      `Blocked by ${api} Login API (Accepted · no longer blocking), ${sessions} Sessions (Accepted), ${cookies} Cookies (Ready)`,
+      `Blocked by ${shortOf(api)} (Accepted · no longer blocking), ${shortOf(sessions)} (Accepted), ${shortOf(cookies)} (Ready)`,
     );
+    // Each Blocker's title is on hover.
+    expect(screen.getByText(shortOf(sessions))).toHaveAttribute("title", `${sessions} Sessions`);
   });
 
   it("keeps a collapsed history of moves, comments and edits, newest first", async () => {
