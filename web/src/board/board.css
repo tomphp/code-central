@@ -16,6 +16,8 @@
 .board-columns-menu label:hover { background: var(--surface-2); }
 .board-swatch { width: 8px; height: 8px; border-radius: 2px; background: var(--st); flex: none; }
 
+/* A brief note under the header, as Focus Mode's. */
+.board-note { margin: 8px auto 0; padding: 6px 14px; border-radius: 6px; background: var(--border); color: var(--muted); font-size: 16px; }
 .board-scroll { flex: 1; min-height: 0; overflow: auto; }
 .board-grid { padding: 0 16px 24px; min-width: min-content; }
 .board-heads, .board-cells { display: grid; grid-template-columns: repeat(var(--cols), minmax(165px, 1fr)); column-gap: 8px; }

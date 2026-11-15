@@ -6,7 +6,7 @@
 // the shared grouping, + New ▾ and Back to the Inbox.
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type { Api } from "../api/api";
 import { newWorld, type World } from "../api/core/core";
@@ -911,39 +911,64 @@ describe("the Board's Spec popup", () => {
 });
 
 describe("+ New ▾ on the Board", () => {
-  it("submits a Requirement and opens its Spec in the Requirements list", async () => {
-    const fake = await world();
-    renderApp(fake, "/?view=board&project=acme");
-    await loaded();
+  const url = "/?view=board&project=acme";
+  const kinds = [
+    ["Requirement", "New requirement", "Submit requirement"],
+    ["Map", "New Map", "Submit map"],
+    ["Small Change", "New Small Change", "Submit small change"],
+  ] as const;
+  // create picks kind from + New ▾ and submits some text.
+  async function create(kind: string, dialog: string, button: string) {
     await userEvent.click(within(board()).getByRole("button", { name: "More to create" }));
-    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Requirement" }));
-    const modal = screen.getByRole("dialog", { name: "New requirement" });
+    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: kind }));
+    const modal = screen.getByRole("dialog", { name: dialog });
     await userEvent.type(within(modal).getByRole("textbox"), "Offline mode");
-    await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
+    await userEvent.click(within(modal).getByRole("button", { name: button }));
+  }
+
+  it.each(kinds)("stays on the Board after a %s, saying so, with nothing opened", async (kind, dialog, button) => {
+    renderApp(await world(), url);
+    await loaded();
+    await create(kind, dialog, button);
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    const q = new URLSearchParams(window.location.search);
-    expect(q.get("view")).toBe("inbox");
-    expect(q.get("project")).toBe("acme");
-    expect(q.get("list")).toBe("requirements");
-    expect(q.get("requirement")).toBe("acme-7");
+    expect(within(board()).getByRole("status")).toHaveTextContent(`${kind} added`);
+    expect(window.location.search).toBe("?view=board&project=acme");
   });
 
-  it("submits a Small Change and opens its Ticket in the Inbox", async () => {
-    const fake = await world();
-    renderApp(fake, "/?view=board&project=acme");
+  it("keeps the columns, grouping and folded lanes", async () => {
+    const start = "/?view=board&project=acme&group=spec&hide=Done&needs=1";
+    renderApp(await world(), start);
     await loaded();
-    await userEvent.click(within(board()).getByRole("button", { name: "More to create" }));
-    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Small Change" }));
-    const modal = screen.getByRole("dialog", { name: "New Small Change" });
-    await userEvent.type(within(modal).getByRole("textbox", { name: "Small Change" }), "Rename the button");
-    await userEvent.click(within(modal).getByRole("button", { name: "Submit small change" }));
+    const login = () => within(within(board()).getByRole("group", { name: "Lane: Login" })).getByRole("button", { name: "Login" });
+    await userEvent.click(login());
+    await create("Small Change", "New Small Change", "Submit small change");
 
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    const q = new URLSearchParams(window.location.search);
-    expect(q.get("view")).toBe("inbox");
-    expect(q.get("project")).toBe("acme");
-    expect(q.get("ticket")).toBe("acme-8");
+    expect(window.location.search).toBe(start.slice(1));
+    expect(login()).toHaveAttribute("aria-expanded", "false");
+  });
+
+  describe("the note", () => {
+    beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true, advanceTimeDelta: 1 }));
+    afterEach(() => vi.useRealTimers());
+
+    it("goes after 4 s, and a second submit's note replaces the first and restarts the 4 s", async () => {
+      renderApp(await world(), url);
+      await loaded();
+      await create("Requirement", "New requirement", "Submit requirement");
+      expect(await within(board()).findByRole("status")).toHaveTextContent("Requirement added");
+
+      act(() => vi.advanceTimersByTime(3000));
+      await create("Small Change", "New Small Change", "Submit small change");
+      expect(await within(board()).findByRole("status")).toHaveTextContent("Small Change added");
+      expect(within(board()).getAllByRole("status")).toHaveLength(1);
+
+      act(() => vi.advanceTimersByTime(3000));
+      expect(within(board()).getByRole("status")).toHaveTextContent("Small Change added");
+      act(() => vi.advanceTimersByTime(1500));
+      expect(within(board()).queryByRole("status")).toBeNull();
+    });
   });
 });
 
