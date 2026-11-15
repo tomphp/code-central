@@ -92,20 +92,6 @@ func (f *factory) reportStuck(ctx context.Context, t *turn, end turnEnd) bool {
 	}})
 }
 
-// how is how the turn ended: its exit code or signal, subtype and
-// terminal reason.
-func (t turnEnd) how() string {
-	s := t.exit()
-	if t.Result == nil {
-		return s + ", with no result message"
-	}
-	s += ", subtype " + t.Result.Subtype
-	if t.Result.TerminalReason != "" {
-		s += ", terminal_reason " + t.Result.TerminalReason
-	}
-	return s
-}
-
 // whereWorkStands names the worktree, its branch and its last commit.
 func (f *factory) whereWorkStands(dir string) string {
 	branch := "a detached HEAD"
