@@ -3,9 +3,9 @@
 // for the Project, and the pop-up it opens. The pop-up follows the
 // Conversation and, once open, stays open if Chat stops being available.
 import { useState } from "react";
-import type { Api } from "../api/api";
 import type { ApiError, ModelRow, ProjectRow } from "../api/types";
 import { Button } from "../controls/Button";
+import { useApi } from "../live";
 import "./chat.css";
 import { ChatPopup } from "./ChatPopup";
 import { useConversation } from "./useConversation";
@@ -15,26 +15,23 @@ import { useConversation } from "./useConversation";
 export const chatAvailable = (project: ProjectRow) => project.factory_status.factories.some((f) => f.status === "online" && f.chat);
 
 export interface ChatDockProps {
-  api: Api;
   // project is the Project the view is scoped to; none in the all-Projects scope.
   project?: ProjectRow;
-  // version is the live version, which bumps on every change notice,
-  // chat.changed among them, and prompts a reread of the Conversation.
-  version: number;
 }
 
 // ChatDock is the icon and pop-up for the view's Project, or nothing in the
 // all-Projects scope.
-export function ChatDock({ api, project, version }: ChatDockProps) {
+export function ChatDock({ project }: ChatDockProps) {
   // Keyed by Project, so a pop-up never carries over to another one.
-  return project ? <Dock key={project.key} api={api} project={project} version={version} /> : null;
+  return project ? <Dock key={project.key} project={project} /> : null;
 }
 
 // Dock holds the open state and the Conversation for one Project.
-function Dock({ api, project, version }: ChatDockProps & { project: ProjectRow }) {
+function Dock({ project }: { project: ProjectRow }) {
+  const api = useApi();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<ApiError>();
-  const conversation = useConversation(api, project.key, open, version);
+  const conversation = useConversation(project.key, open);
   const available = chatAvailable(project);
 
   // act runs one Chat write; the stream shows its effects, a refusal shows

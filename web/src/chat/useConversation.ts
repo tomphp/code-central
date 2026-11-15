@@ -3,8 +3,8 @@
 // change notice prompts bring its availability, Factory and tail up to date,
 // which the stream doesn't carry.
 import { useEffect, useState } from "react";
-import type { Api } from "../api/api";
 import type { ChatMessage, Conversation } from "../api/types";
+import { useApi, useVersion } from "../live";
 
 // withLast changes the last Chat Message, the Claude one a reply fills.
 const withLast = (c: Conversation, change: (m: ChatMessage) => ChatMessage): Conversation => {
@@ -16,7 +16,9 @@ const withLast = (c: Conversation, change: (m: ChatMessage) => ChatMessage): Con
 // useConversation is the Project's current Conversation as the stream last
 // described it, undefined until the stream first sends it. It is dropped
 // when inactive, so a reopened pop-up never shows a stale one.
-export function useConversation(api: Api, project: string, active: boolean, version: number): Conversation | undefined {
+export function useConversation(project: string, active: boolean): Conversation | undefined {
+  const api = useApi();
+  const version = useVersion();
   const [conversation, setConversation] = useState<Conversation>();
 
   useEffect(() => {

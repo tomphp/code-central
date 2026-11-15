@@ -83,7 +83,7 @@ function Views({ now }: { now: () => Date }) {
       <NeedsMeProvider value={needsMe}>
         <IdLinksContext.Provider value={idLinks}>
         {view()}
-        <ChatDock api={api} project={inbox.data?.projects.find((p) => p.key === scope.project)} version={version} />
+        <ChatDock project={inbox.data?.projects.find((p) => p.key === scope.project)} />
         {popup.open && inbox.data && (
           <FocusPopup mode="queue" api={api} now={now()} version={version} data={inbox.data} project={scope.project} onClose={popup.close} navigate={navigate} />
         )}
