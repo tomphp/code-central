@@ -1,5 +1,5 @@
-// The Auto-accept switch (Spec code-central-589) on a Ticket's detail and on
-// the Spec and Requirement panes: the real App on a WASM Core world.
+// The Auto-accept switch (Spec code-central-589), an Off/On toggle group, on
+// a Ticket's detail and on the Spec and Requirement panes: the real App on a WASM Core world.
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -14,7 +14,12 @@ function renderApp(w: World, url: string) {
 }
 
 const detail = () => screen.getByRole("complementary", { name: "Ticket" });
-const switchIn = (el: HTMLElement) => within(el).findByRole("switch", { name: "Auto-accept" });
+// switchIn finds the Auto-accept toggle group, isOn reads it and turn
+// presses its On or Off.
+const switchIn = (el: HTMLElement) => within(el).findByRole("group", { name: "Auto-accept" });
+const isOn = (sw: HTMLElement) => within(sw).getByRole("button", { name: "On" }).getAttribute("aria-pressed") === "true";
+const turn = (sw: HTMLElement, to: "On" | "Off") => userEvent.click(within(sw).getByRole("button", { name: to }));
+const buttonsIn = (sw: HTMLElement) => within(sw).getAllByRole("button");
 
 // seeded makes the Project acme with one Spec, "Accounts", labelled as asked.
 async function seeded(opts: { specLabels?: string[]; specTitle?: string } = {}) {
@@ -40,9 +45,9 @@ describe("the Auto-accept switch on a Ticket", () => {
     renderApp(w, ticketUrl(id));
 
     const sw = await switchIn(detail());
-    expect(sw).toBeChecked();
-    await userEvent.click(sw);
-    await waitFor(() => expect(sw).not.toBeChecked());
+    expect(isOn(sw)).toBe(true);
+    await turn(sw, "Off");
+    await waitFor(() => expect(isOn(sw)).toBe(false));
     expect((await w.api.getTicket("acme", id)).labels).toEqual([]);
   });
 
@@ -52,9 +57,9 @@ describe("the Auto-accept switch on a Ticket", () => {
     renderApp(w, ticketUrl(id));
 
     const sw = await switchIn(detail());
-    expect(sw).not.toBeChecked();
-    await userEvent.click(sw);
-    await waitFor(() => expect(sw).toBeChecked());
+    expect(isOn(sw)).toBe(false);
+    await turn(sw, "On");
+    await waitFor(() => expect(isOn(sw)).toBe(true));
     expect(screen.queryByRole("form", { name: "Turn on auto-accept" })).toBeNull();
     expect((await w.api.getTicket("acme", id)).labels).toEqual(["auto-accept"]);
   });
@@ -65,15 +70,15 @@ describe("the Auto-accept switch on a Ticket", () => {
     renderApp(w, ticketUrl(id));
 
     const sw = await switchIn(detail());
-    await userEvent.click(sw);
+    await turn(sw, "On");
     const box = screen.getByRole("form", { name: "Turn on auto-accept" });
     expect(box).toHaveTextContent("This will accept 1 Ticket now In Review. Turn on?");
     await userEvent.click(within(box).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("form", { name: "Turn on auto-accept" })).toBeNull();
-    expect(sw).not.toBeChecked();
+    expect(isOn(sw)).toBe(false);
     expect((await w.api.getTicket("acme", id)).labels).toEqual([]);
 
-    await userEvent.click(sw);
+    await turn(sw, "On");
     await userEvent.click(within(screen.getByRole("form", { name: "Turn on auto-accept" })).getByRole("button", { name: "Turn on" }));
     await waitFor(async () => expect((await w.api.getTicket("acme", id)).state).toBe("Accepted"));
     expect((await w.api.getTicket("acme", id)).moves.at(-1)).toMatchObject({ actor: "human", cause: "ticket-label" });
@@ -85,7 +90,7 @@ describe("the Auto-accept switch on a Ticket", () => {
     renderApp(w, ticketUrl(id));
 
     const sw = await switchIn(detail());
-    expect(sw).not.toBeChecked();
+    expect(isOn(sw)).toBe(false);
     expect(detail()).toHaveTextContent("Auto-accepted via its Spec's Label");
     // The note's link is the second Spec link after the one in the meta line.
     const links = within(detail()).getAllByRole("button", { name: `${spec} Accounts` });
@@ -105,7 +110,7 @@ describe("the Auto-accept switch on a Ticket", () => {
 
     await within(detail()).findByRole("heading", { name: "The one" });
     await act(async () => {});
-    expect(within(detail()).queryByRole("switch")).toBeNull();
+    expect(within(detail()).queryByRole("group", { name: "Auto-accept" })).toBeNull();
   });
 
   it("shows a refused write's error by the switch and leaves it as it was", async () => {
@@ -119,9 +124,9 @@ describe("the Auto-accept switch on a Ticket", () => {
     renderApp(w, ticketUrl(id));
 
     const sw = await switchIn(detail());
-    await userEvent.click(sw);
+    await turn(sw, "On");
     expect(await within(detail()).findByRole("alert")).toHaveTextContent("the human only");
-    expect(sw).not.toBeChecked();
+    expect(isOn(sw)).toBe(false);
     w.api.addLabels = addLabels;
   });
 });
@@ -136,7 +141,7 @@ describe("the Auto-accept switch on a Spec", () => {
     renderApp(w, `/?view=inbox&requirement=${spec}`);
 
     const pane = await screen.findByRole("region", { name: "Spec" });
-    await userEvent.click(await switchIn(pane));
+    await turn(await switchIn(pane), "On");
     const box = within(pane).getByRole("form", { name: "Turn on auto-accept" });
     expect(box).toHaveTextContent("This will accept 2 Tickets now In Review. Turn on?");
     await userEvent.click(within(box).getByRole("button", { name: "Turn on" }));
@@ -144,7 +149,7 @@ describe("the Auto-accept switch on a Spec", () => {
     await waitFor(async () => expect((await w.api.getTicket("acme", a)).state).toBe("Accepted"));
     expect((await w.api.getTicket("acme", b)).state).toBe("Accepted");
     expect((await w.api.getTicket("acme", a)).moves.at(-1)).toMatchObject({ cause: "spec-label" });
-    expect(await within(pane).findByRole("switch", { name: "Auto-accept" })).toBeChecked();
+    expect(isOn(await switchIn(pane))).toBe(true);
   });
 
   it("turns on at once with nothing In Review, and off without asking, on a Long-lived Spec too", async () => {
@@ -154,11 +159,11 @@ describe("the Auto-accept switch on a Spec", () => {
 
     const pane = await screen.findByRole("region", { name: "Spec" });
     const sw = await switchIn(pane);
-    await userEvent.click(sw);
-    await waitFor(() => expect(sw).toBeChecked());
+    await turn(sw, "On");
+    await waitFor(() => expect(isOn(sw)).toBe(true));
     expect((await w.api.getSpec("acme", spec)).labels).toEqual(["long-lived", "auto-accept"]);
-    await userEvent.click(sw);
-    await waitFor(() => expect(sw).not.toBeChecked());
+    await turn(sw, "Off");
+    await waitFor(() => expect(isOn(sw)).toBe(false));
     expect((await w.api.getSpec("acme", spec)).labels).toEqual(["long-lived"]);
   });
 
@@ -169,9 +174,9 @@ describe("the Auto-accept switch on a Spec", () => {
     renderApp(w, `/?view=inbox&requirement=${id}`);
 
     const sw = await switchIn(await screen.findByRole("region", { name: "Requirement" }));
-    expect(sw).not.toBeDisabled();
-    await userEvent.click(sw);
-    await waitFor(() => expect(sw).toBeChecked());
+    for (const b of buttonsIn(sw)) expect(b).not.toBeDisabled();
+    await turn(sw, "On");
+    await waitFor(() => expect(isOn(sw)).toBe(true));
     expect((await w.api.getSpec("acme", id)).labels).toContain("auto-accept");
   });
 
@@ -182,7 +187,7 @@ describe("the Auto-accept switch on a Spec", () => {
     await w.api.archiveProject("acme");
     renderApp(w, `/?view=inbox&requirement=${spec}`);
 
-    expect(await switchIn(await screen.findByRole("region", { name: "Spec" }))).toBeDisabled();
+    for (const b of buttonsIn(await switchIn(await screen.findByRole("region", { name: "Spec" })))) expect(b).toBeDisabled();
   });
 
   it("is absent on a finished Spec", async () => {
@@ -192,7 +197,7 @@ describe("the Auto-accept switch on a Spec", () => {
 
     const pane = await screen.findByRole("region", { name: "Spec" });
     await within(pane).findByText("Login page");
-    expect(within(pane).queryByRole("switch")).toBeNull();
+    expect(within(pane).queryByRole("group", { name: "Auto-accept" })).toBeNull();
   });
 
   it("is absent on the Map pane", async () => {
@@ -201,6 +206,6 @@ describe("the Auto-accept switch on a Spec", () => {
     renderApp(w, `/?view=inbox&requirement=${spec}`);
 
     const pane = await screen.findByRole("region", { name: "Map" });
-    expect(within(pane).queryByRole("switch")).toBeNull();
+    expect(within(pane).queryByRole("group", { name: "Auto-accept" })).toBeNull();
   });
 });

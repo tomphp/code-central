@@ -1,7 +1,7 @@
-// The In Review panel: the agent's finish summary, then Accept (on a spec
-// Stage, Split into Tickets and Implement, with the Spec recommendation
-// highlighted), and Reject, which can't be sent without a comment saying
-// what to change.
+// The In Review panel: the agent's finish summary, the comment saying what
+// to change, then one row of decisions: Accept (on a spec Stage, Split into
+// Tickets and Implement, with the Spec recommendation highlighted) and
+// Reject, which can't be sent without that comment.
 import { Fragment, useId, useState } from "react";
 import "../../api/actions/accept";
 import "../../api/actions/implement";
@@ -47,7 +47,11 @@ export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
           {error}
         </p>
       )}
-      <p>
+      <label className="reject-comment">
+        <span className="small muted">What to change (required to reject)</span>
+        <textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
+      </label>
+      <div className="review-actions">
         {t.labels.includes("stage:spec") ? (
           specChoices.map(({ recommendation, action, label }) => {
             const recommended = t.recommendation === recommendation;
@@ -77,12 +81,6 @@ export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
             Accept
           </Button>
         )}
-      </p>
-      <label className="reject-comment">
-        <span className="small muted">What to change (required to reject)</span>
-        <textarea rows={2} value={comment} onChange={(e) => setComment(e.target.value)} />
-      </label>
-      <p>
         <Button
           type="button"
           variant="danger"
@@ -91,7 +89,7 @@ export function ReviewPanel({ api, project, ticket: t }: PanelProps) {
         >
           Reject
         </Button>
-      </p>
+      </div>
     </section>
   );
 }

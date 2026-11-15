@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import type { Api } from "../api/api";
 import { Button } from "../controls/Button";
+import { ToggleGroup } from "../controls/ToggleGroup";
 import { AUTO_ACCEPT_LABEL } from "./autoAccept";
 import { useAct } from "./useAct";
 
@@ -40,21 +41,25 @@ export function AutoAcceptSwitch({ api, project, target, on, accepts, archived, 
 
   return (
     <div className="auto-accept-switch">
-      <label>
-        <input
-          type="checkbox"
-          role="switch"
-          checked={shown}
+      <div className="auto-accept-row small">
+        <span>Auto-accept</span>
+        <ToggleGroup
+          label="Auto-accept"
+          options={[
+            { value: "off", label: "Off" },
+            { value: "on", label: "On" },
+          ]}
+          value={shown ? "on" : "off"}
           disabled={archived || busy}
-          onChange={(e) => {
-            if (!e.target.checked) write(false);
+          onChange={(v) => {
+            if (v === (shown ? "on" : "off")) return;
+            if (v === "off") write(false);
             else if (accepts > 0) setAsking(true);
             else write(true);
           }}
-        />{" "}
-        Auto-accept
-      </label>
-      {viaSpec && <span className="muted small"> {viaSpec}</span>}
+        />
+        {viaSpec && <span className="muted small">{viaSpec}</span>}
+      </div>
       {asking && !shown && (
         <form
           aria-label="Turn on auto-accept"

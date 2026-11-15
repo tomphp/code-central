@@ -392,9 +392,9 @@ describe("the Ticket pane's body", () => {
     const id = await s.ticket("acme", { title: "Pick a theme" });
     const t = await w.api.getTicket("acme", id);
     const { rerender } = render(<TicketDetail api={w.api} project="acme" ticket={t} now={w.now()} />);
-    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Auto-accept" })).toBeNull();
     rerender(<TicketDetail api={w.api} project="acme" ticket={t} now={w.now()} specLabels={[]} />);
-    expect(screen.getByRole("switch")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Auto-accept" })).toBeInTheDocument();
   });
 
   it("opens its Spec through openSpec", async () => {

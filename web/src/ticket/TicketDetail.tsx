@@ -86,7 +86,8 @@ export function TicketDetail(props: TicketDetailProps) {
       <header className="ticket-head">
         <ShortId id={t.id} /> <StateChip state={t.state} />
         <WaitingBadge waiting={t.waiting_for_spec} />
-        {t.needs_me_reason && <ReasonBadge reason={t.needs_me_reason} />}
+        {/* The In Review reason only repeats the State chip. */}
+        {t.needs_me_reason && t.needs_me_reason !== "in_review" && <ReasonBadge reason={t.needs_me_reason} />}
         {editing ? (
           <EditForm
             title={t.title}
@@ -125,8 +126,8 @@ type TicketBodyProps = Omit<TicketDetailProps, "ticket" | "error"> & {
 // TicketBody is everything about a Ticket below its action panel: Spec,
 // Labels, an Incoming Issue's triage actions (in the action panel instead
 // while it is a New issue), description, Blockers (with a gated one's CI
-// result, and whether it no longer blocks), the model and effort its next
-// turn runs with and their pickers, its CI section when it has CI Runs
+// result, and whether it no longer blocks), its Auto-accept switch and the
+// model and effort its next turn runs with and their pickers, its CI section when it has CI Runs
 // (in the action panel instead while CI failed), Claim activity with
 // each Claim's Live section, move, and a collapsed history of moves,
 // comments and edits merged by time.
@@ -153,7 +154,6 @@ function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSp
         <PullRequestBadge pr={t.pull_request} />
         <OpenExternal link={t.link} />
       </div>
-      <TicketAutoAccept api={api} project={project} ticket={t} specLabels={specLabels} openSpec={openSpec} archived={archived} />
       {t.link && !t.link.detached && <LinkedNote key={t.id} api={api} project={project} ticket={t} />}
       {/* A New issue's triage actions are its action panel, so they
           aren't shown here too. */}
@@ -173,6 +173,7 @@ function TicketBody({ api, project, ticket: t, specLabels, now, reported, openSp
         </p>
       )}
       {openTicket && <RetroList retros={t.retros} select={openTicket} />}
+      <TicketAutoAccept api={api} project={project} ticket={t} specLabels={specLabels} openSpec={openSpec} archived={archived} />
       <ModelChoice api={api} project={project} ticket={t} reported={reported} />
       {/* A Ticket in a CI item has the CI section in its action panel,
           with the failure options, so it isn't shown here too. */}

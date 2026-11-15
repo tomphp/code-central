@@ -78,7 +78,7 @@ textarea { width: 100%; resize: vertical; }
 .reason-closed_externally { --rc: var(--r-external); }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--rc, var(--r-answer)); flex: none; }
 .reason { font-size: 11px; color: var(--rc); display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; flex: none; }
-.ticket-head .reason, .impl-list .reason { margin-left: 6px; }
+.impl-list .reason { margin-left: 6px; }
 
 /* The triage inbox. */
 .inbox { display: grid; grid-template-columns: 14rem 24rem 1fr; height: 100vh; }
@@ -166,6 +166,10 @@ a.filter { text-decoration: none; }
 .inbox-detail { overflow: auto; padding: 20px 24px 100px; }
 .ticket-head h2 { font-size: 19px; margin-top: 6px; }
 .ticket-body { margin-top: 16px; }
+.ticket-body .auto-accept-switch { margin: 12px 0 6px; }
+.auto-accept-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* On a Ticket it lines up with the Model and Effort rows below it. */
+.ticket-body .auto-accept-row > span:first-child { min-width: 16em; }
 .ticket-body .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; color: var(--muted); font-size: 12px; margin-bottom: 6px; }
 .history { list-style: none; padding: 0; font-size: 12.5px; }
 .ticket-body details > summary { cursor: pointer; color: var(--muted); font-size: 12.5px; margin: 8px 0; }
@@ -357,8 +361,9 @@ a.link-badge:hover { text-decoration: underline; }
 .factory-list { margin: 0; padding-left: 1.1rem; }
 .factory-tooltip .factory-list { padding-left: 0; list-style: none; }
 .factory-empty { margin: 0; }
-.ticket-head h2 { display: inline; }
-.ticket-head > .btn { margin-left: 8px; }
+.ticket-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.ticket-head h2 { display: inline; margin: 0; }
+.ticket-head > .edit-form { flex-basis: 100%; }
 .edit-form { display: flex; flex-direction: column; gap: 8px; margin: 6px 0; }
 .edit-form input { font: inherit; font-size: 16px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 .edit-form .edit-preview { border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; min-height: 120px; }
@@ -383,6 +388,7 @@ a.link-badge:hover { text-decoration: underline; }
 .bs-toggle button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; padding: 4px 12px; cursor: pointer; white-space: nowrap; }
 .bs-toggle button + button { border-left: 1px solid var(--border); }
 .bs-toggle button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.bs-toggle button:disabled { cursor: default; opacity: .6; }
 /* The Spec row (code-central-458): a chevron, then a row link to the Spec. */
 .spec-row { border-bottom: 1px solid var(--border); }
 .spec-row.needs { border-left: 3px solid color-mix(in srgb, var(--r-answer) 55%, transparent); }
