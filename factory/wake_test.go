@@ -230,3 +230,52 @@ func TestADrainingFactoryClaimsNothingOnAWake(t *testing.T) {
 		t.Errorf("%s is %s and claude ran %d times; a draining Factory claims nothing", id, s, len(h.Calls()))
 	}
 }
+
+// A turn ending frees a --parallel slot, so it wakes the poll loop itself,
+// with the long-poll held back and no tick: the next Ticket is claimed at
+// once, however the turn ended.
+func TestAnEndingTurnFillsItsFreedSlotAtOnce(t *testing.T) {
+	t.Parallel()
+	for name, end := range map[string][]factorytest.Step{
+		"finished": {factorytest.Finish("Done."), factorytest.Result("success")},
+		"failed":   {factorytest.Say("Partway."), factorytest.Result("error_during_execution")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			h := factorytest.New(t)
+			first := h.ReadyTicket("First")
+			second := h.ReadyTicket("Second")
+			h.Script(first, append([]factorytest.Step{factorytest.Wait()}, end...)...)
+			h.Start("--parallel", "1")
+			h.WaitFor("the first turn", func() bool { return len(h.Calls()) == 1 })
+			if s := h.Ticket(second).State; s != store.Ready {
+				t.Fatalf("%s is %s while the only slot is full, want Ready", second, s)
+			}
+
+			h.Continue(first)
+			h.WaitForState(second, store.InReview)
+		})
+	}
+}
+
+// A draining Factory ignores the local wake: it claims nothing when a
+// turn ends.
+func TestADrainingFactoryClaimsNothingWhenATurnEnds(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	running := h.ReadyTicket("Nearly done")
+	h.Script(running, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
+	r := h.Start("--parallel", "1")
+	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	id := h.ReadyTicket("Too late")
+
+	r.Interrupt()
+	r.WaitForOutput("draining: waiting on 1 running turn(s)")
+	h.Continue(running)
+	if code := r.Exited(); code != 0 {
+		t.Errorf("exit code %d, want 0", code)
+	}
+	if s := h.Ticket(id).State; s != store.Ready || len(h.Calls()) != 1 {
+		t.Errorf("%s is %s and claude ran %d times; a draining Factory claims nothing", id, s, len(h.Calls()))
+	}
+}
