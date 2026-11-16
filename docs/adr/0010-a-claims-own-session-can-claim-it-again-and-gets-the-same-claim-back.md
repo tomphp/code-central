@@ -11,3 +11,7 @@ Factory sessions call `claim` on Tickets the Factory already holds for them: the
 ## Consequences
 
 The session ID, which the caller supplies, now gets the Claim ID back. That weakens the Claim ID as sole proof, which is acceptable for a local, single-user service whose session IDs aren't shown anywhere another agent would pick them up by chance. A session that loses its Claim ID, for example after context compaction, can get it back by claiming again with its session ID.
+
+## Further Notes
+
+The Factory relies on this to recover a claim whose answer was lost: it claims the Ticket again with the same session ID and gets the same Claim back if the first claim went through (Spec code-central-779).

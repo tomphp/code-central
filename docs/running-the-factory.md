@@ -70,6 +70,13 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    acme-shop-2 claimed (grilling): "Grilling: Format prices for display" in Spec acme-shop-1; worktree /Users/you/src/acme-shop.worktrees/acme-shop-2; resume: claude --resume 37f7978d-a171-4aee-b737-220845e8b7a8
    ```
 
+   If Code Central can't be reached, or its answer is cut off, the claim may still have gone through, so the Factory claims the same Ticket again at once, up to three more times, a second apart. Code Central gives back the same Claim, so the Ticket is never left In Progress under a Claim nobody holds. The Factory prints a line when the answer is lost and another when claiming again recovers it:
+
+   ```text
+   acme-shop-2: claim: the answer was lost (<the error>): claiming it again
+   acme-shop-2: claim: the answer came back on claiming it again
+   ```
+
    Each Claim gets a worktree of its own under `~/src/acme-shop.worktrees`, named after the Ticket. A Stage's worktree is read-only and detached at the base's tip; the Stages write to Code Central, not to the repository.
 
    The session's prompt is the Stage's skill and the Ticket, `/grilling acme-shop-2`. The rest of what the session needs, its Ticket and Claim, how the Factory runs it and the Stage Guide, goes once into its system prompt (`--append-system-prompt`), which every resume passes again so a session keeps it after a compaction. The guide is the Project's own, built by Code Central and returned by `claim`, so the Factory needs no flag for what it says: the Project's [Stage Guides](setting-up-a-project.md#stage-guides) settings decide it. Only when an older service's `claim` returns no guide does the Factory ask for it with `get_stage_guide`, passing its Project.
