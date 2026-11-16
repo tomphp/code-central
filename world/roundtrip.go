@@ -12,6 +12,7 @@ import (
 	"os"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/frontdoor"
@@ -38,7 +39,7 @@ func (w *World) RoundTrip(req *http.Request) (*http.Response, error) {
 	w.mu.Unlock()
 
 	body, pw := io.Pipe()
-	rw := &responseWriter{header: http.Header{}, body: pw, written: make(chan struct{})}
+	rw := &responseWriter{header: http.Header{}, body: pw, unread: &r.unread, written: make(chan struct{})}
 	done := make(chan struct{})
 	go func() {
 		defer func() {
@@ -51,11 +52,14 @@ func (w *World) RoundTrip(req *http.Request) (*http.Response, error) {
 				pw.CloseWithError(err)
 			}
 			rw.WriteHeader(http.StatusOK)
-			pw.Close()
-			cancel()
+			// The request leaves the world before its body ends, so a
+			// reader that has read the whole body finds no request in
+			// flight (Settled), with no gap between the two.
 			w.mu.Lock()
 			delete(w.requests, r)
 			w.mu.Unlock()
+			pw.Close()
+			cancel()
 			close(done)
 		}()
 		w.handler.ServeHTTP(rw, in)
@@ -91,7 +95,7 @@ func (w *World) RoundTrip(req *http.Request) (*http.Response, error) {
 		ProtoMajor:    1,
 		ProtoMinor:    1,
 		Header:        rw.sent,
-		Body:          responseBody{body, cancel},
+		Body:          responseBody{body, &r.unread, cancel},
 		ContentLength: -1,
 		Request:       req,
 	}, nil
@@ -120,7 +124,14 @@ func serverRequest(r *http.Request) *http.Request {
 // responseBody is a response's body, whose Close ends its request.
 type responseBody struct {
 	*io.PipeReader
+	unread *atomic.Int64
 	cancel context.CancelFunc
+}
+
+func (b responseBody) Read(p []byte) (int, error) {
+	n, err := b.PipeReader.Read(p)
+	b.unread.Add(-int64(n))
+	return n, err
 }
 
 func (b responseBody) Close() error {
@@ -133,6 +144,10 @@ func (b responseBody) Close() error {
 type responseWriter struct {
 	header http.Header
 	body   *io.PipeWriter
+	// unread counts the bytes written, or being written, that the
+	// response body's reader has yet to read: an io.Pipe write waits
+	// until the reader takes it.
+	unread *atomic.Int64
 
 	once    sync.Once
 	status  int
@@ -163,7 +178,11 @@ func (rw *responseWriter) WriteHeader(status int) {
 
 func (rw *responseWriter) Write(b []byte) (int, error) {
 	rw.WriteHeader(http.StatusOK)
-	return rw.body.Write(b)
+	rw.unread.Add(int64(len(b)))
+	n, err := rw.body.Write(b)
+	// What a failed write didn't hand over will never be read.
+	rw.unread.Add(-int64(len(b) - n))
+	return n, err
 }
 
 // Flush sends the status, as each write reaches the reader unbuffered.

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tomoram/code-central/clock"
@@ -50,6 +51,9 @@ type request struct {
 	cancel context.CancelFunc
 	// stream is the httpapi stream pattern it follows, if any.
 	stream string
+	// unread counts the bytes its handler has written, or is writing,
+	// that its response body's reader has yet to read.
+	unread atomic.Int64
 }
 
 // streams tells which requests follow a stream: the change-notice feed and
@@ -145,6 +149,73 @@ func (w *World) TranscriptStreams() int {
 		}
 	}
 	return n
+}
+
+// Subscribed counts the feeds a client has subscribed, of each stream
+// kind: the change-notice feed, Transcript streams and Chat streams.
+type Subscribed struct {
+	Events, Transcripts, Chats int
+}
+
+// Busy is what keeps a world from being settled (ADR 0044); its zero
+// value, an empty report, is a settled world.
+type Busy struct {
+	// Requests counts the plain requests, those not streams, in flight:
+	// each from RoundTrip until its handler has returned, which is only
+	// once its body has been read whole.
+	Requests int `json:"requests,omitempty"`
+	// Events, Transcripts and Chats are each kind's open streams against
+	// its subscribed feeds, where the two differ. A stream is open from
+	// RoundTrip until its handler has returned, so one still closing
+	// counts.
+	Events      *Streams `json:"events,omitempty"`
+	Transcripts *Streams `json:"transcripts,omitempty"`
+	Chats       *Streams `json:"chats,omitempty"`
+	// UnreadWrites counts the open streams with a write their reader has
+	// yet to read.
+	UnreadWrites int `json:"unreadWrites,omitempty"`
+}
+
+// Streams is one stream kind's open streams against its subscribed feeds.
+type Streams struct {
+	Open       int `json:"open"`
+	Subscribed int `json:"subscribed"`
+}
+
+// Settled reports what keeps the world from being settled, given the
+// feeds its client has subscribed, or an empty report when it is. It reads
+// the world as it stands: under js/wasm Go hands JavaScript control only
+// once every goroutine is blocked, so a stream with a notice queued has
+// already written it and waits on its reader, and no feed needs a count
+// of its own.
+func (w *World) Settled(subscribed Subscribed) Busy {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var busy Busy
+	open := map[string]int{}
+	for r := range w.requests {
+		if r.stream == "" {
+			busy.Requests++
+			continue
+		}
+		open[r.stream]++
+		if r.unread.Load() > 0 {
+			busy.UnreadWrites++
+		}
+	}
+	busy.Events = busyStreams(open[httpapi.EventsPath], subscribed.Events)
+	busy.Transcripts = busyStreams(open[httpapi.TranscriptStreamPath], subscribed.Transcripts)
+	busy.Chats = busyStreams(open[httpapi.ChatStreamPath], subscribed.Chats)
+	return busy
+}
+
+// busyStreams is one kind's open streams against its subscribed feeds
+// when the two differ, and nil when they match.
+func busyStreams(open, subscribed int) *Streams {
+	if open == subscribed {
+		return nil
+	}
+	return &Streams{Open: open, Subscribed: subscribed}
 }
 
 // Drop ends the world: every request it is serving ends, and it serves no

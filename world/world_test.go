@@ -370,3 +370,90 @@ func TestDroppingTheWorldEndsItsStreamsAndItServesNoMore(t *testing.T) {
 		t.Errorf("a request after Drop: %v, want ErrDropped", err)
 	}
 }
+
+// chatStreamPath follows Project acme's Conversation.
+const chatStreamPath = "/api/p/acme/chat/stream"
+
+func TestAFreshWorldIsSettled(t *testing.T) {
+	w := newWorld(t)
+
+	if busy := w.Settled(world.Subscribed{}); busy != (world.Busy{}) {
+		t.Errorf("a fresh world: %+v, want it settled", busy)
+	}
+}
+
+func TestAPlainRequestIsInFlightUntilItsBodyIsRead(t *testing.T) {
+	w := newWorld(t)
+	req, _ := http.NewRequest("GET", "http://localhost/api/workflow", nil)
+	res, err := w.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+
+	if busy := w.Settled(world.Subscribed{}); busy != (world.Busy{Requests: 1}) {
+		t.Errorf("before its body is read: %+v, want one request in flight", busy)
+	}
+	if _, err := io.ReadAll(res.Body); err != nil {
+		t.Fatal(err)
+	}
+	if busy := w.Settled(world.Subscribed{}); busy != (world.Busy{}) {
+		t.Errorf("once its body is read: %+v, want it settled", busy)
+	}
+}
+
+func TestEachStreamKindCountsItsOpenStreamsAgainstItsSubscribedFeeds(t *testing.T) {
+	w := claimedWorld(t)
+	openStream(t, w, "/api/events")
+	openStream(t, w, transcriptStreamPath)
+	openStream(t, w, chatStreamPath)
+
+	busy := w.Settled(world.Subscribed{Events: 1, Transcripts: 1, Chats: 1})
+	if busy.Events != nil || busy.Transcripts != nil || busy.Chats != nil {
+		t.Errorf("one feed of each kind subscribed: %+v, want every kind's streams open", busy)
+	}
+	busy = w.Settled(world.Subscribed{Events: 2, Transcripts: 0, Chats: 1})
+	if want := (world.Streams{Open: 1, Subscribed: 2}); busy.Events == nil || *busy.Events != want {
+		t.Errorf("events: %+v, want %+v", busy.Events, want)
+	}
+	if want := (world.Streams{Open: 1, Subscribed: 0}); busy.Transcripts == nil || *busy.Transcripts != want {
+		t.Errorf("Transcripts: %+v, want %+v", busy.Transcripts, want)
+	}
+	if busy.Chats != nil {
+		t.Errorf("Chats: %+v, want none busy", busy.Chats)
+	}
+}
+
+func TestADroppedStreamsFeedIsBusyUntilItReconnects(t *testing.T) {
+	w := newWorld(t)
+	notices, _ := openStream(t, w, "/api/events")
+
+	w.DropStreams()
+	ended(t, notices)
+
+	codecentraltest.Eventually(t, func() bool {
+		busy := w.Settled(world.Subscribed{Events: 1})
+		return busy.Events != nil && *busy.Events == world.Streams{Open: 0, Subscribed: 1}
+	}, "the dropped feed isn't reported busy with no stream open")
+	openStream(t, w, "/api/events")
+	if busy := w.Settled(world.Subscribed{Events: 1}); busy != (world.Busy{}) {
+		t.Errorf("once it reconnects: %+v, want it settled", busy)
+	}
+}
+
+func TestAStreamsUnreadWriteKeepsTheWorldBusyUntilItIsRead(t *testing.T) {
+	w := newWorld(t)
+	notices, _ := openStream(t, w, "/api/events")
+
+	ok(t, w, "", "POST", "/api/projects/create_project", `{"key":"acme"}`)
+
+	codecentraltest.Eventually(t, func() bool {
+		return w.Settled(world.Subscribed{Events: 1}) == (world.Busy{UnreadWrites: 1})
+	}, "the notice's write isn't reported unread")
+	readLine(t, notices) // event
+	readLine(t, notices) // data
+	readLine(t, notices) // the blank line ending it
+	if busy := w.Settled(world.Subscribed{Events: 1}); busy != (world.Busy{}) {
+		t.Errorf("once the notice is read: %+v, want it settled", busy)
+	}
+}
