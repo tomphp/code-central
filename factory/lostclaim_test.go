@@ -248,3 +248,32 @@ func TestAStoppingFactoryAbandonsALostClaim(t *testing.T) {
 		t.Errorf("%s is %s, want In Progress under the Claim the stop left", id, s)
 	}
 }
+
+// A claim lost before it reached Code Central leaves its Ticket Ready,
+// but the Factory doesn't choose it as new work under another session:
+// it waits for the lost claim, and claims the next Ticket meanwhile.
+func TestALostClaimsTicketIsNotChosenAgainAsNewWork(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	a, b := h.ReadyTicket("Lost on the way"), h.ReadyTicket("Next")
+	for _, id := range []string{a, b} {
+		h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
+	}
+	// The first poll's 4 tries and the next poll's one.
+	h.LoseRequest("/claim", 5)
+	r := h.Start("--parallel", "2")
+
+	r.Poll()
+	h.WaitFor(b+"'s turn", func() bool { return len(callsFor(h, b)) == 1 })
+	if s := h.Ticket(a).State; s != store.Ready || len(callsFor(h, a)) != 0 {
+		t.Fatalf("%s is %s after %d runs, want Ready and none: its claim is still lost", a, s, len(callsFor(h, a)))
+	}
+	r.Poll()
+	h.WaitFor(a+"'s turn", func() bool { return len(callsFor(h, a)) == 1 })
+	if n := len(h.Ticket(a).Claims); n != 1 {
+		t.Errorf("%s has %d Claims, want 1", a, n)
+	}
+	if strings.Contains(r.Stdout(), "action_not_allowed") {
+		t.Errorf("a claim was refused; stdout:\n%s", r.Stdout())
+	}
+}
