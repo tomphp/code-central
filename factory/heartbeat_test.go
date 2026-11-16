@@ -35,17 +35,6 @@ func wantFactory(t *testing.T, h *factorytest.Harness, status core.FactoryStatus
 	return fs
 }
 
-// TEMPORARY: waitForFactory is wantFactory for chatstop_test.go, which
-// isn't migrated to Settle yet; it goes with its last use.
-func waitForFactory(t *testing.T, h *factorytest.Harness, status core.FactoryStatusName, note string) core.FactoryStatusView {
-	t.Helper()
-	h.WaitFor("the Factory to be "+string(status)+" with "+note, func() bool {
-		fs := factories(t, h)
-		return fs.Status == status && len(fs.Factories) == 1 && strings.Contains(fs.Factories[0].Note, note)
-	})
-	return factories(t, h)
-}
-
 func TestEachPollSendsAnOnlineHeartbeatWithTheTurnsRunning(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
