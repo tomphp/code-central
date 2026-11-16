@@ -18,15 +18,16 @@ An operation lives in `core`; the front doors (MCP, the HTTP API, the CLI) only 
 
 When a second test needs the same setup (a test server, an SSE opener, a world fixture, a link-click check), extract one shared helper and have both tests use it. Look for an existing helper in the package, or in `codecentraltest` / `factory/factorytest`, before writing one.
 
-## A test waits for the loaded state before it interacts
+## A test settles the world before it asserts
 
-In a changed `*.test.tsx`, a component whose data arrives through a fetch or a subscription is not there yet when `render` returns:
+In a changed `*.test.tsx`, a component whose data arrives through a fetch or a subscription is there once the WASM Core world has settled ([ADR 0044](docs/adr/0044-ui-tests-wait-for-the-world-to-settle-not-for-dom-text.md)), not before:
 
-- Wait for its loaded state before interacting or asserting: a `findBy*` on the element that arrives last, or the file's `loaded()` helper (`loadedDashboard` for the Activity Dashboard), never a `getBy*` straight after `render`.
-- A click on an element inside a block that remounts when its data arrives waits for that data first (the settled count or text), then queries the link fresh.
-- A wait inside a container that can be replaced, such as a popup another popup of the same name takes over from, looks the container up again on each try (`waitFor(() => within(popup()).getByRole(…))`), never `within(await findBy…(container)).findBy…`, which waits on the first one after it has gone.
+- Rendering (`renderApp`, `renderLive`) and every Driver and scenario step settle the world themselves, so a test asserts with `getBy*` straight after awaiting them.
+- After a `user-event` interaction or a direct `w.api` call, `await settle(w)`, then query with `getBy*`. Build a world through the shared world testing helpers, whose `scenario` settles with `act`; the API folder's bare `scenario(w)` doesn't flush React.
+- After a settle, query an element fresh rather than reuse one found before it: a block that remounts when its data arrives, or a popup another of the same name takes over from, has replaced it.
+- A `findBy*`, `findAllBy*` or `waitFor` is only for a real UI timer (the Focus Mode pulse, session and note timers, the ShortId copy feedback, the feed's retry) and carries a `// waits: <reason>` comment on its line or the line before. A test that seems to need any other wait has found something *settled* doesn't count: fix the world control, not the test.
 - A `waitFor` wraps one assertion, and a passing test never waits a timeout out (`web/src/test-setup.ts` says why).
-- Fix a flaky test by waiting for the thing it raced, never by a sleep or a longer timeout.
+- Fix a flaky test by settling before the thing it raced, never by a sleep or a longer timeout.
 
 ## Comments match their neighbours
 

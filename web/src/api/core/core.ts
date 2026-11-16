@@ -27,6 +27,7 @@ interface CoreModule {
   reportWatcherCrash(id: number, kind: string, key: string, restarts: number, lastLine: string, restartAtISO: string): void;
   dropStreams(id: number): void;
   transcriptStreams(id: number): number;
+  settled(id: number, events: number, transcripts: number, chats: number): string;
   drop(id: number): void;
 }
 

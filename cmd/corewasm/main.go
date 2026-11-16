@@ -15,13 +15,16 @@
 //	reportWatcherCrash(id, kind, key, restarts, lastLine, restartAtISO)
 //	dropStreams(id)
 //	transcriptStreams(id) -> count
+//	settled(id, events, transcripts, chats) -> busyJSON
 //	drop(id)
 //
 // fetch's headers are [name, value] pairs and its body a string; its
 // Response's body streams as the handler writes it, and cancelling that
 // body or aborting signal ends the request. A check's result is
-// core.WatcherCheckResult as JSON, "{}" to pass. Using an id after drop
-// is a test's bug, and stops the program.
+// core.WatcherCheckResult as JSON, "{}" to pass. settled takes how many
+// feeds of each stream kind the client has subscribed and answers
+// world.Busy as JSON, "{}" once the world is settled. Using an id after
+// drop is a test's bug, and stops the program.
 package main
 
 import (
@@ -72,6 +75,12 @@ func main() {
 	})
 	set("dropStreams", func(a []js.Value) any { of(a[0]).DropStreams(); return nil })
 	set("transcriptStreams", func(a []js.Value) any { return of(a[0]).TranscriptStreams() })
+	set("settled", func(a []js.Value) any {
+		busy, _ := json.Marshal(of(a[0]).Settled(world.Subscribed{
+			Events: a[1].Int(), Transcripts: a[2].Int(), Chats: a[3].Int(),
+		}))
+		return string(busy)
+	})
 	set("drop", func(a []js.Value) any {
 		of(a[0]).Drop()
 		delete(worlds, a[0].Int())
