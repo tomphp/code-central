@@ -1,26 +1,23 @@
 // The Focus section of Project Options (code-central-556): a "Show in
 // Focus" checkbox per Needs Me reason, in group order, all on by default;
 // Save sends the whole off list. On the WASM Core.
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
 import { newWorld, type World } from "../api/core/core";
-import { scenario } from "../api/scenario";
 import { NEEDS_ME_REASONS } from "../api/types";
 import { REASON_LABEL } from "../format";
+import { renderApp as renderAt, scenario, settle } from "../worldTesting";
 
-function renderApp(w: World) {
-  window.history.replaceState(null, "", "/?view=project-options&project=acme");
-  return render(<App api={w.api} now={w.now} />);
-}
+const renderApp = (w: World) => renderAt(w, "/?view=project-options&project=acme");
 
 const page = () => screen.getByRole("main", { name: "Project Options" });
 const focus = () => within(page()).getByRole("group", { name: "Focus" });
-const findFocus = async () =>
-  within(await screen.findByRole("main", { name: "Project Options" })).findByRole("group", { name: "Focus" });
 const box = (reason: string) => within(focus()).getByRole("checkbox", { name: reason });
-const save = () => userEvent.click(within(focus()).getByRole("button", { name: "Save" }));
+const save = async (w: World) => {
+  await userEvent.click(within(focus()).getByRole("button", { name: "Save" }));
+  await settle(w);
+};
 const fresh = async (opts: { archived?: boolean } = {}) => {
   const w = await newWorld();
   const s = scenario(w);
@@ -31,9 +28,8 @@ const fresh = async (opts: { archived?: boolean } = {}) => {
 
 describe("the Focus section", () => {
   it("comes after Stage Guides, with a checked box per reason in group order", async () => {
-    renderApp(await fresh());
+    await renderApp(await fresh());
 
-    await findFocus();
     const sections = Array.from(page().querySelectorAll("fieldset.project-options-section > legend"), (l) => l.textContent);
     expect(sections.slice(sections.indexOf("Stage Guides"))).toEqual(["Stage Guides", "Auto-accept", "Focus", "Factories"]);
     expect(within(focus()).getAllByRole("rowheader").map((h) => h.textContent)).toEqual(NEEDS_ME_REASONS.map((r) => REASON_LABEL[r]));
@@ -45,35 +41,34 @@ describe("the Focus section", () => {
 
   it("saves the whole off list, and turns a reason back on", async () => {
     const w = await fresh();
-    renderApp(w);
+    await renderApp(w);
 
-    await findFocus();
     await userEvent.click(box("In Review"));
     await userEvent.click(box("Answered"));
-    await save();
-    await within(focus()).findByRole("status");
+    await save(w);
+    expect(within(focus()).getByRole("status")).toBeInTheDocument();
     expect((await w.api.listProjects())[0].focus_kinds.off).toEqual(["answered", "in_review"]);
     expect(within(focus()).getByRole("button", { name: "Save" })).toBeDisabled();
 
     await userEvent.click(box("Answered"));
-    await save();
-    await within(focus()).findByRole("status");
+    await save(w);
+    expect(within(focus()).getByRole("status")).toBeInTheDocument();
     expect((await w.api.listProjects())[0].focus_kinds.off).toEqual(["in_review"]);
   });
 
   it("follows the Project as read", async () => {
     const w = await fresh();
-    renderApp(w);
+    await renderApp(w);
 
-    await findFocus();
     await w.api.setFocusKinds("acme", ["failed"]);
-    await within(focus()).findByRole("checkbox", { name: "Failed", checked: false });
+    await settle(w);
+    expect(within(focus()).getByRole("checkbox", { name: "Failed", checked: false })).toBeInTheDocument();
     expect(box("Answered")).toBeChecked();
   });
 
   it("is disabled while the Project is archived", async () => {
-    renderApp(await fresh({ archived: true }));
+    await renderApp(await fresh({ archived: true }));
 
-    expect(await findFocus()).toBeDisabled();
+    expect(focus()).toBeDisabled();
   });
 });
