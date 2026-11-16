@@ -74,21 +74,29 @@ func TestAnAcceptedTicketLandsAndItsBlockedTicketIsClaimedOnWakes(t *testing.T) 
 	h.WaitForState(id, store.InReview)
 }
 
+// The claim's answer may be lost on its way back, as in CI run
+// 43772431843: the Factory claims again with no tick.
 func TestAnsweringARoundsLastQuestionResumesTheSessionOnAWake(t *testing.T) {
 	t.Parallel()
-	h := wakingHarness(t)
-	id := h.ReadyTicket("Ask first")
-	h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
-	r := h.Start()
-	h.WaitForState(id, store.NeedsAnswer)
-	r.WaitForOutput(id + " turn ended")
-	h.Script(id, factorytest.Finish("Painted it blue."), factorytest.Result("success"))
-	r.WaitForLongPoll()
+	for name, lost := range map[string]int{"answer kept": 0, "answer lost": 1} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			h := wakingHarness(t)
+			id := h.ReadyTicket("Ask first")
+			h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
+			h.LoseAnswer("/claim", lost)
+			r := h.Start()
+			h.WaitForState(id, store.NeedsAnswer)
+			r.WaitForOutput(id + " turn ended")
+			h.Script(id, factorytest.Finish("Painted it blue."), factorytest.Result("success"))
+			r.WaitForLongPoll()
 
-	h.Answer(id, "Blue")
-	h.WaitForState(id, store.InReview)
-	if n := len(h.Calls()); n != 2 {
-		t.Errorf("claude ran %d times, want twice: the turn and its resume", n)
+			h.Answer(id, "Blue")
+			h.WaitForState(id, store.InReview)
+			if n := len(h.Calls()); n != 2 {
+				t.Errorf("claude ran %d times, want twice: the turn and its resume", n)
+			}
+		})
 	}
 }
 

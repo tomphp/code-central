@@ -363,7 +363,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 	resume := "claude --resume " + session
 	// The worktree's path is fixed by the Ticket ID, which isn't known
 	// until the claim, so the claim names it afterwards (set_session).
-	res, err := f.client.Claim(ctx, f.project, core.ClaimInput{Ticket: next, SessionID: session, ResumeCommand: &resume})
+	res, err := f.claimRecovering(ctx, core.ClaimInput{Ticket: next, SessionID: session, ResumeCommand: &resume})
 	if err != nil {
 		if ctx.Err() == nil {
 			f.printf("claim: %v", err)
@@ -407,6 +407,54 @@ func (f *factory) claimNext(ctx context.Context) bool {
 	mc := f.withFlags(stage, res.ModelChoice)
 	f.startTurn(ctx, c, turnInput{Dir: wt, Choice: mc, Prompt: firstPrompt(c, stage, f.baseBranch(), conflicts)})
 	return true
+}
+
+// claimRetries is how many times a claim whose answer was lost is sent
+// again, claimRetryPause apart.
+const (
+	claimRetries    = 3
+	claimRetryPause = time.Second
+)
+
+// claimRecovering claims in.Ticket. When the answer is lost, Code Central
+// may have put the Ticket in the Factory's hands, so it sends in again,
+// which gives back the same Claim if the first got through (ADR 0010).
+// The pause between tries is on a real timer, not After, so it takes no
+// poll's tick. It stops trying when ctx ends or the Factory drains.
+func (f *factory) claimRecovering(ctx context.Context, in core.ClaimInput) (core.ClaimResult, error) {
+	res, err := f.client.Claim(ctx, f.project, in)
+	if !answerLost(err) || ctx.Err() != nil {
+		return res, err
+	}
+	f.printf("%s: claim: the answer was lost (%v): claiming it again", in.Ticket, err)
+	for range claimRetries {
+		select {
+		case <-ctx.Done():
+			return res, err
+		case <-f.drainCh:
+			return res, err
+		case <-time.After(claimRetryPause):
+		}
+		res, err = f.client.Claim(ctx, f.project, in)
+		if !answerLost(err) {
+			if err == nil {
+				f.printf("%s: claim: the answer came back on claiming it again", in.Ticket)
+			}
+			return res, err
+		}
+	}
+	return res, err
+}
+
+// answerLost reports whether err leaves unknown what Code Central did: it
+// couldn't be reached, or its answer was cut off. Any other *core.Error
+// is Code Central's answer.
+func answerLost(err error) bool {
+	if err == nil {
+		return false
+	}
+	var ce *core.Error
+	return !errors.As(err, &ce) || ce.Code == core.ServiceUnavailable
 }
 
 // resumeAnswered picks up the answers to c's Round and resumes its
