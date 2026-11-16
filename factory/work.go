@@ -119,6 +119,14 @@ func (s *stint) after(clk clock.Clock, d time.Duration, name ...string) <-chan t
 	return fired
 }
 
+// pollWait goes on with the poll loop's wait for its next poll, d away,
+// and returns its timer.
+func (s *stint) pollWait(clk clock.Clock, d time.Duration) <-chan time.Time {
+	fired, end := s.w.pollWait(clk, d)
+	s.then(end)
+	return fired
+}
+
 // then goes on with the work end ends, ending the piece before it.
 func (s *stint) then(end func()) {
 	before := s.end

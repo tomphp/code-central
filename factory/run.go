@@ -34,8 +34,7 @@ func (f *factory) loop(ctx context.Context) {
 		woke()
 		woke = noop
 		f.poll(ctx)
-		next, waited := f.work.pollWait(f.e.Clock, f.o.poll)
-		f.polling.then(waited)
+		next := f.polling.pollWait(f.e.Clock, f.o.poll)
 		select {
 		case <-ctx.Done():
 			return
@@ -152,7 +151,8 @@ func (f *factory) drain(ctx context.Context) {
 		close(done)
 	}()
 	for {
-		beat := f.polling.after(f.e.Clock, f.o.poll, "draining: waiting on ", strings.Join(names, ", "))
+		// The drain's beat is the poll's: a Tick moves the clock to it.
+		beat := f.polling.pollWait(f.e.Clock, f.o.poll)
 		select {
 		case <-done:
 			f.polling.busy("draining")
@@ -187,7 +187,7 @@ func (f *factory) drainLostClaims(ctx context.Context) bool {
 	note := fmt.Sprintf("draining: claiming %s again", strings.Join(names, ", "))
 	f.printf("%s at each poll first: the answer was lost", note)
 	for len(f.lostClaims) > 0 && !f.claimingHeld() {
-		poll := f.polling.after(f.e.Clock, f.o.poll, note)
+		poll := f.polling.pollWait(f.e.Clock, f.o.poll)
 		select {
 		case <-ctx.Done():
 			return false
@@ -436,8 +436,11 @@ func (f *factory) stopPolling() {
 	for _, t := range ts {
 		f.beginStop(t)
 	}
-	f.stopWork.take()
 	f.endPolls()
+	f.wakeMu.Lock()
+	f.loopDone = true
+	f.stopWork.take()
+	f.wakeMu.Unlock()
 	f.polling.stop()
 	for _, t := range ts {
 		<-t.done

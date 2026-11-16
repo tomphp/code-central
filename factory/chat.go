@@ -52,7 +52,10 @@ func (f *factory) chatLoop(ctx context.Context, s *stint) {
 		return
 	}
 	var turns sync.WaitGroup
-	defer turns.Wait()
+	defer func() {
+		s.rest("waiting for the Chat turn to end")
+		turns.Wait()
+	}()
 	// Draining closes the long-poll; a running turn goes on until ctx ends.
 	pollCtx, cancel := f.untilDraining(ctx)
 	defer cancel()

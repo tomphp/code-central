@@ -359,6 +359,17 @@ func (h *Harness) Calls() []Call {
 	return out
 }
 
+// WantCalls fails the test unless the fake claude has run n times, and
+// returns the Calls. A test settles the Factory first.
+func (h *Harness) WantCalls(n int) []Call {
+	h.t.Helper()
+	calls := h.Calls()
+	if len(calls) != n {
+		h.t.Fatalf("claude ran %d times, want %d: %+v", len(calls), n, calls)
+	}
+	return calls
+}
+
 // readFile reads a file a fake wrote, retrying for up to 2s while
 // another process holds it open.
 func readFile(name string) ([]byte, error) {

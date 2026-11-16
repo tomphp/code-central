@@ -262,9 +262,14 @@ func (f *factory) stopFor(reason string) {
 }
 
 // halt stops the Factory, handing the stop's busy work to the poll loop,
-// which takes it up once it has started stopping the turns.
+// which takes it up once it has started stopping the turns, unless it
+// has ended already.
 func (f *factory) halt() {
-	f.stopWork.give(f.work.busy("stopping"))
+	f.wakeMu.Lock()
+	if !f.loopDone {
+		f.stopWork.give(f.work.busy("stopping"))
+	}
+	f.wakeMu.Unlock()
 	f.stop()
 }
 
@@ -394,10 +399,12 @@ type factory struct {
 	// wakeCh holds a wake for the poll loop, as the end of its busy work:
 	// one at most, so any number of wakes during a poll make one more
 	// poll. pollsOver is set once the poll loop drains or stops, and
-	// takes no more; wakeMu guards it, ordering a wake against it.
+	// takes no more, and loopDone once it has ended, and takes up no
+	// stop; wakeMu guards both, ordering a wake or a stop against them.
 	wakeCh    chan func()
 	wakeMu    sync.Mutex
 	pollsOver bool
+	loopDone  bool
 
 	// work hears of the Factory's work in flight (Env.Work). polling is
 	// the poll loop's line of it, and polls the number of polls so far;

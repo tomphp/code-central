@@ -39,9 +39,6 @@ type tracker struct {
 	// and the waits for a signal that have ended: the Factory has taken
 	// every signal once the second has caught up with the first.
 	signalsSent, signalWaitsEnded int
-	// interrupted is set once the test has sent os.Interrupt: the
-	// Factory drains, and polls no more.
-	interrupted bool
 }
 
 // piece is one piece of the Factory's work in flight.
@@ -156,12 +153,9 @@ func (k *tracker) answered(name string) {
 }
 
 // signal counts a signal the test sends.
-func (k *tracker) signal(sig os.Signal) {
+func (k *tracker) signal() {
 	k.mu.Lock()
 	k.signalsSent++
-	if sig == os.Interrupt {
-		k.interrupted = true
-	}
 	k.mu.Unlock()
 	k.h.changed()
 }
@@ -232,14 +226,6 @@ func (k *tracker) polling() (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return k.pollWait.until, true
-}
-
-// draining reports whether the test has sent the Factory os.Interrupt,
-// after which it polls no more.
-func (k *tracker) draining() bool {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	return k.interrupted
 }
 
 // inKillGrace reports whether a turn being stopped is in a kill grace.
@@ -354,25 +340,33 @@ func (r *Running) hasExited() bool {
 
 // waitPoll settles the Factory, moving the clock to each timer due while
 // a poll is in progress, such as a claim retry pause or the kill grace of
-// a turn the poll stops, until the poll loop waits for its next poll. It
-// returns that poll's deadline, and false once the Factory has exited or
-// is draining, when it polls no more.
+// a turn the poll stops, until the poll loop waits for its next poll, or
+// a draining one for its next beat. It returns that deadline, and false
+// once the Factory has exited.
 func (r *Running) waitPoll() (time.Time, bool) {
 	r.h.t.Helper()
 	deadline := time.Now().Add(Timeout)
 	for {
 		r.Settle()
-		if r.hasExited() || r.track.draining() {
+		changes := r.h.changes()
+		if r.hasExited() {
 			return time.Time{}, false
 		}
 		if at, ok := r.track.polling(); ok {
 			return at, true
 		}
-		next, ok := r.h.Clock.Next()
-		if !ok || time.Now().After(deadline) {
-			r.h.t.Fatal("the Factory's poll is waiting on something no timer ends")
+		if next, ok := r.h.Clock.Next(); ok {
+			r.h.Clock.Set(next)
+			continue
 		}
-		r.h.Clock.Set(next)
+		// No timer: the Factory is on its way out, or a turn it stops
+		// lingers.
+		select {
+		case <-changes:
+		case <-r.done:
+		case <-time.After(time.Until(deadline)):
+			r.h.t.Fatalf("the Factory's poll waits on something no timer ends: %s", r.track.describe())
+		}
 	}
 }
 

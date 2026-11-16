@@ -921,7 +921,10 @@ func (h *Harness) Answer(ticket, text string) {
 	}
 }
 
-// WaitFor polls cond until it holds, failing the test after Timeout.
+// WaitFor polls cond until it holds, failing the test after Timeout. It
+// is for effects outside the Factory, such as Code Central state no
+// Factory work changes, like a Chat reply: what the Factory does a test
+// waits for with Running.Settle.
 func (h *Harness) WaitFor(what string, cond func() bool) {
 	h.t.Helper()
 	h.WaitForDescribed(func() string { return what }, cond)
@@ -940,19 +943,15 @@ func (h *Harness) WaitForDescribed(what func() string, cond func() bool) {
 	}
 }
 
-// WaitForState waits for the Ticket to reach state. A Ticket that is
-// Failed or Cancelled instead fails the test at once: only the human
-// moves it on, so waiting would only time out.
-func (h *Harness) WaitForState(id string, state store.State) core.TicketView {
+// WantState reads the Ticket and fails the test unless it is in state,
+// with its latest Failure Report if it has one. A test settles the
+// Factory first.
+func (h *Harness) WantState(id string, state store.State) core.TicketView {
 	h.t.Helper()
-	var tk core.TicketView
-	h.WaitFor(fmt.Sprintf("%s to be %s", id, state), func() bool {
-		tk = h.Ticket(id)
-		if tk.State != state && (tk.State == store.Failed || tk.State == store.Cancelled) {
-			h.t.Fatalf("waiting for %s to be %s, it is %s%s", id, state, tk.State, lastFailure(tk))
-		}
-		return tk.State == state
-	})
+	tk := h.Ticket(id)
+	if tk.State != state {
+		h.t.Fatalf("%s is %s, want %s%s", id, tk.State, state, lastFailure(tk))
+	}
 	return tk
 }
 
@@ -1158,7 +1157,7 @@ func (h *Harness) RunIn(dir string, args ...string) (code int, stdout, stderr st
 // the Factory takes the same path as for a real Ctrl-C on every OS. The
 // Factory isn't settled until it has taken it.
 func (r *Running) Signal(sig os.Signal) {
-	r.track.signal(sig)
+	r.track.signal()
 	r.signals <- sig
 }
 
@@ -1181,6 +1180,16 @@ func (r *Running) Stop() int {
 func (r *Running) Exited() int {
 	r.h.t.Helper()
 	return r.exited("the Factory didn't exit")
+}
+
+// WantOutput fails the test unless the Factory has printed s. A test
+// settles the Factory first: its output says what it did, never where it
+// is.
+func (r *Running) WantOutput(s string) {
+	r.h.t.Helper()
+	if out := r.stdout.String(); !strings.Contains(out, s) {
+		r.h.t.Fatalf("the Factory hasn't printed %q; stdout:\n%s", s, out)
+	}
 }
 
 // Stdout is what the Factory has printed so far.
