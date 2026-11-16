@@ -13,6 +13,12 @@ import (
 // repo is the git repository as landing and the sweep use it: the seam
 // that lets their decisions be tested against a fake, with real git
 // tested on its own (gitRepo).
+//
+// Landing's helpers (inBase, inOldBase, pushedBase, pushedAlready,
+// remoteTip, mergedOnOldBase) each wrap this seam with a different ref,
+// or with a Ticket's or the Factory's own record, not a different git
+// question, so they stay separate rather than being gathered into a
+// Git facts module.
 type repo interface {
 	// commit resolves rev to a commit, failing when it isn't one in the
 	// repository.
