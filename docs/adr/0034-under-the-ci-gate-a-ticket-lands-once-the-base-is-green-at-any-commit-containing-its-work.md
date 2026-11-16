@@ -17,3 +17,5 @@ Under Branch + Push and Pull Request the CI result is unchanged: there each Tick
 ## Consequences
 
 A later commit that reverts the Ticket's change, or deletes the test that failed, also lands the Ticket. We accept this: under Merge + Push the work is already in the base when CI runs, so the gate was never what kept a bad change out of the base; it keeps dependent work from starting on a red base, and a green base at a later commit does that.
+
+Amended by [ADR 0050](0050-pull-requests-and-ci-tracking-are-per-repository-with-one-watcher-of-each-kind-per-project.md): this holds per Repository, at any commit on that Repository's Base containing the work.

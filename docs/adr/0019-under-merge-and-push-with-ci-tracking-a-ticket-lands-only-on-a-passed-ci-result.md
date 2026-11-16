@@ -20,3 +20,5 @@ A failed CI result leaves the Ticket Accepted, in Needs Me as CI failed, with fo
 ## Consequences
 
 Landing under Merge + Push with CI Tracking takes as long as CI does. The base already holds the work while the Ticket waits, so later merges build on it; a Ticket sent back to fix is fixed on top. A Ticket gated for 10 minutes or more since its push, while the CI Watcher is not Watching or no CI Runs have been reported for its pushed commit, shows in Needs Me as CI unavailable, so a broken CI Watcher doesn't hold up work silently, and turning CI Tracking off lets it land.
+
+Amended by [ADR 0050](0050-pull-requests-and-ci-tracking-are-per-repository-with-one-watcher-of-each-kind-per-project.md): each Repository lands on its own passed CI result.
