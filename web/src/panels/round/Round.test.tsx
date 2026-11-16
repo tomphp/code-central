@@ -1,11 +1,11 @@
 // The Round panel on the WASM Core, inside the real App so each action's
 // change notice refetches the Ticket the way the service's SSE does.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../../App";
 import { newWorld } from "../../api/core/core";
-import { scenario, type QuestionSeed } from "../../api/scenario";
+import type { QuestionSeed } from "../../api/scenario";
+import { renderApp, scenario, settle } from "../../worldTesting";
 
 const COLOUR: QuestionSeed = { title: "Which colour?", body: "Red or **blue**, for the login button.", recommended: "Blue" };
 const SIZE: QuestionSeed = { title: "Which size?", body: "S or M" };
@@ -28,10 +28,9 @@ async function world(extra: Partial<QuestionSeed>[] = [], questions: QuestionSee
 
 type Waiting = Awaited<ReturnType<typeof world>>;
 
-function renderPanel({ w, id }: Waiting, round = 2) {
-  window.history.replaceState(null, "", `/?view=inbox&ticket=${id}`);
-  render(<App api={w.api} now={w.now} />);
-  return screen.findByRole("region", { name: new RegExp(`Round ${round}`) });
+async function renderPanel({ w, id }: Waiting, round = 2) {
+  await renderApp(w, `/?view=inbox&ticket=${id}`);
+  return screen.getByRole("region", { name: new RegExp(`Round ${round}`) });
 }
 
 const question = (panel: HTMLElement, title: string) => within(panel).getByRole("group", { name: new RegExp(title) });
@@ -82,7 +81,8 @@ describe("the Round panel", () => {
     await userEvent.type(box(colour), "Red");
     await userEvent.click(within(colour).getByRole("button", { name: "Answer" }));
 
-    await waitFor(() => expect(within(question(panel, "Which colour?")).getByText("Answered")).toBeInTheDocument());
+    await settle(x.w);
+    expect(within(question(panel, "Which colour?")).getByText("Answered")).toBeInTheDocument();
     expect(x.w.actions()).toEqual(["answer"]);
     expect((await stored(x))[0]).toMatchObject({ status: "answered", answer: "Red" });
     expect(within(panel).getByText("1 of 2 open")).toBeInTheDocument();
@@ -93,7 +93,8 @@ describe("the Round panel", () => {
     expect(within(again).queryByText(/Recommended answer/)).toBeNull();
     await userEvent.type(box(again), " please");
     await userEvent.click(within(again).getByRole("button", { name: "Update answer" }));
-    await waitFor(async () => expect((await stored(x))[0].answer).toBe("Red please"));
+    await settle(x.w);
+    expect((await stored(x))[0].answer).toBe("Red please");
   });
 
   it("dismisses one Question", async () => {
@@ -101,7 +102,8 @@ describe("the Round panel", () => {
     const panel = await renderPanel(x);
     await userEvent.click(within(question(panel, "Which size?")).getByRole("button", { name: "Dismiss" }));
 
-    await waitFor(() => expect(within(question(panel, "Which size?")).getByText("Dismissed")).toBeInTheDocument());
+    await settle(x.w);
+    expect(within(question(panel, "Which size?")).getByText("Dismissed")).toBeInTheDocument();
     expect(x.w.actions()).toEqual(["dismiss_question"]);
     expect((await stored(x))[1].status).toBe("dismissed");
     expect((await stored(x))[0].status).toBe("open");
@@ -112,7 +114,8 @@ describe("the Round panel", () => {
     const panel = await renderPanel(x);
     await userEvent.click(within(panel).getByRole("button", { name: "Accept all recommended" }));
 
-    await waitFor(() => expect(within(panel).getByText("1 of 3 open")).toBeInTheDocument());
+    await settle(x.w);
+    expect(within(panel).getByText("1 of 3 open")).toBeInTheDocument();
     expect(x.w.actions()).toEqual(["accept_recommended"]);
     expect((await stored(x)).map((q) => [q.status, q.answer])).toEqual([
       ["answered", "Blue"],
@@ -140,7 +143,8 @@ describe("the Round panel", () => {
 
     await userEvent.type(box(colour), "try both on the login page");
     await userEvent.click(within(colour).getByRole("button", { name: "Answer" }));
-    await waitFor(async () => expect((await stored(x))[0].answer).toBe("Prototype this: try both on the login page"));
+    await settle(x.w);
+    expect((await stored(x))[0].answer).toBe("Prototype this: try both on the login page");
   });
 
   it("shows the service's refusal", async () => {
@@ -149,6 +153,7 @@ describe("the Round panel", () => {
     const size = question(panel, "Which size?");
     await userEvent.type(box(size), "   ");
     await userEvent.click(within(size).getByRole("button", { name: "Answer" }));
-    expect(await within(size).findByRole("alert")).toHaveTextContent("an answer needs text");
+    await settle(x.w);
+    expect(within(size).getByRole("alert")).toHaveTextContent("an answer needs text");
   });
 });

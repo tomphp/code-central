@@ -5,15 +5,16 @@
 // its sorting, the Context Size table and the recent sessions with their
 // Ticket links, the Session popup, the empty states, and loading only when
 // opened or changed.
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
-import { newWorld, type World } from "../api/core/core";
-import { scenario, type Scenario } from "../api/scenario";
+import { newWorld, nextTask, type World } from "../api/core/core";
+import type { Scenario } from "../api/scenario";
 import type { Api } from "../api/api";
 import type { UsageResponse } from "../api/types";
 import { bytes, count } from "../format";
+import { scenario, settle } from "../worldTesting";
 
 async function projects() {
   const w = await newWorld();
@@ -35,9 +36,17 @@ async function calls(s: Scenario, project: string, op: string, n: number, args: 
   for (let i = 0; i < n; i++) await s.mcpCall(project, op as "get_ticket", args);
 }
 
-function renderApp(w: World, url = "/", api: Api = w.api) {
+// world is the world the test last rendered over, which the helpers settle
+// after an interaction.
+let world: World;
+
+// renderApp renders the App over w, at url, and settles.
+async function renderApp(w: World, url = "/", api: Api = w.api) {
+  world = w;
   window.history.replaceState(null, "", url);
-  return render(<App api={api} now={w.now} />);
+  const r = render(<App api={api} now={w.now} />);
+  await settle(w);
+  return r;
 }
 
 const usage = () => screen.getByRole("main", { name: "Usage" });
@@ -55,12 +64,24 @@ function column(name: string): string[] {
 }
 const ops = () => column("Operation");
 const tab = (name: string) => within(usage()).getByRole("tab", { name });
-const openTab = (name: string) => userEvent.click(tab(name));
+// back is the browser's Back, settled: jsdom fires popstate a task after
+// the call.
+const back = async () => {
+  await act(async () => {
+    window.history.back();
+    await nextTask();
+  });
+  await settle(world);
+};
+const openTab = async (name: string) => {
+  await userEvent.click(tab(name));
+  await settle(world);
+};
 
 describe("opening and leaving Usage", () => {
   it("opens from the Inbox's Admin section on All Projects and 7 days, and returns to the Inbox with its filter and Ticket", async () => {
     const { w, ticket } = await projects();
-    renderApp(w, `/?view=inbox&project=acme&state=Ready&ticket=${ticket}`);
+    await renderApp(w, `/?view=inbox&project=acme&state=Ready&ticket=${ticket}`);
     const nav = screen.getByRole("navigation", { name: "Filters" });
     await userEvent.click(within(nav).getByRole("link", { name: "Usage" }));
 
@@ -72,11 +93,12 @@ describe("opening and leaving Usage", () => {
 
     await userEvent.click(within(usage()).getByRole("button", { name: "Back to the Inbox" }));
     expect(window.location.search).toBe(`?view=inbox&project=acme&state=Ready&ticket=${ticket}`);
-    expect(await screen.findByRole("navigation", { name: "Filters" })).toBeInTheDocument();
+    await settle(world);
+    expect(screen.getByRole("navigation", { name: "Filters" })).toBeInTheDocument();
   });
 
   it("returns to Focus Mode with its Project when the address names it", async () => {
-    renderApp((await projects()).w, "/?view=usage&back=view%3Dfocus%26project%3Dacme");
+    await renderApp((await projects()).w, "/?view=usage&back=view%3Dfocus%26project%3Dacme");
     expect(scope()).toHaveValue("");
     await userEvent.click(within(usage()).getByRole("button", { name: "Back to Focus Mode" }));
     expect(window.location.search).toBe("?view=focus&project=acme");
@@ -84,26 +106,27 @@ describe("opening and leaving Usage", () => {
   });
 
   it("returns to the Inbox when opened straight from the address", async () => {
-    renderApp((await projects()).w, "/?view=usage");
+    await renderApp((await projects()).w, "/?view=usage");
     await userEvent.click(within(usage()).getByRole("button", { name: "Back to the Inbox" }));
     expect(window.location.search).toBe("?view=inbox");
   });
 
   it("returns to where the human was on the browser's Back", async () => {
-    renderApp((await projects()).w, "/?view=inbox&project=acme");
+    await renderApp((await projects()).w, "/?view=inbox&project=acme");
     await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("link", { name: "Usage" }));
     expect(usage()).toBeInTheDocument();
 
-    act(() => window.history.back());
-    expect(await screen.findByRole("navigation", { name: "Filters" })).toBeInTheDocument();
+    await back();
+    expect(screen.getByRole("navigation", { name: "Filters" })).toBeInTheDocument();
     expect(window.location.search).toBe("?view=inbox&project=acme");
   });
 });
 
 describe("scope and range", () => {
   it("lists All Projects and every Project, Archived ones marked", async () => {
-    renderApp((await projects()).w, "/?view=usage");
-    await waitFor(() => expect(within(scope()).getAllByRole("option")).toHaveLength(4));
+    await renderApp((await projects()).w, "/?view=usage");
+    await settle(world);
+    expect(within(scope()).getAllByRole("option")).toHaveLength(4);
     expect(
       within(scope())
         .getAllByRole("option")
@@ -123,33 +146,38 @@ describe("scope and range", () => {
     w.advance(20 * 24 * 60 * 60_000);
     await calls(s, "acme", "get_ticket", 1, { ticket });
     await calls(s, "beta", "find_tickets", 1, {});
-    const { unmount } = renderApp(w, "/?state=Ready");
+    const { unmount } = await renderApp(w, "/?state=Ready");
     await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("link", { name: "Usage" }));
     await openTab("Code Central calls");
-    await waitFor(() => expect(ops()).toEqual(["find_tickets", "get_ticket"]));
+    await settle(world);
+    expect(ops()).toEqual(["find_tickets", "get_ticket"]);
 
-    await waitFor(() => expect(within(scope()).getAllByRole("option")).toHaveLength(4));
+    await settle(world);
+    expect(within(scope()).getAllByRole("option")).toHaveLength(4);
     await userEvent.selectOptions(scope(), "Acme");
     expect(window.location.search).toBe("?view=usage&project=acme&tab=calls&back=view%3Dinbox%26state%3DReady");
-    await waitFor(() => expect(ops()).toEqual(["get_ticket"]));
+    await settle(world);
+    expect(ops()).toEqual(["get_ticket"]);
 
     await userEvent.selectOptions(range(), "Last 30 days");
     expect(window.location.search).toBe("?view=usage&project=acme&days=30&tab=calls&back=view%3Dinbox%26state%3DReady");
-    await waitFor(() => expect(ops()).toEqual(["claim", "get_ticket"]));
+    await settle(world);
+    expect(ops()).toEqual(["claim", "get_ticket"]);
 
     unmount();
-    renderApp(w, window.location.search);
+    await renderApp(w, window.location.search);
     expect(scope()).toHaveValue("acme");
     expect(range()).toHaveValue("30");
     expect(tab("Code Central calls")).toHaveAttribute("aria-selected", "true");
-    await waitFor(() => expect(ops()).toEqual(["claim", "get_ticket"]));
+    await settle(world);
+    expect(ops()).toEqual(["claim", "get_ticket"]);
     await userEvent.click(within(usage()).getByRole("button", { name: "Back to the Inbox" }));
     expect(window.location.search).toBe("?view=inbox&state=Ready");
   });
 
   it("goes back to All Projects and 7 days, leaving them out of the address", async () => {
-    renderApp((await projects()).w, "/?view=usage&project=acme&days=90");
-    await waitFor(() => expect(scope()).toHaveValue("acme"));
+    await renderApp((await projects()).w, "/?view=usage&project=acme&days=90");
+    expect(scope()).toHaveValue("acme");
     await userEvent.selectOptions(scope(), "All Projects");
     await userEvent.selectOptions(range(), "Last 7 days");
     expect(window.location.search).toBe("?view=usage");
@@ -157,21 +185,23 @@ describe("scope and range", () => {
 
   it("loads when opened and when the scope or range changes, never on a live notice", async () => {
     const { w, s } = await projects();
-    renderApp(w, "/?view=usage");
+    await renderApp(w, "/?view=usage");
     const reads = () => w.calls.filter((c) => c === "usage").length;
-    await waitFor(() => expect(reads()).toBe(1));
+    await settle(world);
+    expect(reads()).toBe(1);
 
     await calls(s, "acme", "find_tickets", 1, {});
     await act(() => s.ticket("acme", { title: "Another" }));
     act(() => w.dropStreams());
-    await act(() => new Promise((r) => setTimeout(r, 20)));
+    await settle(w);
     expect(reads()).toBe(1);
     expect(within(usage()).getByText(/No token usage/)).toBeInTheDocument();
 
     await userEvent.selectOptions(range(), "Last 30 days");
-    await waitFor(() => expect(reads()).toBe(2));
+    await settle(w);
+    expect(reads()).toBe(2);
     await openTab("Code Central calls");
-    await waitFor(() => expect(ops()).toEqual(["find_tickets"]));
+    expect(ops()).toEqual(["find_tickets"]);
   });
 });
 
@@ -186,7 +216,7 @@ describe("tabs", () => {
   const selected = () => within(usage()).getByRole("tab", { selected: true });
 
   it("opens on Token usage, the tabs in order, with no tab in the address", async () => {
-    renderApp(await withUsage(), "/?view=usage");
+    await renderApp(await withUsage(), "/?view=usage");
     expect(tabs().map((t) => t.textContent)).toEqual(["Token usage", "Context Size", "Code Central calls"]);
     expect(selected()).toHaveTextContent("Token usage");
     expect(within(usage()).getByRole("tabpanel")).toHaveAccessibleName("Token usage");
@@ -194,31 +224,33 @@ describe("tabs", () => {
   });
 
   it("opens on Token usage for a tab it doesn't know, and writes it with no tab", async () => {
-    renderApp(await withUsage(), "/?view=usage&tab=nonsense");
+    await renderApp(await withUsage(), "/?view=usage&tab=nonsense");
     expect(selected()).toHaveTextContent("Token usage");
     expect(window.location.search).toBe("?view=usage");
   });
 
   it("puts the open tab in the address, leaving Token usage out, and a reload keeps it", async () => {
     const w = await withUsage();
-    const { unmount } = renderApp(w, "/?view=usage");
+    const { unmount } = await renderApp(w, "/?view=usage");
     await openTab("Context Size");
     expect(window.location.search).toBe("?view=usage&tab=context");
     await openTab("Code Central calls");
     expect(window.location.search).toBe("?view=usage&tab=calls");
-    await waitFor(() => expect(ops()).toEqual(["get_ticket", "find_tickets"]));
+    await settle(world);
+    expect(ops()).toEqual(["get_ticket", "find_tickets"]);
 
     unmount();
-    renderApp(w, window.location.search);
+    await renderApp(w, window.location.search);
     expect(selected()).toHaveTextContent("Code Central calls");
-    await waitFor(() => expect(ops()).toEqual(["get_ticket", "find_tickets"]));
+    await settle(world);
+    expect(ops()).toEqual(["get_ticket", "find_tickets"]);
 
     await openTab("Token usage");
     expect(window.location.search).toBe("?view=usage");
   });
 
   it("moves between the tabs with the arrow keys", async () => {
-    renderApp(await withUsage(), "/?view=usage");
+    await renderApp(await withUsage(), "/?view=usage");
     tab("Token usage").focus();
     await userEvent.keyboard("{ArrowRight}");
     expect(selected()).toHaveTextContent("Context Size");
@@ -228,26 +260,28 @@ describe("tabs", () => {
   });
 
   it("goes back through the tabs on the browser's Back", async () => {
-    renderApp(await withUsage(), "/?view=inbox");
+    await renderApp(await withUsage(), "/?view=inbox");
     await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("link", { name: "Usage" }));
     await openTab("Code Central calls");
     await openTab("Context Size");
 
-    act(() => window.history.back());
-    await waitFor(() => expect(selected()).toHaveTextContent("Code Central calls"));
-    act(() => window.history.back());
-    await waitFor(() => expect(selected()).toHaveTextContent("Token usage"));
-    act(() => window.history.back());
-    expect(await screen.findByRole("navigation", { name: "Filters" })).toBeInTheDocument();
+    await back();
+    expect(selected()).toHaveTextContent("Code Central calls");
+    await back();
+    expect(selected()).toHaveTextContent("Token usage");
+    await back();
+    expect(screen.getByRole("navigation", { name: "Filters" })).toBeInTheDocument();
   });
 
   it("keeps the scope and range across a switch, without reading Usage again", async () => {
     const w = await withUsage();
-    renderApp(w, "/?view=usage&project=acme&days=30");
+    await renderApp(w, "/?view=usage&project=acme&days=30");
     const reads = () => w.calls.filter((c) => c === "usage").length;
-    await waitFor(() => expect(reads()).toBe(1));
+    await settle(world);
+    expect(reads()).toBe(1);
     await openTab("Code Central calls");
-    await waitFor(() => expect(ops()).toEqual(["get_ticket"]));
+    await settle(world);
+    expect(ops()).toEqual(["get_ticket"]);
     await openTab("Context Size");
     await openTab("Token usage");
 
@@ -265,8 +299,8 @@ describe("tabs", () => {
         throw new Error("Usage is down");
       },
     };
-    renderApp(w, "/?view=usage&tab=calls", down);
-    const alert = await within(usage()).findByRole("alert");
+    await renderApp(w, "/?view=usage&tab=calls", down);
+    const alert = within(usage()).getByRole("alert");
     expect(alert).toHaveTextContent("Usage is down");
     expect(alert.compareDocumentPosition(within(usage()).getByRole("tablist")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(selected()).toHaveTextContent("Code Central calls");
@@ -294,9 +328,10 @@ describe("the Code Central calls table", () => {
 
   it("shows each operation's calls, sizes in readable units and errors, with the exact figure on hover", async () => {
     const { w, byOp } = await withUsage();
-    renderApp(w, "/?view=usage");
+    await renderApp(w, "/?view=usage");
     await openTab("Code Central calls");
-    await waitFor(() => expect(ops()).toEqual(["get_ticket", "claim", "find_tickets", "finish"]));
+    await settle(world);
+    expect(ops()).toEqual(["get_ticket", "claim", "find_tickets", "finish"]);
     const rows = ops().map((op) => byOp.get(op)!);
     expect(
       within(table())
@@ -320,9 +355,10 @@ describe("the Code Central calls table", () => {
 
   it("sorts by every column, each way", async () => {
     const { w, byOp } = await withUsage();
-    renderApp(w, "/?view=usage");
+    await renderApp(w, "/?view=usage");
     await openTab("Code Central calls");
-    await waitFor(() => expect(ops()).toHaveLength(4));
+    await settle(world);
+    expect(ops()).toHaveLength(4);
     const sortBy = (name: string) => userEvent.click(within(table()).getByRole("button", { name }));
     const sorted = (name: string) => within(table()).getByRole("columnheader", { name });
     // by is the operations ordered by a column's figure, largest first
@@ -362,10 +398,8 @@ describe("the Code Central calls table", () => {
   it("says each tab has nothing to show for an empty range and scope", async () => {
     const { w, s } = await withUsage();
     await s.project("quiet", "Quiet");
-    renderApp(w, "/?view=usage&project=quiet&days=30");
-    expect(
-      await within(usage()).findByText("No token usage in Quiet over the last 30 days. Only sessions the Factory runs are counted."),
-    ).toBeInTheDocument();
+    await renderApp(w, "/?view=usage&project=quiet&days=30");
+    expect(within(usage()).getByText("No token usage in Quiet over the last 30 days. Only sessions the Factory runs are counted.")).toBeInTheDocument();
     await openTab("Context Size");
     expect(within(usage()).getByText("No sessions in Quiet over the last 30 days. Only sessions the Factory runs are counted.")).toBeInTheDocument();
     await openTab("Code Central calls");
@@ -375,8 +409,9 @@ describe("the Code Central calls table", () => {
   });
 
   it("says so for All Projects too", async () => {
-    renderApp((await projects()).w, "/?view=usage&tab=calls");
-    expect(await within(usage()).findByText("No Code Central calls in All Projects over the last 7 days.")).toBeInTheDocument();
+    await renderApp((await projects()).w, "/?view=usage&tab=calls");
+    await settle(world);
+    expect(within(usage()).getByText("No Code Central calls in All Projects over the last 7 days.")).toBeInTheDocument();
   });
 });
 
@@ -441,9 +476,9 @@ describe("Context Size", () => {
       );
 
   it("shows each kind's sessions, average and largest peak, with thousands separators and the exact figure on hover", async () => {
-    renderApp((await withUsage()).w, "/?view=usage");
+    await renderApp((await withUsage()).w, "/?view=usage");
     await openTab("Context Size");
-    await waitFor(() => expect(within(usage()).getByRole("table", { name: "Context Size by kind" })).toBeInTheDocument());
+    expect(within(usage()).getByRole("table", { name: "Context Size by kind" })).toBeInTheDocument();
     expect(
       within(kindsTable())
         .getAllByRole("columnheader")
@@ -464,9 +499,10 @@ describe("Context Size", () => {
 
   it("lists the main sessions newest first, each with its tokens and its Subagents collapsed under it", async () => {
     const { w, impl, spec } = await withUsage();
-    renderApp(w, "/?view=usage");
+    await renderApp(w, "/?view=usage");
     await openTab("Context Size");
-    await waitFor(() => expect(within(usage()).getByRole("table", { name: "Recent sessions" })).toBeInTheDocument());
+    await settle(world);
+    expect(within(usage()).getByRole("table", { name: "Recent sessions" })).toBeInTheDocument();
     expect(within(sessionsTable()).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
       "Ticket",
       "Project",
@@ -508,9 +544,10 @@ describe("Context Size", () => {
       { ...response(w, 5, "subagent", 13_000, "toolu_plan"), agent_type: "Plan" },
     ]);
     const spec = await claimed(s, "beta", "Write it", "sess-spec", [response(w, 6, "spec", 80_000)]);
-    renderApp(w, "/?view=usage");
+    await renderApp(w, "/?view=usage");
     await openTab("Context Size");
-    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    await settle(world);
+    expect(sessionsTable()).toBeInTheDocument();
     const disclosure = within(sessionsTable()).getByRole("button", { name: "4 subagents" });
     expect(disclosure).toHaveAttribute("aria-expanded", "false");
 
@@ -536,9 +573,10 @@ describe("Context Size", () => {
   });
 
   it("opens and closes the Subagents from the keyboard", async () => {
-    renderApp((await withUsage()).w, "/?view=usage");
+    await renderApp((await withUsage()).w, "/?view=usage");
     await openTab("Context Size");
-    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    await settle(world);
+    expect(sessionsTable()).toBeInTheDocument();
     const disclosure = within(sessionsTable()).getByRole("button", { name: "1 subagent" });
     expect(disclosure.tagName).toBe("BUTTON");
     disclosure.focus();
@@ -558,17 +596,19 @@ describe("Context Size", () => {
       response(w, -20 * 24 * 60, "implementation", 40_000),
       response(w, 1, "subagent", 10_000, "toolu_a"),
     ]);
-    renderApp(w, "/?view=usage");
+    await renderApp(w, "/?view=usage");
     await openTab("Context Size");
-    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    await settle(world);
+    expect(sessionsTable()).toBeInTheDocument();
     expect(sessionRows().map(cells)).toEqual([["Acme", "1", "sess-impl", "—", "—", expect.any(String), "0", "0 (10,050 with subagents)", "0"]]);
   });
 
   it("opens a session's Ticket from its link", async () => {
     const { w, impl } = await withUsage();
-    renderApp(w, "/?view=usage&days=30");
+    await renderApp(w, "/?view=usage&days=30");
     await openTab("Context Size");
-    await waitFor(() => expect(within(usage()).getByRole("table", { name: "Recent sessions" })).toBeInTheDocument());
+    await settle(world);
+    expect(within(usage()).getByRole("table", { name: "Recent sessions" })).toBeInTheDocument();
     const link = within(sessionsTable()).getAllByRole("link", {
       name: impl,
     })[0];
@@ -576,14 +616,16 @@ describe("Context Size", () => {
 
     await userEvent.click(link);
     expect(window.location.search).toBe(`?view=inbox&project=acme&ticket=${impl}`);
-    expect(await screen.findByRole("heading", { name: "Build it" })).toBeInTheDocument();
+    await settle(world);
+    expect(screen.getByRole("heading", { name: "Build it" })).toBeInTheDocument();
   });
 
   it("follows the scope", async () => {
     const { w, spec } = await withUsage();
-    renderApp(w, "/?view=usage&project=beta");
+    await renderApp(w, "/?view=usage&project=beta");
     await openTab("Context Size");
-    await waitFor(() => expect(within(usage()).getByRole("table", { name: "Recent sessions" })).toBeInTheDocument());
+    await settle(world);
+    expect(within(usage()).getByRole("table", { name: "Recent sessions" })).toBeInTheDocument();
     expect(
       within(sessionsTable())
         .getAllByRole("rowheader")
@@ -599,16 +641,17 @@ describe("Context Size", () => {
   it("says there are no sessions when there are calls but no token usage", async () => {
     const { w, s } = await projects();
     await calls(s, "acme", "find_tickets", 1, {});
-    renderApp(w, "/?view=usage&tab=calls");
-    await waitFor(() => expect(ops()).toEqual(["find_tickets"]));
+    await renderApp(w, "/?view=usage&tab=calls");
+    expect(ops()).toEqual(["find_tickets"]);
     await openTab("Context Size");
     expect(within(usage()).getByText("No sessions in All Projects over the last 7 days. Only sessions the Factory runs are counted.")).toBeInTheDocument();
     expect(within(usage()).queryByRole("table", { name: "Recent sessions" })).toBeNull();
   });
 
   it("says there are no calls when there is token usage but no calls", async () => {
-    renderApp((await withUsage()).w, "/?view=usage&tab=calls");
-    expect(await within(usage()).findByText("No Code Central calls in All Projects over the last 7 days.")).toBeInTheDocument();
+    await renderApp((await withUsage()).w, "/?view=usage&tab=calls");
+    await settle(world);
+    expect(within(usage()).getByText("No Code Central calls in All Projects over the last 7 days.")).toBeInTheDocument();
     expect(within(usage()).queryByRole("table", { name: "Code Central calls" })).toBeNull();
     await openTab("Context Size");
     expect(within(usage()).getByRole("table", { name: "Context Size by kind" })).toBeInTheDocument();
@@ -635,9 +678,10 @@ describe("the Session popup", () => {
   const search = () => new URLSearchParams(window.location.search);
 
   it("opens a session from the recent sessions as a popup of its Context Size per response, over the table", async () => {
-    renderApp(await withUsage(), "/?view=usage");
+    await renderApp(await withUsage(), "/?view=usage");
     await openTab("Context Size");
-    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    await settle(world);
+    expect(sessionsTable()).toBeInTheDocument();
     const link = within(sessionsTable()).getByRole("link", {
       name: "sess-impl",
     });
@@ -647,7 +691,8 @@ describe("the Session popup", () => {
     expect(search().get("session")).toBe("sess-impl");
     expect(search().get("session_project")).toBe("acme");
     expect(search().get("agent")).toBeNull();
-    await waitFor(() => expect(points()).toHaveLength(3));
+    await settle(world);
+    expect(points()).toHaveLength(3);
     expect(popup()).toHaveAccessibleName("Session sess-impl");
     expect(within(popup()).getByText("3 responses · peak 123,456 tokens")).toBeInTheDocument();
     expect(points().map((p) => p.getAttribute("aria-label"))).toEqual(["Response 1: 40,000 tokens", "Response 2: 123,456 tokens", "Response 3: 98,765 tokens"]);
@@ -660,16 +705,18 @@ describe("the Session popup", () => {
   });
 
   it("opens a Subagent's popup with its agent in the address, and its parent link switches the popup in place", async () => {
-    renderApp(await withUsage(), "/?view=usage&days=30");
+    await renderApp(await withUsage(), "/?view=usage&days=30");
     await openTab("Context Size");
-    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    await settle(world);
+    expect(sessionsTable()).toBeInTheDocument();
     await userEvent.click(within(sessionsTable()).getByRole("button", { name: "1 subagent" }));
     const link = within(sessionsTable()).getByRole("link", { name: "toolu_review" });
     // The link keeps the range and tab too, for a new tab or a copied link.
     expect(link).toHaveAttribute("href", "?view=usage&days=30&tab=context&session_project=acme&session=sess-impl&agent=toolu_review");
     await userEvent.click(link);
     expect(window.location.search).toBe("?view=usage&days=30&tab=context&session_project=acme&session=sess-impl&agent=toolu_review");
-    await waitFor(() => expect(points()).toHaveLength(1));
+    await settle(world);
+    expect(points()).toHaveLength(1);
     expect(popup()).toHaveAccessibleName("Session sess-impl · toolu_review");
     expect(points()[0]).toHaveAttribute("aria-label", "Response 1: 21,000 tokens");
     // Its parent stays expanded, its row marked open.
@@ -680,7 +727,8 @@ describe("the Session popup", () => {
     expect(parent).toHaveAttribute("href", "?view=usage&days=30&tab=context&session_project=acme&session=sess-impl");
     await userEvent.click(parent);
     expect(window.location.search).toBe("?view=usage&days=30&tab=context&session_project=acme&session=sess-impl");
-    await waitFor(() => expect(points()).toHaveLength(3));
+    await settle(world);
+    expect(points()).toHaveLength(3);
     // The popup switched in place: still one, now the parent's.
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     expect(popup()).toHaveAccessibleName("Session sess-impl");
@@ -690,25 +738,26 @@ describe("the Session popup", () => {
   it("names a Subagent's popup from the read and starts its parent expanded when loaded from the address", async () => {
     const w = await withUsage();
     await scenario(w).postUsage("sess-impl", [{ ...response(w, 5, "subagent", 10_000, "toolu_a"), agent_type: "Explore", description: "Map Usage sessions" }]);
-    renderApp(w, "/?view=usage&session_project=acme&session=sess-impl&agent=toolu_a");
-    await waitFor(() => expect(popup()).toHaveAccessibleName("Session sess-impl · Explore · Map Usage sessions"));
-    await within(usage()).findByRole("table", { name: "Recent sessions" });
+    await renderApp(w, "/?view=usage&session_project=acme&session=sess-impl&agent=toolu_a");
+    expect(popup()).toHaveAccessibleName("Session sess-impl · Explore · Map Usage sessions");
     const disclosure = within(sessionsTable()).getByRole("button", { name: "2 subagents" });
     expect(disclosure).toHaveAttribute("aria-expanded", "true");
     expect(within(sessionsTable()).getByRole("link", { name: "Explore · Map Usage sessions" })).toHaveAttribute("aria-current", "true");
   });
 
   it("opens a session from the address over the Context Size tab, whatever tab= says", async () => {
-    renderApp(await withUsage(), "/?view=usage&tab=calls&session_project=acme&session=sess-impl");
-    await waitFor(() => expect(points()).toHaveLength(3));
+    await renderApp(await withUsage(), "/?view=usage&tab=calls&session_project=acme&session=sess-impl");
+    await settle(world);
+    expect(points()).toHaveLength(3);
     expect(within(usage()).getByRole("tab", { selected: true })).toHaveTextContent("Context Size");
-    expect(await within(usage()).findByRole("table", { name: "Recent sessions" })).toBeInTheDocument();
+    expect(within(usage()).getByRole("table", { name: "Recent sessions" })).toBeInTheDocument();
   });
 
   it("reopens the session from the address, whatever the scope", async () => {
     const w = await withUsage();
-    renderApp(w, "/?view=usage&project=beta&session_project=acme&session=sess-impl");
-    await waitFor(() => expect(points()).toHaveLength(3));
+    await renderApp(w, "/?view=usage&project=beta&session_project=acme&session=sess-impl");
+    await settle(world);
+    expect(points()).toHaveLength(3);
     expect(scope()).toHaveValue("beta");
     expect(w.calls.filter((c) => c === "sessionUsage")).toHaveLength(1);
   });
@@ -721,14 +770,16 @@ describe("the Session popup", () => {
         throw new Error("Usage is down");
       },
     };
-    renderApp(w, "/?view=usage&session_project=acme&session=sess-impl", down);
-    expect(await within(usage()).findByRole("alert")).toHaveTextContent("Usage is down");
-    await waitFor(() => expect(points()).toHaveLength(3));
+    await renderApp(w, "/?view=usage&session_project=acme&session=sess-impl", down);
+    expect(within(usage()).getByRole("alert")).toHaveTextContent("Usage is down");
+    await settle(world);
+    expect(points()).toHaveLength(3);
   });
 
   it("shows a point's exact figures on hover or focus, with thousands separators", async () => {
-    renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-impl");
-    await waitFor(() => expect(points()).toHaveLength(3));
+    await renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-impl");
+    await settle(world);
+    expect(points()).toHaveLength(3);
     expect(within(popup()).queryByRole("tooltip")).toBeNull();
 
     await userEvent.hover(points()[1]);
@@ -753,12 +804,14 @@ describe("the Session popup", () => {
     ["Escape", () => userEvent.keyboard("{Escape}")],
     ["a click outside", () => userEvent.click(popup().parentElement!)],
   ])("closes on %s to Usage as it was: the Context Size tab, scope, range and expanded Subagents", async (_, close) => {
-    renderApp(await withUsage(), "/?view=usage&project=acme&days=30&tab=context");
-    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    await renderApp(await withUsage(), "/?view=usage&project=acme&days=30&tab=context");
+    await settle(world);
+    expect(sessionsTable()).toBeInTheDocument();
     const disclosure = within(sessionsTable()).getByRole("button", { name: "1 subagent" });
     await userEvent.click(disclosure);
     await userEvent.click(within(sessionsTable()).getByRole("link", { name: "toolu_review" }));
-    await waitFor(() => expect(points()).toHaveLength(1));
+    await settle(world);
+    expect(points()).toHaveLength(1);
 
     await close();
     noPopup();
@@ -775,8 +828,9 @@ describe("the Session popup", () => {
   });
 
   it("closes to the Context Size tab it showed over when the address named no tab", async () => {
-    renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-impl");
-    await waitFor(() => expect(points()).toHaveLength(3));
+    await renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-impl");
+    await settle(world);
+    expect(points()).toHaveLength(3);
     await userEvent.keyboard("{Escape}");
     noPopup();
     expect(window.location.search).toBe("?view=usage&tab=context");
@@ -784,35 +838,38 @@ describe("the Session popup", () => {
   });
 
   it("closes on the browser's Back, and leaves Usage on the next", async () => {
-    renderApp(await withUsage(), "/?view=inbox&project=acme");
+    await renderApp(await withUsage(), "/?view=inbox&project=acme");
     await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("link", { name: "Usage" }));
     await openTab("Context Size");
-    await waitFor(() => expect(sessionsTable()).toBeInTheDocument());
+    await settle(world);
+    expect(sessionsTable()).toBeInTheDocument();
     await userEvent.click(within(sessionsTable()).getByRole("link", { name: "sess-impl" }));
-    await waitFor(() => expect(points()).toHaveLength(3));
+    await settle(world);
+    expect(points()).toHaveLength(3);
 
-    act(() => window.history.back());
-    await waitFor(noPopup);
+    await back();
+    noPopup();
     expect(search().get("session")).toBeNull();
     expect(within(usage()).getByRole("tab", { selected: true })).toHaveTextContent("Context Size");
 
-    act(() => window.history.back());
-    await waitFor(() => expect(within(usage()).getByRole("tab", { selected: true })).toHaveTextContent("Token usage"));
-    act(() => window.history.back());
-    expect(await screen.findByRole("navigation", { name: "Filters" })).toBeInTheDocument();
+    await back();
+    expect(within(usage()).getByRole("tab", { selected: true })).toHaveTextContent("Token usage");
+    await back();
+    expect(screen.getByRole("navigation", { name: "Filters" })).toBeInTheDocument();
   });
 
   it("returns to where Usage was opened from once the popup is closed", async () => {
-    renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-impl&back=view%3Dfocus%26project%3Dacme");
-    await waitFor(() => expect(points()).toHaveLength(3));
+    await renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-impl&back=view%3Dfocus%26project%3Dacme");
+    await settle(world);
+    expect(points()).toHaveLength(3);
     await userEvent.keyboard("{Escape}");
     await userEvent.click(within(usage()).getByRole("button", { name: "Back to Focus Mode" }));
     expect(window.location.search).toBe("?view=focus&project=acme");
   });
 
   it("says when a session has no responses in the days Usage keeps", async () => {
-    renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-gone");
-    await waitFor(() => expect(within(popup()).getByText("No responses for this session in the 90 days Usage keeps.")).toBeInTheDocument());
+    await renderApp(await withUsage(), "/?view=usage&session_project=acme&session=sess-gone");
+    expect(within(popup()).getByText("No responses for this session in the 90 days Usage keeps.")).toBeInTheDocument();
     expect(within(popup()).queryByRole("img")).toBeNull();
   });
 });
@@ -850,8 +907,9 @@ describe("Token usage", () => {
   const figures = () => within(usage()).getByRole("status", { name: "Day's figures" });
 
   it("draws one bar per day in the range, oldest first, stacked by token type", async () => {
-    renderApp(await withUsage(), "/?view=usage");
-    await waitFor(() => expect(bars()).toHaveLength(7));
+    await renderApp(await withUsage(), "/?view=usage");
+    await settle(world);
+    expect(bars()).toHaveLength(7);
     expect(bars()[6]).toHaveAccessibleName(/: 248,520 tokens$/);
     expect(bars()[4]).toHaveAccessibleName(/: 9,805 tokens$/);
     expect(bars()[5]).toHaveAccessibleName(/: 0 tokens$/);
@@ -862,12 +920,14 @@ describe("Token usage", () => {
     ).toEqual(["Input", "Cache write", "Cache read", "Output"]);
 
     await userEvent.selectOptions(range(), "Last 30 days");
-    await waitFor(() => expect(bars()).toHaveLength(30));
+    await settle(world);
+    expect(bars()).toHaveLength(30);
   });
 
   it("shows a bar's exact figures with thousands separators on hover, and never a dollar figure", async () => {
-    renderApp(await withUsage(), "/?view=usage");
-    await waitFor(() => expect(bars()).toHaveLength(7));
+    await renderApp(await withUsage(), "/?view=usage");
+    await settle(world);
+    expect(bars()).toHaveLength(7);
     await userEvent.hover(bars()[6]);
     const shown = within(figures());
     expect(shown.getByText("Input").nextSibling).toHaveTextContent("20");
@@ -880,8 +940,9 @@ describe("Token usage", () => {
 
   it("filters the bars by kind without reading Usage again", async () => {
     const w = await withUsage();
-    renderApp(w, "/?view=usage");
-    await waitFor(() => expect(bars()).toHaveLength(7));
+    await renderApp(w, "/?view=usage");
+    await settle(world);
+    expect(bars()).toHaveLength(7);
     const reads = w.calls.filter((c) => c === "usage").length;
     expect(
       within(kind())
@@ -901,19 +962,20 @@ describe("Token usage", () => {
   });
 
   it("goes back to all kinds when the chosen kind isn't in the new scope", async () => {
-    renderApp(await withUsage(), "/?view=usage");
-    await waitFor(() => expect(bars()).toHaveLength(7));
+    await renderApp(await withUsage(), "/?view=usage");
+    await settle(world);
+    expect(bars()).toHaveLength(7);
     await userEvent.selectOptions(kind(), "review");
-    await waitFor(() => expect(within(scope()).getAllByRole("option")).toHaveLength(4));
+    await settle(world);
+    expect(within(scope()).getAllByRole("option")).toHaveLength(4);
     await userEvent.selectOptions(scope(), "Beta");
 
-    await waitFor(() =>
-      expect(
-        within(kind())
-          .getAllByRole("option")
-          .map((o) => o.textContent),
-      ).toEqual(["All kinds", "spec"]),
-    );
+    await settle(world);
+    expect(
+      within(kind())
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["All kinds", "spec"]);
     expect(kind()).toHaveValue("");
     expect(bars()[6]).toHaveAccessibleName(/: 73,907 tokens$/);
   });
@@ -921,10 +983,8 @@ describe("Token usage", () => {
   it("says there is no token usage when there are calls but no sessions", async () => {
     const { w, s } = await projects();
     await calls(s, "acme", "find_tickets", 1, {});
-    renderApp(w, "/?view=usage");
-    expect(
-      await within(usage()).findByText("No token usage in All Projects over the last 7 days. Only sessions the Factory runs are counted."),
-    ).toBeInTheDocument();
+    await renderApp(w, "/?view=usage");
+    expect(within(usage()).getByText("No token usage in All Projects over the last 7 days. Only sessions the Factory runs are counted.")).toBeInTheDocument();
     expect(within(usage()).queryByRole("group", { name: "Token usage per day" })).toBeNull();
   });
 });

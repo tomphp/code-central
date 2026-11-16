@@ -4,14 +4,14 @@
 // and New fix Ticket (code-central-264) carry a note prefilled with the
 // failed run's link and failed jobs; and Re-run failed jobs
 // (code-central-265) puts the Ticket back to waiting on CI.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../../App";
 import { newWorld, type World } from "../../api/core/core";
-import { scenario } from "../../api/scenario";
 import type { CIRunView, LandingMethod } from "../../api/types";
 import { rowDetail } from "../../format";
+import { scenario, settle } from "../../worldTesting";
 
 const COMMIT = "abc1234567";
 const RUN_URL = "https://github.com/acme/web/actions/runs/1";
@@ -46,16 +46,17 @@ async function world(method: LandingMethod = "merge", conclusion: "failure" | "c
 
 type Failed = Awaited<ReturnType<typeof world>>;
 
-function renderAt(w: World, url: string) {
+async function renderAt(w: World, url: string) {
   window.history.replaceState(null, "", url);
   render(<App api={w.api} now={w.now} />);
+  await settle(w);
 }
 
 // pane is the Inbox's Ticket pane with the Ticket open.
 async function pane({ w, id }: Failed) {
-  renderAt(w, `/?view=inbox&ticket=${id}`);
+  await renderAt(w, `/?view=inbox&ticket=${id}`);
   const p = screen.getByRole("complementary", { name: "Ticket" });
-  await within(p).findByRole("region", { name: "CI failed" });
+  within(p).getByRole("region", { name: "CI failed" });
   return p;
 }
 
@@ -82,12 +83,13 @@ describe("the CI failed panel", () => {
     const options = within(p).getByRole("group", { name: "Failure options" });
     await userEvent.click(within(options).getByRole("button", { name: "Land anyway" }));
 
-    await waitFor(() => expect(x.w.actions()).toContain("land_anyway"));
+    await settle(x.w);
+    expect(x.w.actions()).toContain("land_anyway");
     const t = await x.w.api.getTicket("acme", x.id);
     expect(t).toMatchObject({ state: "Accepted", land_anyway: true });
     expect(t.needs_me_reason).toBeUndefined();
     expect((await x.w.api.needsMe()).count).toBe(0);
-    await waitFor(() => expect(within(p).getByRole("region", { name: "CI" })).toHaveTextContent("You accepted its failed CI result"));
+    expect(within(p).getByRole("region", { name: "CI" })).toHaveTextContent("You accepted its failed CI result");
     expect(within(p).queryByRole("button", { name: "Land anyway" })).toBeNull();
   });
 
@@ -124,41 +126,44 @@ describe("the CI failed panel", () => {
     const options = within(p).getByRole("group", { name: "Failure options" });
     await userEvent.click(within(options).getByRole("button", { name: "Re-run failed jobs" }));
 
-    await waitFor(() => expect(x.w.actions()).toContain("rerun_ci"));
+    await settle(x.w);
+    expect(x.w.actions()).toContain("rerun_ci");
     const t = await x.w.api.getTicket("acme", x.id);
     expect(t).toMatchObject({ state: "Accepted", ci_result: "running" });
     expect(t).not.toHaveProperty("ci_failure_options");
     // Under Branch the Ticket is still to merge, by the human.
     expect((await x.w.api.needsMe()).groups.map((g) => g.reason)).toEqual(method === "branch" ? ["to_merge"] : []);
-    await waitFor(() => expect(within(p).queryByRole("region", { name: "CI failed" })).toBeNull());
+    expect(within(p).queryByRole("region", { name: "CI failed" })).toBeNull();
   });
 
   it("is the Focus Item's panel, and Re-run failed jobs works from there", async () => {
     const x = await world();
-    renderAt(x.w, "/?view=focus");
-    const item = await screen.findByRole("article", { name: "Focus Item" });
-    const panel = await within(item).findByRole("region", { name: "CI failed" });
+    await renderAt(x.w, "/?view=focus");
+    const item = screen.getByRole("article", { name: "Focus Item" });
+    const panel = within(item).getByRole("region", { name: "CI failed" });
     await userEvent.click(within(panel).getByRole("button", { name: "Re-run failed jobs" }));
-    await waitFor(async () => expect((await x.w.api.getTicket("acme", x.id)).ci_result).toBe("running"));
+    await settle(x.w);
+    expect((await x.w.api.getTicket("acme", x.id)).ci_result).toBe("running");
   });
 
   it("offers Re-run failed jobs on the Focus Item under Branch + Push", async () => {
     const x = await world("branch");
-    renderAt(x.w, "/?view=focus");
-    const item = await screen.findByRole("article", { name: "Focus Item" });
-    const panel = await within(item).findByRole("region", { name: "CI failed" });
+    await renderAt(x.w, "/?view=focus");
+    const item = screen.getByRole("article", { name: "Focus Item" });
+    const panel = within(item).getByRole("region", { name: "CI failed" });
     expect(within(panel).getByRole("button", { name: "Re-run failed jobs" })).toBeInTheDocument();
     expect(within(panel).queryByRole("button", { name: "Land anyway" })).toBeNull();
   });
 
   it("is the Focus Item's panel, and Land anyway works from there", async () => {
     const x = await world();
-    renderAt(x.w, "/?view=focus");
-    const item = await screen.findByRole("article", { name: "Focus Item" });
+    await renderAt(x.w, "/?view=focus");
+    const item = screen.getByRole("article", { name: "Focus Item" });
     expect(within(item).getByText("Focus: CI failed")).toBeInTheDocument();
-    const panel = await within(item).findByRole("region", { name: "CI failed" });
+    const panel = within(item).getByRole("region", { name: "CI failed" });
     await userEvent.click(within(panel).getByRole("button", { name: "Land anyway" }));
-    await waitFor(async () => expect((await x.w.api.getTicket("acme", x.id)).land_anyway).toBe(true));
+    await settle(x.w);
+    expect((await x.w.api.getTicket("acme", x.id)).land_anyway).toBe(true);
   });
 
   it("says in its Needs Me row what failed", async () => {
@@ -182,7 +187,8 @@ describe("the CI failed panel", () => {
     await userEvent.type(note, " Also check the login test.");
     await userEvent.click(within(p).getByRole("button", { name: "Send back to fix" }));
 
-    await waitFor(() => expect(x.w.actions()).toContain("send_back"));
+    await settle(x.w);
+    expect(x.w.actions()).toContain("send_back");
     const t = await x.w.api.getTicket("acme", x.id);
     expect(t.state).toBe("Ready");
     expect(t.comments!.at(-1)?.body).toMatch(/^CI failed at abc1234:[\s\S]*runs\/1\)[\s\S]*Also check the login test\.$/);
@@ -194,7 +200,8 @@ describe("the CI failed panel", () => {
     const p = await pane(x);
     await userEvent.click(within(p).getByRole("button", { name: "New fix Ticket" }));
 
-    await waitFor(() => expect(x.w.actions()).toContain("new_fix_ticket"));
+    await settle(x.w);
+    expect(x.w.actions()).toContain("new_fix_ticket");
     const fix = await fixOf(x);
     expect(fix).toMatchObject({ state: "Ready", spec: { title: "CI Fixes" }, title: `Fix the CI failure of ${x.id}: Login page` });
     expect(fix.description).toContain(`[CI](${RUN_URL})`);
@@ -203,7 +210,7 @@ describe("the CI failed panel", () => {
     expect(t.land_anyway).toBeFalsy();
     expect(t.comments!.at(-1)?.body).toContain(fix.id);
     expect((await x.w.api.needsMe()).count).toBe(0);
-    await waitFor(() => expect(p).toHaveTextContent(`${fix.id} fixes this CI failure forward`));
+    expect(p).toHaveTextContent(`${fix.id} fixes this CI failure forward`);
   });
 
   it("needs a note for either fix", async () => {
@@ -219,28 +226,30 @@ describe("the CI failed panel", () => {
     const options = within(p).getByRole("group", { name: "Failure options" });
     expect(within(options).getByRole("button", { name: "Send back to fix" })).toBeInTheDocument();
     await userEvent.click(within(options).getByRole("button", { name: "New fix Ticket" }));
-    await waitFor(async () => expect((await fixOf(x)).state).toBe("Ready"));
+    await settle(x.w);
+    expect((await fixOf(x)).state).toBe("Ready");
     // The Ticket is still to merge, by the human.
     expect((await x.w.api.needsMe()).groups.map((g) => g.reason)).toEqual(["to_merge"]);
   });
 
   it("offers both fixes on the Focus Item", async () => {
     const x = await world();
-    renderAt(x.w, "/?view=focus");
-    const item = await screen.findByRole("article", { name: "Focus Item" });
-    const panel = await within(item).findByRole("region", { name: "CI failed" });
+    await renderAt(x.w, "/?view=focus");
+    const item = screen.getByRole("article", { name: "Focus Item" });
+    const panel = within(item).getByRole("region", { name: "CI failed" });
     expect(within(panel).getByRole("button", { name: "New fix Ticket" })).toBeInTheDocument();
     await userEvent.click(within(panel).getByRole("button", { name: "Send back to fix" }));
-    await waitFor(async () => expect((await x.w.api.getTicket("acme", x.id)).state).toBe("Ready"));
+    await settle(x.w);
+    expect((await x.w.api.getTicket("acme", x.id)).state).toBe("Ready");
   });
 });
 
 describe("the CI cancelled panel", () => {
   it("shows the cancelled result and run in grey, with Re-run, Land anyway and Send back but no New fix Ticket", async () => {
     const { w, id } = await world("merge", "cancelled");
-    renderAt(w, `/?view=inbox&ticket=${id}`);
+    await renderAt(w, `/?view=inbox&ticket=${id}`);
     const p = screen.getByRole("complementary", { name: "Ticket" });
-    const panel = await within(p).findByRole("region", { name: "CI cancelled" });
+    const panel = within(p).getByRole("region", { name: "CI cancelled" });
     const ci = within(panel).getByRole("region", { name: "CI" });
     expect(within(ci).getAllByText("cancelled").length).toBeGreaterThan(0);
     for (const el of within(ci).getAllByText("cancelled").filter((e) => e.className.includes("ci-"))) {

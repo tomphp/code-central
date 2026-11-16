@@ -1,13 +1,12 @@
 // The In Review panel on the WASM Core: what it shows and which action it
 // calls with what payload, including Reject needing a comment.
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../../App";
 import { newWorld } from "../../api/core/core";
-import { scenario, type Scenario } from "../../api/scenario";
+import type { Scenario } from "../../api/scenario";
 import type { TicketView } from "../../api/types";
-import { renderLive } from "../../worldTesting";
+import { renderApp, renderLive, scenario } from "../../worldTesting";
 import { ReviewPanel } from "./panel";
 
 // world has acme's Login page In Review, its finish summary body among
@@ -37,10 +36,9 @@ async function renderPanel({ w, id }: Review) {
 // whole app, and returns its Summary region.
 async function renderSummaryInApp(body: string) {
   const { w, id } = await world(body);
-  window.history.replaceState(null, "", `/?view=inbox&ticket=${id}`);
-  render(<App api={w.api} now={w.now} />);
+  await renderApp(w, `/?view=inbox&ticket=${id}`);
   const pane = screen.getByRole("complementary", { name: "Ticket" });
-  const panel = await within(pane).findByRole("region", { name: "In Review" });
+  const panel = within(pane).getByRole("region", { name: "In Review" });
   return within(panel).getByLabelText("Summary");
 }
 
@@ -244,9 +242,8 @@ describe("the In Review panel", () => {
 
   it("is the action panel for an In Review Ticket in the inbox", async () => {
     const { w, id } = await world();
-    window.history.replaceState(null, "", `/?view=inbox&ticket=${id}`);
-    render(<App api={w.api} now={w.now} />);
+    await renderApp(w, `/?view=inbox&ticket=${id}`);
     const pane = screen.getByRole("complementary", { name: "Ticket" });
-    expect(await within(pane).findByRole("region", { name: "In Review" })).toHaveTextContent("Added the login page");
+    expect(within(pane).getByRole("region", { name: "In Review" })).toHaveTextContent("Added the login page");
   });
 });

@@ -1,13 +1,12 @@
 // The Resume-then-Release panel, for an Answered Ticket and a Silent or
 // Long Claim, on the WASM Core through the real App. On a Silent or Long
 // Claim, release reads "Stop".
-import { render, screen, within, waitFor } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../../App";
 import { newWorld, type World } from "../../api/core/core";
-import { scenario, type Scenario } from "../../api/scenario";
-import { renderLive } from "../../worldTesting";
+import type { Scenario } from "../../api/scenario";
+import { renderApp as renderAppAt, renderLive, scenario, settle } from "../../worldTesting";
 import { panel as resumePanel } from "./panel";
 
 const MINUTE = 60_000;
@@ -72,19 +71,16 @@ async function answeredWorld(claimSession = true) {
   return { w, s, id };
 }
 
-function renderApp(w: World, id: string) {
-  window.history.replaceState(null, "", `/?view=inbox&ticket=${id}`);
-  return render(<App api={w.api} now={w.now} />);
-}
+const renderApp = (w: World, id: string) => renderAppAt(w, `/?view=inbox&ticket=${id}`);
 
-const panel = () => screen.findByRole("region", { name: "Resume or release" });
+const panel = () => screen.getByRole("region", { name: "Resume or release" });
 
 describe("the Resume-then-Release panel", () => {
   it("shows a Silent Claim's quiet time, then a copyable resume command for its session", async () => {
     const user = userEvent.setup();
     const { w, id } = await silentWorld("sess-42");
-    renderApp(w, id);
-    const p = await panel();
+    await renderApp(w, id);
+    const p = panel();
     expect(p).toHaveTextContent("Quiet for 45m");
     expect(within(p).getByText("claude --resume sess-42")).toBeInTheDocument();
 
@@ -95,8 +91,8 @@ describe("the Resume-then-Release panel", () => {
 
   it("says when no session ID is recorded, and offers no resume command", async () => {
     const { w, id } = await silentWorld(undefined);
-    renderApp(w, id);
-    const p = await panel();
+    await renderApp(w, id);
+    const p = panel();
     expect(p).toHaveTextContent("No session ID is recorded");
     expect(within(p).queryByText(/claude --resume/)).toBeNull();
     expect(within(p).queryByRole("button", { name: "Copy" })).toBeNull();
@@ -105,8 +101,8 @@ describe("the Resume-then-Release panel", () => {
   it("shows the Claim's Resume Command from its working directory", async () => {
     const user = userEvent.setup();
     const { w, id } = await silentWorld("sess-42", { working_dir: "/work/acme-1", resume_command: "codex resume sess-42" });
-    renderApp(w, id);
-    const p = await panel();
+    await renderApp(w, id);
+    const p = panel();
     expect(within(p).getByText("cd /work/acme-1 && codex resume sess-42")).toBeInTheDocument();
     await user.click(within(p).getByRole("button", { name: "Copy" }));
     expect(await navigator.clipboard.readText()).toBe("cd /work/acme-1 && codex resume sess-42");
@@ -114,28 +110,28 @@ describe("the Resume-then-Release panel", () => {
 
   it("leaves out the cd when no working directory is recorded", async () => {
     const { w, id } = await silentWorld(undefined, { resume_command: "codex resume x" });
-    renderApp(w, id);
-    const p = await panel();
+    await renderApp(w, id);
+    const p = panel();
     expect(within(p).getByText("codex resume x")).toBeInTheDocument();
     expect(p).not.toHaveTextContent("No session ID is recorded");
   });
 
   it("falls back to claude --resume from the working directory when no command is set", async () => {
     const { w, id } = await silentWorld("sess-42", { working_dir: "/work/acme-1" });
-    renderApp(w, id);
-    expect(within(await panel()).getByText("cd /work/acme-1 && claude --resume sess-42")).toBeInTheDocument();
+    await renderApp(w, id);
+    expect(within(panel()).getByText("cd /work/acme-1 && claude --resume sess-42")).toBeInTheDocument();
   });
 
   it("quotes a working directory the shell would split", async () => {
     const { w, id } = await silentWorld("sess-42", { working_dir: "/work/my repo", resume_command: "agent resume" });
-    renderApp(w, id);
-    expect(within(await panel()).getByText("cd '/work/my repo' && agent resume")).toBeInTheDocument();
+    await renderApp(w, id);
+    expect(within(panel()).getByText("cd '/work/my repo' && agent resume")).toBeInTheDocument();
   });
 
   it("on an Answered Ticket shows how long it has waited and the Round's answers, collapsed", async () => {
     const { w, id } = await answeredWorld();
-    renderApp(w, id);
-    const p = await panel();
+    await renderApp(w, id);
+    const p = panel();
     expect(p).toHaveTextContent("Answered 3h ago, no session has picked it up");
     // The live Claim's session wins over the Round's: set_session updates it.
     expect(within(p).getByText("claude --resume sess-claim")).toBeInTheDocument();
@@ -153,16 +149,16 @@ describe("the Resume-then-Release panel", () => {
 
   it("falls back to the latest Round's session when the Claim has none", async () => {
     const { w, id } = await answeredWorld(false);
-    renderApp(w, id);
-    expect(within(await panel()).getByText("claude --resume sess-round")).toBeInTheDocument();
+    await renderApp(w, id);
+    expect(within(panel()).getByText("claude --resume sess-round")).toBeInTheDocument();
   });
 
   it("shows a Long Claim in Needs Me with how long since it last moved, its resume command, and Stop", async () => {
     const user = userEvent.setup();
     const { w, id } = await longWorld();
-    renderApp(w, id);
+    await renderApp(w, id);
     const list = screen.getByRole("main", { name: "Tickets" });
-    expect(await within(list).findByRole("link", { name: new RegExp(id) })).toHaveTextContent("No move for 1h");
+    expect(within(list).getByRole("link", { name: new RegExp(id) })).toHaveTextContent("No move for 1h");
     expect(within(list).getByRole("heading", { level: 3 })).toHaveTextContent("Long Claim");
 
     const p = await panel();
@@ -173,25 +169,26 @@ describe("the Resume-then-Release panel", () => {
     await user.click(within(p).getByRole("button", { name: "Stop…" }));
     expect(within(p).getByRole("alert")).toHaveTextContent("a live session's next write will be rejected");
     await user.click(within(p).getByRole("button", { name: "Stop Claim" }));
-    await waitFor(() => expect(w.calls).toContain("release"));
+    await settle(w);
+    expect(w.calls).toContain("release");
     expect((await w.api.getTicket("acme", id)).state).toBe("Ready");
   });
 
   it("labels release Stop on a Silent Claim and Release on an Answered Ticket", async () => {
     const silent = await silentWorld("sess-42");
-    const view = renderApp(silent.w, silent.id);
-    expect(within(await panel()).getByRole("button", { name: "Stop…" })).toBeInTheDocument();
+    const view = await renderApp(silent.w, silent.id);
+    expect(within(panel()).getByRole("button", { name: "Stop…" })).toBeInTheDocument();
     view.unmount();
     const answered = await answeredWorld();
-    renderApp(answered.w, answered.id);
-    expect(within(await panel()).getByRole("button", { name: "Release…" })).toBeInTheDocument();
+    await renderApp(answered.w, answered.id);
+    expect(within(panel()).getByRole("button", { name: "Release…" })).toBeInTheDocument();
   });
 
   it("warns before stopping a Silent Claim, then sends the note", async () => {
     const user = userEvent.setup();
     const { w, id } = await silentWorld("sess-42");
-    renderApp(w, id);
-    const p = await panel();
+    await renderApp(w, id);
+    const p = panel();
     expect(within(p).queryByRole("alert")).toBeNull();
 
     await user.click(within(p).getByRole("button", { name: "Stop…" }));
@@ -203,7 +200,8 @@ describe("the Resume-then-Release panel", () => {
     await user.type(within(p).getByRole("textbox", { name: "Note (optional)" }), "Session died overnight");
     await user.click(within(p).getByRole("button", { name: "Stop Claim" }));
 
-    await waitFor(() => expect(w.calls).toContain("release"));
+    await settle(w);
+    expect(w.calls).toContain("release");
     const t = await w.api.getTicket("acme", id);
     expect(t.state).toBe("Ready");
     expect(t.comments!.at(-1)).toMatchObject({ actor: "human", body: "Session died overnight" });
@@ -214,8 +212,8 @@ describe("the Resume-then-Release panel", () => {
     const user = userEvent.setup();
     const { w, id } = await answeredWorld();
     const before = (await w.api.getTicket("acme", id)).comments;
-    renderApp(w, id);
-    const p = await panel();
+    await renderApp(w, id);
+    const p = panel();
 
     await user.click(within(p).getByRole("button", { name: "Release…" }));
     await user.click(within(p).getByRole("button", { name: "Keep the Claim" }));
@@ -223,7 +221,8 @@ describe("the Resume-then-Release panel", () => {
 
     await user.click(within(p).getByRole("button", { name: "Release…" }));
     await user.click(within(p).getByRole("button", { name: "Release Claim" }));
-    await waitFor(() => expect(w.calls).toContain("release"));
+    await settle(w);
+    expect(w.calls).toContain("release");
     const t = await w.api.getTicket("acme", id);
     expect(t.state).toBe("Ready");
     expect(t.comments).toEqual(before);
@@ -237,10 +236,11 @@ describe("the Resume-then-Release panel", () => {
     const stale = await w.api.getTicket("acme", id);
     await s.human(`${s.ticketPath("acme", id)}/release`, {});
     await renderLive(w, <resumePanel.Component project="acme" ticket={stale} now={w.now()} />);
-    const p = await panel();
+    const p = panel();
     await user.click(within(p).getByRole("button", { name: "Stop…" }));
     await user.click(within(p).getByRole("button", { name: "Stop Claim" }));
-    expect(await within(p).findByText(/release is not allowed/)).toBeInTheDocument();
+    await settle(w);
+    expect(within(p).getByText(/release is not allowed/)).toBeInTheDocument();
     expect(within(p).getByRole("button", { name: "Stop Claim" })).toBeEnabled();
   });
 });
