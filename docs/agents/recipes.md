@@ -16,7 +16,7 @@ Examples to copy: `02bd5d9` (`keep_as_draft`: a human operation with UI) and `89
 
 ## Change a store file
 
-Any change to a store file struct (`store/file.go`), its yaml tags or a checked value set bumps the store format, even an additive one. Run `go test ./core -run TestTheStoreSchemaMatchesItsSnapshot`: when it fails, it prints the four steps and the snapshot to diff against. The example to copy is `8964c77`'s `store/migrate_claim_model_test.go`.
+Any change to a store file struct (`store/file.go`), its yaml tags or a checked value set bumps the store format, even an additive one. File structs and their encode/decode stay explicit on purpose, so write them by hand and don't propose a generator: see [ADR 0003](../adr/0003-the-store-is-yaml-files-loaded-into-memory.md). Run `go test ./core -run TestTheStoreSchemaMatchesItsSnapshot`: when it fails, it prints the four steps and the snapshot to diff against. The example to copy is `8964c77`'s `store/migrate_claim_model_test.go`.
 
 Parallel Tickets each bump the format, so they collide at merge. When merging the base brings in a format your branch also claimed, your migration moves to the next number. Renumber its `From` in `store/migrate.go` and `currentFormat`, keep the base's snapshot for the format it took, and write yours for the next format by running the snapshot test with `-write-store-schema`. Merge commit `8093159` shows this.
 
