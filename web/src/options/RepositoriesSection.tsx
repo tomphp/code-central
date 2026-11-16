@@ -98,6 +98,7 @@ export function RepositoriesSection({ project }: { project: ProjectRow }) {
         save={(r) => api.addRepository(project.key, r)}
         withName
         clearOnSave
+        ciChoice={project.ci.tracking}
       />
     </fieldset>
   );
@@ -230,36 +231,48 @@ function CloneStatus({ clone }: { clone?: CloneView }) {
   );
 }
 
+// RepositoryFields are a Repository's fields as its form edits them.
+type RepositoryFields = Required<Omit<RepositoryAdd, "ci">>;
+
 // RepositoryForm is a Repository's fields: adding one, with its name, or
-// editing one in place, whose name never changes.
+// editing one in place, whose name never changes. With ciChoice, while CI
+// Tracking is on, adding one also chooses whether CI Tracking watches it,
+// as its Clone URL names it, or leaves it Not watched.
 function RepositoryForm(props: {
   label: string;
-  initial: Required<RepositoryAdd>;
+  initial: RepositoryFields;
   submit: string;
-  save(r: Required<RepositoryAdd>): Promise<unknown>;
+  save(r: RepositoryAdd): Promise<unknown>;
   cancel?(): void;
   withName?: boolean;
   clearOnSave?: boolean;
+  ciChoice?: boolean;
 }) {
-  const { label, initial, submit, save, cancel, withName, clearOnSave } = props;
-  const [draft, setDraft] = useState<Required<RepositoryAdd>>({
+  const { label, initial, submit, save, cancel, withName, clearOnSave, ciChoice } = props;
+  const [draft, setDraft] = useState<RepositoryFields>({
     name: initial.name,
     clone_url: initial.clone_url,
     base: initial.base,
     local_path: initial.local_path,
   });
+  const [watchCI, setWatchCI] = useState(true);
   const [error, setError] = useState<ApiError>();
   const id = useId();
 
-  const edit = (patch: Partial<RepositoryAdd>) => {
+  const edit = (patch: Partial<RepositoryFields>) => {
     setDraft((d) => ({ ...d, ...patch }));
     setError(undefined);
   };
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     setError(undefined);
-    save(draft).then(
-      () => clearOnSave && setDraft(initial),
+    save(ciChoice && !watchCI ? { ...draft, ci: { not_watched: true } } : draft).then(
+      () => {
+        if (clearOnSave) {
+          setDraft(initial);
+          setWatchCI(true);
+        }
+      },
       (e: ApiError) => setError(e),
     );
   };
@@ -313,6 +326,20 @@ function RepositoryForm(props: {
           {...invalid("local_path")}
         />
       </Field>
+      {ciChoice && (
+        <label className="project-options-check">
+          <input
+            type="checkbox"
+            checked={watchCI}
+            onChange={(e) => {
+              setWatchCI(e.target.checked);
+              setError(undefined);
+            }}
+            {...invalid("ci.repository")}
+          />{" "}
+          Watch its CI, as its Clone URL names it; unchecked, it is Not watched
+        </label>
+      )}
       {error && <Refusal id={`${id}-error`} error={error} />}
       <div className="project-options-actions">
         <Button type="submit" variant="primary" disabled={!filled}>

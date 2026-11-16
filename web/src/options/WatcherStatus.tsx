@@ -42,7 +42,26 @@ export function WatcherStatus({
       {watcher.state === "not_reported" && (
         <p className="muted">{name}: Starting; it hasn&apos;t reported yet.</p>
       )}
-      {watcher.state === "error" && (
+      {watcher.state === "error" && watcher.repositories && watcher.repositories.length > 0 && (
+        <div className="warning">
+          <p>{name}: Error in {watcher.repositories.length === 1 ? "a Repository" : `${watcher.repositories.length} Repositories`}. It carries on watching the others.</p>
+          <ul aria-label={`${name}'s errors`}>
+            {watcher.repositories.map((r) => (
+              <li key={r.repository}>
+                <strong>{r.repository}</strong>: {r.message}
+                {r.fix && (
+                  <>
+                    <br />
+                    {r.fix}
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p>It tries again every 2 minutes, and goes back to Watching each once the cause is fixed.</p>
+        </div>
+      )}
+      {watcher.state === "error" && !watcher.repositories?.length && (
         <p className="warning">
           {name}: Error. {watcher.message}
           {watcher.fix && (

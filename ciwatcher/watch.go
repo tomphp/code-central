@@ -76,7 +76,7 @@ func WatchArgs(project string) []string { return []string{Command, "--project", 
 func Watch(ctx context.Context, cfg Config) error {
 	ctx, cancel := watchers.UntilStdinCloses(ctx, cfg.Stdin)
 	defer cancel()
-	w := &watcher{Config: cfg, reported: map[runKey]time.Time{}, rerunAsked: map[rerunKey]bool{}, fired: map[runKey]bool{}}
+	w := &watcher{Config: cfg, reported: map[runKey]time.Time{}, rerunAsked: map[rerunKey]bool{}, fired: map[runKey]bool{}, provided: map[string]provided{}}
 	var pace watchers.Pace
 	for {
 		res := w.poll(ctx)
@@ -95,7 +95,6 @@ func Watch(ctx context.Context, cfg Config) error {
 		}
 	}
 }
-
 // watcher is the watch mode's state between polls.
 type watcher struct {
 	Config
@@ -112,21 +111,29 @@ type watcher struct {
 	// fired are the runs a CI Rule fired on, so a run whose report
 	// failed is reported again without firing again.
 	fired map[runKey]bool
-	// provided is the CI Provider for providedFor, kept between polls
-	// while the settings don't change, so what a provider remembers, such
-	// as Azure Pipelines' timelines, outlives a poll.
-	provided    Provider
-	providedFor core.CICheckInput
+	// provided is each Repository's CI Provider, by Repository Name ("" for
+	// the Home), with the settings it was made for, kept between polls
+	// while they don't change, so what a provider remembers, such as Azure
+	// Pipelines' timelines, outlives a poll.
+	provided map[string]provided
 }
 
-// provider is in's CI Provider, the same one while in is the same.
-func (w *watcher) provider(in core.CICheckInput) (Provider, *core.WatcherCheckResult) {
-	if w.provided != nil && w.providedFor == in {
-		return w.provided, nil
+// provided is one Repository's CI Provider and the settings it was made
+// for.
+type provided struct {
+	p        Provider
+	settings core.CICheckInput
+}
+
+// provider is the CI Provider for the Repository repo with in, the same
+// one while in is the same.
+func (w *watcher) provider(repo string, in core.CICheckInput) (Provider, *core.WatcherCheckResult) {
+	if had, ok := w.provided[repo]; ok && had.settings == in {
+		return had.p, nil
 	}
 	p, bad := provider(in, w.Env)
 	if bad == nil {
-		w.provided, w.providedFor = p, in
+		w.provided[repo] = provided{p, in}
 	}
 	return p, bad
 }
@@ -138,8 +145,10 @@ type rerunKey struct {
 	requested time.Time
 }
 
-// runKey names one attempt of one run.
+// runKey names one attempt of one run in one Repository, "" for the
+// Home.
 type runKey struct {
+	repo    string
 	id      int64
 	attempt int
 }
@@ -155,7 +164,31 @@ type pollResult struct {
 	limit *watchers.RateLimitError
 }
 
-// poll is one poll.
+// target is one watched Repository as a poll watches it: its Name as
+// reports give it ("" for the Home Repository), the Name problems name
+// it by, its CI Provider's settings, its waiting commits and its Re-run
+// requests.
+type target struct {
+	repo, name string
+	in         core.CICheckInput
+	waiting    []core.CIWaitingCommit
+	reruns     []core.CIRerun
+}
+
+// targets are watch's watched Repositories, the Home Repository first.
+func targets(watch core.CIWatch) []target {
+	out := []target{{name: watch.Project, waiting: watch.Waiting, reruns: watch.Reruns,
+		in: core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, ProjectURL: watch.ProjectURL, PATEnv: watch.PATEnv, GHPath: watch.GHPath}}}
+	for _, r := range watch.Repositories {
+		out = append(out, target{repo: r.Name, name: r.Name, waiting: r.Waiting, reruns: r.Reruns,
+			in: core.CICheckInput{Provider: r.Provider, Repository: r.Repository, ProjectURL: r.ProjectURL, PATEnv: watch.PATEnv, GHPath: watch.GHPath}})
+	}
+	return out
+}
+
+// poll is one poll: each watched Repository in turn. One whose CI
+// Provider can't be reached is reported in error with its fix, and the
+// others are still watched.
 func (w *watcher) poll(ctx context.Context) (res pollResult) {
 	watch, err := w.Client.GetCIWatch(ctx, w.Project)
 	if err != nil {
@@ -165,37 +198,60 @@ func (w *watcher) poll(ctx context.Context) (res pollResult) {
 	if !watch.Tracking {
 		return res
 	}
-	res.waiting = len(watch.Waiting) > 0
-	p, bad := w.provider(core.CICheckInput{Provider: watch.Provider, Repository: watch.Repository, ProjectURL: watch.ProjectURL, PATEnv: watch.PATEnv, GHPath: watch.GHPath})
-	var r core.WatcherCheckResult
-	if bad != nil {
-		r = *bad
-	} else {
-		r, err = p.CheckAccess(ctx)
+	var problems []core.RepositoryProblem
+	for _, t := range targets(watch) {
+		res.waiting = res.waiting || len(t.waiting) > 0
+		problem, err := w.pollTarget(ctx, watch, t)
+		if ctx.Err() != nil {
+			// Stopped mid-poll: what failed is the stop, not GitHub.
+			return res
+		}
+		if problem.Problem != "" {
+			problems = append(problems, core.RepositoryProblem{Repository: t.name, Problem: problem.Problem, Message: problem.Reason, Fix: problem.Fix})
+		}
+		if errors.As(err, &res.limit) {
+			// Rate-limited: no more calls to the CI Provider this poll.
+			break
+		}
 	}
-	if ctx.Err() != nil {
-		// Stopped mid-poll: what failed is the stop, not GitHub.
-		return res
+	switch {
+	case len(problems) == 0:
+		res.reachable = true
+	case len(watch.Repositories) == 0:
+		// With the Home Repository alone watched, its problem is the
+		// Watcher's.
+		p := problems[0]
+		w.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherError, Problem: p.Problem, Message: p.Message, Fix: p.Fix})
+	default:
+		w.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherError, Repositories: problems})
 	}
-	if r.Problem != "" {
-		w.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
-		return res
-	}
-	if err == nil {
-		err = w.rerunFailed(ctx, p, watch.Reruns)
-	}
-	if err == nil {
-		err = w.reportRuns(ctx, p, watch.Waiting)
-	}
-	if err == nil {
-		err = w.fireRules(ctx, p, watch)
-	}
-	if ctx.Err() != nil {
-		return res
-	}
-	res.reachable = true
-	errors.As(err, &res.limit)
 	return res
+}
+
+// pollTarget polls one watched Repository: checks its CI Provider can be
+// reached, then carries out its Re-run requests, reports the runs of its
+// waiting commits and, for runs on its CI Rules' branches, fires them. It
+// returns the problem when its CI Provider can't be reached, and a
+// *watchers.RateLimitError when it was rate-limited.
+func (w *watcher) pollTarget(ctx context.Context, watch core.CIWatch, t target) (core.WatcherCheckResult, error) {
+	p, bad := w.provider(t.repo, t.in)
+	if bad != nil {
+		return *bad, nil
+	}
+	r, err := p.CheckAccess(ctx)
+	if r.Problem != "" || ctx.Err() != nil {
+		return r, nil
+	}
+	if err == nil {
+		err = w.rerunFailed(ctx, p, t.repo, t.reruns)
+	}
+	if err == nil {
+		err = w.reportRuns(ctx, p, t.repo, t.waiting)
+	}
+	if err == nil {
+		err = w.fireRules(ctx, p, watch, t.repo)
+	}
+	return core.WatcherCheckResult{}, err
 }
 
 // report reports the CI Watcher's status.
@@ -205,12 +261,12 @@ func (w *watcher) report(ctx context.Context, in core.ReportWatcherStatusInput) 
 	}
 }
 
-// rerunFailed carries out each Re-run request not yet carried out. One
-// GitHub refuses is logged and tried again next poll, until the request
-// lapses; a rate limit stops it and is returned.
-func (w *watcher) rerunFailed(ctx context.Context, p Provider, reruns []core.CIRerun) error {
+// rerunFailed carries out each Re-run request in the Repository repo not
+// yet carried out. One GitHub refuses is logged and tried again next
+// poll, until the request lapses; a rate limit stops it and is returned.
+func (w *watcher) rerunFailed(ctx context.Context, p Provider, repo string, reruns []core.CIRerun) error {
 	for _, r := range reruns {
-		k := rerunKey{runKey{r.ID, r.Attempt}, r.Requested}
+		k := rerunKey{runKey{repo, r.ID, r.Attempt}, r.Requested}
 		if w.rerunAsked[k] {
 			continue
 		}
@@ -230,11 +286,12 @@ func (w *watcher) rerunFailed(ctx context.Context, p Provider, reruns []core.CIR
 	return nil
 }
 
-// reportRuns lists the runs of each waiting pushed commit, fetches the
-// jobs of those that changed, and reports them tracked against the
-// commit's Ticket. A rate limit stops it calling the CI Provider: it
-// reports what changed so far and returns the *watchers.RateLimitError.
-func (w *watcher) reportRuns(ctx context.Context, p Provider, waiting []core.CIWaitingCommit) error {
+// reportRuns lists the runs of each waiting pushed commit in the
+// Repository repo, fetches the jobs of those that changed, and reports
+// them in repo, tracked against the commit's Ticket. A rate limit stops
+// it calling the CI Provider: it reports what changed so far and returns
+// the *watchers.RateLimitError.
+func (w *watcher) reportRuns(ctx context.Context, p Provider, repo string, waiting []core.CIWaitingCommit) error {
 	var changed []Run
 	var limit *watchers.RateLimitError
 list:
@@ -250,7 +307,7 @@ list:
 			continue
 		}
 		for _, run := range runs {
-			if at, ok := w.reported[runKey{run.ID, run.Attempt}]; ok && at.Equal(run.Updated) {
+			if at, ok := w.reported[runKey{repo, run.ID, run.Attempt}]; ok && at.Equal(run.Updated) {
 				continue
 			}
 			jobs, err := p.Jobs(ctx, run.ID, run.Attempt)
@@ -263,7 +320,7 @@ list:
 				}
 				continue
 			}
-			run.Jobs, run.Ticket = jobs, c.Ticket
+			run.Jobs, run.Ticket, run.Repository = jobs, c.Ticket, repo
 			changed = append(changed, run)
 		}
 	}
@@ -286,7 +343,7 @@ func (w *watcher) reportChanged(ctx context.Context, changed []Run) {
 	}
 	if _, err := w.Client.ReportCIRuns(ctx, w.Project, in); err == nil {
 		for _, run := range changed {
-			w.reported[runKey{run.ID, run.Attempt}] = run.Updated
+			w.reported[runKey{run.Repository, run.ID, run.Attempt}] = run.Updated
 		}
 		return
 	}
@@ -299,7 +356,7 @@ func (w *watcher) reportChanged(ctx context.Context, changed []Run) {
 			}
 			continue
 		}
-		w.reported[runKey{run.ID, run.Attempt}] = run.Updated
+		w.reported[runKey{run.Repository, run.ID, run.Attempt}] = run.Updated
 	}
 }
 

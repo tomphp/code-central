@@ -467,3 +467,50 @@ func TestUnderBranchAndPushALaterTipIsNotReportedToATicket(t *testing.T) {
 		t.Errorf("%s's pushed commit is %+v, want it left at its branch's %s", id, pc, commit)
 	}
 }
+
+// CI per Repository (Spec code-central-848): under the CI gate each
+// Repository lands on its own CI result, so a red build in another
+// Repository doesn't hold back the Home Repository's landing.
+func TestUnderTheCIGateARedBuildInAnotherRepositoryDoesNotHoldBackTheHomes(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	remote := h.AddRemote("origin")
+	mergeAndPush(h, "origin")
+	trackCI(t, h)
+	h.AddRepository("api")
+	if _, err := h.Human().SetRepositoryCI(context.Background(), h.Project, core.SetRepositoryCIInput{Name: "api", RepositoryCI: core.RepositoryCI{Repository: "acme/api"}}); err != nil {
+		t.Fatal(err)
+	}
+	r := h.Start()
+	id, pushed := gated(t, h, r, "Add a feature", "feature.txt")
+	if got := remote.Git("rev-parse", "main"); got != pushed {
+		t.Fatalf("the remote's main is at %q, want the pushed commit %s", got, pushed)
+	}
+	// Its commit in api, as pushed there, fails its CI.
+	if _, err := h.Server.Client.ReportPushedCommit(context.Background(), h.Project, core.ReportPushedCommitInput{Ticket: core.Ref(id), Commit: "def456", Branch: "main", Repository: "api"}); err != nil {
+		t.Fatal(err)
+	}
+	reportRunIn(t, h, "api", 1, id, "def456", store.CICompleted, store.CIFailure)
+	if tk := h.Ticket(id); tk.NeedsMeReason != core.ReasonCIFailed || tk.CIItem == nil || tk.CIItem.Repository != "api" {
+		t.Fatalf("reason %q, item %+v: want CI failed in api", tk.NeedsMeReason, tk.CIItem)
+	}
+
+	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CISuccess)
+	r.Poll()
+	tk := h.WantState(id, store.Done)
+	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != pushed {
+		t.Errorf("landed with %q, want the Home's pushed commit that passed, %s", m.Commit, pushed)
+	}
+}
+
+// reportRunIn reports, as the CI Watcher, run id of ci.yml on commit in
+// the Repository repo, tracked against ticket.
+func reportRunIn(t *testing.T, h *factorytest.Harness, repo string, id int64, ticket, commit string, status store.CIRunStatus, conclusion store.CIConclusion) {
+	t.Helper()
+	started := h.Clock.Now()
+	run := core.CIRunView{Repository: repo, ID: id, Attempt: 1, Workflow: "ci.yml", Name: "CI", Branch: "main", Commit: commit,
+		Status: status, Conclusion: conclusion, Started: &started, Finished: &started, URL: "https://github.com/acme/" + repo + "/actions/runs/1", Jobs: []core.CIJobView{}, Ticket: ticket}
+	if _, err := h.Server.Client.ReportCIRuns(context.Background(), h.Project, core.ReportCIRunsInput{Runs: []core.CIRunView{run}}); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -135,6 +135,19 @@ export interface RepositoryAdd {
   clone_url: string;
   base?: string;
   local_path?: string;
+  // ci is its CI entry; left out, it is filled in from the Clone URL.
+  ci?: RepositoryCIChange;
+}
+
+// A Repository's CI entry as the human sets it: Not watched, or a CI
+// Provider (GitHub Actions when left out) with what it watches.
+export interface RepositoryCIChange {
+  not_watched?: boolean;
+  provider?: CIProvider;
+  // repository is the GitHub repository as owner/name.
+  repository?: string;
+  // project_url is the Azure DevOps project as its URL.
+  project_url?: string;
 }
 
 // A change to a Repository: each field left out keeps its value, and an

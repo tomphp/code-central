@@ -286,7 +286,7 @@ type TicketView struct {
 	// Project has more than one Repository.
 	CIItem         *CIItemView  `json:"ci_item,omitempty"`
 	CIItems        []CIItemView `json:"ci_items,omitempty"`
-	WaitingForSpec bool        `json:"waiting_for_spec,omitempty"`
+	WaitingForSpec bool         `json:"waiting_for_spec,omitempty"`
 	// CIFailureOptions are the failure options, each an operation's name,
 	// the human may choose on the Ticket's CI item while it is CI failed
 	// or CI cancelled, acting on every Ticket it lists; left out

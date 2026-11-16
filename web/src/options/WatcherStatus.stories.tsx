@@ -29,3 +29,14 @@ export const Error: Story = {
     },
   },
 };
+export const ErrorInARepository: Story = {
+  args: {
+    watcher: {
+      state: "error",
+      problem: "repository_unreadable",
+      message: "api: gh can't read acme/api.",
+      fix: "Grant gh access to acme/api.",
+      repositories: [{ repository: "api", problem: "repository_unreadable", message: "gh can't read acme/api.", fix: "Grant gh access to acme/api." }],
+    },
+  },
+};
