@@ -9,7 +9,7 @@ A body of work tracked here, with its Specs, Tickets and settings, spanning one 
 _Avoid_: workspace, monorepo
 
 **Repository**:
-One git repository that a Project's work changes, however many clones or worktrees of it exist. It keeps its own history, remote and Base, and is identified within its Project by its Repository Name.
+One git repository that a Project's work changes, however many clones or worktrees of it exist. It keeps its own history, remote and Base, and is identified within its Project by its Repository Name. The Project keeps its Repositories in an order, the **landing order**: work lands in each Repository in that order, the Home Repository first by default, and the human can rearrange it. The landing order is Project-wide, never per Ticket.
 _Avoid_: Repo, module, project
 
 **Repository Name**:
@@ -200,7 +200,7 @@ A Ticket that is Done or Cancelled, or a Spec that has Tickets and all of them a
 _Avoid_: Closed, archived, complete
 
 **Land**:
-For a Ticket's accepted work to reach the Project's base, which makes the Ticket Done; whoever delivered it reports the landing. Under Pull Request a Ticket lands when the Code Host reports its pull request merged, at the host's merge commit, whatever the merge strategy. Under Merge + Push with CI Tracking on, a Ticket lands only once its CI result is passed, at the pushed commit that passed, so Done means on the remote and green at a commit containing its work. Under Land per Spec, a Spec-landed Ticket lands only with the rest of its Spec, once the Spec Branch is in the base, and, with Push and CI Tracking, once its CI result is passed.
+For a Ticket's accepted work to reach the base in every one of its Changed Repositories, which makes the Ticket Done; whoever delivered it reports the landing. It lands in each Repository by the Landing Method's own test there, and records a landed commit per Repository; until it has landed in every one it stays Accepted, and is Partly landed once it has landed in some. Under Merge a Ticket lands in a Repository once its branch is merged into that Repository's base, and with Push once that base is pushed. Under Branch it lands in a Repository once its branch is merged there. Under Pull Request it lands in a Repository when the Code Host reports that Repository's pull request merged, at the host's merge commit, whatever the merge strategy. Under Merge + Push with CI Tracking on, it lands in a Repository only once its CI result there is passed, at the pushed commit that passed, so Done means on the remote and green at a commit containing its work. Under Land per Spec, a Spec-landed Ticket lands only with the rest of its Spec, once the Spec Branch is in the base in each Repository, and, with Push and CI Tracking, once its CI result is passed.
 _Avoid_: Merge, ship, deliver, complete
 
 **Landing Method**:
@@ -235,13 +235,13 @@ The branch that a Project's work is cut from and lands on, under every Landing M
 _Avoid_: target branch, merge branch
 
 **Base missing**:
-The Needs Me reason of a Project whose base exists neither locally nor on the Push remote. It is one Focus Item per Project naming the branch and the fix. Until a later poll finds the branch, the Factory neither lands nor cuts new branches. It sits beside Base diverged.
+The Needs Me reason of a Repository whose base exists neither locally nor on the Push remote. It is one Focus Item per Repository naming the Repository, the branch and the fix. Until a later poll finds the branch, the Factory starts no new Claims, and lands nothing whose Changed Repositories include that Repository; other work still lands. It sits beside Base diverged.
 
 **Repository missing**:
 The Needs Me reason of a Repository the Factory has no usable clone of: it couldn't clone it, or found something other than a clone with a matching Clone URL where the clone should be. It is one Focus Item per Repository naming the path, the Clone URL and what is wrong. The Factory never touches what it finds there, and starts no new Claims until a later poll finds the clone. It sits beside Base missing.
 
 **Base diverged**:
-The Needs Me reason of a Project whose Factory can't bring the local base level with the remote base. Under Pull Request it means the local base holds commits the remote's doesn't, so the Factory can't fast-forward it. Under Merge + Push, where a local base that is only ahead is current, it means the local base and the remote's each hold commits the other lacks and the Factory couldn't move the local base onto the remote's: a rebuilt merge or a replayed commit conflicted, or an unpushed merge isn't one of the Factory's. It is one Focus Item per Project showing the local and remote commits and the fix, and the Factory neither lands nor cuts new branches until the human reconciles the base and its next poll brings it level cleanly.
+The Needs Me reason of a Repository whose local base the Factory can't bring level with the remote base. Under Pull Request it means the local base holds commits the remote's doesn't, so the Factory can't fast-forward it. Under Merge + Push, where a local base that is only ahead is current, it means the local base and the remote's each hold commits the other lacks and the Factory couldn't move the local base onto the remote's: a rebuilt merge or a replayed commit conflicted, or an unpushed merge isn't one of the Factory's. It is one Focus Item per Repository naming the Repository and showing the local and remote commits and the fix. Until the human reconciles the base and the Factory's next poll brings it level cleanly, the Factory starts no new Claims, and lands nothing whose Changed Repositories include that Repository; other work still lands.
 _Avoid_: Out of sync, base conflict
 
 **Land per Spec**:
@@ -249,23 +249,27 @@ A Merge and Pull Request option, on by default and kept whatever the method, by 
 _Avoid_: Spec landing, batch landing, release train
 
 **Spec Branch**:
-The local branch, `spec/<spec id>`, that a Spec's accepted implementation Tickets are merged into under Land per Spec. Each Repository has its own, cut from that Repository's Base, and each Ticket's branch in that Repository is cut from its tip; branch names are the same in every Repository. The Factory merges it into the base once the Spec is ready to land. It is pushed only under Pull Request, where the Spec's one pull request is opened from it.
+The local branch, `spec/<spec id>`, that a Spec's accepted implementation Tickets are merged into under Land per Spec. Each Repository has its own, cut from that Repository's Base, and each Ticket's branch in that Repository is cut from its tip; branch names are the same in every Repository. Once the Spec is ready to land, the Factory checks the Spec Branch of every one of the Spec's Changed Repositories against its base before any lands, then makes the same "Merge spec" commit in each, in the landing order. It is pushed only under Pull Request, where the Spec's one pull request is opened from it.
 _Avoid_: Feature branch, integration branch, epic branch
 
 **Spec merge Ticket**:
-The Ready Ticket, "Merge the base into the Spec Branch of <spec id>", that Code Central opens on a Spec when the Factory finds its Spec Branch conflicting with the base, naming the conflicting files and both tips; the Factory retries the Spec once it is accepted. Code Central marks it as one, and only its open_spec_merge sets the mark: a Ticket given the title any other way, or opened by a Factory from before the mark, is an ordinary Ticket. While one is open, a later conflict is commented on it, and the same conflict again writes nothing.
+The Ready Ticket, "Merge the base into the Spec Branch of <spec id>", that Code Central opens, at the Factory's request, on a Spec whose Spec Branch conflicts with the base in any of its Changed Repositories, so an agent merges the base into the Spec Branch. There is one per Spec: it names each conflicting Repository with its files and both tips, and the Factory retries the Spec once it is accepted. While one is open, a later conflict is commented on it, and the same conflict again writes nothing. It carries a stored mark that only Code Central's open_spec_merge sets, which gives it the Merge results Auto-accept kind: a Ticket given the title any other way, or opened before the mark existed, is an ordinary Ticket and stays manual.
 _Avoid_: Conflict Ticket, merge Ticket
 
 **Waiting for the Spec**:
 The status shown on an Accepted Ticket under Land per Spec whose work isn't yet in the base, because the rest of its Spec isn't done. It is not a State, and the Ticket isn't flagged in Needs Me as Accepted but not landed.
 _Avoid_: Held, queued, staged
 
+**Partly landed**:
+The status shown on an Accepted Ticket that has landed in some of its Changed Repositories but not all. Under Land per Spec it is shown on a Spec's Tickets the same way. It is a status, not a State, like Waiting for the Spec.
+_Avoid_: Half landed, partially merged, split
+
 **Accepted but not landed**:
-The Needs Me reason of an Accepted Ticket, under Merge, that has not landed after a while, so the Factory may be stuck. It leaves out a Ticket that is Waiting for the Spec.
+The Needs Me reason of an Accepted Ticket, under Merge, that has not landed after a while, so the Factory may be stuck. For a Partly landed Ticket it names the Repositories that have landed and those that haven't; Partly landed is not a reason of its own. It leaves out a Ticket that is Waiting for the Spec.
 _Avoid_: Stuck, stale
 
 **Push**:
-A Landing Method's option to send the work to a named git remote: the base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands only once the push succeeds, and with CI Tracking on, only once its CI result is passed as well, from that push or a later one containing its work. Under Land per Spec the Factory pushes the base once for a whole Spec, after merging the Spec Branch into it; under Merge and Branch the Spec Branch and Ticket branches are never pushed. Under Pull Request, Push is implied, with no checkbox: the Factory pushes each Ticket's branch on accept, or the Spec Branch under Land per Spec.
+A Landing Method's option to send the work to a named git remote, in each of the Ticket's Changed Repositories: each one's base after a Merge, or the Ticket's branch on accept under Branch. Under Merge + Push the Ticket lands in a Repository only once that push succeeds, and with CI Tracking on, only once its CI result is passed as well, from that push or a later one containing its work. Under Land per Spec the Factory pushes each Repository's base once for a whole Spec, after merging that Repository's Spec Branch into it; under Merge and Branch the Spec Branches and Ticket branches are never pushed. Under Pull Request, Push is implied, with no checkbox: the Factory pushes the Ticket's branch in each Changed Repository on accept, or the Spec Branches under Land per Spec.
 _Avoid_: Publish, sync
 
 **CI Tracking**:
@@ -321,7 +325,7 @@ The kind of Watcher that watches one Project's CI through its CI Provider and re
 _Avoid_: CI daemon, CI Integration
 
 **Pushed commit**:
-The commit the Factory pushed for a Ticket, which it reports on the Ticket: the base after merging under Merge with Push, or the Ticket's branch on accept under Branch with Push or Pull Request (the Spec Branch, for a Spec under Pull Request with Land per Spec). Under Merge with Push and CI Tracking it is also a later commit on the remote's base that the Factory saw containing the Ticket's work, which it reports on each Ticket waiting on CI. A Ticket may have several, one per push; their CI Runs give the Ticket's CI result: under the CI gate those of every pushed commit since the Ticket last moved back to Ready, otherwise its latest's. Several Tickets may share one, and its CI failed, CI cancelled or CI unavailable is one Needs Me item listing them all.
+The commit the Factory pushed for a Ticket in one of its Changed Repositories, which it reports on the Ticket per Repository: that Repository's base after merging under Merge with Push, or the Ticket's branch on accept under Branch with Push or Pull Request (the Spec Branch, for a Spec under Pull Request with Land per Spec). Under Merge with Push and CI Tracking it is also a later commit on that Repository's remote base that the Factory saw containing the Ticket's work, which it reports on each Ticket waiting on CI. A Ticket may have several, one per push; their CI Runs give the Ticket's CI result: under the CI gate those of every pushed commit since the Ticket last moved back to Ready, otherwise its latest's. Several Tickets may share one, and its CI failed, CI cancelled or CI unavailable is one Needs Me item listing them all.
 _Avoid_: Push SHA
 
 **CI Run**:
@@ -600,10 +604,6 @@ _Avoid_: Auto label, opt-in Label
 **Auto-accept switch**:
 The control on a Ticket's detail or a Spec's page by which the human adds or removes that item's Auto-accept Label. It reflects only that item's own Label. It is offered only where the item can be auto-accepted, and asks first when turning it on would accept Tickets already In Review.
 _Avoid_: Auto-accept toggle, Label editor
-
-**Spec merge Ticket**:
-The Ready Ticket Code Central opens, at the Factory's request, on a Spec whose Spec Branch conflicts with the base, so an agent merges the base into the Spec Branch. It carries a stored mark set only by that operation, which gives it the Merge results Auto-accept kind. A Ticket opened before the mark existed stays unmarked and manual.
-_Avoid_: Conflict Ticket, merge Ticket
 
 **Spec recommendation**:
 The `implement` or `split` that a spec Stage's `finish` must carry. The Ticket keeps the latest one; the web UI highlights the matching button, and a spec Stage is auto-accept eligible only if its latest finish carried one.
