@@ -8,6 +8,7 @@
 import {
   FOCUS_CLEARS,
   FOCUS_POPUPS,
+  LIMITS_POPUPS,
   type Acknowledgement,
   type BaseDivergedView,
   type BaseMissingView,
@@ -274,7 +275,7 @@ export type ChangeEvent =
 // ---- Options ----
 
 // DEFAULT_OPTIONS are the Options a fresh store reads.
-export const DEFAULT_OPTIONS: Options = { focus_clear: FOCUS_CLEARS[0], focus_popup: FOCUS_POPUPS[0], gh_path: "" };
+export const DEFAULT_OPTIONS: Options = { focus_clear: FOCUS_CLEARS[0], focus_popup: FOCUS_POPUPS[0], limits_popup: LIMITS_POPUPS[0], gh_path: "" };
 
 // ---- Usage (Spec code-central-201) ----
 
