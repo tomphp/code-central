@@ -87,12 +87,15 @@ func (ws worktreeSet) about(w repositoryWorktree, what string) string {
 
 // setUpWorktrees gives the claimed Ticket tk its worktree in every
 // Repository ws names: on its work branch, or detached at the Base's tip
-// for a Stage. The first that fails is the Claim's failure, naming its
-// Repository when there are several; those set up before it stay.
+// for a Stage. A branch in a Repository where tk's work has landed moves
+// to the Base's tip first. The first that fails is the Claim's failure,
+// naming its Repository when there are several; those set up before it
+// stay.
 func (f *factory) setUpWorktrees(tk core.TicketView, ws worktreeSet) *failure {
 	for _, w := range ws {
 		var err error
 		if w.branch != "" {
+			f.moveLandedBranch(w.r, tk, w.branch, w.path)
 			err = f.cutBranchWorktree(w.r, tk, w.branch, w.path)
 		} else {
 			err = f.stageWorktree(w.r, w.path)

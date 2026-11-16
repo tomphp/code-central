@@ -12,8 +12,9 @@ func init() {
 		description: "Land a Ticket: once its work is merged into the base, move it from Accepted (or In Review) to Done, recording the commit that put it there. Returns an acknowledgement with the Ticket's State, or the Ticket with full.",
 		schema: object(map[string]any{
 			"ticket": ref("The Ticket."),
-			"commit": text("The commit that put the work into the base, such as the merge commit."),
-			"full":   flag("Return the whole Ticket instead of the acknowledgement."),
+			"commit":     text("The commit that put the work into the base, such as the merge commit."),
+			"repository": text("The Repository Name it landed in; then Done once every Changed Repository has landed."),
+			"full":       flag("Return the whole Ticket instead of the acknowledgement."),
 		}, "ticket", "commit"),
 		call: decoded(func(ctx context.Context, c *core.Core, key string, in core.LandInput) (any, error) {
 			return c.Land(ctx, key, in)

@@ -148,11 +148,39 @@ func (a azureRepos) open(ctx context.Context, branch, title, body string) (*pull
 	return a.mapped(p), nil
 }
 
+// edit sets p's description to body, as Azure Repos cuts it. A list may
+// give a long description cut short, so it reads p singly first and
+// writes only when that differs.
+func (a azureRepos) edit(ctx context.Context, p *pullRequest, body string) error {
+	want := azdo.CutDescription(body)
+	one, err := a.c.PullRequest(ctx, a.repository, p.Number)
+	if err == nil && one.Description == want {
+		return nil
+	}
+	if _, err := a.c.EditPullRequestDescription(ctx, a.repository, p.Number, body); err != nil {
+		return fmt.Errorf("editing pull request %d's description: %w", p.Number, err)
+	}
+	return nil
+}
+
+// sameBody reports whether a listed description is body as Azure Repos
+// keeps it.
+func (a azureRepos) sameBody(listed, body string) bool { return listed == azdo.CutDescription(body) }
+
+// close abandons pull request number: Azure Repos' close without merging.
+func (a azureRepos) close(ctx context.Context, number int) (*pullRequest, error) {
+	p, err := a.c.AbandonPullRequest(ctx, a.repository, number)
+	if err != nil {
+		return nil, fmt.Errorf("abandoning pull request %d: %w", number, err)
+	}
+	return a.mapped(p), nil
+}
+
 // mapped is p in the watcher's terms: active is open, or conflicting while
 // its merge status says conflicts; abandoned is closed; completed is
 // merged, at the merge commit Azure Repos reports.
 func (a azureRepos) mapped(p azdo.PullRequest) *pullRequest {
-	pr := &pullRequest{Number: p.ID, Link: a.c.WebURL(a.repository, p.ID), Status: "open", Closed: p.Closed}
+	pr := &pullRequest{Number: p.ID, Link: a.c.WebURL(a.repository, p.ID), Status: "open", Closed: p.Closed, Body: p.Description}
 	switch p.Status {
 	case "abandoned":
 		pr.Status = "closed"

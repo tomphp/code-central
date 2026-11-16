@@ -193,6 +193,7 @@ type ticketFile struct {
 	PushedCommits   []pushedCommitFile  `yaml:"pushed_commits,omitempty"`
 	SpecMerge       *specMergeFile      `yaml:"spec_merge,omitempty"`
 	PullRequest     *pullRequestFile    `yaml:"pull_request,omitempty"`
+	PullRequests    []pullRequestFile   `yaml:"pull_requests,omitempty"`
 	Claims          []claimFile         `yaml:"claims"`
 	Rounds          []roundFile         `yaml:"rounds"`
 	FailureReports  []failureReportFile `yaml:"failure_reports"`
@@ -226,6 +227,7 @@ type pullRequestFile struct {
 	Link        string `yaml:"link"`
 	State       string `yaml:"state"`
 	MergeCommit string `yaml:"merge_commit,omitempty"`
+	Close       bool   `yaml:"close,omitempty"`
 }
 
 type pushedCommitFile struct {
@@ -430,15 +432,17 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		}
 		t.PushedCommits = append(t.PushedCommits, p)
 	}
+	// The Home Repository's pull request is pull_request, as it always
+	// was, and the other Repositories' are pull_requests.
 	if f.PullRequest != nil {
-		pr := &PullRequest{Repository: f.PullRequest.Repository, Number: f.PullRequest.Number, Link: f.PullRequest.Link, State: PullRequestState(f.PullRequest.State), MergeCommit: f.PullRequest.MergeCommit}
-		if lerr := checkRepositoryName("pull_request.repository", pr.Repository); lerr != nil {
+		if lerr := decodePullRequest(&t, "pull_request", *f.PullRequest); lerr != nil {
 			return Ticket{}, lerr
 		}
-		if !slices.Contains(PullRequestStates, pr.State) {
-			return Ticket{}, &LoadError{Field: "pull_request.state", Msg: fmt.Sprintf("%q is not one of %v", pr.State, PullRequestStates)}
+	}
+	for i, pf := range f.PullRequests {
+		if lerr := decodePullRequest(&t, fmt.Sprintf("pull_requests[%d]", i), pf); lerr != nil {
+			return Ticket{}, lerr
 		}
-		t.PullRequest = pr
 	}
 	if f.SpecMerge != nil {
 		sm := &SpecMerge{Repository: f.SpecMerge.Repository, Commit: f.SpecMerge.Commit}
@@ -585,6 +589,23 @@ func decodeChangedRepositories(fs []changedRepoFile) ([]ChangedRepository, *Load
 	return out, nil
 }
 
+// decodePullRequest adds f, a pull request stored at field, to t's,
+// refusing a bad state and a second pull request in one Repository.
+func decodePullRequest(t *Ticket, field string, f pullRequestFile) *LoadError {
+	pr := PullRequest{Repository: f.Repository, Number: f.Number, Link: f.Link, State: PullRequestState(f.State), MergeCommit: f.MergeCommit, Close: f.Close}
+	if lerr := checkRepositoryName(field+".repository", pr.Repository); lerr != nil {
+		return lerr
+	}
+	if !slices.Contains(PullRequestStates, pr.State) {
+		return &LoadError{Field: field + ".state", Msg: fmt.Sprintf("%q is not one of %v", pr.State, PullRequestStates)}
+	}
+	if slices.ContainsFunc(t.PullRequests, func(o PullRequest) bool { return o.Repository == pr.Repository }) {
+		return &LoadError{Field: field + ".repository", Msg: fmt.Sprintf("a second pull request in %q", pr.Repository)}
+	}
+	t.PullRequests = append(t.PullRequests, pr)
+	return nil
+}
+
 // checkRepositoryName refuses a Repository Name that breaks the rules;
 // an empty one, the Home Repository's, passes.
 func checkRepositoryName(field, name string) *LoadError {
@@ -692,8 +713,13 @@ func encode(record any, project string) (string, []byte, error) {
 		for _, pc := range r.PushedCommits {
 			f.PushedCommits = append(f.PushedCommits, pushedCommitFile{Repository: pc.Repository, Commit: pc.Commit, Branch: pc.Branch, Pushed: formatTime(pc.Pushed)})
 		}
-		if r.PullRequest != nil {
-			f.PullRequest = &pullRequestFile{Repository: r.PullRequest.Repository, Number: r.PullRequest.Number, Link: r.PullRequest.Link, State: string(r.PullRequest.State), MergeCommit: r.PullRequest.MergeCommit}
+		for _, pr := range r.PullRequests {
+			pf := pullRequestFile{Repository: pr.Repository, Number: pr.Number, Link: pr.Link, State: string(pr.State), MergeCommit: pr.MergeCommit, Close: pr.Close}
+			if pr.Repository == "" && f.PullRequest == nil {
+				f.PullRequest = &pf
+			} else {
+				f.PullRequests = append(f.PullRequests, pf)
+			}
 		}
 		if r.SpecMerge != nil {
 			f.SpecMerge = &specMergeFile{Repository: r.SpecMerge.Repository, Commit: r.SpecMerge.Commit, Merged: formatTime(r.SpecMerge.Merged)}

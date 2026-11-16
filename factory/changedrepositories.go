@@ -147,6 +147,11 @@ func (f *factory) recordProblem(r *repository, tk core.TicketView, rec core.Chan
 	if err == nil && !holdsWork && f.inBaseOf(r, commit) {
 		return ""
 	}
+	if rec.Landed != nil && !holdsWork {
+		// Its work landed, as by a pull request merged with a squash, and
+		// its branch, moved to the base's tip, holds nothing new.
+		return ""
+	}
 	head, herr := r.git.commit("refs/heads/" + branch)
 	switch {
 	case herr != nil:

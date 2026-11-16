@@ -701,11 +701,12 @@ type Ticket struct {
 	// work into under Land per Spec, and when Code Central heard of it;
 	// nil until then.
 	SpecMerge *SpecMerge
-	// PullRequest is the pull request the Pull Request Watcher reported
-	// for the Ticket's pushed work (code-central-388); nil until then.
-	PullRequest *PullRequest
-	Claims      []Claim
-	Rounds      []Round
+	// PullRequests are the pull requests the Pull Request Watcher
+	// reported for the Ticket's pushed work (code-central-388), one per
+	// Repository at most (Spec code-central-848); none until then.
+	PullRequests []PullRequest
+	Claims       []Claim
+	Rounds       []Round
 	// FailureReports are numbered and never edited.
 	FailureReports []FailureReport
 	Comments       []Comment
@@ -784,6 +785,11 @@ type PullRequest struct {
 	Link        string
 	State       PullRequestState
 	MergeCommit string
+	// Close marks an open pull request for the Pull Request Watcher to
+	// close on the Code Host, as sending its Ticket back while none of
+	// its siblings has merged does; it holds until the watcher reports
+	// the pull request closed or merged.
+	Close bool
 }
 
 // PushedCommit is one commit the Factory pushed for a Ticket, and when
@@ -1086,10 +1092,7 @@ func (t Ticket) clone() Ticket {
 		sm := *t.SpecMerge
 		t.SpecMerge = &sm
 	}
-	if t.PullRequest != nil {
-		pr := *t.PullRequest
-		t.PullRequest = &pr
-	}
+	t.PullRequests = slices.Clone(t.PullRequests)
 	t.Claims = slices.Clone(t.Claims)
 	t.Rounds = slices.Clone(t.Rounds)
 	for i := range t.Rounds {

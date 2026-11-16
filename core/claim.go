@@ -277,22 +277,68 @@ func acceptStep(ctx context.Context, t *store.Ticket, key string, cause store.Au
 type LandInput struct {
 	Ticket Ref    `json:"ticket"`
 	Commit string `json:"commit"`
+	// Repository is the Repository Name the work landed in; empty for the
+	// Home Repository.
+	Repository string `json:"repository,omitempty"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
 
-// Land is land(ticket, commit): human or agent, Accepted or In Review to
-// Done once the work is in the base. The commit is recorded on the Move,
-// with Via merge.
+// Land is land(ticket, commit, repository?): human or agent, Accepted or
+// In Review to Done once the work is in the base. The commit is recorded
+// on the Move, with Via merge. Naming a Repository of a Ticket with
+// Changed Repositories beside the Home Repository's records the commit
+// as that Repository's landed commit, and moves the Ticket to Done only
+// once every one of them has landed; until then it stays where it is
+// (Spec code-central-848). One naming none lands the Ticket as a whole,
+// as it always did.
 func (c *Core) Land(ctx context.Context, key string, in LandInput) (Written[TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
 		return Written[TicketView]{}, invalid("commit", "land needs the commit that put the work into the base")
 	}
-	return c.actThen(ctx, key, in.Ticket, in.Full, "land", "", "", func(t *store.Ticket) error {
+	moved := func(t *store.Ticket) error {
 		m := &t.Moves[len(t.Moves)-1]
 		m.Via, m.Commit = "merge", commit
 		return nil
+	}
+	return c.updateTicketIn(key, "land", in.Ticket, in.Full, func(r store.Reader, t *store.Ticket) (bool, error) {
+		p, _ := r.Project(key)
+		name, err := repositoryOf(p, "repository", in.Repository)
+		if err != nil {
+			return false, err
+		}
+		now := c.now()
+		if strings.TrimSpace(in.Repository) == "" || t.Repositories == nil && name == p.Key {
+			if err := c.actOn(ctx, t, key, "land", "", "", now); err != nil {
+				return false, err
+			}
+			return true, moved(t)
+		}
+		// The land must be one the Ticket's State allows, whether or not it
+		// moves it.
+		probe := *t
+		probe.Moves = slices.Clone(t.Moves)
+		if err := transition(ctx, &probe, key, "land", "", now); err != nil {
+			return false, err
+		}
+		rs := slices.Clone(changedRepositories(p.Key, *t))
+		i := slices.IndexFunc(rs, func(r store.ChangedRepository) bool { return r.Name == name })
+		if i < 0 {
+			return false, invalid("repository", "%s hasn't changed %s: its Changed Repositories are %s", DisplayID(key, t.Number), name, strings.Join(changedRepositoryNames(p.Key, *t), ", "))
+		}
+		if l := rs[i].Landed; l != nil && l.Commit == commit {
+			return false, nil
+		}
+		rs[i].Landed = &store.Landed{Commit: commit, Time: now}
+		t.Repositories = rs
+		if slices.ContainsFunc(rs, func(r store.ChangedRepository) bool { return r.Landed == nil }) {
+			return true, nil
+		}
+		if err := c.actOn(ctx, t, key, "land", "", "", now); err != nil {
+			return false, err
+		}
+		return true, moved(t)
 	})
 }
 

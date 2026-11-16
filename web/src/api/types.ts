@@ -88,6 +88,9 @@ export type PullRequestWatcherReport = CIWatcherReport;
 // What the Pull Request Watcher reports of the pull request of the work
 // pushed as branch; merge_commit comes with the merged state alone.
 export interface PullRequestReport {
+  // repository is the Repository Name the pull request is in; left out
+  // for the Home Repository.
+  repository?: string;
   branch: string;
   number: number;
   link: string;

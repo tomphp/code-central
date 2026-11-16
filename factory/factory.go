@@ -346,6 +346,13 @@ type factory struct {
 	mergedOn map[string]mergeOn
 	// oldBases are the bases the Project named earlier in this run.
 	oldBases []string
+	// fetchedElsewhere is the Repositories beside the Home one whose Push
+	// remote this poll fetched under Pull Request, so their remote bases
+	// are current; the poll's own.
+	fetchedElsewhere map[string]bool
+	// landingRemote is the Push remote the last poll's Landing settings
+	// named, for a Claim's start to find the remote bases.
+	landingRemote string
 
 	// baseDiverged is whether the local base holds commits the Push
 	// remote's doesn't (and, under Merge + Push, the remote's holds ones it

@@ -245,6 +245,9 @@ type ReportPushedCommitInput struct {
 	// Branch is the branch the Factory pushed the commit as, so that the
 	// Pull Request Watcher knows the pull request's head branch.
 	Branch string `json:"branch,omitempty"`
+	// Repository is the Repository Name the commit was pushed in; empty
+	// for the Home Repository.
+	Repository string `json:"repository,omitempty"`
 	// Full asks for the Ticket in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
 }
@@ -272,10 +275,18 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 		if !landingPolicyOf(p).RecordsPushedCommit() {
 			return false, nil
 		}
-		if n := len(t.PushedCommits); n > 0 && t.PushedCommits[n-1].Commit == commit {
+		name, err := repositoryOf(p, "repository", in.Repository)
+		if err != nil {
+			return false, err
+		}
+		if pc, ok := latestPushedTo(key, *t, name); ok && pc.Commit == commit {
 			return false, nil
 		}
-		t.PushedCommits = append(t.PushedCommits, store.PushedCommit{Commit: commit, Branch: strings.TrimSpace(in.Branch), Pushed: c.now()})
+		pushed := store.PushedCommit{Commit: commit, Branch: strings.TrimSpace(in.Branch), Pushed: c.now()}
+		if name != key {
+			pushed.Repository = name
+		}
+		t.PushedCommits = append(t.PushedCommits, pushed)
 		for _, o := range r.Tickets(key) {
 			if o.Number != t.Number && len(o.PushedCommits) > 0 && latestPushed(o).Commit == commit {
 				sharing = append(sharing, o.Number)
@@ -483,8 +494,8 @@ func ciWaiting(ci *ciState) []CIWaitingCommit {
 				continue
 			}
 			w := CIWaitingCommit{Ticket: DisplayID(key, t.Number), Commit: pc.Commit, Pushed: pc.Pushed}
-			if t.PullRequest != nil {
-				w.PullRequest = t.PullRequest.Number
+			if pr := pullRequestIn(key, t, recordRepository(key, pc.Repository)); pr != nil {
+				w.PullRequest = pr.Number
 			}
 			out = append(out, w)
 		}
