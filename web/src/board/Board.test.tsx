@@ -346,12 +346,14 @@ describe("the Board's Ticket popup", () => {
 
   it("shows Loading… until the read arrives, and the read's error if it fails", async () => {
     const fake = await world();
-    let fail: (e: Error) => void = () => {};
+    let fail: ((e: Error) => void) | undefined;
     renderApp(fake, `/?view=board&project=acme&popup=${fake.ids.form}`, { getTicket: () => new Promise((_, reject) => (fail = reject)) });
     await loaded();
     expect(popup()).toHaveTextContent("Loading…");
-    await act(async () => fail(new ApiError(404, "not_found", `Ticket ${fake.ids.form} not found`)));
-    expect(popup()).toHaveTextContent(`Ticket ${fake.ids.form} not found`);
+    // The popup reads in an effect, which can run after the Board shows.
+    await waitFor(() => expect(fail).toBeDefined());
+    await act(async () => fail!(new ApiError(404, "not_found", `Ticket ${fake.ids.form} not found`)));
+    expect(await within(popup()).findByRole("alert")).toHaveTextContent(`Ticket ${fake.ids.form} not found`);
   });
 
   it("offers no edits for a Ticket of an Archived Project", async () => {
