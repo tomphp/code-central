@@ -3,6 +3,7 @@ package client_test
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
 	"slices"
 	"strings"
@@ -177,5 +178,38 @@ func TestPostSessionEventsReachesTheClaimsTranscript(t *testing.T) {
 	tr, err := srv.Core.Transcript(ctx, "acme", "2", 1)
 	if err != nil || len(tr.Events) != 1 || tr.Events[0].Seq != 1 || tr.Events[0].SessionEvent != sent[0] {
 		t.Fatalf("Transcript %+v, %v; want the one event sent", tr, err)
+	}
+}
+
+func TestCutOffBodyNamesTheMethodAndPath(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	go func() {
+		conn, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		buf := make([]byte, 4096)
+		conn.Read(buf)
+		conn.Write([]byte("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{\"id\""))
+	}()
+
+	_, err = client.New("http://"+l.Addr().String()).GetProject(ctx, "acme")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if msg := err.Error(); !strings.HasPrefix(msg, "GET /api/") || !strings.Contains(msg, "reading the answer") {
+		t.Errorf("message %q doesn't name the method, path and the read", msg)
+	}
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("underlying error not reachable: %v", err)
+	}
+	var ce *core.Error
+	if errors.As(err, &ce) {
+		t.Errorf("got a *core.Error %v, want a plain error", ce)
 	}
 }
