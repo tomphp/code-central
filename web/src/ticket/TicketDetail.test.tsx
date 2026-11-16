@@ -1,14 +1,14 @@
 // The Ticket detail on a WASM Core world: what it shows below the action
 // panel, its merged history, edits' "show previous" and move, and its
 // header and loading and error states.
-import { act, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { newWorld, type World } from "../api/core/core";
-import { scenario, type Scenario } from "../api/scenario";
+import type { Scenario } from "../api/scenario";
 import type { CIRunView, TicketView } from "../api/types";
 import { shortOf } from "../inbox/ShortId";
-import { renderApp, renderLive } from "../worldTesting";
+import { renderApp, renderLive, scenario, settle } from "../worldTesting";
 import { TicketDetail } from "./TicketDetail";
 
 const MIN = 60_000;
@@ -202,7 +202,8 @@ describe("the Ticket detail", () => {
 
     await userEvent.selectOptions(select, "Ready");
     await userEvent.click(within(d).getByRole("button", { name: "Move" }));
-    await within(d).findByRole("button", { name: "Move" });
+    await settle(w);
+    expect(within(d).getByRole("button", { name: "Move" })).toBeInTheDocument();
     expect((await w.api.getTicket("acme", id)).state).toBe("Ready");
   });
 
@@ -213,7 +214,8 @@ describe("the Ticket detail", () => {
     await w.api.act("acme", id, "release", {});
     await userEvent.selectOptions(within(d).getByRole("combobox", { name: "Move to" }), "Ready");
     await userEvent.click(within(d).getByRole("button", { name: "Move" }));
-    expect(await within(d).findByRole("alert")).toHaveTextContent(`${id} is already Ready`);
+    await settle(w);
+    expect(within(d).getByRole("alert")).toHaveTextContent(`${id} is already Ready`);
   });
 });
 
@@ -428,8 +430,7 @@ describe("the Ticket pane's body", () => {
     const spec = await s.spec("acme", { title: "Theming" });
     const id = await s.ticket("acme", { title: "Pick a theme", spec });
     await renderApp(w, `/?view=inbox&ticket=${id}`);
-    await screen.findByRole("article", { name: "Ticket details" });
-    await act(async () => {});
+    expect(screen.getByRole("article", { name: "Ticket details" })).toBeInTheDocument();
     expect(w.subscriptions()).toBe(1);
   });
 });

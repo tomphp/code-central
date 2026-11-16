@@ -1,14 +1,12 @@
 // The Link badge (ticket 42) on rows and in the detail, the read-only note
 // and Unlink, on a WASM Core world.
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
 import { newWorld } from "../api/core/core";
-import { scenario } from "../api/scenario";
 import type { ExternalState, LinkView } from "../api/types";
 import { rowDetail } from "../format";
-import { renderLive } from "../worldTesting";
+import { renderApp, renderLive, scenario, settle } from "../worldTesting";
 import { TicketDetail } from "./TicketDetail";
 
 const URL = "https://github.com/acme/web/issues/7";
@@ -45,6 +43,7 @@ describe("the Link badge", () => {
     const d = await renderDetail(w, linked);
     expect(d).toHaveTextContent("The title and description are read-only while linked: change them in github.");
     await userEvent.click(within(d).getByRole("button", { name: "Unlink" }));
+    await settle(w);
     expect((await w.api.getTicket("acme", linked)).link?.detached).toBe(true);
   });
 
@@ -65,19 +64,17 @@ describe("the Link badge", () => {
 
   it("shows on the State list's rows and on Needs Me rows", async () => {
     const { w } = await world({ external: "closed" });
-    window.history.replaceState(null, "", "/?view=inbox");
-    const { unmount } = render(<App api={w.api} now={w.now} />);
-    const list = await screen.findByRole("main", { name: "Tickets" });
-    const row = await within(list).findByText("Issue");
+    const { unmount } = await renderApp(w, "/?view=inbox");
+    const list = screen.getByRole("main", { name: "Tickets" });
+    const row = within(list).getByText("Issue");
     expect(row.closest("a")).toHaveTextContent("github acme/web#7");
     unmount();
 
-    window.history.replaceState(null, "", "/?view=inbox&project=acme&state=Ready");
-    render(<App api={w.api} now={w.now} />);
-    const rows = await screen.findByRole("main", { name: "Tickets" });
-    const linked = (await within(rows).findByText("Issue")).closest("a")!;
+    await renderApp(w, "/?view=inbox&project=acme&state=Ready");
+    const rows = screen.getByRole("main", { name: "Tickets" });
+    const linked = within(rows).getByText("Issue").closest("a")!;
     expect(linked).toHaveTextContent("github acme/web#7");
-    expect((await within(rows).findByText("Local")).closest("a")).not.toHaveTextContent("github");
+    expect(within(rows).getByText("Local").closest("a")).not.toHaveTextContent("github");
   });
 });
 

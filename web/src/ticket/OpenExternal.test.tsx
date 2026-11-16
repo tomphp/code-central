@@ -5,12 +5,11 @@
 import { cleanup, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { newWorld, type World } from "../api/core/core";
-import { scenario } from "../api/scenario";
 import type { LinkView, SpecDetail } from "../api/types";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { SpecPane } from "../spec/SpecPane";
-import { renderLive } from "../worldTesting";
+import { renderLive, scenario } from "../worldTesting";
 import { TicketDetail } from "./TicketDetail";
 
 const URL = "https://github.com/acme/web/issues/7";

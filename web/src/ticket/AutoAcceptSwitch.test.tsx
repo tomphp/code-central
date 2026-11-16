@@ -1,24 +1,21 @@
 // The Auto-accept switch (Spec code-central-589), an Off/On toggle group, on
 // a Ticket's detail and on the Spec and Requirement panes: the real App on a WASM Core world.
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
 import { newWorld, type World } from "../api/core/core";
-import { scenario } from "../api/scenario";
 import type { State } from "../api/types";
-
-function renderApp(w: World, url: string) {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
-}
+import { renderApp, scenario, settle } from "../worldTesting";
 
 const detail = () => screen.getByRole("complementary", { name: "Ticket" });
 // switchIn finds the Auto-accept toggle group, isOn reads it and turn
 // presses its On or Off.
-const switchIn = (el: HTMLElement) => within(el).findByRole("group", { name: "Auto-accept" });
+const switchIn = (el: HTMLElement) => within(el).getByRole("group", { name: "Auto-accept" });
 const isOn = (sw: HTMLElement) => within(sw).getByRole("button", { name: "On" }).getAttribute("aria-pressed") === "true";
-const turn = (sw: HTMLElement, to: "On" | "Off") => userEvent.click(within(sw).getByRole("button", { name: to }));
+const turn = async (w: World, sw: HTMLElement, to: "On" | "Off") => {
+  await userEvent.click(within(sw).getByRole("button", { name: to }));
+  await settle(w);
+};
 const buttonsIn = (sw: HTMLElement) => within(sw).getAllByRole("button");
 
 // seeded makes the Project acme with one Spec, "Accounts", labelled as asked.
@@ -42,24 +39,24 @@ describe("the Auto-accept switch on a Ticket", () => {
   it("reads on exactly when the Ticket carries the Label, and turns off at once without asking", async () => {
     const { w, ticket } = await seeded();
     const id = await ticket("Login page", "Ready", ["auto-accept"]);
-    renderApp(w, ticketUrl(id));
+    await renderApp(w, ticketUrl(id));
 
-    const sw = await switchIn(detail());
+    const sw = switchIn(detail());
     expect(isOn(sw)).toBe(true);
-    await turn(sw, "Off");
-    await waitFor(() => expect(isOn(sw)).toBe(false));
+    await turn(w, sw, "Off");
+    expect(isOn(sw)).toBe(false);
     expect((await w.api.getTicket("acme", id)).labels).toEqual([]);
   });
 
   it("turns on at once when it would accept nothing now In Review", async () => {
     const { w, ticket } = await seeded();
     const id = await ticket("Login page", "Ready");
-    renderApp(w, ticketUrl(id));
+    await renderApp(w, ticketUrl(id));
 
-    const sw = await switchIn(detail());
+    const sw = switchIn(detail());
     expect(isOn(sw)).toBe(false);
-    await turn(sw, "On");
-    await waitFor(() => expect(isOn(sw)).toBe(true));
+    await turn(w, sw, "On");
+    expect(isOn(sw)).toBe(true);
     expect(screen.queryByRole("form", { name: "Turn on auto-accept" })).toBeNull();
     expect((await w.api.getTicket("acme", id)).labels).toEqual(["auto-accept"]);
   });
@@ -67,29 +64,31 @@ describe("the Auto-accept switch on a Ticket", () => {
   it("asks first for a Ticket In Review, accepts it on Turn on, and writes nothing on Cancel", async () => {
     const { w, ticket } = await seeded();
     const id = await ticket("Login page", "In Review");
-    renderApp(w, ticketUrl(id));
+    await renderApp(w, ticketUrl(id));
 
-    const sw = await switchIn(detail());
-    await turn(sw, "On");
+    const sw = switchIn(detail());
+    await turn(w, sw, "On");
     const box = screen.getByRole("form", { name: "Turn on auto-accept" });
     expect(box).toHaveTextContent("This will accept 1 Ticket now In Review. Turn on?");
     await userEvent.click(within(box).getByRole("button", { name: "Cancel" }));
+    await settle(w);
     expect(screen.queryByRole("form", { name: "Turn on auto-accept" })).toBeNull();
     expect(isOn(sw)).toBe(false);
     expect((await w.api.getTicket("acme", id)).labels).toEqual([]);
 
-    await turn(sw, "On");
+    await turn(w, sw, "On");
     await userEvent.click(within(screen.getByRole("form", { name: "Turn on auto-accept" })).getByRole("button", { name: "Turn on" }));
-    await waitFor(async () => expect((await w.api.getTicket("acme", id)).state).toBe("Accepted"));
+    await settle(w);
+    expect((await w.api.getTicket("acme", id)).state).toBe("Accepted");
     expect((await w.api.getTicket("acme", id)).moves!.at(-1)).toMatchObject({ actor: "human", cause: "ticket-label" });
   });
 
   it("notes that the Spec's Label covers the Ticket, linking the Spec, while the switch reads off", async () => {
     const { w, spec, ticket } = await seeded({ specLabels: ["auto-accept"] });
     const id = await ticket("Login page", "Ready");
-    renderApp(w, ticketUrl(id));
+    await renderApp(w, ticketUrl(id));
 
-    const sw = await switchIn(detail());
+    const sw = switchIn(detail());
     expect(isOn(sw)).toBe(false);
     expect(detail()).toHaveTextContent("Auto-accepted via its Spec's Label");
     // The note's link is the second Spec link after the one in the meta line.
@@ -106,10 +105,9 @@ describe("the Auto-accept switch on a Ticket", () => {
   ])("is absent on %s", async (_, state, labels, specLabels) => {
     const { w, ticket } = await seeded({ specLabels });
     const id = await ticket("The one", state, labels);
-    renderApp(w, ticketUrl(id));
+    await renderApp(w, ticketUrl(id));
 
-    await within(detail()).findByRole("heading", { name: "The one" });
-    await act(async () => {});
+    expect(within(detail()).getByRole("heading", { name: "The one" })).toBeInTheDocument();
     expect(within(detail()).queryByRole("group", { name: "Auto-accept" })).toBeNull();
   });
 
@@ -121,11 +119,11 @@ describe("the Auto-accept switch on a Ticket", () => {
     w.api.addLabels = async () => {
       throw new Error("the human only");
     };
-    renderApp(w, ticketUrl(id));
+    await renderApp(w, ticketUrl(id));
 
-    const sw = await switchIn(detail());
-    await turn(sw, "On");
-    expect(await within(detail()).findByRole("alert")).toHaveTextContent("the human only");
+    const sw = switchIn(detail());
+    await turn(w, sw, "On");
+    expect(within(detail()).getByRole("alert")).toHaveTextContent("the human only");
     expect(isOn(sw)).toBe(false);
     w.api.addLabels = addLabels;
   });
@@ -138,32 +136,33 @@ describe("the Auto-accept switch on a Spec", () => {
     const b = await ticket("Sign-up page", "In Review");
     await ticket("Prototype: picker", "In Review", ["prototype"]);
     await ticket("Logout", "Ready");
-    renderApp(w, `/?view=inbox&requirement=${spec}`);
+    await renderApp(w, `/?view=inbox&requirement=${spec}`);
 
-    const pane = await screen.findByRole("region", { name: "Spec" });
-    await turn(await switchIn(pane), "On");
+    const pane = screen.getByRole("region", { name: "Spec" });
+    await turn(w, switchIn(pane), "On");
     const box = within(pane).getByRole("form", { name: "Turn on auto-accept" });
     expect(box).toHaveTextContent("This will accept 2 Tickets now In Review. Turn on?");
     await userEvent.click(within(box).getByRole("button", { name: "Turn on" }));
+    await settle(w);
 
-    await waitFor(async () => expect((await w.api.getTicket("acme", a)).state).toBe("Accepted"));
+    expect((await w.api.getTicket("acme", a)).state).toBe("Accepted");
     expect((await w.api.getTicket("acme", b)).state).toBe("Accepted");
     expect((await w.api.getTicket("acme", a)).moves!.at(-1)).toMatchObject({ cause: "spec-label" });
-    expect(isOn(await switchIn(pane))).toBe(true);
+    expect(isOn(switchIn(pane))).toBe(true);
   });
 
   it("turns on at once with nothing In Review, and off without asking, on a Long-lived Spec too", async () => {
     const { w, spec, ticket } = await seeded({ specTitle: "Small Changes", specLabels: ["long-lived"] });
     await ticket("Tweak", "Ready");
-    renderApp(w, `/?view=inbox&requirement=${spec}`);
+    await renderApp(w, `/?view=inbox&requirement=${spec}`);
 
-    const pane = await screen.findByRole("region", { name: "Spec" });
-    const sw = await switchIn(pane);
-    await turn(sw, "On");
-    await waitFor(() => expect(isOn(sw)).toBe(true));
+    const pane = screen.getByRole("region", { name: "Spec" });
+    const sw = switchIn(pane);
+    await turn(w, sw, "On");
+    expect(isOn(sw)).toBe(true);
     expect((await w.api.getSpec("acme", spec)).labels).toEqual(["long-lived", "auto-accept"]);
-    await turn(sw, "Off");
-    await waitFor(() => expect(isOn(sw)).toBe(false));
+    await turn(w, sw, "Off");
+    expect(isOn(sw)).toBe(false);
     expect((await w.api.getSpec("acme", spec)).labels).toEqual(["long-lived"]);
   });
 
@@ -171,12 +170,12 @@ describe("the Auto-accept switch on a Spec", () => {
     const w = await newWorld();
     await scenario(w).project("acme", "Acme");
     const { spec: { id } } = await w.api.submitRequirement("acme", "Export a Spec as Markdown");
-    renderApp(w, `/?view=inbox&requirement=${id}`);
+    await renderApp(w, `/?view=inbox&requirement=${id}`);
 
-    const sw = await switchIn(await screen.findByRole("region", { name: "Requirement" }));
+    const sw = switchIn(screen.getByRole("region", { name: "Requirement" }));
     for (const b of buttonsIn(sw)) expect(b).not.toBeDisabled();
-    await turn(sw, "On");
-    await waitFor(() => expect(isOn(sw)).toBe(true));
+    await turn(w, sw, "On");
+    expect(isOn(sw)).toBe(true);
     expect((await w.api.getSpec("acme", id)).labels).toContain("auto-accept");
   });
 
@@ -185,27 +184,27 @@ describe("the Auto-accept switch on a Spec", () => {
     // Spec has none.
     const { w, spec } = await seeded();
     await w.api.archiveProject("acme");
-    renderApp(w, `/?view=inbox&requirement=${spec}`);
+    await renderApp(w, `/?view=inbox&requirement=${spec}`);
 
-    for (const b of buttonsIn(await switchIn(await screen.findByRole("region", { name: "Spec" })))) expect(b).toBeDisabled();
+    for (const b of buttonsIn(switchIn(screen.getByRole("region", { name: "Spec" })))) expect(b).toBeDisabled();
   });
 
   it("is absent on a finished Spec", async () => {
     const { w, spec, ticket } = await seeded();
     await ticket("Login page", "Done");
-    renderApp(w, `/?view=inbox&requirement=${spec}`);
+    await renderApp(w, `/?view=inbox&requirement=${spec}`);
 
-    const pane = await screen.findByRole("region", { name: "Spec" });
-    await within(pane).findByText("Login page");
+    const pane = screen.getByRole("region", { name: "Spec" });
+    expect(within(pane).getByText("Login page")).toBeInTheDocument();
     expect(within(pane).queryByRole("group", { name: "Auto-accept" })).toBeNull();
   });
 
   it("is absent on the Map pane", async () => {
     const { w, spec, ticket } = await seeded({ specLabels: ["wayfinder:map"] });
     await ticket("Chart it", "In Review");
-    renderApp(w, `/?view=inbox&requirement=${spec}`);
+    await renderApp(w, `/?view=inbox&requirement=${spec}`);
 
-    const pane = await screen.findByRole("region", { name: "Map" });
+    const pane = screen.getByRole("region", { name: "Map" });
     expect(within(pane).queryByRole("group", { name: "Auto-accept" })).toBeNull();
   });
 });
