@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -104,8 +105,12 @@ func (f *factory) halted(ctx context.Context) bool {
 }
 
 // drain waits for the running turns to end, naming them, unless a stop
-// comes first. No turn starts while it waits: the loop has stopped.
+// comes first. The loop has stopped, so no turn starts while it waits,
+// except one for a claim whose answer was lost.
 func (f *factory) drain(ctx context.Context) {
+	if !f.drainLostClaims(ctx) {
+		return
+	}
 	f.mu.Lock()
 	var names []string
 	for _, t := range f.turns {
@@ -138,6 +143,36 @@ func (f *factory) drain(ctx context.Context) {
 	}
 }
 
+// drainLostClaims sends the claims whose answer was lost again at each
+// poll until Code Central answers them: one that went through has put
+// its Ticket In Progress already, so it gets its turn, which the drain
+// then waits on. It reports false if a stop came first, which abandons
+// them.
+func (f *factory) drainLostClaims(ctx context.Context) bool {
+	f.claimLostAgain(ctx)
+	if len(f.lostClaims) == 0 || f.claimingHeld() {
+		return ctx.Err() == nil
+	}
+	var names []string
+	for _, in := range f.lostClaims {
+		names = append(names, string(in.Ticket))
+	}
+	// The draining Heartbeat's usual note counts running turns, which
+	// may be none yet.
+	note := fmt.Sprintf("draining: claiming %s again", strings.Join(names, ", "))
+	f.printf("%s at each poll first: the answer was lost", note)
+	for len(f.lostClaims) > 0 && !f.claimingHeld() {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-f.e.After(f.o.poll):
+			f.heartbeat(core.HeartbeatDraining, note)
+			f.claimLostAgain(ctx)
+		}
+	}
+	return ctx.Err() == nil
+}
+
 func (f *factory) setDrained() {
 	f.stopMu.Lock()
 	f.drained = true
@@ -159,7 +194,7 @@ func (f *factory) poll(ctx context.Context) {
 		return
 	}
 	if f.paused() && !f.endIdlePause() {
-		for _, c := range f.duePausedResumes(f.o.parallel - f.running()) {
+		for _, c := range f.duePausedResumes(f.o.parallel - f.slotsTaken()) {
 			if !f.resumeCutOff(ctx, c) && f.live(c.ClaimID) {
 				f.requeueCutOff(c)
 			}
@@ -174,6 +209,12 @@ func (f *factory) poll(ctx context.Context) {
 		f.resumeAnswered(ctx, c)
 	}
 	f.resumeRestarted(ctx)
+	// A turn this poll started may have paused the Factory, which then
+	// starts no turn: the lost claims wait for the pause to end, holding
+	// their slots.
+	if !f.halted(ctx) && !f.paused() {
+		f.claimLostAgain(ctx)
+	}
 	for f.slotFree(ctx) {
 		if !f.claimNext(ctx) {
 			return
@@ -187,7 +228,13 @@ func (f *factory) poll(ctx context.Context) {
 // read after the slot: a turn records its outage before giving its slot
 // up, so a slot freed by a cut-off turn is always seen with the pause.
 func (f *factory) slotFree(ctx context.Context) bool {
-	return !f.halted(ctx) && f.running() < f.o.parallel && !f.paused()
+	return !f.halted(ctx) && f.slotsTaken() < f.o.parallel && !f.paused()
+}
+
+// slotsTaken is the --parallel slots in use: the running turns, and the
+// claims whose answer was lost, each of which may yet start one.
+func (f *factory) slotsTaken() int {
+	return f.running() + len(f.lostClaims)
 }
 
 // turn is one running Turn of claude, for one Claim.
@@ -326,7 +373,9 @@ func (f *factory) stopAll() {
 }
 
 // nextRunnable is the Project's first claimable Ticket, in claim order,
-// whose guide the Factory runs. ok is false when there is none.
+// whose guide the Factory runs and whose claim isn't lost: a claim lost
+// before it reached Code Central leaves its Ticket claimable. ok is
+// false when there is none.
 func (f *factory) nextRunnable(ctx context.Context) (id core.Ref, ok bool) {
 	claimable := true
 	rows, err := f.client.FindTickets(ctx, f.project, core.FindTicketsInput{Claimable: &claimable})
@@ -337,7 +386,8 @@ func (f *factory) nextRunnable(ctx context.Context) (id core.Ref, ok bool) {
 		return "", false
 	}
 	for _, r := range rows {
-		if runs(core.GuideName(r.Labels)) {
+		lost := slices.ContainsFunc(f.lostClaims, func(in core.ClaimInput) bool { return in.Ticket == core.Ref(r.ID) })
+		if runs(core.GuideName(r.Labels)) && !lost {
 			return core.Ref(r.ID), true
 		}
 	}
@@ -347,12 +397,7 @@ func (f *factory) nextRunnable(ctx context.Context) (id core.Ref, ok bool) {
 // claimNext claims the Project's next claimable Ticket that it runs and
 // starts its turn. It reports whether it claimed one.
 func (f *factory) claimNext(ctx context.Context) bool {
-	if f.baseDiverged {
-		// No branch is cut from a base that disagrees with the host's.
-		return false
-	}
-	if f.baseMissing || f.mcpHeld {
-		// Every claim cuts a branch or a worktree from the base.
+	if f.claimingHeld() {
 		return false
 	}
 	next, ok := f.nextRunnable(ctx)
@@ -363,13 +408,61 @@ func (f *factory) claimNext(ctx context.Context) bool {
 	resume := "claude --resume " + session
 	// The worktree's path is fixed by the Ticket ID, which isn't known
 	// until the claim, so the claim names it afterwards (set_session).
-	res, err := f.claimRecovering(ctx, core.ClaimInput{Ticket: next, SessionID: session, ResumeCommand: &resume})
-	if err != nil {
-		if ctx.Err() == nil {
-			f.printf("claim: %v", err)
-		}
+	in := core.ClaimInput{Ticket: next, SessionID: session, ResumeCommand: &resume}
+	res, err := f.claimRecovering(ctx, in)
+	switch {
+	case ctx.Err() != nil:
+		// A stop abandons a claim whose answer was lost.
+		return false
+	case answerLost(err):
+		f.lostClaims = append(f.lostClaims, in)
+		return false
+	case err != nil:
+		f.printf("claim: %v", err)
 		return false
 	}
+	return f.startClaimed(ctx, in, res)
+}
+
+// claimingHeld reports whether nothing may be claimed, as every claim
+// cuts a branch or a worktree from the base: the base disagrees with the
+// host's, is missing, or lacks .mcp.json.
+func (f *factory) claimingHeld() bool {
+	return f.baseDiverged || f.baseMissing || f.mcpHeld
+}
+
+// claimLostAgain sends each claim whose answer was lost again, once, so
+// no poll is held up while Code Central is down. One Code Central
+// answers with a Claim starts its turn; one it refuses is dropped; one
+// still lost waits for the next poll, holding its slot.
+func (f *factory) claimLostAgain(ctx context.Context) {
+	if f.claimingHeld() {
+		return
+	}
+	lost := f.lostClaims
+	f.lostClaims = nil
+	for _, in := range lost {
+		res, err := f.client.Claim(ctx, f.project, in)
+		switch {
+		case ctx.Err() != nil:
+			// A stop abandons them.
+			return
+		case answerLost(err):
+			f.lostClaims = append(f.lostClaims, in)
+		case err != nil:
+			f.printf("%s: claim: %v", in.Ticket, err)
+		default:
+			f.printf("%s: claim: the answer came back on claiming it again", in.Ticket)
+			f.startClaimed(ctx, in, res)
+		}
+	}
+}
+
+// startClaimed carries on from res, the answer to claiming with in: it
+// records the Claim, names its worktree and starts its turn. It reports
+// whether there was a Claim.
+func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core.ClaimResult) bool {
+	session, resume := in.SessionID, *in.ResumeCommand
 	if res.Ticket == nil {
 		return false
 	}
@@ -391,6 +484,7 @@ func (f *factory) claimNext(ctx context.Context) bool {
 		f.claimf(c, "%s: set_session: %v", id, err)
 	}
 	f.claimed(c, *res.Ticket, wt)
+	var err error
 	if branch := workBranch(stage, id); branch != "" {
 		err = f.cutBranchWorktree(*res.Ticket, branch, wt)
 	} else {
