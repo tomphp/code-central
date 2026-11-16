@@ -110,6 +110,8 @@ type Harness struct {
 	down      atomic.Bool
 	failing   atomic.Value // string: a path suffix the proxy fails
 	missing   atomic.Value // string: a path suffix the proxy has no route for
+	loseMu    sync.Mutex
+	lose      []lossRule // cuts the proxy still owes, in the order set
 	refusedMu sync.Mutex
 	refused   map[string]int64 // requests refused while down or failed, by path
 	holdMu    sync.Mutex
@@ -270,6 +272,10 @@ func (h *Harness) startProxy() string {
 			return
 		}
 		if !h.down.Load() {
+			if afterWrite, ok := h.takeLoss(r); ok {
+				h.cut(rp, w, r, afterWrite, &finished)
+				return
+			}
 			defer inflight.add(r)()
 			if strings.HasSuffix(r.URL.Path, wakeSuffix) {
 				h.serveWake(rp, w, r)
@@ -340,6 +346,47 @@ func (f *inflightRequests) describe(now time.Time) string {
 	return strings.Join(parts, ", ")
 }
 
+// lossRule is a cut the proxy owes: the next n requests whose path ends in
+// suffix lose their connection, after Code Central has served them if
+// afterWrite.
+type lossRule struct {
+	suffix     string
+	n          int
+	afterWrite bool
+}
+
+// takeLoss reports whether r is to be cut, and if so whether after Code
+// Central has served it, using up one of the cuts owed.
+func (h *Harness) takeLoss(r *http.Request) (afterWrite, ok bool) {
+	h.loseMu.Lock()
+	defer h.loseMu.Unlock()
+	for i := range h.lose {
+		l := &h.lose[i]
+		if l.n > 0 && strings.HasSuffix(r.URL.Path, l.suffix) {
+			l.n--
+			return l.afterWrite, true
+		}
+	}
+	return false, false
+}
+
+// cut drops r's connection, counting it as refused. Given afterWrite it
+// first lets Code Central serve r and throws the answer away.
+func (h *Harness) cut(rp http.Handler, w http.ResponseWriter, r *http.Request, afterWrite bool, finished *atomic.Bool) {
+	h.countRefused(r)
+	when := "before it reached Code Central"
+	if afterWrite {
+		rp.ServeHTTP(httptest.NewRecorder(), r)
+		when = "after Code Central served it"
+	}
+	if !finished.Load() {
+		h.t.Logf("proxy: cut %s %s %s", r.Method, r.URL.Path, when)
+	}
+	if conn, _, err := w.(http.Hijacker).Hijack(); err == nil {
+		conn.Close()
+	}
+}
+
 // refuse answers r with status and the JSON error body, counting it.
 func (h *Harness) refuse(w http.ResponseWriter, r *http.Request, status int, body string) {
 	h.countRefused(r)
@@ -404,9 +451,25 @@ func (h *Harness) SetFailing(suffix string) { h.failing.Store(suffix) }
 // as an older Code Central without that route does: not found.
 func (h *Harness) SetMissing(suffix string) { h.missing.Store(suffix) }
 
+// LoseAnswer cuts the connection of the next n requests whose path ends in
+// suffix, such as "/claim", after Code Central has served them and before
+// the answer is passed on: the write is applied and its client reads
+// unexpected EOF.
+func (h *Harness) LoseAnswer(suffix string, n int) { h.addLoss(lossRule{suffix, n, true}) }
+
+// LoseRequest cuts the connection of the next n requests whose path ends in
+// suffix before they reach Code Central: the write is never applied.
+func (h *Harness) LoseRequest(suffix string, n int) { h.addLoss(lossRule{suffix, n, false}) }
+
+func (h *Harness) addLoss(l lossRule) {
+	h.loseMu.Lock()
+	defer h.loseMu.Unlock()
+	h.lose = append(h.lose, l)
+}
+
 // Refused is how many requests to path, such as "/api/session-events",
 // were refused while Code Central was down, or failed by SetFailing or
-// SetMissing.
+// SetMissing, or cut by LoseAnswer or LoseRequest.
 func (h *Harness) Refused(path string) int64 {
 	h.refusedMu.Lock()
 	defer h.refusedMu.Unlock()
