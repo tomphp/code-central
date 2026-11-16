@@ -4,15 +4,16 @@
 // from, the cards, a card's Ticket popup or Focus popup and closing it, the
 // Focus popup's Questions and closing by itself, a Lane header's Spec popup,
 // the shared grouping, + New ▾ and Back to the Inbox.
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type { Api } from "../api/api";
-import { newWorld, type World } from "../api/core/core";
-import { scenario, WORK, type QuestionSeed, type Scenario } from "../api/scenario";
+import { newWorld, nextTask, type World } from "../api/core/core";
+import { WORK, type QuestionSeed, type Scenario } from "../api/scenario";
 import { ApiError, STATES } from "../api/types";
 import { failCI } from "../ciTesting";
+import { scenario, settle } from "../worldTesting";
 
 const MINUTE = 60_000;
 
@@ -51,11 +52,38 @@ async function world(): Promise<Fake> {
 
 // renderApp renders the App at url on f's world, with over's Api methods in
 // place of the world's.
-function renderApp(f: Fake, url = "/", over: Partial<Api> = {}) {
+async function renderApp(f: Fake, url = "/", over: Partial<Api> = {}) {
+  rendered = f.w;
   window.history.replaceState(null, "", url);
   const api = new Proxy(f.w.api, { get: (t, k: string) => (k in over ? over[k as keyof Api] : t[k as keyof Api]) });
-  return render(<App api={api} now={f.w.now} />);
+  const r = render(<App api={api} now={f.w.now} />);
+  await settle(f.w);
+  return r;
 }
+
+// rendered is the world renderApp last rendered over; settled waits for it
+// after a user-event interaction or a direct call on its Api.
+let rendered: World;
+const settled = () => settle(rendered);
+// click is a user's click, settled.
+const click = async (el: Element) => {
+  await userEvent.click(el);
+  await settled();
+};
+// travel is the browser's Back or Forward, settled: jsdom fires popstate a
+// task after the call.
+const travel = async (go: () => void) => {
+  await act(async () => {
+    go();
+    await nextTask();
+  });
+  await settled();
+};
+// press is a key press, settled.
+const press = async (keys: string) => {
+  await userEvent.keyboard(keys);
+  await settled();
+};
 
 // needing has Sign-up page (In Progress) asking a Round and Login form
 // (Ready) In Review: both need the human, in Needs Me's order.
@@ -73,7 +101,7 @@ const cards = (state: string) => within(column(state)).queryAllByRole("link");
 const titles = (state: string) => cards(state).map((c) => c.querySelector(".board-card-title")?.textContent);
 const card = (title: string) => within(board()).getByRole("link", { name: new RegExp(title) });
 const columnsButton = () => within(board()).getByRole("button", { name: /^Columns/ });
-const loaded = () => within(board()).findByRole("link", { name: /Login form/ });
+const loaded = () => within(board()).getByRole("link", { name: /Login form/ });
 // noPopup checks no popup, nor any other dialog, is open.
 const noPopup = () => expect(screen.queryByRole("dialog")).toBeNull();
 
@@ -81,7 +109,7 @@ beforeEach(() => localStorage.clear());
 
 describe("the Board link", () => {
   it("sits in the View section right after Activity, before Needs Me, on the Inbox's Project", async () => {
-    renderApp(await world(), "/?view=inbox&project=acme&list=tickets");
+    await renderApp(await world(), "/?view=inbox&project=acme&list=tickets");
     const link = boardLink();
     const activity = within(nav()).getByRole("link", { name: "Activity" });
     const needsMe = within(nav()).getByRole("button", { name: /^Needs Me/ });
@@ -91,37 +119,37 @@ describe("the Board link", () => {
   });
 
   it("counts the Tickets in the columns the Board opens with, which by default is the All Tickets count", async () => {
-    renderApp(await world(), "/?view=inbox&project=acme");
-    await waitFor(() => expect(boardLink()).toHaveTextContent("Board 3"));
+    await renderApp(await world(), "/?view=inbox&project=acme");
+    expect(boardLink()).toHaveTextContent("Board 3");
     expect(within(nav()).getByRole("button", { name: /^All Tickets/ })).toHaveTextContent("All Tickets 3");
   });
 
   it("counts every Project's Tickets on All Projects, and carries the Inbox's grouping", async () => {
-    renderApp(await world(), "/?view=inbox&group=spec");
-    await waitFor(() => expect(boardLink()).toHaveTextContent("Board 4"));
+    await renderApp(await world(), "/?view=inbox&group=spec");
+    expect(boardLink()).toHaveTextContent("Board 4");
     expect(boardLink()).toHaveAttribute("href", "?view=board&group=spec&back=view%3Dinbox%26group%3Dspec");
   });
 
   it("follows the columns the browser last chose", async () => {
     const fake = await world();
-    const { unmount } = renderApp(fake, "/?view=board&project=acme");
-    await loaded();
-    await userEvent.click(columnsButton());
-    await userEvent.click(within(board()).getByRole("checkbox", { name: "Done" }));
-    await userEvent.click(within(board()).getByRole("checkbox", { name: "Ready" }));
+    const { unmount } = await renderApp(fake, "/?view=board&project=acme");
+    loaded();
+    await click(columnsButton());
+    await click(within(board()).getByRole("checkbox", { name: "Done" }));
+    await click(within(board()).getByRole("checkbox", { name: "Ready" }));
     unmount();
 
-    renderApp(fake, "/?view=inbox&project=acme");
-    await waitFor(() => expect(boardLink()).toHaveTextContent("Board 2"));
+    await renderApp(fake, "/?view=inbox&project=acme");
+    expect(boardLink()).toHaveTextContent("Board 2");
   });
 
   it("opens the Board on the Inbox's Project, and Back to the Inbox returns to the Inbox as it was", async () => {
-    renderApp(await world(), "/?view=inbox&project=acme&state=Ready");
-    await userEvent.click(boardLink());
+    await renderApp(await world(), "/?view=inbox&project=acme&state=Ready");
+    await click(boardLink());
     expect(within(board()).getByRole("combobox", { name: "Projects" })).toHaveValue("acme");
-    expect(await loaded()).toBeInTheDocument();
+    expect(loaded()).toBeInTheDocument();
 
-    await userEvent.click(within(board()).getByRole("button", { name: "Back to the Inbox" }));
+    await click(within(board()).getByRole("button", { name: "Back to the Inbox" }));
     expect(window.location.search).toBe("?view=inbox&project=acme&state=Ready");
     expect(nav()).toBeInTheDocument();
   });
@@ -129,24 +157,24 @@ describe("the Board link", () => {
 
 describe("the Board's columns", () => {
   it("shows one column per State in workflow order, Done and Cancelled hidden, each with its count", async () => {
-    renderApp(await world(), "/?view=board&project=acme");
-    await loaded();
+    await renderApp(await world(), "/?view=board&project=acme");
+    loaded();
     expect(heads()).toEqual(["Draft 0", "Ready 2", "In Progress 1", "Needs Answer 0", "Answered 0", "Failed 0", "In Review 0", "Accepted 0"]);
     expect(columnsButton()).toHaveTextContent("Columns · 8/10");
   });
 
   it("reads No Tickets in an empty shown column", async () => {
-    renderApp(await world(), "/?view=board&project=acme");
-    await loaded();
+    await renderApp(await world(), "/?view=board&project=acme");
+    loaded();
     expect(column("Draft")).toHaveTextContent("No Tickets");
     expect(cards("Draft")).toEqual([]);
     expect(column("Ready")).not.toHaveTextContent("No Tickets");
   });
 
   it("shows and hides columns with Columns ▾, in the address, and shows · n/10 only while any is hidden", async () => {
-    renderApp(await world(), "/?view=board&project=acme");
-    await loaded();
-    await userEvent.click(columnsButton());
+    await renderApp(await world(), "/?view=board&project=acme");
+    loaded();
+    await click(columnsButton());
     expect(within(board()).getAllByRole("checkbox")).toEqual(
       STATES.flatMap((s) => [within(board()).getByRole("checkbox", { name: s }), ...(s === "In Progress" ? [within(board()).getByRole("checkbox", { name: "Needs Me" })] : [])]),
     );
@@ -154,61 +182,62 @@ describe("the Board's columns", () => {
     expect(within(board()).getByRole("checkbox", { name: "Done" })).not.toBeChecked();
     expect(within(board()).getByRole("checkbox", { name: "Ready" })).toBeChecked();
 
-    await userEvent.click(within(board()).getByRole("checkbox", { name: "Done" }));
+    await click(within(board()).getByRole("checkbox", { name: "Done" }));
     expect(heads()).toContain("Done 1");
     expect(new URLSearchParams(window.location.search).get("hide")).toBe("Cancelled");
     expect(columnsButton()).toHaveTextContent("Columns · 9/10");
 
-    await userEvent.click(within(board()).getByRole("checkbox", { name: "Cancelled" }));
+    await click(within(board()).getByRole("checkbox", { name: "Cancelled" }));
     expect(heads()).toHaveLength(10);
     expect(new URLSearchParams(window.location.search).get("hide")).toBe("");
     expect(columnsButton()).toHaveTextContent(/^Columns ▾$/);
 
-    await userEvent.click(within(board()).getByRole("checkbox", { name: "In Progress" }));
+    await click(within(board()).getByRole("checkbox", { name: "In Progress" }));
     expect(heads()).not.toContain("In Progress 1");
     expect(new URLSearchParams(window.location.search).get("hide")).toBe("In Progress");
   });
 
   it("keeps the browser's pick for a fresh Board with no hide in the address", async () => {
     const fake = await world();
-    const { unmount } = renderApp(fake, "/?view=board&project=acme");
-    await loaded();
-    await userEvent.click(columnsButton());
-    await userEvent.click(within(board()).getByRole("checkbox", { name: "Done" }));
-    await userEvent.click(within(board()).getByRole("checkbox", { name: "Draft" }));
+    const { unmount } = await renderApp(fake, "/?view=board&project=acme");
+    loaded();
+    await click(columnsButton());
+    await click(within(board()).getByRole("checkbox", { name: "Done" }));
+    await click(within(board()).getByRole("checkbox", { name: "Draft" }));
     unmount();
 
-    renderApp(fake, "/?view=board&project=acme");
-    await loaded();
+    await renderApp(fake, "/?view=board&project=acme");
+    loaded();
     expect(heads()).toEqual(["Ready 2", "In Progress 1", "Needs Answer 0", "Answered 0", "Failed 0", "In Review 0", "Accepted 0", "Done 1"]);
   });
 
   it("lets the address's hidden columns win over the browser's pick", async () => {
     const fake = await world();
-    const { unmount } = renderApp(fake, "/?view=board&project=acme");
-    await loaded();
-    await userEvent.click(columnsButton());
-    await userEvent.click(within(board()).getByRole("checkbox", { name: "Done" }));
+    const { unmount } = await renderApp(fake, "/?view=board&project=acme");
+    loaded();
+    await click(columnsButton());
+    await click(within(board()).getByRole("checkbox", { name: "Done" }));
     unmount();
 
-    renderApp(fake, "/?view=board&project=acme&hide=Draft,Ready,Accepted");
-    await waitFor(() => expect(heads()).toEqual(["In Progress 1", "Needs Answer 0", "Answered 0", "Failed 0", "In Review 0", "Done 1", "Cancelled 1"]));
+    await renderApp(fake, "/?view=board&project=acme&hide=Draft,Ready,Accepted");
+    expect(heads()).toEqual(["In Progress 1", "Needs Answer 0", "Answered 0", "Failed 0", "In Review 0", "Done 1", "Cancelled 1"]);
   });
 
   it("shows every column for an empty hide=", async () => {
-    renderApp(await world(), "/?view=board&project=acme&hide=");
-    await loaded();
+    await renderApp(await world(), "/?view=board&project=acme&hide=");
+    loaded();
     expect(heads()).toHaveLength(10);
     expect(heads()).toContain("Done 1");
     expect(heads()).toContain("Cancelled 1");
   });
 
   it("follows the Projects picker, keeping the address", async () => {
-    renderApp(await world(), "/?view=board");
-    await loaded();
+    await renderApp(await world(), "/?view=board");
+    loaded();
     expect(titles("In Progress")).toEqual(["Beta export", "Sign-up page"]);
     const picker = within(board()).getByRole("combobox", { name: "Projects" });
     await userEvent.selectOptions(picker, "beta");
+    await settled();
     expect(window.location.search).toBe("?view=board&project=beta");
     expect(titles("In Progress")).toEqual(["Beta export"]);
     expect(cards("Ready")).toEqual([]);
@@ -219,8 +248,8 @@ describe("the Board's cards", () => {
   it("show the ID, kind, Blocked, the needs-you dot and the Spec's kind and name", async () => {
     const fake = await world();
     await fake.s.askRound("acme", fake.ids.signup);
-    renderApp(fake, "/?view=board&project=acme");
-    await loaded();
+    await renderApp(fake, "/?view=board&project=acme");
+    loaded();
     const reset = card("Password reset");
     expect(within(reset).getByRole("button", { name: fake.ids.reset })).toHaveTextContent("#6");
     expect(reset).toHaveTextContent("Prototype");
@@ -251,39 +280,39 @@ describe("the Board's cards", () => {
     await pushed("Checks failed", 2, "failed");
     const shipped = await pushed("Shipped", 3, "passed");
     await s.human(`${s.ticketPath("acme", shipped)}/land`, { commit: "c3" });
-    renderApp(fake, "/?view=board&project=acme&hide=Cancelled");
-    await loaded();
+    await renderApp(fake, "/?view=board&project=acme&hide=Cancelled");
+    loaded();
     expect(card("Checks running")).toHaveTextContent("CI running");
     expect(card("Checks failed")).toHaveTextContent("CI failed");
     expect(card("Password reset")).not.toHaveTextContent("CI");
     expect(card("Shipped")).not.toHaveTextContent("CI");
-    await act(() => s.ci("acme", running, "passed", "c1", 1));
-    await waitFor(() => expect(card("Checks running")).toHaveTextContent("CI passed"));
+    await s.ci("acme", running, "passed", "c1", 1);
+    expect(card("Checks running")).toHaveTextContent("CI passed");
   });
 
   it("show full IDs on All Projects, and the Spec every Ticket is on", async () => {
     const fake = await world();
-    renderApp(fake, "/?view=board");
-    await loaded();
+    await renderApp(fake, "/?view=board");
+    loaded();
     expect(within(card("Login form")).getByRole("button", { name: fake.ids.form })).toHaveTextContent(fake.ids.form);
     expect(card("Beta export")).toHaveTextContent(new RegExp(`^${fake.ids.beta}\\s*Beta export\\s*Spec\\s*A Spec$`));
   });
 
   it("are newest first by creation", async () => {
-    renderApp(await world(), "/?view=board&project=acme");
-    await loaded();
+    await renderApp(await world(), "/?view=board&project=acme");
+    loaded();
     expect(titles("Ready")).toEqual(["Password reset", "Login form"]);
   });
 
   it("move column when a Ticket changes State, and pulse then but not on first show", async () => {
     const fake = await world();
-    renderApp(fake, "/?view=board&project=acme");
-    await loaded();
+    await renderApp(fake, "/?view=board&project=acme");
+    loaded();
     expect(within(board()).getAllByRole("link").filter((c) => c.hasAttribute("data-pulsing"))).toEqual([]);
 
     fake.w.advance(30 * MINUTE);
-    await act(async () => void (await fake.s.claimFor("acme", fake.ids.form)));
-    await waitFor(() => expect(titles("In Progress")).toEqual(["Sign-up page", "Login form"]));
+    await fake.s.claimFor("acme", fake.ids.form);
+    expect(titles("In Progress")).toEqual(["Sign-up page", "Login form"]);
     expect(titles("Ready")).toEqual(["Password reset"]);
     expect(card("Login form")).toHaveAttribute("data-pulsing", "true");
     expect(card("Sign-up page")).not.toHaveAttribute("data-pulsing");
@@ -291,27 +320,28 @@ describe("the Board's cards", () => {
 
   it("pulse when a Ticket changes in place", async () => {
     const fake = await world();
-    renderApp(fake, "/?view=board&project=acme");
-    await loaded();
+    await renderApp(fake, "/?view=board&project=acme");
+    loaded();
 
     fake.w.advance(30 * MINUTE);
-    await act(async () => void (await fake.w.api.act("acme", fake.ids.signup, "edit_ticket", { title: "Sign-up page, redone" })));
-    await waitFor(() => expect(card("Sign-up page, redone")).toHaveAttribute("data-pulsing", "true"));
+    await fake.w.api.act("acme", fake.ids.signup, "edit_ticket", { title: "Sign-up page, redone" });
+    await settled();
+    expect(card("Sign-up page, redone")).toHaveAttribute("data-pulsing", "true");
     expect(card("Login form")).not.toHaveAttribute("data-pulsing");
   });
 
   it("don't pulse when a hidden column is shown", async () => {
-    renderApp(await world(), "/?view=board&project=acme");
-    await loaded();
-    await userEvent.click(columnsButton());
-    await userEvent.click(within(board()).getByRole("checkbox", { name: "Done" }));
+    await renderApp(await world(), "/?view=board&project=acme");
+    loaded();
+    await click(columnsButton());
+    await click(within(board()).getByRole("checkbox", { name: "Done" }));
     expect(card("Old work")).not.toHaveAttribute("data-pulsing");
   });
 
   it("link to the Board's own address with their popup, not into the Inbox", async () => {
     const fake = await world();
-    renderApp(fake, "/?view=board&project=acme&group=spec&hide=");
-    await loaded();
+    await renderApp(fake, "/?view=board&project=acme&group=spec&hide=");
+    loaded();
     expect(card("Login form")).toHaveAttribute("href", `?view=board&project=acme&group=spec&hide=&popup=${fake.ids.form}`);
     expect(card("Old work")).toHaveAttribute("href", `?view=board&project=acme&group=spec&hide=&popup=${fake.ids.old}`);
   });
@@ -319,19 +349,18 @@ describe("the Board's cards", () => {
 
 describe("the Board's Ticket popup", () => {
   const popup = () => screen.getByRole("dialog", { name: "Ticket popup" });
-  // popupHeading waits for the Ticket popup to show its Ticket's title,
-  // looking the popup up again each try, as another Ticket's can replace it.
-  const popupHeading = (title: string) => waitFor(() => within(popup()).getByRole("heading", { name: new RegExp(title) }));
+  // popupHeading is the Ticket popup's heading for the Ticket titled title.
+  const popupHeading = (title: string) => within(popup()).getByRole("heading", { name: new RegExp(title) });
   const openCard = async (title: string) => {
-    await userEvent.click(within(card(title)).getByText(title));
+    await click(within(card(title)).getByText(title));
     return popupHeading(title);
   };
 
   it("opens from a card that doesn't need the human, with the Ticket's pane and actions, in the address", async () => {
     const fake = await world();
     const idea = await fake.s.ticket("acme", { title: "Rough idea", state: "Draft" });
-    renderApp(fake, "/?view=board&project=acme&hide=Done");
-    await loaded();
+    await renderApp(fake, "/?view=board&project=acme&hide=Done");
+    loaded();
     expect(await openCard("Rough idea")).toBeInTheDocument();
     expect(window.location.search).toBe(`?view=board&project=acme&hide=Done&popup=${idea}`);
     expect(within(popup()).getByRole("button", { name: "Edit" })).toBeInTheDocument();
@@ -347,13 +376,13 @@ describe("the Board's Ticket popup", () => {
   it("shows Loading… until the read arrives, and the read's error if it fails", async () => {
     const fake = await world();
     let fail: ((e: Error) => void) | undefined;
-    renderApp(fake, `/?view=board&project=acme&popup=${fake.ids.form}`, { getTicket: () => new Promise((_, reject) => (fail = reject)) });
-    await loaded();
+    await renderApp(fake, `/?view=board&project=acme&popup=${fake.ids.form}`, { getTicket: () => new Promise((_, reject) => (fail = reject)) });
+    loaded();
     expect(popup()).toHaveTextContent("Loading…");
-    // The popup reads in an effect, which can run after the Board shows.
-    await waitFor(() => expect(fail).toBeDefined());
+    expect(fail).toBeDefined();
     await act(async () => fail!(new ApiError(404, "not_found", `Ticket ${fake.ids.form} not found`)));
-    expect(await within(popup()).findByRole("alert")).toHaveTextContent(`Ticket ${fake.ids.form} not found`);
+    await settled();
+    expect(within(popup()).getByRole("alert")).toHaveTextContent(`Ticket ${fake.ids.form} not found`);
   });
 
   it("offers no edits for a Ticket of an Archived Project", async () => {
@@ -361,46 +390,47 @@ describe("the Board's Ticket popup", () => {
     await fake.s.project("old", "Old");
     const legacy = await fake.s.ticket("old", { title: "Legacy", state: "Done" });
     await fake.w.api.archiveProject("old");
-    renderApp(fake, `/?view=board&project=old&popup=${legacy}`);
-    expect(await popupHeading("Legacy")).toBeInTheDocument();
+    await renderApp(fake, `/?view=board&project=old&popup=${legacy}`);
+    expect(popupHeading("Legacy")).toBeInTheDocument();
     expect(within(popup()).queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
   it("follows the live feed", async () => {
     const fake = await world();
-    renderApp(fake, "/?view=board&project=acme");
-    await loaded();
+    await renderApp(fake, "/?view=board&project=acme");
+    loaded();
     await openCard("Login form");
-    await act(async () => void (await fake.w.api.act("acme", fake.ids.form, "edit_ticket", { title: "Login form, redone" })));
-    expect(await within(popup()).findByRole("heading", { name: /Login form, redone/ })).toBeInTheDocument();
+    await fake.w.api.act("acme", fake.ids.form, "edit_ticket", { title: "Login form, redone" });
+    await settled();
+    expect(within(popup()).getByRole("heading", { name: /Login form, redone/ })).toBeInTheDocument();
   });
 
   it("stays a Ticket popup when its Ticket starts needing the human", async () => {
     const fake = await world();
-    renderApp(fake, "/?view=board&project=acme");
-    await loaded();
+    await renderApp(fake, "/?view=board&project=acme");
+    loaded();
     await openCard("Login form");
-    await act(async () => void (await fake.s.askRound("acme", fake.ids.form)));
-    await waitFor(() => expect(within(board()).getByRole("img", { name: "Needs you" })).toBeInTheDocument());
+    await fake.s.askRound("acme", fake.ids.form);
+    expect(within(board()).getByRole("img", { name: "Needs you" })).toBeInTheDocument();
     expect(within(popup()).getByRole("heading", { name: /Login form/ })).toBeInTheDocument();
   });
 
   it("switches to its Spec's popup address from the Spec link", async () => {
     const fake = await world();
-    renderApp(fake, "/?view=board&project=acme&group=spec");
-    await loaded();
+    await renderApp(fake, "/?view=board&project=acme&group=spec");
+    loaded();
     await openCard("Login form");
-    await userEvent.click(within(popup()).getByRole("button", { name: `${fake.ids.spec} Login` }));
+    await click(within(popup()).getByRole("button", { name: `${fake.ids.spec} Login` }));
     expect(window.location.search).toBe(`?view=board&project=acme&group=spec&popup=${fake.ids.spec}`);
   });
 
   it.each([
-    ["×", () => userEvent.click(within(popup()).getByRole("button", { name: "Close" }))],
-    ["Escape", () => userEvent.keyboard("{Escape}")],
-    ["the backdrop", () => userEvent.click(popup().parentElement!)],
+    ["×", () => click(within(popup()).getByRole("button", { name: "Close" }))],
+    ["Escape", () => press("{Escape}")],
+    ["the backdrop", () => click(popup().parentElement!)],
   ])("closes on %s, pushing the Board's address without popup and keeping its grouping and hidden columns", async (_, close) => {
-    renderApp(await world(), "/?view=board&project=acme&group=spec&hide=Draft");
-    await loaded();
+    await renderApp(await world(), "/?view=board&project=acme&group=spec&hide=Draft");
+    loaded();
     const length = window.history.length;
     await openCard("Login form");
     await close();
@@ -412,34 +442,34 @@ describe("the Board's Ticket popup", () => {
   });
 
   it("closes on the browser's Back, and Forward opens it again", async () => {
-    renderApp(await world(), "/?view=board&project=acme&hide=Draft");
-    await loaded();
+    await renderApp(await world(), "/?view=board&project=acme&hide=Draft");
+    loaded();
     await openCard("Login form");
-    act(() => window.history.back());
-    await waitFor(noPopup);
+    await travel(() => window.history.back());
+    noPopup();
     expect(window.location.search).toBe("?view=board&project=acme&hide=Draft");
     expect(card("Login form")).toHaveFocus();
 
-    act(() => window.history.forward());
-    expect(await popupHeading("Login form")).toBeInTheDocument();
+    await travel(() => window.history.forward());
+    expect(popupHeading("Login form")).toBeInTheDocument();
   });
 
   it("reopens when the address with popup= is loaded", async () => {
     const fake = await world();
-    renderApp(fake, `/?view=board&project=acme&popup=${fake.ids.signup}`);
-    expect(await popupHeading("Sign-up page")).toBeInTheDocument();
+    await renderApp(fake, `/?view=board&project=acme&popup=${fake.ids.signup}`);
+    expect(popupHeading("Sign-up page")).toBeInTheDocument();
   });
 
   it("opens on any Project's Ticket, whatever the picker is on", async () => {
     const fake = await world();
-    renderApp(fake, `/?view=board&project=acme&popup=${fake.ids.beta}`);
-    expect(await popupHeading("Beta export")).toBeInTheDocument();
+    await renderApp(fake, `/?view=board&project=acme&popup=${fake.ids.beta}`);
+    expect(popupHeading("Beta export")).toBeInTheDocument();
   });
 
-  it("opens nothing for an unknown ID, and leaves the address alone", async () => {
-    renderApp(await world(), "/?view=board&project=acme&popup=acme-99");
-    await loaded();
-    noPopup();
+  it("shows the read's error for an unknown ID, and leaves the address alone", async () => {
+    await renderApp(await world(), "/?view=board&project=acme&popup=acme-99");
+    loaded();
+    expect(within(popup()).getByRole("alert")).toHaveTextContent("there is no Ticket acme-99");
     expect(window.location.search).toBe("?view=board&project=acme&popup=acme-99");
   });
 
@@ -448,7 +478,7 @@ describe("the Board's Ticket popup", () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((r) => (release = r));
     const needsMe = fake.w.api.needsMe.bind(fake.w.api);
-    renderApp(fake, `/?view=board&project=acme&popup=${fake.ids.form}`, {
+    await renderApp(fake, `/?view=board&project=acme&popup=${fake.ids.form}`, {
       needsMe: async (...args) => {
         await gate;
         return needsMe(...args);
@@ -457,18 +487,19 @@ describe("the Board's Ticket popup", () => {
     expect(within(board()).getByText("Loading…")).toBeInTheDocument();
     noPopup();
     await act(async () => release());
-    expect(await screen.findByRole("dialog", { name: "Ticket popup" })).toBeInTheDocument();
+    await settled();
+    expect(screen.getByRole("dialog", { name: "Ticket popup" })).toBeInTheDocument();
   });
 });
 
 describe("the Board's Focus popup", () => {
   const popup = () => screen.getByRole("dialog", { name: "Focus popup" });
   // item and question look the popup up again each try, so a popup
-  // replaced mid-wait isn't waited on.
-  const item = () => waitFor(() => within(popup()).getByRole("article", { name: "Focus Item" }));
-  // question waits for the popup to show the Question titled title; each
+  // replaced isn't held on to.
+  const item = () => within(popup()).getByRole("article", { name: "Focus Item" });
+  // question is the popup's heading for the Question titled title; each
   // Question is a new Focus Item, so it looks in the popup, not an item.
-  const question = (title: string) => waitFor(() => within(popup()).getByRole("heading", { name: title }));
+  const question = (title: string) => within(popup()).getByRole("heading", { name: title });
 
   const QUESTIONS: QuestionSeed[] = [
     { title: "Which colour?", body: "Red or blue", recommended: "Blue" },
@@ -488,10 +519,10 @@ describe("the Board's Focus popup", () => {
 
   it("opens from a card that needs the human, with its Focus Item and no Skip, N left or Open in Inbox", async () => {
     const fake = await asking();
-    renderApp(fake, "/?view=board&project=acme");
-    await loaded();
-    await userEvent.click(within(card("Pick a colour")).getByText("Pick a colour"));
-    expect(await question("Which colour?")).toBeInTheDocument();
+    await renderApp(fake, "/?view=board&project=acme");
+    loaded();
+    await click(within(card("Pick a colour")).getByText("Pick a colour"));
+    expect(question("Which colour?")).toBeInTheDocument();
     expect(window.location.search).toBe(`?view=board&project=acme&popup=${fake.pick}`);
     expect(within(popup()).getByText("Question 1 of 3 · Round 1")).toBeInTheDocument();
     expect(within(popup()).getByRole("button", { name: "Close" })).toBeInTheDocument();
@@ -508,47 +539,48 @@ describe("the Board's Focus popup", () => {
     let release: () => void = () => {};
     const gate = new Promise<void>((r) => (release = r));
     const getTicket = fake.w.api.getTicket.bind(fake.w.api);
-    renderApp(fake, `/?view=board&project=acme&popup=${fake.pick}`, {
+    await renderApp(fake, `/?view=board&project=acme&popup=${fake.pick}`, {
       getTicket: async (...args) => {
         await gate;
         return getTicket(...args);
       },
     });
-    await loaded();
-    expect(within(await item()).getByText("Pick a colour")).toBeInTheDocument();
+    loaded();
+    expect(within(item()).getByText("Pick a colour")).toBeInTheDocument();
     expect(popup()).toHaveTextContent("Loading…");
     expect(within(popup()).queryByRole("region", { name: "Question" })).toBeNull();
     await act(async () => release());
-    expect(await question("Which colour?")).toBeInTheDocument();
+    await settled();
+    expect(question("Which colour?")).toBeInTheDocument();
   });
 
   it("shows the Round's Questions one at a time, goes on to the Ticket's next Focus Item, and closes once it needs nothing more", async () => {
     const fake = await asking();
-    renderApp(fake, "/?view=board&project=acme&hide=Draft");
-    await loaded();
-    await userEvent.click(within(card("Pick a colour")).getByText("Pick a colour"));
-    await question("Which colour?");
+    await renderApp(fake, "/?view=board&project=acme&hide=Draft");
+    loaded();
+    await click(within(card("Pick a colour")).getByText("Pick a colour"));
+    question("Which colour?");
     expect(within(popup()).getByText("Question 1 of 3 · Round 1")).toBeInTheDocument();
     expect(within(popup()).queryByText("Which font?")).toBeNull();
-    await userEvent.click(within(popup()).getByRole("button", { name: "Answer" }));
-    expect(await question("Which font?")).toBeInTheDocument();
+    await click(within(popup()).getByRole("button", { name: "Answer" }));
+    expect(question("Which font?")).toBeInTheDocument();
     expect(within(popup()).getByText("Question 2 of 3 · Round 1")).toBeInTheDocument();
     await userEvent.type(within(popup()).getByRole("textbox"), "Sans");
-    await userEvent.click(within(popup()).getByRole("button", { name: "Answer" }));
-    expect(await question("Which size?")).toBeInTheDocument();
-    await userEvent.click(within(popup()).getByRole("button", { name: "Dismiss" }));
+    await click(within(popup()).getByRole("button", { name: "Answer" }));
+    expect(question("Which size?")).toBeInTheDocument();
+    await click(within(popup()).getByRole("button", { name: "Dismiss" }));
 
     // The Round is answered: its answers wait for the agent, which the
     // human can end with Release.
-    const resume = await within(await item()).findByRole("region", { name: "Resume or release" });
+    const resume = within(item()).getByRole("region", { name: "Resume or release" });
     expect((await fake.w.api.getTicket("acme", fake.pick)).rounds![0].questions.map((q) => [q.status, q.answer])).toEqual([
       ["answered", "Blue"],
       ["answered", "Sans"],
       ["dismissed", undefined],
     ]);
-    await userEvent.click(within(resume).getByRole("button", { name: "Release…" }));
-    await userEvent.click(within(resume).getByRole("button", { name: "Release Claim" }));
-    await waitFor(noPopup);
+    await click(within(resume).getByRole("button", { name: "Release…" }));
+    await click(within(resume).getByRole("button", { name: "Release Claim" }));
+    noPopup();
     expect(window.location.search).toBe("?view=board&project=acme&hide=Draft");
     expect(heads()[0]).toBe("Ready 3");
     expect(screen.queryByRole("status")).toBeNull();
@@ -563,27 +595,28 @@ describe("the Board's Focus popup", () => {
     const needsMe = fake.w.api.needsMe.bind(fake.w.api);
     const getTicket = fake.w.api.getTicket.bind(fake.w.api);
     const read = vi.fn(getTicket);
-    renderApp(fake, `/?view=board&project=acme&popup=${fake.pick}`, { needsMe: async () => (behind ? stale : needsMe()), getTicket: read });
-    await loaded();
+    await renderApp(fake, `/?view=board&project=acme&popup=${fake.pick}`, { needsMe: async () => (behind ? stale : needsMe()), getTicket: read });
+    loaded();
     // Once read, the Round has nothing to show, so no Focus Item either.
-    await waitFor(() => expect(within(popup()).queryByRole("article", { name: "Focus Item" })).toBeNull());
+    expect(within(popup()).queryByRole("article", { name: "Focus Item" })).toBeNull();
     expect(popup()).toHaveTextContent("Loading…");
     // It waits on that read, rather than reading the Round again and again.
     await act(() => new Promise((r) => setTimeout(r, 50)));
     expect(read.mock.calls.length).toBeLessThan(5);
 
     behind = false;
-    await act(async () => fake.s.pickUpAnswers("acme", fake.pick));
-    await waitFor(noPopup);
+    await fake.s.pickUpAnswers("acme", fake.pick);
+    noPopup();
   });
 
   it("closes quietly when the agent deals with its Ticket", async () => {
     const fake = await asking();
-    renderApp(fake, `/?view=board&project=acme&popup=${fake.pick}`);
-    await question("Which colour?");
+    await renderApp(fake, `/?view=board&project=acme&popup=${fake.pick}`);
+    question("Which colour?");
     const length = window.history.length;
-    await act(async () => void (await fake.w.api.act("acme", fake.pick, "move", { to_state: "In Progress" })));
-    await waitFor(noPopup);
+    await fake.w.api.act("acme", fake.pick, "move", { to_state: "In Progress" });
+    await settled();
+    noPopup();
     expect(window.location.search).toBe("?view=board&project=acme");
     expect(window.history.length).toBe(length + 1);
     expect(screen.queryByText(/Dealt with elsewhere/)).toBeNull();
@@ -596,19 +629,19 @@ describe("the Board's Focus popup", () => {
     const basket = await fake.s.ticket("acme", { title: "Basket", state: "Accepted", spec: fake.ids.spec });
     const checkout = await fake.s.ticket("acme", { title: "Checkout", state: "Accepted", spec: fake.ids.spec });
     await failCI(fake.s, "acme", [basket, checkout]);
-    renderApp(fake, `/?view=board&project=acme&popup=${checkout}`);
-    const ciItem = await item();
+    await renderApp(fake, `/?view=board&project=acme&popup=${checkout}`);
+    const ciItem = item();
     expect(within(ciItem).getByRole("heading", { level: 2 })).toHaveTextContent("CI failed at abc1234");
-    const panel = await within(ciItem).findByRole("region", { name: "CI failed" });
-    await userEvent.click(within(within(panel).getByRole("group", { name: "Failure options" })).getByRole("button", { name: "Land anyway" }));
+    const panel = within(ciItem).getByRole("region", { name: "CI failed" });
+    await click(within(within(panel).getByRole("group", { name: "Failure options" })).getByRole("button", { name: "Land anyway" }));
     for (const id of [basket, checkout]) expect((await fake.w.api.getTicket("acme", id)).land_anyway).toBe(true);
-    await waitFor(noPopup);
+    noPopup();
   });
 
   it("reopens as a Focus popup when the address with popup= is loaded for a Ticket that needs the human", async () => {
     const fake = await asking();
-    renderApp(fake, `/?view=board&project=acme&popup=${fake.pick}`);
-    expect(await question("Which colour?")).toBeInTheDocument();
+    await renderApp(fake, `/?view=board&project=acme&popup=${fake.pick}`);
+    expect(question("Which colour?")).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Ticket popup" })).toBeNull();
   });
 
@@ -617,21 +650,21 @@ describe("the Board's Focus popup", () => {
     await fake.s.askRound("acme", fake.ids.signup);
     await fake.s.answerRound("acme", fake.ids.signup);
     await fake.w.api.setFocusKinds("acme", ["answered"]);
-    renderApp(fake, "/?view=board&project=acme");
-    await loaded();
+    await renderApp(fake, "/?view=board&project=acme");
+    loaded();
     expect(within(card("Sign-up page")).getByRole("img", { name: "Needs you" })).toBeInTheDocument();
-    await userEvent.click(within(card("Sign-up page")).getByText("Sign-up page"));
-    expect(within(await item()).getByRole("heading", { name: "Sign-up page" })).toBeInTheDocument();
+    await click(within(card("Sign-up page")).getByText("Sign-up page"));
+    expect(within(item()).getByRole("heading", { name: "Sign-up page" })).toBeInTheDocument();
     expect(window.location.search).toBe(`?view=board&project=acme&popup=${fake.ids.signup}`);
     expect(screen.queryByRole("dialog", { name: "Ticket popup" })).toBeNull();
   });
 
   it("gives focus back to the card when it closes", async () => {
-    renderApp(await asking(), "/?view=board&project=acme");
-    await loaded();
-    await userEvent.click(within(card("Pick a colour")).getByText("Pick a colour"));
-    await question("Which colour?");
-    await userEvent.click(within(popup()).getByRole("button", { name: "Close" }));
+    await renderApp(await asking(), "/?view=board&project=acme");
+    loaded();
+    await click(within(card("Pick a colour")).getByText("Pick a colour"));
+    question("Which colour?");
+    await click(within(popup()).getByRole("button", { name: "Close" }));
     noPopup();
     expect(window.location.search).toBe("?view=board&project=acme");
     expect(card("Pick a colour")).toHaveFocus();
@@ -641,22 +674,22 @@ describe("the Board's Focus popup", () => {
 describe("the Board's grouping", () => {
   it("is By Ticket by default, and shares its pick with the State lists", async () => {
     const fake = await world();
-    const { unmount } = renderApp(fake, "/?view=board&project=acme");
-    await loaded();
+    const { unmount } = await renderApp(fake, "/?view=board&project=acme");
+    loaded();
     const toggle = within(board()).getByRole("group", { name: "Group the board" });
     expect(within(toggle).getByRole("button", { name: "Ticket" })).toHaveAttribute("aria-pressed", "true");
-    await userEvent.click(within(toggle).getByRole("button", { name: "Spec" }));
+    await click(within(toggle).getByRole("button", { name: "Spec" }));
     expect(within(toggle).getByRole("button", { name: "Spec" })).toHaveAttribute("aria-pressed", "true");
     expect(new URLSearchParams(window.location.search).get("group")).toBe("spec");
     unmount();
 
-    const inbox = renderApp(fake, "/?view=inbox&project=acme&state=Ready");
-    const list = await within(screen.getByRole("main", { name: "Tickets" })).findByRole("group", { name: "Group the list" });
+    const inbox = await renderApp(fake, "/?view=inbox&project=acme&state=Ready");
+    const list = within(screen.getByRole("main", { name: "Tickets" })).getByRole("group", { name: "Group the list" });
     expect(within(list).getByRole("button", { name: "Spec" })).toHaveAttribute("aria-pressed", "true");
-    await userEvent.click(within(list).getByRole("button", { name: "Ticket" }));
+    await click(within(list).getByRole("button", { name: "Ticket" }));
     inbox.unmount();
 
-    renderApp(fake, "/?view=board&project=acme");
+    await renderApp(fake, "/?view=board&project=acme");
     const again = within(board()).getByRole("group", { name: "Group the board" });
     expect(within(again).getByRole("button", { name: "Ticket" })).toHaveAttribute("aria-pressed", "true");
   });
@@ -685,35 +718,35 @@ describe("the Board's By Spec lanes", () => {
 
   it("shows one lane per Spec with a Ticket in a shown column, newest Spec first, and no lanes By Ticket", async () => {
     await bySpec();
-    await loaded();
+    loaded();
     expect(lanes()).toEqual(["Lane: Billing", "Lane: Login"]);
-    await userEvent.click(within(within(board()).getByRole("group", { name: "Group the board" })).getByRole("button", { name: "Ticket" }));
+    await click(within(within(board()).getByRole("group", { name: "Group the board" })).getByRole("button", { name: "Ticket" }));
     expect(within(board()).queryAllByRole("group", { name: /^Lane: / })).toEqual([]);
     expect(cards("Ready")).toHaveLength(3);
   });
 
   it("adds a lane when its Spec's Done Tickets are shown with Columns ▾", async () => {
     await bySpec("/?view=board&project=acme&group=spec&hide=");
-    await loaded();
+    loaded();
     expect(lanes()).toEqual(["Lane: Archive", "Lane: Billing", "Lane: Login"]);
   });
 
   it("heads each lane with its Lane header, which opens the Spec's popup", async () => {
     await bySpec();
-    await loaded();
+    loaded();
     const row = within(lane("Login")).getByRole("region", { name: "Login" });
     // One line: the count of the Tickets the lane shows, and no State chips.
     expect(within(row).getByText("3 shown")).toBeInTheDocument();
     expect(row.querySelector(".state-chips, .strip")).toBeNull();
     expect(within(row).getByRole("link")).toHaveAttribute("href", "?view=board&project=acme&group=spec&popup=acme-1");
-    await userEvent.click(within(row).getByRole("link"));
-    expect(await screen.findByRole("dialog", { name: "Spec popup" })).toBeInTheDocument();
+    await click(within(row).getByRole("link"));
+    expect(screen.getByRole("dialog", { name: "Spec popup" })).toBeInTheDocument();
     expect(window.location.search).toBe("?view=board&project=acme&group=spec&popup=acme-1");
   });
 
   it("puts each Ticket's card in its lane's column, without the Spec line", async () => {
     await bySpec();
-    await loaded();
+    loaded();
     const ready = within(lane("Login")).getByRole("region", { name: "Ready" });
     expect(within(ready).getAllByRole("link").map((c) => c.querySelector(".board-card-title")?.textContent)).toEqual(["Password reset", "Login form"]);
     const billingReady = within(lane("Billing")).getByRole("region", { name: "Ready" });
@@ -723,7 +756,7 @@ describe("the Board's By Spec lanes", () => {
 
   it("counts a column's Tickets across all lanes in its head", async () => {
     await bySpec();
-    await loaded();
+    loaded();
     expect(heads()).toContain("Ready 3");
     expect(heads()).toContain("In Progress 2");
     expect(heads()).toContain("Draft 0");
@@ -731,27 +764,27 @@ describe("the Board's By Spec lanes", () => {
 
   it("collapses a lane to its header, keeping its per-column counts and the head totals", async () => {
     await bySpec();
-    await loaded();
+    loaded();
     const toggle = within(lane("Login")).getByRole("button", { name: "Login" });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await userEvent.click(toggle);
+    await click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(within(lane("Login")).queryAllByRole("link", { name: /Login form|Sign-up page|Password reset/ })).toEqual([]);
     expect(within(within(lane("Login")).getByRole("region", { name: "Ready" })).getByText("2")).toBeInTheDocument();
     expect(within(within(lane("Login")).getByRole("region", { name: "In Progress" })).getByText("1")).toBeInTheDocument();
     expect(within(lane("Billing")).getByRole("link", { name: /Invoice list/ })).toBeInTheDocument();
     expect(heads()).toContain("Ready 3");
-    await userEvent.click(toggle);
+    await click(toggle);
     expect(within(lane("Login")).getByRole("link", { name: /Login form/ })).toBeInTheDocument();
   });
 
   it("keeps folded lanes across a card's popup opening and closing", async () => {
     await bySpec();
-    await loaded();
-    await userEvent.click(within(lane("Billing")).getByRole("button", { name: "Billing" }));
-    await userEvent.click(within(lane("Login")).getByText("Login form"));
-    await screen.findByRole("dialog", { name: "Ticket popup" });
-    await userEvent.keyboard("{Escape}");
+    loaded();
+    await click(within(lane("Billing")).getByRole("button", { name: "Billing" }));
+    await click(within(lane("Login")).getByText("Login form"));
+    screen.getByRole("dialog", { name: "Ticket popup" });
+    await press("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(within(lane("Billing")).getByRole("button", { name: "Billing" })).toHaveAttribute("aria-expanded", "false");
     expect(within(lane("Billing")).queryByRole("link", { name: /Invoice list/ })).toBeNull();
@@ -759,10 +792,10 @@ describe("the Board's By Spec lanes", () => {
 
   it("follows a Ticket moving column inside its lane", async () => {
     const fake = await lanesWorld();
-    renderApp(fake, "/?view=board&project=acme&group=spec");
-    await loaded();
-    await act(async () => void (await fake.s.claimFor("acme", fake.ids.form)));
-    await waitFor(() => expect(within(within(lane("Login")).getByRole("region", { name: "In Progress" })).getByRole("link", { name: /Login form/ })).toBeInTheDocument());
+    await renderApp(fake, "/?view=board&project=acme&group=spec");
+    loaded();
+    await fake.s.claimFor("acme", fake.ids.form);
+    expect(within(within(lane("Login")).getByRole("region", { name: "In Progress" })).getByRole("link", { name: /Login form/ })).toBeInTheDocument();
     expect(heads()).toContain("In Progress 3");
   });
 });
@@ -773,11 +806,11 @@ describe("the Board's Spec popup", () => {
   const lane = (title: string) => within(board()).getByRole("group", { name: `Lane: ${title}` });
   const header = (title: string) => within(within(lane(title)).getByRole("region", { name: title })).getByRole("link");
   const openLane = async (title: string) => {
-    await userEvent.click(header(title));
-    return screen.findByRole("dialog", { name: "Spec popup" });
+    await click(header(title));
+    return popup();
   };
   const bySpec = "/?view=board&project=acme&group=spec&hide=Done";
-  const specPopup = () => screen.findByRole("dialog", { name: "Spec popup" });
+  const specPopup = popup;
 
   // finishedMap makes a Map whose every Ticket is Done: acme-1, its Ticket acme-2.
   async function finishedMap() {
@@ -793,13 +826,13 @@ describe("the Board's Spec popup", () => {
 
   it("opens from a Lane header with the Spec's pane and its Tickets, and its chevron only folds", async () => {
     const fake = await world();
-    renderApp(fake, bySpec);
-    await loaded();
+    await renderApp(fake, bySpec);
+    loaded();
     const chevron = () => within(lane("Login")).getByRole("button", { name: "Login" });
-    await userEvent.click(chevron());
+    await click(chevron());
     noPopup();
     expect(chevron()).toHaveAttribute("aria-expanded", "false");
-    await userEvent.click(chevron());
+    await click(chevron());
     noPopup();
     await openLane("Login");
     expect(within(popup()).getByRole("region", { name: "Spec" })).toBeInTheDocument();
@@ -812,8 +845,8 @@ describe("the Board's Spec popup", () => {
 
   it("leaves a modified click on a Lane header to the browser", async () => {
     const fake = await world();
-    renderApp(fake, bySpec);
-    await loaded();
+    await renderApp(fake, bySpec);
+    loaded();
     expect(header("Login")).toHaveAttribute("href", `?view=board&project=acme&group=spec&hide=Done&popup=${fake.ids.spec}`);
     fireEvent.click(header("Login"), { metaKey: true });
     fireEvent.click(header("Login"), { button: 1 });
@@ -827,10 +860,10 @@ describe("the Board's Spec popup", () => {
     await s.project("acme", "Acme");
     const { spec, stages } = await w.api.submitRequirement("acme", "Offline mode");
     await s.askRound("acme", stages[0].id);
-    renderApp({ w, s } as Fake, "/?view=board&project=acme&group=spec");
-    await within(board()).findByRole("group", { name: "Lane: Offline mode" });
-    await userEvent.click(header("Offline mode"));
-    expect(await within(await specPopup()).findByRole("region", { name: "Requirement" })).toBeInTheDocument();
+    await renderApp({ w, s } as Fake, "/?view=board&project=acme&group=spec");
+    within(board()).getByRole("group", { name: "Lane: Offline mode" });
+    await click(header("Offline mode"));
+    expect(within(specPopup()).getByRole("region", { name: "Requirement" })).toBeInTheDocument();
     expect(window.location.search).toBe(`?view=board&project=acme&group=spec&popup=${spec.id}`);
   });
 
@@ -839,27 +872,27 @@ describe("the Board's Spec popup", () => {
     const s = scenario(w);
     await s.project("acme", "Acme");
     const { spec } = await w.api.submitMap("acme", "Plan the year");
-    renderApp({ w, s } as Fake, "/?view=board&project=acme&group=spec");
-    await within(board()).findByRole("group", { name: "Lane: Plan the year" });
-    await userEvent.click(header("Plan the year"));
-    const dialog = await specPopup();
-    expect(await within(dialog).findByRole("region", { name: "Map" })).toBeInTheDocument();
+    await renderApp({ w, s } as Fake, "/?view=board&project=acme&group=spec");
+    within(board()).getByRole("group", { name: "Lane: Plan the year" });
+    await click(header("Plan the year"));
+    const dialog = specPopup();
+    expect(within(dialog).getByRole("region", { name: "Map" })).toBeInTheDocument();
     expect(within(dialog).getByRole("heading", { name: "Plan the year", level: 2 })).toBeInTheDocument();
     expect(window.location.search).toContain(`popup=${spec.id}`);
   });
 
   it("switches to a Ticket's popup when a Ticket is chosen in it, and Back returns to the Spec popup", async () => {
     const fake = await world();
-    renderApp(fake, bySpec);
-    await loaded();
+    await renderApp(fake, bySpec);
+    loaded();
     await openLane("Login");
-    await userEvent.click(await within(popup()).findByRole("button", { name: /Login form/ }));
-    const ticket = await screen.findByRole("dialog", { name: "Ticket popup" });
-    expect(await within(ticket).findByRole("heading", { name: /Login form/ })).toBeInTheDocument();
+    await click(within(popup()).getByRole("button", { name: /Login form/ }));
+    const ticket = screen.getByRole("dialog", { name: "Ticket popup" });
+    expect(within(ticket).getByRole("heading", { name: /Login form/ })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Spec popup" })).toBeNull();
     expect(window.location.search).toBe(`?view=board&project=acme&group=spec&hide=Done&popup=${fake.ids.form}`);
-    act(() => window.history.back());
-    expect(await specPopup()).toBeInTheDocument();
+    await travel(() => window.history.back());
+    expect(specPopup()).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Ticket popup" })).toBeNull();
     // No Ticket shows as selected.
     expect(popup().querySelector("[aria-current]")).toBeNull();
@@ -867,45 +900,45 @@ describe("the Board's Spec popup", () => {
 
   it("switches to the Spec's popup from a Ticket popup's Spec link", async () => {
     const fake = await world();
-    renderApp(fake, bySpec);
-    await loaded();
-    await userEvent.click(within(card("Login form")).getByText("Login form"));
-    await screen.findByRole("dialog", { name: "Ticket popup" });
-    await userEvent.click(await screen.findByRole("button", { name: `${fake.ids.spec} Login` }));
-    expect(await specPopup()).toBeInTheDocument();
+    await renderApp(fake, bySpec);
+    loaded();
+    await click(within(card("Login form")).getByText("Login form"));
+    screen.getByRole("dialog", { name: "Ticket popup" });
+    await click(screen.getByRole("button", { name: `${fake.ids.spec} Login` }));
+    expect(specPopup()).toBeInTheDocument();
     expect(window.location.search).toBe(`?view=board&project=acme&group=spec&hide=Done&popup=${fake.ids.spec}`);
   });
 
   it("switches to the Map's popup from a Requirement made from it", async () => {
     const fake = await finishedMap();
     const { spec } = await fake.w.api.submitRequirement("acme", "Offline mode", fake.map); // acme-3
-    renderApp(fake as unknown as Fake, `/?view=board&project=acme&group=spec&popup=${spec.id}`);
-    await userEvent.click(await within(await specPopup()).findByRole("link", { name: /^Map/ }));
-    expect(await within(await specPopup()).findByRole("region", { name: "Map" })).toBeInTheDocument();
+    await renderApp(fake as unknown as Fake, `/?view=board&project=acme&group=spec&popup=${spec.id}`);
+    await click(within(specPopup()).getByRole("link", { name: /^Map/ }));
+    expect(within(specPopup()).getByRole("region", { name: "Map" })).toBeInTheDocument();
     expect(window.location.search).toBe(`?view=board&project=acme&group=spec&popup=${fake.map}`);
   });
 
   it("switches to the new Requirement's popup after Write the Spec", async () => {
     const fake = await finishedMap();
-    renderApp(fake as unknown as Fake, `/?view=board&project=acme&group=spec&popup=${fake.map}`);
-    await userEvent.click(await within(await specPopup()).findByRole("button", { name: "Write the Spec" }));
-    await userEvent.click(within(await screen.findByRole("dialog", { name: "Write the Spec" })).getByRole("button", { name: "Submit requirement" }));
-    await waitFor(() => expect(window.location.search).toContain("popup=acme-3"));
-    expect(await within(await specPopup()).findByRole("region", { name: "Requirement" })).toBeInTheDocument();
+    await renderApp(fake as unknown as Fake, `/?view=board&project=acme&group=spec&popup=${fake.map}`);
+    await click(within(specPopup()).getByRole("button", { name: "Write the Spec" }));
+    await click(within(screen.getByRole("dialog", { name: "Write the Spec" })).getByRole("button", { name: "Submit requirement" }));
+    expect(window.location.search).toContain("popup=acme-3");
+    expect(within(specPopup()).getByRole("region", { name: "Requirement" })).toBeInTheDocument();
   });
 
   it.each([
-    ["×", () => userEvent.click(within(popup()).getByRole("button", { name: "Close" }))],
-    ["Escape", () => userEvent.keyboard("{Escape}")],
-    ["the backdrop", () => userEvent.click(popup().parentElement!)],
-    ["Back", () => act(() => window.history.back())],
+    ["×", () => click(within(popup()).getByRole("button", { name: "Close" }))],
+    ["Escape", () => press("{Escape}")],
+    ["the backdrop", () => click(popup().parentElement!)],
+    ["Back", () => travel(() => window.history.back())],
   ])("closes on %s, keeping the grouping, hidden columns and folded lanes", async (_, close) => {
-    renderApp(await world(), bySpec);
-    await loaded();
-    await userEvent.click(within(lane("Login")).getByRole("button", { name: "Login" }));
+    await renderApp(await world(), bySpec);
+    loaded();
+    await click(within(lane("Login")).getByRole("button", { name: "Login" }));
     await openLane("Login");
     await close();
-    await waitFor(noPopup);
+    noPopup();
     expect(window.location.search).toBe(bySpec.slice(1));
     expect(within(lane("Login")).getByRole("button", { name: "Login" })).toHaveAttribute("aria-expanded", "false");
     expect(within(board()).queryByRole("region", { name: "Done" })).toBeNull();
@@ -921,32 +954,32 @@ describe("+ New ▾ on the Board", () => {
   ] as const;
   // create picks kind from + New ▾ and submits some text.
   async function create(kind: string, dialog: string, button: string) {
-    await userEvent.click(within(board()).getByRole("button", { name: "More to create" }));
-    await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: kind }));
+    await click(within(board()).getByRole("button", { name: "More to create" }));
+    await click(within(screen.getByRole("menu")).getByRole("menuitem", { name: kind }));
     const modal = screen.getByRole("dialog", { name: dialog });
     await userEvent.type(within(modal).getByRole("textbox"), "Offline mode");
-    await userEvent.click(within(modal).getByRole("button", { name: button }));
+    await click(within(modal).getByRole("button", { name: button }));
   }
 
   it.each(kinds)("stays on the Board after a %s, saying so, with nothing opened", async (kind, dialog, button) => {
-    renderApp(await world(), url);
-    await loaded();
+    await renderApp(await world(), url);
+    loaded();
     await create(kind, dialog, button);
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(within(board()).getByRole("status")).toHaveTextContent(`${kind} added`);
     expect(window.location.search).toBe("?view=board&project=acme");
   });
 
   it("keeps the columns, grouping and folded lanes", async () => {
     const start = "/?view=board&project=acme&group=spec&hide=Done&needs=1";
-    renderApp(await world(), start);
-    await loaded();
+    await renderApp(await world(), start);
+    loaded();
     const login = () => within(within(board()).getByRole("group", { name: "Lane: Login" })).getByRole("button", { name: "Login" });
-    await userEvent.click(login());
+    await click(login());
     await create("Small Change", "New Small Change", "Submit small change");
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(window.location.search).toBe(start.slice(1));
     expect(login()).toHaveAttribute("aria-expanded", "false");
   });
@@ -956,14 +989,14 @@ describe("+ New ▾ on the Board", () => {
     afterEach(() => vi.useRealTimers());
 
     it("goes after 4 s, and a second submit's note replaces the first and restarts the 4 s", async () => {
-      renderApp(await world(), url);
-      await loaded();
+      await renderApp(await world(), url);
+      loaded();
       await create("Requirement", "New requirement", "Submit requirement");
-      expect(await within(board()).findByRole("status")).toHaveTextContent("Requirement added");
+      expect(within(board()).getByRole("status")).toHaveTextContent("Requirement added");
 
       act(() => vi.advanceTimersByTime(3000));
       await create("Small Change", "New Small Change", "Submit small change");
-      expect(await within(board()).findByRole("status")).toHaveTextContent("Small Change added");
+      expect(within(board()).getByRole("status")).toHaveTextContent("Small Change added");
       expect(within(board()).getAllByRole("status")).toHaveLength(1);
 
       act(() => vi.advanceTimersByTime(3000));
@@ -982,8 +1015,8 @@ describe("the Board's Needs Me column", () => {
   it("is off by default: no column, the address untouched, and its checkbox after In Progress", async () => {
     const fake = await world();
     await needing(fake);
-    renderApp(fake, "/?view=board&project=acme");
-    await loaded();
+    await renderApp(fake, "/?view=board&project=acme");
+    loaded();
     expect(heads()).not.toContain("Needs Me 2");
     expect(within(board()).queryByRole("region", { name: "Needs Me" })).toBeNull();
     expect(window.location.search).toBe("?view=board&project=acme");
@@ -993,21 +1026,21 @@ describe("the Board's Needs Me column", () => {
   it("is shown with Columns ▾, kept in the address and the browser, and doesn't change the N/M count", async () => {
     const fake = await world();
     await needing(fake);
-    const { unmount } = renderApp(fake, "/?view=board&project=acme");
-    await within(board()).findByRole("link", { name: /Password reset/ });
-    await userEvent.click(columnsButton());
-    await userEvent.click(within(board()).getByRole("checkbox", { name: "Needs Me" }));
+    const { unmount } = await renderApp(fake, "/?view=board&project=acme");
+    within(board()).getByRole("link", { name: /Password reset/ });
+    await click(columnsButton());
+    await click(within(board()).getByRole("checkbox", { name: "Needs Me" }));
     expect(new URLSearchParams(window.location.search).get("needs")).toBe("1");
     expect(heads()).toEqual(["Draft 0", "Ready 1", "In Progress 0", "Needs Me 2", "Needs Answer 0", "Answered 0", "Failed 0", "In Review 0", "Accepted 0"]);
     expect(columnsButton()).toHaveTextContent("Columns · 8/10");
     unmount();
 
-    renderApp(fake, "/?view=board&project=acme");
-    await within(board()).findByRole("link", { name: /Password reset/ });
+    await renderApp(fake, "/?view=board&project=acme");
+    within(board()).getByRole("link", { name: /Password reset/ });
     expect(heads()).toContain("Needs Me 2");
 
-    await userEvent.click(columnsButton());
-    await userEvent.click(within(board()).getByRole("checkbox", { name: "Needs Me" }));
+    await click(columnsButton());
+    await click(within(board()).getByRole("checkbox", { name: "Needs Me" }));
     expect(new URLSearchParams(window.location.search).get("needs")).toBe("0");
     expect(heads()).not.toContain("Needs Me 2");
   });
@@ -1016,21 +1049,21 @@ describe("the Board's Needs Me column", () => {
     localStorage.setItem("code-central.board.needs", "1");
     const fake = await world();
     await needing(fake);
-    const { unmount } = renderApp(fake, "/?view=board&project=acme&needs=0");
-    await within(board()).findByRole("link", { name: /Password reset/ });
+    const { unmount } = await renderApp(fake, "/?view=board&project=acme&needs=0");
+    within(board()).getByRole("link", { name: /Password reset/ });
     expect(heads().some((h) => h?.startsWith("Needs Me"))).toBe(false);
     unmount();
     localStorage.clear();
-    renderApp(fake, "/?view=board&project=acme&hide=Done");
-    await within(board()).findByRole("link", { name: /Password reset/ });
+    await renderApp(fake, "/?view=board&project=acme&hide=Done");
+    within(board()).getByRole("link", { name: /Password reset/ });
     expect(heads().some((h) => h?.startsWith("Needs Me"))).toBe(false);
   });
 
   it("holds needing Tickets in Needs Me's order, out of their State columns, with State chip and reason", async () => {
     const fake = await world();
     await needing(fake);
-    renderApp(fake, needsOn);
-    await within(board()).findByRole("link", { name: /Password reset/ });
+    await renderApp(fake, needsOn);
+    within(board()).getByRole("link", { name: /Password reset/ });
     expect(needsTitles()).toEqual(["Sign-up page", "Login form"]);
     expect(cards("Ready").map((c) => c.textContent)).not.toContain("Login form");
     expect(titles("Ready")).toEqual(["Password reset"]);
@@ -1047,17 +1080,17 @@ describe("the Board's Needs Me column", () => {
     const fake = await world();
     const basket = await fake.s.ticket("acme", { title: "Basket", state: "Accepted", spec: fake.ids.spec });
     await failCI(fake.s, "acme", [basket]);
-    renderApp(fake, needsOn);
-    await loaded();
-    await waitFor(() => expect(needsTitles()).toEqual(["Basket"]));
+    await renderApp(fake, needsOn);
+    loaded();
+    expect(needsTitles()).toEqual(["Basket"]);
     expect(within(needsCol()).getByRole("link")).toHaveTextContent("CI failed");
   });
 
   it("shows a needing Ticket whose State column is hidden, and no other Ticket of it", async () => {
     const fake = await world();
     await fake.s.inReview("acme", fake.ids.form);
-    renderApp(fake, `${needsOn}&hide=Done,Cancelled,Ready,In Review`);
-    await within(board()).findByRole("link", { name: /Login form/ });
+    await renderApp(fake, `${needsOn}&hide=Done,Cancelled,Ready,In Review`);
+    within(board()).getByRole("link", { name: /Login form/ });
     expect(needsTitles()).toEqual(["Login form"]);
     expect(within(board()).queryByRole("region", { name: "Ready" })).toBeNull();
     expect(within(board()).queryByRole("link", { name: /Dropped/ })).toBeNull();
@@ -1067,53 +1100,52 @@ describe("the Board's Needs Me column", () => {
     const fake = await world();
     await fake.s.askRound("acme", fake.ids.signup);
     await fake.s.askRound("beta", fake.ids.beta);
-    renderApp(fake, "/?view=board&needs=1");
-    await within(board()).findByRole("link", { name: /Beta export/ });
+    await renderApp(fake, "/?view=board&needs=1");
+    within(board()).getByRole("link", { name: /Beta export/ });
     expect(needsTitles()).toEqual(["Sign-up page", "Beta export"]);
     await userEvent.selectOptions(within(board()).getByRole("combobox", { name: "Projects" }), "acme");
-    await waitFor(() => expect(needsTitles()).toEqual(["Sign-up page"]));
+    await settled();
+    expect(needsTitles()).toEqual(["Sign-up page"]);
   });
 
   it("reads Nothing needs you when empty", async () => {
-    renderApp(await world(), needsOn);
-    await loaded();
+    await renderApp(await world(), needsOn);
+    loaded();
     expect(needsCol()).toHaveTextContent("Nothing needs you");
   });
 
   it("opens a card's Focus popup on click", async () => {
     const fake = await world();
     await needing(fake);
-    renderApp(fake, needsOn);
-    await within(board()).findByRole("link", { name: /Password reset/ });
-    await userEvent.click(within(needsCol()).getByRole("link", { name: /Sign-up page/ }));
-    expect(await screen.findByRole("dialog", { name: "Focus popup" })).toBeInTheDocument();
+    await renderApp(fake, needsOn);
+    within(board()).getByRole("link", { name: /Password reset/ });
+    await click(within(needsCol()).getByRole("link", { name: /Sign-up page/ }));
+    expect(screen.getByRole("dialog", { name: "Focus popup" })).toBeInTheDocument();
   });
 
   it("moves a card in and out live, pulsing on joining even with no Ticket update", async () => {
     const fake = await world();
-    renderApp(fake, needsOn);
-    await loaded();
+    await renderApp(fake, needsOn);
+    loaded();
     expect(needsTitles()).toEqual([]);
-    await act(async () => void (await fake.s.askRound("acme", fake.ids.signup)));
-    await waitFor(() => expect(needsTitles()).toEqual(["Sign-up page"]));
+    await fake.s.askRound("acme", fake.ids.signup);
+    expect(needsTitles()).toEqual(["Sign-up page"]);
     expect(within(needsCol()).getByRole("link")).toHaveAttribute("data-pulsing", "true");
     expect(titles("In Progress")).toEqual([]);
 
-    await act(async () => {
-      await fake.s.answerRound("acme", fake.ids.signup);
-      await fake.s.pickUpAnswers("acme", fake.ids.signup);
-    });
-    await waitFor(() => expect(titles("In Progress")).toEqual(["Sign-up page"]));
+    await fake.s.answerRound("acme", fake.ids.signup);
+    await fake.s.pickUpAnswers("acme", fake.ids.signup);
+    expect(titles("In Progress")).toEqual(["Sign-up page"]);
     expect(needsTitles()).toEqual([]);
   });
 
   it("doesn't pulse when the column is just shown", async () => {
     const fake = await world();
     await needing(fake);
-    renderApp(fake, "/?view=board&project=acme");
-    await within(board()).findByRole("link", { name: /Password reset/ });
-    await userEvent.click(columnsButton());
-    await userEvent.click(within(board()).getByRole("checkbox", { name: "Needs Me" }));
+    await renderApp(fake, "/?view=board&project=acme");
+    within(board()).getByRole("link", { name: /Password reset/ });
+    await click(columnsButton());
+    await click(within(board()).getByRole("checkbox", { name: "Needs Me" }));
     expect(within(needsCol()).getAllByRole("link").filter((c) => c.hasAttribute("data-pulsing"))).toEqual([]);
   });
 
@@ -1125,13 +1157,13 @@ describe("the Board's Needs Me column", () => {
       fake.w.advance(MINUTE);
       const cold = await fake.s.ticket("acme", { title: "Cold storage", state: "Ready", spec: archive });
       await fake.s.inReview("acme", cold);
-      renderApp(fake, `${needsOn}&group=spec&hide=Done,Cancelled,In Review`);
-      await within(board()).findByRole("group", { name: "Lane: Login" });
+      await renderApp(fake, `${needsOn}&group=spec&hide=Done,Cancelled,In Review`);
+      within(board()).getByRole("group", { name: "Lane: Login" });
       const lanes = within(board()).getAllByRole("group", { name: /^Lane: / });
       expect(lanes.map((l) => l.getAttribute("aria-label"))).toEqual(["Lane: Archive", "Lane: Login"]);
       const login = within(board()).getByRole("group", { name: "Lane: Login" });
       expect(within(within(login).getByRole("region", { name: "Needs Me" })).getAllByRole("link")).toHaveLength(1);
-      await userEvent.click(within(login).getByRole("button", { name: "Login" }));
+      await click(within(login).getByRole("button", { name: "Login" }));
       expect(within(within(login).getByRole("region", { name: "Needs Me" })).getByText("1")).toBeInTheDocument();
     });
   });
@@ -1141,7 +1173,7 @@ describe("the Board's Needs Me column", () => {
     localStorage.setItem("code-central.board.hide", "Done,Cancelled,Failed");
     const fake = await world();
     await fake.s.ticket("acme", { title: "Broken", state: "Failed", spec: fake.ids.spec });
-    renderApp(fake, "/?view=inbox&project=acme");
-    await waitFor(() => expect(boardLink()).toHaveTextContent("Board 4"));
+    await renderApp(fake, "/?view=inbox&project=acme");
+    expect(boardLink()).toHaveTextContent("Board 4");
   });
 });

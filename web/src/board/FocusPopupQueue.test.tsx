@@ -3,19 +3,20 @@
 // It shows Needs Me's Focus Items in scope one at a time, with Skip, N left
 // and Open in Inbox, and reports why it closed and the Focus Item keys in
 // scope then, counted here: their format is the Focus session's own.
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type { Api } from "../api/api";
 import { newWorld, type World } from "../api/core/core";
-import { scenario, type Scenario } from "../api/scenario";
+import type { Scenario } from "../api/scenario";
 import { failCI } from "../ciTesting";
 import { Live, useInbox, useVersion } from "../live";
 import { NeedsMeProvider } from "../needsme/context";
 import { needsMeOf } from "../needsme/model";
 import { hrefFor, readLocation, type UiLocation } from "../url";
+import { scenario, settle } from "../worldTesting";
 import { FocusPopup, type FocusPopupClose } from "./FocusPopup";
 
 // Fake is a world, its scenario builder and the Tickets of its Projects.
@@ -101,8 +102,8 @@ function Harness({ api, now, project, onClose }: { api: Api; now: Date; project?
 }
 
 // renderQueue renders the App at url with the Queue mode popup over it,
-// scoped to project, and returns what it reports on closing.
-function renderQueue({ w }: Fake, { project, url = "/?view=activity" }: { project?: string; url?: string } = {}) {
+// scoped to project, settles, and returns what it reports on closing.
+async function renderQueue({ w }: Fake, { project, url = "/?view=activity" }: { project?: string; url?: string } = {}) {
   window.history.replaceState(null, "", url);
   const onClose = vi.fn<(c: FocusPopupClose) => void>();
   render(
@@ -113,24 +114,26 @@ function renderQueue({ w }: Fake, { project, url = "/?view=activity" }: { projec
       </Live>
     </>,
   );
+  await settle(w);
   return onClose;
 }
 
 const popup = () => screen.getByRole("dialog", { name: "Focus popup" });
-// item and heading look the popup up again each try, so a popup replaced
-// mid-wait isn't waited on.
-const item = () => waitFor(() => within(popup()).getByRole("article", { name: "Focus Item" }));
-const heading = (name: string) => waitFor(() => within(popup()).getByRole("heading", { name }));
-const skip = async () => userEvent.click(await within(popup()).findByRole("button", { name: "Skip" }));
+const item = () => within(popup()).getByRole("article", { name: "Focus Item" });
+const heading = (name: string) => within(popup()).getByRole("heading", { name });
+const skip = async ({ w }: Fake) => {
+  await userEvent.click(within(popup()).getByRole("button", { name: "Skip" }));
+  await settle(w);
+};
 const noPopup = () => expect(screen.queryByRole("dialog", { name: "Focus popup" })).toBeNull();
 
 describe("the Focus popup's Queue mode", () => {
   it("shows Needs Me's first Focus Item on All Projects, with N left, Skip and Open in Inbox, and no + New ▾", async () => {
     const fake = await tickets();
-    renderQueue(fake);
-    expect(await heading("Flaky build")).toBeInTheDocument();
+    await renderQueue(fake);
+    expect(heading("Flaky build")).toBeInTheDocument();
     expect(within(popup()).getByText("3 left")).toBeInTheDocument();
-    expect(await within(popup()).findByRole("button", { name: "Skip" })).toBeInTheDocument();
+    expect(within(popup()).getByRole("button", { name: "Skip" })).toBeInTheDocument();
     expect(within(popup()).getByRole("link", { name: "Open in Inbox" })).toHaveAttribute("href", `?view=inbox&ticket=${fake.flaky}`);
     expect(within(popup()).getByRole("button", { name: "Close" })).toBeInTheDocument();
     expect(within(popup()).queryByRole("button", { name: /New/ })).toBeNull();
@@ -138,31 +141,32 @@ describe("the Focus popup's Queue mode", () => {
   });
 
   it("goes through Needs Me's Focus Items in order with Skip, still counting each", async () => {
-    renderQueue(await tickets());
-    await heading("Flaky build");
-    await skip();
-    expect(await heading("Login page")).toBeInTheDocument();
+    const fake = await tickets();
+    await renderQueue(fake);
+    heading("Flaky build");
+    await skip(fake);
+    expect(heading("Login page")).toBeInTheDocument();
     expect(within(popup()).getByText("3 left")).toBeInTheDocument();
-    await skip();
-    expect(await heading("Beta search")).toBeInTheDocument();
+    await skip(fake);
+    expect(heading("Beta search")).toBeInTheDocument();
   });
 
   it("is scoped to a Project, counting only its Focus Items", async () => {
-    renderQueue(await tickets(), { project: "beta" });
-    expect(await heading("Beta search")).toBeInTheDocument();
+    await renderQueue(await tickets(), { project: "beta" });
+    expect(heading("Beta search")).toBeInTheDocument();
     expect(within(popup()).getByText("1 left")).toBeInTheDocument();
   });
 
   it("closes by itself once only skipped Focus Items are left, reporting them as in scope", async () => {
     const fake = await tickets();
-    const closed = renderQueue(fake, { project: "acme" });
+    const closed = await renderQueue(fake, { project: "acme" });
     const actions = fake.w.actions();
-    await heading("Flaky build");
-    await skip();
-    await heading("Login page");
+    heading("Flaky build");
+    await skip(fake);
+    heading("Login page");
     const length = window.history.length;
-    await skip();
-    await waitFor(noPopup);
+    await skip(fake);
+    noPopup();
     expect(closed).toHaveBeenCalledOnce();
     const [{ why, keys }] = closed.mock.calls[0];
     expect(why).toBe("only_skipped");
@@ -173,35 +177,39 @@ describe("the Focus popup's Queue mode", () => {
 
   it("closes by itself once the queue is clear, with no keys left in scope", async () => {
     const fake = await tickets();
-    const closed = renderQueue(fake);
-    await heading("Flaky build");
-    await act(() => cancel(fake, "acme", fake.flaky, fake.login).then(() => cancel(fake, "beta", fake.search)));
-    await waitFor(noPopup);
+    const closed = await renderQueue(fake);
+    heading("Flaky build");
+    await cancel(fake, "acme", fake.flaky, fake.login);
+    await cancel(fake, "beta", fake.search);
+    await settle(fake.w);
+    noPopup();
     expect(closed.mock.calls).toEqual([[{ why: "cleared", keys: [] }]]);
   });
 
   it("moves on from a Focus Item dealt with elsewhere with Focus Mode's note", async () => {
     const fake = await tickets();
-    renderQueue(fake);
-    await heading("Flaky build");
-    await act(() => cancel(fake, "acme", fake.flaky));
-    expect(await heading("Login page")).toBeInTheDocument();
+    await renderQueue(fake);
+    heading("Flaky build");
+    await cancel(fake, "acme", fake.flaky);
+    await settle(fake.w);
+    expect(heading("Login page")).toBeInTheDocument();
     expect(within(popup()).getByText("2 left")).toBeInTheDocument();
-    expect(await within(popup()).findByText("Dealt with elsewhere")).toBeInTheDocument();
+    expect(within(popup()).getByText("Dealt with elsewhere")).toBeInTheDocument();
   });
 
   it("shows a Round's open Questions one at a time, as Focus Mode does, then the next Focus Item", async () => {
     const fake = await world();
-    renderQueue(fake, { project: "acme" });
-    expect(await heading("Which colour?")).toBeInTheDocument();
+    await renderQueue(fake, { project: "acme" });
+    expect(heading("Which colour?")).toBeInTheDocument();
     expect(within(popup()).getByText("Question 1 of 2 · Round 1")).toBeInTheDocument();
     expect(within(popup()).getByText("4 left")).toBeInTheDocument();
     expect(within(popup()).queryByText("Which size?")).toBeNull();
     await userEvent.click(within(popup()).getByRole("button", { name: "Answer" }));
-    expect(await heading("Which size?")).toBeInTheDocument();
+    await settle(fake.w);
+    expect(heading("Which size?")).toBeInTheDocument();
     expect(within(popup()).getByText("Question 2 of 2 · Round 1")).toBeInTheDocument();
-    await skip();
-    expect(await heading("Flaky build")).toBeInTheDocument();
+    await skip(fake);
+    expect(heading("Flaky build")).toBeInTheDocument();
     expect((await fake.w.api.getTicket("acme", fake.colour!)).rounds![0].questions.map((q) => [q.status, q.answer])).toEqual([
       ["answered", "Blue"],
       ["open", undefined],
@@ -214,11 +222,12 @@ describe("the Focus popup's Queue mode", () => {
     ["a click outside", () => userEvent.click(popup().parentElement!)],
   ])("closes on %s as a dismissal, reporting every Focus Item key in scope, and leaves the address alone", async (_, close) => {
     const fake = await world();
-    const closed = renderQueue(fake, { project: "acme" });
-    await heading("Which colour?");
+    const closed = await renderQueue(fake, { project: "acme" });
+    heading("Which colour?");
     const length = window.history.length;
     const search = window.location.search;
     await close();
+    await settle(fake.w);
     noPopup();
     expect(closed).toHaveBeenCalledOnce();
     const [{ why, keys }] = closed.mock.calls[0];
@@ -233,13 +242,14 @@ describe("the Focus popup's Queue mode", () => {
 
   it("opens the Focus Item's Ticket in the Inbox from Open in Inbox, closing as a dismissal", async () => {
     const fake = await tickets();
-    const closed = renderQueue(fake);
-    await heading("Flaky build");
-    await userEvent.click(within(await item()).getByRole("link", { name: "Open in Inbox" }));
+    const closed = await renderQueue(fake);
+    heading("Flaky build");
+    await userEvent.click(within(item()).getByRole("link", { name: "Open in Inbox" }));
+    await settle(fake.w);
     noPopup();
     expect(window.location.search).toBe(`?view=inbox&ticket=${fake.flaky}`);
-    const detail = await screen.findByRole("complementary", { name: "Ticket" });
-    expect(await within(detail).findByText("Flaky build")).toBeInTheDocument();
+    const detail = screen.getByRole("complementary", { name: "Ticket" });
+    expect(within(detail).getByText("Flaky build")).toBeInTheDocument();
     expect(closed).toHaveBeenCalledOnce();
     expect(closed.mock.calls[0][0].why).toBe("dismissed");
     expect(sorted(closed.mock.calls[0][0].keys)).toEqual(sorted([`${fake.flaky} failed`, `${fake.login} in_review`, `${fake.search} in_review`]));
@@ -255,14 +265,14 @@ describe("the Focus popup's Queue mode", () => {
     await withBase(fake, "beta", "missing");
     await cancel(fake, "acme", fake.colour!, fake.flaky, fake.login);
     await cancel(fake, "beta", fake.search);
-    renderQueue(fake);
-    expect(await heading("CI failed at abc1234")).toBeInTheDocument();
+    await renderQueue(fake);
+    expect(heading("CI failed at abc1234")).toBeInTheDocument();
     expect(within(popup()).getByText("3 left")).toBeInTheDocument();
-    expect(await within(await item()).findByRole("region", { name: "CI failed" })).toBeInTheDocument();
-    await skip();
-    expect(await within(await item()).findByRole("region", { name: "Base diverged" })).toBeInTheDocument();
-    await skip();
-    expect(await within(await item()).findByRole("region", { name: "Base missing" })).toBeInTheDocument();
+    expect(within(item()).getByRole("region", { name: "CI failed" })).toBeInTheDocument();
+    await skip(fake);
+    expect(within(item()).getByRole("region", { name: "Base diverged" })).toBeInTheDocument();
+    await skip(fake);
+    expect(within(item()).getByRole("region", { name: "Base missing" })).toBeInTheDocument();
   });
 
   it("leaves out items of a reason off in their own Project, CI items, Base diverged and Base missing included", async () => {
@@ -274,33 +284,33 @@ describe("the Focus popup's Queue mode", () => {
     await cancel(fake, "acme", fake.colour!, fake.flaky, fake.login);
     await cancel(fake, "beta", fake.search);
     await fake.w.api.setFocusKinds("acme", ["ci_failed", "base_diverged", "base_missing"]);
-    const closed = renderQueue(fake);
-    expect(await within(await item()).findByRole("region", { name: "Base missing" })).toBeInTheDocument();
+    const closed = await renderQueue(fake);
+    expect(within(item()).getByRole("region", { name: "Base missing" })).toBeInTheDocument();
     expect(within(popup()).getByText("1 left")).toBeInTheDocument();
-    await skip();
-    await waitFor(noPopup);
+    await skip(fake);
+    noPopup();
     expect(closed.mock.calls[0][0]).toEqual({ why: "only_skipped", keys: [expect.any(String)] });
   });
 
   it("closes by itself as cleared once only items of a reason off in their Project are left, with no keys in scope", async () => {
     const fake = await tickets();
     await fake.w.api.setFocusKinds("acme", ["in_review"]);
-    const closed = renderQueue(fake, { project: "acme" });
-    await heading("Flaky build");
+    const closed = await renderQueue(fake, { project: "acme" });
+    heading("Flaky build");
     expect(within(popup()).getByText("1 left")).toBeInTheDocument();
-    await act(() => cancel(fake, "acme", fake.flaky));
-    await waitFor(noPopup);
+    await cancel(fake, "acme", fake.flaky);
+    await settle(fake.w);
+    noPopup();
     expect(closed.mock.calls[0][0]).toEqual({ why: "cleared", keys: [] });
   });
 
   it("follows a new Focus Item arriving while it's open in N left, keeping the one on screen", async () => {
     const fake = await tickets();
-    renderQueue(fake);
-    await heading("Flaky build");
-    await act(async () => {
-      await fake.s.ticket("acme", { title: "Quiet session", state: "In Review" });
-    });
-    await waitFor(() => expect(within(popup()).getByText("4 left")).toBeInTheDocument());
+    await renderQueue(fake);
+    heading("Flaky build");
+    await fake.s.ticket("acme", { title: "Quiet session", state: "In Review" });
+    await settle(fake.w);
+    expect(within(popup()).getByText("4 left")).toBeInTheDocument();
     expect(within(popup()).getByRole("heading", { name: "Flaky build" })).toBeInTheDocument();
   });
 });
