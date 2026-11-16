@@ -1,10 +1,11 @@
 // Shared set-up for the Inbox and Focus Mode tests (Spec code-central-580):
 // the real App on a WASM Core world, opened at a URL, built with the
 // scenario builder, and the helpers every one of them reaches for.
-import { act, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { App } from "../App";
 import { newWorld, type World } from "../api/core/core";
 import { scenario, type Scenario } from "../api/scenario";
+import { settle } from "../worldTesting";
 
 // renderApp renders the App at url, against w and its clock.
 export function renderApp(w: World, url = "/?view=focus") {
@@ -15,18 +16,12 @@ export function renderApp(w: World, url = "/?view=focus") {
 // focus is Focus Mode's main region.
 export const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 
-// settled lets the App's pending effects run, so a change made next
-// reaches the subscriptions they make on mounting.
-export async function settled() {
-  await act(async () => {});
-}
-
-// loadedDashboard waits for the Activity Dashboard in main, then for its
-// effects to run, so a change made next reaches the subscription it makes on
+// loadedDashboard waits for the Activity Dashboard in main, then for w to
+// settle, so a change made next reaches the subscription it makes on
 // mounting.
-export async function loadedDashboard(main: HTMLElement) {
+export async function loadedDashboard(w: World, main: HTMLElement) {
   const d = await within(main).findByRole("region", { name: "Activity Dashboard" });
-  await settled();
+  await settle(w);
   return d;
 }
 

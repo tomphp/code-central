@@ -49,7 +49,7 @@ describe("opening the Activity view from the Inbox", () => {
 });
 
 const activity = () => screen.getByRole("main", { name: "Activity" });
-const dashboard = () => loadedDashboard(activity());
+const dashboard = (w: World) => loadedDashboard(w, activity());
 
 describe("the Activity view", () => {
   it("shows the Activity Dashboard of its Project, whatever needs the human and whatever Focus Mode shows when nothing does", async () => {
@@ -57,7 +57,7 @@ describe("the Activity view", () => {
     await s.ticket("acme", { title: "Broken build", state: "Failed" });
     await act(() => w.api.setOptions({ focus_clear: "all_clear" }));
     renderApp(w, "/?view=activity&project=acme");
-    const d = await dashboard();
+    const d = await dashboard(w);
     expect(within(within(d).getByRole("list", { name: "In Progress" })).getAllByRole("listitem")).toHaveLength(1);
     expect(d).toHaveTextContent("Sign-up page");
     expect(d).not.toHaveTextContent("Beta export");
@@ -73,19 +73,21 @@ describe("the Activity view", () => {
   });
 
   it("changes scope with the Projects picker, keeping the address", async () => {
-    renderApp((await projects()).w, "/?view=activity");
+    const { w } = await projects();
+    renderApp(w, "/?view=activity");
     const picker = within(activity()).getByRole("combobox", { name: "Projects" });
     await within(picker).findByRole("option", { name: "Beta" });
     await userEvent.selectOptions(picker, "beta");
     expect(window.location.search).toBe("?view=activity&project=beta");
-    const d = await dashboard();
+    const d = await dashboard(w);
     expect(d).toHaveTextContent("Beta export");
     expect(d).not.toHaveTextContent("Sign-up page");
   });
 
   it("opens an In Progress Ticket in the Inbox", async () => {
-    renderApp((await projects()).w, "/?view=activity&project=acme");
-    await userEvent.click(await within(await dashboard()).findByRole("link", { name: /Sign-up page/ }));
+    const { w } = await projects();
+    renderApp(w, "/?view=activity&project=acme");
+    await userEvent.click(await within(await dashboard(w)).findByRole("link", { name: /Sign-up page/ }));
     expect(window.location.search).toContain("view=inbox");
     expect(window.location.search).toContain("ticket=");
   });
@@ -94,7 +96,7 @@ describe("the Activity view", () => {
     const { w, s } = await projects();
     await s.trackCI("acme");
     renderApp(w, "/?view=activity&project=acme");
-    const d = await dashboard();
+    const d = await dashboard(w);
     // The block remounts when the count arrives, so click its link only after that.
     await waitFor(() => expect(within(within(d).getByRole("group", { name: "CI Running" })).getByTestId("count")).toHaveTextContent("0"));
     await userEvent.click(within(d).getByRole("link", { name: /CI Running/ }));
@@ -102,6 +104,6 @@ describe("the Activity view", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Back to Activity" }));
     expect(window.location.search).toBe("?view=activity&project=acme");
-    expect(await dashboard()).toBeInTheDocument();
+    expect(await dashboard(w)).toBeInTheDocument();
   });
 });
