@@ -15,29 +15,43 @@ import (
 // worktree is ticket's Home worktree, where its sessions run.
 func (f *factory) worktree(ticket string) string { return filepath.Join(f.home.worktrees, ticket) }
 
-// placed is a Claim's or a Conversation's worktree in one Repository
-// (ADR 0048): its path, beside the Repository's clone, and the Base and
-// branch it is on, where an empty branch is detached at the Base's tip.
-type placed struct {
+// repositoryWorktree is a Claim's or a Conversation's worktree in one
+// Repository (ADR 0048): its path, beside the Repository's clone, and the
+// Base and branch it is on, where an empty branch is detached at the
+// Base's tip.
+type repositoryWorktree struct {
 	r      *repository
 	path   string
 	base   string
 	branch string
 }
 
-// placeWorktrees is the worktree folder named name (a Ticket ID, or the
-// Chat worktree's) on branch in every Repository with a clone, in landing
-// order.
-func (f *factory) placeWorktrees(name, branch string) []placed {
-	var ws []placed
+// label names w's Repository in a list of them, marking the Home
+// Repository.
+func (w repositoryWorktree) label() string {
+	if w.r.home {
+		return w.r.name + ", the Home Repository"
+	}
+	return w.r.name
+}
+
+// worktreeSet is a Claim's or a Conversation's worktrees, one in every
+// Repository with a clone, in landing order, the Home worktree among
+// them.
+type worktreeSet []repositoryWorktree
+
+// worktreesNamed is the worktree folder named name (a Ticket ID, or the
+// Chat worktree's) on branch in every Repository with a clone.
+func (f *factory) worktreesNamed(name, branch string) worktreeSet {
+	var ws worktreeSet
 	for _, r := range f.readyRepositories() {
-		ws = append(ws, placed{r: r, path: filepath.Join(r.worktrees, name), base: f.baseOf(r), branch: branch})
+		ws = append(ws, repositoryWorktree{r: r, path: filepath.Join(r.worktrees, name), base: f.baseOf(r), branch: branch})
 	}
 	return ws
 }
 
-// homeOf is the Home Repository's worktree among ws.
-func homeOf(ws []placed) placed {
+// home is the Home worktree among ws, where the session starts.
+func (ws worktreeSet) home() repositoryWorktree {
 	for _, w := range ws {
 		if w.r.home {
 			return w
@@ -46,9 +60,9 @@ func homeOf(ws []placed) placed {
 	panic("factory: no Home worktree")
 }
 
-// addDirs is the paths of ws but the Home worktree's, which a session
-// starts in: the folders it is given with --add-dir.
-func addDirs(ws []placed) []string {
+// addDirs is the paths of ws but the Home worktree's: the folders the
+// session reaches with --add-dir.
+func (ws worktreeSet) addDirs() []string {
 	var dirs []string
 	for _, w := range ws {
 		if !w.r.home {
@@ -58,11 +72,24 @@ func addDirs(ws []placed) []string {
 	return dirs
 }
 
+// several reports whether ws spans more than one Repository, which the
+// session is then told of.
+func (ws worktreeSet) several() bool { return len(ws) > 1 }
+
+// about is what, a sentence about w, one of ws, as said to the human:
+// opening with w's Repository when there are several.
+func (ws worktreeSet) about(w repositoryWorktree, what string) string {
+	if !ws.several() || what == "" {
+		return what
+	}
+	return "In Repository " + w.r.name + ", " + strings.ToLower(what[:1]) + what[1:]
+}
+
 // setUpWorktrees gives the claimed Ticket tk its worktree in every
 // Repository ws names: on its work branch, or detached at the Base's tip
 // for a Stage. The first that fails is the Claim's failure, naming its
 // Repository when there are several; those set up before it stay.
-func (f *factory) setUpWorktrees(tk core.TicketView, ws []placed) *failure {
+func (f *factory) setUpWorktrees(tk core.TicketView, ws worktreeSet) *failure {
 	for _, w := range ws {
 		var err error
 		if w.branch != "" {
@@ -77,17 +104,10 @@ func (f *factory) setUpWorktrees(tk core.TicketView, ws []placed) *failure {
 		if !errors.As(err, &fl) {
 			fl = f.setUpFailed(w.path, err)
 		}
-		if len(ws) > 1 {
-			fl.report.WhatBroke = inRepository(w.r.name, fl.report.WhatBroke)
-		}
+		fl.report.WhatBroke = ws.about(w, fl.report.WhatBroke)
 		return fl
 	}
 	return nil
-}
-
-// inRepository is what, a sentence, said of the Repository named name.
-func inRepository(name, what string) string {
-	return "In Repository " + name + ", " + strings.ToLower(what[:1]) + what[1:]
 }
 
 // gitWorktree is one entry of `git worktree list`.
@@ -216,10 +236,10 @@ func (f *factory) prune(r *repository) {
 // (under Branch, so the human can check its branch out), or Accepted with
 // its Spec merge recorded under Land per Spec, is removed with `git
 // worktree remove` when clean, and left with a warning line when dirty.
-// In a Repository other than the Home Repository, the Ticket's branch
-// goes with its worktree when the Ticket never used it
-// (sweepUnusedBranch). The Home Repository's branches are never deleted,
-// and anything else is kept, the Chat worktrees among it.
+// With several Repositories, the Ticket's branch goes with its worktree
+// when the Ticket never used it (sweepsBranch, sweepUnusedBranch); with
+// the Home Repository alone, branches are never deleted. Anything else is
+// kept, the Chat worktrees among it.
 func (f *factory) sweep(ctx context.Context, policy core.LandingPolicy) {
 	tickets := map[string]*core.TicketView{}
 	for _, r := range f.readyRepositories() {
@@ -235,7 +255,7 @@ func (f *factory) sweep(ctx context.Context, policy core.LandingPolicy) {
 func (f *factory) sweepIn(ctx context.Context, r *repository, policy core.LandingPolicy, tickets map[string]*core.TicketView) {
 	list, err := r.git.worktrees()
 	if err != nil {
-		f.printf("warning: can't list the worktrees%s: %v", r.in(), err)
+		f.printf("warning: can't list the worktrees%s: %v", r.where(), err)
 		return
 	}
 	for _, w := range list {
@@ -277,10 +297,27 @@ func (f *factory) sweepIn(ctx context.Context, r *repository, policy core.Landin
 		}
 		delete(f.warned, w.path)
 		f.printf("%s: %s: removed its worktree %s", id, tk.State, w.path)
-		if !r.home {
+		if f.sweepsBranch(r, *tk, w.branch) {
 			f.sweepUnusedBranch(r, *tk, w.branch)
 		}
 	}
+}
+
+// sweepsBranch reports whether the sweep may delete tk's branch in r,
+// once its worktree there is gone, if tk never used it. In a Repository
+// other than the Home Repository it may: nothing reads a branch that
+// holds no work. In the Home Repository it may only with several
+// Repositories, as a Project with the Home Repository alone never has,
+// and only once tk is Done or Cancelled or names another branch, since
+// landing reads the branch a Ticket names.
+func (f *factory) sweepsBranch(r *repository, tk core.TicketView, branch string) bool {
+	switch {
+	case !r.home:
+		return true
+	case !f.several():
+		return false
+	}
+	return tk.State == store.Done || tk.State == store.Cancelled || tk.Branch != branch
 }
 
 // sweptTicket is the Ticket id for the sweep, or nil when it can't be
@@ -297,12 +334,10 @@ func (f *factory) sweptTicket(ctx context.Context, id string) *core.TicketView {
 	return &tk
 }
 
-// sweepUnusedBranch deletes branch, tk's in r, a Repository other than the
-// Home Repository, once its worktree is gone, when tk never used it: its
+// sweepUnusedBranch deletes branch, tk's in r, when tk never used it: its
 // tip is still on the first-parent line of r's Base, or of the Spec
 // Branch of tk's Spec, where it was cut, rather than merged into either or
-// beyond them. A branch with work of its own is kept, as every branch is
-// in the Home Repository.
+// beyond them. A branch with work of its own is kept.
 func (f *factory) sweepUnusedBranch(r *repository, tk core.TicketView, branch string) {
 	if branch == "" {
 		return
@@ -316,10 +351,10 @@ func (f *factory) sweepUnusedBranch(r *repository, tk core.TicketView, branch st
 		return
 	}
 	if err := r.git.deleteRef(ref, tip); err != nil {
-		f.printf("warning: %s: can't delete its unused branch %s%s: %v", tk.ID, branch, r.in(), err)
+		f.printf("warning: %s: can't delete its unused branch %s%s: %v", tk.ID, branch, r.where(), err)
 		return
 	}
-	f.printf("%s: deleted its unused branch %s%s", tk.ID, branch, r.in())
+	f.printf("%s: deleted its unused branch %s%s", tk.ID, branch, r.where())
 }
 
 // onFirstParentLine reports whether commit is rev's tip or one of the

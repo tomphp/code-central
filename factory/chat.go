@@ -129,10 +129,9 @@ func (f *factory) runChatTurn(ctx context.Context, t core.ChatTurn, work *stint,
 	if t.First {
 		session = newSessionID()
 	}
-	resume := chatResumeCommand(homeOf(ws).path, session, addDirs(ws))
-	p := f.newChatPoster(t, session, resume)
+	p := f.newChatPoster(t, session, chatResumeCommand(ws.home().path, session, ws.addDirs()))
 	p.start()
-	outcome, msg := f.answerChat(ctx, t, session, ws, resume, p, work, stopWork)
+	outcome, msg := f.answerChat(ctx, t, session, ws, p, work, stopWork)
 	if outcome == core.ChatFailed {
 		f.printf("chat: the reply failed: %s", firstLine(msg))
 	}
@@ -142,12 +141,12 @@ func (f *factory) runChatTurn(ctx context.Context, t core.ChatTurn, work *stint,
 // chatWorktrees is the Chat worktree of every Repository with a clone, for
 // a Conversation's first turn, or for a later one those already there: a
 // Repository added mid-Conversation joins the next.
-func (f *factory) chatWorktrees(first bool) []placed {
-	ws := f.placeWorktrees(chatWorktreeName, "")
+func (f *factory) chatWorktrees(first bool) worktreeSet {
+	ws := f.worktreesNamed(chatWorktreeName, "")
 	if first {
 		return ws
 	}
-	var there []placed
+	var there worktreeSet
 	for _, w := range ws {
 		if _, err := os.Stat(w.path); w.r.home || err == nil {
 			there = append(there, w)
@@ -159,15 +158,12 @@ func (f *factory) chatWorktrees(first bool) []placed {
 // answerChat runs t's claude turn in the Chat worktrees ws, as session,
 // from the Home Repository's, and says how the reply ended, with the
 // error text of a failed one. A first turn moves each Chat worktree to
-// its base's tip first. resume is the Conversation's Resume Command.
-func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session string, ws []placed, resume string, p *chatPoster, work *stint, stopWork handoff) (core.ChatOutcome, string) {
+// its base's tip first.
+func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session string, ws worktreeSet, p *chatPoster, work *stint, stopWork handoff) (core.ChatOutcome, string) {
 	if t.First {
 		for _, w := range ws {
 			if err := f.chatWorktreeAtBase(w.r, w.path); err != nil {
-				if len(ws) > 1 {
-					return core.ChatFailed, inRepository(w.r.name, err.Error())
-				}
-				return core.ChatFailed, err.Error()
+				return core.ChatFailed, ws.about(w, err.Error())
 			}
 		}
 	}
@@ -176,13 +172,13 @@ func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session strin
 	if ctx.Err() != nil {
 		return core.ChatStopped, ""
 	}
-	wt := homeOf(ws).path
+	wt := ws.home().path
 	if t.First {
-		f.printf("chat: starting a Conversation in %s; resume: %s", wt, resume)
+		f.printf("chat: starting a Conversation in %s; resume: %s", wt, p.resumeCommand)
 	}
 	out := f.runner.run(ctx, turnInput{
 		Dir:          wt,
-		AddDirs:      addDirs(ws),
+		AddDirs:      ws.addDirs(),
 		Session:      session,
 		Resume:       !t.First,
 		Choice:       turnChoice{model: t.Model, effort: t.Effort},
@@ -274,17 +270,13 @@ func chatResumeCommand(wt, session string, dirs []string) string {
 // chatRepositories ends a Chat turn's system prompt in several
 // Repositories, ws, saying where each one's Chat worktree is; it is
 // empty with one.
-func chatRepositories(ws []placed) string {
-	if len(ws) < 2 {
+func chatRepositories(ws worktreeSet) string {
+	if !ws.several() {
 		return ""
 	}
 	var each []string
 	for _, w := range ws {
-		name := w.r.name
-		if w.r.home {
-			name += ", the Home Repository,"
-		}
-		each = append(each, fmt.Sprintf("%s at %s", name, w.path))
+		each = append(each, w.label()+": "+w.path)
 	}
 	return " This Project has several Repositories, each read-only too, with a Chat worktree at its Base's tip: " + strings.Join(each, "; ") + "."
 }

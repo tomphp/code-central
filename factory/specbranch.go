@@ -33,7 +33,7 @@ func (f *factory) specBranchTip(r *repository, spec string) (string, error) {
 		}
 		return baseTip, nil
 	}
-	if tip != baseTip && r.git.isAncestor(tip, "refs/heads/"+base) {
+	if tip != baseTip && f.inBaseOf(r, tip) {
 		if err := r.git.updateRef(ref, baseTip, tip); err != nil {
 			return "", fmt.Errorf("can't move the Spec Branch %s to %s's tip: %v", specBranch(spec), base, err)
 		}
@@ -478,22 +478,19 @@ func (f *factory) sweepSpecBranch(r *repository, branch string, spec core.SpecDe
 	if err != nil {
 		return
 	}
-	in, warnedKey := r.in(), ref
-	if !r.home {
-		warnedKey = r.name + ":" + ref
-	}
-	if !r.git.isAncestor(tip, "refs/heads/"+base) && !(policy.LandsByPullRequest() && f.specLanded(spec)) {
-		if !f.warned[warnedKey] {
-			f.warned[warnedKey] = true
-			f.printf("%s: every Ticket is finished but %s%s isn't in %s: kept", id, branch, in, base)
+	where := r.where()
+	if !f.inBaseOf(r, tip) && !(policy.LandsByPullRequest() && f.specLanded(spec)) {
+		if warned := ref + where; !f.warned[warned] {
+			f.warned[warned] = true
+			f.printf("%s: every Ticket is finished but %s%s isn't in %s: kept", id, branch, where, base)
 		}
 		return
 	}
 	if err := r.git.deleteRef(ref, tip); err != nil {
-		f.printf("warning: %s: can't delete %s%s: %v", id, branch, in, err)
+		f.printf("warning: %s: can't delete %s%s: %v", id, branch, where, err)
 		return
 	}
-	f.printf("%s: deleted %s%s, which is in %s", id, branch, in, base)
+	f.printf("%s: deleted %s%s, which is in %s", id, branch, where, base)
 }
 
 // firstID is the ID of the first of tickets, or "".

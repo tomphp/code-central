@@ -526,7 +526,7 @@ acme-shop-2: spec/acme-shop-2 conflicts with main again: commented on acme-shop-
 
 Turning Land per Spec off part-way makes the Factory's next poll merge every Spec Branch that holds merged-but-not-landed Tickets into the base, ready or not, and land them as a group; later Tickets land one by one. Adding the `long-lived` Label to a Spec while its Tickets wait does the same for that Spec alone. Turning Land per Spec on, or taking the Label off, affects only Tickets accepted afterwards. A Ticket added to a Spec after it has landed lands with a second batch: the Spec Branch is merged into the base again once the new Ticket is accepted.
 
-A Spec Branch is deleted once it is in the base and every Ticket on its Spec is Done or Cancelled. One that isn't in the base, as when the whole Spec is cancelled, is kept, and the Factory says so once. With several Repositories, each one's Spec Branch goes by the same rule against its own Base. Ticket branches are never deleted, but for a branch the Ticket never used in a Repository other than the Home Repository (see **Worktrees in every Repository** below).
+A Spec Branch is deleted once it is in the base and every Ticket on its Spec is Done or Cancelled. One that isn't in the base, as when the whole Spec is cancelled, is kept, and the Factory says so once. With several Repositories, each one's Spec Branch goes by the same rule against its own Base. Ticket branches are never deleted, but with several Repositories a branch the Ticket never used is (see **Worktrees in every Repository** below).
 
 ```text
 acme-shop-2: deleted spec/acme-shop-2, which is in main
@@ -596,7 +596,7 @@ repository docs: cloned git@github.com:acme/docs.git to /home/you/src/docs
 acme-shop-14 claimed (implementation): "Show prices from the API" in Spec acme-shop-13; worktree /home/you/src/acme-shop.worktrees/acme-shop-14; resume: claude --resume 2c9e4b1a-6f0d-4e8a-9b57-3d1f0a6c2e84 --add-dir /home/you/src/api.worktrees/acme-shop-14
 ```
 
-Once the Ticket is done with its worktrees, the sweep removes them in every Repository. In a Repository other than the Home Repository, a branch the Ticket never used (still on the line of the Base or Spec Branch it was cut from) goes with its worktree; a branch with work of its own is kept, as every Home Repository branch is:
+Once the Ticket is done with its worktrees, the sweep removes them in every Repository, and a branch the Ticket never used (still on the line of the Base or Spec Branch it was cut from) goes with its worktree. A branch with work of its own is kept, merged or not. In the Home Repository, whose branch landing reads, an unused branch goes only once the Ticket is Done or Cancelled, or when it names no Home branch; with the Home Repository alone no branch is ever deleted. Here the Ticket changed the Home Repository alone:
 
 ```text
 acme-shop-14: Done: removed its worktree /home/you/src/acme-shop.worktrees/acme-shop-14

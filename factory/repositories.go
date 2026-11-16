@@ -29,7 +29,9 @@ type repository struct {
 	dir string
 	// git is the seam for every git call in the clone; nil while missing.
 	git repo
-	// worktrees is the folder of its worktrees, beside the clone: <dir>.worktrees.
+	// worktrees is the folder of its worktrees, beside the clone:
+	// <dir>.worktrees for the Home Repository, and <dir's
+	// parent>/<name>.worktrees for each other one.
 	worktrees string
 	// cloneURL is the Clone URL the Project lists; empty for the Home
 	// Repository.
@@ -52,15 +54,24 @@ func (f *factory) baseOf(r *repository) string {
 	return r.base
 }
 
-// in names r at the end of a line about something in it: " in
+// inBaseOf reports whether commit is in r's base.
+func (f *factory) inBaseOf(r *repository, commit string) bool {
+	return r.git.isAncestor(commit, "refs/heads/"+f.baseOf(r))
+}
+
+// where ends a line about something in r, saying where it is: " in
 // Repository <name>", or nothing for the Home Repository, as the lines
 // of a Project with the Home Repository alone have always said.
-func (r *repository) in() string {
+func (r *repository) where() string {
 	if r.home {
 		return ""
 	}
 	return " in Repository " + r.name
 }
+
+// several reports whether the Project has more than one Repository, as
+// the last poll found; the poll's own.
+func (f *factory) several() bool { return len(f.inOrder) > 1 }
 
 // readyRepositories is the Project's Repositories with a clone, in
 // landing order, as the last poll found them: the Home Repository alone
@@ -145,6 +156,9 @@ func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, remote str
 	}
 	r := f.newRepository(v.Name, dir)
 	r.cloneURL, r.base = v.CloneURL, v.Base
+	// Named after the Repository, whatever its local path's folder is
+	// called (ADR 0048).
+	r.worktrees = filepath.Join(filepath.Dir(dir), v.Name+".worktrees")
 	missing := func(format string, args ...any) *repository {
 		r.git, r.problem = nil, fmt.Sprintf(format, args...)
 		return r

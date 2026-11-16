@@ -1057,6 +1057,14 @@ type Repository struct {
 	// Path is where the Factory clones it: beside the Home Repository,
 	// at <Repo's parent>/<Name>.
 	Path string
+	h    *Harness
+}
+
+// CommitOn commits file with content on branch in r's clone at Path, as
+// Harness.CommitOn does in the Home Repository, and returns the commit.
+func (r *Repository) CommitOn(branch, file, content string) string {
+	r.h.t.Helper()
+	return r.h.commitOn(r.Path, branch, file, content)
 }
 
 // Worktree is where the Factory keeps ticket's worktree in r, beside its
@@ -1089,7 +1097,7 @@ func (h *Harness) MakeRepository(name string) *Repository {
 	must(h.t, os.WriteFile(filepath.Join(seed, "README.md"), []byte(name+"\n"), 0o644))
 	h.GitIn(seed, "add", "README.md")
 	h.GitIn(seed, "commit", "-q", "-m", "Start "+name)
-	r := &Repository{Name: name, CloneURL: filepath.Join(root, "repositories", name+".git"), Path: filepath.Join(filepath.Dir(h.Repo), name)}
+	r := &Repository{Name: name, CloneURL: filepath.Join(root, "repositories", name+".git"), Path: filepath.Join(filepath.Dir(h.Repo), name), h: h}
 	h.GitIn(root, "clone", "-q", "--bare", seed, r.CloneURL)
 	return r
 }
@@ -1098,17 +1106,23 @@ func (h *Harness) MakeRepository(name string) *Repository {
 // doesn't exist, and returns the commit. The repo is left on main.
 func (h *Harness) CommitOn(branch, file, content string) string {
 	h.t.Helper()
+	return h.commitOn(h.Repo, branch, file, content)
+}
+
+// commitOn is CommitOn in the clone at dir.
+func (h *Harness) commitOn(dir, branch, file, content string) string {
+	h.t.Helper()
 	if branch != "main" {
-		if !strings.Contains(h.Git("branch", "--list", branch), branch) {
-			h.Git("branch", branch, "main")
+		if !strings.Contains(h.GitIn(dir, "branch", "--list", branch), branch) {
+			h.GitIn(dir, "branch", branch, "main")
 		}
-		h.Git("checkout", "-q", branch)
-		defer h.Git("checkout", "-q", "main")
+		h.GitIn(dir, "checkout", "-q", branch)
+		defer h.GitIn(dir, "checkout", "-q", "main")
 	}
-	must(h.t, os.WriteFile(filepath.Join(h.Repo, file), []byte(content), 0o644))
-	h.Git("add", file)
-	h.Git("commit", "-q", "-m", "Change "+file)
-	return h.Git("rev-parse", "HEAD")
+	must(h.t, os.WriteFile(filepath.Join(dir, file), []byte(content), 0o644))
+	h.GitIn(dir, "add", file)
+	h.GitIn(dir, "commit", "-q", "-m", "Change "+file)
+	return h.GitIn(dir, "rev-parse", "HEAD")
 }
 
 // Running is a Factory running in-process.

@@ -546,16 +546,16 @@ func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core
 	}
 	id := res.Ticket.ID
 	stage := core.GuideName(res.Ticket.Labels)
-	ws := f.placeWorktrees(id, workBranch(stage, id))
+	ws := f.worktreesNamed(id, workBranch(stage, id))
 	conflicts := f.conflictsIn(ws, stage, *res.Ticket)
 	var guide core.StageGuideView
 	if len(conflicts) == 0 {
 		guide = f.stageGuide(ctx, res.StageGuide, stage)
 	}
-	wt := homeOf(ws).path
-	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}, AddDirs: addDirs(ws)}
+	wt := ws.home().path
+	c := claim{Ticket: id, ClaimID: res.ClaimID, SessionID: session, AllowedTools: []string{}, AddDirs: ws.addDirs()}
 	var prompt string
-	if len(ws) > 1 {
+	if ws.several() {
 		c.SystemPrompt, prompt = severalSystemPrompt(c, stage, ws, guide, len(conflicts) > 0), severalFirstPrompt(c, stage, ws, conflicts)
 	} else {
 		var files []string

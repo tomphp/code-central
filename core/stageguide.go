@@ -55,9 +55,10 @@ const (
 	subagentExplorationPlaceholder = "<!-- subagent-exploration -->"
 	modelAssignmentPlaceholder     = "<!-- model-assignment -->"
 	// severalRepositoriesPlaceholder ends the Finishing paragraph of each
-	// guide whose Tickets commit. The human's Repository list governs it
-	// (Spec code-central-848): with more than one Repository the fragment
-	// follows as a paragraph of its own.
+	// guide whose Tickets commit. Its Project setting is the Repository
+	// list, which the human sets: with more than one Repository the
+	// fragment follows as a paragraph of its own, and with the Home
+	// Repository alone the line is removed whole.
 	severalRepositoriesPlaceholder = "<!-- several-repositories -->"
 )
 

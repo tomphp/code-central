@@ -98,16 +98,20 @@ const sessionLogs = "Claude Code keeps each session's log in its projects folder
 // implementation Ticket: the branch and its head commit.
 const conflictFinish = "Conflict Claim: the first prompt holds the work. When it is done, `finish` with `branch` (the Ticket's ID) and `commit` (the branch's head commit), and a summary of how each conflict was resolved and the test result. The Ticket goes to In Review; stop working it."
 
+// severalConflictFinish is conflictFinish in several Repositories, where
+// finish records each other Repository committed in as well.
+const severalConflictFinish = "Conflict Claim: the first prompt holds the work. When it is done, `finish` with `branch` (the Ticket's ID) and `commit` (the branch's head commit) for the Home Repository and `repositories` for each other one you committed in, and a summary of how each conflict was resolved and the test result. The Ticket goes to In Review; stop working it."
+
 // conflict is the files merging a Repository's base into the Ticket's
 // branch in its worktree w conflicts in.
 type conflict struct {
-	w     placed
+	w     repositoryWorktree
 	files []string
 }
 
 // conflictsIn is the conflicts of tk's branch with the base in each
 // Repository of ws that has them (conflictFiles).
-func (f *factory) conflictsIn(ws []placed, stage string, tk core.TicketView) []conflict {
+func (f *factory) conflictsIn(ws worktreeSet, stage string, tk core.TicketView) []conflict {
 	var out []conflict
 	for _, w := range ws {
 		if files := f.conflictFiles(w.r, stage, tk); len(files) > 0 {
@@ -145,7 +149,7 @@ func (f *factory) conflictFiles(r *repository, stage string, tk core.TicketView)
 	}
 	_, conflicts, err := r.git.mergeTree(baseTip, head)
 	if err != nil {
-		f.printf("warning: %s: can't check the branch against %s%s: %v", tk.ID, base, r.in(), err)
+		f.printf("warning: %s: can't check the branch against %s%s: %v", tk.ID, base, r.where(), err)
 		return nil
 	}
 	return conflicts
@@ -183,7 +187,7 @@ func firstPrompt(c claim, stage, base string, conflicts []string) string {
 // several Repositories (ADR 0048): a conflict Claim's names the files
 // conflicting in each Repository, and either ends with the Repositories
 // list, where the session finds each one.
-func severalFirstPrompt(c claim, stage string, ws []placed, conflicts []conflict) string {
+func severalFirstPrompt(c claim, stage string, ws worktreeSet, conflicts []conflict) string {
 	p := firstPrompt(c, stage, "", nil)
 	if len(conflicts) > 0 {
 		var b strings.Builder
@@ -203,17 +207,14 @@ func severalFirstPrompt(c claim, stage string, ws []placed, conflicts []conflict
 // repositoriesList is the Repositories list that ends a first prompt in
 // several Repositories: one line for each, with its worktree, Base and
 // the branch to commit on, or that it is detached for a Stage.
-func repositoriesList(ws []placed) string {
+func repositoriesList(ws worktreeSet) string {
 	var lines []string
 	for _, w := range ws {
-		name, on := w.r.name, "branch "+w.branch
-		if w.r.home {
-			name += ", the Home Repository"
-		}
+		on := "branch " + w.branch
 		if w.branch == "" {
 			on = "detached at its tip"
 		}
-		lines = append(lines, fmt.Sprintf("- %s: worktree %s, Base %s, %s", name, w.path, w.base, on))
+		lines = append(lines, fmt.Sprintf("- %s: worktree %s, Base %s, %s", w.label(), w.path, w.base, on))
 	}
 	return "Repositories:\n" + strings.Join(lines, "\n")
 }
@@ -234,14 +235,18 @@ func systemPrompt(c claim, stage, wt string, g core.StageGuideView, conflicts []
 // severalSystemPrompt is systemPrompt for a Claim with its worktrees ws
 // in several Repositories (ADR 0048): it adds where they are and how to
 // commit in them and finish, before the guide.
-func severalSystemPrompt(c claim, stage string, ws []placed, g core.StageGuideView, conflicted bool) string {
+func severalSystemPrompt(c claim, stage string, ws worktreeSet, g core.StageGuideView, conflicted bool) string {
 	var several string
 	if branch := workBranch(stage, c.Ticket); branch != "" {
 		several = fmt.Sprintf("This Project has several Repositories, and this Ticket has a worktree in each on branch %s, listed at the end of your first prompt; this session starts in the Home Repository's. Commit each Repository's changes in its own worktree, on branch %s, and finish with `repositories`: one entry for each Repository you committed in, with its branch and head commit.", branch, branch)
 	} else {
 		several = "This Project has several Repositories, and this Ticket has a detached, read-only worktree in each at its Base's tip, listed at the end of your first prompt; this session starts in the Home Repository's."
 	}
-	return claimIntro(c, stage, homeOf(ws).path) + "\n\n" + several + guideOrFinish(g, conflicted)
+	end := guideOrFinish(g, false)
+	if conflicted {
+		end = "\n\n" + severalConflictFinish
+	}
+	return claimIntro(c, stage, ws.home().path) + "\n\n" + several + end
 }
 
 // claimIntro starts a Claim's system prompt: its Ticket and Claim, and
