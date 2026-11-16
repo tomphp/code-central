@@ -32,7 +32,7 @@ const address = () => window.location.search;
 describe("the Inbox with a Sole Project", () => {
   it("scopes to it with Short IDs, its filter on and no All Projects, keeping its Project Options link", async () => {
     const { w, mine } = await world();
-    renderApp(w, "/?view=inbox&list=tickets");
+    await renderApp(w, "/?view=inbox&list=tickets");
     const short = `#${mine.slice(mine.lastIndexOf("-") + 1)}`;
     expect(await screen.findByText(short)).toBeInTheDocument();
     expect(screen.queryByText(mine)).toBeNull();
@@ -44,7 +44,7 @@ describe("the Inbox with a Sole Project", () => {
 
   it("copies the full ID from a Short ID", async () => {
     const { w, mine } = await world();
-    renderApp(w, "/?view=inbox&list=tickets");
+    await renderApp(w, "/?view=inbox&list=tickets");
     const write = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText: write }, configurable: true });
     await userEvent.click(await screen.findByRole("button", { name: mine }));
@@ -53,14 +53,14 @@ describe("the Inbox with a Sole Project", () => {
 
   it("leaves the address alone", async () => {
     const { w } = await world();
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     await screen.findByRole("button", { name: /^Acme/ });
     expect(address()).toBe("?view=inbox");
   });
 
   it("lets a named Archived Project win, with the Sole Project's filter still the way back", async () => {
     const { w, old } = await world();
-    renderApp(w, "/?view=inbox&project=old&list=tickets&finished=1");
+    await renderApp(w, "/?view=inbox&project=old&list=tickets&finished=1");
     expect(await screen.findByText(`#${old.slice(old.lastIndexOf("-") + 1)}`)).toBeInTheDocument();
     expect(within(nav()).queryByRole("button", { name: /^All Projects/ })).toBeNull();
     await userEvent.click(within(nav()).getByRole("button", { name: /^Acme/ }));
@@ -69,14 +69,14 @@ describe("the Inbox with a Sole Project", () => {
 
   it("behaves as before with two active Projects", async () => {
     const { w, mine } = await world("beta");
-    renderApp(w, "/?view=inbox&list=tickets");
+    await renderApp(w, "/?view=inbox&list=tickets");
     expect(await screen.findByText(mine)).toBeInTheDocument();
     expect(within(nav()).getByRole("button", { name: /^All Projects/ })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("follows archiving and unarchiving through the live feed", async () => {
     const { w, mine } = await world("beta");
-    renderApp(w, "/?view=inbox&list=tickets");
+    await renderApp(w, "/?view=inbox&list=tickets");
     expect(await screen.findByText(mine)).toBeInTheDocument();
     await w.api.archiveProject("beta");
     await waitFor(() => expect(within(nav()).queryByRole("button", { name: /^All Projects/ })).toBeNull());
@@ -91,7 +91,7 @@ describe("the Inbox with a Sole Project", () => {
 describe("the full-width views with a Sole Project", () => {
   it.each(["board", "ci", "activity", "usage"])("%s: the picker shows the Sole Project, lists the Archived one and has no All Projects", async (view) => {
     const { w } = await world();
-    renderApp(w, `/?view=${view}`);
+    await renderApp(w, `/?view=${view}`);
     const select = await picker();
     await waitFor(() => expect(select).toHaveValue("acme"));
     expect(optionNames(select)).toEqual(["Acme", "Old App (Archived)"]);
@@ -100,7 +100,7 @@ describe("the full-width views with a Sole Project", () => {
 
   it("offers All Projects with two active Projects", async () => {
     const { w } = await world("beta");
-    renderApp(w, "/?view=board");
+    await renderApp(w, "/?view=board");
     expect(optionNames(await picker())[0]).toBe("All Projects");
   });
 
@@ -108,13 +108,13 @@ describe("the full-width views with a Sole Project", () => {
     const { w, s, mine } = await world();
     await s.project("other", "Other");
     await w.api.archiveProject("other");
-    renderApp(w, "/?view=board");
+    await renderApp(w, "/?view=board");
     expect(await screen.findByText(`#${mine.slice(mine.lastIndexOf("-") + 1)}`)).toBeInTheDocument();
   });
 
   it("keeps the address clean through the Activity, Board, CI and Usage links and Back", async () => {
     const { w } = await world();
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     for (const name of [/^Activity/, /^Board/]) {
       await userEvent.click(await within(nav()).findByRole("link", { name }));
       expect(address()).not.toContain("project=");
@@ -130,7 +130,7 @@ describe("the full-width views with a Sole Project", () => {
       let release!: () => void;
       const gate = new Promise<void>((r) => (release = r));
       vi.spyOn(w.api, "listProjects").mockImplementation(async () => (await gate, real()));
-      renderApp(w, `/?view=${view}`);
+      await renderApp(w, `/?view=${view}`);
       await new Promise((r) => setTimeout(r, 50));
       expect(w.calls).not.toContain(view === "ci" ? "ciOverview" : "usage");
       release();
@@ -142,7 +142,7 @@ describe("the full-width views with a Sole Project", () => {
   it("fetches as today when the Project list read fails", async () => {
     const { w } = await world();
     vi.spyOn(w.api, "listProjects").mockRejectedValue(new Error("down"));
-    renderApp(w, "/?view=ci");
+    await renderApp(w, "/?view=ci");
     await waitFor(() => expect(w.calls).toContain("ciOverview"));
     vi.restoreAllMocks();
   });
@@ -151,7 +151,7 @@ describe("the full-width views with a Sole Project", () => {
 describe("Focus Mode, Project Options, + New and Chat with a Sole Project", () => {
   it("scopes Focus Mode to it", async () => {
     const { w } = await world();
-    renderApp(w, "/?view=focus");
+    await renderApp(w, "/?view=focus");
     const main = await screen.findByRole("main", { name: "Focus Mode" });
     expect(await within(main).findByText("Acme")).toBeInTheDocument();
     expect(address()).toBe("?view=focus");
@@ -159,21 +159,21 @@ describe("Focus Mode, Project Options, + New and Chat with a Sole Project", () =
 
   it("shows its Project Options when none is named", async () => {
     const { w } = await world();
-    renderApp(w, "/?view=project-options");
+    await renderApp(w, "/?view=project-options");
     expect(await screen.findByRole("heading", { name: /Acme/ })).toBeInTheDocument();
   });
 
   it("defaults + New to it without asking which Project", async () => {
     const { w } = await world("beta");
     await w.api.archiveProject("beta");
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
     expect(within(screen.getByRole("dialog")).queryByRole("combobox")).toBeNull();
   });
 
   it("shows the Chat dock for it with an online Factory that supports Chat, and not without", async () => {
     const a = await world();
-    renderApp(a.w, "/?view=inbox");
+    await renderApp(a.w, "/?view=inbox");
     await screen.findByRole("button", { name: /^Acme/ });
     expect(screen.queryByRole("button", { name: "Chat" })).toBeNull();
   });
@@ -181,7 +181,7 @@ describe("Focus Mode, Project Options, + New and Chat with a Sole Project", () =
   it("shows the Chat dock with a Chat-capable Factory", async () => {
     const { w, s } = await world();
     await s.reportHeartbeat("acme", { ...beat, state: "online", chat: true });
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     expect(await screen.findByRole("button", { name: "Chat" })).toBeInTheDocument();
   });
 });

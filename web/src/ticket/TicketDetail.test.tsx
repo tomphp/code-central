@@ -48,8 +48,8 @@ async function seeded() {
 // claimLine is a Claim row's own line, without its Live section.
 const claimLine = (row: HTMLElement) => row.querySelector(".claim-line")!;
 
-function renderDetail(w: World, t: TicketView) {
-  renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
+async function renderDetail(w: World, t: TicketView) {
+  await renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("article", { name: "Ticket details" });
 }
 
@@ -226,7 +226,7 @@ describe("a Prototype's Ticket detail", () => {
   }
   const line = async (tag?: string) => {
     const { w, t } = await prototype(tag);
-    renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
+    await renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
     return screen.queryByText(/^Prototype at/);
   };
 
@@ -363,14 +363,14 @@ describe("the Ticket detail's CI section", () => {
 describe("the Ticket pane's body", () => {
   it("says Loading… until the Ticket is read", async () => {
     const { w } = await acme();
-    renderLive(w, <TicketDetail project="acme" now={w.now()} />);
+    await renderLive(w, <TicketDetail project="acme" now={w.now()} />);
     expect(screen.getByText("Loading…")).toBeInTheDocument();
     expect(screen.queryByRole("article", { name: "Ticket details" })).toBeNull();
   });
 
   it("shows the read's error", async () => {
     const { w } = await acme();
-    renderLive(w, <TicketDetail project="acme" now={w.now()} error="acme-9 not found" />);
+    await renderLive(w, <TicketDetail project="acme" now={w.now()} error="acme-9 not found" />);
     expect(screen.getByRole("alert")).toHaveTextContent("acme-9 not found");
     expect(screen.queryByText("Loading…")).toBeNull();
   });
@@ -378,7 +378,7 @@ describe("the Ticket pane's body", () => {
   it("heads the Ticket with its State chip and Reason badge", async () => {
     const { w, s } = await acme();
     const id = await s.ticket("acme", { title: "Pick a theme", state: "Needs Answer" });
-    renderLive(w, <TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} />);
+    await renderLive(w, <TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} />);
     expect(screen.getByText("Needs Answer", { selector: ".state-chip" })).toHaveClass("st-needs-answer");
     expect(screen.getByText("Questions", { selector: ".reason" })).toHaveClass("reason-needs_answer");
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("Pick a theme");
@@ -387,7 +387,7 @@ describe("the Ticket pane's body", () => {
   it("has no Reason badge when the Ticket doesn't need the human", async () => {
     const { w, s } = await acme();
     const id = await s.ticket("acme", { title: "Pick a theme" });
-    renderLive(w, <TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} />);
+    await renderLive(w, <TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} />);
     expect(screen.getByText("Ready", { selector: ".state-chip" })).toBeInTheDocument();
     expect(document.querySelector(".reason")).toBeNull();
   });
@@ -396,7 +396,7 @@ describe("the Ticket pane's body", () => {
     const { w, s } = await acme();
     const id = await s.ticket("acme", { title: "Pick a theme" });
     const t = await w.api.getTicket("acme", id);
-    const { rerender } = renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
+    const { rerender } = await renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
     expect(screen.queryByRole("group", { name: "Auto-accept" })).toBeNull();
     rerender(<TicketDetail project="acme" ticket={t} now={w.now()} specLabels={[]} />);
     expect(screen.getByRole("group", { name: "Auto-accept" })).toBeInTheDocument();
@@ -407,7 +407,7 @@ describe("the Ticket pane's body", () => {
     const spec = await s.spec("acme", { title: "Theming" });
     const id = await s.ticket("acme", { title: "Pick a theme", spec });
     const openSpec = vi.fn();
-    renderLive(w, <TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} openSpec={openSpec} />);
+    await renderLive(w, <TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} openSpec={openSpec} />);
     await userEvent.click(screen.getByRole("button", { name: `${spec} Theming` }));
     expect(openSpec).toHaveBeenCalledWith(spec);
   });
@@ -416,7 +416,7 @@ describe("the Ticket pane's body", () => {
     const { w, s } = await acme();
     const id = await s.ticket("acme", { title: "Pick a theme", state: "Done" });
     const openTicket = vi.fn();
-    renderLive(w, <TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} openTicket={openTicket} />);
+    await renderLive(w, <TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} openTicket={openTicket} />);
     await userEvent.click(screen.getByRole("button", { name: "Retro" }));
     await userEvent.click(within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
     const [retro] = (await w.api.getTicket("acme", id)).retros ?? [];
@@ -427,7 +427,7 @@ describe("the Ticket pane's body", () => {
     const { w, s } = await acme();
     const spec = await s.spec("acme", { title: "Theming" });
     const id = await s.ticket("acme", { title: "Pick a theme", spec });
-    renderApp(w, `/?view=inbox&ticket=${id}`);
+    await renderApp(w, `/?view=inbox&ticket=${id}`);
     await screen.findByRole("article", { name: "Ticket details" });
     await act(async () => {});
     expect(w.subscriptions()).toBe(1);

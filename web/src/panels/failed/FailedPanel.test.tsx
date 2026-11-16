@@ -54,7 +54,7 @@ type Failed = Awaited<ReturnType<typeof world>>;
 
 async function renderPanel({ w, id }: Failed) {
   const ticket = await w.api.getTicket("acme", id);
-  renderLive(w, <FailedPanel project="acme" ticket={ticket} now={w.now()} />);
+  await renderLive(w, <FailedPanel project="acme" ticket={ticket} now={w.now()} />);
   return screen.getByRole("region", { name: "Failed" });
 }
 

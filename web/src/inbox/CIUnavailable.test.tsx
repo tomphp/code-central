@@ -34,7 +34,7 @@ describe("CI unavailable in Needs Me", () => {
     // gamma's has not reported.
     await pushed(s, "gamma", "Settings page", "0123456789");
     w.advance(20 * 60_000);
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
 
     const list = screen.getByRole("main", { name: "Tickets" });
     const group = await within(list).findByRole("region", { name: "CI unavailable" });

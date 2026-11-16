@@ -1,17 +1,12 @@
 // Shared set-up for the Inbox and Focus Mode tests (Spec code-central-580):
 // the real App on a WASM Core world, opened at a URL, built with the
 // scenario builder, and the helpers every one of them reaches for.
-import { render, screen, within } from "@testing-library/react";
-import { App } from "../App";
+import { screen, within } from "@testing-library/react";
 import { newWorld, type World } from "../api/core/core";
-import { scenario, type Scenario } from "../api/scenario";
-import { settle } from "../worldTesting";
+import type { Scenario } from "../api/scenario";
+import { scenario, settle } from "../worldTesting";
 
-// renderApp renders the App at url, against w and its clock.
-export function renderApp(w: World, url = "/?view=focus") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
-}
+export { renderApp, scenario } from "../worldTesting";
 
 // focus is Focus Mode's main region.
 export const focus = () => screen.getByRole("main", { name: "Focus Mode" });
@@ -25,7 +20,8 @@ export async function loadedDashboard(w: World, main: HTMLElement) {
   return d;
 }
 
-// acme is a world with the Project "acme" ("Acme"), and its scenario.
+// acme is a world with the Project "acme" ("Acme"), and its scenario,
+// which settles inside act after every step.
 export async function acme(): Promise<{ w: World; s: Scenario }> {
   const w = await newWorld();
   const s = scenario(w);

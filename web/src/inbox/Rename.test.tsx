@@ -19,7 +19,7 @@ describe("Renaming a Project", () => {
   it("renames a Project's display name from its menu", async () => {
     const w = await newWorld();
     await scenario(w).project("acme", "Acme");
-    renderApp(w, "/");
+    await renderApp(w, "/");
 
     const box = await rename("Acme");
     expect(box).toHaveValue("Acme");
@@ -34,7 +34,7 @@ describe("Renaming a Project", () => {
   it("keeps the old name on Cancel, and shows a refused rename's reason", async () => {
     const w = await newWorld();
     await scenario(w).project("acme", "Acme");
-    renderApp(w, "/");
+    await renderApp(w, "/");
 
     await userEvent.type(await rename("Acme"), " Corp");
     await userEvent.click(within(nav()).getByRole("button", { name: "Cancel" }));
@@ -54,7 +54,7 @@ describe("Renaming a Project", () => {
     const s = scenario(w);
     await s.project("old", "Old App");
     await s.human(`${s.projectPath("old")}/archive_project`, {});
-    renderApp(w, "/");
+    await renderApp(w, "/");
     await userEvent.click(await within(nav()).findByRole("button", { name: "Menu for Old App", hidden: true }));
     expect(within(screen.getByRole("menu", { name: "Menu for Old App", hidden: true })).queryByRole("menuitem", { name: "Rename", hidden: true })).toBeNull();
   });

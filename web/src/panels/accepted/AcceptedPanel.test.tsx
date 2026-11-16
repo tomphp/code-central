@@ -25,7 +25,7 @@ type Accepted = Awaited<ReturnType<typeof world>>;
 
 async function renderPanel({ w, id }: Accepted) {
   const ticket = await w.api.getTicket("acme", id);
-  renderLive(w, <AcceptedPanel project="acme" ticket={ticket} now={w.now()} />);
+  await renderLive(w, <AcceptedPanel project="acme" ticket={ticket} now={w.now()} />);
   return screen.getByRole("region", { name: "Accepted" });
 }
 

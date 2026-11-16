@@ -61,7 +61,7 @@ const item = () => within(focus()).findByRole("article", { name: "Focus Item" })
 describe("a Ticket Focus Item", () => {
   it("shows where it's from and why it waits, in Needs Me's order", async () => {
     const { w, failed } = await world();
-    renderApp(w);
+    await renderApp(w);
     const it = await item();
     expect(within(it).getByText("Acme")).toBeInTheDocument();
     expect(within(it).getByText("acme")).toBeInTheDocument();
@@ -78,7 +78,7 @@ describe("a Ticket Focus Item", () => {
     await s.human(`${s.projectPath("beta")}/set_landing_method`, { method: "branch" });
     const id = await s.ticket("beta", { title: "Beta land" });
     await s.accepted("beta", id, { branch: "beta-1", commit: "abc123" });
-    renderApp(w);
+    await renderApp(w);
     const it = await item();
     expect(within(it).getByRole("heading", { name: "Beta land" })).toBeInTheDocument();
     expect(within(it).getByText("Focus: To merge")).toBeInTheDocument();
@@ -88,14 +88,14 @@ describe("a Ticket Focus Item", () => {
 
   it("shows the remaining count, the item on screen included", async () => {
     const { w } = await world();
-    renderApp(w);
+    await renderApp(w);
     await item();
     expect(within(focus()).getByText("3 left")).toBeInTheDocument();
   });
 
   it("limits the queue to the Project in scope", async () => {
     const { w } = await world();
-    renderApp(w, "/?view=focus&project=beta");
+    await renderApp(w, "/?view=focus&project=beta");
     const it = await item();
     expect(within(it).getByRole("heading", { name: "Beta land" })).toBeInTheDocument();
     expect(within(focus()).getByText("1 left")).toBeInTheDocument();
@@ -106,7 +106,7 @@ describe("a Ticket Focus Item", () => {
     const dark = await spec(s, "acme", "Dark mode");
     await stage(s, dark, "Spec: Dark mode");
     const build = await s.ticket("acme", { title: "Toggle", state: "Failed", spec: dark });
-    renderApp(w);
+    await renderApp(w);
     expect(within(await item()).getByText("Requirement: Dark mode")).toBeInTheDocument();
 
     await cancel(s, "acme", build);
@@ -117,7 +117,7 @@ describe("a Ticket Focus Item", () => {
   it("shows its reason's panel, with the panel's own buttons", async () => {
     const { w, s } = await base();
     await s.ticket("acme", { title: "Login page", state: "In Review" });
-    renderApp(w);
+    await renderApp(w);
     const panel = await within(await item()).findByRole("region", { name: "In Review" });
     expect(within(panel).getByRole("button", { name: "Accept" })).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Reject" })).toBeInTheDocument();
@@ -127,7 +127,7 @@ describe("a Ticket Focus Item", () => {
 describe("Open in Inbox", () => {
   it("opens the Ticket in the Inbox, keeping the Project filter", async () => {
     const { w, failed } = await world();
-    renderApp(w, "/?view=focus&project=acme");
+    await renderApp(w, "/?view=focus&project=acme");
     const link = within(await item()).getByRole("link", { name: "Open in Inbox" });
     expect(link).toHaveAttribute("href", `?view=inbox&project=acme&ticket=${failed}`);
     await userEvent.click(link);
@@ -139,7 +139,7 @@ describe("Open in Inbox", () => {
     const { w, s } = await base();
     const dark = await spec(s, "acme", "Dark mode");
     const id = await stage(s, dark, "Spec: Dark mode");
-    renderApp(w);
+    await renderApp(w);
     const link = within(await item()).getByRole("link", { name: "Open in Inbox" });
     expect(link).toHaveAttribute("href", `?view=inbox&requirement=${dark}&ticket=${id}`);
   });
@@ -151,7 +151,7 @@ describe("moving on", () => {
     const review = await s.ticket("acme", { title: "Login page", state: "In Review" });
     await accepted(s);
     w.advance(11 * 60_000); // Accepted for long enough to count as not landed
-    renderApp(w);
+    await renderApp(w);
     const panel = await within(await item()).findByRole("region", { name: "In Review" });
     await userEvent.click(within(panel).getByRole("button", { name: "Accept" }));
 
@@ -162,7 +162,7 @@ describe("moving on", () => {
 
   it("moves on when the item on screen is gone from Needs Me", async () => {
     const { w, s, failed } = await world();
-    renderApp(w);
+    await renderApp(w);
     await within(focus()).findByRole("heading", { name: "Flaky build" });
     await cancel(s, "acme", failed);
     expect(await within(focus()).findByRole("heading", { name: "Login page" })).toBeInTheDocument();
@@ -174,7 +174,7 @@ describe("moving on", () => {
     await s.ticket("acme", { title: "Login page", state: "In Review" });
     w.advance(HOUR);
     const failed = await s.ticket("acme", { title: "Flaky build", state: "Failed" });
-    renderApp(w);
+    await renderApp(w);
     await within(focus()).findByRole("heading", { name: "Flaky build" });
     // The Failed Ticket leaves Failed and comes back In Review, behind the first.
     await s.human(`${s.ticketPath("acme", failed)}/send_back`, { note: "Try again" });
@@ -186,7 +186,7 @@ describe("moving on", () => {
   it("goes to All clear once the last Focus Item is dealt with", async () => {
     const { w, s } = await base();
     await s.ticket("acme", { title: "Login page", state: "In Review" });
-    renderApp(w);
+    await renderApp(w);
     const panel = await within(await item()).findByRole("region", { name: "In Review" });
     await userEvent.click(within(panel).getByRole("button", { name: "Accept" }));
     expect(await within(focus()).findByText("All clear")).toBeInTheDocument();
@@ -206,7 +206,7 @@ describe("live arrivals", () => {
 
   it("queues a new, higher-priority Focus Item without replacing the item on screen", async () => {
     const { w, s, failed } = await world();
-    renderApp(w);
+    await renderApp(w);
     await within(focus()).findByRole("heading", { name: "Flaky build" });
     await quiet(w, s);
     await waitFor(() => expect(within(focus()).getByText("4 left")).toBeInTheDocument());
@@ -219,7 +219,7 @@ describe("live arrivals", () => {
 
   it("keeps the item on screen when Needs Me reorders", async () => {
     const { w, s } = await world();
-    renderApp(w);
+    await renderApp(w);
     await within(focus()).findByRole("heading", { name: "Flaky build" });
     await quiet(w, s); // sorts ahead of every item
     await waitFor(() => expect(document.title).toBe("(4) Code Central"));
@@ -228,7 +228,7 @@ describe("live arrivals", () => {
 
   it("shows the first Focus Item that arrives at All clear, with no reload", async () => {
     const { w, s } = await base();
-    renderApp(w);
+    await renderApp(w);
     await within(focus()).findByText("All clear");
     await s.ticket("acme", { title: "Login page", state: "In Review" });
     expect(await within(focus()).findByRole("heading", { name: "Login page" })).toBeInTheDocument();
@@ -241,7 +241,7 @@ describe("a Retro Focus Item", () => {
     const { w, s } = await base();
     const plain = await spec(s, "acme", "Login");
     await s.ticket("acme", { title: "Retro: Login page", state: "In Review", spec: plain, labels: ["retro"] });
-    renderApp(w);
+    await renderApp(w);
     const it = await item();
     expect(within(it).getByText("Retro")).toHaveClass("label", "retro-badge");
     expect(within(it).queryByText("Prototype")).toBeNull();
@@ -268,7 +268,7 @@ describe("a Map Ticket or Prototype Focus Item", () => {
 
   it("shows its Map's name and a Prototype badge, and opens in the Inbox as itself", async () => {
     const { w, id } = await wayfinding({ map: "prototype" });
-    renderApp(w);
+    await renderApp(w);
     const it = await item();
     expect(within(it).getByText("Map: Find the way")).toHaveClass("focus-requirement");
     expect(within(it).getByText("Prototype")).toHaveClass("label", "prototype-badge");
@@ -278,7 +278,7 @@ describe("a Map Ticket or Prototype Focus Item", () => {
 
   it("shows no badge on a Map Ticket that isn't a Prototype", async () => {
     const { w } = await wayfinding({ map: "grilling" });
-    renderApp(w);
+    await renderApp(w);
     const it = await item();
     expect(within(it).getByText("Map: Find the way")).toBeInTheDocument();
     expect(within(it).queryByText("Prototype")).toBeNull();
@@ -286,7 +286,7 @@ describe("a Map Ticket or Prototype Focus Item", () => {
 
   it("names the plain Spec a Prototype is on", async () => {
     const { w } = await wayfinding({ plain: true });
-    renderApp(w);
+    await renderApp(w);
     const it = await item();
     expect(within(it).getByText("Spec: Login")).toBeInTheDocument();
     expect(within(it).getByText("Prototype")).toBeInTheDocument();

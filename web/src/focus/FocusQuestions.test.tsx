@@ -47,7 +47,7 @@ const stored = async (w: World, id: string) => (await w.api.getTicket("acme", id
 describe("a Question Focus Item", () => {
   it("shows where it's from, why it waits, where it is in the Round, its title large and its body as Markdown", async () => {
     const { w, colour } = await world();
-    renderApp(w);
+    await renderApp(w);
     await question("Which colour?");
     const it = await item();
     expect(within(it).getByText("Acme")).toBeInTheDocument();
@@ -66,14 +66,14 @@ describe("a Question Focus Item", () => {
 
   it("counts each open Question in the remaining count", async () => {
     const { w } = await world();
-    renderApp(w);
+    await renderApp(w);
     await question("Which colour?");
     expect(within(focus()).getByText("3 left")).toBeInTheDocument();
   });
 
   it("prefills the answer box with the recommendation as an unsaved draft", async () => {
     const { w } = await world();
-    renderApp(w);
+    await renderApp(w);
     await question("Which colour?");
     expect(box()).toHaveValue("Blue");
     expect(within(focus()).getByText(/Recommended answer, a draft: nothing is saved until you answer/)).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe("a Question Focus Item", () => {
     const spec = await s.spec("acme", { title: "Dark mode" }); // acme-1
     const stage = await s.ticket("acme", { title: "Grilling: Dark mode", spec, labels: ["stage:grilling"] }); // acme-2
     await round2(s, stage);
-    renderApp(w);
+    await renderApp(w);
     expect(await question("Which colour?")).toBeInTheDocument();
     expect(within(await item()).getByText("Requirement: Dark mode · grilling")).toBeInTheDocument();
     expect(within(await item()).getByRole("link", { name: "Open in Inbox" })).toHaveAttribute("href", `?view=inbox&requirement=${spec}&ticket=${stage}`);
@@ -95,7 +95,7 @@ describe("a Question Focus Item", () => {
 describe("answering in Focus Mode", () => {
   it("sends Answer for that Question, then shows the Round's next open Question", async () => {
     const { w, colour } = await world();
-    renderApp(w);
+    await renderApp(w);
     await question("Which colour?");
     await userEvent.click(within(focus()).getByRole("button", { name: "Answer" }));
 
@@ -109,7 +109,7 @@ describe("answering in Focus Mode", () => {
 
   it("sends Dismiss for that Question", async () => {
     const { w, colour } = await world();
-    renderApp(w);
+    await renderApp(w);
     await question("Which colour?");
     await userEvent.click(within(focus()).getByRole("button", { name: "Dismiss" }));
 
@@ -120,7 +120,7 @@ describe("answering in Focus Mode", () => {
 
   it("sends Answer on Cmd+Enter or Ctrl+Enter in the answer box", async () => {
     const { w, colour } = await world();
-    renderApp(w);
+    await renderApp(w);
     await question("Which colour?");
     await userEvent.clear(box());
     await userEvent.type(box(), "Green");
@@ -139,7 +139,7 @@ describe("answering in Focus Mode", () => {
   it("sends nothing on a plain Enter, nor on Cmd+Enter in an empty box", async () => {
     const { w, s, colour } = await world();
     await dismiss(s, colour, 2);
-    renderApp(w);
+    await renderApp(w);
     await question("Which size?");
     fireEvent.keyDown(box(), { key: "Enter", metaKey: true });
     await userEvent.type(box(), "M{Enter}");
@@ -149,7 +149,7 @@ describe("answering in Focus Mode", () => {
 
   it("leaves the Inbox's Round panel without Cmd+Enter", async () => {
     const { w, colour } = await world();
-    renderApp(w, `/?view=inbox&ticket=${colour}`);
+    await renderApp(w, `/?view=inbox&ticket=${colour}`);
     const panel = await screen.findByRole("region", { name: /Round 2/ });
     const group = within(panel).getByRole("group", { name: /Which colour\?/ });
     fireEvent.keyDown(within(group).getByRole("textbox"), { key: "Enter", metaKey: true });
@@ -159,7 +159,7 @@ describe("answering in Focus Mode", () => {
 
   it("goes on, after the Round's last Question, to the Ticket as an Answered Focus Item in its Needs Me place", async () => {
     const { w } = await world();
-    renderApp(w);
+    await renderApp(w);
     await question("Which colour?");
     await userEvent.click(within(focus()).getByRole("button", { name: "Answer" }));
     await question("Which size?");
@@ -184,7 +184,7 @@ describe("a Round's Questions in the queue", () => {
     const colour = await s.ticket("acme", { title: "Pick a colour" });
     await round2(s, colour);
     await s.ticket("acme", { title: "Login page", state: "In Review" });
-    renderApp(w);
+    await renderApp(w);
     expect(await within(focus()).findByRole("heading", { name: "Which tool?" })).toBeInTheDocument();
     expect(within(focus()).getByText("4 left")).toBeInTheDocument();
 
@@ -195,7 +195,7 @@ describe("a Round's Questions in the queue", () => {
   it("finishes the Round first, even when another Focus Item arrives meanwhile", async () => {
     const { w, s, review } = await world();
     await s.ticket("acme", { title: "Quiet session", state: "In Progress" });
-    renderApp(w);
+    await renderApp(w);
     await question("Which colour?");
     // Silent after 30 minutes; a change to another Ticket makes the App look again.
     w.advance(31 * 60_000);
@@ -212,7 +212,7 @@ describe("a Round's Questions in the queue", () => {
 
   it("moves on to the Round's next open Question when the one on screen is closed elsewhere", async () => {
     const { w, s, colour } = await world();
-    renderApp(w);
+    await renderApp(w);
     await question("Which colour?");
     await act(() => dismiss(s, colour, 2));
     expect(await question("Which size?")).toBeInTheDocument();
@@ -220,7 +220,7 @@ describe("a Round's Questions in the queue", () => {
 
   it("moves on when its Ticket leaves Needs Answer", async () => {
     const { w, s, colour } = await world();
-    renderApp(w);
+    await renderApp(w);
     await question("Which colour?");
     await act(() => s.human(`${s.ticketPath("acme", colour)}/cancel`, {}));
     expect(await within(focus()).findByRole("heading", { name: "Login page" })).toBeInTheDocument();
@@ -231,7 +231,7 @@ describe("a Round's Questions in the queue", () => {
     const { w, s } = await world();
     await s.project("beta", "Beta");
     await s.ticket("beta", { title: "Beta review", state: "In Review" });
-    renderApp(w, "/?view=focus&project=beta");
+    await renderApp(w, "/?view=focus&project=beta");
     expect(await within(focus()).findByRole("heading", { name: "Beta review" })).toBeInTheDocument();
     expect(within(focus()).getByText("1 left")).toBeInTheDocument();
   });

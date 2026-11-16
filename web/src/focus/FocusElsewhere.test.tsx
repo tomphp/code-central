@@ -76,7 +76,7 @@ function renderHeld(w: World, api: Api, url: string) {
 describe("dealt with elsewhere", () => {
   it("moves on with a brief note when the Ticket on screen leaves its reason in Needs Me", async () => {
     const { w, s, failed } = await tickets();
-    renderApp(w);
+    await renderApp(w);
     await within(focus()).findByRole("button", { name: "Send back" });
     await cancel(s, failed);
 
@@ -86,7 +86,7 @@ describe("dealt with elsewhere", () => {
 
   it("moves on with the note when the Question on screen is answered elsewhere, losing a half-typed answer", async () => {
     const { w, s, colour } = await world();
-    renderApp(w);
+    await renderApp(w);
     await heading("Which colour?");
     const box = within(focus()).getByRole("textbox");
     await userEvent.clear(box);
@@ -108,7 +108,7 @@ describe("dealt with elsewhere", () => {
     w.advance(60_000);
     const shape = await s.ticket("acme", { title: "Pick a shape" });
     await s.askRound("acme", shape, [{ title: "Which shape?", body: "Round or square" }]);
-    renderApp(w);
+    await renderApp(w);
     await heading("Which colour?");
     await cancel(s, colour);
 
@@ -120,7 +120,7 @@ describe("dealt with elsewhere", () => {
     const { w, s } = await acme();
     await allClearOn(w);
     const failed = await s.ticket("acme", { title: "Flaky build", state: "Failed" });
-    renderApp(w);
+    await renderApp(w);
     await within(focus()).findByRole("button", { name: "Send back" });
     await cancel(s, failed);
 
@@ -130,7 +130,7 @@ describe("dealt with elsewhere", () => {
 
   it("goes once the human moves on from the next item", async () => {
     const { w, s, failed } = await tickets();
-    renderApp(w);
+    await renderApp(w);
     await within(focus()).findByRole("button", { name: "Send back" });
     await cancel(s, failed);
     await within(focus()).findByText("Dealt with elsewhere");
@@ -144,7 +144,7 @@ describe("dealt with elsewhere", () => {
 
   it("isn't shown when the human skips the item", async () => {
     const { w } = await tickets();
-    renderApp(w);
+    await renderApp(w);
     await userEvent.click(await within(focus()).findByRole("button", { name: "Skip" }));
 
     expect(await heading("Login page")).toBeInTheDocument();
@@ -154,7 +154,7 @@ describe("dealt with elsewhere", () => {
   it("isn't shown when a new item arrives ahead of the one on screen", async () => {
     const { w, s, review } = await tickets();
     await s.ticket("acme", { title: "Quiet session", state: "In Progress" });
-    renderApp(w);
+    await renderApp(w);
     await within(focus()).findByRole("button", { name: "Send back" });
     // Silent after 30 minutes, which Core lists ahead of Failed; a change
     // to another Ticket makes the App look again.
@@ -170,7 +170,7 @@ describe("dealt with elsewhere", () => {
 describe("the human's own action", () => {
   it("moves a Ticket item on with no note", async () => {
     const { w } = await tickets();
-    renderApp(w);
+    await renderApp(w);
     await userEvent.click(await within(focus()).findByRole("button", { name: "Send back" }));
 
     expect(await heading("Login page")).toBeInTheDocument();
@@ -184,7 +184,7 @@ describe("the human's own action", () => {
     const link = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7" };
     const closed = await s.incomingIssue("acme", await s.spec("acme"), "Closed upstream", link);
     await s.integration(`${s.projectPath("acme")}/integration/set_external_state`, { target: closed, external_state: "closed" });
-    renderApp(w);
+    await renderApp(w);
     await userEvent.click(await within(focus()).findByRole("button", { name: "Unlink" }));
 
     expect(await within(focus()).findByText("All clear")).toBeInTheDocument();
@@ -193,7 +193,7 @@ describe("the human's own action", () => {
 
   it("moves a Question on with no note after Answer, or Dismiss", async () => {
     const { w } = await world();
-    renderApp(w);
+    await renderApp(w);
     await heading("Which colour?");
     await userEvent.click(within(focus()).getByRole("button", { name: "Answer" }));
     expect(await heading("Which size?")).toBeInTheDocument();
@@ -209,7 +209,7 @@ describe("the human's own action", () => {
 describe("a refused action", () => {
   it("keeps a Question on screen with the form's alert, and the human can try again", async () => {
     const { w } = await world();
-    renderApp(w);
+    await renderApp(w);
     await heading("Which colour?");
     const box = within(focus()).getByRole("textbox");
     await userEvent.clear(box);
@@ -266,7 +266,7 @@ describe("in the Focus popup", () => {
   it("moves on with a brief note when the Ticket on screen leaves its reason in Needs Me", async () => {
     const { w, s, failed } = await tickets();
     await popupOn(s);
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     await within(await screen.findByRole("dialog", { name: "Focus popup" })).findByRole("button", { name: "Send back" });
     await cancel(s, failed);
 
@@ -276,7 +276,7 @@ describe("in the Focus popup", () => {
 
   it("moves a card's Question on with the note when it's answered elsewhere", async () => {
     const { w, s, colour } = await world();
-    renderApp(w, `/?view=board&project=acme&popup=${colour}`);
+    await renderApp(w, `/?view=board&project=acme&popup=${colour}`);
     await inPopup("Which colour?");
     await answer(s, colour, 1, "Green");
 
@@ -287,7 +287,7 @@ describe("in the Focus popup", () => {
   it("moves on with no note after the human's own action", async () => {
     const { w, s } = await tickets();
     await popupOn(s);
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     await inPopup("Flaky build");
     await userEvent.click(await within(popup()).findByRole("button", { name: "Send back" }));
 
@@ -298,7 +298,7 @@ describe("in the Focus popup", () => {
   it("moves a Question on with no note after Answer", async () => {
     const { w, s } = await world();
     await popupOn(s);
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     await inPopup("Which colour?");
     await userEvent.click(within(popup()).getByRole("button", { name: "Answer" }));
 

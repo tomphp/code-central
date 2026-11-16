@@ -236,7 +236,7 @@ describe("the Resume-then-Release panel", () => {
     // meanwhile, and the notice hasn't arrived yet.
     const stale = await w.api.getTicket("acme", id);
     await s.human(`${s.ticketPath("acme", id)}/release`, {});
-    renderLive(w, <resumePanel.Component project="acme" ticket={stale} now={w.now()} />);
+    await renderLive(w, <resumePanel.Component project="acme" ticket={stale} now={w.now()} />);
     const p = await panel();
     await user.click(within(p).getByRole("button", { name: "Stop…" }));
     await user.click(within(p).getByRole("button", { name: "Stop Claim" }));

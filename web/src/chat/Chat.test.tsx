@@ -45,7 +45,7 @@ const typeAndSend = async (chat: HTMLElement, text: string) => {
 describe("the Chat icon", () => {
   it("shows when scoped to a Project with an Online Factory that has Chat support, and opens the pop-up", async () => {
     const { w } = await fresh();
-    open(w);
+    await open(w);
 
     await userEvent.click(await icon());
 
@@ -60,7 +60,7 @@ describe("the Chat icon", () => {
     const { w } = await fresh();
     // A lone Project would be the Sole Project.
     await scenario(w).project("spare", "Spare");
-    open(w, "/");
+    await open(w, "/");
 
     await screen.findByRole("navigation", { name: "Filters" });
     await screen.findByRole("img", { name: "Factory Status: Online" });
@@ -69,7 +69,7 @@ describe("the Chat icon", () => {
 
   it("is hidden when no Factory reports Chat support", async () => {
     const { w } = await fresh(false);
-    open(w);
+    await open(w);
 
     await screen.findByRole("img", { name: "Factory Status: Online" });
     expect(screen.queryByRole("button", { name: "Chat" })).not.toBeInTheDocument();
@@ -81,7 +81,7 @@ describe("the Chat icon", () => {
   ] as const)("is hidden when the Factory with Chat support is %s", async (state, label) => {
     const { w, s } = await fresh();
     await s.reportHeartbeat("acme", { ...beat, state, chat: true });
-    open(w);
+    await open(w);
 
     await screen.findByRole("img", { name: `Factory Status: ${label}` });
     expect(screen.queryByRole("button", { name: "Chat" })).not.toBeInTheDocument();
@@ -92,7 +92,7 @@ describe("a Conversation in the pop-up", () => {
   it("starts with the Chat row's defaults on the first message, then streams the reply", async () => {
     const { w, s } = await fresh();
     await w.api.setModels("acme", { default: { model: "", effort: "" }, chat: { model: "sonnet", effort: "low" }, kinds: [] });
-    open(w);
+    await open(w);
     await userEvent.click(await icon());
     const chat = await popup();
 
@@ -127,7 +127,7 @@ describe("a Conversation in the pop-up", () => {
 
   it("stops a reply, and shows it Stopped", async () => {
     const { w } = await fresh();
-    open(w);
+    await open(w);
     await userEvent.click(await icon());
     const chat = await popup();
     await typeAndSend(chat, "Hello");
@@ -143,7 +143,7 @@ describe("a Conversation in the pop-up", () => {
     const { w, s } = await fresh();
     await w.api.sendChatMessage("acme", "From another tab");
     await reply(w, s, [{ text: "An answer" }], { outcome: "done" });
-    open(w);
+    await open(w);
 
     await userEvent.click(await icon());
 
@@ -155,7 +155,7 @@ describe("a Conversation in the pop-up", () => {
   it("starts a new conversation with the picked model, dropping the old one", async () => {
     const { w } = await fresh();
     await w.api.sendChatMessage("acme", "Old question");
-    open(w);
+    await open(w);
     await userEvent.click(await icon());
     const chat = await popup();
     expect(await within(chat).findByText("Old question")).toBeInTheDocument();
@@ -175,7 +175,7 @@ describe("a Conversation in the pop-up", () => {
     const { w, s } = await fresh();
     await w.api.sendChatMessage("acme", "Hello");
     await reply(w, s, [{ text: "Hi" }], { outcome: "done" });
-    open(w);
+    await open(w);
     await userEvent.click(await icon());
     const chat = await popup();
     expect(await within(chat).findByText("Hi")).toBeInTheDocument();

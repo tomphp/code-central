@@ -34,6 +34,8 @@ apiContract("HTTP API against code-central serve", async () => {
     },
     // Absolute where the service runs: a Windows path isn't on Unix.
     absolutePath: process.platform === "win32" ? "C:\\Tools\\gh.exe" : "/opt/tools/gh",
+    // serve has nothing to settle on (ADR 0044): its contract cases poll.
+    settle: async () => {},
     close: svc.stop,
   });
 });
