@@ -273,18 +273,18 @@ type factory struct {
 	state      *stateFile
 	lock       *os.File // held for the Factory's whole life
 
-	outMu     sync.Mutex
-	mu        sync.Mutex           // guards turns, ended, info and backInReady
-	turns     map[string]*turn     // running turns by Claim ID
-	ended     map[string]bool      // Claim IDs never to be written with again
-	info      map[string]claimInfo // what the lines say of each held Claim, by Claim ID
+	outMu sync.Mutex
+	mu    sync.Mutex           // guards turns, ended, info and backInReady
+	turns map[string]*turn     // running turns by Claim ID
+	ended map[string]bool      // Claim IDs never to be written with again
+	info  map[string]claimInfo // what the lines say of each held Claim, by Claim ID
 	// backInReady is when each Ticket's turn ended with it back in Ready,
 	// as when the agent gave up, by Ticket ID: it isn't claimed again
 	// until the next timed poll, so the wake at its turn's end doesn't
 	// claim it again at once, and again, without end.
 	backInReady map[string]time.Time
-	warned    map[string]bool      // dirty finished worktrees already warned of; the poll's own
-	turnsDone sync.WaitGroup
+	warned      map[string]bool // dirty finished worktrees already warned of; the poll's own
+	turnsDone   sync.WaitGroup
 
 	// warnedMerged is "<ticket>@<commit>" of Tickets merged in a State
 	// that can't land, already warned of; the poll's own.

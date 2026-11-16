@@ -33,7 +33,7 @@ func TestTheStateFileHoldsEachClaimAfterItIsMade(t *testing.T) {
 	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
 	c := h.Calls()[0]
 
-	b, err := os.ReadFile(h.StateFile())
+	b, err := h.ReadStateFile()
 	if err != nil {
 		t.Fatal(err)
 	}
