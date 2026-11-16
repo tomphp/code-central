@@ -270,6 +270,7 @@ export class Scenario extends HttpDriver {
   // returns the Requirement's Spec ID.
   async requirement(key: string, text: string): Promise<string> {
     const r = await this.api.submitRequirement(key, text);
+    await this.settle();
     for (const t of r.stages) {
       const claim_id = await this.claimFor(key, t.id);
       // Only the spec Stage takes a recommendation.
