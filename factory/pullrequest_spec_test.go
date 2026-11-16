@@ -33,7 +33,7 @@ func TestUnderPullRequestAReadySpecBranchIsPushedAndReportedForEveryTicket(t *te
 	if got := remote.Git("branch", "--list", "main"); strings.TrimSpace(got) != "" {
 		t.Errorf("the remote has main %q: only the Spec Branch is pushed", got)
 	}
-	waitPushed(t, h, branch, tip)
+	wantPushed(t, h,branch, tip)
 	for _, id := range []string{a, b} {
 		if tk := h.Ticket(id); tk.State != store.Accepted {
 			t.Errorf("%s is %s, want it waiting Accepted", id, tk.State)
@@ -55,7 +55,7 @@ func TestUnderPullRequestTheSpecsTicketsLandAtItsMergeCommit(t *testing.T) {
 	branch := "spec/" + h.SpecID()
 
 	r := h.Start()
-	waitPushed(t, h, branch, "")
+	wantPushed(t, h,branch, "")
 	reportPullRequest(t, h, branch, "")
 	r.Poll()
 	if h.Ticket(a).State != store.Accepted || h.Ticket(b).State != store.Accepted {
@@ -113,7 +113,7 @@ func TestUnderPullRequestASpecBranchThatConflictsWithTheBaseOpensTheConflictTick
 		t.Fatalf("the fixed Spec Branch %s wasn't pushed", branch)
 	}
 	tip := h.Git("rev-parse", branch)
-	waitPushed(t, h, branch, tip)
+	wantPushed(t, h,branch, tip)
 	if got := remote.Git("rev-parse", branch); got != tip {
 		t.Errorf("the remote's %s is at %s, want %s", branch, got, tip)
 	}
@@ -129,5 +129,5 @@ func TestUnderPullRequestATicketOutsideLandPerSpecStillGetsItsOwnPullRequest(t *
 	h.MakeRequirement()
 	id, commit := accepted(h, "Plain", "plain.txt", "plain\n")
 	h.Start()
-	waitPushed(t, h, id, commit)
+	wantPushed(t, h,id, commit)
 }

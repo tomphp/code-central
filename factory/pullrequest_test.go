@@ -35,14 +35,6 @@ func wantPushed(t *testing.T, h *factorytest.Harness, ticket, commit string) {
 	t.Fatalf("the pushed work isn't reported: want %s at %q, the Watcher's list is %+v", ticket, commit, w.Work)
 }
 
-// TEMPORARY: wantPushed under its old name, for the tests of other files
-// (basechange_test.go, pullrequest_spec_test.go) until they call
-// wantPushed. Every caller is right after a Start or a Poll.
-func waitPushed(t *testing.T, h *factorytest.Harness, ticket, commit string) {
-	t.Helper()
-	wantPushed(t, h, ticket, commit)
-}
-
 // reportPullRequest is the Pull Request Watcher reporting ticket's pull
 // request, as merged at commit when commit isn't "".
 func reportPullRequest(t *testing.T, h *factorytest.Harness, branch, commit string) {
