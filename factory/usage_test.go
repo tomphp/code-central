@@ -48,10 +48,11 @@ func wantUsageSessions(t *testing.T, u core.UsageView, session string, want []us
 	}
 }
 
-// waitForUsage waits for Usage to hold n responses in all, and returns it.
-func waitForUsage(h *factorytest.Harness, n int) core.UsageView {
+// waitForUsage polls until Usage holds n responses in all, and returns
+// it.
+func waitForUsage(h *factorytest.Harness, r *factorytest.Running, n int) core.UsageView {
 	var u core.UsageView
-	h.WaitFor("Usage to hold the responses", func() bool {
+	r.PollUntil("Usage to hold the responses", func() bool {
 		u = h.Usage()
 		got := 0
 		for _, s := range everySession(u) {
@@ -79,11 +80,11 @@ func TestEachModelResponsesTokenUsageIsPostedOnceUnderItsKind(t *testing.T) {
 		factorytest.FinishSpec("Done.", "split"),
 		factorytest.Result("success"),
 	)
-	h.Start()
+	r := h.Start()
 	h.WaitForState(id, store.InReview)
 	session := h.Ticket(id).Claims[0].SessionID
 
-	u := waitForUsage(h, 5)
+	u := waitForUsage(h, r, 5)
 	want := []usageSession{
 		{Ticket: id, Kind: "spec", Claim: 1, Peak: 800, Responses: 2, Models: []string{}},
 		{Ticket: id, Agent: "toolu_explore", Kind: "subagent", Claim: 1, Peak: 60, Responses: 2, Models: []string{}},
@@ -117,9 +118,9 @@ func TestEachSubagentsResponsesCarryItsAgentTypeAndDescriptionAndTheMainSessions
 		factorytest.Finish("Done."),
 		factorytest.Result("success"),
 	)
-	h.Start()
+	r := h.Start()
 	h.WaitForState(id, store.InReview)
-	waitForUsage(h, 6)
+	waitForUsage(h, r, 6)
 	session := h.Ticket(id).Claims[0].SessionID
 
 	for _, c := range []struct{ agent, kind, agentType, description string }{
@@ -158,10 +159,10 @@ func TestEachUsageSessionListsTheModelsOfItsResponsesInOrderOfFirstUse(t *testin
 		factorytest.Finish("Done."),
 		factorytest.Result("success"),
 	)
-	h.Start()
+	r := h.Start()
 	h.WaitForState(id, store.InReview)
 
-	u := waitForUsage(h, 4)
+	u := waitForUsage(h, r, 4)
 	want := []usageSession{
 		{Ticket: id, Kind: "implementation", Claim: 1, Peak: 300, Responses: 3, Models: []string{"claude-opus-5-5", "claude-sonnet-5-5"}},
 		{Ticket: id, Agent: "toolu_explore", Kind: "subagent", Claim: 1, Peak: 50, Responses: 1, Models: []string{"claude-haiku-5-5"}},
@@ -183,10 +184,10 @@ func TestASyntheticResponseIsPostedWithItsTokensButNoModel(t *testing.T) {
 		factorytest.Finish("Done."),
 		factorytest.Result("success"),
 	)
-	h.Start()
+	r := h.Start()
 	h.WaitForState(id, store.InReview)
 
-	u := waitForUsage(h, 4)
+	u := waitForUsage(h, r, 4)
 	want := []usageSession{
 		{Ticket: id, Kind: "implementation", Claim: 1, Peak: 900, Responses: 2, Models: []string{"claude-opus-5-5"}},
 		{Ticket: id, Agent: "toolu_explore", Kind: "subagent", Claim: 1, Peak: 50, Responses: 1, Models: []string{}},
@@ -207,7 +208,7 @@ func TestAResumedSessionAddsToTheSameUsageSession(t *testing.T) {
 	r := h.Start()
 	h.WaitForState(id, store.NeedsAnswer)
 	r.WaitForOutput(id + " turn ended")
-	waitForUsage(h, 1)
+	waitForUsage(h, r, 1)
 
 	h.Script(id,
 		factorytest.Response("msg_second", "", "", 300, 0, 0, 10),
@@ -218,7 +219,7 @@ func TestAResumedSessionAddsToTheSameUsageSession(t *testing.T) {
 	r.Poll()
 	h.WaitForState(id, store.InReview)
 
-	u := waitForUsage(h, 2)
+	u := waitForUsage(h, r, 2)
 	want := []usageSession{{Ticket: id, Kind: "implementation", Claim: 1, Peak: 300, Responses: 2, Models: []string{}}}
 	wantUsageSessions(t, u, h.Ticket(id).Claims[0].SessionID, want)
 }
@@ -232,18 +233,18 @@ func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedUsageHoldsNothi
 		factorytest.Response("msg_during", "", "", 200, 0, 0, 1), factorytest.Wait(),
 		factorytest.Response("msg_after", "", "", 300, 0, 0, 1), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
-	waitForUsage(h, 1)
+	waitForUsage(h, r, 1)
 
 	h.SetDown(true)
 	h.Continue(id)
-	h.WaitFor("a post of usage to be refused", func() bool { return h.Refused("/api/usage") > 0 })
+	r.PollUntil("a post of usage to be refused", func() bool { return h.Refused("/api/usage") > 0 })
 	h.SetDown(false)
 	h.Continue(id)
 	h.WaitForState(id, store.InReview)
 	r.WaitForOutput(id + " turn ended")
 
 	// The batch posted while down is dropped, never retried.
-	u := waitForUsage(h, 2)
+	u := waitForUsage(h, r, 2)
 	want := []usageSession{{Ticket: id, Kind: "implementation", Claim: 1, Peak: 300, Responses: 2, Models: []string{}}}
 	wantUsageSessions(t, u, h.Ticket(id).Claims[0].SessionID, want)
 	if strings.Contains(r.Stdout()+r.Stderr(), "/api/usage") {

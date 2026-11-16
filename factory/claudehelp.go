@@ -17,7 +17,9 @@ import (
 	"github.com/tomoram/code-central/core"
 )
 
-// helpTimeout bounds claude --help.
+// helpTimeout bounds claude --help. It is on real time, not the Factory's
+// clock: it bounds a process, and no test moves the clock while one
+// hangs.
 const helpTimeout = 30 * time.Second
 
 // claudeAccepts is what claude --help says claude accepts; either is

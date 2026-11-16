@@ -14,7 +14,9 @@ import (
 	"github.com/tomoram/code-central/core"
 )
 
-// checkLimit bounds a check: gh auth status and one API read.
+// checkLimit bounds a check: gh auth status and one API read. It is on
+// real time, not the service's clock: it bounds a process, and no test
+// moves the clock while one hangs.
 const checkLimit = time.Minute
 
 // Check runs program, the service's own executable, once with args, a

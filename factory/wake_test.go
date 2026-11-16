@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/factory"
 	"github.com/tomoram/code-central/factory/factorytest"
 	"github.com/tomoram/code-central/store"
 )
@@ -112,6 +113,7 @@ func TestCancellingARunningClaimStopsItsTurnOnAWake(t *testing.T) {
 	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
+	r.PassKillGrace()
 	h.WaitFor("the turn to be stopped", func() bool { return slices.Equal(h.Signals(id), stopSignals()) })
 }
 
@@ -164,6 +166,12 @@ func TestACommentOrSetSessionDoesNotWakeThePoll(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.SetFailing("")
+	// The long-poll's pause after failing is due before the poll is.
+	h.WaitFor("the long-poll's pause after failing", func() bool {
+		at, ok := h.Clock.Next()
+		return ok && at.Equal(h.Clock.Now().Add(factory.WakeRetry))
+	})
+	h.Clock.Advance(factory.WakeRetry)
 	r.WaitForLongPoll()
 
 	if _, err := h.Human().Comment(ctx, h.Project, core.CommentInput{Ticket: core.Ref(id), Body: "Mind the tests."}); err != nil {
@@ -187,7 +195,7 @@ func TestAFailingLongPollWarnsOnceAndTheTimedPollCarriesOn(t *testing.T) {
 	h := wakingHarness(t)
 	h.SetFailing("/factory/next-wake")
 	r := h.Start()
-	h.WaitFor("the long-poll to fail again after its pause", func() bool { return h.Refused(wakePath) >= 2 })
+	r.PollUntil("the long-poll to fail again after its pause", func() bool { return h.Refused(wakePath) >= 2 })
 	if n := strings.Count(r.Stdout(), "warning: can't wait for a wake from Code Central"); n != 1 {
 		t.Errorf("warned %d times, want once for the run of failures; stdout:\n%s", n, r.Stdout())
 	}

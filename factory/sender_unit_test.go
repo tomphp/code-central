@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/client"
+	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 )
 
@@ -18,7 +19,7 @@ func TestAnOlderCodeCentralsNotFoundForUsageIsDroppedNeverRetried(t *testing.T) 
 		http.NotFound(w, r)
 	}))
 	defer old.Close()
-	s := newSender(client.New(old.URL).PostUsage, time.Millisecond, postTimeout)
+	s := newSender(client.New(old.URL).PostUsage, clock.System{}, time.Millisecond, postTimeout)
 	go s.run()
 	s.add("s1", core.UsageResponse{Kind: "implementation"})
 	for posts.Load() == 0 {

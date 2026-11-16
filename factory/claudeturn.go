@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 )
 
@@ -34,18 +35,20 @@ type turnRunner struct {
 	// but the last (stopSteps).
 	killGrace time.Duration
 	verbose   bool
-	now       func() time.Time
+	// clock times the kill grace and Session Events, and dates model
+	// responses.
+	clock clock.Clock
 }
 
 // newTurnRunner is the runner of claude in e, which accepts what accepts
 // says, with the Factory's --bypass-permissions, Claude Args and
 // --verbose.
 func newTurnRunner(claude string, e Env, accepts claudeAccepts, bypass bool, claudeArgs []string, verbose bool) *turnRunner {
-	now := e.Now
-	if now == nil {
-		now = time.Now
+	clk := e.Clock
+	if clk == nil {
+		clk = clock.System{}
 	}
-	return &turnRunner{claude: claude, environ: e.Environ, stderr: e.Stderr, accepts: accepts, bypass: bypass, claudeArgs: claudeArgs, killGrace: e.killGrace(), verbose: verbose, now: now}
+	return &turnRunner{claude: claude, environ: e.Environ, stderr: e.Stderr, accepts: accepts, bypass: bypass, claudeArgs: claudeArgs, killGrace: e.killGrace(), verbose: verbose, clock: clk}
 }
 
 // turnInput is one Turn: where and as what it runs, and where what it
@@ -143,7 +146,7 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 		case <-streamRead:
 		}
 	}()
-	end := readTurn(cmd, stdout, in.Dir, newUsageReader(in.UsageKind, r.now), func(e core.SessionEvent) {
+	end := readTurn(cmd, stdout, in.Dir, r.clock.Now, newUsageReader(in.UsageKind, r.clock.Now), func(e core.SessionEvent) {
 		in.OnEvent(e)
 		if r.verbose && e.Kind == core.EventToolCall {
 			in.Echo(e.Text)
@@ -224,7 +227,7 @@ func (r *turnRunner) stop(proc *os.Process, ended <-chan struct{}, warn func(err
 		select {
 		case <-ended:
 			return
-		case <-time.After(r.killGrace):
+		case <-r.clock.After(r.killGrace):
 		}
 	}
 	<-ended
@@ -392,8 +395,9 @@ type streamMessage struct {
 // readTurn reads a started Turn's stream-json to its end and waits for
 // it, giving how it ended. onEvent is called with each Session Event the
 // stream maps to, in order, and onResponse with each model response's
-// usage, as usage reads them; dir is the Turn's worktree.
-func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, usage *usageReader, onEvent func(core.SessionEvent), onResponse func(core.UsageResponse)) turnEnd {
+// usage, as usage reads them; dir is the Turn's worktree, and now times
+// each Session Event.
+func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time, usage *usageReader, onEvent func(core.SessionEvent), onResponse func(core.UsageResponse)) turnEnd {
 	var end turnEnd
 	var retryErr string
 	tools := map[string]string{}
@@ -407,7 +411,7 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, usage *usageReader, o
 		if r, ok := usage.read(msg); ok {
 			onResponse(r)
 		}
-		for _, e := range streamEvents(msg, time.Now(), tools, dir) {
+		for _, e := range streamEvents(msg, now(), tools, dir) {
 			if e.Kind == core.EventText {
 				end.LastText = e.Text
 			}

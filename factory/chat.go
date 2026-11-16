@@ -61,7 +61,7 @@ func (f *factory) chatLoop(ctx context.Context) {
 			failing = true
 			select {
 			case <-pollCtx.Done():
-			case <-time.After(chatRetry):
+			case <-f.e.Clock.After(chatRetry):
 			}
 			continue
 		}
@@ -146,7 +146,7 @@ func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session, wt s
 		Linef:        func(format string, args ...any) { f.printf("chat: "+format, args...) },
 	})
 	if out.End.Result != nil && len(out.End.Result.PermissionDenials) > 0 {
-		p.add(denialsItem(out.End.Result.PermissionDenials, f.e.Now()))
+		p.add(denialsItem(out.End.Result.PermissionDenials, f.e.Clock.Now()))
 	}
 	return chatOutcome(t, out)
 }
@@ -286,14 +286,12 @@ func (p *chatPoster) addUsage(r core.UsageResponse) {
 }
 
 // run posts the waiting items every batch interval until end, then the
-// rest with the outcome.
+// rest with the outcome. The interval is timed afresh after each round.
 func (p *chatPoster) run() {
 	defer close(p.done)
-	tick := time.NewTicker(p.f.events.every)
-	defer tick.Stop()
 	for {
 		select {
-		case <-tick.C:
+		case <-p.f.e.Clock.After(p.f.events.every):
 			p.post(chatEnd{})
 		case e := <-p.ended:
 			p.post(e)
@@ -331,6 +329,8 @@ func (p *chatPoster) post(e chatEnd) {
 	if len(in.Items) == 0 && in.Outcome == "" {
 		return
 	}
+	// Real time, not the clock, like every deadline on a call to Code
+	// Central: no test moves the clock while a call hangs.
 	ctx, cancel := context.WithTimeout(context.Background(), p.f.events.timeout)
 	defer cancel()
 	// The session goes again with the next post until one is taken.

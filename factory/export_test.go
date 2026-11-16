@@ -38,10 +38,14 @@ func Choice(model, effort string) turnChoice { return turnChoice{model: model, e
 // How is how the Turn ended, as Failure Reports and Chat say it.
 func (t turnEnd) How() string { return t.how() }
 
+// WakeRetry is the wake loop's pause after a next_factory_wake that
+// failed.
+const WakeRetry = wakeRetry
+
 // StartWaiting starts a child that waits, as startWaiting does.
 var StartWaiting = startWaiting
 
 // ReadTurn reads a started Turn's stream to its end, as the runner does.
 func ReadTurn(cmd *exec.Cmd, stdout io.Reader, dir string) turnEnd {
-	return readTurn(cmd, stdout, dir, newUsageReader("implementation", time.Now), func(core.SessionEvent) {}, func(core.UsageResponse) {})
+	return readTurn(cmd, stdout, dir, time.Now, newUsageReader("implementation", time.Now), func(core.SessionEvent) {}, func(core.UsageResponse) {})
 }

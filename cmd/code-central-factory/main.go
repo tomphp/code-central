@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/factory"
 )
 
@@ -25,6 +26,7 @@ func main() {
 		UserHomeDir: os.UserHomeDir,
 		Stdout:      os.Stdout,
 		Stderr:      os.Stderr,
+		Clock:       clock.System{},
 		Signals:     sigs,
 	})
 	signal.Stop(sigs)

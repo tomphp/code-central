@@ -17,6 +17,7 @@ import (
 
 	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/client"
+	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/home"
 	"github.com/tomoram/code-central/store"
@@ -35,12 +36,13 @@ type Env struct {
 	// none.
 	UserHomeDir    func() (string, error)
 	Stdout, Stderr io.Writer
-	// After replaces time.After for the wait between polls.
-	After func(time.Duration) <-chan time.Time
-	// Now replaces time.Now for an outage's backoff and the turns it
-	// waits on, and dates the model responses posted to Usage; nil means
-	// time.Now.
-	Now func() time.Time
+	// Clock is every timer and timestamp of the Factory's: the wait
+	// between polls, the retry pauses, the batch posts, the kill grace,
+	// an outage's backoff, Session Events' times and the dates of the
+	// model responses posted to Usage. Nil means clock.System. Only the
+	// deadlines that bound a call to Code Central or a process stay on
+	// real time.
+	Clock clock.Clock
 	// KillGrace is how long a turn being stopped has after each stop step
 	// but the last (SIGINT, SIGTERM; Ctrl-Break on Windows); zero means
 	// ten seconds.
@@ -52,7 +54,8 @@ type Env struct {
 	// are posted; zero means postEvery.
 	EventBatchEvery time.Duration
 	// EventPostTimeout bounds each post of Session Events and token
-	// usage; zero means postTimeout.
+	// usage; zero means postTimeout. It is on real time, as postTimeout
+	// is.
 	EventPostTimeout time.Duration
 	// Signals is the stop signals the Factory gets: the first Ctrl-C
 	// (os.Interrupt) drains; a second, SIGTERM or SIGHUP stops the turns
@@ -166,11 +169,8 @@ func parseFlags(args []string, stderr io.Writer) (options, error) {
 
 // Run runs the Factory until ctx ends and returns its exit code.
 func Run(ctx context.Context, args []string, e Env) int {
-	if e.After == nil {
-		e.After = time.After
-	}
-	if e.Now == nil {
-		e.Now = time.Now
+	if e.Clock == nil {
+		e.Clock = clock.System{}
 	}
 	o, err := parseFlags(args, e.Stderr)
 	if err != nil {
@@ -421,8 +421,8 @@ func start(e Env, o options) (*factory, error) {
 	if timeout <= 0 {
 		timeout = postTimeout
 	}
-	f.events = newSender(f.client.PostSessionEvents, every, timeout)
-	f.usage = newSender(f.client.PostUsage, every, timeout)
+	f.events = newSender(f.client.PostSessionEvents, e.Clock, every, timeout)
+	f.usage = newSender(f.client.PostUsage, e.Clock, every, timeout)
 	// A Project that can't be read yet is checked on every poll instead.
 	p, readErr := f.client.GetProject(context.Background(), project)
 	// The base is the Project's, read again on every poll; until it can be
