@@ -238,15 +238,10 @@ func (e *evaluation) itemOf(t store.Ticket) (ciItem, bool) {
 }
 
 // baseRows are the Project's Base diverged, Base missing and Repository
-// missing rows, each while its Factory reports it.
+// missing rows, one per Repository each, while its Factory reports it.
 func (e *evaluation) baseRows() []NeedsMeRow {
-	var out []NeedsMeRow
-	if row, ok := e.c.baseDivergedRow(e.p); ok {
-		out = append(out, row)
-	}
-	if row, ok := e.c.baseMissingRow(e.p); ok {
-		out = append(out, row)
-	}
+	out := e.c.baseDivergedRows(e.p)
+	out = append(out, e.c.baseMissingRows(e.p)...)
 	return append(out, e.c.repositoryMissingRows(e.p)...)
 }
 

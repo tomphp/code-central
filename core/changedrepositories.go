@@ -38,6 +38,10 @@ type ChangedRepositoryView struct {
 	// Landed is the commit that put the work into the Repository's base;
 	// left out until it lands.
 	Landed *LandedView `json:"landed,omitempty"`
+	// NotLanded is why an Accepted Ticket hasn't landed in the Repository
+	// yet: its broken base, or what the Factory last said; left out once
+	// it lands, or while there's none to give.
+	NotLanded string `json:"not_landed,omitempty"`
 	// PushedCommit is the latest commit the Factory pushed for the Ticket
 	// in the Repository; left out while it has pushed none.
 	PushedCommit *PushedCommitView `json:"pushed_commit,omitempty"`
@@ -96,11 +100,47 @@ func landedSomewhere(home string, t store.Ticket) bool {
 	return slices.ContainsFunc(changedRepositories(home, t), func(r store.ChangedRepository) bool { return r.Landed != nil })
 }
 
+// landedNames is the Names of the Changed Repositories t has landed in.
+func landedNames(home string, t store.Ticket) []string {
+	var out []string
+	for _, r := range changedRepositories(home, t) {
+		if r.Landed != nil {
+			out = append(out, r.Name)
+		}
+	}
+	return out
+}
+
 // partlyLanded reports whether t is Partly landed: Accepted, and landed
 // in some of its Changed Repositories but not all.
 func partlyLanded(home string, t store.Ticket) bool {
 	return t.State == store.Accepted && landedSomewhere(home, t) &&
 		slices.ContainsFunc(changedRepositories(home, t), func(r store.ChangedRepository) bool { return r.Landed == nil })
+}
+
+// landingRepository is the Repository a land of t, p's, names: name, or
+// the Home Repository for none. It refuses a name that isn't one of p's
+// Repositories, or isn't one of t's Changed Repositories while t has any.
+func landingRepository(p store.Project, t store.Ticket, name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = p.Key
+	}
+	if names := repositoryNames(p.RepositoryList()); !slices.Contains(names, name) {
+		return "", invalid("repository", "%q is not one of this Project's Repositories, which are %s", name, strings.Join(names, ", "))
+	}
+	changed := changedRepositoryNames(p.Key, t)
+	if len(changed) > 0 && !slices.Contains(changed, name) {
+		return "", invalid("repository", "%s is not one of %s's Changed Repositories, which are %s: land the work in each of those, naming it",
+			name, DisplayID(p.Key, t.Number), strings.Join(namesInLandingOrder(p, changed), ", "))
+	}
+	return name, nil
+}
+
+// landsLast reports whether landing in the Repository name lands the
+// last of rs, a Ticket's Changed Repositories: every other one has landed.
+func landsLast(rs []store.ChangedRepository, name string) bool {
+	return !slices.ContainsFunc(rs, func(r store.ChangedRepository) bool { return r.Name != name && r.Landed == nil })
 }
 
 // landingRank orders Repository Names by p's landing order, with any
@@ -154,14 +194,20 @@ func checkRepositoryWork(p store.Project, field string, ws []RepositoryWork) ([]
 }
 
 // setChangedRepositories stores rs as t's Changed Repositories, in p's
-// landing order, each keeping the landed commit t had for it. They are
-// stored as none while they are just what t's branch and commit read as,
-// so a single-repository Ticket's file is as it always was.
+// landing order. Each keeps the landed commit t had for it while its
+// commit is the one that landed: work changed since it landed needs
+// landing again. A Repository t has landed in that rs leaves out stays,
+// landed: its work is in its base, so its branch holds none beyond it.
+// They are stored as none while they are just what t's branch and commit
+// read as, so a single-repository Ticket's file is as it always was.
 func setChangedRepositories(p store.Project, t *store.Ticket, rs []store.ChangedRepository) {
-	was := changedRepositories(p.Key, *t)
-	for i := range rs {
-		if j := slices.IndexFunc(was, func(w store.ChangedRepository) bool { return w.Name == rs[i].Name }); j >= 0 && rs[i].Landed == nil {
-			rs[i].Landed = was[j].Landed
+	for _, w := range changedRepositories(p.Key, *t) {
+		j := slices.IndexFunc(rs, func(r store.ChangedRepository) bool { return r.Name == w.Name })
+		switch {
+		case j < 0 && w.Landed != nil:
+			rs = append(rs, w)
+		case j >= 0 && rs[j].Landed == nil && rs[j].Commit == w.Commit:
+			rs[j].Landed = w.Landed
 		}
 	}
 	inLandingOrder(p, rs, repositoryName)

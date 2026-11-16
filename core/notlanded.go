@@ -1,0 +1,84 @@
+package core
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+
+	"github.com/tomoram/code-central/store"
+)
+
+// Why an Accepted Ticket hasn't landed in each of its Changed
+// Repositories (Spec code-central-848, ADR 0049): a Repository whose base
+// is missing or diverged waits for it, and otherwise the Factory says why
+// in a comment naming the Repository (CantLandComment), once per reason.
+// Accepted but not landed names the Repositories that have landed and
+// those that haven't with these reasons, and the Ticket's Repositories
+// section shows them, while the Project has several Repositories.
+
+// NotLandedView is an Accepted but not landed item's Repositories, while
+// the Project has several: those its Ticket has landed in, and those it
+// hasn't, each with why, in landing order.
+type NotLandedView struct {
+	Landed   []string                 `json:"landed"`
+	Unlanded []UnlandedRepositoryView `json:"unlanded"`
+}
+
+// UnlandedRepositoryView is a Changed Repository a Ticket hasn't landed
+// in, and why.
+type UnlandedRepositoryView struct {
+	Name string `json:"name"`
+	// Reason is why: its broken base, or what the Factory last said about
+	// it since the Ticket was accepted; left out when there's none to
+	// give.
+	Reason string `json:"reason,omitempty"`
+}
+
+// cantLandLead starts the Factory's comment that it can't land a Ticket's
+// work in a Repository yet.
+const cantLandLead = "The Factory can't land this in "
+
+// CantLandComment is the Factory's comment that it can't land a Ticket's
+// work in the Repository name yet, and why, while the Ticket stays in
+// state. Core reads why's first line back as the Repository's reason.
+func CantLandComment(name, why string, state store.State) string {
+	return fmt.Sprintf("%s%s yet: %s\n\nIt stays %s and the Factory tries again on every poll.", cantLandLead, name, why, state)
+}
+
+// notLandedReason is why t, p's, hasn't landed in the Repository name:
+// its base is missing or diverged, else the first line of what the
+// Factory last commented about it since t moved to its State; "" when
+// there's neither.
+func (c *Core) notLandedReason(p store.Project, t store.Ticket, name string) string {
+	if why := c.brokenBase(p, name); why != "" {
+		return why
+	}
+	lead, since := cantLandLead+name+" yet: ", entered(t)
+	for i := len(t.Comments) - 1; i >= 0 && !t.Comments[i].Time.Before(since); i-- {
+		if why, ok := strings.CutPrefix(t.Comments[i].Body, lead); ok && t.Comments[i].Actor != string(Human) {
+			return strings.TrimSuffix(firstLine(why), ":")
+		}
+	}
+	return ""
+}
+
+// notLandedView is t's NotLandedView, t being p's and Accepted but not
+// landed; nil while p has the Home Repository alone, or t has no Changed
+// Repositories.
+func (c *Core) notLandedView(p store.Project, t store.Ticket) *NotLandedView {
+	rs := changedRepositories(p.Key, t)
+	if !severalRepositories(p) || len(rs) == 0 {
+		return nil
+	}
+	rs = slices.Clone(rs)
+	inLandingOrder(p, rs, repositoryName)
+	v := &NotLandedView{Landed: []string{}, Unlanded: []UnlandedRepositoryView{}}
+	for _, r := range rs {
+		if r.Landed != nil {
+			v.Landed = append(v.Landed, r.Name)
+		} else {
+			v.Unlanded = append(v.Unlanded, UnlandedRepositoryView{Name: r.Name, Reason: c.notLandedReason(p, t, r.Name)})
+		}
+	}
+	return v
+}

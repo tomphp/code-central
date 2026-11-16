@@ -967,14 +967,15 @@ func lastFailure(tk core.TicketView) string {
 }
 
 // Finished claims ticket outside the Factory and finishes it with this
-// branch and commit, so it is In Review with work to land.
-func (h *Harness) Finished(ticket, branch, commit string) {
+// branch and commit, and the work in any other repositories, so it is In
+// Review with work to land.
+func (h *Harness) Finished(ticket, branch, commit string, repositories ...core.RepositoryWork) {
 	h.t.Helper()
 	ctx := context.Background()
 	c := h.Server.Client
 	res, err := c.Claim(ctx, h.Project, core.ClaimInput{Ticket: core.Ref(ticket)})
 	must(h.t, err)
-	_, err = c.Finish(ctx, h.Project, core.FinishInput{Ticket: core.Ref(ticket), ClaimID: res.ClaimID, Summary: "Done.", Branch: branch, Commit: commit})
+	_, err = c.Finish(ctx, h.Project, core.FinishInput{Ticket: core.Ref(ticket), ClaimID: res.ClaimID, Summary: "Done.", Branch: branch, Commit: commit, Repositories: repositories})
 	must(h.t, err)
 }
 
@@ -1065,6 +1066,12 @@ type Repository struct {
 func (r *Repository) CommitOn(branch, file, content string) string {
 	r.h.t.Helper()
 	return r.h.commitOn(r.Path, branch, file, content)
+}
+
+// Remote is r's bare remote, its Clone URL, as the remote name of the
+// Factory's clone: the Push remote's name, which it clones under.
+func (r *Repository) Remote(name string) *Remote {
+	return &Remote{h: r.h, Name: name, Path: r.CloneURL}
 }
 
 // Worktree is where the Factory keeps ticket's worktree in r, beside its

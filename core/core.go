@@ -69,7 +69,7 @@ func New(s store.Store, clk clock.Clock, idSource ids.Source) *Core {
 	c.transcripts = &transcripts{all: map[markKey]*transcript{}, feeds: map[markKey]map[*TranscriptFeed]struct{}{}}
 	c.latestNotices = &latestNotices{sent: map[markKey]time.Time{}, pending: map[markKey]bool{}}
 	c.watchers = &watchers{all: map[watcherKey]watcherStatus{}}
-	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}, base: map[string]BaseView{}, clones: map[string]map[string]CloneView{}}
+	c.heartbeats = &heartbeats{all: map[heartbeatKey]heartbeat{}, seen: map[string]string{}, base: map[string]map[string]BaseView{}, clones: map[string]map[string]CloneView{}}
 	c.chats = newChats()
 	return c
 }
@@ -360,6 +360,9 @@ type TicketRow struct {
 	// landing order, for its card's chips; left out while the Project has
 	// the Home Repository alone.
 	Repositories []string `json:"repositories,omitempty"`
+	// PartlyLanded says the Ticket is Accepted and has landed in some of
+	// its Changed Repositories but not all, for its card's badge.
+	PartlyLanded bool `json:"partly_landed,omitempty"`
 }
 
 // CreateProjectInput is create_project's input.
@@ -732,6 +735,7 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t store.Ticket, onMap bo
 	if severalRepositories(e.p) {
 		row.Repositories = namesInLandingOrder(e.p, changedRepositoryNames(key, t))
 	}
+	row.PartlyLanded = partlyLanded(key, t)
 	return row
 }
 
@@ -809,6 +813,11 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 	v.WaitingForSpec = waitingForSpec(r, pr, t)
 	if severalRepositories(pr) {
 		v.Repositories = changedRepositoryViews(pr, t, v)
+		for i, rv := range v.Repositories {
+			if t.State == store.Accepted && rv.Landed == nil {
+				v.Repositories[i].NotLanded = c.notLandedReason(pr, t, rv.Name)
+			}
+		}
 	}
 	v.PartlyLanded = partlyLanded(key, t)
 	if it, ok := e.itemOf(t); ok {

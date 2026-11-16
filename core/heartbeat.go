@@ -89,8 +89,9 @@ type heartbeats struct {
 	all map[heartbeatKey]heartbeat
 	// seen is each Project's Factory Status as the watch last saw it.
 	seen map[string]string
-	// base is each Project's reported base (code-central-394).
-	base map[string]BaseView
+	// base is each Project's reported bases (code-central-394), by
+	// Repository Name (Spec code-central-848).
+	base map[string]map[string]BaseView
 	// clones is each Project's reported clones, by Repository Name
 	// (Spec code-central-848).
 	clones map[string]map[string]CloneView
@@ -124,7 +125,8 @@ func (hs *heartbeats) view(project string, now time.Time) FactoryStatusView {
 			v.Status = s
 		}
 	}
-	v.Base = hs.baseView(project, now)
+	// The Home Repository's, named by the Project Key.
+	v.Base = hs.baseView(project, project, now)
 	slices.SortFunc(v.Factories, func(a, b FactoryView) int {
 		if c := strings.Compare(a.Name, b.Name); c != 0 {
 			return c

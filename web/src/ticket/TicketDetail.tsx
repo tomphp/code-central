@@ -16,6 +16,7 @@ import { OpenExternal } from "./OpenExternal";
 import { Live } from "./Live";
 import { PullRequestBadge } from "./PullRequestBadge";
 import { WaitingBadge } from "./WaitingBadge";
+import { PartlyLandedBadge } from "./PartlyLandedBadge";
 import { useAct } from "./useAct";
 import { CISection } from "./CISection";
 import { TicketRepositories } from "./TicketRepositories";
@@ -89,6 +90,7 @@ export function TicketDetail(props: TicketDetailProps) {
       <header className="ticket-head">
         <ShortId id={t.id} /> <StateChip state={t.state} />
         <WaitingBadge waiting={t.waiting_for_spec} />
+        <PartlyLandedBadge partly={t.partly_landed} />
         {/* The In Review reason only repeats the State chip. */}
         {t.needs_me_reason && t.needs_me_reason !== "in_review" && <ReasonBadge reason={t.needs_me_reason} />}
         {editing ? (
