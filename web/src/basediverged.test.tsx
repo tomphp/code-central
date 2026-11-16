@@ -5,9 +5,8 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { newWorld } from "./api/core/core";
-import { scenario } from "./api/scenario";
 import { rowDetail } from "./format";
-import { allClear, focus, renderApp } from "./worldTesting";
+import { allClear, focus, renderApp, scenario, settle } from "./worldTesting";
 
 // world has acme, whose base has diverged, and beta; acme also has a Ticket
 // In Review unless alone.
@@ -23,7 +22,7 @@ async function world(alone = false) {
 }
 
 const item = () =>
-  within(focus()).findByRole("article", { name: "Focus Item" });
+  within(focus()).getByRole("article", { name: "Focus Item" });
 
 describe("Base diverged", () => {
   it("is a one-line detail with both commits", async () => {
@@ -35,8 +34,9 @@ describe("Base diverged", () => {
   });
 
   it("is a Focus Item for the Project with the commits and the fix, and no Ticket panel", async () => {
-    await renderApp(await world(true));
-    const it = await item();
+    const w = await world(true);
+    await renderApp(w);
+    const it = item();
     // Its reason and its title.
     expect(within(it).getAllByText("Base diverged")).toHaveLength(1);
     expect(within(it).getByText("Focus: Base diverged")).toBeInTheDocument();
@@ -51,8 +51,9 @@ describe("Base diverged", () => {
 
     // It can be skipped like any item.
     await userEvent.click(within(it).getByRole("button", { name: "Skip" }));
+    await settle(w);
     expect(
-      await screen.findByRole("region", {
+      screen.getByRole("region", {
         name: "Only skipped Focus Items left",
       }),
     ).toBeInTheDocument();
