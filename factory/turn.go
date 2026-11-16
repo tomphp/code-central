@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/store"
 )
 
 // startTurn runs c's Turn in, which says where it runs, whether it
@@ -59,6 +60,9 @@ func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 		// The turn keeps its slot until its outcome is acted on, and
 		// "turn ended" is printed once the slot is free.
 		state := f.afterTurn(ctx, t, out)
+		if state == store.Ready {
+			f.holdBack(c.Ticket)
+		}
 		f.freeSlot(c)
 		f.turnEnded(t, out.End, state, ran)
 		f.forgetEnded(c)
@@ -70,6 +74,37 @@ func (f *factory) freeSlot(c claim) {
 	f.mu.Lock()
 	delete(f.turns, c.ClaimID)
 	f.mu.Unlock()
+}
+
+// holdBack keeps ticket, whose turn just ended with it back in Ready,
+// from being claimed again until the next timed poll or until --poll
+// has passed, whichever is first: wakes alone could put the timed poll
+// off for good.
+func (f *factory) holdBack(ticket string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.backInReady[ticket] = f.e.Now()
+}
+
+// releaseHeldBack lets every held-back Ticket be claimed again, as a
+// timed poll is starting.
+func (f *factory) releaseHeldBack() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	clear(f.backInReady)
+}
+
+// heldBack reports whether ticket is held back: its turn ended with it
+// back in Ready since the last timed poll, less than --poll ago.
+func (f *factory) heldBack(ticket string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	at, ok := f.backInReady[ticket]
+	if ok && f.e.Now().Sub(at) >= f.o.poll {
+		delete(f.backInReady, ticket)
+		return false
+	}
+	return ok
 }
 
 // newSessionID is a random UUID (version 4), as claude --session-id takes.
