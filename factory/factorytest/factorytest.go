@@ -104,13 +104,13 @@ type Harness struct {
 	// cut off; set it before Start. New makes it a millisecond.
 	Backoff time.Duration
 	// Clock is the Factory's clock, every timer and timestamp of its: it
-	// stands still until the test, Tick, Start, Poll or Stop moves it.
-	// Tick moves it to the next poll's deadline; Start and Poll end a
-	// claim retry pause or kill grace their poll waits on; Stop moves it
-	// past the kill grace until the Factory has exited. It starts at
-	// midday, as
-	// Server's clock does, so that many Ticks keep the model responses
-	// the Factory dates on Code Central's today in Usage.
+	// stands still until the test, Tick, Start, Poll, Exited or Stop
+	// moves it. Tick moves it to the next poll's deadline; Start and Poll
+	// end a claim retry pause or kill grace their poll waits on; Exited
+	// and Stop move it past each kill grace until the Factory has exited.
+	// It starts at midday, as Server's clock does, so that many Ticks keep
+	// the model responses the Factory dates on Code Central's today in
+	// Usage.
 	Clock *clock.Fake
 	// URL is the Code Central the Factory and its sessions reach: Server
 	// behind a proxy that SetDown can take down.
@@ -1009,14 +1009,17 @@ const (
 // wait for a poll, a timer of the Factory's --poll, so that Tick can move
 // the clock to the poll's deadline and Start and Poll can see a poll
 // finish, and each pause a poll can wait on, a claim retry pause or the
-// kill grace of a turn it stops, so that they can end it.
+// kill grace of a turn it stops, so that they can end it. It tells the
+// timers apart by their durations, which differ: --poll is at least 5s,
+// the claim retry pause 1s, KillGrace 100ms, EventBatchEvery 10s, and the
+// wake and Chat retry pauses 5s, so no test passes --poll 5s or 10s.
 type factoryClock struct {
 	*clock.Fake
 	poll time.Duration
 
 	mu     sync.Mutex
-	waits  []pollWait // every wait for a poll, oldest first
-	pauses []pause    // the claim retry pauses and kill graces not over yet
+	waits  []pollTimer // every wait for a poll, oldest first
+	pauses []pause     // the claim retry pauses and kill graces not over yet
 }
 
 // pause is a claim retry pause or a kill grace, due at. The harness ends
@@ -1028,9 +1031,9 @@ type pause struct {
 	grace    bool
 }
 
-// pollWait is one of the Factory's waits for its next poll: its timer,
+// pollTimer is one of the Factory's waits for its next poll: its timer,
 // due at.
-type pollWait struct {
+type pollTimer struct {
 	at    time.Time
 	timer <-chan time.Time
 }
@@ -1044,7 +1047,7 @@ func (c *factoryClock) After(d time.Duration) <-chan time.Time {
 	timer := c.Fake.After(d)
 	switch d {
 	case c.poll:
-		c.waits = append(c.waits, pollWait{at, timer})
+		c.waits = append(c.waits, pollTimer{at, timer})
 	case claimRetryPause:
 		c.pauses = append(c.pauses, pause{at: at, ripe: time.Now()})
 	case KillGrace:
@@ -1055,11 +1058,11 @@ func (c *factoryClock) After(d time.Duration) <-chan time.Time {
 
 // latestWait is the Factory's latest wait for a poll and its number,
 // counting from 1, or 0 when it hasn't waited for one yet.
-func (c *factoryClock) latestWait() (int, pollWait) {
+func (c *factoryClock) latestWait() (int, pollTimer) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if len(c.waits) == 0 {
-		return 0, pollWait{}
+		return 0, pollTimer{}
 	}
 	return len(c.waits), c.waits[len(c.waits)-1]
 }

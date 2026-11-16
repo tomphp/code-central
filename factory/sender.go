@@ -73,9 +73,11 @@ func (s *sender[T]) add(session string, item T) {
 }
 
 // run posts batches until close. The interval is timed afresh after each
-// batch: the drift of the time a post takes doesn't matter to a batch.
+// timed batch: the drift of the time a post takes doesn't matter to a
+// batch.
 func (s *sender[T]) run() {
 	defer close(s.done)
+	tick := s.clock.After(s.every)
 	for {
 		select {
 		case <-s.stop:
@@ -85,10 +87,12 @@ func (s *sender[T]) run() {
 			s.flush(ctx)
 			cancel()
 			return
-		case <-s.clock.After(s.every):
+		case <-tick:
+			s.flush(context.Background())
+			tick = s.clock.After(s.every)
 		case <-s.full:
+			s.flush(context.Background())
 		}
-		s.flush(context.Background())
 	}
 }
 
