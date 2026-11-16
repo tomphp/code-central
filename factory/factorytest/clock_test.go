@@ -45,10 +45,12 @@ func TestStopEndsAFactoryInAKillGrace(t *testing.T) {
 	id := h.ReadyTicket("Long job")
 	h.Script(id, Wait())
 	r := h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
 	r.Interrupt()
 	r.Interrupt()
-	h.WaitFor("the turn's kill grace", r.clock.inKillGrace)
+	r.Settle()
+	if !r.track.inKillGrace() {
+		t.Fatal("no kill grace in progress once the second Ctrl-C has settled")
+	}
 
 	if code := r.Stop(); code != 0 {
 		t.Errorf("exit code %d, want 0", code)
@@ -64,7 +66,6 @@ func TestPassKillGraceTakesAStoppingTurnToItsNextStopStep(t *testing.T) {
 	id := h.ReadyTicket("Long job")
 	h.Script(id, Wait())
 	r := h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
 	r.Interrupt()
 	r.Interrupt()
 

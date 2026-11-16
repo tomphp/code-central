@@ -28,28 +28,44 @@ const (
 	// chatRetry is how long the Chat loop waits after a next_chat_work
 	// that failed before it calls again.
 	chatRetry = 5 * time.Second
+	// chatTurnKey names a Chat turn in the Factory's work (Work), as its
+	// Ticket ID names a Claim's turn.
+	chatTurnKey = "chat"
 )
 
 func (f *factory) chatWorktree() string { return filepath.Join(f.worktrees, chatWorktreeName) }
 
+// chatStop stops a running Chat turn: cancel ends its context, and work
+// hands its Turn runner the stop's busy work.
+type chatStop struct {
+	cancel context.CancelFunc
+	work   handoff
+}
+
 // chatLoop keeps one next_chat_work call open until ctx ends or the
 // Factory drains, and starts each turn it hands out, one at a time. It
-// returns once the last turn has ended. With --no-chat it never calls.
-func (f *factory) chatLoop(ctx context.Context) {
+// returns once the last turn has ended. With --no-chat it never calls. s
+// is its line of work, busy starting it.
+func (f *factory) chatLoop(ctx context.Context, s *stint) {
+	defer s.stop()
 	if f.o.noChat {
 		return
 	}
 	var turns sync.WaitGroup
-	defer turns.Wait()
+	defer func() {
+		s.rest("waiting for the Chat turn to end")
+		turns.Wait()
+	}()
 	// Draining closes the long-poll; a running turn goes on until ctx ends.
 	pollCtx, cancel := f.untilDraining(ctx)
 	defer cancel()
 	var turnRunning sync.Mutex // held by the running turn
 	// stops ends a Conversation's turn, by its ID, when a stop asks.
 	var stopsMu sync.Mutex
-	stops := map[string]context.CancelFunc{}
+	stops := map[string]chatStop{}
 	failing := false
 	for pollCtx.Err() == nil {
+		s.rest(ChatLongPoll)
 		w, err := f.client.NextChatWork(pollCtx, f.project, core.NextChatWorkInput{Factory: factoryName, Host: f.host})
 		if err != nil {
 			if pollCtx.Err() != nil {
@@ -59,17 +75,19 @@ func (f *factory) chatLoop(ctx context.Context) {
 				f.printf("warning: can't take Chat work from Code Central: %v", err)
 			}
 			failing = true
+			retry := s.after(f.e.Clock, chatRetry, "Chat retry pause")
 			select {
 			case <-pollCtx.Done():
-			case <-f.e.Clock.After(chatRetry):
+			case <-retry:
 			}
 			continue
 		}
 		failing = false
 		if w.Stop != nil {
 			stopsMu.Lock()
-			if stop := stops[w.Stop.Conversation]; stop != nil {
-				stop()
+			if stop, ok := stops[w.Stop.Conversation]; ok {
+				stop.work.give(f.work.busy("stopping turn ", chatTurnKey))
+				stop.cancel()
 			}
 			stopsMu.Unlock()
 			continue
@@ -77,39 +95,45 @@ func (f *factory) chatLoop(ctx context.Context) {
 		if w.Turn == nil {
 			continue
 		}
-		turnCtx, stop := context.WithCancel(ctx)
+		turnCtx, cancelTurn := context.WithCancel(ctx)
+		stop := chatStop{cancel: cancelTurn, work: newHandoff()}
 		stopsMu.Lock()
 		stops[w.Turn.Conversation] = stop
 		stopsMu.Unlock()
 		turns.Add(1)
+		work := f.starting("turn ", chatTurnKey)
 		go func(t core.ChatTurn) {
 			defer turns.Done()
+			defer work.stop()
 			defer func() {
 				stopsMu.Lock()
 				delete(stops, t.Conversation)
 				stopsMu.Unlock()
-				stop()
+				// A stop that came as the turn ended was never taken up.
+				stop.work.take()
+				cancelTurn()
 			}()
 			// Code Central hands out a turn only once the reply before
 			// it has ended, which its turn posts just before it returns.
 			turnRunning.Lock()
 			defer turnRunning.Unlock()
-			f.runChatTurn(turnCtx, t)
+			f.runChatTurn(turnCtx, t, work, stop.work)
 		}(*w.Turn)
 	}
 }
 
 // runChatTurn answers one Chat Message and posts the reply as it comes:
-// its items, then its outcome.
-func (f *factory) runChatTurn(ctx context.Context, t core.ChatTurn) {
+// its items, then its outcome. work is the turn's line of work, busy
+// starting it; stopWork hands its Turn runner a stop's busy work.
+func (f *factory) runChatTurn(ctx context.Context, t core.ChatTurn, work *stint, stopWork handoff) {
 	wt := f.chatWorktree()
 	session := t.SessionID
 	if t.First {
 		session = newSessionID()
 	}
 	p := f.newChatPoster(t, session, wt)
-	go p.run()
-	outcome, msg := f.answerChat(ctx, t, session, wt, p)
+	p.start()
+	outcome, msg := f.answerChat(ctx, t, session, wt, p, work, stopWork)
 	if outcome == core.ChatFailed {
 		f.printf("chat: the reply failed: %s", firstLine(msg))
 	}
@@ -119,7 +143,7 @@ func (f *factory) runChatTurn(ctx context.Context, t core.ChatTurn) {
 // answerChat runs t's claude turn in the Chat worktree wt, as session,
 // and says how the reply ended, with the error text of a failed one. A
 // first turn moves the Chat worktree to the base's tip first.
-func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session, wt string, p *chatPoster) (core.ChatOutcome, string) {
+func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session, wt string, p *chatPoster, work *stint, stopWork handoff) (core.ChatOutcome, string) {
 	if t.First {
 		if err := f.chatWorktreeAtBase(wt); err != nil {
 			return core.ChatFailed, err.Error()
@@ -144,6 +168,9 @@ func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session, wt s
 		OnEvent:      p.add,
 		OnUsage:      p.addUsage,
 		Linef:        func(format string, args ...any) { f.printf("chat: "+format, args...) },
+		Key:          chatTurnKey,
+		Work:         work,
+		StopWork:     stopWork,
 	})
 	if out.End.Result != nil && len(out.End.Result.PermissionDenials) > 0 {
 		p.add(denialsItem(out.End.Result.PermissionDenials, f.e.Clock.Now()))
@@ -285,15 +312,27 @@ func (p *chatPoster) addUsage(r core.UsageResponse) {
 	p.f.usage.add(p.session, r)
 }
 
+// start times the first round and runs the poster until end.
+func (p *chatPoster) start() {
+	tick, waited := p.f.work.after(p.f.e.Clock, p.f.events.every, "waiting to post the Chat reply")
+	go p.run(tick, waited)
+}
+
 // run posts the waiting items every batch interval until end, then the
-// rest with the outcome. The interval is timed afresh after each round.
-func (p *chatPoster) run() {
+// rest with the outcome. The interval is timed afresh after each round;
+// waited ends the wait for tick.
+func (p *chatPoster) run(tick <-chan time.Time, waited func()) {
 	defer close(p.done)
 	for {
 		select {
-		case <-p.f.e.Clock.After(p.f.events.every):
+		case <-tick:
+			posting := p.f.work.busy("posting the Chat reply")
+			waited()
 			p.post(chatEnd{})
+			tick, waited = p.f.work.after(p.f.e.Clock, p.f.events.every, "waiting to post the Chat reply")
+			posting()
 		case e := <-p.ended:
+			waited()
 			p.post(e)
 			return
 		}

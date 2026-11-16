@@ -31,19 +31,24 @@ func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 	// Before the Turn starts, which may end the Claim before a report
 	// after it could land.
 	in.BeforeStart = func() { f.reportChoice(ctx, c, in.Choice) }
+	// Busy from here until claude runs, and again once it has exited.
+	in.Key = c.Ticket
+	in.Work = f.starting("turn ", c.Ticket)
 	// Not derived from ctx: a Claim's Turn is stopped only by stopTurn.
 	stop, cancel := context.WithCancel(context.Background())
-	t := &turn{claim: c, dir: in.Dir, choice: in.Choice, started: f.e.Clock.Now(), cancel: cancel, done: make(chan struct{})}
+	t := &turn{claim: c, dir: in.Dir, choice: in.Choice, started: f.e.Clock.Now(), cancel: cancel, stopWork: newHandoff(), done: make(chan struct{})}
+	in.StopWork = t.stopWork
 	f.mu.Lock()
 	f.turns[c.ClaimID] = t
 	f.mu.Unlock()
 	f.turnsDone.Add(1)
 	go func() {
+		defer in.Work.stop()
 		// Last, whatever the outcome and even if no Ticket changed: the
 		// slot is free, so the poll loop polls at once.
 		defer f.wake()
 		defer f.turnsDone.Done()
-		defer close(t.done)
+		defer f.endTurn(t)
 		defer cancel()
 		out := f.runner.run(stop, in)
 		if out.Kind == turnEffortRejected || out.StartErr != nil {

@@ -20,11 +20,15 @@ func reported(t *testing.T, h *factorytest.Harness) core.ReportedModelsView {
 	return p.ReportedModels
 }
 
-// waitForReport waits for the Factory's report_models and returns it.
-func waitForReport(t *testing.T, h *factorytest.Harness) core.ReportedModelsView {
+// wantReport fails the test unless the Factory has made its report_models
+// (a test settles the Factory first), and returns it.
+func wantReport(t *testing.T, h *factorytest.Harness) core.ReportedModelsView {
 	t.Helper()
-	h.WaitFor("the Factory's report of what its claude accepts", func() bool { return reported(t, h).Reported != nil })
-	return reported(t, h)
+	got := reported(t, h)
+	if got.Reported == nil {
+		t.Fatal("the Factory hasn't reported what its claude accepts")
+	}
+	return got
 }
 
 // wantAccepts checks the Reported Models hold levels, aliases and flags.
@@ -44,7 +48,7 @@ func TestAtStartupTheFactoryReportsWhatItsClaudeAcceptsWithItsFlags(t *testing.T
 	t.Parallel()
 	h := factorytest.New(t)
 	h.Start("--model", "opus", "--effort", "high")
-	wantAccepts(t, waitForReport(t, h), claudeLevels, claudeAliases, "opus", "high")
+	wantAccepts(t, wantReport(t, h), claudeLevels, claudeAliases, "opus", "high")
 }
 
 func TestTheFactoryReadsReWrappedAndReorderedHelp(t *testing.T) {
@@ -79,7 +83,7 @@ Options:
 			h := factorytest.New(t)
 			h.ClaudeHelp(help)
 			h.Start()
-			wantAccepts(t, waitForReport(t, h), claudeLevels, claudeAliases, "", "")
+			wantAccepts(t, wantReport(t, h), claudeLevels, claudeAliases, "", "")
 		})
 	}
 }
@@ -95,10 +99,9 @@ func TestHelpTheFactoryCantReadWarnsAndReportsNoLevelsOrAliases(t *testing.T) {
 
 	// With nothing to check it against, any --effort is taken.
 	r := h.Start("--model", "sonnet", "--effort", "extreme")
-	r.WaitForOutput("warning: can't read the effort levels from claude --help")
-	r.WaitForOutput("warning: can't read the model aliases from claude --help")
-	h.WaitFor("the Factory's flags in its report", func() bool { return reported(t, h).ModelFlag == "sonnet" })
-	wantAccepts(t, reported(t, h), []string{"low", "high"}, []string{"opus"}, "sonnet", "extreme")
+	r.WantOutput("warning: can't read the effort levels from claude --help")
+	r.WantOutput("warning: can't read the model aliases from claude --help")
+	wantAccepts(t, wantReport(t, h), []string{"low", "high"}, []string{"opus"}, "sonnet", "extreme")
 }
 
 func TestTheFactoryRefusesToStartWithAnEffortItsClaudeDoesntAccept(t *testing.T) {
@@ -122,7 +125,7 @@ func TestAProjectUnreadableAtStartupIsReportedOnTheFirstPollThatCanReadIt(t *tes
 
 	h.SetFailing("")
 	r.Poll()
-	wantAccepts(t, waitForReport(t, h), claudeLevels, claudeAliases, "opus", "")
+	wantAccepts(t, wantReport(t, h), claudeLevels, claudeAliases, "opus", "")
 	if n := strings.Count(r.Stdout(), "warning: can't report"); n != 0 {
 		t.Errorf("warned of a failed report: %s", r.Stdout())
 	}

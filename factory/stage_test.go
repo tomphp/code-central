@@ -34,7 +34,7 @@ func TestEachSessionStartsItsStagesSkillWithItsStageGuide(t *testing.T) {
 
 	h.Start()
 	for _, id := range ids {
-		h.WaitForState(id, store.InReview)
+		h.WantState(id, store.InReview)
 	}
 
 	calls := map[string]factorytest.Call{}
@@ -65,7 +65,7 @@ func TestEachSystemPromptSaysTheTicketIsAlreadyClaimedAndNotToCallClaim(t *testi
 
 	h.Start()
 	for _, id := range ids {
-		h.WaitForState(id, store.InReview)
+		h.WantState(id, store.InReview)
 	}
 
 	calls := map[string]factorytest.Call{}
@@ -102,7 +102,7 @@ func TestAStageWorksInADetachedWorktreeAtTheBasesTip(t *testing.T) {
 	mainTip := h.Git("rev-parse", "main")
 
 	h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 
 	if c := h.Calls()[0]; c.Dir != h.Worktree(id) {
 		t.Errorf("claude ran in %s, want the worktree %s", c.Dir, h.Worktree(id))
@@ -127,7 +127,7 @@ func TestACleanStageWorktreeMovesToTheBasesCurrentTipAtANewClaim(t *testing.T) {
 	mainTip := h.Git("rev-parse", "main")
 
 	h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 
 	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != mainTip {
 		t.Errorf("the Stage's worktree is at %s, want main's current tip %s", got, mainTip)
@@ -144,7 +144,7 @@ func TestADirtyStageWorktreeIsAFailureReport(t *testing.T) {
 	}
 
 	h.Start()
-	tk := h.WaitForState(id, store.Failed)
+	tk := h.WantState(id, store.Failed)
 
 	if n := len(h.Calls()); n != 0 {
 		t.Errorf("claude ran %d times in a dirty Stage worktree, want none", n)
@@ -164,7 +164,7 @@ func TestTheGrillingStageStartsGrillingWithDomainModelingAndItsStageGuide(t *tes
 	id := h.StageTicket("grilling", "Grilling: Add a button")
 
 	h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 
 	c := h.Calls()[0]
 	if c.Prompt != "/grilling "+id {
@@ -190,7 +190,7 @@ func TestEachMapTicketStartsItsSkillWithItsGuideInADetachedWorktree(t *testing.T
 
 	h.Start()
 	for _, id := range ids {
-		h.WaitForState(id, store.InReview)
+		h.WantState(id, store.InReview)
 	}
 
 	calls := map[string]factorytest.Call{}

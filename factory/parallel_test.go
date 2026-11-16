@@ -27,17 +27,20 @@ func TestParallelCapsTheTurnsRunningAtOnce(t *testing.T) {
 	}
 
 	r := h.Start("--parallel", "2")
-	h.WaitFor("two turns", func() bool { return len(h.Calls()) == 2 })
+	h.WantCalls(2)
 	r.Poll()
 	if s := h.Ticket(c).State; s != store.Ready || len(h.Calls()) != 2 {
 		t.Fatalf("with two turns running, %s is %s and claude ran %d times; want it left Ready", c, s, len(h.Calls()))
 	}
 
 	h.Continue(a)
-	h.WaitForState(a, store.InReview)
-	r.WaitForOutput(a + " turn ended")
+	r.Settle()
+	h.WantState(a, store.InReview)
+	r.WantOutput(a + " turn ended")
 	r.Poll()
-	h.WaitFor(c+"'s turn", func() bool { return len(callsFor(h, c)) == 1 })
+	if n := len(callsFor(h, c)); n != 1 {
+		t.Errorf("claude ran %d times for %s, want once: the freed slot is filled", n, c)
+	}
 }
 
 func TestAClaimParkedInNeedsAnswerDoesNotTakeASlot(t *testing.T) {
@@ -48,8 +51,10 @@ func TestAClaimParkedInNeedsAnswerDoesNotTakeASlot(t *testing.T) {
 	h.Script(b, factorytest.Wait())
 
 	r := h.Start("--parallel", "1")
-	h.WaitForState(a, store.NeedsAnswer)
-	r.WaitForOutput(a + " turn ended")
+	h.WantState(a, store.NeedsAnswer)
+	r.WantOutput(a + " turn ended")
 	r.Poll()
-	h.WaitFor(b+"'s turn", func() bool { return len(callsFor(h, b)) == 1 })
+	if n := len(callsFor(h, b)); n != 1 {
+		t.Errorf("claude ran %d times for %s, want once: the parked claim takes no slot", n, b)
+	}
 }

@@ -25,7 +25,7 @@ func TestUnderPullRequestAReadySpecBranchIsPushedAndReportedForEveryTicket(t *te
 	branch := "spec/" + h.SpecID()
 
 	r := h.Start()
-	r.WaitForOutput(h.SpecID() + ": pushed " + branch + " to origin")
+	r.WantOutput(h.SpecID() + ": pushed " + branch + " to origin")
 	tip := h.Git("rev-parse", branch)
 	if got := remote.Git("rev-parse", branch); got != tip {
 		t.Errorf("the remote's %s is at %q, want %s", branch, got, tip)
@@ -33,7 +33,7 @@ func TestUnderPullRequestAReadySpecBranchIsPushedAndReportedForEveryTicket(t *te
 	if got := remote.Git("branch", "--list", "main"); strings.TrimSpace(got) != "" {
 		t.Errorf("the remote has main %q: only the Spec Branch is pushed", got)
 	}
-	waitPushed(t, h, branch, tip)
+	wantPushed(t, h, branch, tip)
 	for _, id := range []string{a, b} {
 		if tk := h.Ticket(id); tk.State != store.Accepted {
 			t.Errorf("%s is %s, want it waiting Accepted", id, tk.State)
@@ -55,7 +55,7 @@ func TestUnderPullRequestTheSpecsTicketsLandAtItsMergeCommit(t *testing.T) {
 	branch := "spec/" + h.SpecID()
 
 	r := h.Start()
-	waitPushed(t, h, branch, "")
+	wantPushed(t, h, branch, "")
 	reportPullRequest(t, h, branch, "")
 	r.Poll()
 	if h.Ticket(a).State != store.Accepted || h.Ticket(b).State != store.Accepted {
@@ -69,14 +69,14 @@ func TestUnderPullRequestTheSpecsTicketsLandAtItsMergeCommit(t *testing.T) {
 	r.Poll()
 
 	for _, id := range []string{a, b} {
-		tk := h.WaitForState(id, store.Done)
+		tk := h.WantState(id, store.Done)
 		if m := tk.Moves[len(tk.Moves)-1]; m.Commit != squash {
 			t.Errorf("%s landed at %q, want the merge commit %s", id, m.Commit, squash)
 		}
 	}
-	r.WaitForOutput(b + ": landed on main at ")
+	r.WantOutput(b + ": landed on main at ")
 	r.Poll()
-	r.WaitForOutput(h.SpecID() + ": deleted " + branch)
+	r.WantOutput(h.SpecID() + ": deleted " + branch)
 }
 
 func TestUnderPullRequestASpecBranchThatConflictsWithTheBaseOpensTheConflictTicketAndIsPushedOnceFixed(t *testing.T) {
@@ -91,7 +91,7 @@ func TestUnderPullRequestASpecBranchThatConflictsWithTheBaseOpensTheConflictTick
 	h.Script(fix, factorytest.Git("merge", "-q", "-X", "theirs", "main"), factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Merged the base.", "--branch", fix))
 	branch := "spec/" + h.SpecID()
 	r := h.Start()
-	r.WaitForOutput(a + ": merged into " + branch)
+	r.WantOutput(a + ": merged into " + branch)
 
 	if err := os.WriteFile(filepath.Join(h.Repo, "README"), []byte("base side\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -101,19 +101,19 @@ func TestUnderPullRequestASpecBranchThatConflictsWithTheBaseOpensTheConflictTick
 	h.Git("push", "-q", remote.Path, "main:refs/heads/main")
 	release()
 	r.Poll()
-	r.WaitForOutput(h.SpecID() + ": " + branch + " conflicts with main in README: opened " + fix)
+	r.WantOutput(h.SpecID() + ": " + branch + " conflicts with main in README: opened " + fix)
 	if out := remote.Git("branch", "--list", branch); strings.TrimSpace(out) != "" {
 		t.Fatalf("the conflicting Spec Branch was pushed: %q", out)
 	}
-	h.WaitForState(fix, store.InReview)
+	h.WantState(fix, store.InReview)
 
 	h.Accept(fix)
 	r.Poll()
-	h.WaitFor("the fixed Spec Branch is pushed", func() bool {
-		return strings.TrimSpace(remote.Git("branch", "--list", branch)) != ""
-	})
+	if out := remote.Git("branch", "--list", branch); strings.TrimSpace(out) == "" {
+		t.Fatalf("the fixed Spec Branch %s wasn't pushed", branch)
+	}
 	tip := h.Git("rev-parse", branch)
-	waitPushed(t, h, branch, tip)
+	wantPushed(t, h, branch, tip)
 	if got := remote.Git("rev-parse", branch); got != tip {
 		t.Errorf("the remote's %s is at %s, want %s", branch, got, tip)
 	}
@@ -129,5 +129,5 @@ func TestUnderPullRequestATicketOutsideLandPerSpecStillGetsItsOwnPullRequest(t *
 	h.MakeRequirement()
 	id, commit := accepted(h, "Plain", "plain.txt", "plain\n")
 	h.Start()
-	waitPushed(t, h, id, commit)
+	wantPushed(t, h, id, commit)
 }

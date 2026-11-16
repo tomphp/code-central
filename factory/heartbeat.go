@@ -23,9 +23,11 @@ type heartbeater struct {
 	post func(ctx context.Context, in core.ReportHeartbeatInput) error
 	base core.ReportHeartbeatInput // factory, host and interval
 	warn func(err error)
+	work work
 
 	mu      sync.Mutex
 	waiting *core.ReportHeartbeatInput
+	posted  func()              // ends the waiting Heartbeat's busy work once it is posted
 	last    core.HeartbeatState // the furthest state sent: online, draining, stopping
 	failing bool
 	wake    chan struct{}
@@ -33,8 +35,8 @@ type heartbeater struct {
 	done    chan struct{}
 }
 
-func newHeartbeater(post func(context.Context, core.ReportHeartbeatInput) error, base core.ReportHeartbeatInput, warn func(error)) *heartbeater {
-	return &heartbeater{post: post, base: base, warn: warn, wake: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
+func newHeartbeater(post func(context.Context, core.ReportHeartbeatInput) error, base core.ReportHeartbeatInput, warn func(error), w work) *heartbeater {
+	return &heartbeater{post: post, base: base, warn: warn, work: w, wake: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
 }
 
 var heartbeatRank = map[core.HeartbeatState]int{core.HeartbeatOnline: 0, core.HeartbeatDraining: 1, core.HeartbeatStopping: 2}
@@ -51,18 +53,26 @@ func (h *heartbeater) send(state core.HeartbeatState, note string) {
 	in := h.base
 	in.State, in.Note = state, note
 	h.waiting = &in
+	if h.posted == nil {
+		h.posted = h.work.busy("posting a Heartbeat")
+	}
 	select {
 	case h.wake <- struct{}{}:
 	default:
 	}
 }
 
-func (h *heartbeater) take() *core.ReportHeartbeatInput {
+// take takes the waiting Heartbeat, if any, and the func that ends its
+// busy work once it is posted.
+func (h *heartbeater) take() (*core.ReportHeartbeatInput, func()) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	in := h.waiting
-	h.waiting = nil
-	return in
+	in, posted := h.waiting, h.posted
+	h.waiting, h.posted = nil, nil
+	if posted == nil {
+		posted = noop
+	}
+	return in, posted
 }
 
 // postOne posts in, logging a failure once until a post goes through.
@@ -93,15 +103,19 @@ func (h *heartbeater) run() {
 	for {
 		select {
 		case <-h.wake:
-			if in := h.take(); in != nil {
+			in, posted := h.take()
+			if in != nil {
 				h.postOne(ctx, in)
 			}
+			posted()
 		case <-h.stop:
 			// The stopping Heartbeat has one postTimeout of its own,
 			// beside the final flushes.
-			if in := h.take(); in != nil && in.State == core.HeartbeatStopping {
+			in, posted := h.take()
+			if in != nil && in.State == core.HeartbeatStopping {
 				h.postOne(context.Background(), in)
 			}
+			posted()
 			return
 		}
 	}
@@ -164,5 +178,5 @@ func newFactoryHeartbeater(f *factory) *heartbeater {
 		return err
 	}, base, func(err error) {
 		f.printf("warning: can't send a Heartbeat to Code Central: %v", err)
-	})
+	}, f.work)
 }

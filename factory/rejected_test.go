@@ -9,11 +9,11 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// wantFailureReport waits for id to fail and checks its one Failure
-// Report says each of what it must.
+// wantFailureReport checks id has failed, and its one Failure Report says
+// each of what it must. A test settles the Factory first.
 func wantFailureReport(t *testing.T, h *factorytest.Harness, id string, broke, fix []string) {
 	t.Helper()
-	tk := h.WaitForState(id, store.Failed)
+	tk := h.WantState(id, store.Failed)
 	if len(tk.FailureReports) != 1 {
 		t.Fatalf("%d Failure Reports, want 1", len(tk.FailureReports))
 	}
@@ -82,7 +82,7 @@ func TestAModelClaudeRejectsFailsTheClaimNamingWhereItWasSet(t *testing.T) {
 			// Neither an outage nor fatal: the Factory carries on claiming.
 			next := h.ReadyTicket("Next")
 			r.Poll()
-			h.WaitForState(next, store.InReview)
+			h.WantState(next, store.InReview)
 			if strings.Contains(r.Stdout(), "paused") {
 				t.Errorf("output %q: a rejected model is no outage", r.Stdout())
 			}
@@ -160,7 +160,7 @@ func TestWithoutLevelsFromItsHelpTheFactoryDoesntCheckEffort(t *testing.T) {
 	setTags(t, h, id, map[string]string{"effort": "xhigh"})
 	h.ClaudeHelp("Usage: claude [options]\n")
 	h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	ranWith(t, h, id, h.Calls()[0], "", "xhigh")
 }
 

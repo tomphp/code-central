@@ -20,7 +20,7 @@ func gated(t *testing.T, h *factorytest.Harness, r *factorytest.Running, title, 
 	t.Helper()
 	id, _ = accepted(h, title, file, title+"\n")
 	r.Poll()
-	r.WaitForOutput(id + ": CI tracks main at ")
+	r.WantOutput(id + ": CI tracks main at ")
 	tk := h.Ticket(id)
 	if tk.State != store.Accepted || tk.PushedCommit == nil {
 		t.Fatalf("%s with pushed commit %+v, want it pushed and left Accepted", tk.State, tk.PushedCommit)
@@ -81,7 +81,7 @@ func TestUnderMergeAndPushWithCITrackingATicketLandsAtItsPushedCommitOncePassed(
 
 	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CISuccess)
 	r.Poll()
-	tk := h.WaitForState(id, store.Done)
+	tk := h.WantState(id, store.Done)
 	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != pushed {
 		t.Errorf("landed with %q, want the pushed commit %s", m.Commit, pushed)
 	}
@@ -97,7 +97,7 @@ func TestUnderMergeAndPushWithCITrackingAFailedCIResultDoesNotLand(t *testing.T)
 
 	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CIFailure)
 	stillAccepted(t, h, r, id, "with a failed CI result")
-	r.WaitForOutput(id + ": CI failed at " + pushed[:12])
+	r.WantOutput(id + ": CI failed at " + pushed[:12])
 }
 
 func TestUnderMergeAndPushWithCITrackingACancelledCIResultDoesNotLand(t *testing.T) {
@@ -107,7 +107,7 @@ func TestUnderMergeAndPushWithCITrackingACancelledCIResultDoesNotLand(t *testing
 
 	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CICancelled)
 	stillAccepted(t, h, r, id, "with a cancelled CI result")
-	r.WaitForOutput(id + ": CI cancelled at " + pushed[:12])
+	r.WantOutput(id + ": CI cancelled at " + pushed[:12])
 }
 
 // A Ticket's CI result is passed once any of its pushed commits since it
@@ -128,7 +128,7 @@ func TestUnderTheCIGateATicketLandsAtAnEarlierPushedCommitThatPassedAfterALaterO
 
 	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CISuccess)
 	r.Poll()
-	tk := h.WaitForState(id, store.Done)
+	tk := h.WantState(id, store.Done)
 	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != pushed {
 		t.Errorf("landed with %q, want the pushed commit that passed, %s", m.Commit, pushed)
 	}
@@ -148,11 +148,11 @@ func TestAfterLandAnywayAFailedTicketLandsOnTheNextPoll(t *testing.T) {
 		t.Fatal(err)
 	}
 	r.Poll()
-	tk := h.WaitForState(id, store.Done)
+	tk := h.WantState(id, store.Done)
 	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != pushed {
 		t.Errorf("landed with %q, want the pushed commit %s", m.Commit, pushed)
 	}
-	r.WaitForOutput(id + ": landing anyway at " + pushed[:12])
+	r.WantOutput(id + ": landing anyway at " + pushed[:12])
 }
 
 func TestATicketBlockedByAGatedTicketStaysBlockedUntilItLands(t *testing.T) {
@@ -172,9 +172,9 @@ func TestATicketBlockedByAGatedTicketStaysBlockedUntilItLands(t *testing.T) {
 
 	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CISuccess)
 	r.Poll()
-	h.WaitForState(id, store.Done)
+	h.WantState(id, store.Done)
 	r.Poll()
-	h.WaitForState(blocked, store.InProgress)
+	h.WantState(blocked, store.InProgress)
 }
 
 func TestTheGateLiftingLandsAWaitingTicketOnTheNextPoll(t *testing.T) {
@@ -232,11 +232,11 @@ func TestUnderBranchAndPushTheHumansMergeLandsWhateverTheCIResult(t *testing.T) 
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	r.WaitForOutput(id + ": CI tracks " + id + " at ")
+	r.WantOutput(id + ": CI tracks " + id + " at ")
 	reportRun(t, h, 1, id, commit, store.CICompleted, store.CIFailure)
 	h.Git("merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 	r.Poll()
-	if tk := h.WaitForState(id, store.Done); tk.CIResult != core.CIFailed {
+	if tk := h.WantState(id, store.Done); tk.CIResult != core.CIFailed {
 		t.Fatalf("ci result %q, want it landed with its failed CI result", tk.CIResult)
 	}
 }
@@ -250,7 +250,7 @@ func TestAnInReviewTicketMergedByHandWaitsOnCIInReview(t *testing.T) {
 	h.Git("merge", "-q", "--no-ff", "-m", "My own merge", id)
 
 	r.Poll()
-	r.WaitForOutput(id + ": CI tracks main at ")
+	r.WantOutput(id + ": CI tracks main at ")
 	tk := h.Ticket(id)
 	merge := h.Git("rev-parse", "main")
 	if tk.State != store.InReview || tk.PushedCommit == nil || tk.PushedCommit.Commit != merge {
@@ -266,7 +266,7 @@ func TestAnInReviewTicketMergedByHandWaitsOnCIInReview(t *testing.T) {
 
 	reportRun(t, h, 1, id, merge, store.CICompleted, store.CISuccess)
 	r.Poll()
-	if tk := h.WaitForState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != merge {
+	if tk := h.WantState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != merge {
 		t.Errorf("landed with %q, want the pushed merge %s", tk.Moves[len(tk.Moves)-1].Commit, merge)
 	}
 }
@@ -280,7 +280,7 @@ func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *tes
 	h, remote, r := gatedHarness(t)
 	id, failed := sentBackCIFailure(t, h, r)
 	r.Poll()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	if calls := h.Calls(); len(calls) != 2 || calls[1].Ticket != id || calls[1].Dir != h.Worktree(id) {
 		t.Fatalf("calls %+v, want the second Claim run in %s", calls, h.Worktree(id))
 	}
@@ -290,11 +290,10 @@ func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *tes
 
 	h.Accept(id)
 	r.Poll()
-	h.WaitFor(id+"'s newer pushed commit", func() bool {
-		pc := h.Ticket(id).PushedCommit
-		return pc != nil && pc.Commit != failed
-	})
 	tk := h.Ticket(id)
+	if tk.PushedCommit == nil || tk.PushedCommit.Commit == failed {
+		t.Fatalf("%s's pushed commit is %+v, want one newer than the failed %s", id, tk.PushedCommit, failed)
+	}
 	fixed := tk.PushedCommit.Commit
 	if tk.CIResult != core.CIRunning || remote.Git("rev-parse", "main") != fixed {
 		t.Fatalf("ci result %q, remote main %s: want the fix pushed as %s and its CI running", tk.CIResult, remote.Git("rev-parse", "main"), fixed)
@@ -303,7 +302,7 @@ func TestASentBackCIFailureIsFixedOnItsBranchAndItsNewPushedCommitDecides(t *tes
 
 	reportRun(t, h, 2, id, fixed, store.CICompleted, store.CISuccess)
 	r.Poll()
-	if tk := h.WaitForState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != fixed {
+	if tk := h.WantState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != fixed {
 		t.Errorf("landed with %q, want the new pushed commit %s", tk.Moves[len(tk.Moves)-1].Commit, fixed)
 	}
 }
@@ -322,10 +321,10 @@ func sentBackCIFailure(t *testing.T, h *factorytest.Harness, r *factorytest.Runn
 		factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Added.", "--branch", "{{ticket}}"),
 		factorytest.Result("success"))
 	r.Poll()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	h.Accept(id)
 	r.Poll()
-	r.WaitForOutput(id + ": CI tracks main at ")
+	r.WantOutput(id + ": CI tracks main at ")
 	failed = h.Ticket(id).PushedCommit.Commit
 	reportRun(t, h, 1, id, failed, store.CICompleted, store.CIFailure)
 	stillAccepted(t, h, r, id, "with a failed CI result")
@@ -386,7 +385,7 @@ func TestAfterAnotherTicketsMergeIsPushedEarlierWaitingTicketsGetTheNewTipAndLan
 	reportRun(t, h, 1, second, tip, store.CICompleted, store.CISuccess)
 	r.Poll()
 	for _, id := range []string{first, second} {
-		tk := h.WaitForState(id, store.Done)
+		tk := h.WantState(id, store.Done)
 		if m := tk.Moves[len(tk.Moves)-1]; m.Commit != tip {
 			t.Errorf("%s landed with %q, want the tip that passed, %s", id, m.Commit, tip)
 		}
@@ -411,7 +410,7 @@ func TestACommitPushedByHandFromAnotherCloneIsReportedToWaitingTicketsAndLandsTh
 
 	reportRun(t, h, 1, id, byHand, store.CICompleted, store.CISuccess)
 	r.Poll()
-	if tk := h.WaitForState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != byHand {
+	if tk := h.WantState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != byHand {
 		t.Errorf("landed with %q, want the hand-pushed commit %s", tk.Moves[len(tk.Moves)-1].Commit, byHand)
 	}
 }
@@ -423,15 +422,15 @@ func TestAnInReviewTicketMergedByHandGetsALaterTipToo(t *testing.T) {
 	h.Finished(id, id, h.CommitOn(id, "feature.txt", "feature\n"))
 	h.Git("merge", "-q", "--no-ff", "-m", "My own merge", id)
 	r.Poll()
-	r.WaitForOutput(id + ": CI tracks main at ")
+	r.WantOutput(id + ": CI tracks main at ")
 	byHand := h.CommitOn("hand", "hand.txt", "hand\n")
 	h.Git("push", "-q", remote.Path, "hand:refs/heads/main")
 
 	r.Poll()
-	r.WaitForOutput(id + ": CI tracks main at " + byHand[:12])
+	r.WantOutput(id + ": CI tracks main at " + byHand[:12])
 	reportRun(t, h, 1, id, byHand, store.CICompleted, store.CISuccess)
 	r.Poll()
-	if tk := h.WaitForState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != byHand {
+	if tk := h.WantState(id, store.Done); tk.Moves[len(tk.Moves)-1].Commit != byHand {
 		t.Errorf("landed with %q, want the later commit %s", tk.Moves[len(tk.Moves)-1].Commit, byHand)
 	}
 }
@@ -458,7 +457,7 @@ func TestUnderBranchAndPushALaterTipIsNotReportedToATicket(t *testing.T) {
 	trackCI(t, h)
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
-	r.WaitForOutput(id + ": CI tracks " + id + " at ")
+	r.WantOutput(id + ": CI tracks " + id + " at ")
 	h.CommitOn("hand", "hand.txt", "hand\n")
 	h.Git("push", "-q", remote.Path, "hand:refs/heads/main")
 

@@ -27,7 +27,7 @@ func TestAnAcceptedTicketIsMergedIntoTheBaseAndLanded(t *testing.T) {
 	oldMain := h.Git("rev-parse", "main")
 
 	h.Start()
-	tk := h.WaitForState(id, store.Done)
+	tk := h.WantState(id, store.Done)
 
 	merge := h.Git("rev-parse", "main")
 	if got := h.Git("log", "-1", "--format=%P", merge); got != oldMain+" "+commit {
@@ -58,7 +58,9 @@ func TestAConflictIsSentBackNamingTheBaseCommitAndTheConflictingFiles(t *testing
 	// Hold the next Claim's turn, so the Ticket stays where send_back put it.
 	h.Script(id, factorytest.Wait())
 	h.Start()
-	h.WaitFor(id+" to be sent back", func() bool { return movedTo(h.Ticket(id), store.Accepted, store.Ready) })
+	if !movedTo(h.Ticket(id), store.Accepted, store.Ready) {
+		t.Fatalf("%s wasn't sent back: %+v", id, h.Ticket(id).Moves)
+	}
 
 	if h.Git("rev-parse", "main") != base {
 		t.Error("main moved on a conflict")
@@ -126,7 +128,7 @@ func TestAnAcceptedTicketIsMergedIntoTheBaseTheProjectNames(t *testing.T) {
 	oldRelease := h.Git("rev-parse", "release")
 
 	r := h.Start()
-	h.WaitForState(id, store.Done)
+	h.WantState(id, store.Done)
 
 	if h.Git("rev-parse", "main") != oldMain {
 		t.Error("main moved, want the merge on release")
@@ -142,7 +144,7 @@ func TestAnAcceptedTicketIsMergedIntoTheBaseTheProjectNames(t *testing.T) {
 	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, Base: &next})
 	id2, commit2 := accepted(h, "Another feature", "other.txt", "other\n")
 	r.Poll()
-	h.WaitForState(id2, store.Done)
+	h.WantState(id2, store.Done)
 	if h.Git("rev-parse", "release") != merge {
 		t.Error("release moved after the base changed")
 	}

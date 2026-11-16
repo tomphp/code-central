@@ -25,7 +25,7 @@ func unpushedMerge(t *testing.T, h *factorytest.Harness, remote *factorytest.Rem
 	t.Helper()
 	remote.RefusePushes()
 	r := h.Start()
-	r.WaitForOutput(id + ": can't land yet")
+	r.WantOutput(id + ": can't land yet")
 	remote.AcceptPushes()
 	return r
 }
@@ -43,8 +43,8 @@ func TestUnderMergeAndPushAnUnpushedFactoryMergeIsRebuiltOnTheRemotesTipAndTheTi
 	h.Git("push", "-q", remote.Path, "theirs:refs/heads/main")
 
 	r.Poll()
-	r.WaitForOutput("main: moved 1 unpushed commit onto origin/main")
-	h.WaitForState(id, store.Done)
+	r.WantOutput("main: moved 1 unpushed commit onto origin/main")
+	h.WantState(id, store.Done)
 	merge := h.Git("rev-parse", "main")
 	if got := h.Git("log", "-1", "--format=%P", merge); got != theirs+" "+head {
 		t.Errorf("main's tip has parents %q, want the remote's %s then the Ticket's head %s", got, theirs, head)
@@ -75,8 +75,8 @@ func TestUnderMergeAndPushAnUnpushedHumanCommitIsReplayedOnTheRemotesTipAndPushe
 	mine = h.Git("rev-parse", "main")
 
 	r := h.Start()
-	r.WaitForOutput("main: moved 1 unpushed commit onto origin/main")
-	h.WaitForState(id, store.Done)
+	r.WantOutput("main: moved 1 unpushed commit onto origin/main")
+	h.WantState(id, store.Done)
 	if got := h.Git("log", "--first-parent", "--reverse", "--format=%s", theirs+"..main"); got != "Change mine.txt\nMerge "+id+": Add a feature" {
 		t.Errorf("main holds on top of the remote's:\n%s\nwant the human's commit replayed, then the merge", got)
 	}
@@ -109,8 +109,8 @@ func TestUnderMergeAndPushAFactoryMergeAndAHumanCommitAreMovedTogetherInOrder(t 
 	h.Git("push", "-q", remote.Path, "theirs:refs/heads/main")
 
 	r.Poll()
-	r.WaitForOutput("main: moved 2 unpushed commits onto origin/main")
-	h.WaitForState(id, store.Done)
+	r.WantOutput("main: moved 2 unpushed commits onto origin/main")
+	h.WantState(id, store.Done)
 	if got := h.Git("log", "--first-parent", "--reverse", "--format=%s", theirs+"..main"); got != "Merge "+id+": Add a feature\nChange mine.txt" {
 		t.Errorf("main holds on top of the remote's:\n%s\nwant the merge rebuilt, then the human's commit", got)
 	}
@@ -137,8 +137,8 @@ func TestUnderMergeAndPushAnUnpushedMergeThatIsntTheFactorysIsBaseDiverged(t *te
 	before := h.Git("rev-parse", "main")
 
 	r := h.Start()
-	r.WaitForOutput("warning: can't move main onto origin/main: " + before[:12] + " is a merge the Factory didn't make")
-	r.WaitForOutput("has diverged from the remote's")
+	r.WantOutput("warning: can't move main onto origin/main: " + before[:12] + " is a merge the Factory didn't make")
+	r.WantOutput("has diverged from the remote's")
 	if got := h.Git("rev-parse", "main"); got != before {
 		t.Errorf("main moved to %s, want it left at %s", got, before)
 	}
@@ -167,7 +167,7 @@ func TestUnderMergeAndPushUncommittedChangesInTheWayOfTheMoveMakeThePollWait(t *
 	}
 
 	r := h.Start()
-	r.WaitForOutput("warning: can't move main onto origin/main yet: uncommitted changes in")
+	r.WantOutput("warning: can't move main onto origin/main yet: uncommitted changes in")
 	if tk := h.Ticket(id); tk.State != store.Accepted {
 		t.Errorf("%s is %s, want it held Accepted", id, tk.State)
 	}
@@ -182,7 +182,7 @@ func TestUnderMergeAndPushUncommittedChangesInTheWayOfTheMoveMakeThePollWait(t *
 		t.Fatal(err)
 	}
 	r.Poll()
-	h.WaitForState(id, store.Done)
+	h.WantState(id, store.Done)
 	h.Git("merge-base", "--is-ancestor", theirs, "main")
 	if got := remote.Git("rev-parse", "main"); got != h.Git("rev-parse", "main") {
 		t.Errorf("the remote's main is at %q, want it pushed level with the local base", got)
@@ -199,16 +199,16 @@ func TestUnderMergeAndPushAnUnpushedSpecBranchMergeIsRebuiltAndItsTicketsLand(t 
 	a, b := twoAccepted(t, h)
 	remote.RefusePushes()
 	r := h.Start()
-	r.WaitForOutput(h.SpecID() + ": merged spec/" + h.SpecID() + " into main at ")
-	r.WaitForOutput(a + ": can't land yet")
+	r.WantOutput(h.SpecID() + ": merged spec/" + h.SpecID() + " into main at ")
+	r.WantOutput(a + ": can't land yet")
 	remote.AcceptPushes()
 	specTip := h.Git("rev-parse", "spec/"+h.SpecID())
 	h.Git("push", "-q", remote.Path, "theirs:refs/heads/main")
 
 	r.Poll()
-	r.WaitForOutput("main: moved 1 unpushed commit onto origin/main")
-	h.WaitForState(a, store.Done)
-	h.WaitForState(b, store.Done)
+	r.WantOutput("main: moved 1 unpushed commit onto origin/main")
+	h.WantState(a, store.Done)
+	h.WantState(b, store.Done)
 	if got := h.Git("log", "-1", "--format=%P", "main"); got != theirs+" "+specTip {
 		t.Errorf("main's tip has parents %q, want the remote's %s then the Spec Branch's %s", got, theirs, specTip)
 	}

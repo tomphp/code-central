@@ -2,7 +2,6 @@ package factory_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -28,11 +27,9 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 		h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 	}
 	r := h.Start("--parallel", "5")
-	h.WaitForState(answered, store.NeedsAnswer)
-	h.WaitForState(waiting, store.NeedsAnswer)
-	h.WaitForDescribed(func() string {
-		return fmt.Sprintf("every turn (%d started; stdout %q; stderr %q)", len(h.Calls()), r.Stdout(), r.Stderr())
-	}, func() bool { return len(h.Calls()) == 5 })
+	h.WantState(answered, store.NeedsAnswer)
+	h.WantState(waiting, store.NeedsAnswer)
+	h.WantCalls(5)
 	r.Signal(os.Interrupt)
 	r.Signal(os.Interrupt)
 	r.Exited()
@@ -62,7 +59,7 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 
 	// --parallel 1: the Answered resume takes the one slot first.
 	r = h.Start("--parallel", "1")
-	h.WaitForState(answered, store.InReview)
+	h.WantState(answered, store.InReview)
 	if got := stateTickets(t, h); !slices.Contains(got, cutOff) || !slices.Contains(got, waiting) || slices.Contains(got, finished) || slices.Contains(got, cancelled) {
 		t.Errorf("state file holds %q; want %s and %s kept, %s and %s dropped", got, cutOff, waiting, finished, cancelled)
 	}
@@ -78,12 +75,12 @@ func TestARestartReconcilesEachSavedClaimAgainstCodeCentral(t *testing.T) {
 	}
 
 	// The cut-off session waits a poll while another process holds it.
-	r.WaitForOutput(answered + " turn ended")
+	r.WantOutput(answered + " turn ended")
 	r.Poll()
-	r.WaitForOutput("session " + first[cutOff].Session + " is held by pid")
+	r.WantOutput("session " + first[cutOff].Session + " is held by pid")
 	hold()
 	r.Poll()
-	h.WaitForState(cutOff, store.InReview)
+	h.WantState(cutOff, store.InReview)
 	c = lastCall(h, cutOff)
 	if s, _ := c.Flag("--resume"); s != first[cutOff].Session || c.Claim != first[cutOff].Claim || !strings.Contains(c.Prompt, "Your last turn was cut off; carry on.") {
 		t.Errorf("%s resumed with %q; want its session resumed as cut off under its Claim", cutOff, c.Args)
@@ -118,7 +115,7 @@ func TestALostStateFileLosesItsClaimsButNotTheFactory(t *testing.T) {
 	held := h.ReadyTicket("Held")
 	h.Script(held, factorytest.Wait())
 	r := h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WantCalls(1)
 	r.Signal(os.Interrupt)
 	r.Signal(os.Interrupt)
 	r.Exited()
@@ -130,8 +127,10 @@ func TestALostStateFileLosesItsClaimsButNotTheFactory(t *testing.T) {
 	// that drops the Claim.
 	next := h.ReadyTicket("Next")
 	h.Script(next, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
-	h.Start()
-	h.WaitFor("the new turn", func() bool { return len(callsFor(h, next)) == 1 })
+	r = h.Start()
+	if n := len(callsFor(h, next)); n != 1 {
+		t.Fatalf("%s ran %d times, want its turn running", next, n)
+	}
 	if n := len(callsFor(h, held)); n != 1 {
 		t.Errorf("%s ran %d times; with the state file lost its Claim is never adopted", held, n)
 	}
@@ -139,5 +138,6 @@ func TestALostStateFileLosesItsClaimsButNotTheFactory(t *testing.T) {
 		t.Errorf("state file holds %q, want only the new Claim on %s", got, next)
 	}
 	h.Continue(next)
-	h.WaitForState(next, store.InReview)
+	r.Settle()
+	h.WantState(next, store.InReview)
 }

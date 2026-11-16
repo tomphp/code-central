@@ -61,6 +61,9 @@ type Env struct {
 	// (os.Interrupt) drains; a second, SIGTERM or SIGHUP stops the turns
 	// at once. Nil means none come.
 	Signals <-chan os.Signal
+	// Work, if set, hears of the Factory's work in flight, so that a test
+	// knows when it has settled. The binary sets none.
+	Work Work
 }
 
 func (e Env) getenv(key string) string {
@@ -172,18 +175,23 @@ func Run(ctx context.Context, args []string, e Env) int {
 	if e.Clock == nil {
 		e.Clock = clock.System{}
 	}
+	// Busy from the first line until the first poll takes over.
+	startingUp := work{e.Work}.busy("starting up")
 	o, err := parseFlags(args, e.Stderr)
 	if err != nil {
 		if !errors.Is(err, flag.ErrHelp) {
 			fmt.Fprintln(e.Stderr, "code-central-factory:", err)
 		}
+		startingUp()
 		return exitRefused
 	}
 	f, err := start(e, o)
 	if err != nil {
 		fmt.Fprintln(e.Stderr, "code-central-factory: refusing to start:", err)
+		startingUp()
 		return exitRefused
 	}
+	f.polling.end = startingUp
 	defer f.lock.Close()
 	f.printf("base: %s", f.baseBranch())
 	if len(o.claudeArgs) > 0 {
@@ -195,19 +203,21 @@ func Run(ctx context.Context, args []string, e Env) int {
 	f.prune()
 	ctx, f.stop = context.WithCancel(ctx)
 	defer f.stop()
-	go f.watchSignals(ctx)
-	go f.events.run()
-	go f.usage.run()
+	go f.watchSignals(ctx, f.starting("the signal watch"))
+	f.events.start()
+	f.usage.start()
 	go f.heartbeats.run()
 	chatDone := make(chan struct{})
+	chatStarting := f.starting("the Chat loop")
 	go func() {
 		defer close(chatDone)
-		f.chatLoop(ctx)
+		f.chatLoop(ctx, chatStarting)
 	}()
 	wakeDone := make(chan struct{})
+	wakeStarting := f.starting("the wake loop")
 	go func() {
 		defer close(wakeDone)
-		f.wakeLoop(ctx)
+		f.wakeLoop(ctx, wakeStarting)
 	}()
 	f.restart(ctx)
 	f.loop(ctx)
@@ -229,6 +239,16 @@ func Run(ctx context.Context, args []string, e Env) int {
 	return exitOK
 }
 
+// starting is the line of work of a goroutine about to start, busy
+// starting what (its parts, joined) until it first rests.
+func (f *factory) starting(what ...string) *stint {
+	s := &stint{w: f.work}
+	if f.work.hook != nil {
+		s.end = f.work.busy("starting ", strings.Join(what, ""))
+	}
+	return s
+}
+
 // stopFor stops the Factory for a reason only the human can fix: the
 // loop ends and running turns are stopped. Claims are kept.
 func (f *factory) stopFor(reason string) {
@@ -238,6 +258,18 @@ func (f *factory) stopFor(reason string) {
 		f.printf("stopping: %s", reason)
 	}
 	f.stopMu.Unlock()
+	f.halt()
+}
+
+// halt stops the Factory, handing the stop's busy work to the poll loop,
+// which takes it up once it has started stopping the turns, unless it
+// has ended already.
+func (f *factory) halt() {
+	f.wakeMu.Lock()
+	if !f.loopDone {
+		f.stopWork.give(f.work.busy("stopping"))
+	}
+	f.wakeMu.Unlock()
 	f.stop()
 }
 
@@ -364,15 +396,32 @@ type factory struct {
 	// or landing, and the Factory exits once its running turns end.
 	drainCh   chan struct{}
 	drainOnce sync.Once
-	// wakeCh holds a wake for the poll loop: one at most, so any number
-	// of wakes during a poll make one more poll.
-	wakeCh chan struct{}
+	// wakeCh holds a wake for the poll loop, as the end of its busy work:
+	// one at most, so any number of wakes during a poll make one more
+	// poll. pollsOver is set once the poll loop drains or stops, and
+	// takes no more, and loopDone once it has ended, and takes up no
+	// stop; wakeMu guards both, ordering a wake or a stop against them.
+	wakeCh    chan func()
+	wakeMu    sync.Mutex
+	pollsOver bool
+	loopDone  bool
+
+	// work hears of the Factory's work in flight (Env.Work). polling is
+	// the poll loop's line of it, and polls the number of polls so far;
+	// both the poll's own. drainWork and stopWork hand the busy work of a
+	// drain or a stop to the poll loop, which takes it up.
+	work      work
+	polling   stint
+	polls     int
+	drainWork handoff
+	stopWork  handoff
 }
 
 // newFactory is a factory with nothing found out yet: start fills in the
 // rest.
 func newFactory(e Env, o options) *factory {
-	return &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan struct{}, 1), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, mergedOn: map[string]mergeOn{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
+	w := work{e.Work}
+	return &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, mergedOn: map[string]mergeOn{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
 }
 
 // start makes every start-up check, refusing with the reason.
@@ -421,8 +470,8 @@ func start(e Env, o options) (*factory, error) {
 	if timeout <= 0 {
 		timeout = postTimeout
 	}
-	f.events = newSender(f.client.PostSessionEvents, e.Clock, every, timeout)
-	f.usage = newSender(f.client.PostUsage, e.Clock, every, timeout)
+	f.events = newSender(f.client.PostSessionEvents, e.Clock, every, timeout, f.work, "Session Events")
+	f.usage = newSender(f.client.PostUsage, e.Clock, every, timeout, f.work, "token usage")
 	// A Project that can't be read yet is checked on every poll instead.
 	p, readErr := f.client.GetProject(context.Background(), project)
 	// The base is the Project's, read again on every poll; until it can be

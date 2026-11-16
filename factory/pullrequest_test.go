@@ -18,22 +18,21 @@ func pullRequestOn(h *factorytest.Harness, remote string) {
 	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingPullRequest, Remote: remote})
 }
 
-// waitPushed waits for the Factory to report ticket's branch as pushed, at
+// wantPushed checks the Factory has reported ticket's branch as pushed, at
 // commit when it isn't "": the Pull Request Watcher would see it in its list.
-func waitPushed(t *testing.T, h *factorytest.Harness, ticket, commit string) {
+// The Factory has settled.
+func wantPushed(t *testing.T, h *factorytest.Harness, ticket, commit string) {
 	t.Helper()
-	h.WaitFor("the pushed work is reported", func() bool {
-		w, err := h.Server.Client.GetPullRequestWatch(context.Background(), h.Project)
-		if err != nil {
-			t.Fatal(err)
+	w, err := h.Server.Client.GetPullRequestWatch(context.Background(), h.Project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, work := range w.Work {
+		if work.Branch == ticket && (commit == "" || work.Commit == commit) {
+			return
 		}
-		for _, work := range w.Work {
-			if work.Branch == ticket && (commit == "" || work.Commit == commit) {
-				return true
-			}
-		}
-		return false
-	})
+	}
+	t.Fatalf("the pushed work isn't reported: want %s at %q, the Watcher's list is %+v", ticket, commit, w.Work)
 }
 
 // reportPullRequest is the Pull Request Watcher reporting ticket's pull
@@ -57,11 +56,11 @@ func TestUnderPullRequestAcceptingPushesTheBranchAndReportsIt(t *testing.T) {
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	r.WaitForOutput(id + ": pushed " + id + " to origin")
+	r.WantOutput(id + ": pushed " + id + " to origin")
 	if got := remote.Git("rev-parse", id); got != commit {
 		t.Errorf("the remote's %s is at %q, want %s", id, got, commit)
 	}
-	waitPushed(t, h, id, commit)
+	wantPushed(t, h, id, commit)
 	if tk := h.Ticket(id); tk.State != store.Accepted {
 		t.Errorf("%s is %s, want it waiting Accepted for its pull request", id, tk.State)
 	}
@@ -78,7 +77,7 @@ func TestUnderPullRequestEarlierAcceptedTicketsArePushedOnTheNextPoll(t *testing
 
 	pullRequestOn(h, "origin")
 	r.Poll()
-	waitPushed(t, h, id, commit)
+	wantPushed(t, h, id, commit)
 	if got := remote.Git("rev-parse", id); got != commit {
 		t.Errorf("the remote's %s is at %q, want %s", id, got, commit)
 	}
@@ -91,7 +90,7 @@ func TestUnderPullRequestATicketLandsAtTheMergeCommitOfASquashMergeMadeOnTheRemo
 	pullRequestOn(h, "origin")
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
-	waitPushed(t, h, id, "")
+	wantPushed(t, h, id, "")
 	reportPullRequest(t, h, id, "")
 	r.Poll()
 	if tk := h.Ticket(id); tk.State != store.Accepted || tk.PullRequest == nil {
@@ -104,7 +103,7 @@ func TestUnderPullRequestATicketLandsAtTheMergeCommitOfASquashMergeMadeOnTheRemo
 	reportPullRequest(t, h, id, squash)
 	r.Poll()
 
-	tk := h.WaitForState(id, store.Done)
+	tk := h.WantState(id, store.Done)
 	if m := tk.Moves[len(tk.Moves)-1]; m.Commit != squash {
 		t.Errorf("landed at %q, want the merge commit %s", m.Commit, squash)
 	}
@@ -120,13 +119,13 @@ func TestUnderPullRequestATicketWaitsWhileTheMergeCommitIsNotFetched(t *testing.
 	pullRequestOn(h, "origin")
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
-	waitPushed(t, h, id, "")
+	wantPushed(t, h, id, "")
 
 	// The merge commit exists locally but the remote's base doesn't hold it.
 	unfetched := h.CommitOn("unfetched", "feature.txt", "feature\n")
 	reportPullRequest(t, h, id, unfetched)
 	r.Poll()
-	r.WaitForOutput(id + ": its pull request is merged at")
+	r.WantOutput(id + ": its pull request is merged at")
 	if tk := h.Ticket(id); tk.State != store.Accepted {
 		t.Errorf("%s is %s, want it waiting Accepted", id, tk.State)
 	}
@@ -139,14 +138,14 @@ func TestUnderPullRequestAFailedFetchOnlyWarns(t *testing.T) {
 	pullRequestOn(h, "origin")
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
-	waitPushed(t, h, id, "")
+	wantPushed(t, h, id, "")
 	squash := h.CommitOn("squash", "feature.txt", "feature\n")
 	h.Git("push", "-q", remote.Path, "squash:refs/heads/main")
 	reportPullRequest(t, h, id, squash)
 
 	remote.Break()
 	r.Poll()
-	r.WaitForOutput("warning: can't fetch origin")
+	r.WantOutput("warning: can't fetch origin")
 	if _, ok := baseDivergedItem(t, h); ok {
 		t.Error("a failed fetch showed Base diverged")
 	}
@@ -156,7 +155,7 @@ func TestUnderPullRequestAFailedFetchOnlyWarns(t *testing.T) {
 
 	remote.Restore()
 	r.Poll()
-	h.WaitForState(id, store.Done)
+	h.WantState(id, store.Done)
 }
 
 func TestUnderPullRequestADivergedBaseStopsLandingAndClaiming(t *testing.T) {
@@ -170,11 +169,11 @@ func TestUnderPullRequestADivergedBaseStopsLandingAndClaiming(t *testing.T) {
 	h.Git("push", "-q", remote.Path, "theirs:refs/heads/main")
 	h.CommitOn("main", "mine.txt", "mine\n")
 	r := h.Start()
-	waitPushed(t, h, id, "")
+	wantPushed(t, h, id, "")
 	reportPullRequest(t, h, id, theirs)
 	ready := h.ReadyTicket("Waits for the base")
 	r.Poll()
-	r.WaitForOutput("has diverged from the remote's")
+	r.WantOutput("has diverged from the remote's")
 	if tk := h.Ticket(id); tk.State != store.Accepted {
 		t.Errorf("%s is %s, want it held Accepted", id, tk.State)
 	}
@@ -182,16 +181,21 @@ func TestUnderPullRequestADivergedBaseStopsLandingAndClaiming(t *testing.T) {
 		t.Errorf("%s is %s, want it not claimed", ready, tk.State)
 	}
 	local := h.Git("rev-parse", "main")
-	h.WaitFor("Base diverged shows in Needs Me", func() bool {
-		row, ok := baseDivergedItem(t, h)
-		return ok && row.BaseDiverged.Local == local && row.BaseDiverged.Remote == theirs
-	})
+	row, ok := baseDivergedItem(t, h)
+	if !ok {
+		t.Fatal("Base diverged doesn't show in Needs Me")
+	}
+	if got := row.BaseDiverged; got.Local != local || got.Remote != theirs {
+		t.Errorf("Base diverged shows the local base at %s and the remote's at %s, want %s and %s", got.Local, got.Remote, local, theirs)
+	}
 
 	h.Git("reset", "-q", "--hard", "origin/main")
 	r.Poll()
-	h.WaitForState(id, store.Done)
-	h.WaitFor("Base diverged clears", func() bool { _, ok := baseDivergedItem(t, h); return !ok })
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WantState(id, store.Done)
+	if _, ok := baseDivergedItem(t, h); ok {
+		t.Error("Base diverged still shows in Needs Me after the base was reset to the remote's")
+	}
+	h.WantCalls(1)
 }
 
 // baseDivergedItem is the Project's Base diverged item in Needs Me.
@@ -224,12 +228,12 @@ func TestUnderPullRequestANewBranchIsCutFromTheFastForwardedBase(t *testing.T) {
 	ready := h.ReadyTicket("Starts from the host's base")
 
 	h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	calls := h.WantCalls(1)
 	if got := h.Git("rev-parse", "main"); got != theirs {
 		t.Errorf("the local base is at %s, want it fast-forwarded to %s", got, theirs)
 	}
-	if h.Calls()[0].Ticket != ready {
-		t.Fatalf("calls %+v, want %s claimed", h.Calls(), ready)
+	if calls[0].Ticket != ready {
+		t.Fatalf("calls %+v, want %s claimed", calls, ready)
 	}
 	// The branch was cut from the host's base, so it holds its commit.
 	h.Git("merge-base", "--is-ancestor", theirs, ready)
@@ -246,7 +250,7 @@ func TestUnderPullRequestATicketWithNothingToMergeLandsWithoutAPullRequest(t *te
 	h.Accept(id)
 
 	h.Start()
-	tk := h.WaitForState(id, store.Done)
+	tk := h.WantState(id, store.Done)
 	if tk.PullRequest != nil {
 		t.Errorf("%s has pull request %+v, want none", id, tk.PullRequest)
 	}
@@ -262,7 +266,7 @@ func TestUnderPullRequestATicketWithoutABranchLands(t *testing.T) {
 	h.Accept(id)
 
 	h.Start()
-	h.WaitForState(id, store.Done)
+	h.WantState(id, store.Done)
 }
 
 func TestUnderPullRequestAMergedPullRequestLandsAnInReviewTicketAndWarnsOfOthers(t *testing.T) {
@@ -272,7 +276,7 @@ func TestUnderPullRequestAMergedPullRequestLandsAnInReviewTicketAndWarnsOfOthers
 	pullRequestOn(h, "origin")
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
-	waitPushed(t, h, id, "")
+	wantPushed(t, h, id, "")
 	reportPullRequest(t, h, id, "")
 	if _, err := h.Human().SendBack(context.Background(), h.Project, core.SendBackInput{Ticket: core.Ref(id), Note: "fix"}); err != nil {
 		t.Fatal(err)
@@ -281,7 +285,7 @@ func TestUnderPullRequestAMergedPullRequestLandsAnInReviewTicketAndWarnsOfOthers
 	h.Git("push", "-q", remote.Path, "squash:refs/heads/main")
 	reportPullRequest(t, h, id, squash)
 	r.Poll()
-	r.WaitForOutput("warning: " + id + " is")
+	r.WantOutput("warning: " + id + " is")
 	if !commented(h.Ticket(id), "pull request 7 was merged") {
 		t.Errorf("want a comment on the merge, got %+v", h.Ticket(id).Comments)
 	}
@@ -297,12 +301,12 @@ func TestUnderPullRequestLandingNeedsNoCI(t *testing.T) {
 	}
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
-	waitPushed(t, h, id, "")
+	wantPushed(t, h, id, "")
 	squash := h.CommitOn("squash", "feature.txt", "feature\n")
 	h.Git("push", "-q", remote.Path, "squash:refs/heads/main")
 	reportPullRequest(t, h, id, squash)
 	r.Poll()
-	h.WaitForState(id, store.Done)
+	h.WantState(id, store.Done)
 }
 
 func TestSwitchingFromPullRequestToMergeLandsWaitingTicketsAlreadyInTheBaseAndMergesTheOthers(t *testing.T) {
@@ -313,16 +317,16 @@ func TestSwitchingFromPullRequestToMergeLandsWaitingTicketsAlreadyInTheBaseAndMe
 	inBase, _ := accepted(h, "Merged by hand", "byhand.txt", "by hand\n")
 	other, _ := accepted(h, "Still waiting", "waiting.txt", "waiting\n")
 	r := h.Start()
-	waitPushed(t, h, inBase, "")
-	waitPushed(t, h, other, "")
+	wantPushed(t, h, inBase, "")
+	wantPushed(t, h, other, "")
 	reportPullRequest(t, h, inBase, "")
 	h.Git("merge", "-q", "--no-ff", "-m", "by hand", inBase)
 	handMerge := h.Git("rev-parse", "main")
 
 	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge})
 	r.Poll()
-	h.WaitForState(inBase, store.Done)
-	h.WaitForState(other, store.Done)
+	h.WantState(inBase, store.Done)
+	h.WantState(other, store.Done)
 	if h.Git("rev-parse", "main") == handMerge {
 		t.Errorf("main is still at %s, want %s merged into it", handMerge, other)
 	}
@@ -335,7 +339,7 @@ func TestSwitchingFromPullRequestToBranchWaitsForTheBranchInTheBaseByAncestry(t 
 	pullRequestOn(h, "origin")
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
-	waitPushed(t, h, id, "")
+	wantPushed(t, h, id, "")
 	reportPullRequest(t, h, id, "")
 
 	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingBranch})
@@ -345,5 +349,5 @@ func TestSwitchingFromPullRequestToBranchWaitsForTheBranchInTheBaseByAncestry(t 
 	}
 	h.Git("merge", "-q", "--no-ff", "-m", "merged by hand", id)
 	r.Poll()
-	h.WaitForState(id, store.Done)
+	h.WantState(id, store.Done)
 }

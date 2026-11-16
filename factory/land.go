@@ -476,6 +476,7 @@ func (f *factory) push(ctx context.Context, remote, branch, commit string) (push
 	if f.repository.isAncestor(commit, "refs/remotes/"+remote+"/"+branch) {
 		return false, ""
 	}
+	defer f.work.busy("pushing ", branch)()
 	// A stop kills it, so a push that hangs doesn't hold up the Factory.
 	if out, err := f.repository.push(ctx, remote, branch); err != nil {
 		return false, fmt.Sprintf("couldn't push %s to %s:\n\n```\n%s\n```", branch, remote, out)

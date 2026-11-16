@@ -2,7 +2,6 @@ package factory_test
 
 import (
 	"context"
-	"slices"
 	"strings"
 	"testing"
 
@@ -30,12 +29,12 @@ func TestAnApprovedTicketIsClaimedOnAWake(t *testing.T) {
 	h := wakingHarness(t)
 	id := h.NewTicket(core.CreateTicketInput{Title: "Approve me", State: store.Draft})
 	r := h.Start()
-	r.WaitForLongPoll()
 
 	if _, err := h.Human().Approve(context.Background(), h.Project, core.TicketInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
-	h.WaitForState(id, store.InReview)
+	r.Settle()
+	h.WantState(id, store.InReview)
 }
 
 // A Cancelled Blocker is followed through its Replacements, so cancelling
@@ -51,12 +50,12 @@ func TestATicketWhoseLastBlockerIsCancelledIsClaimedOnAWake(t *testing.T) {
 	}
 	id := h.NewTicket(core.CreateTicketInput{Title: "Waits", State: store.Ready, BlockedBy: []core.Ref{core.Ref(blocker)}})
 	r := h.Start()
-	r.WaitForLongPoll()
 
 	if _, err := h.Human().Cancel(ctx, h.Project, core.CancelInput{Ticket: core.Ref(blocker), Replacements: []core.Ref{core.Ref(done)}}); err != nil {
 		t.Fatal(err)
 	}
-	h.WaitForState(id, store.InReview)
+	r.Settle()
+	h.WantState(id, store.InReview)
 }
 
 // Accepting wakes the Factory to land the Ticket, and its landing wakes it
@@ -68,11 +67,11 @@ func TestAnAcceptedTicketLandsAndItsBlockedTicketIsClaimedOnWakes(t *testing.T) 
 	h.Finished(blocker, blocker, h.CommitOn(blocker, "first.txt", "first\n"))
 	id := h.NewTicket(core.CreateTicketInput{Title: "Second", State: store.Ready, BlockedBy: []core.Ref{core.Ref(blocker)}})
 	r := h.Start()
-	r.WaitForLongPoll()
 
 	h.Accept(blocker)
-	h.WaitForState(blocker, store.Done)
-	h.WaitForState(id, store.InReview)
+	r.Settle()
+	h.WantState(blocker, store.Done)
+	h.WantState(id, store.InReview)
 }
 
 // The claim's answer may be lost on its way back, as in CI run
@@ -87,13 +86,13 @@ func TestAnsweringARoundsLastQuestionResumesTheSessionOnAWake(t *testing.T) {
 			h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 			h.LoseAnswer("/claim", lost)
 			r := h.Start()
-			h.WaitForState(id, store.NeedsAnswer)
-			r.WaitForOutput(id + " turn ended")
+			h.WantState(id, store.NeedsAnswer)
+			r.WantOutput(id + " turn ended")
 			h.Script(id, factorytest.Finish("Painted it blue."), factorytest.Result("success"))
-			r.WaitForLongPoll()
 
 			h.Answer(id, "Blue")
-			h.WaitForState(id, store.InReview)
+			r.Settle()
+			h.WantState(id, store.InReview)
 			if n := len(h.Calls()); n != 2 {
 				t.Errorf("claude ran %d times, want twice: the turn and its resume", n)
 			}
@@ -107,14 +106,14 @@ func TestCancellingARunningClaimStopsItsTurnOnAWake(t *testing.T) {
 	id := h.ReadyTicket("Not wanted")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
-	r.WaitForLongPoll()
+	h.WantCalls(1)
 
 	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	r.PassKillGrace()
-	h.WaitFor("the turn to be stopped", func() bool { return slices.Equal(h.Signals(id), stopSignals()) })
+	r.Settle()
+	wantStopped(t, h, id)
 }
 
 // Every slot full or paused, the Factory keeps its long-poll open, and a
@@ -126,13 +125,14 @@ func TestWithEverySlotFullAWakeStillRunsThePoll(t *testing.T) {
 	running := h.ReadyTicket("Running")
 	h.Script(running, factorytest.Wait())
 	r := h.Start("--parallel", "1")
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WantCalls(1)
 	id := h.ReadyTicket("Done elsewhere")
 	h.Finished(id, id, h.CommitOn(id, "elsewhere.txt", "elsewhere\n"))
-	r.WaitForLongPoll()
+	r.Settle()
 
 	h.Accept(id)
-	h.WaitForState(id, store.Done)
+	r.Settle()
+	h.WantState(id, store.Done)
 }
 
 func TestWhilePausedAWakeStillRunsThePoll(t *testing.T) {
@@ -141,13 +141,15 @@ func TestWhilePausedAWakeStillRunsThePoll(t *testing.T) {
 	cut := h.ReadyTicket("Cut off")
 	h.Script(cut, factorytest.APIError("rate_limit"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
-	r.WaitForOutput("waiting on rate_limit")
-	r.WaitForLongPoll()
+	r.WantOutput("waiting on rate_limit")
 
 	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(cut)}); err != nil {
 		t.Fatal(err)
 	}
-	h.WaitFor("the cut-off Claim to be dropped", func() bool { return len(stateTickets(t, h)) == 0 })
+	r.Settle()
+	if got := stateTickets(t, h); len(got) != 0 {
+		t.Errorf("state file holds %q, want the cut-off Claim dropped", got)
+	}
 }
 
 // A comment or set_session is nothing the poll acts on: the long-poll
@@ -167,12 +169,11 @@ func TestACommentOrSetSessionDoesNotWakeThePoll(t *testing.T) {
 	}
 	h.SetFailing("")
 	// The long-poll's pause after failing is due before the poll is.
-	h.WaitFor("the long-poll's pause after failing", func() bool {
-		at, ok := h.Clock.Next()
-		return ok && at.Equal(h.Clock.Now().Add(factory.WakeRetry))
-	})
+	if at, ok := h.Clock.Next(); !ok || !at.Equal(h.Clock.Now().Add(factory.WakeRetry)) {
+		t.Fatalf("the next timer is due at %v, want the long-poll's pause after failing", at)
+	}
 	h.Clock.Advance(factory.WakeRetry)
-	r.WaitForLongPoll()
+	r.Settle()
 
 	if _, err := h.Human().Comment(ctx, h.Project, core.CommentInput{Ticket: core.Ref(id), Body: "Mind the tests."}); err != nil {
 		t.Fatal(err)
@@ -183,11 +184,12 @@ func TestACommentOrSetSessionDoesNotWakeThePoll(t *testing.T) {
 	if n := h.Server.Core.WaitingFactoryWakes(h.Project); n != 1 {
 		t.Errorf("%d next_factory_wake calls still waiting, want the Factory's: nothing woke it", n)
 	}
+	r.Settle()
 	if s := h.Ticket(id).State; s != store.Ready {
 		t.Errorf("%s is %s with no poll since it was made, want Ready", id, s)
 	}
 	r.Poll()
-	r.WaitForClaimed(id, store.InReview)
+	h.WantState(id, store.InReview)
 }
 
 func TestAFailingLongPollWarnsOnceAndTheTimedPollCarriesOn(t *testing.T) {
@@ -195,14 +197,18 @@ func TestAFailingLongPollWarnsOnceAndTheTimedPollCarriesOn(t *testing.T) {
 	h := wakingHarness(t)
 	h.SetFailing("/factory/next-wake")
 	r := h.Start()
-	r.PollUntil("the long-poll to fail again after its pause", func() bool { return h.Refused(wakePath) >= 2 })
+	// The poll's Tick passes the long-poll's pauses after failing.
+	r.Poll()
+	if n := h.Refused(wakePath); n < 2 {
+		t.Errorf("next_factory_wake was refused %d times, want it called again after its pause", n)
+	}
 	if n := strings.Count(r.Stdout(), "warning: can't wait for a wake from Code Central"); n != 1 {
 		t.Errorf("warned %d times, want once for the run of failures; stdout:\n%s", n, r.Stdout())
 	}
 
 	id := h.ReadyTicket("Claim on a tick")
 	r.Poll()
-	r.WaitForClaimed(id, store.InReview)
+	h.WantState(id, store.InReview)
 }
 
 func TestAnOlderCodeCentralWithoutTheLongPollGetsTheTimedPollOnly(t *testing.T) {
@@ -210,11 +216,11 @@ func TestAnOlderCodeCentralWithoutTheLongPollGetsTheTimedPollOnly(t *testing.T) 
 	h := wakingHarness(t)
 	h.SetMissing("/factory/next-wake")
 	r := h.Start()
-	r.WaitForOutput("warning: Code Central has no next_factory_wake: polling every 30s only")
+	r.WantOutput("warning: Code Central has no next_factory_wake: polling every 30s only")
 
 	id := h.ReadyTicket("Claim on a tick")
 	r.Poll()
-	r.WaitForClaimed(id, store.InReview)
+	h.WantState(id, store.InReview)
 	if n := h.Refused(wakePath); n != 1 {
 		t.Errorf("next_factory_wake was called %d times, want once: long-polling stops for the run", n)
 	}
@@ -231,11 +237,12 @@ func TestADrainingFactoryClaimsNothingOnAWake(t *testing.T) {
 	running := h.ReadyTicket("Nearly done")
 	h.Script(running, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
-	r.WaitForLongPoll()
+	h.WantCalls(1)
 
 	r.Interrupt()
-	r.WaitForOutput("draining: waiting on 1 running turn(s)")
+	r.Settle()
+	r.WantOutput("draining: waiting on 1 running turn(s)")
+	// Code Central lets go of the long-poll once the cancel reaches it.
 	h.WaitFor("the long-poll to close", func() bool { return h.Server.Core.WaitingFactoryWakes(h.Project) == 0 })
 	id := h.ReadyTicket("Too late")
 	h.Continue(running)
@@ -262,14 +269,15 @@ func TestAnEndingTurnFillsItsFreedSlotAtOnce(t *testing.T) {
 			first := h.ReadyTicket("First")
 			second := h.ReadyTicket("Second")
 			h.Script(first, append([]factorytest.Step{factorytest.Wait()}, end...)...)
-			h.Start("--parallel", "1")
-			h.WaitFor("the first turn", func() bool { return len(h.Calls()) == 1 })
+			r := h.Start("--parallel", "1")
+			h.WantCalls(1)
 			if s := h.Ticket(second).State; s != store.Ready {
 				t.Fatalf("%s is %s while the only slot is full, want Ready", second, s)
 			}
 
 			h.Continue(first)
-			h.WaitForState(second, store.InReview)
+			r.Settle()
+			h.WantState(second, store.InReview)
 		})
 	}
 }
@@ -283,13 +291,15 @@ func TestAGivenUpTicketWaitsForTheNextTimedPoll(t *testing.T) {
 	h.Script(gaveUp, factorytest.CLI("give-up", "{{ticket}}", "--claim", "{{claim}}", "--note", "Too hard."), factorytest.Result("success"))
 	next := h.ReadyTicket("Next")
 	r := h.Start("--parallel", "1")
-	h.WaitForState(next, store.InReview)
+	h.WantState(next, store.InReview)
 	if n := len(h.Ticket(gaveUp).Claims); n != 1 {
 		t.Fatalf("%s was claimed %d times before a timed poll, want once", gaveUp, n)
 	}
 
 	r.Poll()
-	h.WaitFor("the given-up Ticket claimed again", func() bool { return len(h.Ticket(gaveUp).Claims) == 2 })
+	if n := len(h.Ticket(gaveUp).Claims); n != 2 {
+		t.Errorf("%s was claimed %d times after a timed poll, want again", gaveUp, n)
+	}
 }
 
 // A Ticket whose agent has given up but whose turn is still running isn't
@@ -302,17 +312,20 @@ func TestAGivenUpTicketIsntClaimedWhileItsTurnRuns(t *testing.T) {
 	h.Script(gaveUp, factorytest.CLI("give-up", "{{ticket}}", "--claim", "{{claim}}", "--note", "Too hard."), factorytest.Wait(), factorytest.Result("success"))
 	next := h.ReadyTicket("Next")
 	r := h.Start("--parallel", "2")
-	h.WaitFor("the give-up", func() bool { return h.Ticket(gaveUp).State == store.Ready })
-	r.WaitForOutput(next + " turn ended")
+	h.WantState(gaveUp, store.Ready)
+	r.WantOutput(next + " turn ended")
 	r.Poll()
 	if n := len(h.Ticket(gaveUp).Claims); n != 1 {
 		t.Fatalf("%s was claimed %d times while its turn ran, want once", gaveUp, n)
 	}
 
 	h.Continue(gaveUp)
-	r.WaitForOutput(gaveUp + " turn ended")
+	r.Settle()
+	r.WantOutput(gaveUp + " turn ended")
 	r.Poll()
-	h.WaitFor("the given-up Ticket claimed again", func() bool { return len(h.Ticket(gaveUp).Claims) == 2 })
+	if n := len(h.Ticket(gaveUp).Claims); n != 2 {
+		t.Errorf("%s was claimed %d times after its turn ended and a timed poll, want again", gaveUp, n)
+	}
 }
 
 // A draining Factory ignores the local wake: it claims nothing when a
@@ -323,11 +336,12 @@ func TestADrainingFactoryClaimsNothingWhenATurnEnds(t *testing.T) {
 	running := h.ReadyTicket("Nearly done")
 	h.Script(running, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start("--parallel", "1")
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WantCalls(1)
 	id := h.ReadyTicket("Too late")
 
 	r.Interrupt()
-	r.WaitForOutput("draining: waiting on 1 running turn(s)")
+	r.Settle()
+	r.WantOutput("draining: waiting on 1 running turn(s)")
 	h.Continue(running)
 	if code := r.Exited(); code != 0 {
 		t.Errorf("exit code %d, want 0", code)

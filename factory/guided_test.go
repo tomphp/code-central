@@ -87,8 +87,8 @@ func TestTheFactoryStartsOneDecisionPerIdleGuidedMapInCreatedOrder(t *testing.T)
 	h.Script(first, factorytest.Wait(), factorytest.Finish("Legal says yes."), factorytest.Result("success"))
 
 	r := h.Start()
-	h.WaitForState(first, store.InProgress)
-	r.WaitForOutput(first + ` approved (guided Map ` + m + `): "Ask legal"`)
+	h.WantState(first, store.InProgress)
+	r.WantOutput(first + ` approved (guided Map ` + m + `): "Ask legal"`)
 	wantState(t, h, second, store.Draft, "one Ticket per Map per poll")
 	if s := h.Ticket(unblocked).State; s == store.Draft {
 		t.Errorf("%s is still Draft: each idle Map starts its first frontier Ticket", unblocked)
@@ -96,7 +96,8 @@ func TestTheFactoryStartsOneDecisionPerIdleGuidedMapInCreatedOrder(t *testing.T)
 	wantState(t, h, blocked, store.Draft, "a blocked Ticket isn't on the frontier")
 
 	h.Continue(first)
-	h.WaitForState(first, store.InReview)
+	r.Settle()
+	h.WantState(first, store.InReview)
 	r.Poll()
 	wantState(t, h, second, store.Draft, "a Ticket In Review holds its Map")
 
@@ -137,7 +138,7 @@ func TestAGuidedMapIsNotHeldByResearch(t *testing.T) {
 	h.Script(next, factorytest.Wait())
 
 	h.Start()
-	h.WaitForState(next, store.InProgress)
+	h.WantState(next, store.InProgress)
 }
 
 func TestAMapIsGuidedOnlyWhenItsGuidedTagIsOn(t *testing.T) {
@@ -162,7 +163,7 @@ func TestAPausedFactoryStartsNoDecision(t *testing.T) {
 	cut := h.ReadyTicket("Cut off")
 	h.Script(cut, factorytest.APIError("rate_limit"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
-	r.WaitForOutput(cut + " turn ended")
+	r.WantOutput(cut + " turn ended")
 
 	m := guidedMap(t, h, "Offline mode")
 	next := decision(t, h, m, "wayfinder:task", "Ask legal")

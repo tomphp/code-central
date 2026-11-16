@@ -274,6 +274,7 @@ func TestAFailingChatTurnEndsFailedWithNoFailureReport(t *testing.T) {
 			if again := reply(h.WaitForReply()); again.Outcome != core.ChatDone {
 				t.Errorf("next reply ended %q (%q), want done", again.Outcome, again.Error)
 			}
+			r.Settle()
 			if out := r.Stdout(); strings.Contains(out, "report_failure") || strings.Contains(out, ": Failed: ") {
 				t.Errorf("stdout %q, want no Failure Report", out)
 			}
@@ -289,6 +290,7 @@ func TestAChatReplyCutOffByAnOutageEndsFailedAndTheFactoryGoesOn(t *testing.T) {
 
 	h.SendChat("Hi")
 	got := reply(h.WaitForReply())
+	r.Settle()
 
 	if got.Outcome != core.ChatFailed || !strings.Contains(got.Error, "claude hit an Outage (`rate_limit`)") || !strings.Contains(got.Error, "Send the message again later.") {
 		t.Errorf("reply ended %q (%q), want failed with the Outage text naming rate_limit", got.Outcome, got.Error)
@@ -300,9 +302,10 @@ func TestAChatReplyCutOffByAnOutageEndsFailedAndTheFactoryGoesOn(t *testing.T) {
 	id := h.ReadyTicket("After the Outage")
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	r.Poll()
-	h.WaitForState(id, store.InProgress)
+	h.WantState(id, store.InProgress)
 	h.Continue(id)
-	h.WaitForState(id, store.InReview)
+	r.Settle()
+	h.WantState(id, store.InReview)
 }
 
 func TestAChatReplyWithAnExpiredLoginEndsFailedAndTheFactoryKeepsRunning(t *testing.T) {
@@ -313,6 +316,7 @@ func TestAChatReplyWithAnExpiredLoginEndsFailedAndTheFactoryKeepsRunning(t *test
 
 	h.SendChat("Hi")
 	got := reply(h.WaitForReply())
+	r.Settle()
 
 	if got.Outcome != core.ChatFailed || !strings.Contains(got.Error, "(authentication_failed)") || !strings.Contains(got.Error, "`claude /login`") {
 		t.Errorf("reply ended %q (%q), want failed with the login text naming claude /login", got.Outcome, got.Error)
@@ -439,18 +443,20 @@ func TestAChatTurnRunsWhileEveryClaimSlotIsFull(t *testing.T) {
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
-	h.Start("--parallel", "1")
-	h.WaitFor(id+"'s turn to start", func() bool { return len(h.Calls()) == 1 })
+	run := h.Start("--parallel", "1")
+	h.WantCalls(1)
 
 	h.SendChat("Hi")
 	if r := reply(h.WaitForReply()); r.Outcome != core.ChatDone {
 		t.Errorf("reply ended %q (%q), want done while the slot is full", r.Outcome, r.Error)
 	}
+	run.Settle()
 	if tk := h.Ticket(id); tk.State != store.InProgress {
 		t.Errorf("%s is %s, want its turn still running", id, tk.State)
 	}
 	h.Continue(id)
-	h.WaitForState(id, store.InReview)
+	run.Settle()
+	h.WantState(id, store.InReview)
 }
 
 func TestAChatTurnsUsageIsPostedWithKindChat(t *testing.T) {

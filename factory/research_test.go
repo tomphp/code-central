@@ -30,7 +30,7 @@ func TestAMapResearchTicketStartsTheResearchSkillInItsOwnWorktreeOnALocalResearc
 	mainTip := h.Git("rev-parse", "main")
 
 	h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 
 	c := h.Calls()[0]
 	branch := "research/" + id
@@ -86,7 +86,7 @@ func TestAnAcceptedMapResearchTicketIsDoneWithNothingPushedOrLandedUnderEveryLan
 			mainTip := h.Git("rev-parse", "main")
 
 			r := h.Start()
-			h.WaitForState(id, store.InReview)
+			h.WantState(id, store.InReview)
 			commit := h.Git("rev-parse", "research/"+id)
 			h.Accept(id)
 			if tk := h.Ticket(id); tk.State != store.Done {
@@ -118,7 +118,7 @@ func TestAMapResearchTicketsWorktreeIsKeptInReviewAndSweptOnceDone(t *testing.T)
 	researched(h, id)
 
 	r := h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	r.Poll()
 	r.Poll()
 	if _, err := os.Stat(h.Worktree(id)); err != nil {
@@ -128,7 +128,7 @@ func TestAMapResearchTicketsWorktreeIsKeptInReviewAndSweptOnceDone(t *testing.T)
 	commit := h.Git("rev-parse", "research/"+id)
 	h.Accept(id)
 	r.Poll()
-	r.WaitForOutput(id + ": Done: removed its worktree " + h.Worktree(id))
+	r.WantOutput(id + ": Done: removed its worktree " + h.Worktree(id))
 	if _, err := os.Stat(h.Worktree(id)); !os.IsNotExist(err) {
 		t.Errorf("the worktree %s is still there: %v", h.Worktree(id), err)
 	}
@@ -144,13 +144,13 @@ func TestACancelledMapResearchTicketsWorktreeIsSweptAndItsBranchKept(t *testing.
 	researched(h, id)
 
 	r := h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	commit := h.Git("rev-parse", "research/"+id)
 	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()
-	r.WaitForOutput(id + ": Cancelled: removed its worktree " + h.Worktree(id))
+	r.WantOutput(id + ": Cancelled: removed its worktree " + h.Worktree(id))
 	if got := h.Git("rev-parse", "research/"+id); got != commit {
 		t.Errorf("research/%s is at %q, want it kept at %s", id, got, commit)
 	}

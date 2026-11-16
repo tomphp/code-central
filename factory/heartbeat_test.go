@@ -23,15 +23,16 @@ func factories(t *testing.T, h *factorytest.Harness) core.FactoryStatusView {
 	return p.FactoryStatus
 }
 
-// waitForFactory waits for the Factory to show status with a note
-// containing note, and returns its Factory Status.
-func waitForFactory(t *testing.T, h *factorytest.Harness, status core.FactoryStatusName, note string) core.FactoryStatusView {
+// wantFactory fails the test unless the Factory shows status with a note
+// containing note, and returns its Factory Status. A test settles the
+// Factory first: a Heartbeat it has queued is busy work until posted.
+func wantFactory(t *testing.T, h *factorytest.Harness, status core.FactoryStatusName, note string) core.FactoryStatusView {
 	t.Helper()
-	h.WaitFor("the Factory to be "+string(status)+" with "+note, func() bool {
-		fs := factories(t, h)
-		return fs.Status == status && len(fs.Factories) == 1 && strings.Contains(fs.Factories[0].Note, note)
-	})
-	return factories(t, h)
+	fs := factories(t, h)
+	if fs.Status != status || len(fs.Factories) != 1 || !strings.Contains(fs.Factories[0].Note, note) {
+		t.Fatalf("Factory Status %+v, want %s with %q in its note", fs, status, note)
+	}
+	return fs
 }
 
 func TestEachPollSendsAnOnlineHeartbeatWithTheTurnsRunning(t *testing.T) {
@@ -40,7 +41,7 @@ func TestEachPollSendsAnOnlineHeartbeatWithTheTurnsRunning(t *testing.T) {
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start("--parallel", "2", "--poll", "20s")
-	fs := waitForFactory(t, h, core.FactoryOnline, "1 of 2 turns running")
+	fs := wantFactory(t, h, core.FactoryOnline, "1 of 2 turns running")
 	f := fs.Factories[0]
 	host, _ := os.Hostname()
 	if f.Name != "code-central-factory" || f.Host != host || f.IntervalSeconds != 20 {
@@ -50,21 +51,17 @@ func TestEachPollSendsAnOnlineHeartbeatWithTheTurnsRunning(t *testing.T) {
 		t.Errorf("Factory %+v, want Chat support on by default", f)
 	}
 	h.Continue(id)
-	h.WaitForState(id, store.InReview)
-	// The turn's process may still be exiting after the Ticket is in
-	// review, so poll until a Heartbeat sees it gone.
-	h.WaitFor("the Factory to be online with 0 of 2 turns running", func() bool {
-		r.Poll()
-		fs := factories(t, h)
-		return fs.Status == core.FactoryOnline && len(fs.Factories) == 1 && strings.Contains(fs.Factories[0].Note, "0 of 2 turns running")
-	})
+	r.Settle()
+	h.WantState(id, store.InReview)
+	r.Poll()
+	wantFactory(t, h, core.FactoryOnline, "0 of 2 turns running")
 }
 
 func TestNoChatReportsNoChatSupport(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.Start("--no-chat")
-	fs := waitForFactory(t, h, core.FactoryOnline, "turns running")
+	fs := wantFactory(t, h, core.FactoryOnline, "turns running")
 	if fs.Factories[0].Chat {
 		t.Errorf("Factory %+v, want no Chat support with --no-chat", fs.Factories[0])
 	}
@@ -76,9 +73,9 @@ func TestAnOutagePauseStaysOnlineAndSaysWhenItResumes(t *testing.T) {
 	cut := h.ReadyTicket("Cut off")
 	h.Script(cut, factorytest.APIError("rate_limit"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
-	r.WaitForOutput("waiting on rate_limit")
+	r.WantOutput("waiting on rate_limit")
 	r.Poll()
-	fs := waitForFactory(t, h, core.FactoryOnline, "paused: ")
+	fs := wantFactory(t, h, core.FactoryOnline, "paused: ")
 	if n := fs.Factories[0].Note; !strings.Contains(n, "rate_limit") || !strings.Contains(n, "; next resume at ") {
 		t.Errorf("note %q, want the reason and when it resumes", n)
 	}
@@ -90,19 +87,21 @@ func TestTheFirstCtrlCSendsDrainingAndTheDrainKeepsSendingIt(t *testing.T) {
 	id := h.ReadyTicket("Nearly done")
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start("--parallel", "1")
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WantCalls(1)
 
 	r.Interrupt()
-	first := waitForFactory(t, h, core.FactoryDraining, "draining: waiting on 1 running turn(s)").Factories[0].LastHeartbeat
+	r.Settle()
+	first := wantFactory(t, h, core.FactoryDraining, "draining: waiting on 1 running turn(s)").Factories[0].LastHeartbeat
 	h.Server.Clock.Advance(time.Second)
 	r.Tick()
-	h.WaitFor("another Heartbeat while it drains", func() bool {
-		return factories(t, h).Factories[0].LastHeartbeat.After(first)
-	})
+	r.Settle()
+	if last := factories(t, h).Factories[0].LastHeartbeat; !last.After(first) {
+		t.Errorf("the last Heartbeat is at %v, want another after %v while it drains", last, first)
+	}
 
 	h.Continue(id)
 	r.Exited()
-	waitForFactory(t, h, core.FactoryOffline, "stopped: drained")
+	wantFactory(t, h, core.FactoryOffline, "stopped: drained")
 }
 
 func TestASecondCtrlCSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
@@ -111,13 +110,14 @@ func TestASecondCtrlCSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WantCalls(1)
 	r.Interrupt()
-	waitForFactory(t, h, core.FactoryDraining, "draining")
+	r.Settle()
+	wantFactory(t, h, core.FactoryDraining, "draining")
 	r.Interrupt()
 	r.PassKillGrace()
 	r.Exited()
-	waitForFactory(t, h, core.FactoryOffline, "stopped on interrupt")
+	wantFactory(t, h, core.FactoryOffline, "stopped on interrupt")
 }
 
 func TestSIGTERMSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
@@ -126,11 +126,11 @@ func TestSIGTERMSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WantCalls(1)
 	r.Signal(syscall.SIGTERM)
 	r.PassKillGrace()
 	r.Exited()
-	waitForFactory(t, h, core.FactoryOffline, "stopped on terminated")
+	wantFactory(t, h, core.FactoryOffline, "stopped on terminated")
 }
 
 func TestAStopForSendsAStoppingHeartbeatWithItsReason(t *testing.T) {
@@ -140,7 +140,7 @@ func TestAStopForSendsAStoppingHeartbeatWithItsReason(t *testing.T) {
 	h.Script(expired, factorytest.APIError("authentication_failed"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
 	r.Exited()
-	waitForFactory(t, h, core.FactoryOffline, "stopped: claude's login has expired")
+	wantFactory(t, h, core.FactoryOffline, "stopped: claude's login has expired")
 }
 
 func TestAFactoryThatRefusesToStartSendsNoHeartbeat(t *testing.T) {
@@ -162,13 +162,13 @@ func TestARefusedHeartbeatIsWarnedOnceAndNeverStopsThePoll(t *testing.T) {
 	id := h.ReadyTicket("Still claimed")
 	h.Script(id, factorytest.Finish("Done."), factorytest.Result("success"))
 	r.Poll()
-	h.WaitForState(id, store.InReview)
-	r.WaitForOutput("warning: can't send a Heartbeat")
+	h.WantState(id, store.InReview)
+	r.WantOutput("warning: can't send a Heartbeat")
 	if n := strings.Count(r.Stdout(), "warning: can't send a Heartbeat"); n != 1 {
 		t.Errorf("warned %d times, want once: %s", n, r.Stdout())
 	}
 
 	h.SetFailing("")
 	r.Poll()
-	waitForFactory(t, h, core.FactoryOnline, "turns running")
+	wantFactory(t, h, core.FactoryOnline, "turns running")
 }

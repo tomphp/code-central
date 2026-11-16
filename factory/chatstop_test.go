@@ -2,6 +2,7 @@ package factory_test
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
@@ -9,13 +10,16 @@ import (
 )
 
 // startLongReply starts the Factory and sends a Chat Message whose reply
-// waits, once the fake claude is running it.
+// waits, once the fake claude is running it and the Factory has settled.
 func startLongReply(t *testing.T, h *factorytest.Harness, args ...string) *factorytest.Running {
 	t.Helper()
 	h.Script(factorytest.Chat, factorytest.Say("Working"), factorytest.Wait(), factorytest.Say("All done."), factorytest.Result("success"))
 	r := h.Start(args...)
 	h.SendChat("Long question")
+	// Code Central hands the Chat Message to the Factory on its own time,
+	// which Settle can't see.
 	h.WaitFor("the Chat reply to start", func() bool { return len(chatCalls(h)) == 1 })
+	r.Settle()
 	return r
 }
 
@@ -29,6 +33,7 @@ func TestAStopEndsTheChatTurnAndTheNextMessageResumesTheSession(t *testing.T) {
 	}
 	r.PassKillGrace()
 	cv := h.WaitForReply()
+	r.Settle()
 	if r := reply(cv); r.Outcome != core.ChatStopped {
 		t.Errorf("reply ended %q (%q), want stopped", r.Outcome, r.Error)
 	}
@@ -58,10 +63,11 @@ func TestTheFirstCtrlCDrainsLettingTheChatReplyFinishAndTheConversationIsUnavail
 	r := startLongReply(t, h)
 
 	r.Interrupt()
-	r.WaitForOutput("draining")
-	h.WaitFor("the Factory to report Draining", func() bool {
-		return factories(t, h).Status == core.FactoryDraining
-	})
+	r.Settle()
+	r.WantOutput("draining")
+	if s := factories(t, h).Status; s != core.FactoryDraining {
+		t.Fatalf("the Factory reports %s, want Draining", s)
+	}
 
 	h.Continue(factorytest.Chat)
 	if code := r.Exited(); code != 0 {
@@ -85,7 +91,8 @@ func TestStoppingStopsTheChatReplyPostsStoppedAndExits(t *testing.T) {
 	r := startLongReply(t, h)
 
 	r.Interrupt()
-	r.WaitForOutput("draining")
+	r.Settle()
+	r.WantOutput("draining")
 	r.Interrupt()
 	r.PassKillGrace()
 	if code := r.Exited(); code != 0 {
@@ -105,8 +112,11 @@ func TestNoChatNeverPollsForChatWork(t *testing.T) {
 	// Every poll for Chat work would fail and be counted.
 	h.SetFailing("/chat/next-work")
 	h.Start("--no-chat")
-	waitForFactory(t, h, core.FactoryOnline, "turns running")
-	if fs := factories(t, h); fs.Factories[0].Chat {
+	fs := factories(t, h)
+	if fs.Status != core.FactoryOnline || len(fs.Factories) != 1 || !strings.Contains(fs.Factories[0].Note, "turns running") {
+		t.Fatalf("Factory Status %+v, want Online with its turns running", fs)
+	}
+	if fs.Factories[0].Chat {
 		t.Errorf("Factory %+v, want no Chat support", fs.Factories[0])
 	}
 	if n := h.Refused("/api/p/" + h.Project + "/chat/next-work"); n != 0 {

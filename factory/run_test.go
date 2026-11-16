@@ -21,8 +21,8 @@ func TestTheFactoryClaimsAReadyTicketAndRunsOneSessionToInReview(t *testing.T) {
 	mainTip := h.Git("rev-parse", "main")
 
 	r := h.Start()
-	r.WaitForOutput("base: main")
-	tk := h.WaitForState(id, store.InReview)
+	r.WantOutput("base: main")
+	tk := h.WantState(id, store.InReview)
 
 	calls := h.Calls()
 	if len(calls) != 1 {
@@ -48,7 +48,7 @@ func TestTheFactoryClaimsAReadyTicketAndRunsOneSessionToInReview(t *testing.T) {
 	if parent := h.Git("rev-parse", id+"^"); parent != mainTip {
 		t.Errorf("branch %s starts at %s, want main's tip %s", id, parent, mainTip)
 	}
-	r.WaitForOutput(id + ` turn ended (implementation): "Add a button": exit 0, success; now In Review; ran `)
+	r.WantOutput(id + ` turn ended (implementation): "Add a button": exit 0, success; now In Review; ran `)
 }
 
 // onlyCall runs the Factory with args until id is In Review and returns
@@ -58,7 +58,7 @@ func onlyCall(t *testing.T, args ...string) (factorytest.Call, *factorytest.Runn
 	h := factorytest.New(t)
 	id := h.ReadyTicket("Work")
 	r := h.Start(args...)
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	calls := h.Calls()
 	if len(calls) != 1 {
 		t.Fatalf("claude ran %d times, want once", len(calls))

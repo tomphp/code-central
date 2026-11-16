@@ -32,10 +32,10 @@ func TestTheClaimedLineNamesTheTicketStageTitleSpecWorktreeAndResumeCommand(t *t
 	impl := h.ReadyTicket("Paint the shed")
 	grill := h.StageTicket("grilling", "Shed colours")
 	r := h.Start()
-	h.WaitForState(impl, store.InReview)
-	h.WaitForState(grill, store.InReview)
-	r.WaitForOutput(impl + " turn ended")
-	r.WaitForOutput(grill + " turn ended")
+	h.WantState(impl, store.InReview)
+	h.WantState(grill, store.InReview)
+	r.WantOutput(impl + " turn ended")
+	r.WantOutput(grill + " turn ended")
 
 	for _, c := range []struct{ id, stage, title string }{{impl, "implementation", "Paint the shed"}, {grill, "grilling", "Shed colours"}} {
 		call := callsFor(h, c.id)[0]
@@ -58,10 +58,10 @@ func TestTheTurnEndedLineGivesTheStageTitleExitStateAndDuration(t *testing.T) {
 	done := h.StageTicket("spec", "Write it up")
 	h.Script(asks, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 	r := h.Start()
-	h.WaitForState(asks, store.NeedsAnswer)
-	h.WaitForState(done, store.InReview)
-	r.WaitForOutput(asks + " turn ended")
-	r.WaitForOutput(done + " turn ended")
+	h.WantState(asks, store.NeedsAnswer)
+	h.WantState(done, store.InReview)
+	r.WantOutput(asks + " turn ended")
+	r.WantOutput(done + " turn ended")
 
 	for _, c := range []struct{ id, want string }{
 		{asks, asks + ` turn ended (implementation): "Ask first": exit 0, success; now Needs Answer; ran `},
@@ -81,8 +81,8 @@ func TestTheTurnEndedLineNamesTheStateTheFactoryLeftTheTicketIn(t *testing.T) {
 	id := h.ReadyTicket("Stops early")
 	h.Script(id, factorytest.Say("I give up."), factorytest.Result("success"))
 	r := h.Start()
-	h.WaitForState(id, store.Failed)
-	r.WaitForOutput(id + " turn ended")
+	h.WantState(id, store.Failed)
+	r.WantOutput(id + " turn ended")
 	if got := line(t, r, id+" turn ended"); !strings.Contains(got, ": exit 0, success; now Failed; ran ") {
 		t.Errorf("turn ended line %q: want it to say the Factory's Failure Report left it Failed", got)
 	}
@@ -93,8 +93,8 @@ func TestTheResumedLineNamesTheRoundBeingAnswered(t *testing.T) {
 	h := factorytest.New(t)
 	id, _, r := answeredTicket(t, h)
 	r.Poll()
-	h.WaitForState(id, store.InReview)
-	r.WaitForOutput(id + " resumed")
+	h.WantState(id, store.InReview)
+	r.WantOutput(id + " resumed")
 	want := id + ` resumed (implementation): "Ask first" with the answers to Round 1`
 	if got := line(t, r, id+" resumed"); got != want {
 		t.Errorf("resumed line\n got %s\nwant %s", got, want)
@@ -107,15 +107,15 @@ func TestTheResumedLineForACutOffClaimSaysSoAfterARestart(t *testing.T) {
 	id := h.StageTicket("tickets", "Cut it up")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
-	r.WaitForTurn(id + "'s turn")
+	h.WantCalls(1)
 	r.Signal(os.Interrupt)
 	r.Signal(os.Interrupt)
 	r.Exited()
 
 	h.Script(id, factorytest.Finish("Done."), factorytest.Result("success"))
 	r = h.Start()
-	h.WaitForState(id, store.InReview)
-	r.WaitForOutput(id + " turn ended")
+	h.WantState(id, store.InReview)
+	r.WantOutput(id + " turn ended")
 	want := id + ` resumed (tickets): "Cut it up" after being cut off`
 	if got := line(t, r, id+" resumed"); got != want {
 		t.Errorf("resumed line\n got %s\nwant %s", got, want)
@@ -167,8 +167,8 @@ func TestVerbosePrintsOneLinePerToolCallWithItsSummary(t *testing.T) {
 	wt := h.Worktree(id)
 	h.Script(id, toolCalls(wt)...)
 	r := h.Start("--verbose")
-	h.WaitForState(id, store.InReview)
-	r.WaitForOutput(id + " turn ended")
+	h.WantState(id, store.InReview)
+	r.WantOutput(id + " turn ended")
 
 	var got []string
 	for _, l := range strings.Split(r.Stdout(), "\n") {
@@ -213,8 +213,8 @@ func TestWithoutVerboseNoToolCallLinesArePrinted(t *testing.T) {
 	id := h.ReadyTicket("Busy")
 	h.Script(id, toolCalls(h.Worktree(id))...)
 	r := h.Start()
-	h.WaitForState(id, store.InReview)
-	r.WaitForOutput(id + " turn ended")
+	h.WantState(id, store.InReview)
+	r.WantOutput(id + " turn ended")
 	if out := r.Stdout(); strings.Contains(out, id+": Bash") || strings.Contains(out, "go test") {
 		t.Errorf("tool-call lines printed without --verbose:\n%s", out)
 	}

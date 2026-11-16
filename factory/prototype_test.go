@@ -30,7 +30,7 @@ func TestAPrototypeStartsThePrototypeSkillInItsOwnWorktreeOnALocalPrototypeBranc
 	mainTip := h.Git("rev-parse", "main")
 
 	h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 
 	c := h.Calls()[0]
 	branch := "prototype/" + id
@@ -78,7 +78,7 @@ func TestAPrototypeIsReusedOnItsBranchAtARedo(t *testing.T) {
 	h.Script(id, factorytest.NeedFile("picker.html"), factorytest.Finish("Again."), factorytest.Result("success"))
 
 	h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 
 	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != commit {
 		t.Errorf("the worktree is at %s, want %s's earlier commit %s", got, branch, commit)
@@ -103,7 +103,7 @@ func TestAnAcceptedPrototypeIsDoneWithNothingPushedOrLandedUnderEveryLandingMeth
 			mainTip := h.Git("rev-parse", "main")
 
 			r := h.Start()
-			h.WaitForState(id, store.InReview)
+			h.WantState(id, store.InReview)
 			commit := h.Git("rev-parse", "prototype/"+id)
 			h.Accept(id)
 			tk := h.Ticket(id)
@@ -146,7 +146,7 @@ func TestAPrototypesWorktreeIsKeptWhileTheHumanTriesItAndSweptOnceDone(t *testin
 		factorytest.Result("success"))
 
 	r := h.Start()
-	h.WaitForState(id, store.NeedsAnswer)
+	h.WantState(id, store.NeedsAnswer)
 	r.Poll()
 	r.Poll()
 	if _, err := os.Stat(h.Worktree(id)); err != nil {
@@ -156,7 +156,7 @@ func TestAPrototypesWorktreeIsKeptWhileTheHumanTriesItAndSweptOnceDone(t *testin
 	h.Script(id, factorytest.Finish("Learned that a picker beats a toggle."), factorytest.Result("success"))
 	h.Answer(id, "Tried it: the picker is better.")
 	r.Poll()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	r.Poll()
 	r.Poll()
 	if _, err := os.Stat(h.Worktree(id)); err != nil {
@@ -166,7 +166,7 @@ func TestAPrototypesWorktreeIsKeptWhileTheHumanTriesItAndSweptOnceDone(t *testin
 	commit := h.Git("rev-parse", "prototype/"+id)
 	h.Accept(id)
 	r.Poll()
-	r.WaitForOutput(id + ": Done: removed its worktree " + h.Worktree(id))
+	r.WantOutput(id + ": Done: removed its worktree " + h.Worktree(id))
 	if _, err := os.Stat(h.Worktree(id)); !os.IsNotExist(err) {
 		t.Errorf("the worktree %s is still there: %v", h.Worktree(id), err)
 	}
@@ -182,13 +182,13 @@ func TestACancelledPrototypesWorktreeIsSweptAndItsBranchKept(t *testing.T) {
 	builtPrototype(h, id)
 
 	r := h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	commit := h.Git("rev-parse", "prototype/"+id)
 	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()
-	r.WaitForOutput(id + ": Cancelled: removed its worktree " + h.Worktree(id))
+	r.WantOutput(id + ": Cancelled: removed its worktree " + h.Worktree(id))
 	if got := h.Git("rev-parse", "prototype/"+id); got != commit {
 		t.Errorf("prototype/%s is at %q, want it kept at %s", id, got, commit)
 	}

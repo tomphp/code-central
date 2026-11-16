@@ -1,7 +1,6 @@
 package factory_test
 
 import (
-	"fmt"
 	"os"
 	"runtime"
 	"slices"
@@ -19,18 +18,19 @@ func TestTheFirstCtrlCDrainsWaitingForRunningTurnsAndClaimingNoMore(t *testing.T
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	later := h.ReadyTicket("Later")
 	r := h.Start("--parallel", "1")
-	h.WaitForDescribed(func() string {
-		return fmt.Sprintf("the turn (%d calls; %s is %s, %s is %s)", len(h.Calls()), id, h.Ticket(id).State, later, h.Ticket(later).State)
-	}, func() bool { return len(h.Calls()) == 1 })
+	if n := len(h.Calls()); n != 1 {
+		t.Fatalf("claude ran %d times, want once: %s is %s, %s is %s", n, id, h.Ticket(id).State, later, h.Ticket(later).State)
+	}
 
 	r.Interrupt()
-	r.WaitForOutput("waiting on 1 running turn(s): " + id)
+	r.Settle()
+	r.WantOutput("waiting on 1 running turn(s): " + id)
 
 	h.Continue(id)
 	if code := r.Exited(); code != 0 {
 		t.Errorf("exit code %d, want 0", code)
 	}
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	if got := h.Signals(id); len(got) != 0 {
 		t.Errorf("the draining turn got %q, want no signals", got)
 	}
@@ -93,10 +93,11 @@ func TestASecondCtrlCStopsTheRunningTurnsAndKeepsTheirClaims(t *testing.T) {
 	id := h.ReadyTicket("Long job")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WantCalls(1)
 
 	r.Interrupt()
-	r.WaitForOutput("waiting on 1 running turn(s)")
+	r.Settle()
+	r.WantOutput("waiting on 1 running turn(s)")
 	r.Interrupt()
 	killed(t, h, r, id)
 }
@@ -110,7 +111,7 @@ func TestSIGTERMOrSIGHUPStopsTheRunningTurnsAtOnce(t *testing.T) {
 			id := h.ReadyTicket("Long job")
 			h.Script(id, factorytest.Wait())
 			r := h.Start()
-			h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+			h.WantCalls(1)
 
 			r.Signal(sig)
 			killed(t, h, r, id)
