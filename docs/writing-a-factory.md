@@ -52,7 +52,7 @@ A Factory that runs `claude` can report the Claude account's **Plan Limits**, it
 
 | Field | |
 | --- | --- |
-| `observed_at` | Required. When the Factory read the figures, an RFC 3339 time. A time later than Code Central's receipt of the Heartbeat is kept as the receipt time, so clock skew never makes figures look newer than they are. |
+| `observed_at` | Required. When the Factory read the figures, an RFC 3339 time. A time later than Code Central's receipt of the Heartbeat is kept as the receipt time, so clock skew never makes figures look newer than they are; the same figures sent again keep that first receipt time. |
 | `five_hour` | Optional. The 5-hour window: `used_percent`, from 0 to 100, and `resets_at`, an RFC 3339 time, both required. |
 | `weekly` | Optional. The weekly window, as `five_hour`. |
 

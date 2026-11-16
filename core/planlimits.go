@@ -40,25 +40,31 @@ func checkPlanLimits(in *PlanLimits) (*PlanLimits, error) {
 	if in.ObservedAt.IsZero() {
 		return nil, invalid("plan_limits.observed_at", "plan_limits.observed_at is required: when the Factory read the figures, as an RFC 3339 time")
 	}
-	out := &PlanLimits{ObservedAt: in.ObservedAt.UTC()}
-	for _, w := range []struct {
-		name string
-		in   *PlanLimitWindow
-		out  **PlanLimitWindow
-	}{{"five_hour", in.FiveHour, &out.FiveHour}, {"weekly", in.Weekly, &out.Weekly}} {
-		if w.in == nil {
-			continue
-		}
-		field := "plan_limits." + w.name
-		if p := w.in.UsedPercent; !(p >= 0 && p <= 100) {
-			return nil, invalid(field+".used_percent", "%s.used_percent is from 0 to 100, not %g", field, p)
-		}
-		if w.in.ResetsAt.IsZero() {
-			return nil, invalid(field+".resets_at", "%s.resets_at is required: when the window resets, as an RFC 3339 time", field)
-		}
-		*w.out = &PlanLimitWindow{UsedPercent: w.in.UsedPercent, ResetsAt: w.in.ResetsAt.UTC()}
+	fiveHour, err := checkPlanLimitWindow("plan_limits.five_hour", in.FiveHour)
+	if err != nil {
+		return nil, err
 	}
-	return out, nil
+	weekly, err := checkPlanLimitWindow("plan_limits.weekly", in.Weekly)
+	if err != nil {
+		return nil, err
+	}
+	return &PlanLimits{ObservedAt: in.ObservedAt.UTC(), FiveHour: fiveHour, Weekly: weekly}, nil
+}
+
+// checkPlanLimitWindow checks the window at field and returns a copy of
+// it, or nil when it is left out.
+func checkPlanLimitWindow(field string, in *PlanLimitWindow) (*PlanLimitWindow, error) {
+	if in == nil {
+		return nil, nil
+	}
+	// Written this way round, the check refuses NaN too.
+	if p := in.UsedPercent; !(p >= 0 && p <= 100) {
+		return nil, invalid(field+".used_percent", "%s.used_percent is from 0 to 100, not %g", field, p)
+	}
+	if in.ResetsAt.IsZero() {
+		return nil, invalid(field+".resets_at", "%s.resets_at is required: when the window resets, as an RFC 3339 time", field)
+	}
+	return &PlanLimitWindow{UsedPercent: in.UsedPercent, ResetsAt: in.ResetsAt.UTC()}, nil
 }
 
 // keptLimits are the Plan Limits to keep for a Heartbeat reporting
@@ -87,6 +93,7 @@ func sameLimits(a, b *PlanLimits) bool {
 	return a.ObservedAt.Equal(b.ObservedAt) && sameWindow(a.FiveHour, b.FiveHour) && sameWindow(a.Weekly, b.Weekly)
 }
 
+// sameWindow says whether a and b are the same window, or both left out.
 func sameWindow(a, b *PlanLimitWindow) bool {
 	if a == nil || b == nil {
 		return a == b
