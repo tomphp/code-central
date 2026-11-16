@@ -20,6 +20,10 @@ _Avoid_: alias, slug
 The Project's one primary Repository, where the Factory runs and where the Project's file-based settings live. It is the only Repository a single-repository Project has, and a Ticket can change it like any other.
 _Avoid_: Home Repo, main repository, meta repository
 
+**Clone URL**:
+The remote a Repository is cloned from and pushed to. Code Central works out the Repository's Code Host from it. The Home Repository's Clone URL is the Push remote URL the Factory reports.
+_Avoid_: remote, origin, repository URL
+
 **Changed Repositories**:
 The Repositories in which a Ticket's branch holds commits beyond the Base. The Factory reports them live while the Ticket is In Progress, and each finish settles them, replacing the earlier list. Nobody sets them by hand. Every Ticket records them, including those whose work never lands. A finish recorded before Repositories existed reads as the Home Repository's. A Spec's Changed Repositories are the union of its Tickets'.
 _Avoid_: affected repos, target repos, scope
@@ -33,7 +37,7 @@ The short, permanent name that identifies a Project to anything connecting to Co
 _Avoid_: Slug, Project ID
 
 **Project Options**:
-The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides, Auto-accept and Focus. Unlike an Option, what it sets belongs to one Project.
+The page where the human sets a Project's settings, such as its Landing Method, CI Tracking, GitHub Issues, Models, Stage Guides, Auto-accept and Focus, and its Repositories section, where the human adds and removes the Project's Repositories (the CLI does the same). Unlike an Option, what it sets belongs to one Project.
 _Avoid_: Project settings, preferences, config
 
 **Models**:
@@ -196,7 +200,7 @@ For a Ticket's accepted work to reach the Project's base, which makes the Ticket
 _Avoid_: Merge, ship, deliver, complete
 
 **Landing Method**:
-A Project's choice of how accepted work reaches its base. It is Merge (the Factory merges the branch into the base), Branch (the Factory leaves the branch for the human to merge, and lands the Ticket when it sees the merge) or Pull Request (the Factory pushes the branch and a pull request is opened on the Code Host). Merge and Branch have Push as an option, and Pull Request implies it; Land per Spec applies under Merge and Pull Request, and has no effect under Branch.
+A Project's choice of how accepted work reaches its base. It is Project-wide and applies in every Repository; nothing about landing is set per Repository. It is Merge (the Factory merges the branch into the base), Branch (the Factory leaves the branch for the human to merge, and lands the Ticket when it sees the merge) or Pull Request (the Factory pushes the branch and a pull request is opened on the Code Host). Merge and Branch have Push as an option, and Pull Request implies it; Land per Spec applies under Merge and Pull Request, and has no effect under Branch.
 _Avoid_: Completion option, delivery mode, finish mode
 
 **Landing Policy**:
@@ -223,11 +227,14 @@ The Needs Me reason of an Accepted Ticket whose pull request was closed or aband
 _Avoid_: PR abandoned
 
 **Base**:
-The branch, a Project setting (`main` by default), that a Project's work is cut from and lands on, under every Landing Method.
+The branch that a Project's work is cut from and lands on, under every Landing Method. Each Repository has its own Base, `main` by default; the Home Repository's is the Project's Base, a Project setting.
 _Avoid_: target branch, merge branch
 
 **Base missing**:
 The Needs Me reason of a Project whose base exists neither locally nor on the Push remote. It is one Focus Item per Project naming the branch and the fix. Until a later poll finds the branch, the Factory neither lands nor cuts new branches. It sits beside Base diverged.
+
+**Repository missing**:
+The Needs Me reason of a Repository the Factory has no usable clone of: it couldn't clone it, or found something other than a clone with a matching Clone URL where the clone should be. It is one Focus Item per Repository naming the path, the Clone URL and what is wrong. The Factory never touches what it finds there, and starts no new Claims until a later poll finds the clone. It sits beside Base missing.
 
 **Base diverged**:
 The Needs Me reason of a Project whose Factory can't bring the local base level with the remote base. Under Pull Request it means the local base holds commits the remote's doesn't, so the Factory can't fast-forward it. Under Merge + Push, where a local base that is only ahead is current, it means the local base and the remote's each hold commits the other lacks and the Factory couldn't move the local base onto the remote's: a rebuilt merge or a replayed commit conflicted, or an unpushed merge isn't one of the Factory's. It is one Focus Item per Project showing the local and remote commits and the fix, and the Factory neither lands nor cuts new branches until the human reconciles the base and its next poll brings it level cleanly.
@@ -342,7 +349,7 @@ An ordinary implementation Ticket opened to fix a failed CI Run: by a CI Rule on
 _Avoid_: CI Ticket, failure Ticket
 
 **Push remote**:
-The git remote a Landing Method's Push sends work to, `origin` unless the human names another. The Factory reports its URL when it starts, from which the CI section of Project Options fills in the GitHub repository, or the Azure DevOps project URL from an Azure Repos remote, and from which Code Central works out the Code Host under Pull Request.
+The git remote a Landing Method's Push sends work to, `origin` unless the human names another. The name is Project-wide and applies in every Repository. Its URL, which is the Home Repository's Clone URL, is reported by the Factory when it starts, from which the CI section of Project Options fills in the GitHub repository, or the Azure DevOps project URL from an Azure Repos remote, and from which Code Central works out the Code Host under Pull Request.
 _Avoid_: Upstream, origin (for the concept)
 
 **Blocker**:
@@ -415,7 +422,7 @@ Who made a change: the human, an agent, or an Integration.
 _Avoid_: User, caller
 
 **Needs Me**:
-The Tickets waiting on the human before they can move, a Project's Base diverged or Base missing, and each pushed commit's CI failed, CI cancelled or CI unavailable, one item per commit listing the Tickets waiting on it.
+The Tickets waiting on the human before they can move, a Project's Base diverged or Base missing, a Repository missing, and each pushed commit's CI failed, CI cancelled or CI unavailable, one item per commit listing the Tickets waiting on it.
 _Avoid_: Inbox, blocked
 
 **Needs Me count**:
@@ -523,7 +530,7 @@ A view showing the human one Focus Item at a time from Needs Me, moving to the n
 _Avoid_: Zen mode, queue view
 
 **Focus Item**:
-One thing in Needs Me, of a reason its Project's Focus Kinds leave on, that the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, or a Project's Base diverged or Base missing. It opens with a Focus badge naming its reason.
+One thing in Needs Me, of a reason its Project's Focus Kinds leave on, that the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, a Project's Base diverged or Base missing, or a Repository missing. It opens with a Focus badge naming its reason.
 _Avoid_: Action, card, task
 
 **Reason badge**:
