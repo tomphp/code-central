@@ -23,7 +23,7 @@ func (f *factory) locateBase(ctx context.Context, p core.ProjectView) bool {
 				f.printf("warning: can't fetch %s to look for the base, %s: %s", p.Landing.Remote, base, firstLine(out))
 			}
 		} else if theirs, rerr := f.home.git.commit("refs/remotes/" + p.Landing.Remote + "/" + base); rerr == nil {
-			if _, berr := f.gitOut(f.home.dir,"branch", "--no-track", base, theirs); berr != nil {
+			if _, berr := f.gitOut(f.home.dir, "branch", "--no-track", base, theirs); berr != nil {
 				f.printf("warning: can't create the base, %s, from %s/%s: %v", base, p.Landing.Remote, base, berr)
 			} else {
 				f.printf("base: created %s at %s from %s/%s", base, short(theirs), p.Landing.Remote, base)

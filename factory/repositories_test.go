@@ -256,6 +256,29 @@ func TestAFailedCloneIsRepositoryMissing(t *testing.T) {
 	}
 }
 
+func TestBackToTheHomeRepositoryAloneTheCloneReportIsCleared(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	web := h.AddRepository("web")
+	r := h.Start()
+	r.Poll()
+	if c := clone(t, h, "web"); c == nil {
+		t.Fatal("web's clone isn't reported")
+	}
+	if _, err := h.Human().RemoveRepository(context.Background(), h.Project, core.RemoveRepositoryInput{Name: "web"}); err != nil {
+		t.Fatal(err)
+	}
+	r.Poll()
+
+	// Added again, web has no clone report until the Factory's next poll.
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: "web", CloneURL: web.CloneURL}); err != nil {
+		t.Fatal(err)
+	}
+	if c := clone(t, h, "web"); c != nil {
+		t.Errorf("web's clone %+v before the Factory has looked again, want none", c)
+	}
+}
+
 func TestARemovedRepositorysCloneIsLeftOnDisk(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)

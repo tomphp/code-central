@@ -49,7 +49,8 @@ func (f *factory) newRepository(name, dir string) *repository {
 // syncRepositories rebuilds the registry from p's Repositories: it
 // clones each Repository with nothing at its path, adopts each matching
 // clone, and reports every clone to Code Central. A Project with the
-// Home Repository alone has nothing to clone or report.
+// Home Repository alone has nothing to clone or report, once a report
+// has cleared any from when it had more.
 func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 	next := map[string]*repository{}
 	var report []core.RepositoryReport
@@ -71,9 +72,12 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 		report = append(report, core.RepositoryReport{Name: v.Name, Path: r.dir, State: state, Problem: r.problem})
 	}
 	f.repositories = next
-	if len(p.Repositories) < 2 {
+	// Back to the Home Repository alone, one more report clears the last.
+	several := len(p.Repositories) > 1
+	if !several && !f.reportedSeveral {
 		return
 	}
+	f.reportedSeveral = several
 	if _, err := f.client.ReportRepositories(ctx, f.project, core.ReportRepositoriesInput{Repositories: report}); err != nil && ctx.Err() == nil {
 		if !f.reportRepositoriesFailing {
 			f.printf("warning: can't report the Repositories' clones to Code Central: %v", err)

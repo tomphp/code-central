@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -86,7 +87,7 @@ func (c *Core) ReportRepositories(_ context.Context, key string, in ReportReposi
 			return Written[ProjectView]{}, invalid("repositories", "each Repository needs its name")
 		case path == "":
 			return Written[ProjectView]{}, invalid("repositories", "Repository %s needs the path of its clone", name)
-		case r.State != CloneReady && r.State != CloneMissing:
+		case !slices.Contains(CloneStates, r.State):
 			return Written[ProjectView]{}, invalid("repositories", "Repository %s's state is ready or missing, not %q", name, r.State)
 		case r.State == CloneMissing && problem == "":
 			return Written[ProjectView]{}, invalid("repositories", "Repository %s is missing, so needs the problem", name)
@@ -140,7 +141,8 @@ func (hs *heartbeats) cloneView(project, name string, now time.Time) *CloneView 
 	return &v
 }
 
-// fillClones fills in each of rs's clones from p's latest clone report.
+// fillClones fills in each of rs's clones from the latest clone report of
+// the Project key.
 func (c *Core) fillClones(key string, rs []RepositoryView) {
 	hs := c.heartbeats
 	hs.mu.Lock()

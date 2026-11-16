@@ -298,17 +298,19 @@ type factory struct {
 	home *repository
 	// repositories is the registry of the Project's Repositories by
 	// Repository Name, home among them, rebuilt from the Project on every
-	// poll; the poll's own. reportRepositoriesFailing is whether the last
-	// report of their clones failed, so a failure warns once.
+	// poll; the poll's own. reportedSeveral is whether the last report of
+	// their clones was of several, and reportRepositoriesFailing whether it
+	// failed, so a failure warns once.
 	repositories              map[string]*repository
+	reportedSeveral           bool
 	reportRepositoriesFailing bool
 	project                   string
 	host                      string // the machine, as the Heartbeats name it
 	client                    *client.Client
-	events     *sender[core.SessionEvent]  // posts Session Events
-	usage      *sender[core.UsageResponse] // posts model responses' token usage
-	state      *stateFile
-	lock       *os.File // held for the Factory's whole life
+	events                    *sender[core.SessionEvent]  // posts Session Events
+	usage                     *sender[core.UsageResponse] // posts model responses' token usage
+	state                     *stateFile
+	lock                      *os.File // held for the Factory's whole life
 
 	outMu sync.Mutex
 	mu    sync.Mutex           // guards turns, ended, info and backInReady

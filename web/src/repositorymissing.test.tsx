@@ -8,7 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { newWorld } from "./api/core/core";
 import { rowDetail } from "./format";
-import { allClear, focus, renderApp, scenario } from "./worldTesting";
+import { allClear, focus, renderApp, scenario, settle } from "./worldTesting";
 
 const webURL = "git@github.com:acme/web.git";
 const problem = "/src/web isn't a git repository";
@@ -71,6 +71,7 @@ describe("Repository missing", () => {
     const panel = () => within(focus()).getByRole("region", { name: "Repository missing" });
     expect(panel()).toHaveTextContent("/src/web");
     await userEvent.click(within(focus()).getByRole("button", { name: "Skip" }));
+    await settle(w);
     expect(panel()).toHaveTextContent("/src/api");
   });
 

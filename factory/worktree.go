@@ -49,16 +49,16 @@ func (f *factory) branchWorktree(branch, wt, from string) error {
 	if _, err := os.Stat(wt); err == nil {
 		return f.strayDirectory(wt)
 	}
-	if _, err := f.gitOut(f.home.dir,"rev-parse", "--verify", "-q", "refs/heads/"+branch); err == nil {
+	if _, err := f.gitOut(f.home.dir, "rev-parse", "--verify", "-q", "refs/heads/"+branch); err == nil {
 		for _, w := range list {
 			if w.branch == branch {
 				return f.branchElsewhere(branch, wt, w.path)
 			}
 		}
-		_, err := f.gitOut(f.home.dir,"worktree", "add", "-q", wt, branch)
+		_, err := f.gitOut(f.home.dir, "worktree", "add", "-q", wt, branch)
 		return err
 	}
-	_, err = f.gitOut(f.home.dir,"worktree", "add", "-q", "-b", branch, wt, from)
+	_, err = f.gitOut(f.home.dir, "worktree", "add", "-q", "-b", branch, wt, from)
 	return err
 }
 
@@ -108,7 +108,7 @@ func (f *factory) detachAtBase(wt string) (*leftAsItWas, error) {
 		if _, err := os.Stat(wt); err == nil {
 			return &leftAsItWas{stray: true}, nil
 		}
-		_, err := f.gitOut(f.home.dir,"worktree", "add", "-q", "--detach", wt, f.baseBranch())
+		_, err := f.gitOut(f.home.dir, "worktree", "add", "-q", "--detach", wt, f.baseBranch())
 		return nil, err
 	}
 	if w.branch != "" {
@@ -128,7 +128,7 @@ func (f *factory) detachAtBase(wt string) (*leftAsItWas, error) {
 // prune runs `git worktree prune`, dropping worktrees whose folders are
 // gone.
 func (f *factory) prune() {
-	if _, err := f.gitOut(f.home.dir,"worktree", "prune"); err != nil {
+	if _, err := f.gitOut(f.home.dir, "worktree", "prune"); err != nil {
 		f.printf("warning: %v", err)
 	}
 }
