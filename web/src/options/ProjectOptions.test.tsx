@@ -3,12 +3,11 @@
 // its CI settings (code-central-251), whose turn-on the CI check may
 // refuse (code-central-252), CI Rules (code-central-254) and the CI
 // Watcher's status (code-central-253). On the WASM Core.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { App } from "../App";
-import { newWorld, type World } from "../api/core/core";
-import { scenario } from "../api/scenario";
+import { newWorld } from "../api/core/core";
+import { renderApp, scenario, settle } from "../worldTesting";
 
 // acme is a WASM Core world with the Project acme, which has no Spec.
 async function acme() {
@@ -16,11 +15,6 @@ async function acme() {
   const s = scenario(w);
   await s.project("acme", "Acme");
   return { w, s };
-}
-
-function renderApp(w: World, url = "/") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
 }
 
 const nav = () => screen.getByRole("navigation", { name: "Filters" });
@@ -35,10 +29,10 @@ const addForm = () =>
 describe("Project Options", () => {
   it("opens from an active Project's menu, in the URL, so a reload keeps it", async () => {
     const { w } = await acme();
-    const { unmount } = renderApp(w);
+    const { unmount } = await renderApp(w, "/");
 
     await userEvent.click(
-      await within(nav()).findByRole("button", { name: "Menu for Acme" }),
+      within(nav()).getByRole("button", { name: "Menu for Acme" }),
     );
     const menu = screen.getByRole("menu", { name: "Menu for Acme" });
     expect(
@@ -49,31 +43,32 @@ describe("Project Options", () => {
     await userEvent.click(
       within(menu).getByRole("menuitem", { name: "Options" }),
     );
+    await settle(w);
 
     expect(
-      await screen.findByRole("heading", { name: "Acme: Project Options" }),
+      screen.getByRole("heading", { name: "Acme: Project Options" }),
     ).toBeInTheDocument();
     expect(window.location.search).toBe("?view=project-options&project=acme");
 
     unmount();
-    renderApp(w, window.location.pathname + window.location.search);
+    await renderApp(w, window.location.pathname + window.location.search);
     expect(
-      await screen.findByRole("heading", { name: "Acme: Project Options" }),
+      screen.getByRole("heading", { name: "Acme: Project Options" }),
     ).toBeInTheDocument();
 
     await userEvent.click(
       within(page()).getByRole("link", { name: "Back to the inbox" }),
     );
+    await settle(w);
     expect(
-      await within(nav()).findByRole("button", { name: /^Acme/ }),
+      within(nav()).getByRole("button", { name: /^Acme/ }),
     ).toHaveAttribute("aria-pressed", "true");
     expect(window.location.search).toBe("?view=inbox&project=acme");
   });
 
   it("offers Pull Request with no Push checkbox, the worked-out Code Host, and the PAT variable only for Azure Repos", async () => {
     const { w, s } = await acme();
-    renderApp(w, "/?view=project-options&project=acme");
-    await screen.findByRole("group", { name: "Landing Method" });
+    await renderApp(w, "/?view=project-options&project=acme");
 
     await userEvent.click(
       within(landing()).getByRole("radio", { name: "Pull Request" }),
@@ -84,22 +79,22 @@ describe("Project Options", () => {
       "start the Factory once",
     );
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
-    const alert = await within(landing()).findByRole("alert");
+    await settle(w);
+    const alert = within(landing()).getByRole("alert");
     expect(alert).toHaveTextContent("Push remote's URL");
     expect(alert).toHaveTextContent("start the Factory once");
 
     await s.reportPushRemote("acme", "git@github.com:acme/web.git");
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
-    await waitFor(() =>
-      expect(within(landing()).getByRole("status", { name: "Code Host" })).toHaveTextContent(
-        "Code Host: GitHub, repository acme/web.",
-      ),
+    await settle(w);
+    expect(within(landing()).getByRole("status", { name: "Code Host" })).toHaveTextContent(
+      "Code Host: GitHub, repository acme/web.",
     );
     expect(within(landing()).queryByRole("textbox", { name: "PAT variable" })).toBeNull();
     expect((await w.api.listProjects())[0].landing).toMatchObject({ method: "pull_request", push: false });
 
     await s.reportPushRemote("acme", "https://dev.azure.com/acme/shop/_git/web");
-    const pat = await within(landing()).findByRole("textbox", { name: "PAT variable" });
+    const pat = within(landing()).getByRole("textbox", { name: "PAT variable" });
     expect(pat).toHaveValue("ADO_PAT");
     expect(within(landing()).getByRole("status", { name: "Code Host" })).toHaveTextContent(
       "Azure Repos, repository acme/shop/web",
@@ -107,42 +102,39 @@ describe("Project Options", () => {
     await userEvent.clear(pat);
     await userEvent.type(pat, "REPOS_PAT");
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
-    await waitFor(async () =>
-      expect((await w.api.listProjects())[0].landing.pat_env).toBe("REPOS_PAT"),
-    );
+    await settle(w);
+    expect((await w.api.listProjects())[0].landing.pat_env).toBe("REPOS_PAT");
   });
 
   it("saves Pull Request for an Azure Repos Push remote without sending the view-only fields", async () => {
     const { w, s } = await acme();
     await s.reportPushRemote("acme", "https://dev.azure.com/org/proj/_git/repo");
-    renderApp(w, "/?view=project-options&project=acme");
-    await screen.findByRole("group", { name: "Landing Method" });
+    await renderApp(w, "/?view=project-options&project=acme");
 
     await userEvent.click(within(landing()).getByRole("radio", { name: "Pull Request" }));
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
-    await waitFor(async () =>
-      expect((await w.api.listProjects())[0].landing).toMatchObject({
-        method: "pull_request",
-        code_host: "azure_repos",
-      }),
-    );
+    await settle(w);
+    expect((await w.api.listProjects())[0].landing).toMatchObject({
+      method: "pull_request",
+      code_host: "azure_repos",
+    });
     expect(within(landing()).queryByRole("alert")).toBeNull();
   });
 
   it("shows the Pull Request Watcher's status under Pull Request: Watching, rate-limited, or an error with its fix", async () => {
     const { w, s } = await acme();
     await s.reportPushRemote("acme", "git@github.com:acme/web.git");
-    renderApp(w, "/?view=project-options&project=acme");
-    await screen.findByRole("group", { name: "Landing Method" });
+    await renderApp(w, "/?view=project-options&project=acme");
     expect(within(landing()).queryByRole("region", { name: "Pull Request Watcher" })).toBeNull();
 
     await userEvent.click(within(landing()).getByRole("radio", { name: "Pull Request" }));
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
-    const watcher = await within(landing()).findByRole("region", { name: "Pull Request Watcher" });
+    await settle(w);
+    const watcher = within(landing()).getByRole("region", { name: "Pull Request Watcher" });
     expect(watcher).toHaveTextContent("Starting; it hasn't reported yet");
 
     await s.reportPullRequestWatcher("acme", { state: "watching" });
-    await waitFor(() => expect(watcher).toHaveTextContent("Pull Request Watcher: Watching acme/web."));
+    expect(watcher).toHaveTextContent("Pull Request Watcher: Watching acme/web.");
 
     await s.reportPullRequestWatcher("acme", {
       state: "error",
@@ -150,29 +142,29 @@ describe("Project Options", () => {
       message: "the account gh is logged in as can't write to acme/web",
       fix: "Log gh in as an account with write access.",
     });
-    await waitFor(() => expect(watcher).toHaveTextContent("can't write to acme/web"));
+    expect(watcher).toHaveTextContent("can't write to acme/web");
     expect(watcher).toHaveTextContent("Log gh in as an account with write access.");
     expect(watcher).toHaveTextContent("goes back to Watching once the cause is fixed");
 
     // Switching away forgets its status and hides it.
     await userEvent.click(within(landing()).getByRole("radio", { name: "Merge" }));
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(within(landing()).queryByRole("region", { name: "Pull Request Watcher" })).toBeNull());
+    await settle(w);
+    expect(within(landing()).queryByRole("region", { name: "Pull Request Watcher" })).toBeNull();
     expect((await w.api.listProjects())[0].landing.watcher).toEqual({ state: "not_reported" });
   });
 
   it("shows Land per Spec on under Merge, disabled but kept under Branch, and saves it", async () => {
     const { w } = await acme();
-    renderApp(w, "/?view=project-options&project=acme");
+    await renderApp(w, "/?view=project-options&project=acme");
 
-    const box = await within(
-      await screen.findByRole("group", { name: "Landing Method" }),
-    ).findByRole("checkbox", { name: "Land per Spec" });
+    const box = within(landing()).getByRole("checkbox", { name: "Land per Spec" });
     expect(box).toBeChecked();
     expect(box).toBeEnabled();
 
     await userEvent.click(box);
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
+    await settle(w);
     expect((await w.api.listProjects())[0].landing.land_per_spec).toBe(false);
 
     await userEvent.click(
@@ -189,11 +181,9 @@ describe("Project Options", () => {
       push: false,
       remote: "upstream",
     });
-    renderApp(w, "/?view=project-options&project=acme");
+    await renderApp(w, "/?view=project-options&project=acme");
 
-    const merge = await within(
-      await screen.findByRole("group", { name: "Landing Method" }),
-    ).findByRole("radio", { name: "Merge" });
+    const merge = within(landing()).getByRole("radio", { name: "Merge" });
     expect(merge).not.toBeChecked();
     expect(merge).toHaveAccessibleDescription(
       /merges the accepted branch into the base/,
@@ -222,9 +212,8 @@ describe("Project Options", () => {
   it("shows the Base branch above the radios, sends it on every save, and shows its error", async () => {
     const { w } = await acme();
     await w.api.setLandingMethod("acme", { method: "merge", push: false, remote: "origin", base: "develop" });
-    renderApp(w, "/?view=project-options&project=acme");
+    await renderApp(w, "/?view=project-options&project=acme");
 
-    await screen.findByRole("group", { name: "Landing Method" });
     const base = within(landing()).getByRole("textbox", { name: "Base branch" });
     expect(base).toHaveValue("develop");
     const radio = within(landing()).getByRole("radio", { name: "Merge" });
@@ -234,19 +223,20 @@ describe("Project Options", () => {
     // Changing only the method still sends the base shown.
     await userEvent.click(within(landing()).getByRole("radio", { name: "Leave as a branch" }));
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
-    await waitFor(async () =>
-      expect((await w.api.listProjects())[0].landing).toMatchObject({ method: "branch", base: "develop" }),
-    );
+    await settle(w);
+    expect((await w.api.listProjects())[0].landing).toMatchObject({ method: "branch", base: "develop" });
 
     await userEvent.clear(base);
     await userEvent.type(base, "release/1.0");
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
-    await waitFor(async () => expect((await w.api.listProjects())[0].landing.base).toBe("release/1.0"));
+    await settle(w);
+    expect((await w.api.listProjects())[0].landing.base).toBe("release/1.0");
 
     await userEvent.clear(base);
     await userEvent.type(base, "bad name");
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
-    expect(await within(landing()).findByRole("alert")).toHaveTextContent("branch name");
+    await settle(w);
+    expect(within(landing()).getByRole("alert")).toHaveTextContent("branch name");
     expect(base).toHaveAttribute("aria-invalid", "true");
     expect(base).toHaveAccessibleDescription(/branch name/);
     expect((await w.api.listProjects())[0].landing.base).toBe("release/1.0");
@@ -254,11 +244,9 @@ describe("Project Options", () => {
 
   it("saves the Landing Method, and shows a field error from the service", async () => {
     const { w } = await acme();
-    renderApp(w, "/?view=project-options&project=acme");
+    await renderApp(w, "/?view=project-options&project=acme");
 
-    const save = await within(
-      await screen.findByRole("group", { name: "Landing Method" }),
-    ).findByRole("button", { name: "Save" });
+    const save = within(landing()).getByRole("button", { name: "Save" });
     expect(
       within(landing()).getByRole("radio", { name: "Merge" }),
     ).toBeChecked();
@@ -276,7 +264,8 @@ describe("Project Options", () => {
     const remote = within(landing()).getByRole("textbox", { name: "Remote" });
     await userEvent.clear(remote);
     await userEvent.click(save);
-    expect(await within(landing()).findByRole("alert")).toHaveTextContent(
+    await settle(w);
+    expect(within(landing()).getByRole("alert")).toHaveTextContent(
       "Push needs a git remote",
     );
     expect(remote).toHaveAccessibleDescription(/Push needs a git remote/);
@@ -297,9 +286,8 @@ describe("Project Options", () => {
     await userEvent.type(remote, "upstream");
     expect(within(landing()).queryByRole("alert")).toBeNull();
     await userEvent.click(save);
-    expect(await within(landing()).findByRole("status")).toHaveTextContent(
-      "Saved",
-    );
+    await settle(w);
+    expect(within(landing()).getByRole("status")).toHaveTextContent("Saved");
     expect((await w.api.listProjects())[0].landing).toEqual({
       method: "branch",
       push: true,
@@ -322,18 +310,15 @@ describe("Project Options", () => {
       push: true,
       remote: "upstream",
     });
-    renderApp(w, "/?view=project-options&project=acme");
+    await renderApp(w, "/?view=project-options&project=acme");
 
-    const remote = await within(
-      await screen.findByRole("group", { name: "Landing Method" }),
-    ).findByRole("textbox", { name: "Remote" });
+    const remote = within(landing()).getByRole("textbox", { name: "Remote" });
     await userEvent.type(remote, " ");
     await userEvent.click(
       within(landing()).getByRole("button", { name: "Save" }),
     );
-    expect(await within(landing()).findByRole("status")).toHaveTextContent(
-      "Saved",
-    );
+    await settle(w);
+    expect(within(landing()).getByRole("status")).toHaveTextContent("Saved");
     expect(remote).toHaveValue("upstream");
     expect(
       within(landing()).getByRole("button", { name: "Save" }),
@@ -342,11 +327,9 @@ describe("Project Options", () => {
 
   it("shows a change made elsewhere, as another tab would", async () => {
     const { w } = await acme();
-    renderApp(w, "/?view=project-options&project=acme");
+    await renderApp(w, "/?view=project-options&project=acme");
     expect(
-      await within(
-        await screen.findByRole("group", { name: "Landing Method" }),
-      ).findByRole("radio", { name: "Merge" }),
+      within(landing()).getByRole("radio", { name: "Merge" }),
     ).toBeChecked();
 
     await w.api.setLandingMethod("acme", {
@@ -354,11 +337,10 @@ describe("Project Options", () => {
       push: true,
       remote: "upstream",
     });
-    await waitFor(() =>
-      expect(
-        within(landing()).getByRole("radio", { name: "Leave as a branch" }),
-      ).toBeChecked(),
-    );
+    await settle(w);
+    expect(
+      within(landing()).getByRole("radio", { name: "Leave as a branch" }),
+    ).toBeChecked();
     expect(
       within(landing()).getByRole("checkbox", { name: "Push" }),
     ).toBeChecked();
@@ -371,9 +353,9 @@ describe("Project Options", () => {
     const { w, s } = await acme();
     await s.project("old", "Old App");
     await s.archive("old");
-    renderApp(w);
+    await renderApp(w, "/");
     await userEvent.click(
-      await within(nav()).findByRole("button", {
+      within(nav()).getByRole("button", {
         name: "Menu for Old App",
         hidden: true,
       }),
@@ -389,11 +371,9 @@ describe("Project Options", () => {
     const { w, s } = await acme();
     await s.project("old", "Old App");
     await s.archive("old");
-    renderApp(w, "/?view=project-options&project=old");
+    await renderApp(w, "/?view=project-options&project=old");
     expect(
-      await within(page()).findByText(
-        /archived: unarchive it to change its options/,
-      ),
+      within(page()).getByText(/archived: unarchive it to change its options/),
     ).toBeInTheDocument();
     expect(
       within(landing()).getByRole("radio", { name: "Merge" }),
@@ -415,9 +395,9 @@ describe("Project Options", () => {
 
   it("says when the URL names no such Project", async () => {
     const { w } = await acme();
-    renderApp(w, "/?view=project-options&project=nope");
+    await renderApp(w, "/?view=project-options&project=nope");
     expect(
-      await within(page()).findByText("There is no Project nope."),
+      within(page()).getByText("There is no Project nope."),
     ).toBeInTheDocument();
     expect(
       within(page()).getByRole("link", { name: "Back to the inbox" }),
@@ -427,9 +407,9 @@ describe("Project Options", () => {
   describe("the CI section", () => {
     it("shows CI Tracking off by default, on GitHub Actions, with nothing named", async () => {
       const { w } = await acme();
-      renderApp(w, "/?view=project-options&project=acme");
+      await renderApp(w, "/?view=project-options&project=acme");
 
-      const group = await screen.findByRole("group", { name: "CI" });
+      const group = screen.getByRole("group", { name: "CI" });
       const tracking = within(group).getByRole("checkbox", {
         name: "CI Tracking",
       });
@@ -467,11 +447,11 @@ describe("Project Options", () => {
     it("prefills the repository from a GitHub Push remote the Factory reported, and lets the human change it", async () => {
       const { w, s } = await acme();
       await s.reportPushRemote("acme", "git@github.com:acme/web.git");
-      renderApp(w, "/?view=project-options&project=acme");
+      await renderApp(w, "/?view=project-options&project=acme");
 
-      const repository = await within(
-        await screen.findByRole("group", { name: "CI" }),
-      ).findByRole("textbox", { name: "GitHub repository" });
+      const repository = within(ci()).getByRole("textbox", {
+        name: "GitHub repository",
+      });
       expect(repository).toHaveValue("acme/web");
       expect(repository).toHaveAccessibleDescription(
         /From the Push remote git@github\.com:acme\/web\.git/,
@@ -485,9 +465,8 @@ describe("Project Options", () => {
       await userEvent.clear(repository);
       await userEvent.type(repository, "acme/website");
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
-      expect(await within(ci()).findByRole("status")).toHaveTextContent(
-        "Saved",
-      );
+      await settle(w);
+      expect(within(ci()).getByRole("status")).toHaveTextContent("Saved");
       expect((await w.api.listProjects())[0].ci).toMatchObject({
         tracking: true,
         repository: "acme/website",
@@ -505,30 +484,28 @@ describe("Project Options", () => {
         repository: "beta/fork",
         ignored_workflows: [],
       });
-      const { unmount } = renderApp(
+      const { unmount } = await renderApp(
         w,
         "/?view=project-options&project=acme",
       );
 
-      const repository = await within(
-        await screen.findByRole("group", { name: "CI" }),
-      ).findByRole("textbox", { name: "GitHub repository" });
+      const repository = within(ci()).getByRole("textbox", {
+        name: "GitHub repository",
+      });
       expect(repository).toHaveValue("");
       expect(repository).not.toHaveAccessibleDescription(/Push remote/);
       unmount();
 
-      renderApp(w, "/?view=project-options&project=beta");
+      await renderApp(w, "/?view=project-options&project=beta");
       expect(
-        await within(
-          await screen.findByRole("group", { name: "CI" }),
-        ).findByRole("textbox", { name: "GitHub repository" }),
+        within(ci()).getByRole("textbox", { name: "GitHub repository" }),
       ).toHaveValue("beta/fork");
     });
 
     it("shows each provider's fields, keeping the other's values when switching", async () => {
       const { w } = await acme();
-      renderApp(w, "/?view=project-options&project=acme");
-      const group = await screen.findByRole("group", { name: "CI" });
+      await renderApp(w, "/?view=project-options&project=acme");
+      const group = screen.getByRole("group", { name: "CI" });
       expect(
         within(group).queryByRole("textbox", {
           name: "Azure DevOps project URL",
@@ -575,9 +552,8 @@ describe("Project Options", () => {
       await userEvent.click(
         within(group).getByRole("button", { name: "Save" }),
       );
-      expect(await within(group).findByRole("status")).toHaveTextContent(
-        "Saved",
-      );
+      await settle(w);
+      expect(within(group).getByRole("status")).toHaveTextContent("Saved");
       expect((await w.api.listProjects())[0].ci).toMatchObject({
         provider: "azure_pipelines",
         repository: "acme/web",
@@ -612,12 +588,12 @@ describe("Project Options", () => {
         project_url: "https://dev.azure.com/beta/other",
         ignored_workflows: [],
       });
-      const { unmount } = renderApp(
+      const { unmount } = await renderApp(
         w,
         "/?view=project-options&project=acme",
       );
 
-      const group = await screen.findByRole("group", { name: "CI" });
+      const group = screen.getByRole("group", { name: "CI" });
       // GitHub Actions: nothing to prefill.
       await userEvent.selectOptions(
         within(group).getByRole("combobox", { name: "CI Provider" }),
@@ -632,10 +608,10 @@ describe("Project Options", () => {
       );
       unmount();
 
-      renderApp(w, "/?view=project-options&project=beta");
-      const stored = await within(
-        await screen.findByRole("group", { name: "CI" }),
-      ).findByRole("textbox", { name: "Azure DevOps project URL" });
+      await renderApp(w, "/?view=project-options&project=beta");
+      const stored = within(ci()).getByRole("textbox", {
+        name: "Azure DevOps project URL",
+      });
       expect(stored).toHaveValue("https://dev.azure.com/beta/other");
       expect(stored).not.toHaveAccessibleDescription(/Push remote/);
     });
@@ -646,8 +622,8 @@ describe("Project Options", () => {
         "acme",
         "ssh://git@tfs.example.com:22/tfs/DefaultCollection/web/_git/app",
       );
-      renderApp(w, "/?view=project-options&project=acme");
-      const group = await screen.findByRole("group", { name: "CI" });
+      await renderApp(w, "/?view=project-options&project=acme");
+      const group = screen.getByRole("group", { name: "CI" });
       await userEvent.selectOptions(
         within(group).getByRole("combobox", { name: "CI Provider" }),
         "azure_pipelines",
@@ -661,8 +637,8 @@ describe("Project Options", () => {
 
     it("shows field errors on the project URL and the PAT environment variable", async () => {
       const { w } = await acme();
-      renderApp(w, "/?view=project-options&project=acme");
-      const group = await screen.findByRole("group", { name: "CI" });
+      await renderApp(w, "/?view=project-options&project=acme");
+      const group = screen.getByRole("group", { name: "CI" });
       await userEvent.selectOptions(
         within(group).getByRole("combobox", { name: "CI Provider" }),
         "azure_pipelines",
@@ -673,11 +649,12 @@ describe("Project Options", () => {
       await userEvent.click(
         within(group).getByRole("button", { name: "Save" }),
       );
+      await settle(w);
       const url = within(group).getByRole("textbox", {
         name: "Azure DevOps project URL",
       });
-      await waitFor(() => expect(url).toBeInvalid());
-      expect(await within(group).findByRole("alert")).toHaveTextContent(
+      expect(url).toBeInvalid();
+      expect(within(group).getByRole("alert")).toHaveTextContent(
         "CI Tracking needs the Azure DevOps project to watch, as its URL",
       );
 
@@ -690,7 +667,8 @@ describe("Project Options", () => {
       await userEvent.click(
         within(group).getByRole("button", { name: "Save" }),
       );
-      await waitFor(() => expect(pat).toBeInvalid());
+      await settle(w);
+      expect(pat).toBeInvalid();
       expect(url).not.toBeInvalid();
     });
 
@@ -704,10 +682,8 @@ describe("Project Options", () => {
         ignored_workflows: [],
       });
       await s.reportCIWatcherStatus("acme", { state: "watching" });
-      renderApp(w, "/?view=project-options&project=acme");
-      const watcher = await within(
-        await screen.findByRole("group", { name: "CI" }),
-      ).findByRole("region", { name: "CI Watcher" });
+      await renderApp(w, "/?view=project-options&project=acme");
+      const watcher = within(ci()).getByRole("region", { name: "CI Watcher" });
       expect(watcher).toHaveTextContent(
         "CI Watcher: Watching https://dev.azure.com/acme/web.",
       );
@@ -716,20 +692,19 @@ describe("Project Options", () => {
     it("turns CI Tracking on with a prefilled repository and Ignored workflows", async () => {
       const { w, s } = await acme();
       await s.reportPushRemote("acme", "https://github.com/acme/web.git");
-      renderApp(w, "/?view=project-options&project=acme");
+      await renderApp(w, "/?view=project-options&project=acme");
 
-      const tracking = await within(
-        await screen.findByRole("group", { name: "CI" }),
-      ).findByRole("checkbox", { name: "CI Tracking" });
+      const tracking = within(ci()).getByRole("checkbox", {
+        name: "CI Tracking",
+      });
       await userEvent.click(tracking);
       await userEvent.type(
         within(ci()).getByRole("textbox", { name: "Ignored workflows" }),
         "nightly.yml, preview.yml",
       );
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
-      expect(await within(ci()).findByRole("status")).toHaveTextContent(
-        "Saved",
-      );
+      await settle(w);
+      expect(within(ci()).getByRole("status")).toHaveTextContent("Saved");
       expect((await w.api.listProjects())[0].ci).toEqual({
         tracking: true,
         provider: "github_actions",
@@ -748,19 +723,14 @@ describe("Project Options", () => {
 
       await userEvent.click(tracking);
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
-      await waitFor(async () =>
-        expect((await w.api.listProjects())[0].ci.tracking).toBe(false),
-      );
+      await settle(w);
+      expect((await w.api.listProjects())[0].ci.tracking).toBe(false);
       expect((await w.api.listProjects())[0].ci.repository).toBe("acme/web");
     });
 
     it("shows the CI Watcher's status while CI Tracking is on, live", async () => {
       const { w, s } = await acme();
-      renderApp(w, "/?view=project-options&project=acme");
-      await within(await screen.findByRole("group", { name: "CI" })).findByRole(
-        "checkbox",
-        { name: "CI Tracking" },
-      );
+      await renderApp(w, "/?view=project-options&project=acme");
       expect(
         within(ci()).queryByRole("region", { name: "CI Watcher" }),
       ).toBeNull();
@@ -771,7 +741,8 @@ describe("Project Options", () => {
         repository: "acme/web",
         ignored_workflows: [],
       });
-      const watcher = await within(ci()).findByRole("region", {
+      await settle(w);
+      const watcher = within(ci()).getByRole("region", {
         name: "CI Watcher",
       });
       expect(watcher).toHaveTextContent("CI Watcher: Starting");
@@ -782,11 +753,9 @@ describe("Project Options", () => {
         message: "gh isn't logged in to GitHub",
         fix: "Run gh auth login.",
       });
-      await waitFor(() =>
-        expect(
-          within(ci()).getByRole("region", { name: "CI Watcher" }),
-        ).toHaveTextContent("CI Watcher: Error"),
-      );
+      expect(
+        within(ci()).getByRole("region", { name: "CI Watcher" }),
+      ).toHaveTextContent("CI Watcher: Error");
       expect(
         within(ci()).getByRole("region", { name: "CI Watcher" }),
       ).toHaveTextContent("gh isn't logged in to GitHub");
@@ -795,11 +764,9 @@ describe("Project Options", () => {
       ).toHaveTextContent("Run gh auth login.");
 
       await s.reportCIWatcherStatus("acme", { state: "watching" });
-      await waitFor(() =>
-        expect(
-          within(ci()).getByRole("region", { name: "CI Watcher" }),
-        ).toHaveTextContent("CI Watcher: Watching acme/web"),
-      );
+      expect(
+        within(ci()).getByRole("region", { name: "CI Watcher" }),
+      ).toHaveTextContent("CI Watcher: Watching acme/web");
       expect(
         within(ci()).getByRole("region", { name: "CI Watcher" }),
       ).not.toHaveTextContent("gh auth login");
@@ -817,10 +784,8 @@ describe("Project Options", () => {
         state: "watching",
         rate_limited_until: "2026-01-05T10:15:00Z",
       });
-      renderApp(w, "/?view=project-options&project=acme");
-      const watcher = await within(
-        await screen.findByRole("group", { name: "CI" }),
-      ).findByRole("region", { name: "CI Watcher" });
+      await renderApp(w, "/?view=project-options&project=acme");
+      const watcher = within(ci()).getByRole("region", { name: "CI Watcher" });
       expect(watcher).toHaveTextContent("CI Watcher: Watching acme/web");
       expect(watcher).toHaveTextContent("GitHub is rate-limiting it until");
       expect(watcher.querySelector("time")).toHaveAttribute(
@@ -830,11 +795,9 @@ describe("Project Options", () => {
       expect(watcher.querySelector(".warning")).toBeNull();
 
       await s.reportCIWatcherStatus("acme", { state: "watching" });
-      await waitFor(() =>
-        expect(
-          within(ci()).getByRole("region", { name: "CI Watcher" }),
-        ).not.toHaveTextContent("rate-limiting"),
-      );
+      expect(
+        within(ci()).getByRole("region", { name: "CI Watcher" }),
+      ).not.toHaveTextContent("rate-limiting");
     });
 
     it("shows a crashing CI Watcher's restarts and last line, which the service restarts by itself", async () => {
@@ -850,11 +813,9 @@ describe("Project Options", () => {
         lastLine: "panic: boom",
         restartAt: new Date(w.now().getTime() + 2 * 60_000),
       });
-      renderApp(w, "/?view=project-options&project=acme");
+      await renderApp(w, "/?view=project-options&project=acme");
 
-      const watcher = await within(
-        await screen.findByRole("group", { name: "CI" }),
-      ).findByRole("region", { name: "CI Watcher" });
+      const watcher = within(ci()).getByRole("region", { name: "CI Watcher" });
       expect(watcher).toHaveTextContent(
         "crashed, restarted 3 times; the last line it wrote: panic: boom",
       );
@@ -864,18 +825,17 @@ describe("Project Options", () => {
 
     it("shows the service's refusal on its field", async () => {
       const { w } = await acme();
-      renderApp(w, "/?view=project-options&project=acme");
+      await renderApp(w, "/?view=project-options&project=acme");
 
       await userEvent.click(
-        await within(
-          await screen.findByRole("group", { name: "CI" }),
-        ).findByRole("checkbox", { name: "CI Tracking" }),
+        within(ci()).getByRole("checkbox", { name: "CI Tracking" }),
       );
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
+      await settle(w);
       const repository = within(ci()).getByRole("textbox", {
         name: "GitHub repository",
       });
-      expect(await within(ci()).findByRole("alert")).toHaveTextContent(
+      expect(within(ci()).getByRole("alert")).toHaveTextContent(
         "CI Tracking needs the GitHub repository to watch, as owner/name",
       );
       expect(repository).toHaveAttribute("aria-invalid", "true");
@@ -891,7 +851,8 @@ describe("Project Options", () => {
       });
       await userEvent.type(ignored, ".github/workflows/ci.yml");
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
-      expect(await within(ci()).findByRole("alert")).toHaveTextContent(
+      await settle(w);
+      expect(within(ci()).getByRole("alert")).toHaveTextContent(
         "isn't a workflow file name, such as ci.yml",
       );
       expect(ignored).toHaveAttribute("aria-invalid", "true");
@@ -904,19 +865,18 @@ describe("Project Options", () => {
         reason: "gh isn't logged in to GitHub.",
         fix: "Run gh auth login as the user the service runs as.",
       });
-      renderApp(w, "/?view=project-options&project=acme");
+      await renderApp(w, "/?view=project-options&project=acme");
 
       await userEvent.click(
-        await within(
-          await screen.findByRole("group", { name: "CI" }),
-        ).findByRole("checkbox", { name: "CI Tracking" }),
+        within(ci()).getByRole("checkbox", { name: "CI Tracking" }),
       );
       await userEvent.type(
         within(ci()).getByRole("textbox", { name: "GitHub repository" }),
         "acme/web",
       );
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
-      const alert = await within(ci()).findByRole("alert");
+      await settle(w);
+      const alert = within(ci()).getByRole("alert");
       expect(alert).toHaveTextContent("gh isn't logged in to GitHub.");
       expect(alert).toHaveTextContent(
         "Run gh auth login as the user the service runs as.",
@@ -928,20 +888,17 @@ describe("Project Options", () => {
 
       w.setCICheck();
       await userEvent.click(within(ci()).getByRole("button", { name: "Save" }));
-      expect(await within(ci()).findByRole("status")).toHaveTextContent(
-        "Saved",
-      );
+      await settle(w);
+      expect(within(ci()).getByRole("status")).toHaveTextContent("Saved");
       expect(within(ci()).queryByRole("alert")).toBeNull();
       expect((await w.api.listProjects())[0].ci.tracking).toBe(true);
     });
 
     it("shows a change made elsewhere, as another tab would", async () => {
       const { w } = await acme();
-      renderApp(w, "/?view=project-options&project=acme");
+      await renderApp(w, "/?view=project-options&project=acme");
       expect(
-        await within(
-          await screen.findByRole("group", { name: "CI" }),
-        ).findByRole("checkbox", { name: "CI Tracking" }),
+        within(ci()).getByRole("checkbox", { name: "CI Tracking" }),
       ).not.toBeChecked();
 
       await w.api.setCITracking("acme", {
@@ -950,11 +907,10 @@ describe("Project Options", () => {
         repository: "acme/web",
         ignored_workflows: ["nightly.yml"],
       });
-      await waitFor(() =>
-        expect(
-          within(ci()).getByRole("checkbox", { name: "CI Tracking" }),
-        ).toBeChecked(),
-      );
+      await settle(w);
+      expect(
+        within(ci()).getByRole("checkbox", { name: "CI Tracking" }),
+      ).toBeChecked();
       expect(
         within(ci()).getByRole("textbox", { name: "GitHub repository" }),
       ).toHaveValue("acme/web");
@@ -967,8 +923,8 @@ describe("Project Options", () => {
   describe("the CI Rules", () => {
     it("lists the rules, each with its Spec and the State its Tickets open in", async () => {
       const { w } = await acme();
-      renderApp(w, "/?view=project-options&project=acme");
-      const group = await screen.findByRole("group", { name: "CI Rules" });
+      await renderApp(w, "/?view=project-options&project=acme");
+      const group = screen.getByRole("group", { name: "CI Rules" });
       expect(ci()).toContainElement(group);
       expect(within(group).getByText("No CI Rules yet.")).toBeInTheDocument();
 
@@ -982,30 +938,28 @@ describe("Project Options", () => {
         branch: "release",
         state: "Draft",
       });
-      const list = await within(rules()).findByRole("list", {
+      await settle(w);
+      const list = within(rules()).getByRole("list", {
         name: "CI Rules",
       });
-      await waitFor(() =>
-        expect(
-          within(list)
-            .getAllByRole("listitem")
-            .map((li) => li.textContent),
-        ).toEqual([
-          expect.stringMatching(
-            /^ci\.yml on main.*opens Ready Tickets on acme-1/,
-          ),
-          expect.stringMatching(
-            /^any workflow on release.*opens Draft Tickets on acme-2/,
-          ),
-        ]),
-      );
+      expect(
+        within(list)
+          .getAllByRole("listitem")
+          .map((li) => li.textContent),
+      ).toEqual([
+        expect.stringMatching(
+          /^ci\.yml on main.*opens Ready Tickets on acme-1/,
+        ),
+        expect.stringMatching(
+          /^any workflow on release.*opens Draft Tickets on acme-2/,
+        ),
+      ]);
       expect(within(rules()).queryByText("No CI Rules yet.")).toBeNull();
     });
 
     it("adds a rule, creating its Spec", async () => {
       const { w } = await acme();
-      renderApp(w, "/?view=project-options&project=acme");
-      await screen.findByRole("group", { name: "CI Rules" });
+      await renderApp(w, "/?view=project-options&project=acme");
 
       const add = within(addForm()).getByRole("button", { name: "Add rule" });
       expect(add).toBeDisabled();
@@ -1022,9 +976,10 @@ describe("Project Options", () => {
         "Ready",
       );
       await userEvent.click(add);
+      await settle(w);
 
       expect(
-        await within(rules()).findByText(/opens Ready Tickets on acme-1/),
+        within(rules()).getByText(/opens Ready Tickets on acme-1/),
       ).toBeInTheDocument();
       expect((await w.api.listProjects())[0].ci.rules).toMatchObject([
         { spec: "acme-1", workflow: "ci.yml", branch: "main", state: "Ready" },
@@ -1046,8 +1001,7 @@ describe("Project Options", () => {
 
     it("shows a refusal on the field it names", async () => {
       const { w } = await acme();
-      renderApp(w, "/?view=project-options&project=acme");
-      await screen.findByRole("group", { name: "CI Rules" });
+      await renderApp(w, "/?view=project-options&project=acme");
 
       await userEvent.type(
         within(addForm()).getByRole("textbox", { name: "Workflow" }),
@@ -1058,7 +1012,8 @@ describe("Project Options", () => {
       await userEvent.click(
         within(addForm()).getByRole("button", { name: "Add rule" }),
       );
-      expect(await within(addForm()).findByRole("alert")).toHaveTextContent(
+      await settle(w);
+      expect(within(addForm()).getByRole("alert")).toHaveTextContent(
         "a CI Rule's branch takes no globs",
       );
       expect(branch).toHaveAttribute("aria-invalid", "true");
@@ -1075,12 +1030,10 @@ describe("Project Options", () => {
         branch: "main",
         state: "Draft",
       });
-      renderApp(w, "/?view=project-options&project=acme");
+      await renderApp(w, "/?view=project-options&project=acme");
 
       await userEvent.click(
-        await within(
-          await screen.findByRole("group", { name: "CI Rules" }),
-        ).findByRole("button", { name: "Edit ci.yml on main" }),
+        within(rules()).getByRole("button", { name: "Edit ci.yml on main" }),
       );
       const form = within(rules()).getByRole("form", {
         name: "Edit ci.yml on main",
@@ -1122,9 +1075,10 @@ describe("Project Options", () => {
       await userEvent.click(
         within(again).getByRole("button", { name: "Save" }),
       );
+      await settle(w);
 
       expect(
-        await within(rules()).findByText(/opens Ready Tickets on acme-1/),
+        within(rules()).getByText(/opens Ready Tickets on acme-1/),
       ).toHaveTextContent(/^ci\.yml on develop/);
       expect(within(rules()).queryByRole("form", { name: /^Edit/ })).toBeNull();
       expect((await w.api.listProjects())[0].ci.rules).toMatchObject([
@@ -1144,15 +1098,16 @@ describe("Project Options", () => {
         branch: "main",
         state: "Draft",
       });
-      renderApp(w, "/?view=project-options&project=acme");
+      await renderApp(w, "/?view=project-options&project=acme");
 
-      const remove = await within(
-        await screen.findByRole("group", { name: "CI Rules" }),
-      ).findByRole("button", { name: "Remove ci.yml on main" });
+      const remove = within(rules()).getByRole("button", {
+        name: "Remove ci.yml on main",
+      });
       expect(remove).toHaveAccessibleDescription(/keeps its Spec/);
       await userEvent.click(remove);
+      await settle(w);
       expect(
-        await within(rules()).findByText("No CI Rules yet."),
+        within(rules()).getByText("No CI Rules yet."),
       ).toBeInTheDocument();
       expect((await w.api.listProjects())[0].ci.rules).toEqual([]);
       expect((await w.api.getSpec("acme", "acme-1")).title).toBe(
@@ -1169,8 +1124,7 @@ describe("Project Options", () => {
       });
       await s.project("old", "Old");
       await s.archive("old");
-      renderApp(w, "/?view=project-options&project=old");
-      await screen.findByRole("group", { name: "CI Rules" });
+      await renderApp(w, "/?view=project-options&project=old");
       expect(
         within(addForm()).getByRole("textbox", { name: "Workflow" }),
       ).toBeDisabled();
@@ -1184,13 +1138,13 @@ describe("Project Options", () => {
     await w.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "origin" });
     await s.reportPushedCommit("acme", id, "abc123", id);
     await s.reportPullRequest("acme", { branch: id, number: 7, link: "https://github.com/acme/web/pull/7", state: "open" });
-    renderApp(w, "/?view=project-options&project=acme");
-    await screen.findByRole("group", { name: "Landing Method" });
+    await renderApp(w, "/?view=project-options&project=acme");
     expect(within(landing()).queryByRole("status", { name: "Open pull requests" })).toBeNull();
 
     await userEvent.click(within(landing()).getByRole("radio", { name: "Merge" }));
     await userEvent.click(within(landing()).getByRole("button", { name: "Save" }));
-    const notice = await within(landing()).findByRole("status", { name: "Open pull requests" });
+    await settle(w);
+    const notice = within(landing()).getByRole("status", { name: "Open pull requests" });
     expect(notice).toHaveTextContent("1 pull request is still open on the Code Host.");
     expect(within(notice).getByRole("link", { name: "https://github.com/acme/web/pull/7" })).toHaveAttribute(
       "href",
@@ -1200,8 +1154,7 @@ describe("Project Options", () => {
 
   it("has a section menu whose entries jump to their sections", async () => {
     const { w } = await acme();
-    renderApp(w, "/?view=project-options&project=acme");
-    await screen.findByRole("heading", { name: "Acme: Project Options" });
+    await renderApp(w, "/?view=project-options&project=acme");
 
     const menu = within(page()).getByRole("navigation", { name: "Sections" });
     const links = within(menu).getAllByRole("link");
