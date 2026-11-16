@@ -10,7 +10,10 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
+	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/store"
 )
 
 // fakeT is a testing.TB that records what the test logs and runs its
@@ -113,4 +116,63 @@ func TestProxyDropsLinesAfterTheTest(t *testing.T) {
 	if got := ft.logged(); got != "" {
 		t.Fatalf("logged %q after the test finished, want nothing", got)
 	}
+}
+
+// claimThroughProxy claims ticket through the harness's URL and returns the
+// client's error.
+func claimThroughProxy(h *Harness, ticket string) error {
+	c := client.New(h.URL)
+	_, err := c.Claim(context.Background(), h.Project, core.ClaimInput{Ticket: core.Ref(ticket)})
+	return err
+}
+
+func TestLoseAnswerCutsAfterCodeCentralAppliedTheWrite(t *testing.T) {
+	h := New(t)
+	id := h.ReadyTicket("Lose an answer")
+	h.LoseAnswer("/claim", 1)
+	err := claimThroughProxy(h, id)
+	if err == nil || !strings.Contains(err.Error(), "cannot reach Code Central") {
+		t.Fatalf("claim error = %v, want the connection cut", err)
+	}
+	if got := h.Ticket(id).State; got != store.InProgress {
+		t.Fatalf("state = %v, want In Progress: Code Central applied the claim", got)
+	}
+	if n := h.Refused("/api/p/" + h.Project + "/claim"); n != 1 {
+		t.Fatalf("refused = %d, want 1", n)
+	}
+}
+
+func TestLoseRequestCutsBeforeCodeCentralSeesIt(t *testing.T) {
+	h := New(t)
+	id := h.ReadyTicket("Lose a request")
+	h.LoseRequest("/claim", 1)
+	if err := claimThroughProxy(h, id); err == nil {
+		t.Fatal("claim succeeded, want the connection cut")
+	}
+	if got := h.Ticket(id).State; got != store.Ready {
+		t.Fatalf("state = %v, want Ready: the claim never arrived", got)
+	}
+	if err := claimThroughProxy(h, id); err != nil {
+		t.Fatalf("second claim: %v, want it through once the cuts are used", err)
+	}
+}
+
+func TestLoseAnswerLogsTheCutNamingTheRequest(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "ok") }))
+	t.Cleanup(up.Close)
+	ft := &fakeT{TB: t}
+	h := &Harness{t: ft, Server: &codecentraltest.Server{URL: up.URL}, refused: map[string]int64{}}
+	url := h.startProxy()
+	h.LoseAnswer("/claim", 1)
+	if _, err := http.Post(url+"/p/acme/claim", "application/json", nil); err == nil {
+		t.Fatal("request succeeded, want the connection cut")
+	}
+	if got := ft.logged(); !strings.Contains(got, "POST /p/acme/claim") {
+		t.Fatalf("logged %q, want a line naming POST /p/acme/claim", got)
+	}
+	resp, err := http.Post(url+"/p/acme/claim", "application/json", nil)
+	if err != nil {
+		t.Fatalf("second request: %v, want it through", err)
+	}
+	resp.Body.Close()
 }
