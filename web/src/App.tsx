@@ -21,6 +21,7 @@ import { ActivityView } from "./activity/ActivityView";
 import { BoardView } from "./board/BoardView";
 import { FocusPopup } from "./board/FocusPopup";
 import { usePopupTrigger } from "./focus/session";
+import { LimitsPopup } from "./limits/LimitsPopup";
 
 export interface AppProps {
   api: Api;
@@ -71,6 +72,7 @@ function Views({ now }: { now: () => Date }) {
   // Items. Until the Options first load Focus Pop-up is off; a failed read
   // later keeps the last one, so an open popup isn't lost to it.
   const scope = projectScopeOf(loc.project, inbox.data?.projects, !!inbox.error);
+  const project = inbox.data?.projects.find((p) => p.key === scope.project);
   const popup = usePopupTrigger({
     option: options.data?.focus_popup ?? "off",
     view: loc.view,
@@ -83,7 +85,8 @@ function Views({ now }: { now: () => Date }) {
       <NeedsMeProvider value={needsMe}>
         <IdLinksContext.Provider value={idLinks}>
         {view()}
-        <ChatDock project={inbox.data?.projects.find((p) => p.key === scope.project)} />
+        <ChatDock project={project} />
+        <LimitsPopup project={project} on={options.data?.limits_popup === "on"} now={now} />
         {popup.open && inbox.data && (
           <FocusPopup mode="queue" now={now()} data={inbox.data} project={scope.project} onClose={popup.close} navigate={navigate} />
         )}
