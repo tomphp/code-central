@@ -28,3 +28,9 @@ func (c *Client) RemoveRepository(ctx context.Context, key string, in core.Remov
 func (c *Client) SetLandingOrder(ctx context.Context, key string, in core.SetLandingOrderInput) (core.Written[core.ProjectView], error) {
 	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/set_landing_order", in, in.Full)
 }
+
+// ReportRepositories is the Factory's report_repositories: each
+// Repository's clone, ready or missing.
+func (c *Client) ReportRepositories(ctx context.Context, key string, in core.ReportRepositoriesInput) (core.Written[core.ProjectView], error) {
+	return write[core.ProjectView](ctx, c, "/api/p/"+url.PathEscape(key)+"/report_repositories", in, in.Full)
+}

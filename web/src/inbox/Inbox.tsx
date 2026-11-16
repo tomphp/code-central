@@ -15,7 +15,7 @@ import {
   type SpecDetail,
   type TicketView,
 } from "../api/types";
-import { REASON_LABEL, ticketOf } from "../format";
+import { REASON_LABEL, projectItemOf, ticketOf } from "../format";
 import type { InboxData, ProjectSpec } from "../live";
 import { useNeedsMe } from "../needsme/context";
 import { useProjectScope } from "../projectScope";
@@ -332,7 +332,7 @@ export function Inbox({
                 </h3>
                 {g.tickets.map((r) => (
                   <NeedsMeLink
-                    key={r.id || `${r.project} ${r.reason} ${r.ci_item?.commit ?? ""}`}
+                    key={r.id || `${r.project} ${r.reason} ${projectItemOf(r)}`}
                     row={r}
                     now={now}
                     link={rowLink(ticketOf(r))}

@@ -107,7 +107,7 @@ func (f *factory) conflictFiles(stage string, tk core.TicketView) []string {
 	if stage != core.ImplementationStage || branch == "" {
 		return nil
 	}
-	head, err := f.repository.commit("refs/heads/" + branch)
+	head, err := f.home.git.commit("refs/heads/" + branch)
 	if err != nil {
 		// A Spec merge Ticket, marked or one opened before the mark, has
 		// no branch yet: it is cut from the Spec Branch, which is what
@@ -119,11 +119,11 @@ func (f *factory) conflictFiles(stage string, tk core.TicketView) []string {
 			return nil
 		}
 	}
-	baseTip, err := f.repository.commit("refs/heads/" + f.baseBranch())
+	baseTip, err := f.home.git.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
 		return nil
 	}
-	_, conflicts, err := f.repository.mergeTree(baseTip, head)
+	_, conflicts, err := f.home.git.mergeTree(baseTip, head)
 	if err != nil {
 		f.printf("warning: %s: can't check the branch against %s: %v", tk.ID, f.baseBranch(), err)
 		return nil

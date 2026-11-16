@@ -15,7 +15,7 @@
 // and Question numbers are Core's.
 import type { World } from "./core/core";
 import { HttpDriver, worldConnection } from "./driver";
-import type { CIRunView, CISettings, ExternalState, IssueWatcherReport, Landing, PullRequestState, PullRequestWatcherReport, SessionEvent, State, UsageResponse } from "./types";
+import type { CIRunView, CISettings, CloneState, ExternalState, IssueWatcherReport, Landing, PullRequestState, PullRequestWatcherReport, SessionEvent, State, UsageResponse } from "./types";
 
 export interface QuestionSeed {
   title: string;
@@ -301,6 +301,13 @@ export class Scenario extends HttpDriver {
     if (state === "diverged" && !p?.landing.push && p?.landing.method !== "pull_request") await this.landOn(key, "merge");
     await this.reportHeartbeat(key, { factory: "code-central-factory", host: "laptop", state: "online", interval_seconds: 30 });
     await this.agent(`${this.projectPath(key)}/report_base`, { state, ...commits });
+  }
+
+  // clones has a Factory come online for the Project and report its
+  // Repositories' clones, each ready or missing with its problem.
+  async clones(key: string, repositories: { name: string; path: string; state: CloneState; problem?: string }[]) {
+    await this.reportHeartbeat(key, { factory: "code-central-factory", host: "laptop", state: "online", interval_seconds: 30 });
+    await this.agent(`${this.projectPath(key)}/report_repositories`, { repositories });
   }
 
   // pullRequest takes an Accepted Ticket to the Pull Request Landing

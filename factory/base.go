@@ -16,14 +16,14 @@ import (
 func (f *factory) locateBase(ctx context.Context, p core.ProjectView) bool {
 	base := f.baseBranch()
 	ref := "refs/heads/" + base
-	tip, err := f.repository.commit(ref)
-	if err != nil && f.repository.hasRemote(p.Landing.Remote) {
-		if out, ferr := f.repository.fetch(ctx, p.Landing.Remote); ferr != nil {
+	tip, err := f.home.git.commit(ref)
+	if err != nil && f.home.git.hasRemote(p.Landing.Remote) {
+		if out, ferr := f.home.git.fetch(ctx, p.Landing.Remote); ferr != nil {
 			if ctx.Err() == nil {
 				f.printf("warning: can't fetch %s to look for the base, %s: %s", p.Landing.Remote, base, firstLine(out))
 			}
-		} else if theirs, rerr := f.repository.commit("refs/remotes/" + p.Landing.Remote + "/" + base); rerr == nil {
-			if _, berr := f.gitOut(f.repo, "branch", "--no-track", base, theirs); berr != nil {
+		} else if theirs, rerr := f.home.git.commit("refs/remotes/" + p.Landing.Remote + "/" + base); rerr == nil {
+			if _, berr := f.gitOut(f.home.dir,"branch", "--no-track", base, theirs); berr != nil {
 				f.printf("warning: can't create the base, %s, from %s/%s: %v", base, p.Landing.Remote, base, berr)
 			} else {
 				f.printf("base: created %s at %s from %s/%s", base, short(theirs), p.Landing.Remote, base)
@@ -48,7 +48,7 @@ func (f *factory) locateBase(ctx context.Context, p core.ProjectView) bool {
 	if !p.LandingPolicy().KeepsBaseLevel() {
 		// Where the Factory keeps the base level, syncing it reports it.
 		remote := tip
-		if theirs, rerr := f.repository.commit("refs/remotes/" + p.Landing.Remote + "/" + base); rerr == nil {
+		if theirs, rerr := f.home.git.commit("refs/remotes/" + p.Landing.Remote + "/" + base); rerr == nil {
 			remote = theirs
 		}
 		f.reportBaseState(ctx, core.ReportBaseInput{State: core.BaseCurrent, Local: tip, Remote: remote})

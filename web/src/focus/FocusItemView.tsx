@@ -148,6 +148,11 @@ export function FocusItemView({
           <BaseMissingFix row={row} navigate={navigate} />
           {skipButton && <p className="focus-skip">{skipButton}</p>}
         </>
+      ) : row.repository_missing ? (
+        <>
+          <RepositoryMissingFix row={row} navigate={navigate} />
+          {skipButton && <p className="focus-skip">{skipButton}</p>}
+        </>
       ) : (
         <>
           {ticket ? (
@@ -225,6 +230,47 @@ function BaseMissingFix({
           Project Options
         </a>
         . The Factory carries on by itself on its next poll.
+      </p>
+    </section>
+  );
+}
+
+// RepositoryMissingFix is a Repository missing item: the path the Factory
+// left untouched, the Clone URL, what is wrong there and the fix, with a
+// link to where the local path is set.
+function RepositoryMissingFix({
+  row,
+  navigate,
+}: {
+  row: NeedsMeRow;
+  navigate: (patch: Partial<UiLocation>) => void;
+}) {
+  const m = row.repository_missing!;
+  const options = { view: "project-options" as const, project: row.project };
+  return (
+    <section aria-label="Repository missing" className="panel">
+      <p>
+        The Factory has no clone of Repository <strong>{m.repository}</strong>,
+        so no new Claim starts until it has. It leaves the path as it is.
+      </p>
+      <dl className="focus-repository-missing">
+        <dt>Path</dt>
+        <dd>
+          <code>{m.path}</code>
+        </dd>
+        <dt>Clone URL</dt>
+        <dd>
+          <code>{m.clone_url}</code>
+        </dd>
+        <dt>Problem</dt>
+        <dd>{m.problem}</dd>
+      </dl>
+      <p className="small">
+        {m.fix} (
+        <a href={hrefFor(options)} onClick={clickTo(navigate, options)}>
+          Project Options
+        </a>
+        ). The Factory carries on by itself on its next poll.
       </p>
     </section>
   );

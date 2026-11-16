@@ -12,12 +12,14 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// landAndSweep is a poll's landing: it reads the Landing Method, lands
-// what it can unless the Factory is paused, halted or missing the Push
-// remote, and sweeps the worktrees the Factory is done with.
+// landAndSweep is a poll's landing: it reads the Landing Method and the
+// Repositories, makes sure each Repository has a clone, lands what it can
+// unless the Factory is paused, halted or missing the Push remote, and
+// sweeps the worktrees the Factory is done with.
 func (f *factory) landAndSweep(ctx context.Context) {
 	p, ok := f.landing(ctx)
 	if ok {
+		f.syncRepositories(ctx, p)
 		ok = f.locateBase(ctx, p)
 	}
 	if ok && !f.paused() && !f.halted(ctx) && f.remoteReady(p) {
@@ -57,7 +59,7 @@ func (f *factory) missingRemote(remote string, policy core.LandingPolicy) string
 	if !policy.NeedsPushRemote() {
 		return ""
 	}
-	if f.repository.hasRemote(remote) {
+	if f.home.git.hasRemote(remote) {
 		return ""
 	}
 	return fmt.Sprintf("Push names the remote %q, which this repository doesn't have: add it with `git remote add`, or change it on the Project's Project Options page in Code Central", remote)
@@ -68,7 +70,7 @@ func (f *factory) missingRemote(remote string, policy core.LandingPolicy) string
 // repository. It is reported even with Push off: the remote is the one
 // Push would use.
 func (f *factory) reportPushRemote(remote string) {
-	url, err := f.gitOut(f.repo, "remote", "get-url", remote)
+	url, err := f.home.git.remoteURL(remote)
 	if err != nil {
 		return
 	}
@@ -207,7 +209,7 @@ func (f *factory) workOf(tk core.TicketView) (commit, what string, err error) {
 	if work == "" {
 		work, what = "refs/heads/"+tk.Branch, "its branch "+tk.Branch
 	}
-	commit, err = f.repository.commit(work)
+	commit, err = f.home.git.commit(work)
 	return commit, what, err
 }
 
@@ -249,7 +251,7 @@ var mergeableStates = slices.DeleteFunc(slices.Clone(store.States), func(s store
 
 // inBase reports whether commit is reachable from the base.
 func (f *factory) inBase(commit string) bool {
-	return f.repository.isAncestor(commit, "refs/heads/"+f.baseBranch())
+	return f.home.git.isAncestor(commit, "refs/heads/"+f.baseBranch())
 }
 
 // landable is every Ticket in these States, read in full by one
@@ -284,7 +286,7 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, p core.P
 		f.landPushed(ctx, tk, p, old.base, old.commit)
 		return
 	}
-	baseTip, err := f.repository.commit("refs/heads/" + f.baseBranch())
+	baseTip, err := f.home.git.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
 		f.cantLandYet(ctx, tk, fmt.Sprintf("the base, %s, isn't a branch, so the Factory can't move it.", f.baseBranch()))
 		return
@@ -298,7 +300,7 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, p core.P
 		f.landPushed(ctx, tk, p, f.baseBranch(), head)
 		return
 	}
-	tree, conflicts, err := f.repository.mergeTree(baseTip, head)
+	tree, conflicts, err := f.home.git.mergeTree(baseTip, head)
 	if err != nil {
 		f.printf("warning: %s: can't merge: %v", tk.ID, err)
 		return
@@ -308,7 +310,7 @@ func (f *factory) landAccepted(ctx context.Context, tk core.TicketView, p core.P
 		return
 	}
 	msg := fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title)
-	merge, err := f.repository.commitTree(tree, msg, baseTip, head)
+	merge, err := f.home.git.commitTree(tree, msg, baseTip, head)
 	if err != nil {
 		f.printf("warning: %s: can't make the merge commit: %v", tk.ID, err)
 		return
@@ -374,7 +376,7 @@ func (f *factory) pushedBase(tk core.TicketView, remote, base, commit string) bo
 		return false
 	}
 	pushed := tk.PushedCommit.Commit
-	return f.repository.isAncestor(commit, pushed) && f.repository.isAncestor(pushed, "refs/remotes/"+remote+"/"+base)
+	return f.home.git.isAncestor(commit, pushed) && f.home.git.isAncestor(pushed, "refs/remotes/"+remote+"/"+base)
 }
 
 // landOnCI lands a Ticket the CI gate holds once its CI result is
@@ -411,7 +413,7 @@ func (f *factory) landOnCI(ctx context.Context, tk core.TicketView) {
 // remoteTip is the commit branch's remote-tracking ref on remote holds,
 // or, without one to read, pushed.
 func (f *factory) remoteTip(remote, branch, pushed string) string {
-	commit, err := f.repository.commit("refs/remotes/" + remote + "/" + branch)
+	commit, err := f.home.git.commit("refs/remotes/" + remote + "/" + branch)
 	if err != nil {
 		return pushed
 	}
@@ -449,7 +451,7 @@ func (f *factory) reportPushed(ctx context.Context, tk core.TicketView, policy c
 // contain the work, as after a force push, is reported to no Ticket.
 func (f *factory) reportTip(ctx context.Context, remote string, policy core.LandingPolicy) {
 	base := f.baseBranch()
-	tip, err := f.repository.commit("refs/remotes/" + remote + "/" + base)
+	tip, err := f.home.git.commit("refs/remotes/" + remote + "/" + base)
 	if err != nil {
 		return
 	}
@@ -457,7 +459,7 @@ func (f *factory) reportTip(ctx context.Context, remote string, policy core.Land
 		if f.halted(ctx) || f.paused() {
 			return
 		}
-		if tk.PushedCommit == nil || tk.PushedCommit.Commit == tip || !f.repository.isAncestor(tk.PushedCommit.Commit, tip) {
+		if tk.PushedCommit == nil || tk.PushedCommit.Commit == tip || !f.home.git.isAncestor(tk.PushedCommit.Commit, tip) {
 			continue
 		}
 		if tk.State == store.InReview && (tk.Commit == "" || !f.inBase(tk.Commit)) {
@@ -473,12 +475,12 @@ func (f *factory) reportTip(ctx context.Context, remote string, policy core.Land
 // ahead is left as it is. It returns whether it pushed, or why the push
 // failed.
 func (f *factory) push(ctx context.Context, remote, branch, commit string) (pushed bool, why string) {
-	if f.repository.isAncestor(commit, "refs/remotes/"+remote+"/"+branch) {
+	if f.home.git.isAncestor(commit, "refs/remotes/"+remote+"/"+branch) {
 		return false, ""
 	}
 	defer f.work.busy("pushing ", branch)()
 	// A stop kills it, so a push that hangs doesn't hold up the Factory.
-	if out, err := f.repository.push(ctx, remote, branch); err != nil {
+	if out, err := f.home.git.push(ctx, remote, branch); err != nil {
 		return false, fmt.Sprintf("couldn't push %s to %s:\n\n```\n%s\n```", branch, remote, out)
 	}
 	return true, ""
@@ -540,14 +542,14 @@ func (f *factory) sendBack(ctx context.Context, tk core.TicketView, head, into, 
 // advanceBase fast-forwards the base from old to merge. It returns why it
 // couldn't, or "".
 func (f *factory) advanceBase(old, merge string) string {
-	return f.setBaseTo(old, merge, f.repository.fastForward)
+	return f.setBaseTo(old, merge, f.home.git.fastForward)
 }
 
 // setBaseTo moves the base from old to tip: with move in the worktree
 // where it is checked out, or by ref with old as a guard. It returns why
 // it couldn't, or "".
 func (f *factory) setBaseTo(old, tip string, move func(dir, commit string) (out string, err error)) string {
-	list, err := f.repository.worktrees()
+	list, err := f.home.git.worktrees()
 	if err != nil {
 		return err.Error()
 	}
@@ -567,7 +569,7 @@ func (f *factory) setBaseTo(old, tip string, move func(dir, commit string) (out 
 		}
 		return fmt.Sprintf("uncommitted changes in %s, where %s is checked out, are in the way:\n\n%s", w.path, f.baseBranch(), out)
 	}
-	if err := f.repository.updateRef("refs/heads/"+f.baseBranch(), tip, old); err != nil {
+	if err := f.home.git.updateRef("refs/heads/"+f.baseBranch(), tip, old); err != nil {
 		if moved := f.baseMoved(old); moved != "" {
 			return moved
 		}
@@ -578,7 +580,7 @@ func (f *factory) setBaseTo(old, tip string, move func(dir, commit string) (out 
 
 // baseMoved says so when the base is no longer at old.
 func (f *factory) baseMoved(old string) string {
-	if tip, err := f.repository.commit("refs/heads/" + f.baseBranch()); err == nil && tip == old {
+	if tip, err := f.home.git.commit("refs/heads/" + f.baseBranch()); err == nil && tip == old {
 		return ""
 	}
 	return fmt.Sprintf("%s moved while the Factory was merging.", f.baseBranch())
@@ -594,7 +596,7 @@ type mergeOn struct{ base, commit string }
 // merged again into the base the Project names then.
 func (f *factory) mergedOnOldBase(id string) (mergeOn, bool) {
 	m, ok := f.mergedOn[id]
-	if !ok || m.base == f.baseBranch() || !f.repository.isAncestor(m.commit, "refs/heads/"+m.base) {
+	if !ok || m.base == f.baseBranch() || !f.home.git.isAncestor(m.commit, "refs/heads/"+m.base) {
 		return mergeOn{}, false
 	}
 	return m, true

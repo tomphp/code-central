@@ -82,7 +82,7 @@ func (f *factory) checkClaudeArgsAccepted() error {
 	ctx, cancel := context.WithTimeout(context.Background(), helpTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, f.claude, append([]string{"-p"}, f.o.claudeArgs...)...)
-	cmd.Dir, cmd.Env = f.repo, f.e.Environ
+	cmd.Dir, cmd.Env = f.home.dir, f.e.Environ
 	out, err := cmd.CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	for line := range strings.Lines(text) {

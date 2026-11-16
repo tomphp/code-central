@@ -43,6 +43,11 @@ const (
 	// missing, under any Landing Method. It is one item per Project, with
 	// no Ticket.
 	ReasonBaseMissing NeedsMeReason = "base_missing"
+	// ReasonRepositoryMissing is a Repository whose Factory reports its
+	// clone missing (Spec code-central-848): its path holds something
+	// other than a clone of its Clone URL, or cloning it failed. It is one
+	// item per Repository, with no Ticket.
+	ReasonRepositoryMissing NeedsMeReason = "repository_missing"
 	// ReasonPullRequestClosed is an Accepted Ticket under Pull Request
 	// whose pull request is closed or abandoned without merging
 	// (code-central-391); it clears if the pull request is reopened.
@@ -92,6 +97,7 @@ var needsMeReasons = []NeedsMeReasonView{
 	{ReasonCICancelled, "CI cancelled: one item per pushed commit whose CI was cancelled"},
 	{ReasonBaseDiverged, "Base diverged: a Project's local base has diverged from the remote's; reconcile it by hand"},
 	{ReasonBaseMissing, "Base missing: a Project's base branch exists nowhere; create it or change it in Options"},
+	{ReasonRepositoryMissing, "Repository missing: the Factory has no clone of a Repository; clone it or set its local path"},
 	{ReasonPullRequestClosed, "Pull request closed: Accepted with its pull request closed without merging"},
 	{ReasonToMerge, "To merge: Accepted under Branch or Pull Request; merge it to the base"},
 	{ReasonCIUnavailable, "CI unavailable: one item per pushed commit with no word of its CI 10 minutes after its push"},
@@ -199,6 +205,9 @@ type NeedsMeRow struct {
 	// BaseMissing is the missing base's branch and the fix (Base missing,
 	// whose row has no Ticket either).
 	BaseMissing *BaseMissingView `json:"base_missing,omitempty"`
+	// RepositoryMissing is the missing Repository's path, Clone URL,
+	// problem and fix (Repository missing, whose row has no Ticket).
+	RepositoryMissing *RepositoryMissingView `json:"repository_missing,omitempty"`
 }
 
 // NeedsMeRequirement is the Requirement a Needs Me row's Ticket is on:

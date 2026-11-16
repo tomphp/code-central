@@ -579,6 +579,15 @@ warning: the base, release, exists neither here nor on origin: nothing lands and
 base: found release again
 ```
 
+**Repository missing.** In a Project with [several Repositories](setting-up-a-project.md#several-repositories), the Factory also makes sure, on every poll, that each one has a clone: at its local path, else beside the Home Repository, at `<parent of the Home Repository>/<Repository Name>`. It clones a Repository with nothing at that path under the Push remote's name (`git clone --origin origin`), and adopts a clone already there when its Push remote's URL is the Clone URL (ssh or https, with or without `.git`). A Repository added while the Factory runs is cloned on its next poll. Anything else at the path, or a clone that fails, is **Repository missing**: the Factory touches nothing there, reports it through `report_repositories`, and starts no new Claim until every Repository has a clone. Code Central shows one **Repository missing** item per Repository in Needs Me and Focus Mode, naming the path, the Clone URL, the problem and the fix: clone it there by hand, set its local path in Project Options to a clone you have, or move what's there aside for the Factory to clone it. Project Options shows each Repository's clone and path. The next poll sees the fix by itself:
+
+```text
+repository web: cloned git@github.com:acme/web.git to /home/you/src/web
+repository api: adopted the clone at /home/you/src/api
+warning: Repository docs is missing: /home/you/src/docs isn't a git repository: no new Claim starts until it is cloned
+repository docs: cloned git@github.com:acme/docs.git to /home/you/src/docs
+```
+
 When a base is found for the first time in a run, or changes, the Factory checks that `.mcp.json` is committed on it. At start it refuses to start without the file. Mid-run it cuts no new branches or worktrees, and prints the same message once, until the file is committed; landing carries on.
 
 With **Land per Spec** on, the Spec's accepted Tickets gather on the Spec Branch as under Merge. Once the Spec is ready, the Factory checks the Spec Branch against the fast-forwarded base (a conflict opens the usual Ticket on the Spec), pushes `spec/<spec id>`, and reports that commit for every waiting Ticket: one pull request opens for the Spec, with a section for each Ticket, and each later merge into the Spec Branch is pushed to update it. When it is merged, every waiting Ticket lands at its merge commit and the Spec Branch is deleted:

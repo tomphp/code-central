@@ -11,6 +11,7 @@ export const REASON_LABEL: Record<NeedsMeReason, string> = {
   ci_cancelled: "CI cancelled",
   base_diverged: "Base diverged",
   base_missing: "Base missing",
+  repository_missing: "Repository missing",
   pull_request_closed: "Pull request closed",
   to_merge: "To merge",
   ci_unavailable: "CI unavailable",
@@ -39,6 +40,13 @@ export function runDuration(run: Pick<CIRunView, "status" | "started" | "finishe
 // a CI item lists (code-central-432); "" for a Project's item.
 export function ticketOf(r: NeedsMeRow): string {
   return r.id || r.ci_item?.tickets[0]?.id || "";
+}
+
+// projectItemOf tells a Project's items of one reason apart: a CI item by
+// its pushed commit, a Repository missing item by its Repository; "" for
+// any other row.
+export function projectItemOf(r: NeedsMeRow): string {
+  return r.ci_item?.commit ?? r.repository_missing?.repository ?? "";
 }
 
 // listedTickets names the Tickets a CI item lists.
@@ -91,6 +99,10 @@ export function rowDetail(now: Date, r: NeedsMeRow): string {
         : "The local base has diverged from the remote's";
     case "base_missing":
       return r.base_missing?.fix ?? "The base branch doesn't exist";
+    case "repository_missing":
+      return r.repository_missing
+        ? `${r.repository_missing.repository}: ${r.repository_missing.problem}`
+        : "A Repository has no clone";
     case "pull_request_closed":
       return r.pull_request
         ? `Pull request #${r.pull_request.number} was closed without merging: send the work back or cancel it`

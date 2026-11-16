@@ -41,7 +41,7 @@ func (f *factory) moveBase(ctx context.Context, remote, local, theirs string, me
 		f.noteBase(ctx, true, local, theirs)
 		return false
 	}
-	reset := func(dir, commit string) (string, error) { return f.repository.reset(dir, commit, local) }
+	reset := func(dir, commit string) (string, error) { return f.home.git.reset(dir, commit, local) }
 	if why := f.setBaseTo(local, r.tip, reset); why != "" {
 		f.noteBase(ctx, false, local, theirs)
 		f.printf("warning: can't move %s onto %s/%s yet: %s", base, remote, base, firstLine(why))
@@ -77,13 +77,13 @@ type rebuilt struct {
 // returns why it can't, or "": a conflict, or a merge that isn't the
 // Factory's.
 func (f *factory) rebuildOnto(onto, from string, heads map[string]bool) (rebuilt, string) {
-	chain, err := f.repository.firstParents(from, onto)
+	chain, err := f.home.git.firstParents(from, onto)
 	if err != nil {
 		return rebuilt{}, err.Error()
 	}
 	r := rebuilt{tip: onto, rewritten: map[string]string{}}
 	for _, c := range chain {
-		parents, err := f.repository.parentsOf(c)
+		parents, err := f.home.git.parentsOf(c)
 		if err != nil {
 			return rebuilt{}, err.Error()
 		}
@@ -91,12 +91,12 @@ func (f *factory) rebuildOnto(onto, from string, heads map[string]bool) (rebuilt
 		var conflicts []string
 		switch len(parents) {
 		case 1:
-			tree, conflicts, err = f.repository.replayTree(r.tip, c)
+			tree, conflicts, err = f.home.git.replayTree(r.tip, c)
 		case 2:
 			if !heads[parents[1]] {
 				return rebuilt{}, fmt.Sprintf("%s is a merge the Factory didn't make, so it can't be rebuilt safely", short(c))
 			}
-			tree, conflicts, err = f.repository.mergeTree(r.tip, parents[1])
+			tree, conflicts, err = f.home.git.mergeTree(r.tip, parents[1])
 		default:
 			return rebuilt{}, fmt.Sprintf("%s has %d parents, so it can't be rebuilt safely", short(c), len(parents))
 		}
@@ -106,7 +106,7 @@ func (f *factory) rebuildOnto(onto, from string, heads map[string]bool) (rebuilt
 		if len(conflicts) > 0 {
 			return rebuilt{}, fmt.Sprintf("%s conflicts in %s", short(c), strings.Join(conflicts, ", "))
 		}
-		made, err := f.repository.commitTreeLike(tree, c, append([]string{r.tip}, parents[1:]...)...)
+		made, err := f.home.git.commitTreeLike(tree, c, append([]string{r.tip}, parents[1:]...)...)
 		if err != nil {
 			return rebuilt{}, err.Error()
 		}
@@ -130,12 +130,12 @@ func (f *factory) mergeHeads(theirs string, merged []core.TicketView) (map[strin
 			heads[head] = true
 		}
 	}
-	specs, err := f.repository.specBranches()
+	specs, err := f.home.git.specBranches()
 	if err != nil {
 		return nil, err
 	}
 	for _, s := range specs {
-		line, err := f.repository.firstParents("refs/heads/"+s, theirs)
+		line, err := f.home.git.firstParents("refs/heads/"+s, theirs)
 		if err != nil {
 			return nil, err
 		}

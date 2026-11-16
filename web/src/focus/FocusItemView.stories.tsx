@@ -185,6 +185,17 @@ export const BaseMissing = focusItem(async (s) => {
   return undefined;
 });
 
+// A Project's item: a Repository whose path holds something other than
+// its clone, which the Factory leaves untouched.
+export const RepositoryMissing = focusItem(async (s) => {
+  await s.human(`${s.projectPath("acme")}/add_repository`, { name: "web", clone_url: "git@github.com:acme/web.git" });
+  await s.clones("acme", [
+    { name: "acme", path: "/src/acme", state: "ready" },
+    { name: "web", path: "/src/web", state: "missing", problem: "/src/web isn't a git repository" },
+  ]);
+  return undefined;
+});
+
 export const PullRequestClosed = focusItem(async (s) => {
   const id = await accepted(s);
   await s.pullRequest("acme", id, "closed");

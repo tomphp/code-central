@@ -5,6 +5,7 @@ import type {
   ProjectRow,
   RepositoryAdd,
   RepositoryView,
+  CloneView,
   CodeHost,
 } from "../api/types";
 import { Button } from "../controls/Button";
@@ -79,6 +80,7 @@ export function RepositoriesSection({ project }: { project: ProjectRow }) {
             <RepositoryRow
               key={r.name}
               repository={r}
+              several={repositories.length > 1}
               first={i === 0}
               last={i === repositories.length - 1}
               moveUp={() => move(i, -1)}
@@ -101,9 +103,12 @@ export function RepositoriesSection({ project }: { project: ProjectRow }) {
   );
 }
 
-// RepositoryRow is one Repository: what it is, and its actions.
+// RepositoryRow is one Repository: what it is, and its actions. Its clone
+// shows only once the Project has several Repositories: with the Home
+// Repository alone, the Factory has nothing to clone.
 function RepositoryRow({
   repository: r,
+  several,
   first,
   last,
   moveUp,
@@ -112,6 +117,7 @@ function RepositoryRow({
   remove,
 }: {
   repository: RepositoryView;
+  several: boolean;
   first: boolean;
   last: boolean;
   moveUp(): Promise<unknown>;
@@ -166,6 +172,14 @@ function RepositoryRow({
             <dd>{r.local_path || "Beside the Home Repository"}</dd>
           </>
         )}
+        {several && (
+          <>
+            <dt>Clone</dt>
+            <dd>
+              <CloneStatus clone={r.clone} />
+            </dd>
+          </>
+        )}
       </dl>
       <div className="project-options-actions">
         <Button type="button" aria-label={`Move ${r.name} up`} disabled={first} onClick={act(moveUp)}>
@@ -196,6 +210,23 @@ function RepositoryRow({
       )}
       {error && <Refusal id={`${id}-error`} error={error} />}
     </li>
+  );
+}
+
+// CloneStatus is a Repository's clone as its Factory last reported it:
+// cloned at its path, or missing there with the problem.
+function CloneStatus({ clone }: { clone?: CloneView }) {
+  if (!clone) return <>Not reported: a running Factory reports it on each poll.</>;
+  if (clone.state === "ready")
+    return (
+      <>
+        Cloned at <code>{clone.path}</code>
+      </>
+    );
+  return (
+    <span className="project-options-clone-missing">
+      Missing at <code>{clone.path}</code>: {clone.problem}
+    </span>
   );
 }
 

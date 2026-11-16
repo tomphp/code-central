@@ -27,28 +27,28 @@ import (
 // Request, any holding commits the remote's doesn't) is diverged, and
 // stops landing and new branches until a later poll finds it fixed.
 func (f *factory) syncBase(ctx context.Context, remote string, pushesBase bool, merged []core.TicketView) bool {
-	if out, err := f.repository.fetch(ctx, remote); err != nil {
+	if out, err := f.home.git.fetch(ctx, remote); err != nil {
 		if ctx.Err() == nil {
 			f.printf("warning: can't fetch %s, so nothing lands this poll: %s", remote, firstLine(out))
 		}
 		return false
 	}
-	local, err := f.repository.commit("refs/heads/" + f.baseBranch())
+	local, err := f.home.git.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
 		f.printf("warning: the base, %s, isn't a branch, so the Factory can't keep it level with %s", f.baseBranch(), remote)
 		return false
 	}
-	theirs, err := f.repository.commit("refs/remotes/" + remote + "/" + f.baseBranch())
+	theirs, err := f.home.git.commit("refs/remotes/" + remote + "/" + f.baseBranch())
 	if err != nil {
 		// The remote has no base yet: nothing to catch up with.
 		f.baseDiverged = false
 		return true
 	}
 	switch {
-	case local == theirs, pushesBase && f.repository.isAncestor(theirs, local):
+	case local == theirs, pushesBase && f.home.git.isAncestor(theirs, local):
 		f.noteBase(ctx, false, local, theirs)
 		return true
-	case f.repository.isAncestor(local, theirs):
+	case f.home.git.isAncestor(local, theirs):
 		f.noteBase(ctx, false, local, theirs)
 		if why := f.advanceBase(local, theirs); why != "" {
 			f.printf("warning: can't fast-forward %s to %s yet: %s", f.baseBranch(), remote, firstLine(why))
@@ -138,7 +138,7 @@ func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p cor
 // when the base changes, so it merges there.
 func (f *factory) inOldBase(commit, remote string) bool {
 	for _, b := range f.oldBases {
-		if f.repository.isAncestor(commit, "refs/remotes/"+remote+"/"+b) {
+		if f.home.git.isAncestor(commit, "refs/remotes/"+remote+"/"+b) {
 			return true
 		}
 	}
@@ -194,6 +194,6 @@ func (f *factory) detectMergedPullRequests(ctx context.Context, remote string) {
 // pushedAlready reports whether branch is on remote, as far as the last
 // fetch or push knows.
 func (f *factory) pushedAlready(remote, branch string) bool {
-	_, err := f.repository.commit("refs/remotes/" + remote + "/" + branch)
+	_, err := f.home.git.commit("refs/remotes/" + remote + "/" + branch)
 	return err == nil
 }
