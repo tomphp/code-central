@@ -433,10 +433,10 @@ type streamMessage struct {
 // readTurn reads a started Turn's stream-json to its end and waits for
 // it, giving how it ended. onEvent is called with each Session Event the
 // stream maps to, in order, and onResponse with each model response's
-// usage, as usage reads them, and onLimits with the Plan Limits of each
-// rate_limit_event; dir is the Turn's worktree, and now times each
+// usage, as usage reads them, and onPlanLimits with the Plan Limits of
+// each rate_limit_event; dir is the Turn's worktree, and now times each
 // Session Event and dates each Plan Limits.
-func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time, usage *usageReader, onEvent func(core.SessionEvent), onResponse func(core.UsageResponse), onLimits func(core.PlanLimits)) turnEnd {
+func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time, usage *usageReader, onEvent func(core.SessionEvent), onResponse func(core.UsageResponse), onPlanLimits func(core.PlanLimits)) turnEnd {
 	var end turnEnd
 	var retryErr string
 	tools := map[string]string{}
@@ -451,7 +451,7 @@ func readTurn(cmd *exec.Cmd, stdout io.Reader, dir string, now func() time.Time,
 			onResponse(r)
 		}
 		if pl, ok := readPlanLimits(msg, now()); ok {
-			onLimits(pl)
+			onPlanLimits(pl)
 		}
 		for _, e := range streamEvents(msg, now(), tools, dir) {
 			if e.Kind == core.EventText {

@@ -1,3 +1,8 @@
+// Plan Limits (Spec code-central-861, ADR 0051). The Factory reads the
+// Claude account's 5-hour and weekly limits from each Turn's stream-json
+// rate_limit_event, Claim and Chat Turns alike, keeps the latest, and
+// sends it on every Heartbeat from then on.
+
 package factory
 
 import (
@@ -8,11 +13,6 @@ import (
 
 	"github.com/tomoram/code-central/core"
 )
-
-// Plan Limits (Spec code-central-861, ADR 0051). The Factory reads the
-// Claude account's 5-hour and weekly limits from each Turn's stream-json
-// rate_limit_event, Claim and Chat Turns alike, keeps the latest, and
-// sends it on every Heartbeat from then on.
 
 // rateLimitInfo is the part of a rate_limit_event's rate_limit_info the
 // Factory reads: the five_hour and seven_day windows of its
@@ -39,13 +39,14 @@ func readPlanLimits(msg streamMessage, now time.Time) (core.PlanLimits, bool) {
 	if msg.Type != "rate_limit_event" || json.Unmarshal(msg.RateLimitInfo, &info) != nil {
 		return core.PlanLimits{}, false
 	}
-	pl := core.PlanLimits{ObservedAt: now, FiveHour: info.UnifiedWindows.FiveHour.window(), Weekly: info.UnifiedWindows.SevenDay.window()}
+	windows := info.UnifiedWindows
+	pl := core.PlanLimits{ObservedAt: now, FiveHour: windows.FiveHour.planLimitWindow(), Weekly: windows.SevenDay.planLimitWindow()}
 	return pl, pl.FiveHour != nil || pl.Weekly != nil
 }
 
-// window is w as a Plan Limits window, or nil when w is missing or lacks
-// either figure.
-func (w *rateLimitWindow) window() *core.PlanLimitWindow {
+// planLimitWindow is w as a Plan Limits window, or nil when w is missing
+// or lacks either figure.
+func (w *rateLimitWindow) planLimitWindow() *core.PlanLimitWindow {
 	if w == nil || w.Utilization == nil || w.ResetsAt == nil {
 		return nil
 	}
