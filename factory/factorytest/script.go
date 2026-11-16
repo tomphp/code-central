@@ -198,6 +198,34 @@ func ModelNotFound(model string) []Step {
 	return []Step{{Stdout: string(msg)}, {Stdout: string(res)}, Exit(1)}
 }
 
+// RateLimitWindow is one window of a rate_limit_event: Utilization is
+// the share used, from 0 to 1, and ResetsAt when it resets, in Unix
+// seconds.
+type RateLimitWindow struct {
+	Utilization float64 `json:"utilization"`
+	ResetsAt    int64   `json:"resetsAt"`
+}
+
+// RateLimitEvent prints the stream-json rate_limit_event claude prints
+// when its rate limit info changes, with these unifiedWindows by name
+// ("five_hour", "seven_day", "seven_day_opus", ...), each with the status
+// and overage fields Claude Code 2.1.311 puts beside them.
+func RateLimitEvent(windows map[string]RateLimitWindow) Step {
+	unified := map[string]any{}
+	for name, w := range windows {
+		unified[name] = map[string]any{"utilization": w.Utilization, "resetsAt": w.ResetsAt, "status": "allowed"}
+	}
+	b, _ := json.Marshal(map[string]any{
+		"type": "rate_limit_event",
+		"rate_limit_info": map[string]any{
+			"status": "allowed", "rateLimitType": "five_hour", "isUsingOverage": false,
+			"unifiedWindows": unified,
+		},
+		"uuid": "8a1d0c3e-4b5f-4e6a-9c7d-1e2f3a4b5c6d", "session_id": "{{session}}",
+	})
+	return Step{Stdout: string(b)}
+}
+
 // Say prints a stream-json assistant message with this text.
 func Say(text string) Step {
 	b, _ := json.Marshal(map[string]any{
