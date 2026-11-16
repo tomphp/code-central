@@ -57,6 +57,7 @@ export function NewSplit({ variant, onSubmitted, ...newProps }: NewSplitProps) {
   // Opening the menu focuses its first item.
   useEffect(() => {
     if (open) focusFirst();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focusFirst is a new function each render; the menu is focused once, as it opens
   }, [open]);
 
   // ↓ on the ▾ opens the menu as Enter and Space do, by their click.

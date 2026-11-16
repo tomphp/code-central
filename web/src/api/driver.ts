@@ -208,6 +208,7 @@ export class HttpDriver implements Driver {
 
   // call makes one request as actor, settles, and returns its JSON,
   // nothing for a 204, or throws its refusal as an ApiError.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the JSON is read untyped, as each caller knows its shape
   async call<T = any>(actor: Actor, method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
     const res = await this.c.fetch(this.c.url + path, {
       method,
@@ -221,9 +222,11 @@ export class HttpDriver implements Driver {
   }
 
   // agent, human and integration are one POST as that Actor.
+  /* eslint-disable @typescript-eslint/no-explicit-any -- the JSON is read untyped, as each caller knows its shape */
   agent = <T = any>(path: string, body: unknown) => this.call<T>("agent", "POST", path, body);
   human = <T = any>(path: string, body: unknown) => this.call<T>("human", "POST", path, body);
   integration = <T = any>(path: string, body: unknown) => this.call<T>("integration", "POST", path, body);
+  /* eslint-enable @typescript-eslint/no-explicit-any -- the three POST helpers above are the only untyped ones */
 
   // projectPath and ticketPath are where a Project's and a Ticket's
   // operations go.

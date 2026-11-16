@@ -2,7 +2,6 @@
 import {
   numberOf,
   type Api,
-  type EventHandlers,
   type TicketAction,
   type TicketActions,
   type ChatHandlers,

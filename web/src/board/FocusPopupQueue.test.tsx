@@ -75,8 +75,8 @@ async function cancel({ s }: Fake, key: string, ...ids: string[]) {
 // Harness renders the popup in Queue mode while open, over the live Inbox
 // data and its read model as the App's views have them, and navigates as
 // the App does, by the address.
-function Harness({ api, now, project, onClose }: { api: Api; now: Date; project?: string; onClose(c: FocusPopupClose): void }) {
-  const version = useVersion();
+function Harness({ now, project, onClose }: { api: Api; now: Date; project?: string; onClose(c: FocusPopupClose): void }) {
+  useVersion();
   const inbox = useInbox();
   const [open, setOpen] = useState(true);
   const navigate = (patch: Partial<UiLocation>) => {

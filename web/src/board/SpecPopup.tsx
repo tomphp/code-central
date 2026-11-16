@@ -7,7 +7,7 @@
 // SpecPopupView is the popup over a read handed in.
 import { projectOf } from "../api/api";
 import type { ApiError, ProjectRow, SpecDetail } from "../api/types";
-import { useApi, useSpec } from "../live";
+import { useSpec } from "../live";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { SpecPane } from "../spec/SpecPane";
@@ -37,7 +37,6 @@ export interface SpecPopupViewProps extends SpecPopupProps {
 }
 
 export function SpecPopupView({ now, id, projects, spec, onClose, open, specLink }: SpecPopupViewProps) {
-  const api = useApi();
   const project = projectOf(id);
   const archived = !!projects.find((p) => p.key === project)?.archived;
   const data = spec.data?.id === id ? spec.data : undefined;

@@ -12,7 +12,6 @@ import type {
   HeldSessionEvent,
   CIRuleChange,
   CITrackingChange,
-  Landing,
   LandingInput,
   LinkedRow,
   NeedsMeView,
@@ -49,6 +48,7 @@ import type {
 //   declare module "../api" {
 //     interface TicketActions { answer: { body: { question: number; answer: string }; result: TicketView } }
 //   }
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- empty until a module augments it, as above
 export interface TicketActions {}
 export type TicketAction = keyof TicketActions;
 

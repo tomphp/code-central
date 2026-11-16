@@ -1,5 +1,4 @@
 import { beforeEach, expect, it } from "vitest";
-import type { State } from "../types";
 import { ApiError } from "../types";
 import type { Driver } from "../driver";
 import { wantAcknowledgement } from "./support";

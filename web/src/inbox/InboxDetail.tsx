@@ -1,6 +1,5 @@
 import { projectOf } from "../api/api";
 import type { ProjectRow } from "../api/types";
-import { useApi } from "../live";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { SpecPane } from "../spec/SpecPane";
@@ -40,7 +39,6 @@ export function InboxDetail({
   isArchived(id: string): boolean;
   specLink(id: string): Link;
 }) {
-  const api = useApi();
   // shown is the selected Ticket once read: one still being read is
   // another's.
   const shown = ticket && ticket.id === loc.ticket ? ticket : undefined;

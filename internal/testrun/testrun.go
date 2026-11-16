@@ -1,5 +1,5 @@
 // Command testrun runs the fast suite for `make test`: `go test ./...`,
-// `vitest run` and the TypeScript type check, in parallel. It is quiet
+// `vitest run`, the TypeScript type check and ESLint, in parallel. It is quiet
 // by default: a job that passes prints one line, and a job that fails
 // prints its output without the packages that passed. With -v every
 // job's whole output is printed. The output is printed when all jobs are
@@ -42,6 +42,7 @@ var suite = []job{
 	{Name: "go test", Args: []string{"go", "test", "./..."}},
 	{Name: "vitest", Dir: "web", Args: []string{"node", "node_modules/vitest/vitest.mjs", "run"}},
 	{Name: "tsc", Dir: "web", Args: []string{"node", "node_modules/typescript/bin/tsc", "--noEmit"}},
+	{Name: "eslint", Dir: "web", Args: []string{"node", "node_modules/eslint/bin/eslint.js", "."}},
 	{Name: "hooks", Args: []string{"python3", "-I", ".claude/hooks/prefer-edit_test.py"}},
 }
 

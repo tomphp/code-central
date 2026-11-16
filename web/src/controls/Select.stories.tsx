@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Select } from "./Select";
 
@@ -9,6 +9,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+// StatefulSelect starts on its value arg and changes as the Select does.
+function StatefulSelect(args: ComponentProps<typeof Select<string>>) {
+  const [value, setValue] = useState(args.value);
+  return <Select {...args} value={value} onChange={setValue} />;
+}
+
 export const Default: Story = {
   args: {
     "aria-label": "Effort",
@@ -16,10 +22,7 @@ export const Default: Story = {
     value: "medium",
     onChange: () => {},
   },
-  render: (args) => {
-    const [value, setValue] = useState(args.value);
-    return <Select {...args} value={value} onChange={setValue} />;
-  },
+  render: (args) => <StatefulSelect {...args} />,
 };
 
 export const WithPlaceholder: Story = {

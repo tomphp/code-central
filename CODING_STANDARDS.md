@@ -1,6 +1,6 @@
 # Coding standards
 
-Read during review. `make test` already enforces what tooling can (go vet, the TypeScript type check, the suite's 60s budget); these are the judgement calls past reviews kept finding. Also check the diff against `GLOSSARY.md` and any ADR in `docs/adr/` that touches the area.
+Read during review. `make test` already enforces what tooling can (go vet, the TypeScript type check, ESLint, the suite's 60s budget); these are the judgement calls past reviews kept finding. Also check the diff against `GLOSSARY.md` and any ADR in `docs/adr/` that touches the area.
 
 ## Names are glossary terms
 
@@ -26,8 +26,8 @@ In a changed `*.test.tsx`, a component whose data arrives through a fetch or a s
 - After a `user-event` interaction or a direct `w.api` call, `await settle(w)`, then query with `getBy*`. Build a world through the shared world testing helpers, whose `scenario` settles with `act`; the API folder's bare `scenario(w)` doesn't flush React.
 - After a settle, query an element fresh rather than reuse one found before it: a block that remounts when its data arrives, or a popup another of the same name takes over from, has replaced it.
 - A `findBy*`, `findAllBy*` or `waitFor` is only for a real UI timer (the Focus Mode pulse, session and note timers, the ShortId copy feedback, the feed's retry) and carries a `// waits: <reason>` comment on its line or the line before. A test that seems to need any other wait has found something *settled* doesn't count: fix the world control, not the test.
-- A `waitFor` wraps one assertion, and a passing test never waits a timeout out (`web/src/test-setup.ts` says why).
-- Fix a flaky test by settling before the thing it raced, never by a sleep or a longer timeout.
+- A `waitFor` wraps one assertion with no side effects inside it, and a test never sleeps: ESLint enforces both (a deliberate pause takes `// eslint-disable-next-line no-restricted-syntax -- <reason>`). A passing test never waits a timeout out either (`web/src/test-setup.ts` says why).
+- Fix a flaky test by settling before the thing it raced, never by a longer timeout.
 
 ## Comments match their neighbours
 
