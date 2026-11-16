@@ -37,4 +37,21 @@ describe("end-to-end: the documented Heartbeat", () => {
     expect(s.status).toBe("offline");
     expect(s.factories).toMatchObject([{ status: "offline", note: "stopped on SIGTERM" }]);
   });
+
+  it("the documented plan_limits show on the Project's factory_status", async () => {
+    await svc.agent("/api/projects/create_project", { key: "plan", display_name: "Plan" });
+    const plan_limits = {
+      observed_at: "2026-11-16T09:00:00Z",
+      five_hour: { used_percent: 42, resets_at: "2026-11-16T12:00:00Z" },
+      weekly: { used_percent: 7, resets_at: "2026-11-20T09:00:00Z" },
+    };
+    const res = await fetch(`${svc.url}/api/p/plan/report_heartbeat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ factory: "sandcastle", host: "build-1", state: "online", interval_seconds: 30, plan_limits }),
+    });
+    expect(res.status).toBe(200);
+    const s = (await (await fetch(`${svc.url}/api/projects/plan`)).json()).factory_status;
+    expect(s.plan_limits).toEqual(plan_limits);
+  });
 });

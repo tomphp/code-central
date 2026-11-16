@@ -26,6 +26,7 @@ import {
   type ModelRowView,
   type ModelsView,
   type OptionsView,
+  type PlanLimits,
   type ProjectView,
   type PullRequestState,
   type ReportedModelsView,
@@ -181,6 +182,9 @@ export interface HeartbeatReport {
   interval_seconds: number;
   // chat defaults to false.
   chat?: boolean;
+  // plan_limits are the Plan Limits the Factory last read from its Turns;
+  // left out, they are none.
+  plan_limits?: PlanLimits;
 }
 
 // ---- Specs and Tickets ----
