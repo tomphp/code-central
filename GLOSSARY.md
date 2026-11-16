@@ -28,6 +28,10 @@ _Avoid_: remote, origin, repository URL
 The Repositories in which a Ticket's branch holds commits beyond the Base. The Factory reports them live while the Ticket is In Progress, and each finish settles them, replacing the earlier list. Nobody sets them by hand. Every Ticket records them, including those whose work never lands. A finish recorded before Repositories existed reads as the Home Repository's. A Spec's Changed Repositories are the union of its Tickets'.
 _Avoid_: affected repos, target repos, scope
 
+**Home worktree**:
+A Ticket's worktree in the Home Repository, `<home>.worktrees/<ticket-id>`. It is where the Ticket's session starts, its working directory. A Ticket has one worktree per Repository: at each Claim's start the Factory makes or reuses one in every Repository, whichever of them the Ticket goes on to change, and each other Repository's is beside its clone, at `<clone parent>/<Repository Name>.worktrees/<ticket-id>`. A Repository added mid-session gets its worktree at the next Claim.
+_Avoid_: workspace, main worktree
+
 **Archived Project**:
 A Project put away by the human once all its work is finished, which takes no new work until it is brought back.
 _Avoid_: Deleted, closed, inactive
@@ -245,7 +249,7 @@ A Merge and Pull Request option, on by default and kept whatever the method, by 
 _Avoid_: Spec landing, batch landing, release train
 
 **Spec Branch**:
-The one local branch, `spec/<spec id>`, that a Spec's accepted implementation Tickets are merged into under Land per Spec. Each Ticket's branch is cut from its tip, and the Factory merges it into the base once the Spec is ready to land. It is pushed only under Pull Request, where the Spec's one pull request is opened from it.
+The local branch, `spec/<spec id>`, that a Spec's accepted implementation Tickets are merged into under Land per Spec. Each Repository has its own, cut from that Repository's Base, and each Ticket's branch in that Repository is cut from its tip; branch names are the same in every Repository. The Factory merges it into the base once the Spec is ready to land. It is pushed only under Pull Request, where the Spec's one pull request is opened from it.
 _Avoid_: Feature branch, integration branch, epic branch
 
 **Spec merge Ticket**:
@@ -301,7 +305,7 @@ A Factory saying in its Heartbeat that it can run Conversations.
 _Avoid_: chat capability, chat mode
 
 **Chat worktree**:
-The one worktree a Factory runs every Conversation in, `<repo>.worktrees/chat`, beside the Ticket worktrees. A Conversation's first turn moves it to the Base's tip when it is clean; the Factory never removes it, so a Conversation's Resume Command keeps working.
+The one worktree a Factory runs every Conversation in, `<home>.worktrees/chat` in the Home Repository, beside the Home worktrees. A Conversation's first turn moves it to the Base's tip when it is clean; the Factory never removes it, so a Conversation's Resume Command keeps working.
 _Avoid_: chat checkout, chat directory
 
 **Factory Status**:
