@@ -42,8 +42,8 @@ func TestAReleasedClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	id := h.ReadyTicket("Stopped")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
-	h.WaitForState(id, store.InProgress)
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WantState(id, store.InProgress)
+	h.WantCalls(1)
 
 	if _, err := h.Human().Release(context.Background(), h.Project, core.ReleaseInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestAReleasedClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	r.Poll()
 
 	wantStopped(t, h, id)
-	r.WaitForOutput(fmt.Sprintf(`%s turn ended (implementation): "Stopped": exit %d`, id, stoppedExit()))
+	r.WantOutput(fmt.Sprintf(`%s turn ended (implementation): "Stopped": exit %d`, id, stoppedExit()))
 	if ended := h.Calls()[0].Claim; slices.Contains(stateClaims(t, h), ended) {
 		t.Errorf("state file still holds the ended Claim %s", ended)
 	}
@@ -86,7 +86,7 @@ func TestACancelledClaimsTurnIsStoppedAndDropped(t *testing.T) {
 	id := h.ReadyTicket("Not wanted")
 	h.Script(id, factorytest.Wait())
 	r := h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WantCalls(1)
 
 	if _, err := h.Human().Cancel(context.Background(), h.Project, core.CancelInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)
@@ -109,22 +109,20 @@ func TestAReleasedTicketIsClaimedAfreshInItsWorktreeOnItsBranch(t *testing.T) {
 		factorytest.WriteFile("committed", ""),
 		factorytest.Wait())
 	r := h.Start()
-	h.WaitFor("the first turn's commit", func() bool {
-		_, err := os.Stat(filepath.Join(h.Worktree(id), "committed"))
-		return err == nil
-	})
+	if _, err := os.Stat(filepath.Join(h.Worktree(id), "committed")); err != nil {
+		t.Fatalf("the first turn didn't get as far as its commit: %v", err)
+	}
 
 	if _, err := h.Human().Release(context.Background(), h.Project, core.ReleaseInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
-	h.Script(id, factorytest.NeedFile("wip.txt"), factorytest.Finish("Done."), factorytest.Result("success"))
+	// The second turn is held, so the state file is read while its Claim
+	// is live: once the turn has ended, the poll its end wakes drops the
+	// Claim.
+	h.Script(id, factorytest.NeedFile("wip.txt"), factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 	r.Poll()
-	tk := h.WaitForState(id, store.InReview)
 
-	calls := h.Calls()
-	if len(calls) != 2 {
-		t.Fatalf("claude ran %d times, want twice", len(calls))
-	}
+	calls := h.WantCalls(2)
 	first, second := calls[0], calls[1]
 	if second.Dir != h.Worktree(id) || second.Claim == first.Claim || second.Session == first.Session {
 		t.Errorf("second run %+v; want the same worktree under a new Claim and session (first %+v)", second, first)
@@ -132,10 +130,14 @@ func TestAReleasedTicketIsClaimedAfreshInItsWorktreeOnItsBranch(t *testing.T) {
 	if !second.Has("--session-id") {
 		t.Errorf("args %q: a fresh Claim starts a new session", second.Args)
 	}
-	if n := len(tk.Claims); n != 2 {
-		t.Errorf("%s has %d Claims, want 2", id, n)
-	}
 	if got := stateTickets(t, h); !slices.Equal(got, []string{id}) {
 		t.Errorf("state file holds %q, want only the new Claim on %s", got, id)
+	}
+
+	h.Continue(id)
+	r.Settle()
+	tk := h.WantState(id, store.InReview)
+	if n := len(tk.Claims); n != 2 {
+		t.Errorf("%s has %d Claims, want 2", id, n)
 	}
 }

@@ -23,7 +23,7 @@ func TestAnAcceptedSpecLandedTicketIsMergedIntoTheSpecBranchAndNotTheBase(t *tes
 	holdTicketsStage(t, h)
 
 	r := h.Start()
-	r.WaitForOutput(id + ": merged into spec/" + h.SpecID() + " at ")
+	r.WantOutput(id + ": merged into spec/" + h.SpecID() + " at ")
 
 	branch := "spec/" + h.SpecID()
 	tip := h.Git("rev-parse", branch)
@@ -48,7 +48,9 @@ func TestASpecBranchConflictSendsTheTicketBack(t *testing.T) {
 
 	h.Script(second, factorytest.Wait())
 	h.Start()
-	h.WaitFor(second+" to be sent back", func() bool { return movedTo(h.Ticket(second), store.Accepted, store.Ready) })
+	if !movedTo(h.Ticket(second), store.Accepted, store.Ready) {
+		t.Fatalf("%s was not sent back: %+v", second, h.Ticket(second).Moves)
+	}
 
 	if tk := h.Ticket(first); tk.SpecMerge == nil {
 		t.Errorf("%s, the older accept, has no Spec merge", first)
@@ -65,7 +67,7 @@ func TestATicketWhoseWorkIsInTheBaseLandsAsPlainMerge(t *testing.T) {
 	h.Git("merge", "-q", "--ff-only", commit)
 
 	h.Start()
-	h.WaitForState(id, store.Done)
+	h.WantState(id, store.Done)
 	if got := h.Git("branch", "--list", "spec/*"); got != "" {
 		t.Errorf("a Spec Branch was made: %q", got)
 	}
@@ -80,7 +82,6 @@ func TestTheFirstClaimMakesTheSpecBranchAndCutsTheTicketBranchFromIt(t *testing.
 	base := h.Git("rev-parse", "main")
 
 	h.Start()
-	h.WaitForWorktree(id)
 
 	if got := h.Git("rev-parse", "spec/"+h.SpecID()); got != base {
 		t.Errorf("the Spec Branch is at %s, want the base's tip %s", got, base)
@@ -96,13 +97,12 @@ func TestASecondTicketIsCutFromTheSpecBranchHoldingTheFirstOnes(t *testing.T) {
 	_, _ = requirementAccepted(h, "First", "one.txt", "1\n")
 	holdTicketsStage(t, h)
 	r := h.Start()
-	r.WaitForOutput("merged into spec/" + h.SpecID())
+	r.WantOutput("merged into spec/" + h.SpecID())
 	tip := h.Git("rev-parse", "spec/"+h.SpecID())
 
 	id := h.ReadyTicket("Second")
 	h.Script(id, factorytest.Wait())
-	r.Tick()
-	h.WaitForWorktree(id)
+	r.Poll()
 
 	if got := h.GitIn(h.Worktree(id), "rev-parse", "HEAD"); got != tip {
 		t.Errorf("the Ticket's branch is at %s, want the Spec Branch's tip %s", got, tip)
@@ -123,7 +123,7 @@ func TestAnAcceptedTicketsWorktreeIsRemovedOnceItsSpecMergeIsRecorded(t *testing
 	holdTicketsStage(t, h)
 
 	r := h.Start()
-	r.WaitForOutput(id + ": Accepted: removed its worktree")
+	r.WantOutput(id + ": Accepted: removed its worktree")
 	if _, err := os.Stat(h.Worktree(id)); err == nil {
 		t.Error("the worktree is still there")
 	}

@@ -87,8 +87,9 @@ func TestTheFactoryStartsOnADetachedHead(t *testing.T) {
 	h := factorytest.New(t)
 	id := h.ReadyTicket("From anywhere")
 	h.Git("checkout", "-q", "--detach")
-	h.Start().WaitForOutput("base: main")
-	h.WaitForState(id, store.InReview)
+	r := h.Start()
+	r.WantOutput("base: main")
+	h.WantState(id, store.InReview)
 }
 
 func TestTheFactoryRefusesTheBaseFlagAndPointsToProjectOptions(t *testing.T) {

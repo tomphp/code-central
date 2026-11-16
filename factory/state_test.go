@@ -14,13 +14,13 @@ func TestASecondFactoryOnTheSameProjectRefusesToStartNamingTheFirstsPid(t *testi
 	t.Parallel()
 	h := factorytest.New(t)
 	first := h.Start()
-	first.WaitForOutput("base: main")
+	first.WantOutput("base: main")
 
 	refuses(t, h, h.Repo, fmt.Sprintf("a Factory is already running for acme (pid %d)", os.Getpid()))
 
 	first.Stop()
 	second := h.Start()
-	second.WaitForOutput("base: main")
+	second.WantOutput("base: main")
 }
 
 func TestTheStateFileHoldsEachClaimAfterItIsMade(t *testing.T) {
@@ -29,9 +29,8 @@ func TestTheStateFileHoldsEachClaimAfterItIsMade(t *testing.T) {
 	id := h.ReadyTicket("Work")
 	// Read while the turn runs: its ending wakes a poll that drops the Claim.
 	h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
-	h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
-	c := h.Calls()[0]
+	r := h.Start()
+	c := h.WantCalls(1)[0]
 
 	b, err := h.ReadStateFile()
 	if err != nil {
@@ -56,7 +55,8 @@ func TestTheStateFileHoldsEachClaimAfterItIsMade(t *testing.T) {
 		t.Errorf("state file %s; want %s under Claim %s and session %s, with no allowed tools", b, id, c.Claim, c.Session)
 	}
 	h.Continue(id)
-	h.WaitForState(id, store.InReview)
+	r.Settle()
+	h.WantState(id, store.InReview)
 }
 
 func TestWithNoHOMETheStateFileIsUnderTheProfileFolder(t *testing.T) {
@@ -65,7 +65,7 @@ func TestWithNoHOMETheStateFileIsUnderTheProfileFolder(t *testing.T) {
 	h.Setenv("HOME", "") // as on Windows: Home is then only the profile folder
 	id := h.ReadyTicket("Work")
 	h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	if _, err := os.Stat(h.StateFile()); err != nil {
 		t.Fatalf("no state file under the profile folder: %v", err)
 	}

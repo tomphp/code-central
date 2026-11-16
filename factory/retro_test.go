@@ -21,7 +21,7 @@ func TestARetroStartsTheRetroSkillReadOnlyInADetachedWorktreeAtTheBasesTip(t *te
 	mainTip := h.Git("rev-parse", "main")
 
 	h.Start()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 
 	c := h.Calls()[0]
 	if want := "/retro " + id; c.Prompt != want {
@@ -69,7 +69,7 @@ func TestOnlyARetrosSystemPromptSaysWhereSessionLogsAre(t *testing.T) {
 
 	h.Start()
 	for _, id := range ids {
-		h.WaitForState(id, store.InReview)
+		h.WantState(id, store.InReview)
 	}
 
 	for _, c := range h.Calls() {
