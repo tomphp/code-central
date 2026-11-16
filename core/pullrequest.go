@@ -313,11 +313,14 @@ func pushedWork(r store.Reader, key string) []PushedWorkView {
 	return out
 }
 
-// pullRequestsToClose is every open pull request of p's Tickets marked to
-// close, by Ticket.
+// pullRequestsToClose is every open pull request of p's unfinished
+// Tickets marked to close, by Ticket.
 func pullRequestsToClose(r store.Reader, p store.Project) []PullRequestToClose {
 	out := []PullRequestToClose{}
 	for _, t := range r.Tickets(p.Key) {
+		if finished(t.State) {
+			continue
+		}
 		for _, pr := range t.PullRequests {
 			if !pr.Close || (pr.State != store.PROpen && pr.State != store.PRConflicting) {
 				continue

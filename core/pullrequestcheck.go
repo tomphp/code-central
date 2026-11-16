@@ -100,12 +100,13 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, l store.Landing
 	if len(ps) == 0 {
 		return nil
 	}
-	return checkRefusal(sumRepositoryProblems(ps), "method")
+	return checkRefusal(SumRepositoryProblems(ps), "method")
 }
 
-// sumRepositoryProblems is one check result naming each of ps, the
-// failing Repositories, with its reason and its fix.
-func sumRepositoryProblems(ps []RepositoryProblem) WatcherCheckResult {
+// SumRepositoryProblems is one check result naming each of ps, the
+// failing Repositories, with its reason and its fix: its Problem is the
+// first one's.
+func SumRepositoryProblems(ps []RepositoryProblem) WatcherCheckResult {
 	var reasons, fixes []string
 	for _, p := range ps {
 		reasons = append(reasons, p.Repository+": "+p.Message)
@@ -118,7 +119,7 @@ func sumRepositoryProblems(ps []RepositoryProblem) WatcherCheckResult {
 		r.Problem = ps[0].Problem
 	}
 	if len(ps) > 1 {
-		r.Reason = fmt.Sprintf("Pull Request can't work %d Repositories: %s", len(ps), r.Reason)
+		r.Reason = fmt.Sprintf("%d Repositories fail: %s", len(ps), r.Reason)
 	}
 	return r
 }

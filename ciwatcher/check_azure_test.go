@@ -3,6 +3,7 @@ package ciwatcher_test
 import (
 	"context"
 	"io"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -24,7 +25,7 @@ func checkAzure(srv *fakeazdo.Server, environ ...string) core.WatcherCheckResult
 
 func TestAnAzureCheckWithAWorkingPATPassesAndSendsItAsBasicAuth(t *testing.T) {
 	srv := fakeazdo.New(t)
-	if r := checkAzure(srv, "ADO_PAT="+secretPAT); r != (core.WatcherCheckResult{}) {
+	if r := checkAzure(srv, "ADO_PAT="+secretPAT); !reflect.DeepEqual(r, core.WatcherCheckResult{}) {
 		t.Fatalf("check = %+v, want no problem", r)
 	}
 	reqs := srv.Requests()

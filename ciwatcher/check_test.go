@@ -3,6 +3,7 @@ package ciwatcher_test
 import (
 	"context"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -38,7 +39,7 @@ func ran(h *ciwatchertest.Harness) []string {
 
 func TestTheCheckAsksGHForItsLoginThenTheRepository(t *testing.T) {
 	h := ciwatchertest.New(t)
-	if r := check(h, "", []string{h.Bin}); r != (core.WatcherCheckResult{}) {
+	if r := check(h, "", []string{h.Bin}); !reflect.DeepEqual(r, core.WatcherCheckResult{}) {
 		t.Fatalf("check = %+v, want no problem", r)
 	}
 	var got [][]string
