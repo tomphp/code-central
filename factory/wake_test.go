@@ -284,6 +284,29 @@ func TestAGivenUpTicketWaitsForTheNextTimedPoll(t *testing.T) {
 	h.WaitFor("the given-up Ticket claimed again", func() bool { return len(h.Ticket(gaveUp).Claims) == 2 })
 }
 
+// A Ticket whose agent has given up but whose turn is still running isn't
+// claimed again, though it is Ready: no poll, woken or timed, claims it
+// before its turn ends and holds it back.
+func TestAGivenUpTicketIsntClaimedWhileItsTurnRuns(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	gaveUp := h.ReadyTicket("Too hard")
+	h.Script(gaveUp, factorytest.CLI("give-up", "{{ticket}}", "--claim", "{{claim}}", "--note", "Too hard."), factorytest.Wait(), factorytest.Result("success"))
+	next := h.ReadyTicket("Next")
+	r := h.Start("--parallel", "2")
+	h.WaitFor("the give-up", func() bool { return h.Ticket(gaveUp).State == store.Ready })
+	r.WaitForOutput(next + " turn ended")
+	r.Poll()
+	if n := len(h.Ticket(gaveUp).Claims); n != 1 {
+		t.Fatalf("%s was claimed %d times while its turn ran, want once", gaveUp, n)
+	}
+
+	h.Continue(gaveUp)
+	r.WaitForOutput(gaveUp + " turn ended")
+	r.Poll()
+	h.WaitFor("the given-up Ticket claimed again", func() bool { return len(h.Ticket(gaveUp).Claims) == 2 })
+}
+
 // A draining Factory ignores the local wake: it claims nothing when a
 // turn ends.
 func TestADrainingFactoryClaimsNothingWhenATurnEnds(t *testing.T) {

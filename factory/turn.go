@@ -94,11 +94,19 @@ func (f *factory) releaseHeldBack() {
 	clear(f.backInReady)
 }
 
-// heldBack reports whether ticket is held back: its turn ended with it
-// back in Ready since the last timed poll, less than --poll ago.
+// heldBack reports whether ticket is held back: a turn on it is still
+// running, as when its agent has given up but not yet exited, or its
+// turn ended with it back in Ready since the last timed poll, less than
+// --poll ago. A turn is held back before it gives its slot up, so the
+// two leave no moment between them.
 func (f *factory) heldBack(ticket string) bool {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	for _, t := range f.turns {
+		if t.claim.Ticket == ticket {
+			return true
+		}
+	}
 	at, ok := f.backInReady[ticket]
 	if ok && f.e.Now().Sub(at) >= f.o.poll {
 		delete(f.backInReady, ticket)
