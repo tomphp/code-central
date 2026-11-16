@@ -309,7 +309,7 @@ A Factory saying in its Heartbeat that it can run Conversations.
 _Avoid_: chat capability, chat mode
 
 **Chat worktree**:
-The one worktree a Factory runs every Conversation in, `<home>.worktrees/chat` in the Home Repository, beside the Home worktrees. A Conversation's first turn moves it to the Base's tip when it is clean; the Factory never removes it, so a Conversation's Resume Command keeps working.
+A Repository's worktree for the Factory's Conversations: `<home>.worktrees/chat` in the Home Repository, beside the Home worktrees, where every Conversation runs, and `<clone parent>/<Repository Name>.worktrees/chat` beside each other Repository's clone, which a Conversation reaches as an added directory. A Conversation's first turn moves each one to its Repository's Base tip when it is clean; the Factory never removes them, so a Conversation's Resume Command keeps working.
 _Avoid_: chat checkout, chat directory
 
 **Factory Status**:
@@ -377,7 +377,7 @@ The identifier Code Central issues with a Claim, which proves the holder on ever
 _Avoid_: Token, holder ID
 
 **Resume Command**:
-The command that brings a session back: a Claim's, given by whoever claims, from its working directory; or a Conversation's. A Conversation's Resume Command changes into the worktree itself, because the human runs it from anywhere.
+The command that brings a session back: a Claim's, given by whoever claims, from its working directory; or a Conversation's. A Conversation's Resume Command changes into the worktree itself, because the human runs it from anywhere. With several Repositories, the Factory's Resume Commands add the other Repositories' worktrees as directories, as its sessions do.
 _Avoid_: Resume string, attach command
 
 **Silent Claim**:

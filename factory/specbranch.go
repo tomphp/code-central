@@ -14,26 +14,28 @@ import (
 // Tickets' work gathers under Land per Spec.
 func specBranch(spec string) string { return "spec/" + spec }
 
-// specBranchTip makes sure the Spec Branch of spec exists and returns its
-// tip. A missing one is created at the base's tip; one already in the
-// base (after an earlier landing of the Spec) is fast-forwarded to the
-// base's tip first. The branch is never checked out: only its ref moves.
-func (f *factory) specBranchTip(spec string) (string, error) {
+// specBranchTip makes sure the Spec Branch of spec exists in r and
+// returns its tip. A missing one is created at r's base's tip; one
+// already in the base (after an earlier landing of the Spec) is
+// fast-forwarded to the base's tip first. The branch is never checked
+// out: only its ref moves.
+func (f *factory) specBranchTip(r *repository, spec string) (string, error) {
 	ref := "refs/heads/" + specBranch(spec)
-	baseTip, err := f.home.git.commit("refs/heads/" + f.baseBranch())
+	base := f.baseOf(r)
+	baseTip, err := r.git.commit("refs/heads/" + base)
 	if err != nil {
-		return "", fmt.Errorf("the base, %s, isn't a branch", f.baseBranch())
+		return "", fmt.Errorf("the base, %s, isn't a branch", base)
 	}
-	tip, err := f.home.git.commit(ref)
+	tip, err := r.git.commit(ref)
 	if err != nil {
-		if err := f.home.git.updateRef(ref, baseTip, ""); err != nil {
+		if err := r.git.updateRef(ref, baseTip, ""); err != nil {
 			return "", fmt.Errorf("can't create the Spec Branch %s (a branch named %q may be in the way): %v", specBranch(spec), "spec", err)
 		}
 		return baseTip, nil
 	}
-	if tip != baseTip && f.inBase(tip) {
-		if err := f.home.git.updateRef(ref, baseTip, tip); err != nil {
-			return "", fmt.Errorf("can't move the Spec Branch %s to %s's tip: %v", specBranch(spec), f.baseBranch(), err)
+	if tip != baseTip && f.inBaseOf(r, tip) {
+		if err := r.git.updateRef(ref, baseTip, tip); err != nil {
+			return "", fmt.Errorf("can't move the Spec Branch %s to %s's tip: %v", specBranch(spec), base, err)
 		}
 		return baseTip, nil
 	}
@@ -63,7 +65,7 @@ func (f *factory) mergeIntoSpecBranch(ctx context.Context, tk core.TicketView) {
 	}
 	branch := specBranch(tk.Spec.ID)
 	ref := "refs/heads/" + branch
-	tip, err := f.specBranchTip(tk.Spec.ID)
+	tip, err := f.specBranchTip(f.home, tk.Spec.ID)
 	if err != nil {
 		f.cantLandYet(ctx, tk, err.Error()+".")
 		return
@@ -118,21 +120,21 @@ func (f *factory) waitsOnSpecBranch(tk core.TicketView) bool {
 	return err != nil || !f.inBase(head)
 }
 
-// cutBranchWorktree gives a claimed Ticket its worktree on branch. A new
-// branch is cut from the base's tip, or for a Spec-landed Ticket from its
-// Spec Branch's tip; an existing branch is reused as it is.
-func (f *factory) cutBranchWorktree(tk core.TicketView, branch, wt string) error {
-	from := f.baseBranch()
+// cutBranchWorktree gives a claimed Ticket its worktree in r on branch. A
+// new branch is cut from r's base's tip, or for a Spec-landed Ticket from
+// its Spec Branch's tip in r; an existing branch is reused as it is.
+func (f *factory) cutBranchWorktree(r *repository, tk core.TicketView, branch, wt string) error {
+	from := f.baseOf(r)
 	if tk.SpecLanded {
-		if _, err := f.home.git.commit("refs/heads/" + branch); err != nil {
-			tip, err := f.specBranchTip(tk.Spec.ID)
+		if _, err := r.git.commit("refs/heads/" + branch); err != nil {
+			tip, err := f.specBranchTip(r, tk.Spec.ID)
 			if err != nil {
 				return specBranchFailed(wt, err)
 			}
 			from = tip
 		}
 	}
-	return f.branchWorktree(branch, wt, from)
+	return f.branchWorktree(r, branch, wt, from)
 }
 
 // landSpecs merges the Spec Branch of every Spec ready to land into the
@@ -424,50 +426,71 @@ func (f *factory) specLanded(spec core.SpecDetail) bool {
 	return false
 }
 
-// sweepSpecBranches deletes each Spec Branch that is in the base once
-// every Ticket on its Spec is Done or Cancelled. One not in the base, as
-// when the whole Spec is cancelled, is kept, with a line printed once.
+// sweepSpecBranches deletes, in every Repository with a clone, each Spec
+// Branch that is in that Repository's base once every Ticket on its Spec
+// is Done or Cancelled. One not in the base, as when the whole Spec is
+// cancelled, is kept, with a line printed once.
 func (f *factory) sweepSpecBranches(ctx context.Context, policy core.LandingPolicy) {
-	branches, err := f.home.git.specBranches()
-	if err != nil {
-		return
-	}
-	for _, branch := range branches {
-		if ctx.Err() != nil {
-			return
-		}
-		id := strings.TrimPrefix(branch, "spec/")
-		spec, err := f.client.GetSpec(ctx, f.project, core.GetSpecInput{Spec: core.Ref(id), Parts: []string{"tickets"}})
-		if err != nil || len(spec.Tickets) == 0 {
-			continue
-		}
-		finished := true
-		for _, r := range spec.Tickets {
-			if r.State != store.Done && r.State != store.Cancelled {
-				finished = false
-			}
-		}
-		if !finished {
-			continue
-		}
-		ref := "refs/heads/" + branch
-		tip, err := f.home.git.commit(ref)
+	specs := map[string]*core.SpecDetail{}
+	for _, r := range f.readyRepositories() {
+		branches, err := r.git.specBranches()
 		if err != nil {
 			continue
 		}
-		if !f.inBase(tip) && !(policy.LandsByPullRequest() && f.specLanded(spec)) {
-			if !f.warned[ref] {
-				f.warned[ref] = true
-				f.printf("%s: every Ticket is finished but %s isn't in %s: kept", id, branch, f.baseBranch())
+		for _, branch := range branches {
+			if ctx.Err() != nil {
+				return
 			}
-			continue
+			id := strings.TrimPrefix(branch, "spec/")
+			spec, ok := specs[id]
+			if !ok {
+				spec = f.finishedSpec(ctx, id)
+				specs[id] = spec
+			}
+			if spec != nil {
+				f.sweepSpecBranch(r, branch, *spec, policy)
+			}
 		}
-		if err := f.home.git.deleteRef(ref, tip); err != nil {
-			f.printf("warning: %s: can't delete %s: %v", id, branch, err)
-			continue
-		}
-		f.printf("%s: deleted %s, which is in %s", id, branch, f.baseBranch())
 	}
+}
+
+// finishedSpec is the Spec id when every Ticket on it is Done or
+// Cancelled, and nil when one isn't, it has none, or it can't be read.
+func (f *factory) finishedSpec(ctx context.Context, id string) *core.SpecDetail {
+	spec, err := f.client.GetSpec(ctx, f.project, core.GetSpecInput{Spec: core.Ref(id), Parts: []string{"tickets"}})
+	if err != nil || len(spec.Tickets) == 0 {
+		return nil
+	}
+	for _, r := range spec.Tickets {
+		if r.State != store.Done && r.State != store.Cancelled {
+			return nil
+		}
+	}
+	return &spec
+}
+
+// sweepSpecBranch deletes branch, the Spec Branch of the finished spec in
+// r, when it is in r's base, and otherwise says once that it is kept.
+func (f *factory) sweepSpecBranch(r *repository, branch string, spec core.SpecDetail, policy core.LandingPolicy) {
+	id, base := strings.TrimPrefix(branch, "spec/"), f.baseOf(r)
+	ref := "refs/heads/" + branch
+	tip, err := r.git.commit(ref)
+	if err != nil {
+		return
+	}
+	where := r.where()
+	if !f.inBaseOf(r, tip) && !(policy.LandsByPullRequest() && f.specLanded(spec)) {
+		if warned := ref + where; !f.warned[warned] {
+			f.warned[warned] = true
+			f.printf("%s: every Ticket is finished but %s%s isn't in %s: kept", id, branch, where, base)
+		}
+		return
+	}
+	if err := r.git.deleteRef(ref, tip); err != nil {
+		f.printf("warning: %s: can't delete %s%s: %v", id, branch, where, err)
+		return
+	}
+	f.printf("%s: deleted %s%s, which is in %s", id, branch, where, base)
 }
 
 // firstID is the ID of the first of tickets, or "".

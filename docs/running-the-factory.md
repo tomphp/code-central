@@ -304,6 +304,8 @@ If the Conversation's Factory is no longer Online, or no Factory has Chat suppor
 
 Each Conversation turn runs `claude -p` in the **Chat worktree**, `chat` in the Factory's worktrees folder beside the Tickets' (`~/src/acme-shop.worktrees/chat`); a Ticket ID is never `chat`, so the two can't clash. A Conversation's first turn moves the worktree to the base's tip, uses `--session-id` and prints `chat: starting a Conversation in <worktree>; resume: <command>`; later turns use `--resume`. The Factory keeps one `next_chat_work` call open and runs the turns it hands out one at a time.
 
+With several Repositories, each has its own Chat worktree beside its clone, `<clone parent>/<Repository Name>.worktrees/chat`, which a Conversation's first turn moves to that Repository's Base tip. The turn runs in the Home Repository's Chat worktree and reaches the others with `--add-dir`, and the Conversation's Resume Command carries them. The sweep leaves every Chat worktree alone.
+
 A Chat turn takes **no Claim slot**: it doesn't count against the Factory's concurrent turns, and a Conversation never waits for a Claim to end.
 
 - **Draining.** The first Ctrl-C closes the `next_chat_work` call, so no new Chat turn starts. A turn already running goes on, and the Factory exits once it has ended. While its Factory is Draining, the pop-up shows the Conversation as unavailable.
@@ -524,7 +526,7 @@ acme-shop-2: spec/acme-shop-2 conflicts with main again: commented on acme-shop-
 
 Turning Land per Spec off part-way makes the Factory's next poll merge every Spec Branch that holds merged-but-not-landed Tickets into the base, ready or not, and land them as a group; later Tickets land one by one. Adding the `long-lived` Label to a Spec while its Tickets wait does the same for that Spec alone. Turning Land per Spec on, or taking the Label off, affects only Tickets accepted afterwards. A Ticket added to a Spec after it has landed lands with a second batch: the Spec Branch is merged into the base again once the new Ticket is accepted.
 
-A Spec Branch is deleted once it is in the base and every Ticket on its Spec is Done or Cancelled. One that isn't in the base, as when the whole Spec is cancelled, is kept, and the Factory says so once. Ticket branches are never deleted.
+A Spec Branch is deleted once it is in the base and every Ticket on its Spec is Done or Cancelled. One that isn't in the base, as when the whole Spec is cancelled, is kept, and the Factory says so once. With several Repositories, each one's Spec Branch goes by the same rule against its own Base. Ticket branches are never deleted, but with several Repositories a branch the Ticket never used is (see **Worktrees in every Repository** below).
 
 ```text
 acme-shop-2: deleted spec/acme-shop-2, which is in main
@@ -586,6 +588,20 @@ repository web: cloned git@github.com:acme/web.git to /home/you/src/web
 repository api: adopted the clone at /home/you/src/api
 warning: Repository docs is missing: /home/you/src/docs isn't a git repository: no new Claim starts until it is cloned
 repository docs: cloned git@github.com:acme/docs.git to /home/you/src/docs
+```
+
+**Worktrees in every Repository.** With several Repositories, each Claim's start makes or reuses the Ticket's worktree in every one, beside its clone: the **Home worktree** at `<home>.worktrees/<ticket-id>` as ever, and each other at `<clone parent>/<Repository Name>.worktrees/<ticket-id>`. The branch has the same name in each (`<ticket-id>`, `prototype/<ticket-id>` or `research/<ticket-id>`), cut from that Repository's own Base, or under Land per Spec from its own Spec Branch, made from its Base on first use. A Stage gets a worktree detached at each Repository's Base tip, and a dirty one fails the Claim. A failure setting up a worktree names its Repository, and a Ticket whose branch conflicts with the Base in any Repository starts as a Conflict Claim listing the files under each Repository's name. The session starts in the Home worktree and reaches the others with `--add-dir`; its first prompt ends with a Repositories list giving each one's worktree, Base and branch, and its system prompt says to commit in each worktree and finish with `repositories`. The Ticket's Resume Command carries the same `--add-dir` flags. A Repository added while a Claim is held gets its worktree at the Ticket's next Claim; resuming the session doesn't add it:
+
+```text
+acme-shop-14 claimed (implementation): "Show prices from the API" in Spec acme-shop-13; worktree /home/you/src/acme-shop.worktrees/acme-shop-14; resume: claude --resume 2c9e4b1a-6f0d-4e8a-9b57-3d1f0a6c2e84 --add-dir /home/you/src/api.worktrees/acme-shop-14
+```
+
+Once the Ticket is done with its worktrees, the sweep removes them in every Repository, and a branch the Ticket never used (still on the line of the Base or Spec Branch it was cut from) goes with its worktree. A branch with work of its own is kept, merged or not. In the Home Repository, whose branch landing reads, an unused branch goes only once the Ticket is Done or Cancelled, or when it names no Home branch; with the Home Repository alone no branch is ever deleted. Here the Ticket changed the Home Repository alone:
+
+```text
+acme-shop-14: Done: removed its worktree /home/you/src/acme-shop.worktrees/acme-shop-14
+acme-shop-14: Done: removed its worktree /home/you/src/api.worktrees/acme-shop-14
+acme-shop-14: deleted its unused branch acme-shop-14 in Repository api
 ```
 
 When a base is found for the first time in a run, or changes, the Factory checks that `.mcp.json` is committed on it. At start it refuses to start without the file. Mid-run it cuts no new branches or worktrees, and prints the same message once, until the file is committed; landing carries on.

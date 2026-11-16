@@ -56,7 +56,10 @@ func newTurnRunner(claude string, e Env, accepts claudeAccepts, bypass bool, cla
 // turnInput is one Turn: where and as what it runs, and where what it
 // does goes.
 type turnInput struct {
-	Dir     string
+	Dir string
+	// AddDirs are the folders the Turn reaches beside Dir (--add-dir): the
+	// worktrees of the Repositories other than the Home Repository.
+	AddDirs []string
 	Session string
 	// Resume resumes Session (--resume) rather than starting it
 	// (--session-id).
@@ -198,16 +201,17 @@ func (r *turnRunner) args(in turnInput) []string {
 	if in.Resume {
 		session = "--resume"
 	}
-	args := append([]string{"-p", session, in.Session}, r.flags(in.Choice, in.AllowedTools, in.SystemPrompt)...)
+	args := append([]string{"-p", session, in.Session}, r.flags(in.Choice, in.AllowedTools, in.SystemPrompt, in.AddDirs)...)
 	return append(args, in.Prompt)
 }
 
 // flags are the flags every claude Turn passes, a Claim's or a Chat's:
 // the output format, the permission mode, the Turn's model and effort
-// when set, and the allowed tools and system prompt when there are any,
-// then the Claude Args and a -- that ends the flags, so that a flag
-// taking several values can't swallow the prompt that follows.
-func (r *turnRunner) flags(mc turnChoice, allowedTools []string, systemPrompt string) []string {
+// when set, and the allowed tools, system prompt and added folders when
+// there are any, then the Claude Args and a -- that ends the flags, so
+// that a flag taking several values, as --add-dir does, can't swallow
+// the prompt that follows.
+func (r *turnRunner) flags(mc turnChoice, allowedTools []string, systemPrompt string, addDirs []string) []string {
 	args := []string{"--output-format", "stream-json", "--verbose"}
 	if r.bypass {
 		args = append(args, "--permission-mode", "bypassPermissions")
@@ -226,8 +230,21 @@ func (r *turnRunner) flags(mc turnChoice, allowedTools []string, systemPrompt st
 	if systemPrompt != "" {
 		args = append(args, "--append-system-prompt", systemPrompt)
 	}
+	for _, d := range addDirs {
+		args = append(args, "--add-dir", d)
+	}
 	args = append(args, r.claudeArgs...)
 	return append(args, "--")
+}
+
+// addDirFlags is the --add-dir flags for dirs as a command line ends
+// with them, each after a space, quoted where joinArgs quotes.
+func addDirFlags(dirs []string) string {
+	var b strings.Builder
+	for _, d := range dirs {
+		b.WriteString(" --add-dir " + joinArgs([]string{d}))
+	}
+	return b.String()
 }
 
 // stop takes a Turn's process proc through stopSteps until ended is

@@ -249,10 +249,9 @@ var mergeableStates = slices.DeleteFunc(slices.Clone(store.States), func(s store
 	return s == store.Draft || s == store.Accepted || s == store.Done || s == store.Cancelled
 })
 
-// inBase reports whether commit is reachable from the base.
-func (f *factory) inBase(commit string) bool {
-	return f.home.git.isAncestor(commit, "refs/heads/"+f.baseBranch())
-}
+// inBase reports whether commit is reachable from the Home Repository's
+// base.
+func (f *factory) inBase(commit string) bool { return f.inBaseOf(f.home, commit) }
 
 // landable is every Ticket in these States, read in full by one
 // find_tickets call. If the call fails it lands nothing this poll.

@@ -54,6 +54,12 @@ var guideFragments embed.FS
 const (
 	subagentExplorationPlaceholder = "<!-- subagent-exploration -->"
 	modelAssignmentPlaceholder     = "<!-- model-assignment -->"
+	// severalRepositoriesPlaceholder ends the Finishing paragraph of each
+	// guide whose Tickets commit. Its Project setting is the Repository
+	// list, which the human sets: with more than one Repository the
+	// fragment follows as a paragraph of its own, and with the Home
+	// Repository alone the line is removed whole.
+	severalRepositoriesPlaceholder = "<!-- several-repositories -->"
 )
 
 // modelAssignmentFragment is the Model Assignment fragment, a template
@@ -142,7 +148,24 @@ func stageGuide(stage string, p store.Project) StageGuideView {
 	if strings.Contains(text, modelAssignmentPlaceholder) {
 		text = strings.Replace(text, modelAssignmentPlaceholder+"\n", modelAssignmentText(p), 1)
 	}
+	if strings.Contains(text, severalRepositoriesPlaceholder) {
+		text = strings.Replace(text, severalRepositoriesPlaceholder+"\n", severalRepositoriesText(p), 1)
+	}
 	return StageGuideView{Stage: stage, Guide: text + "\n" + troubleRules}
+}
+
+// severalRepositoriesText is what replaces the several-repositories
+// placeholder line: nothing while p has the Home Repository alone, else
+// the fragment as a paragraph of its own.
+func severalRepositoriesText(p store.Project) string {
+	if len(p.RepositoryList()) < 2 {
+		return ""
+	}
+	f, err := guideFragments.ReadFile("stageguides/fragments/several-repositories.md")
+	if err != nil {
+		panic("core: no several-repositories fragment")
+	}
+	return "\n" + string(f)
 }
 
 // modelAssignmentText is what replaces the model-assignment placeholder

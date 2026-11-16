@@ -20,7 +20,7 @@ import (
 // "turn ended" line.
 func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 	in.Session = c.SessionID
-	in.AllowedTools, in.SystemPrompt = c.AllowedTools, c.SystemPrompt
+	in.AllowedTools, in.SystemPrompt, in.AddDirs = c.AllowedTools, c.SystemPrompt, c.AddDirs
 	in.UsageKind = f.claimInfo(c).stage
 	in.OnEvent = func(e core.SessionEvent) { f.events.add(c.SessionID, e) }
 	in.OnUsage = func(r core.UsageResponse) { f.usage.add(c.SessionID, r) }

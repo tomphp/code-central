@@ -34,6 +34,10 @@ type Step struct {
 	// notes each stop signal it gets (see Signals): on Unix it ignores
 	// SIGINT and exits 143 on SIGTERM; on Windows it ignores Ctrl-Break.
 	Wait bool `json:"wait,omitempty"`
+	// In runs a Write, Git or Need step in the worktree of the Repository
+	// it names, one of the run's --add-dir folders, in place of the
+	// worktree the run started in (InRepository).
+	In string `json:"in,omitempty"`
 }
 
 // File is a file a Write step writes, Name relative to the worktree.
@@ -129,6 +133,24 @@ func Git(args ...string) Step { return Step{Git: args} }
 
 // NeedFile fails the run unless name is in the worktree.
 func NeedFile(name string) Step { return Step{Need: name} }
+
+// InRepository is s run in the worktree of the Repository named
+// repository, which the Factory passed with --add-dir, rather than in
+// the worktree the run started in.
+func InRepository(repository string, s Step) Step {
+	s.In = repository
+	return s
+}
+
+// CommitIn writes file with content in the worktree of the Repository
+// named repository and commits it there.
+func CommitIn(repository, file, content string) []Step {
+	return []Step{
+		InRepository(repository, WriteFile(file, content)),
+		InRepository(repository, Git("add", file)),
+		InRepository(repository, Git("commit", "-q", "-m", "Change "+file)),
+	}
+}
 
 // Finish finishes the run's Ticket under its Claim.
 func Finish(summary string) Step {
@@ -330,6 +352,17 @@ func (c Call) Flag(flag string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// Values is the value after each flag in the call's args, in order.
+func (c Call) Values(flag string) []string {
+	var out []string
+	for i, a := range c.Args {
+		if a == flag && i+1 < len(c.Args) {
+			out = append(out, c.Args[i+1])
+		}
+	}
+	return out
 }
 
 // Has reports whether arg is one of the call's args.

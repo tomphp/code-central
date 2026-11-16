@@ -20,6 +20,7 @@ The In Review gate replaces any step that would stop to check with the user: the
 ## Finishing
 
 When the resolution comment is posted, `finish` with a summary that points at it. Give no `branch`: a Prototype never lands, so accepting it makes the Ticket Done. The Ticket goes to In Review; stop working it.
+<!-- several-repositories -->
 
 ## A redo
 
