@@ -342,6 +342,21 @@ export class Scenario extends HttpDriver {
     });
   }
 
+  // pullRequestIn has the Factory push an Accepted Ticket's branch in the
+  // Repository and the Pull Request Watcher report its pull request
+  // there in state, under Pull Request (pullRequest, or landOn, first).
+  async pullRequestIn(key: string, id: string, repository: string, state: PullRequestState = "open", number = 7) {
+    await this.reportPushedCommit(key, id, `${repository}-head`, id, repository);
+    await this.reportPullRequest(key, {
+      repository,
+      branch: id,
+      number,
+      link: `https://github.com/acme/${repository}/pull/${number}`,
+      state,
+      ...(state === "merged" && { merge_commit: `${repository}-merge` }),
+    });
+  }
+
   // factorySession has the Factory claim the Ticket in session and post
   // its Session Events and its model responses' Usage, and returns the
   // Claim ID.

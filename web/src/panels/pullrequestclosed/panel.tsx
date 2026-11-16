@@ -15,14 +15,43 @@ export function PullRequestClosedPanel({ project, ticket: t }: PanelProps) {
   const api = useApi();
   const { busy, error, run } = useAct();
   const [note, setNote] = useState("");
+  // With several Repositories each closed pull request is named by its
+  // Repository, and once a sibling has merged its work is in a base, so
+  // the Ticket can't be cancelled (Spec code-central-848).
+  const repositories = t.repositories ?? [];
+  const closed = repositories.filter((r) => r.pull_request?.state === "closed");
+  const merged = repositories.filter((r) => r.pull_request?.state === "merged");
   return (
     <section aria-label="Pull request closed" className="panel accepted-panel">
       <h3>Pull request closed</h3>
-      <p className="small">
-        <PullRequestBadge pr={t.pull_request} /> Its pull request was closed without merging, so it waits Accepted until you choose. Reopen it on your Code
-        Host and it is watched again; or send the work back to be redone, or cancel it. Pull request comments aren't read here: put what to change in the
-        note.
-      </p>
+      {closed.length === 0 ? (
+        <p className="small">
+          <PullRequestBadge pr={t.pull_request} /> Its pull request was closed without merging, so it waits Accepted until you choose. Reopen it on your
+          Code Host and it is watched again; or send the work back to be redone, or cancel it. Pull request comments aren't read here: put what to
+          change in the note.
+        </p>
+      ) : (
+        <>
+          <p className="small">
+            {closed.length === 1 ? "Its pull request in " + closed[0].name + " was" : "Its pull requests in " + closed.length + " Repositories were"}{" "}
+            closed without merging, so it waits Accepted until you choose. Reopen{" "}
+            {closed.length === 1 ? "it" : "them"} on the Code Host and {closed.length === 1 ? "it is" : "they are"} watched again; or send the work back
+            to be redone{merged.length === 0 && ", or cancel it"}. Pull request comments aren't read here: put what to change in the note.
+          </p>
+          <ul aria-label="Closed pull requests" className="repos">
+            {closed.map((r) => (
+              <li key={r.name} aria-label={r.name}>
+                <span className="repo-name">{r.name}</span> <PullRequestBadge pr={r.pull_request} />
+              </li>
+            ))}
+          </ul>
+          {merged.length > 0 && (
+            <p className="small muted">
+              Already merged in {merged.map((r) => r.name).join(", ")}, so it can&apos;t be cancelled: sending it back keeps that work landed.
+            </p>
+          )}
+        </>
+      )}
       {error && (
         <p role="alert" className="warning">
           {error}
@@ -40,10 +69,15 @@ export function PullRequestClosedPanel({ project, ticket: t }: PanelProps) {
           onClick={() => run(() => api.act(project, t.id, "send_back", { note: note.trim() }))}
         >
           Send back
-        </Button>{" "}
-        <Button type="button" variant="danger" disabled={busy} onClick={() => run(() => api.act(project, t.id, "cancel", {}))}>
-          Cancel
         </Button>
+        {merged.length === 0 && (
+          <>
+            {" "}
+            <Button type="button" variant="danger" disabled={busy} onClick={() => run(() => api.act(project, t.id, "cancel", {}))}>
+              Cancel
+            </Button>
+          </>
+        )}
       </p>
     </section>
   );
