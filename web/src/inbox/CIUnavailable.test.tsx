@@ -5,8 +5,8 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { newWorld } from "../api/core/core";
-import { scenario, type Scenario } from "../api/scenario";
-import { renderApp } from "../focus/worldTesting";
+import type { Scenario } from "../api/scenario";
+import { renderApp, scenario } from "../worldTesting";
 
 // pushed has a Ticket accepted and its commit pushed, returning its ID.
 async function pushed(s: Scenario, key: string, title: string, commit: string) {
@@ -37,7 +37,7 @@ describe("CI unavailable in Needs Me", () => {
     await renderApp(w, "/?view=inbox");
 
     const list = screen.getByRole("main", { name: "Tickets" });
-    const group = await within(list).findByRole("region", { name: "CI unavailable" });
+    const group = within(list).getByRole("region", { name: "CI unavailable" });
     expect(within(group).getByRole("heading", { level: 3 })).toHaveTextContent("CI unavailable 3");
     expect(within(group).getByRole("link", { name: /abc1234/ })).toHaveTextContent("No CI Runs reported for abc1234 pushed 20m ago");
     expect(within(group).getByRole("link", { name: /fed4321/ })).toHaveTextContent("CI Watcher not Watching: gh is logged out · fed4321 pushed 20m ago");
