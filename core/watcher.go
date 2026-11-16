@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -120,6 +121,20 @@ type WatcherCheckResult struct {
 	Problem WatcherProblem `json:"problem,omitempty"`
 	Reason  string         `json:"reason,omitempty"`
 	Fix     string         `json:"fix,omitempty"`
+	// Repositories are the failing Repositories of a check that was given
+	// a list of them, each with its own problem; Problem, Reason and Fix
+	// then sum them up.
+	Repositories []RepositoryProblem `json:"repositories,omitempty"`
+}
+
+// RepositoryProblem is one Repository a Watcher can't watch, by
+// Repository Name, with what is wrong and its fix (Spec
+// code-central-848): the Watcher carries on with the others.
+type RepositoryProblem struct {
+	Repository string         `json:"repository"`
+	Problem    WatcherProblem `json:"problem,omitempty"`
+	Message    string         `json:"message"`
+	Fix        string         `json:"fix,omitempty"`
 }
 
 // WatcherState is how a Project's Watcher last said it was.
@@ -145,6 +160,9 @@ type WatcherView struct {
 	Problem WatcherProblem `json:"problem,omitempty"`
 	Message string         `json:"message,omitempty"`
 	Fix     string         `json:"fix,omitempty"`
+	// Repositories are the Repositories it can't watch, each with its own
+	// problem, while in error because of them.
+	Repositories []RepositoryProblem `json:"repositories,omitempty"`
 	// RateLimitedUntil is when GitHub lets a rate-limited Watcher call it
 	// again; until then it is still Watching, not in error.
 	RateLimitedUntil time.Time `json:"rate_limited_until,omitzero"`
@@ -235,7 +253,7 @@ func (w *watchers) set(k watcherKey, next WatcherView, now time.Time) bool {
 	s, ok := w.all[k]
 	was := s.view
 	was.Since = nil
-	if ok && was == next {
+	if ok && reflect.DeepEqual(was, next) {
 		return false
 	}
 	if next.State == WatcherError && was.State != WatcherError {
@@ -262,6 +280,9 @@ type ReportWatcherStatusInput struct {
 	// Message and Fix are an error's; watching drops them.
 	Message string `json:"message,omitempty"`
 	Fix     string `json:"fix,omitempty"`
+	// Repositories are the Repositories it can't watch, each with its own
+	// problem: an error that names them, while it watches the others.
+	Repositories []RepositoryProblem `json:"repositories,omitempty"`
 	// RateLimitedUntil is when GitHub lets a Watching Watcher call it
 	// again, while it is rate-limited.
 	RateLimitedUntil time.Time `json:"rate_limited_until,omitzero"`
@@ -281,6 +302,9 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 		if !in.RateLimitedUntil.IsZero() {
 			next.RateLimitedUntil = in.RateLimitedUntil.UTC()
 		}
+		if len(in.Repositories) > 0 {
+			return Written[ProjectView]{}, invalid("repositories", "a Repository the %s can't watch makes it an error, not Watching", k.name)
+		}
 	case WatcherError:
 		if !in.RateLimitedUntil.IsZero() {
 			return Written[ProjectView]{}, invalid("rate_limited_until", "only a Watching %s is rate-limited; an error has its own fix", k.name)
@@ -291,6 +315,19 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 		next.Problem, next.Message, next.Fix = in.Problem, strings.TrimSpace(in.Message), strings.TrimSpace(in.Fix)
 		if next.Message == "" {
 			return Written[ProjectView]{}, invalid("message", "an error needs its message")
+		}
+		for i, rp := range in.Repositories {
+			field := fmt.Sprintf("repositories[%d]", i)
+			rp.Repository, rp.Message, rp.Fix = strings.TrimSpace(rp.Repository), strings.TrimSpace(rp.Message), strings.TrimSpace(rp.Fix)
+			switch {
+			case rp.Repository == "":
+				return Written[ProjectView]{}, invalid(field+".repository", "each Repository's problem names its Repository")
+			case rp.Problem != "" && !slices.Contains(k.problems, rp.Problem):
+				return Written[ProjectView]{}, invalid(field+".problem", "%q isn't a %s problem", rp.Problem, k.watches)
+			case rp.Message == "":
+				return Written[ProjectView]{}, invalid(field+".message", "each Repository's problem needs its message")
+			}
+			next.Repositories = append(next.Repositories, rp)
 		}
 	default:
 		return Written[ProjectView]{}, invalid("state", "the %s is %q or %q, not %q", k.name, WatcherWatching, WatcherError, in.State)
@@ -304,6 +341,12 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 		p, _ := r.Project(key)
 		if !k.on(p) {
 			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is off on %s, so it has no %s", k.setting, key, k.name)}
+		}
+		names := repositoryNames(p.RepositoryList())
+		for i, rp := range next.Repositories {
+			if !slices.Contains(names, rp.Repository) {
+				return invalid(fmt.Sprintf("repositories[%d].repository", i), "%q is not one of %s's Repositories, which are %s", rp.Repository, key, strings.Join(names, ", "))
+			}
 		}
 		// The store's read lock keeps the setting from being turned off
 		// between the check and the change.

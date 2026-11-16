@@ -385,7 +385,7 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 		return Written[ProjectView]{}, err
 	}
 	if check != nil {
-		if err := c.checkRepositoryPullRequests(ctx, r.CloneURL, *check); err != nil {
+		if err := c.checkRepositoryPullRequests(ctx, r.Name, r.CloneURL, *check); err != nil {
 			return Written[ProjectView]{}, err
 		}
 	}
@@ -395,7 +395,7 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 // checkRepositoryPullRequests refuses a Repository whose Clone URL names
 // no Code Host Pull Request supports, or fails the Pull Request
 // Watcher's check, with the reason and fix.
-func (c *Core) checkRepositoryPullRequests(ctx context.Context, url string, in PullRequestCheckInput) error {
+func (c *Core) checkRepositoryPullRequests(ctx context.Context, name, url string, in PullRequestCheckInput) error {
 	if in.CodeHost, in.Repository = codeHostOf(url); in.CodeHost == CodeHostNone {
 		return &Error{Code: Invalid, Field: "clone_url", Message: url + " is on a host Pull Request doesn't support; it supports GitHub (github.com) and Azure Repos (dev.azure.com, ssh.dev.azure.com, *.visualstudio.com)",
 			Fix: "give its GitHub or Azure Repos Clone URL, or land by Merge or Branch"}
@@ -403,7 +403,12 @@ func (c *Core) checkRepositoryPullRequests(ctx context.Context, url string, in P
 	if c.pullRequestCheck == nil {
 		return nil
 	}
-	if res := c.pullRequestCheck(ctx, in); res.Problem != "" {
+	in.Repositories = []PullRequestCheckRepository{{Name: name, CodeHost: in.CodeHost, Repository: in.Repository}}
+	res := c.pullRequestCheck(ctx, in)
+	if len(res.Repositories) > 0 {
+		res.Reason, res.Fix = res.Repositories[0].Message, res.Repositories[0].Fix
+	}
+	if res.Problem != "" {
 		return &Error{Code: Invalid, Field: "clone_url", Message: res.Reason, Fix: res.Fix}
 	}
 	return nil

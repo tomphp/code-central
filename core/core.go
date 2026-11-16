@@ -718,7 +718,7 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t store.Ticket, onMap bo
 	row := TicketRow{
 		ID: DisplayID(key, t.Number), Title: t.Title, State: t.State, Spec: DisplayID(key, t.Spec),
 		Labels: orEmpty(t.Labels), Blocked: c.blockRule(r, key).blocked(t), Created: t.Created, Updated: t.Updated, Link: linkView(t.Link),
-		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(t.PullRequest),
+		CIResult: e.ci.ticket(t).result, PullRequest: pullRequestView(homePullRequest(key, t)),
 		WaitingForSpec: waitingForSpec(r, e.p, t),
 	}
 	row.NeedsMeReason, _ = e.reason(t)
@@ -801,7 +801,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 		v.Moves = append(v.Moves, moveView(m))
 	}
 	v.PushedCommit, v.CIResult, v.CICommit, v.CIRuns = e.ci.view(t)
-	v.PullRequest = pullRequestView(t.PullRequest)
+	v.PullRequest = pullRequestView(homePullRequest(key, t))
 	if t.SpecMerge != nil {
 		v.SpecMerge = &SpecMergeView{Commit: t.SpecMerge.Commit, Merged: t.SpecMerge.Merged, Counts: specMergeCounts(t)}
 	}

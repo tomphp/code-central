@@ -84,6 +84,7 @@ var migrations = []MigrationStep{
 	{From: 40, Name: "add a Project's Repositories"},
 	{From: 41, Name: "add the repository_missing Focus Kind"},
 	{From: 42, Name: "add a Ticket's Changed Repositories and the Repository of its pushed commits, Spec merge and pull request"},
+	{From: 43, Name: "add a Ticket's pull requests in its other Repositories and the mark to close one"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

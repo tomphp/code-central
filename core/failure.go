@@ -181,7 +181,10 @@ func (c *Core) GiveUp(ctx context.Context, key string, in GiveUpInput) (StopResu
 // required: the agent's for work that can't land, such as a merge
 // conflict, and the human's for work to fix, such as a CI failure.
 // The note is stored as a comment. The Ticket keeps its created time, so
-// it keeps its place near the front of the claim order.
+// it keeps its place near the front of the claim order. While none of
+// its pull requests has merged, its open ones are marked for the Pull
+// Request Watcher to close; once one has, the Repositories it merged in
+// keep their landed commits.
 func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Written[TicketView], error) {
 	if ActorOf(ctx) == Human {
 		if err := c.refuseSendBackOfShared(key, in.Ticket); err != nil {
@@ -192,6 +195,7 @@ func (c *Core) SendBack(ctx context.Context, key string, in SendBackInput) (Writ
 		if from := t.Moves[len(t.Moves)-1].From; from == store.Accepted && strings.TrimSpace(in.Note) == "" {
 			return invalid("note", "sending back Accepted work needs a note saying why: the base commit and the conflicting files of a merge conflict, or the failed CI run's link and its failed jobs")
 		}
+		markPullRequestsToClose(t)
 		return nil
 	})
 }

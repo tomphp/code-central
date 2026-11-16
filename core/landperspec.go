@@ -206,7 +206,7 @@ func (c *Core) newSpecFixTicket(ctx context.Context, key string, in NewFixTicket
 			return nil
 		}
 		lead, handled = t, true
-		closed = t.PullRequest != nil && t.PullRequest.State == store.PRClosed
+		closed = anyPullRequest(t, store.PRClosed)
 		return nil
 	})
 	if err != nil || !handled {

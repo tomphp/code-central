@@ -20,13 +20,13 @@ func TestTheRealChainMigratesAFormat23StoreToThePullRequestFormat(t *testing.T) 
 
 	s := openFile(t, dir)
 	s.View(func(r store.Reader) error {
-		if tk, _ := r.Ticket("acme", 2); tk.PullRequest != nil {
-			t.Errorf("pull request of a plain Ticket = %+v, want none", tk.PullRequest)
+		if tk, _ := r.Ticket("acme", 2); tk.PullRequests != nil {
+			t.Errorf("pull requests of a plain Ticket = %+v, want none", tk.PullRequests)
 		}
 		tk, _ := r.Ticket("acme", 3)
 		want := store.PullRequest{Number: 7, Link: "https://github.com/a/b/pull/7", State: store.PRMerged, MergeCommit: "abc123"}
-		if tk.PullRequest == nil || *tk.PullRequest != want {
-			t.Errorf("pull request = %+v, want %+v", tk.PullRequest, want)
+		if len(tk.PullRequests) != 1 || tk.PullRequests[0] != want {
+			t.Errorf("pull requests = %+v, want %+v", tk.PullRequests, want)
 		}
 		return nil
 	})
