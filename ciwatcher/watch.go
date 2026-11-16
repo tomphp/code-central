@@ -95,6 +95,7 @@ func Watch(ctx context.Context, cfg Config) error {
 		}
 	}
 }
+
 // watcher is the watch mode's state between polls.
 type watcher struct {
 	Config
