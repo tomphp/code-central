@@ -9,7 +9,6 @@ package factory
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/tomoram/code-central/core"
 )
@@ -21,8 +20,8 @@ const wakeRetry = chatRetry
 // wakeLoop keeps one next_factory_wake call open until ctx ends or the
 // Factory drains, and wakes the poll loop each time a call returns woken.
 // Against a Code Central without the operation it stops at once, leaving
-// the timed poll. Its pauses run on real time, never on the injected
-// After, so they never take a poll's tick.
+// the timed poll. Its pauses are on the Factory's clock, as every
+// other timer is.
 func (f *factory) wakeLoop(ctx context.Context) {
 	pollCtx, cancel := f.untilDraining(ctx)
 	defer cancel()
@@ -43,7 +42,7 @@ func (f *factory) wakeLoop(ctx context.Context) {
 			failing = true
 			select {
 			case <-pollCtx.Done():
-			case <-time.After(wakeRetry):
+			case <-f.e.Clock.After(wakeRetry):
 			}
 			continue
 		}

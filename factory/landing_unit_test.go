@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/client"
+	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/store"
@@ -67,7 +68,7 @@ func newLandWorld(t *testing.T) *landWorld {
 	human.Actor = core.Human
 	out := &lineBuffer{}
 	repo := newFakeRepo(fakeTop)
-	f := newFactory(Env{Stdout: out, Now: time.Now}, options{parallel: 1})
+	f := newFactory(Env{Stdout: out, Clock: clock.System{}}, options{parallel: 1})
 	f.repo, f.repository, f.project, f.base, f.client = fakeTop, repo, "acme", "main", srv.Client
 	// As start builds it: with the OS's separators.
 	f.worktrees = filepath.FromSlash(fakeTop + ".worktrees")

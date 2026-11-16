@@ -13,7 +13,7 @@ import (
 // clock.
 func pausedWorld() (*factory, *clock.Fake) {
 	clk := clock.NewFake(time.Date(2026, 1, 5, 9, 0, 0, 0, time.UTC))
-	f := newFactory(Env{Stdout: io.Discard, Now: clk.Now, Backoff: time.Minute}, options{parallel: 2})
+	f := newFactory(Env{Stdout: io.Discard, Clock: clk, Backoff: time.Minute}, options{parallel: 2})
 	return f, clk
 }
 

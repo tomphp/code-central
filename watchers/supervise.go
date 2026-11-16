@@ -30,9 +30,9 @@ const (
 	ResetAfter   = core.WatcherSteadyAfter
 )
 
-// stopLimit bounds how long a Watcher has to exit once its stdin
+// StopLimit bounds how long a Watcher has to exit once its stdin
 // closes before it is killed.
-const stopLimit = 10 * time.Second
+const StopLimit = 10 * time.Second
 
 // Projects is what the service's supervision reads and reports on Code
 // Central; *core.Core is one.
@@ -198,13 +198,16 @@ func (cfg Supervision) supervise(ctx context.Context, o projectWatcher, prev *su
 
 // run runs o once, until it exits or ctx ends, and returns the last line
 // it wrote to stderr. Ending ctx closes its stdin, which it exits on; one
-// that doesn't in stopLimit is killed.
+// that doesn't in StopLimit is killed.
 func (cfg Supervision) run(ctx context.Context, o projectWatcher) string {
 	cmd := exec.Command(cfg.Program, o.kind.Args(o.project)...)
 	cmd.Env = cfg.Environ
 	last := &lastLine{w: cfg.Log}
 	cmd.Stdout, cmd.Stderr = cfg.Log, last
-	cmd.WaitDelay = stopLimit
+	// Real time, not cfg.Clock: os/exec owns it, and it bounds copying
+	// the pipes once the process has gone, which no test moves a clock
+	// for.
+	cmd.WaitDelay = StopLimit
 	stdin, err := cmd.StdinPipe()
 	if err == nil {
 		err = cmd.Start()
@@ -223,11 +226,11 @@ func (cfg Supervision) run(ctx context.Context, o projectWatcher) string {
 		}
 	case <-ctx.Done():
 		stdin.Close()
-		// Real time, not cfg.Clock: a kill is a last resort that must
-		// not wait on a test's fake clock.
+		// On cfg.Clock, like every wait of the supervision's: a test
+		// moves its fake clock past the stop limit to have one killed.
 		select {
 		case <-exited:
-		case <-time.After(stopLimit):
+		case <-cfg.Clock.After(StopLimit):
 			cmd.Process.Kill()
 			<-exited
 		}

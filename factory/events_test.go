@@ -27,12 +27,12 @@ func events(tr core.TranscriptView) []event {
 	return out
 }
 
-// waitForTranscript waits for the Transcript of ticket's first Claim to
-// hold an event whose text contains s, and returns it.
-func waitForTranscript(h *factorytest.Harness, ticket, s string) core.TranscriptView {
+// waitForTranscript polls until the Transcript of ticket's first Claim
+// holds an event whose text contains s, and returns it.
+func waitForTranscript(h *factorytest.Harness, r *factorytest.Running, ticket, s string) core.TranscriptView {
 	h.WaitFor(ticket+" to be claimed", func() bool { return len(h.Ticket(ticket).Claims) > 0 })
 	var tr core.TranscriptView
-	h.WaitFor("an event with "+s+" in "+ticket+"'s Transcript", func() bool {
+	r.PollUntil("an event with "+s+" in "+ticket+"'s Transcript", func() bool {
 		tr = h.Transcript(ticket, 1)
 		return slices.ContainsFunc(tr.Events, func(e core.HeldSessionEvent) bool { return strings.Contains(e.Text, s) })
 	})
@@ -64,7 +64,7 @@ func TestATurnsStreamJSONIsPostedAsSessionEvents(t *testing.T) {
 	r := h.Start("--verbose")
 	h.WaitForState(id, store.InReview)
 	r.WaitForOutput(id + " turn ended")
-	tr := waitForTranscript(h, id, "turn ended")
+	tr := waitForTranscript(h, r, id, "turn ended")
 
 	cut := strings.Repeat("é", 2048) // 4 KB of two-byte runes
 	want := []event{
@@ -109,7 +109,7 @@ func TestTheFactorysLinesAboutAClaimArePostedToItsTranscript(t *testing.T) {
 	r.Poll()
 	h.WaitFor("the resumed turn to end", func() bool { return strings.Count(r.Stdout(), id+" turn ended") == 2 })
 	var tr core.TranscriptView
-	h.WaitFor("the second turn ended line in the Transcript", func() bool {
+	r.PollUntil("the second turn ended line in the Transcript", func() bool {
 		tr = h.Transcript(id, 1)
 		return len(tr.Events) == 4
 	})
@@ -138,8 +138,8 @@ func TestATurnThatKeepsPostingEventsNeverMakesItsClaimSilent(t *testing.T) {
 		factorytest.Wait(), factorytest.Say("Still painting."),
 		factorytest.Wait(), factorytest.Say("Nearly there."),
 		factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
-	h.Start()
-	waitForTranscript(h, id, "claimed")
+	r := h.Start()
+	waitForTranscript(h, r, id, "claimed")
 
 	for _, said := range []string{"Still painting.", "Nearly there."} {
 		h.Server.Clock.Advance(core.SilentAfter + time.Minute)
@@ -147,7 +147,7 @@ func TestATurnThatKeepsPostingEventsNeverMakesItsClaimSilent(t *testing.T) {
 			t.Fatalf("%s isn't Silent after %v quiet; the test proves nothing", id, core.SilentAfter+time.Minute)
 		}
 		h.Continue(id)
-		waitForTranscript(h, id, said)
+		waitForTranscript(h, r, id, said)
 		if s := h.Ticket(id).SilentSince; s != nil {
 			t.Errorf("%s is Silent since %v after posting %q", id, *s, said)
 		}
@@ -165,16 +165,16 @@ func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedEventsHoldNothi
 		factorytest.Say("During the outage."), factorytest.Wait(),
 		factorytest.Say("After the outage."), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
-	waitForTranscript(h, id, "Before the outage.")
+	waitForTranscript(h, r, id, "Before the outage.")
 
 	h.SetDown(true)
 	h.Continue(id)
-	h.WaitFor("a post of Session Events to be refused", func() bool { return h.Refused("/api/session-events") > 0 })
+	r.PollUntil("a post of Session Events to be refused", func() bool { return h.Refused("/api/session-events") > 0 })
 	h.SetDown(false)
 	h.Continue(id)
 	h.WaitForState(id, store.InReview)
 	r.WaitForOutput(id + " turn ended")
-	tr := waitForTranscript(h, id, "turn ended")
+	tr := waitForTranscript(h, r, id, "turn ended")
 
 	var said []string
 	for _, e := range tr.Events {

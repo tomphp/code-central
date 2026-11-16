@@ -11,6 +11,7 @@ import (
 	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
+	"github.com/tomoram/code-central/watchers"
 )
 
 // supervising is a real Code Central and the service's supervision of
@@ -206,6 +207,24 @@ func TestTheBackoffResetsAfterTenMinutesOfRunning(t *testing.T) {
 	s.crashed("1 time")
 	s.restartsAfter(time.Second, 4)
 	s.crashed("2 times")
+}
+
+// A CI Watcher that doesn't exit when its stdin closes is killed once the
+// stop limit has passed on the service's clock, and not before.
+func TestACIWatcherThatWontExitIsKilledAfterTheStopLimit(t *testing.T) {
+	s := newSupervising(t)
+	s.project("acme", true)
+	s.start(s.h.Stubborn)
+	s.Logged("started the CI Watcher for acme", 1)
+	s.tracking("acme", false)
+
+	s.srv.Clock.BlockUntil(1)
+	s.srv.Clock.Advance(watchers.StopLimit - time.Millisecond)
+	if strings.Contains(s.Log.String(), "stopped the CI Watcher for acme") {
+		t.Fatalf("stopped before the stop limit passed:\n%s", s.Log)
+	}
+	s.srv.Clock.Advance(time.Millisecond)
+	s.Logged("stopped the CI Watcher for acme", 1)
 }
 
 func TestACIWatcherStoppedWhileWaitingToRestartIsNotRestarted(t *testing.T) {
