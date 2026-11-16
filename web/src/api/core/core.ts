@@ -64,6 +64,7 @@ const READS: ReadonlySet<string> = new Set<keyof Api>([
 // FEEDS are the Api's subscribes, by the stream kind each follows.
 const FEEDS = { subscribe: "events", subscribeTranscript: "transcripts", subscribeChat: "chats" } as const;
 type Feed = (typeof FEEDS)[keyof typeof FEEDS];
+// Subscribe is any of the Api's subscribes: each answers its feed's close.
 type Subscribe = (...a: never[]) => () => void;
 
 // Busy is cmd/corewasm's settled report (world.Busy): what keeps the world
@@ -84,10 +85,16 @@ interface Streams {
 // SETTLE_MS is how long settled waits, by the wall clock, before it gives up.
 const SETTLE_MS = 2000;
 
-// Saved as the module loads, so settled keeps time and polls for real
-// while a test fakes timers.
+// wallClock and realSetTimeout are saved as the module loads, so settled
+// keeps time and polls for real while a test fakes timers.
 const wallClock = Date.now;
 const realSetTimeout = globalThis.setTimeout;
+
+// nextTask resolves on the next macrotask, on a real timer even while a
+// test fakes timers.
+export function nextTask(): Promise<void> {
+  return new Promise((r) => realSetTimeout(r));
+}
 
 let loading: Promise<CoreModule> | undefined;
 
@@ -175,7 +182,7 @@ export class World {
     this.api = new Proxy(api, {
       get: (t, k: string) => {
         const v = t[k as keyof Api];
-        if (k in FEEDS) return this.counted(FEEDS[k as keyof typeof FEEDS], v as Subscribe);
+        if (Object.hasOwn(FEEDS, k)) return this.counted(FEEDS[k as keyof typeof FEEDS], v as Subscribe);
         if (typeof v !== "function") return v;
         return (...a: unknown[]) => {
           this.calls.push(k === "act" ? String(a[2]) : k);
@@ -219,7 +226,7 @@ export class World {
     const deadline = wallClock() + SETTLE_MS;
     for (let busy = this.busy(); busy; busy = this.busy()) {
       if (wallClock() >= deadline) throw new Error(`the world did not settle within ${SETTLE_MS} ms: ${busy}`);
-      await new Promise((r) => realSetTimeout(r));
+      await nextTask();
     }
   }
 

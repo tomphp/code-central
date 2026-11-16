@@ -4,7 +4,7 @@
 import { act, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { App } from "./App";
-import type { World } from "./api/core/core";
+import { nextTask, type World } from "./api/core/core";
 import { Live } from "./live";
 
 // focus is Focus Mode's main region.
@@ -20,10 +20,6 @@ export function renderApp(w: World, url = "/?view=focus") {
 // it gives up on a UI that keeps fetching.
 const SETTLE_ROUNDS = 10;
 
-// Saved as the module loads, so settle polls for real while a test fakes
-// timers.
-const realSetTimeout = globalThis.setTimeout;
-
 // settle waits, inside act, for w to settle (ADR 0044) and React to render
 // what that brought, pass after pass until one starts no fetch: a notice
 // makes <Live> refetch, the refetch renders, and the render can fetch or
@@ -31,37 +27,40 @@ const realSetTimeout = globalThis.setTimeout;
 // fetching fails it after SETTLE_ROUNDS rounds rather than hang.
 export async function settle(w: World) {
   let rounds = 0;
-  const round = () => {
-    if (++rounds >= SETTLE_ROUNDS) throw new Error(`the UI keeps fetching: it started fetches in ${SETTLE_ROUNDS} rounds of settling`);
+  const fetched = () => {
+    if (++rounds > SETTLE_ROUNDS) throw new Error(`the UI keeps fetching: it was still starting fetches after ${SETTLE_ROUNDS} rounds of settling`);
   };
   for (;;) {
     const started = w.fetchesStarted();
-    await settlePass(w, round);
+    await settlePass(w, fetched);
     if (w.fetchesStarted() === started) return;
-    round();
   }
 }
 
 // settlePass is one of settle's passes: act around w.settled(), after
-// which act renders until React has nothing left to do. A UI that
-// refetches as fast as the world answers keeps act rendering, so each poll
-// that finds a fetch started since the world settled is a round too.
-async function settlePass(w: World, round: () => void) {
-  let seen: number | undefined;
+// which act renders until React has nothing left to do. It calls fetched
+// for each round of fetching it sees once the world has settled: each
+// poll that finds a fetch started since the last, and the end of the pass
+// if it does. A UI that refetches as fast as the world answers keeps act
+// rendering, so fetched's limit, not the pass's end, stops it.
+async function settlePass(w: World, fetched: () => void) {
+  let seen = w.fetchesStarted();
+  let settled = false;
   // act answers a thenable whose then answers nothing, not a Promise.
   const done = (async () => {
     await act(async () => {
       await w.settled();
-      seen = w.fetchesStarted();
+      settled = true;
     });
     return true;
   })();
   for (;;) {
-    if (await Promise.race([done, new Promise<false>((r) => realSetTimeout(() => r(false)))])) return;
-    if (seen !== undefined && w.fetchesStarted() > seen) {
+    const ended = await Promise.race([done, nextTask().then(() => false)]);
+    if (settled && w.fetchesStarted() > seen) {
       seen = w.fetchesStarted();
-      round();
+      fetched();
     }
+    if (ended) return;
   }
 }
 

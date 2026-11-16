@@ -2,10 +2,11 @@
 // reads follow change notices and reconnects through the one feed, Usage
 // reads load only when their arguments change, and a hook outside <Live>
 // says so. Each settles the world (ADR 0044) before it asserts, so a
-// change made once the feed is open always reaches it.
+// change made once the feed is open always reaches it; settle itself is
+// tested here too, with React.
 import { render, screen } from "@testing-library/react";
 import { useEffect, useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { newWorld, type World } from "./api/core/core";
 import { scenario } from "./api/scenario";
 import type { SessionUsageFilter, UsageDays } from "./api/types";
@@ -98,6 +99,15 @@ describe("the live read hooks", () => {
 });
 
 describe("settling a world under React", () => {
+  it("renders what the world brought while the test fakes timers", async () => {
+    vi.useFakeTimers();
+    onTestFinished(() => void vi.useRealTimers());
+    const { w, id } = await acme();
+    renderLive(w, <TicketTitle id={id} />);
+    await settle(w);
+    expect(screen.getByRole("heading", { name: "Fix login" })).toBeInTheDocument();
+  });
+
   it("fails clearly, rather than hang, while the UI keeps fetching", async () => {
     const w = await newWorld();
     function Restless() {

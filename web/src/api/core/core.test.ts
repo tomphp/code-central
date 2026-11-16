@@ -77,11 +77,13 @@ describe("a WASM Core world's settled", () => {
 
   it("resolves only once a write's notice has reached the feed", async () => {
     const w = await newWorld();
+    await scenario(w).project("acme");
     const { events } = feed(w);
     await w.settled();
-    await scenario(w).project("acme");
+    const renamed = w.api.renameProject("acme", "Acme Web");
     await w.settled();
-    expect(events).toContainEqual(expect.objectContaining({ project: "acme" }));
+    expect(events).toEqual([{ type: "project.changed", project: "acme" }]);
+    await renamed;
   });
 
   it("resolves after dropped streams only once the feed has reconnected", async () => {
