@@ -281,6 +281,9 @@ func (s *FileStore) loadProject(key string) error {
 		}
 		p.SetAutoAccept(kind, true)
 	}
+	if p.Repositories, at, err = decodeRepositories(p.Key, pf.Repositories); err != nil {
+		return &LoadError{File: rel, Field: "repositories" + at, Msg: err.Error()}
+	}
 	s.setProject(p)
 	if err := s.loadCIRuns(key); err != nil {
 		return err

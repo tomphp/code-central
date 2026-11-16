@@ -416,6 +416,9 @@ export interface ProjectView {
   // their Heartbeats, always filled in: offline, with no Factories,
   // until one sends a Heartbeat.
   factory_status: FactoryStatusView;
+  // Repositories are the Project's Repositories in landing order, always
+  // filled in: the Home Repository alone until the human adds another.
+  repositories: RepositoryView[];
 }
 
 // ProjectRow is one list_projects row: the Project and how many of its
@@ -878,6 +881,31 @@ export interface FactoryStatusView {
   // Base is the base the Factory last reported under Pull Request
   // (code-central-394); left out while none is reporting.
   base?: BaseView;
+}
+
+// RepositoryView is one of a Project's Repositories as every Project read
+// returns it, in landing order.
+export interface RepositoryView {
+  name: string;
+  // Home marks the Home Repository, named by the Project Key.
+  home: boolean;
+  // CloneURL is the remote the Repository is cloned from and pushed to:
+  // the Push remote URL the Factory reported for the Home Repository,
+  // empty until it has.
+  clone_url: string;
+  // Base is the branch its work is cut from and lands on: the Project's
+  // Base for the Home Repository.
+  base: string;
+  // LocalPath is where the Factory finds its clone, empty for beside
+  // the Home Repository.
+  local_path: string;
+  // CodeHost is the Code Host its Clone URL names, empty for none
+  // Code Central supports.
+  code_host: CodeHost;
+  // ChangedBy are the unfinished Tickets whose Changed Repositories
+  // include it, which keep it from being removed. Only get_project and
+  // list_projects fill them in.
+  changed_by: string[];
 }
 
 // LinkView is a Spec's or Ticket's Link as reads show it: the external

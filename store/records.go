@@ -57,6 +57,18 @@ type projectFile struct {
 	// AutoAccept is the Auto-accept kinds that are on, left out while
 	// every kind is off.
 	AutoAccept []string `yaml:"auto_accept,omitempty"`
+	// Repositories is left out while the Home Repository is the only one.
+	Repositories []repositoryFile `yaml:"repositories,omitempty"`
+}
+
+// repositoryFile is one of a Project's Repositories, in landing order.
+// The Home Repository's holds only its name.
+type repositoryFile struct {
+	Name      string `yaml:"name"`
+	Home      bool   `yaml:"home,omitempty"`
+	CloneURL  string `yaml:"clone_url,omitempty"`
+	Base      string `yaml:"base,omitempty"`
+	LocalPath string `yaml:"local_path,omitempty"`
 }
 
 // stageGuidesFile is a Project's Stage Guides settings.
@@ -580,7 +592,8 @@ func encode(record any, project string) (string, []byte, error) {
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
 			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models),
-			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, RetrosSpec: r.RetrosSpec, AutoAccept: encodeAutoAccept(r.AutoAccept)})
+			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, RetrosSpec: r.RetrosSpec, AutoAccept: encodeAutoAccept(r.AutoAccept),
+			Repositories: encodeRepositories(r.Repositories)})
 	case Options:
 		rel = "options.yaml"
 		data, err = encodeYAML(optionsFile{FocusClear: string(r.FocusClear), FocusPopup: string(r.FocusPopup), GHPath: r.GHPath})
@@ -720,6 +733,64 @@ func encodeAutoAccept(kinds []AutoAcceptKind) []string {
 		out = append(out, string(k))
 	}
 	return out
+}
+
+// encodeRepositories is the Repositories as project.yaml holds them, the
+// Home Repository's with its name alone.
+func encodeRepositories(rs []Repository) []repositoryFile {
+	var out []repositoryFile
+	for _, r := range rs {
+		if r.Home {
+			out = append(out, repositoryFile{Name: r.Name, Home: true})
+			continue
+		}
+		out = append(out, repositoryFile{Name: r.Name, CloneURL: r.CloneURL, Base: r.Base, LocalPath: r.LocalPath})
+	}
+	return out
+}
+
+// decodeRepositories checks a Project's Repositories as load does: each
+// Name keeps the rules and is unique, the Home Repository, named key, is
+// listed once with nothing more, and every other has a Clone URL and a
+// Base. It returns the offending field, relative to repositories, with
+// the error.
+func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, error) {
+	if len(fs) == 0 {
+		return nil, "", nil
+	}
+	var out []Repository
+	homes := 0
+	for i, f := range fs {
+		field := fmt.Sprintf("[%d]", i)
+		if !ValidRepositoryName(f.Name) {
+			return nil, field + ".name", fmt.Errorf("%q isn't a Repository Name: lowercase letters, digits, -, _ and ., starting with a letter or digit, at most %d characters", f.Name, MaxRepositoryName)
+		}
+		if slices.ContainsFunc(out, func(r Repository) bool { return r.Name == f.Name }) {
+			return nil, field + ".name", fmt.Errorf("%q a second time", f.Name)
+		}
+		if f.Home {
+			homes++
+			if f.Name != key {
+				return nil, field + ".name", fmt.Errorf("the Home Repository is named by the Project Key %q, not %q", key, f.Name)
+			}
+			if f.CloneURL != "" || f.Base != "" || f.LocalPath != "" {
+				return nil, field, errors.New("the Home Repository holds only its name: its Clone URL is reported and its Base is the Project's")
+			}
+			out = append(out, Repository{Name: f.Name, Home: true})
+			continue
+		}
+		if f.CloneURL == "" {
+			return nil, field + ".clone_url", errors.New("missing")
+		}
+		if f.Base == "" {
+			return nil, field + ".base", errors.New("missing")
+		}
+		out = append(out, Repository{Name: f.Name, CloneURL: f.CloneURL, Base: f.Base, LocalPath: f.LocalPath})
+	}
+	if homes != 1 {
+		return nil, "", fmt.Errorf("lists the Home Repository %d times, want once", homes)
+	}
+	return out, "", nil
 }
 
 // encodeStageGuides leaves the Stage Guides settings out of project.yaml

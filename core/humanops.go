@@ -215,6 +215,7 @@ func (c *Core) ListProjects(context.Context) ([]ProjectRow, error) {
 		for _, p := range r.Projects() {
 			row := ProjectRow{ProjectView: c.projectView(p)}
 			row.Landing.OpenPullRequests = openPullRequests(r, p.Key, landingPolicyOf(p))
+			fillChangedBy(r, &row.ProjectView)
 			e := c.evaluate(r, p)
 			row.NeedsMe = len(e.baseRows())
 			for _, t := range e.tickets() {

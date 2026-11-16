@@ -33,6 +33,9 @@ const (
 	trackerPointer   = "\n## Issue tracker\n\nSpecs and Tickets live in Code Central: see `" + trackerDoc + "`.\n"
 	excludeMark      = "# code-central init --local"
 	sandboxesPointer = "Agents in a sandbox or container: see `code-central help sandboxes`."
+	// repositoriesPointer: init sets up the Home Repository, and is never
+	// run in the Project's other Repositories.
+	repositoriesPointer = "This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`."
 )
 
 // setup is what init has settled before it writes the repository's files.
@@ -128,6 +131,7 @@ func setUp(ctx context.Context, e Env, ask func(string) (string, error), c *clie
 	} else {
 		fmt.Fprintln(e.Stdout, "Nothing was committed.")
 	}
+	fmt.Fprintln(e.Stdout, repositoriesPointer)
 	fmt.Fprintln(e.Stdout, sandboxesPointer)
 	return nil
 }

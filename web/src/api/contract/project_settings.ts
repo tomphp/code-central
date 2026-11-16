@@ -349,6 +349,40 @@ export function projectSettingsContract(driver: () => Driver) {
     expect(path).toMatchObject({ status: 422, code: "invalid", field: "workflow" });
   });
 
+  it("lists the Home Repository alone, then adds, edits, reorders and removes Repositories", async () => {
+    await d.createProject("acme", "Acme");
+    const names = (p: { repositories: { name: string }[] }) => p.repositories.map((r) => r.name);
+    expect((await d.api.listProjects())[0].repositories).toEqual([
+      { name: "acme", home: true, clone_url: "", base: "main", local_path: "", code_host: "", changed_by: [] },
+    ]);
+
+    const added = await d.api.addRepository("acme", { name: "web", clone_url: " git@github.com:acme/web.git " });
+    expect(added.repositories[1]).toEqual({
+      name: "web", home: false, clone_url: "git@github.com:acme/web.git", base: "main", local_path: "", code_host: "github", changed_by: [],
+    });
+    await d.api.addRepository("acme", { name: "api", clone_url: "https://github.com/acme/api", base: "develop", local_path: "/src/api" });
+    expect(names((await d.api.listProjects())[0])).toEqual(["acme", "web", "api"]);
+
+    const edited = await d.api.editRepository("acme", "web", { base: "trunk", local_path: "/src/web" });
+    expect(edited.repositories[1]).toMatchObject({ name: "web", clone_url: "git@github.com:acme/web.git", base: "trunk", local_path: "/src/web" });
+    expect(names(await d.api.setLandingOrder("acme", ["api", "acme", "web"]))).toEqual(["api", "acme", "web"]);
+    expect(names(await d.api.removeRepository("acme", "web"))).toEqual(["api", "acme"]);
+
+    // Each refusal names its field and says how to put it right.
+    const twice = await d.api.addRepository("acme", { name: "shop", clone_url: "git@github.com:Acme/API.git" }).catch((e) => e);
+    expect(twice).toMatchObject({ status: 422, code: "invalid", field: "clone_url" });
+    expect(twice.fix).toContain("edit api");
+    const home = await d.api.removeRepository("acme", "acme").catch((e) => e);
+    expect(home).toMatchObject({ status: 422, code: "invalid", field: "name" });
+    expect(home.fix).toBeTruthy();
+    const homeBase = await d.api.editRepository("acme", "acme", { base: "trunk" }).catch((e) => e);
+    expect(homeBase).toMatchObject({ status: 422, code: "invalid", field: "base" });
+    expect(homeBase.fix).toContain("Landing");
+    const order = await d.api.setLandingOrder("acme", ["api"]).catch((e) => e);
+    expect(order).toMatchObject({ status: 422, code: "invalid", field: "names" });
+    expect(await d.api.editRepository("acme", "web", { base: "main" }).catch((e) => e)).toMatchObject({ status: 404, code: "not_found" });
+  });
+
   it("sets a Project's Azure Pipelines settings, validating them by provider", async () => {
     await d.createProject("acme", "Acme");
     const azure = { provider: "azure_pipelines" as CIProvider, repository: "", ignored_workflows: [] };

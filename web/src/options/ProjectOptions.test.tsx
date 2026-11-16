@@ -1159,6 +1159,7 @@ describe("Project Options", () => {
     const menu = within(page()).getByRole("navigation", { name: "Sections" });
     const links = within(menu).getAllByRole("link");
     expect(links.map((l) => l.textContent)).toEqual([
+      "Repositories",
       "Landing Method",
       "CI",
       "GitHub Issues",

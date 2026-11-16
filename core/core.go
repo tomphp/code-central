@@ -115,6 +115,9 @@ type ProjectView struct {
 	// their Heartbeats, always filled in: offline, with no Factories,
 	// until one sends a Heartbeat.
 	FactoryStatus FactoryStatusView `json:"factory_status"`
+	// Repositories are the Project's Repositories in landing order, always
+	// filled in: the Home Repository alone until the human adds another.
+	Repositories []RepositoryView `json:"repositories"`
 }
 
 // LandingView is a Project's Landing Method with its Push option and the
@@ -442,6 +445,7 @@ func (c *Core) GetProject(_ context.Context, key string) (ProjectView, error) {
 		}
 		v = c.projectView(p)
 		v.Landing.OpenPullRequests = openPullRequests(r, key, landingPolicyOf(p))
+		fillChangedBy(r, &v)
 		return nil
 	})
 	return v, err
@@ -730,7 +734,7 @@ func (c *Core) projectView(p store.Project) ProjectView {
 		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key})),
 		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), AutoAccept: autoAcceptView(p),
-		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now())}
+		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now()), Repositories: repositoriesView(p)}
 	if !p.Archived.IsZero() {
 		at := p.Archived
 		v.Archived, v.ArchivedAt = true, &at

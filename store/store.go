@@ -100,6 +100,71 @@ type Project struct {
 	// for, in AutoAcceptKinds order (ADR 0037). It is stored as on, so a
 	// Project stored without it reads every kind off (ADR 0034).
 	AutoAccept []AutoAcceptKind
+	// Repositories are the Project's Repositories in landing order (Spec
+	// code-central-848), the Home Repository among them. A Project stored
+	// without them has the Home Repository alone, as RepositoryList reads
+	// it, and a list holding only the Home Repository is stored as none.
+	Repositories []Repository
+}
+
+// Repository is one git repository a Project's work changes. The Home
+// Repository, where the Factory runs, keeps only its Name, the Project
+// Key, and its place in the landing order: its Base is the Project's
+// (Landing.Base) and its Clone URL the Push remote URL the Factory
+// reports.
+type Repository struct {
+	// Name is the Repository Name, fixed once added.
+	Name string
+	Home bool
+	// CloneURL is the remote the Repository is cloned from and pushed to.
+	CloneURL string
+	// Base is the branch the Repository's work is cut from and lands on.
+	Base string
+	// LocalPath is where the Factory finds the Repository's clone, when
+	// it isn't beside the Home Repository; empty for there.
+	LocalPath string
+}
+
+// DefaultRepositoryBase is a Repository's Base when the human names none.
+const DefaultRepositoryBase = "main"
+
+// MaxRepositoryName is the longest a Repository Name may be.
+const MaxRepositoryName = 64
+
+// ValidRepositoryName reports whether name keeps the Repository Name
+// rules: lowercase letters, digits, -, _ and ., starting with a letter or
+// digit, at most MaxRepositoryName long.
+func ValidRepositoryName(name string) bool {
+	if name == "" || len(name) > MaxRepositoryName {
+		return false
+	}
+	for i, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+		case i > 0 && (r == '-' || r == '_' || r == '.'):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// RepositoryList is the Project's Repositories in landing order: the
+// Home Repository alone, named by the Project Key, while none is stored.
+func (p Project) RepositoryList() []Repository {
+	if len(p.Repositories) == 0 {
+		return []Repository{{Name: p.Key, Home: true}}
+	}
+	return slices.Clone(p.Repositories)
+}
+
+// SetRepositories stores rs as the Project's Repositories, none while
+// they are the Home Repository alone.
+func (p *Project) SetRepositories(rs []Repository) {
+	if len(rs) == 1 && rs[0].Home {
+		rs = nil
+	}
+	p.Repositories = rs
 }
 
 // AutoAcceptKind is an Auto-accept kind: the kind of Ticket a Project's

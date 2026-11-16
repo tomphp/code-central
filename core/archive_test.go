@@ -265,6 +265,23 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.SetFocusKinds(human, "acme", core.SetFocusKindsInput{Off: []core.NeedsMeReason{core.ReasonAnswered}})
 		return err
 	},
+	"add_repository": func(f fixture) error {
+		_, err := f.core.AddRepository(human, "acme", core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
+		return err
+	},
+	"edit_repository": func(f fixture) error {
+		base := "develop"
+		_, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", Base: &base})
+		return err
+	},
+	"remove_repository": func(f fixture) error {
+		_, err := f.core.RemoveRepository(human, "acme", core.RemoveRepositoryInput{Name: "web"})
+		return err
+	},
+	"set_landing_order": func(f fixture) error {
+		_, err := f.core.SetLandingOrder(human, "acme", core.SetLandingOrderInput{Names: []string{"acme"}})
+		return err
+	},
 	"report_models": func(f fixture) error {
 		_, err := f.core.ReportModels(ctx, "acme", core.ReportModelsInput{EffortLevels: []string{"low"}})
 		return err
