@@ -215,11 +215,13 @@ func TestAStoppedTurnIsTakenThroughTheStopLadderAndEndsStopped(t *testing.T) {
 
 	cancel()
 	// It ignores the first stop step, so the runner waits out the kill
-	// grace before the next.
+	// grace before the next. On Windows the next is a kill, so the fake
+	// has to have noted the first before the grace ends.
 	tt.h.WaitFor("the kill grace", func() bool {
 		at, ok := tt.h.Clock.Next()
 		return ok && at.Equal(tt.h.Clock.Now().Add(factorytest.KillGrace))
 	})
+	tt.h.WaitFor("the first stop signal noted", func() bool { return len(tt.h.Signals("turn-1")) == 1 })
 	tt.h.Clock.Advance(factorytest.KillGrace)
 	o := <-ran
 
