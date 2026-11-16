@@ -15,7 +15,7 @@ import (
 // lastFailure is the newest Failure Report on a Failed Ticket.
 func lastFailure(t *testing.T, h *factorytest.Harness, id string) string {
 	t.Helper()
-	tk := h.WaitForState(id, store.Failed)
+	tk := h.WantState(id, store.Failed)
 	r := tk.FailureReports[len(tk.FailureReports)-1]
 	return r.WhatBroke + "\n" + r.Why + "\n" + r.WhatToFix + "\n" + r.WhereWorkStands
 }
@@ -127,9 +127,11 @@ func TestWorktreesAreKeptThroughInReviewGiveUpAndFailed(t *testing.T) {
 	h.Script(failed, factorytest.CLI("report-failure", "{{ticket}}", "--claim", "{{claim}}", "--what-broke", "x", "--why", "x", "--what-to-fix", "x", "--where-work-stands", "x"), factorytest.Result("success"))
 
 	r := h.Start()
-	h.WaitForState(review, store.InReview)
-	h.WaitForState(failed, store.Failed)
-	h.WaitFor("the give-up", func() bool { tk := h.Ticket(gaveUp); return len(tk.Claims) > 0 && tk.State == store.Ready })
+	h.WantState(review, store.InReview)
+	h.WantState(failed, store.Failed)
+	if tk := h.WantState(gaveUp, store.Ready); len(tk.Claims) == 0 {
+		t.Fatalf("%s is Ready but was never claimed, want its turn to have given up", gaveUp)
+	}
 	r.Poll()
 
 	for _, id := range []string{review, gaveUp, failed} {
@@ -149,8 +151,8 @@ func TestACleanWorktreeIsRemovedOnDoneAndItsBranchKept(t *testing.T) {
 		factorytest.Git("commit", "-q", "-m", "x"),
 		factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
-	h.WaitForState(id, store.InReview)
-	r.WaitForOutput(id + " turn ended")
+	h.WantState(id, store.InReview)
+	r.WantOutput(id + " turn ended")
 	tip := h.Git("rev-parse", id)
 
 	move(t, h, id, store.Done)
@@ -173,8 +175,8 @@ func TestADirtyWorktreeIsLeftOnCancelledWithAWarning(t *testing.T) {
 	id := h.ReadyTicket("Abandoned")
 	h.Script(id, factorytest.WriteFile("wip.txt", "wip\n"), factorytest.Finish("Done."), factorytest.Result("success"))
 	r := h.Start()
-	h.WaitForState(id, store.InReview)
-	r.WaitForOutput(id + " turn ended")
+	h.WantState(id, store.InReview)
+	r.WantOutput(id + " turn ended")
 
 	move(t, h, id, store.Cancelled)
 	r.Poll()
@@ -182,7 +184,7 @@ func TestADirtyWorktreeIsLeftOnCancelledWithAWarning(t *testing.T) {
 	if got, _ := os.ReadFile(filepath.Join(h.Worktree(id), "wip.txt")); string(got) != "wip\n" {
 		t.Errorf("the dirty worktree was changed: wip.txt = %q", got)
 	}
-	r.WaitForOutput("warning: " + id)
+	r.WantOutput("warning: " + id)
 	if !strings.Contains(r.Stdout(), h.Worktree(id)) {
 		t.Errorf("stdout %q: the warning doesn't name the worktree", r.Stdout())
 	}
@@ -207,8 +209,12 @@ func TestTheSweepAtStartRemovesFinishedTicketsWorktreesAndPrunes(t *testing.T) {
 	}
 
 	r := h.Start()
-	r.WaitForOutput("base: main")
-	h.WaitFor("the sweep", func() bool { return !exists(h.Worktree(done)) && !exists(h.Worktree(stage)) })
+	r.WantOutput("base: main")
+	for _, id := range []string{done, stage} {
+		if exists(h.Worktree(id)) {
+			t.Errorf("the sweep left %s's worktree %s", id, h.Worktree(id))
+		}
+	}
 
 	if list := h.Git("worktree", "list"); strings.Contains(list, gone) {
 		t.Errorf("git worktree list still has the deleted %s:\n%s", gone, list)

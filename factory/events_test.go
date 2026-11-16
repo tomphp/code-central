@@ -28,9 +28,9 @@ func events(tr core.TranscriptView) []event {
 }
 
 // waitForTranscript polls until the Transcript of ticket's first Claim
-// holds an event whose text contains s, and returns it.
+// holds an event whose text contains s, and returns it. The Ticket has
+// been claimed: a test settles the Factory first.
 func waitForTranscript(h *factorytest.Harness, r *factorytest.Running, ticket, s string) core.TranscriptView {
-	h.WaitFor(ticket+" to be claimed", func() bool { return len(h.Ticket(ticket).Claims) > 0 })
 	var tr core.TranscriptView
 	r.PollUntil("an event with "+s+" in "+ticket+"'s Transcript", func() bool {
 		tr = h.Transcript(ticket, 1)
@@ -62,9 +62,11 @@ func TestATurnsStreamJSONIsPostedAsSessionEvents(t *testing.T) {
 		factorytest.Result("success"),
 	)
 	r := h.Start("--verbose")
-	h.WaitForState(id, store.InReview)
-	r.WaitForOutput(id + " turn ended")
-	tr := waitForTranscript(h, r, id, "turn ended")
+	h.WantState(id, store.InReview)
+	r.WantOutput(id + " turn ended")
+	// The turn has ended, so everything it printed waits for a batch.
+	r.Poll()
+	tr := h.Transcript(id, 1)
 
 	cut := strings.Repeat("é", 2048) // 4 KB of two-byte runes
 	want := []event{
@@ -103,16 +105,19 @@ func TestTheFactorysLinesAboutAClaimArePostedToItsTranscript(t *testing.T) {
 	id := h.ReadyTicket("Ask first")
 	h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 	r := h.Start()
-	h.WaitForState(id, store.NeedsAnswer)
-	r.WaitForOutput(id + " turn ended")
+	h.WantState(id, store.NeedsAnswer)
+	r.WantOutput(id + " turn ended")
 	h.Answer(id, "Green")
 	r.Poll()
-	h.WaitFor("the resumed turn to end", func() bool { return strings.Count(r.Stdout(), id+" turn ended") == 2 })
-	var tr core.TranscriptView
-	r.PollUntil("the second turn ended line in the Transcript", func() bool {
-		tr = h.Transcript(id, 1)
-		return len(tr.Events) == 4
-	})
+	if n := strings.Count(r.Stdout(), id+" turn ended"); n != 2 {
+		t.Fatalf("%d turn ended lines after the resume, want 2; stdout:\n%s", n, r.Stdout())
+	}
+	// The second turn ended line was printed after the poll's batches.
+	r.Poll()
+	tr := h.Transcript(id, 1)
+	if len(tr.Events) != 4 {
+		t.Fatalf("Transcript holds %+v, want the claimed, turn ended, resumed and turn ended lines", events(tr))
+	}
 
 	var want []event
 	for _, l := range strings.Split(r.Stdout(), "\n") {
@@ -153,7 +158,8 @@ func TestATurnThatKeepsPostingEventsNeverMakesItsClaimSilent(t *testing.T) {
 		}
 	}
 	h.Continue(id)
-	h.WaitForState(id, store.InReview)
+	r.Settle()
+	h.WantState(id, store.InReview)
 }
 
 func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedEventsHoldNothingUp(t *testing.T) {
@@ -172,9 +178,11 @@ func TestWithCodeCentralDownMidTurnTheTurnStillFinishesAndDroppedEventsHoldNothi
 	r.PollUntil("a post of Session Events to be refused", func() bool { return h.Refused("/api/session-events") > 0 })
 	h.SetDown(false)
 	h.Continue(id)
-	h.WaitForState(id, store.InReview)
-	r.WaitForOutput(id + " turn ended")
-	tr := waitForTranscript(h, r, id, "turn ended")
+	r.Settle()
+	h.WantState(id, store.InReview)
+	r.WantOutput(id + " turn ended")
+	r.Poll()
+	tr := h.Transcript(id, 1)
 
 	var said []string
 	for _, e := range tr.Events {

@@ -9,19 +9,16 @@ import (
 	"github.com/tomoram/code-central/factory/factorytest"
 )
 
-// callFor is the one claude call the Factory made for the Ticket.
+// callFor is the one claude call the Factory made for the Ticket. A test
+// settles the Factory first.
 func callFor(t *testing.T, h *factorytest.Harness, id string) factorytest.Call {
 	t.Helper()
 	var found []factorytest.Call
-	h.WaitFor("claude to start on "+id, func() bool {
-		found = nil
-		for _, c := range h.Calls() {
-			if c.Ticket == id {
-				found = append(found, c)
-			}
+	for _, c := range h.Calls() {
+		if c.Ticket == id {
+			found = append(found, c)
 		}
-		return len(found) > 0
-	})
+	}
 	if len(found) != 1 {
 		t.Fatalf("%s: %d claude calls, want 1", id, len(found))
 	}
@@ -64,7 +61,6 @@ func TestATicketSentBackForAConflictIsClaimedWithAnInlinePrompt(t *testing.T) {
 
 	h.Script(id, factorytest.Wait())
 	h.Start()
-	h.WaitForWorktree(id)
 
 	requireConflictClaim(t, callFor(t, h, id), "README")
 }
@@ -79,7 +75,6 @@ func TestATicketSentBackForAnotherReasonStartsAsAnOrdinaryClaim(t *testing.T) {
 
 	h.Script(id, factorytest.Wait())
 	h.Start()
-	h.WaitForWorktree(id)
 
 	requireOrdinaryClaim(t, h, callFor(t, h, id))
 }
@@ -95,7 +90,6 @@ func TestATicketWhoseBranchNoLongerConflictsStartsAsAnOrdinaryClaim(t *testing.T
 
 	h.Script(id, factorytest.Wait())
 	h.Start()
-	h.WaitForWorktree(id)
 
 	requireOrdinaryClaim(t, h, callFor(t, h, id))
 }
@@ -108,7 +102,6 @@ func TestAFirstClaimIsAnOrdinaryClaim(t *testing.T) {
 
 	h.Script(id, factorytest.Wait())
 	h.Start()
-	h.WaitForWorktree(id)
 
 	requireOrdinaryClaim(t, h, callFor(t, h, id))
 }
@@ -128,7 +121,6 @@ func TestATicketOnASpecBranchIsAConflictClaimOnlyWhenItsBranchConflicts(t *testi
 
 		h.Script(id, factorytest.Wait())
 		h.Start()
-		h.WaitForWorktree(id)
 
 		c := callFor(t, h, id)
 		if conflicts {
@@ -148,12 +140,12 @@ func TestTheConflictTicketTheFactoryOpensForASpecBranchStartsAsAConflictClaim(t 
 	fix := "acme-5"
 	h.Script(fix, factorytest.Wait())
 	r := h.Start()
-	r.WaitForOutput(a + ": merged into spec/" + h.SpecID())
+	r.WantOutput(a + ": merged into spec/" + h.SpecID())
 
 	h.CommitOn("main", "README", "base side\n")
 	release()
 	r.Poll()
-	r.WaitForOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)
+	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)
 
 	requireConflictClaim(t, callFor(t, h, fix), "README")
 }

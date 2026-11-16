@@ -23,8 +23,8 @@ func TestAPlainSpecIsMergedAndPushedOnceAndItsTicketsLandTogether(t *testing.T) 
 	b, _ := accepted(h, "Second", "two.txt", "2\n")
 
 	h.Start()
-	h.WaitForState(a, store.Done)
-	h.WaitForState(b, store.Done)
+	h.WantState(a, store.Done)
+	h.WantState(b, store.Done)
 
 	merge := h.Git("rev-parse", "main")
 	if got := h.Git("log", "-1", "--format=%s", merge); got != "Merge spec "+h.SpecID()+": Work" {
@@ -49,12 +49,12 @@ func TestATicketAddedAfterAPlainSpecLandedLandsWithASecondBatch(t *testing.T) {
 	h.MakePlainSpec()
 	a, _ := accepted(h, "First", "one.txt", "1\n")
 	r := h.Start()
-	h.WaitForState(a, store.Done)
+	h.WantState(a, store.Done)
 	first := h.Git("rev-parse", "main")
 
 	late, _ := accepted(h, "Late", "late.txt", "late\n")
 	r.Poll()
-	h.WaitForState(late, store.Done)
+	h.WantState(late, store.Done)
 	second := h.Git("rev-parse", "main")
 	if second == first {
 		t.Fatal("main didn't move for the late Ticket")
@@ -77,14 +77,14 @@ func TestLabellingASpecLongLivedWhileItsTicketsWaitLandsThemTogetherAtOnce(t *te
 	release := holdTicketsStage(t, h)
 	defer release()
 	r := h.Start()
-	r.WaitForOutput(c + ": merged into spec/" + h.SpecID())
+	r.WantOutput(c + ": merged into spec/" + h.SpecID())
 
 	if _, err := h.Human().AddLabels(context.Background(), h.Project, core.LabelsInput{Target: core.Ref(h.SpecID()), Labels: []string{core.LongLivedLabel}}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()
-	h.WaitForState(a, store.Done)
-	h.WaitForState(c, store.Done)
+	h.WantState(a, store.Done)
+	h.WantState(c, store.Done)
 	merge := h.Git("rev-parse", "main")
 	if got := h.Git("log", "-1", "--format=%s", merge); got != "Merge spec "+h.SpecID()+": Work" {
 		t.Errorf("merge subject %q", got)
@@ -98,8 +98,8 @@ func TestALongLivedSpecsTicketsLandOneByOne(t *testing.T) {
 	b, _ := accepted(h, "Second", "two.txt", "2\n")
 
 	h.Start()
-	h.WaitForState(a, store.Done)
-	h.WaitForState(b, store.Done)
+	h.WantState(a, store.Done)
+	h.WantState(b, store.Done)
 	if got := h.Git("branch", "--list", "spec/*"); got != "" {
 		t.Errorf("a Spec Branch was made for a Long-lived Spec: %q", got)
 	}
