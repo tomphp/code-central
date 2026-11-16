@@ -41,11 +41,11 @@ func TestUnderBranchAnAcceptedTicketIsLeftOnItsBranchAndLandedOnceMergedByHand(t
 	if got := h.Git("rev-parse", "refs/heads/"+id); got != commit {
 		t.Errorf("branch %s is at %q, want it kept at %s", id, got, commit)
 	}
-	r.WaitForOutput(id + ": Accepted under the Branch Landing Method: merge " + id + " into main")
+	r.WantOutput(id + ": Accepted under the Branch Landing Method: merge " + id + " into main")
 
 	h.Git("merge", "-q", "--no-ff", "-m", "My own merge", id)
 	r.Poll()
-	tk := h.WaitForState(id, store.Done)
+	tk := h.WantState(id, store.Done)
 	if m := tk.Moves[len(tk.Moves)-1]; m.From != store.Accepted || m.Commit != commit {
 		t.Errorf("land move %+v, want from Accepted with the finish commit %s", m, commit)
 	}

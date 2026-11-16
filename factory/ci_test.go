@@ -54,7 +54,7 @@ func TestAFactoryWithNoPushRemoteReportsNothingAndStillStarts(t *testing.T) {
 	h.Script(id, factorytest.Wait())
 
 	h.Start()
-	h.WaitForState(id, store.InProgress)
+	h.WantState(id, store.InProgress)
 	if got := pushRemoteURL(t, h); got != "" {
 		t.Fatalf("push remote URL %q, want none reported", got)
 	}
@@ -77,7 +77,7 @@ func TestUnderMergeAndPushTheFactoryReportsThePushedBaseAsTheTicketsPushedCommit
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	r.WaitForOutput(id + ": CI tracks main at ")
+	r.WantOutput(id + ": CI tracks main at ")
 	tk := h.Ticket(id)
 	merge := h.Git("rev-parse", "main")
 	if tk.PushedCommit == nil || tk.PushedCommit.Commit != merge {
@@ -97,7 +97,7 @@ func TestUnderBranchAndPushTheFactoryReportsThePushedBranchAsTheTicketsPushedCom
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	r.WaitForOutput(id + ": CI tracks " + id + " at ")
+	r.WantOutput(id + ": CI tracks " + id + " at ")
 	r.Poll()
 	tk := h.Ticket(id)
 	if tk.State != store.Accepted || tk.PushedCommit == nil || tk.PushedCommit.Commit != commit {
@@ -116,7 +116,7 @@ func TestWithCITrackingOffThePushedCommitIsNotReported(t *testing.T) {
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	h.Start()
-	if tk := h.WaitForState(id, store.Done); tk.PushedCommit != nil {
+	if tk := h.WantState(id, store.Done); tk.PushedCommit != nil {
 		t.Fatalf("pushed commit %+v, want none with CI Tracking off", tk.PushedCommit)
 	}
 }
@@ -129,7 +129,7 @@ func TestABranchPushedBeforeCITrackingWasOnIsNotTracked(t *testing.T) {
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	r.WaitForOutput(id + ": pushed " + id + " to origin")
+	r.WantOutput(id + ": pushed " + id + " to origin")
 	trackCI(t, h)
 	r.Poll()
 	r.Poll()

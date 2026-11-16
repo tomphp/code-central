@@ -44,8 +44,8 @@ func TestAReadySpecIsMergedIntoTheBaseAndItsTicketsLandAtTheMergeCommit(t *testi
 	a, b := twoAccepted(t, h)
 
 	r := h.Start()
-	h.WaitForState(a, store.Done)
-	tkB := h.WaitForState(b, store.Done)
+	h.WantState(a, store.Done)
+	tkB := h.WantState(b, store.Done)
 
 	merge := h.Git("rev-parse", "main")
 	if got := h.Git("log", "-1", "--format=%s", merge); got != "Merge spec "+h.SpecID()+": Work" {
@@ -57,8 +57,8 @@ func TestAReadySpecIsMergedIntoTheBaseAndItsTicketsLandAtTheMergeCommit(t *testi
 	if m := h.Ticket(a).Moves; m[len(m)-1].Commit != merge {
 		t.Errorf("first landed at %q, want the merge %s", m[len(m)-1].Commit, merge)
 	}
-	r.WaitForOutput(h.SpecID() + ": merged spec/" + h.SpecID() + " into main at ")
-	r.WaitForOutput(a + ": landed on main at ")
+	r.WantOutput(h.SpecID() + ": merged spec/" + h.SpecID() + " into main at ")
+	r.WantOutput(a + ": landed on main at ")
 }
 
 func TestNothingLandsWhileTheSpecIsNotReady(t *testing.T) {
@@ -67,7 +67,7 @@ func TestNothingLandsWhileTheSpecIsNotReady(t *testing.T) {
 	a, _ := twoAccepted(t, h)
 	release := holdTicketsStage(t, h)
 	r := h.Start()
-	r.WaitForOutput(a + ": merged into spec/")
+	r.WantOutput(a + ": merged into spec/")
 	r.Poll()
 	if h.Ticket(a).State != store.Accepted {
 		t.Error("landed before the tickets Stage was finished")
@@ -77,7 +77,7 @@ func TestNothingLandsWhileTheSpecIsNotReady(t *testing.T) {
 	later := h.ReadyTicket("Added later")
 	h.Script(later, factorytest.Wait())
 	r.Poll()
-	h.WaitForState(later, store.InProgress)
+	h.WantState(later, store.InProgress)
 	r.Poll()
 	r.Poll()
 	if h.Ticket(a).State != store.Accepted {
@@ -92,16 +92,15 @@ func TestUnderPushASpecIsPushedOnceAndItsTicketsLand(t *testing.T) {
 	mergeAndPush(h, "origin")
 	a, b := twoAccepted(t, h)
 
-	r := h.Start()
-	h.WaitForState(a, store.Done)
-	h.WaitForState(b, store.Done)
+	h.Start()
+	h.WantState(a, store.Done)
+	h.WantState(b, store.Done)
 	if got, want := remote.Git("rev-parse", "main"), h.Git("rev-parse", "main"); got != want {
 		t.Errorf("the remote's main is %s, want %s", got, want)
 	}
 	if got := remote.Git("branch", "--list"); got != "main" && got != "* main" {
 		t.Errorf("the remote has branches %q, want only main", got)
 	}
-	_ = r
 }
 
 func TestAFailedPushLeavesTheSpecsTicketsAcceptedAndRetries(t *testing.T) {
@@ -128,8 +127,8 @@ func TestAFailedPushLeavesTheSpecsTicketsAcceptedAndRetries(t *testing.T) {
 
 	remote.AcceptPushes()
 	r.Poll()
-	h.WaitForState(a, store.Done)
-	h.WaitForState(b, store.Done)
+	h.WantState(a, store.Done)
+	h.WantState(b, store.Done)
 }
 
 func TestWithCITrackingASpecsTicketsShareOnePushedCommitAndLandOncePassed(t *testing.T) {
@@ -141,8 +140,8 @@ func TestWithCITrackingASpecsTicketsShareOnePushedCommitAndLandOncePassed(t *tes
 	a, b := twoAccepted(t, h)
 
 	r := h.Start()
-	r.WaitForOutput(b + ": CI tracks main at ")
-	r.WaitForOutput(a + ": CI tracks main at ")
+	r.WantOutput(b + ": CI tracks main at ")
+	r.WantOutput(a + ": CI tracks main at ")
 	pa, pb := h.Ticket(a).PushedCommit, h.Ticket(b).PushedCommit
 	if pa == nil || pb == nil || pa.Commit != pb.Commit {
 		t.Fatalf("pushed commits %+v and %+v, want the same one", pa, pb)
@@ -158,8 +157,8 @@ func TestWithCITrackingASpecsTicketsShareOnePushedCommitAndLandOncePassed(t *tes
 	// A re-run passes.
 	reportAttempt(t, h, 1, 2, a, pa.Commit, store.CICompleted, store.CISuccess)
 	r.Poll()
-	h.WaitForState(a, store.Done)
-	h.WaitForState(b, store.Done)
+	h.WantState(a, store.Done)
+	h.WantState(b, store.Done)
 }
 
 func TestASpecBranchThatConflictsWithTheBaseOpensOneConflictTicket(t *testing.T) {
@@ -169,7 +168,7 @@ func TestASpecBranchThatConflictsWithTheBaseOpensOneConflictTicket(t *testing.T)
 	a, _ := accepted(h, "First", "README", "spec side\n")
 	release := holdTicketsStage(t, h)
 	r := h.Start()
-	r.WaitForOutput(a + ": merged into spec/" + h.SpecID())
+	r.WantOutput(a + ": merged into spec/" + h.SpecID())
 
 	if err := os.WriteFile(filepath.Join(h.Repo, "README"), []byte("base side\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -178,7 +177,7 @@ func TestASpecBranchThatConflictsWithTheBaseOpensOneConflictTicket(t *testing.T)
 	h.Git("commit", "-q", "-m", "base changes README")
 	release()
 	r.Poll()
-	r.WaitForOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened ")
+	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened ")
 	r.Poll()
 
 	rows, err := h.Server.Client.FindTickets(context.Background(), h.Project, core.FindTicketsInput{Spec: core.Ref(h.SpecID()), Title: "Merge the base into the Spec Branch of " + h.SpecID()})
@@ -206,12 +205,12 @@ func TestASpecBranchConflictingWithAMovedBaseCommentsOnItsOpenSpecMergeTicket(t 
 	fix := "acme-5"
 	h.Script(fix, factorytest.Wait())
 	r := h.Start()
-	r.WaitForOutput(a + ": merged into spec/" + h.SpecID())
+	r.WantOutput(a + ": merged into spec/" + h.SpecID())
 
 	h.CommitOn("main", "README", "base side\n")
 	release()
 	r.Poll()
-	r.WaitForOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)
+	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)
 
 	// Land per Spec off merges the Spec Branch on every poll, ready or
 	// not, so the moved base meets the same conflict.
@@ -219,7 +218,7 @@ func TestASpecBranchConflictingWithAMovedBaseCommentsOnItsOpenSpecMergeTicket(t 
 	baseTip := h.Git("rev-parse", "main")
 	h.SetLandingMethod(core.SetLandingMethodInput{Method: store.LandingMerge, LandPerSpec: off()})
 	r.Poll()
-	r.WaitForOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main again: commented on " + fix)
+	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main again: commented on " + fix)
 
 	comments := h.Ticket(fix).Comments
 	if len(comments) != 1 || !strings.Contains(comments[0].Body, "base's tip is "+baseTip) {
@@ -238,7 +237,7 @@ func TestOnceTheConflictTicketIsAcceptedTheSpecLandsAgain(t *testing.T) {
 	fix := "acme-5"
 	h.Script(fix, factorytest.Git("merge", "-q", "-X", "theirs", "main"), factorytest.CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", "Merged the base.", "--branch", fix))
 	r := h.Start()
-	r.WaitForOutput(a + ": merged into spec/" + h.SpecID())
+	r.WantOutput(a + ": merged into spec/" + h.SpecID())
 
 	if err := os.WriteFile(filepath.Join(h.Repo, "README"), []byte("base side\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -247,11 +246,11 @@ func TestOnceTheConflictTicketIsAcceptedTheSpecLandsAgain(t *testing.T) {
 	h.Git("commit", "-q", "-m", "base changes README")
 	release()
 	r.Poll()
-	r.WaitForOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)
-	h.WaitForState(fix, store.InReview)
+	r.WantOutput(h.SpecID() + ": spec/" + h.SpecID() + " conflicts with main in README: opened " + fix)
+	h.WantState(fix, store.InReview)
 
 	h.Accept(fix)
 	r.Poll()
-	h.WaitForState(a, store.Done)
-	h.WaitForState(fix, store.Done)
+	h.WantState(a, store.Done)
+	h.WantState(fix, store.Done)
 }
