@@ -601,6 +601,7 @@ describe("the Board's Focus popup", () => {
     expect(within(popup()).queryByRole("article", { name: "Focus Item" })).toBeNull();
     expect(popup()).toHaveTextContent("Loading…");
     // It waits on that read, rather than reading the Round again and again.
+    // eslint-disable-next-line no-restricted-syntax -- nothing happens to wait for: the test shows the read is not repeated
     await act(() => new Promise((r) => setTimeout(r, 50)));
     expect(read.mock.calls.length).toBeLessThan(5);
 

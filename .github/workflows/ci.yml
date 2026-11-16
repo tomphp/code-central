@@ -95,6 +95,10 @@ jobs:
         working-directory: web
         run: npx tsc --noEmit
 
+      - name: eslint
+        working-directory: web
+        run: npx eslint .
+
       - name: Vite build
         working-directory: web
         run: npm run build

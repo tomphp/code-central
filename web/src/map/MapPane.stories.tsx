@@ -37,7 +37,7 @@ const pane = (build: (api: Api, s: Parameters<Parameters<typeof storyWorld>[0]>[
     return { api: w.api, now: w.now(), spec: { ...spec, map: spec.map! } };
   }),
   render: (_, { loaded }) => {
-    const { api, now, spec } = loaded.world as Loaded;
+    const { now, spec } = loaded.world as Loaded;
     return (
       <MapBody
         spec={spec}

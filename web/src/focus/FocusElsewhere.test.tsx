@@ -360,6 +360,7 @@ describe("a read Round with no open Question left, before Needs Me catches up", 
   async function waitsThenCatchesUp({ s, colour, h }: Awaited<ReturnType<typeof answeredRound>>, region: () => HTMLElement) {
     expect(h.getTicket).toHaveBeenCalled();
     expect(region()).toHaveTextContent("Loading…");
+    // eslint-disable-next-line no-restricted-syntax -- nothing happens to wait for: the test shows the read is not repeated
     await act(() => new Promise((r) => setTimeout(r, 50)));
     expect(h.getTicket.mock.calls.length).toBeLessThan(5);
     expect(within(region()).queryByRole("article", { name: "Focus Item" })).toBeNull();

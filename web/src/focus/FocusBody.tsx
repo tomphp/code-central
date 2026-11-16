@@ -46,7 +46,7 @@ export interface FocusBodyProps {
   navigate(patch: Partial<UiLocation>): void;
 }
 
-export function FocusBody({ api, now, data, session, dashboard, loc, project: scoped, navigate }: FocusBodyProps) {
+export function FocusBody({ now, data, session, dashboard, loc, project: scoped, navigate }: FocusBodyProps) {
   const scope = scoped ?? loc.project;
   const project = data?.projects.find((p) => p.key === scope);
   const { item } = session;

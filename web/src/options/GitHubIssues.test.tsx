@@ -30,8 +30,8 @@ const save = async (w: World) => {
 // settings is acme's GitHub Issues settings, without the Issue Watcher's
 // status.
 const settings = async (w: World) => {
-  const { watcher: _, ...settings } = (await w.api.listProjects())[0].github_issues;
-  return settings;
+  const { github_issues } = (await w.api.listProjects())[0];
+  return Object.fromEntries(Object.entries(github_issues).filter(([k]) => k !== "watcher")) as Omit<typeof github_issues, "watcher">;
 };
 const watcher = () => within(issues()).getByRole("region", { name: "Issue Watcher" });
 const turnOn = async (w: World) => {

@@ -46,6 +46,7 @@ describe("end-to-end: an issue arrives and the human turns it To Requirement", (
       const got = await writes();
       if (want.every((w) => got.includes(w))) return;
       if (Date.now() > deadline) expect(got).toEqual(expect.arrayContaining(want));
+      // eslint-disable-next-line no-restricted-syntax -- the poll interval of a loop that reads a real process's writes until the deadline
       await new Promise((r) => setTimeout(r, 100));
     }
   }

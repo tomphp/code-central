@@ -39,7 +39,7 @@ export function App({ api, now = () => new Date() }: AppProps) {
 
 function Views({ now }: { now: () => Date }) {
   const api = useApi();
-  const version = useVersion();
+  useVersion();
   const [loc, navigate, replace] = useUiLocation();
   const inbox = useInbox();
   const options = useOptions();
