@@ -291,6 +291,14 @@ export const FOCUS_POPUPS = [
 ] as const;
 export type FocusPopup = (typeof FOCUS_POPUPS)[number];
 
+// LimitsPopup is whether the Limits popup shows a Project's Plan Limits.
+// LimitsPopups has the default first.
+export const LIMITS_POPUPS = [
+  "on",
+  "off",
+] as const;
+export type LimitsPopup = (typeof LIMITS_POPUPS)[number];
+
 // ChatAvailability is whether the Project's current Conversation can take
 // a Chat Message now, worked out from the Heartbeats on every read.
 export const CHAT_AVAILABILITIES = [
@@ -717,6 +725,8 @@ export interface OptionsView {
   focus_clear: FocusClear;
   // FocusPopup is the Focus Pop-up Option.
   focus_popup: FocusPopup;
+  // LimitsPopup is the Show Limits popup Option.
+  limits_popup: LimitsPopup;
   // GHPath is the gh path Option: where gh is, "" to find it on the
   // service's PATH, then in the usual install places.
   gh_path: string;

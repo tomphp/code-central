@@ -71,6 +71,7 @@ var enums = []Enum{
 	enumOf("SessionEventKinds", core.SessionEventKinds),
 	enumOf("FocusClears", store.FocusClears),
 	enumOf("FocusPopups", store.FocusPopups),
+	enumOf("LimitsPopups", store.LimitsPopups),
 	enumOf("ChatAvailabilities", core.ChatAvailabilities),
 	enumOf("ChatAuthors", core.ChatAuthors),
 	enumOf("ChatOutcomes", core.ChatOutcomes),
