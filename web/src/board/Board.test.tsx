@@ -405,6 +405,18 @@ describe("the Board's Ticket popup", () => {
     expect(within(popup()).getByRole("heading", { name: /Login form, redone/ })).toBeInTheDocument();
   });
 
+  it("closes once its Move button has moved the Ticket", async () => {
+    const fake = await world();
+    await renderApp(fake, "/?view=board&project=acme&hide=Done");
+    loaded();
+    await openCard("Login form");
+    const before = (await fake.w.api.getTicket("acme", fake.ids.form)).state;
+    await click(within(popup()).getByRole("button", { name: "Move" }));
+    await settled();
+    expect((await fake.w.api.getTicket("acme", fake.ids.form)).state).not.toBe(before);
+    noPopup();
+  });
+
   it("stays a Ticket popup when its Ticket starts needing the human", async () => {
     const fake = await world();
     await renderApp(fake, "/?view=board&project=acme");
