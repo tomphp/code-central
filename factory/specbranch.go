@@ -264,6 +264,11 @@ func (f *factory) landSpec(ctx context.Context, id string, p core.ProjectView) {
 			}
 			return
 		}
+		if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
+			// Accepted after this poll merged into Spec Branches: the
+			// Spec lands once the next poll has merged it.
+			return
+		}
 		tickets = append(tickets, tk)
 	}
 	f.mergeSpec(ctx, spec, tickets, p)

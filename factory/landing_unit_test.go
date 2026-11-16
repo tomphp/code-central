@@ -777,3 +777,45 @@ func TestAPushedCommitWhoseReportFailedIsReportedAsItsOwnNotALaterTicketsPush(t 
 		t.Fatalf("%s is %s with pushed commit %+v, want it Accepted with its own merge %s, not the later push", first, tk.State, tk.PushedCommit, firstMerge)
 	}
 }
+
+// Under Merge with Land per Spec.
+
+func TestASpecWhoseLastTicketIsAcceptedMidPollWaitsForItsMergeIntoTheSpecBranch(t *testing.T) {
+	t.Parallel()
+	w := newLandWorld(t)
+	s, err := w.srv.Client.CreateSpec(context.Background(), "acme", core.CreateSpecInput{Title: "Work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.spec = s.ID // not long-lived: its Tickets land together
+	first, _ := w.accepted("First")
+	second, commit := w.reviewed("Second")
+	w.poll()
+	if w.lines(first+": merged into spec/") != 1 {
+		t.Fatalf("%s wasn't merged into the Spec Branch:\n%s", first, w.out)
+	}
+	base := w.repo.tip("refs/heads/main")
+
+	// Accepted after the poll read its Accepted Tickets, as the human can
+	// at any moment: the Spec is ready, but the Spec Branch lacks it.
+	w.accept(second)
+	p, ok := w.f.landing(context.Background())
+	if !ok {
+		t.Fatal("can't read the Project")
+	}
+	w.f.landSpecs(context.Background(), p)
+	if got := w.repo.tip("refs/heads/main"); got != base {
+		t.Fatalf("the Spec landed at %s without %s's work", got, second)
+	}
+
+	w.poll()
+	merge := w.repo.tip("refs/heads/main")
+	if !w.repo.isAncestor(commit, merge) {
+		t.Errorf("main's tip %s doesn't hold %s's work %s", merge, second, commit)
+	}
+	for _, id := range []string{first, second} {
+		if tk := w.ticket(id); tk.State != store.Done || lastMove(tk).Commit != merge {
+			t.Errorf("%s is %s with move %+v; want it landed at the Spec's merge %s", id, tk.State, lastMove(tk), merge)
+		}
+	}
+}
