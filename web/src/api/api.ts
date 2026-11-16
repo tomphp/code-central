@@ -36,7 +36,9 @@ import type {
   ChatMessage,
   ChatOutcome,
   Conversation,
-  UsageView, GitHubIssuesChange, ModelsChange, NeedsMeReason
+  UsageView, GitHubIssuesChange, ModelsChange, NeedsMeReason,
+  RepositoryAdd,
+  RepositoryChange,
 } from "./types";
 
 // TicketActions maps each human action on one Ticket to its request body
@@ -187,6 +189,16 @@ export interface Api {
   addCIRule(project: string, rule: CIRuleChange): Promise<ProjectView>;
   editCIRule(project: string, spec: string, rule: CIRuleChange): Promise<ProjectView>;
   removeCIRule(project: string, spec: string): Promise<ProjectView>;
+  // addRepository adds a Repository at the end of the landing order, its
+  // Base main unless named; editRepository changes the named one's Clone
+  // URL, Base or local path, never its name, and never the Home
+  // Repository's; removeRepository removes one no unfinished Ticket has
+  // changed, never the Home Repository; setLandingOrder takes every
+  // Repository Name once, in the new order. Each refusal gives a fix.
+  addRepository(project: string, repository: RepositoryAdd): Promise<ProjectView>;
+  editRepository(project: string, name: string, change: RepositoryChange): Promise<ProjectView>;
+  removeRepository(project: string, name: string): Promise<ProjectView>;
+  setLandingOrder(project: string, names: string[]): Promise<ProjectView>;
   // unlink detaches a Spec's or Ticket's Link (ticket 42). It isn't a
   // TicketAction: its target, a Spec or a Ticket, goes in the body.
   unlink(project: string, target: string): Promise<LinkedRow>;

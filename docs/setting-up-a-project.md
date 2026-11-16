@@ -64,6 +64,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
    Created Project acme-shop.
    Project acme-shop is committed. Wrote .mcp.json, .claude/settings.json, docs/agents/issue-tracker.md, docs/agents/triage-labels.md, CLAUDE.md.
    Nothing was committed.
+   This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`.
    Agents in a sandbox or container: see `code-central help sandboxes`.
    ```
 
@@ -156,6 +157,7 @@ You're starting `acme-shop` from nothing, in `~/src`.
    Created Project acme-api.
    Project acme-api is committed. Wrote .mcp.json, .claude/settings.json, docs/agents/issue-tracker.md, docs/agents/triage-labels.md, CLAUDE.md.
    Nothing was committed.
+   This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`.
    Agents in a sandbox or container: see `code-central help sandboxes`.
    ```
 
@@ -204,11 +206,30 @@ You're starting `acme-shop` from nothing, in `~/src`.
 
 `acme-api` is now a working Project.
 
+## Several Repositories
+
+A Project's work can span more than one repository. The one you ran `init` in is its **Home Repository**: the Factory runs there and the Project's files live there. Every other repository is added to the Project, never set up with `init`. A Project with only its Home Repository needs nothing here.
+
+Add, edit, reorder and remove them in the **Repositories** section at the top of Project Options, or with `code-central repository`. Each has a **Repository Name**, fixed once added (lowercase letters, digits, `-`, `_` and `.`), a **Clone URL**, a **Base** (`main` unless you name another) and an optional local path, the full path of a clone you already have:
+
+```console
+$ code-central repository add web --clone-url git@github.com:acme/web.git
+NAME             CLONE URL                         BASE  LOCAL PATH
+acme-api (home)  git@github.com:acme/acme-api.git  main  -
+web              git@github.com:acme/web.git       main  -
+$ code-central repository move web --before acme-api
+NAME             CLONE URL                         BASE  LOCAL PATH
+web              git@github.com:acme/web.git       main  -
+acme-api (home)  git@github.com:acme/acme-api.git  main  -
+```
+
+The list is the **landing order**: accepted work lands in each Repository in that order. `code-central repository list` shows it; `edit <name>` takes `--clone-url`, `--base` and `--local-path` (an empty `--local-path ""` clears it); `remove <name>` takes one off the list and leaves its clone on disk. The Home Repository is listed under the Project Key: its Clone URL is the Push remote URL the Factory reports, and its Base is set in the Landing Method section. Each refusal says how to put it right: a Repository Name or a Clone URL already listed (`git@github.com:acme/web.git` and `https://github.com/acme/web` are the same one), removing the Home Repository, or removing one an unfinished Ticket has changed. While the Landing Method is Pull Request, a Repository is added only on a Code Host Pull Request supports, and only once the Pull Request Watcher's check passes for it.
+
 ## Choosing how accepted work lands
 
 Each Project has a **Landing Method**: what the Factory does with an implementation Ticket's branch once you accept it. A new Project starts on **Merge** with **Push** off: the Factory merges the branch into the base locally and lands the Ticket, and nothing leaves the machine. Leave it there unless you want something else.
 
-To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=project-options&project=acme-api`, so you can bookmark it. On a wide screen a menu on the left lists the page's sections (Landing Method, CI, GitHub Issues, Models, Stage Guides, Auto-accept and Focus) and stays in view as you scroll; choosing an entry jumps to that section. On a narrow screen the menu is hidden. Its **Landing Method** section starts with the **Base branch**, a text field showing the branch the Project's work is cut from and lands on (`main` until you change it; it is saved with the rest of the section, and Save refuses a name git would not accept). Below it are the three methods:
+To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=project-options&project=acme-api`, so you can bookmark it. On a wide screen a menu on the left lists the page's sections (Repositories, Landing Method, CI, GitHub Issues, Models, Stage Guides, Auto-accept and Focus) and stays in view as you scroll; choosing an entry jumps to that section. On a narrow screen the menu is hidden. Its **Landing Method** section starts with the **Base branch**, a text field showing the branch the Project's work is cut from and lands on (`main` until you change it; it is saved with the rest of the section, and Save refuses a name git would not accept). Below it are the three methods:
 
 - **Merge**: the Factory merges the accepted branch into the base and lands the Ticket. The default.
 - **Leave as a branch**: the Factory leaves the branch for you to merge, and lands the Ticket when it sees the merge in the base.
@@ -535,6 +556,7 @@ curl -X POST localhost:7733/api/p/acme-api/add_labels -H 'X-Code-Central-Actor: 
    Created Project widgets.
    Project widgets is local. Wrote .mcp.json, .claude/settings.local.json, docs/agents/issue-tracker.md, docs/agents/triage-labels.md, CLAUDE.local.md.
    They are listed in .git/info/exclude; nothing was committed.
+   This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`.
    Agents in a sandbox or container: see `code-central help sandboxes`.
    ```
 
@@ -572,6 +594,7 @@ $ code-central init
 /Users/you/src/acme-api-rate-limits/.mcp.json already points at Project acme-api; refreshing the files init writes.
 Project acme-api is committed. Wrote .claude/settings.json, docs/agents/issue-tracker.md, docs/agents/triage-labels.md.
 Nothing was committed.
+This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`.
 Agents in a sandbox or container: see `code-central help sandboxes`.
 $ git status --short
 ```
@@ -589,6 +612,7 @@ Project Key [widgets]:
 Project widgets already exists. Join it? Only if this repository is that Project. [y/N]: y
 Project widgets is local. Wrote .mcp.json, .claude/settings.local.json, docs/agents/issue-tracker.md, docs/agents/triage-labels.md, CLAUDE.local.md.
 They are listed in .git/info/exclude; nothing was committed.
+This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`.
 Agents in a sandbox or container: see `code-central help sandboxes`.
 ```
 
@@ -626,6 +650,7 @@ In `acme-api`, someone has replaced `docs/agents/triage-labels.md` with their ow
    Project acme-api is committed. Wrote .claude/settings.json, docs/agents/issue-tracker.md.
    Kept your docs/agents/triage-labels.md.
    Nothing was committed.
+   This is the Project's Home Repository. Work spanning other repositories? Add them with `code-central repository add`.
    Agents in a sandbox or container: see `code-central help sandboxes`.
    ```
 

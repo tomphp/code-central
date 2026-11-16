@@ -128,6 +128,23 @@ export interface CIRuleChange {
   state: "Draft" | "Ready";
 }
 
+// A Repository as the human adds it: base is main and local_path beside
+// the Home Repository when left empty.
+export interface RepositoryAdd {
+  name: string;
+  clone_url: string;
+  base?: string;
+  local_path?: string;
+}
+
+// A change to a Repository: each field left out keeps its value, and an
+// empty local_path puts the clone back beside the Home Repository.
+export interface RepositoryChange {
+  clone_url?: string;
+  base?: string;
+  local_path?: string;
+}
+
 // CI_VIEW_DAYS is how far back the CI view lists finished runs.
 export const CI_VIEW_DAYS = 7;
 

@@ -97,6 +97,12 @@ var Operations = []Op{
 	{Name: "set_auto_accept", Audience: HumanOnly, Write: true},
 	// Focus Kinds (Spec code-central-550).
 	{Name: "set_focus_kinds", Audience: HumanOnly, Write: true},
+	// Repositories (Spec code-central-848): the human's alone, over HTTP
+	// and the CLI's repository command, never MCP.
+	{Name: "add_repository", Audience: HumanOnly, Write: true},
+	{Name: "edit_repository", Audience: HumanOnly, Write: true},
+	{Name: "remove_repository", Audience: HumanOnly, Write: true},
+	{Name: "set_landing_order", Audience: HumanOnly, Write: true},
 
 	// The Integration contract (ticket 42).
 	{Name: "create_linked_spec", Audience: IntegrationOnly, Write: true},

@@ -308,10 +308,11 @@ func (c *Core) updateCI(key string, full bool, change func(*store.CI) error) (Wr
 		}
 		p.CI = ci
 		after = c.projectView(p)
-		// A CI write never changes the Landing; only its Code Host, worked
-		// out from the Push remote URL, can differ, and that isn't the
-		// write's change.
-		before.Landing = after.Landing
+		// A CI write never changes the Landing or the Repositories; only
+		// what is worked out from the Push remote URL, the Code Host and
+		// the Home Repository's Clone URL and Base, can differ, and that
+		// isn't the write's change.
+		before.Landing, before.Repositories = after.Landing, after.Repositories
 		if ci.Equal(was) {
 			return nil
 		}
