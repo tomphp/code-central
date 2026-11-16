@@ -203,15 +203,15 @@ func (w *World) Settled(subscribed Subscribed) Busy {
 			busy.UnreadWrites++
 		}
 	}
-	busy.Events = differ(open[httpapi.EventsPath], subscribed.Events)
-	busy.Transcripts = differ(open[httpapi.TranscriptStreamPath], subscribed.Transcripts)
-	busy.Chats = differ(open[httpapi.ChatStreamPath], subscribed.Chats)
+	busy.Events = busyStreams(open[httpapi.EventsPath], subscribed.Events)
+	busy.Transcripts = busyStreams(open[httpapi.TranscriptStreamPath], subscribed.Transcripts)
+	busy.Chats = busyStreams(open[httpapi.ChatStreamPath], subscribed.Chats)
 	return busy
 }
 
-// differ is one kind's open streams against its subscribed feeds, or nil
-// when they match.
-func differ(open, subscribed int) *Streams {
+// busyStreams is one kind's open streams against its subscribed feeds
+// when the two differ, and nil when they match.
+func busyStreams(open, subscribed int) *Streams {
 	if open == subscribed {
 		return nil
 	}

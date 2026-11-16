@@ -52,8 +52,9 @@ func (w *World) RoundTrip(req *http.Request) (*http.Response, error) {
 				pw.CloseWithError(err)
 			}
 			rw.WriteHeader(http.StatusOK)
-			// It leaves the world before its body ends, so a client
-			// that has read the whole body finds it gone (Settled).
+			// The request leaves the world before its body ends, so a
+			// reader that has read the whole body finds no request in
+			// flight (Settled), with no gap between the two.
 			w.mu.Lock()
 			delete(w.requests, r)
 			w.mu.Unlock()
