@@ -888,6 +888,10 @@ export interface FactoryStatusView {
   // Base is the base the Factory last reported under Pull Request
   // (code-central-394); left out while none is reporting.
   base?: BaseView;
+  // PlanLimits are the most recently observed Plan Limits among the
+  // Factories that aren't Offline (Spec code-central-861); left out
+  // while none has any.
+  plan_limits?: PlanLimits;
 }
 
 // LinkView is a Spec's or Ticket's Link as reads show it: the external
@@ -1347,6 +1351,18 @@ export interface BaseView {
   at: string;
 }
 
+// PlanLimits are a Factory's Plan Limits, as it reports them and as the
+// Project's Factory Status shows them.
+export interface PlanLimits {
+  // ObservedAt is when the Factory read the figures; one later than
+  // Code Central's receipt is kept as the receipt time.
+  observed_at: string;
+  // FiveHour and Weekly are each left out when the Factory has no
+  // figures for that window.
+  five_hour?: PlanLimitWindow;
+  weekly?: PlanLimitWindow;
+}
+
 // CIJobView is one job of a CI Run; its conclusion is empty until it
 // ends.
 export interface CIJobView {
@@ -1488,6 +1504,13 @@ export interface Tokens {
   cache_write_tokens: number;
   cache_read_tokens: number;
   output_tokens: number;
+}
+
+// PlanLimitWindow is one window of the Plan Limits.
+export interface PlanLimitWindow {
+  // UsedPercent is the share of the window's limit used, 0 to 100.
+  used_percent: number;
+  resets_at: string;
 }
 
 // RoundSummary is a Round's number and how many of its Questions are open.

@@ -21,6 +21,7 @@ Content-Type: application/json
 | `note` | Optional. Free text for the human, cut to 200 characters. Code Central never interprets it. |
 | `interval_seconds` | Required. How often the Factory polls, from 1 to 86400. It sets when Code Central gives up on it, below. |
 | `chat` | Optional boolean, `false` when left out. **Chat support**: the Factory can run Conversations for the Project's Chat. Chat is available for the Project while an Online Factory reports it. A change in it counts as a change, so the UI refetches. |
+| `plan_limits` | Optional. The account's **Plan Limits** as the Factory last read them; see [Plan Limits](#plan-limits). |
 | `full` | Optional. Returns the Project in place of the acknowledgement. |
 
 ```console
@@ -44,6 +45,31 @@ Code Central works the status out on every read:
 - otherwise **Online**.
 
 The Project's dot is Online if any Factory is Online, else Draining if any is, else Offline. A stopped Factory keeps its note, so the tooltip still says why it stopped.
+
+## Plan Limits
+
+A Factory that runs `claude` can report the Claude account's **Plan Limits**, its 5-hour limit and its weekly limit, as it last read them from its Turns. Send them in `plan_limits` on every Heartbeat:
+
+| Field | |
+| --- | --- |
+| `observed_at` | Required. When the Factory read the figures, an RFC 3339 time. A time later than Code Central's receipt of the Heartbeat is kept as the receipt time, so clock skew never makes figures look newer than they are; the same figures sent again keep that first receipt time. |
+| `five_hour` | Optional. The 5-hour window: `used_percent`, from 0 to 100, and `resets_at`, an RFC 3339 time, both required. |
+| `weekly` | Optional. The weekly window, as `five_hour`. |
+
+Leave out a window the Factory has no figures for. `plan_limits` with neither window counts as none. A `used_percent` outside 0 to 100, a window without `resets_at` or `plan_limits` without `observed_at` is refused with the field named, such as `plan_limits.weekly.used_percent`.
+
+Each Heartbeat replaces the Factory's last one whole, so keep sending the figures you hold: a Heartbeat without `plan_limits` says the Factory has none. Like the Heartbeat, Code Central keeps them in memory only.
+
+```console
+$ curl -s -X POST http://localhost:7733/api/p/acme-shop/report_heartbeat \
+    -H 'Content-Type: application/json' \
+    -d '{"factory":"sandcastle","host":"build-1","state":"online","interval_seconds":30,
+         "plan_limits":{"observed_at":"2026-11-16T09:00:00Z",
+                        "five_hour":{"used_percent":42,"resets_at":"2026-11-16T12:00:00Z"},
+                        "weekly":{"used_percent":7,"resets_at":"2026-11-20T09:00:00Z"}}}'
+```
+
+The Project's `factory_status` carries `plan_limits`, in the same shape: the figures with the latest `observed_at` among its Factories that aren't Offline, left out while none has any. A Factory going Offline drops its figures out at once. New or changed figures count as a change, so the UI refetches; the same figures again don't.
 
 ## Waking the poll
 
@@ -161,4 +187,4 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 ```
 
-An end-to-end test (`web/src/e2e/heartbeat.e2e.test.ts`) sends these same bodies to a real service, so the example stays true. Read the result in any Project view: `factory_status` in `get_project` and `list_projects` holds the combined `status` and each Factory's `name`, `host`, `status`, `note`, `last_heartbeat`, `interval_seconds` and `chat`.
+An end-to-end test (`web/src/e2e/heartbeat.e2e.test.ts`) sends these same bodies to a real service, so the example stays true. Read the result in any Project view: `factory_status` in `get_project` and `list_projects` holds the combined `status` and each Factory's `name`, `host`, `status`, `note`, `last_heartbeat`, `interval_seconds` and `chat`, and `plan_limits` when there are any.
