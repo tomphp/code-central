@@ -1,14 +1,13 @@
 // Focus Mode's body's tests, through its props: its header, "N left", the
 // Focus Item on screen, All clear, only skipped and loading, in one Project
 // and in All Projects, with the data read from a WASM Core world.
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { newWorld, type World } from "../api/core/core";
-import { scenario } from "../api/scenario";
 import type { UiLocation } from "../url";
 import { FocusBody, type FocusBodyProps, type FocusBodySession } from "./FocusBody";
-import { renderLive } from "../worldTesting";
+import { renderLive, scenario, settle } from "../worldTesting";
 import { focusData, focusSession, type FocusData } from "./storyData";
 
 let w: World;
@@ -65,7 +64,8 @@ describe("Focus Mode's body with a queue", () => {
     const modal = screen.getByRole("dialog", { name: "New requirement" });
     await userEvent.type(within(modal).getByRole("textbox"), "Offline mode");
     await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
-    await waitFor(() => expect(session.say).toHaveBeenCalledWith("Requirement added"));
+    await settle(w);
+    expect(session.say).toHaveBeenCalledWith("Requirement added");
   });
 
   it("opens the item's Ticket in the Inbox", async () => {
