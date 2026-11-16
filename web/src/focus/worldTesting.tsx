@@ -6,18 +6,17 @@ import { newWorld, type World } from "../api/core/core";
 import type { Scenario } from "../api/scenario";
 import { scenario, settle } from "../worldTesting";
 
-export { renderApp, scenario } from "../worldTesting";
+export { renderApp, scenario, settle } from "../worldTesting";
 
 // focus is Focus Mode's main region.
 export const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 
-// loadedDashboard waits for the Activity Dashboard in main, then for w to
-// settle, so a change made next reaches the subscription it makes on
-// mounting.
+// loadedDashboard settles w, so a change made next reaches the subscription
+// the Activity Dashboard makes on mounting, then returns the dashboard in
+// main.
 export async function loadedDashboard(w: World, main: HTMLElement) {
-  const d = await within(main).findByRole("region", { name: "Activity Dashboard" });
   await settle(w);
-  return d;
+  return within(main).getByRole("region", { name: "Activity Dashboard" });
 }
 
 // acme is a world with the Project "acme" ("Acme"), and its scenario,
