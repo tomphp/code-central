@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/tomoram/code-central/clock"
 )
 
 // The Factory's posts to Code Central of what its turns do, Session
@@ -18,7 +20,10 @@ const (
 	postEvery = time.Second
 	// postBatchMax is how many waiting items make a post at once.
 	postBatchMax = 100
-	// postTimeout bounds each post, the last flush's too.
+	// postTimeout bounds each post, the last flush's too. It is on real
+	// time, not the Factory's clock, like every deadline on a call to Code
+	// Central: no test moves the clock while a call hangs, so on a fake
+	// clock a hung post would never end.
 	postTimeout = 2 * time.Second
 )
 
@@ -32,9 +37,10 @@ type queued[T any] struct {
 // model responses' token usage. It posts what is waiting every postEvery, or sooner once
 // postBatchMax are waiting, one post per session in the order they
 // came, so each session's order holds. every is postEvery, and timeout
-// postTimeout, unless a test changes them.
+// postTimeout, unless a test changes them; every is timed on clock.
 type sender[T any] struct {
 	post    func(ctx context.Context, session string, items []T) error
+	clock   clock.Clock
 	every   time.Duration
 	timeout time.Duration
 
@@ -45,8 +51,8 @@ type sender[T any] struct {
 	done    chan struct{}
 }
 
-func newSender[T any](post func(context.Context, string, []T) error, every, timeout time.Duration) *sender[T] {
-	return &sender[T]{post: post, every: every, timeout: timeout, full: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
+func newSender[T any](post func(context.Context, string, []T) error, clk clock.Clock, every, timeout time.Duration) *sender[T] {
+	return &sender[T]{post: post, clock: clk, every: every, timeout: timeout, full: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
 }
 
 // add queues item for session, dropping the oldest waiting item when the
@@ -66,11 +72,12 @@ func (s *sender[T]) add(session string, item T) {
 	}
 }
 
-// run posts batches until close.
+// run posts batches until close. The interval is timed afresh after each
+// timed batch: the drift of the time a post takes doesn't matter to a
+// batch.
 func (s *sender[T]) run() {
 	defer close(s.done)
-	tick := time.NewTicker(s.every)
-	defer tick.Stop()
+	tick := s.clock.After(s.every)
 	for {
 		select {
 		case <-s.stop:
@@ -80,10 +87,12 @@ func (s *sender[T]) run() {
 			s.flush(ctx)
 			cancel()
 			return
-		case <-tick.C:
+		case <-tick:
+			s.flush(context.Background())
+			tick = s.clock.After(s.every)
 		case <-s.full:
+			s.flush(context.Background())
 		}
-		s.flush(context.Background())
 	}
 }
 

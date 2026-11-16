@@ -147,10 +147,10 @@ func TestTheChatTurnsItemsReachGetChatAsTheyArrive(t *testing.T) {
 		factorytest.Wait(),
 		factorytest.Say("Done looking."),
 		factorytest.Result("success"))
-	h.Start()
+	run := h.Start()
 
 	h.SendChat("List the files")
-	h.WaitFor("the reply's first items while it runs", func() bool {
+	run.PollUntil("the reply's first items while it runs", func() bool {
 		cv := h.Chat()
 		return cv.Running && len(reply(cv).Items) == 3
 	})
@@ -205,11 +205,11 @@ func TestAChatPostThatFailsIsDroppedAndTheTurnGoesOn(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.Script(factorytest.Chat, factorytest.Say("Lost."), factorytest.Wait(), factorytest.Say("Kept."), factorytest.Result("success"))
-	h.Start()
+	run := h.Start()
 	h.SetFailing("/chat/events")
 
 	h.SendChat("Hi")
-	h.WaitFor("a post of the reply to fail", func() bool { return h.Refused("/api/p/acme/chat/events") > 0 })
+	run.PollUntil("a post of the reply to fail", func() bool { return h.Refused("/api/p/acme/chat/events") > 0 })
 	h.SetFailing("")
 	h.Continue(factorytest.Chat)
 	cv := h.WaitForReply()
@@ -460,13 +460,13 @@ func TestAChatTurnsUsageIsPostedWithKindChat(t *testing.T) {
 		factorytest.Response("msg_1", "", "claude-haiku-5-5", 100, 0, 0, 10),
 		factorytest.Say("Hi."),
 		factorytest.Result("success"))
-	h.Start()
+	r := h.Start()
 
 	h.SendChat("Hi")
 	cv := h.WaitForReply()
 
 	var got []core.UsageSession
-	h.WaitFor("the Chat turn's usage", func() bool {
+	r.PollUntil("the Chat turn's usage", func() bool {
 		got = nil
 		for _, s := range h.Usage().Sessions {
 			if s.SessionID == cv.SessionID {

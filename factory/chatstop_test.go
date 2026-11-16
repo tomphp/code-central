@@ -22,11 +22,12 @@ func startLongReply(t *testing.T, h *factorytest.Harness, args ...string) *facto
 func TestAStopEndsTheChatTurnAndTheNextMessageResumesTheSession(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
-	startLongReply(t, h)
+	r := startLongReply(t, h)
 
 	if _, err := h.Human().StopChatReply(t.Context(), h.Project); err != nil {
 		t.Fatal(err)
 	}
+	r.PassKillGrace()
 	cv := h.WaitForReply()
 	if r := reply(cv); r.Outcome != core.ChatStopped {
 		t.Errorf("reply ended %q (%q), want stopped", r.Outcome, r.Error)
@@ -86,6 +87,7 @@ func TestStoppingStopsTheChatReplyPostsStoppedAndExits(t *testing.T) {
 	r.Interrupt()
 	r.WaitForOutput("draining")
 	r.Interrupt()
+	r.PassKillGrace()
 	if code := r.Exited(); code != 0 {
 		t.Errorf("exit code %d, want 0", code)
 	}

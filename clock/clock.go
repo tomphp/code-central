@@ -3,6 +3,7 @@
 package clock
 
 import (
+	"slices"
 	"sync"
 	"time"
 )
@@ -24,8 +25,8 @@ func (System) Now() time.Time { return time.Now() }
 func (System) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
 // Fake is a clock that moves only when told to. Timers made with After
-// fire when Set or Advance reaches their deadline. It is safe for
-// concurrent use.
+// fire when Set or Advance reaches their deadline, earliest first, each
+// with the time it fell due. It is safe for concurrent use.
 type Fake struct {
 	mu      sync.Mutex
 	cond    *sync.Cond
@@ -74,6 +75,19 @@ func (f *Fake) Waiters() int {
 	return len(f.waiters)
 }
 
+// Next is the deadline of the earliest timer that has not fired yet,
+// and false when none is waiting.
+func (f *Fake) Next() (time.Time, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.waiters) == 0 {
+		return time.Time{}, false
+	}
+	return slices.MinFunc(f.waiters, byDeadline).at, true
+}
+
+func byDeadline(a, b waiter) int { return a.at.Compare(b.at) }
+
 // BlockUntil blocks until at least n timers are waiting, so a test can
 // move the clock only after the code under test has started its timer.
 func (f *Fake) BlockUntil(n int) {
@@ -100,15 +114,17 @@ func (f *Fake) Advance(d time.Duration) {
 	f.fire()
 }
 
+// fire fires every timer due by now, earliest first.
 func (f *Fake) fire() {
-	kept := f.waiters[:0]
+	slices.SortStableFunc(f.waiters, byDeadline)
+	due := 0
 	for _, w := range f.waiters {
 		if w.at.After(f.now) {
-			kept = append(kept, w)
-			continue
+			break
 		}
-		w.ch <- f.now
+		w.ch <- w.at
+		due++
 	}
-	f.waiters = kept
+	f.waiters = slices.Delete(f.waiters, 0, due)
 	f.cond.Broadcast()
 }

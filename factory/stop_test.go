@@ -67,11 +67,13 @@ func wantStopped(t *testing.T, h *factorytest.Harness, id string) {
 	}
 }
 
-// killed checks a turn the Factory stopped on its way out: it got
-// stopSignals, and its Claim is kept, In Progress and in the state
-// file, with no Failure Report.
+// killed checks a turn the Factory stopped on its way out, ignoring the
+// first stop step until the kill grace has passed: it got stopSignals,
+// and its Claim is kept, In Progress and in the state file, with no
+// Failure Report.
 func killed(t *testing.T, h *factorytest.Harness, r *factorytest.Running, id string) {
 	t.Helper()
+	r.PassKillGrace()
 	if code := r.Exited(); code != 0 {
 		t.Errorf("exit code %d, want 0", code)
 	}

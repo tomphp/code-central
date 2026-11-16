@@ -39,7 +39,7 @@ type runnerOpts struct {
 func newTurnTest(t *testing.T, o runnerOpts) *turnTest {
 	t.Helper()
 	h := factorytest.New(t)
-	e := factory.Env{Environ: h.Environ(), KillGrace: factorytest.KillGrace}
+	e := factory.Env{Environ: h.Environ(), Clock: h.Clock, KillGrace: factorytest.KillGrace}
 	return &turnTest{h: h, runner: factory.NewTurnRunner(h.Claude(), e, defaultLevels, o.bypass, o.claudeArgs, o.verbose)}
 }
 
@@ -214,6 +214,13 @@ func TestAStoppedTurnIsTakenThroughTheStopLadderAndEndsStopped(t *testing.T) {
 	tt.h.WaitFor("claude to start", func() bool { return len(tt.h.Calls()) == 1 })
 
 	cancel()
+	// It ignores the first stop step, so the runner waits out the kill
+	// grace before the next.
+	tt.h.WaitFor("the kill grace", func() bool {
+		at, ok := tt.h.Clock.Next()
+		return ok && at.Equal(tt.h.Clock.Now().Add(factorytest.KillGrace))
+	})
+	tt.h.Clock.Advance(factorytest.KillGrace)
 	o := <-ran
 
 	wantKind(t, o, "stopped")

@@ -49,14 +49,23 @@ func runFake(data string, args []string) int {
 		return cli.Run(context.Background(), args[1:], cli.Env{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr, Getenv: os.Getenv})
 	case crashingName:
 		return crash(data)
+	case stubbornName:
+		// A Watcher that ignores its stdin closing, running until killed.
+		for {
+			time.Sleep(time.Hour)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "ciwatchertest: %s=%s but run as %q, not a fake\n", fakeEnv, data, name)
 		return 70
 	}
 }
 
-// crashingName is the program name the test binary crashes under.
-const crashingName = "crashing-code-central"
+// The program names the test binary crashes under, and runs under until
+// it is killed.
+const (
+	crashingName = "crashing-code-central"
+	stubbornName = "stubborn-code-central"
+)
 
 // The crashing CI Watcher's files in the data folder: a line in runs for
 // each run, and while hold exists, it waits before crashing.
@@ -107,6 +116,9 @@ type Harness struct {
 	// Crashing is a CI Watcher that crashes on every run, as the
 	// service's executable.
 	Crashing string
+	// Stubborn is a Watcher that never exits, not even when its stdin
+	// closes, until it is killed, as the service's executable.
+	Stubborn string
 }
 
 // New sets up a fake gh in Bin, with no Script: every call exits 0.
@@ -120,6 +132,7 @@ func New(t testing.TB) *Harness {
 	h.GH(h.Bin)
 	h.CodeCentral = h.install(filepath.Join(root, "program"), "code-central")
 	h.Crashing = h.install(filepath.Join(root, "program"), crashingName)
+	h.Stubborn = h.install(filepath.Join(root, "program"), stubbornName)
 	return h
 }
 

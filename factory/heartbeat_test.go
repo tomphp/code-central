@@ -115,6 +115,7 @@ func TestASecondCtrlCSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
 	r.Interrupt()
 	waitForFactory(t, h, core.FactoryDraining, "draining")
 	r.Interrupt()
+	r.PassKillGrace()
 	r.Exited()
 	waitForFactory(t, h, core.FactoryOffline, "stopped on interrupt")
 }
@@ -127,6 +128,7 @@ func TestSIGTERMSendsAStoppingHeartbeatNamingTheSignal(t *testing.T) {
 	r := h.Start()
 	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
 	r.Signal(syscall.SIGTERM)
+	r.PassKillGrace()
 	r.Exited()
 	waitForFactory(t, h, core.FactoryOffline, "stopped on terminated")
 }

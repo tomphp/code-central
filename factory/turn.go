@@ -33,7 +33,7 @@ func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 	in.BeforeStart = func() { f.reportChoice(ctx, c, in.Choice) }
 	// Not derived from ctx: a Claim's Turn is stopped only by stopTurn.
 	stop, cancel := context.WithCancel(context.Background())
-	t := &turn{claim: c, dir: in.Dir, choice: in.Choice, started: f.e.Now(), cancel: cancel, done: make(chan struct{})}
+	t := &turn{claim: c, dir: in.Dir, choice: in.Choice, started: f.e.Clock.Now(), cancel: cancel, done: make(chan struct{})}
 	f.mu.Lock()
 	f.turns[c.ClaimID] = t
 	f.mu.Unlock()
@@ -56,7 +56,7 @@ func (f *factory) startTurn(ctx context.Context, c claim, in turnInput) {
 			f.forgetEnded(c)
 			return
 		}
-		ran := f.e.Now().Sub(t.started)
+		ran := f.e.Clock.Now().Sub(t.started)
 		// The turn keeps its slot until its outcome is acted on, and
 		// "turn ended" is printed once the slot is free.
 		state := f.afterTurn(ctx, t, out)
@@ -83,7 +83,7 @@ func (f *factory) freeSlot(c claim) {
 func (f *factory) holdBack(ticket string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.backInReady[ticket] = f.e.Now()
+	f.backInReady[ticket] = f.e.Clock.Now()
 }
 
 // releaseHeldBack lets every held-back Ticket be claimed again, as a
@@ -108,7 +108,7 @@ func (f *factory) heldBack(ticket string) bool {
 		}
 	}
 	at, ok := f.backInReady[ticket]
-	if ok && f.e.Now().Sub(at) >= f.o.poll {
+	if ok && f.e.Clock.Now().Sub(at) >= f.o.poll {
 		delete(f.backInReady, ticket)
 		return false
 	}

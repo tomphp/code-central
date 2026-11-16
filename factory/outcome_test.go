@@ -159,6 +159,8 @@ func TestDenialsOnATurnThatFinishedAreListedInAComment(t *testing.T) {
 func TestAnOutagePausesClaimingAndResumingAndSaysWhatItIsWaitingOn(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
+	// Longer than a poll, which moves the clock by --poll.
+	h.Backoff = time.Minute
 	cut := h.ReadyTicket("Cut off")
 	h.Script(cut, factorytest.APIError("rate_limit"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
@@ -197,6 +199,8 @@ func TestAPauseWithNothingLeftCutOffEndsAndClaimingCarriesOn(t *testing.T) {
 func TestACutOffTurnIsResumedWithBackoffUntilTheOutageIsOver(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
+	// Two polls, each of which moves the clock by --poll, 30s.
+	h.Backoff = time.Minute
 	cut := h.ReadyTicket("Cut off")
 	h.Script(cut, factorytest.APIError("overloaded_error"), factorytest.Result("success"), factorytest.Exit(1))
 	r := h.Start()
@@ -205,7 +209,7 @@ func TestACutOffTurnIsResumedWithBackoffUntilTheOutageIsOver(t *testing.T) {
 		h.WaitFor(fmt.Sprintf("%d turns to end", n), func() bool { return strings.Count(r.Stdout(), cut+" turn ended") == n })
 	}
 	turnsEnded(1)
-	r.WaitForOutput("in 1ms")
+	r.WaitForOutput("in 1m0s")
 	next := h.ReadyTicket("Next")
 
 	// Not resumed until the backoff has passed.
@@ -215,18 +219,17 @@ func TestACutOffTurnIsResumedWithBackoffUntilTheOutageIsOver(t *testing.T) {
 	}
 
 	// Still overloaded: the backoff doubles.
-	h.Clock.Advance(time.Millisecond)
 	r.Poll()
 	turnsEnded(2)
-	r.WaitForOutput("in 2ms")
+	r.WaitForOutput("in 2m0s")
 
 	h.Script(cut, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
-	h.Clock.Advance(time.Millisecond)
-	r.Poll()
+	for range 3 {
+		r.Poll()
+	}
 	if n := len(h.Calls()); n != 2 {
 		t.Errorf("%d runs before the doubled backoff passed; want 2", n)
 	}
-	h.Clock.Advance(time.Millisecond)
 	r.Poll()
 	h.WaitFor("the second resume", func() bool { return len(h.Calls()) == 3 })
 	first := h.Calls()[0]

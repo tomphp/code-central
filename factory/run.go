@@ -35,7 +35,7 @@ func (f *factory) loop(ctx context.Context) {
 		case <-f.drainCh:
 			f.drain(ctx)
 			return
-		case <-f.e.After(f.o.poll):
+		case <-f.e.Clock.After(f.o.poll):
 			f.releaseHeldBack()
 		case <-f.wakeCh:
 			// A stopping or draining Factory ignores wakes.
@@ -138,7 +138,7 @@ func (f *factory) drain(ctx context.Context) {
 			return
 		case <-ctx.Done():
 			return
-		case <-f.e.After(f.o.poll):
+		case <-f.e.Clock.After(f.o.poll):
 			f.heartbeat(core.HeartbeatDraining, f.drainNote())
 		}
 	}
@@ -166,7 +166,7 @@ func (f *factory) drainLostClaims(ctx context.Context) bool {
 		select {
 		case <-ctx.Done():
 			return false
-		case <-f.e.After(f.o.poll):
+		case <-f.e.Clock.After(f.o.poll):
 			f.heartbeat(core.HeartbeatDraining, note)
 			f.claimLostAgain(ctx)
 		}
@@ -514,8 +514,8 @@ const (
 // claimRecovering claims in.Ticket. When the answer is lost, Code Central
 // may have put the Ticket in the Factory's hands, so it sends in again,
 // which gives back the same Claim if the first got through (ADR 0010).
-// The pause between tries is on a real timer, not After, so it takes no
-// poll's tick. It stops trying when ctx ends or the Factory drains.
+// The pause between tries is on the Factory's clock, as every other
+// timer is. It stops trying when ctx ends or the Factory drains.
 func (f *factory) claimRecovering(ctx context.Context, in core.ClaimInput) (core.ClaimResult, error) {
 	res, err := f.client.Claim(ctx, f.project, in)
 	if !answerLost(err) || ctx.Err() != nil {
@@ -528,7 +528,7 @@ func (f *factory) claimRecovering(ctx context.Context, in core.ClaimInput) (core
 			return res, err
 		case <-f.drainCh:
 			return res, err
-		case <-time.After(claimRetryPause):
+		case <-f.e.Clock.After(claimRetryPause):
 		}
 		res, err = f.client.Claim(ctx, f.project, in)
 		if !answerLost(err) {

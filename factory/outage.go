@@ -34,7 +34,7 @@ func (f *factory) firstBackoff() time.Duration {
 func (f *factory) cutOff(c claim, apiErr string) {
 	f.pauseMu.Lock()
 	defer f.pauseMu.Unlock()
-	now := f.e.Now()
+	now := f.e.Clock.Now()
 	p := f.pause
 	if p == nil {
 		p = &pause{since: now}
@@ -68,7 +68,7 @@ func (f *factory) turnWentWell(t *turn) {
 		f.printf("the outage is over: carrying on")
 		return
 	}
-	p.backoff, p.until = 0, f.e.Now()
+	p.backoff, p.until = 0, f.e.Clock.Now()
 }
 
 // endIdlePause ends the pause when no turn is running and nothing is cut
@@ -110,7 +110,7 @@ func (f *factory) duePausedResumes(free int) []claim {
 	f.pauseMu.Lock()
 	defer f.pauseMu.Unlock()
 	p := f.pause
-	if f.e.Now().Before(p.until) || free <= 0 {
+	if f.e.Clock.Now().Before(p.until) || free <= 0 {
 		var names []string
 		for _, c := range p.cutOff {
 			names = append(names, c.Ticket)
