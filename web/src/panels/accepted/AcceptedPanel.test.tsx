@@ -1,12 +1,10 @@
 // The Accepted panel (ticket 71, ADR 0006) on the WASM Core: accepted
 // work waiting to land, with Land (asking for the commit) and Cancel.
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../../App";
 import { newWorld } from "../../api/core/core";
-import { scenario } from "../../api/scenario";
-import { renderLive } from "../../worldTesting";
+import { renderApp, renderLive, scenario } from "../../worldTesting";
 import { AcceptedPanel } from "./panel";
 
 // world has acme's Login page Accepted, under Merge unless method says,
@@ -65,24 +63,22 @@ describe("the Accepted panel", () => {
 
   it("is the action panel for an Accepted Ticket in the inbox", async () => {
     const { w, id } = await world();
-    window.history.replaceState(null, "", `/?ticket=${id}&state=Accepted`);
-    render(<App api={w.api} now={w.now} />);
+    await renderApp(w, `/?ticket=${id}&state=Accepted`);
     const pane = screen.getByRole("complementary", { name: "Ticket" });
-    expect(await within(pane).findByRole("region", { name: "Accepted" })).toBeInTheDocument();
+    expect(within(pane).getByRole("region", { name: "Accepted" })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Filters" });
-    expect(await within(nav).findByRole("button", { name: "Accepted 1" })).toBeInTheDocument();
+    expect(within(nav).getByRole("button", { name: "Accepted 1" })).toBeInTheDocument();
   });
 
   it("shows Accepted but not landed in Needs Me, with how long since the accept, and this panel", async () => {
     const { w, id } = await world();
     w.advance(25 * 60_000);
-    window.history.replaceState(null, "", `/?view=inbox&ticket=${id}`);
-    render(<App api={w.api} now={w.now} />);
+    await renderApp(w, `/?view=inbox&ticket=${id}`);
     const list = screen.getByRole("main", { name: "Tickets" });
-    expect(await within(list).findByRole("link", { name: new RegExp(id) })).toHaveTextContent("Accepted 25m ago, not landed");
+    expect(within(list).getByRole("link", { name: new RegExp(id) })).toHaveTextContent("Accepted 25m ago, not landed");
     expect(within(list).getByRole("heading", { level: 3 })).toHaveTextContent("Accepted but not landed");
     const pane = screen.getByRole("complementary", { name: "Ticket" });
-    expect(await within(pane).findByRole("region", { name: "Accepted" })).toBeInTheDocument();
+    expect(within(pane).getByRole("region", { name: "Accepted" })).toBeInTheDocument();
   });
 
   it("under Branch, tells the human to merge the branch, keeping Land and Cancel", async () => {
@@ -102,13 +98,12 @@ describe("the Accepted panel", () => {
   it("shows To merge in Needs Me, naming the branch, with this panel", async () => {
     const { w, id } = await world("branch");
     w.advance(5 * 60_000);
-    window.history.replaceState(null, "", `/?view=inbox&ticket=${id}`);
-    render(<App api={w.api} now={w.now} />);
+    await renderApp(w, `/?view=inbox&ticket=${id}`);
     const list = screen.getByRole("main", { name: "Tickets" });
-    expect(await within(list).findByRole("link", { name: new RegExp(id) })).toHaveTextContent("Accepted 5m ago: merge impl into the base");
+    expect(within(list).getByRole("link", { name: new RegExp(id) })).toHaveTextContent("Accepted 5m ago: merge impl into the base");
     expect(within(list).getByRole("heading", { level: 3 })).toHaveTextContent("To merge");
     const pane = screen.getByRole("complementary", { name: "Ticket" });
-    const panel = await within(pane).findByRole("region", { name: "Accepted" });
+    const panel = within(pane).getByRole("region", { name: "Accepted" });
     expect(panel).toHaveTextContent("and the Factory lands it");
   });
 });

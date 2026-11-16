@@ -1,14 +1,12 @@
 // The closed-externally panel on the WASM Core: a linked Ticket whose
 // external item closed, was deleted or left the query, and the human's
 // three ways out: Cancel, Mark Done, Unlink.
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../../App";
 import { newWorld } from "../../api/core/core";
-import { scenario } from "../../api/scenario";
 import type { ExternalState } from "../../api/types";
-import { renderLive } from "../../worldTesting";
+import { renderApp, renderLive, scenario } from "../../worldTesting";
 import { panel } from "./panel";
 
 const URL = "https://github.com/acme/web/issues/7";
@@ -32,10 +30,9 @@ async function renderPanel({ w, id }: Linked) {
 describe("the closed-externally panel", () => {
   it("is the action panel for a Ticket closed externally", async () => {
     const { w, id } = await world();
-    window.history.replaceState(null, "", `/?view=inbox&ticket=${id}`);
-    render(<App api={w.api} now={w.now} />);
-    const slot = await screen.findByRole("region", { name: "Action panel" });
-    expect(await within(slot).findByRole("region", { name: "Closed externally" })).toBeInTheDocument();
+    await renderApp(w, `/?view=inbox&ticket=${id}`);
+    const slot = screen.getByRole("region", { name: "Action panel" });
+    expect(within(slot).getByRole("region", { name: "Closed externally" })).toBeInTheDocument();
   });
 
   it("says what happened and links to the external item", async () => {
