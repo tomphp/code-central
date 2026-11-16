@@ -27,7 +27,7 @@ async function world(opts: { external?: ExternalState; detached?: boolean } = {}
 
 async function renderDetail(w: Awaited<ReturnType<typeof world>>["w"], id: string) {
   const t = await w.api.getTicket("acme", id);
-  renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
+  await renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("article", { name: "Ticket details" });
 }
 

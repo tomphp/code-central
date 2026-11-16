@@ -30,7 +30,7 @@ const reported = async (w: World): Promise<ReportedModels> => (await w.api.listP
 
 async function renderDetail(w: World, id: string) {
   const t = await w.api.getTicket("acme", id);
-  const r = renderLive(w, <TicketDetail project="acme" ticket={t} reported={await reported(w)} now={w.now()} />);
+  const r = await renderLive(w, <TicketDetail project="acme" ticket={t} reported={await reported(w)} now={w.now()} />);
   return {
     ...r,
     rerender: async () => r.rerender(<TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} reported={await reported(w)} now={w.now()} />),

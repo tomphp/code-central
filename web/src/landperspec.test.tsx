@@ -27,14 +27,14 @@ async function world(ready = false) {
 describe("the Waiting for the Spec badge", () => {
   it("shows beside the State on the Ticket page", async () => {
     const { w, exporter } = await world();
-    renderApp(w, `/?view=inbox&ticket=${exporter}`);
+    await renderApp(w, `/?view=inbox&ticket=${exporter}`);
     const pane = await screen.findByRole("complementary", { name: "Ticket" });
     expect(await within(pane).findByText("Waiting for the Spec")).toBeInTheDocument();
   });
 
   it("shows in the Spec's Ticket list on the waiting Tickets only", async () => {
     const { w, spec } = await world();
-    renderApp(w, `/?requirement=${spec}`);
+    await renderApp(w, `/?requirement=${spec}`);
     const list = await screen.findByRole("list", { name: "Build" });
     expect(within(list).getAllByText("Waiting for the Spec")).toHaveLength(2);
     const ready = within(list).getByText("Export docs").closest("li")!;
@@ -43,7 +43,7 @@ describe("the Waiting for the Spec badge", () => {
 
   it("shows on the State list's rows", async () => {
     const { w } = await world();
-    renderApp(w, "/?view=inbox&state=Accepted");
+    await renderApp(w, "/?view=inbox&state=Accepted");
     expect((await screen.findAllByText("Waiting for the Spec")).length).toBeGreaterThanOrEqual(2);
   });
 });
@@ -51,13 +51,13 @@ describe("the Waiting for the Spec badge", () => {
 describe("the Requirement's Land per Spec status", () => {
   it("counts the Tickets waiting", async () => {
     const { w, spec } = await world();
-    renderApp(w, `/?requirement=${spec}`);
+    await renderApp(w, `/?requirement=${spec}`);
     expect(await screen.findByRole("status", { name: "Land per Spec" })).toHaveTextContent("2 Tickets waiting for the Spec");
   });
 
   it("says merging once the Spec is ready", async () => {
     const { w, spec } = await world(true);
-    renderApp(w, `/?requirement=${spec}`);
+    await renderApp(w, `/?requirement=${spec}`);
     expect(await screen.findByRole("status", { name: "Land per Spec" })).toHaveTextContent("Merging into the base");
   });
 });
@@ -68,7 +68,7 @@ describe("the CI item of a Spec-landed Ticket", () => {
     // The Spec's merge is pushed once, as the commit of each of its Tickets.
     for (const id of [exporter, button, docs]) await s.pushed("acme", id, "abc1234567");
     await s.ci("acme", exporter, "failed", "abc1234567");
-    renderApp(w, `/?view=inbox&ticket=${exporter}`);
+    await renderApp(w, `/?view=inbox&ticket=${exporter}`);
     const pane = await screen.findByRole("complementary", { name: "Ticket" });
     const panel = await within(pane).findByRole("region", { name: "CI failed" });
     expect(within(panel).getByText(/is one Needs Me item, listing 3 Tickets/)).toHaveTextContent(`Also waiting: ${button}, ${docs}`);

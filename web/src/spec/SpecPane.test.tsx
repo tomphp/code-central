@@ -17,7 +17,7 @@ describe("SpecPane", () => {
     const s = scenario(w);
     await s.project("acme", "Acme");
     const spec = await w.api.getSpec("acme", await s.spec("acme", { title: "Sign-in" }));
-    renderLive(w, <SpecPane spec={spec} now={w.now()} select={() => {}} />);
+    await renderLive(w, <SpecPane spec={spec} now={w.now()} select={() => {}} />);
     expect(screen.getByRole("heading", { name: "Sign-in", level: 2 })).toBeInTheDocument();
     expect(screen.getByText("No Tickets yet.")).toBeInTheDocument();
   });
@@ -29,7 +29,7 @@ describe("SpecPane", () => {
     const id = await s.spec("acme", { title: "Sign-in" });
     await s.ticket("acme", { title: "Add a page", spec: id, state: "Accepted" });
     const select = vi.fn();
-    renderLive(w, <SpecPane spec={await w.api.getSpec("acme", id)} now={w.now()} select={select} />);
+    await renderLive(w, <SpecPane spec={await w.api.getSpec("acme", id)} now={w.now()} select={select} />);
     const list = screen.getByRole("list", { name: "Tickets" });
     expect(list).toHaveTextContent("Accepted");
     await userEvent.click(within(list).getByRole("button", { name: /Add a page/ }));
@@ -44,7 +44,7 @@ describe("RequirementPane", () => {
     await s.project("acme", "Acme");
     const { spec } = await w.api.submitRequirement("acme", "Export a Spec");
     const read = await w.api.getSpec("acme", spec.id);
-    renderLive(w, <RequirementPane spec={{ ...read, requirement: read.requirement! }} now={w.now()} select={() => {}} specLink={link} />);
+    await renderLive(w, <RequirementPane spec={{ ...read, requirement: read.requirement! }} now={w.now()} select={() => {}} specLink={link} />);
     expect(within(screen.getByRole("list", { name: "Stages" })).getAllByRole("listitem")).toHaveLength(4);
     expect(screen.queryByRole("list", { name: "Build" })).toBeNull();
   });

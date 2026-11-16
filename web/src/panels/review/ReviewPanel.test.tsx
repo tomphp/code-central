@@ -29,7 +29,7 @@ type Review = Awaited<ReturnType<typeof world>>;
 
 async function renderPanel({ w, id }: Review) {
   const ticket = await w.api.getTicket("acme", id);
-  renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
+  await renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
   return screen.getByRole("region", { name: "In Review" });
 }
 
@@ -79,7 +79,7 @@ describe("the In Review panel", () => {
     }
     const ticket = await w.api.getTicket("acme", id);
     expect(ticket.auto_accept_kind).toBe(kind);
-    renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
+    await renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
     const panel = screen.getByRole("region", { name: "In Review" });
     expect(within(panel).getByText(`Auto-accept: ${name}`)).toBeInTheDocument();
     expect(within(panel).getByRole("heading", { name: "Review the finished work" })).toBeInTheDocument();
@@ -92,7 +92,7 @@ describe("the In Review panel", () => {
     const id = await s.ticket("acme", { title: "Try a layout", labels: ["prototype"], state: "In Review" });
     const ticket = await w.api.getTicket("acme", id);
     expect(ticket.auto_accept_kind).toBeUndefined();
-    renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
+    await renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
     expect(within(screen.getByRole("region", { name: "In Review" })).getByText("Auto-accept: never")).toBeInTheDocument();
   });
 
@@ -134,7 +134,7 @@ describe("the In Review panel", () => {
       return { w, r, spec, tickets: r.stages[2].id };
     }
     async function renderSpec({ w }: Awaited<ReturnType<typeof specWorld>>, spec: string) {
-      renderLive(w, <ReviewPanel project="acme" ticket={await w.api.getTicket("acme", spec)} now={w.now()} />);
+      await renderLive(w, <ReviewPanel project="acme" ticket={await w.api.getTicket("acme", spec)} now={w.now()} />);
       return screen.getByRole("region", { name: "In Review" });
     }
 
@@ -225,7 +225,7 @@ describe("the In Review panel", () => {
     const id = await s.ticket("acme", { title: "Moved by hand" });
     await inReview(s, id);
     const ticket = await w.api.getTicket("acme", id);
-    renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
+    await renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
     expect(screen.getByRole("region", { name: "In Review" })).toHaveTextContent("No finish summary");
   });
 

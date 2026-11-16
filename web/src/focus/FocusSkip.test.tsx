@@ -50,7 +50,7 @@ const skip = async () => userEvent.click(await within(focus()).findByRole("butto
 describe("Skip", () => {
   it("sits next to Answer, Dismiss and Prototype this on a Question Focus Item", async () => {
     const { w } = await waiting();
-    renderApp(w);
+    await renderApp(w);
     await heading("Which colour?");
     const buttons = within(focus()).getByRole("button", { name: "Answer" }).parentElement!;
     expect(within(buttons).getAllByRole("button").map((b) => b.textContent)).toEqual(["Answer", "Dismiss", "Prototype this", "Skip"]);
@@ -58,7 +58,7 @@ describe("Skip", () => {
 
   it("sits with a Ticket Focus Item's panel buttons", async () => {
     const { w } = await waitingTickets();
-    renderApp(w);
+    await renderApp(w);
     await heading("Flaky build");
     expect(await within(focus()).findByRole("button", { name: "Send back" })).toBeInTheDocument();
     expect(within(focus()).getByRole("button", { name: "Skip" })).toBeInTheDocument();
@@ -66,7 +66,7 @@ describe("Skip", () => {
 
   it("sends the item to the back of the queue and shows the next one, still counting it", async () => {
     const { w } = await waitingTickets();
-    renderApp(w);
+    await renderApp(w);
     await heading("Flaky build");
     expect(within(focus()).getByText("2 left")).toBeInTheDocument();
     await skip();
@@ -78,7 +78,7 @@ describe("Skip", () => {
 
   it("goes on to the Round's next open Question, and only the skipped one goes to the back of the whole queue", async () => {
     const { w } = await waiting();
-    renderApp(w);
+    await renderApp(w);
     await heading("Which colour?");
     await skip();
     expect(await heading("Which size?")).toBeInTheDocument();
@@ -90,7 +90,7 @@ describe("Skip", () => {
 
   it("keeps a skipped item behind one that arrives later", async () => {
     const { w, s } = await waitingTickets();
-    renderApp(w);
+    await renderApp(w);
     await heading("Flaky build");
     await skip();
     await heading("Login page");
@@ -102,7 +102,7 @@ describe("Skip", () => {
 
   it("has no single-key shortcut", async () => {
     const { w } = await waitingTickets();
-    renderApp(w);
+    await renderApp(w);
     await heading("Flaky build");
     await userEvent.keyboard("s");
     await userEvent.keyboard("k");
@@ -113,7 +113,7 @@ describe("Skip", () => {
 describe("only skipped items left", () => {
   it("asks \"You skipped N, go through them again?\" instead of All clear, still counting them", async () => {
     const { w } = await waitingTickets();
-    renderApp(w);
+    await renderApp(w);
     await heading("Flaky build");
     await skip();
     await heading("Login page");
@@ -127,7 +127,7 @@ describe("only skipped items left", () => {
 
   it("counts a skipped Round's open Questions one each", async () => {
     const { w } = await waiting({ tickets: false });
-    renderApp(w);
+    await renderApp(w);
     await heading("Which colour?");
     await skip();
     await heading("Which size?");
@@ -138,7 +138,7 @@ describe("only skipped items left", () => {
 
   it("goes through them again from the front, in Needs Me order", async () => {
     const { w } = await waiting();
-    renderApp(w);
+    await renderApp(w);
     await heading("Which colour?");
     await skip();
     await heading("Which size?");
@@ -157,7 +157,7 @@ describe("only skipped items left", () => {
 
   it("shows a new Focus Item on its own when it arrives", async () => {
     const { w, s } = await waitingTickets();
-    renderApp(w);
+    await renderApp(w);
     await heading("Flaky build");
     await skip();
     await heading("Login page");
@@ -170,7 +170,7 @@ describe("only skipped items left", () => {
 
   it("is All clear once the skipped items are dealt with elsewhere", async () => {
     const { w, s, failed, review } = await waitingTickets();
-    renderApp(w);
+    await renderApp(w);
     await heading("Flaky build");
     await skip();
     await heading("Login page");
@@ -186,7 +186,7 @@ describe("only skipped items left", () => {
 describe("skips", () => {
   it("live only in this tab's memory: never sent, never in the URL or local storage", async () => {
     const { w } = await waitingTickets();
-    renderApp(w);
+    await renderApp(w);
     await heading("Flaky build");
     await skip();
     await heading("Login page");
@@ -198,7 +198,7 @@ describe("skips", () => {
 
   it("are forgotten on leaving Focus Mode", async () => {
     const { w } = await waitingTickets();
-    renderApp(w);
+    await renderApp(w);
     await heading("Flaky build");
     await skip();
     await heading("Login page");
@@ -210,12 +210,12 @@ describe("skips", () => {
 
   it("are forgotten on reload", async () => {
     const { w } = await waitingTickets();
-    const { unmount } = renderApp(w);
+    const { unmount } = await renderApp(w);
     await heading("Flaky build");
     await skip();
     await heading("Login page");
     unmount();
-    renderApp(w);
+    await renderApp(w);
 
     expect(await heading("Flaky build")).toBeInTheDocument();
   });

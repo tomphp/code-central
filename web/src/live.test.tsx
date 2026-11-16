@@ -29,7 +29,7 @@ function TicketTitle({ id }: { id: string }) {
 describe("the live read hooks", () => {
   it("show a change made through the api once its notice arrives", async () => {
     const { w, id } = await acme();
-    renderLive(w, <TicketTitle id={id} />);
+    await renderLive(w, <TicketTitle id={id} />);
     await settle(w);
     expect(screen.getByRole("heading", { name: "Fix login" })).toBeInTheDocument();
 
@@ -40,7 +40,7 @@ describe("the live read hooks", () => {
 
   it("bring in a change made while the feed was down once it reconnects", async () => {
     const { w, id } = await acme();
-    renderLive(w, <TicketTitle id={id} />);
+    await renderLive(w, <TicketTitle id={id} />);
     await settle(w);
 
     w.dropStreams();
@@ -55,7 +55,7 @@ describe("the live read hooks", () => {
       const reads = [useTicket("acme", undefined), useSpec(undefined, "acme-1"), useCIOverview(undefined), useUsage(undefined), useSessionUsage(undefined)];
       return <p>{reads.some((r) => r.data) ? "Read" : "Nothing"}</p>;
     }
-    renderLive(w, <Pane />);
+    await renderLive(w, <Pane />);
     await settle(w);
     expect(screen.getByText("Nothing")).toBeInTheDocument();
     expect(w.calls).toEqual([]);
@@ -67,7 +67,7 @@ describe("the live read hooks", () => {
       const ci = useCIOverview({ project: "acme" });
       return <p>{ci.data ? "CI read" : "Loading"}</p>;
     }
-    renderLive(w, <CI />);
+    await renderLive(w, <CI />);
     await settle(w);
     expect(screen.getByText("CI read")).toBeInTheDocument();
     const reads = () => w.calls.filter((c) => c === "ciOverview").length;
@@ -86,7 +86,7 @@ describe("the live read hooks", () => {
       useTicket("acme", id);
       return <TicketTitle id={id} />;
     }
-    renderLive(w, <Readers />);
+    await renderLive(w, <Readers />);
     await settle(w);
     expect(screen.getByRole("heading", { name: "Fix login" })).toBeInTheDocument();
     expect(w.subscriptions()).toBe(1);
@@ -103,7 +103,7 @@ describe("settling a world under React", () => {
     vi.useFakeTimers();
     onTestFinished(() => void vi.useRealTimers());
     const { w, id } = await acme();
-    renderLive(w, <TicketTitle id={id} />);
+    await renderLive(w, <TicketTitle id={id} />);
     await settle(w);
     expect(screen.getByRole("heading", { name: "Fix login" })).toBeInTheDocument();
   });
@@ -140,7 +140,7 @@ describe("the Usage reads", () => {
 
   it("load when opened and when their arguments change, never on a notice", async () => {
     const { w, id } = await acme();
-    const { rerender } = renderLive(
+    const { rerender } = await renderLive(
       w,
       <>
         <Usage days={7} />

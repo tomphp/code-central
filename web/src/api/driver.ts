@@ -10,6 +10,10 @@
 // controls, and the serve half's (http.e2e.test.ts) over a real
 // `code-central serve` with its fake gh and real connections. A write's
 // ID is the one it returned, and a Question's number is Core's.
+//
+// Each operation ends by awaiting the Connection's settle (ADR 0044), so a
+// test asserts straight after it: a world's waits for the world to settle,
+// and serve's is a no-op.
 import type { Api } from "./api";
 import type { CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, ModelsReport, PullRequestReport, SessionEvent, TicketView, UsageResponse } from "./types";
 import type { World } from "./core/core";
@@ -61,7 +65,7 @@ export interface Driver {
   postUsage(sessionId: string, responses: UsageResponse[]): Promise<void>;
   // dropTranscriptStreams drops every open Transcript stream, as a flaky
   // connection would; each reconnects by itself (ticket 110).
-  dropTranscriptStreams(): void;
+  dropTranscriptStreams(): Promise<void>;
   // startConversation and sendChatMessage are the human's Chat actions;
   // sendChatMessage returns once the turn is queued (Spec code-central-633).
   startConversation(key: string): Promise<void>;
@@ -142,6 +146,9 @@ export interface Connection {
   // absolutePath is a path absolute where Core runs: a WASM Core judges
   // paths as Unix does, whatever the host.
   absolutePath: string;
+  // settle resolves once what an operation set off is done: the Driver
+  // awaits it after each write it makes and each control it calls.
+  settle(): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -150,14 +157,16 @@ export type Actor = "agent" | "human" | "integration";
 // SESSION is the session an agent claims with unless told otherwise.
 export const SESSION = "contract-session";
 
-// worldDriver drives a WASM Core world.
-export function worldDriver(w: World): HttpDriver {
-  return new HttpDriver(worldConnection(w));
+// worldDriver drives a WASM Core world, settling it with settle.
+export function worldDriver(w: World, settle?: () => Promise<void>): HttpDriver {
+  return new HttpDriver(worldConnection(w, settle));
 }
 
 // worldConnection reaches a WASM Core world, and sets the gh checks with
-// its controls: logged out as gh answers with no login.
-export function worldConnection(w: World): Connection {
+// its controls: logged out as gh answers with no login. It settles with
+// the world's own settled unless given a settle, such as a component
+// test's act-wrapped settle(w).
+export function worldConnection(w: World, settle = () => w.settled()): Connection {
   const loggedOut = {
     problem: "logged_out",
     reason: "gh isn't logged in to GitHub: You are not logged into any GitHub hosts. To log in, run: gh auth login",
@@ -176,6 +185,7 @@ export function worldConnection(w: World): Connection {
     letGHWrite: async () => w.setPullRequestCheck(),
     dropTranscriptStreams: () => w.dropStreams(),
     absolutePath: "/opt/tools/gh",
+    settle,
     close: async () => w.drop(),
   };
 }
@@ -193,8 +203,11 @@ export class HttpDriver implements Driver {
     this.api = c.api;
   }
 
-  // call makes one request as actor and returns its JSON, nothing for a
-  // 204, or throws its refusal as an ApiError.
+  // settle waits for what an operation set off, as the Connection does.
+  settle = () => this.c.settle();
+
+  // call makes one request as actor, settles, and returns its JSON,
+  // nothing for a 204, or throws its refusal as an ApiError.
   async call<T = any>(actor: Actor, method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
     const res = await this.c.fetch(this.c.url + path, {
       method,
@@ -202,6 +215,7 @@ export class HttpDriver implements Driver {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const text = await res.text();
+    await this.settle();
     if (!res.ok) throw toError(res.status, text);
     return (text ? JSON.parse(text) : undefined) as T;
   }
@@ -286,6 +300,7 @@ export class HttpDriver implements Driver {
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: op, arguments: args } }),
     });
     const { result } = await res.json();
+    await this.settle();
     const text: string = result.content[0].text;
     return { text, error: result.isError ? JSON.parse(text).code : undefined };
   };
@@ -329,10 +344,23 @@ export class HttpDriver implements Driver {
     await this.agent(`${this.projectPath(key)}/report_ci_runs`, { runs });
   };
 
-  logOutOfGH: Driver["logOutOfGH"] = () => this.c.logOutOfGH();
-  letGHTriage: Driver["letGHTriage"] = (repository) => this.c.letGHTriage(repository);
-  letGHWrite: Driver["letGHWrite"] = (repository) => this.c.letGHWrite(repository);
-  dropTranscriptStreams: Driver["dropTranscriptStreams"] = () => this.c.dropTranscriptStreams();
+  logOutOfGH: Driver["logOutOfGH"] = async () => {
+    await this.c.logOutOfGH();
+    await this.settle();
+  };
+  letGHTriage: Driver["letGHTriage"] = async (repository) => {
+    await this.c.letGHTriage(repository);
+    await this.settle();
+  };
+  letGHWrite: Driver["letGHWrite"] = async (repository) => {
+    await this.c.letGHWrite(repository);
+    await this.settle();
+  };
+  // A world settles once every dropped stream has reconnected.
+  dropTranscriptStreams: Driver["dropTranscriptStreams"] = async () => {
+    this.c.dropTranscriptStreams();
+    await this.settle();
+  };
 
   // Spec code-central-633: the human's Chat actions, and a Factory's part
   startConversation: Driver["startConversation"] = async (key) => {

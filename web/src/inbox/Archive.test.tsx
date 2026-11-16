@@ -47,7 +47,7 @@ async function openMenu(name: string) {
 
 describe("Archived Projects and finished work", () => {
   it("keeps Archived Projects in a collapsed group at the bottom of the left pane", async () => {
-    renderApp((await world()).w, "/");
+    await renderApp((await world()).w, "/");
     const old = await within(nav()).findByRole("button", { name: /^Old App/, hidden: true });
     const group = archivedGroup();
     expect(group).not.toHaveAttribute("open");
@@ -61,7 +61,7 @@ describe("Archived Projects and finished work", () => {
 
   it("disables Archive, saying why, while unfinished work remains", async () => {
     const { w } = await world();
-    renderApp(w, "/");
+    await renderApp(w, "/");
     const menu = await openMenu("Acme");
     const archive = within(menu).getByRole("menuitem", { name: "Archive" });
     expect(archive).toBeDisabled();
@@ -72,7 +72,7 @@ describe("Archived Projects and finished work", () => {
 
   it("archives a finished Project from its menu, and unarchives it", async () => {
     const { w } = await world();
-    renderApp(w, "/");
+    await renderApp(w, "/");
     await userEvent.click(within(await openMenu("Done Co")).getByRole("menuitem", { name: "Archive" }));
     await waitFor(() => expect(archivedGroup()).toContainElement(within(nav()).getByRole("button", { name: /^Done Co/, hidden: true })));
     expect(screen.queryByRole("menu")).toBeNull();
@@ -103,7 +103,7 @@ describe("Archived Projects and finished work", () => {
 
   it("lists Done and Cancelled newest first, with plain counts, across every Project", async () => {
     const { w, ids } = await world();
-    renderApp(w, "/");
+    await renderApp(w, "/");
     const done = await within(nav()).findByRole("button", { name: "Done 3" });
     expect(done.querySelector(".count")).not.toHaveClass("loud");
     expect(within(nav()).getByRole("button", { name: "Cancelled 1" })).toBeInTheDocument();
@@ -116,7 +116,7 @@ describe("Archived Projects and finished work", () => {
 
   it("opens any Ticket by its URL, an Archived Project's too", async () => {
     const { w, ids } = await world();
-    renderApp(w, `/?view=inbox&ticket=${ids.lastWeek}`);
+    await renderApp(w, `/?view=inbox&ticket=${ids.lastWeek}`);
     expect(await within(detail()).findByRole("heading", { name: "Shipped last week" })).toBeInTheDocument();
   });
 });

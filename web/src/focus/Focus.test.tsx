@@ -28,7 +28,7 @@ const params = () => new URLSearchParams(window.location.search);
 describe("entering and leaving Focus Mode", () => {
   it("enters from the Inbox's Focus button, carrying the Project filter, and Exit returns with it", async () => {
     const { w, pick } = await world();
-    renderApp(w, `/?view=inbox&project=acme&ticket=${pick}`);
+    await renderApp(w, `/?view=inbox&project=acme&ticket=${pick}`);
     const nav = screen.getByRole("navigation", { name: "Filters" });
     await userEvent.click(within(nav).getByRole("button", { name: "Focus" }));
 
@@ -44,7 +44,7 @@ describe("entering and leaving Focus Mode", () => {
 
   it("enters with no project when the Inbox is unfiltered, and shows no Project in its header", async () => {
     const { w } = await world({ review: false }); // no Focus Item, whose own Project would show
-    renderApp(w, "/");
+    await renderApp(w, "/");
     await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("button", { name: "Focus" }));
     expect(window.location.search).toBe("?view=focus");
     expect(within(focus()).queryByText(/Acme|Beta/)).toBeNull();
@@ -53,7 +53,7 @@ describe("entering and leaving Focus Mode", () => {
 
   it("returns to where the human was in the Inbox on Back", async () => {
     const { w, pick } = await world();
-    renderApp(w, `/?view=inbox&project=acme&ticket=${pick}`);
+    await renderApp(w, `/?view=inbox&project=acme&ticket=${pick}`);
     await screen.findByRole("heading", { name: "Pick a colour" });
     await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("button", { name: "Focus" }));
     expect(focus()).toBeInTheDocument();
@@ -67,14 +67,14 @@ describe("entering and leaving Focus Mode", () => {
 
   it("opens directly from the URL, dropping every parameter but project", async () => {
     const { w, beta } = await world();
-    renderApp(w, `/?view=focus&project=beta&state=Ready&list=requirements&requirement=beta-9&ticket=${beta}`);
+    await renderApp(w, `/?view=focus&project=beta&state=Ready&list=requirements&requirement=beta-9&ticket=${beta}`);
     expect(focus()).toBeInTheDocument();
     expect(window.location.search).toBe("?view=focus&project=beta");
   });
 
   it("treats any other view as the Inbox", async () => {
     const { w } = await world();
-    renderApp(w, "/?view=calendar");
+    await renderApp(w, "/?view=calendar");
     expect(screen.getByRole("navigation", { name: "Filters" })).toBeInTheDocument();
     expect(params().get("view")).toBe("inbox");
   });
@@ -90,7 +90,7 @@ describe("All clear", () => {
       await gate;
       return needsMe();
     });
-    renderApp(w, "/?view=focus");
+    await renderApp(w, "/?view=focus");
     expect(within(focus()).getByText("Loading…")).toBeInTheDocument();
     expect(within(focus()).queryByText("All clear")).toBeNull();
 
@@ -100,7 +100,7 @@ describe("All clear", () => {
 
   it("shows All clear with Nothing needs you, + New ▾ and Exit, and nothing else, when nothing needs the human", async () => {
     const { w } = await world({ review: false });
-    renderApp(w, "/?view=focus");
+    await renderApp(w, "/?view=focus");
     const clear = await within(focus()).findByRole("region", { name: "All clear" });
     expect(clear).toHaveTextContent(/^All clearNothing needs you\.$/);
     expect(within(focus()).getAllByRole("button").map((b) => b.textContent)).toEqual(["+ New", "▾", "Exit"]);
@@ -110,14 +110,14 @@ describe("All clear", () => {
   it("shows All clear when the Options can't be read, with no error banner over it", async () => {
     const { w } = await world({ review: false });
     vi.spyOn(w.api, "options").mockRejectedValue(new ApiError(0, "service_unavailable", "Code Central isn't reachable"));
-    renderApp(w, "/?view=focus");
+    await renderApp(w, "/?view=focus");
     expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
     expect(screen.queryByText("Code Central isn't reachable")).toBeNull();
   });
 
   it("is not All clear while something in scope needs the human, and becomes All clear when it goes", async () => {
     const { w, s, beta } = await world();
-    renderApp(w, "/?view=focus");
+    await renderApp(w, "/?view=focus");
     await waitFor(() => expect(document.title).toBe("(1) Code Central"));
     expect(within(focus()).queryByText("All clear")).toBeNull();
 
@@ -127,20 +127,21 @@ describe("All clear", () => {
 
   it("means nothing in the filtered Project needs the human", async () => {
     const { w } = await world(); // only Beta review needs the human
-    const { unmount } = renderApp(w, "/?view=focus&project=acme");
+    const { unmount } = await renderApp(w, "/?view=focus&project=acme");
     expect(await within(focus()).findByText("All clear")).toBeInTheDocument();
     unmount();
 
-    renderApp(w, "/?view=focus&project=beta");
+    await renderApp(w, "/?view=focus&project=beta");
     await waitFor(() => expect(document.title).toBe("(1) Code Central"));
     expect(within(focus()).queryByText("All clear")).toBeNull();
   });
 
   it("counts a Stage Ticket in scope as needing the human", async () => {
-    const { w, s } = await world();
+    // The tab title counts every Project: no Beta review, so the Stage Ticket is the one.
+    const { w, s } = await world({ review: false });
     const spec = await s.spec("acme", { title: "Dark mode" });
     await s.ticket("acme", { title: "Grilling: Dark mode", state: "Needs Answer", spec, labels: ["stage:grilling"] });
-    renderApp(w, "/?view=focus&project=acme");
+    await renderApp(w, "/?view=focus&project=acme");
     await waitFor(() => expect(document.title).toBe("(1) Code Central"));
     expect(within(focus()).queryByText("All clear")).toBeNull();
   });
@@ -149,7 +150,7 @@ describe("All clear", () => {
 describe("live reads in Focus Mode", () => {
   it("shows the App's error banner on a failed read and keeps the last data", async () => {
     const { w, s } = await world({ review: false });
-    renderApp(w, "/?view=focus");
+    await renderApp(w, "/?view=focus");
     await within(focus()).findByText("All clear");
 
     vi.spyOn(w.api, "needsMe").mockRejectedValue(new ApiError(0, "unreachable", "Code Central is unreachable"));
@@ -160,7 +161,7 @@ describe("live reads in Focus Mode", () => {
 
   it("keeps the Needs Me count in the tab title and favicon", async () => {
     const { w, s, beta } = await world();
-    renderApp(w, "/?view=focus&project=beta");
+    await renderApp(w, "/?view=focus&project=beta");
     await waitFor(() => expect(document.title).toBe("(1) Code Central"));
     const icon = () => document.querySelector<HTMLLinkElement>("link[rel=icon]")!;
     expect(decodeURIComponent(icon().href)).toContain(">1<");
@@ -188,7 +189,7 @@ describe("Focus Kinds in Focus Mode", () => {
   const skip = async () => userEvent.click(await within(focus()).findByRole("button", { name: "Skip" }));
 
   it("leaves out a Project's items of a reason off there, and doesn't count them, while another Project's still show", async () => {
-    renderApp(await kinds(), "/?view=focus");
+    await renderApp(await kinds(), "/?view=focus");
     expect(await heading("Flaky build")).toBeInTheDocument();
     expect(within(focus()).getByText("2 left")).toBeInTheDocument();
     await skip();
@@ -199,19 +200,19 @@ describe("Focus Kinds in Focus Mode", () => {
 
   it("applies only the chosen Project's Focus Kinds with a Project chosen", async () => {
     const w = await kinds();
-    const { unmount } = renderApp(w, "/?view=focus&project=acme");
+    const { unmount } = await renderApp(w, "/?view=focus&project=acme");
     expect(await heading("Flaky build")).toBeInTheDocument();
     expect(within(focus()).getByText("1 left")).toBeInTheDocument();
     unmount();
 
-    renderApp(w, "/?view=focus&project=beta");
+    await renderApp(w, "/?view=focus&project=beta");
     expect(await heading("Beta search")).toBeInTheDocument();
     expect(within(focus()).getByText("1 left")).toBeInTheDocument();
   });
 
   it("shows All clear when only items of reasons turned off are left, though Needs Me still counts them", async () => {
     const w = await kinds({ without: ["flaky", "beta"] });
-    renderApp(w, "/?view=focus");
+    await renderApp(w, "/?view=focus");
     expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
     expect(within(focus()).queryByText(/left/)).toBeNull();
     await waitFor(() => expect(document.title).toBe("(1) Code Central"));
@@ -220,13 +221,13 @@ describe("Focus Kinds in Focus Mode", () => {
   it("shows the Activity Dashboard when only items of reasons turned off are left and it's chosen", async () => {
     const w = await kinds({ without: ["flaky", "beta"] });
     await w.api.setOptions({ focus_clear: "activity_dashboard" });
-    renderApp(w, "/?view=focus");
+    await renderApp(w, "/?view=focus");
     expect(await within(focus()).findByRole("region", { name: "Activity Dashboard" })).toBeInTheDocument();
   });
 
   it("follows a saved change without a reload: a reason turned off goes, and comes back once turned on", async () => {
     const w = await kinds();
-    renderApp(w, "/?view=focus&project=acme");
+    await renderApp(w, "/?view=focus&project=acme");
     expect(await within(focus()).findByText("1 left")).toBeInTheDocument();
 
     await act(() => w.api.setFocusKinds("acme", []));

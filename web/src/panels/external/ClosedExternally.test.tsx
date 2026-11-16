@@ -25,7 +25,7 @@ type Linked = Awaited<ReturnType<typeof world>>;
 
 async function renderPanel({ w, id }: Linked) {
   const t = await w.api.getTicket("acme", id);
-  renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
+  await renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("region", { name: "Closed externally" });
 }
 

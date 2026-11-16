@@ -45,13 +45,13 @@ const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 
 async function renderPanel({ w, issue }: Issues) {
   const t = await w.api.getTicket("acme", issue);
-  renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
+  await renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("region", { name: "New issue" });
 }
 
 async function renderDetail(w: World, id: string) {
   const t = await w.api.getTicket("acme", id);
-  renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
+  await renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("article", { name: "Ticket details" });
 }
 

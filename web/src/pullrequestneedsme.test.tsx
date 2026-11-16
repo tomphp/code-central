@@ -38,7 +38,7 @@ describe("To merge under Pull Request", () => {
 
   it("is a Focus Item linking the pull request, offering Send back to fix with a note", async () => {
     const { w, ticket } = await world("conflicting");
-    renderApp(w);
+    await renderApp(w);
     const it = await item();
     expect(within(it).getByText("Focus: To merge")).toBeInTheDocument();
     const link = await within(it).findByRole("link", { name: "Pull request 7, conflicting" });
@@ -56,7 +56,7 @@ describe("To merge under Pull Request", () => {
 describe("Pull request closed", () => {
   it("is a Focus Item linking the pull request with Send back and Cancel", async () => {
     const { w, ticket } = await world("closed");
-    renderApp(w);
+    await renderApp(w);
     const it = await item();
     expect(within(it).getByText("Focus: Pull request closed")).toBeInTheDocument();
     expect(await within(it).findByRole("heading", { name: "Pull request closed" })).toBeInTheDocument();
@@ -72,7 +72,7 @@ describe("Pull request closed", () => {
 
   it("cancels", async () => {
     const { w, ticket } = await world("closed");
-    renderApp(w);
+    await renderApp(w);
     const it = await item();
     await userEvent.click(await within(it).findByRole("button", { name: "Cancel" }));
     await waitFor(async () => expect((await w.api.getTicket("acme", ticket)).state).toBe("Cancelled"));

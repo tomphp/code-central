@@ -92,7 +92,7 @@ const noPopup = () => expect(screen.queryByRole("dialog", { name: "Focus popup" 
 // popup that would open has had its chance.
 async function loaded(w: World, url: string) {
   document.title = "";
-  renderApp(w, url);
+  await renderApp(w, url);
   await waitFor(() => expect(document.title).toMatch(/^\(\d+\)/));
 }
 
@@ -101,7 +101,7 @@ const reads = (w: World, name: string) => w.calls.filter((c) => c === name).leng
 
 describe("Focus Pop-up", () => {
   it.each(["inbox", "board", "activity", "ci", "usage"])("opens the Focus popup over the %s view while Focus Items wait", async (view) => {
-    renderApp((await popupOn()).w, `/?view=${view}`);
+    await renderApp((await popupOn()).w, `/?view=${view}`);
     expect(await heading("Flaky build")).toBeInTheDocument();
     expect(within(popup()).getByText("3 left")).toBeInTheDocument();
   });
@@ -112,7 +112,7 @@ describe("Focus Pop-up", () => {
   });
 
   it("is scoped to the view's Project", async () => {
-    renderApp((await popupOn()).w, "/?view=board&project=beta");
+    await renderApp((await popupOn()).w, "/?view=board&project=beta");
     expect(await heading("Beta search")).toBeInTheDocument();
     expect(within(popup()).getByText("1 left")).toBeInTheDocument();
   });
@@ -120,7 +120,7 @@ describe("Focus Pop-up", () => {
   it("goes through the Focus Items with Skip, closes once only skipped ones are left, and doesn't reopen for them", async () => {
     const { w } = await popupOn();
     const before = w.actions().length;
-    renderApp(w, "/?view=inbox&project=acme");
+    await renderApp(w, "/?view=inbox&project=acme");
     await heading("Flaky build");
     await userEvent.click(await within(popup()).findByRole("button", { name: "Skip" }));
     await heading("Login page");
@@ -134,7 +134,7 @@ describe("Focus Pop-up", () => {
 
   it("closes once nothing in scope is left", async () => {
     const { w, s, search } = await popupOn();
-    renderApp(w, "/?view=activity&project=beta");
+    await renderApp(w, "/?view=activity&project=beta");
     await heading("Beta search");
     await drop(s, search);
     await waitFor(noPopup);
@@ -142,7 +142,7 @@ describe("Focus Pop-up", () => {
 
   it("stays closed across views once closed, until a new Focus Item arrives through the live feed", async () => {
     const { w, s } = await popupOn();
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     await heading("Flaky build");
     await close();
     noPopup();
@@ -159,7 +159,7 @@ describe("Focus Pop-up", () => {
 
   it("once open for a new Focus Item, goes on through the rest in scope", async () => {
     const { w, s } = await popupOn();
-    renderApp(w, "/?view=activity");
+    await renderApp(w, "/?view=activity");
     await heading("Flaky build");
     await close();
     const id = await arrive(w, s);
@@ -171,7 +171,7 @@ describe("Focus Pop-up", () => {
 
   it("answers a Round's Questions one at a time, and doesn't reopen for the rest of the Round once closed", async () => {
     const { w, round } = await roundOn();
-    renderApp(w, "/?view=board");
+    await renderApp(w, "/?view=board");
     expect(await heading("Which colour?")).toBeInTheDocument();
     await userEvent.click(within(popup()).getByRole("button", { name: "Answer" }));
     expect(await heading("Which size?")).toBeInTheDocument();
@@ -184,7 +184,7 @@ describe("Focus Pop-up", () => {
   });
 
   it("holds a close only for the Focus Items in scope then", async () => {
-    renderApp((await popupOn()).w, "/?view=inbox&project=beta");
+    await renderApp((await popupOn()).w, "/?view=inbox&project=beta");
     await heading("Beta search");
     await close();
     go("/?view=inbox");
@@ -194,7 +194,7 @@ describe("Focus Pop-up", () => {
 
   it("doesn't open in one Project's view for a new Focus Item in another", async () => {
     const { w, s } = await popupOn();
-    renderApp(w, "/?view=board&project=beta");
+    await renderApp(w, "/?view=board&project=beta");
     await heading("Beta search");
     await close();
     await arrive(w, s, "acme");
@@ -204,7 +204,7 @@ describe("Focus Pop-up", () => {
 
   it("stays open, where it was, through a failed read of the Options", async () => {
     const { w, s } = await popupOn();
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     await heading("Flaky build");
     await userEvent.click(await within(popup()).findByRole("button", { name: "Skip" }));
     await heading("Login page");
@@ -217,18 +217,18 @@ describe("Focus Pop-up", () => {
 
   it("forgets what was closed on a reload", async () => {
     const { w } = await popupOn();
-    const { unmount } = renderApp(w, "/?view=usage");
+    const { unmount } = await renderApp(w, "/?view=usage");
     await heading("Flaky build");
     await close();
     unmount();
-    renderApp(w, "/?view=usage");
+    await renderApp(w, "/?view=usage");
     expect(await heading("Flaky build")).toBeInTheDocument();
   });
 
   it("leaves the address and history alone, and Back doesn't close it", async () => {
     window.history.replaceState(null, "", "/?view=board");
     window.history.pushState(null, "", "/?view=activity");
-    renderApp((await popupOn()).w, "/?view=activity");
+    await renderApp((await popupOn()).w, "/?view=activity");
     await heading("Flaky build");
     const length = window.history.length;
     expect(window.location.search).toBe("?view=activity");
@@ -241,7 +241,7 @@ describe("Focus Pop-up", () => {
 
   it("lands on the Focus Item's Ticket in the Inbox from Open in Inbox, and stays closed there", async () => {
     const { w, flaky } = await popupOn();
-    renderApp(w, "/?view=ci");
+    await renderApp(w, "/?view=ci");
     const item = within(await screen.findByRole("dialog", { name: "Focus popup" }));
     await userEvent.click(await item.findByRole("link", { name: "Open in Inbox" }));
     expect(window.location.search).toBe(`?view=inbox&ticket=${flaky}`);
@@ -284,7 +284,7 @@ describe("Focus Pop-up after a close", () => {
     // Core puts a Round's Questions ahead of the Failed Ticket, so the Round
     // is skipped past to be left unread.
     const { w, s } = await roundOn();
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     await heading("Which colour?");
     await userEvent.click(within(popup()).getByRole("button", { name: "Skip" }));
     await heading("Which size?");
@@ -296,7 +296,7 @@ describe("Focus Pop-up after a close", () => {
 
   it("stays closed for a Round closed read", async () => {
     const { w, s } = await onlyRound();
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     await heading("Which colour?");
     await close();
     await stillClosed(w, s);
@@ -304,7 +304,7 @@ describe("Focus Pop-up after a close", () => {
 
   it("opens again for a new Round on a Ticket it closed on", async () => {
     const { w, s, round } = await onlyRound();
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     await heading("Which colour?");
     await close();
 
@@ -316,7 +316,7 @@ describe("Focus Pop-up after a close", () => {
 
   it("opens again for a Ticket it closed on, waiting for a new reason", async () => {
     const { w, s, flaky } = await popupOn();
-    renderApp(w, "/?view=inbox&project=acme");
+    await renderApp(w, "/?view=inbox&project=acme");
     await heading("Flaky build");
     await close();
 
@@ -336,7 +336,7 @@ describe("Focus Pop-up after a close", () => {
       await s.ci("acme", id, "failed", commit);
     };
     await push("Basket", "abc1234567");
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
     await heading("CI failed at abc1234");
     await close();
     await stillClosed(w, s);
@@ -406,7 +406,7 @@ describe("Focus Pop-up and Focus Kinds", () => {
   it("leaves them out and doesn't count them when another item opens it, while another Project's still show", async () => {
     const { w } = await popupOn();
     await w.api.setFocusKinds("acme", ["in_review"]);
-    renderApp(w, "/?view=board");
+    await renderApp(w, "/?view=board");
     expect(await heading("Flaky build")).toBeInTheDocument();
     expect(within(popup()).getByText("2 left")).toBeInTheDocument();
     await userEvent.click(await within(popup()).findByRole("button", { name: "Skip" }));
@@ -417,7 +417,7 @@ describe("Focus Pop-up and Focus Kinds", () => {
   it("closes as cleared once only items of reasons turned off are left", async () => {
     const { w, s, flaky } = await popupOn();
     await w.api.setFocusKinds("acme", ["in_review"]);
-    renderApp(w, "/?view=activity&project=acme");
+    await renderApp(w, "/?view=activity&project=acme");
     await heading("Flaky build");
     await drop(s, flaky);
     await waitFor(noPopup);
@@ -425,7 +425,7 @@ describe("Focus Pop-up and Focus Kinds", () => {
 
   it("closes as cleared when the reason of the only item left is turned off", async () => {
     const { w } = await popupOn();
-    renderApp(w, "/?view=activity&project=beta");
+    await renderApp(w, "/?view=activity&project=beta");
     await heading("Beta search");
     await projectRead(w, () => w.api.setFocusKinds("beta", ["in_review"]));
     await waitFor(noPopup);
@@ -434,7 +434,7 @@ describe("Focus Pop-up and Focus Kinds", () => {
   it("opens for items a reason turned back on brings back, unless they were dismissed in this tab", async () => {
     const { w } = await popupOn();
     await w.api.setFocusKinds("acme", ["in_review"]);
-    renderApp(w, "/?view=inbox&project=acme");
+    await renderApp(w, "/?view=inbox&project=acme");
     await heading("Flaky build");
     expect(within(popup()).getByText("1 left")).toBeInTheDocument();
     await close();
@@ -456,7 +456,7 @@ describe("Focus Pop-up never interrupts", () => {
   // dismissed renders the App at url, waits for the Focus popup and
   // closes it, so only a new Focus Item opens it again.
   async function dismissed(w: World, url: string, first = "Flaky build") {
-    renderApp(w, url);
+    await renderApp(w, url);
     await heading(first);
     await close();
     noPopup();
@@ -483,7 +483,7 @@ describe("Focus Pop-up never interrupts", () => {
 
   it("waits for a card's Focus popup loaded from the address, then opens for the Focus Items left once it closes by itself", async () => {
     const { w, s, flaky } = await popupOn();
-    renderApp(w, `/?view=board&project=acme&popup=${flaky}`);
+    await renderApp(w, `/?view=board&project=acme&popup=${flaky}`);
     await heading("Flaky build");
     expect(dialogs()).toEqual(["Focus popup"]);
     expect(popup()).not.toHaveTextContent(/\d+ left/);
@@ -496,7 +496,7 @@ describe("Focus Pop-up never interrupts", () => {
 
   it("doesn't open for the Focus Items a card's Focus popup showed once it's closed", async () => {
     const { w, search } = await popupOn();
-    renderApp(w, `/?view=board&project=beta&popup=${search}`);
+    await renderApp(w, `/?view=board&project=beta&popup=${search}`);
     await heading("Beta search");
     await close();
     await waitFor(() => expect(window.location.search).toBe("?view=board&project=beta"));
@@ -511,7 +511,7 @@ describe("Focus Pop-up never interrupts", () => {
     const { w, search } = await popupOn();
     window.history.replaceState(null, "", "/?view=board&project=beta");
     window.history.pushState(null, "", `/?view=board&project=beta&popup=${search}`);
-    renderApp(w, `/?view=board&project=beta&popup=${search}`);
+    await renderApp(w, `/?view=board&project=beta&popup=${search}`);
     await heading("Beta search");
     act(() => window.history.back());
     await waitFor(() => expect(window.location.search).toBe("?view=board&project=beta"));

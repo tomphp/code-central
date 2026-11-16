@@ -25,7 +25,7 @@ describe("Base missing", () => {
   });
 
   it("is a Focus Item for the Project with a link to Project Options", async () => {
-    renderApp(await world());
+    await renderApp(await world());
     const it = await within(focus()).findByRole("article", { name: "Focus Item" });
     expect(within(it).getAllByText("Base missing")).toHaveLength(1);
     expect(within(it).getByText("Focus: Base missing")).toBeInTheDocument();

@@ -26,7 +26,7 @@ type Blocked = Awaited<ReturnType<typeof world>>;
 
 async function renderPanel({ w, blocked }: Blocked) {
   const t = await w.api.getTicket("acme", blocked);
-  renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
+  await renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("region", { name: "Blocked" });
 }
 
@@ -71,7 +71,7 @@ describe("the Blocked panel", () => {
     await x.s.addBlocker("acme", dependant, stage);
 
     const t = await x.w.api.getTicket("acme", dependant);
-    renderLive(x.w, <panel.Component project="acme" ticket={t} now={x.w.now()} />);
+    await renderLive(x.w, <panel.Component project="acme" ticket={t} now={x.w.now()} />);
     const p = screen.getByRole("region", { name: "Blocked" });
     expect(p).toHaveTextContent(`${gone} Implement: Offline mode`);
     expect(p).toHaveTextContent(`replacing ${stage}`);

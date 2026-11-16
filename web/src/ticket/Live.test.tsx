@@ -28,7 +28,7 @@ async function seeded(state: State = "In Progress") {
 
 async function renderDetail(w: World, id: string) {
   const t = await w.api.getTicket("acme", id);
-  renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
+  await renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
   const claims = within(screen.getByRole("article", { name: "Ticket details" })).getByRole("list", { name: "Claims" });
   return within(claims).getAllByRole("listitem");
 }
@@ -228,7 +228,7 @@ describe("the Live section", () => {
   it("opens when its Ticket goes back to In Progress with the Claim still live", async () => {
     const { w, id } = await seeded("Needs Answer");
     const view = await w.api.getTicket("acme", id);
-    const { rerender } = renderLive(w, <TicketDetail project="acme" ticket={view} now={w.now()} />);
+    const { rerender } = await renderLive(w, <TicketDetail project="acme" ticket={view} now={w.now()} />);
     const row = () => within(screen.getByRole("list", { name: "Claims" })).getAllByRole("listitem")[0];
     expect(live(row())).not.toHaveAttribute("open");
 

@@ -5,15 +5,25 @@ import { act, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { App } from "./App";
 import { nextTask, type World } from "./api/core/core";
+import { scenario as worldScenario, type Scenario } from "./api/scenario";
 import { Live } from "./live";
 
 // focus is Focus Mode's main region.
 export const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 
-// renderApp renders the App at url, over w and its clock.
-export function renderApp(w: World, url = "/?view=focus") {
+// renderApp renders the App at url, over w and its clock, and settles, so
+// a test asserts with getBy* straight after.
+export async function renderApp(w: World, url = "/?view=focus") {
   window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
+  const r = render(<App api={w.api} now={w.now} />);
+  await settle(w);
+  return r;
+}
+
+// scenario is the scenario builder on w for a component test: each step
+// ends with settle(w), inside act, rather than the world's bare settled.
+export function scenario(w: World): Scenario {
+  return worldScenario(w, () => settle(w));
 }
 
 // SETTLE_ROUNDS is how many rounds of fetching settle waits through before
@@ -65,9 +75,12 @@ async function settlePass(w: World, fetched: () => void) {
 }
 
 // renderLive renders ui inside <Live> over w, as App mounts it, for a test
-// of less than the whole App. Its rerender keeps ui inside <Live> too.
-export function renderLive(w: World, ui: ReactNode) {
-  return render(ui, { wrapper: ({ children }) => <Live api={w.api}>{children}</Live> });
+// of less than the whole App, and settles. Its rerender keeps ui inside
+// <Live> too.
+export async function renderLive(w: World, ui: ReactNode) {
+  const r = render(ui, { wrapper: ({ children }) => <Live api={w.api}>{children}</Live> });
+  await settle(w);
+  return r;
 }
 
 // allClear sets the Focus Mode Option to All clear, for the tests of All

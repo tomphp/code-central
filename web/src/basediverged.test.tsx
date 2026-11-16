@@ -35,7 +35,7 @@ describe("Base diverged", () => {
   });
 
   it("is a Focus Item for the Project with the commits and the fix, and no Ticket panel", async () => {
-    renderApp(await world(true));
+    await renderApp(await world(true));
     const it = await item();
     // Its reason and its title.
     expect(within(it).getAllByText("Base diverged")).toHaveLength(1);
