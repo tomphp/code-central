@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/factory/factorytest"
@@ -25,8 +24,8 @@ func TestAClaimWhoseAnswerIsLostIsClaimedAgainAndRuns(t *testing.T) {
 	h.LoseAnswer("/claim", 1)
 	r := h.Start()
 
-	h.WaitForState(id, store.NeedsAnswer)
-	r.WaitForOutput(id + " turn ended")
+	h.WantState(id, store.NeedsAnswer)
+	r.WantOutput(id + " turn ended")
 	out := r.Stdout()
 	for _, want := range []string{id + ": claim: the answer was lost (", "): claiming it again", id + ": claim: the answer came back on claiming it again"} {
 		if n := strings.Count(out, want); n != 1 {
@@ -48,7 +47,7 @@ func TestAClaimThatNeverArrivedIsClaimedAgainAndRuns(t *testing.T) {
 	h.LoseRequest("/claim", 1)
 	r := h.Start()
 
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	if n := len(h.Ticket(id).Claims); n != 1 {
 		t.Errorf("%s has %d Claims, want 1", id, n)
 	}
@@ -63,26 +62,25 @@ func TestAClaimThatNeverArrivedIsClaimedAgainAndRuns(t *testing.T) {
 func TestAClaimAnotherSessionTakesBeforeTheRetryIsDropped(t *testing.T) {
 	t.Parallel()
 	h := wakingHarness(t)
-	id := h.ReadyTicket("Taken elsewhere")
 	// Every try but the last is cut before Code Central sees it, so the
 	// other session has from the first cut to the last try to claim.
 	h.LoseRequest("/claim", 3)
-	// Start returns after the first poll, which makes every try, so the
-	// other session claims alongside it.
-	claimed := make(chan error, 1)
-	go func() {
-		for h.Refused(claimPath) == 0 {
-			time.Sleep(5 * time.Millisecond)
-		}
-		_, err := h.Server.Client.Claim(context.Background(), h.Project, core.ClaimInput{Ticket: core.Ref(id), SessionID: "elsewhere"})
-		claimed <- err
-	}()
 	r := h.Start()
-	if err := <-claimed; err != nil {
+	// The Ticket wakes a poll, whose first try is cut and which then waits
+	// out the claim retry pause: Settle doesn't move the clock past it, so
+	// the other session claims between the first try and the rest.
+	id := h.ReadyTicket("Taken elsewhere")
+	r.Settle()
+	if n := h.Refused(claimPath); n != 1 {
+		t.Fatalf("%d claims cut before the other session claimed, want 1: the Factory waits to claim again", n)
+	}
+	if _, err := h.Server.Client.Claim(context.Background(), h.Project, core.ClaimInput{Ticket: core.Ref(id), SessionID: "elsewhere"}); err != nil {
 		t.Fatal(err)
 	}
 
-	r.WaitForOutput("claim: action_not_allowed")
+	// The poll passes the pause, and the last try reaches Code Central.
+	r.Poll()
+	r.WantOutput("claim: action_not_allowed")
 	tk := h.Ticket(id)
 	if len(tk.Claims) != 1 || tk.Claims[0].SessionID != "elsewhere" {
 		t.Errorf("%s has Claims %+v, want only the other session's", id, tk.Claims)
@@ -140,7 +138,7 @@ func TestAClaimLostOnEveryTryIsClaimedAgainAtLaterPolls(t *testing.T) {
 		t.Fatalf("after the second poll %d claims cut and claude ran %d times, want 5 and none", n, len(h.Calls()))
 	}
 	r.Poll()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	if n := len(h.Ticket(id).Claims); n != 1 {
 		t.Errorf("%s has %d Claims, want 1: claiming again gets the same Claim", id, n)
 	}
@@ -166,12 +164,16 @@ func TestALostClaimHoldsItsSlot(t *testing.T) {
 	r := h.Start("--parallel", "2")
 
 	r.Poll()
-	h.WaitFor(b+"'s turn", func() bool { return len(callsFor(h, b)) == 1 })
+	if n := len(callsFor(h, b)); n != 1 {
+		t.Fatalf("%s ran %d times at the second poll, want once", b, n)
+	}
 	if s := h.Ticket(c).State; s != store.Ready {
 		t.Fatalf("with %s's claim lost and %s running, %s is %s; want it left Ready", a, b, c, s)
 	}
 	r.Poll()
-	h.WaitFor(a+"'s turn", func() bool { return len(callsFor(h, a)) == 1 })
+	if n := len(callsFor(h, a)); n != 1 {
+		t.Fatalf("%s ran %d times at the third poll, want once", a, n)
+	}
 	r.Poll()
 	if s := h.Ticket(c).State; s != store.Ready || len(h.Calls()) != 2 {
 		t.Errorf("with two turns running, %s is %s and claude ran %d times; want it left Ready", c, s, len(h.Calls()))
@@ -194,7 +196,7 @@ func TestALostClaimRefusedAtALaterPollIsDropped(t *testing.T) {
 	}
 
 	r.Poll()
-	h.WaitForState(b, store.InReview)
+	h.WantState(b, store.InReview)
 	r.Poll()
 	if n := strings.Count(r.Stdout(), a+": claim: action_not_allowed"); n != 1 {
 		t.Errorf("the refusal printed %d times, want once; stdout:\n%s", n, r.Stdout())
@@ -216,7 +218,8 @@ func TestADrainingFactoryStillClaimsALostClaimAgain(t *testing.T) {
 	r := h.Start("--parallel", "2")
 
 	r.Interrupt()
-	r.WaitForOutput("draining: claiming " + id + " again")
+	r.Settle()
+	r.WantOutput("draining: claiming " + id + " again")
 	r.Tick()
 	if code := r.Exited(); code != 0 {
 		t.Errorf("exit code %d, want 0", code)
@@ -264,12 +267,16 @@ func TestALostClaimsTicketIsNotChosenAgainAsNewWork(t *testing.T) {
 	r := h.Start("--parallel", "2")
 
 	r.Poll()
-	h.WaitFor(b+"'s turn", func() bool { return len(callsFor(h, b)) == 1 })
+	if n := len(callsFor(h, b)); n != 1 {
+		t.Fatalf("%s ran %d times at the second poll, want once", b, n)
+	}
 	if s := h.Ticket(a).State; s != store.Ready || len(callsFor(h, a)) != 0 {
 		t.Fatalf("%s is %s after %d runs, want Ready and none: its claim is still lost", a, s, len(callsFor(h, a)))
 	}
 	r.Poll()
-	h.WaitFor(a+"'s turn", func() bool { return len(callsFor(h, a)) == 1 })
+	if n := len(callsFor(h, a)); n != 1 {
+		t.Fatalf("%s ran %d times at the third poll, want once", a, n)
+	}
 	if n := len(h.Ticket(a).Claims); n != 1 {
 		t.Errorf("%s has %d Claims, want 1", a, n)
 	}

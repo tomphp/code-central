@@ -16,8 +16,8 @@ func answeredTicket(t *testing.T, h *factorytest.Harness, args ...string) (strin
 	id := h.ReadyTicket("Ask first")
 	h.Script(id, factorytest.PostRound("Which colour?"), factorytest.Result("success"))
 	r := h.Start(args...)
-	h.WaitForState(id, store.NeedsAnswer)
-	r.WaitForOutput(id + " turn ended")
+	h.WantState(id, store.NeedsAnswer)
+	r.WantOutput(id + " turn ended")
 	h.Script(id, factorytest.Finish("Painted it blue."), factorytest.Result("success"))
 	h.Answer(id, "Blue")
 	return id, h.Calls()[0], r
@@ -29,7 +29,7 @@ func TestAnAnsweredClaimIsPickedUpAndItsSessionResumedWithTheAnswers(t *testing.
 	id, first, r := answeredTicket(t, h, "--model", "opus")
 
 	r.Poll()
-	tk := h.WaitForState(id, store.InReview)
+	tk := h.WantState(id, store.InReview)
 	calls := h.Calls()
 	if len(calls) != 2 {
 		t.Fatalf("claude ran %d times, want twice", len(calls))
@@ -66,7 +66,7 @@ func TestAResumeIsInBypassModeWithBypassPermissions(t *testing.T) {
 	h := factorytest.New(t)
 	id, _, r := answeredTicket(t, h, "--bypass-permissions")
 	r.Poll()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 	if m, _ := h.Calls()[1].Flag("--permission-mode"); m != "bypassPermissions" {
 		t.Errorf("--permission-mode %q, want bypassPermissions", m)
 	}
@@ -81,10 +81,12 @@ func TestWhenASlotFreesAnAnsweredResumeGoesBeforeANewClaim(t *testing.T) {
 	h.Script(busy, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
 
 	r := h.Start("--parallel", "1")
-	h.WaitForState(asks, store.NeedsAnswer)
-	r.WaitForOutput(asks + " turn ended")
-	r.Poll()
-	h.WaitFor(busy+"'s turn", func() bool { return len(callsFor(h, busy)) == 1 })
+	h.WantState(asks, store.NeedsAnswer)
+	r.WantOutput(asks + " turn ended")
+	// The turn's end freed the slot, and woke the poll that claimed busy.
+	if n := len(callsFor(h, busy)); n != 1 {
+		t.Fatalf("%s ran %d times after %s's turn ended, want once", busy, n, asks)
+	}
 
 	h.Script(asks, factorytest.Wait())
 	h.Answer(asks, "Blue")
@@ -95,10 +97,13 @@ func TestWhenASlotFreesAnAnsweredResumeGoesBeforeANewClaim(t *testing.T) {
 	}
 
 	h.Continue(busy)
-	h.WaitForState(busy, store.InReview)
-	r.WaitForOutput(busy + " turn ended")
-	r.Poll()
-	h.WaitFor(asks+"'s resume", func() bool { return len(callsFor(h, asks)) == 2 })
+	r.Settle()
+	h.WantState(busy, store.InReview)
+	r.WantOutput(busy + " turn ended")
+	// The turn's end freed the slot, and woke the poll that resumed asks.
+	if n := len(callsFor(h, asks)); n != 2 {
+		t.Fatalf("%s ran %d times after %s's turn ended, want its resume", asks, n, busy)
+	}
 	if s := h.Ticket(waiting).State; s != store.Ready {
 		t.Errorf("%s is %s; the resume should have taken the one slot", waiting, s)
 	}
@@ -114,9 +119,9 @@ func TestAResumeWaitsAPollWhileAnotherProcessHoldsTheSession(t *testing.T) {
 	if s := h.Ticket(id).State; s != store.Answered || len(h.Calls()) != 1 {
 		t.Fatalf("%s is %s after %d runs; want it left Answered while another process holds the session", id, s, len(h.Calls()))
 	}
-	r.WaitForOutput("session " + first.Session + " is held by pid")
+	r.WantOutput("session " + first.Session + " is held by pid")
 
 	release()
 	r.Poll()
-	h.WaitForState(id, store.InReview)
+	h.WantState(id, store.InReview)
 }
