@@ -3,9 +3,8 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { newWorld } from "./api/core/core";
-import { scenario } from "./api/scenario";
 import type { PullRequestState } from "./api/types";
-import { allClear, renderApp } from "./worldTesting";
+import { allClear, renderApp, scenario } from "./worldTesting";
 
 // world is an Accepted Ticket on Spec "Login" under Pull Request, pushed as
 // its branch, with its pull request reported in state. Their IDs are the
@@ -26,9 +25,9 @@ describe("the pull request badge", () => {
   it("links to the pull request with its state on the Ticket page", async () => {
     const { w, ticket } = await world("conflicting");
     await renderApp(w, `/?view=inbox&ticket=${ticket}`);
-    const pane = await screen.findByRole("complementary", { name: "Ticket" });
+    const pane = screen.getByRole("complementary", { name: "Ticket" });
     // In the Accepted panel and in the Spec's Ticket list beside it.
-    const badges = await within(pane).findAllByRole("link", { name: "Pull request 7, conflicting" });
+    const badges = within(pane).getAllByRole("link", { name: "Pull request 7, conflicting" });
     expect(badges).toHaveLength(2);
     for (const badge of badges) {
       expect(badge).toHaveAttribute("href", "https://github.com/acme/web/pull/7");
@@ -39,14 +38,14 @@ describe("the pull request badge", () => {
   it("shows in the Spec's Ticket list", async () => {
     const { w, spec } = await world();
     await renderApp(w, `/?requirement=${spec}`);
-    const row = (await screen.findAllByText("Login form")).map((e) => e.closest("li")).find(Boolean)!;
-    expect(await within(row).findByRole("link", { name: "Pull request 7, open" })).toHaveAttribute("href", "https://github.com/acme/web/pull/7");
+    const row = screen.getAllByText("Login form").map((e) => e.closest("li")).find(Boolean)!;
+    expect(within(row).getByRole("link", { name: "Pull request 7, open" })).toHaveAttribute("href", "https://github.com/acme/web/pull/7");
   });
 
   it("shows on an Inbox row without nesting a link in the row's link", async () => {
     const { w } = await world();
     await renderApp(w, "/?view=inbox");
-    const badge = await screen.findByRole("link", { name: "Pull request 7, open" });
+    const badge = screen.getByRole("link", { name: "Pull request 7, open" });
     expect(badge.tagName).toBe("SPAN");
     expect(badge.closest("a")).not.toBeNull();
     expect(badge).toHaveTextContent("PR #7 open");
@@ -58,7 +57,7 @@ describe("the pull request badge", () => {
     await s.project("acme", "Acme");
     const id = await s.ticket("acme", { title: "Plain", state: "Ready" });
     await renderApp(w, `/?view=inbox&ticket=${id}`);
-    await screen.findByRole("complementary", { name: "Ticket" });
+    expect(screen.getByRole("complementary", { name: "Ticket" })).toBeInTheDocument();
     expect(screen.queryByText(/^PR #/)).toBeNull();
   });
 });
