@@ -88,7 +88,6 @@ func repositoryNames(rs []store.Repository) []string {
 	return names
 }
 
-
 // AddRepositoryInput is the human's add_repository(name, clone_url,
 // base?, local_path?, full?).
 type AddRepositoryInput struct {

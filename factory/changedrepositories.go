@@ -91,7 +91,7 @@ func (f *factory) checkFinish(ctx context.Context, tk core.TicketView) (passed, 
 		WhatBroke: "The finish's record of the Repositories this Ticket changed doesn't match their branches:\n\n- " + strings.Join(problems, "\n- "),
 		Why: "With several Repositories, a finish records every Repository whose branch holds the work, each at its branch's head commit: `branch` and `commit` for the Home Repository, and `repositories` for each other one. " +
 			"The Factory checks the record against every Repository's branch after the finish and before landing, so that no work is dropped and none lands at the wrong commit.",
-		WhatToFix: "Send the Ticket back. Its next Claim finishes again, recording each Repository below that holds work at its branch's head commit.",
+		WhatToFix:       "Send the Ticket back. Its next Claim finishes again, recording each Repository below that holds work at its branch's head commit.",
 		WhereWorkStands: "The Ticket's branches, as the finish check found them:\n\n- " + strings.Join(stands, "\n- "),
 	}
 	if _, err := f.client.FailFinish(ctx, f.project, in); err != nil {

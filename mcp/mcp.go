@@ -120,11 +120,11 @@ var tools = map[string]tool{
 	"finish": {
 		description: "Finish a claimed Ticket into In Review with a summary: what was done, where (branch or commit; with several Repositories, the others' in repositories), and what to check. Returns an acknowledgement with the next step, or the Ticket with full.",
 		schema: object(map[string]any{
-			"ticket":         ref("The Ticket."),
-			"claim_id":       text("The Claim ID claim returned."),
-			"summary":        text("What was done, where, and what the reviewer should check, in Markdown."),
-			"branch":         text("The branch the work is on, if any. Accepting work on a branch moves it to Accepted, to land once merged."),
-			"commit":         text("The branch's head commit, if any."),
+			"ticket":   ref("The Ticket."),
+			"claim_id": text("The Claim ID claim returned."),
+			"summary":  text("What was done, where, and what the reviewer should check, in Markdown."),
+			"branch":   text("The branch the work is on, if any. Accepting work on a branch moves it to Accepted, to land once merged."),
+			"commit":   text("The branch's head commit, if any."),
 			"repositories": map[string]any{
 				"type": "array",
 				"items": object(map[string]any{
