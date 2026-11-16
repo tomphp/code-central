@@ -118,7 +118,7 @@ var tools = map[string]tool{
 		},
 	},
 	"finish": {
-		description: "Finish a claimed Ticket into In Review with a summary: what was done, where (branch or commit), and what to check. Returns an acknowledgement with the next step, or the Ticket with full.",
+		description: "Finish a claimed Ticket into In Review with a summary: what was done, where (branch or commit; with several Repositories, the others' in repositories), and what to check. Returns an acknowledgement with the next step, or the Ticket with full.",
 		schema: object(map[string]any{
 			"ticket":         ref("The Ticket."),
 			"claim_id":       text("The Claim ID claim returned."),

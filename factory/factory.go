@@ -200,7 +200,7 @@ func Run(ctx context.Context, args []string, e Env) int {
 	if o.bypass {
 		f.printf("warning: --bypass-permissions: every session runs in bypassPermissions mode, with no permission checks")
 	}
-	f.prune()
+	f.prune(f.home)
 	ctx, f.stop = context.WithCancel(ctx)
 	defer f.stop()
 	go f.watchSignals(ctx, f.starting("the signal watch"))
@@ -298,10 +298,14 @@ type factory struct {
 	home *repository
 	// repositories is the registry of the Project's Repositories by
 	// Repository Name, home among them, rebuilt from the Project on every
-	// poll; the poll's own. reportedSeveral is whether the last report of
-	// their clones was of several, and reportRepositoriesFailing whether it
-	// failed, so a failure warns once.
+	// poll, and inOrder the same in landing order; the poll writes them
+	// under reposMu, which the Chat loop's reads take (readyRepositories).
+	// reportedSeveral is whether the last report of their clones was of
+	// several, and reportRepositoriesFailing whether it failed, so a
+	// failure warns once.
+	reposMu                   sync.Mutex
 	repositories              map[string]*repository
+	inOrder                   []*repository
 	reportedSeveral           bool
 	reportRepositoriesFailing bool
 	project                   string
@@ -458,7 +462,7 @@ func start(e Env, o options) (*factory, error) {
 	f.project = project
 	// The Home Repository is named by the Project Key.
 	f.home.name = project
-	f.repositories = map[string]*repository{project: f.home}
+	f.repositories, f.inOrder = map[string]*repository{project: f.home}, []*repository{f.home}
 	if f.claude, ok = e.lookPath("claude"); !ok {
 		return nil, errors.New("claude isn't on PATH")
 	}

@@ -366,6 +366,49 @@ func TestNoServedGuideHasAnUnreplacedPlaceholder(t *testing.T) {
 	}
 }
 
+// severalRepositoriesGuides are the guides whose Tickets commit, which
+// say how to finish in a Project with several Repositories.
+var severalRepositoriesGuides = []string{"implementation", "prototype", "map-research"}
+
+func TestASecondRepositoryAddsTheRepositoriesFinishToTheGuidesWhoseTicketsCommit(t *testing.T) {
+	f := newFixture(t)
+	f.project(t, "acme")
+	alone := map[string]string{}
+	for _, stage := range core.GuideNames {
+		alone[stage] = guide(t, f, stage)
+		if strings.Contains(alone[stage], "`repositories`") {
+			t.Errorf("the %s guide mentions `repositories` with the Home Repository alone", stage)
+		}
+	}
+	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	for _, stage := range core.GuideNames {
+		g := guide(t, f, stage)
+		if !slices.Contains(severalRepositoriesGuides, stage) {
+			if g != alone[stage] {
+				t.Errorf("the %s guide changed with a second Repository:\n%s", stage, g)
+			}
+			continue
+		}
+		at := strings.Index(g, "\n\nThis Project has several Repositories")
+		if at < 0 {
+			t.Errorf("the %s guide has no paragraph for several Repositories:\n%s", stage, g)
+			continue
+		}
+		wantAll(t, stage, g, "`finish` with `repositories`", "in its own worktree", "`branch` and `commit` still mean the Home Repository")
+		// One paragraph of Finishing, and the rest is the guide as it was.
+		end := at + 2 + strings.Index(g[at+2:], "\n\n")
+		if g[:at]+g[end:] != alone[stage] {
+			t.Errorf("the %s guide with several Repositories is more than the one paragraph:\n%s", stage, g)
+		}
+		if finishing, redo := strings.Index(g, "## Finishing"), strings.Index(g, "## A redo"); finishing > at || at > redo {
+			t.Errorf("the %s guide's paragraph for several Repositories isn't in Finishing:\n%s", stage, g)
+		}
+		if strings.Contains(g, "<!--") {
+			t.Errorf("the %s guide has a placeholder with several Repositories", stage)
+		}
+	}
+}
+
 func TestClaimBuildsTheGuideFromTheTicketsProject(t *testing.T) {
 	f := newFixture(t)
 	f.project(t, "acme")

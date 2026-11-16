@@ -181,6 +181,11 @@ func runFakeClaude(data string, args []string) int {
 	fmt.Println(`{"type":"system","subtype":"init","session_id":"` + c.Session + `"}`)
 	noted := 0 // the stop signals the run has noted
 	for _, s := range steps {
+		dir, err := stepDir(s, c)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "fake claude:", err)
+			return 70
+		}
 		switch {
 		case s.Exit != nil:
 			return *s.Exit
@@ -191,20 +196,21 @@ func runFakeClaude(data string, args []string) int {
 		case s.Stdout != "":
 			fmt.Println(fill(s.Stdout))
 		case s.Write != nil:
-			if err := os.WriteFile(s.Write.Name, []byte(fill(s.Write.Content)), 0o644); err != nil {
+			if err := os.WriteFile(filepath.Join(dir, s.Write.Name), []byte(fill(s.Write.Content)), 0o644); err != nil {
 				fmt.Fprintln(os.Stderr, "fake claude:", err)
 				return 70
 			}
 		case s.Git != nil:
 			filled := fillAll(s.Git)
 			cmd := exec.Command("git", filled...)
+			cmd.Dir = dir
 			cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 			if err := cmd.Run(); err != nil {
 				fmt.Fprintf(os.Stderr, "fake claude: git %s: %v\n", strings.Join(filled, " "), err)
 				return 70
 			}
 		case s.Need != "":
-			if _, err := os.Stat(s.Need); err != nil {
+			if _, err := os.Stat(filepath.Join(dir, s.Need)); err != nil {
 				fmt.Fprintln(os.Stderr, "fake claude: need", s.Need+":", err)
 				return 70
 			}
@@ -218,6 +224,21 @@ func runFakeClaude(data string, args []string) int {
 		}
 	}
 	return 0
+}
+
+// stepDir is where s runs in the run c: the worktree of the Repository
+// s names, the one of c's --add-dir folders at <Name>.worktrees/<ticket
+// or chat>, else "", the run's working directory.
+func stepDir(s Step, c Call) (string, error) {
+	if s.In == "" {
+		return "", nil
+	}
+	for _, d := range c.Values("--add-dir") {
+		if filepath.Base(filepath.Dir(d)) == s.In+".worktrees" {
+			return d, nil
+		}
+	}
+	return "", fmt.Errorf("no --add-dir is Repository %s's worktree: %q", s.In, c.Values("--add-dir"))
 }
 
 // wait is the fake's Wait step: it returns when the test continues the

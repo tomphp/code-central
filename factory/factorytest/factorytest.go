@@ -1059,6 +1059,13 @@ type Repository struct {
 	Path string
 }
 
+// Worktree is where the Factory keeps ticket's worktree in r, beside its
+// clone, at <Path's parent>/<Name>.worktrees/<ticket>; Worktree("chat")
+// is r's Chat worktree.
+func (r *Repository) Worktree(ticket string) string {
+	return filepath.Join(filepath.Dir(r.Path), r.Name+".worktrees", ticket)
+}
+
 // AddRepository makes a bare repository named name, holding one commit
 // on main, and adds it to the Project through add_repository, with no
 // local path, so the Factory clones it beside the Home Repository.

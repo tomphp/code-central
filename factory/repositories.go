@@ -34,11 +34,48 @@ type repository struct {
 	// cloneURL is the Clone URL the Project lists; empty for the Home
 	// Repository.
 	cloneURL string
+	// base is the Base the Project lists; empty for the Home Repository,
+	// whose Base is the Project's (baseOf).
+	base string
 	// problem says why it is Repository missing; empty while its clone is
 	// ready.
 	problem string
 	// cloned is whether this poll made its clone.
 	cloned bool
+}
+
+// baseOf is r's Base: the Project's for the Home Repository.
+func (f *factory) baseOf(r *repository) string {
+	if r.home {
+		return f.baseBranch()
+	}
+	return r.base
+}
+
+// in names r at the end of a line about something in it: " in
+// Repository <name>", or nothing for the Home Repository, as the lines
+// of a Project with the Home Repository alone have always said.
+func (r *repository) in() string {
+	if r.home {
+		return ""
+	}
+	return " in Repository " + r.name
+}
+
+// readyRepositories is the Project's Repositories with a clone, in
+// landing order, as the last poll found them: the Home Repository alone
+// before the first. The Chat loop reads them too, from its own
+// goroutine.
+func (f *factory) readyRepositories() []*repository {
+	f.reposMu.Lock()
+	defer f.reposMu.Unlock()
+	var out []*repository
+	for _, r := range f.inOrder {
+		if r.problem == "" {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // newRepository is the Repository name whose clone is at dir.
@@ -53,6 +90,7 @@ func (f *factory) newRepository(name, dir string) *repository {
 // has cleared any from when it had more.
 func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 	next := map[string]*repository{}
+	var inOrder []*repository
 	var report []core.RepositoryReport
 	for _, v := range p.Repositories {
 		r := f.home
@@ -62,16 +100,24 @@ func (f *factory) syncRepositories(ctx context.Context, p core.ProjectView) {
 				// A stop cut the clone off: it isn't missing.
 				return
 			}
-			f.sayClone(r, f.repositories[v.Name])
+			was := f.repositories[v.Name]
+			f.sayClone(r, was)
+			if r.problem == "" && (was == nil || was.problem != "") {
+				// As the Home Repository's are at start.
+				f.prune(r)
+			}
 		}
 		next[v.Name] = r
+		inOrder = append(inOrder, r)
 		state := core.CloneReady
 		if r.problem != "" {
 			state = core.CloneMissing
 		}
 		report = append(report, core.RepositoryReport{Name: v.Name, Path: r.dir, State: state, Problem: r.problem})
 	}
-	f.repositories = next
+	f.reposMu.Lock()
+	f.repositories, f.inOrder = next, inOrder
+	f.reposMu.Unlock()
 	// Back to the Home Repository alone, one more report clears the last.
 	several := len(p.Repositories) > 1
 	if !several && !f.reportedSeveral {
@@ -98,7 +144,7 @@ func (f *factory) cloneOf(ctx context.Context, v core.RepositoryView, remote str
 		dir = filepath.Join(filepath.Dir(f.home.dir), v.Name)
 	}
 	r := f.newRepository(v.Name, dir)
-	r.cloneURL = v.CloneURL
+	r.cloneURL, r.base = v.CloneURL, v.Base
 	missing := func(format string, args ...any) *repository {
 		r.git, r.problem = nil, fmt.Sprintf(format, args...)
 		return r

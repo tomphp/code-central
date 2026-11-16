@@ -98,16 +98,35 @@ const sessionLogs = "Claude Code keeps each session's log in its projects folder
 // implementation Ticket: the branch and its head commit.
 const conflictFinish = "Conflict Claim: the first prompt holds the work. When it is done, `finish` with `branch` (the Ticket's ID) and `commit` (the branch's head commit), and a summary of how each conflict was resolved and the test result. The Ticket goes to In Review; stop working it."
 
-// conflictFiles is the files merging the base's tip into the Ticket's
-// existing branch conflicts in, for an implementation Ticket; none for
-// any other, for a branch not yet cut (but a Spec merge Ticket's, checked
-// at the Spec Branch), or when the merge is clean.
-func (f *factory) conflictFiles(stage string, tk core.TicketView) []string {
+// conflict is the files merging a Repository's base into the Ticket's
+// branch in its worktree w conflicts in.
+type conflict struct {
+	w     placed
+	files []string
+}
+
+// conflictsIn is the conflicts of tk's branch with the base in each
+// Repository of ws that has them (conflictFiles).
+func (f *factory) conflictsIn(ws []placed, stage string, tk core.TicketView) []conflict {
+	var out []conflict
+	for _, w := range ws {
+		if files := f.conflictFiles(w.r, stage, tk); len(files) > 0 {
+			out = append(out, conflict{w, files})
+		}
+	}
+	return out
+}
+
+// conflictFiles is the files merging r's base's tip into the Ticket's
+// existing branch in r conflicts in, for an implementation Ticket; none
+// for any other, for a branch not yet cut (but a Spec merge Ticket's,
+// checked at the Spec Branch), or when the merge is clean.
+func (f *factory) conflictFiles(r *repository, stage string, tk core.TicketView) []string {
 	branch := workBranch(stage, tk.ID)
 	if stage != core.ImplementationStage || branch == "" {
 		return nil
 	}
-	head, err := f.home.git.commit("refs/heads/" + branch)
+	head, err := r.git.commit("refs/heads/" + branch)
 	if err != nil {
 		// A Spec merge Ticket, marked or one opened before the mark, has
 		// no branch yet: it is cut from the Spec Branch, which is what
@@ -115,17 +134,18 @@ func (f *factory) conflictFiles(stage string, tk core.TicketView) []string {
 		if !tk.SpecLanded || tk.Title != core.SpecMergeTitle(tk.Spec.ID) {
 			return nil
 		}
-		if head, err = f.specBranchTip(tk.Spec.ID); err != nil {
+		if head, err = f.specBranchTip(r, tk.Spec.ID); err != nil {
 			return nil
 		}
 	}
-	baseTip, err := f.home.git.commit("refs/heads/" + f.baseBranch())
+	base := f.baseOf(r)
+	baseTip, err := r.git.commit("refs/heads/" + base)
 	if err != nil {
 		return nil
 	}
-	_, conflicts, err := f.home.git.mergeTree(baseTip, head)
+	_, conflicts, err := r.git.mergeTree(baseTip, head)
 	if err != nil {
-		f.printf("warning: %s: can't check the branch against %s: %v", tk.ID, f.baseBranch(), err)
+		f.printf("warning: %s: can't check the branch against %s%s: %v", tk.ID, base, r.in(), err)
 		return nil
 	}
 	return conflicts
@@ -159,6 +179,45 @@ func firstPrompt(c claim, stage, base string, conflicts []string) string {
 	return fmt.Sprintf("Work Ticket %s, as the Factory's instructions and its Stage Guide in your system prompt say.", c.Ticket)
 }
 
+// severalFirstPrompt is firstPrompt for a Claim with its worktrees ws in
+// several Repositories (ADR 0048): a conflict Claim's names the files
+// conflicting in each Repository, and either ends with the Repositories
+// list, where the session finds each one.
+func severalFirstPrompt(c claim, stage string, ws []placed, conflicts []conflict) string {
+	p := firstPrompt(c, stage, "", nil)
+	if len(conflicts) > 0 {
+		var b strings.Builder
+		fmt.Fprintf(&b, "Ticket %s's branch, %s, conflicts with the base in these Repositories. In each one's worktree, merge its base into the branch and resolve the conflicts in these files:\n", c.Ticket, c.Ticket)
+		for _, cf := range conflicts {
+			fmt.Fprintf(&b, "\n%s, base %s:\n", cf.w.r.name, cf.w.base)
+			for _, f := range cf.files {
+				fmt.Fprintf(&b, "- %s\n", f)
+			}
+		}
+		b.WriteString("\nResolve them keeping the intent of both sides. Run `make typecheck` and the tests the resolution touches. Commit on the branch in each worktree, with no push and no PR, and finish the Ticket.")
+		p = b.String()
+	}
+	return p + "\n\n" + repositoriesList(ws)
+}
+
+// repositoriesList is the Repositories list that ends a first prompt in
+// several Repositories: one line for each, with its worktree, Base and
+// the branch to commit on, or that it is detached for a Stage.
+func repositoriesList(ws []placed) string {
+	var lines []string
+	for _, w := range ws {
+		name, on := w.r.name, "branch "+w.branch
+		if w.r.home {
+			name += ", the Home Repository"
+		}
+		if w.branch == "" {
+			on = "detached at its tip"
+		}
+		lines = append(lines, fmt.Sprintf("- %s: worktree %s, Base %s, %s", name, w.path, w.base, on))
+	}
+	return "Repositories:\n" + strings.Join(lines, "\n")
+}
+
 // systemPrompt is what every turn of a Claim adds to claude's system
 // prompt: the Ticket and Claim, how the Factory runs it in its worktree
 // wt, and the guide from the claim. stage is the guide's name. Claude Code
@@ -169,6 +228,25 @@ func firstPrompt(c claim, stage, base string, conflicts []string) string {
 // For a conflict Claim (conflicts non-empty) the Stage Guide is replaced
 // by a short finish instruction, since the first prompt holds the work.
 func systemPrompt(c claim, stage, wt string, g core.StageGuideView, conflicts []string) string {
+	return claimIntro(c, stage, wt) + guideOrFinish(g, len(conflicts) > 0)
+}
+
+// severalSystemPrompt is systemPrompt for a Claim with its worktrees ws
+// in several Repositories (ADR 0048): it adds where they are and how to
+// commit in them and finish, before the guide.
+func severalSystemPrompt(c claim, stage string, ws []placed, g core.StageGuideView, conflicted bool) string {
+	var several string
+	if branch := workBranch(stage, c.Ticket); branch != "" {
+		several = fmt.Sprintf("This Project has several Repositories, and this Ticket has a worktree in each on branch %s, listed at the end of your first prompt; this session starts in the Home Repository's. Commit each Repository's changes in its own worktree, on branch %s, and finish with `repositories`: one entry for each Repository you committed in, with its branch and head commit.", branch, branch)
+	} else {
+		several = "This Project has several Repositories, and this Ticket has a detached, read-only worktree in each at its Base's tip, listed at the end of your first prompt; this session starts in the Home Repository's."
+	}
+	return claimIntro(c, stage, homeOf(ws).path) + "\n\n" + several + guideOrFinish(g, conflicted)
+}
+
+// claimIntro starts a Claim's system prompt: its Ticket and Claim, and
+// how the Factory runs it in its worktree wt.
+func claimIntro(c claim, stage, wt string) string {
 	var b strings.Builder
 	sk := stageSkills[stage]
 	fmt.Fprintf(&b, "Ticket: %s\nClaim: %s\n\n", c.Ticket, c.ClaimID)
@@ -193,10 +271,14 @@ func systemPrompt(c claim, stage, wt string, g core.StageGuideView, conflicts []
 			b.WriteString("\n\n" + sessionLogs)
 		}
 	}
-	if len(conflicts) > 0 {
-		b.WriteString("\n\n" + conflictFinish)
-		return b.String()
-	}
-	fmt.Fprintf(&b, "\n\nThe Stage Guide for %s follows: what this Ticket must produce and how to finish it.\n\n%s", g.Stage, g.Guide)
 	return b.String()
+}
+
+// guideOrFinish ends a Claim's system prompt: the Stage Guide g, or for a
+// conflict Claim a short finish instruction in its place.
+func guideOrFinish(g core.StageGuideView, conflicted bool) string {
+	if conflicted {
+		return "\n\n" + conflictFinish
+	}
+	return fmt.Sprintf("\n\nThe Stage Guide for %s follows: what this Ticket must produce and how to finish it.\n\n%s", g.Stage, g.Guide)
 }

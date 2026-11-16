@@ -10,7 +10,7 @@ package factory
 import (
 	"context"
 	"fmt"
-	"path/filepath"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	// chatWorktreeName is the Chat worktree's folder, beside the Ticket
-	// worktrees: a Ticket ID is never chat.
+	// chatWorktreeName is the folder of each Repository's Chat worktree,
+	// beside its Ticket worktrees: a Ticket ID is never chat.
 	chatWorktreeName = "chat"
 	// kindChat is the kind a Chat turn's model responses are posted
 	// under in Usage.
@@ -32,8 +32,6 @@ const (
 	// Ticket ID names a Claim's turn.
 	chatTurnKey = "chat"
 )
-
-func (f *factory) chatWorktree() string { return filepath.Join(f.home.worktrees, chatWorktreeName) }
 
 // chatStop stops a running Chat turn: cancel ends its context, and work
 // hands its Turn runner the stop's busy work.
@@ -126,27 +124,51 @@ func (f *factory) chatLoop(ctx context.Context, s *stint) {
 // its items, then its outcome. work is the turn's line of work, busy
 // starting it; stopWork hands its Turn runner a stop's busy work.
 func (f *factory) runChatTurn(ctx context.Context, t core.ChatTurn, work *stint, stopWork handoff) {
-	wt := f.chatWorktree()
+	ws := f.chatWorktrees(t.First)
 	session := t.SessionID
 	if t.First {
 		session = newSessionID()
 	}
-	p := f.newChatPoster(t, session, wt)
+	resume := chatResumeCommand(homeOf(ws).path, session, addDirs(ws))
+	p := f.newChatPoster(t, session, resume)
 	p.start()
-	outcome, msg := f.answerChat(ctx, t, session, wt, p, work, stopWork)
+	outcome, msg := f.answerChat(ctx, t, session, ws, resume, p, work, stopWork)
 	if outcome == core.ChatFailed {
 		f.printf("chat: the reply failed: %s", firstLine(msg))
 	}
 	p.end(outcome, msg)
 }
 
-// answerChat runs t's claude turn in the Chat worktree wt, as session,
-// and says how the reply ended, with the error text of a failed one. A
-// first turn moves the Chat worktree to the base's tip first.
-func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session, wt string, p *chatPoster, work *stint, stopWork handoff) (core.ChatOutcome, string) {
+// chatWorktrees is the Chat worktree of every Repository with a clone, for
+// a Conversation's first turn, or for a later one those already there: a
+// Repository added mid-Conversation joins the next.
+func (f *factory) chatWorktrees(first bool) []placed {
+	ws := f.placeWorktrees(chatWorktreeName, "")
+	if first {
+		return ws
+	}
+	var there []placed
+	for _, w := range ws {
+		if _, err := os.Stat(w.path); w.r.home || err == nil {
+			there = append(there, w)
+		}
+	}
+	return there
+}
+
+// answerChat runs t's claude turn in the Chat worktrees ws, as session,
+// from the Home Repository's, and says how the reply ended, with the
+// error text of a failed one. A first turn moves each Chat worktree to
+// its base's tip first. resume is the Conversation's Resume Command.
+func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session string, ws []placed, resume string, p *chatPoster, work *stint, stopWork handoff) (core.ChatOutcome, string) {
 	if t.First {
-		if err := f.chatWorktreeAtBase(wt); err != nil {
-			return core.ChatFailed, err.Error()
+		for _, w := range ws {
+			if err := f.chatWorktreeAtBase(w.r, w.path); err != nil {
+				if len(ws) > 1 {
+					return core.ChatFailed, inRepository(w.r.name, err.Error())
+				}
+				return core.ChatFailed, err.Error()
+			}
 		}
 	}
 	// A turn that waited on the one before it starts nothing once the
@@ -154,15 +176,17 @@ func (f *factory) answerChat(ctx context.Context, t core.ChatTurn, session, wt s
 	if ctx.Err() != nil {
 		return core.ChatStopped, ""
 	}
+	wt := homeOf(ws).path
 	if t.First {
-		f.printf("chat: starting a Conversation in %s; resume: %s", wt, chatResumeCommand(wt, session))
+		f.printf("chat: starting a Conversation in %s; resume: %s", wt, resume)
 	}
 	out := f.runner.run(ctx, turnInput{
 		Dir:          wt,
+		AddDirs:      addDirs(ws),
 		Session:      session,
 		Resume:       !t.First,
 		Choice:       turnChoice{model: t.Model, effort: t.Effort},
-		SystemPrompt: chatPrompt(f.project, wt),
+		SystemPrompt: chatPrompt(f.project, wt) + chatRepositories(ws),
 		Prompt:       t.Text,
 		UsageKind:    kindChat,
 		OnEvent:      p.add,
@@ -222,11 +246,11 @@ func denialsItem(ds []denial, now time.Time) core.SessionEvent {
 	return core.SessionEvent{Time: now, Kind: core.EventPermissionDenials, Text: "Auto mode denied these calls:\n" + denialList(ds)}
 }
 
-// chatWorktreeAtBase makes the Chat worktree wt detached at the base's
+// chatWorktreeAtBase makes r's Chat worktree wt detached at its base's
 // tip for a Conversation's first turn. Anything it can't move is left as
 // it was, with an error saying what is there and how to clear it.
-func (f *factory) chatWorktreeAtBase(wt string) error {
-	left, err := f.detachAtBase(wt)
+func (f *factory) chatWorktreeAtBase(r *repository, wt string) error {
+	left, err := f.detachAtBase(r, wt)
 	switch {
 	case err != nil:
 		return fmt.Errorf("The Factory couldn't set up the Chat worktree at %s: %v", wt, err)
@@ -237,13 +261,32 @@ func (f *factory) chatWorktreeAtBase(wt string) error {
 	case left.branch != "":
 		return fmt.Errorf("The Chat worktree at %s is on branch %s, not detached, so the Factory can't use it. Detach it with `git -C %s switch --detach`, or remove it with `git worktree remove %s`, then send the message again.", wt, left.branch, wt, wt)
 	}
-	return fmt.Errorf("The Chat worktree at %s has uncommitted changes, so the Factory can't move it to %s's tip for a new Conversation. Changed files:\n\n%s\n\nA Chat writes nothing to the repository. Keep anything worth keeping elsewhere, then clean the worktree with `git -C %s reset --hard` and `git -C %s clean -fd`, and send the message again.", wt, f.baseBranch(), left.dirty, wt, wt)
+	return fmt.Errorf("The Chat worktree at %s has uncommitted changes, so the Factory can't move it to %s's tip for a new Conversation. Changed files:\n\n%s\n\nA Chat writes nothing to the repository. Keep anything worth keeping elsewhere, then clean the worktree with `git -C %s reset --hard` and `git -C %s clean -fd`, and send the message again.", wt, f.baseOf(r), left.dirty, wt, wt)
 }
 
 // chatResumeCommand brings a Conversation's session back from anywhere,
-// so it changes into the Chat worktree first.
-func chatResumeCommand(wt, session string) string {
-	return "cd " + wt + " && claude --resume " + session
+// so it changes into the Chat worktree wt first, and adds the other
+// Repositories' Chat worktrees, dirs, as its turns do.
+func chatResumeCommand(wt, session string, dirs []string) string {
+	return "cd " + wt + " && claude --resume " + session + addDirFlags(dirs)
+}
+
+// chatRepositories ends a Chat turn's system prompt in several
+// Repositories, ws, saying where each one's Chat worktree is; it is
+// empty with one.
+func chatRepositories(ws []placed) string {
+	if len(ws) < 2 {
+		return ""
+	}
+	var each []string
+	for _, w := range ws {
+		name := w.r.name
+		if w.r.home {
+			name += ", the Home Repository,"
+		}
+		each = append(each, fmt.Sprintf("%s at %s", name, w.path))
+	}
+	return " This Project has several Repositories, each read-only too, with a Chat worktree at its Base's tip: " + strings.Join(each, "; ") + "."
 }
 
 // chatPrompt is what every Chat turn adds to claude's system prompt, for
@@ -283,11 +326,11 @@ type chatPoster struct {
 	done  chan struct{}
 }
 
-func (f *factory) newChatPoster(t core.ChatTurn, session, wt string) *chatPoster {
+func (f *factory) newChatPoster(t core.ChatTurn, session, resume string) *chatPoster {
 	return &chatPoster{
 		f:       f,
 		base:    core.PostChatEventsInput{Conversation: t.Conversation, Factory: factoryName, Host: f.host},
-		session: session, sessionUnposted: t.First, resumeCommand: chatResumeCommand(wt, session),
+		session: session, sessionUnposted: t.First, resumeCommand: resume,
 		ended: make(chan chatEnd), done: make(chan struct{}),
 	}
 }
