@@ -21,8 +21,8 @@ func TestUnderMergeAndPushTheBaseIsPushedBeforeTheTicketLands(t *testing.T) {
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	tk := h.WaitForState(id, store.Done)
-	r.WaitForOutput(id + ": pushed main to origin")
+	tk := h.WantState(id, store.Done)
+	r.WantOutput(id + ": pushed main to origin")
 	merge := h.Git("rev-parse", "main")
 	if got := remote.Git("rev-parse", "main"); got != merge {
 		t.Errorf("the remote's main is at %q, want the merge %s", got, merge)
@@ -52,8 +52,8 @@ func TestAPushRemoteThatGoesMissingHoldsLandingButNotClaiming(t *testing.T) {
 	ready := h.ReadyTicket("Still claimed")
 	h.Script(ready, factorytest.Wait())
 	r.Poll()
-	r.WaitForOutput(`warning: nothing lands until this is fixed: Push names the remote "nowhere", which this repository doesn't have`)
-	h.WaitForState(ready, store.InProgress)
+	r.WantOutput(`warning: nothing lands until this is fixed: Push names the remote "nowhere", which this repository doesn't have`)
+	h.WantState(ready, store.InProgress)
 }
 
 func TestUnderBranchAndPushAnAcceptedTicketsBranchReachesABareRemote(t *testing.T) {
@@ -64,7 +64,7 @@ func TestUnderBranchAndPushAnAcceptedTicketsBranchReachesABareRemote(t *testing.
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	r.WaitForOutput(id + ": pushed " + id + " to origin")
+	r.WantOutput(id + ": pushed " + id + " to origin")
 	if got := remote.Git("rev-parse", "refs/heads/"+id); got != commit {
 		t.Errorf("the remote's %s is at %q, want the finish commit %s", id, got, commit)
 	}

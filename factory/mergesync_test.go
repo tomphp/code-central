@@ -28,8 +28,8 @@ func TestUnderMergeAndPushARemoteThatIsAheadIsFastForwardedBeforeTheTicketLands(
 	id, commit := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	r.WaitForOutput("main: fast-forwarded to origin/main")
-	tk := h.WaitForState(id, store.Done)
+	r.WantOutput("main: fast-forwarded to origin/main")
+	tk := h.WantState(id, store.Done)
 	merge := h.Git("rev-parse", "main")
 	if got := h.Git("log", "-1", "--format=%P", merge); got != theirs+" "+commit {
 		t.Errorf("main's tip has parents %q, want the remote's %s then %s", got, theirs, commit)
@@ -53,7 +53,7 @@ func TestUnderMergeAndPushWithCITrackingARemoteThatIsAheadIsFastForwarded(t *tes
 	ready := h.ReadyTicket("Starts from the remote's base")
 
 	h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WantCalls(1)
 	if got := h.Git("rev-parse", "main"); got != theirs {
 		t.Errorf("the local base is at %s, want it fast-forwarded to %s", got, theirs)
 	}
@@ -71,12 +71,12 @@ func TestUnderMergeAndPushANewBranchIsCutFromTheFastForwardedBase(t *testing.T) 
 	ready := h.ReadyTicket("Starts from the remote's base")
 
 	h.Start()
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	calls := h.WantCalls(1)
 	if got := h.Git("rev-parse", "main"); got != theirs {
 		t.Errorf("the local base is at %s, want it fast-forwarded to %s", got, theirs)
 	}
-	if h.Calls()[0].Ticket != ready {
-		t.Fatalf("calls %+v, want %s claimed", h.Calls(), ready)
+	if calls[0].Ticket != ready {
+		t.Fatalf("calls %+v, want %s claimed", calls, ready)
 	}
 	h.Git("merge-base", "--is-ancestor", theirs, ready)
 }
@@ -91,7 +91,7 @@ func TestUnderMergeAndPushALocalBaseAheadOfTheRemoteIsCurrent(t *testing.T) {
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	r := h.Start()
-	h.WaitForState(id, store.Done)
+	h.WantState(id, store.Done)
 	if _, ok := baseDivergedItem(t, h); ok {
 		t.Error("an unpushed local commit showed Base diverged")
 	}
@@ -114,8 +114,8 @@ func TestUnderMergeAndPushAConflictingMoveLeavesTheBaseAsItWasAndStopsLandingAnd
 	ready := h.ReadyTicket("Waits for the base")
 
 	r := h.Start()
-	r.WaitForOutput("warning: can't move main onto origin/main: " + mine[:12] + " conflicts in shared.txt")
-	r.WaitForOutput("has diverged from the remote's")
+	r.WantOutput("warning: can't move main onto origin/main: " + mine[:12] + " conflicts in shared.txt")
+	r.WantOutput("has diverged from the remote's")
 	if got := h.Git("rev-parse", "main"); got != mine {
 		t.Errorf("main moved to %s, want it left at %s", got, mine)
 	}
@@ -130,16 +130,21 @@ func TestUnderMergeAndPushAConflictingMoveLeavesTheBaseAsItWasAndStopsLandingAnd
 	}
 	local := h.Git("rev-parse", "main")
 	r.Poll()
-	h.WaitFor("Base diverged shows in Needs Me", func() bool {
-		row, ok := baseDivergedItem(t, h)
-		return ok && row.BaseDiverged.Local == local && row.BaseDiverged.Remote == theirs
-	})
+	row, ok := baseDivergedItem(t, h)
+	if !ok {
+		t.Fatal("Base diverged doesn't show in Needs Me")
+	}
+	if got := row.BaseDiverged; got.Local != local || got.Remote != theirs {
+		t.Errorf("Base diverged shows the local base at %s and the remote's at %s, want %s and %s", got.Local, got.Remote, local, theirs)
+	}
 
 	h.Git("reset", "-q", "--hard", "origin/main")
 	r.Poll()
-	h.WaitForState(id, store.Done)
-	h.WaitFor("Base diverged clears", func() bool { _, ok := baseDivergedItem(t, h); return !ok })
-	h.WaitFor("the turn", func() bool { return len(h.Calls()) == 1 })
+	h.WantState(id, store.Done)
+	if _, ok := baseDivergedItem(t, h); ok {
+		t.Error("Base diverged still shows in Needs Me after the base was reset to the remote's")
+	}
+	h.WantCalls(1)
 }
 
 func TestUnderMergeAndPushAFailedFetchOnlyWarns(t *testing.T) {
@@ -151,7 +156,7 @@ func TestUnderMergeAndPushAFailedFetchOnlyWarns(t *testing.T) {
 	remote.Break()
 
 	r := h.Start()
-	r.WaitForOutput("warning: can't fetch origin")
+	r.WantOutput("warning: can't fetch origin")
 	if _, ok := baseDivergedItem(t, h); ok {
 		t.Error("a failed fetch showed Base diverged")
 	}
@@ -161,7 +166,7 @@ func TestUnderMergeAndPushAFailedFetchOnlyWarns(t *testing.T) {
 
 	remote.Restore()
 	r.Poll()
-	h.WaitForState(id, store.Done)
+	h.WantState(id, store.Done)
 }
 
 func TestUnderMergeAndPushUncommittedChangesInTheWayMakeThePollWait(t *testing.T) {
@@ -179,7 +184,7 @@ func TestUnderMergeAndPushUncommittedChangesInTheWayMakeThePollWait(t *testing.T
 	before := h.Git("rev-parse", "main")
 
 	r := h.Start()
-	r.WaitForOutput("warning: can't fast-forward main to origin yet")
+	r.WantOutput("warning: can't fast-forward main to origin yet")
 	if tk := h.Ticket(id); tk.State != store.Accepted {
 		t.Errorf("%s is %s, want it held Accepted", id, tk.State)
 	}
@@ -194,7 +199,7 @@ func TestUnderMergeAndPushUncommittedChangesInTheWayMakeThePollWait(t *testing.T
 		t.Fatal(err)
 	}
 	r.Poll()
-	h.WaitForState(id, store.Done)
+	h.WantState(id, store.Done)
 	h.Git("merge-base", "--is-ancestor", theirs, "main")
 }
 
@@ -213,7 +218,7 @@ func TestUnderMergeWithoutPushTheFactoryNeverFetches(t *testing.T) {
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 
 	h.Start()
-	h.WaitForState(id, store.Done)
+	h.WantState(id, store.Done)
 	if got := h.Git("branch", "-r"); got != "" {
 		t.Errorf("remote-tracking branches %q, want none: nothing was fetched", got)
 	}
