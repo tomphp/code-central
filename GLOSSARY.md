@@ -582,7 +582,7 @@ The Questions an agent posts together on a Ticket, all of which must be answered
 _Avoid_: Batch
 
 **Failure Report**:
-An agent's permanent record of what broke on a Ticket, why, and what to fix, posted when it has no way forward.
+An agent's permanent record of what broke on a Ticket, why, and what to fix, posted when it has no way forward. The Factory posts one too, on the finishing Claim, when a finish leaves out a Changed Repository or records a commit that isn't its branch's head.
 _Avoid_: Error, incident
 
 **Label**:

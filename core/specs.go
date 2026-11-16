@@ -35,7 +35,11 @@ type SpecDetail struct {
 	Outline      []Heading    `json:"outline,omitzero"`
 	StateSummary StateSummary `json:"state_summary"`
 	Finished     bool         `json:"finished"`
-	Tickets      []TicketRow  `json:"tickets,omitzero"`
+	// Repositories are the Spec's Changed Repositories, the union of its
+	// Tickets', by Name in landing order; left out while the Project has
+	// the Home Repository alone.
+	Repositories []string    `json:"repositories,omitempty"`
+	Tickets      []TicketRow `json:"tickets,omitzero"`
 	// Requirement is set only when the Spec is a Requirement.
 	Requirement *RequirementView `json:"requirement,omitempty"`
 	// LandPerSpec is the Spec's Land per Spec status, left out unless it is
@@ -124,6 +128,9 @@ func (c *Core) GetSpec(_ context.Context, key string, in GetSpecInput) (SpecDeta
 			Created: sv.Created, Updated: sv.Updated, Link: sv.Link,
 		}
 		v.StateSummary, v.Finished = summarise(tickets)
+		if severalRepositories(p) {
+			v.Repositories = specRepositories(p, tickets)
+		}
 		// The evaluation is worked out only if a block below reads it.
 		e := c.evaluate(r, p)
 		v.Requirement = requirementView(e, s, tickets)

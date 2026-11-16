@@ -125,6 +125,15 @@ var tools = map[string]tool{
 			"summary":        text("What was done, where, and what the reviewer should check, in Markdown."),
 			"branch":         text("The branch the work is on, if any. Accepting work on a branch moves it to Accepted, to land once merged."),
 			"commit":         text("The branch's head commit, if any."),
+			"repositories": map[string]any{
+				"type": "array",
+				"items": object(map[string]any{
+					"name":   text("The Repository Name."),
+					"branch": text("The branch the work is on there."),
+					"commit": text("The branch's head commit there."),
+				}, "name", "branch", "commit"),
+				"description": "With several Repositories: each other Repository you committed in. branch and commit stay the Home Repository's.",
+			},
 			"recommendation": map[string]any{"type": "string", "enum": []string{"implement", "split"}, "description": "Required on a spec Stage only: implement or split."},
 			"full":           flag("Return the whole Ticket instead of the acknowledgement."),
 		}, "ticket", "claim_id", "summary"),

@@ -88,14 +88,6 @@ func repositoryNames(rs []store.Repository) []string {
 	return names
 }
 
-// changedRepositories is the Names of t's Changed Repositories. A finish
-// recorded before Repositories existed reads as the Home Repository's.
-func changedRepositories(home string, t store.Ticket) []string {
-	if t.Branch != "" || t.Commit != "" {
-		return []string{home}
-	}
-	return nil
-}
 
 // AddRepositoryInput is the human's add_repository(name, clone_url,
 // base?, local_path?, full?).

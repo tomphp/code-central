@@ -16,7 +16,9 @@ import (
 
 // Step is one thing the fake claude does. In CLI and Git args, Write's
 // content and Stdout, {{ticket}}, {{claim}} and {{session}} stand for the
-// run's Ticket, Claim and session ID.
+// run's Ticket, Claim and session ID, {{head}} for the head commit of the
+// worktree the run started in, and {{head:<Repository Name>}} for that of
+// the Repository's worktree, as it is when the step runs.
 type Step struct {
 	// CLI runs the code-central CLI with these args in the worktree.
 	CLI []string `json:"cli,omitempty"`
@@ -155,6 +157,23 @@ func CommitIn(repository, file, content string) []Step {
 // Finish finishes the run's Ticket under its Claim.
 func Finish(summary string) Step {
 	return CLI("finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", summary)
+}
+
+// FinishIn finishes the run's Ticket under its Claim with repositories:
+// each Repository named, one of the run's --add-dir worktrees, on the
+// Ticket's branch at its worktree's head. home also records the Home
+// Repository's branch and head, as branch and commit.
+func FinishIn(summary string, home bool, repositories ...string) Step {
+	var list []core.RepositoryWork
+	for _, r := range repositories {
+		list = append(list, core.RepositoryWork{Name: r, Branch: "{{ticket}}", Commit: "{{head:" + r + "}}"})
+	}
+	b, _ := json.Marshal(list)
+	args := []string{"finish", "{{ticket}}", "--claim", "{{claim}}", "--summary", summary, "--repositories", string(b)}
+	if home {
+		args = append(args, "--branch", "{{ticket}}", "--commit", "{{head}}")
+	}
+	return CLI(args...)
 }
 
 // FinishSpec finishes the run's spec Stage under its Claim with its Spec

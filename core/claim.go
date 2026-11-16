@@ -38,11 +38,17 @@ type FinishInput struct {
 	Ticket  Ref    `json:"ticket"`
 	ClaimID string `json:"claim_id"`
 	Summary string `json:"summary"`
-	// Branch and Commit name the work's branch and its head commit. Both
-	// are optional and free-form; one left out keeps the stored value. A
-	// Ticket with a branch is Accepted, not Done, when the human accepts it.
+	// Branch and Commit name the work's branch and its head commit in the
+	// Home Repository. Both are optional and free-form; one left out keeps
+	// the stored value. A Ticket with a branch is Accepted, not Done, when
+	// the human accepts it.
 	Branch string `json:"branch,omitempty"`
 	Commit string `json:"commit,omitempty"`
+	// Repositories are the branch and head commit in each other
+	// Repository the work changed (Spec code-central-848); the Home
+	// Repository may be given here instead of in Branch and Commit, not
+	// in both. The finish replaces the Ticket's Changed Repositories.
+	Repositories []RepositoryWork `json:"repositories,omitempty"`
 	// Recommendation is the Spec recommendation, implement or split:
 	// required on a spec Stage and refused on any other Ticket. It
 	// replaces the one an earlier finish gave.
@@ -218,11 +224,9 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 			return invalid("recommendation", "only a spec Stage takes a recommendation: finish again without it")
 		}
 		t.Recommendation = rec
-		if b := strings.TrimSpace(in.Branch); b != "" {
-			t.Branch = b
-		}
-		if cm := strings.TrimSpace(in.Commit); cm != "" {
-			t.Commit = cm
+		p, _ := w.Project(key)
+		if err := settleFinish(p, &t, in); err != nil {
+			return err
 		}
 		t.Updated = now
 		// The result is read here, before any auto-accept, so the agent
@@ -249,11 +253,11 @@ func (c *Core) Accept(ctx context.Context, key string, in TicketInput) (Written[
 
 // acceptStep is the accept transition on t, the step the human's accept
 // and an auto-accept share: In Review to Accepted when the work's finish
-// named a branch, and to Done otherwise. The Move records cause, empty
-// for the human's own accept.
+// named a branch in any of its Changed Repositories, and to Done
+// otherwise. The Move records cause, empty for the human's own accept.
 func acceptStep(ctx context.Context, t *store.Ticket, key string, cause store.AutoAcceptCause, now time.Time) error {
 	to := store.Done
-	if t.Branch != "" {
+	if hasBranchToLand(key, *t) {
 		to = store.Accepted
 	}
 	if err := transitionTo(ctx, t, key, "accept", "", to, now); err != nil {

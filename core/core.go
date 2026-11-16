@@ -234,11 +234,19 @@ type TicketView struct {
 	Created      time.Time         `json:"created"`
 	Updated      time.Time         `json:"updated"`
 	Description  string            `json:"description"`
-	// Branch and Commit are the work's branch and head commit, as the
-	// last finish naming them gave them. Work with a branch is Accepted,
-	// then lands.
+	// Branch and Commit are the work's branch and head commit in the Home
+	// Repository, as the last finish naming them gave them. Work with a
+	// branch is Accepted, then lands.
 	Branch string `json:"branch,omitempty"`
 	Commit string `json:"commit,omitempty"`
+	// Repositories are the Ticket's Changed Repositories, in landing
+	// order: live while it is In Progress, as the Factory reports them,
+	// and settled by each finish. Left out while the Project has the Home
+	// Repository alone, whose work Branch and Commit give.
+	Repositories []ChangedRepositoryView `json:"repositories,omitempty"`
+	// PartlyLanded says the Ticket is Accepted and has landed in some of
+	// its Changed Repositories but not all. Computed on read.
+	PartlyLanded bool `json:"partly_landed,omitempty"`
 	// Recommendation is a spec Stage's Spec recommendation, as its last
 	// finish gave it: implement (Implement) or split (Split into
 	// Tickets); empty on any other Ticket.
@@ -348,6 +356,10 @@ type TicketRow struct {
 	// NeedsMeReason says why the Ticket waits on the human, if it does:
 	// the reason get_ticket gives, a CI item's for a Ticket it lists.
 	NeedsMeReason NeedsMeReason `json:"needs_me_reason,omitempty"`
+	// Repositories are the Names of the Ticket's Changed Repositories, in
+	// landing order, for its card's chips; left out while the Project has
+	// the Home Repository alone.
+	Repositories []string `json:"repositories,omitempty"`
 }
 
 // CreateProjectInput is create_project's input.
@@ -717,6 +729,9 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t store.Ticket, onMap bo
 	if cl, ok := liveClaim(t); ok {
 		row.LatestEvent = c.latestEvent(key, t.Number, cl.Number)
 	}
+	if severalRepositories(e.p) {
+		row.Repositories = inLandingOrder(e.p, changedRepositories(key, t))
+	}
 	return row
 }
 
@@ -792,6 +807,10 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 	}
 	v.SpecLanded = specLanded(r, pr, t)
 	v.WaitingForSpec = waitingForSpec(r, pr, t)
+	if severalRepositories(pr) {
+		v.Repositories = changedRepositoryViews(pr, t, v)
+	}
+	v.PartlyLanded = partlyLanded(key, t)
 	if it, ok := e.itemOf(t); ok {
 		v.CIItem = ciItemView(r, pr, it)
 		if it.reason != ReasonCIUnavailable {

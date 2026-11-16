@@ -127,6 +127,14 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 		if held[tk.ID] {
 			continue
 		}
+		// The finish check again before the Ticket's first landing step,
+		// which a restart or an Auto-accept may have come to before the
+		// check after its turn.
+		if tk.SpecMerge == nil && !tk.PartlyLanded {
+			if passed, _ := f.checkFinish(ctx, tk); !passed {
+				continue
+			}
+		}
 		prMerged := tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged
 		switch policy.Route(f.waitsOnSpecBranch(tk), prMerged) {
 		case core.RouteBranch:
@@ -230,6 +238,9 @@ func (f *factory) detectHandMerges(ctx context.Context, p core.ProjectView) {
 			continue
 		}
 		if tk.State == store.InReview {
+			if passed, _ := f.checkFinish(ctx, tk); !passed {
+				continue
+			}
 			f.printf("%s: merged into %s by hand", tk.ID, f.baseBranch())
 			f.landPushed(ctx, tk, p, f.baseBranch(), tk.Commit)
 			continue

@@ -170,7 +170,10 @@ func runFakeClaude(data string, args []string) int {
 		return 70
 	}
 
-	fill := strings.NewReplacer("{{ticket}}", c.Ticket, "{{claim}}", c.Claim, "{{session}}", c.Session).Replace
+	fill := func(s string) string {
+		s = strings.NewReplacer("{{ticket}}", c.Ticket, "{{claim}}", c.Claim, "{{session}}", c.Session).Replace(s)
+		return headPlaceholder.ReplaceAllStringFunc(s, func(m string) string { return headIn(c, headPlaceholder.FindStringSubmatch(m)[1]) })
+	}
 	fillAll := func(args []string) []string {
 		var filled []string
 		for _, a := range args {
@@ -224,6 +227,30 @@ func runFakeClaude(data string, args []string) int {
 		}
 	}
 	return 0
+}
+
+// headPlaceholder is {{head}}, the head commit of the run's worktree, or
+// {{head:<Repository Name>}}, that of the Repository's worktree.
+var headPlaceholder = regexp.MustCompile(`\{\{head(?::([^}]+))?\}\}`)
+
+// headIn is the head commit of the worktree of the Repository named
+// repository in the run c, or of the run's own for "": what a session
+// reads to finish with. It is "" when it can't be read, which the
+// finish then refuses.
+func headIn(c Call, repository string) string {
+	dir, err := stepDir(Step{In: repository}, c)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "fake claude:", err)
+		return ""
+	}
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "fake claude: git rev-parse HEAD:", err)
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // stepDir is where s runs in the run c: the worktree of the Repository

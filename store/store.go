@@ -679,9 +679,16 @@ type Ticket struct {
 	Updated         time.Time
 	Description     string
 	// Branch and Commit are what the last finish naming them gave: the
-	// work's branch and its head commit. Free-form, never parsed.
+	// work's branch and its head commit in the Home Repository.
+	// Free-form, never parsed.
 	Branch string
 	Commit string
+	// Repositories are the Ticket's Changed Repositories (Spec
+	// code-central-848): reported live by the Factory while it is In
+	// Progress, and settled by each finish, the Home Repository's entry
+	// mirroring Branch and Commit. A Ticket stored without them, with a
+	// Branch or Commit, reads as the Home Repository's (ADR 0046).
+	Repositories []ChangedRepository
 	// Recommendation is the Spec recommendation the last finish of a spec
 	// Stage gave; empty on any other Ticket and on a spec Stage finished
 	// before there was one.
@@ -725,11 +732,32 @@ var Recommendations = []Recommendation{RecommendImplement, RecommendSplit}
 // Valid reports whether r is one of the Spec recommendations.
 func (r Recommendation) Valid() bool { return slices.Contains(Recommendations, r) }
 
+// ChangedRepository is one of a Ticket's Changed Repositories: the
+// Repository Name, the Ticket's branch and its head commit there, and
+// once its work has landed there, the landed commit.
+type ChangedRepository struct {
+	Name   string
+	Branch string
+	Commit string
+	// Landed is nil until the Ticket's work lands in the Repository.
+	Landed *Landed
+}
+
+// Landed is the commit that put a Ticket's work into a Repository's
+// base, and when Code Central heard of it.
+type Landed struct {
+	Commit string
+	Time   time.Time
+}
+
 // SpecMerge is the Spec Branch commit a Ticket's work was merged into, and
 // when Code Central heard of it.
 type SpecMerge struct {
-	Commit string
-	Merged time.Time
+	// Repository is the Repository Name of the Spec Branch; empty for the
+	// Home Repository.
+	Repository string
+	Commit     string
+	Merged     time.Time
 }
 
 // PullRequestState is where a pull request stands on its Code Host.
@@ -749,6 +777,9 @@ var PullRequestStates = []PullRequestState{PROpen, PRConflicting, PRClosed, PRMe
 // PullRequest is a pull request on a Code Host: its number and link, its
 // state, and once merged the merge commit the host reports.
 type PullRequest struct {
+	// Repository is the Repository Name the pull request is in; empty
+	// for the Home Repository.
+	Repository  string
 	Number      int
 	Link        string
 	State       PullRequestState
@@ -758,7 +789,10 @@ type PullRequest struct {
 // PushedCommit is one commit the Factory pushed for a Ticket, and when
 // Code Central heard of it.
 type PushedCommit struct {
-	Commit string
+	// Repository is the Repository Name the commit was pushed in; empty
+	// for the Home Repository.
+	Repository string
+	Commit     string
 	// Branch is the branch the commit was pushed as; empty for a push
 	// reported without one.
 	Branch string
@@ -1041,6 +1075,13 @@ func (t Ticket) clone() Ticket {
 	t.BlockedBy = slices.Clone(t.BlockedBy)
 	t.Replacements = slices.Clone(t.Replacements)
 	t.PushedCommits = slices.Clone(t.PushedCommits)
+	t.Repositories = slices.Clone(t.Repositories)
+	for i, r := range t.Repositories {
+		if r.Landed != nil {
+			l := *r.Landed
+			t.Repositories[i].Landed = &l
+		}
+	}
 	if t.SpecMerge != nil {
 		sm := *t.SpecMerge
 		t.SpecMerge = &sm

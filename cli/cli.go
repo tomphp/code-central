@@ -119,7 +119,7 @@ func init() {
 		"approve":       {op: "approve", usage: "approve <id> [--full]", run: runApprove},
 		"defer":         {op: "defer", usage: "defer <id> [--reason <text> | --file <path|->] [--full]", run: runDefer},
 		"claim":         {op: "claim", usage: "claim [--spec <id> | --ticket <id>] [--session <id>] [--working-dir <dir>] [--resume-command <command>]", run: runClaim},
-		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->] [--branch <branch>] [--commit <sha>] [--recommendation implement|split] [--full]", run: runFinish},
+		"finish":        {op: "finish", usage: "finish <id> --claim <claim-id> [--summary <md> | --file <path|->] [--branch <branch>] [--commit <sha>] [--repositories <json>] [--recommendation implement|split] [--full]  repositories as a JSON array of {name, branch, commit}", run: runFinish},
 
 		"set-session": {op: "set_session", usage: "set-session <id> --claim <claim-id> [--session <id>] [--working-dir <dir>] [--resume-command <command>] [--full]  (session defaults to $CLAUDE_CODE_SESSION_ID)", run: runSetSession},
 		"ping":        {usage: "ping [--session <id>]  mark this session active (reads hook JSON on stdin); always exits 0", run: runPing},
@@ -490,6 +490,7 @@ func runFinish(ctx context.Context, e Env, args []string) error {
 	file := fs.String("file", "", "")
 	branch := fs.String("branch", "", "")
 	commit := fs.String("commit", "", "")
+	repositories := fs.String("repositories", "", "")
 	recommendation := fs.String("recommendation", "", "")
 	full := fs.Bool("full", false, "")
 	pos, err := parse(fs, args)
@@ -507,7 +508,17 @@ func runFinish(ctx context.Context, e Env, args []string) error {
 	if err != nil {
 		return err
 	}
-	v, err := sc.client.Finish(ctx, sc.project, core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text, Branch: *branch, Commit: *commit, Recommendation: store.Recommendation(*recommendation), Full: *full})
+	in := core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text, Branch: *branch, Commit: *commit, Recommendation: store.Recommendation(*recommendation), Full: *full}
+	if *repositories != "" {
+		if err := core.Decode(ctx, []byte(*repositories), &in.Repositories); err != nil {
+			var ce *core.Error
+			if errors.As(err, &ce) {
+				ce.Field = "repositories" + dotted(ce.Field)
+			}
+			return err
+		}
+	}
+	v, err := sc.client.Finish(ctx, sc.project, in)
 	if err != nil {
 		return err
 	}

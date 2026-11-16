@@ -318,6 +318,7 @@ func (f *factory) reconcile(ctx context.Context) []claim {
 			continue
 		}
 		f.noteTicket(c, tk)
+		f.reportChanged(ctx, c, tk)
 		if tk.State == store.Answered && f.turnFor(c.ClaimID) == nil {
 			answered = append(answered, c)
 		}
@@ -347,6 +348,7 @@ func (f *factory) endClaim(c claim, by string) {
 	f.mu.Lock()
 	f.ended[c.ClaimID] = true
 	f.mu.Unlock()
+	delete(f.reportedChanged, c.ClaimID)
 	f.dropCutOff(c.ClaimID)
 	t := f.turnFor(c.ClaimID)
 	if t != nil && !endsItsOwnTurn[by] {

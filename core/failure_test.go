@@ -115,9 +115,12 @@ func TestFailureReportsAreNumberedAndKeptAcrossClaims(t *testing.T) {
 	}
 }
 
-func TestOnlyReportFailureEntersFailed(t *testing.T) {
+// Failed is entered only with a Failure Report: the holder's
+// report_failure, or the Factory's fail_finish on a bad finish (Spec
+// code-central-848), which no Actor is offered.
+func TestOnlyAFailureReportEntersFailed(t *testing.T) {
 	for _, a := range core.Workflow {
-		if a.To == store.Failed && a.Name != "report_failure" {
+		if a.To == store.Failed && a.Name != "report_failure" && (a.Name != "fail_finish" || a.Who != core.FactoryMove) {
 			t.Errorf("%s moves to Failed", a.Name)
 		}
 		if a.To == "" && !slices.Contains(a.Except, store.Failed) {

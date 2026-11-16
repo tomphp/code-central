@@ -83,6 +83,7 @@ var migrations = []MigrationStep{
 	{From: 39, Name: "add a Project's Chat row in its Models"},
 	{From: 40, Name: "add a Project's Repositories"},
 	{From: 41, Name: "add the repository_missing Focus Kind"},
+	{From: 42, Name: "add a Ticket's Changed Repositories and the Repository of its pushed commits, Spec merge and pull request"},
 }
 
 // archivedBecomesATime is format 2 to 3 (ticket 39): project.yaml's

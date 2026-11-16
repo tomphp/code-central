@@ -68,17 +68,10 @@ type FailureReportView struct {
 // ReportFailure is report_failure(ticket, claim_id, what_broke, why,
 // what_to_fix, where_work_stands): the holder posts a numbered, permanent
 // Failure Report, which moves In Progress to Failed and ends the Claim.
-// It is the only way into Failed.
+// It and the Factory's fail_finish are the only ways into Failed.
 func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureInput) (StopResult, error) {
-	for _, f := range []struct{ name, value, hint string }{
-		{"what_broke", in.WhatBroke, "a headline plus the symptom"},
-		{"why", in.Why, "why it broke"},
-		{"what_to_fix", in.WhatToFix, "what has to change before this Ticket can go on"},
-		{"where_work_stands", in.WhereWorkStands, "where the work stands: branch, commits, what is done"},
-	} {
-		if strings.TrimSpace(f.value) == "" {
-			return StopResult{}, invalid(f.name, "a Failure Report needs %s: %s", f.name, f.hint)
-		}
+	if err := checkFailureReport(in.WhatBroke, in.Why, in.WhatToFix, in.WhereWorkStands); err != nil {
+		return StopResult{}, err
 	}
 	v, err := c.updateTicket(key, "report_failure", in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
 		now := c.now()
@@ -99,6 +92,22 @@ func (c *Core) ReportFailure(ctx context.Context, key string, in ReportFailureIn
 		return StopResult{}, err
 	}
 	return stopResult(v, "report_failure"), nil
+}
+
+// checkFailureReport refuses a Failure Report missing any of its four
+// parts.
+func checkFailureReport(whatBroke, why, whatToFix, whereWorkStands string) error {
+	for _, f := range []struct{ name, value, hint string }{
+		{"what_broke", whatBroke, "a headline plus the symptom"},
+		{"why", why, "why it broke"},
+		{"what_to_fix", whatToFix, "what has to change before this Ticket can go on"},
+		{"where_work_stands", whereWorkStands, "where the work stands: branch, commits, what is done"},
+	} {
+		if strings.TrimSpace(f.value) == "" {
+			return invalid(f.name, "a Failure Report needs %s: %s", f.name, f.hint)
+		}
+	}
+	return nil
 }
 
 // GiveUp is give_up(ticket, claim_id, note): the holder, finding nothing

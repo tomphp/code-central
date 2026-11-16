@@ -34,12 +34,15 @@ export interface Driver {
   reportFailure(key: string, id: string, report: FailureReportBody): Promise<void>;
   // finish claims a Ready Ticket as an agent and finishes it with the
   // summary, moving it to In Review. on names the work's branch and head
-  // commit (ticket 71), or a spec Stage's Spec recommendation.
+  // commit (ticket 71), with several Repositories also each other one's
+  // (Spec code-central-848), or a spec Stage's Spec recommendation.
   finish(
     key: string,
     id: string,
     summary: string,
-    on?: { branch: string; commit: string } | { recommendation: NonNullable<TicketView["recommendation"]> },
+    on?:
+      | { branch: string; commit: string; repositories?: { name: string; branch: string; commit: string }[] }
+      | { recommendation: NonNullable<TicketView["recommendation"]> },
   ): Promise<void>;
   // addBlocker makes id wait on blocker, as an agent's add_blocker.
   addBlocker(key: string, id: string, blocker: string): Promise<void>;

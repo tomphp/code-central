@@ -1,8 +1,10 @@
 // The plain Spec pane, for a Spec that is neither a Requirement nor a Map,
 // above the shared Ticket pane: the header (ID, title, submitted time, New
-// Prototype, Retro), its body, collapsed, the sums of its Tickets' CI badges, then the Spec's Tickets
+// Prototype, Retro), its Changed Repositories' chips while the Project has
+// several, its body, collapsed, the sums of its Tickets' CI badges, then the Spec's Tickets
 // with their States.
 import type { SpecDetail } from "../api/types";
+import { RepositoryChips } from "../controls/RepositoryChips";
 import { useApi } from "../live";
 import { BodySection } from "../edit/BodySection";
 import { SpecPaneHeader } from "../controls/SpecPaneHeader";
@@ -32,6 +34,7 @@ export function SpecPane({ spec, archived, now, ticket, select }: SpecPaneProps)
   return (
     <section aria-label="Spec" className="req-head">
       <SpecPaneHeader id={spec.id} kind="Spec" title={spec.title} now={now} created={spec.created} />
+      <RepositoryChips names={spec.repositories} />
       <div className="spec-actions">
         <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />
         {specRetroable(spec, !!archived) && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}

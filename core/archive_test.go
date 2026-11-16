@@ -298,6 +298,14 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.ReportRepositories(ctx, "acme", core.ReportRepositoriesInput{Repositories: []core.RepositoryReport{{Name: "acme", Path: "/src/acme", State: core.CloneReady}}})
 		return err
 	},
+	"report_changed_repositories": func(f fixture) error {
+		_, err := f.core.ReportChangedRepositories(ctx, "acme", core.ReportChangedRepositoriesInput{Ticket: "acme-2", ClaimID: "claim-1", Repositories: []core.RepositoryWork{{Name: "acme", Branch: "acme-2", Commit: "abc"}}})
+		return err
+	},
+	"fail_finish": func(f fixture) error {
+		_, err := f.core.FailFinish(ctx, "acme", core.FailFinishInput{Ticket: "acme-2", WhatBroke: "a", Why: "b", WhatToFix: "c", WhereWorkStands: "d"})
+		return err
+	},
 	"start_conversation": func(f fixture) error {
 		_, err := f.core.StartConversation(human, "acme", core.StartConversationInput{})
 		return err

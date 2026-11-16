@@ -25,6 +25,10 @@ export const NeedsYou = card(({ stage }) => (
 ));
 // Outside a lane, the card names its Spec.
 export const WithSpec = card(({ plain }) => <TicketCard t={plain} link={storyLink(plain.id)} spec={{ kind: "Spec", title: "Sign-in" }} />);
+// With several Repositories, the card names the ones its Ticket changes.
+export const WithRepositories = card(({ plain }) => (
+  <TicketCard t={{ ...plain, state: "In Progress", repositories: ["acme", "api"] }} link={storyLink(plain.id)} />
+));
 // A card that just joined its column pulses.
 export const Joined = card(({ plain }) => <TicketCard t={plain} link={storyLink(plain.id)} joined />);
 export const Everything = card(({ linked }) => (

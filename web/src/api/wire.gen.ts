@@ -341,6 +341,8 @@ export const TICKET_FIELDS = [
   "description",
   "branch",
   "commit",
+  "repositories",
+  "partly_landed",
   "recommendation",
   "pushed_commit",
   "pull_request",
@@ -474,11 +476,19 @@ export interface TicketView {
   created: string;
   updated: string;
   description: string;
-  // Branch and Commit are the work's branch and head commit, as the
-  // last finish naming them gave them. Work with a branch is Accepted,
-  // then lands.
+  // Branch and Commit are the work's branch and head commit in the Home
+  // Repository, as the last finish naming them gave them. Work with a
+  // branch is Accepted, then lands.
   branch?: string;
   commit?: string;
+  // Repositories are the Ticket's Changed Repositories, in landing
+  // order: live while it is In Progress, as the Factory reports them,
+  // and settled by each finish. Left out while the Project has the Home
+  // Repository alone, whose work Branch and Commit give.
+  repositories?: ChangedRepositoryView[];
+  // PartlyLanded says the Ticket is Accepted and has landed in some of
+  // its Changed Repositories but not all. Computed on read.
+  partly_landed?: boolean;
   // Recommendation is a spec Stage's Spec recommendation, as its last
   // finish gave it: implement (Implement) or split (Split into
   // Tickets); empty on any other Ticket.
@@ -588,6 +598,10 @@ export interface TicketRow {
   // NeedsMeReason says why the Ticket waits on the human, if it does:
   // the reason get_ticket gives, a CI item's for a Ticket it lists.
   needs_me_reason?: NeedsMeReason;
+  // Repositories are the Names of the Ticket's Changed Repositories, in
+  // landing order, for its card's chips; left out while the Project has
+  // the Home Repository alone.
+  repositories?: string[];
 }
 
 // SpecDetail is get_spec's result: the Spec, its State summary and its
@@ -610,6 +624,10 @@ export interface SpecDetail {
   outline?: Heading[];
   state_summary: Partial<Record<State, number>>;
   finished: boolean;
+  // Repositories are the Spec's Changed Repositories, the union of its
+  // Tickets', by Name in landing order; left out while the Project has
+  // the Home Repository alone.
+  repositories?: string[];
   tickets?: TicketRow[];
   // Requirement is set only when the Spec is a Requirement.
   requirement?: RequirementView;
@@ -953,6 +971,27 @@ export interface BlockerView {
   // on the same Spec does once it is merged into the Spec Branch. It is
   // always set, except on a brief view's Done Blocker.
   cleared?: boolean;
+}
+
+// ChangedRepositoryView is one of a Ticket's Changed Repositories as
+// reads show it, in landing order.
+export interface ChangedRepositoryView {
+  name: string;
+  branch?: string;
+  commit?: string;
+  // Landed is the commit that put the work into the Repository's base;
+  // left out until it lands.
+  landed?: LandedView;
+  // PushedCommit is the latest commit the Factory pushed for the Ticket
+  // in the Repository; left out while it has pushed none.
+  pushed_commit?: PushedCommitView;
+  // PullRequest is the Ticket's pull request in the Repository; left
+  // out until the Pull Request Watcher reports one.
+  pull_request?: PullRequestView;
+  // CIResult is the Repository's CI result, from the pushed commit
+  // CICommit; both are left out while it has none.
+  ci_result?: CIResult;
+  ci_commit?: string;
 }
 
 // PushedCommitView is a commit the Factory pushed for a Ticket, and when
@@ -1386,6 +1425,13 @@ export interface CloneView {
   // Since is when the Factory first reported it in this state with
   // this problem.
   since: string;
+}
+
+// LandedView is the commit that put a Ticket's work into a Repository's
+// base, and when Code Central heard of it.
+export interface LandedView {
+  commit: string;
+  time: string;
 }
 
 // CIJobView is one job of a CI Run; its conclusion is empty until it

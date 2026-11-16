@@ -189,6 +189,10 @@ var Operations = []Op{
 	{Name: "report_base", Audience: FactoryOnly, Write: true},
 	// The Factory's clones of the Repositories (Spec code-central-848).
 	{Name: "report_repositories", Audience: FactoryOnly, Write: true},
+	// A Ticket's Changed Repositories, live, and the Factory's finish
+	// check (Spec code-central-848).
+	{Name: "report_changed_repositories", Audience: FactoryOnly, Write: true},
+	{Name: "fail_finish", Audience: FactoryOnly, Write: true},
 
 	// Chat (Spec code-central-633): the human's Conversation and the
 	// Factory's long-poll for its turns. Chat writes change only memory.
