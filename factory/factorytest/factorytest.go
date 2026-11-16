@@ -652,6 +652,11 @@ func (h *Harness) StateFile() string {
 	return filepath.Join(h.Home, ".local", "state", "code-central-factory", h.Project+".json")
 }
 
+// ReadStateFile reads the Factory's state file, retrying while Windows
+// refuses to open it because the Factory is renaming a new one into
+// place.
+func (h *Harness) ReadStateFile() ([]byte, error) { return readFile(h.StateFile()) }
+
 // ReadyTicket creates a Ready implementation Ticket (on one shared Spec)
 // and returns its ID.
 func (h *Harness) ReadyTicket(title string) string {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -286,7 +285,7 @@ func TestAnExpiredLoginStopsTheFactory(t *testing.T) {
 // for claimID.
 func stateAllowedTools(t *testing.T, h *factorytest.Harness, claimID string) []string {
 	t.Helper()
-	b, err := os.ReadFile(h.StateFile())
+	b, err := h.ReadStateFile()
 	if err != nil {
 		t.Fatal(err)
 	}
