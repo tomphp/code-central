@@ -263,7 +263,7 @@ func ciEntryNamed(p store.Project, name string) (store.CIRepository, error) {
 	}
 	e, ok := ciEntryOf(p, name)
 	if !ok {
-		return e, invalid("name", "%q is not one of this Project's Repositories, which are %s", name, strings.Join(repositoryNames(p.RepositoryList()), ", "))
+		return e, notARepository(p, "name", name)
 	}
 	return e, nil
 }

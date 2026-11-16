@@ -427,14 +427,18 @@ func (f *factory) landOnCI(ctx context.Context, tk core.TicketView) {
 // pushed commit that result comes from, and whether the human chose Land
 // anyway on it. With the Home Repository alone, the Ticket's own fields
 // are the Home's; with several, its Changed Repository's are, as its CI
-// result combines every Repository's.
+// result combines every Repository's, and one that didn't change the Home
+// Repository has no CI result there.
 func (f *factory) homeCI(tk core.TicketView) (result core.CIResult, commit string, landAnyway bool) {
+	if len(tk.Repositories) == 0 {
+		return tk.CIResult, tk.CICommit, tk.LandAnyway
+	}
 	for _, r := range tk.Repositories {
 		if r.Name == f.project {
 			return r.CIResult, r.CICommit, r.LandAnyway
 		}
 	}
-	return tk.CIResult, tk.CICommit, tk.LandAnyway
+	return "", "", false
 }
 
 // remoteTip is the commit branch's remote-tracking ref on remote holds,

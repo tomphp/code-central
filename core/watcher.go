@@ -379,10 +379,9 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 		if !k.on(p) {
 			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is off on %s, so it has no %s", k.setting, key, k.name)}
 		}
-		names := repositoryNames(p.RepositoryList())
 		for i, rp := range next.Repositories {
-			if !slices.Contains(names, rp.Repository) {
-				return invalid(fmt.Sprintf("repositories[%d].repository", i), "%q is not one of this Project's Repositories, which are %s", rp.Repository, strings.Join(names, ", "))
+			if !slices.Contains(repositoryNames(p.RepositoryList()), rp.Repository) {
+				return notARepository(p, fmt.Sprintf("repositories[%d].repository", i), rp.Repository)
 			}
 		}
 		// The store's read lock keeps the setting from being turned off

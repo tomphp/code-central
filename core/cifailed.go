@@ -107,11 +107,8 @@ type CIResponseInput struct {
 // given, that of t's only CI item, the Home Repository when it has none.
 // A Ticket with CI items in several Repositories needs one given.
 func itemRepository(e *evaluation, t store.Ticket, given string) (string, error) {
-	if given = strings.TrimSpace(given); given != "" {
-		if names := repositoryNames(e.p.RepositoryList()); !slices.Contains(names, given) {
-			return "", invalid("repository", "%q is not one of this Project's Repositories, which are %s", given, strings.Join(names, ", "))
-		}
-		return given, nil
+	if strings.TrimSpace(given) != "" {
+		return repositoryOf(e.p, "repository", given)
 	}
 	items := e.itemsOf(t)
 	switch len(items) {

@@ -297,10 +297,16 @@ func repositoryOf(p store.Project, field, given string) (string, error) {
 	if given == "" {
 		return p.Key, nil
 	}
-	if names := repositoryNames(p.RepositoryList()); !slices.Contains(names, given) {
-		return "", invalid(field, "%q is not one of this Project's Repositories, which are %s", given, strings.Join(names, ", "))
+	if !slices.Contains(repositoryNames(p.RepositoryList()), given) {
+		return "", notARepository(p, field, given)
 	}
 	return given, nil
+}
+
+// notARepository refuses name, on field, as naming none of p's
+// Repositories, which it lists.
+func notARepository(p store.Project, field, name string) error {
+	return invalid(field, "%q is not one of this Project's Repositories, which are %s", name, strings.Join(repositoryNames(p.RepositoryList()), ", "))
 }
 
 // ReportCIRunsInput is the CI Watcher's report_ci_runs(runs, full?).
