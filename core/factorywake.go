@@ -80,11 +80,14 @@ func (p *longPoll) notify() {
 type factoryWakes struct {
 	mu    sync.Mutex
 	polls map[heartbeatKey]*longPoll
+	// woken is the open calls given a wake: a call takes its wake from
+	// its channel before it closes, so the channel can't say so.
+	woken map[*longPoll]bool
 }
 
 // newFactoryWakes is an empty holder.
 func newFactoryWakes() *factoryWakes {
-	return &factoryWakes{polls: map[heartbeatKey]*longPoll{}}
+	return &factoryWakes{polls: map[heartbeatKey]*longPoll{}, woken: map[*longPoll]bool{}}
 }
 
 // open makes p Factory k's open call, ending the one it replaces, empty,
@@ -97,6 +100,7 @@ func (fw *factoryWakes) open(k heartbeatKey, p *longPoll) {
 		select {
 		case <-old.wake:
 			p.notify()
+			fw.woken[p] = true
 		default:
 		}
 	}
@@ -110,6 +114,7 @@ func (fw *factoryWakes) close(k heartbeatKey, p *longPoll) {
 	if fw.polls[k] == p {
 		delete(fw.polls, k)
 	}
+	delete(fw.woken, p)
 }
 
 // wake wakes every open call on the Project.
@@ -119,21 +124,23 @@ func (fw *factoryWakes) wake(key string) {
 	for k, p := range fw.polls {
 		if k.project == key {
 			p.notify()
+			fw.woken[p] = true
 		}
 	}
 }
 
 // WaitingFactoryWakes is how many next_factory_wake calls on Project key
 // are open and not yet woken: those a write the Factory's poll acts on
-// would wake now. It is for tests, which must know a wake will reach a
-// Factory before they make one.
+// would wake now. A woken call stays uncounted while it returns. It is
+// for tests, which must know a wake will reach a Factory before they make
+// one.
 func (c *Core) WaitingFactoryWakes(key string) int {
 	fw := c.factoryWakes
 	fw.mu.Lock()
 	defer fw.mu.Unlock()
 	n := 0
 	for k, p := range fw.polls {
-		if k.project == key && len(p.wake) == 0 {
+		if k.project == key && !fw.woken[p] {
 			n++
 		}
 	}
