@@ -6,7 +6,7 @@ import { newWorld, type World } from "../api/core/core";
 import type { Scenario } from "../api/scenario";
 import { scenario, settle } from "../worldTesting";
 
-export { renderApp, scenario } from "../worldTesting";
+export { renderApp, scenario, settle } from "../worldTesting";
 
 // focus is Focus Mode's main region.
 export const focus = () => screen.getByRole("main", { name: "Focus Mode" });
