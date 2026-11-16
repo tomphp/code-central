@@ -22,3 +22,5 @@ It amends:
 ## Consequences
 
 Switching away from Pull Request stops the watcher and leaves any open pull requests on the host; Code Central comments on each affected Ticket and Project Options says how many are still open.
+
+Amended by [ADR 0050](0050-pull-requests-and-ci-tracking-are-per-repository-with-one-watcher-of-each-kind-per-project.md): one pull request per Changed Repository, and the Code Host per Repository.
