@@ -1,12 +1,10 @@
 // The Failed panel on the WASM Core: what it shows and which action it
 // calls with what payload.
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../../App";
 import { newWorld } from "../../api/core/core";
-import { scenario } from "../../api/scenario";
-import { renderLive } from "../../worldTesting";
+import { renderApp, renderLive, scenario, settle } from "../../worldTesting";
 import { FailedPanel } from "./panel";
 
 // A Report is what an agent failed with, and the Claim it held: its
@@ -54,16 +52,15 @@ type Failed = Awaited<ReturnType<typeof world>>;
 
 async function renderPanel({ w, id }: Failed) {
   const ticket = await w.api.getTicket("acme", id);
-  renderLive(w, <FailedPanel project="acme" ticket={ticket} now={w.now()} />);
+  await renderLive(w, <FailedPanel project="acme" ticket={ticket} now={w.now()} />);
   return screen.getByRole("region", { name: "Failed" });
 }
 
 // renderInApp opens the Failed Ticket in the whole app's inbox and returns its Failed panel.
 async function renderInApp({ w, id }: Failed) {
-  window.history.replaceState(null, "", `/?view=inbox&ticket=${id}`);
-  render(<App api={w.api} now={w.now} />);
+  await renderApp(w, `/?view=inbox&ticket=${id}`);
   const pane = screen.getByRole("complementary", { name: "Ticket" });
-  return within(pane).findByRole("region", { name: "Failed" });
+  return within(pane).getByRole("region", { name: "Failed" });
 }
 
 describe("the Failed panel", () => {
@@ -159,7 +156,8 @@ describe("the Failed panel", () => {
     const panel = await renderPanel(x);
     await x.s.human(`${x.s.ticketPath("acme", x.id)}/send_back`, {}); // moved on elsewhere
     await userEvent.click(within(panel).getByRole("button", { name: "To Draft" }));
-    expect(await within(panel).findByRole("alert")).toHaveTextContent("to_draft is not allowed");
+    await settle(x.w);
+    expect(within(panel).getByRole("alert")).toHaveTextContent("to_draft is not allowed");
   });
 
   it("renders every field of the latest and earlier reports as Markdown, under plain labels", async () => {

@@ -1,13 +1,12 @@
 // The In Review panel on the WASM Core: what it shows and which action it
 // calls with what payload, including Reject needing a comment.
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../../App";
 import { newWorld } from "../../api/core/core";
-import { scenario, type Scenario } from "../../api/scenario";
+import type { Scenario } from "../../api/scenario";
 import type { TicketView } from "../../api/types";
-import { renderLive } from "../../worldTesting";
+import { renderApp, renderLive, scenario } from "../../worldTesting";
 import { ReviewPanel } from "./panel";
 
 // world has acme's Login page In Review, its finish summary body among
@@ -29,7 +28,7 @@ type Review = Awaited<ReturnType<typeof world>>;
 
 async function renderPanel({ w, id }: Review) {
   const ticket = await w.api.getTicket("acme", id);
-  renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
+  await renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
   return screen.getByRole("region", { name: "In Review" });
 }
 
@@ -37,10 +36,9 @@ async function renderPanel({ w, id }: Review) {
 // whole app, and returns its Summary region.
 async function renderSummaryInApp(body: string) {
   const { w, id } = await world(body);
-  window.history.replaceState(null, "", `/?view=inbox&ticket=${id}`);
-  render(<App api={w.api} now={w.now} />);
+  await renderApp(w, `/?view=inbox&ticket=${id}`);
   const pane = screen.getByRole("complementary", { name: "Ticket" });
-  const panel = await within(pane).findByRole("region", { name: "In Review" });
+  const panel = within(pane).getByRole("region", { name: "In Review" });
   return within(panel).getByLabelText("Summary");
 }
 
@@ -79,7 +77,7 @@ describe("the In Review panel", () => {
     }
     const ticket = await w.api.getTicket("acme", id);
     expect(ticket.auto_accept_kind).toBe(kind);
-    renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
+    await renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
     const panel = screen.getByRole("region", { name: "In Review" });
     expect(within(panel).getByText(`Auto-accept: ${name}`)).toBeInTheDocument();
     expect(within(panel).getByRole("heading", { name: "Review the finished work" })).toBeInTheDocument();
@@ -92,7 +90,7 @@ describe("the In Review panel", () => {
     const id = await s.ticket("acme", { title: "Try a layout", labels: ["prototype"], state: "In Review" });
     const ticket = await w.api.getTicket("acme", id);
     expect(ticket.auto_accept_kind).toBeUndefined();
-    renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
+    await renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
     expect(within(screen.getByRole("region", { name: "In Review" })).getByText("Auto-accept: never")).toBeInTheDocument();
   });
 
@@ -134,7 +132,7 @@ describe("the In Review panel", () => {
       return { w, r, spec, tickets: r.stages[2].id };
     }
     async function renderSpec({ w }: Awaited<ReturnType<typeof specWorld>>, spec: string) {
-      renderLive(w, <ReviewPanel project="acme" ticket={await w.api.getTicket("acme", spec)} now={w.now()} />);
+      await renderLive(w, <ReviewPanel project="acme" ticket={await w.api.getTicket("acme", spec)} now={w.now()} />);
       return screen.getByRole("region", { name: "In Review" });
     }
 
@@ -225,7 +223,7 @@ describe("the In Review panel", () => {
     const id = await s.ticket("acme", { title: "Moved by hand" });
     await inReview(s, id);
     const ticket = await w.api.getTicket("acme", id);
-    renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
+    await renderLive(w, <ReviewPanel project="acme" ticket={ticket} now={w.now()} />);
     expect(screen.getByRole("region", { name: "In Review" })).toHaveTextContent("No finish summary");
   });
 
@@ -244,9 +242,8 @@ describe("the In Review panel", () => {
 
   it("is the action panel for an In Review Ticket in the inbox", async () => {
     const { w, id } = await world();
-    window.history.replaceState(null, "", `/?view=inbox&ticket=${id}`);
-    render(<App api={w.api} now={w.now} />);
+    await renderApp(w, `/?view=inbox&ticket=${id}`);
     const pane = screen.getByRole("complementary", { name: "Ticket" });
-    expect(await within(pane).findByRole("region", { name: "In Review" })).toHaveTextContent("Added the login page");
+    expect(within(pane).getByRole("region", { name: "In Review" })).toHaveTextContent("Added the login page");
   });
 });

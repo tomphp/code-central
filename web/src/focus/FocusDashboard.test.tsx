@@ -2,13 +2,13 @@
 // ?view=focus, with the Focus Mode Option at its default, Activity
 // Dashboard. They check what the human sees: where the dashboard shows, its
 // counts and its In Progress list.
-import { screen, within, act, waitFor } from "@testing-library/react";
+import { screen, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { newWorld, type World } from "../api/core/core";
-import { scenario, WORK, type Scenario } from "../api/scenario";
+import { WORK, type Scenario } from "../api/scenario";
 import { ApiError, type CIRunView } from "../api/types";
-import { focus, loadedDashboard, renderApp } from "./worldTesting";
+import { focus, loadedDashboard, renderApp, scenario, settle } from "./worldTesting";
 
 // dash is a world with Acme and Beta, its scenario and the IDs of its Tickets:
 // Login form and Sign-up page (In Progress) in Acme, Beta export in Beta,
@@ -25,8 +25,8 @@ async function dash() {
   return { w, s, login, signup, betaExport };
 }
 
-// dashboard waits for the Focus Mode region's Activity Dashboard and its effects.
-const dashboard = () => loadedDashboard(focus());
+// dashboard settles w, then finds the Focus Mode region's Activity Dashboard.
+const dashboard = (w: World) => loadedDashboard(w, focus());
 // block is state's block, named by its State; count is the number on it.
 const block = (d: HTMLElement, state: string) => within(d).getByRole("group", { name: state });
 const count = (d: HTMLElement, state: string) => within(block(d, state)).getByTestId("count").textContent;
@@ -51,8 +51,8 @@ async function done(s: Scenario, key: string, id: string) {
 describe("where the Activity Dashboard shows", () => {
   it("shows where All clear would by default", async () => {
     const { w } = await dash();
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
     expect(within(focus()).queryByRole("region", { name: "All clear" })).toBeNull();
     expect(count(d, "Ready")).toBe("2");
     expect(count(d, "In Progress")).toBe("1");
@@ -67,58 +67,60 @@ describe("where the Activity Dashboard shows", () => {
       await gate;
       return options();
     });
-    renderApp(w);
-    expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
+    await renderApp(w);
+    expect(within(focus()).getByRole("region", { name: "All clear" })).toBeInTheDocument();
     expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
 
     release();
-    expect(await dashboard()).toBeInTheDocument();
+    expect(await dashboard(w)).toBeInTheDocument();
     expect(within(focus()).queryByRole("region", { name: "All clear" })).toBeNull();
   });
 
   it("shows All clear, not the dashboard, when the Options can't be read", async () => {
     const { w } = await dash();
     vi.spyOn(w.api, "options").mockRejectedValue(new ApiError(0, "service_unavailable", "Code Central isn't reachable"));
-    renderApp(w);
-    expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
+    await renderApp(w);
+    expect(within(focus()).getByRole("region", { name: "All clear" })).toBeInTheDocument();
     expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
     expect(screen.queryByText("Code Central isn't reachable")).toBeNull();
   });
 
   it("switches live between the dashboard and All clear on options.changed, with no reload", async () => {
     const { w } = await dash();
-    renderApp(w);
-    await dashboard();
+    await renderApp(w);
+    await dashboard(w);
 
     await act(() => w.api.setOptions({ focus_clear: "all_clear" }));
-    expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
+    await settle(w);
+    expect(within(focus()).getByRole("region", { name: "All clear" })).toBeInTheDocument();
     expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
 
     await act(() => w.api.setOptions({ focus_clear: "activity_dashboard" }));
-    expect(await dashboard()).toBeInTheDocument();
+    expect(await dashboard(w)).toBeInTheDocument();
     expect(within(focus()).queryByRole("region", { name: "All clear" })).toBeNull();
   });
 
   it("gives way to a Focus Item the moment one appears, and comes back when it goes", async () => {
     const { w, s, signup } = await dash();
-    renderApp(w);
-    await dashboard();
+    await renderApp(w);
+    await dashboard(w);
 
     await act(() => s.fail("acme", signup));
-    expect(await within(focus()).findByRole("article", { name: "Focus Item" })).toBeInTheDocument();
+    expect(within(focus()).getByRole("article", { name: "Focus Item" })).toBeInTheDocument();
     expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
 
     await act(() => cancel(s, "acme", signup));
-    expect(await dashboard()).toBeInTheDocument();
+    expect(await dashboard(w)).toBeInTheDocument();
   });
 
   it("leaves the skipped screen as it is", async () => {
     const { w, s, signup } = await dash();
     await s.fail("acme", signup);
-    renderApp(w);
-    await userEvent.click(await within(focus()).findByRole("button", { name: "Skip" }));
+    await renderApp(w);
+    await userEvent.click(within(focus()).getByRole("button", { name: "Skip" }));
+    await settle(w);
 
-    expect(await within(focus()).findByRole("region", { name: "Only skipped Focus Items left" })).toHaveTextContent("You skipped 1, go through them again?");
+    expect(within(focus()).getByRole("region", { name: "Only skipped Focus Items left" })).toHaveTextContent("You skipped 1, go through them again?");
     expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
   });
 });
@@ -126,14 +128,14 @@ describe("where the Activity Dashboard shows", () => {
 describe("the counts", () => {
   it("cover only Focus Mode's Project when scoped, and every Project when not", async () => {
     const { w } = await dash();
-    const { unmount } = renderApp(w, "/?view=focus&project=beta");
-    let d = await dashboard();
+    const { unmount } = await renderApp(w, "/?view=focus&project=beta");
+    let d = await dashboard(w);
     expect(count(d, "Ready")).toBe("1");
     expect(count(d, "In Progress")).toBe("0");
     unmount();
 
-    renderApp(w);
-    d = await dashboard();
+    await renderApp(w);
+    d = await dashboard(w);
     expect(count(d, "Ready")).toBe("2");
     expect(count(d, "In Progress")).toBe("1");
   });
@@ -145,8 +147,8 @@ describe("the counts", () => {
     await s.project("old", "Old");
     await done(s, "old", await s.ticket("old", { title: "Left behind" }));
     await w.api.archiveProject("old");
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
     expect(count(d, "Ready")).toBe("2");
     expect(count(d, "In Progress")).toBe("1");
     expect(within(d).queryByText("Left behind")).toBeNull();
@@ -158,13 +160,12 @@ describe("the counts", () => {
     await s.ticket("acme", { title: "Grilling: Dark mode", state: "In Progress", spec, labels: ["stage:grilling"] });
     const waits = await s.ticket("acme", { title: "Waits on login" });
     await s.addBlocker("acme", waits, login);
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
     expect(count(d, "Ready")).toBe("3");
     expect(count(d, "In Progress")).toBe("2");
 
     await act(() => s.claimFor("acme", login));
-    await within(d).findByText("Login form");
     expect(count(d, "Ready")).toBe("2");
     expect(count(d, "In Progress")).toBe("3");
   });
@@ -196,15 +197,15 @@ const entries = (d: HTMLElement) => within(inProgress(d)).getAllByRole("listitem
 describe("the In Progress list", () => {
   it("lists the In Progress Tickets by Project, then Ticket number", async () => {
     const { w, signup, stage, theme, betaImport } = await busy();
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
     expect(entries(d).map((e) => within(e).getByText(/^(acme|beta)-\d+$/).textContent)).toEqual([signup, stage, theme, betaImport]);
   });
 
   it("shows each entry's ID, title, Project and latest event line", async () => {
     const { w, signup, theme, betaImport } = await busy();
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
     const [quiet, , themed, beta] = entries(d);
     expect(quiet).toHaveTextContent(new RegExp(`^${signup}Sign-up pageAcme$`));
     expect(themed).toHaveTextContent(new RegExp(`^${theme}Theme toggleAcmeRead: web/src/App.tsx · 2m ago$`));
@@ -213,37 +214,37 @@ describe("the In Progress list", () => {
 
   it("shows a Stage Ticket's Requirement and Stage", async () => {
     const { w } = await busy();
-    renderApp(w);
-    const stage = entries(await dashboard())[1];
+    await renderApp(w);
+    const stage = entries(await dashboard(w))[1];
     expect(within(stage).getByText("Requirement: Dark mode · Spec")).toBeInTheDocument();
   });
 
   it("leaves out the Project when scoped to one", async () => {
     const { w, signup } = await busy();
-    renderApp(w, "/?view=focus&project=acme");
-    const d = await dashboard();
+    await renderApp(w, "/?view=focus&project=acme");
+    const d = await dashboard(w);
     expect(entries(d)[0]).toHaveTextContent(new RegExp(`^${signup}Sign-up page$`));
     expect(entries(d)).toHaveLength(3);
   });
 
   it("follows the live feed: a new latest event, and a Ticket leaving In Progress", async () => {
     const { w, s, betaImport } = await busy();
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
     await act(() => typed(w, s));
-    expect(await within(d).findByText("Writing the test first. · just now")).toBeInTheDocument();
+    expect(within(d).getByText("Writing the test first. · just now")).toBeInTheDocument();
 
     // Core makes an In Review Ticket a Focus Item, which would take over
     // from the dashboard, so the Ticket leaves by being cancelled.
     await act(() => cancel(s, "beta", betaImport));
-    await waitFor(() => expect(count(d, "In Progress")).toBe("3"));
+    expect(count(d, "In Progress")).toBe("3");
     expect(within(d).queryByText("Beta import")).toBeNull();
   });
 
   it("says Nothing in progress when it's empty, with the blocks still showing", async () => {
     const { w } = await dash();
-    renderApp(w, "/?view=focus&project=beta");
-    const d = await dashboard();
+    await renderApp(w, "/?view=focus&project=beta");
+    const d = await dashboard(w);
     expect(within(d).getByText("Nothing in progress.")).toBeInTheDocument();
     expect(within(d).queryByRole("listitem")).toBeNull();
     expect(count(d, "Ready")).toBe("1");
@@ -252,16 +253,17 @@ describe("the In Progress list", () => {
 
   it("opens an entry's Ticket in the Inbox, keeping the Project filter", async () => {
     const { w, signup } = await busy();
-    renderApp(w, "/?view=focus&project=acme");
-    await userEvent.click(within(entries(await dashboard())[0]).getByRole("link"));
+    await renderApp(w, "/?view=focus&project=acme");
+    await userEvent.click(within(entries(await dashboard(w))[0]).getByRole("link"));
+    await settle(w);
     expect(window.location.search).toBe(`?view=inbox&project=acme&ticket=${signup}`);
-    expect(await screen.findByRole("complementary", { name: "Ticket" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Ticket" })).toBeInTheDocument();
   });
 
   it("opens a Stage Ticket in its Requirement", async () => {
     const { w, requirement, stage } = await busy();
-    renderApp(w);
-    await userEvent.click(within(entries(await dashboard())[1]).getByRole("link"));
+    await renderApp(w);
+    await userEvent.click(within(entries(await dashboard(w))[1]).getByRole("link"));
     expect(window.location.search).toBe(`?view=inbox&requirement=${requirement}&ticket=${stage}`);
   });
 });
@@ -273,8 +275,8 @@ const entry = (d: HTMLElement, id: string) => within(inProgress(d)).getByText(id
 describe("pulses", () => {
   it("marks neither a block nor an entry on first show", async () => {
     const { w } = await busy();
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
     expect(pulsing(block(d, "Ready"))).toBe(false);
     expect(pulsing(block(d, "In Progress"))).toBe(false);
     expect(entries(d).filter(pulsing)).toEqual([]);
@@ -282,22 +284,22 @@ describe("pulses", () => {
 
   it("marks a block when its count changes, and not the other", async () => {
     const { w, s, betaExport } = await busy();
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
 
     await act(() => done(s, "beta", betaExport));
-    await waitFor(() => expect(count(d, "Ready")).toBe("1"));
+    expect(count(d, "Ready")).toBe("1");
     expect(pulsing(block(d, "Ready"))).toBe(true);
     expect(pulsing(block(d, "In Progress"))).toBe(false);
   });
 
   it("marks only the entry whose Ticket a notice names, and no block when a refetch leaves the counts the same", async () => {
     const { w, s, theme } = await busy();
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
 
     await act(() => typed(w, s));
-    await within(d).findByText("Writing the test first. · just now");
+    expect(within(d).getByText("Writing the test first. · just now")).toBeInTheDocument();
     expect(entries(d).filter(pulsing)).toEqual([entry(d, theme)]);
     expect(pulsing(block(d, "Ready"))).toBe(false);
     expect(pulsing(block(d, "In Progress"))).toBe(false);
@@ -305,32 +307,32 @@ describe("pulses", () => {
 
   it("marks an entry on a notice that changes nothing it shows", async () => {
     const { w, s, betaImport } = await busy();
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
 
     await act(() => touch(s, "beta", betaImport));
-    await waitFor(() => expect(pulsing(entry(d, betaImport))).toBe(true));
+    expect(pulsing(entry(d, betaImport))).toBe(true);
     expect(entries(d).filter(pulsing)).toEqual([entry(d, betaImport)]);
   });
 
   it("marks an entry that joins the list", async () => {
     const { w, s, login } = await busy();
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
 
     await act(() => s.claimFor("acme", login));
-    await within(d).findByText("Login form");
+    expect(within(d).getByText("Login form")).toBeInTheDocument();
     expect(entries(d).filter(pulsing)).toEqual([entry(d, login)]);
     expect(pulsing(block(d, "In Progress"))).toBe(true);
   });
 
   it("marks the first entry to join an empty list", async () => {
     const { w, s, betaExport } = await dash();
-    renderApp(w, "/?view=focus&project=beta");
-    const d = await dashboard();
+    await renderApp(w, "/?view=focus&project=beta");
+    const d = await dashboard(w);
 
     await act(() => s.claimFor("beta", betaExport));
-    await within(d).findByText("Beta export");
+    expect(within(d).getByText("Beta export")).toBeInTheDocument();
     expect(pulsing(entry(d, betaExport))).toBe(true);
   });
 });
@@ -382,9 +384,9 @@ describe("the CI Running block", () => {
       finished(c, 3, "e2e.yml", "success"),
       ciRun(c, 4, "nightly.yml"),
     ]);
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(count(d, "CI Running")).toBe("2"));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(count(d, "CI Running")).toBe("2");
     expect(within(ciBlock(d)).getByText("CI Running")).toBeInTheDocument();
     const blocks = within(d).getAllByRole("group").map((g) => g.getAttribute("aria-label"));
     expect(blocks).toEqual(["Ready", "In Progress", "CI Running"]);
@@ -392,23 +394,23 @@ describe("the CI Running block", () => {
 
   it("reads 0 with nothing running", async () => {
     const { w } = await ciWorld();
-    renderApp(w);
-    const d = await dashboard();
-    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    await renderApp(w);
+    const d = await dashboard(w);
+    expect(count(d, "CI Running")).toBe("0");
   });
 
   it("isn't there, and reads nothing, without CI Tracking in scope", async () => {
     const { w } = await dash();
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
     expect(within(d).getAllByRole("group").map((g) => g.getAttribute("aria-label"))).toEqual(["Ready", "In Progress"]);
     expect(w.calls).not.toContain("ciOverview");
   });
 
   it("honours the Project filter: not there in a Project with CI Tracking off", async () => {
     const { w } = await ciWorld();
-    renderApp(w, "/?view=focus&project=beta");
-    const d = await dashboard();
+    await renderApp(w, "/?view=focus&project=beta");
+    const d = await dashboard(w);
     expect(within(d).queryByRole("group", { name: "CI Running" })).toBeNull();
     expect(w.calls).not.toContain("ciOverview");
   });
@@ -423,8 +425,8 @@ describe("the CI Running block", () => {
     await w.api.archiveProject("old");
     await w.api.setCITracking("acme", { tracking: false, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
     expect(theme).toBeTruthy();
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
     expect(within(d).queryByRole("group", { name: "CI Running" })).toBeNull();
     expect(w.calls).not.toContain("ciOverview");
   });
@@ -432,41 +434,43 @@ describe("the CI Running block", () => {
   it("reads the running runs in Focus Mode's Project scope", async () => {
     const { w } = await ciWorld();
     const read = vi.spyOn(w.api, "ciOverview");
-    renderApp(w, "/?view=focus&project=acme");
-    await waitFor(() => expect(read).toHaveBeenCalledWith({ project: "acme", running: true }));
+    await renderApp(w, "/?view=focus&project=acme");
+    expect(read).toHaveBeenCalledWith({ project: "acme", running: true });
   });
 
   it("opens the CI view in Focus Mode's scope, with Back to Focus Mode", async () => {
     const { w } = await ciWorld();
-    renderApp(w, "/?view=focus&project=acme");
-    const d = await dashboard();
+    await renderApp(w, "/?view=focus&project=acme");
+    const d = await dashboard(w);
     // The block is drawn afresh when its first read arrives.
-    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    expect(count(d, "CI Running")).toBe("0");
     const link = within(ciBlock(d)).getByRole("link");
     expect(link).toHaveAttribute("href", "?view=ci&project=acme&back=view%3Dfocus%26project%3Dacme");
 
     await userEvent.click(link);
+    await settle(w);
     expect(window.location.search).toBe("?view=ci&project=acme&back=view%3Dfocus%26project%3Dacme");
-    await userEvent.click(await screen.findByRole("button", { name: "Back to Focus Mode" }));
+    await userEvent.click(screen.getByRole("button", { name: "Back to Focus Mode" }));
+    await settle(w);
     expect(window.location.search).toBe("?view=focus&project=acme");
   });
 
   it("opens the CI view on All Projects from All Projects", async () => {
     const { w } = await ciWorld();
-    renderApp(w);
-    const d = await dashboard();
-    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    await renderApp(w);
+    const d = await dashboard(w);
+    expect(count(d, "CI Running")).toBe("0");
     expect(within(ciBlock(d)).getByRole("link")).toHaveAttribute("href", "?view=ci&back=view%3Dfocus");
   });
 
   it("follows the live feed: runs changing, and a newer pushed commit outside the CI gate", async () => {
     const c = await ciWorld();
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(count(d, "CI Running")).toBe("0");
 
     await act(() => c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml"), ciRun(c, 2, "lint.yml")]));
-    await waitFor(() => expect(count(d, "CI Running")).toBe("2"));
+    expect(count(d, "CI Running")).toBe("2");
 
     // Under the CI gate an earlier pushed commit still counts (code-central-430).
     await act(() => c.w.api.setLandingMethod("acme", { method: "branch", push: true, remote: "origin" }));
@@ -474,32 +478,32 @@ describe("the CI Running block", () => {
     // Core makes an Accepted Ticket the branch method leaves a Focus Item
     // (To merge), which takes over from the dashboard, so the runs it no
     // longer counts are read from the service.
-    expect(await within(focus()).findByRole("article", { name: "Focus Item" })).toBeInTheDocument();
+    expect(within(focus()).getByRole("article", { name: "Focus Item" })).toBeInTheDocument();
     expect((await c.w.api.ciOverview({ running: true })).runs).toHaveLength(0);
   });
 
   it("rereads the running runs on a ticket.changed notice", async () => {
     const { w, s, theme } = await ciWorld();
     const read = vi.spyOn(w.api, "ciOverview");
-    renderApp(w);
-    const d = await dashboard();
-    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    await renderApp(w);
+    const d = await dashboard(w);
+    expect(count(d, "CI Running")).toBe("0");
     const reads = read.mock.calls.length;
 
     await act(() => touch(s, "acme", theme));
-    await waitFor(() => expect(read.mock.calls.length).toBeGreaterThan(reads));
+    expect(read.mock.calls.length).toBeGreaterThan(reads);
   });
 
   it("pulses when its count changes, but not on first show", async () => {
     const c = await ciWorld();
     await c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml")]);
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(count(d, "CI Running")).toBe("1"));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(count(d, "CI Running")).toBe("1");
     expect(pulsing(ciBlock(d))).toBe(false);
 
     await act(() => c.s.reportCIRuns("acme", [finished(c, 1, "ci.yml", "success")]));
-    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    expect(count(d, "CI Running")).toBe("0");
     expect(pulsing(ciBlock(d))).toBe(true);
     expect(pulsing(block(d, "Ready"))).toBe(false);
   });
@@ -508,9 +512,9 @@ describe("the CI Running block", () => {
     const c = await ciWorld();
     await c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml")]);
     vi.spyOn(c.w.api, "ciOverview").mockRejectedValueOnce(new ApiError(500, "internal", "The CI Runs can't be read"));
-    renderApp(c.w);
-    const d = await dashboard();
-    const alert = await within(d).findByRole("alert");
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    const alert = within(d).getByRole("alert");
     expect(alert).toHaveTextContent("The CI Runs can't be read");
     expect(inProgress(d).compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(ciBlock(d)).toBeInTheDocument();
@@ -519,19 +523,19 @@ describe("the CI Running block", () => {
     expect(entries(d)).toHaveLength(1);
 
     await act(() => c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml", { attempt: 2 })]));
-    await waitFor(() => expect(count(d, "CI Running")).toBe("1"));
+    expect(count(d, "CI Running")).toBe("1");
     expect(within(d).queryByRole("alert")).toBeNull();
   });
 
   it("leaves the Focus Item to take over when something needs the human, and shows no CI Watcher status", async () => {
     const { w, s, signup } = await ciWorld();
-    renderApp(w);
-    const d = await dashboard();
-    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    await renderApp(w);
+    const d = await dashboard(w);
+    expect(count(d, "CI Running")).toBe("0");
     expect(within(d).queryByText(/CI Watcher|Watching|hasn't reported/)).toBeNull();
 
     await act(() => s.fail("acme", signup));
-    expect(await within(focus()).findByRole("article", { name: "Focus Item" })).toBeInTheDocument();
+    expect(within(focus()).getByRole("article", { name: "Focus Item" })).toBeInTheDocument();
     expect(within(focus()).queryByRole("region", { name: "Activity Dashboard" })).toBeNull();
   });
 });
@@ -552,26 +556,26 @@ describe("the CI Running list", () => {
       finished(c, 2, "e2e.yml", "success"),
       ciRun(c, 4, "nightly.yml"),
     ]);
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(labels(d)).toEqual(["lint.yml", "ci.yml"]));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(labels(d)).toEqual(["lint.yml", "ci.yml"]);
     expect(count(d, "CI Running")).toBe("2");
     expect(inProgress(d).compareDocumentPosition(ciList(d)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("reads No CI Runs running when nothing is", async () => {
     const { w } = await ciWorld();
-    renderApp(w, "/?view=focus&project=acme");
-    const d = await dashboard();
-    await waitFor(() => expect(count(d, "CI Running")).toBe("0"));
+    await renderApp(w, "/?view=focus&project=acme");
+    const d = await dashboard(w);
+    expect(count(d, "CI Running")).toBe("0");
     expect(within(d).getByText("No CI Runs running.")).toBeInTheDocument();
     expect(within(d).queryByRole("list", { name: "CI Running" })).toBeNull();
   });
 
   it("isn't there without CI Tracking in scope", async () => {
     const { w } = await dash();
-    renderApp(w);
-    const d = await dashboard();
+    await renderApp(w);
+    const d = await dashboard(w);
     expect(within(d).queryByRole("list", { name: "CI Running" })).toBeNull();
     expect(within(d).queryByText("No CI Runs running.")).toBeNull();
   });
@@ -580,9 +584,9 @@ describe("the CI Running list", () => {
     const c = await ciWorld();
     await c.s.reportPushedCommit("acme", c.theme, "abc1234def");
     await c.s.reportCIRuns("acme", [ciRun(c, 3, "ci.yml", { name: "CI", commit: "abc1234def" }), ciRun(c, 2, "lint.yml", { name: "", commit: "abc1234def" })]);
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(ciEntries(d)).toHaveLength(2);
     expect(ciEntry(d, "CI")).toHaveTextContent(new RegExp(`^${c.theme}CIAcme${c.theme} · abc1234 · running 3m 0sView on GitHub$`));
     expect(ciEntry(d, "lint.yml")).toHaveTextContent(new RegExp(`^${c.theme}lint.ymlAcme${c.theme} · abc1234 · running 2m 0sView on GitHub$`));
   });
@@ -590,9 +594,9 @@ describe("the CI Running list", () => {
   it("says a queued run is queued, and leaves out the duration of one not started", async () => {
     const c = await ciWorld();
     await c.s.reportCIRuns("acme", [ciRun(c, 2, "ci.yml", { status: "queued" }), ciRun(c, 1, "lint.yml", { status: "queued", started: undefined })]);
-    renderApp(c.w, "/?view=focus&project=acme");
-    const d = await dashboard();
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    await renderApp(c.w, "/?view=focus&project=acme");
+    const d = await dashboard(c.w);
+    expect(ciEntries(d)).toHaveLength(2);
     expect(ciEntry(d, "ci.yml")).toHaveTextContent(new RegExp(`^${c.theme}ci.yml${c.theme} · abc123 · queued 2m 0sView on GitHub$`));
     expect(ciEntry(d, "lint.yml")).toHaveTextContent(new RegExp(`^${c.theme}lint.yml${c.theme} · abc123 · queuedView on GitHub$`));
   });
@@ -600,24 +604,25 @@ describe("the CI Running list", () => {
   it("leaves out the Project when scoped to one", async () => {
     const c = await ciWorld();
     await c.s.reportCIRuns("acme", [ciRun(c, 3, "ci.yml", { name: "CI" })]);
-    renderApp(c.w, "/?view=focus&project=acme");
-    const d = await dashboard();
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    await renderApp(c.w, "/?view=focus&project=acme");
+    const d = await dashboard(c.w);
+    expect(ciEntries(d)).toHaveLength(1);
     expect(ciEntry(d, "CI")).toHaveTextContent(new RegExp(`^${c.theme}CI${c.theme} · abc123 · running 3m 0sView on GitHub$`));
   });
 
   it("opens an entry's Ticket in the Inbox, keeping the Project filter", async () => {
     const c = await ciWorld();
     await c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml", { name: "CI" })]);
-    renderApp(c.w, "/?view=focus&project=acme");
-    const d = await dashboard();
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    await renderApp(c.w, "/?view=focus&project=acme");
+    const d = await dashboard(c.w);
+    expect(ciEntries(d)).toHaveLength(1);
     const link = within(ciEntry(d, "CI")).getByRole("link", { name: new RegExp(c.theme) });
     expect(link).toHaveAttribute("href", `?view=inbox&project=acme&ticket=${c.theme}`);
 
     await userEvent.click(link);
+    await settle(c.w);
     expect(window.location.search).toBe(`?view=inbox&project=acme&ticket=${c.theme}`);
-    expect(await screen.findByRole("complementary", { name: "Ticket" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Ticket" })).toBeInTheDocument();
   });
 
   it("opens a Stage Ticket's run in its Requirement", async () => {
@@ -626,9 +631,9 @@ describe("the CI Running list", () => {
     const stage = await c.s.ticket("acme", { title: "Tickets: Dark mode", state: "Accepted", spec: requirement, labels: ["stage:tickets"] });
     await c.s.reportPushedCommit("acme", stage, "fed987");
     await c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml", { name: "CI", branch: stage, commit: "fed987", ticket: stage })]);
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(ciEntries(d)).toHaveLength(1);
     await userEvent.click(within(ciEntry(d, "CI")).getByRole("link", { name: new RegExp(stage) }));
     expect(window.location.search).toBe(`?view=inbox&requirement=${requirement}&ticket=${stage}`);
   });
@@ -636,9 +641,9 @@ describe("the CI Running list", () => {
   it("carries the run's GitHub link beside the Ticket link, not inside it", async () => {
     const c = await ciWorld();
     await c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml", { name: "CI" })]);
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(ciEntries(d)).toHaveLength(1);
     const github = within(ciEntry(d, "CI")).getByRole("link", { name: "View on GitHub" });
     expect(github).toHaveAttribute("href", "https://github.com/acme/web/actions/runs/1");
     expect(github).toHaveAttribute("target", "_blank");
@@ -648,15 +653,15 @@ describe("the CI Running list", () => {
 
   it("follows the live feed: a run joining, finishing, and a newer pushed commit outside the CI gate", async () => {
     const c = await ciWorld();
-    renderApp(c.w);
-    const d = await dashboard();
-    await within(d).findByText("No CI Runs running.");
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(within(d).getByText("No CI Runs running.")).toBeInTheDocument();
 
     await act(() => c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml"), ciRun(c, 2, "lint.yml")]));
-    await waitFor(() => expect(labels(d)).toEqual(["ci.yml", "lint.yml"]));
+    expect(labels(d)).toEqual(["ci.yml", "lint.yml"]);
 
     await act(() => c.s.reportCIRuns("acme", [finished(c, 1, "ci.yml", "failure")]));
-    await waitFor(() => expect(labels(d)).toEqual(["lint.yml"]));
+    expect(labels(d)).toEqual(["lint.yml"]);
 
     // Under the CI gate an earlier pushed commit still counts (code-central-430).
     await act(() => c.w.api.setLandingMethod("acme", { method: "branch", push: true, remote: "origin" }));
@@ -664,39 +669,39 @@ describe("the CI Running list", () => {
     // Core makes an Accepted Ticket the branch method leaves a Focus Item
     // (To merge), which takes over from the dashboard, so the runs it no
     // longer counts are read from the service.
-    expect(await within(focus()).findByRole("article", { name: "Focus Item" })).toBeInTheDocument();
+    expect(within(focus()).getByRole("article", { name: "Focus Item" })).toBeInTheDocument();
     expect((await c.w.api.ciOverview({ running: true })).runs).toHaveLength(0);
   });
 
   it("drops a run whose workflow becomes Ignored at its next report", async () => {
     const c = await ciWorld();
     await c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml"), ciRun(c, 2, "lint.yml")]);
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(ciEntries(d)).toHaveLength(2);
 
     await act(async () => {
       await c.w.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: ["lint.yml"] });
       await c.s.reportCIRuns("acme", [ciRun(c, 2, "lint.yml")]);
     });
-    await waitFor(() => expect(labels(d)).toEqual(["ci.yml"]));
+    expect(labels(d)).toEqual(["ci.yml"]);
   });
 
   it("shows a failed read's error in its place", async () => {
     const c = await ciWorld();
     await c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml")]);
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(ciEntries(d)).toHaveLength(1);
 
     vi.spyOn(c.w.api, "ciOverview").mockRejectedValueOnce(new ApiError(500, "internal", "The CI Runs can't be read"));
     await act(() => c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml", { attempt: 2 })]));
-    expect(await within(d).findByRole("alert")).toHaveTextContent("The CI Runs can't be read");
+    expect(within(d).getByRole("alert")).toHaveTextContent("The CI Runs can't be read");
     expect(within(d).queryByRole("list", { name: "CI Running" })).toBeNull();
     expect(entries(d)).toHaveLength(1);
 
     await act(() => c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml", { attempt: 3 })]));
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    expect(ciEntries(d)).toHaveLength(1);
     expect(within(d).queryByRole("alert")).toBeNull();
   });
 });
@@ -705,33 +710,33 @@ describe("CI Running pulses", () => {
   it("marks no entry on first show", async () => {
     const c = await ciWorld();
     await c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml"), ciRun(c, 2, "lint.yml")]);
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(ciEntries(d)).toHaveLength(2);
     expect(ciEntries(d).filter(pulsing)).toEqual([]);
   });
 
   it("marks an entry when its run's status changes", async () => {
     const c = await ciWorld();
     await c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml", { status: "queued" }), ciRun(c, 2, "lint.yml")]);
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(ciEntries(d)).toHaveLength(2);
 
     await act(() => c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml")]));
-    await waitFor(() => expect(ciEntries(d).filter(pulsing)).toEqual([ciEntry(d, "ci.yml")]));
+    expect(ciEntries(d).filter(pulsing)).toEqual([ciEntry(d, "ci.yml")]);
   });
 
   it("marks a re-run's next attempt as the same entry", async () => {
     const c = await ciWorld();
     await c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml"), ciRun(c, 2, "lint.yml")]);
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(ciEntries(d)).toHaveLength(2);
     const before = ciEntry(d, "ci.yml");
 
     await act(() => c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml", { attempt: 2 })]));
-    await waitFor(() => expect(ciEntries(d).filter(pulsing)).toEqual([ciEntry(d, "ci.yml")]));
+    expect(ciEntries(d).filter(pulsing)).toEqual([ciEntry(d, "ci.yml")]);
     expect(ciEntry(d, "ci.yml")).toBe(before);
     expect(ciEntries(d)).toHaveLength(2);
   });
@@ -739,23 +744,23 @@ describe("CI Running pulses", () => {
   it("marks an entry that joins after the dashboard first shows", async () => {
     const c = await ciWorld();
     await c.s.reportCIRuns("acme", [ciRun(c, 2, "lint.yml")]);
-    renderApp(c.w);
-    const d = await dashboard();
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(ciEntries(d)).toHaveLength(1);
 
     await act(() => c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml")]));
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(2));
+    expect(ciEntries(d)).toHaveLength(2);
     expect(ciEntries(d).filter(pulsing)).toEqual([ciEntry(d, "ci.yml")]);
   });
 
   it("marks the first entry to join an empty list", async () => {
     const c = await ciWorld();
-    renderApp(c.w);
-    const d = await dashboard();
-    await within(d).findByText("No CI Runs running.");
+    await renderApp(c.w);
+    const d = await dashboard(c.w);
+    expect(within(d).getByText("No CI Runs running.")).toBeInTheDocument();
 
     await act(() => c.s.reportCIRuns("acme", [ciRun(c, 1, "ci.yml")]));
-    await waitFor(() => expect(ciEntries(d)).toHaveLength(1));
+    expect(ciEntries(d)).toHaveLength(1);
     expect(pulsing(ciEntry(d, "ci.yml"))).toBe(true);
   });
 });

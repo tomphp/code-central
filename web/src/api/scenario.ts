@@ -51,9 +51,11 @@ export interface Work {
 // CIOutcome is how a pushed commit's CI run stands.
 export type CIOutcome = "running" | "passed" | "failed" | "cancelled";
 
-// scenario builds on a WASM Core world.
-export function scenario(w: World): Scenario {
-  return new Scenario(worldConnection(w));
+// scenario builds on a WASM Core world, settling it after every step with
+// settle, the world's own settled unless given. A component test takes
+// worldTesting's scenario instead, which settles inside act.
+export function scenario(w: World, settle?: () => Promise<void>): Scenario {
+  return new Scenario(worldConnection(w, settle));
 }
 
 export const QUESTIONS: QuestionSeed[] = [{ title: "Which colour?", body: "Red or blue", recommended: "Blue" }];
@@ -113,7 +115,10 @@ export class Scenario extends HttpDriver {
   // spec makes a Spec and returns its ID.
   async spec(key: string, s: { title?: string; body?: string; labels?: string[] } = {}): Promise<string> {
     const { id } = await this.agent(`${this.projectPath(key)}/create_spec`, { title: s.title ?? "A Spec", body: s.body ?? "" });
-    if (s.labels?.length) await this.api.addLabels(key, id, s.labels);
+    if (s.labels?.length) {
+      await this.api.addLabels(key, id, s.labels);
+      await this.settle();
+    }
     return id;
   }
 
@@ -265,6 +270,7 @@ export class Scenario extends HttpDriver {
   // returns the Requirement's Spec ID.
   async requirement(key: string, text: string): Promise<string> {
     const r = await this.api.submitRequirement(key, text);
+    await this.settle();
     for (const t of r.stages) {
       const claim_id = await this.claimFor(key, t.id);
       // Only the spec Stage takes a recommendation.
@@ -346,6 +352,7 @@ export class Scenario extends HttpDriver {
   // archive has the human put the Project away.
   async archive(key: string) {
     await this.api.archiveProject(key);
+    await this.settle();
   }
 
   // reportIssueWatcher and reportPullRequestWatcher have the Watchers

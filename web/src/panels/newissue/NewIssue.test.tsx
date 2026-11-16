@@ -3,15 +3,14 @@
 // Core: a New issue's row in Needs Me, its
 // Focus Item, its action panel, and the triage actions in the Ticket
 // panel of every Incoming Issue.
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../../App";
 import { newWorld, type World } from "../../api/core/core";
-import { scenario, type Scenario } from "../../api/scenario";
+import type { Scenario } from "../../api/scenario";
 import { TRIAGE_ACTIONS } from "../../api/types";
 import { TicketDetail } from "../../ticket/TicketDetail";
-import { renderLive } from "../../worldTesting";
+import { renderApp, renderLive, scenario, settle } from "../../worldTesting";
 import { panel } from "./panel";
 
 const ISSUE = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7" };
@@ -36,38 +35,33 @@ function nextUp(s: Scenario, title: string, number = 8) {
   return s.linkTicket("acme", title, { ...ISSUE, id: `acme/web#${number}`, url: `https://github.com/acme/web/issues/${number}` }, "closed");
 }
 
-function renderApp(w: World, url: string) {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
-}
-
 const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 
 async function renderPanel({ w, issue }: Issues) {
   const t = await w.api.getTicket("acme", issue);
-  renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
+  await renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("region", { name: "New issue" });
 }
 
 async function renderDetail(w: World, id: string) {
   const t = await w.api.getTicket("acme", id);
-  renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
+  await renderLive(w, <TicketDetail project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("article", { name: "Ticket details" });
 }
 
 describe("a New issue in Needs Me", () => {
   it("is listed under New issue, naming its issue", async () => {
     const { w, issue } = await world();
-    renderApp(w, "/?view=inbox");
-    const group = await screen.findByRole("region", { name: "New issue" });
+    await renderApp(w, "/?view=inbox");
+    const group = screen.getByRole("region", { name: "New issue" });
     expect(within(group).getByRole("link", { name: new RegExp(issue) })).toHaveTextContent("github acme/web#7 came in just now");
   });
 
   it("has the New issue panel as its action panel", async () => {
     const { w, issue } = await world();
-    renderApp(w, `/?view=inbox&ticket=${issue}`);
-    const slot = await screen.findByRole("region", { name: "Action panel" });
-    expect(await within(slot).findByRole("region", { name: "New issue" })).toBeInTheDocument();
+    await renderApp(w, `/?view=inbox&ticket=${issue}`);
+    const slot = screen.getByRole("region", { name: "Action panel" });
+    expect(within(slot).getByRole("region", { name: "New issue" })).toBeInTheDocument();
     // The triage actions are in the panel, so the Ticket details don't
     // repeat them.
     expect(within(screen.getByRole("article", { name: "Ticket details" })).queryByRole("region", { name: "Triage" })).toBeNull();
@@ -193,31 +187,34 @@ describe("a New issue in Focus Mode", () => {
   it("offers To Requirement with its context box, and moves on", async () => {
     const x = await world();
     await nextUp(x.s, "Next up");
-    renderApp(x.w, "/?view=focus");
-    const item = await within(focus()).findByRole("region", { name: "New issue" });
+    await renderApp(x.w, "/?view=focus");
+    const item = within(focus()).getByRole("region", { name: "New issue" });
     await toRequirement(item, "Urgent.");
+    await settle(x.w);
     expect((await x.w.api.getTicket("acme", x.issue)).comments!.at(-1)?.body).toBe("Urgent.");
-    expect(await within(focus()).findByRole("heading", { name: "Next up" })).toBeInTheDocument();
+    expect(within(focus()).getByRole("heading", { name: "Next up" })).toBeInTheDocument();
   });
 
   it("offers Won't fix with its reason box, and moves on", async () => {
     const x = await world();
     await nextUp(x.s, "Next up");
-    renderApp(x.w, "/?view=focus");
-    const item = await within(focus()).findByRole("region", { name: "New issue" });
+    await renderApp(x.w, "/?view=focus");
+    const item = within(focus()).getByRole("region", { name: "New issue" });
     await wontFix(item, "Not planned.");
+    await settle(x.w);
     expect((await x.w.api.getTicket("acme", x.issue)).comments!.at(-1)?.body).toBe("Not planned.");
-    expect(await within(focus()).findByRole("heading", { name: "Next up" })).toBeInTheDocument();
+    expect(within(focus()).getByRole("heading", { name: "Next up" })).toBeInTheDocument();
   });
 
   it("is a Focus Item with its panel, and Keep as Draft moves on", async () => {
     const x = await world();
     await nextUp(x.s, "Gone upstream");
-    renderApp(x.w, "/?view=focus");
-    expect(await within(focus()).findByRole("heading", { name: "Login is broken" })).toBeInTheDocument();
-    const item = await within(focus()).findByRole("region", { name: "New issue" });
+    await renderApp(x.w, "/?view=focus");
+    expect(within(focus()).getByRole("heading", { name: "Login is broken" })).toBeInTheDocument();
+    const item = within(focus()).getByRole("region", { name: "New issue" });
     await userEvent.click(within(item).getByRole("button", { name: "Keep as Draft" }));
-    expect(await within(focus()).findByRole("heading", { name: "Gone upstream" })).toBeInTheDocument();
+    await settle(x.w);
+    expect(within(focus()).getByRole("heading", { name: "Gone upstream" })).toBeInTheDocument();
   });
 });
 
@@ -252,7 +249,8 @@ describe("the triage actions in the Ticket panel", () => {
     const d = await renderDetail(w, issue);
     await w.api.unlink("acme", issue); // the Ticket shown is stale
     await wontFix(d);
-    expect(await within(d).findByRole("alert")).toHaveTextContent("was unlinked from github acme/web#7");
+    await settle(w);
+    expect(within(d).getByRole("alert")).toHaveTextContent("was unlinked from github acme/web#7");
   });
 
   it("are not offered on any other Ticket", async () => {
@@ -267,6 +265,7 @@ describe("the triage actions in the Ticket panel", () => {
     const d = await renderDetail(w, issue);
     await w.api.unlink("acme", issue); // the Ticket shown is stale
     await userEvent.click(within(d).getByRole("button", { name: "Keep as Draft" }));
-    expect(await within(d).findByRole("alert")).toHaveTextContent("no longer an Incoming Issue to triage");
+    await settle(w);
+    expect(within(d).getByRole("alert")).toHaveTextContent("no longer an Incoming Issue to triage");
   });
 });

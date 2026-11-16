@@ -1,36 +1,26 @@
 // Shared set-up for the Inbox and Focus Mode tests (Spec code-central-580):
 // the real App on a WASM Core world, opened at a URL, built with the
 // scenario builder, and the helpers every one of them reaches for.
-import { act, render, screen, within } from "@testing-library/react";
-import { App } from "../App";
+import { screen, within } from "@testing-library/react";
 import { newWorld, type World } from "../api/core/core";
-import { scenario, type Scenario } from "../api/scenario";
+import type { Scenario } from "../api/scenario";
+import { scenario, settle } from "../worldTesting";
 
-// renderApp renders the App at url, against w and its clock.
-export function renderApp(w: World, url = "/?view=focus") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
-}
+export { renderApp, scenario, settle } from "../worldTesting";
 
 // focus is Focus Mode's main region.
 export const focus = () => screen.getByRole("main", { name: "Focus Mode" });
 
-// settled lets the App's pending effects run, so a change made next
-// reaches the subscriptions they make on mounting.
-export async function settled() {
-  await act(async () => {});
+// loadedDashboard settles w, so a change made next reaches the subscription
+// the Activity Dashboard makes on mounting, then returns the dashboard in
+// main.
+export async function loadedDashboard(w: World, main: HTMLElement) {
+  await settle(w);
+  return within(main).getByRole("region", { name: "Activity Dashboard" });
 }
 
-// loadedDashboard waits for the Activity Dashboard in main, then for its
-// effects to run, so a change made next reaches the subscription it makes on
-// mounting.
-export async function loadedDashboard(main: HTMLElement) {
-  const d = await within(main).findByRole("region", { name: "Activity Dashboard" });
-  await settled();
-  return d;
-}
-
-// acme is a world with the Project "acme" ("Acme"), and its scenario.
+// acme is a world with the Project "acme" ("Acme"), and its scenario,
+// which settles inside act after every step.
 export async function acme(): Promise<{ w: World; s: Scenario }> {
   const w = await newWorld();
   const s = scenario(w);

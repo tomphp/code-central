@@ -1,18 +1,13 @@
 // Requirement tests: the real App on a WASM Core world. "New requirement",
 // the Stage strip, the Requirement pane and the Requirements view.
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
 import { newWorld, type World } from "../api/core/core";
-import { scenario, WORK, type Scenario } from "../api/scenario";
+import { WORK, type Scenario } from "../api/scenario";
+import { renderApp, scenario, settle } from "../worldTesting";
 
 const HOUR = 3_600_000;
-
-function renderApp(w: World, url = "/") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
-}
 
 // acme is a world with the Project acme, and the scenario builder on it.
 async function acme(...more: string[]) {
@@ -37,100 +32,112 @@ const nav = () => screen.getByRole("navigation", { name: "Filters" });
 const detail = () => screen.getByRole("complementary", { name: "Ticket" });
 const params = () => new URLSearchParams(window.location.search);
 
+// click is a user's click, settled.
+async function click(w: World, el: Element) {
+  await userEvent.click(el);
+  await settle(w);
+}
+
+// type is a user's typing, settled.
+async function type(w: World, el: Element, text: string) {
+  await userEvent.type(el, text);
+  await settle(w);
+}
+
 describe("New requirement", () => {
   it("opens a modal with one text box, submits it and selects the new Requirement", async () => {
     const { w } = await acme();
-    renderApp(w);
+    await renderApp(w, "/");
 
-    await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
+    await click(w, within(nav()).getByRole("button", { name: "New requirement" }));
     const modal = screen.getByRole("dialog", { name: "New requirement" });
     expect(within(modal).getAllByRole("textbox")).toHaveLength(1);
-    await userEvent.type(within(modal).getByRole("textbox", { name: "Requirement" }), "Export a Spec as Markdown{Enter}One file.");
-    await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
+    await type(w, within(modal).getByRole("textbox", { name: "Requirement" }), "Export a Spec as Markdown{Enter}One file.");
+    await click(w, within(modal).getByRole("button", { name: "Submit requirement" }));
 
     expect(w.calls).toContain("submitRequirement");
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(await within(detail()).findByText("Waiting for a Factory to claim Grilling. Nothing needs you yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(detail()).getByText("Waiting for a Factory to claim Grilling. Nothing needs you yet.")).toBeInTheDocument();
     expect(within(detail()).getByRole("heading", { name: "Export a Spec as Markdown", level: 2 })).toBeInTheDocument();
     expect(params().get("requirement")).toBe("acme-1");
   });
 
   it("offers Straight to Spec, off by default, and submits it skipping Grilling", async () => {
     const { w } = await acme();
-    renderApp(w);
+    await renderApp(w, "/");
 
-    await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
+    await click(w, within(nav()).getByRole("button", { name: "New requirement" }));
     const modal = screen.getByRole("dialog", { name: "New requirement" });
     const box = within(modal).getByRole("checkbox", { name: "Straight to Spec (no grilling)" });
     expect(box).not.toBeChecked();
     expect(within(modal).getByText(/Grilling, Spec and Tickets Stages/)).toBeInTheDocument();
-    await userEvent.click(box);
+    await click(w, box);
     expect(within(modal).getByText("Creates a Spec and its Spec and Tickets Stages. A Factory picks up Spec.")).toBeInTheDocument();
-    await userEvent.type(within(modal).getByRole("textbox", { name: "Requirement" }), "Dark mode");
-    await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
+    await type(w, within(modal).getByRole("textbox", { name: "Requirement" }), "Dark mode");
+    await click(w, within(modal).getByRole("button", { name: "Submit requirement" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(await within(detail()).findByText(/Grilling/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(detail()).getByText(/Grilling/)).toBeInTheDocument();
     expect(w.calls).toContain("submitRequirement");
   });
 
   it("saves as Draft: Save as Draft writes every Stage Ticket as Draft", async () => {
     const { w } = await acme();
-    renderApp(w);
+    await renderApp(w, "/");
 
-    await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
+    await click(w, within(nav()).getByRole("button", { name: "New requirement" }));
     const modal = screen.getByRole("dialog", { name: "New requirement" });
     expect(within(modal).getByRole("button", { name: "Save as Draft" })).toBeDisabled();
-    await userEvent.type(within(modal).getByRole("textbox", { name: "Requirement" }), "Export a Spec as Markdown");
-    await userEvent.click(within(modal).getByRole("button", { name: "Save as Draft" }));
+    await type(w, within(modal).getByRole("textbox", { name: "Requirement" }), "Export a Spec as Markdown");
+    await click(w, within(modal).getByRole("button", { name: "Save as Draft" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.queryByRole("dialog")).toBeNull();
     const tickets = (await w.api.findTickets("acme")).filter((t) => t.spec === "acme-1");
     expect(tickets.map((t) => t.state)).toEqual(["Draft", "Draft", "Draft"]);
   });
 
   it("closes on Cancel without submitting", async () => {
     const { w } = await acme();
-    renderApp(w);
+    await renderApp(w, "/");
 
-    await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
-    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    await click(w, within(nav()).getByRole("button", { name: "New requirement" }));
+    await click(w, within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(w.calls).not.toContain("submitRequirement");
   });
 
   it("asks which Project when there are several and none is chosen, and goes to the chosen one", async () => {
     const { w } = await acme("beta");
-    renderApp(w);
+    await renderApp(w, "/");
 
-    await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
+    await click(w, within(nav()).getByRole("button", { name: "New requirement" }));
     const modal = screen.getByRole("dialog");
     await userEvent.selectOptions(within(modal).getByRole("combobox", { name: "Project" }), "beta");
-    await userEvent.type(within(modal).getByRole("textbox", { name: "Requirement" }), "Beta work");
-    await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
+    await type(w, within(modal).getByRole("textbox", { name: "Requirement" }), "Beta work");
+    await click(w, within(modal).getByRole("button", { name: "Submit requirement" }));
 
-    await waitFor(() => expect(params().get("requirement")).toBe("beta-1"));
+    expect(params().get("requirement")).toBe("beta-1");
   });
 
   it("submits to the filtered Project without asking", async () => {
     const { w } = await acme("beta");
-    renderApp(w, "/?view=inbox&project=beta");
+    await renderApp(w, "/?view=inbox&project=beta");
 
-    await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
+    await click(w, within(nav()).getByRole("button", { name: "New requirement" }));
     const modal = screen.getByRole("dialog");
     expect(within(modal).queryByRole("combobox")).toBeNull();
-    await userEvent.type(within(modal).getByRole("textbox", { name: "Requirement" }), "Beta work");
-    await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
-    await waitFor(() => expect(params().get("requirement")).toBe("beta-1"));
+    await type(w, within(modal).getByRole("textbox", { name: "Requirement" }), "Beta work");
+    await click(w, within(modal).getByRole("button", { name: "Submit requirement" }));
+    expect(params().get("requirement")).toBe("beta-1");
   });
 
   it("won't submit blank text", async () => {
     const { w } = await acme();
-    renderApp(w);
+    await renderApp(w, "/");
 
-    await userEvent.click(await within(nav()).findByRole("button", { name: "New requirement" }));
+    await click(w, within(nav()).getByRole("button", { name: "New requirement" }));
     const modal = screen.getByRole("dialog");
-    await userEvent.type(within(modal).getByRole("textbox", { name: "Requirement" }), "   ");
+    await type(w, within(modal).getByRole("textbox", { name: "Requirement" }), "   ");
     expect(within(modal).getByRole("button", { name: "Submit requirement" })).toBeDisabled();
   });
 });
@@ -159,9 +166,8 @@ describe("the Requirement pane", () => {
   it("shows Grilling skipped and Spec current for a Requirement submitted Straight to Spec", async () => {
     const { w } = await acme();
     await w.api.submitRequirement("acme", "Export a Spec as Markdown", undefined, true);
-    renderApp(w, "/?view=inbox&requirement=acme-1");
+    await renderApp(w, "/?view=inbox&requirement=acme-1");
 
-    await within(detail()).findByRole("region", { name: "Requirement" });
     const strip = within(within(pane()).getByRole("list", { name: "Stages" }));
     expect(strip.getByText("Grilling").closest("li")).toHaveAttribute("data-progress", "skipped");
     expect(strip.queryByText("Map")).toBeNull();
@@ -173,9 +179,8 @@ describe("the Requirement pane", () => {
   it("shows the header and strip, a queued Stage dashed, while the Requirement waits for a Factory", async () => {
     const { w } = await acme();
     await w.api.submitRequirement("acme", "Export a Spec as Markdown");
-    renderApp(w, "/?view=inbox&requirement=acme-1");
+    await renderApp(w, "/?view=inbox&requirement=acme-1");
 
-    await within(detail()).findByRole("region", { name: "Requirement" });
     expect(pane()).toHaveTextContent("acme-1");
     expect(pane()).toHaveTextContent("submitted just now");
     expect(segment(/^Grilling/).closest("li")).toHaveAttribute("data-progress", "queued");
@@ -183,14 +188,14 @@ describe("the Requirement pane", () => {
     expect(segment(/^Build/)).toBeDisabled();
     expect(within(pane()).getByText("Waiting for a Factory to claim Grilling. Nothing needs you yet.")).toBeInTheDocument();
     // With no Ticket needing the human, the Ticket pane opens on the current Stage.
-    expect(await within(detail()).findByRole("heading", { name: "Grilling: Export a Spec as Markdown" })).toBeInTheDocument();
+    expect(within(detail()).getByRole("heading", { name: "Grilling: Export a Spec as Markdown" })).toBeInTheDocument();
   });
 
   it("opens on the Ticket that needs the human, lists Build's Tickets with their States, and selects a Stage from the strip", async () => {
     const { w } = await building();
-    renderApp(w, "/?view=inbox&requirement=acme-1");
+    await renderApp(w, "/?view=inbox&requirement=acme-1");
 
-    expect(await within(detail()).findByRole("heading", { name: "Archive in the Project menu" })).toBeInTheDocument();
+    expect(within(detail()).getByRole("heading", { name: "Archive in the Project menu" })).toBeInTheDocument();
     expect(pane()).toHaveTextContent("submitted 2h ago");
     expect(within(pane()).getByRole("heading", { name: "Archive finished Projects" })).toBeInTheDocument();
     expect(segment(/^Build/)).toHaveTextContent("Build 1/3");
@@ -208,14 +213,14 @@ describe("the Requirement pane", () => {
       "acme-8 Dropped idea Cancelled",
     ]);
 
-    await userEvent.click(segment(/^Spec/));
+    await click(w, segment(/^Spec/));
     expect(params().get("ticket")).toBe("acme-3");
     expect(params().get("requirement")).toBe("acme-1");
-    expect(await within(detail()).findByRole("heading", { name: "Spec: Archive finished Projects" })).toBeInTheDocument();
+    expect(within(detail()).getByRole("heading", { name: "Spec: Archive finished Projects" })).toBeInTheDocument();
     expect(segment(/^Spec/).closest("li")).toHaveAttribute("aria-current", "step");
 
-    await userEvent.click(within(build).getByRole("button", { name: /acme-7 CLI/ }));
-    expect(await within(detail()).findByRole("heading", { name: "CLI: archive-project" })).toBeInTheDocument();
+    await click(w, within(build).getByRole("button", { name: /acme-7 CLI/ }));
+    expect(within(detail()).getByRole("heading", { name: "CLI: archive-project" })).toBeInTheDocument();
   });
 
   it("shows an In Progress Build Ticket's latest Session Event faintly, and nothing on one with none", async () => {
@@ -225,9 +230,8 @@ describe("the Requirement pane", () => {
     const quiet = await s.ticket("acme", { title: "Archive in the store", state: "Ready", spec }); // acme-10
     await s.factorySession("acme", busy, { session: "s-busy", events: [{ time: new Date(w.now().getTime() - 5 * 60_000).toISOString(), kind: "tool_call", tool: "Edit", text: "Edit: core/archive.go" }] });
     await s.factorySession("acme", quiet, { session: "s-quiet" });
-    renderApp(w, "/?view=inbox&requirement=acme-1");
+    await renderApp(w, "/?view=inbox&requirement=acme-1");
 
-    await within(detail()).findByRole("region", { name: "Requirement" });
     const build = within(pane()).getByRole("list", { name: "Build" });
     const items = within(build).getAllByRole("listitem");
     expect(within(items[4]).getByText("Edit: core/archive.go · 5m ago")).toHaveClass("latest-event");
@@ -245,11 +249,11 @@ describe("the Requirement pane", () => {
     const { w, s } = await building();
     const busy = await s.ticket("acme", { title: "Archive in the API", state: "Ready", spec: "acme-1" }); // acme-9
     await s.factorySession("acme", busy, { session: "s-busy" });
-    renderApp(w, "/?view=inbox&requirement=acme-1");
+    await renderApp(w, "/?view=inbox&requirement=acme-1");
 
-    const build = await within(detail()).findByRole("list", { name: "Build" });
-    await act(() => s.postSessionEvents("s-busy", [{ time: w.now().toISOString(), kind: "text", text: "Writing the test first." }]));
-    expect(await within(build).findByText("Writing the test first. · just now")).toHaveClass("latest-event");
+    const build = within(pane()).getByRole("list", { name: "Build" });
+    await s.postSessionEvents("s-busy", [{ time: w.now().toISOString(), kind: "text", text: "Writing the test first." }]);
+    expect(within(build).getByText("Writing the test first. · just now")).toHaveClass("latest-event");
   });
 
   it("shows a Cancelled tickets Stage as skipped, makes Build current and opens on the implementation Ticket", async () => {
@@ -259,17 +263,16 @@ describe("the Requirement pane", () => {
     await done(s, r.stages[1].id);
     await s.human(`${s.ticketPath("acme", r.stages[2].id)}/cancel`, {});
     await s.ticket("acme", { title: "Implement the export", state: "Ready", spec: r.spec.id });
-    renderApp(w, "/?view=inbox&requirement=acme-1");
+    await renderApp(w, "/?view=inbox&requirement=acme-1");
 
-    await within(detail()).findByRole("region", { name: "Requirement" });
     const tickets = segment(/^Tickets/);
     expect(tickets.closest("li")).toHaveAttribute("data-progress", "skipped");
     expect(tickets).toHaveAttribute("title", "Tickets: skipped");
     expect(tickets).toBeEnabled();
     expect(within(pane()).getByText("Waiting for a Factory to claim a Build Ticket. Nothing needs you yet.")).toBeInTheDocument();
-    expect(await within(detail()).findByRole("heading", { name: "Implement the export" })).toBeInTheDocument();
+    expect(within(detail()).getByRole("heading", { name: "Implement the export" })).toBeInTheDocument();
 
-    await userEvent.click(tickets);
+    await click(w, tickets);
     expect(params().get("ticket")).toBe(r.stages[2].id);
   });
 
@@ -277,9 +280,9 @@ describe("the Requirement pane", () => {
     const { w, s, review } = await building();
     await s.human(`${s.ticketPath("acme", review)}/accept`, {});
     await s.human(`${s.ticketPath("acme", review)}/land`, { commit: WORK.commit });
-    renderApp(w, "/?view=inbox&requirement=acme-1");
+    await renderApp(w, "/?view=inbox&requirement=acme-1");
 
-    expect(await within(detail()).findByText("Waiting for a Factory to claim a Build Ticket. Nothing needs you yet.")).toBeInTheDocument();
+    expect(within(detail()).getByText("Waiting for a Factory to claim a Build Ticket. Nothing needs you yet.")).toBeInTheDocument();
     expect(segment(/^Build/)).toHaveTextContent("Build 2/3");
     expect(segment(/^Build/).closest("li")).toHaveAttribute("data-progress", "queued");
   });
@@ -293,11 +296,11 @@ describe("the Requirements view", () => {
     for (const t of finished.stages) await done(s, t.id);
     const notRequirement = await s.spec("acme", { title: "Not a Requirement" });
     await s.ticket("acme", { title: "Plain work", state: "Ready", spec: notRequirement });
-    renderApp(w, "/?view=inbox&list=requirements");
+    await renderApp(w, "/?view=inbox&list=requirements");
 
     const list = screen.getByRole("main", { name: "Tickets" });
     const ids = () => [...list.querySelectorAll<HTMLElement>("a[data-id]")].map((a) => a.dataset.id);
-    await waitFor(() => expect(ids()).toEqual([fresh.spec.id, "acme-1", finished.spec.id]));
+    expect(ids()).toEqual([fresh.spec.id, "acme-1", finished.spec.id]);
 
     const row = (id: string) => list.querySelector<HTMLElement>(`a[data-id="${id}"]`)!;
     expect(within(row("acme-1")).getByRole("list", { name: "Stages" })).toHaveTextContent("Build 1/3");
@@ -307,9 +310,9 @@ describe("the Requirements view", () => {
     expect(row(finished.spec.id)).toHaveTextContent("Finished");
     expect(params().get("list")).toBe("requirements");
 
-    await userEvent.click(row("acme-1"));
+    await click(w, row("acme-1"));
     expect(params().get("requirement")).toBe("acme-1");
-    expect(await within(detail()).findByRole("heading", { name: "Archive in the Project menu" })).toBeInTheDocument();
+    expect(within(detail()).getByRole("heading", { name: "Archive in the Project menu" })).toBeInTheDocument();
     expect(row("acme-1")).toHaveAttribute("aria-current", "true");
   });
 });

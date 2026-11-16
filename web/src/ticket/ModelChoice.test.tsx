@@ -2,15 +2,13 @@
 // effort the Ticket's next turn runs with, each with its source, and
 // pickers that write the Ticket's model and effort Tags or clear them.
 // On a WASM Core world.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
 import { newWorld, type World } from "../api/core/core";
-import { scenario } from "../api/scenario";
 import type { ReportedModels } from "../api/types";
 import { options, suggested } from "../testPickers";
-import { renderLive } from "../worldTesting";
+import { renderApp, renderLive, scenario, settle } from "../worldTesting";
 import { TicketDetail } from "./TicketDetail";
 
 const report = { effort_levels: [], aliases: [], model_flag: "", effort_flag: "" };
@@ -30,7 +28,7 @@ const reported = async (w: World): Promise<ReportedModels> => (await w.api.listP
 
 async function renderDetail(w: World, id: string) {
   const t = await w.api.getTicket("acme", id);
-  const r = renderLive(w, <TicketDetail project="acme" ticket={t} reported={await reported(w)} now={w.now()} />);
+  const r = await renderLive(w, <TicketDetail project="acme" ticket={t} reported={await reported(w)} now={w.now()} />);
   return {
     ...r,
     rerender: async () => r.rerender(<TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} reported={await reported(w)} now={w.now()} />),
@@ -138,7 +136,8 @@ describe("the Ticket detail's Model and effort", () => {
     // The Factory reports other levels after the panel was read.
     await s.reportModels("acme", { ...report, effort_levels: ["low", "high"] });
     await userEvent.selectOptions(effortPicker(), "max");
-    expect(await within(section()).findByRole("alert")).toHaveTextContent('effort "max" isn\'t a valid level; use one of low, high');
+    await settle(w);
+    expect(within(section()).getByRole("alert")).toHaveTextContent('effort "max" isn\'t a valid level; use one of low, high');
     expect((await w.api.getTicket("acme", fix)).tags).toEqual({});
   });
 });
@@ -147,15 +146,16 @@ describe("the Ticket panel's Model and effort, live", () => {
   it("follows the Ticket's Tags, the Models rows and the Reported Models", async () => {
     const { w, s, fix } = await seeded();
     window.history.replaceState(null, "", `/?view=inbox&ticket=${fix}`);
-    render(<App api={w.api} now={w.now} />);
-    const line = (text: string) => waitFor(() => expect(applies("Model")).toBe(text));
-    await line("Claude Code's default");
+    await renderApp(w, `/?view=inbox&ticket=${fix}`);
+    expect(applies("Model")).toBe("Claude Code's default");
 
     await s.reportModels("acme", { ...report, model_flag: "sonnet" });
-    await line("sonnet (Factory flag)");
+    expect(applies("Model")).toBe("sonnet (Factory flag)");
     await w.api.setModels("acme", { default: { model: "", effort: "" }, kinds: [{ kind: "implementation", model: "opus", effort: "" }] });
-    await line("opus (the Project's implementation row)");
+    await settle(w);
+    expect(applies("Model")).toBe("opus (the Project's implementation row)");
     await w.api.setTags("acme", fix, { model: "fable" });
-    await line("fable (Ticket Tag)");
+    await settle(w);
+    expect(applies("Model")).toBe("fable (Ticket Tag)");
   });
 });

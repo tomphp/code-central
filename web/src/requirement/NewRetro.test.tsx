@@ -1,17 +1,11 @@
 // Retro tests: the real App on a WASM Core world. "Retro" in the Ticket
 // pane's header, its dialog, and the Retro badge.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { App } from "../App";
 import { newWorld, type World } from "../api/core/core";
-import { scenario } from "../api/scenario";
 import { ApiError, type State } from "../api/types";
-
-function renderApp(w: World, url = "/") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
-}
+import { renderApp, scenario, settle } from "../worldTesting";
 
 // acme is a world with the Project acme and a Spec, and the scenario builder.
 async function acme() {
@@ -26,9 +20,21 @@ async function acme() {
 const detail = () => screen.getByRole("complementary", { name: "Ticket" });
 const params = () => new URLSearchParams(window.location.search);
 
+// click is a user's click, settled.
+async function click(w: World, el: Element) {
+  await userEvent.click(el);
+  await settle(w);
+}
+
+// type is a user's typing, settled.
+async function type(w: World, el: Element, text: string) {
+  await userEvent.type(el, text);
+  await settle(w);
+}
+
 // startRetro opens the dialog from the Ticket pane.
-async function startRetro() {
-  await userEvent.click(await within(detail()).findByRole("button", { name: "Retro" }));
+async function startRetro(w: World) {
+  await click(w, within(detail()).getByRole("button", { name: "Retro" }));
   return screen.getByRole("dialog", { name: "Retro" });
 }
 
@@ -42,9 +48,9 @@ describe("Retro on a Ticket", () => {
   ])("a %s Ticket's header has the Retro button: %s", async (state, shown) => {
     const { w, s, spec } = await acme();
     const id = await s.ticket("acme", { title: "Dark palette", state, spec });
-    renderApp(w, `/?view=inbox&ticket=${id}`);
+    await renderApp(w, `/?view=inbox&ticket=${id}`);
 
-    expect(await within(detail()).findByRole("heading", { name: "Dark palette", level: 2 })).toBeInTheDocument();
+    expect(within(detail()).getByRole("heading", { name: "Dark palette", level: 2 })).toBeInTheDocument();
     const retro = within(detail()).queryByRole("button", { name: "Retro" });
     if (shown) expect(retro).toBeInTheDocument();
     else expect(retro).toBeNull();
@@ -54,42 +60,42 @@ describe("Retro on a Ticket", () => {
     const { w, s, spec } = await acme();
     const id = await s.ticket("acme", { title: "Dark palette", state: "Done", spec });
     await s.archive("acme");
-    renderApp(w, `/?view=inbox&ticket=${id}`);
+    await renderApp(w, `/?view=inbox&ticket=${id}`);
 
-    expect(await within(detail()).findByRole("heading", { name: "Dark palette", level: 2 })).toBeInTheDocument();
+    expect(within(detail()).getByRole("heading", { name: "Dark palette", level: 2 })).toBeInTheDocument();
     expect(within(detail()).queryByRole("button", { name: "Retro" })).toBeNull();
   });
 
   it("opens a dialog with one optional Note, and submits with an empty note", async () => {
     const { w, s, spec } = await acme();
     const id = await s.ticket("acme", { title: "Dark palette", state: "Done", spec });
-    renderApp(w, `/?view=inbox&ticket=${id}`);
+    await renderApp(w, `/?view=inbox&ticket=${id}`);
 
-    const modal = await startRetro();
+    const modal = await startRetro(w);
     expect(within(modal).getAllByRole("textbox")).toHaveLength(1);
     expect(within(modal).getByRole("textbox", { name: "Note" })).toHaveValue("");
     const submit = within(modal).getByRole("button", { name: "Start retro" });
     expect(submit).toBeEnabled();
-    await userEvent.click(submit);
+    await click(w, submit);
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(w.calls).toContain("submitRetro");
     const retro = (await w.api.findTickets("acme")).find((t) => t.title === "Retro: Dark palette")!;
     expect(await w.api.getTicket("acme", retro.id)).toMatchObject({ state: "Ready", labels: ["retro"], tags: { "retro-of": id } });
     expect(params().get("ticket")).toBe(retro.id);
-    expect(await within(detail()).findByRole("heading", { name: "Retro: Dark palette", level: 2 })).toBeInTheDocument();
+    expect(within(detail()).getByRole("heading", { name: "Retro: Dark palette", level: 2 })).toBeInTheDocument();
   });
 
   it("puts the note in the Retro, and selects it", async () => {
     const { w, s, spec } = await acme();
     const id = await s.ticket("acme", { title: "Dark palette", state: "Cancelled", spec });
-    renderApp(w, `/?view=inbox&ticket=${id}`);
+    await renderApp(w, `/?view=inbox&ticket=${id}`);
 
-    const modal = await startRetro();
-    await userEvent.type(within(modal).getByRole("textbox", { name: "Note" }), "Why did the agent stall?");
-    await userEvent.click(within(modal).getByRole("button", { name: "Start retro" }));
+    const modal = await startRetro(w);
+    await type(w, within(modal).getByRole("textbox", { name: "Note" }), "Why did the agent stall?");
+    await click(w, within(modal).getByRole("button", { name: "Start retro" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.queryByRole("dialog")).toBeNull();
     const retro = (await w.api.findTickets("acme")).find((t) => t.title === "Retro: Dark palette")!;
     expect((await w.api.getTicket("acme", retro.id)).description).toContain("Why did the agent stall?");
     expect(params().get("ticket")).toBe(retro.id);
@@ -98,10 +104,10 @@ describe("Retro on a Ticket", () => {
   it("closes on Cancel without submitting", async () => {
     const { w, s, spec } = await acme();
     const id = await s.ticket("acme", { title: "Dark palette", state: "Done", spec });
-    renderApp(w, `/?view=inbox&ticket=${id}`);
+    await renderApp(w, `/?view=inbox&ticket=${id}`);
 
-    const modal = await startRetro();
-    await userEvent.click(within(modal).getByRole("button", { name: "Cancel" }));
+    const modal = await startRetro(w);
+    await click(w, within(modal).getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(w.calls).not.toContain("submitRetro");
   });
@@ -109,14 +115,14 @@ describe("Retro on a Ticket", () => {
   it("shows why a Retro was refused in the dialog, and keeps the note", async () => {
     const { w, s, spec } = await acme();
     const id = await s.ticket("acme", { title: "Dark palette", state: "Done", spec });
-    renderApp(w, `/?view=inbox&ticket=${id}`);
+    await renderApp(w, `/?view=inbox&ticket=${id}`);
 
-    const modal = await startRetro();
-    await userEvent.type(within(modal).getByRole("textbox", { name: "Note" }), "Look at CI");
+    const modal = await startRetro(w);
+    await type(w, within(modal).getByRole("textbox", { name: "Note" }), "Look at CI");
     // An Archived Project hides the button, and its dialog, so the refusal is made up.
     vi.spyOn(w.api, "submitRetro").mockRejectedValue(new ApiError(422, "invalid", "Dark palette isn't finished", "target"));
-    await userEvent.click(within(modal).getByRole("button", { name: "Start retro" }));
-    expect(await within(modal).findByText("Dark palette isn't finished")).toBeInTheDocument();
+    await click(w, within(modal).getByRole("button", { name: "Start retro" }));
+    expect(within(modal).getByText("Dark palette isn't finished")).toBeInTheDocument();
     expect(within(modal).getByRole("textbox", { name: "Note" })).toHaveValue("Look at CI");
   });
 });
@@ -129,11 +135,11 @@ describe("the Retro badge", () => {
     const retro = (await w.api.submitRetro("acme", done)).id;
     await s.inReview("acme", retro);
     await s.inReview("acme", other);
-    renderApp(w, "/?view=inbox");
+    await renderApp(w, "/?view=inbox");
 
-    const row = (id: string) => screen.findByRole("link", { name: new RegExp(id) });
-    expect(within(await row(retro)).getByText("Retro")).toHaveClass("label", "retro-badge");
-    expect(within(await row(other)).queryByText("Retro")).toBeNull();
+    const row = (id: string) => screen.getByRole("link", { name: new RegExp(id) });
+    expect(within(row(retro)).getByText("Retro")).toHaveClass("label", "retro-badge");
+    expect(within(row(other)).queryByText("Retro")).toBeNull();
   });
 });
 
@@ -143,40 +149,40 @@ async function finish(w: World, spec: string) {
   expect((await w.api.getSpec("acme", spec)).finished).toBe(true);
 }
 
-const specRetro = (view: string) => within(detail()).findByRole("region", { name: view });
+const specRetro = (view: string) => within(detail()).getByRole("region", { name: view });
 
 describe("Retro on a Spec", () => {
   it("is beside New Prototype on a Finished plain Spec, and submits a Retro on it with the note", async () => {
     const { w, s, spec } = await acme();
     await s.ticket("acme", { title: "Dark palette", state: "Done", spec });
-    renderApp(w, `/?view=inbox&requirement=${spec}`);
+    await renderApp(w, `/?view=inbox&requirement=${spec}`);
 
-    const pane = await specRetro("Spec");
-    const retro = await within(pane).findByRole("button", { name: "Retro" });
+    const pane = specRetro("Spec");
+    const retro = within(pane).getByRole("button", { name: "Retro" });
     expect(within(pane).getByRole("button", { name: "New Prototype" }).nextElementSibling).toBe(retro);
-    await userEvent.click(retro);
+    await click(w, retro);
     const modal = screen.getByRole("dialog", { name: "Retro" });
-    await userEvent.type(within(modal).getByRole("textbox", { name: "Note" }), "Was the split right?");
-    await userEvent.click(within(modal).getByRole("button", { name: "Start retro" }));
+    await type(w, within(modal).getByRole("textbox", { name: "Note" }), "Was the split right?");
+    await click(w, within(modal).getByRole("button", { name: "Start retro" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(w.calls).toContain("submitRetro");
     const made = (await w.api.findTickets("acme")).find((t) => t.title === "Retro: Theming")!;
     expect(await w.api.getTicket("acme", made.id)).toMatchObject({ state: "Ready", labels: ["retro"], tags: { "retro-of": spec } });
     expect((await w.api.getTicket("acme", made.id)).description).toContain("Was the split right?");
     expect(params().get("ticket")).toBe(made.id);
-    expect(await within(detail()).findByRole("heading", { name: "Retro: Theming", level: 2 })).toBeInTheDocument();
+    expect(within(detail()).getByRole("heading", { name: "Retro: Theming", level: 2 })).toBeInTheDocument();
   });
 
   it("submits with an empty note", async () => {
     const { w, s, spec } = await acme();
     await s.ticket("acme", { title: "Dark palette", state: "Done", spec });
-    renderApp(w, `/?view=inbox&requirement=${spec}`);
+    await renderApp(w, `/?view=inbox&requirement=${spec}`);
 
-    await userEvent.click(await within(await specRetro("Spec")).findByRole("button", { name: "Retro" }));
-    await userEvent.click(within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
+    await click(w, within(specRetro("Spec")).getByRole("button", { name: "Retro" }));
+    await click(w, within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.queryByRole("dialog")).toBeNull();
     const made = (await w.api.findTickets("acme")).find((t) => t.title === "Retro: Theming")!;
     expect(params().get("ticket")).toBe(made.id);
   });
@@ -185,11 +191,11 @@ describe("Retro on a Spec", () => {
     const { w } = await acme();
     const { spec } = await w.api.submitMap("acme", "Offline mode");
     await finish(w, spec.id);
-    renderApp(w, `/?view=inbox&requirement=${spec.id}`);
+    await renderApp(w, `/?view=inbox&requirement=${spec.id}`);
 
-    await userEvent.click(await within(await specRetro("Map")).findByRole("button", { name: "Retro" }));
-    await userEvent.click(within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await click(w, within(specRetro("Map")).getByRole("button", { name: "Retro" }));
+    await click(w, within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
     const made = (await w.api.findTickets("acme")).find((t) => t.title === "Retro: Offline mode")!;
     expect(await w.api.getTicket("acme", made.id)).toMatchObject({ tags: { "retro-of": spec.id } });
   });
@@ -198,11 +204,11 @@ describe("Retro on a Spec", () => {
     const { w } = await acme();
     const { spec } = await w.api.submitRequirement("acme", "Dark mode");
     await finish(w, spec.id);
-    renderApp(w, `/?view=inbox&requirement=${spec.id}`);
+    await renderApp(w, `/?view=inbox&requirement=${spec.id}`);
 
-    await userEvent.click(await within(await specRetro("Requirement")).findByRole("button", { name: "Retro" }));
-    await userEvent.click(within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await click(w, within(specRetro("Requirement")).getByRole("button", { name: "Retro" }));
+    await click(w, within(screen.getByRole("dialog", { name: "Retro" })).getByRole("button", { name: "Start retro" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(w.calls).toContain("submitRetro");
   });
 
@@ -216,8 +222,8 @@ describe("Retro on a Spec", () => {
     expect((await w.api.getSpec("acme", longLived)).finished).toBe(true);
 
     for (const [id, view] of [[spec, "Spec"], [longLived, "Spec"], [map, "Map"], [req, "Requirement"]] as const) {
-      const { unmount } = renderApp(w, `/?view=inbox&requirement=${id}`);
-      const pane = await specRetro(view);
+      const { unmount } = await renderApp(w, `/?view=inbox&requirement=${id}`);
+      const pane = specRetro(view);
       expect(within(pane).getByRole("button", { name: "New Prototype" })).toBeInTheDocument();
       expect(within(pane).queryByRole("button", { name: "Retro" })).toBeNull();
       unmount();
@@ -228,9 +234,9 @@ describe("Retro on a Spec", () => {
     const { w, s, spec } = await acme();
     await s.ticket("acme", { title: "Dark palette", state: "Done", spec });
     await s.archive("acme");
-    renderApp(w, `/?view=inbox&requirement=${spec}`);
+    await renderApp(w, `/?view=inbox&requirement=${spec}`);
 
-    const pane = await specRetro("Spec");
+    const pane = specRetro("Spec");
     expect(within(pane).getByRole("button", { name: "New Prototype" })).toBeInTheDocument();
     expect(within(pane).queryByRole("button", { name: "Retro" })).toBeNull();
   });
@@ -242,22 +248,22 @@ describe("the Retros list", () => {
     const done = await s.ticket("acme", { title: "Dark palette", state: "Done", spec });
     const onSpec = (await w.api.submitRetro("acme", spec)).id;
     const onTicket = (await w.api.submitRetro("acme", done)).id;
-    renderApp(w, `/?view=inbox&requirement=${spec}&ticket=${done}`);
+    await renderApp(w, `/?view=inbox&requirement=${spec}&ticket=${done}`);
 
-    const specList = await within(await specRetro("Spec")).findByRole("list", { name: "Retros" });
+    const specList = within(specRetro("Spec")).getByRole("list", { name: "Retros" });
     expect(within(specList).getAllByRole("listitem").map((li) => li.textContent)).toEqual([`${onSpec} Retro: Theming Ready`]);
-    const ticketList = await within(screen.getByRole("article", { name: "Ticket details" })).findByRole("list", { name: "Retros" });
+    const ticketList = within(screen.getByRole("article", { name: "Ticket details" })).getByRole("list", { name: "Retros" });
     expect(within(ticketList).getAllByRole("listitem").map((li) => li.textContent)).toEqual([`${onTicket} Retro: Dark palette Ready`]);
 
-    await userEvent.click(within(ticketList).getByRole("button", { name: /Retro: Dark palette/ }));
+    await click(w, within(ticketList).getByRole("button", { name: /Retro: Dark palette/ }));
     expect(params().get("ticket")).toBe(onTicket);
-    expect(await within(detail()).findByRole("heading", { name: "Retro: Dark palette", level: 2 })).toBeInTheDocument();
+    expect(within(detail()).getByRole("heading", { name: "Retro: Dark palette", level: 2 })).toBeInTheDocument();
   });
 
   it("is on a view only when the Spec has Retros", async () => {
     const { w, spec } = await acme();
-    renderApp(w, `/?view=inbox&requirement=${spec}`);
-    await specRetro("Spec");
+    await renderApp(w, `/?view=inbox&requirement=${spec}`);
+    specRetro("Spec");
     expect(within(detail()).queryByRole("list", { name: "Retros" })).toBeNull();
   });
 
@@ -268,9 +274,9 @@ describe("the Retros list", () => {
     for (const [id, view] of [[map, "Map"], [req, "Requirement"]] as const) {
       await finish(w, id);
       const retro = (await w.api.submitRetro("acme", id)).id;
-      const { unmount } = renderApp(w, `/?view=inbox&requirement=${id}`);
-      const list = await within(await specRetro(view)).findByRole("list", { name: "Retros" });
-      await userEvent.click(within(list).getByRole("button", { name: /Retro: / }));
+      const { unmount } = await renderApp(w, `/?view=inbox&requirement=${id}`);
+      const list = within(specRetro(view)).getByRole("list", { name: "Retros" });
+      await click(w, within(list).getByRole("button", { name: /Retro: / }));
       expect(params().get("ticket")).toBe(retro);
       unmount();
     }

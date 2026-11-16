@@ -23,7 +23,7 @@ async function body(props: Partial<MapBodyProps> = {}, populate = false) {
   const { w, spec } = await map(populate);
   const start = vi.fn();
   const setGuided = vi.fn();
-  renderLive(
+  await renderLive(
     w,
     <MapBody spec={spec} now={w.now()} busy={false} select={() => {}} specLink={() => ({ href: "#", onClick: () => {} })} written={() => {}} start={start} setGuided={setGuided} {...props} />,
   );

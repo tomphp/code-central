@@ -7,7 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { World } from "../api/core/core";
 import type { Scenario } from "../api/scenario";
-import { acme, allClearOn, focus, renderApp } from "./worldTesting";
+import { acme, allClearOn, focus, renderApp, settle } from "./worldTesting";
 
 // waiting is acme with All clear on and, in Needs Me's order, a Ticket
 // waiting on Round 1 (Questions 1 and 2 open), a Failed one and an In
@@ -43,83 +43,81 @@ async function quiet(w: World, s: Scenario) {
   await s.ticket("acme", { title: "Filler" }); // sends the change notice
 }
 
-const heading = (name: string) => within(focus()).findByRole("heading", { name });
-// skip waits for Skip, which shows once the Focus Item has loaded.
-const skip = async () => userEvent.click(await within(focus()).findByRole("button", { name: "Skip" }));
+const heading = (name: string) => within(focus()).getByRole("heading", { name });
+// skip clicks Skip and settles what it sets off.
+const skip = async (w: World) => {
+  await userEvent.click(within(focus()).getByRole("button", { name: "Skip" }));
+  await settle(w);
+};
 
 describe("Skip", () => {
   it("sits next to Answer, Dismiss and Prototype this on a Question Focus Item", async () => {
     const { w } = await waiting();
-    renderApp(w);
-    await heading("Which colour?");
+    await renderApp(w);
+    expect(heading("Which colour?")).toBeInTheDocument();
     const buttons = within(focus()).getByRole("button", { name: "Answer" }).parentElement!;
     expect(within(buttons).getAllByRole("button").map((b) => b.textContent)).toEqual(["Answer", "Dismiss", "Prototype this", "Skip"]);
   });
 
   it("sits with a Ticket Focus Item's panel buttons", async () => {
     const { w } = await waitingTickets();
-    renderApp(w);
-    await heading("Flaky build");
-    expect(await within(focus()).findByRole("button", { name: "Send back" })).toBeInTheDocument();
+    await renderApp(w);
+    expect(heading("Flaky build")).toBeInTheDocument();
+    expect(within(focus()).getByRole("button", { name: "Send back" })).toBeInTheDocument();
     expect(within(focus()).getByRole("button", { name: "Skip" })).toBeInTheDocument();
   });
 
   it("sends the item to the back of the queue and shows the next one, still counting it", async () => {
     const { w } = await waitingTickets();
-    renderApp(w);
-    await heading("Flaky build");
+    await renderApp(w);
+    expect(heading("Flaky build")).toBeInTheDocument();
     expect(within(focus()).getByText("2 left")).toBeInTheDocument();
-    await skip();
+    await skip(w);
 
-    expect(await heading("Login page")).toBeInTheDocument();
+    expect(heading("Login page")).toBeInTheDocument();
     expect(within(focus()).getByText("2 left")).toBeInTheDocument();
     expect(w.actions()).toEqual([]);
   });
 
   it("goes on to the Round's next open Question, and only the skipped one goes to the back of the whole queue", async () => {
     const { w } = await waiting();
-    renderApp(w);
-    await heading("Which colour?");
-    await skip();
-    expect(await heading("Which size?")).toBeInTheDocument();
+    await renderApp(w);
+    await skip(w);
+    expect(heading("Which size?")).toBeInTheDocument();
     expect(within(focus()).getByText("Question 2 of 2 · Round 1")).toBeInTheDocument();
 
     await userEvent.click(within(focus()).getByRole("button", { name: "Dismiss" }));
-    expect(await heading("Flaky build")).toBeInTheDocument();
+    await settle(w);
+    expect(heading("Flaky build")).toBeInTheDocument();
   });
 
   it("keeps a skipped item behind one that arrives later", async () => {
     const { w, s } = await waitingTickets();
-    renderApp(w);
-    await heading("Flaky build");
-    await skip();
-    await heading("Login page");
+    await renderApp(w);
+    await skip(w);
     await quiet(w, s);
-    await skip();
+    await skip(w);
 
-    expect(await heading("Quiet session")).toBeInTheDocument();
+    expect(heading("Quiet session")).toBeInTheDocument();
   });
 
   it("has no single-key shortcut", async () => {
     const { w } = await waitingTickets();
-    renderApp(w);
-    await heading("Flaky build");
+    await renderApp(w);
     await userEvent.keyboard("s");
     await userEvent.keyboard("k");
-    expect(within(focus()).getByRole("heading", { name: "Flaky build" })).toBeInTheDocument();
+    expect(heading("Flaky build")).toBeInTheDocument();
   });
 });
 
 describe("only skipped items left", () => {
   it("asks \"You skipped N, go through them again?\" instead of All clear, still counting them", async () => {
     const { w } = await waitingTickets();
-    renderApp(w);
-    await heading("Flaky build");
-    await skip();
-    await heading("Login page");
-    await skip();
+    await renderApp(w);
+    await skip(w);
+    await skip(w);
 
-    expect(await within(focus()).findByText("You skipped 2, go through them again?")).toBeInTheDocument();
+    expect(within(focus()).getByText("You skipped 2, go through them again?")).toBeInTheDocument();
     expect(within(focus()).queryByText("All clear")).toBeNull();
     expect(within(focus()).queryByRole("article", { name: "Focus Item" })).toBeNull();
     expect(within(focus()).getByText("2 left")).toBeInTheDocument();
@@ -127,69 +125,59 @@ describe("only skipped items left", () => {
 
   it("counts a skipped Round's open Questions one each", async () => {
     const { w } = await waiting({ tickets: false });
-    renderApp(w);
-    await heading("Which colour?");
-    await skip();
-    await heading("Which size?");
-    await skip();
+    await renderApp(w);
+    await skip(w);
+    await skip(w);
 
-    expect(await within(focus()).findByText("You skipped 2, go through them again?")).toBeInTheDocument();
+    expect(within(focus()).getByText("You skipped 2, go through them again?")).toBeInTheDocument();
   });
 
   it("goes through them again from the front, in Needs Me order", async () => {
     const { w } = await waiting();
-    renderApp(w);
-    await heading("Which colour?");
-    await skip();
-    await heading("Which size?");
-    await skip();
-    await heading("Flaky build");
-    await skip();
-    await heading("Login page");
-    await skip();
-    await within(focus()).findByText("You skipped 4, go through them again?");
+    await renderApp(w);
+    await skip(w);
+    await skip(w);
+    await skip(w);
+    await skip(w);
+    expect(within(focus()).getByText("You skipped 4, go through them again?")).toBeInTheDocument();
     await userEvent.click(within(focus()).getByRole("button", { name: "Go through them again" }));
+    await settle(w);
 
-    expect(await heading("Which colour?")).toBeInTheDocument();
-    await skip();
-    expect(await heading("Which size?")).toBeInTheDocument();
+    expect(heading("Which colour?")).toBeInTheDocument();
+    await skip(w);
+    expect(heading("Which size?")).toBeInTheDocument();
   });
 
   it("shows a new Focus Item on its own when it arrives", async () => {
     const { w, s } = await waitingTickets();
-    renderApp(w);
-    await heading("Flaky build");
-    await skip();
-    await heading("Login page");
-    await skip();
-    await within(focus()).findByText("You skipped 2, go through them again?");
+    await renderApp(w);
+    await skip(w);
+    await skip(w);
+    expect(within(focus()).getByText("You skipped 2, go through them again?")).toBeInTheDocument();
     await quiet(w, s);
 
-    expect(await heading("Quiet session")).toBeInTheDocument();
+    expect(heading("Quiet session")).toBeInTheDocument();
   });
 
   it("is All clear once the skipped items are dealt with elsewhere", async () => {
     const { w, s, failed, review } = await waitingTickets();
-    renderApp(w);
-    await heading("Flaky build");
-    await skip();
-    await heading("Login page");
-    await skip();
-    await within(focus()).findByText("You skipped 2, go through them again?");
+    await renderApp(w);
+    await skip(w);
+    await skip(w);
+    expect(within(focus()).getByText("You skipped 2, go through them again?")).toBeInTheDocument();
     await s.human(`${s.ticketPath("acme", failed)}/cancel`, {});
     await s.human(`${s.ticketPath("acme", review)}/accept`, {});
 
-    expect(await within(focus()).findByText("All clear")).toBeInTheDocument();
+    expect(within(focus()).getByText("All clear")).toBeInTheDocument();
   });
 });
 
 describe("skips", () => {
   it("live only in this tab's memory: never sent, never in the URL or local storage", async () => {
     const { w } = await waitingTickets();
-    renderApp(w);
-    await heading("Flaky build");
-    await skip();
-    await heading("Login page");
+    await renderApp(w);
+    await skip(w);
+    expect(heading("Login page")).toBeInTheDocument();
 
     expect(window.location.search).toBe("?view=focus");
     expect(localStorage.length).toBe(0);
@@ -198,25 +186,25 @@ describe("skips", () => {
 
   it("are forgotten on leaving Focus Mode", async () => {
     const { w } = await waitingTickets();
-    renderApp(w);
-    await heading("Flaky build");
-    await skip();
-    await heading("Login page");
+    await renderApp(w);
+    await skip(w);
+    expect(heading("Login page")).toBeInTheDocument();
     await userEvent.click(within(focus()).getByRole("button", { name: "Exit" }));
-    await userEvent.click(within(await screen.findByRole("navigation", { name: "Filters" })).getByRole("button", { name: "Focus" }));
+    await settle(w);
+    await userEvent.click(within(screen.getByRole("navigation", { name: "Filters" })).getByRole("button", { name: "Focus" }));
+    await settle(w);
 
-    expect(await heading("Flaky build")).toBeInTheDocument();
+    expect(heading("Flaky build")).toBeInTheDocument();
   });
 
   it("are forgotten on reload", async () => {
     const { w } = await waitingTickets();
-    const { unmount } = renderApp(w);
-    await heading("Flaky build");
-    await skip();
-    await heading("Login page");
+    const { unmount } = await renderApp(w);
+    await skip(w);
+    expect(heading("Login page")).toBeInTheDocument();
     unmount();
-    renderApp(w);
+    await renderApp(w);
 
-    expect(await heading("Flaky build")).toBeInTheDocument();
+    expect(heading("Flaky build")).toBeInTheDocument();
   });
 });

@@ -41,7 +41,7 @@ export function chatContract(driver: () => Driver) {
       await d.postChatEvents("acme", "code-central-factory", conversation, ["two"]);
       await expect.poll(() => heard.length, { timeout: 5000 }).toBe(2);
 
-      d.dropTranscriptStreams();
+      await d.dropTranscriptStreams();
       await d.postChatEvents("acme", "code-central-factory", conversation, ["three"], "done");
       await expect.poll(() => opens, { timeout: 5000 }).toEqual([false, true]);
       await expect.poll(() => heard.length, { timeout: 5000 }).toBe(4);
@@ -79,7 +79,7 @@ export function chatContract(driver: () => Driver) {
       expect(latest!.id).not.toBe(first);
 
       // The stream goes on with the new Conversation, also across a drop.
-      d.dropTranscriptStreams();
+      await d.dropTranscriptStreams();
       await d.sendChatMessage("acme", "Again");
       await expect.poll(() => heard.length, { timeout: 5000 }).toBe(5);
       expect(heard.slice(3)).toEqual(["message from human", "message from claude"]);

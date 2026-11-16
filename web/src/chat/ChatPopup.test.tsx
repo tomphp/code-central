@@ -2,7 +2,7 @@
 // Chat Messages as plain text and Markdown, collapsed tool lines, the
 // warning, ending and tail notices, Send and Stop, the unavailable notice,
 // New conversation's pickers and Copy resume command.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ApiError, type Conversation } from "../api/types";
@@ -121,7 +121,8 @@ describe("Send and Stop", () => {
     await userEvent.click(send());
 
     expect(h.onSend).toHaveBeenCalledWith("Hello there");
-    await waitFor(() => expect(screen.getByRole("textbox", { name: "Chat Message" })).toHaveValue(""));
+    await act(async () => {});
+    expect(screen.getByRole("textbox", { name: "Chat Message" })).toHaveValue("");
   });
 
   it("keeps the typed message in the input when it is refused", async () => {
@@ -223,7 +224,8 @@ describe("the header", () => {
     await userEvent.click(screen.getByRole("button", { name: "Copy resume command" }));
 
     expect(copy).toHaveBeenCalledWith("cd /w/chat && claude --resume s1");
-    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
+    await act(async () => {});
+    expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
   });
 
   it("closes", async () => {

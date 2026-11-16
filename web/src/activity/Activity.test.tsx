@@ -2,13 +2,12 @@
 // They check what the human sees and does: opening the Activity Dashboard
 // from the Inbox's Admin section on the sidebar's Project or All Projects,
 // its Projects picker and Back, and that it shows whatever needs the human.
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
 import { newWorld, type World } from "../api/core/core";
-import { scenario } from "../api/scenario";
 import { loadedDashboard } from "../focus/worldTesting";
+import { renderApp, scenario, settle } from "../worldTesting";
 
 async function projects() {
   const w = await newWorld();
@@ -21,16 +20,11 @@ async function projects() {
   return { w, s };
 }
 
-function renderApp(w: World, url = "/") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
-}
-
 const nav = () => screen.getByRole("navigation", { name: "Filters" });
 
 describe("opening the Activity view from the Inbox", () => {
   it("links first in the View section, before Board and Needs Me, on the sidebar's Project", async () => {
-    renderApp((await projects()).w, "/?view=inbox&project=acme&state=Accepted");
+    await renderApp((await projects()).w,"/?view=inbox&project=acme&state=Accepted");
     const link = within(nav()).getByRole("link", { name: "Activity" });
     const view = within(nav()).getByRole("heading", { level: 2, name: "View" });
     const board = within(nav()).getByRole("link", { name: /^Board/ });
@@ -43,28 +37,28 @@ describe("opening the Activity view from the Inbox", () => {
   });
 
   it("links on All Projects when the sidebar has none chosen", async () => {
-    renderApp((await projects()).w, "/?view=inbox");
+    await renderApp((await projects()).w,"/?view=inbox");
     expect(within(nav()).getByRole("link", { name: "Activity" })).toHaveAttribute("href", "?view=activity");
   });
 });
 
 const activity = () => screen.getByRole("main", { name: "Activity" });
-const dashboard = () => loadedDashboard(activity());
+const dashboard = (w: World) => loadedDashboard(w, activity());
 
 describe("the Activity view", () => {
   it("shows the Activity Dashboard of its Project, whatever needs the human and whatever Focus Mode shows when nothing does", async () => {
     const { w, s } = await projects();
     await s.ticket("acme", { title: "Broken build", state: "Failed" });
-    await act(() => w.api.setOptions({ focus_clear: "all_clear" }));
-    renderApp(w, "/?view=activity&project=acme");
-    const d = await dashboard();
+    await w.api.setOptions({ focus_clear: "all_clear" });
+    await renderApp(w, "/?view=activity&project=acme");
+    const d = await dashboard(w);
     expect(within(within(d).getByRole("list", { name: "In Progress" })).getAllByRole("listitem")).toHaveLength(1);
     expect(d).toHaveTextContent("Sign-up page");
     expect(d).not.toHaveTextContent("Beta export");
   });
 
   it("opens from the link on the sidebar's Project and Back returns to the Inbox as it was", async () => {
-    renderApp((await projects()).w, "/?view=inbox&project=acme&state=Accepted");
+    await renderApp((await projects()).w,"/?view=inbox&project=acme&state=Accepted");
     await userEvent.click(within(nav()).getByRole("link", { name: "Activity" }));
     expect(within(activity()).getByRole("combobox", { name: "Projects" })).toHaveValue("acme");
 
@@ -73,19 +67,21 @@ describe("the Activity view", () => {
   });
 
   it("changes scope with the Projects picker, keeping the address", async () => {
-    renderApp((await projects()).w, "/?view=activity");
+    const { w } = await projects();
+    await renderApp(w, "/?view=activity");
     const picker = within(activity()).getByRole("combobox", { name: "Projects" });
-    await within(picker).findByRole("option", { name: "Beta" });
+    within(picker).getByRole("option", { name: "Beta" });
     await userEvent.selectOptions(picker, "beta");
     expect(window.location.search).toBe("?view=activity&project=beta");
-    const d = await dashboard();
+    const d = await dashboard(w);
     expect(d).toHaveTextContent("Beta export");
     expect(d).not.toHaveTextContent("Sign-up page");
   });
 
   it("opens an In Progress Ticket in the Inbox", async () => {
-    renderApp((await projects()).w, "/?view=activity&project=acme");
-    await userEvent.click(await within(await dashboard()).findByRole("link", { name: /Sign-up page/ }));
+    const { w } = await projects();
+    await renderApp(w, "/?view=activity&project=acme");
+    await userEvent.click(within(await dashboard(w)).getByRole("link", { name: /Sign-up page/ }));
     expect(window.location.search).toContain("view=inbox");
     expect(window.location.search).toContain("ticket=");
   });
@@ -93,15 +89,16 @@ describe("the Activity view", () => {
   it("returns from the CI view its CI Running block opens to the Activity view, on the same Project", async () => {
     const { w, s } = await projects();
     await s.trackCI("acme");
-    renderApp(w, "/?view=activity&project=acme");
-    const d = await dashboard();
+    await renderApp(w, "/?view=activity&project=acme");
+    const d = await dashboard(w);
     // The block remounts when the count arrives, so click its link only after that.
-    await waitFor(() => expect(within(within(d).getByRole("group", { name: "CI Running" })).getByTestId("count")).toHaveTextContent("0"));
+    expect(within(within(d).getByRole("group", { name: "CI Running" })).getByTestId("count")).toHaveTextContent("0");
     await userEvent.click(within(d).getByRole("link", { name: /CI Running/ }));
     expect(window.location.search).toContain("view=ci");
 
     await userEvent.click(screen.getByRole("button", { name: "Back to Activity" }));
+    await settle(w);
     expect(window.location.search).toBe("?view=activity&project=acme");
-    expect(await dashboard()).toBeInTheDocument();
+    expect(await dashboard(w)).toBeInTheDocument();
   });
 });

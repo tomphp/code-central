@@ -5,12 +5,11 @@
 import { cleanup, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { newWorld, type World } from "../api/core/core";
-import { scenario } from "../api/scenario";
 import type { LinkView, SpecDetail } from "../api/types";
 import { MapPane } from "../map/MapPane";
 import { RequirementPane } from "../requirement/RequirementPane";
 import { SpecPane } from "../spec/SpecPane";
-import { renderLive } from "../worldTesting";
+import { renderLive, scenario } from "../worldTesting";
 import { TicketDetail } from "./TicketDetail";
 
 const URL = "https://github.com/acme/web/issues/7";
@@ -25,24 +24,24 @@ async function world() {
 }
 
 async function ticketPanel(w: World, id: string) {
-  renderLive(w, <TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} />);
+  await renderLive(w, <TicketDetail project="acme" ticket={await w.api.getTicket("acme", id)} now={w.now()} />);
   return screen.getByRole("article", { name: "Ticket details" });
 }
 
 const noLinks = { reasons: new Map(), select: () => {}, specLink: (id: string) => ({ href: `?requirement=${id}`, onClick: () => {} }) };
 
 // specPane renders spec in the pane its kind uses.
-function specPane(w: World, spec: SpecDetail) {
+async function specPane(w: World, spec: SpecDetail) {
   const now = w.now();
   if (spec.requirement) {
-    renderLive(w, <RequirementPane spec={{ ...spec, requirement: spec.requirement }} now={now} {...noLinks} />);
+    await renderLive(w, <RequirementPane spec={{ ...spec, requirement: spec.requirement }} now={now} {...noLinks} />);
     return screen.getByRole("region", { name: "Requirement" });
   }
   if (spec.map) {
-    renderLive(w, <MapPane spec={{ ...spec, map: spec.map }} now={now} written={() => {}} {...noLinks} />);
+    await renderLive(w, <MapPane spec={{ ...spec, map: spec.map }} now={now} written={() => {}} {...noLinks} />);
     return screen.getByRole("region", { name: "Map" });
   }
-  renderLive(w, <SpecPane spec={spec} now={now} {...noLinks} />);
+  await renderLive(w, <SpecPane spec={spec} now={now} {...noLinks} />);
   return screen.getByRole("region", { name: "Spec" });
 }
 
@@ -92,13 +91,13 @@ describe("Open in GitHub", () => {
   it("shows on a linked Spec's pane", async () => {
     const { w, s } = await world();
     const id = await s.linkedSpec("acme", "Linked", seed);
-    expectOpenInGitHub(specPane(w, await w.api.getSpec("acme", id)));
+    expectOpenInGitHub(await specPane(w, await w.api.getSpec("acme", id)));
   });
 
   it("is absent on an unlinked Spec's pane", async () => {
     const { w, s } = await world();
     const id = await s.spec("acme", { title: "GitHub Issues: acme/web" });
-    expect(within(specPane(w, await w.api.getSpec("acme", id))).queryByRole("link", { name: /^Open in/ })).toBeNull();
+    expect(within(await specPane(w, await w.api.getSpec("acme", id))).queryByRole("link", { name: /^Open in/ })).toBeNull();
   });
 
   it("shows on a linked Requirement's pane and a linked Map's", async () => {
@@ -106,7 +105,7 @@ describe("Open in GitHub", () => {
     const r = await w.api.submitRequirement("acme", "Export\n\nAs Markdown.");
     const m = await w.api.submitMap("acme", "Exports");
     for (const id of [r.spec.id, m.spec.id]) {
-      const pane = specPane(w, { ...(await w.api.getSpec("acme", id)), link });
+      const pane = await specPane(w, { ...(await w.api.getSpec("acme", id)), link });
       expectOpenInGitHub(pane);
       cleanup();
     }
@@ -120,7 +119,7 @@ describe("the Link badge on a Spec's pane", () => {
     const on = await w.api.setGitHubIssues("acme", { on: true, repository: "acme/web", label: "", new_issues_need_me: false });
     const issue = await s.incomingIssue("acme", on.github_issues.spec!, "Login is broken", { integration: "github", id: "acme/web#7", url: URL });
     const grilling = (await w.api.getTicket("acme", (await w.api.act("acme", issue, "to_requirement", {})).id)).replacements[0];
-    const pane = specPane(w, await w.api.getSpec("acme", (await w.api.getTicket("acme", grilling)).spec.id));
+    const pane = await specPane(w, await w.api.getSpec("acme", (await w.api.getTicket("acme", grilling)).spec.id));
     expect(within(pane).getByRole("link", { name: "github acme/web#7 (outbound)" })).toHaveAttribute("href", URL);
     expectOpenInGitHub(pane);
   });
@@ -128,9 +127,9 @@ describe("the Link badge on a Spec's pane", () => {
   it("shows an owned Link plainly, and none on an unlinked Spec", async () => {
     const { w, s } = await world();
     const linked = await s.linkedSpec("acme", "Linked", seed);
-    expect(within(specPane(w, await w.api.getSpec("acme", linked))).getByRole("link", { name: "github acme/web#7" })).toBeInTheDocument();
+    expect(within(await specPane(w, await w.api.getSpec("acme", linked))).getByRole("link", { name: "github acme/web#7" })).toBeInTheDocument();
     cleanup();
     const plain = await s.spec("acme", { title: "Local" });
-    expect(within(specPane(w, await w.api.getSpec("acme", plain))).queryByText(/github/)).toBeNull();
+    expect(within(await specPane(w, await w.api.getSpec("acme", plain))).queryByText(/github/)).toBeNull();
   });
 });

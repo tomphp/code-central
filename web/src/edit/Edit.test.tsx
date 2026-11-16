@@ -1,24 +1,18 @@
 // Edit tests: the real App on a WASM Core world. Edit on a Draft Ticket in the
 // Ticket panel, and the body section, with Edit, on the Requirement view
 // and the plain Spec view.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
 import { newWorld, type World } from "../api/core/core";
-import { scenario } from "../api/scenario";
 import type { State } from "../api/types";
+import { renderApp, scenario, settle } from "../worldTesting";
 
 async function setup() {
   const w = await newWorld();
   const s = scenario(w);
   await s.project("acme", "Acme");
   return { w, s };
-}
-
-function renderApp(w: World, url: string) {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
 }
 
 const detail = () => screen.getByRole("complementary", { name: "Ticket" });
@@ -42,8 +36,8 @@ async function draft(extra: { state?: State; link?: "owned" | "detached" } = {})
 }
 
 async function openTicket(d: { w: World; spec: string; id: string }, title = "Dark palette") {
-  renderApp(d.w, `/?view=inbox&requirement=${d.spec}&ticket=${d.id}`);
-  await within(detail()).findByRole("heading", { name: title, level: 2 });
+  await renderApp(d.w, `/?view=inbox&requirement=${d.spec}&ticket=${d.id}`);
+  within(detail()).getByRole("heading", { name: title, level: 2 });
 }
 
 // The Ticket's own Edit, in its header: the Spec view above has one too.
@@ -63,8 +57,9 @@ describe("Edit on a Ticket", () => {
     await userEvent.clear(text);
     await userEvent.type(text, "Use slate.");
     await userEvent.click(within(detail()).getByRole("button", { name: "Save" }));
+    await settle(d.w);
 
-    expect(await within(detail()).findByRole("heading", { name: "Night palette", level: 2 })).toBeInTheDocument();
+    expect(within(detail()).getByRole("heading", { name: "Night palette", level: 2 })).toBeInTheDocument();
     expect(within(detail()).getByText("Use slate.")).toBeInTheDocument();
     expect(within(detail()).queryByRole("textbox", { name: "Title" })).toBeNull();
     expect(within(detail()).getByText("title and description edited by human")).toBeInTheDocument();
@@ -79,7 +74,8 @@ describe("Edit on a Ticket", () => {
     await userEvent.click(edit()!);
     await userEvent.type(within(detail()).getByRole("textbox", { name: "Description" }), " More.");
     await userEvent.click(within(detail()).getByRole("button", { name: "Save" }));
-    expect(await within(detail()).findByText("description edited by human")).toBeInTheDocument();
+    await settle(d.w);
+    expect(within(detail()).getByText("description edited by human")).toBeInTheDocument();
     expect(within(detail()).queryByText("title and description edited by human")).toBeNull();
   });
 
@@ -125,7 +121,8 @@ describe("Edit on a Ticket", () => {
     await userEvent.clear(within(detail()).getByRole("textbox", { name: "Title" }));
     await userEvent.type(within(detail()).getByRole("textbox", { name: "Description" }), " Extra.");
     await userEvent.click(within(detail()).getByRole("button", { name: "Save" }));
-    expect(await within(detail()).findByRole("alert")).toHaveTextContent("a Ticket needs a title");
+    await settle(d.w);
+    expect(within(detail()).getByRole("alert")).toHaveTextContent("a Ticket needs a title");
     expect(within(detail()).getByRole("textbox", { name: "Description" })).toHaveValue("Use **navy**. Extra.");
     expect((await d.w.api.getTicket("acme", d.id)).edits).toEqual([]);
   });
@@ -136,10 +133,11 @@ describe("Edit on a Ticket", () => {
     await userEvent.click(edit()!);
     await userEvent.type(within(detail()).getByRole("textbox", { name: "Description" }), " Mine.");
     await d.s.human(`${d.s.ticketPath("acme", d.id)}/move`, { to_state: "Ready" });
-    await waitFor(() => expect(within(detail()).getByText("Ready")).toBeInTheDocument());
+    expect(within(detail()).getAllByText("Ready").length).toBeGreaterThan(0);
     expect(within(detail()).getByRole("textbox", { name: "Description" })).toHaveValue("Use **navy**. Mine.");
     await userEvent.click(within(detail()).getByRole("button", { name: "Save" }));
-    expect(await within(detail()).findByText("description edited by human")).toBeInTheDocument();
+    await settle(d.w);
+    expect(within(detail()).getByText("description edited by human")).toBeInTheDocument();
     expect(within(detail()).getByRole("article", { name: "Ticket details" })).toHaveTextContent("Use navy. Mine.");
     expect(edit()).toBeNull();
   });
@@ -173,8 +171,8 @@ describe("the Requirement view's body", () => {
         await s.human(`${s.ticketPath("acme", id)}/accept`, {});
       }
     }
-    renderApp(w, specUrl(spec.id));
-    const pane = await within(detail()).findByRole("region", { name: /Requirement's text|Spec/ });
+    await renderApp(w, specUrl(spec.id));
+    const pane = within(detail()).getByRole("region", { name: /Requirement's text|Spec/ });
     return { w, s, spec, stages, pane };
   }
 
@@ -199,7 +197,8 @@ describe("the Requirement view's body", () => {
     await userEvent.type(title, "Flight mode");
     await userEvent.type(within(pane).getByRole("textbox", { name: "Body" }), "\nAnd trains.");
     await userEvent.click(within(pane).getByRole("button", { name: "Save" }));
-    expect(await within(detail()).findByRole("heading", { name: "Flight mode", level: 2 })).toBeInTheDocument();
+    await settle(w);
+    expect(within(detail()).getByRole("heading", { name: "Flight mode", level: 2 })).toBeInTheDocument();
     expect(within(pane).getByText("And trains.", { exact: false })).toBeInTheDocument();
     expect((await w.api.getSpec("acme", spec.id)).edits!.map((e) => e.actor)).toEqual(["human"]);
   });
@@ -208,7 +207,7 @@ describe("the Requirement view's body", () => {
     const { s, stages, pane } = await requirement();
     expect(within(pane).getByRole("button", { name: "Edit" })).toBeInTheDocument();
     for (const { id } of stages) await s.human(`${s.ticketPath("acme", id)}/cancel`, {});
-    await waitFor(() => expect(within(pane).queryByRole("button", { name: "Edit" })).toBeNull());
+    expect(within(pane).queryByRole("button", { name: "Edit" })).toBeNull();
     await userEvent.click(within(pane).getByRole("button", { name: "Requirement's text" }));
     expect(within(pane).getByText(/Works on a plane\./)).toBeInTheDocument();
   });
@@ -232,8 +231,8 @@ describe("the plain Spec view's body", () => {
     return { w, s, spec };
   }
   async function open({ w, spec }: { w: World; spec: string }) {
-    renderApp(w, specUrl(spec));
-    return within(detail()).findByRole("region", { name: "Body" });
+    await renderApp(w, specUrl(spec));
+    return within(detail()).getByRole("region", { name: "Body" });
   }
 
   it("is a Body section with Edit on a Spec with no Tickets, closed until opened", async () => {
@@ -249,8 +248,8 @@ describe("the plain Spec view's body", () => {
   it("reads No body. for an empty body", async () => {
     const { w, s } = await world();
     const empty = await s.spec("acme", { title: "Empty" });
-    renderApp(w, specUrl(empty));
-    const pane = await within(detail()).findByRole("region", { name: "Body" });
+    await renderApp(w, specUrl(empty));
+    const pane = within(detail()).getByRole("region", { name: "Body" });
     await userEvent.click(within(pane).getByRole("button", { name: "Body" }));
     expect(within(pane).getByText("No body.")).toBeInTheDocument();
   });
@@ -277,8 +276,8 @@ describe("the plain Spec view's body", () => {
   it("has no body section on a Map", async () => {
     const { w } = await setup();
     const { spec } = await w.api.submitMap("acme", "Plan the year");
-    renderApp(w, specUrl(spec.id));
-    await within(detail()).findByRole("region", { name: "Map" });
+    await renderApp(w, specUrl(spec.id));
+    within(detail()).getByRole("region", { name: "Map" });
     expect(within(detail()).queryByRole("button", { name: "Edit" })).toBeNull();
     expect(within(detail()).queryByRole("region", { name: "Body" })).toBeNull();
   });

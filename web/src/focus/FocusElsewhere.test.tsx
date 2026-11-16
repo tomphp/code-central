@@ -4,16 +4,16 @@
 // moves on with a brief note; one the human acted on moves on silently; a
 // refused action keeps the item on screen with its alert. A read Round
 // with no open Question left waits, in both, for Needs Me to catch up.
-import { render, screen, within, act, waitFor } from "@testing-library/react";
+import { render, screen, within, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../App";
 import type { World } from "../api/core/core";
 import type { Api } from "../api/api";
 import type { Scenario } from "../api/scenario";
-import { acme, allClearOn, focus, renderApp } from "./worldTesting";
+import { acme, allClearOn, focus, renderApp, settle } from "./worldTesting";
 
-const heading = (name: string) => within(focus()).findByRole("heading", { name });
+const heading = (name: string) => within(focus()).getByRole("heading", { name });
 const note = () => within(focus()).queryByText("Dealt with elsewhere");
 
 // cancel has the human cancel the Ticket elsewhere.
@@ -68,33 +68,34 @@ function held(w: World) {
   };
 }
 
-function renderHeld(w: World, api: Api, url: string) {
+async function renderHeld(w: World, api: Api, url: string) {
   window.history.replaceState(null, "", url);
-  return render(<App api={api} now={w.now} />);
+  render(<App api={api} now={w.now} />);
+  await settle(w);
 }
 
 describe("dealt with elsewhere", () => {
   it("moves on with a brief note when the Ticket on screen leaves its reason in Needs Me", async () => {
     const { w, s, failed } = await tickets();
-    renderApp(w);
-    await within(focus()).findByRole("button", { name: "Send back" });
+    await renderApp(w);
+    within(focus()).getByRole("button", { name: "Send back" });
     await cancel(s, failed);
 
-    expect(await heading("Login page")).toBeInTheDocument();
-    expect(await within(focus()).findByText("Dealt with elsewhere")).toBeInTheDocument();
+    expect(heading("Login page")).toBeInTheDocument();
+    expect(within(focus()).getByText("Dealt with elsewhere")).toBeInTheDocument();
   });
 
   it("moves on with the note when the Question on screen is answered elsewhere, losing a half-typed answer", async () => {
     const { w, s, colour } = await world();
-    renderApp(w);
-    await heading("Which colour?");
+    await renderApp(w);
+    heading("Which colour?");
     const box = within(focus()).getByRole("textbox");
     await userEvent.clear(box);
     await userEvent.type(box, "Gre");
     await answer(s, colour, 1, "Green");
 
-    expect(await heading("Which size?")).toBeInTheDocument();
-    expect(await within(focus()).findByText("Dealt with elsewhere")).toBeInTheDocument();
+    expect(heading("Which size?")).toBeInTheDocument();
+    expect(within(focus()).getByText("Dealt with elsewhere")).toBeInTheDocument();
     expect(within(focus()).getByRole("textbox")).toHaveValue("");
   });
 
@@ -108,11 +109,11 @@ describe("dealt with elsewhere", () => {
     w.advance(60_000);
     const shape = await s.ticket("acme", { title: "Pick a shape" });
     await s.askRound("acme", shape, [{ title: "Which shape?", body: "Round or square" }]);
-    renderApp(w);
-    await heading("Which colour?");
+    await renderApp(w);
+    heading("Which colour?");
     await cancel(s, colour);
 
-    expect(await heading("Which shape?")).toBeInTheDocument();
+    expect(heading("Which shape?")).toBeInTheDocument();
     expect(within(focus()).getByText("Dealt with elsewhere")).toBeInTheDocument();
   });
 
@@ -120,48 +121,48 @@ describe("dealt with elsewhere", () => {
     const { w, s } = await acme();
     await allClearOn(w);
     const failed = await s.ticket("acme", { title: "Flaky build", state: "Failed" });
-    renderApp(w);
-    await within(focus()).findByRole("button", { name: "Send back" });
+    await renderApp(w);
+    within(focus()).getByRole("button", { name: "Send back" });
     await cancel(s, failed);
 
-    expect(await within(focus()).findByText("All clear")).toBeInTheDocument();
+    expect(within(focus()).getByText("All clear")).toBeInTheDocument();
     expect(note()).toBeNull();
   });
 
   it("goes once the human moves on from the next item", async () => {
     const { w, s, failed } = await tickets();
-    renderApp(w);
-    await within(focus()).findByRole("button", { name: "Send back" });
+    await renderApp(w);
+    within(focus()).getByRole("button", { name: "Send back" });
     await cancel(s, failed);
-    await within(focus()).findByText("Dealt with elsewhere");
-    await userEvent.click(await within(focus()).findByRole("button", { name: "Accept" }));
+    within(focus()).getByText("Dealt with elsewhere");
+    await userEvent.click(within(focus()).getByRole("button", { name: "Accept" }));
+    await settle(w);
 
-    expect(await within(focus()).findByText("All clear")).toBeInTheDocument();
-    // Core's change notice and the Accept's reply race, so the note may be
-    // a moment going.
-    await waitFor(() => expect(note()).toBeNull());
+    expect(within(focus()).getByText("All clear")).toBeInTheDocument();
+    expect(note()).toBeNull();
   });
 
   it("isn't shown when the human skips the item", async () => {
     const { w } = await tickets();
-    renderApp(w);
-    await userEvent.click(await within(focus()).findByRole("button", { name: "Skip" }));
+    await renderApp(w);
+    await userEvent.click(within(focus()).getByRole("button", { name: "Skip" }));
+    await settle(w);
 
-    expect(await heading("Login page")).toBeInTheDocument();
+    expect(heading("Login page")).toBeInTheDocument();
     expect(note()).toBeNull();
   });
 
   it("isn't shown when a new item arrives ahead of the one on screen", async () => {
     const { w, s, review } = await tickets();
     await s.ticket("acme", { title: "Quiet session", state: "In Progress" });
-    renderApp(w);
-    await within(focus()).findByRole("button", { name: "Send back" });
+    await renderApp(w);
+    within(focus()).getByRole("button", { name: "Send back" });
     // Silent after 30 minutes, which Core lists ahead of Failed; a change
     // to another Ticket makes the App look again.
     w.advance(31 * 60_000);
     await touch(s, review);
 
-    await within(focus()).findByText("3 left");
+    within(focus()).getByText("3 left");
     expect(within(focus()).getByRole("heading", { name: "Flaky build" })).toBeInTheDocument();
     expect(note()).toBeNull();
   });
@@ -170,10 +171,11 @@ describe("dealt with elsewhere", () => {
 describe("the human's own action", () => {
   it("moves a Ticket item on with no note", async () => {
     const { w } = await tickets();
-    renderApp(w);
-    await userEvent.click(await within(focus()).findByRole("button", { name: "Send back" }));
+    await renderApp(w);
+    await userEvent.click(within(focus()).getByRole("button", { name: "Send back" }));
+    await settle(w);
 
-    expect(await heading("Login page")).toBeInTheDocument();
+    expect(heading("Login page")).toBeInTheDocument();
     expect(note()).toBeNull();
   });
 
@@ -184,24 +186,27 @@ describe("the human's own action", () => {
     const link = { integration: "github", id: "acme/web#7", url: "https://github.com/acme/web/issues/7" };
     const closed = await s.incomingIssue("acme", await s.spec("acme"), "Closed upstream", link);
     await s.integration(`${s.projectPath("acme")}/integration/set_external_state`, { target: closed, external_state: "closed" });
-    renderApp(w);
-    await userEvent.click(await within(focus()).findByRole("button", { name: "Unlink" }));
+    await renderApp(w);
+    await userEvent.click(within(focus()).getByRole("button", { name: "Unlink" }));
+    await settle(w);
 
-    expect(await within(focus()).findByText("All clear")).toBeInTheDocument();
+    expect(within(focus()).getByText("All clear")).toBeInTheDocument();
     expect(note()).toBeNull();
   });
 
   it("moves a Question on with no note after Answer, or Dismiss", async () => {
     const { w } = await world();
-    renderApp(w);
-    await heading("Which colour?");
+    await renderApp(w);
+    heading("Which colour?");
     await userEvent.click(within(focus()).getByRole("button", { name: "Answer" }));
-    expect(await heading("Which size?")).toBeInTheDocument();
+    await settle(w);
+    expect(heading("Which size?")).toBeInTheDocument();
     expect(note()).toBeNull();
 
     // The Round is complete, so the Ticket comes back Answered.
     await userEvent.click(within(focus()).getByRole("button", { name: "Dismiss" }));
-    expect(await within(focus()).findByRole("region", { name: "Resume or release" })).toBeInTheDocument();
+    await settle(w);
+    expect(within(focus()).getByRole("region", { name: "Resume or release" })).toBeInTheDocument();
     expect(note()).toBeNull();
   });
 });
@@ -209,21 +214,23 @@ describe("the human's own action", () => {
 describe("a refused action", () => {
   it("keeps a Question on screen with the form's alert, and the human can try again", async () => {
     const { w } = await world();
-    renderApp(w);
-    await heading("Which colour?");
+    await renderApp(w);
+    heading("Which colour?");
     const box = within(focus()).getByRole("textbox");
     await userEvent.clear(box);
     await userEvent.type(box, "   ");
     await userEvent.click(within(focus()).getByRole("button", { name: "Answer" }));
+    await settle(w);
 
-    expect(await within(focus()).findByRole("alert")).toHaveTextContent("an answer needs text");
+    expect(within(focus()).getByRole("alert")).toHaveTextContent("an answer needs text");
     expect(within(focus()).getByRole("heading", { name: "Which colour?" })).toBeInTheDocument();
     expect(note()).toBeNull();
 
     await userEvent.clear(box);
     await userEvent.type(box, "Green");
     await userEvent.click(within(focus()).getByRole("button", { name: "Answer" }));
-    expect(await heading("Which size?")).toBeInTheDocument();
+    await settle(w);
+    expect(heading("Which size?")).toBeInTheDocument();
     expect(note()).toBeNull();
   });
 
@@ -233,10 +240,11 @@ describe("a refused action", () => {
     const h = held(w);
     await h.hold();
     await s.human(`${s.ticketPath("acme", failed)}/cancel`, {});
-    renderHeld(w, h.api, "/?view=focus");
-    await userEvent.click(await within(focus()).findByRole("button", { name: "Cancel" }));
+    await renderHeld(w, h.api, "/?view=focus");
+    await userEvent.click(within(focus()).getByRole("button", { name: "Cancel" }));
+    await settle(w);
 
-    expect(await within(focus()).findByRole("alert")).toHaveTextContent(`${failed} is Cancelled, so cancel is not allowed`);
+    expect(within(focus()).getByRole("alert")).toHaveTextContent(`${failed} is Cancelled, so cancel is not allowed`);
     expect(within(focus()).getByRole("heading", { name: "Flaky build" })).toBeInTheDocument();
   });
 
@@ -245,14 +253,15 @@ describe("a refused action", () => {
     const h = held(w);
     await h.hold();
     await s.human(`${s.ticketPath("acme", failed)}/cancel`, {});
-    renderHeld(w, h.api, "/?view=focus");
-    await userEvent.click(await within(focus()).findByRole("button", { name: "Cancel" }));
-    await within(focus()).findByRole("alert");
+    await renderHeld(w, h.api, "/?view=focus");
+    await userEvent.click(within(focus()).getByRole("button", { name: "Cancel" }));
+    await settle(w);
+    within(focus()).getByRole("alert");
     h.release();
     await touch(s, review);
 
-    expect(await heading("Login page")).toBeInTheDocument();
-    expect(await within(focus()).findByText("Dealt with elsewhere")).toBeInTheDocument();
+    expect(heading("Login page")).toBeInTheDocument();
+    expect(within(focus()).getByText("Dealt with elsewhere")).toBeInTheDocument();
   });
 });
 
@@ -260,49 +269,51 @@ describe("in the Focus popup", () => {
   // popupOn turns Focus Pop-up on in w.
   const popupOn = (s: Scenario) => s.human("/api/set_options", { focus_popup: "on" });
   const popup = () => screen.getByRole("dialog", { name: "Focus popup" });
-  const inPopup = (name: string) => waitFor(() => within(popup()).getByRole("heading", { name }));
+  const inPopup = (name: string) => within(popup()).getByRole("heading", { name });
   const popupNote = () => within(popup()).queryByText("Dealt with elsewhere");
 
   it("moves on with a brief note when the Ticket on screen leaves its reason in Needs Me", async () => {
     const { w, s, failed } = await tickets();
     await popupOn(s);
-    renderApp(w, "/?view=inbox");
-    await within(await screen.findByRole("dialog", { name: "Focus popup" })).findByRole("button", { name: "Send back" });
+    await renderApp(w, "/?view=inbox");
+    within(popup()).getByRole("button", { name: "Send back" });
     await cancel(s, failed);
 
-    expect(await inPopup("Login page")).toBeInTheDocument();
-    expect(await within(popup()).findByText("Dealt with elsewhere")).toBeInTheDocument();
+    expect(inPopup("Login page")).toBeInTheDocument();
+    expect(within(popup()).getByText("Dealt with elsewhere")).toBeInTheDocument();
   });
 
   it("moves a card's Question on with the note when it's answered elsewhere", async () => {
     const { w, s, colour } = await world();
-    renderApp(w, `/?view=board&project=acme&popup=${colour}`);
-    await inPopup("Which colour?");
+    await renderApp(w, `/?view=board&project=acme&popup=${colour}`);
+    inPopup("Which colour?");
     await answer(s, colour, 1, "Green");
 
-    expect(await inPopup("Which size?")).toBeInTheDocument();
-    expect(await within(popup()).findByText("Dealt with elsewhere")).toBeInTheDocument();
+    expect(inPopup("Which size?")).toBeInTheDocument();
+    expect(within(popup()).getByText("Dealt with elsewhere")).toBeInTheDocument();
   });
 
   it("moves on with no note after the human's own action", async () => {
     const { w, s } = await tickets();
     await popupOn(s);
-    renderApp(w, "/?view=inbox");
-    await inPopup("Flaky build");
-    await userEvent.click(await within(popup()).findByRole("button", { name: "Send back" }));
+    await renderApp(w, "/?view=inbox");
+    inPopup("Flaky build");
+    await userEvent.click(within(popup()).getByRole("button", { name: "Send back" }));
+    await settle(w);
 
-    expect(await inPopup("Login page")).toBeInTheDocument();
+    expect(inPopup("Login page")).toBeInTheDocument();
     expect(popupNote()).toBeNull();
   });
 
   it("moves a Question on with no note after Answer", async () => {
     const { w, s } = await world();
     await popupOn(s);
-    renderApp(w, "/?view=inbox");
-    await inPopup("Which colour?");
+    await renderApp(w, "/?view=inbox");
+    inPopup("Which colour?");
     await userEvent.click(within(popup()).getByRole("button", { name: "Answer" }));
+    await settle(w);
 
-    expect(await inPopup("Which size?")).toBeInTheDocument();
+    expect(inPopup("Which size?")).toBeInTheDocument();
     expect(popupNote()).toBeNull();
   });
 
@@ -312,15 +323,16 @@ describe("in the Focus popup", () => {
     const h = held(w);
     await h.hold();
     await s.human(`${s.ticketPath("acme", failed)}/cancel`, {});
-    renderHeld(w, h.api, "/?view=inbox");
-    await inPopup("Flaky build");
-    await userEvent.click(await within(popup()).findByRole("button", { name: "Cancel" }));
-    await within(popup()).findByRole("alert");
+    await renderHeld(w, h.api, "/?view=inbox");
+    inPopup("Flaky build");
+    await userEvent.click(within(popup()).getByRole("button", { name: "Cancel" }));
+    await settle(w);
+    within(popup()).getByRole("alert");
     h.release();
     await touch(s, review);
 
-    expect(await inPopup("Login page")).toBeInTheDocument();
-    expect(await within(popup()).findByText("Dealt with elsewhere")).toBeInTheDocument();
+    expect(inPopup("Login page")).toBeInTheDocument();
+    expect(within(popup()).getByText("Dealt with elsewhere")).toBeInTheDocument();
   });
 });
 
@@ -346,27 +358,27 @@ describe("a read Round with no open Question left, before Needs Me catches up", 
   // without reading the Round again and again, then shows the Ticket as
   // Answered once Needs Me catches up.
   async function waitsThenCatchesUp({ s, colour, h }: Awaited<ReturnType<typeof answeredRound>>, region: () => HTMLElement) {
-    await waitFor(() => expect(h.getTicket).toHaveBeenCalled());
-    await waitFor(() => expect(region()).toHaveTextContent("Loading…"));
+    expect(h.getTicket).toHaveBeenCalled();
+    expect(region()).toHaveTextContent("Loading…");
     await act(() => new Promise((r) => setTimeout(r, 50)));
     expect(h.getTicket.mock.calls.length).toBeLessThan(5);
     expect(within(region()).queryByRole("article", { name: "Focus Item" })).toBeNull();
 
     h.release();
     await touch(s, colour);
-    expect(await within(region()).findByRole("region", { name: "Resume or release" })).toBeInTheDocument();
+    expect(within(region()).getByRole("region", { name: "Resume or release" })).toBeInTheDocument();
   }
 
   it("waits in Focus Mode", async () => {
     const a = await answeredRound();
-    renderHeld(a.w, a.h.api, "/?view=focus");
+    await renderHeld(a.w, a.h.api, "/?view=focus");
     await waitsThenCatchesUp(a, focus);
   });
 
   it("waits in the Focus popup, which stays open", async () => {
     const a = await answeredRound();
     await a.s.human("/api/set_options", { focus_popup: "on" });
-    renderHeld(a.w, a.h.api, "/?view=inbox");
+    await renderHeld(a.w, a.h.api, "/?view=inbox");
     await waitsThenCatchesUp(a, () => screen.getByRole("dialog", { name: "Focus popup" }));
   });
 });

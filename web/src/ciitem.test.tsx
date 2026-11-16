@@ -4,13 +4,12 @@
 // Inbox row, its list and badge; the Focus Item with the list and the
 // failure options, which act on every listed Ticket; and a listed
 // Ticket's own view, which links the item.
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { newWorld } from "./api/core/core";
-import { scenario } from "./api/scenario";
 import { rowDetail } from "./format";
-import { allClear, focus, renderApp } from "./worldTesting";
+import { allClear, focus, renderApp, scenario, settle } from "./worldTesting";
 
 const COMMIT = "abc1234567";
 
@@ -45,8 +44,8 @@ describe("a CI item in Needs Me", () => {
     const row = (await w.api.needsMe()).groups[0].tickets[0];
     expect(rowDetail(w.now(), row)).toBe(`${login}, ${basket} · ci.yml failed`);
 
-    renderApp(w, "/?view=inbox");
-    const group = await within(screen.getByRole("main", { name: "Tickets" })).findByRole("region", { name: "CI failed" });
+    await renderApp(w, "/?view=inbox");
+    const group = within(screen.getByRole("main", { name: "Tickets" })).getByRole("region", { name: "CI failed" });
     expect(within(group).getByRole("heading", { level: 3 })).toHaveTextContent("CI failed 1");
     // The row opens on the first Ticket it lists, whose panel shows the item.
     const link = within(group).getByRole("link", { name: /CI failed at abc1234/ });
@@ -58,29 +57,30 @@ describe("a CI item in Needs Me", () => {
 
   it("is one Focus Item whose panel lists the Tickets and whose options act on all of them", async () => {
     const { w, login, basket } = await world();
-    renderApp(w);
-    const focusItem = await within(focus()).findByRole("article", { name: "Focus Item" });
+    await renderApp(w);
+    const focusItem = within(focus()).getByRole("article", { name: "Focus Item" });
     expect(within(focusItem).getByRole("heading", { level: 2 })).toHaveTextContent("CI failed at abc1234");
     expect(within(focusItem).getByText("Focus: CI failed")).toBeInTheDocument();
-    const panel = await within(focusItem).findByRole("region", { name: "CI failed" });
+    const panel = within(focusItem).getByRole("region", { name: "CI failed" });
     expect(within(panel).getByText(/is one Needs Me item, listing 2 Tickets/)).toHaveTextContent(`Also waiting: ${basket}`);
     expect(within(panel).getByRole("link", { name: basket })).toHaveAttribute("href", expect.stringContaining(`ticket=${basket}`));
     const options = within(panel).getByRole("group", { name: "Failure options" });
     expect(within(options).queryByRole("button", { name: /Send back to fix/ })).toBeNull();
     await userEvent.click(within(options).getByRole("button", { name: "Land anyway" }));
+    await settle(w);
     for (const id of [login, basket]) {
-      await waitFor(async () => expect((await w.api.getTicket("acme", id)).land_anyway).toBe(true));
+      expect((await w.api.getTicket("acme", id)).land_anyway).toBe(true);
     }
-    await waitFor(async () => expect((await w.api.needsMe()).count).toBe(0));
-    expect(await within(focus()).findByRole("region", { name: "All clear" })).toBeInTheDocument();
+    expect((await w.api.needsMe()).count).toBe(0);
+    expect(within(focus()).getByRole("region", { name: "All clear" })).toBeInTheDocument();
   });
 
   it("is linked from each listed Ticket's own view, which shows its CI result", async () => {
     const { w, login, basket } = await world();
-    renderApp(w, `/?view=inbox&ticket=${basket}`);
-    const pane = await screen.findByRole("complementary", { name: "Ticket" });
-    expect(await within(pane).findByText("CI failed", { selector: ".reason" })).toBeInTheDocument();
-    const panel = await within(pane).findByRole("region", { name: "CI failed" });
+    await renderApp(w, `/?view=inbox&ticket=${basket}`);
+    const pane = screen.getByRole("complementary", { name: "Ticket" });
+    expect(within(pane).getByText("CI failed", { selector: ".reason" })).toBeInTheDocument();
+    const panel = within(pane).getByRole("region", { name: "CI failed" });
     expect(within(panel).getByText(/is one Needs Me item/, { selector: ".ci-item" })).toHaveTextContent(
       `CI failed at abc1234 is one Needs Me item, listing 2 Tickets waiting on the commit. Your choice acts on all of them. Also waiting: ${login}.`,
     );
@@ -112,9 +112,9 @@ describe("a CI item in Needs Me", () => {
     const row = (await w.api.needsMe()).groups[0].tickets[0];
     expect(rowDetail(w.now(), row)).toBe(`${login}, ${basket} · No CI Runs reported for abc1234 pushed 12m ago`);
 
-    renderApp(w);
-    const focusItem = await within(focus()).findByRole("article", { name: "Focus Item" });
-    const panel = await within(focusItem).findByRole("region", { name: "CI unavailable" });
+    await renderApp(w);
+    const focusItem = within(focus()).getByRole("article", { name: "Focus Item" });
+    const panel = within(focusItem).getByRole("region", { name: "CI unavailable" });
     expect(within(panel).getByText(/is one Needs Me item, listing 2 Tickets/)).toHaveTextContent(`Also waiting: ${basket}`);
     expect(within(panel).queryByRole("group", { name: "Failure options" })).toBeNull();
   });

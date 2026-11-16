@@ -1,12 +1,10 @@
 // The Blocked panel on the WASM Core: a Ticket stranded behind a Cancelled
 // Blocker with no Replacement, and the three ways to unstick it.
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../../App";
 import { newWorld } from "../../api/core/core";
-import { scenario } from "../../api/scenario";
-import { renderLive } from "../../worldTesting";
+import { renderApp, renderLive, scenario, settle } from "../../worldTesting";
 import { panel } from "./panel";
 
 // world has a Cancelled and a Done Ticket and a Ticket blocked by both.
@@ -26,17 +24,16 @@ type Blocked = Awaited<ReturnType<typeof world>>;
 
 async function renderPanel({ w, blocked }: Blocked) {
   const t = await w.api.getTicket("acme", blocked);
-  renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
+  await renderLive(w, <panel.Component project="acme" ticket={t} now={w.now()} />);
   return screen.getByRole("region", { name: "Blocked" });
 }
 
 describe("the Blocked panel", () => {
   it("is the action panel for a Ticket blocked by a Cancelled Ticket", async () => {
     const { w, blocked } = await world();
-    window.history.replaceState(null, "", `/?view=inbox&ticket=${blocked}`);
-    render(<App api={w.api} now={w.now} />);
-    const slot = await screen.findByRole("region", { name: "Action panel" });
-    expect(await within(slot).findByRole("region", { name: "Blocked" })).toBeInTheDocument();
+    await renderApp(w, `/?view=inbox&ticket=${blocked}`);
+    const slot = screen.getByRole("region", { name: "Action panel" });
+    expect(within(slot).getByRole("region", { name: "Blocked" })).toBeInTheDocument();
   });
 
   it("names the Cancelled Blocker and only that one", async () => {
@@ -71,7 +68,7 @@ describe("the Blocked panel", () => {
     await x.s.addBlocker("acme", dependant, stage);
 
     const t = await x.w.api.getTicket("acme", dependant);
-    renderLive(x.w, <panel.Component project="acme" ticket={t} now={x.w.now()} />);
+    await renderLive(x.w, <panel.Component project="acme" ticket={t} now={x.w.now()} />);
     const p = screen.getByRole("region", { name: "Blocked" });
     expect(p).toHaveTextContent(`${gone} Implement: Offline mode`);
     expect(p).toHaveTextContent(`replacing ${stage}`);
@@ -108,6 +105,7 @@ describe("the Blocked panel", () => {
     // Someone else removed the link first.
     await x.w.api.act("acme", x.blocked, "remove_blocker", { blocker: x.cancelled });
     await userEvent.click(within(p).getByRole("button", { name: `Remove ${x.cancelled} as a Blocker` }));
-    expect(await within(p).findByRole("alert")).toHaveTextContent(`${x.cancelled} is not a Blocker of ${x.blocked}`);
+    await settle(x.w);
+    expect(within(p).getByRole("alert")).toHaveTextContent(`${x.cancelled} is not a Blocker of ${x.blocked}`);
   });
 });

@@ -1,12 +1,11 @@
 // ID Links in the UI: the real App on a WASM Core world, clicking a link
 // whose target is a Spec's or Ticket's full ID in a Ticket's description, and
 // checking what opens and the address bar.
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { App } from "./App";
 import { newWorld } from "./api/core/core";
-import { scenario } from "./api/scenario";
+import { renderApp, scenario, settle } from "./worldTesting";
 
 // world makes acme with a Spec (acme-1), a Ready Ticket (acme-2) whose
 // description links acme-1 (Spec), acme-3 (Done Ticket), acme-4 (a Ticket
@@ -30,47 +29,47 @@ async function world() {
   return { w, links, asking };
 }
 
-function renderApp(w: Awaited<ReturnType<typeof world>>, url: string) {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.w.api} now={w.w.now} />);
-}
-
-const dialog = (name: string) => screen.findByRole("dialog", { name });
+const dialog = (name: string) => screen.getByRole("dialog", { name });
 
 beforeEach(() => localStorage.clear());
 
 describe("an ID Link on the Board", () => {
   const open = async (url: string) => {
-    renderApp(await world(), url);
-    await userEvent.click(await screen.findByText("Linker"));
-    return within(await dialog("Ticket popup"));
+    const { w } = await world();
+    await renderApp(w, url);
+    await userEvent.click(screen.getByText("Linker"));
+    await settle(w);
+    return { w, popup: within(dialog("Ticket popup")) };
   };
 
   it("opens a Spec's popup in place of the open one", async () => {
-    const popup = await open("/?view=board&project=acme");
-    await userEvent.click(await popup.findByRole("link", { name: "spec" }));
-    expect(await dialog("Spec popup")).toBeInTheDocument();
+    const { w, popup } = await open("/?view=board&project=acme");
+    await userEvent.click(popup.getByRole("link", { name: "spec" }));
+    await settle(w);
+    expect(dialog("Spec popup")).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Ticket popup" })).toBeNull();
     expect(window.location.search).toBe("?view=board&project=acme&popup=acme-1");
   });
 
   it("opens a Done Ticket's, which the Board hasn't loaded, as a Ticket popup", async () => {
-    const popup = await open("/?view=board&project=acme");
-    await userEvent.click(await popup.findByRole("link", { name: "old" }));
-    await waitFor(() => expect(window.location.search).toBe("?view=board&project=acme&popup=acme-3"));
-    expect(await within(await dialog("Ticket popup")).findByRole("heading", { name: /Old work/ })).toBeInTheDocument();
+    const { w, popup } = await open("/?view=board&project=acme");
+    await userEvent.click(popup.getByRole("link", { name: "old" }));
+    await settle(w);
+    expect(window.location.search).toBe("?view=board&project=acme&popup=acme-3");
+    expect(within(dialog("Ticket popup")).getByRole("heading", { name: /Old work/ })).toBeInTheDocument();
   });
 
   it("opens the Focus popup of a Ticket that needs the human", async () => {
-    const popup = await open("/?view=board&project=acme");
-    await userEvent.click(await popup.findByRole("link", { name: "asking" }));
-    expect(await dialog("Focus popup")).toBeInTheDocument();
+    const { w, popup } = await open("/?view=board&project=acme");
+    await userEvent.click(popup.getByRole("link", { name: "asking" }));
+    await settle(w);
+    expect(dialog("Focus popup")).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Ticket popup" })).toBeNull();
   });
 
   it("leaves a modified click to the browser", async () => {
-    const popup = await open("/?view=board&project=acme");
-    const link = await popup.findByRole("link", { name: "spec" });
+    const { popup } = await open("/?view=board&project=acme");
+    const link = popup.getByRole("link", { name: "spec" });
     expect(link).toHaveAttribute("href", "?view=board&project=acme&popup=acme-1");
     expect(link).not.toHaveAttribute("target");
     fireEvent.click(link, { ctrlKey: true });
@@ -79,40 +78,48 @@ describe("an ID Link on the Board", () => {
 });
 
 describe("an ID Link in the Inbox", () => {
-  const ticketPane = async () => within(await screen.findByRole("article", { name: "Ticket details" }));
+  const ticketPane = () => within(screen.getByRole("article", { name: "Ticket details" }));
   const start = async (url = "/?project=acme") => {
-    const w = await world();
-    renderApp(w, url);
+    const { w } = await world();
+    await renderApp(w, url);
     return w;
   };
 
   it("selects a Ticket, replacing the address so Back returns to the Ticket the link was in", async () => {
-    await start("/?project=acme&ticket=acme-2");
-    await userEvent.click(await (await ticketPane()).findByRole("link", { name: "old" }));
-    await waitFor(() => expect(window.location.search).toBe("?view=inbox&project=acme&ticket=acme-3"));
-    await waitFor(() => expect(screen.getByRole("article", { name: "Ticket details" })).toHaveTextContent("Accepted → Done"));
+    const w = await start("/?project=acme&ticket=acme-2");
+    await userEvent.click(ticketPane().getByRole("link", { name: "old" }));
+    await settle(w);
+    expect(window.location.search).toBe("?view=inbox&project=acme&ticket=acme-3");
+    expect(screen.getByRole("article", { name: "Ticket details" })).toHaveTextContent("Accepted → Done");
+    // jsdom fires history.back()'s popstate on a later task, which settle doesn't wait for.
+    const popped = new Promise((r) => window.addEventListener("popstate", r, { once: true }));
     window.history.back();
-    await waitFor(() => expect(window.location.search).toBe("?view=inbox&project=acme&ticket=acme-2"));
+    await popped;
+    await settle(w);
+    expect(window.location.search).toBe("?view=inbox&project=acme&ticket=acme-2");
   });
 
   it("selects a Spec through the server as a Spec, never as a Ticket", async () => {
-    await start("/?project=acme&ticket=acme-2");
-    await userEvent.click(await (await ticketPane()).findByRole("link", { name: "spec" }));
-    await waitFor(() => expect(window.location.search).toBe("?view=inbox&project=acme&requirement=acme-1"));
-    expect(await screen.findByText(/Login/)).toBeInTheDocument();
+    const w = await start("/?project=acme&ticket=acme-2");
+    await userEvent.click(ticketPane().getByRole("link", { name: "spec" }));
+    await settle(w);
+    expect(window.location.search).toBe("?view=inbox&project=acme&requirement=acme-1");
+    expect(screen.getByText(/Login/)).toBeInTheDocument();
   });
 
   it("switches the Project filter to the ID's Project", async () => {
-    await start("/?project=acme&ticket=acme-2");
-    await userEvent.click(await (await ticketPane()).findByRole("link", { name: "other" }));
-    await waitFor(() => expect(window.location.search).toContain("project=beta"));
+    const w = await start("/?project=acme&ticket=acme-2");
+    await userEvent.click(ticketPane().getByRole("link", { name: "other" }));
+    await settle(w);
+    expect(window.location.search).toContain("project=beta");
   });
 
   it("shows the Ticket pane's error for an ID that names nothing", async () => {
-    await start("/?project=acme&ticket=acme-2");
-    await userEvent.click(await (await ticketPane()).findByRole("link", { name: "nowhere" }));
-    await waitFor(() => expect(window.location.search).toBe("?view=inbox&project=acme&ticket=acme-99"));
-    expect(await screen.findByText(/acme-99/, { selector: "p, div" })).toBeInTheDocument();
+    const w = await start("/?project=acme&ticket=acme-2");
+    await userEvent.click(ticketPane().getByRole("link", { name: "nowhere" }));
+    await settle(w);
+    expect(window.location.search).toBe("?view=inbox&project=acme&ticket=acme-99");
+    expect(screen.getByText(/acme-99/, { selector: "p, div" })).toBeInTheDocument();
   });
 });
 
@@ -125,11 +132,11 @@ describe("an ID Link in the Focus popup", () => {
     const spec = await s.spec("acme", { title: "Login" }); // acme-1
     const t = await s.ticket("acme", { title: "Login page", state: "Ready", spec });
     await s.inReview("acme", t, undefined, `Built per [the spec](${spec}).`);
-    window.history.replaceState(null, "", "/?view=usage");
-    render(<App api={w.api} now={w.now} />);
-    const popup = within(await dialog("Focus popup"));
-    await userEvent.click(await popup.findByRole("link", { name: "the spec" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Focus popup" })).toBeNull());
-    await waitFor(() => expect(window.location.search).toBe(`?view=inbox&requirement=${spec}`));
+    await renderApp(w, "/?view=usage");
+    const popup = within(dialog("Focus popup"));
+    await userEvent.click(popup.getByRole("link", { name: "the spec" }));
+    await settle(w);
+    expect(screen.queryByRole("dialog", { name: "Focus popup" })).toBeNull();
+    expect(window.location.search).toBe(`?view=inbox&requirement=${spec}`);
   });
 });

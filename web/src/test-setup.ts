@@ -19,9 +19,9 @@ globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
 pulseTiming.ms = 60_000;
 pulseTiming.board = 60_000;
 
-// waitFor and findBy* wait up to 1s by default, which a loaded CI runner
-// can use up before a change notice has refetched; a passing test never waits it out.
-configure({ asyncUtilTimeout: 5000 });
+// waitFor and findBy* wait up to 1s (the library default); a passing test
+// never waits it out, and a test that needs longer waits for the world to settle.
+configure({ asyncUtilTimeout: 1000 });
 
 afterEach(() => {
   cleanup();

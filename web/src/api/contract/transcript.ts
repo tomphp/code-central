@@ -124,7 +124,7 @@ export function transcriptContract(driver: () => Driver) {
       await d.postSessionEvents("sess-busy", [said("three")]);
       await expect.poll(() => textsOf(got), { timeout: 5000 }).toEqual(["1 one", "2 two", "3 three"]);
 
-      d.dropTranscriptStreams();
+      await d.dropTranscriptStreams();
       await d.postSessionEvents("sess-busy", [said("four"), said("five")]);
       await expect.poll(() => opens, { timeout: 5000 }).toEqual([false, true]);
       await d.postSessionEvents("sess-busy", [said("six")]);
@@ -161,7 +161,7 @@ export function transcriptContract(driver: () => Driver) {
       expect(order.at(-1)).toBe("2002");
 
       // A reconnect misses nothing, so it brings no second notice.
-      d.dropTranscriptStreams();
+      await d.dropTranscriptStreams();
       await d.postSessionEvents("sess-busy", [said("2003")]);
       await expect.poll(() => order.length, { timeout: 5000 }).toBe(2002);
       expect(order.at(-1)).toBe("2003");

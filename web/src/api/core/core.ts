@@ -27,6 +27,7 @@ interface CoreModule {
   reportWatcherCrash(id: number, kind: string, key: string, restarts: number, lastLine: string, restartAtISO: string): void;
   dropStreams(id: number): void;
   transcriptStreams(id: number): number;
+  settled(id: number, events: number, transcripts: number, chats: number): string;
   drop(id: number): void;
 }
 
@@ -59,6 +60,41 @@ export const START = "2026-11-07T09:00:00Z";
 const READS: ReadonlySet<string> = new Set<keyof Api>([
   "listProjects", "needsMe", "findTickets", "getTicket", "getSpec", "findSpecs", "specQuestions", "options", "transcript", "usage", "sessionUsage", "ciOverview",
 ]);
+
+// FEEDS are the Api's subscribes, by the stream kind each follows.
+const FEEDS = { subscribe: "events", subscribeTranscript: "transcripts", subscribeChat: "chats" } as const;
+type Feed = (typeof FEEDS)[keyof typeof FEEDS];
+// Subscribe is any of the Api's subscribes: each answers its feed's close.
+type Subscribe = (...a: never[]) => () => void;
+
+// Busy is cmd/corewasm's settled report (world.Busy): what keeps the world
+// from being settled, with nothing set once it is.
+interface Busy {
+  requests?: number;
+  events?: Streams;
+  transcripts?: Streams;
+  chats?: Streams;
+  unreadWrites?: number;
+}
+
+interface Streams {
+  open: number;
+  subscribed: number;
+}
+
+// SETTLE_MS is how long settled waits, by the wall clock, before it gives up.
+const SETTLE_MS = 2000;
+
+// wallClock and realSetTimeout are saved as the module loads, so settled
+// keeps time and polls for real while a test fakes timers.
+const wallClock = Date.now;
+const realSetTimeout = globalThis.setTimeout;
+
+// nextTask resolves on the next macrotask, on a real timer even while a
+// test fakes timers.
+export function nextTask(): Promise<void> {
+  return new Promise((r) => realSetTimeout(r));
+}
 
 let loading: Promise<CoreModule> | undefined;
 
@@ -113,8 +149,14 @@ export class World {
   readonly api: Api;
   // calls records each Api method called by name, an action by its own.
   readonly calls: string[] = [];
-  // feeds counts the change feeds open on api, each until it is closed.
-  private feeds = 0;
+  // feeds counts the feeds of each kind subscribed on api, each until it
+  // is closed.
+  private feeds: Record<Feed, number> = { events: 0, transcripts: 0, chats: 0 };
+  // started counts the fetches started so far, and pending those whose
+  // core.fetch hasn't settled: Go may see a request only after core.fetch
+  // has returned.
+  private started = 0;
+  private pending = 0;
   private dropped = false;
 
   constructor(
@@ -128,14 +170,20 @@ export class World {
       if (input instanceof Request || (init.body != null && typeof init.body !== "string")) {
         throw new Error("a world's fetch takes a URL and a string body");
       }
-      return await core.fetch(id, init.method ?? "GET", String(input), [...new Headers(init.headers)], init.body ?? undefined, init.signal ?? undefined);
+      this.started++;
+      this.pending++;
+      try {
+        return await core.fetch(id, init.method ?? "GET", String(input), [...new Headers(init.headers)], init.body ?? undefined, init.signal ?? undefined);
+      } finally {
+        this.pending--;
+      }
     };
     const api = createHttpApi({ fetch: this.fetch, retryMs: 50 });
     this.api = new Proxy(api, {
       get: (t, k: string) => {
         const v = t[k as keyof Api];
-        if (k === "subscribe") return this.counted(t.subscribe);
-        if (typeof v !== "function" || k.startsWith("subscribe")) return v;
+        if (Object.hasOwn(FEEDS, k)) return this.counted(FEEDS[k as keyof typeof FEEDS], v as Subscribe);
+        if (typeof v !== "function") return v;
         return (...a: unknown[]) => {
           this.calls.push(k === "act" ? String(a[2]) : k);
           return (v as (...a: unknown[]) => unknown)(...a);
@@ -146,21 +194,57 @@ export class World {
 
   // subscriptions counts the change feeds open on api now.
   subscriptions(): number {
-    return this.feeds;
+    return this.feeds.events;
   }
 
-  // counted is subscribe, counting each feed while it is open.
-  private counted(subscribe: Api["subscribe"]): Api["subscribe"] {
-    return (h) => {
-      const close = subscribe(h);
-      this.feeds++;
+  // counted is subscribe, counting each feed of kind while it is open.
+  private counted(kind: Feed, subscribe: Subscribe): Subscribe {
+    return (...a) => {
+      const close = subscribe(...a);
+      this.feeds[kind]++;
       let open = true;
       return () => {
-        if (open) this.feeds--;
+        if (open) this.feeds[kind]--;
         open = false;
         close();
       };
     };
+  }
+
+  // fetchesStarted counts the fetches started on the world so far, streams'
+  // and the Driver's as well as api's reads and writes.
+  fetchesStarted(): number {
+    return this.started;
+  }
+
+  // settled resolves once the world is settled (ADR 0044): no request in
+  // flight, every feed subscribed on api open, and every frame written to
+  // an open stream read. It checks at once, then once per macrotask on a
+  // real timer, so a test that fakes timers doesn't stall it. After
+  // SETTLE_MS it rejects, naming what is still busy.
+  async settled(): Promise<void> {
+    const deadline = wallClock() + SETTLE_MS;
+    for (let busy = this.busy(); busy; busy = this.busy()) {
+      if (wallClock() >= deadline) throw new Error(`the world did not settle within ${SETTLE_MS} ms: ${busy}`);
+      await nextTask();
+    }
+  }
+
+  // busy says what keeps the world from being settled, or nothing once it
+  // is.
+  private busy(): string | undefined {
+    const { events, transcripts, chats } = this.feeds;
+    const go = JSON.parse(this.live().settled(this.id, events, transcripts, chats)) as Busy;
+    const streams = (name: string, s?: Streams) => s && `${name}: ${s.subscribed} subscribed, ${s.open} open`;
+    const busy = [
+      this.pending > 0 && `fetches not yet answered: ${this.pending}`,
+      go.requests && `requests in flight: ${go.requests}`,
+      streams("change feeds", go.events),
+      streams("Transcript streams", go.transcripts),
+      streams("Chat streams", go.chats),
+      go.unreadWrites && `streams with a frame not yet read: ${go.unreadWrites}`,
+    ].filter(Boolean);
+    return busy.length > 0 ? busy.join("; ") : undefined;
   }
 
   // actions is calls without the reads: the writes made, in order.

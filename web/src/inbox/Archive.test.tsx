@@ -1,14 +1,13 @@
 // Finished work and Archived Projects in the inbox (ticket 39): the
 // Archived group in the left pane, each Project row's menu, and the
 // finished States' lists. On a WASM Core world.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "../App";
 import { newWorld } from "../api/core/core";
-import { scenario } from "../api/scenario";
 import { ApiError } from "../api/types";
-import { renderApp } from "../focus/worldTesting";
+import { renderApp, scenario, settle } from "../worldTesting";
 
 const HOUR = 3_600_000;
 
@@ -41,14 +40,14 @@ const rowIds = () => [...list().querySelectorAll<HTMLElement>("a[data-id]")].map
 const archivedGroup = () => within(nav()).getByText(/^Archived/).closest("details")!;
 
 async function openMenu(name: string) {
-  await userEvent.click(await within(nav()).findByRole("button", { name: `Menu for ${name}`, hidden: true }));
+  await userEvent.click(within(nav()).getByRole("button", { name: `Menu for ${name}`, hidden: true }));
   return screen.getByRole("menu", { name: `Menu for ${name}` });
 }
 
 describe("Archived Projects and finished work", () => {
   it("keeps Archived Projects in a collapsed group at the bottom of the left pane", async () => {
-    renderApp((await world()).w, "/");
-    const old = await within(nav()).findByRole("button", { name: /^Old App/, hidden: true });
+    await renderApp((await world()).w, "/");
+    const old = within(nav()).getByRole("button", { name: /^Old App/, hidden: true });
     const group = archivedGroup();
     expect(group).not.toHaveAttribute("open");
     expect(group).toContainElement(old);
@@ -61,7 +60,7 @@ describe("Archived Projects and finished work", () => {
 
   it("disables Archive, saying why, while unfinished work remains", async () => {
     const { w } = await world();
-    renderApp(w, "/");
+    await renderApp(w, "/");
     const menu = await openMenu("Acme");
     const archive = within(menu).getByRole("menuitem", { name: "Archive" });
     expect(archive).toBeDisabled();
@@ -72,9 +71,10 @@ describe("Archived Projects and finished work", () => {
 
   it("archives a finished Project from its menu, and unarchives it", async () => {
     const { w } = await world();
-    renderApp(w, "/");
+    await renderApp(w, "/");
     await userEvent.click(within(await openMenu("Done Co")).getByRole("menuitem", { name: "Archive" }));
-    await waitFor(() => expect(archivedGroup()).toContainElement(within(nav()).getByRole("button", { name: /^Done Co/, hidden: true })));
+    await settle(w);
+    expect(archivedGroup()).toContainElement(within(nav()).getByRole("button", { name: /^Done Co/, hidden: true }));
     expect(screen.queryByRole("menu")).toBeNull();
     expect(within(archivedGroup()).getByText("Archived (2)")).toBeInTheDocument();
 
@@ -82,7 +82,8 @@ describe("Archived Projects and finished work", () => {
     const menu = await openMenu("Done Co");
     expect(within(menu).queryByRole("menuitem", { name: "Archive" })).toBeNull();
     await userEvent.click(within(menu).getByRole("menuitem", { name: "Unarchive" }));
-    await waitFor(() => expect(archivedGroup()).not.toContainElement(within(nav()).getByRole("button", { name: /^Done Co/ })));
+    await settle(w);
+    expect(archivedGroup()).not.toContainElement(within(nav()).getByRole("button", { name: /^Done Co/ }));
     expect(w.calls).toEqual(expect.arrayContaining(["archiveProject", "unarchiveProject"]));
   });
 
@@ -97,26 +98,30 @@ describe("Archived Projects and finished work", () => {
     };
     window.history.replaceState(null, "", "/");
     render(<App api={api} now={w.now} />);
+    await settle(w);
     await userEvent.click(within(await openMenu("Done Co")).getByRole("menuitem", { name: "Archive" }));
-    expect(await within(nav()).findByRole("alert")).toHaveTextContent("still has unfinished work: done-3 (Ready)");
+    await settle(w);
+    expect(within(nav()).getByRole("alert")).toHaveTextContent("still has unfinished work: done-3 (Ready)");
   });
 
   it("lists Done and Cancelled newest first, with plain counts, across every Project", async () => {
     const { w, ids } = await world();
-    renderApp(w, "/");
-    const done = await within(nav()).findByRole("button", { name: "Done 3" });
+    await renderApp(w, "/");
+    const done = within(nav()).getByRole("button", { name: "Done 3" });
     expect(done.querySelector(".count")).not.toHaveClass("loud");
     expect(within(nav()).getByRole("button", { name: "Cancelled 1" })).toBeInTheDocument();
 
     await userEvent.click(done);
-    await waitFor(() => expect(rowIds()).toEqual([ids.yesterday, ids.lastWeek, ids.longAgo]));
+    await settle(w);
+    expect(rowIds()).toEqual([ids.yesterday, ids.lastWeek, ids.longAgo]);
     await userEvent.click(within(nav()).getByRole("button", { name: /^Cancelled/ }));
-    await waitFor(() => expect(rowIds()).toEqual([ids.dropped]));
+    await settle(w);
+    expect(rowIds()).toEqual([ids.dropped]);
   });
 
   it("opens any Ticket by its URL, an Archived Project's too", async () => {
     const { w, ids } = await world();
-    renderApp(w, `/?view=inbox&ticket=${ids.lastWeek}`);
-    expect(await within(detail()).findByRole("heading", { name: "Shipped last week" })).toBeInTheDocument();
+    await renderApp(w, `/?view=inbox&ticket=${ids.lastWeek}`);
+    expect(within(detail()).getByRole("heading", { name: "Shipped last week" })).toBeInTheDocument();
   });
 });
