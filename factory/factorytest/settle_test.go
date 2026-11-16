@@ -147,7 +147,9 @@ func TestSettleTimesOutNamingTheWorkInFlight(t *testing.T) {
 	if !slices.Contains(unmet, "poll 2") {
 		t.Errorf("Settle timed out naming %q, want poll 2 named", unmet)
 	}
-	if !slices.ContainsFunc(unmet, func(s string) bool { return strings.HasPrefix(s, "requests through the proxy: GET /api/p/acme/tickets") }) {
+	if !slices.ContainsFunc(unmet, func(s string) bool {
+		return strings.HasPrefix(s, "requests through the proxy: GET /api/p/acme/tickets")
+	}) {
 		t.Errorf("Settle timed out naming %q, want the held find_tickets named", unmet)
 	}
 	holds.release()

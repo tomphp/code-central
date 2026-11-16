@@ -27,7 +27,7 @@ type heartbeater struct {
 
 	mu      sync.Mutex
 	waiting *core.ReportHeartbeatInput
-	posted  func() // ends the waiting Heartbeat's busy work once it is posted
+	posted  func()              // ends the waiting Heartbeat's busy work once it is posted
 	last    core.HeartbeatState // the furthest state sent: online, draining, stopping
 	failing bool
 	wake    chan struct{}
