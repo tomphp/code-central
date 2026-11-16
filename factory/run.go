@@ -36,6 +36,7 @@ func (f *factory) loop(ctx context.Context) {
 			f.drain(ctx)
 			return
 		case <-f.e.After(f.o.poll):
+			f.releaseHeldBack()
 		case <-f.wakeCh:
 			// A stopping or draining Factory ignores wakes.
 			if ctx.Err() != nil {
@@ -373,9 +374,9 @@ func (f *factory) stopAll() {
 }
 
 // nextRunnable is the Project's first claimable Ticket, in claim order,
-// whose guide the Factory runs and whose claim isn't lost: a claim lost
-// before it reached Code Central leaves its Ticket claimable. ok is
-// false when there is none.
+// whose guide the Factory runs, whose claim isn't lost and that isn't
+// held back: a claim lost before it reached Code Central leaves its
+// Ticket claimable. ok is false when there is none.
 func (f *factory) nextRunnable(ctx context.Context) (id core.Ref, ok bool) {
 	claimable := true
 	rows, err := f.client.FindTickets(ctx, f.project, core.FindTicketsInput{Claimable: &claimable})
@@ -387,7 +388,7 @@ func (f *factory) nextRunnable(ctx context.Context) (id core.Ref, ok bool) {
 	}
 	for _, r := range rows {
 		lost := slices.ContainsFunc(f.lostClaims, func(in core.ClaimInput) bool { return in.Ticket == core.Ref(r.ID) })
-		if runs(core.GuideName(r.Labels)) && !lost {
+		if runs(core.GuideName(r.Labels)) && !lost && !f.heldBack(r.ID) {
 			return core.Ref(r.ID), true
 		}
 	}

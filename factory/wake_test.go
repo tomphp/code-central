@@ -266,6 +266,24 @@ func TestAnEndingTurnFillsItsFreedSlotAtOnce(t *testing.T) {
 	}
 }
 
+// A Ticket whose agent gave up waits for the next timed poll: the wake
+// at its turn's end claims the next Ticket, not it again.
+func TestAGivenUpTicketWaitsForTheNextTimedPoll(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	gaveUp := h.ReadyTicket("Too hard")
+	h.Script(gaveUp, factorytest.CLI("give-up", "{{ticket}}", "--claim", "{{claim}}", "--note", "Too hard."), factorytest.Result("success"))
+	next := h.ReadyTicket("Next")
+	r := h.Start("--parallel", "1")
+	h.WaitForState(next, store.InReview)
+	if n := len(h.Ticket(gaveUp).Claims); n != 1 {
+		t.Fatalf("%s was claimed %d times before a timed poll, want once", gaveUp, n)
+	}
+
+	r.Poll()
+	h.WaitFor("the given-up Ticket claimed again", func() bool { return len(h.Ticket(gaveUp).Claims) == 2 })
+}
+
 // A draining Factory ignores the local wake: it claims nothing when a
 // turn ends.
 func TestADrainingFactoryClaimsNothingWhenATurnEnds(t *testing.T) {

@@ -52,7 +52,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    The first Ctrl-C drains: the Factory claims, resumes and lands nothing more (except a claim whose answer was lost, which it still claims again), lets the running turns finish, then exits. A second Ctrl-C stops the running turns. Either way the Claims are kept, and the Factory picks them up when you start it again. Step 8 shows it.
 
-   The Factory keeps a request open to Code Central and starts its poll at once when work appears: a new or approved Ticket, an Accept or Reject, answered Questions. `--poll <duration>` (default 30s, at least 5s) remains the fallback for what Code Central can't see happen, such as CI results and merged Pull Requests, and sets the Heartbeat cadence.
+   The Factory keeps a request open to Code Central and starts its poll at once when work appears: a new or approved Ticket, an Accept or Reject, answered Questions. It also polls at once when a turn ends, to fill the freed slot, but a Ticket whose session gave up waits for the next timed poll rather than being claimed again straight away. `--poll <duration>` (default 30s, at least 5s) remains the fallback for what Code Central can't see happen, such as CI results and merged Pull Requests, and sets the Heartbeat cadence.
 
    Check: the Factory is still running, and its only line is `base: main`.
 
