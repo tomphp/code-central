@@ -5,8 +5,24 @@ A local coordination point for AI agent-driven software delivery across many rep
 ## Language
 
 **Project**:
-A single repository whose work is tracked here, however many clones or worktrees of it exist.
-_Avoid_: Repo (in domain language), workspace
+A body of work tracked here, with its Specs, Tickets and settings, spanning one or more Repositories, one of which is its Home Repository.
+_Avoid_: workspace, monorepo
+
+**Repository**:
+One git repository that a Project's work changes, however many clones or worktrees of it exist. It keeps its own history, remote and Base, and is identified within its Project by its Repository Name.
+_Avoid_: Repo, module, project
+
+**Repository Name**:
+The short, permanent name that identifies a Repository within its Project. It is set when the Repository is added and never changes. The Home Repository's name defaults to the Project Key. A Repository can be removed only when no unfinished Ticket has changed it, and finished Tickets keep showing its name.
+_Avoid_: alias, slug
+
+**Home Repository**:
+The Project's one primary Repository, where the Factory runs and where the Project's file-based settings live. It is the only Repository a single-repository Project has, and a Ticket can change it like any other.
+_Avoid_: Home Repo, main repository, meta repository
+
+**Changed Repositories**:
+The Repositories in which a Ticket's branch holds commits beyond the Base. The Factory reports them live while the Ticket is In Progress, and each finish settles them, replacing the earlier list. Nobody sets them by hand. Every Ticket records them, including those whose work never lands. A finish recorded before Repositories existed reads as the Home Repository's. A Spec's Changed Repositories are the union of its Tickets'.
+_Avoid_: affected repos, target repos, scope
 
 **Archived Project**:
 A Project put away by the human once all its work is finished, which takes no new work until it is brought back.
