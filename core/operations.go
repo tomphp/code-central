@@ -187,6 +187,8 @@ var Operations = []Op{
 	{Name: "report_heartbeat", Audience: FactoryOnly, Write: true},
 	// The Factory's base under Pull Request (code-central-394).
 	{Name: "report_base", Audience: FactoryOnly, Write: true},
+	// The Factory's clones of the Repositories (Spec code-central-848).
+	{Name: "report_repositories", Audience: FactoryOnly, Write: true},
 
 	// Chat (Spec code-central-633): the human's Conversation and the
 	// Factory's long-poll for its turns. Chat writes change only memory.

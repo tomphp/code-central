@@ -237,8 +237,8 @@ func (e *evaluation) itemOf(t store.Ticket) (ciItem, bool) {
 	return e.ciItems[i], true
 }
 
-// baseRows are the Project's Base diverged and Base missing rows, each
-// while its Factory reports it.
+// baseRows are the Project's Base diverged, Base missing and Repository
+// missing rows, each while its Factory reports it.
 func (e *evaluation) baseRows() []NeedsMeRow {
 	var out []NeedsMeRow
 	if row, ok := e.c.baseDivergedRow(e.p); ok {
@@ -247,7 +247,7 @@ func (e *evaluation) baseRows() []NeedsMeRow {
 	if row, ok := e.c.baseMissingRow(e.p); ok {
 		out = append(out, row)
 	}
-	return out
+	return append(out, e.c.repositoryMissingRows(e.p)...)
 }
 
 // needsMeItem is one Needs Me item as the evaluation has it: its row,

@@ -17,3 +17,15 @@ export const SeveralRepositories: Story = {
     await w.api.addRepository("acme", { name: "api", clone_url: "https://dev.azure.com/acme/shop/_git/api", base: "develop" });
   }),
 };
+export const CloneStatus: Story = {
+  ...optionsWorld(async (s, w) => {
+    await s.reportPushRemote("acme", "git@github.com:acme/acme.git");
+    await w.api.addRepository("acme", { name: "web", clone_url: "git@github.com:acme/web.git" });
+    await w.api.addRepository("acme", { name: "api", clone_url: "git@github.com:acme/api.git" });
+    await s.clones("acme", [
+      { name: "acme", path: "/src/acme", state: "ready" },
+      { name: "web", path: "/src/web", state: "ready" },
+      { name: "api", path: "/src/api", state: "missing", problem: "/src/api's remote origin is git@github.com:acme/other.git, not git@github.com:acme/api.git" },
+    ]);
+  }),
+};

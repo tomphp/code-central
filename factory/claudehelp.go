@@ -35,7 +35,7 @@ func (f *factory) readClaudeHelp() claudeAccepts {
 	ctx, cancel := context.WithTimeout(context.Background(), helpTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, f.claude, "--help")
-	cmd.Dir, cmd.Env = f.repo, f.e.Environ
+	cmd.Dir, cmd.Env = f.home.dir, f.e.Environ
 	out, err := cmd.Output()
 	if err != nil {
 		f.printf("warning: can't run claude --help (%v), so there are no effort levels or model aliases to report, and --effort isn't checked", err)

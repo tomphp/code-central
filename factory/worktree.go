@@ -11,7 +11,7 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-func (f *factory) worktree(ticket string) string { return filepath.Join(f.worktrees, ticket) }
+func (f *factory) worktree(ticket string) string { return filepath.Join(f.home.worktrees, ticket) }
 
 // gitWorktree is one entry of `git worktree list`.
 type gitWorktree struct {
@@ -36,7 +36,7 @@ func find(list []gitWorktree, path string) (gitWorktree, bool) {
 // or branch checked out elsewhere, is a failure, and nothing is
 // touched.
 func (f *factory) branchWorktree(branch, wt, from string) error {
-	list, err := f.repository.worktrees()
+	list, err := f.home.git.worktrees()
 	if err != nil {
 		return err
 	}
@@ -49,16 +49,16 @@ func (f *factory) branchWorktree(branch, wt, from string) error {
 	if _, err := os.Stat(wt); err == nil {
 		return f.strayDirectory(wt)
 	}
-	if _, err := f.gitOut(f.repo, "rev-parse", "--verify", "-q", "refs/heads/"+branch); err == nil {
+	if _, err := f.gitOut(f.home.dir, "rev-parse", "--verify", "-q", "refs/heads/"+branch); err == nil {
 		for _, w := range list {
 			if w.branch == branch {
 				return f.branchElsewhere(branch, wt, w.path)
 			}
 		}
-		_, err := f.gitOut(f.repo, "worktree", "add", "-q", wt, branch)
+		_, err := f.gitOut(f.home.dir, "worktree", "add", "-q", wt, branch)
 		return err
 	}
-	_, err = f.gitOut(f.repo, "worktree", "add", "-q", "-b", branch, wt, from)
+	_, err = f.gitOut(f.home.dir, "worktree", "add", "-q", "-b", branch, wt, from)
 	return err
 }
 
@@ -99,7 +99,7 @@ type leftAsItWas struct {
 // it isn't there, and moved to the current tip when it is a clean
 // detached one. Anything else is left as it was, and returned saying why.
 func (f *factory) detachAtBase(wt string) (*leftAsItWas, error) {
-	list, err := f.repository.worktrees()
+	list, err := f.home.git.worktrees()
 	if err != nil {
 		return nil, err
 	}
@@ -108,13 +108,13 @@ func (f *factory) detachAtBase(wt string) (*leftAsItWas, error) {
 		if _, err := os.Stat(wt); err == nil {
 			return &leftAsItWas{stray: true}, nil
 		}
-		_, err := f.gitOut(f.repo, "worktree", "add", "-q", "--detach", wt, f.baseBranch())
+		_, err := f.gitOut(f.home.dir, "worktree", "add", "-q", "--detach", wt, f.baseBranch())
 		return nil, err
 	}
 	if w.branch != "" {
 		return &leftAsItWas{branch: w.branch}, nil
 	}
-	status, err := f.repository.status(wt)
+	status, err := f.home.git.status(wt)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (f *factory) detachAtBase(wt string) (*leftAsItWas, error) {
 // prune runs `git worktree prune`, dropping worktrees whose folders are
 // gone.
 func (f *factory) prune() {
-	if _, err := f.gitOut(f.repo, "worktree", "prune"); err != nil {
+	if _, err := f.gitOut(f.home.dir, "worktree", "prune"); err != nil {
 		f.printf("warning: %v", err)
 	}
 }
@@ -141,7 +141,7 @@ func (f *factory) prune() {
 // and left with a warning line when dirty. Branches are never deleted, and anything else
 // is kept, the Chat worktree among it.
 func (f *factory) sweep(ctx context.Context, policy core.LandingPolicy) {
-	list, err := f.repository.worktrees()
+	list, err := f.home.git.worktrees()
 	if err != nil {
 		f.printf("warning: can't list the worktrees: %v", err)
 		return
@@ -150,7 +150,7 @@ func (f *factory) sweep(ctx context.Context, policy core.LandingPolicy) {
 		if ctx.Err() != nil {
 			return
 		}
-		if filepath.Dir(w.path) != f.worktrees {
+		if filepath.Dir(w.path) != f.home.worktrees {
 			continue
 		}
 		id := filepath.Base(w.path)
@@ -170,7 +170,7 @@ func (f *factory) sweep(ctx context.Context, policy core.LandingPolicy) {
 		if !doneWithWorktree(tk, policy) {
 			continue
 		}
-		status, err := f.repository.status(w.path)
+		status, err := f.home.git.status(w.path)
 		if err != nil {
 			f.printf("warning: %s: can't read the worktree %s: %v", id, w.path, err)
 			continue
@@ -182,7 +182,7 @@ func (f *factory) sweep(ctx context.Context, policy core.LandingPolicy) {
 			}
 			continue
 		}
-		if err := f.repository.removeWorktree(w.path); err != nil {
+		if err := f.home.git.removeWorktree(w.path); err != nil {
 			f.printf("warning: %s: can't remove the worktree %s: %v", id, w.path, err)
 			continue
 		}
@@ -231,7 +231,7 @@ func (f *factory) setUpFailed(wt string, err error) *failure {
 func (f *factory) strayDirectory(wt string) error {
 	return &failure{core.ReportFailureInput{
 		WhatBroke:       fmt.Sprintf("Something that isn't a git worktree is at this Ticket's worktree path, %s, so the Factory can't set up the worktree.", wt),
-		Why:             fmt.Sprintf("Each Ticket's worktree is at %s/<ticket-id>. %s exists but `git worktree list` doesn't list it, and the Factory never deletes or overwrites what it doesn't recognise.", f.worktrees, wt),
+		Why:             fmt.Sprintf("Each Ticket's worktree is at %s/<ticket-id>. %s exists but `git worktree list` doesn't list it, and the Factory never deletes or overwrites what it doesn't recognise.", f.home.worktrees, wt),
 		WhatToFix:       fmt.Sprintf("Look at %s, keep anything worth keeping elsewhere, and remove or move it. Then send the Ticket back.", wt),
 		WhereWorkStands: fmt.Sprintf("No session ran under this Claim. %s was left as it was.", wt),
 	}}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -27,6 +28,12 @@ type repo interface {
 	isAncestor(commit, rev string) bool
 	// hasRemote reports whether the repository has the remote name.
 	hasRemote(name string) bool
+	// remoteURL is the URL of the remote name, failing when the
+	// repository hasn't it.
+	remoteURL(name string) (string, error)
+	// topLevel is the top level of the git repository holding the
+	// repository's folder, failing when none does.
+	topLevel() (string, error)
 	// mergeTree merges head into base without touching any working tree:
 	// the merged tree, or the conflicting files.
 	mergeTree(base, head string) (tree string, conflicts []string, err error)
@@ -107,8 +114,39 @@ func (g gitRepo) isAncestor(commit, rev string) bool {
 }
 
 func (g gitRepo) hasRemote(name string) bool {
-	_, err := g.out("remote", "get-url", name)
+	_, err := g.remoteURL(name)
 	return err == nil
+}
+
+func (g gitRepo) remoteURL(name string) (string, error) { return g.out("remote", "get-url", name) }
+
+func (g gitRepo) topLevel() (string, error) {
+	top, err := g.out("rev-parse", "--show-toplevel")
+	// git writes C:/... on Windows; the Factory's paths are C:\...
+	return filepath.FromSlash(top), err
+}
+
+// cloneRepository clones url to path, naming its remote remote; out is
+// git's output when it fails, and nothing is left at path then. A stop
+// (ctx) kills it. The clone is made in a folder beside path, the
+// Factory's own, and moved into place once whole, so a clone cut off
+// part way is never at path to be adopted.
+func cloneRepository(ctx context.Context, git string, environ []string, remote, url, path string) (string, error) {
+	partial := filepath.Join(filepath.Dir(path), "."+filepath.Base(path)+".cloning")
+	if err := os.RemoveAll(partial); err != nil {
+		return "", err
+	}
+	cmd := exec.CommandContext(ctx, git, "clone", "--quiet", "--origin", remote, url, partial)
+	// A prompt for credentials would wait forever: nobody answers it.
+	cmd.Env = append(slices.Clone(environ), "GIT_TERMINAL_PROMPT=0")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		err = os.Rename(partial, path)
+	}
+	if err != nil {
+		os.RemoveAll(partial)
+	}
+	return strings.TrimSpace(string(out)), err
 }
 
 func (g gitRepo) mergeTree(base, head string) (tree string, conflicts []string, err error) {

@@ -91,6 +91,9 @@ type heartbeats struct {
 	seen map[string]string
 	// base is each Project's reported base (code-central-394).
 	base map[string]BaseView
+	// clones is each Project's reported clones, by Repository Name
+	// (Spec code-central-848).
+	clones map[string]map[string]CloneView
 }
 
 // status is h's status at now.
@@ -190,8 +193,9 @@ func (c *Core) ReportHeartbeat(_ context.Context, key string, in ReportHeartbeat
 	hs.all[k] = h
 	if !seen || prev.status(now) == FactoryOffline || in.State == HeartbeatStopping {
 		// A Factory that is new, back from a lapse or stopping holds
-		// no base report of its own to trust.
+		// no base or clone report of its own to trust.
 		delete(hs.base, key)
+		delete(hs.clones, key)
 	}
 	hs.mu.Unlock()
 	if !seen || prev.status(now) != h.status(now) || prev.note != note || prev.chat != in.Chat {

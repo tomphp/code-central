@@ -40,6 +40,9 @@ type RepositoryView struct {
 	// include it, which keep it from being removed. Only get_project and
 	// list_projects fill them in.
 	ChangedBy []string `json:"changed_by"`
+	// Clone is its clone as the Factory last reported it, absent while no
+	// Factory is reporting.
+	Clone *CloneView `json:"clone,omitempty"`
 }
 
 // repositoriesView is p's Repositories in landing order.

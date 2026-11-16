@@ -138,6 +138,7 @@ a.filter { text-decoration: none; }
 .project-options-repository-details { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 6px 0; }
 .project-options-repository-details dt { color: var(--muted); }
 .project-options-repository-details dd { margin: 0; overflow-wrap: anywhere; }
+.project-options-clone-missing { color: var(--danger); }
 .project-options-repository-form { margin-top: 12px; }
 .project-options-field { display: block; margin: 12px 0 0; }
 .project-options-field input { min-width: 16rem; }

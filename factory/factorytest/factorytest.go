@@ -130,8 +130,9 @@ type Harness struct {
 	Server *codecentraltest.Server
 	// Project is the Project Key the repo's committed .mcp.json names.
 	Project string
-	// Repo is the git repo's top level. Its parent holds only it and the
-	// Factory's worktree folder, Repo + ".worktrees".
+	// Repo is the git repo's top level, the Home Repository's. Its parent
+	// holds only it, the Factory's worktree folder, Repo + ".worktrees",
+	// and the clones of the Repositories AddRepository adds.
 	Repo string
 	// Home is the Factory's HOME and its profile folder, so its state file
 	// is under it even with HOME unset.
@@ -1044,6 +1045,46 @@ func (r *Remote) RefusePushes() {
 func (r *Remote) AcceptPushes() {
 	r.h.t.Helper()
 	must(r.h.t, os.Remove(filepath.Join(r.Path, "hooks", "pre-receive")))
+}
+
+// Repository is a second real repository of the Project's (Spec
+// code-central-848), beside the Home Repository.
+type Repository struct {
+	// Name is its Repository Name.
+	Name string
+	// CloneURL is its own bare remote, holding one commit on main.
+	CloneURL string
+	// Path is where the Factory clones it: beside the Home Repository,
+	// at <Repo's parent>/<Name>.
+	Path string
+}
+
+// AddRepository makes a bare repository named name, holding one commit
+// on main, and adds it to the Project through add_repository, with no
+// local path, so the Factory clones it beside the Home Repository.
+func (h *Harness) AddRepository(name string) *Repository {
+	h.t.Helper()
+	r := h.MakeRepository(name)
+	if _, err := h.Human().AddRepository(context.Background(), h.Project, core.AddRepositoryInput{Name: name, CloneURL: r.CloneURL}); err != nil {
+		h.t.Fatalf("add_repository %s: %v", name, err)
+	}
+	return r
+}
+
+// MakeRepository makes AddRepository's bare repository without adding it
+// to the Project.
+func (h *Harness) MakeRepository(name string) *Repository {
+	h.t.Helper()
+	root := filepath.Dir(filepath.Dir(h.Repo))
+	seed := filepath.Join(root, "seeds", name)
+	must(h.t, os.MkdirAll(seed, 0o755))
+	h.GitIn(seed, "init", "-q", "-b", "main")
+	must(h.t, os.WriteFile(filepath.Join(seed, "README.md"), []byte(name+"\n"), 0o644))
+	h.GitIn(seed, "add", "README.md")
+	h.GitIn(seed, "commit", "-q", "-m", "Start "+name)
+	r := &Repository{Name: name, CloneURL: filepath.Join(root, "repositories", name+".git"), Path: filepath.Join(filepath.Dir(h.Repo), name)}
+	h.GitIn(root, "clone", "-q", "--bare", seed, r.CloneURL)
+	return r
 }
 
 // CommitOn commits file with content on branch, made from main when it

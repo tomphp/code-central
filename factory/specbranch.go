@@ -20,19 +20,19 @@ func specBranch(spec string) string { return "spec/" + spec }
 // base's tip first. The branch is never checked out: only its ref moves.
 func (f *factory) specBranchTip(spec string) (string, error) {
 	ref := "refs/heads/" + specBranch(spec)
-	baseTip, err := f.repository.commit("refs/heads/" + f.baseBranch())
+	baseTip, err := f.home.git.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
 		return "", fmt.Errorf("the base, %s, isn't a branch", f.baseBranch())
 	}
-	tip, err := f.repository.commit(ref)
+	tip, err := f.home.git.commit(ref)
 	if err != nil {
-		if err := f.repository.updateRef(ref, baseTip, ""); err != nil {
+		if err := f.home.git.updateRef(ref, baseTip, ""); err != nil {
 			return "", fmt.Errorf("can't create the Spec Branch %s (a branch named %q may be in the way): %v", specBranch(spec), "spec", err)
 		}
 		return baseTip, nil
 	}
 	if tip != baseTip && f.inBase(tip) {
-		if err := f.repository.updateRef(ref, baseTip, tip); err != nil {
+		if err := f.home.git.updateRef(ref, baseTip, tip); err != nil {
 			return "", fmt.Errorf("can't move the Spec Branch %s to %s's tip: %v", specBranch(spec), f.baseBranch(), err)
 		}
 		return baseTip, nil
@@ -68,11 +68,11 @@ func (f *factory) mergeIntoSpecBranch(ctx context.Context, tk core.TicketView) {
 		f.cantLandYet(ctx, tk, err.Error()+".")
 		return
 	}
-	if f.repository.isAncestor(head, ref) {
+	if f.home.git.isAncestor(head, ref) {
 		f.reportSpecMerge(ctx, tk, branch, tip)
 		return
 	}
-	tree, conflicts, err := f.repository.mergeTree(tip, head)
+	tree, conflicts, err := f.home.git.mergeTree(tip, head)
 	if err != nil {
 		f.printf("warning: %s: can't merge: %v", tk.ID, err)
 		return
@@ -81,12 +81,12 @@ func (f *factory) mergeIntoSpecBranch(ctx context.Context, tk core.TicketView) {
 		f.sendBack(ctx, tk, head, branch, tip, conflicts)
 		return
 	}
-	merge, err := f.repository.commitTree(tree, fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title), tip, head)
+	merge, err := f.home.git.commitTree(tree, fmt.Sprintf("Merge %s: %s", tk.ID, tk.Title), tip, head)
 	if err != nil {
 		f.printf("warning: %s: can't make the merge commit: %v", tk.ID, err)
 		return
 	}
-	if err := f.repository.updateRef(ref, merge, tip); err != nil {
+	if err := f.home.git.updateRef(ref, merge, tip); err != nil {
 		f.cantLandYet(ctx, tk, fmt.Sprintf("the Spec Branch %s moved while the Factory was merging, or git refused: %v", branch, err))
 		return
 	}
@@ -124,7 +124,7 @@ func (f *factory) waitsOnSpecBranch(tk core.TicketView) bool {
 func (f *factory) cutBranchWorktree(tk core.TicketView, branch, wt string) error {
 	from := f.baseBranch()
 	if tk.SpecLanded {
-		if _, err := f.repository.commit("refs/heads/" + branch); err != nil {
+		if _, err := f.home.git.commit("refs/heads/" + branch); err != nil {
 			tip, err := f.specBranchTip(tk.Spec.ID)
 			if err != nil {
 				return specBranchFailed(wt, err)
@@ -211,15 +211,15 @@ func (f *factory) pushSpec(ctx context.Context, id string, p core.ProjectView) {
 	}
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
 	branch := specBranch(id)
-	tip, err := f.repository.commit("refs/heads/" + branch)
+	tip, err := f.home.git.commit("refs/heads/" + branch)
 	if err != nil || f.inBase(tip) {
 		return
 	}
-	baseTip, err := f.repository.commit("refs/heads/" + f.baseBranch())
+	baseTip, err := f.home.git.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
 		return
 	}
-	_, conflicts, err := f.repository.mergeTree(baseTip, tip)
+	_, conflicts, err := f.home.git.mergeTree(baseTip, tip)
 	if err != nil {
 		f.printf("warning: %s: can't merge %s: %v", id, branch, err)
 		return
@@ -283,7 +283,7 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 	id := spec.ID
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
 	ref := "refs/heads/" + specBranch(id)
-	tip, err := f.repository.commit(ref)
+	tip, err := f.home.git.commit(ref)
 	if err != nil {
 		return false
 	}
@@ -295,7 +295,7 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 		}
 		return true
 	}
-	baseTip, err := f.repository.commit("refs/heads/" + f.baseBranch())
+	baseTip, err := f.home.git.commit("refs/heads/" + f.baseBranch())
 	if err != nil {
 		f.printf("warning: %s: the base, %s, isn't a branch, so the Spec can't land", id, f.baseBranch())
 		return true
@@ -305,7 +305,7 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 	if f.inBase(tip) {
 		return false
 	}
-	tree, conflicts, err := f.repository.mergeTree(baseTip, tip)
+	tree, conflicts, err := f.home.git.mergeTree(baseTip, tip)
 	if err != nil {
 		f.printf("warning: %s: can't merge %s: %v", id, specBranch(id), err)
 		return true
@@ -314,7 +314,7 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 		f.openSpecConflict(ctx, spec, tip, baseTip, conflicts)
 		return true
 	}
-	merge, err := f.repository.commitTree(tree, fmt.Sprintf("Merge spec %s: %s", id, spec.Title), baseTip, tip)
+	merge, err := f.home.git.commitTree(tree, fmt.Sprintf("Merge spec %s: %s", id, spec.Title), baseTip, tip)
 	if err != nil {
 		f.printf("warning: %s: can't make the merge commit: %v", id, err)
 		return true
@@ -428,7 +428,7 @@ func (f *factory) specLanded(spec core.SpecDetail) bool {
 // every Ticket on its Spec is Done or Cancelled. One not in the base, as
 // when the whole Spec is cancelled, is kept, with a line printed once.
 func (f *factory) sweepSpecBranches(ctx context.Context, policy core.LandingPolicy) {
-	branches, err := f.repository.specBranches()
+	branches, err := f.home.git.specBranches()
 	if err != nil {
 		return
 	}
@@ -451,7 +451,7 @@ func (f *factory) sweepSpecBranches(ctx context.Context, policy core.LandingPoli
 			continue
 		}
 		ref := "refs/heads/" + branch
-		tip, err := f.repository.commit(ref)
+		tip, err := f.home.git.commit(ref)
 		if err != nil {
 			continue
 		}
@@ -462,7 +462,7 @@ func (f *factory) sweepSpecBranches(ctx context.Context, policy core.LandingPoli
 			}
 			continue
 		}
-		if err := f.repository.deleteRef(ref, tip); err != nil {
+		if err := f.home.git.deleteRef(ref, tip); err != nil {
 			f.printf("warning: %s: can't delete %s: %v", id, branch, err)
 			continue
 		}

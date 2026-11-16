@@ -44,3 +44,16 @@ func init() {
 		return c.SetLandingOrder(r.Context(), r.PathValue("key"), in)
 	}
 }
+
+// The Factory's clones of the Repositories (Spec code-central-848).
+func init() {
+	Routes["report_repositories"] = "POST /api/p/{key}/report_repositories"
+
+	handlers["report_repositories"] = func(c *core.Core, r *http.Request) (any, error) {
+		var in core.ReportRepositoriesInput
+		if err := decodeBody(r, &in); err != nil {
+			return nil, err
+		}
+		return c.ReportRepositories(r.Context(), r.PathValue("key"), in)
+	}
+}

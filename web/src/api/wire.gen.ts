@@ -30,6 +30,7 @@ export const NEEDS_ME_REASONS = [
   "ci_cancelled",
   "base_diverged",
   "base_missing",
+  "repository_missing",
   "pull_request_closed",
   "to_merge",
   "ci_unavailable",
@@ -73,6 +74,14 @@ export const CODE_HOSTS = [
   "",
 ] as const;
 export type CodeHost = (typeof CODE_HOSTS)[number];
+
+// CloneState is the state of a Repository's clone as the Factory reports
+// it.
+export const CLONE_STATES = [
+  "ready",
+  "missing",
+] as const;
+export type CloneState = (typeof CLONE_STATES)[number];
 
 // CIProvider is the CI system a Project's CI Tracking watches.
 export const CI_PROVIDERS = [
@@ -906,6 +915,9 @@ export interface RepositoryView {
   // include it, which keep it from being removed. Only get_project and
   // list_projects fill them in.
   changed_by: string[];
+  // Clone is its clone as the Factory last reported it, absent while no
+  // Factory is reporting.
+  clone?: CloneView;
 }
 
 // LinkView is a Spec's or Ticket's Link as reads show it: the external
@@ -1365,6 +1377,17 @@ export interface BaseView {
   at: string;
 }
 
+// CloneView is a Repository's clone as the Factory last reported it;
+// absent while no Factory is reporting.
+export interface CloneView {
+  state: CloneState;
+  path: string;
+  problem?: string;
+  // Since is when the Factory first reported it in this state with
+  // this problem.
+  since: string;
+}
+
 // CIJobView is one job of a CI Run; its conclusion is empty until it
 // ends.
 export interface CIJobView {
@@ -1480,6 +1503,9 @@ export interface NeedsMeRow {
   // BaseMissing is the missing base's branch and the fix (Base missing,
   // whose row has no Ticket either).
   base_missing?: BaseMissingView;
+  // RepositoryMissing is the missing Repository's path, Clone URL,
+  // problem and fix (Repository missing, whose row has no Ticket).
+  repository_missing?: RepositoryMissingView;
 }
 
 // SessionEvent is one thing a Claim's session did, as posted: agent text,
@@ -1567,5 +1593,15 @@ export interface BaseDivergedView {
 // BaseMissingView is a Base missing item's detail: the branch and the fix.
 export interface BaseMissingView {
   base: string;
+  fix: string;
+}
+
+// RepositoryMissingView is a Repository missing item's detail: the
+// Repository, its path and Clone URL, what is wrong and the fix.
+export interface RepositoryMissingView {
+  repository: string;
+  path: string;
+  clone_url: string;
+  problem: string;
   fix: string;
 }

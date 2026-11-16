@@ -33,7 +33,7 @@ const (
 	chatTurnKey = "chat"
 )
 
-func (f *factory) chatWorktree() string { return filepath.Join(f.worktrees, chatWorktreeName) }
+func (f *factory) chatWorktree() string { return filepath.Join(f.home.worktrees, chatWorktreeName) }
 
 // chatStop stops a running Chat turn: cancel ends its context, and work
 // hands its Turn runner the stop's busy work.

@@ -502,9 +502,10 @@ func (f *factory) claimNext(ctx context.Context) bool {
 
 // claimingHeld reports whether nothing may be claimed, as every claim
 // cuts a branch or a worktree from the base: the base disagrees with the
-// host's, is missing, or lacks .mcp.json.
+// host's, is missing, or lacks .mcp.json, or a Repository is missing, so
+// a Ticket would start without a checkout of every Repository.
 func (f *factory) claimingHeld() bool {
-	return f.baseDiverged || f.baseMissing || f.mcpHeld
+	return f.baseDiverged || f.baseMissing || f.mcpHeld || f.repositoryMissing()
 }
 
 // claimLostAgain sends each claim whose answer was lost again, once, so

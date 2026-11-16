@@ -292,18 +292,25 @@ type factory struct {
 	o      options
 	git    string
 	claude string
-	repo   string // the git top level
-	// repository is the repo at the top level, as landing and the sweep
-	// use it.
-	repository repo
-	project    string
-	host       string // the machine, as the Heartbeats name it
-	worktrees  string // <repo-parent>/<repo-dir>.worktrees
-	client     *client.Client
-	events     *sender[core.SessionEvent]  // posts Session Events
-	usage      *sender[core.UsageResponse] // posts model responses' token usage
-	state      *stateFile
-	lock       *os.File // held for the Factory's whole life
+	// home is the Home Repository: the git top level the Factory starts
+	// in, its repo as landing and the sweep use it, and its worktree
+	// folder, <repo-parent>/<repo-dir>.worktrees.
+	home *repository
+	// repositories is the registry of the Project's Repositories by
+	// Repository Name, home among them, rebuilt from the Project on every
+	// poll; the poll's own. reportedSeveral is whether the last report of
+	// their clones was of several, and reportRepositoriesFailing whether it
+	// failed, so a failure warns once.
+	repositories              map[string]*repository
+	reportedSeveral           bool
+	reportRepositoriesFailing bool
+	project                   string
+	host                      string // the machine, as the Heartbeats name it
+	client                    *client.Client
+	events                    *sender[core.SessionEvent]  // posts Session Events
+	usage                     *sender[core.UsageResponse] // posts model responses' token usage
+	state                     *stateFile
+	lock                      *os.File // held for the Factory's whole life
 
 	outMu sync.Mutex
 	mu    sync.Mutex           // guards turns, ended, info and backInReady
@@ -436,8 +443,8 @@ func start(e Env, o options) (*factory, error) {
 	if err != nil {
 		return nil, fmt.Errorf("not in a git repository (%s)", e.Dir)
 	}
-	f.repo = top
-	f.repository = gitRepo{git: git, dir: top, environ: e.Environ}
+	f.home = f.newRepository("", top)
+	f.home.home = true
 	if err := f.checkGitVersion(); err != nil {
 		return nil, err
 	}
@@ -449,15 +456,17 @@ func start(e Env, o options) (*factory, error) {
 		return nil, errors.New("no Project: pass --project <key>, set CODE_CENTRAL_PROJECT, or run `code-central init` in the repository")
 	}
 	f.project = project
+	// The Home Repository is named by the Project Key.
+	f.home.name = project
+	f.repositories = map[string]*repository{project: f.home}
 	if f.claude, ok = e.lookPath("claude"); !ok {
 		return nil, errors.New("claude isn't on PATH")
 	}
 	if err := refuseClaudeShim(f.claude); err != nil {
 		return nil, err
 	}
-	f.worktrees = filepath.Join(filepath.Dir(top), filepath.Base(top)+".worktrees")
-	if err := writable(f.worktrees); err != nil {
-		return nil, fmt.Errorf("can't use the worktree folder %s: %v", f.worktrees, err)
+	if err := writable(f.home.worktrees); err != nil {
+		return nil, fmt.Errorf("can't use the worktree folder %s: %v", f.home.worktrees, err)
 	}
 	f.client = client.New(cli.ServiceURL(e.getenv))
 	every := e.EventBatchEvery
@@ -526,7 +535,7 @@ func start(e Env, o options) (*factory, error) {
 var minGit = [2]int{2, 38}
 
 func (f *factory) checkGitVersion() error {
-	out, err := f.gitOut(f.repo, "version")
+	out, err := f.gitOut(f.home.dir, "version")
 	if err != nil {
 		return err
 	}
@@ -594,7 +603,7 @@ func (f *factory) setBase(base string) {
 
 // mcpCommitted is whether .mcp.json is committed on the base.
 func (f *factory) mcpCommitted() bool {
-	_, err := f.gitOut(f.repo, "cat-file", "-e", f.baseBranch()+":.mcp.json")
+	_, err := f.gitOut(f.home.dir, "cat-file", "-e", f.baseBranch()+":.mcp.json")
 	return err == nil
 }
 

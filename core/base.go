@@ -112,15 +112,21 @@ func (c *Core) ReportBase(_ context.Context, key string, in ReportBaseInput) (Wr
 // no report, or no Factory online or draining. hs.mu is held.
 func (hs *heartbeats) baseView(project string, now time.Time) *BaseView {
 	b, ok := hs.base[project]
-	if !ok {
+	if !ok || !hs.reporting(project, now) {
 		return nil
 	}
+	return &b
+}
+
+// reporting reports whether a Factory of project's is online or draining
+// at now, so its reports stand. hs.mu is held.
+func (hs *heartbeats) reporting(project string, now time.Time) bool {
 	for k, h := range hs.all {
 		if k.project == project && h.status(now) != FactoryOffline {
-			return &b
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 // divergedBase is project's reported base while it is diverged and the

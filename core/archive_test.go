@@ -294,6 +294,10 @@ var writesOnAcme = map[string]func(f fixture) error{
 		_, err := f.core.ReportBase(ctx, "acme", core.ReportBaseInput{State: core.BaseCurrent, Local: "a", Remote: "a"})
 		return err
 	},
+	"report_repositories": func(f fixture) error {
+		_, err := f.core.ReportRepositories(ctx, "acme", core.ReportRepositoriesInput{Repositories: []core.RepositoryReport{{Name: "acme", Path: "/src/acme", State: core.CloneReady}}})
+		return err
+	},
 	"start_conversation": func(f fixture) error {
 		_, err := f.core.StartConversation(human, "acme", core.StartConversationInput{})
 		return err
