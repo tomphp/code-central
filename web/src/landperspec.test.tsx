@@ -4,8 +4,7 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { newWorld } from "./api/core/core";
-import { scenario } from "./api/scenario";
-import { allClear, renderApp } from "./worldTesting";
+import { allClear, renderApp, scenario } from "./worldTesting";
 
 // world is a Requirement in Build, under Merge with Land per Spec on: two
 // Tickets are Accepted and waiting for the Spec, and a third is Ready, or
@@ -28,14 +27,14 @@ describe("the Waiting for the Spec badge", () => {
   it("shows beside the State on the Ticket page", async () => {
     const { w, exporter } = await world();
     await renderApp(w, `/?view=inbox&ticket=${exporter}`);
-    const pane = await screen.findByRole("complementary", { name: "Ticket" });
-    expect(await within(pane).findByText("Waiting for the Spec")).toBeInTheDocument();
+    const pane = screen.getByRole("complementary", { name: "Ticket" });
+    expect(within(pane).getByText("Waiting for the Spec")).toBeInTheDocument();
   });
 
   it("shows in the Spec's Ticket list on the waiting Tickets only", async () => {
     const { w, spec } = await world();
     await renderApp(w, `/?requirement=${spec}`);
-    const list = await screen.findByRole("list", { name: "Build" });
+    const list = screen.getByRole("list", { name: "Build" });
     expect(within(list).getAllByText("Waiting for the Spec")).toHaveLength(2);
     const ready = within(list).getByText("Export docs").closest("li")!;
     expect(within(ready).queryByText("Waiting for the Spec")).toBeNull();
@@ -44,7 +43,7 @@ describe("the Waiting for the Spec badge", () => {
   it("shows on the State list's rows", async () => {
     const { w } = await world();
     await renderApp(w, "/?view=inbox&state=Accepted");
-    expect((await screen.findAllByText("Waiting for the Spec")).length).toBeGreaterThanOrEqual(2);
+    expect((screen.getAllByText("Waiting for the Spec")).length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -52,13 +51,13 @@ describe("the Requirement's Land per Spec status", () => {
   it("counts the Tickets waiting", async () => {
     const { w, spec } = await world();
     await renderApp(w, `/?requirement=${spec}`);
-    expect(await screen.findByRole("status", { name: "Land per Spec" })).toHaveTextContent("2 Tickets waiting for the Spec");
+    expect(screen.getByRole("status", { name: "Land per Spec" })).toHaveTextContent("2 Tickets waiting for the Spec");
   });
 
   it("says merging once the Spec is ready", async () => {
     const { w, spec } = await world(true);
     await renderApp(w, `/?requirement=${spec}`);
-    expect(await screen.findByRole("status", { name: "Land per Spec" })).toHaveTextContent("Merging into the base");
+    expect(screen.getByRole("status", { name: "Land per Spec" })).toHaveTextContent("Merging into the base");
   });
 });
 
@@ -69,8 +68,8 @@ describe("the CI item of a Spec-landed Ticket", () => {
     for (const id of [exporter, button, docs]) await s.pushed("acme", id, "abc1234567");
     await s.ci("acme", exporter, "failed", "abc1234567");
     await renderApp(w, `/?view=inbox&ticket=${exporter}`);
-    const pane = await screen.findByRole("complementary", { name: "Ticket" });
-    const panel = await within(pane).findByRole("region", { name: "CI failed" });
+    const pane = screen.getByRole("complementary", { name: "Ticket" });
+    const panel = within(pane).getByRole("region", { name: "CI failed" });
     expect(within(panel).getByText(/is one Needs Me item, listing 3 Tickets/)).toHaveTextContent(`Also waiting: ${button}, ${docs}`);
     const group = within(panel).getByRole("group", { name: "Failure options" });
     expect(within(group).getByRole("button", { name: "Re-run failed jobs" })).toBeInTheDocument();

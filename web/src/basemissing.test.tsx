@@ -3,9 +3,8 @@
 import { within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { newWorld } from "./api/core/core";
-import { scenario } from "./api/scenario";
 import { rowDetail } from "./format";
-import { allClear, focus, renderApp } from "./worldTesting";
+import { allClear, focus, renderApp, scenario } from "./worldTesting";
 
 const fix = "Create the branch main, or change Base branch in Project Options";
 
@@ -26,7 +25,7 @@ describe("Base missing", () => {
 
   it("is a Focus Item for the Project with a link to Project Options", async () => {
     await renderApp(await world());
-    const it = await within(focus()).findByRole("article", { name: "Focus Item" });
+    const it = within(focus()).getByRole("article", { name: "Focus Item" });
     expect(within(it).getAllByText("Base missing")).toHaveLength(1);
     expect(within(it).getByText("Focus: Base missing")).toBeInTheDocument();
     expect(within(it).getByText(/main/)).toBeInTheDocument();
