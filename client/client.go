@@ -343,7 +343,7 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 	}
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s %s: reading the answer: %w", method, path, err)
 	}
 	if resp.StatusCode >= 400 {
 		var e core.Error

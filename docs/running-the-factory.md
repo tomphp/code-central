@@ -50,7 +50,7 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    Without `--bypass-permissions`, every session runs in auto mode with no permission prompts. Anything auto mode won't allow is denied and the turn carries on without it. If a turn ends on denied calls, the Factory posts a Round asking you about each one, and answering it lets the session try again. Allow rules for the repository go in its committed `.claude/settings.json`.
 
-   The first Ctrl-C drains: the Factory claims, resumes and lands nothing more, lets the running turns finish, then exits. A second Ctrl-C stops the running turns. Either way the Claims are kept, and the Factory picks them up when you start it again. Step 8 shows it.
+   The first Ctrl-C drains: the Factory claims, resumes and lands nothing more (except a claim whose answer was lost, which it still claims again), lets the running turns finish, then exits. A second Ctrl-C stops the running turns. Either way the Claims are kept, and the Factory picks them up when you start it again. Step 8 shows it.
 
    The Factory keeps a request open to Code Central and starts its poll at once when work appears: a new or approved Ticket, an Accept or Reject, answered Questions. `--poll <duration>` (default 30s, at least 5s) remains the fallback for what Code Central can't see happen, such as CI results and merged Pull Requests, and sets the Heartbeat cadence.
 
@@ -68,6 +68,13 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    ```text
    acme-shop-2 claimed (grilling): "Grilling: Format prices for display" in Spec acme-shop-1; worktree /Users/you/src/acme-shop.worktrees/acme-shop-2; resume: claude --resume 37f7978d-a171-4aee-b737-220845e8b7a8
+   ```
+
+   If Code Central can't be reached, or its answer is cut off, the claim may still have gone through, so the Factory claims the same Ticket again at once, up to three more times, a second apart. Code Central gives back the same Claim, so the Ticket is never left In Progress under a Claim nobody holds. The Factory prints a line when the answer is lost and another when claiming again recovers it:
+
+   ```text
+   acme-shop-2: claim: the answer was lost (<the error>): claiming it again
+   acme-shop-2: claim: the answer came back on claiming it again
    ```
 
    Each Claim gets a worktree of its own under `~/src/acme-shop.worktrees`, named after the Ticket. A Stage's worktree is read-only and detached at the base's tip; the Stages write to Code Central, not to the repository.
@@ -265,6 +272,8 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
    ```
 
    With turns running, it prints `draining: waiting on …` and exits once they finish, or stops them at a second Ctrl-C, as in step 1.
+
+   If the answer to a claim was lost on the network, the Ticket may be In Progress already, so the draining Factory still claims it again at each poll until Code Central answers, printing `draining: claiming acme-2 again at each poll first: the answer was lost`, and waits on its turn like the others. A second Ctrl-C gives up on it, leaving any Claim as it is.
 
    Check: the Factory has exited, and the Requirement is still *Finished*.
 
