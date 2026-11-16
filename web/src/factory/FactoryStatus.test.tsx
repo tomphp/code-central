@@ -1,16 +1,10 @@
 // The Factory Status dot in the left pane and the Factories section of
 // Project Options, on the WASM Core (code-central-324).
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
-import { newWorld, type World } from "../api/core/core";
-import { scenario } from "../api/scenario";
-
-function renderApp(w: World, url = "/") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
-}
+import { newWorld } from "../api/core/core";
+import { renderApp, scenario, settle } from "../worldTesting";
 
 const nav = () => screen.getByRole("navigation", { name: "Filters" });
 const beat = { factory: "code-central-factory", host: "laptop", interval_seconds: 30 } as const;
@@ -25,8 +19,8 @@ describe("Factory Status dot", () => {
     const s = scenario(w);
     await s.project("acme", "Acme");
     await s.reportHeartbeat("acme", { ...beat, state });
-    renderApp(w);
-    const dot = await within(nav()).findByRole("img", { name: `Factory Status: ${label}` });
+    await renderApp(w, "/");
+    const dot = within(nav()).getByRole("img", { name: `Factory Status: ${label}` });
     expect(dot).toHaveClass(cls);
     expect(dot).toHaveAttribute("tabindex", "0");
   });
@@ -34,8 +28,8 @@ describe("Factory Status dot", () => {
   it("is Offline when no Factory has ever reported", async () => {
     const w = await newWorld();
     await scenario(w).project("acme", "Acme");
-    renderApp(w);
-    expect(await within(nav()).findByRole("img", { name: "Factory Status: Offline" })).toHaveClass("offline");
+    await renderApp(w, "/");
+    expect(within(nav()).getByRole("img", { name: "Factory Status: Offline" })).toHaveClass("offline");
   });
 
   it("is not shown on an Archived Project", async () => {
@@ -44,8 +38,8 @@ describe("Factory Status dot", () => {
     await s.project("old", "Old");
     await w.api.archiveProject("old");
     await s.project("acme", "Acme");
-    renderApp(w);
-    await within(nav()).findByRole("img", { name: "Factory Status: Offline" });
+    await renderApp(w, "/");
+    within(nav()).getByRole("img", { name: "Factory Status: Offline" });
     expect(within(nav()).getAllByRole("img", { name: /Factory Status/ })).toHaveLength(1);
   });
 
@@ -54,8 +48,8 @@ describe("Factory Status dot", () => {
     const s = scenario(w);
     await s.project("acme", "Acme");
     await s.reportHeartbeat("acme", { ...beat, state: "online", note: "1 of 3 turns running" });
-    renderApp(w);
-    const dot = await within(nav()).findByRole("img", { name: "Factory Status: Online" });
+    await renderApp(w, "/");
+    const dot = within(nav()).getByRole("img", { name: "Factory Status: Online" });
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
     await userEvent.hover(dot);
@@ -65,14 +59,15 @@ describe("Factory Status dot", () => {
 
     await userEvent.tab();
     dot.focus();
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("code-central-factory on laptop");
+    await settle(w);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("code-central-factory on laptop");
   });
 
   it("says no Factory has sent a Heartbeat when there are none", async () => {
     const w = await newWorld();
     await scenario(w).project("acme", "Acme");
-    renderApp(w);
-    await userEvent.hover(await within(nav()).findByRole("img", { name: "Factory Status: Offline" }));
+    await renderApp(w, "/");
+    await userEvent.hover(within(nav()).getByRole("img", { name: "Factory Status: Offline" }));
     expect(screen.getByRole("tooltip")).toHaveTextContent("No Factory has sent a Heartbeat since Code Central started.");
   });
 });
@@ -83,8 +78,8 @@ describe("Project Options Factories section", () => {
     const s = scenario(w);
     await s.project("acme", "Acme");
     await s.reportHeartbeat("acme", { ...beat, state: "stopping", note: "stopped: drained" });
-    renderApp(w, "/?view=project-options&project=acme");
-    const group = await screen.findByRole("group", { name: "Factories" });
+    await renderApp(w, "/?view=project-options&project=acme");
+    const group = screen.getByRole("group", { name: "Factories" });
     expect(group).toHaveTextContent("code-central-factory on laptop: Offline, last Heartbeat just now (stopped: drained)");
   });
 
@@ -94,8 +89,8 @@ describe("Project Options Factories section", () => {
     await s.project("acme", "Acme");
     await s.reportHeartbeat("acme", { ...beat, state: "online", chat: true });
     await s.reportHeartbeat("acme", { ...beat, factory: "other", state: "online" });
-    renderApp(w,"/?view=project-options&project=acme");
-    const group = await screen.findByRole("group", { name: "Factories" });
+    await renderApp(w, "/?view=project-options&project=acme");
+    const group = screen.getByRole("group", { name: "Factories" });
     expect(group).toHaveTextContent("code-central-factory on laptop: Online, last Heartbeat just now · Chat support");
     expect(group).toHaveTextContent("other on laptop: Online, last Heartbeat just now · no Chat support");
   });
@@ -103,8 +98,8 @@ describe("Project Options Factories section", () => {
   it("shows the empty line with links to the guides", async () => {
     const w = await newWorld();
     await scenario(w).project("acme", "Acme");
-    renderApp(w, "/?view=project-options&project=acme");
-    const group = await screen.findByRole("group", { name: "Factories" });
+    await renderApp(w, "/?view=project-options&project=acme");
+    const group = screen.getByRole("group", { name: "Factories" });
     expect(group).toHaveTextContent("No Factory has sent a Heartbeat since Code Central started.");
     expect(within(group).getByRole("link", { name: "running a Factory" })).toHaveAttribute("href", "docs/running-the-factory.md");
     expect(within(group).getByRole("link", { name: "writing a Factory" })).toHaveAttribute("href", "docs/writing-a-factory.md");

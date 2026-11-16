@@ -1,17 +1,12 @@
 // Map tests: the real App on a WASM Core world. "New Map", the Map view and
 // the Map's row in the Requirements view.
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
 import { newWorld, type World } from "../api/core/core";
-import { scenario, WORK, type Scenario } from "../api/scenario";
+import { WORK, type Scenario } from "../api/scenario";
 import { MAP_LABEL, type State } from "../api/types";
-
-function renderApp(w: World, url = "/") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
-}
+import { renderApp, scenario, settle } from "../worldTesting";
 
 async function newProject() {
   const w = await newWorld();
@@ -30,9 +25,9 @@ const row = (id: string) => list().querySelector<HTMLElement>(`a[data-id="${id}"
 describe("New Map", () => {
   it("opens from the + New menu, submits the same free-text dialog and selects the new Map", async () => {
     const { w } = await newProject();
-    renderApp(w);
+    await renderApp(w, "/");
 
-    await userEvent.click(await within(nav()).findByRole("button", { name: "More to create" }));
+    await userEvent.click(within(nav()).getByRole("button", { name: "More to create" }));
     await userEvent.click(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Map" }));
     const modal = screen.getByRole("dialog", { name: "New Map" });
     expect(within(modal).getAllByRole("textbox")).toHaveLength(1);
@@ -40,12 +35,13 @@ describe("New Map", () => {
     await userEvent.type(within(modal).getByRole("textbox", { name: "Map" }), "Offline mode{Enter}Works on a plane.");
     await userEvent.click(within(modal).getByRole("button", { name: "Submit map" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await settle(w);
+    expect(screen.queryByRole("dialog")).toBeNull();
     const map = (await w.api.getSpec("acme", "acme-1"));
     expect(map.labels).toContain(MAP_LABEL);
     expect(map.requirement).toBeUndefined();
     expect(params().get("requirement")).toBe("acme-1");
-    const pane = await within(detail()).findByRole("region", { name: "Map" });
+    const pane = within(detail()).getByRole("region", { name: "Map" });
     expect(within(pane).getByRole("heading", { name: "Offline mode", level: 2 })).toBeInTheDocument();
     expect(pane).toHaveTextContent("0/1 decided");
     const charting = within(within(pane).getByRole("list", { name: "Map Tickets" })).getByRole("listitem");
@@ -67,10 +63,10 @@ describe("a Map's row in the Requirements view", () => {
     await s.ticket("acme", { title: "Try a cache", state: "In Review", spec: busy.spec.id, labels: ["prototype"] });
     await s.ticket("acme", { title: "Dropped", state: "Cancelled", spec: busy.spec.id, labels: ["wayfinder:task"] });
     const req = await s.api.submitRequirement("acme", "Export a Spec");
-    renderApp(w, "/?view=inbox&list=requirements");
+    await renderApp(w, "/?view=inbox&list=requirements");
 
     const ids = () => [...list().querySelectorAll<HTMLElement>("a[data-id]")].map((a) => a.dataset.id);
-    await waitFor(() => expect(ids()).toEqual([req.spec.id, busy.spec.id, quiet.spec.id]));
+    expect(ids()).toEqual([req.spec.id, busy.spec.id, quiet.spec.id]);
 
     expect(within(row(busy.spec.id)).queryByRole("list", { name: "Stages" })).toBeNull();
     expect(row(busy.spec.id)).toHaveTextContent("1/2 decided · 2 needs you");
@@ -139,8 +135,8 @@ const offlineMode = (s: Scenario) =>
 
 describe("the Map view", () => {
   const open = async (w: World, map: string) => {
-    renderApp(w, `/?view=inbox&list=requirements&requirement=${map}`);
-    return within(detail()).findByRole("region", { name: "Map" });
+    await renderApp(w, `/?view=inbox&list=requirements&requirement=${map}`);
+    return within(detail()).getByRole("region", { name: "Map" });
   };
   const graph = (pane: HTMLElement) => within(pane).getByRole("list", { name: "Map Tickets" });
   const node = (pane: HTMLElement, id: string) => graph(pane).querySelector<HTMLElement>(`[data-id="${id}"]`)!;
@@ -189,7 +185,8 @@ describe("the Map view", () => {
     expect(within(node(pane, t["Which store"])).getByRole("button", { name: "Start Which store" })).toBe(starts[0]);
     await userEvent.click(starts[0]);
 
-    await waitFor(() => expect(node(pane, t["Which store"])).toHaveTextContent("Ready"));
+    await settle(w);
+    expect(node(pane, t["Which store"])).toHaveTextContent("Ready");
     expect((await w.api.getTicket("acme", t["Which store"])).state).toBe("Ready");
     expect(within(graph(pane)).queryByRole("button", { name: /^Start/ })).toBeNull();
   });
@@ -201,7 +198,8 @@ describe("the Map view", () => {
 
     await userEvent.click(within(node(pane, t["Ask legal"])).getByRole("button", { name: /Ask legal/ }));
     expect(params().get("ticket")).toBe(t["Ask legal"]);
-    expect(await within(detail()).findByRole("heading", { name: "Ask legal" })).toBeInTheDocument();
+    await settle(w);
+    expect(within(detail()).getByRole("heading", { name: "Ask legal" })).toBeInTheDocument();
   });
 
   it("draws one dim fog node on the right for Not yet specified, which shows that section when clicked", async () => {
@@ -244,11 +242,13 @@ describe("the Map view", () => {
     const guided = within(pane).getByRole("checkbox", { name: "Guided" });
     expect(guided).not.toBeChecked();
     await userEvent.click(guided);
-    await waitFor(() => expect(within(pane).getByRole("checkbox", { name: "Guided" })).toBeChecked());
+    await settle(w);
+    expect(within(pane).getByRole("checkbox", { name: "Guided" })).toBeChecked();
     expect((await w.api.getSpec("acme", map)).tags).toEqual({ guided: "on" });
 
     await userEvent.click(within(pane).getByRole("checkbox", { name: "Guided" }));
-    await waitFor(() => expect(within(pane).getByRole("checkbox", { name: "Guided" })).not.toBeChecked());
+    await settle(w);
+    expect(within(pane).getByRole("checkbox", { name: "Guided" })).not.toBeChecked();
     expect((await w.api.getSpec("acme", map)).tags).toEqual({});
   });
 
@@ -275,8 +275,8 @@ describe("the Map view", () => {
 
 describe("Write the Spec", () => {
   const open = async (w: World, id: string) => {
-    renderApp(w, `/?view=inbox&list=requirements&requirement=${id}`);
-    return within(detail()).findByRole("region", { name: "Map" });
+    await renderApp(w, `/?view=inbox&list=requirements&requirement=${id}`);
+    return within(detail()).getByRole("region", { name: "Map" });
   };
   // A finished Map: every Ticket Done or Cancelled.
   const finished = (s: Scenario) =>
@@ -305,14 +305,15 @@ describe("Write the Spec", () => {
     expect(within(modal).queryByRole("combobox")).toBeNull();
     await userEvent.click(within(modal).getByRole("button", { name: "Submit requirement" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    await waitFor(() => expect(params().get("requirement")).not.toBe(map));
+    await settle(w);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(params().get("requirement")).not.toBe(map);
     const made = params().get("requirement")!;
     const spec = await w.api.getSpec("acme", made);
     expect(spec.tags).toEqual({ map });
     expect(spec.requirement?.map).toBe(map);
     expect(spec.requirement?.stages.map((st) => st.name)).toEqual(["spec", "tickets"]);
-    expect(await within(detail()).findByRole("region", { name: "Requirement" })).toBeInTheDocument();
+    expect(within(detail()).getByRole("region", { name: "Requirement" })).toBeInTheDocument();
   });
 
   it("links the Requirements made from the Map in its header", async () => {
@@ -324,27 +325,29 @@ describe("Write the Spec", () => {
     const made = within(pane).getByRole("link", { name: req.spec.id });
     expect(made.closest("p")).toHaveTextContent(`Requirements from this Map: ${req.spec.id}`);
     await userEvent.click(made);
+    await settle(w);
     expect(params().get("requirement")).toBe(req.spec.id);
-    expect(await within(detail()).findByRole("region", { name: "Requirement" })).toBeInTheDocument();
+    expect(within(detail()).getByRole("region", { name: "Requirement" })).toBeInTheDocument();
   });
 
   it("shows a Requirement made from the Map with its grilling segment done, labelled Map and linking to the Map", async () => {
     const { w, s } = await newProject();
     const { map } = await finished(s);
     const req = await s.api.submitRequirement("acme", "Offline mode", map);
-    renderApp(w, `/?view=inbox&list=requirements&requirement=${req.spec.id}`);
+    await renderApp(w, `/?view=inbox&list=requirements&requirement=${req.spec.id}`);
 
-    const pane = await within(detail()).findByRole("region", { name: "Requirement" });
+    const pane = within(detail()).getByRole("region", { name: "Requirement" });
     const strip = within(pane).getByRole("list", { name: "Stages" });
     const segs = within(strip).getAllByRole("listitem");
     expect(segs.map((sg) => sg.textContent)).toEqual(["Map", "Spec", "Tickets", "Build"]);
     expect(segs[0].dataset.progress).toBe("done");
-    expect(await within(pane).findByText("Waiting for a Factory to claim Spec. Nothing needs you yet.")).toBeInTheDocument();
+    expect(within(pane).getByText("Waiting for a Factory to claim Spec. Nothing needs you yet.")).toBeInTheDocument();
     // In the list, the row's strip is a picture inside the row's link.
     expect(within(row(req.spec.id)).getByRole("list", { name: "Stages" })).toHaveTextContent("MapSpecTickets");
 
     await userEvent.click(within(segs[0]).getByRole("link", { name: "Map" }));
+    await settle(w);
     expect(params().get("requirement")).toBe(map);
-    expect(await within(detail()).findByRole("region", { name: "Map" })).toBeInTheDocument();
+    expect(within(detail()).getByRole("region", { name: "Map" })).toBeInTheDocument();
   });
 });

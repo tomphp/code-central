@@ -3,13 +3,13 @@
 // Inbox's Admin section on the sidebar's Project or All Projects and going
 // Back, the scope picker, the CI Watchers' statuses on top, the runs'
 // order and fields, ignored runs, and a run that changes pulsing.
-import { act, render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { App } from "../App";
 import { newWorld, type World } from "../api/core/core";
-import { scenario, type Scenario } from "../api/scenario";
+import type { Scenario } from "../api/scenario";
 import type { CIRunView } from "../api/types";
+import { renderApp as renderWorldApp, scenario } from "../worldTesting";
 
 const MINUTE = 60_000;
 
@@ -79,20 +79,17 @@ function run(
   };
 }
 
-function renderApp({ w }: Fake, url = "/") {
-  window.history.replaceState(null, "", url);
-  return render(<App api={w.api} now={w.now} />);
-}
+const renderApp = ({ w }: Fake, url = "/") => renderWorldApp(w, url);
 
 const ci = () => screen.getByRole("main", { name: "CI" });
 const nav = () => screen.getByRole("navigation", { name: "Filters" });
 const scope = () => within(ci()).getByRole("combobox", { name: "Projects" });
 const watchers = () =>
   within(ci()).getByRole("region", { name: "CI Watchers" });
-const table = () => within(ci()).findByRole("table", { name: "CI Runs" });
+const table = () => within(ci()).getByRole("table", { name: "CI Runs" });
 // rows are the runs' rows, by name.
-const rows = async () =>
-  within(await table())
+const rows = () =>
+  within(table())
     .getAllByRole("row")
     .slice(1);
 // cells is the text of a row's header and cells.
@@ -103,7 +100,7 @@ const cells = (row: HTMLElement) =>
 
 describe("opening and leaving the CI view", () => {
   it("opens from the Admin section, before Usage, on the sidebar's Project, and returns to the Inbox", async () => {
-    renderApp(await world(), "/?view=inbox&project=acme&state=Accepted");
+    await renderApp(await world(),"/?view=inbox&project=acme&state=Accepted");
     const link = within(nav()).getByRole("link", { name: "CI" });
     const usage = within(nav()).getByRole("link", { name: "Usage" });
     expect(
@@ -127,7 +124,7 @@ describe("opening and leaving the CI view", () => {
   });
 
   it("opens on All Projects when the sidebar has none chosen", async () => {
-    renderApp(await world(), "/?view=inbox");
+    await renderApp(await world(),"/?view=inbox");
     expect(within(nav()).getByRole("link", { name: "CI" })).toHaveAttribute(
       "href",
       "?view=ci",
@@ -137,8 +134,8 @@ describe("opening and leaving the CI view", () => {
   });
 
   it("changes scope with the Projects picker, keeping the address", async () => {
-    renderApp(await world(), "/?view=ci");
-    await within(scope()).findByRole("option", { name: "Beta" });
+    await renderApp(await world(),"/?view=ci");
+    within(scope()).getByRole("option", { name: "Beta" });
     await userEvent.selectOptions(scope(), "beta");
     expect(window.location.search).toBe("?view=ci&project=beta");
   });
@@ -156,9 +153,9 @@ describe("the CI Watchers' statuses", () => {
       message: "gh isn't logged in.",
       fix: "Run gh auth login.",
     });
-    renderApp(fake, "/?view=ci");
+    await renderApp(fake,"/?view=ci");
     expect(
-      await within(ci()).findByText("Acme: Watching acme/web."),
+      within(ci()).getByText("Acme: Watching acme/web."),
     ).toBeInTheDocument();
     expect(watchers()).toHaveTextContent(
       "Beta: Error. gh isn't logged in.Run gh auth login.",
@@ -169,9 +166,9 @@ describe("the CI Watchers' statuses", () => {
     const fake = await world();
     await azure(fake, "acme");
     await fake.s.reportCIWatcherStatus("acme", { state: "watching" });
-    renderApp(fake, "/?view=ci");
+    await renderApp(fake,"/?view=ci");
     expect(
-      await within(ci()).findByText(
+      within(ci()).getByText(
         "Acme: Watching https://dev.azure.com/acme/web.",
       ),
     ).toBeInTheDocument();
@@ -181,25 +178,25 @@ describe("the CI Watchers' statuses", () => {
     const fake = await world();
     await azure(fake, "acme");
     await fake.s.reportCIWatcherStatus("acme", { state: "watching" });
-    renderApp(fake, "/?view=ci&project=acme");
-    expect(await within(ci()).findByText("Acme: Watching https://dev.azure.com/acme/web.")).toBeInTheDocument();
+    await renderApp(fake,"/?view=ci&project=acme");
+    expect(within(ci()).getByText("Acme: Watching https://dev.azure.com/acme/web.")).toBeInTheDocument();
   });
 
   it("says when the CI Watcher hasn't reported yet", async () => {
     const fake = await world();
     await tracked(fake, "acme");
-    renderApp(fake, "/?view=ci&project=acme");
+    await renderApp(fake,"/?view=ci&project=acme");
     expect(
-      await within(ci()).findByText(
+      within(ci()).getByText(
         "Acme: Starting; the CI Watcher hasn't reported yet.",
       ),
     ).toBeInTheDocument();
   });
 
   it("says a Project has CI Tracking off, linking its Project Options", async () => {
-    renderApp(await world(), "/?view=ci&project=beta");
+    await renderApp(await world(),"/?view=ci&project=beta");
     expect(
-      await within(ci()).findByText(/CI Tracking is off in Beta/),
+      within(ci()).getByText(/CI Tracking is off in Beta/),
     ).toBeInTheDocument();
     await userEvent.click(
       within(watchers()).getByRole("link", { name: "Project Options" }),
@@ -208,9 +205,9 @@ describe("the CI Watchers' statuses", () => {
   });
 
   it("says when no Project has CI Tracking on", async () => {
-    renderApp(await world(), "/?view=ci");
+    await renderApp(await world(),"/?view=ci");
     expect(
-      await within(ci()).findByText(/No Project has CI Tracking on/),
+      within(ci()).getByText(/No Project has CI Tracking on/),
     ).toBeInTheDocument();
     expect(
       within(ci()).getByText(
@@ -233,9 +230,9 @@ describe("the runs", () => {
         conclusion: "success",
       }),
     ]);
-    renderApp(fake, "/?view=ci&project=acme");
+    await renderApp(fake,"/?view=ci&project=acme");
 
-    const shown = await rows();
+    const shown = rows();
     expect(shown.map((r) => r.getAttribute("aria-label"))).toEqual([
       "DEPLOY",
       "LINT",
@@ -278,8 +275,8 @@ describe("the runs", () => {
     await fake.s.reportCIRuns("acme", [{ ...run(fake, 1, "Build", -3), url: "https://dev.azure.com/acme/web/_build/results?buildId=1" }]);
     const other = await fake.s.ticket("beta", { title: "Other", state: "Accepted" });
     await fake.s.reportCIRuns("beta", [{ ...run(fake, 2, "ci.yml", -3), ticket: other }]);
-    renderApp(fake, "/?view=ci");
-    const [acme, beta] = (await rows()).sort((a, b) => a.getAttribute("aria-label")!.localeCompare(b.getAttribute("aria-label")!));
+    await renderApp(fake,"/?view=ci");
+    const [acme, beta] = rows().sort((a, b) => a.getAttribute("aria-label")!.localeCompare(b.getAttribute("aria-label")!));
     expect(within(acme).getByRole("link", { name: "View on Azure DevOps" })).toHaveAttribute("href", "https://dev.azure.com/acme/web/_build/results?buildId=1");
     expect(within(beta).getByRole("link", { name: "View on GitHub" })).toBeInTheDocument();
   });
@@ -288,8 +285,8 @@ describe("the runs", () => {
     const fake = await world();
     await azure(fake, "acme");
     await fake.s.reportCIRuns("acme", [run(fake, 1, "Build", -5, { finished: -3, conclusion: "partially_succeeded" })]);
-    renderApp(fake, "/?view=ci&project=acme");
-    const [row] = await rows();
+    await renderApp(fake,"/?view=ci&project=acme");
+    const [row] = rows();
     const status = within(row).getByText(/Partially succeeded/);
     expect(status).toHaveClass("ci-partially-succeeded");
     expect(status).toHaveTextContent("⚠ Partially succeeded");
@@ -303,8 +300,8 @@ describe("the runs", () => {
     await fake.s.reportCIRuns("acme", [
       { ...run(fake, 1, "ci.yml", -3), ticket: undefined, rule },
     ]);
-    renderApp(fake, "/?view=ci");
-    const [row] = await rows();
+    await renderApp(fake,"/?view=ci");
+    const [row] = rows();
     expect(cells(row)).toEqual([
       "CI ci.yml",
       "main",
@@ -328,8 +325,8 @@ describe("the runs", () => {
       run(fake, 1, "nightly.yml", -3),
       run(fake, 2, "ci.yml", -4),
     ]);
-    renderApp(fake, "/?view=ci&project=acme");
-    const [nightly, ciRun] = await rows();
+    await renderApp(fake,"/?view=ci&project=acme");
+    const [nightly, ciRun] = rows();
     expect(nightly).toHaveClass("ignored");
     expect(within(nightly).getByText("ignored")).toBeInTheDocument();
     expect(ciRun).not.toHaveClass("ignored");
@@ -344,8 +341,8 @@ describe("the runs", () => {
       run(fake, 2, "lint.yml", -12, { finished: -10, conclusion: "failure" }),
       run(fake, 3, "deploy.yml", -5, { finished: -4, conclusion: "timed_out" }),
     ]);
-    renderApp(fake, "/?view=ci&project=acme");
-    const shown = await rows();
+    await renderApp(fake,"/?view=ci&project=acme");
+    const shown = rows();
     const status = (name: string) =>
       within(
         shown.find((r) => r.getAttribute("aria-label") === name)!,
@@ -363,24 +360,22 @@ describe("the runs", () => {
       run(fake, 1, "ci.yml", -3),
       run(fake, 2, "lint.yml", -4),
     ]);
-    renderApp(fake, "/?view=ci&project=acme");
-    const opened = await rows();
+    await renderApp(fake,"/?view=ci&project=acme");
+    const opened = rows();
     expect(opened.filter((r) => r.hasAttribute("data-pulsing"))).toEqual([]);
 
-    await act(() =>
-      fake.s.reportCIRuns("acme", [
-        run(fake, 1, "ci.yml", -3, { finished: 0, conclusion: "success" }),
-        run(fake, 3, "e2e.yml", -1),
-      ]),
-    );
+    await fake.s.reportCIRuns("acme", [
+      run(fake, 1, "ci.yml", -3, { finished: 0, conclusion: "success" }),
+      run(fake, 3, "e2e.yml", -1),
+    ]);
     expect(
-      await within(await table()).findByRole("row", { name: "E2E" }),
+      within(table()).getByRole("row", { name: "E2E" }),
     ).toHaveAttribute("data-pulsing", "true");
     expect(
-      within(await table()).getByRole("row", { name: "CI" }),
+      within(table()).getByRole("row", { name: "CI" }),
     ).toHaveAttribute("data-pulsing", "true");
     expect(
-      within(await table()).getByRole("row", { name: "LINT" }),
+      within(table()).getByRole("row", { name: "LINT" }),
     ).not.toHaveAttribute("data-pulsing");
   });
 });
