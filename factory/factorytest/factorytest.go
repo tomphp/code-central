@@ -7,11 +7,50 @@
 // code-central CLI in-process, write a file, run git, exit) and needs
 // nothing built. There is no shell, so it runs the same on every OS.
 // script.go holds the Script's Steps and the Calls read back; fake.go
-// holds the fakes themselves.
+// holds the fakes themselves; settle.go the settled signal.
 //
 // A test package that uses it calls Main from its TestMain:
 //
 //	func TestMain(m *testing.M) { factorytest.Main(m) }
+//
+// # Settled
+//
+// A test never reads the Factory's output to learn where it is: it waits
+// for the Factory to settle (Running.Settle), and then asserts what the
+// Factory did, as Code Central, git and the fake's Calls show it. Poll is
+// a Tick and a Settle, and Start returns once the first poll has
+// finished and the Factory has settled.
+//
+// The Factory is settled when nothing it is doing will change anything
+// without an outside event: the clock moving, an answer to a long-poll, a
+// turn's claude printing or exiting, or a signal. It tells the harness of
+// its work through factory.Work, each piece busy or resting:
+//
+//   - Busy (not settled): a poll in progress, a post of Session Events,
+//     token usage, a Chat reply or a Heartbeat, git work, setting up a
+//     worktree, starting a turn, and handling a turn's exit (its outcome,
+//     push, finish checks and Failure Report).
+//   - Resting (settled): a pending claim retry, the wake or Chat retry
+//     pause, the wait for the next poll, an outage's backoff, a kill
+//     grace in progress, an open wake or Chat long-poll, the wait for a
+//     signal, and a turn whose claude is running.
+//
+// A timer that has fired counts as busy until the Factory has taken it,
+// and work that follows other work starts before the other ends. On top
+// of the Factory's own, Settle waits for:
+//
+//   - every turn whose claude is running to be parked in the fake's Wait
+//     step, having noted each stop signal sent to it;
+//   - no answer on its way through the proxy to the Factory: an open
+//     long-poll counts as resting only once Code Central holds it and
+//     until it answers, or while PassWakes holds its answer back;
+//   - no other request through the proxy, and every signal sent taken.
+//
+// So a test whose turn runs a claude other than the scripted fake (a
+// shim, a held session, a missing claude) can't Settle while it runs: it
+// never parks in a Wait step. Such a test waits with WaitFor on the
+// outside effect it needs, as a test does for Code Central state no
+// Factory work changes, such as a Chat reply.
 package factorytest
 
 import (
@@ -31,7 +70,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -104,13 +142,14 @@ type Harness struct {
 	// cut off; set it before Start. New makes it a millisecond.
 	Backoff time.Duration
 	// Clock is the Factory's clock, every timer and timestamp of its: it
-	// stands still until the test, Tick, Start, Poll, Exited or Stop
-	// moves it. Tick moves it to the next poll's deadline; Start and Poll
-	// end a claim retry pause or kill grace their poll waits on; Exited
-	// and Stop move it past each kill grace until the Factory has exited.
-	// It starts at midday, as Server's clock does, so that many Ticks keep
-	// the model responses the Factory dates on Code Central's today in
-	// Usage.
+	// stands still until the test, Tick, Start, Poll, PassKillGrace,
+	// Exited or Stop moves it. Tick moves it to the next poll's deadline,
+	// through each timer due before it; Start and Poll pass a claim retry
+	// pause or kill grace their poll waits on; Exited and Stop pass each
+	// timer but the next poll's until the Factory has exited. A test that
+	// moves it itself settles first. It starts at midday, as Server's
+	// clock does, so that many Ticks keep the model responses the Factory
+	// dates on Code Central's today in Usage.
 	Clock *clock.Fake
 	// URL is the Code Central the Factory and its sessions reach: Server
 	// behind a proxy that SetDown can take down.
@@ -124,9 +163,23 @@ type Harness struct {
 	refused   map[string]int64 // requests refused while down or failed, by path
 	holdMu    sync.Mutex
 	wakesHeld chan struct{} // closed by PassWakes
-	data      string        // scripts/ and calls/
-	env       map[string]string
-	spec      string
+	// inflight is the requests the proxy is serving, and polls what it
+	// knows of the Factory's long-polls among them.
+	inflight inflightRequests
+	polls    longPolls
+	// stall, if set before Start, is called by the proxy before it serves
+	// each request but a long-poll: the harness's own tests hold the
+	// Factory or a turn mid-way with it.
+	stall func(*http.Request)
+	// runs is the Factories running; change is closed at the next change
+	// to their work or to the proxy's requests (changes).
+	runMu    sync.Mutex
+	runs     []*Running
+	changeMu sync.Mutex
+	change   chan struct{}
+	data     string // scripts/, calls/, continue/, signals/ and waiting/
+	env      map[string]string
+	spec     string
 }
 
 // New starts a Code Central with Project "acme" and a git repo on branch
@@ -153,11 +206,12 @@ func New(t testing.TB) *Harness {
 		Backoff: time.Millisecond,
 		Clock:   clock.NewFake(now),
 		refused: map[string]int64{},
+		polls:   longPolls{upstream: map[string]int{}},
 		// The Factory polls only on Tick until a test passes its wakes.
 		wakesHeld: make(chan struct{}),
 	}
 	template := filepath.Join(root, "git-template")
-	for _, d := range []string{h.Home, h.Bin, template, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals")} {
+	for _, d := range []string{h.Home, h.Bin, template, filepath.Join(h.data, "scripts"), filepath.Join(h.data, "calls"), filepath.Join(h.data, "continue"), filepath.Join(h.data, "signals"), filepath.Join(h.data, "waiting")} {
 		must(t, os.MkdirAll(d, 0o755))
 	}
 	h.URL = h.startProxy()
@@ -254,7 +308,8 @@ func (h *Harness) startProxy() string {
 	target, err := url.Parse(h.Server.URL)
 	must(h.t, err)
 	rp := httputil.NewSingleHostReverseProxy(target)
-	inflight := &inflightRequests{}
+	inflight := &h.inflight
+	inflight.changed = h.changed
 	var finished atomic.Bool
 	h.t.Cleanup(func() { finished.Store(true) })
 	// A body-copy error carries no request, so its line names the
@@ -287,10 +342,14 @@ func (h *Harness) startProxy() string {
 				h.cut(rp, w, r, afterWrite, &finished)
 				return
 			}
-			defer inflight.add(r)()
-			if strings.HasSuffix(r.URL.Path, wakeSuffix) {
-				h.serveWake(rp, w, r)
+			if name := longPollOf(r.URL.Path); name != "" {
+				defer inflight.add(r, true)()
+				h.serveLongPoll(rp, w, r, name)
 				return
+			}
+			defer inflight.add(r, false)()
+			if h.stall != nil {
+				h.stall(r)
 			}
 			rp.ServeHTTP(w, r)
 			return
@@ -309,52 +368,70 @@ type writerFunc func([]byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
 
-// inflightRequests records the requests the proxy is serving.
+// inflightRequests records the requests the proxy is serving, telling
+// changed of each change.
 type inflightRequests struct {
-	mu   sync.Mutex
-	next int
-	reqs map[int]inflightRequest
+	changed func()
+	mu      sync.Mutex
+	next    int
+	reqs    map[int]inflightRequest
 }
 
 type inflightRequest struct {
 	method, path string
 	start        time.Time
+	// longPoll marks a long-poll, which the Factory rests on.
+	longPoll bool
 }
 
-// add records r and returns the function that forgets it.
-func (f *inflightRequests) add(r *http.Request) func() {
+// add records r, a long-poll or not, and returns the function that
+// forgets it.
+func (f *inflightRequests) add(r *http.Request, longPoll bool) func() {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	if f.reqs == nil {
 		f.reqs = map[int]inflightRequest{}
 	}
 	id := f.next
 	f.next++
-	f.reqs[id] = inflightRequest{r.Method, r.URL.Path, time.Now()}
+	f.reqs[id] = inflightRequest{r.Method, r.URL.Path, time.Now(), longPoll}
+	f.mu.Unlock()
+	f.changed()
 	return func() {
 		f.mu.Lock()
-		defer f.mu.Unlock()
 		delete(f.reqs, id)
+		f.mu.Unlock()
+		f.changed()
 	}
 }
 
 // describe lists the requests in flight at now, oldest first.
 func (f *inflightRequests) describe(now time.Time) string {
+	parts := f.list(now, true)
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// busy lists the requests in flight at now but the long-polls, oldest
+// first.
+func (f *inflightRequests) busy(now time.Time) []string { return f.list(now, false) }
+
+func (f *inflightRequests) list(now time.Time, longPolls bool) []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var list []inflightRequest
 	for _, q := range f.reqs {
-		list = append(list, q)
+		if longPolls || !q.longPoll {
+			list = append(list, q)
+		}
 	}
 	sort.Slice(list, func(i, j int) bool { return list[i].start.Before(list[j].start) })
 	var parts []string
 	for _, q := range list {
 		parts = append(parts, fmt.Sprintf("%s %s for %s", q.method, q.path, now.Sub(q.start).Round(time.Millisecond)))
 	}
-	if len(parts) == 0 {
-		return "none"
-	}
-	return strings.Join(parts, ", ")
+	return parts
 }
 
 // lossRule is a cut the proxy owes: the next n requests whose path ends in
@@ -412,21 +489,37 @@ func (h *Harness) countRefused(r *http.Request) {
 	h.refused[r.URL.Path]++
 }
 
-// wakeSuffix ends the path of the Factory's next_factory_wake.
-const wakeSuffix = "/factory/next-wake"
+// The ends of the paths of the Factory's long-polls: next_factory_wake
+// and next_chat_work.
+const (
+	wakeSuffix     = "/factory/next-wake"
+	chatWorkSuffix = "/chat/next-work"
+)
 
-// serveWake proxies a next_factory_wake call, holding its answer back
-// until PassWakes.
-func (h *Harness) serveWake(rp http.Handler, w http.ResponseWriter, r *http.Request) {
+// serveLongPoll proxies the Factory's long-poll called name, holding a
+// next_factory_wake answer back until PassWakes. An answer on its way to
+// the Factory is marked on it first, so the Factory isn't settled until
+// it has taken it.
+func (h *Harness) serveLongPoll(rp http.Handler, w http.ResponseWriter, r *http.Request, name string) {
 	rec := httptest.NewRecorder()
+	sent := h.sendLongPoll(name)
 	rp.ServeHTTP(rec, r)
 	h.holdMu.Lock()
 	held := h.wakesHeld
 	h.holdMu.Unlock()
-	if held != nil {
+	if name != factory.WakeLongPoll || held == nil {
+		if r.Context().Err() == nil {
+			h.answered(name)
+		}
+		sent(false)
+	} else {
+		sent(true)
 		select {
 		case <-held:
+			h.answered(name)
+			h.unpark()
 		case <-r.Context().Done():
+			h.unpark()
 			return
 		}
 	}
@@ -435,10 +528,11 @@ func (h *Harness) serveWake(rp http.Handler, w http.ResponseWriter, r *http.Requ
 	w.Write(rec.Body.Bytes())
 }
 
-// PassWakes lets the Factory's wakes through. Until a test calls it, the
-// harness holds back every answer from next_factory_wake, so the Factory
-// polls only on Tick and what a test sets up, such as a Ready Ticket it
-// then claims itself, is first seen by the poll it ticks.
+// PassWakes lets the Factory's wakes through; a test calls it before
+// Start. Until a test calls it, the harness holds back every answer from
+// next_factory_wake, so the Factory polls only on Tick and what a test
+// sets up, such as a Ready Ticket it then claims itself, is first seen by
+// the poll it ticks.
 func (h *Harness) PassWakes() {
 	h.holdMu.Lock()
 	defer h.holdMu.Unlock()
@@ -639,20 +733,6 @@ func (h *Harness) GitIn(dir string, args ...string) string {
 func failedToStart(err error) bool {
 	var exit *exec.ExitError
 	return runtime.GOOS == "windows" && errors.As(err, &exit) && uint32(exit.ExitCode()) == 0xc0000142
-}
-
-// WaitForWorktree waits until ticket's worktree is a usable git worktree: its
-// directory appears before git has finished making it.
-func (h *Harness) WaitForWorktree(ticket string) {
-	h.t.Helper()
-	git, err := realGit()
-	must(h.t, err)
-	h.WaitFor("the worktree of "+ticket, func() bool {
-		cmd := exec.Command(git, "rev-parse", "HEAD")
-		cmd.Dir = h.Worktree(ticket)
-		cmd.Env = h.Environ()
-		return cmd.Run() == nil
-	})
 }
 
 // Worktree is where the Factory keeps ticket's worktree.
@@ -992,136 +1072,15 @@ type Running struct {
 	code           int
 	stdout, stderr *buffer
 	signals        chan os.Signal
-	clock          *factoryClock
-	ticked         int // the number of the last wait for a poll Tick fired
-}
-
-// The Factory's durations the harness knows, to tell its timers apart.
-const (
-	// defaultPoll is the Factory's --poll when a test passes none.
-	defaultPoll = 30 * time.Second
-	// claimRetryPause is the Factory's pause between the tries of a claim
-	// whose answer was lost.
-	claimRetryPause = time.Second
-)
-
-// factoryClock is the Factory's clock: the harness's Clock, noting each
-// wait for a poll, a timer of the Factory's --poll, so that Tick can move
-// the clock to the poll's deadline and Start and Poll can see a poll
-// finish, and each pause a poll can wait on, a claim retry pause or the
-// kill grace of a turn it stops, so that they can end it. It tells the
-// timers apart by their durations, which differ: --poll is at least 5s,
-// the claim retry pause 1s, KillGrace 100ms, EventBatchEvery 10s, and the
-// wake and Chat retry pauses 5s, so no test passes --poll 5s or 10s.
-type factoryClock struct {
-	*clock.Fake
-	poll time.Duration
-
-	mu     sync.Mutex
-	waits  []pollTimer // every wait for a poll, oldest first
-	pauses []pause     // the claim retry pauses and kill graces not over yet
-}
-
-// pause is a claim retry pause or a kill grace, due at. The harness ends
-// it no sooner than ripe, in real time: a kill grace only once it has run
-// KillGrace in real time as well, so that the turn has had the time to
-// take the stop step before it, as it would with no fake clock.
-type pause struct {
-	at, ripe time.Time
-	grace    bool
-}
-
-// pollTimer is one of the Factory's waits for its next poll: its timer,
-// due at.
-type pollTimer struct {
-	at    time.Time
-	timer <-chan time.Time
-}
-
-// After is the fake clock's After, noting a wait for a poll, a claim
-// retry pause or a kill grace.
-func (c *factoryClock) After(d time.Duration) <-chan time.Time {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	at := c.Now().Add(d)
-	timer := c.Fake.After(d)
-	switch d {
-	case c.poll:
-		c.waits = append(c.waits, pollTimer{at, timer})
-	case claimRetryPause:
-		c.pauses = append(c.pauses, pause{at: at, ripe: time.Now()})
-	case KillGrace:
-		c.pauses = append(c.pauses, pause{at: at, ripe: time.Now().Add(KillGrace), grace: true})
-	}
-	return timer
-}
-
-// latestWait is the Factory's latest wait for a poll and its number,
-// counting from 1, or 0 when it hasn't waited for one yet.
-func (c *factoryClock) latestWait() (int, pollTimer) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if len(c.waits) == 0 {
-		return 0, pollTimer{}
-	}
-	return len(c.waits), c.waits[len(c.waits)-1]
-}
-
-// endPause moves the clock to the end of the earliest ripe claim retry
-// pause or kill grace still running, if one is: a poll waiting on it
-// can't finish until it ends.
-func (c *factoryClock) endPause() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.dropEnded()
-	var end time.Time
-	for _, p := range c.pauses {
-		if !time.Now().Before(p.ripe) && (end.IsZero() || p.at.Before(end)) {
-			end = p.at
-		}
-	}
-	if !end.IsZero() {
-		c.Set(end)
-	}
-}
-
-// inKillGrace reports whether a turn being stopped is in its kill grace.
-func (c *factoryClock) inKillGrace() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.dropEnded()
-	return slices.ContainsFunc(c.pauses, func(p pause) bool { return p.grace })
-}
-
-// dropEnded forgets the pauses the clock has passed the end of.
-func (c *factoryClock) dropEnded() {
-	now := c.Now()
-	c.pauses = slices.DeleteFunc(c.pauses, func(p pause) bool { return !p.at.After(now) })
-}
-
-// pollFlag is the --poll args give the Factory, or its default.
-func pollFlag(args []string) time.Duration {
-	poll := defaultPoll
-	for i, a := range args {
-		if a == "--" {
-			break
-		}
-		v, ok := strings.CutPrefix(a, "--poll=")
-		if !ok && a == "--poll" && i+1 < len(args) {
-			v, ok = args[i+1], true
-		}
-		if d, err := time.ParseDuration(v); ok && err == nil {
-			poll = d
-		}
-	}
-	return poll
+	// track hears of the Factory's work in flight.
+	track *tracker
 }
 
 // Start runs the Factory in the repo with args until Stop or the end of
 // the test, and returns once its first poll has finished (or it has
-// exited), so whatever the test sets up next is first seen by a later
-// poll. Polls after the first happen only on Tick, or on a wake from
-// next_factory_wake.
+// exited) and it has settled, so whatever the test sets up next is first
+// seen by a later poll. Polls after the first happen only on Tick, or on
+// a wake from next_factory_wake.
 func (h *Harness) Start(args ...string) *Running {
 	h.t.Helper()
 	return h.StartIn(h.Repo, args...)
@@ -1131,22 +1090,22 @@ func (h *Harness) Start(args ...string) *Running {
 func (h *Harness) StartIn(dir string, args ...string) *Running {
 	h.t.Helper()
 	r := h.launch(dir, args...)
-	r.waitForPolls(1)
+	r.started()
+	r.waitPoll()
 	return r
 }
 
 // launch runs the Factory in dir with args, without waiting.
 func (h *Harness) launch(dir string, args ...string) *Running {
 	ctx, cancel := context.WithCancel(context.Background())
-	r := &Running{h: h, cancel: cancel, done: make(chan struct{}), stdout: &buffer{}, stderr: &buffer{}, signals: make(chan os.Signal, 2),
-		clock: &factoryClock{Fake: h.Clock, poll: pollFlag(args)}}
+	r := &Running{h: h, cancel: cancel, done: make(chan struct{}), stdout: &buffer{}, stderr: &buffer{}, signals: make(chan os.Signal, 2), track: newTracker(h)}
 	env := factory.Env{
 		Dir:             dir,
 		Environ:         h.Environ(),
 		UserHomeDir:     func() (string, error) { return h.Home, nil },
 		Stdout:          r.stdout,
 		Stderr:          r.stderr,
-		Clock:           r.clock,
+		Clock:           h.Clock,
 		KillGrace:       KillGrace,
 		Backoff:         h.Backoff,
 		EventBatchEvery: EventBatchEvery,
@@ -1154,8 +1113,13 @@ func (h *Harness) launch(dir string, args ...string) *Running {
 		// test could wait for an event that never comes.
 		EventPostTimeout: Timeout,
 		Signals:          r.signals,
+		Work:             r.track,
 	}
+	h.runMu.Lock()
+	h.runs = append(h.runs, r)
+	h.runMu.Unlock()
 	go func() {
+		defer h.changed()
 		defer close(r.done)
 		r.code = factory.Run(ctx, args, env)
 	}()
@@ -1189,161 +1153,17 @@ func (h *Harness) RunIn(dir string, args ...string) (code int, stdout, stderr st
 	return r.code, r.stdout.String(), r.stderr.String()
 }
 
-// Tick lets the Factory make its next poll: it moves the clock to the
-// poll's deadline, firing every timer due by then on the way.
-func (r *Running) Tick() {
-	r.h.t.Helper()
-	r.tick()
-}
-
-// tick moves the clock to the deadline of the Factory's latest wait for a
-// poll that no Tick has fired, once it waits, and returns the wait's
-// number once the Factory has taken its timer: the poll it starts has
-// finished once the Factory waits again. A wait a wake ended first
-// leaves the tick for the next one. It returns 0 once the Factory has
-// exited.
-func (r *Running) tick() int {
-	r.h.t.Helper()
-	deadline := time.Now().Add(Timeout)
-	for {
-		select {
-		case <-r.done:
-			return 0
-		default:
-		}
-		if n, w := r.clock.latestWait(); n > r.ticked {
-			if w.at.After(r.h.Clock.Now()) {
-				r.h.Clock.Set(w.at)
-			}
-			if len(w.timer) == 0 {
-				r.ticked = n
-				return n
-			}
-		}
-		r.clock.endPause()
-		if time.Now().After(deadline) {
-			r.h.t.Fatal("the Factory didn't wait for its next poll")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
-
-// Poll waits for the Factory's current poll to finish, lets it make its
-// next one and waits for that to finish too. Turns the poll started may
-// still be running.
-func (r *Running) Poll() {
-	r.h.t.Helper()
-	r.waitForPolls(r.tick() + 1)
-}
-
-// PollUntil polls until cond holds, failing the test after Timeout. The
-// Factory posts its Session Events, token usage and Chat items in batches
-// on its clock, and each poll moves the clock past a batch, so cond can
-// wait on what a post makes true. A post goes on after the poll, so cond
-// is checked a while before the next poll.
-func (r *Running) PollUntil(what string, cond func() bool) {
-	r.h.t.Helper()
-	deadline := time.Now().Add(Timeout)
-	for {
-		for range 10 {
-			if cond() {
-				return
-			}
-			time.Sleep(5 * time.Millisecond)
-		}
-		if time.Now().After(deadline) {
-			r.h.t.Fatalf("timed out polling for %s", what)
-		}
-		r.Poll()
-	}
-}
-
-// WaitForLongPoll waits until the Factory holds a next_factory_wake call
-// open that no wake has ended yet, so a wake from here on reaches it.
-func (r *Running) WaitForLongPoll() {
-	r.h.t.Helper()
-	r.h.WaitFor("the Factory's next_factory_wake call", func() bool {
-		return r.h.Server.Core.WaitingFactoryWakes(r.h.Project) > 0
-	})
-}
-
-// WaitForTurn waits for the Factory to have started a turn. Its poll can
-// lose a claim to a dropped connection, which it retries only at its next
-// poll, so WaitForTurn makes that poll whenever a claim has failed.
-func (r *Running) WaitForTurn(what string) {
-	r.h.t.Helper()
-	failed := 0
-	r.h.WaitFor(what, func() bool {
-		if len(r.h.Calls()) > 0 {
-			return true
-		}
-		if n := strings.Count(r.stdout.String(), "claim: "); n > failed {
-			failed = n
-			r.Poll()
-		}
-		return false
-	})
-}
-
-// WaitForClaimed waits for id to be in state, re-polling whenever a claim
-// has failed to a dropped connection, as WaitForTurn does.
-func (r *Running) WaitForClaimed(id string, state store.State) {
-	r.h.t.Helper()
-	failed := 0
-	r.h.WaitFor(fmt.Sprintf("%s to be %s", id, state), func() bool {
-		if r.h.Ticket(id).State == state {
-			return true
-		}
-		if n := strings.Count(r.stdout.String(), "claim: "); n > failed {
-			failed = n
-			r.Poll()
-		}
-		return false
-	})
-}
-
-// waitForPolls waits for the Factory to have waited for a poll n times,
-// ending each claim retry pause and kill grace a poll waits on
-// meanwhile.
-func (r *Running) waitForPolls(n int) {
-	r.h.t.Helper()
-	r.h.WaitFor(fmt.Sprintf("poll %d to finish (stdout %q)", n, r.stdout), func() bool {
-		select {
-		case <-r.done:
-			return true
-		default:
-		}
-		if waits, _ := r.clock.latestWait(); waits >= n {
-			return true
-		}
-		r.clock.endPause()
-		return false
-	})
-}
-
-// WaitForOutput waits for s on the Factory's stdout.
-func (r *Running) WaitForOutput(s string) {
-	r.h.t.Helper()
-	r.h.WaitFor(fmt.Sprintf("%q on stdout (have %q, stderr %q)", s, r.stdout, r.stderr), func() bool {
-		return strings.Contains(r.stdout.String(), s)
-	})
-}
-
 // Signal sends the Factory sig, as the terminal or the OS would, on
 // Env.Signals: the channel the binary's main fills from signal.Notify, so
-// the Factory takes the same path as for a real Ctrl-C on every OS.
-func (r *Running) Signal(sig os.Signal) { r.signals <- sig }
+// the Factory takes the same path as for a real Ctrl-C on every OS. The
+// Factory isn't settled until it has taken it.
+func (r *Running) Signal(sig os.Signal) {
+	r.track.signal(sig)
+	r.signals <- sig
+}
 
 // Interrupt is the human's Ctrl-C.
 func (r *Running) Interrupt() { r.Signal(os.Interrupt) }
-
-// PassKillGrace waits for a turn being stopped to be in its kill grace
-// and moves the clock past it, taking the turn to its next stop step.
-func (r *Running) PassKillGrace() {
-	r.h.t.Helper()
-	r.h.WaitFor("a turn's kill grace", r.clock.inKillGrace)
-	r.h.Clock.Advance(KillGrace)
-}
 
 // Stop stops the Factory and returns its exit code. It keeps moving the
 // clock past each kill grace until the Factory has exited, so a turn that
@@ -1354,29 +1174,13 @@ func (r *Running) Stop() int {
 }
 
 // Exited waits for the Factory to exit on its own and returns its exit
-// code. It ends each claim retry pause and kill grace meanwhile, as
+// code. It passes each claim retry pause and kill grace meanwhile, as
 // Poll does: a Factory stopping itself stops its turns on its way out.
+// A draining Factory exits once its turns end, so a test waits for that
+// with Exited.
 func (r *Running) Exited() int {
 	r.h.t.Helper()
 	return r.exited("the Factory didn't exit")
-}
-
-// exited waits for the Factory to exit, ending each claim retry pause and
-// kill grace meanwhile, and returns its exit code. It fails the test with
-// failure after Timeout.
-func (r *Running) exited(failure string) int {
-	r.h.t.Helper()
-	timeout := time.After(Timeout)
-	for {
-		select {
-		case <-r.done:
-			return r.code
-		case <-timeout:
-			r.h.t.Fatalf("%s; stdout:\n%s", failure, r.stdout)
-		case <-time.After(5 * time.Millisecond):
-			r.clock.endPause()
-		}
-	}
 }
 
 // Stdout is what the Factory has printed so far.

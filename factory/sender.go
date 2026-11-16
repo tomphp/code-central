@@ -37,22 +37,26 @@ type queued[T any] struct {
 // model responses' token usage. It posts what is waiting every postEvery, or sooner once
 // postBatchMax are waiting, one post per session in the order they
 // came, so each session's order holds. every is postEvery, and timeout
-// postTimeout, unless a test changes them; every is timed on clock.
+// postTimeout, unless a test changes them; every is timed on clock. work
+// hears of its posts and its waits for the next batch, as of what it
+// posts.
 type sender[T any] struct {
 	post    func(ctx context.Context, session string, items []T) error
 	clock   clock.Clock
 	every   time.Duration
 	timeout time.Duration
+	work    work
+	what    string
 
 	mu      sync.Mutex
 	waiting []queued[T]
-	full    chan struct{} // signalled when postBatchMax are waiting
+	full    handoff // a post's busy work, given when postBatchMax are waiting
 	stop    chan struct{}
 	done    chan struct{}
 }
 
-func newSender[T any](post func(context.Context, string, []T) error, clk clock.Clock, every, timeout time.Duration) *sender[T] {
-	return &sender[T]{post: post, clock: clk, every: every, timeout: timeout, full: make(chan struct{}, 1), stop: make(chan struct{}), done: make(chan struct{})}
+func newSender[T any](post func(context.Context, string, []T) error, clk clock.Clock, every, timeout time.Duration, w work, what string) *sender[T] {
+	return &sender[T]{post: post, clock: clk, every: every, timeout: timeout, work: w, what: what, full: newHandoff(), stop: make(chan struct{}), done: make(chan struct{})}
 }
 
 // add queues item for session, dropping the oldest waiting item when the
@@ -65,33 +69,41 @@ func (s *sender[T]) add(session string, item T) {
 	}
 	s.waiting = append(s.waiting, queued[T]{session, item})
 	if len(s.waiting) >= postBatchMax {
-		select {
-		case s.full <- struct{}{}:
-		default:
-		}
+		s.full.give(s.work.busy("posting ", s.what))
 	}
 }
 
-// run posts batches until close. The interval is timed afresh after each
-// timed batch: the drift of the time a post takes doesn't matter to a
-// batch.
-func (s *sender[T]) run() {
+// start times the first batch and runs the sender until close.
+func (s *sender[T]) start() {
+	tick, waited := s.work.after(s.clock, s.every, "waiting to post ", s.what)
+	go s.run(tick, waited)
+}
+
+// run posts batches until close, the first when tick fires. The
+// interval is timed afresh after each timed batch: the drift of the time
+// a post takes doesn't matter to a batch. waited ends the wait for tick.
+func (s *sender[T]) run(tick <-chan time.Time, waited func()) {
 	defer close(s.done)
-	tick := s.clock.After(s.every)
 	for {
 		select {
 		case <-s.stop:
+			waited()
 			// The last flush has one timeout in all, so a hung Code
 			// Central holds up the stop no longer than that.
 			ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 			s.flush(ctx)
 			cancel()
+			s.full.take()
 			return
 		case <-tick:
+			posting := s.work.busy("posting ", s.what)
+			waited()
 			s.flush(context.Background())
-			tick = s.clock.After(s.every)
-		case <-s.full:
+			tick, waited = s.work.after(s.clock, s.every, "waiting to post ", s.what)
+			posting()
+		case posted := <-s.full:
 			s.flush(context.Background())
+			posted()
 		}
 	}
 }

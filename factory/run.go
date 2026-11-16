@@ -25,24 +25,33 @@ import (
 // wake or else every --poll, timed afresh after each poll. When ctx ends,
 // running turns are stopped and waited for.
 func (f *factory) loop(ctx context.Context) {
-	defer f.turnsDone.Wait()
-	defer f.stopAll()
+	defer f.stopPolling()
+	// woke ends the wake that started the poll, once the poll has.
+	woke := noop
 	for {
+		f.polls++
+		f.polling.busy(f.pollName())
+		woke()
+		woke = noop
 		f.poll(ctx)
+		next, waited := f.work.pollWait(f.e.Clock, f.o.poll)
+		f.polling.then(waited)
 		select {
 		case <-ctx.Done():
 			return
 		case <-f.drainCh:
 			f.drain(ctx)
 			return
-		case <-f.e.Clock.After(f.o.poll):
+		case <-next:
 			f.releaseHeldBack()
-		case <-f.wakeCh:
+		case woke = <-f.wakeCh:
 			// A stopping or draining Factory ignores wakes.
 			if ctx.Err() != nil {
+				woke()
 				return
 			}
 			if f.draining() {
+				f.drainWork.give(woke)
 				f.drain(ctx)
 				return
 			}
@@ -50,18 +59,27 @@ func (f *factory) loop(ctx context.Context) {
 	}
 }
 
+// pollName names the poll in progress.
+func (f *factory) pollName() string { return "poll " + strconv.Itoa(f.polls) }
+
 // watchSignals turns the stop signals into a drain or a stop. The first
 // Ctrl-C drains; a second Ctrl-C, SIGTERM or SIGHUP stops the running
 // turns and exits. Either way every Claim is kept.
-func (f *factory) watchSignals(ctx context.Context) {
+func (f *factory) watchSignals(ctx context.Context, s *stint) {
+	defer s.stop()
 	for {
+		s.rest(SignalWait)
 		select {
 		case <-ctx.Done():
 			return
 		case sig := <-f.e.Signals:
+			s.busy("taking the signal ", sig.String())
 			if sig == os.Interrupt && !f.draining() {
 				f.printf("draining: no more claiming, resuming or landing; Ctrl-C again to stop the running turns (Claims are kept)")
-				f.drainOnce.Do(func() { close(f.drainCh) })
+				f.drainOnce.Do(func() {
+					f.drainWork.give(f.work.busy("starting to drain"))
+					close(f.drainCh)
+				})
 				f.heartbeat(core.HeartbeatDraining, f.drainNote())
 				continue
 			}
@@ -69,7 +87,7 @@ func (f *factory) watchSignals(ctx context.Context) {
 			f.stopSignal = sig
 			f.stopMu.Unlock()
 			f.printf("stopping on %v: stopping the running turns (Claims are kept)", sig)
-			f.stop()
+			f.halt()
 			return
 		}
 	}
@@ -109,6 +127,9 @@ func (f *factory) halted(ctx context.Context) bool {
 // comes first. The loop has stopped, so no turn starts while it waits,
 // except one for a claim whose answer was lost.
 func (f *factory) drain(ctx context.Context) {
+	f.polling.busy("draining")
+	f.drainWork.take()
+	f.endPolls()
 	if !f.drainLostClaims(ctx) {
 		return
 	}
@@ -131,14 +152,17 @@ func (f *factory) drain(ctx context.Context) {
 		close(done)
 	}()
 	for {
+		beat := f.polling.after(f.e.Clock, f.o.poll, "draining: waiting on ", strings.Join(names, ", "))
 		select {
 		case <-done:
+			f.polling.busy("draining")
 			f.printf("drained: every turn has ended")
 			f.setDrained()
 			return
 		case <-ctx.Done():
 			return
-		case <-f.e.Clock.After(f.o.poll):
+		case <-beat:
+			f.polling.busy("draining")
 			f.heartbeat(core.HeartbeatDraining, f.drainNote())
 		}
 	}
@@ -163,10 +187,12 @@ func (f *factory) drainLostClaims(ctx context.Context) bool {
 	note := fmt.Sprintf("draining: claiming %s again", strings.Join(names, ", "))
 	f.printf("%s at each poll first: the answer was lost", note)
 	for len(f.lostClaims) > 0 && !f.claimingHeld() {
+		poll := f.polling.after(f.e.Clock, f.o.poll, note)
 		select {
 		case <-ctx.Done():
 			return false
-		case <-f.e.Clock.After(f.o.poll):
+		case <-poll:
+			f.polling.busy(note)
 			f.heartbeat(core.HeartbeatDraining, note)
 			f.claimLostAgain(ctx)
 		}
@@ -245,12 +271,18 @@ type turn struct {
 	choice  turnChoice // the model and effort it was started with
 	started time.Time
 	// cancel ends the Turn's stop context, which has the Turn runner stop
-	// claude.
-	cancel context.CancelFunc
-	done   chan struct{} // closed once the turn has ended and been read
+	// claude; stopWork hands it the stop's busy work.
+	cancel   context.CancelFunc
+	stopWork handoff
+	done     chan struct{} // closed once the turn has ended and been read
 	// stopped is set when the Factory stops the turn, so its end is the
 	// Factory's doing, not an outcome to act on.
 	stopped atomic.Bool
+	// ending is set, under the factory's mu, as the turn's goroutine
+	// closes done; until then a poll waiting on it joins waiters, which
+	// the goroutine waits for before its own work ends.
+	ending  bool
+	waiters sync.WaitGroup
 }
 
 // running is the number of turns running: the --parallel slots in use.
@@ -347,30 +379,70 @@ func (f *factory) live(claimID string) bool {
 }
 
 // stopTurn stops t, which the Turn runner does through its stop ladder,
-// and waits for it to end.
+// and waits for it to end. The poll, which calls it, rests meanwhile, and
+// is busy again before the turn's own work ends.
 func (f *factory) stopTurn(t *turn) {
-	t.stopped.Store(true)
-	t.cancel()
+	f.beginStop(t)
+	f.mu.Lock()
+	waiting := !t.ending
+	if waiting {
+		t.waiters.Add(1)
+	}
+	f.mu.Unlock()
+	if !waiting {
+		<-t.done
+		return
+	}
+	f.polling.rest(f.pollName(), ": waiting for turn ", t.claim.Ticket, " to stop")
 	<-t.done
+	f.polling.busy(f.pollName())
+	t.waiters.Done()
 }
 
-// stopAll stops every running turn at once.
-func (f *factory) stopAll() {
+// beginStop has the Turn runner stop t, handing it the stop's busy work,
+// which it ends once the first stop step is under way, or t's goroutine
+// ends as the turn ends.
+func (f *factory) beginStop(t *turn) {
+	t.stopped.Store(true)
+	f.mu.Lock()
+	if !t.ending {
+		t.stopWork.give(f.work.busy("stopping turn ", t.claim.Ticket))
+	}
+	f.mu.Unlock()
+	t.cancel()
+}
+
+// endTurn closes t.done once t's turn has ended, and waits until each
+// poll waiting on it is busy again, so the hand-over leaves no moment
+// that looks settled.
+func (f *factory) endTurn(t *turn) {
+	f.mu.Lock()
+	t.ending = true
+	f.mu.Unlock()
+	t.stopWork.take()
+	close(t.done)
+	t.waiters.Wait()
+}
+
+// stopPolling ends the poll loop: it stops every running turn at once,
+// takes no more wakes, and waits for the turns to end, resting meanwhile.
+func (f *factory) stopPolling() {
 	f.mu.Lock()
 	var ts []*turn
 	for _, t := range f.turns {
 		ts = append(ts, t)
 	}
 	f.mu.Unlock()
-	var wg sync.WaitGroup
 	for _, t := range ts {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			f.stopTurn(t)
-		}()
+		f.beginStop(t)
 	}
-	wg.Wait()
+	f.stopWork.take()
+	f.endPolls()
+	f.polling.stop()
+	for _, t := range ts {
+		<-t.done
+	}
+	f.turnsDone.Wait()
 }
 
 // nextRunnable is the Project's first claimable Ticket, in claim order,
@@ -485,12 +557,14 @@ func (f *factory) startClaimed(ctx context.Context, in core.ClaimInput, res core
 		f.claimf(c, "%s: set_session: %v", id, err)
 	}
 	f.claimed(c, *res.Ticket, wt)
+	settingUp := f.work.busy("setting up the worktree of ", id)
 	var err error
 	if branch := workBranch(stage, id); branch != "" {
 		err = f.cutBranchWorktree(*res.Ticket, branch, wt)
 	} else {
 		err = f.stageWorktree(wt)
 	}
+	settingUp()
 	if err != nil {
 		fl := (*failure)(nil)
 		if !errors.As(err, &fl) {
@@ -515,7 +589,8 @@ const (
 // may have put the Ticket in the Factory's hands, so it sends in again,
 // which gives back the same Claim if the first got through (ADR 0010).
 // The pause between tries is on the Factory's clock, as every other
-// timer is. It stops trying when ctx ends or the Factory drains.
+// timer is, and the poll rests on it. It stops trying when ctx ends or
+// the Factory drains.
 func (f *factory) claimRecovering(ctx context.Context, in core.ClaimInput) (core.ClaimResult, error) {
 	res, err := f.client.Claim(ctx, f.project, in)
 	if !answerLost(err) || ctx.Err() != nil {
@@ -523,12 +598,15 @@ func (f *factory) claimRecovering(ctx context.Context, in core.ClaimInput) (core
 	}
 	f.printf("%s: claim: the answer was lost (%v): claiming it again", in.Ticket, err)
 	for range claimRetries {
+		pause := f.polling.after(f.e.Clock, claimRetryPause, f.pollName(), ": claim retry pause of ", string(in.Ticket))
 		select {
 		case <-ctx.Done():
-			return res, err
 		case <-f.drainCh:
+		case <-pause:
+		}
+		f.polling.busy(f.pollName())
+		if ctx.Err() != nil || f.draining() {
 			return res, err
-		case <-f.e.Clock.After(claimRetryPause):
 		}
 		res, err = f.client.Claim(ctx, f.project, in)
 		if !answerLost(err) {

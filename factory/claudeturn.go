@@ -38,6 +38,8 @@ type turnRunner struct {
 	// clock times the kill grace and Session Events, and dates model
 	// responses.
 	clock clock.Clock
+	// work hears of a stop's kill graces (Env.Work).
+	work work
 }
 
 // newTurnRunner is the runner of claude in e, which accepts what accepts
@@ -48,7 +50,7 @@ func newTurnRunner(claude string, e Env, accepts claudeAccepts, bypass bool, cla
 	if clk == nil {
 		clk = clock.System{}
 	}
-	return &turnRunner{claude: claude, environ: e.Environ, stderr: e.Stderr, accepts: accepts, bypass: bypass, claudeArgs: claudeArgs, killGrace: e.killGrace(), verbose: verbose, clock: clk}
+	return &turnRunner{claude: claude, environ: e.Environ, stderr: e.Stderr, accepts: accepts, bypass: bypass, claudeArgs: claudeArgs, killGrace: e.killGrace(), verbose: verbose, clock: clk, work: work{e.Work}}
 }
 
 // turnInput is one Turn: where and as what it runs, and where what it
@@ -80,6 +82,14 @@ type turnInput struct {
 	// BeforeStart, if set, is called once the effort has passed its
 	// check, just before claude starts.
 	BeforeStart func()
+	// Key names the Turn in its work (Work): its Ticket ID, or chat.
+	Key string
+	// Work, if set, is the Turn's line of work, busy as the Turn is
+	// given: it rests while claude runs and is busy handling the exit
+	// once claude has exited. StopWork hands the runner the busy work of
+	// a stop, which it ends once the first stop step is under way.
+	Work     *stint
+	StopWork handoff
 }
 
 // outcomeKind is how a Turn ended, classified.
@@ -134,6 +144,7 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 		in.Linef("can't start claude: %v", err)
 		return turnOutcome{Kind: turnFailed, StartErr: err}
 	}
+	in.Work.rest("turn ", in.Key, " running")
 	// streamRead is closed once claude has exited and its stream has been
 	// read; stopperDone once the goroutine stopping it has returned.
 	streamRead := make(chan struct{})
@@ -142,7 +153,7 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 		defer close(stopperDone)
 		select {
 		case <-stop.Done():
-			r.stop(cmd.Process, streamRead, func(err error) { in.Linef("can't stop the Turn: %v", err) })
+			r.stop(cmd.Process, streamRead, in.Key, in.StopWork, func(err error) { in.Linef("can't stop the Turn: %v", err) })
 		case <-streamRead:
 		}
 	}()
@@ -152,6 +163,7 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 			in.Echo(e.Text)
 		}
 	}, in.OnUsage)
+	in.Work.busy("handling the exit of turn ", in.Key)
 	close(streamRead)
 	<-stopperDone
 	return turnOutcome{Kind: end.kind(stop.Err() != nil), End: end}
@@ -172,6 +184,9 @@ func (in turnInput) withDefaults() turnInput {
 	if in.Echo == nil {
 		linef := in.Linef
 		in.Echo = func(toolCall string) { linef("%s", toolCall) }
+	}
+	if in.Work == nil {
+		in.Work = &stint{}
 	}
 	return in
 }
@@ -218,16 +233,31 @@ func (r *turnRunner) flags(mc turnChoice, allowedTools []string, systemPrompt st
 // stop takes a Turn's process proc through stopSteps until ended is
 // closed, moving to the next step if it lingers past the kill grace and
 // telling warn of a step that fails: on Unix SIGINT, then SIGTERM, then
-// kill; on Windows Ctrl-Break, then kill.
-func (r *turnRunner) stop(proc *os.Process, ended <-chan struct{}, warn func(error)) {
-	for _, step := range stopSteps(proc) {
+// kill; on Windows Ctrl-Break, then kill. Each kill grace before the kill
+// rests on the clock as the "kill grace of turn <key>"; the kill is busy
+// until the process has gone. Once the first grace has begun it ends the
+// stop's busy work stopWork hands it.
+func (r *turnRunner) stop(proc *os.Process, ended <-chan struct{}, key string, stopWork handoff, warn func(error)) {
+	s := stint{w: r.work}
+	defer s.stop()
+	defer stopWork.take()
+	steps := stopSteps(proc)
+	for i, step := range steps {
 		if err := step(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 			warn(err)
 		}
+		var grace <-chan time.Time
+		if i < len(steps)-1 {
+			grace = s.after(r.clock, r.killGrace, "kill grace of turn ", key)
+		} else {
+			s.busy("killing turn ", key)
+			grace = r.clock.After(r.killGrace)
+		}
+		stopWork.take()
 		select {
 		case <-ended:
 			return
-		case <-r.clock.After(r.killGrace):
+		case <-grace:
 		}
 	}
 	<-ended

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -178,12 +179,13 @@ func runFakeClaude(data string, args []string) int {
 		return filled
 	}
 	fmt.Println(`{"type":"system","subtype":"init","session_id":"` + c.Session + `"}`)
+	noted := 0 // the stop signals the run has noted
 	for _, s := range steps {
 		switch {
 		case s.Exit != nil:
 			return *s.Exit
 		case s.Wait:
-			if code, stop := wait(data, key, sigs); stop {
+			if code, stop := wait(data, key, sigs, &noted); stop {
 				return code
 			}
 		case s.Stdout != "":
@@ -219,28 +221,62 @@ func runFakeClaude(data string, args []string) int {
 }
 
 // wait is the fake's Wait step: it returns when the test continues the
-// run, or with stop set when a signal on sigs ends it.
-func wait(data, ticket string, sigs <-chan os.Signal) (code int, stop bool) {
+// run, or with stop set when a signal on sigs ends it, counting each
+// signal it notes in noted. While it waits it keeps the marker
+// waiting/<key> (Settle's), holding noted, and removes it before it
+// leaves: before it takes the continue file, so the marker is gone once
+// Continue returns.
+func wait(data, key string, sigs <-chan os.Signal, noted *int) (code int, stop bool) {
 	note := func(s string) {
-		f, err := os.OpenFile(filepath.Join(data, "signals", ticket), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		f, err := os.OpenFile(filepath.Join(data, "signals", key), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err == nil {
 			fmt.Fprintln(f, s)
 			f.Close()
 		}
 	}
-	cont := filepath.Join(data, "continue", ticket)
+	marker := filepath.Join(data, "waiting", key)
+	mark := func() {
+		whileInUse(func() error { return os.WriteFile(marker, []byte(strconv.Itoa(*noted)), 0o644) })
+	}
+	unmark := func() {
+		whileInUse(func() error {
+			if err := os.Remove(marker); !os.IsNotExist(err) {
+				return err
+			}
+			return nil
+		})
+	}
+	cont := filepath.Join(data, "continue", key)
+	mark()
 	for {
 		select {
 		case s := <-sigs:
 			name, ends := signalName(s)
 			note(name)
+			*noted++
 			if ends {
+				unmark()
 				return 143, true
 			}
+			mark()
 		case <-time.After(5 * time.Millisecond):
+			if _, err := os.Stat(cont); err != nil {
+				continue
+			}
+			unmark()
 			if os.Remove(cont) == nil {
 				return 0, false
 			}
+			mark()
 		}
+	}
+}
+
+// whileInUse runs do again for up to 2s while it fails on a file another
+// process holds open, as the harness reading a marker does on Windows.
+func whileInUse(do func() error) {
+	deadline := time.Now().Add(2 * time.Second)
+	for err := do(); inUse(err) && time.Now().Before(deadline); err = do() {
+		time.Sleep(10 * time.Millisecond)
 	}
 }
