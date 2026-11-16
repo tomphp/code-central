@@ -127,4 +127,4 @@ function WaitingWork({ ticket: t }: { ticket: TicketView }) {
   );
 }
 
-export const panel: PanelDef ={ reasons: ["to_merge", "accepted_not_landed"], states: ["Accepted"], Component: AcceptedPanel };
+export const panel: PanelDef = { reasons: ["to_merge", "accepted_not_landed"], states: ["Accepted"], Component: AcceptedPanel };

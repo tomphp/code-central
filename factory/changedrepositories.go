@@ -76,7 +76,7 @@ func (f *factory) reportChanged(ctx context.Context, c claim, tk core.TicketView
 // work, or names a commit that isn't its branch's head, fails with a
 // Failure Report (fail_finish). It reports whether the finish passed, and
 // whether failing it moved tk to Failed; one that couldn't be failed yet
-// is failed at the next check.
+// is failed by the check before it lands.
 func (f *factory) checkFinish(ctx context.Context, tk core.TicketView) (passed, failed bool) {
 	if !f.several() {
 		return true, false

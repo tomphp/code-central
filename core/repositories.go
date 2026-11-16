@@ -72,7 +72,7 @@ func fillChangedBy(r store.Reader, v *ProjectView) {
 func changedBy(r store.Reader, key, name string) []string {
 	by := []string{}
 	for _, t := range r.Tickets(key) {
-		if !finished(t.State) && slices.Contains(changedRepositories(key, t), name) {
+		if !finished(t.State) && slices.Contains(changedRepositoryNames(key, t), name) {
 			by = append(by, DisplayID(key, t.Number))
 		}
 	}

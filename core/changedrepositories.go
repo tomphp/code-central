@@ -16,10 +16,10 @@ import (
 // reports them live while the Ticket is In Progress
 // (report_changed_repositories), each finish settles them, and the
 // Factory's finish check fails a finish that leaves one out or names a
-// commit that isn't its branch's head (fail_finish). A Ticket stored
-// without them, with a branch or a commit, reads as the Home
-// Repository's, so there is no migration. Reads show them only while the
-// Project has more than one Repository.
+// commit that isn't its branch's head (fail_finish, in failure.go). A
+// Ticket stored without them, with a branch or a commit, reads as the
+// Home Repository's, so there is no migration. Reads show them only while
+// the Project has more than one Repository.
 
 // RepositoryWork is a Ticket's branch and its head commit in one
 // Repository, as finish and report_changed_repositories take them.
@@ -61,10 +61,10 @@ type LandedView struct {
 // only then do reads name Repositories (the visibility rule).
 func severalRepositories(p store.Project) bool { return len(p.RepositoryList()) > 1 }
 
-// changedRepos is t's Changed Repositories as recorded, or with none
-// recorded, the Home Repository's, named home, when t has a branch or a
-// commit.
-func changedRepos(home string, t store.Ticket) []store.ChangedRepository {
+// changedRepositories is t's Changed Repositories as recorded, or with
+// none recorded, the Home Repository's, named home, when t has a branch
+// or a commit.
+func changedRepositories(home string, t store.Ticket) []store.ChangedRepository {
 	if t.Repositories != nil {
 		return t.Repositories
 	}
@@ -74,10 +74,10 @@ func changedRepos(home string, t store.Ticket) []store.ChangedRepository {
 	return nil
 }
 
-// changedRepositories is the Names of t's Changed Repositories.
-func changedRepositories(home string, t store.Ticket) []string {
+// changedRepositoryNames is the Names of t's Changed Repositories.
+func changedRepositoryNames(home string, t store.Ticket) []string {
 	var names []string
-	for _, r := range changedRepos(home, t) {
+	for _, r := range changedRepositories(home, t) {
 		names = append(names, r.Name)
 	}
 	return names
@@ -87,21 +87,20 @@ func changedRepositories(home string, t store.Ticket) []string {
 // wait to land rather than to Done: one of its Changed Repositories has a
 // branch, as a finish naming a branch always gave the Home Repository.
 func hasBranchToLand(home string, t store.Ticket) bool {
-	return slices.ContainsFunc(changedRepos(home, t), func(r store.ChangedRepository) bool { return r.Branch != "" })
+	return slices.ContainsFunc(changedRepositories(home, t), func(r store.ChangedRepository) bool { return r.Branch != "" })
 }
 
 // landedSomewhere reports whether t's work has landed in any of its
 // Changed Repositories.
 func landedSomewhere(home string, t store.Ticket) bool {
-	return slices.ContainsFunc(changedRepos(home, t), func(r store.ChangedRepository) bool { return r.Landed != nil })
+	return slices.ContainsFunc(changedRepositories(home, t), func(r store.ChangedRepository) bool { return r.Landed != nil })
 }
 
 // partlyLanded reports whether t is Partly landed: Accepted, and landed
 // in some of its Changed Repositories but not all.
 func partlyLanded(home string, t store.Ticket) bool {
-	rs := changedRepos(home, t)
 	return t.State == store.Accepted && landedSomewhere(home, t) &&
-		slices.ContainsFunc(rs, func(r store.ChangedRepository) bool { return r.Landed == nil })
+		slices.ContainsFunc(changedRepositories(home, t), func(r store.ChangedRepository) bool { return r.Landed == nil })
 }
 
 // landingRank orders Repository Names by p's landing order, with any
@@ -116,13 +115,21 @@ func landingRank(p store.Project) func(name string) int {
 	}
 }
 
-// inLandingOrder is names sorted by p's landing order.
-func inLandingOrder(p store.Project, names []string) []string {
+// inLandingOrder sorts xs, each named by name, by p's landing order.
+func inLandingOrder[X any](p store.Project, xs []X, name func(X) string) {
 	rank := landingRank(p)
+	slices.SortStableFunc(xs, func(a, b X) int { return rank(name(a)) - rank(name(b)) })
+}
+
+// namesInLandingOrder is names sorted by p's landing order.
+func namesInLandingOrder(p store.Project, names []string) []string {
 	out := slices.Clone(names)
-	slices.SortStableFunc(out, func(a, b string) int { return rank(a) - rank(b) })
+	inLandingOrder(p, out, func(n string) string { return n })
 	return out
 }
+
+// repositoryName is r's Repository Name, for inLandingOrder.
+func repositoryName(r store.ChangedRepository) string { return r.Name }
 
 // checkRepositoryWork is ws as Changed Repositories of p, refusing a
 // name that isn't one of p's Repositories, a name given twice and an
@@ -151,15 +158,14 @@ func checkRepositoryWork(p store.Project, field string, ws []RepositoryWork) ([]
 // stored as none while they are just what t's branch and commit read as,
 // so a single-repository Ticket's file is as it always was.
 func setChangedRepositories(p store.Project, t *store.Ticket, rs []store.ChangedRepository) {
-	was := changedRepos(p.Key, *t)
+	was := changedRepositories(p.Key, *t)
 	for i := range rs {
 		if j := slices.IndexFunc(was, func(w store.ChangedRepository) bool { return w.Name == rs[i].Name }); j >= 0 && rs[i].Landed == nil {
 			rs[i].Landed = was[j].Landed
 		}
 	}
-	rank := landingRank(p)
-	slices.SortStableFunc(rs, func(a, b store.ChangedRepository) int { return rank(a.Name) - rank(b.Name) })
-	if len(rs) == 0 || len(rs) == 1 && reflect.DeepEqual(rs, changedRepos(p.Key, store.Ticket{Branch: t.Branch, Commit: t.Commit})) {
+	inLandingOrder(p, rs, repositoryName)
+	if len(rs) == 0 || len(rs) == 1 && reflect.DeepEqual(rs, changedRepositories(p.Key, store.Ticket{Branch: t.Branch, Commit: t.Commit})) {
 		rs = nil
 	}
 	t.Repositories = rs
@@ -198,13 +204,21 @@ func settleFinish(p store.Project, t *store.Ticket, in FinishInput) error {
 	return nil
 }
 
+// dropsRepositories reports whether t's Changed Repositories, as a finish
+// settled them, leave out any of was, those it had before. Such a finish
+// isn't auto-accepted: it waits In Review for the Factory's finish check,
+// which an Auto-accept to Done would otherwise skip.
+func dropsRepositories(home string, t store.Ticket, was []string) bool {
+	now := changedRepositoryNames(home, t)
+	return slices.ContainsFunc(was, func(name string) bool { return !slices.Contains(now, name) })
+}
+
 // changedRepositoryViews is t's Changed Repositories as v, t's view in
 // p, shows them: the Home Repository's with the CI result v gives, and
 // any Repository's landed commit, latest pushed commit and pull request.
 func changedRepositoryViews(p store.Project, t store.Ticket, v TicketView) []ChangedRepositoryView {
-	rs := slices.Clone(changedRepos(p.Key, t))
-	rank := landingRank(p)
-	slices.SortStableFunc(rs, func(a, b store.ChangedRepository) int { return rank(a.Name) - rank(b.Name) })
+	rs := slices.Clone(changedRepositories(p.Key, t))
+	inLandingOrder(p, rs, repositoryName)
 	out := []ChangedRepositoryView{}
 	for _, r := range rs {
 		rv := ChangedRepositoryView{Name: r.Name, Branch: r.Branch, Commit: r.Commit, PushedCommit: latestPushedIn(p.Key, t, r.Name)}
@@ -263,13 +277,13 @@ func landedByMove(t store.Ticket) *LandedView {
 func specRepositories(p store.Project, tickets []store.Ticket) []string {
 	var names []string
 	for _, t := range tickets {
-		for _, name := range changedRepositories(p.Key, t) {
+		for _, name := range changedRepositoryNames(p.Key, t) {
 			if !slices.Contains(names, name) {
 				names = append(names, name)
 			}
 		}
 	}
-	return inLandingOrder(p, names)
+	return namesInLandingOrder(p, names)
 }
 
 // ReportChangedRepositoriesInput is the Factory's
@@ -305,55 +319,5 @@ func (c *Core) ReportChangedRepositories(ctx context.Context, key string, in Rep
 		was := t.Repositories
 		setChangedRepositories(p, t, rs)
 		return !reflect.DeepEqual(was, t.Repositories), nil
-	})
-}
-
-// FailFinishInput is the Factory's fail_finish(ticket, what_broke, why,
-// what_to_fix, where_work_stands, full?): a Failure Report on a finish
-// the finish check found wrong. Every field is required.
-type FailFinishInput struct {
-	Ticket          Ref    `json:"ticket"`
-	WhatBroke       string `json:"what_broke"`
-	Why             string `json:"why"`
-	WhatToFix       string `json:"what_to_fix"`
-	WhereWorkStands string `json:"where_work_stands"`
-	// Full asks for the Ticket in place of the Acknowledgement.
-	Full bool `json:"full,omitempty"`
-}
-
-// failFinish is the Factory's workflow action that fails a finish.
-const failFinish = "fail_finish"
-
-// FailFinish is the Factory's fail_finish: its finish check found a
-// finish that leaves out a Repository with work or names a commit that
-// isn't its branch's head. It adds a Failure Report on the finishing
-// Claim, which has already ended, and moves the Ticket from In Review, or
-// from Accepted while it has landed nowhere, to Failed.
-func (c *Core) FailFinish(ctx context.Context, key string, in FailFinishInput) (Written[TicketView], error) {
-	if err := checkFailureReport(in.WhatBroke, in.Why, in.WhatToFix, in.WhereWorkStands); err != nil {
-		return Written[TicketView]{}, err
-	}
-	return c.updateTicket(key, failFinish, in.Ticket, in.Full, func(t *store.Ticket) (bool, error) {
-		id := DisplayID(key, t.Number)
-		if t.State == store.Accepted && landedSomewhere(key, *t) {
-			return false, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s has landed in some of its Changed Repositories, so its finish can't fail: land the rest, or send it back", id)}
-		}
-		var finishing store.Claim
-		for _, cl := range t.Claims {
-			if cl.EndedBy == "finish" {
-				finishing = cl
-			}
-		}
-		now := c.now()
-		if err := transition(ctx, t, key, failFinish, "", now); err != nil {
-			return false, err
-		}
-		t.FailureReports = append(t.FailureReports, store.FailureReport{
-			Number: len(t.FailureReports) + 1, Claim: finishing.Number,
-			SessionID: finishing.SessionID, WorkingDir: finishing.WorkingDir, ResumeCommand: finishing.ResumeCommand,
-			Actor: string(ActorOf(ctx)), Time: now,
-			WhatBroke: in.WhatBroke, Why: in.Why, WhatToFix: in.WhatToFix, WhereWorkStands: in.WhereWorkStands,
-		})
-		return true, nil
 	})
 }

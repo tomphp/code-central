@@ -14,7 +14,7 @@
 // IDs are what the writes returned (Specs and Tickets share one counter),
 // and Question numbers are Core's.
 import type { World } from "./core/core";
-import { HttpDriver, worldConnection } from "./driver";
+import { HttpDriver, worldConnection, type RepositoryWork } from "./driver";
 import type { CIRunView, CISettings, CloneState, ExternalState, IssueWatcherReport, Landing, PullRequestState, PullRequestWatcherReport, SessionEvent, State, UsageResponse } from "./types";
 
 export interface QuestionSeed {
@@ -49,14 +49,6 @@ export interface Work {
   branch: string;
   commit: string;
   repositories?: RepositoryWork[];
-}
-
-// RepositoryWork is a Ticket's branch and head commit in one Repository,
-// as finish and the Factory's live report give them.
-export interface RepositoryWork {
-  name: string;
-  branch: string;
-  commit: string;
 }
 
 // CIOutcome is how a pushed commit's CI run stands.

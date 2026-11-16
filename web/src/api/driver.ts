@@ -19,6 +19,14 @@ import type { CIRunView, CIWatcherReport, ExternalState, HeartbeatReport, Models
 import type { World } from "./core/core";
 import { toError } from "./http";
 
+// RepositoryWork is a Ticket's branch and head commit in one Repository,
+// as finish and the Factory's live report give them (Spec code-central-848).
+export interface RepositoryWork {
+  name: string;
+  branch: string;
+  commit: string;
+}
+
 // The Driver sets up the world the way agents, integrations and the Factory
 // would, with their operations over HTTP. Tests use the IDs it returns,
 // never literal IDs (Specs and Tickets share one counter).
@@ -40,9 +48,7 @@ export interface Driver {
     key: string,
     id: string,
     summary: string,
-    on?:
-      | { branch: string; commit: string; repositories?: { name: string; branch: string; commit: string }[] }
-      | { recommendation: NonNullable<TicketView["recommendation"]> },
+    on?: { branch: string; commit: string; repositories?: RepositoryWork[] } | { recommendation: NonNullable<TicketView["recommendation"]> },
   ): Promise<void>;
   // addBlocker makes id wait on blocker, as an agent's add_blocker.
   addBlocker(key: string, id: string, blocker: string): Promise<void>;

@@ -510,11 +510,7 @@ func runFinish(ctx context.Context, e Env, args []string) error {
 	}
 	in := core.FinishInput{Ticket: core.Ref(pos[0]), ClaimID: *claim, Summary: text, Branch: *branch, Commit: *commit, Recommendation: store.Recommendation(*recommendation), Full: *full}
 	if *repositories != "" {
-		if err := core.Decode(ctx, []byte(*repositories), &in.Repositories); err != nil {
-			var ce *core.Error
-			if errors.As(err, &ce) {
-				ce.Field = "repositories" + dotted(ce.Field)
-			}
+		if err := decodeField(ctx, *repositories, "repositories", &in.Repositories); err != nil {
 			return err
 		}
 	}

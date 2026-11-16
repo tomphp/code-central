@@ -730,7 +730,7 @@ func (c *Core) ticketRow(r store.Reader, e *evaluation, t store.Ticket, onMap bo
 		row.LatestEvent = c.latestEvent(key, t.Number, cl.Number)
 	}
 	if severalRepositories(e.p) {
-		row.Repositories = inLandingOrder(e.p, changedRepositories(key, t))
+		row.Repositories = namesInLandingOrder(e.p, changedRepositoryNames(key, t))
 	}
 	return row
 }

@@ -59,8 +59,7 @@ describe("a Ticket's Changed Repositories", () => {
 
   it("list branch@commit per Repository in the Accepted panel, each not landed yet", async () => {
     const { w, s, ticket } = await world();
-    await s.inReview("acme", ticket, SETTLED);
-    await s.human(`${s.ticketPath("acme", ticket)}/accept`, {});
+    await s.accepted("acme", ticket, SETTLED);
     await renderApp(w, `/?view=inbox&ticket=${ticket}`);
     const panel = within(ticketPane()).getByRole("region", { name: "Accepted" });
     expect(within(panel).getAllByRole("listitem").map((r) => r.textContent)).toEqual(["acme: acme-3@9a8b7c6d5e4f", "api: acme-3@1234567890ab"]);

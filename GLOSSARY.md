@@ -28,6 +28,10 @@ _Avoid_: remote, origin, repository URL
 The Repositories in which a Ticket's branch holds commits beyond the Base. The Factory reports them live while the Ticket is In Progress, and each finish settles them, replacing the earlier list. Nobody sets them by hand. Every Ticket records them, including those whose work never lands. A finish recorded before Repositories existed reads as the Home Repository's. A Spec's Changed Repositories are the union of its Tickets'.
 _Avoid_: affected repos, target repos, scope
 
+**Finish check**:
+The Factory's comparison of a finish's record of the Changed Repositories with every Repository's branch, made after the turn that finished the Ticket and again before landing it, only while the Project has more than one Repository. A finish that leaves out a Repository whose branch holds work, or records a commit that isn't its branch's head, fails: the Ticket goes to Failed with a Failure Report on the finishing Claim. An Accepted Ticket that has landed somewhere can't fail it.
+_Avoid_: finish validation, finish guard
+
 **Home worktree**:
 A Ticket's worktree in the Home Repository, `<home>.worktrees/<ticket-id>`. It is where the Ticket's session starts, its working directory. A Ticket has one worktree per Repository: at each Claim's start the Factory makes or reuses one in every Repository, whichever of them the Ticket goes on to change, and each other Repository's is beside its clone, at `<clone parent>/<Repository Name>.worktrees/<ticket-id>`. A Repository added mid-session gets its worktree at the next Claim.
 _Avoid_: workspace, main worktree

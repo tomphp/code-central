@@ -128,6 +128,36 @@ func TestAcceptingWorkOnlyInAnotherRepositoryWaitsToLand(t *testing.T) {
 	}
 }
 
+// A finish that drops a Repository the live report named would go
+// straight to Done under Auto-accept, out of the finish check's reach, so
+// it waits In Review for the check instead.
+func TestAFinishDroppingAReportedRepositoryIsntAutoAccepted(t *testing.T) {
+	f := newFixture(t)
+	f.severalRepositories(t)
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true})
+	f.reportChanged(t, core.RepositoryWork{Name: "api", Branch: "acme-2", Commit: "bbb"})
+
+	if tk := f.finishWith(t, core.FinishInput{}); tk.State != store.InReview {
+		t.Fatalf("acme-2 is %s, want In Review for the finish check", tk.State)
+	}
+	if tk := f.get(t, "2"); tk.State != store.InReview {
+		t.Fatalf("acme-2 is %s after the finish, want In Review: not auto-accepted", tk.State)
+	}
+}
+
+func TestAFinishKeepingItsRepositoriesIsAutoAccepted(t *testing.T) {
+	f := newFixture(t)
+	f.severalRepositories(t)
+	f.setAutoAccept(t, map[store.AutoAcceptKind]bool{store.AutoAcceptImplementation: true})
+	f.reportChanged(t, core.RepositoryWork{Name: "api", Branch: "acme-2", Commit: "bbb"})
+
+	f.finishWith(t, core.FinishInput{Repositories: []core.RepositoryWork{{Name: "api", Branch: "acme-2", Commit: "ccc"}}})
+
+	if tk := f.get(t, "2"); tk.State != store.Accepted {
+		t.Fatalf("acme-2 is %s, want Accepted on the human's behalf", tk.State)
+	}
+}
+
 func TestATicketFinishedBeforeRepositoriesExistedReadsAsTheHomeRepositorys(t *testing.T) {
 	f := newFixture(t)
 	f.inReviewOnBranch(t)

@@ -189,7 +189,8 @@ func claimTarget(rule blockRule, in ClaimInput) (t store.Ticket, found bool, err
 // Progress to In Review, with the summary stored as a comment. A spec
 // Stage's finish also gives its Spec recommendation. Then, in the same
 // write, an auto-accept eligible Ticket is accepted on the human's
-// behalf (ADR 0037); the result is the same either way.
+// behalf (ADR 0037), unless the finish dropped one of its Changed
+// Repositories; the result is the same either way.
 func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishResult, error) {
 	if strings.TrimSpace(in.Summary) == "" {
 		return FinishResult{}, invalid("summary", "finish needs a summary: what was done, where (branch or commit) and what the reviewer should check")
@@ -225,6 +226,7 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 		}
 		t.Recommendation = rec
 		p, _ := w.Project(key)
+		was := changedRepositoryNames(key, t)
 		if err := settleFinish(p, &t, in); err != nil {
 			return err
 		}
@@ -233,6 +235,10 @@ func (c *Core) Finish(ctx context.Context, key string, in FinishInput) (FinishRe
 		// sees the same whether or not one follows.
 		if v, err = acknowledge(before, c.ticketView(w, key, t), in.Full); err != nil {
 			return err
+		}
+		if dropsRepositories(key, t, was) {
+			// The Factory's finish check comes first.
+			return w.PutTicket(key, t)
 		}
 		return c.autoAccept(ctx, w, key, t, now)
 	})
