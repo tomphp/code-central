@@ -627,15 +627,15 @@ A link in Markdown text whose target is a Spec's or a Ticket's full ID, such as 
 _Avoid_: Ticket link (it may name a Spec), reference, mention
 
 **GitHub Issues**:
-A Project's opt-in, off by default, to link its GitHub repository's issues through an Integration. The human turns it on in the GitHub Issues section of Project Options, naming the repository, an optional filter label, and whether New issues need me; turning it on first checks `gh` can triage the repository's issues, and the first time creates the Issues Spec. Turning it off leaves every Link as it is. It is the first Integration.
+A Project's opt-in, off by default, to link the issues of a list of GitHub repositories through an Integration. Any `owner/repo` may be listed, and each Repository's GitHub remote is suggested. The human turns it on in the GitHub Issues section of Project Options, naming the repositories, an optional filter label, and whether New issues need me; turning it on first checks `gh` can triage each listed repository's issues, and the first time creates the Issues Spec. Turning it off leaves every Link as it is. It is inbound only: Code Central never opens an issue, and reports progress only on each linked issue. It is the first Integration.
 _Avoid_: Issue sync, GitHub integration
 
 **Issue Watcher**:
-The kind of Watcher that polls one Project's GitHub issues through `gh`, writing as the `integration` Actor, and posts Code Central's progress back to the issues. Before GitHub Issues turns on, Code Central runs it once in its check mode, which checks `gh` is found and logged in, can read the repository, the repository has issues on, and the login can triage them, answering with what is wrong and its fix. Its status, Watching or an error with its fix, shows in the GitHub Issues section of Project Options; going into an error sends one Notification, and being rate-limited is still Watching and sends none. The service starts one per Project with GitHub Issues on, whether or not the Factory runs, stops it when GitHub Issues is turned off or the Project is archived, and restarts one that crashes with backoff, reporting it as crashed, restarted N times.
+The kind of Watcher that polls the issues of each repository one Project's GitHub Issues lists, through `gh`, writing as the `integration` Actor, and posts Code Central's progress back to the issues. Before GitHub Issues turns on, Code Central runs it once in its check mode, which checks `gh` is found and logged in and that, for each listed repository, it can read the repository, the repository has issues on, and the login can triage them, answering with what is wrong and its fix. Its status, Watching or an error with its fix, shows in the GitHub Issues section of Project Options; one failing repository is an error naming that repository, while the others are still watched. Going into an error sends one Notification, and being rate-limited is still Watching and sends none. The service starts one per Project with GitHub Issues on, whether or not the Factory runs, stops it when GitHub Issues is turned off or the Project is archived, and restarts one that crashes with backoff, reporting it as crashed, restarted N times.
 _Avoid_: Issue daemon, syncer
 
 **Issues Spec**:
-A Project's Long-lived Spec that its Incoming Issues arrive on, titled like "GitHub Issues: owner/repo", with no Link and no Stages. It is created the first time GitHub Issues is turned on, and its title follows the repository unless the human retitles it.
+A Project's Long-lived Spec that the Incoming Issues from every listed repository arrive on, with no Link and no Stages. It is titled like "GitHub Issues: owner/repo" while one repository is listed, and "GitHub Issues" once more than one is. It is created the first time GitHub Issues is turned on, and its title follows the list unless the human retitles it.
 _Avoid_: Inbox Spec, triage Spec
 
 **Incoming Issue**:
@@ -675,7 +675,7 @@ The one `code-central:` label Code Central keeps on a linked GitHub issue to sho
 _Avoid_: Tag, state label
 
 **Write-back**:
-What Code Central writes to a linked GitHub issue: its comments, such as a Requirement's grilling resolution, its Spec's body and each Ticket as it lands, its Status label and closing it. Code Central works out from the work's state what is due on each issue, never from events, and the Issue Watcher makes it so, posting each comment exactly once. Nothing is ever written from Rounds, answers, Failure Reports, Transcripts or Claims.
+What Code Central writes to a linked GitHub issue: its comments, such as a Requirement's grilling resolution, its Spec's body and each Ticket as it lands, its Status label and closing it. Each Ticket's landed comment names its commit in every Changed Repository, as `owner/repo@sha` for a GitHub-hosted Repository and as `Name@sha`, by Repository Name, otherwise; the comment listing what landed once the Spec is Finished also lists the Spec's Changed Repositories. In a single-repository Project they read as before. Code Central works out from the work's state what is due on each issue, never from events, and the Issue Watcher makes it so, posting each comment exactly once. Only the linked issue is written to, never another repository's issues. Nothing is ever written from Rounds, answers, Failure Reports, Transcripts or Claims.
 _Avoid_: Sync, mirroring
 
 **Outbound Link**:
