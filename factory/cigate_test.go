@@ -144,7 +144,7 @@ func TestAfterLandAnywayAFailedTicketLandsOnTheNextPoll(t *testing.T) {
 	reportRun(t, h, 1, id, pushed, store.CICompleted, store.CIFailure)
 	stillAccepted(t, h, r, id, "with a failed CI result")
 
-	if _, err := h.Server.Core.LandAnyway(core.WithActor(context.Background(), core.Human), h.Project, core.TicketInput{Ticket: core.Ref(id)}); err != nil {
+	if _, err := h.Server.Core.LandAnyway(core.WithActor(context.Background(), core.Human), h.Project, core.CIResponseInput{Ticket: core.Ref(id)}); err != nil {
 		t.Fatal(err)
 	}
 	r.Poll()

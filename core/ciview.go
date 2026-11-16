@@ -81,7 +81,7 @@ func (c *Core) CIOverview(_ context.Context, in CIOverviewInput) (CIOverview, er
 			}
 		}
 		for _, p := range projects {
-			v := ciView(p.Key, p.CI, c.watchers.view(watcherKey{WatcherCI, p.Key}))
+			v := ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key}))
 			out.Projects = append(out.Projects, CIProjectStatus{Project: p.Key, Tracking: v.Tracking, Provider: v.Provider, Repository: v.Repository, ProjectURL: v.ProjectURL, Watcher: v.Watcher})
 			ci := c.ciStateOf(r, p)
 			for _, run := range latestAttempts(keptCIRuns(r.CIRuns(p.Key), now)) {
@@ -128,14 +128,20 @@ func runningForTicket(ci *ciState, run store.CIRun) bool {
 	if run.Status != store.CIQueued && run.Status != store.CIInProgress || run.Ticket == 0 {
 		return false
 	}
-	return ci.reads(run.Commit) && !run.Ignored
+	return ci.reads(run.Repository, run.Commit) && !run.Ignored
 }
 
-// latestAttempts is runs with each run's latest attempt only.
+// latestAttempts is runs with each run's latest attempt only, a run being
+// its Repository's run ID.
 func latestAttempts(runs []store.CIRun) []store.CIRun {
-	latest := map[int64]int{}
-	for _, run := range runs {
-		latest[run.ID] = max(latest[run.ID], run.Attempt)
+	type runID struct {
+		repository string
+		id         int64
 	}
-	return slices.DeleteFunc(runs, func(run store.CIRun) bool { return run.Attempt < latest[run.ID] })
+	latest := map[runID]int{}
+	for _, run := range runs {
+		k := runID{run.Repository, run.ID}
+		latest[k] = max(latest[k], run.Attempt)
+	}
+	return slices.DeleteFunc(runs, func(run store.CIRun) bool { return run.Attempt < latest[runID{run.Repository, run.ID}] })
 }

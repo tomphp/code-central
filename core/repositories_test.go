@@ -106,8 +106,9 @@ func TestAddRepositoryAcknowledgesTheRepositories(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Record != nil || w.ID != "acme" || !slices.Equal(w.Changed, []string{"repositories"}) {
-		t.Fatalf("acknowledgement = %+v, want acme with repositories changed", w)
+	// It brings its CI entry, filled in from its Clone URL.
+	if w.Record != nil || w.ID != "acme" || !slices.Equal(w.Changed, []string{"ci", "repositories"}) {
+		t.Fatalf("acknowledgement = %+v, want acme with ci and repositories changed", w)
 	}
 }
 
