@@ -180,7 +180,7 @@ func TestUnderPullRequestAnOpenPullRequestKeepsItsTargetAndNewOnesUseTheNewBase(
 	pullRequestOn(h, "origin")
 	id, _ := accepted(h, "Add a feature", "feature.txt", "feature\n")
 	r := h.Start()
-	waitPushed(t, h, id, "")
+	wantPushed(t, h, id, "")
 	reportPullRequest(t, h, id, "")
 
 	pullRequestBase(h, "release")
