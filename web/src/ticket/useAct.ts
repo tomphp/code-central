@@ -6,13 +6,16 @@ import { useState } from "react";
 export function useAct() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  async function run(action: () => Promise<unknown>) {
+  // run says whether the action succeeded.
+  async function run(action: () => Promise<unknown>): Promise<boolean> {
     setBusy(true);
     setError(undefined);
     try {
       await action();
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return false;
     } finally {
       setBusy(false);
     }

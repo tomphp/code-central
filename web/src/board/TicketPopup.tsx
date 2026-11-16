@@ -44,6 +44,7 @@ export function TicketPopupView({ now, id, projects, ticket, onClose, openSpec, 
         reported={row?.reported_models}
         openSpec={openSpec}
         openTicket={openTicket}
+        onMoved={onClose}
       />
     </PopupShell>
   );

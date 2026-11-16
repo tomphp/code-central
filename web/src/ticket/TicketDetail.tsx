@@ -52,6 +52,9 @@ export interface TicketDetailProps {
   // archived is whether the Ticket's Project is Archived, which takes no
   // edits.
   archived?: boolean;
+  // onMoved is told once the Move control has moved the Ticket: the Board's
+  // popup closes then.
+  onMoved?(): void;
 }
 
 export type TicketPaneProps = Omit<TicketDetailProps, "specLabels">;
@@ -132,7 +135,7 @@ type TicketBodyProps = Omit<TicketDetailProps, "ticket" | "error"> & {
 // (in the action panel instead while CI failed), Claim activity with
 // each Claim's Live section, move, and a collapsed history of moves,
 // comments and edits merged by time.
-function TicketBody({ project, ticket: t, specLabels, now, reported, openSpec, openTicket, archived, editing }: TicketBodyProps) {
+function TicketBody({ project, ticket: t, specLabels, now, reported, openSpec, openTicket, archived, editing, onMoved }: TicketBodyProps) {
   const claims = [...(t.claims ?? [])].sort((a, b) => b.number - a.number);
   return (
     <article aria-label="Ticket details" className="ticket-body">
@@ -177,7 +180,7 @@ function TicketBody({ project, ticket: t, specLabels, now, reported, openSpec, o
       <section aria-label="Ticket controls" className="ticket-controls">
         <TicketAutoAccept project={project} ticket={t} specLabels={specLabels} openSpec={openSpec} archived={archived} />
         <ModelChoice project={project} ticket={t} reported={reported} />
-        <MoveControl key={`${t.id} ${t.state}`} project={project} ticket={t} />
+        <MoveControl key={`${t.id} ${t.state}`} project={project} ticket={t} onMoved={onMoved} />
       </section>
       {/* A Ticket in a CI item has the CI section in its action panel,
           with the failure options, so it isn't shown here too. */}
@@ -301,7 +304,7 @@ function LinkedNote({ project, ticket: t }: { project: string; ticket: TicketVie
   );
 }
 
-function MoveControl({ project, ticket: t }: { project: string; ticket: TicketView }) {
+function MoveControl({ project, ticket: t, onMoved }: { project: string; ticket: TicketView; onMoved?(): void }) {
   const api = useApi();
   const targets = moveTargets(t.state);
   const [to, setTo] = useState<State>(targets[0]);
@@ -311,7 +314,7 @@ function MoveControl({ project, ticket: t }: { project: string; ticket: TicketVi
       className="move"
       onSubmit={(e) => {
         e.preventDefault();
-        run(() => api.act(project, t.id, "move", { to_state: to }));
+        void run(() => api.act(project, t.id, "move", { to_state: to })).then((ok) => ok && onMoved?.());
       }}
     >
       <span>Move to</span>
