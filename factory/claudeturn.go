@@ -144,7 +144,7 @@ func (r *turnRunner) run(stop context.Context, in turnInput) turnOutcome {
 		in.Linef("can't start claude: %v", err)
 		return turnOutcome{Kind: turnFailed, StartErr: err}
 	}
-	in.Work.rest("turn ", in.Key, " running")
+	in.Work.rest(TurnRunning, in.Key, TurnRunningEnd)
 	// streamRead is closed once claude has exited and its stream has been
 	// read; stopperDone once the goroutine stopping it has returned.
 	streamRead := make(chan struct{})
@@ -248,7 +248,7 @@ func (r *turnRunner) stop(proc *os.Process, ended <-chan struct{}, key string, s
 		}
 		var grace <-chan time.Time
 		if i < len(steps)-1 {
-			grace = s.after(r.clock, r.killGrace, "kill grace of turn ", key)
+			grace = s.after(r.clock, r.killGrace, KillGrace, key)
 		} else {
 			s.busy("killing turn ", key)
 			grace = r.clock.After(r.killGrace)

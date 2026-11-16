@@ -65,11 +65,11 @@ func (k *tracker) Busy(name string) func() { return k.add(&piece{name: name}) }
 func (k *tracker) Rest(name string, until time.Time) func() {
 	p := &piece{name: name, resting: true, until: until}
 	k.mu.Lock()
-	if key, ok := cutAround(name, "turn ", " running"); ok {
+	if key, ok := cutAround(name, factory.TurnRunning, factory.TurnRunningEnd); ok {
 		p.turn = key
 		k.graces[key] = 0
 	}
-	if key, ok := strings.CutPrefix(name, "kill grace of turn "); ok {
+	if key, ok := strings.CutPrefix(name, factory.KillGrace); ok {
 		k.graces[key]++
 	}
 	k.mu.Unlock()
@@ -233,7 +233,7 @@ func (k *tracker) inKillGrace() bool {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	for _, p := range k.open {
-		if strings.HasPrefix(p.name, "kill grace of turn ") {
+		if strings.HasPrefix(p.name, factory.KillGrace) {
 			return true
 		}
 	}

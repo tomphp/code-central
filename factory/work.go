@@ -53,6 +53,13 @@ const (
 	ChatLongPoll = "Chat long-poll"
 	// SignalWait is the wait for a stop signal on Env.Signals.
 	SignalWait = "waiting for a signal"
+	// TurnRunning and TurnRunningEnd frame a turn's claude running, as
+	// "turn <key> running", which a turn printing or exiting ends.
+	TurnRunning    = "turn "
+	TurnRunningEnd = " running"
+	// KillGrace, followed by a turn's key, is a kill grace of its claude,
+	// which the clock ends.
+	KillGrace = "kill grace of turn "
 )
 
 // work is Env.Work, safe to use without one: with no hook it tells
