@@ -32,9 +32,7 @@ interface CoreModule {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var codeCentralCore: CoreModule | undefined;
-  // eslint-disable-next-line no-var
   var Go: new () => { importObject: WebAssembly.Imports; run(i: WebAssembly.Instance): Promise<void> };
 }
 

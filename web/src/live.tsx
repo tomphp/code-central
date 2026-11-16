@@ -101,6 +101,7 @@ function useFetch<T>(load: (() => Promise<T>) | null, deps: unknown[]): { data?:
     return () => {
       current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the caller's deps say when load changes; load itself is a new function each render
   }, deps);
   return state;
 }

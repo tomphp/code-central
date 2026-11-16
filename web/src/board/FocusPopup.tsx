@@ -57,7 +57,7 @@ export type FocusPopupProps = {
 export function FocusPopup(props: FocusPopupProps) {
   const { now, data, onClose, navigate } = props;
   const api = useApi();
-  const version = useVersion();
+  useVersion();
   const queue = props.mode === "queue";
   const project = queue ? props.project : undefined;
   // The session lives for the popup's life; Ticket mode has no Skip, so
@@ -74,6 +74,7 @@ export function FocusPopup(props: FocusPopupProps) {
   const done = session.clear ? "cleared" : queue && session.onlySkipped ? "only_skipped" : undefined;
   useEffect(() => {
     if (done) close(done);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- close is a new function each render; the popup closes once, as done changes
   }, [done]);
   // Leaving through a link in a Queue mode item, Open in Inbox or Base
   // missing's Project Options, dismisses the popup on the way.

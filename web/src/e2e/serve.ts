@@ -23,8 +23,10 @@ function fakeGHBinary(): string {
 export interface Service {
   url: string;
   // agent makes one POST as an agent, as an MCP tool call or the CLI would.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the JSON is read untyped, as each test knows its shape
   agent(path: string, body: unknown): Promise<any>;
   // human makes one POST as the human, as the UI does.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the JSON is read untyped, as each test knows its shape
   human(path: string, body: unknown): Promise<any>;
   // logOutOfGH makes the fake gh answer gh auth status as a gh with no
   // login does.
@@ -137,6 +139,7 @@ export async function serve(): Promise<Service> {
 }
 
 // post makes one POST to the service as actor, failing on a refusal.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the JSON is read untyped, as each test knows its shape
 async function post(url: string, actor: "agent" | "human", path: string, body: unknown): Promise<any> {
   const res = await fetch(url + path, {
     method: "POST",

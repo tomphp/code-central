@@ -54,7 +54,6 @@ export function BoardView({ now, data, loc, navigate, onFocusPopupGone }: BoardV
   const { note, say } = useNote();
   const projects = data?.projects ?? [];
   const hidden = hiddenColumns(loc.hide);
-  const shownStates = STATES.filter((s) => !hidden.includes(s));
   const needsMe = needsMeColumn(loc.needs);
   // The columns: the shown States, with the Needs Me column after In Progress.
   const shown: Col[] = STATES.flatMap((s): Col[] => [

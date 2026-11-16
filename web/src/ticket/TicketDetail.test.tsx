@@ -5,7 +5,6 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { newWorld, type World } from "../api/core/core";
-import type { Scenario } from "../api/scenario";
 import type { CIRunView, TicketView } from "../api/types";
 import { shortOf } from "../inbox/ShortId";
 import { renderApp, renderLive, scenario, settle } from "../worldTesting";

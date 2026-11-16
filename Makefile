@@ -5,7 +5,7 @@ TEST_BUDGET := 60
 # npm ci writes this; it is newer than the lockfile while node_modules is current.
 WEB_DEPS := web/node_modules/.package-lock.json
 
-.PHONY: test test-verbose typecheck vitest vitest-stress e2e build web clean hooks context-report ci-failures serve-components build-components corewasm wiretypes demo-store demo
+.PHONY: test test-verbose typecheck lint vitestvitest-stress e2e build web clean hooks context-report ci-failures serve-components build-components corewasm wiretypes demo-store demo
 
 # Every recipe is one command that runs the same under cmd.exe and POSIX
 # sh, so a Windows developer needs only GNU make. Binaries get .exe there.
@@ -16,7 +16,7 @@ endif
 # Runs the fast suite and fails if it takes more than $(TEST_BUDGET)
 # seconds of wall-clock time: internal/testrun runs `go test ./...`
 # (against the committed placeholder page, so no Vite build), `vitest run`
-# and the TypeScript type check in parallel. Installing web dependencies
+# the TypeScript type check and ESLint in parallel. Installing web dependencies
 # (first run, or after the lockfile changes) and building core.wasm
 # happen before the clock starts. It prints one line per passing job and
 # the output of a failing one; test-verbose prints every job's whole
@@ -33,6 +33,11 @@ test-verbose: $(WEB_DEPS) hooks corewasm
 # through node rather than node_modules/.bin, whose shims differ by OS.
 typecheck: $(WEB_DEPS) hooks
 	cd web && node node_modules/typescript/bin/tsc --noEmit
+
+# ESLint on one file (F=src/...) or on all of web/. It installs web
+# dependencies first, and needs no core.wasm.
+lint: $(WEB_DEPS) hooks
+	cd web && node node_modules/eslint/bin/eslint.js $(or $(F:web/%=%),.)
 
 vitest: $(WEB_DEPS) hooks corewasm
 	cd web && node node_modules/vitest/vitest.mjs run $(F:web/%=%)

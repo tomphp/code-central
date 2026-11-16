@@ -1,5 +1,4 @@
 import { beforeEach, expect, it } from "vitest";
-import type { State } from "../types";
 import { ApiError } from "../types";
 import { MOVE_EXCEPT } from "../actions/move";
 import type { Driver } from "../driver";

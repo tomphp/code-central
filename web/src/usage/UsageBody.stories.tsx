@@ -1,9 +1,19 @@
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { DEFAULT_SORT, UsageBody } from "./UsageBody";
 import { empty, manyProjects, populated } from "./fixtures";
 
 const names: Record<string, string> = { acme: "Acme", globex: "Globex", initech: "Initech" };
+
+// StatefulUsageBody starts on its tab arg, and its tabs switch as the view's do.
+function StatefulUsageBody(args: ComponentProps<typeof UsageBody>) {
+  const [tab, setTab] = useState(args.tab);
+  return (
+    <main className="usage view-shell">
+      <UsageBody {...args} tab={tab} onTab={setTab} />
+    </main>
+  );
+}
 
 const meta = {
   title: "Usage/UsageBody",
@@ -21,14 +31,7 @@ const meta = {
     onTab: () => {},
   },
   // The story starts on its tab arg, and its tabs switch as the view's do.
-  render: (args) => {
-    const [tab, setTab] = useState(args.tab);
-    return (
-      <main className="usage view-shell">
-        <UsageBody {...args} tab={tab} onTab={setTab} />
-      </main>
-    );
-  },
+  render: (args) => <StatefulUsageBody {...args} />,
 } satisfies Meta<typeof UsageBody>;
 export default meta;
 type Story = StoryObj<typeof meta>;

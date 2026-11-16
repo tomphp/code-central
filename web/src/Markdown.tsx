@@ -8,6 +8,7 @@ import { NO_ID_LINKS, useIdLinks } from "./idLinks";
 import { hrefFor, idLinkPatch, isIdLink, opensInPlace } from "./url";
 
 const components: Components = {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- node is taken out of props so it doesn't reach the DOM
   a: function Anchor({ node: _node, href, ...props }) {
     const ids = useIdLinks();
     if (!href || !isIdLink(href)) return <a {...props} href={href} target="_blank" rel="noopener noreferrer" />;
