@@ -750,10 +750,11 @@ func encodeRepositories(rs []Repository) []repositoryFile {
 }
 
 // decodeRepositories checks a Project's Repositories as load does: each
-// Name keeps the rules and is unique, the Home Repository, named key, is
-// listed once with nothing more, and every other has a Clone URL and a
-// Base. It returns the offending field, relative to repositories, with
-// the error.
+// Name is unique, the Home Repository, named key, is listed once with
+// nothing more, and every other keeps the Repository Name rules and has a
+// Clone URL and a Base. The Home Repository's name is the Project Key,
+// which keeps the key's own rules. It returns the offending field,
+// relative to repositories, with the error.
 func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, error) {
 	if len(fs) == 0 {
 		return nil, "", nil
@@ -762,7 +763,7 @@ func decodeRepositories(key string, fs []repositoryFile) ([]Repository, string, 
 	homes := 0
 	for i, f := range fs {
 		field := fmt.Sprintf("[%d]", i)
-		if !ValidRepositoryName(f.Name) {
+		if !f.Home && !ValidRepositoryName(f.Name) {
 			return nil, field + ".name", fmt.Errorf("%q isn't a Repository Name: lowercase letters, digits, -, _ and ., starting with a letter or digit, at most %d characters", f.Name, MaxRepositoryName)
 		}
 		if slices.ContainsFunc(out, func(r Repository) bool { return r.Name == f.Name }) {

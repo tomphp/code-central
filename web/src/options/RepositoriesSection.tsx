@@ -5,6 +5,7 @@ import type {
   ProjectRow,
   RepositoryAdd,
   RepositoryView,
+  CodeHost,
 } from "../api/types";
 import { Button } from "../controls/Button";
 import { Field } from "../controls/Field";
@@ -12,7 +13,7 @@ import { Refusal } from "./Refusal";
 
 // CODE_HOST_LABEL names a Repository's Code Host, worked out from its Clone
 // URL; "" is a host Code Central doesn't support.
-const CODE_HOST_LABEL: Record<string, string> = {
+const CODE_HOST_LABEL: Record<CodeHost, string> = {
   github: "GitHub",
   azure_repos: "Azure Repos",
   "": "no supported Code Host",
@@ -124,7 +125,8 @@ function RepositoryRow({
     setError(undefined);
     action().catch(setError);
   };
-  const kept = r.home
+  // whyNotRemovable says why Remove is disabled, when it is.
+  const whyNotRemovable = r.home
     ? "The Home Repository can't be removed: the Factory runs in it."
     : r.changed_by.length > 0
       ? `Unfinished Tickets have changed it: ${r.changed_by.join(", ")}. Finish or cancel them to remove it.`
@@ -143,7 +145,7 @@ function RepositoryRow({
             (r.home ? "Not reported yet: start the Factory once and it reports its Push remote." : "")}
         </dd>
         <dt>Code Host</dt>
-        <dd>{CODE_HOST_LABEL[r.code_host] ?? r.code_host}</dd>
+        <dd>{CODE_HOST_LABEL[r.code_host]}</dd>
         <dt>Base</dt>
         <dd>
           {r.base}
@@ -180,16 +182,16 @@ function RepositoryRow({
         <Button
           type="button"
           aria-label={`Remove ${r.name}`}
-          aria-describedby={kept ? `${id}-kept` : undefined}
-          disabled={kept !== undefined}
+          aria-describedby={whyNotRemovable ? `${id}-not-removable` : undefined}
+          disabled={whyNotRemovable !== undefined}
           onClick={act(remove)}
         >
           Remove
         </Button>
       </div>
-      {kept && (
-        <p className="project-options-hint" id={`${id}-kept`}>
-          {kept}
+      {whyNotRemovable && (
+        <p className="project-options-hint" id={`${id}-not-removable`}>
+          {whyNotRemovable}
         </p>
       )}
       {error && <Refusal id={`${id}-error`} error={error} />}

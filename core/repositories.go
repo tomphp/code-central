@@ -59,17 +59,30 @@ func repositoriesView(p store.Project) []RepositoryView {
 // fillChangedBy fills in each of v's Repositories' ChangedBy from the
 // Project's Tickets.
 func fillChangedBy(r store.Reader, v *ProjectView) {
-	home := v.Key
-	for _, t := range r.Tickets(v.Key) {
-		if finished(t.State) {
-			continue
-		}
-		for _, name := range changedRepositories(home, t) {
-			if i := slices.IndexFunc(v.Repositories, func(r RepositoryView) bool { return r.Name == name }); i >= 0 {
-				v.Repositories[i].ChangedBy = append(v.Repositories[i].ChangedBy, DisplayID(v.Key, t.Number))
-			}
+	for i := range v.Repositories {
+		v.Repositories[i].ChangedBy = changedBy(r, v.Key, v.Repositories[i].Name)
+	}
+}
+
+// changedBy is the unfinished Tickets whose Changed Repositories include
+// the Repository named name.
+func changedBy(r store.Reader, key, name string) []string {
+	by := []string{}
+	for _, t := range r.Tickets(key) {
+		if !finished(t.State) && slices.Contains(changedRepositories(key, t), name) {
+			by = append(by, DisplayID(key, t.Number))
 		}
 	}
+	return by
+}
+
+// repositoryNames is rs's Repository Names, in order.
+func repositoryNames(rs []store.Repository) []string {
+	var names []string
+	for _, r := range rs {
+		names = append(names, r.Name)
+	}
+	return names
 }
 
 // changedRepositories is the Names of t's Changed Repositories. A finish
@@ -154,7 +167,7 @@ func (c *Core) AddRepository(ctx context.Context, key string, in AddRepositoryIn
 		}
 		return append(rs, r), nil
 	}
-	return c.updateRepositories(ctx, key, in.Full, r, add)
+	return c.updateRepositories(ctx, key, in.Full, r, true, add)
 }
 
 // EditRepository is the human's edit_repository: a Repository's Clone
@@ -185,6 +198,7 @@ func (c *Core) EditRepository(ctx context.Context, key string, in EditRepository
 	if err != nil {
 		return Written[ProjectView]{}, err
 	}
+	was := r.CloneURL
 	if in.CloneURL != nil {
 		r.CloneURL = strings.TrimSpace(*in.CloneURL)
 	}
@@ -205,7 +219,9 @@ func (c *Core) EditRepository(ctx context.Context, key string, in EditRepository
 		rs[i] = r
 		return rs, nil
 	}
-	return c.updateRepositories(ctx, key, in.Full, r, edit)
+	// Only a Clone URL naming another repository needs the Pull Request
+	// check again.
+	return c.updateRepositories(ctx, key, in.Full, r, NormalCloneURL(was) != NormalCloneURL(r.CloneURL), edit)
 }
 
 // editHomeRefusal is why in can't edit the Home Repository.
@@ -242,13 +258,7 @@ func (c *Core) RemoveRepository(ctx context.Context, key string, in RemoveReposi
 			return nil, &Error{Code: Invalid, Field: "name", Message: fmt.Sprintf("%s is the Home Repository, where the Factory runs and the Project's settings live, so it can't be removed", name),
 				Fix: "remove the other Repositories you no longer want; the Home Repository stays"}
 		}
-		var by []string
-		for _, t := range r.Tickets(key) {
-			if !finished(t.State) && slices.Contains(changedRepositories(key, t), name) {
-				by = append(by, DisplayID(key, t.Number))
-			}
-		}
-		if len(by) > 0 {
+		if by := changedBy(r, key, name); len(by) > 0 {
 			return nil, &Error{Code: Invalid, Field: "name", Message: fmt.Sprintf("%s can't be removed while unfinished Tickets have changed it: %s", name, strings.Join(by, ", ")),
 				Fix: "finish or cancel those Tickets first, then remove it"}
 		}
@@ -264,10 +274,7 @@ func (c *Core) SetLandingOrder(ctx context.Context, key string, in SetLandingOrd
 	}
 	return c.changeRepositories(key, in.Full, func(_ store.Reader, p store.Project) ([]store.Repository, error) {
 		rs := p.RepositoryList()
-		var names []string
-		for _, r := range rs {
-			names = append(names, r.Name)
-		}
+		names := repositoryNames(rs)
 		var out []store.Repository
 		var problems []string
 		for _, n := range in.Names {
@@ -318,10 +325,10 @@ func checkRepositoryFields(r store.Repository) error {
 	return nil
 }
 
-// repositoryIsNew refuses r when another Repository has its Clone URL,
-// as normalised, or its local path. The Home Repository's Clone URL is
-// the reported Push remote URL.
-func repositoryIsNew(p store.Project, r store.Repository) error {
+// refuseListed refuses r when another Repository has its Clone URL, as
+// normalised, or its local path. The Home Repository's Clone URL is the
+// reported Push remote URL, so it can clash only once that is reported.
+func refuseListed(p store.Project, r store.Repository) error {
 	for _, o := range p.RepositoryList() {
 		if o.Name == r.Name {
 			continue
@@ -346,28 +353,25 @@ func repositoryIsNew(p store.Project, r store.Repository) error {
 func repositoryNamed(key string, rs []store.Repository, name string) (int, error) {
 	i := slices.IndexFunc(rs, func(r store.Repository) bool { return r.Name == name })
 	if i < 0 {
-		var names []string
-		for _, r := range rs {
-			names = append(names, r.Name)
-		}
 		return 0, &Error{Code: NotFound, Field: "name", Message: fmt.Sprintf("Project %s has no Repository %s", key, quote(name)),
-			Fix: "name one of its Repositories: " + strings.Join(names, ", ")}
+			Fix: "name one of its Repositories: " + strings.Join(repositoryNames(rs), ", ")}
 	}
 	return i, nil
 }
 
-// updateRepositories writes the Repositories change makes, once r is
-// new among them and, under Pull Request, passes the Pull Request
-// Watcher's check. The check calls the Code Host, so it runs outside the
-// store's lock, between a read that refuses what the store alone can and
-// the write, which checks again.
-func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r store.Repository, change func([]store.Repository) ([]store.Repository, error)) (Written[ProjectView], error) {
+// updateRepositories writes the Repositories change makes, once r's Clone
+// URL and local path are listed nowhere else and, when checkHost and
+// under Pull Request, its Clone URL passes the Pull Request Watcher's
+// check. The check calls the Code Host, so it runs outside the store's
+// lock, between a read that refuses what the store alone can and the
+// write, which checks again.
+func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r store.Repository, checkHost bool, change func([]store.Repository) ([]store.Repository, error)) (Written[ProjectView], error) {
 	apply := func(p store.Project) ([]store.Repository, error) {
 		rs, err := change(p.RepositoryList())
 		if err != nil {
 			return nil, err
 		}
-		return rs, repositoryIsNew(p, r)
+		return rs, refuseListed(p, r)
 	}
 	var check *PullRequestCheckInput
 	err := c.store.View(func(rd store.Reader) error {
@@ -378,7 +382,7 @@ func (c *Core) updateRepositories(ctx context.Context, key string, full bool, r 
 		if _, err := apply(p); err != nil {
 			return err
 		}
-		if landingPolicyOf(p).RunsPullRequestWatcher() {
+		if checkHost && landingPolicyOf(p).RunsPullRequestWatcher() {
 			check = &PullRequestCheckInput{GHPath: rd.Options().GHPath, PATEnv: patEnvOf(store.CI{PATEnv: p.Landing.PATEnv})}
 		}
 		return nil

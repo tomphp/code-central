@@ -71,6 +71,20 @@ func TestTheRealChainMigratesAFormat40StoreToTheRepositoriesFormat(t *testing.T)
 }
 
 func TestLoadRefusesAProjectsRepositoriesThatBreakTheirRules(t *testing.T) {
+	// A Project Key may be longer than a Repository Name, and still names
+	// its Home Repository.
+	long := strings.Repeat("a", store.MaxRepositoryName+1)
+	dir := filepath.Join(t.TempDir(), "code-central")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 41\n")
+	writeFile(t, filepath.Join(dir, "projects/"+long+"/project.yaml"),
+		"key: "+long+"\ndisplay_name: Long\ncreated: 2026-01-02T03:04:05Z\nmode: committed\nrepositories:\n"+
+			"  - name: "+long+"\n    home: true\n  - name: web\n    clone_url: u\n    base: main\n")
+	if s, err := store.Open(dir); err != nil {
+		t.Fatalf("open with a long Project Key: %v", err)
+	} else {
+		s.Close()
+	}
+
 	for name, tc := range map[string]struct{ repos, field string }{
 		"a bad name":            {"  - name: acme\n    home: true\n  - name: Web\n    clone_url: u\n    base: main\n", "repositories[1].name"},
 		"a name twice":          {"  - name: acme\n    home: true\n  - name: web\n    clone_url: u\n    base: main\n  - name: web\n    clone_url: v\n    base: main\n", "repositories[2].name"},

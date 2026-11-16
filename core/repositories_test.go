@@ -304,6 +304,18 @@ func TestAddRepositoryUnderPullRequestRunsTheWatchersCheckForIt(t *testing.T) {
 	if last := checked[len(checked)-1]; last.CodeHost != core.CodeHostAzureRepos || last.Repository != "acme/shop/web" || last.PATEnv != store.DefaultPATEnv {
 		t.Fatalf("checked %+v, want Azure Repos acme/shop/web with the PAT variable", last)
 	}
+
+	// An edit checks again only when its Clone URL names another repository.
+	n := len(checked)
+	base, same, private := "develop", "git@ssh.dev.azure.com:v3/acme/shop/web", "git@github.com:acme/private.git"
+	if _, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", Base: &base, CloneURL: &same}); err != nil {
+		t.Fatalf("edit web's Base: %v", err)
+	}
+	if len(checked) != n {
+		t.Fatalf("editing the Base checked %+v again", checked[n:])
+	}
+	_, err = f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "web", CloneURL: &private})
+	wantFix(t, err, core.Invalid, "clone_url")
 }
 
 func TestCloneURLsNormaliseAcrossSchemesAndSuffixes(t *testing.T) {
