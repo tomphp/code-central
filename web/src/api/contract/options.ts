@@ -12,16 +12,16 @@ export function optionsContract(driver: () => Driver) {
   // ---- Options (Spec code-central-160) ----
 
   it("reads the default Options, and sets focus_clear and reads it back", async () => {
-    expect(await d.api.options()).toEqual({ focus_clear: "activity_dashboard", focus_popup: "off", gh_path: "" });
+    expect(await d.api.options()).toEqual({ focus_clear: "activity_dashboard", focus_popup: "off", limits_popup: "on", gh_path: "" });
 
-    expect(await d.api.setOptions({ focus_clear: "all_clear" })).toEqual({ focus_clear: "all_clear", focus_popup: "off", gh_path: "" });
-    expect(await d.api.options()).toEqual({ focus_clear: "all_clear", focus_popup: "off", gh_path: "" });
-    expect(await d.api.setOptions({})).toEqual({ focus_clear: "all_clear", focus_popup: "off", gh_path: "" });
+    expect(await d.api.setOptions({ focus_clear: "all_clear" })).toEqual({ focus_clear: "all_clear", focus_popup: "off", limits_popup: "on", gh_path: "" });
+    expect(await d.api.options()).toEqual({ focus_clear: "all_clear", focus_popup: "off", limits_popup: "on", gh_path: "" });
+    expect(await d.api.setOptions({})).toEqual({ focus_clear: "all_clear", focus_popup: "off", limits_popup: "on", gh_path: "" });
   });
 
   it("sets focus_popup to on, refuses an unknown value, and reads it back", async () => {
     expect((await d.api.options()).focus_popup).toBe("off");
-    expect(await d.api.setOptions({ focus_popup: "on" })).toEqual({ focus_clear: "activity_dashboard", focus_popup: "on", gh_path: "" });
+    expect(await d.api.setOptions({ focus_popup: "on" })).toEqual({ focus_clear: "activity_dashboard", focus_popup: "on", limits_popup: "on", gh_path: "" });
     expect((await d.api.options()).focus_popup).toBe("on");
 
     const bad = await d.api.setOptions({ focus_popup: "loud" } as never).catch((e) => e);
@@ -30,9 +30,20 @@ export function optionsContract(driver: () => Driver) {
     expect((await d.api.options()).focus_popup).toBe("on");
   });
 
+  it("sets limits_popup to off, refuses an unknown value, and reads it back", async () => {
+    expect((await d.api.options()).limits_popup).toBe("on");
+    expect(await d.api.setOptions({ limits_popup: "off" })).toEqual({ focus_clear: "activity_dashboard", focus_popup: "off", limits_popup: "off", gh_path: "" });
+    expect((await d.api.options()).limits_popup).toBe("off");
+
+    const bad = await d.api.setOptions({ limits_popup: "loud" } as never).catch((e) => e);
+    expect(bad).toMatchObject({ status: 422, code: "invalid", field: "limits_popup" });
+    expect(bad.message).toContain("allowed: on, off");
+    expect((await d.api.options()).limits_popup).toBe("off");
+  });
+
   it("sets the gh path Option to an absolute path, and clears it", async () => {
     const gh = d.absolutePath;
-    expect(await d.api.setOptions({ gh_path: ` ${gh} ` })).toEqual({ focus_clear: "activity_dashboard", focus_popup: "off", gh_path: gh });
+    expect(await d.api.setOptions({ gh_path: ` ${gh} ` })).toEqual({ focus_clear: "activity_dashboard", focus_popup: "off", limits_popup: "on", gh_path: gh });
     expect((await d.api.options()).gh_path).toBe(gh);
 
     const relative = await d.api.setOptions({ gh_path: "bin/gh" }).catch((e) => e);
@@ -40,7 +51,7 @@ export function optionsContract(driver: () => Driver) {
     expect(relative.message).toContain("bin/gh");
     expect((await d.api.options()).gh_path).toBe(gh);
 
-    expect(await d.api.setOptions({ gh_path: "" })).toEqual({ focus_clear: "activity_dashboard", focus_popup: "off", gh_path: "" });
+    expect(await d.api.setOptions({ gh_path: "" })).toEqual({ focus_clear: "activity_dashboard", focus_popup: "off", limits_popup: "on", gh_path: "" });
   });
 
   it("refuses an unknown Option and a bad value, changing nothing", async () => {
@@ -53,7 +64,7 @@ export function optionsContract(driver: () => Driver) {
     expect(bad).toMatchObject({ status: 422, code: "invalid", field: "focus_clear" });
     expect(bad.message).toContain("allowed: activity_dashboard, all_clear");
 
-    expect(await d.api.options()).toEqual({ focus_clear: "activity_dashboard", focus_popup: "off", gh_path: "" });
+    expect(await d.api.options()).toEqual({ focus_clear: "activity_dashboard", focus_popup: "off", limits_popup: "on", gh_path: "" });
   });
 
   it("sends options.changed over the live feed when the Options change", async () => {

@@ -36,6 +36,7 @@ func Schema() string {
 	}
 	values(fmt.Sprintf("  options focus_clear (default %s)", DefaultOptions().FocusClear), FocusClearNames())
 	values(fmt.Sprintf("  options focus_popup (default %s)", DefaultOptions().FocusPopup), FocusPopupNames())
+	values(fmt.Sprintf("  options limits_popup (default %s)", DefaultOptions().LimitsPopup), LimitsPopupNames())
 	values("  project landing.method (no landing: merge, push false, remote origin)", landingMethodNames())
 	values("  project ci.provider (no ci: tracking off, github_actions)", ciProviderNames())
 	values("  project models.kinds[].kind", ModelKinds)

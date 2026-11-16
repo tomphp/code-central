@@ -19,6 +19,8 @@ type OptionsView struct {
 	FocusClear store.FocusClear `json:"focus_clear"`
 	// FocusPopup is the Focus Pop-up Option.
 	FocusPopup store.FocusPopup `json:"focus_popup"`
+	// LimitsPopup is the Show Limits popup Option.
+	LimitsPopup store.LimitsPopup `json:"limits_popup"`
 	// GHPath is the gh path Option: where gh is, "" to find it on the
 	// service's PATH, then in the usual install places.
 	GHPath string `json:"gh_path"`
@@ -26,8 +28,9 @@ type OptionsView struct {
 
 // SetOptionsInput is the Options to change; each left out stays as it is.
 type SetOptionsInput struct {
-	FocusClear *store.FocusClear `json:"focus_clear,omitempty"`
-	FocusPopup *store.FocusPopup `json:"focus_popup,omitempty"`
+	FocusClear  *store.FocusClear  `json:"focus_clear,omitempty"`
+	FocusPopup  *store.FocusPopup  `json:"focus_popup,omitempty"`
+	LimitsPopup *store.LimitsPopup `json:"limits_popup,omitempty"`
 	// GHPath is an absolute path, or "" to clear it.
 	GHPath *string `json:"gh_path,omitempty"`
 }
@@ -54,6 +57,9 @@ func (c *Core) SetOptions(ctx context.Context, in SetOptionsInput) (OptionsView,
 	if in.FocusPopup != nil && !in.FocusPopup.Valid() {
 		return OptionsView{}, invalid("focus_popup", "focus_popup %q is not an Option's value; allowed: %s", *in.FocusPopup, strings.Join(store.FocusPopupNames(), ", "))
 	}
+	if in.LimitsPopup != nil && !in.LimitsPopup.Valid() {
+		return OptionsView{}, invalid("limits_popup", "limits_popup %q is not an Option's value; allowed: %s", *in.LimitsPopup, strings.Join(store.LimitsPopupNames(), ", "))
+	}
 	if in.GHPath != nil {
 		gh := strings.TrimSpace(*in.GHPath)
 		if gh != "" && !filepath.IsAbs(gh) {
@@ -71,6 +77,9 @@ func (c *Core) SetOptions(ctx context.Context, in SetOptionsInput) (OptionsView,
 		if in.FocusPopup != nil {
 			o.FocusPopup = *in.FocusPopup
 		}
+		if in.LimitsPopup != nil {
+			o.LimitsPopup = *in.LimitsPopup
+		}
 		if in.GHPath != nil {
 			o.GHPath = *in.GHPath
 		}
@@ -84,8 +93,8 @@ func (c *Core) SetOptions(ctx context.Context, in SetOptionsInput) (OptionsView,
 }
 
 // OptionNames is every Option there is, for the refusal of an unknown one.
-var OptionNames = []string{"focus_clear", "focus_popup", "gh_path"}
+var OptionNames = []string{"focus_clear", "focus_popup", "limits_popup", "gh_path"}
 
 func optionsView(o store.Options) OptionsView {
-	return OptionsView{FocusClear: o.FocusClear, FocusPopup: o.FocusPopup, GHPath: o.GHPath}
+	return OptionsView{FocusClear: o.FocusClear, FocusPopup: o.FocusPopup, LimitsPopup: o.LimitsPopup, GHPath: o.GHPath}
 }

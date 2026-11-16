@@ -287,7 +287,7 @@ func TestOptionsAreOneFileAtTheStoreRoot(t *testing.T) {
 	s := openFile(t, dir)
 	before := listFiles(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff})
+		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOn})
 	})
 	var added []string
 	for _, f := range listFiles(t, dir) {
@@ -307,16 +307,55 @@ func TestAnOptionsFileKeepsTheGHPathOnlyWhenSet(t *testing.T) {
 	dir := t.TempDir()
 	s := openFile(t, dir)
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, GHPath: "/opt/tools/gh"})
+		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOn, GHPath: "/opt/tools/gh"})
 	})
 	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: all_clear\nfocus_popup: \"off\"\ngh_path: /opt/tools/gh\n" {
 		t.Fatalf("options.yaml = %q", got)
 	}
 	mustUpdate(t, s, func(w store.Writer) error {
-		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff})
+		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOn})
 	})
 	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: all_clear\nfocus_popup: \"off\"\n" {
 		t.Fatalf("options.yaml = %q, want no gh_path once it is cleared", got)
+	}
+}
+
+func TestAnOptionsFileKeepsTheLimitsPopupOnlyWhenOff(t *testing.T) {
+	dir := t.TempDir()
+	s := openFile(t, dir)
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOff})
+	})
+	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: all_clear\nfocus_popup: \"off\"\nlimits_popup: \"off\"\n" {
+		t.Fatalf("options.yaml = %q", got)
+	}
+	mustUpdate(t, s, func(w store.Writer) error {
+		return w.PutOptions(store.Options{FocusClear: store.FocusAllClear, FocusPopup: store.FocusPopupOff, LimitsPopup: store.LimitsPopupOn})
+	})
+	if got := readFile(t, filepath.Join(dir, "options.yaml")); got != "focus_clear: all_clear\nfocus_popup: \"off\"\n" {
+		t.Fatalf("options.yaml = %q, want no limits_popup while it is the default", got)
+	}
+}
+
+func TestAnOptionsFileKeepsAnExplicitLimitsPopupOff(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "store.yaml"), fmt.Sprintf("format: %d\n", store.Format))
+	writeFile(t, filepath.Join(dir, "options.yaml"), "limits_popup: \"off\"\n")
+	s := openFile(t, dir)
+	s.View(func(r store.Reader) error {
+		if o := r.Options(); o.LimitsPopup != store.LimitsPopupOff {
+			t.Fatalf("options = %+v, want Show Limits popup off as the file holds", o)
+		}
+		return nil
+	})
+}
+
+func TestAnOptionsFileWithAnUnknownLimitsPopupIsALoadError(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "store.yaml"), fmt.Sprintf("format: %d\n", store.Format))
+	writeFile(t, filepath.Join(dir, "options.yaml"), "limits_popup: loud\n")
+	if _, err := store.Open(dir); err == nil || !strings.Contains(err.Error(), "limits_popup") || !strings.Contains(err.Error(), "on or off") {
+		t.Fatalf("err = %v, want limits_popup's values listed default first", err)
 	}
 }
 
