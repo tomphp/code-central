@@ -399,29 +399,36 @@ func (g github) open(ctx context.Context, branch, title, body string) (*pullRequ
 	return &pr, nil
 }
 
+// sameBody reports whether a listed body is body: GitHub keeps a body as
+// it was sent.
 func (g github) sameBody(listed, body string) bool { return listed == body }
 
-// edit sets an open pull request's body.
-func (g github) edit(ctx context.Context, p *pullRequest, body string) error {
-	if _, msg, err := gh.API(ctx, g.env, g.prog, fmt.Sprintf("repos/%s/pulls/%d", g.repository, p.Number), "--method", "PATCH", "-f", "body="+body); err != nil {
-		var limit *watchers.RateLimitError
-		if errors.As(err, &limit) {
-			return err
-		}
-		return fmt.Errorf("editing pull request %d's body: %w: %s", p.Number, err, msg)
-	}
-	return nil
-}
-
-// close closes pull request number without merging it.
-func (g github) close(ctx context.Context, number int) (*pullRequest, error) {
-	out, msg, err := gh.API(ctx, g.env, g.prog, fmt.Sprintf("repos/%s/pulls/%d", g.repository, number), "--method", "PATCH", "-f", "state=closed")
+// patch sets field (name=value) on pull request number, with GitHub's
+// answer; a refusal is wrapped with what, and a rate limit returned as
+// it is.
+func (g github) patch(ctx context.Context, number int, what, field string) ([]byte, error) {
+	out, msg, err := gh.API(ctx, g.env, g.prog, fmt.Sprintf("repos/%s/pulls/%d", g.repository, number), "--method", "PATCH", "-f", field)
 	if err != nil {
 		var limit *watchers.RateLimitError
 		if errors.As(err, &limit) {
 			return nil, err
 		}
-		return nil, fmt.Errorf("closing pull request %d: %w: %s", number, err, msg)
+		return nil, fmt.Errorf(what+": %w: %s", number, err, msg)
+	}
+	return out, nil
+}
+
+// edit sets an open pull request's body.
+func (g github) edit(ctx context.Context, p *pullRequest, body string) error {
+	_, err := g.patch(ctx, p.Number, "editing pull request %d's body", "body="+body)
+	return err
+}
+
+// close closes pull request number without merging it.
+func (g github) close(ctx context.Context, number int) (*pullRequest, error) {
+	out, err := g.patch(ctx, number, "closing pull request %d", "state=closed")
+	if err != nil {
+		return nil, err
 	}
 	var pr pullRequest
 	if err := json.Unmarshal(out, &pr); err != nil || pr.Number == 0 {

@@ -447,3 +447,15 @@ func TestTurningPullRequestOnChecksEveryRepositoryNamingEachThatFails(t *testing
 		t.Error("Pull Request turned on despite the refusal")
 	}
 }
+
+func TestSendingBackATicketWithOnePullRequestLeavesItOpenForTheNextPush(t *testing.T) {
+	f := newFixture(t)
+	f.pullRequestAccepted(t)
+	f.reportPR(t, core.ReportPullRequestInput{Branch: "acme-2", State: store.PROpen})
+	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "2", Note: "Redo it."}); err != nil {
+		t.Fatalf("send_back: %v", err)
+	}
+	if w := f.watch(t); len(w.Close) != 0 {
+		t.Errorf("close = %+v, want the one pull request left open", w.Close)
+	}
+}

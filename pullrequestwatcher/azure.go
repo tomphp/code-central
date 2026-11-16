@@ -167,6 +167,7 @@ func (a azureRepos) edit(ctx context.Context, p *pullRequest, body string) error
 // keeps it.
 func (a azureRepos) sameBody(listed, body string) bool { return listed == azdo.CutDescription(body) }
 
+// close abandons pull request number: Azure Repos' close without merging.
 func (a azureRepos) close(ctx context.Context, number int) (*pullRequest, error) {
 	p, err := a.c.AbandonPullRequest(ctx, a.repository, number)
 	if err != nil {

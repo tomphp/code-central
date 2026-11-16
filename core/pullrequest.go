@@ -502,7 +502,7 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in ReportPullReq
 			if t.State == store.Done || t.State == store.Cancelled {
 				continue
 			}
-			if pc, ok := latestPushedTo(key, t, name); ok && cmpBranch(pc, t, branch) {
+			if pc, ok := latestPushedTo(key, t, name); ok && pushedAs(pc, t, branch) {
 				covered = append(covered, t.Number)
 			}
 		}
@@ -546,10 +546,10 @@ func (c *Core) ReportPullRequest(_ context.Context, key string, in ReportPullReq
 	return Written[PullRequestReport]{Acknowledgement: ack}, nil
 }
 
-// cmpBranch reports whether pc, t's latest pushed commit in a Repository,
+// pushedAs reports whether pc, t's latest pushed commit in a Repository,
 // was pushed as branch: the report's, or t's own branch for a push
 // reported without one.
-func cmpBranch(pc store.PushedCommit, t store.Ticket, branch string) bool {
+func pushedAs(pc store.PushedCommit, t store.Ticket, branch string) bool {
 	if pc.Branch != "" {
 		return pc.Branch == branch
 	}
@@ -599,10 +599,12 @@ func openPullRequests(r store.Reader, key string, lp LandingPolicy) []OpenPullRe
 }
 
 // markPullRequestsToClose marks t's open pull requests for the Pull
-// Request Watcher to close, as sending it back does while none of them
-// has merged; once one has, the rest stay open for the next push.
+// Request Watcher to close, as sending it back does while it has
+// siblings in other Repositories and none of them has merged; once one
+// has, the rest stay open for the next push. A Ticket with one pull
+// request keeps it open, as it always did, for the next push to update.
 func markPullRequestsToClose(t *store.Ticket) {
-	if anyPullRequest(*t, store.PRMerged) {
+	if len(t.PullRequests) < 2 || anyPullRequest(*t, store.PRMerged) {
 		return
 	}
 	for i, pr := range t.PullRequests {

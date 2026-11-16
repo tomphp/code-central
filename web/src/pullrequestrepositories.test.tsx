@@ -61,10 +61,10 @@ describe("the Pull Request Watcher across Repositories", () => {
   it("watches every Repository and names each one it can't watch with its fix", async () => {
     const { w, s } = await world("open", "open");
     await renderApp(w, "/?view=project-options&project=acme");
-    const watcher = within(landing()).getByRole("region", { name: "Pull Request Watcher" });
+    const watcher = () => within(landing()).getByRole("region", { name: "Pull Request Watcher" });
 
     await s.reportPullRequestWatcher("acme", { state: "watching" });
-    expect(watcher).toHaveTextContent("Pull Request Watcher: Watching its 2 Repositories.");
+    expect(watcher()).toHaveTextContent("Pull Request Watcher: Watching its 2 Repositories.");
 
     await s.reportPullRequestWatcher("acme", {
       state: "error",
@@ -73,8 +73,8 @@ describe("the Pull Request Watcher across Repositories", () => {
       fix: "api: set ADO_PAT",
       repositories: [{ repository: "api", problem: "pat_missing", message: "ADO_PAT isn't set", fix: "Set ADO_PAT for the service." }],
     });
-    expect(watcher).toHaveTextContent("Error in 1 Repository. It carries on watching the others");
-    const failing = within(watcher).getByRole("list", { name: "Failing Repositories" });
+    expect(watcher()).toHaveTextContent("Error in 1 Repository. It carries on watching the others");
+    const failing = within(watcher()).getByRole("list", { name: "Failing Repositories" });
     const api = within(failing).getByRole("listitem", { name: "api" });
     expect(api).toHaveTextContent("api: ADO_PAT isn't set");
     expect(api).toHaveTextContent("Set ADO_PAT for the service.");
