@@ -241,11 +241,22 @@ func (h *Harness) startProxy() string {
 	target, err := url.Parse(h.Server.URL)
 	must(h.t, err)
 	rp := httputil.NewSingleHostReverseProxy(target)
+	inflight := &inflightRequests{}
+	var finished atomic.Bool
+	h.t.Cleanup(func() { finished.Store(true) })
+	// A body-copy error carries no request, so its line names the
+	// requests in flight.
+	rp.ErrorLog = log.New(writerFunc(func(p []byte) (int, error) {
+		if !finished.Load() {
+			h.t.Logf("proxy: %s (in flight: %s)", strings.TrimSpace(string(p)), inflight.describe(time.Now()))
+		}
+		return len(p), nil
+	}), "", 0)
 	rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		// A request its client gave up on, such as the Factory's Chat
 		// long-poll when it stops, is no error worth a line.
-		if r.Context().Err() == nil {
-			log.Printf("http: proxy error: %v", err)
+		if r.Context().Err() == nil && !finished.Load() {
+			h.t.Logf("proxy: %s %s: %v", r.Method, r.URL.Path, err)
 		}
 		w.WriteHeader(http.StatusBadGateway)
 	}
@@ -259,6 +270,7 @@ func (h *Harness) startProxy() string {
 			return
 		}
 		if !h.down.Load() {
+			defer inflight.add(r)()
 			if strings.HasSuffix(r.URL.Path, wakeSuffix) {
 				h.serveWake(rp, w, r)
 				return
@@ -273,6 +285,59 @@ func (h *Harness) startProxy() string {
 	}))
 	h.t.Cleanup(ps.Close)
 	return ps.URL
+}
+
+// writerFunc is an io.Writer made of a function.
+type writerFunc func([]byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
+
+// inflightRequests records the requests the proxy is serving.
+type inflightRequests struct {
+	mu   sync.Mutex
+	next int
+	reqs map[int]inflightRequest
+}
+
+type inflightRequest struct {
+	method, path string
+	start        time.Time
+}
+
+// add records r and returns the function that forgets it.
+func (f *inflightRequests) add(r *http.Request) func() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.reqs == nil {
+		f.reqs = map[int]inflightRequest{}
+	}
+	id := f.next
+	f.next++
+	f.reqs[id] = inflightRequest{r.Method, r.URL.Path, time.Now()}
+	return func() {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		delete(f.reqs, id)
+	}
+}
+
+// describe lists the requests in flight at now, oldest first.
+func (f *inflightRequests) describe(now time.Time) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var list []inflightRequest
+	for _, q := range f.reqs {
+		list = append(list, q)
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].start.Before(list[j].start) })
+	var parts []string
+	for _, q := range list {
+		parts = append(parts, fmt.Sprintf("%s %s for %s", q.method, q.path, now.Sub(q.start).Round(time.Millisecond)))
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, ", ")
 }
 
 // refuse answers r with status and the JSON error body, counting it.
