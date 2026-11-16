@@ -95,31 +95,28 @@ describe("the Limits popup", () => {
   it("hides once the Factory goes Offline", async () => {
     const { w, s } = await world(limits);
     await renderApp(w, "/?project=acme");
-    popup();
+    expect(popup()).toBeInTheDocument();
 
     await s.reportHeartbeat("acme", { ...beat, state: "stopping", note: "stopped: drained", plan_limits: limits(w) });
     expect(screen.queryByRole("region", { name: "Limits" })).toBeNull();
   });
 
   it.each([
-    [74.4, "neither"],
-    [75, "amber"],
-    [89.4, "amber"],
-    [90, "red"],
-    [100, "red"],
-  ])("colours a window %s per cent used %s", async (used_percent, colour) => {
+    [74.4, []],
+    [75, ["amber"]],
+    [89.4, ["amber"]],
+    [90, ["red"]],
+    [100, ["red"]],
+  ])("colours a window %s per cent used %j", async (used_percent, colours) => {
     const { w } = await world((w) => limits(w, { five_hour: { used_percent, resets_at: at(w, HOUR) } }));
     await renderApp(w, "/?project=acme");
-    for (const c of ["amber", "red"]) {
-      if (c === colour) expect(meter("5-hour")).toHaveClass(c);
-      else expect(meter("5-hour")).not.toHaveClass(c);
-    }
+    expect(["amber", "red"].filter((c) => meter("5-hour").classList.contains(c))).toEqual(colours);
   });
 
   it("hides at once when the Option is turned off in the Options view, and comes back when turned on", async () => {
     const { w } = await world(limits);
     await renderApp(w, "/?view=options&project=acme");
-    popup();
+    expect(popup()).toBeInTheDocument();
     const group = within(screen.getByRole("main", { name: "Options" })).getByRole("radiogroup", { name: "Show Limits popup" });
 
     await userEvent.click(within(group).getByRole("radio", { name: "Off" }));
@@ -128,7 +125,7 @@ describe("the Limits popup", () => {
 
     await userEvent.click(within(group).getByRole("radio", { name: "On" }));
     await settle(w);
-    popup();
+    expect(popup()).toBeInTheDocument();
   });
 });
 

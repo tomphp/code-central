@@ -3,7 +3,7 @@
 // Its countdowns, resets and age note come from the UI's clock, which it
 // reads again each minute without a refetch.
 import { useEffect, useState } from "react";
-import type { PlanLimits, PlanLimitWindow, ProjectRow } from "../api/types";
+import type { Options, PlanLimits, PlanLimitWindow, ProjectRow } from "../api/types";
 import { ago } from "../format";
 import "./limits.css";
 
@@ -15,16 +15,16 @@ const STALE_MS = 10 * MINUTE;
 export interface LimitsPopupProps {
   // project is the selected Project; none under All Projects.
   project?: ProjectRow;
-  // on is the Show Limits popup Option.
-  on: boolean;
+  // option is the Show Limits popup Option; none until the Options load.
+  option?: Options["limits_popup"];
   now: () => Date;
 }
 
 // LimitsPopup renders nothing unless the Option is on and the selected
 // Project's Factory Status has Plan Limits with at least one window.
-export function LimitsPopup({ project, on, now }: LimitsPopupProps) {
+export function LimitsPopup({ project, option, now }: LimitsPopupProps) {
   const limits = project?.factory_status.plan_limits;
-  if (!on || !limits || (!limits.five_hour && !limits.weekly)) return null;
+  if (option !== "on" || !limits || (!limits.five_hour && !limits.weekly)) return null;
   return <Popup limits={limits} now={now} />;
 }
 
@@ -39,8 +39,8 @@ function Popup({ limits, now }: { limits: PlanLimits; now: () => Date }) {
   const stale = at.getTime() - Date.parse(limits.observed_at) > STALE_MS;
   return (
     <section className="limits-popup" aria-label="Limits">
-      {limits.five_hour && <Meter name="5-hour" window={limits.five_hour} now={at} />}
-      {limits.weekly && <Meter name="Weekly" window={limits.weekly} now={at} />}
+      {limits.five_hour && <Meter name="5-hour" limit={limits.five_hour} now={at} />}
+      {limits.weekly && <Meter name="Weekly" limit={limits.weekly} now={at} />}
       {stale && <span className="limits-age">updated {ago(at, limits.observed_at)}</span>}
     </section>
   );
@@ -48,9 +48,9 @@ function Popup({ limits, now }: { limits: PlanLimits; now: () => Date }) {
 
 // Meter is one window: its bar, its whole-number percentage and when it
 // resets; once that has passed, 0% and "reset".
-function Meter({ name, window: w, now }: { name: string; window: PlanLimitWindow; now: Date }) {
-  const left = Date.parse(w.resets_at) - now.getTime();
-  const percent = left > 0 ? Math.round(w.used_percent) : 0;
+function Meter({ name, limit, now }: { name: string; limit: PlanLimitWindow; now: Date }) {
+  const left = Date.parse(limit.resets_at) - now.getTime();
+  const percent = left > 0 ? Math.round(limit.used_percent) : 0;
   return (
     <div className="limits-window">
       <span className="limits-name">{name}</span>

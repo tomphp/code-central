@@ -86,7 +86,7 @@ function Views({ now }: { now: () => Date }) {
         <IdLinksContext.Provider value={idLinks}>
         {view()}
         <ChatDock project={project} />
-        <LimitsPopup project={project} on={options.data?.limits_popup === "on"} now={now} />
+        <LimitsPopup project={project} option={options.data?.limits_popup} now={now} />
         {popup.open && inbox.data && (
           <FocusPopup mode="queue" now={now()} data={inbox.data} project={scope.project} onClose={popup.close} navigate={navigate} />
         )}
