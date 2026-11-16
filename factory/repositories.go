@@ -70,8 +70,13 @@ func (r *repository) where() string {
 }
 
 // several reports whether the Project has more than one Repository, as
-// the last poll found; the poll's own.
-func (f *factory) several() bool { return len(f.inOrder) > 1 }
+// the last poll found. A turn's end reads it too (the finish check), from
+// its own goroutine.
+func (f *factory) several() bool {
+	f.reposMu.Lock()
+	defer f.reposMu.Unlock()
+	return len(f.inOrder) > 1
+}
 
 // readyRepositories is the Project's Repositories with a clone, in
 // landing order, as the last poll found them: the Home Repository alone

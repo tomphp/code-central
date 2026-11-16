@@ -44,7 +44,7 @@ func TestAClaimGetsAWorktreeOnTheSameBranchInEveryRepositoryAndTheSessionSeesThe
 	api := h.AddRepository("api")
 	id := h.ReadyTicket("Add an endpoint")
 	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"),
-		factorytest.Finish("Done."), factorytest.Result("success"))...)
+		factorytest.FinishIn("Done.", false, "api"), factorytest.Result("success"))...)
 
 	h.Start()
 	tk := h.WantState(id, store.InReview)
@@ -290,7 +290,7 @@ func TestABranchWithWorkOfItsOwnIsKeptInEveryRepositoryEvenOnceMerged(t *testing
 	id := h.ReadyTicket("Add an endpoint")
 	h.Script(id, append(factorytest.CommitIn("api", "endpoint.go", "package api\n"),
 		factorytest.WriteFile("client.go", "package acme\n"), factorytest.Git("add", "client.go"), factorytest.Git("commit", "-q", "-m", "Call it"),
-		factorytest.Finish("Done."), factorytest.Result("success"))...)
+		factorytest.FinishIn("Done.", true, "api"), factorytest.Result("success"))...)
 	r := h.Start()
 	h.WantState(id, store.InReview)
 	heads := map[string]string{}
@@ -300,6 +300,7 @@ func TestABranchWithWorkOfItsOwnIsKeptInEveryRepositoryEvenOnceMerged(t *testing
 		h.GitIn(clone, "merge", "-q", "--no-ff", "-m", "Merge "+id, id)
 	}
 	h.Accept(id)
+	r.Poll()
 	h.WantState(id, store.Done)
 
 	r.Poll()

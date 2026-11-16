@@ -72,7 +72,7 @@ func fillChangedBy(r store.Reader, v *ProjectView) {
 func changedBy(r store.Reader, key, name string) []string {
 	by := []string{}
 	for _, t := range r.Tickets(key) {
-		if !finished(t.State) && slices.Contains(changedRepositories(key, t), name) {
+		if !finished(t.State) && slices.Contains(changedRepositoryNames(key, t), name) {
 			by = append(by, DisplayID(key, t.Number))
 		}
 	}
@@ -86,15 +86,6 @@ func repositoryNames(rs []store.Repository) []string {
 		names = append(names, r.Name)
 	}
 	return names
-}
-
-// changedRepositories is the Names of t's Changed Repositories. A finish
-// recorded before Repositories existed reads as the Home Repository's.
-func changedRepositories(home string, t store.Ticket) []string {
-	if t.Branch != "" || t.Commit != "" {
-		return []string{home}
-	}
-	return nil
 }
 
 // AddRepositoryInput is the human's add_repository(name, clone_url,

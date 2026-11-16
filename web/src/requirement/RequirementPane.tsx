@@ -1,9 +1,11 @@
 // The Requirement pane, above the shared Ticket pane: the header (ID,
-// title, submitted time, New Prototype, Retro), the clickable Stage strip (its
+// title, submitted time, New Prototype, Retro), its Changed Repositories'
+// chips while the Project has several, the clickable Stage strip (its
 // Map segment linking to the Map it was made from, if any), what it waits
 // for, its body (the text, then the Spec) collapsed, and under Build the sums of its implementation Tickets' CI badges
 // and those Tickets with their States.
 import type { SpecDetail } from "../api/types";
+import { RepositoryChips } from "../controls/RepositoryChips";
 import { useApi } from "../live";
 import { useNeedsMe } from "../needsme/context";
 import { BodySection } from "../edit/BodySection";
@@ -42,6 +44,7 @@ export function RequirementPane({ spec, archived, now, ticket, select, specLink 
   return (
     <section aria-label="Requirement" className="req-head">
       <SpecPaneHeader id={spec.id} kind="Requirement" title={spec.title} now={now} created={spec.created} />
+      <RepositoryChips names={spec.repositories} />
       <div className="spec-actions">
         <NewPrototype spec={spec.id} onSubmitted={(t) => select(t.id)} />
         {specRetroable(spec, !!archived) && <NewRetro target={spec.id} onSubmitted={(t) => select(t.id)} />}

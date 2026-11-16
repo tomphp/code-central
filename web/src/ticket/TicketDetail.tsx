@@ -18,6 +18,7 @@ import { PullRequestBadge } from "./PullRequestBadge";
 import { WaitingBadge } from "./WaitingBadge";
 import { useAct } from "./useAct";
 import { CISection } from "./CISection";
+import { TicketRepositories } from "./TicketRepositories";
 import { Triage } from "./Triage";
 import { ModelChoice } from "./ModelChoice";
 import { ShortId, shortOf } from "../inbox/ShortId";
@@ -131,7 +132,8 @@ type TicketBodyProps = Omit<TicketDetailProps, "ticket" | "error"> & {
 // Labels, an Incoming Issue's triage actions (in the action panel instead
 // while it is a New issue), description, Blockers (with a gated one's CI
 // result, and whether it no longer blocks), its Auto-accept switch and the
-// model and effort its next turn runs with and their pickers, its CI section when it has CI Runs
+// model and effort its next turn runs with and their pickers, its
+// Repositories section while the Project has several, its CI section when it has CI Runs
 // (in the action panel instead while CI failed), Claim activity with
 // each Claim's Live section, move, and a collapsed history of moves,
 // comments and edits merged by time.
@@ -182,6 +184,7 @@ function TicketBody({ project, ticket: t, specLabels, now, reported, openSpec, o
         <ModelChoice project={project} ticket={t} reported={reported} />
         <MoveControl key={`${t.id} ${t.state}`} project={project} ticket={t} onMoved={onMoved} />
       </section>
+      <TicketRepositories ticket={t} />
       {/* A Ticket in a CI item has the CI section in its action panel,
           with the failure options, so it isn't shown here too. */}
       {!isCIItemReason(t.needs_me_reason) && (

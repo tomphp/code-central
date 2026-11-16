@@ -26,6 +26,10 @@ const (
 	HumanActor Who = "human"
 	// Automatic moves are made by core itself, never asked for.
 	Automatic Who = "automatic"
+	// FactoryMove moves are the Factory's own, made through a FactoryOnly
+	// operation: no Actor takes them as an action, so none is offered
+	// them.
+	FactoryMove Who = "factory"
 )
 
 // Action is one row of the fixed workflow: from which States, to which,
@@ -87,12 +91,19 @@ var Workflow = []Action{
 	{Name: "finish", From: []store.State{store.InProgress}, To: store.InReview, Who: Holder,
 		Requires: "summary (required): what was done, where (branch or commit), what to check",
 		NextStep: stopWorking},
-	// accept has two rows: work whose finish named a branch is Accepted
-	// and waits to land (ADR 0006); any other Ticket goes straight to Done.
+	// accept has two rows: work whose finish named a branch, in any of
+	// its Changed Repositories, is Accepted and waits to land (ADR 0006);
+	// any other Ticket goes straight to Done.
 	{Name: "accept", From: []store.State{store.InReview}, To: store.Accepted, Who: HumanActor,
 		Requires: "nothing; taken when the last finish named a branch"},
 	{Name: "accept", From: []store.State{store.InReview}, To: store.Done, Who: HumanActor,
 		Requires: "nothing; taken when no finish named a branch"},
+	// The Factory fails a finish its finish check finds leaving out a
+	// Repository with work, or naming a commit that isn't its branch's
+	// head (Spec code-central-848, ADR 0048). The finishing Claim has
+	// ended, so it is the Factory's move, not the holder's.
+	{Name: failFinish, From: []store.State{store.InReview, store.Accepted}, To: store.Failed, Who: FactoryMove,
+		Requires: "a Failure Report's four parts; from Accepted only while landed nowhere"},
 	// implement is the other way to accept a Requirement's spec Stage
 	// (ADR 0016): valid only on that Stage, which core checks.
 	{Name: "implement", From: []store.State{store.InReview}, To: store.Done, Who: HumanActor,
@@ -210,9 +221,12 @@ func transitionTo(ctx context.Context, t *store.Ticket, key, name, claimID strin
 	}
 	var a Action
 	var err error
-	if name == automaticAnswered {
+	switch name {
+	case automaticAnswered:
 		a, err = automatic(name, t.State)
-	} else {
+	case failFinish:
+		a, err = factoryMove(name, t.State, id)
+	default:
 		a, err = check(name, t.State, to, actor, id)
 	}
 	if err != nil {
@@ -252,6 +266,25 @@ func automatic(name string, state store.State) (Action, error) {
 		}
 	}
 	return Action{}, fmt.Errorf("core: no automatic move %s from %s", name, state)
+}
+
+// factoryMove finds the Factory's row name from state, or refuses with
+// the States it is made from. Whoever calls the Factory's operation makes
+// it: the operation's audience keeps it to the Factory.
+func factoryMove(name string, state store.State, ticketID string) (Action, error) {
+	var from []string
+	for _, a := range Workflow {
+		if a.Name != name || a.Who != FactoryMove {
+			continue
+		}
+		if slices.Contains(a.From, state) {
+			return a, nil
+		}
+		for _, s := range a.From {
+			from = append(from, string(s))
+		}
+	}
+	return Action{}, &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s is %s, so %s is not allowed: it is made only from %s", ticketID, state, name, strings.Join(from, " or "))}
 }
 
 func isHolderAction(name string) bool {

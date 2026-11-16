@@ -19,3 +19,7 @@ This amends [ADR 0032](0032-the-base-is-a-project-setting-not-the-factorys.md)'s
 - Branch names (`<ticket-id>`, `spec/<spec id>`, `prototype/<id>`, `research/<id>`) are the same in every Repository, each cut from that Repository's own Base or Spec Branch. Each Repository's refs are its own, so a prefix would buy nothing.
 - `finish` gains `repositories: [{name, branch, commit}]`, and `branch`/`commit` still mean the Home Repository. The Factory checks the list against every worktree's branch; a Repository with commits that is missing from the list, or whose commit is wrong, gets a Failure Report.
 - Every Claim makes a worktree in every Repository, including those the Ticket never changes.
+
+## Amendment: a bad finish fails through the Factory's own transition (code-central-854)
+
+The finishing Claim has ended by the time the Factory can check a finish, so the holder can't be the one to report the failure. The Factory's FactoryOnly `fail_finish` adds the Failure Report on the finishing Claim and moves the Ticket from In Review, or from Accepted while it has landed nowhere, to Failed. It is a new row of the workflow, marked as the Factory's: no Actor is offered it, and Failed is still entered only with a Failure Report. The Factory checks after each turn that ends with the Ticket finished, and again before landing it, so a restart or an Auto-accept can't skip the check. With the Home Repository alone nothing is checked, as before: a single-repository finish is unchanged.

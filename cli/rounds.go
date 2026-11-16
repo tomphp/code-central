@@ -43,11 +43,7 @@ func runPostRound(ctx context.Context, e Env, args []string) error {
 		return err
 	}
 	in := core.PostRoundInput{Ticket: ref, ClaimID: *claim, SessionID: sessionID(e, *session), Full: *full}
-	if err := core.Decode(ctx, []byte(text), &in.Questions); err != nil {
-		var ce *core.Error
-		if errors.As(err, &ce) {
-			ce.Field = "questions" + dotted(ce.Field)
-		}
+	if err := decodeField(ctx, text, "questions", &in.Questions); err != nil {
 		return err
 	}
 	v, err := sc.client.PostRound(ctx, sc.project, in)
@@ -55,6 +51,17 @@ func runPostRound(ctx context.Context, e Env, args []string) error {
 		return err
 	}
 	return printJSON(e, v)
+}
+
+// decodeField decodes text, the JSON a flag gave, into v, an input's
+// field, with any refusal naming the field.
+func decodeField(ctx context.Context, text, field string, v any) error {
+	err := core.Decode(ctx, []byte(text), v)
+	var ce *core.Error
+	if errors.As(err, &ce) {
+		ce.Field = field + dotted(ce.Field)
+	}
+	return err
 }
 
 func dotted(f string) string {

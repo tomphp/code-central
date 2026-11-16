@@ -337,6 +337,10 @@ type factory struct {
 	// human to merge under the Branch Landing Method, already said; the
 	// poll's own.
 	leftOnBranch map[string]bool
+	// reportedChanged is the Changed Repositories last reported for each
+	// held Claim, by Claim ID, so a report goes only when they change;
+	// the poll's own.
+	reportedChanged map[string]string
 	// mergedOn is where the Factory merged each Ticket it hasn't landed
 	// yet, so a change of base leaves it to finish there.
 	mergedOn map[string]mergeOn
@@ -432,7 +436,7 @@ type factory struct {
 // rest.
 func newFactory(e Env, o options) *factory {
 	w := work{e.Work}
-	return &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, mergedOn: map[string]mergeOn{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
+	return &factory{e: e, o: o, drainCh: make(chan struct{}), wakeCh: make(chan func(), 1), work: w, polling: stint{w: w}, drainWork: newHandoff(), stopWork: newHandoff(), turns: map[string]*turn{}, ended: map[string]bool{}, info: map[string]claimInfo{}, backInReady: map[string]time.Time{}, warned: map[string]bool{}, warnedMerged: map[string]bool{}, leftOnBranch: map[string]bool{}, reportedChanged: map[string]string{}, mergedOn: map[string]mergeOn{}, saidOnCI: map[string]bool{}, unreported: map[string]string{}, warnedRemote: map[string]bool{}}
 }
 
 // start makes every start-up check, refusing with the reason.

@@ -37,12 +37,17 @@ func (f *factory) afterTurn(ctx context.Context, t *turn, out turnOutcome) store
 	}
 	// The Claim may already be dropped by a poll that saw the finish, so
 	// liveness here is read from the Ticket alone.
-	ended, _ := claimEnded(tk, c)
+	ended, by := claimEnded(tk, c)
 	if ended || tk.State != store.InProgress {
 		// The session ended its turn itself (finish, a Round, give_up):
 		// its denials are for the human to see.
 		if len(denials) > 0 {
 			f.commentDenials(ctx, t, denials)
+		}
+		if checksFinish(by, tk.State) {
+			if _, failed := f.checkFinish(ctx, tk); failed {
+				return store.Failed
+			}
 		}
 		return tk.State
 	}

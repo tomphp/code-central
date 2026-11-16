@@ -1,5 +1,6 @@
 // The Accepted panel (ADR 0006): the human has accepted the work and it
-// waits to land in the base. It shows the branch and head commit, then
+// waits to land in the base. It shows the branch and head commit (with
+// several Repositories, branch@commit in each Changed Repository), then
 // Land, which asks for the commit that put the work into the base, and
 // Cancel. Under the Branch Landing Method the Ticket is To merge, and the
 // panel tells the human to merge the branch themselves.
@@ -7,6 +8,7 @@ import { useState } from "react";
 import "../../api/actions/land";
 import "../../api/actions/cancel";
 import "../../api/actions/send_back";
+import type { TicketView } from "../../api/types";
 import type { PanelDef, PanelProps } from "../ActionPanel";
 import { PullRequestBadge } from "../../ticket/PullRequestBadge";
 import { useAct } from "../../ticket/useAct";
@@ -26,22 +28,7 @@ export function AcceptedPanel({ project, ticket: t }: PanelProps) {
   return (
     <section aria-label="Accepted" className="panel accepted-panel">
       <h3>Accepted, waiting to land</h3>
-      <p className="small">
-        {t.branch ? (
-          <>
-            Branch <code>{t.branch}</code>
-            {t.commit && (
-              <>
-                {" "}
-                at <code>{t.commit}</code>
-              </>
-            )}
-            . It is Done once it is merged into the base and landed.
-          </>
-        ) : (
-          "It is Done once it is merged into the base and landed."
-        )}
-      </p>
+      <WaitingWork ticket={t} />
       {toMerge && pr && (
         <>
           <p className="small">
@@ -94,6 +81,49 @@ export function AcceptedPanel({ project, ticket: t }: PanelProps) {
         </Button>
       </p>
     </section>
+  );
+}
+
+// WaitingWork is the work waiting to land: its branch and head commit, or
+// while the Project has several Repositories, branch@commit in each
+// Changed Repository.
+function WaitingWork({ ticket: t }: { ticket: TicketView }) {
+  if (t.repositories?.length) {
+    return (
+      <>
+        <ul aria-label="Branches to land" className="small accepted-repos">
+          {t.repositories.map((r) => (
+            <li key={r.name}>
+              {r.name}: {r.branch ? <code>{r.branch}</code> : "no branch"}
+              {r.commit && (
+                <>
+                  @<code>{r.commit}</code>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+        <p className="small">It is Done once it is merged into each base and landed.</p>
+      </>
+    );
+  }
+  return (
+    <p className="small">
+      {t.branch ? (
+        <>
+          Branch <code>{t.branch}</code>
+          {t.commit && (
+            <>
+              {" "}
+              at <code>{t.commit}</code>
+            </>
+          )}
+          . It is Done once it is merged into the base and landed.
+        </>
+      ) : (
+        "It is Done once it is merged into the base and landed."
+      )}
+    </p>
   );
 }
 

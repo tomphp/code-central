@@ -188,6 +188,7 @@ type ticketFile struct {
 	Description     string              `yaml:"description"`
 	Branch          string              `yaml:"branch,omitempty"`
 	Commit          string              `yaml:"commit,omitempty"`
+	Repositories    []changedRepoFile   `yaml:"repositories,omitempty"`
 	Recommendation  string              `yaml:"recommendation,omitempty"`
 	PushedCommits   []pushedCommitFile  `yaml:"pushed_commits,omitempty"`
 	SpecMerge       *specMergeFile      `yaml:"spec_merge,omitempty"`
@@ -200,12 +201,27 @@ type ticketFile struct {
 	Edits           []editFile          `yaml:"edits"`
 }
 
-type specMergeFile struct {
+// changedRepoFile is one of a Ticket's Changed Repositories.
+type changedRepoFile struct {
+	Name   string      `yaml:"name"`
+	Branch string      `yaml:"branch,omitempty"`
+	Commit string      `yaml:"commit,omitempty"`
+	Landed *landedFile `yaml:"landed,omitempty"`
+}
+
+type landedFile struct {
 	Commit string `yaml:"commit"`
-	Merged string `yaml:"merged"`
+	Time   string `yaml:"time"`
+}
+
+type specMergeFile struct {
+	Repository string `yaml:"repository,omitempty"`
+	Commit     string `yaml:"commit"`
+	Merged     string `yaml:"merged"`
 }
 
 type pullRequestFile struct {
+	Repository  string `yaml:"repository,omitempty"`
 	Number      int    `yaml:"number"`
 	Link        string `yaml:"link"`
 	State       string `yaml:"state"`
@@ -213,9 +229,10 @@ type pullRequestFile struct {
 }
 
 type pushedCommitFile struct {
-	Commit string `yaml:"commit"`
-	Branch string `yaml:"branch,omitempty"`
-	Pushed string `yaml:"pushed"`
+	Repository string `yaml:"repository,omitempty"`
+	Commit     string `yaml:"commit"`
+	Branch     string `yaml:"branch,omitempty"`
+	Pushed     string `yaml:"pushed"`
 }
 
 type runAttemptFile struct {
@@ -397,8 +414,14 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 	if t.Updated, err = parseTime(f.Updated); err != nil {
 		return Ticket{}, &LoadError{Field: "updated", Msg: err.Error()}
 	}
+	if t.Repositories, lerr = decodeChangedRepositories(f.Repositories); lerr != nil {
+		return Ticket{}, lerr
+	}
 	for i, pc := range f.PushedCommits {
-		p := PushedCommit{Commit: pc.Commit, Branch: pc.Branch}
+		p := PushedCommit{Repository: pc.Repository, Commit: pc.Commit, Branch: pc.Branch}
+		if lerr := checkRepositoryName(fmt.Sprintf("pushed_commits[%d].repository", i), p.Repository); lerr != nil {
+			return Ticket{}, lerr
+		}
 		if p.Commit == "" {
 			return Ticket{}, &LoadError{Field: fmt.Sprintf("pushed_commits[%d].commit", i), Msg: "required"}
 		}
@@ -408,14 +431,20 @@ func decodeTicket(data []byte, n int) (Ticket, *LoadError) {
 		t.PushedCommits = append(t.PushedCommits, p)
 	}
 	if f.PullRequest != nil {
-		pr := &PullRequest{Number: f.PullRequest.Number, Link: f.PullRequest.Link, State: PullRequestState(f.PullRequest.State), MergeCommit: f.PullRequest.MergeCommit}
+		pr := &PullRequest{Repository: f.PullRequest.Repository, Number: f.PullRequest.Number, Link: f.PullRequest.Link, State: PullRequestState(f.PullRequest.State), MergeCommit: f.PullRequest.MergeCommit}
+		if lerr := checkRepositoryName("pull_request.repository", pr.Repository); lerr != nil {
+			return Ticket{}, lerr
+		}
 		if !slices.Contains(PullRequestStates, pr.State) {
 			return Ticket{}, &LoadError{Field: "pull_request.state", Msg: fmt.Sprintf("%q is not one of %v", pr.State, PullRequestStates)}
 		}
 		t.PullRequest = pr
 	}
 	if f.SpecMerge != nil {
-		sm := &SpecMerge{Commit: f.SpecMerge.Commit}
+		sm := &SpecMerge{Repository: f.SpecMerge.Repository, Commit: f.SpecMerge.Commit}
+		if lerr := checkRepositoryName("spec_merge.repository", sm.Repository); lerr != nil {
+			return Ticket{}, lerr
+		}
 		if sm.Commit == "" {
 			return Ticket{}, &LoadError{Field: "spec_merge.commit", Msg: "required"}
 		}
@@ -524,6 +553,47 @@ func decodeCIRuns(data []byte) ([]CIRun, *LoadError) {
 	return out, nil
 }
 
+// decodeChangedRepositories is a Ticket's Changed Repositories, each
+// named by a valid Repository Name, once.
+func decodeChangedRepositories(fs []changedRepoFile) ([]ChangedRepository, *LoadError) {
+	var out []ChangedRepository
+	for i, f := range fs {
+		field := fmt.Sprintf("repositories[%d]", i)
+		if f.Name == "" {
+			return nil, &LoadError{Field: field + ".name", Msg: "required"}
+		}
+		if lerr := checkRepositoryName(field+".name", f.Name); lerr != nil {
+			return nil, lerr
+		}
+		if slices.ContainsFunc(out, func(r ChangedRepository) bool { return r.Name == f.Name }) {
+			return nil, &LoadError{Field: field + ".name", Msg: fmt.Sprintf("%q is listed twice", f.Name)}
+		}
+		r := ChangedRepository{Name: f.Name, Branch: f.Branch, Commit: f.Commit}
+		if f.Landed != nil {
+			l := &Landed{Commit: f.Landed.Commit}
+			if l.Commit == "" {
+				return nil, &LoadError{Field: field + ".landed.commit", Msg: "required"}
+			}
+			var err error
+			if l.Time, err = parseTime(f.Landed.Time); err != nil {
+				return nil, &LoadError{Field: field + ".landed.time", Msg: err.Error()}
+			}
+			r.Landed = l
+		}
+		out = append(out, r)
+	}
+	return out, nil
+}
+
+// checkRepositoryName refuses a Repository Name that breaks the rules;
+// an empty one, the Home Repository's, passes.
+func checkRepositoryName(field, name string) *LoadError {
+	if name != "" && !ValidRepositoryName(name) {
+		return &LoadError{Field: field, Msg: fmt.Sprintf("%q is not a Repository Name", name)}
+	}
+	return nil
+}
+
 func decodeRounds(rs []roundFile) ([]Round, error) {
 	var out []Round
 	for i, r := range rs {
@@ -612,14 +682,21 @@ func encode(record any, project string) (string, []byte, error) {
 			Claims: []claimFile{}, Rounds: []roundFile{}, FailureReports: []failureReportFile{},
 			Comments: []commentFile{}, Moves: []moveFile{}, Edits: encodeEdits(r.Edits),
 		}
+		for _, cr := range r.Repositories {
+			cf := changedRepoFile{Name: cr.Name, Branch: cr.Branch, Commit: cr.Commit}
+			if cr.Landed != nil {
+				cf.Landed = &landedFile{Commit: cr.Landed.Commit, Time: formatTime(cr.Landed.Time)}
+			}
+			f.Repositories = append(f.Repositories, cf)
+		}
 		for _, pc := range r.PushedCommits {
-			f.PushedCommits = append(f.PushedCommits, pushedCommitFile{Commit: pc.Commit, Branch: pc.Branch, Pushed: formatTime(pc.Pushed)})
+			f.PushedCommits = append(f.PushedCommits, pushedCommitFile{Repository: pc.Repository, Commit: pc.Commit, Branch: pc.Branch, Pushed: formatTime(pc.Pushed)})
 		}
 		if r.PullRequest != nil {
-			f.PullRequest = &pullRequestFile{Number: r.PullRequest.Number, Link: r.PullRequest.Link, State: string(r.PullRequest.State), MergeCommit: r.PullRequest.MergeCommit}
+			f.PullRequest = &pullRequestFile{Repository: r.PullRequest.Repository, Number: r.PullRequest.Number, Link: r.PullRequest.Link, State: string(r.PullRequest.State), MergeCommit: r.PullRequest.MergeCommit}
 		}
 		if r.SpecMerge != nil {
-			f.SpecMerge = &specMergeFile{Commit: r.SpecMerge.Commit, Merged: formatTime(r.SpecMerge.Merged)}
+			f.SpecMerge = &specMergeFile{Repository: r.SpecMerge.Repository, Commit: r.SpecMerge.Commit, Merged: formatTime(r.SpecMerge.Merged)}
 		}
 		for _, c := range r.Claims {
 			cf := claimFile{Number: c.Number, ID: c.ID, SessionID: c.SessionID, WorkingDir: c.WorkingDir, ResumeCommand: c.ResumeCommand, Model: c.Model, Effort: c.Effort, Started: formatTime(c.Started), EndedBy: c.EndedBy}

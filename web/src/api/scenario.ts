@@ -14,7 +14,7 @@
 // IDs are what the writes returned (Specs and Tickets share one counter),
 // and Question numbers are Core's.
 import type { World } from "./core/core";
-import { HttpDriver, worldConnection } from "./driver";
+import { HttpDriver, worldConnection, type RepositoryWork } from "./driver";
 import type { CIRunView, CISettings, CloneState, ExternalState, IssueWatcherReport, Landing, PullRequestState, PullRequestWatcherReport, SessionEvent, State, UsageResponse } from "./types";
 
 export interface QuestionSeed {
@@ -42,10 +42,13 @@ export interface LinkSeed {
   external_state?: ExternalState;
 }
 
-// Work is the branch and head commit an agent finishes with.
+// Work is the branch and head commit an agent finishes with, in the Home
+// Repository, and with several Repositories, those in each other one it
+// changed.
 export interface Work {
   branch: string;
   commit: string;
+  repositories?: RepositoryWork[];
 }
 
 // CIOutcome is how a pushed commit's CI run stands.
@@ -308,6 +311,20 @@ export class Scenario extends HttpDriver {
   async clones(key: string, repositories: { name: string; path: string; state: CloneState; problem?: string }[]) {
     await this.reportHeartbeat(key, { factory: "code-central-factory", host: "laptop", state: "online", interval_seconds: 30 });
     await this.agent(`${this.projectPath(key)}/report_repositories`, { repositories });
+  }
+
+  // repository has the human add the Repository name to the Project, which
+  // then has several: reads name each Ticket's Changed Repositories.
+  async repository(key: string, name: string, cloneUrl = `git@github.com:acme/${name}.git`) {
+    await this.human(`${this.projectPath(key)}/add_repository`, { name, clone_url: cloneUrl });
+  }
+
+  // changed has the Factory report a Ticket's live Changed Repositories,
+  // each name on the Ticket's branch at its commit, claiming the Ticket
+  // first if it must.
+  async changed(key: string, id: string, commits: Record<string, string>) {
+    const repositories: RepositoryWork[] = Object.entries(commits).map(([name, commit]) => ({ name, branch: id, commit }));
+    await this.agent(`${this.ticketPath(key, id)}/report_changed_repositories`, { claim_id: await this.claimFor(key, id), repositories });
   }
 
   // pullRequest takes an Accepted Ticket to the Pull Request Landing
