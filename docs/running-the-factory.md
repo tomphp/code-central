@@ -266,6 +266,8 @@ Compared with working by hand, you type no prompts and run no sessions, and you 
 
    With turns running, it prints `draining: waiting on …` and exits once they finish, or stops them at a second Ctrl-C, as in step 1.
 
+   If the answer to a claim was lost on the network, the Ticket may be In Progress already, so the draining Factory still claims it again at each poll until Code Central answers, printing `draining: claiming acme-2 again at each poll first: the answer was lost`, and waits on its turn like the others. A second Ctrl-C gives up on it, leaving any Claim as it is.
+
    Check: the Factory has exited, and the Requirement is still *Finished*.
 
 ## The Factory Status dot

@@ -120,3 +120,131 @@ func TestAClaimLostOnEveryTryIsSentFourTimes(t *testing.T) {
 		t.Errorf("%s is %s, want Ready: no try reached Code Central", id, s)
 	}
 }
+
+// Lost on every try within a poll, the claim is remembered: each later
+// poll sends it once more, with no pause, until Code Central answers,
+// and the turn runs under the one Claim the first try made.
+func TestAClaimLostOnEveryTryIsClaimedAgainAtLaterPolls(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("Lost for a while")
+	// The first poll's 4 tries and the next poll's one.
+	h.LoseAnswer("/claim", 5)
+	r := h.Start()
+	if n := h.Refused(claimPath); n != 4 || len(h.Calls()) != 0 {
+		t.Fatalf("after the first poll %d claims cut and claude ran %d times, want 4 and none", n, len(h.Calls()))
+	}
+
+	r.Poll()
+	if n := h.Refused(claimPath); n != 5 || len(h.Calls()) != 0 {
+		t.Fatalf("after the second poll %d claims cut and claude ran %d times, want 5 and none", n, len(h.Calls()))
+	}
+	r.Poll()
+	h.WaitForState(id, store.InReview)
+	if n := len(h.Ticket(id).Claims); n != 1 {
+		t.Errorf("%s has %d Claims, want 1: claiming again gets the same Claim", id, n)
+	}
+	out := r.Stdout()
+	for _, want := range []string{"the answer was lost", id + ": claim: the answer came back on claiming it again"} {
+		if n := strings.Count(out, want); n != 1 {
+			t.Errorf("%q printed %d times, want once; stdout:\n%s", want, n, out)
+		}
+	}
+}
+
+// A claim whose answer is lost holds its --parallel slot until Code
+// Central answers, so once it does the Factory runs no more turns than
+// it has slots.
+func TestALostClaimHoldsItsSlot(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	a, b, c := h.ReadyTicket("A"), h.ReadyTicket("B"), h.ReadyTicket("C")
+	for _, id := range []string{a, b, c} {
+		h.Script(id, factorytest.Wait(), factorytest.Finish("Done."), factorytest.Result("success"))
+	}
+	h.LoseAnswer("/claim", 5)
+	r := h.Start("--parallel", "2")
+
+	r.Poll()
+	h.WaitFor(b+"'s turn", func() bool { return len(callsFor(h, b)) == 1 })
+	if s := h.Ticket(c).State; s != store.Ready {
+		t.Fatalf("with %s's claim lost and %s running, %s is %s; want it left Ready", a, b, c, s)
+	}
+	r.Poll()
+	h.WaitFor(a+"'s turn", func() bool { return len(callsFor(h, a)) == 1 })
+	r.Poll()
+	if s := h.Ticket(c).State; s != store.Ready || len(h.Calls()) != 2 {
+		t.Errorf("with two turns running, %s is %s and claude ran %d times; want it left Ready", c, s, len(h.Calls()))
+	}
+	if n := len(h.Ticket(a).Claims); n != 1 {
+		t.Errorf("%s has %d Claims, want 1", a, n)
+	}
+}
+
+// Code Central's refusal of a remembered claim, at a later poll, is an
+// answer: the Factory drops it, freeing its slot, and sends it no more.
+func TestALostClaimRefusedAtALaterPollIsDropped(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	a, b := h.ReadyTicket("Taken elsewhere"), h.ReadyTicket("Next")
+	h.LoseRequest("/claim", 4)
+	r := h.Start("--parallel", "1")
+	if _, err := h.Server.Client.Claim(context.Background(), h.Project, core.ClaimInput{Ticket: core.Ref(a), SessionID: "elsewhere"}); err != nil {
+		t.Fatal(err)
+	}
+
+	r.Poll()
+	h.WaitForState(b, store.InReview)
+	r.Poll()
+	if n := strings.Count(r.Stdout(), a+": claim: action_not_allowed"); n != 1 {
+		t.Errorf("the refusal printed %d times, want once; stdout:\n%s", n, r.Stdout())
+	}
+	tk := h.Ticket(a)
+	if len(tk.Claims) != 1 || tk.Claims[0].SessionID != "elsewhere" || len(callsFor(h, a)) != 0 {
+		t.Errorf("%s has Claims %+v and ran %d times, want only the other session's and none", a, tk.Claims, len(callsFor(h, a)))
+	}
+}
+
+// A draining Factory claims nothing new, but still claims again a claim
+// whose answer was lost: its Ticket may be In Progress already.
+func TestADrainingFactoryStillClaimsALostClaimAgain(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id, later := h.ReadyTicket("Lost"), h.ReadyTicket("Later")
+	// The first poll's 4 tries and the drain's first.
+	h.LoseAnswer("/claim", 5)
+	r := h.Start("--parallel", "2")
+
+	r.Interrupt()
+	r.WaitForOutput("draining: claiming " + id + " again")
+	r.Tick()
+	if code := r.Exited(); code != 0 {
+		t.Errorf("exit code %d, want 0", code)
+	}
+	tk := h.Ticket(id)
+	if tk.State != store.InReview || len(tk.Claims) != 1 {
+		t.Errorf("%s is %s with %d Claims, want In Review with 1", id, tk.State, len(tk.Claims))
+	}
+	if s := h.Ticket(later).State; s != store.Ready || len(h.Calls()) != 1 {
+		t.Errorf("%s is %s after %d runs; a draining Factory claims nothing new", later, s, len(h.Calls()))
+	}
+}
+
+// A stopping Factory abandons a claim whose answer was lost.
+func TestAStoppingFactoryAbandonsALostClaim(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	id := h.ReadyTicket("Lost")
+	h.LoseAnswer("/claim", 4)
+	r := h.Start()
+
+	if code := r.Stop(); code != 0 {
+		t.Errorf("exit code %d, want 0", code)
+	}
+	if n := h.Refused(claimPath); n != 4 || len(h.Calls()) != 0 {
+		t.Errorf("%d claims cut and claude ran %d times, want 4 and none", n, len(h.Calls()))
+	}
+	if s := h.Ticket(id).State; s != store.InProgress {
+		t.Errorf("%s is %s, want In Progress under the Claim the stop left", id, s)
+	}
+}

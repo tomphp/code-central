@@ -338,6 +338,10 @@ type factory struct {
 	// restarted is the saved Claims a stop cut off, to resume as cut off
 	// once a slot is free; the poll's own.
 	restarted []claim
+	// lostClaims are the claims whose answer was lost on every try, oldest
+	// first, sent again at each poll until Code Central answers; each
+	// holds a slot meanwhile. They last this run only; the poll's own.
+	lostClaims []core.ClaimInput
 
 	pauseMu sync.Mutex
 	pause   *pause // set during an outage
