@@ -286,10 +286,12 @@ type LandInput struct {
 
 // Land is land(ticket, commit, repository?): human or agent, Accepted or
 // In Review to Done once the work is in the base. The commit is recorded
-// on the Move, with Via merge. A Ticket with Changed Repositories beside
-// the Home Repository's has the commit recorded as the Repository's
-// landed commit, and moves to Done only once every one of them has
-// landed; until then it stays where it is (Spec code-central-848).
+// on the Move, with Via merge. Naming a Repository of a Ticket with
+// Changed Repositories beside the Home Repository's records the commit
+// as that Repository's landed commit, and moves the Ticket to Done only
+// once every one of them has landed; until then it stays where it is
+// (Spec code-central-848). One naming none lands the Ticket as a whole,
+// as it always did.
 func (c *Core) Land(ctx context.Context, key string, in LandInput) (Written[TicketView], error) {
 	commit := strings.TrimSpace(in.Commit)
 	if commit == "" {
@@ -307,7 +309,7 @@ func (c *Core) Land(ctx context.Context, key string, in LandInput) (Written[Tick
 			return false, err
 		}
 		now := c.now()
-		if t.Repositories == nil && name == p.Key {
+		if strings.TrimSpace(in.Repository) == "" || t.Repositories == nil && name == p.Key {
 			if err := c.actOn(ctx, t, key, "land", "", "", now); err != nil {
 				return false, err
 			}

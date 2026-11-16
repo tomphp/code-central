@@ -209,7 +209,7 @@ func TestThePullRequestsMergeInAnyOrderEachLandingItsRepository(t *testing.T) {
 		t.Fatalf("after api lands: %s, partly landed %v, want Accepted and Partly landed", tk.State, tk.PartlyLanded)
 	}
 	f.reportIn(t, "", 7, store.PRMerged, "m-acme")
-	tk, err = record(f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "m-acme", Full: true}))
+	tk, err = record(f.core.Land(ctx, "acme", core.LandInput{Ticket: "2", Commit: "m-acme", Repository: "acme", Full: true}))
 	if err != nil {
 		t.Fatalf("land acme: %v", err)
 	}
