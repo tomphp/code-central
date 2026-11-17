@@ -15,7 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tomoram/code-central/cli"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
@@ -457,7 +456,7 @@ func start(e Env, o options) (*factory, error) {
 	if err := f.checkGitVersion(); err != nil {
 		return nil, err
 	}
-	project, err := cli.ResolveProject(e.Dir, o.project, e.getenv)
+	project, err := client.ResolveProject(e.Dir, o.project, e.getenv)
 	if err != nil {
 		return nil, err
 	}
@@ -477,7 +476,7 @@ func start(e Env, o options) (*factory, error) {
 	if err := writable(f.home.worktrees); err != nil {
 		return nil, fmt.Errorf("can't use the worktree folder %s: %v", f.home.worktrees, err)
 	}
-	f.client = client.New(cli.ServiceURL(e.getenv))
+	f.client = client.New(client.ServiceURL(e.getenv))
 	every := e.EventBatchEvery
 	if every <= 0 {
 		every = postEvery
