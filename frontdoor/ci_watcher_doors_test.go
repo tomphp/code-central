@@ -57,10 +57,17 @@ func ciTrackingOn(t *testing.T, srv *codecentraltest.Server) {
 // ciWatcher checks the CI Watcher's status in a Project's ci object.
 func ciWatcher(t *testing.T, project map[string]any, state, message, fix string) {
 	t.Helper()
-	c, _ := project["ci"].(map[string]any)
+	watcherIn(t, project, "ci", state, message, fix)
+}
+
+// watcherIn checks a Watcher's status in a Project's settings object
+// section, such as ci, the one whose setting runs it.
+func watcherIn(t *testing.T, project map[string]any, section, state, message, fix string) {
+	t.Helper()
+	c, _ := project[section].(map[string]any)
 	w, _ := c["watcher"].(map[string]any)
 	if w == nil || w["state"] != state || str(w["message"]) != message || str(w["fix"]) != fix {
-		t.Fatalf("ci.watcher = %v, want %s with message %q and fix %q", c["watcher"], state, message, fix)
+		t.Fatalf("%s.watcher = %v, want %s with message %q and fix %q", section, c["watcher"], state, message, fix)
 	}
 }
 

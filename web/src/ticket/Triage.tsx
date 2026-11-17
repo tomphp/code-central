@@ -12,23 +12,34 @@ import { Button } from "../controls/Button";
 import { useApi } from "../live";
 
 // BOXES are the triage actions that open a box before confirming: the
-// box's label, the field its text is sent as, and what it says.
+// box's label, the field its text is sent as, and its size. What the
+// action does, which depends on the Integration the Incoming Issue came
+// from, is the Ticket's triage note.
 const BOXES = {
   to_requirement: {
     title: "To Requirement",
     field: "context",
     label: "Context (optional), added to the Requirement and posted to the issue as a comment",
     rows: 3,
-    note: "To Requirement makes a Requirement of the issue's title and body, Cancels this Ticket, and from then on only writes the work's progress to the issue.",
   },
   wont_fix: {
     title: "Won't fix",
     field: "reason",
     label: "Reason (optional), posted to the issue as a comment",
     rows: 2,
-    note: "Won't fix Cancels this Ticket and closes the issue on GitHub as not planned.",
   },
 } as const;
+
+// triageSummary is what each triage action offered on t does, in the
+// order they are offered, from its triage notes.
+export function triageSummary(t: TicketView): string {
+  return (t.triage_actions ?? []).map((a) => t.triage_notes?.[a]).filter(Boolean).join(" ");
+}
+
+// incomingFrom names the Integration an Incoming Issue came from.
+export function incomingFrom(t: TicketView): string {
+  return t.link?.integration === "azure-boards" ? "Azure Boards" : "GitHub Issues";
+}
 
 type BoxAction = keyof typeof BOXES;
 
@@ -79,7 +90,7 @@ export function TriageActions({ project, ticket: t }: { project: string; ticket:
             <span className="small muted">{box.label}</span>
             <textarea rows={box.rows} value={text} onChange={(e) => setText(e.target.value)} />
           </label>
-          <p className="small muted">{box.note}</p>
+          <p className="small muted">{t.triage_notes?.[open]}</p>
           <p className="actions">
             <Button type="submit" variant="primary" disabled={busy}>
               {box.title}
@@ -105,8 +116,7 @@ export function Triage(props: { project: string; ticket: TicketView }) {
   return (
     <section aria-label="Triage">
       <p className="muted small">
-        An Incoming Issue from GitHub Issues. Keep as Draft leaves it here as it is{props.ticket.awaiting_triage && ", out of Needs Me"}, and
-        writes nothing to GitHub. To Requirement makes a Requirement of it. Won't fix Cancels it and closes the issue as not planned.
+        An Incoming Issue from {incomingFrom(props.ticket)}. {triageSummary(props.ticket)}
       </p>
       <TriageActions {...props} />
     </section>

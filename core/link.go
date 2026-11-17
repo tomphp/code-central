@@ -164,9 +164,10 @@ type CreateLinkedTicketInput struct {
 }
 
 // CreateLinkedTicket is the integration's create_linked_ticket(spec,
-// title, description, state, link, full?). On the Project's Issues Spec
-// while New issues need me is on, Code Central marks the Ticket awaiting
-// triage (Spec code-central-279).
+// title, description, state, link, full?). On an Integration's inbox
+// Spec, the Issues Spec or the Azure Boards Spec, while that
+// Integration's New issues need me is on, Code Central marks the Ticket
+// awaiting triage (Spec code-central-279, Spec code-central-894).
 func (c *Core) CreateLinkedTicket(ctx context.Context, key string, in CreateLinkedTicketInput) (Written[TicketView], error) {
 	if err := requireActor(ctx, "create_linked_ticket", Integration); err != nil {
 		return Written[TicketView]{}, err

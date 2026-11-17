@@ -117,6 +117,8 @@ export const WATCHER_PROBLEMS = [
   "pat_rejected",
   "project_unreadable",
   "pat_scope",
+  "query_unusable",
+  "too_many_work_items",
   "check_failed",
   "crashed",
 ] as const;
@@ -386,6 +388,7 @@ export const TICKET_FIELDS = [
   "awaiting_triage",
   "spec_merge_ticket",
   "triage_actions",
+  "triage_notes",
   "model_choice",
   "retros",
   "auto_accept_kind",
@@ -582,6 +585,10 @@ export interface TicketView {
   // human may take on an Incoming Issue; left out on any other Ticket.
   // Computed on read.
   triage_actions?: TriageAction[];
+  // TriageNotes say what each of TriageActions does to the linked issue
+  // or work item, as the UI shows it before the human confirms; left out
+  // on any other Ticket. Computed on read.
+  triage_notes?: Partial<Record<TriageAction, string>>;
   // ModelChoice is the model and effort the Ticket's next turn runs
   // with, each with its source; only the UI's read carries it.
   model_choice?: ModelChoice;
@@ -913,6 +920,8 @@ export interface AzureBoardsView {
   // Spec is the Azure Boards Spec's ID, left out until Azure Boards is
   // first turned on.
   spec?: string;
+  // Watcher is the Work Item Watcher's status, as it last reported it.
+  watcher: WatcherView;
 }
 
 // ModelsView is a Project's Models as every Project read returns them:

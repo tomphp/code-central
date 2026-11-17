@@ -36,12 +36,14 @@ type AzureBoardsView struct {
 	// Spec is the Azure Boards Spec's ID, left out until Azure Boards is
 	// first turned on.
 	Spec string `json:"spec,omitempty"`
+	// Watcher is the Work Item Watcher's status, as it last reported it.
+	Watcher WatcherView `json:"watcher"`
 }
 
-func azureBoardsView(p store.Project) AzureBoardsView {
+func azureBoardsView(p store.Project, watcher WatcherView) AzureBoardsView {
 	a := p.AzureBoards
 	v := AzureBoardsView{On: a.On, Mode: azureBoardsModeOf(a), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
-		PATEnv: boardsPATEnvOf(p.CI, a), NewIssuesNeedMe: a.NewIssuesNeedMe}
+		PATEnv: boardsPATEnvOf(p.CI, a), NewIssuesNeedMe: a.NewIssuesNeedMe, Watcher: watcher}
 	if a.Spec != 0 {
 		v.Spec = DisplayID(p.Key, a.Spec)
 	}
@@ -127,6 +129,10 @@ func (c *Core) SetAzureBoards(ctx context.Context, key string, in SetAzureBoards
 		after = c.projectView(p)
 		if a == was {
 			return nil
+		}
+		// What the Work Item Watcher said was about the old settings.
+		if !a.On || azureBoardsCheckInput(p.CI, a) != azureBoardsCheckInput(p.CI, was) {
+			c.watchers.reset(watcherKey{WatcherWorkItems, key})
 		}
 		return w.PutProject(p)
 	})

@@ -16,7 +16,7 @@ import (
 )
 
 // Integration is the name every Link the Issue Watcher makes carries.
-const Integration = "github"
+const Integration = core.IntegrationGitHub
 
 // LinkID is the Link ID of repository's issue n: owner/repo#n, so it
 // stays unique if the configured repository changes.

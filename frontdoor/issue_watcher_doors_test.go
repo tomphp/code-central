@@ -62,11 +62,7 @@ func githubIssuesOn(t *testing.T, srv *codecentraltest.Server) {
 // github_issues object.
 func issueWatcher(t *testing.T, project map[string]any, state, message, fix string) {
 	t.Helper()
-	g, _ := project["github_issues"].(map[string]any)
-	w, _ := g["watcher"].(map[string]any)
-	if w == nil || w["state"] != state || str(w["message"]) != message || str(w["fix"]) != fix {
-		t.Fatalf("github_issues.watcher = %v, want %s with message %q and fix %q", g["watcher"], state, message, fix)
-	}
+	watcherIn(t, project, "github_issues", state, message, fix)
 }
 
 func TestGetIssueWatchHasTheGitHubIssuesSettingsAndGHPath(t *testing.T) {
