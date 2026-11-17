@@ -169,6 +169,9 @@ func TestSetCITrackingTakesAnOlderClientsHomeTargetAsTheHomesCIEntry(t *testing.
 	if ci := f.home(t).CI; ci.NotWatched || ci.Repository != "acme/acme" {
 		t.Fatalf("Home's CI %+v, want it filled in from its Clone URL: set_ci_tracking's Project-wide fields leave it", ci)
 	}
+	if watch, err := f.core.GetCIWatch(ctx, "acme"); err != nil || watch.NotWatched || watch.Provider != store.CIGitHubActions || watch.Repository != "acme/acme" {
+		t.Fatalf("CI watch %+v (%v), want the CI Watcher to watch the Home's filled-in acme/acme", watch, err)
+	}
 
 	azure := core.SetCITrackingInput{Tracking: true, Provider: store.CIAzurePipelines, ProjectURL: "https://dev.azure.com/acme/ops/"}
 	if _, err := f.core.SetCITracking(human, "acme", azure); err != nil {
@@ -194,6 +197,18 @@ func TestSetCITrackingTakesAnOlderClientsHomeTargetAsTheHomesCIEntry(t *testing.
 	// refused, as before.
 	_, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Tracking: true, Provider: store.CIGitHubActions})
 	wantCode(t, err, core.Invalid, "repository")
+
+	// Saving off on GitHub Actions with nothing named, as an older client
+	// does, leaves a Home the human made Not watched so.
+	if _, err := f.core.SetRepositoryCI(human, "acme", core.SetRepositoryCIInput{Name: "acme", RepositoryCI: core.RepositoryCI{NotWatched: true}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.core.SetCITracking(human, "acme", core.SetCITrackingInput{Provider: store.CIGitHubActions}); err != nil {
+		t.Fatal(err)
+	}
+	if ci := f.home(t).CI; !ci.NotWatched {
+		t.Fatalf("Home's CI %+v, want it still Not watched", ci)
+	}
 }
 
 func TestALocalOnlyHomeNeitherWaitsOnCINorOffersLandAnywayWhileAPushedRepositoryDoes(t *testing.T) {

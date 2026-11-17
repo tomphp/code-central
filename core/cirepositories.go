@@ -213,12 +213,12 @@ func (c *Core) checkCIEntry(ctx context.Context, p store.Project, opts store.Opt
 	return c.checkCIEntryOn(ctx, p, opts, e, field, "provider", e.Name+": ")
 }
 
-// checkCIEntryOn is checkCIEntry refusing on field+other, not provider,
+// checkCIEntryOn is checkCIEntry refusing on field+fallback, not provider,
 // for a problem with neither the repository nor the project, with lead
 // before the reason. A watched entry naming nothing to watch, as an older
 // client's set_ci_tracking may leave the Home's while CI Tracking is
 // off, is refused as needing it, without the check.
-func (c *Core) checkCIEntryOn(ctx context.Context, p store.Project, opts store.Options, e store.CIRepository, field, other, lead string) error {
+func (c *Core) checkCIEntryOn(ctx context.Context, p store.Project, opts store.Options, e store.CIRepository, field, fallback, lead string) error {
 	if e.NotWatched {
 		return nil
 	}
@@ -239,7 +239,7 @@ func (c *Core) checkCIEntryOn(ctx context.Context, p store.Project, opts store.O
 	if res.Problem == "" {
 		return nil
 	}
-	f := other
+	f := fallback
 	switch res.Problem {
 	case ProblemRepositoryUnreadable:
 		f = "repository"

@@ -127,7 +127,8 @@ func (c *Core) GetCIWatch(_ context.Context, key string) (CIWatch, error) {
 			return unknownProject(key)
 		}
 		v := ciView(p, WatcherView{})
-		out = CIWatch{Project: key, Tracking: v.Tracking, NotWatched: !watchesCI(p, key), Provider: v.Provider, Repository: v.Repository, ProjectURL: v.ProjectURL, PATEnv: v.PATEnv,
+		home, _ := ciEntryOf(p, key)
+		out = CIWatch{Project: key, Tracking: v.Tracking, NotWatched: home.NotWatched, Provider: providerOrDefault(home.Provider), Repository: home.Repository, ProjectURL: home.ProjectURL, PATEnv: v.PATEnv,
 			IgnoredWorkflows: v.IgnoredWorkflows, Rules: []CIWatchRule{}, GHPath: r.Options().GHPath,
 			Waiting: []CIWaitingCommit{}, Reruns: []CIRerun{}, Repositories: []CIWatchRepository{}, Pushed: []CITicketCommit{}, Landed: []CITicketCommit{}}
 		last := ciRulesLastRuns(r.CIRuns(key))

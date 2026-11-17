@@ -182,8 +182,8 @@ func (c *Core) SetCITracking(ctx context.Context, key string, in SetCITrackingIn
 	// change is the write, on p's CI settings ci.
 	change := func(p store.Project, ci *store.CI) error {
 		ci.Tracking, ci.PATEnv, ci.IgnoredWorkflows = in.Tracking, patEnv, nil
-		if home != nil {
-			ci.Repositories = withOlderClientsHomeCI(ci.Repositories, *home)
+		if home != nil && !keepsHomeCI(p, *home) {
+			ci.Repositories = withCIEntry(ci.Repositories, *home)
 		}
 		next := p
 		next.CI = *ci
@@ -256,15 +256,16 @@ func olderClientsHomeCI(key string, in SetCITrackingInput) (*store.CIRepository,
 	return &e, nil
 }
 
-// withOlderClientsHomeCI is es with e as the Home Repository's CI entry,
-// as an older client's set_ci_tracking sets it. GitHub Actions naming
-// nothing, the CI settings' default before the Home had an entry, leaves
-// it none: it is filled in from its Clone URL.
-func withOlderClientsHomeCI(es []store.CIRepository, e store.CIRepository) []store.CIRepository {
-	if e == (store.CIRepository{Name: e.Name, Provider: store.CIGitHubActions}) {
-		return slices.DeleteFunc(slices.Clone(es), func(o store.CIRepository) bool { return o.Name == e.Name })
+// keepsHomeCI reports whether e, an older client's Home Repository entry
+// naming nothing to watch on GitHub Actions, the default it sends, leaves
+// the Home's entry as p stores it: none, so filled in from its Clone URL,
+// or Not watched, a choice an older client can't show.
+func keepsHomeCI(p store.Project, e store.CIRepository) bool {
+	if e != (store.CIRepository{Name: e.Name, Provider: store.CIGitHubActions}) {
+		return false
 	}
-	return withCIEntry(es, e)
+	stored, ok := storedCIEntry(p, e.Name)
+	return !ok || stored.NotWatched
 }
 
 // checkCITarget validates what e, a CI entry, watches: the repository
@@ -382,6 +383,8 @@ func (c *Core) ReportPushRemote(_ context.Context, key string, in ReportPushRemo
 	return c.updateCI(key, in.Full, func(p *store.CI) error {
 		if url == "" && !p.NoPushRemote {
 			p.Repositories = withCIEntry(p.Repositories, store.CIRepository{Name: key, NotWatched: true})
+			// What the CI Watcher said may have been about the Home.
+			c.watchers.reset(watcherKey{WatcherCI, key})
 		}
 		p.PushRemoteURL, p.NoPushRemote = withoutLogin(url), url == ""
 		return nil
