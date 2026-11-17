@@ -276,6 +276,7 @@ func claimIntro(c claim, stage, wt string) string {
 			b.WriteString("\n\n" + sessionLogs)
 		}
 	}
+	fmt.Fprintf(&b, "\n\nYour first call is `get_ticket` with `ticket: %s`. The code-central tools are deferred: load their schemas with ToolSearch (`select:mcp__code-central__get_ticket,...`) before you call them, and pass `ticket` on the writes that take it.", c.Ticket)
 	return b.String()
 }
 
