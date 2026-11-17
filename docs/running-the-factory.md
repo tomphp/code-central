@@ -629,6 +629,23 @@ acme-shop-16: CI tracks main at 0a1b2c3d4e5f in Repository api
 acme-shop-16: CI failed at 0a1b2c3d4e5f in Repository api, so it stays Accepted
 ```
 
+Under **Branch**, an accepted Ticket lands in each of its Changed Repositories once you have merged its branch there into that Repository's base, and is Done once you have merged it in all of them; merged in some, it is Partly landed. With Push on, accepting pushes its branch in each. Under **Land per Spec**, each Repository has its own Spec Branch. An accepted Ticket is merged into its Spec Branch in each of its Changed Repositories, every one checked first: a conflict in any merges it into none, and sends it back with one comment naming each conflicting Repository and its files. Once the Spec is ready, the Factory checks the Spec Branch of every Repository the Spec's Tickets changed against that Repository's base before it lands any. A conflict in any lands nothing and opens, or comments on, the Spec's one Spec merge Ticket, which names each conflicting Repository with its files and both tips; its Claim merges each base into its branch there. Otherwise the Factory makes the same `Merge spec <spec id>: <title>` commit in each, in the landing order, pushes each base once with Push on, and lands there every Ticket that changed it. A failed push or base move in one Repository is tried again on every poll, as above, and the Spec's Tickets wait for it there. Under Pull Request, the Spec Branch is pushed in each Repository, one pull request in each, and the Spec's Tickets land in each Repository as its pull request merges:
+
+```text
+acme-shop-14: Accepted under the Branch Landing Method: merge acme-shop-14 into main in Repository api and the Factory lands it
+acme-shop-14: merged into main by hand in Repository api
+acme-shop-14: landed on main at 4b5c6d7e8f90 in Repository api
+acme-shop-18: merged into spec/acme-shop-17 at 3b9e1f0c2d44
+acme-shop-18: merged into spec/acme-shop-17 at 5c0d1e2f3a4b in Repository api
+acme-shop-17: merged spec/acme-shop-17 into main at 9ad0fd655dd2
+acme-shop-17: landing its Tickets: acme-shop-18
+acme-shop-18: landed on main at 9ad0fd655dd2
+acme-shop-17: merged spec/acme-shop-17 into main at 6e7f8a9b0c1d in Repository api
+acme-shop-17: landing its Tickets in Repository api: acme-shop-18
+acme-shop-18: landed on main at 6e7f8a9b0c1d in Repository api
+acme-shop-19: spec/acme-shop-19 conflicts with the base in acme-shop, api: opened acme-shop-22 to merge the base into it
+```
+
 When a base is found for the first time in a run, or changes, the Factory checks that `.mcp.json` is committed on it. At start it refuses to start without the file. Mid-run it cuts no new branches or worktrees, and prints the same message once, until the file is committed; landing carries on.
 
 With **Land per Spec** on, the Spec's accepted Tickets gather on the Spec Branch as under Merge. Once the Spec is ready, the Factory checks the Spec Branch against the fast-forwarded base (a conflict opens the usual Ticket on the Spec), pushes `spec/<spec id>`, and reports that commit for every waiting Ticket: one pull request opens for the Spec, with a section for each Ticket, and each later merge into the Spec Branch is pushed to update it. When it is merged, every waiting Ticket lands at its merge commit and the Spec Branch is deleted:
