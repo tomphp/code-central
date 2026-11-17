@@ -76,6 +76,7 @@ export function defaultLanding(overrides: Partial<Landing> = {}): Landing {
     code_host: "",
     repository: "",
     pat_env: "ADO_PAT",
+    uses_azure_repos_pat: false,
     base: "main",
     watcher: { state: "not_reported" },
     open_pull_requests: [],

@@ -32,28 +32,19 @@ func TestUnderMergeAndPushTheBaseIsPushedBeforeTheTicketLands(t *testing.T) {
 	}
 }
 
-func TestTheFactoryRefusesToStartWhenPushNamesAMissingRemote(t *testing.T) {
+func TestAFactoryWhosePushNamesAMissingRemoteStartsWithTheHomeLocalOnlyAndClaims(t *testing.T) {
 	t.Parallel()
 	h := factorytest.New(t)
 	h.AddRemote("origin")
 	mergeAndPush(h, "upstream")
-	refuses(t, h, h.Repo, `Push names the remote "upstream", which this repository doesn't have`)
-	refuses(t, h, h.Repo, "Project Options")
-}
-
-func TestAPushRemoteThatGoesMissingHoldsLandingButNotClaiming(t *testing.T) {
-	t.Parallel()
-	h := factorytest.New(t)
-	h.AddRemote("origin")
-	mergeAndPush(h, "origin")
-	r := h.Start()
-
-	mergeAndPush(h, "nowhere")
 	ready := h.ReadyTicket("Still claimed")
 	h.Script(ready, factorytest.Wait())
-	r.Poll()
-	r.WantOutput(`warning: nothing lands until this is fixed: Push names the remote "nowhere", which this repository doesn't have`)
+
+	h.Start()
 	h.WantState(ready, store.InProgress)
+	if home := repositoryView(t, h, h.Project); !home.LocalOnly {
+		t.Fatalf("Home %+v, want it local-only: its clone has no remote upstream", home)
+	}
 }
 
 func TestUnderBranchAndPushAnAcceptedTicketsBranchReachesABareRemote(t *testing.T) {

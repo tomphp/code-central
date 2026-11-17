@@ -29,13 +29,19 @@ func (w *landWorld) withAPI() *fakeRepo {
 }
 
 // pollRepositories is a poll's landing step with the Repositories withAPI
-// set up: as poll, but for making the clones, which takes real git.
+// set up: as poll, but for making the clones, which takes real git. Each
+// takes its Push remote from the Project, as syncing them does.
 func (w *landWorld) pollRepositories() {
 	w.t.Helper()
 	ctx := context.Background()
 	p, ok := w.f.landing(ctx)
 	if !ok {
 		w.t.Fatal("the landing step can't read the Project")
+	}
+	for _, v := range p.Repositories {
+		if r := w.f.repositories[v.Name]; r != nil {
+			r.listedAs(v)
+		}
 	}
 	w.f.locateBases(ctx, p)
 	w.f.land(ctx, p)

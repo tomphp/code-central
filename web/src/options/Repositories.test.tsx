@@ -51,16 +51,16 @@ describe("the Repositories section", () => {
     const home = row("acme");
     expect(home).toHaveTextContent("Home");
     expect(home).toHaveTextContent("Not reported yet");
-    const toLanding = within(home).getByRole("link", { name: "Landing Method" });
-    expect(toLanding).toHaveAttribute("href", "#project-options-landing-method");
+    const toLanding = within(home).getByRole("link", { name: "Default Landing" });
+    expect(toLanding).toHaveAttribute("href", "#project-options-default-landing");
     const scrolled: string[] = [];
     Element.prototype.scrollIntoView = vi.fn(function (this: Element) {
       scrolled.push(this.id);
     });
     await userEvent.click(toLanding);
-    expect(scrolled).toEqual(["project-options-landing-method"]);
+    expect(scrolled).toEqual(["project-options-default-landing"]);
     expect(window.location.search).toBe("?view=project-options&project=acme");
-    expect(within(home).queryByRole("button", { name: "Edit acme" })).toBeNull();
+    expect(within(home).getByRole("button", { name: "Edit acme" })).toBeEnabled();
     expect(within(home).getByRole("button", { name: "Move acme up" })).toBeDisabled();
     expect(within(home).getByRole("button", { name: "Move acme down" })).toBeDisabled();
     const remove = within(home).getByRole("button", { name: "Remove acme" });
@@ -113,7 +113,7 @@ describe("the Repositories section", () => {
     await settle(w);
 
     expect(order()).toEqual(["acme", "docs"]);
-    expect(row("docs")).toHaveTextContent("None: local only, never pushed");
+    expect(row("docs")).toHaveTextContent("local-only: never cloned or pushed");
     expect(row("docs")).toHaveTextContent("/src/docs");
     expect(within(row("docs")).getByText("Code Host").nextElementSibling).toBeEmptyDOMElement();
     expect((await w.api.listProjects())[0].repositories[1]).toMatchObject({ name: "docs", clone_url: "", code_host: "", local_path: "/src/docs" });
@@ -152,7 +152,7 @@ describe("the Repositories section", () => {
     await userEvent.click(within(form).getByRole("button", { name: "Save" }));
     await settle(w);
 
-    expect(row("web")).toHaveTextContent("None: local only, never pushed");
+    expect(row("web")).toHaveTextContent("local-only: never cloned or pushed");
     expect((await w.api.listProjects())[0].repositories[1]).toMatchObject({ name: "web", clone_url: "", local_path: "/src/web" });
   });
 
@@ -234,6 +234,155 @@ describe("the Repositories section", () => {
     await userEvent.click(within(row("web")).getByRole("button", { name: "Remove web" }));
     await settle(w);
     expect(order()).toEqual(["acme", "api"]);
+  });
+
+  it("shows each Repository's Landing, marked Project default or its own, its Push remote and its CI choice", async () => {
+    const { w, s } = await fresh({ repositories: ["web"] });
+    await s.reportPushRemote("acme", "git@github.com:acme/acme.git");
+    await w.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
+    await w.api.editRepository("acme", "web", { landing: "pull_request", push_remote: "upstream" });
+    await w.api.setRepositoryCI("acme", "web", { not_watched: true });
+    await renderApp(w);
+
+    const detail = (name: string, term: string) => within(row(name)).getByText(term, { selector: "dt" }).nextElementSibling;
+    expect(detail("acme", "Landing")).toHaveTextContent("Merge + Push (Project default)");
+    expect(detail("acme", "Push remote")).toHaveTextContent("origin (Project's)");
+    expect(detail("acme", "CI")).toHaveTextContent("GitHub Actions on acme/acme");
+    expect(detail("web", "Landing")).toHaveTextContent("Pull Request (its own)");
+    expect(detail("web", "Push remote")).toHaveTextContent("upstream (its own)");
+    expect(detail("web", "CI")).toHaveTextContent("Not watched");
+  });
+
+  it("shows a Home whose clone has no Push remote as local-only, Not watched", async () => {
+    const { w, s } = await fresh();
+    await s.reportPushRemote("acme", "");
+    await renderApp(w);
+
+    const detail = (term: string) => within(row("acme")).getByText(term, { selector: "dt" }).nextElementSibling;
+    expect(detail("Clone URL")).toHaveTextContent("local-only: its clone has no Push remote");
+    expect(detail("Code Host")).toBeEmptyDOMElement();
+    expect(detail("CI")).toHaveTextContent("Not watched");
+  });
+
+  it("gives a Repository its own Landing and Push remote in place, and sets it back to Project default", async () => {
+    const { w } = await fresh({ repositories: ["web"] });
+    await renderApp(w);
+
+    await userEvent.click(within(row("web")).getByRole("button", { name: "Edit web" }));
+    let form = within(section()).getByRole("form", { name: "Edit web" });
+    const landing = within(form).getByRole("combobox", { name: "Landing" });
+    expect(landing).toHaveValue("default");
+    expect(within(landing).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "Project default (Merge)",
+      "Merge",
+      "Merge + Push",
+      "Branch",
+      "Branch + Push",
+      "Pull Request",
+    ]);
+    expect(within(form).getByRole("textbox", { name: "Push remote" })).toHaveValue("");
+    expect(within(form).getByRole("textbox", { name: "Push remote" })).toHaveAttribute("placeholder", "origin");
+    await userEvent.selectOptions(landing, "Branch + Push");
+    await userEvent.type(within(form).getByRole("textbox", { name: "Push remote" }), "upstream");
+    await userEvent.click(within(form).getByRole("button", { name: "Save" }));
+    await settle(w);
+
+    expect(row("web")).toHaveTextContent("Branch + Push (its own)");
+    expect(row("web")).toHaveTextContent("upstream (its own)");
+    expect((await w.api.listProjects())[0].repositories[1]).toMatchObject({ landing: "branch_push", own_landing: true, push_remote: "upstream" });
+
+    await userEvent.click(within(row("web")).getByRole("button", { name: "Edit web" }));
+    form = within(section()).getByRole("form", { name: "Edit web" });
+    expect(within(form).getByRole("combobox", { name: "Landing" })).toHaveValue("branch_push");
+    await userEvent.selectOptions(within(form).getByRole("combobox", { name: "Landing" }), "Project default (Merge)");
+    await userEvent.clear(within(form).getByRole("textbox", { name: "Push remote" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Save" }));
+    await settle(w);
+
+    expect(row("web")).toHaveTextContent("Merge (Project default)");
+    expect(row("web")).toHaveTextContent("origin (Project's)");
+  });
+
+  it("edits the Home's Landing and Push remote, never its Clone URL, Base or local path", async () => {
+    const { w, s } = await fresh();
+    await s.reportPushRemote("acme", "git@github.com:acme/acme.git");
+    await renderApp(w);
+
+    await userEvent.click(within(row("acme")).getByRole("button", { name: "Edit acme" }));
+    const form = within(section()).getByRole("form", { name: "Edit acme" });
+    expect(within(form).queryByRole("textbox", { name: "Clone URL" })).toBeNull();
+    expect(within(form).queryByRole("textbox", { name: "Base" })).toBeNull();
+    expect(within(form).queryByRole("textbox", { name: "Local path" })).toBeNull();
+    await userEvent.selectOptions(within(form).getByRole("combobox", { name: "Landing" }), "Merge + Push");
+    await userEvent.click(within(form).getByRole("button", { name: "Save" }));
+    await settle(w);
+
+    expect(row("acme")).toHaveTextContent("Merge + Push (its own)");
+    expect(row("acme")).toHaveTextContent("git@github.com:acme/acme.git");
+  });
+
+  it("shows a refused Own Landing inline with its fix, keeping the edit open", async () => {
+    const { w } = await fresh();
+    await w.api.addRepository("acme", { name: "docs", local_path: "/src/docs" });
+    await renderApp(w);
+
+    await userEvent.click(within(row("docs")).getByRole("button", { name: "Edit docs" }));
+    const form = within(section()).getByRole("form", { name: "Edit docs" });
+    await userEvent.selectOptions(within(form).getByRole("combobox", { name: "Landing" }), "Pull Request");
+    await userEvent.click(within(form).getByRole("button", { name: "Save" }));
+    await settle(w);
+
+    const alert = within(form).getByRole("alert");
+    expect(alert).toHaveTextContent("docs");
+    expect(alert).toHaveTextContent("Merge");
+    expect(within(form).getByRole("combobox", { name: "Landing" })).toHaveAttribute("aria-invalid", "true");
+    expect((await w.api.listProjects())[0].repositories[1].own_landing).toBe(false);
+  });
+
+  it("sets the Home's CI choice in its row, like any other Repository's", async () => {
+    const { w, s } = await fresh();
+    await s.reportPushRemote("acme", "git@github.com:acme/acme.git");
+    await renderApp(w);
+
+    await userEvent.click(within(row("acme")).getByRole("button", { name: "Edit acme's CI" }));
+    const form = within(row("acme")).getByRole("form", { name: "acme's CI" });
+    expect(within(form).getByRole("textbox", { name: "GitHub repository" })).toHaveValue("acme/acme");
+    await userEvent.selectOptions(within(form).getByRole("combobox", { name: "CI" }), "Not watched");
+    await userEvent.click(within(form).getByRole("button", { name: "Save" }));
+    await settle(w);
+
+    expect(within(row("acme")).queryByRole("form", { name: "acme's CI" })).toBeNull();
+    expect(row("acme")).toHaveTextContent("Not watched");
+    expect((await w.api.listProjects())[0].repositories[0].ci).toEqual({ name: "acme", not_watched: true });
+  });
+
+  it("flags a local-only Home under Pull Request in its row, with the fix", async () => {
+    const { w, s } = await fresh();
+    await s.reportPushRemote("acme", "git@github.com:acme/acme.git");
+    await w.api.setLandingMethod("acme", { method: "pull_request", push: false, remote: "origin" });
+    await s.reportPushRemote("acme", "");
+    await renderApp(w);
+
+    const flag = within(row("acme")).getByRole("alert");
+    expect(flag).toHaveTextContent("local-only under Pull Request: nothing lands in acme");
+    expect(flag).toHaveTextContent("Give acme an Own Landing such as Merge, or add a Push remote to its clone and restart the Factory.");
+  });
+
+  it("notes that Push pushes nothing while every Repository is local-only, and still allows it", async () => {
+    const { w, s } = await fresh();
+    await s.reportPushRemote("acme", "");
+    await w.api.addRepository("acme", { name: "docs", local_path: "/src/docs" });
+    await renderApp(w);
+    const note = () => within(section()).queryByRole("note");
+    expect(note()).toBeNull();
+
+    await w.api.setLandingMethod("acme", { method: "merge", push: true, remote: "origin" });
+    await settle(w);
+    expect(note()).toHaveTextContent("No Repository has a Clone URL, so Push pushes nothing.");
+
+    await w.api.addRepository("acme", { name: "web", clone_url: "git@github.com:acme/web.git" });
+    await settle(w);
+    expect(note()).toBeNull();
   });
 
   it("is disabled while the Project is archived", async () => {

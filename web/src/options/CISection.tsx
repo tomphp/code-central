@@ -1,50 +1,23 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { useApi } from "../live";
-import type {
-  ApiError,
-  CIProvider,
-  CISettings,
-  ProjectRow,
-} from "../api/types";
+import type { ApiError, CISettings, ProjectRow, RepositoryView } from "../api/types";
 import { Button } from "../controls/Button";
 import { Field } from "../controls/Field";
-import { Select } from "../controls/Select";
-import { azureProjectURL } from "./azureProjectURL";
-import { CIRepositories } from "./CIRepositories";
 import { CIRules } from "./CIRules";
-import { githubRepository } from "./githubRepository";
 import { Refusal } from "./Refusal";
 import { WatcherStatus } from "./WatcherStatus";
-
-const PROVIDERS: { provider: CIProvider; label: string }[] = [
-  { provider: "github_actions", label: "GitHub Actions" },
-  { provider: "azure_pipelines", label: "Azure Pipelines" },
-];
 
 // CIDraft is the CI section's form: Ignored workflows as typed, one string.
 interface CIDraft {
   tracking: boolean;
-  provider: CIProvider;
-  repository: string;
-  projectURL: string;
   patEnv: string;
   ignored: string;
 }
 
-// ciDraft is the form for ci as stored, its repository prefilled from a
-// GitHub Push remote while none is set, and, for Azure Pipelines, its
-// project URL from an Azure Repos one.
+// ciDraft is the form for ci as stored.
 function ciDraft(ci: CISettings): CIDraft {
   return {
     tracking: ci.tracking,
-    provider: ci.provider,
-    repository: ci.repository || githubRepository(ci.push_remote_url) || "",
-    projectURL:
-      ci.project_url ||
-      (ci.provider === "azure_pipelines"
-        ? azureProjectURL(ci.push_remote_url)
-        : undefined) ||
-      "",
     patEnv: ci.pat_env || "ADO_PAT",
     ignored: ci.ignored_workflows.join(", "),
   };
@@ -54,48 +27,46 @@ function ciDraft(ci: CISettings): CIDraft {
 const workflowNames = (ignored: string) =>
   ignored.split(/[\s,]+/).filter(Boolean);
 
-// CISection is the Project's CI settings: CI Tracking, its CI Provider,
-// the GitHub repository or Azure DevOps project it watches, and the Ignored workflows. Like the Landing Method it follows the Project as read.
+// watched is the Repositories whose CI choice is a CI Provider, not Not
+// watched.
+const watched = (repositories: RepositoryView[]) =>
+  repositories.filter((r) => !r.ci.not_watched);
+
+// watching names what the CI Watcher watches: the one watched
+// Repository's GitHub repository or Azure DevOps project, or how many.
+function watching(repositories: RepositoryView[]): string {
+  const ws = watched(repositories);
+  if (ws.length !== 1) return `its ${ws.length} watched Repositories`;
+  const { ci } = ws[0];
+  return (ci.provider === "azure_pipelines" ? ci.project_url : ci.repository) ?? "";
+}
+
+// ignoredHint is the Ignored workflows' hint for the CI Providers the
+// watched Repositories are on.
+function ignoredHint(repositories: RepositoryView[]): string {
+  const providers = new Set(watched(repositories).map((r) => r.ci.provider));
+  const names = !providers.has("azure_pipelines")
+    ? "Workflow file names, such as nightly.yml,"
+    : providers.size === 1
+      ? "Pipeline names, such as Nightly build,"
+      : "Workflow file names, such as nightly.yml, or pipeline names, such as Nightly build,";
+  return `${names} separated by commas: their runs never count towards a Ticket's CI result.`;
+}
+
+// CISection is the Project's CI settings that are every Repository's
+// (Spec code-central-890): CI Tracking, the PAT environment variable
+// while any Repository is on Azure Pipelines, the Ignored workflows and
+// the CI Rules. Each Repository's CI choice is in its row under
+// Repositories. Like the Default Landing it follows the Project as read.
 export function CISection({ project }: { project: ProjectRow }) {
   const api = useApi();
   const stored = ciDraft(project.ci);
-  const prefilled = !project.ci.repository && stored.repository !== "";
   const [draft, setDraft] = useState<CIDraft>(stored);
   const [error, setError] = useState<ApiError>();
   const [saved, setSaved] = useState(false);
-  const remoteURL = azureProjectURL(project.ci.push_remote_url);
-  const urlPrefilled =
-    !project.ci.project_url &&
-    remoteURL !== undefined &&
-    draft.projectURL === remoteURL;
   const id = useId();
-  const {
-    tracking,
-    provider,
-    repository,
-    projectURL,
-    patEnv,
-    ignored,
-  } = stored;
-  useEffect(
-    () =>
-      setDraft({
-        tracking,
-        provider,
-        repository,
-        projectURL,
-        patEnv,
-        ignored,
-          }),
-    [
-      tracking,
-      provider,
-      repository,
-      projectURL,
-      patEnv,
-      ignored,
-      ],
-  );
+  const { tracking, patEnv, ignored } = stored;
+  useEffect(() => setDraft({ tracking, patEnv, ignored }), [tracking, patEnv, ignored]);
 
   const edit = (patch: Partial<CIDraft>) => {
     setDraft((d) => ({ ...d, ...patch }));
@@ -107,9 +78,6 @@ export function CISection({ project }: { project: ProjectRow }) {
     setError(undefined);
     const change = {
       tracking: draft.tracking,
-      provider: draft.provider,
-      repository: draft.repository,
-      project_url: draft.projectURL,
       pat_env: draft.patEnv,
       ignored_workflows: workflowNames(draft.ignored),
     };
@@ -123,9 +91,6 @@ export function CISection({ project }: { project: ProjectRow }) {
   };
   const changed =
     draft.tracking !== tracking ||
-    draft.provider !== provider ||
-    draft.repository !== repository ||
-    draft.projectURL !== projectURL ||
     draft.patEnv !== patEnv ||
     workflowNames(draft.ignored).join(",") !==
       workflowNames(ignored).join(",");
@@ -133,6 +98,7 @@ export function CISection({ project }: { project: ProjectRow }) {
     error?.field === field
       ? { "aria-invalid": true, "aria-describedby": `${id}-error` }
       : undefined;
+  const azurePipelines = watched(project.repositories).some((r) => r.ci.provider === "azure_pipelines");
 
   return (
     <fieldset id="project-options-ci" className="project-options-section" disabled={project.archived}>
@@ -156,107 +122,32 @@ export function CISection({ project }: { project: ProjectRow }) {
           <p className="project-options-hint" id={`${id}-tracking`}>
             CI Tracking watches the CI of what the Factory pushes, through your
             existing <code>gh</code> login. Code Central stores no GitHub token.
+            Each Repository&apos;s CI, or Not watched, is set in its row under
+            Repositories.
           </p>
         </div>
-        <label className="project-options-field">
-          CI Provider{" "}
-          <Select
-            value={draft.provider}
-            options={PROVIDERS.map((pr) => ({ value: pr.provider, label: pr.label }))}
-            onChange={(v) => {
-              // Each provider keeps its own values; Azure Pipelines starts from the Push remote.
-              const next = v as CIProvider;
-              edit({
-                provider: next,
-                ...(next === "azure_pipelines" &&
-                !project.ci.project_url &&
-                draft.projectURL === "" &&
-                remoteURL
-                  ? { projectURL: remoteURL }
-                  : {}),
-              });
-            }}
-          />
-        </label>
-        {draft.provider === "github_actions" && (
-          <>
-            <Field
-              label="GitHub repository"
-              hintId={`${id}-repository`}
-              hint={
-                <>
-              {prefilled
-                ? `From the Push remote ${project.ci.push_remote_url}. `
-                : ""}
-              The repository to watch, as owner/name; CI Tracking needs one.
-                </>
-              }
-            >
-              <input
-                value={draft.repository}
-                placeholder="owner/name"
-                onChange={(e) => edit({ repository: e.target.value })}
-                aria-describedby={`${id}-repository`}
-                {...invalid("repository")}
-              />
-            </Field>
-          </>
+        {azurePipelines && (
+          <Field
+            label="PAT environment variable"
+            hintId={`${id}-pat-env`}
+            hint={
+              <>
+                The environment variable that holds an Azure DevOps PAT with
+                Build: Read &amp; execute, in the service&apos;s environment. Code
+                Central keeps the name, never the PAT.
+              </>
+            }
+          >
+            <input
+              value={draft.patEnv}
+              placeholder="ADO_PAT"
+              onChange={(e) => edit({ patEnv: e.target.value })}
+              aria-describedby={`${id}-pat-env`}
+              {...invalid("pat_env")}
+            />
+          </Field>
         )}
-        {draft.provider === "azure_pipelines" && (
-          <>
-            <Field
-              label="Azure DevOps project URL"
-              hintId={`${id}-project-url`}
-              hint={
-                <>
-              {urlPrefilled
-                ? `From the Push remote ${project.ci.push_remote_url}. `
-                : ""}
-              The Azure DevOps project to watch, as its URL, such as
-              https://dev.azure.com/acme/web; CI Tracking needs one.
-                </>
-              }
-            >
-              <input
-                value={draft.projectURL}
-                placeholder="https://dev.azure.com/org/project"
-                onChange={(e) => edit({ projectURL: e.target.value })}
-                aria-describedby={`${id}-project-url`}
-                {...invalid("project_url")}
-              />
-            </Field>
-            <Field
-              label="PAT environment variable"
-              hintId={`${id}-pat-env`}
-              hint={
-                <>
-              The environment variable that holds an Azure DevOps PAT with
-              Build: Read &amp; execute, in the service&apos;s environment. Code
-              Central keeps the name, never the PAT.
-                </>
-              }
-            >
-              <input
-                value={draft.patEnv}
-                placeholder="ADO_PAT"
-                onChange={(e) => edit({ patEnv: e.target.value })}
-                aria-describedby={`${id}-pat-env`}
-                {...invalid("pat_env")}
-              />
-            </Field>
-          </>
-        )}
-        <Field
-          label="Ignored workflows"
-          hintId={`${id}-ignored`}
-          hint={
-            <>
-          {draft.provider === "azure_pipelines"
-            ? "Pipeline names, such as Nightly build, separated by commas: their runs never count towards a Ticket's CI result."
-            : "Workflow file names, such as nightly.yml, separated by commas: their runs never count towards a Ticket's CI result."}
-            </>
-          }
-        >
+        <Field label="Ignored workflows" hintId={`${id}-ignored`} hint={ignoredHint(project.repositories)}>
           <input
             value={draft.ignored}
             placeholder="nightly.yml, preview.yml"
@@ -278,17 +169,8 @@ export function CISection({ project }: { project: ProjectRow }) {
         </div>
       </form>
       {project.ci.tracking && (
-        <WatcherStatus
-          name="CI Watcher"
-          repository={
-            project.ci.provider === "azure_pipelines"
-              ? project.ci.project_url
-              : project.ci.repository
-          }
-          watcher={project.ci.watcher}
-        />
+        <WatcherStatus name="CI Watcher" repository={watching(project.repositories)} watcher={project.ci.watcher} />
       )}
-      <CIRepositories project={project} />
       <CIRules project={project} />
     </fieldset>
   );

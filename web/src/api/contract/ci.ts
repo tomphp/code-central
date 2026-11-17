@@ -424,7 +424,9 @@ export function ciContract(driver: () => Driver) {
     await d.api.setCITracking("acme", { tracking: true, provider: "github_actions", repository: "acme/web", ignored_workflows: [] });
     const added = await d.api.addRepository("acme", { name: "api", clone_url: "git@github.com:acme/api.git" });
     expect(added.ci.repositories).toEqual([{ name: "api", not_watched: false, provider: "github_actions", repository: "acme/api" }]);
-    const refused = await d.api.setRepositoryCI("acme", "acme", { not_watched: true }).catch((e) => e);
+    // The Home's CI is a CI entry like the others' (Spec code-central-890).
+    expect(added.repositories[0].ci).toEqual({ name: "acme", not_watched: false, provider: "github_actions", repository: "acme/web" });
+    const refused = await d.api.setRepositoryCI("acme", "nope", { not_watched: true }).catch((e) => e);
     expect(refused).toMatchObject({ code: "invalid", field: "name" });
 
     const id = await d.createTicket("acme", "Login page", "Ready");
