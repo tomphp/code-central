@@ -194,7 +194,7 @@ function RuleForm(props: {
           {...invalid("branch")}
         />
       </Field>
-      <label className="project-options-field">
+      <label className="field">
         Tickets open as{" "}
         <Select
           value={draft.state}

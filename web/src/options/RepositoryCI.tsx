@@ -66,7 +66,7 @@ function RepositoryCIForm({ project, entry, close }: { project: string; entry: C
 
   return (
     <form aria-label={`${entry.name}'s CI`} onSubmit={save}>
-      <label className="project-options-field">
+      <label className="field">
         CI{" "}
         <Select
           value={choice}
