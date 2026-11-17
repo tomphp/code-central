@@ -30,10 +30,12 @@ async function world() {
 
 const card = (title: string) => within(screen.getByRole("main", { name: "Board" })).getByRole("link", { name: new RegExp(title) });
 const ticketPane = () => screen.getByRole("complementary", { name: "Ticket" });
+// cells is a row's non-empty grid cells: repository, landing, PR, CI, commit.
+const cells = (row: HTMLElement) => Array.from(row.children, (c) => c.textContent ?? "").filter((t) => t !== "");
 const repositoryRows = () =>
   within(within(ticketPane()).getByRole("region", { name: "Repositories" }))
     .getAllByRole("listitem")
-    .map((r) => r.textContent);
+    .map((r) => cells(r).join(" "));
 
 // rows is the Needs Me rows of reason.
 async function rows(w: World, reason: string): Promise<NeedsMeRow[]> {
@@ -51,14 +53,14 @@ describe("a Ticket landing across Repositories", () => {
 
     await renderApp(w, `/?view=inbox&ticket=${ticket}`);
     expect(within(ticketPane()).getByText("Partly landed")).toBeInTheDocument();
-    expect(repositoryRows()).toEqual(["acme acme-3@9a8b7c6 · not landed", "api acme-3@1234567 · landed at def4567"]);
+    expect(repositoryRows()).toEqual(["acme not landed acme-3@9a8b7c6", "api landed at def4567 acme-3@1234567"]);
   });
 
   it("says why a Repository hasn't landed", async () => {
     const { w, s, ticket } = await world();
     await s.base("acme", "missing", undefined, "api");
     await renderApp(w, `/?view=inbox&ticket=${ticket}`);
-    expect(repositoryRows()[1]).toBe("api acme-3@1234567 · not landed: its base, main, is missing");
+    expect(repositoryRows()[1]).toBe("api not landed: its base, main, is missing acme-3@1234567");
   });
 
   it("lands in the Repository chosen in the Accepted panel, and can't be cancelled once Partly landed", async () => {
@@ -74,7 +76,7 @@ describe("a Ticket landing across Repositories", () => {
     await userEvent.click(within(panel()).getByRole("button", { name: "Land" }));
     await settle(w);
 
-    expect(repositoryRows()[1]).toBe("api acme-3@1234567 · landed at def4567");
+    expect(repositoryRows()[1]).toBe("api landed at def4567 acme-3@1234567");
     // Only acme is left to land in, so there is nothing to choose.
     expect(within(panel()).queryByRole("combobox", { name: "Repository it landed in" })).toBeNull();
     expect(within(panel()).getByRole("button", { name: "Cancel" })).toBeDisabled();
