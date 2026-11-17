@@ -9,25 +9,21 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Pull requests across Repositories (Spec code-central-848, ADR 0050):
-// under Pull Request a Ticket whose work is in Repositories beside the
-// Home one has a pull request in each Changed Repository, into that
-// Repository's own Base. The Factory pushes its branch in each, and lands
-// each Repository at its pull request's merge commit once that
-// Repository's fetched base holds it, in whatever order the human merges
-// them; the Ticket is Done once every one has landed. A Ticket whose work
-// is in the Home Repository alone lands as it always did.
+// Pull requests across Repositories (Spec code-central-848, ADR 0050,
+// Spec code-central-890): a Ticket whose work is in Repositories beside
+// the Home one has a pull request in each of its Changed Repositories
+// under Pull Request, and in no other, into that Repository's own Base.
+// The Factory pushes its branch in each, and lands each Repository at its
+// pull request's merge commit once that Repository's fetched base holds
+// it, in whatever order the human merges them; the Ticket is Done once
+// every one of its Changed Repositories has landed, each by its own
+// Landing. A Ticket whose work is in the Home Repository alone lands as
+// it always did.
 
 // changedElsewhere reports whether tk's work is in a Repository beside
 // the Home Repository, home.
 func changedElsewhere(home string, tk core.TicketView) bool {
 	return slices.ContainsFunc(tk.Repositories, func(r core.ChangedRepositoryView) bool { return r.Name != home })
-}
-
-// pullRequestMerged reports whether a pull request of tk's has merged, in
-// any of its Changed Repositories.
-func pullRequestMerged(tk core.TicketView) bool {
-	return hasMerged(tk.PullRequest) || slices.ContainsFunc(tk.Repositories, func(v core.ChangedRepositoryView) bool { return hasMerged(v.PullRequest) })
 }
 
 // hasMerged reports whether pr is a pull request that has merged.
@@ -50,54 +46,47 @@ func (f *factory) baseHolds(r *repository, commit string) bool {
 	return f.stateOf(r).current && (f.inBaseOf(r, commit) || r.home && f.inOldBase(commit))
 }
 
-// landPullRequests sees to an Accepted Ticket under Pull Request whose
-// work spans Repositories, in landing order: each Changed Repository not
-// yet landed lands at its pull request's merge commit once its base
-// holds it, or at once with nothing to merge; the rest have their branch
-// pushed there for the Watcher to open a pull request on. A Ticket still
-// waiting on its Spec Branch has that pushed instead, by pushSpecs, so
-// only its merged pull requests are seen to here. Each is pushed to its
-// own Push remote.
-func (f *factory) landPullRequests(ctx context.Context, tk core.TicketView, p core.ProjectView) {
-	onSpec := f.waitsOnSpecBranch(tk)
-	for _, rec := range tk.Repositories {
-		if rec.Landed != nil {
-			continue
-		}
-		r := f.repositoryNamed(rec.Name)
-		if r == nil {
-			// Repository missing says why.
-			continue
-		}
-		if pr := rec.PullRequest; pr != nil && pr.State == store.PRMerged {
-			f.landMergedIn(ctx, tk, r, pr)
-			continue
-		}
-		remote := r.remote
-		branch := rec.Branch
-		if branch == "" || onSpec {
-			continue
-		}
-		head, err := r.git.commit(rec.Commit)
-		if err != nil {
-			f.cantPushYet(ctx, tk, fmt.Sprintf("its work in %s, %s, isn't in that Repository.", r.name, rec.Commit))
-			continue
-		}
-		if rec.PullRequest == nil && !f.pushedAlreadyIn(r, branch) && f.baseHolds(r, head) {
-			f.printf("%s: nothing to merge into %s%s", tk.ID, f.baseOf(r), r.where())
-			f.landIn(ctx, tk, r, head)
-			continue
-		}
-		pushed, why := f.push(ctx, r, remote, branch, head)
-		if why != "" {
-			f.cantPushYet(ctx, tk, fmt.Sprintf("in %s, %s", r.name, why))
-			continue
-		}
-		if pushed {
-			f.printf("%s: pushed %s to %s%s", tk.ID, branch, remote, r.where())
-		}
-		f.reportPushed(ctx, tk, p.LandingPolicies(), r, branch, f.remoteTip(r, remote, branch, head))
+// landPullRequestIn sees to an Accepted Ticket whose work spans
+// Repositories in r, one of its Changed Repositories under Pull Request:
+// not yet landed there, it lands at its pull request's merge commit once
+// r's base holds it, or at once with nothing to merge; otherwise its
+// branch is pushed to r's Push remote for the Watcher to open a pull
+// request on. A Ticket still waiting on its Spec Branch, onSpec, has that
+// pushed instead, by landSpecs, so only its merged pull request is seen
+// to here.
+func (f *factory) landPullRequestIn(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, r *repository, onSpec bool) {
+	rec, ok := viewIn(tk, r)
+	if !ok || rec.Landed != nil {
+		return
 	}
+	if hasMerged(rec.PullRequest) {
+		f.landMergedIn(ctx, tk, r, rec.PullRequest)
+		return
+	}
+	remote := r.remote
+	branch := rec.Branch
+	if branch == "" || onSpec {
+		return
+	}
+	head, err := r.git.commit(rec.Commit)
+	if err != nil {
+		f.cantPushYet(ctx, tk, fmt.Sprintf("its work in %s, %s, isn't in that Repository.", r.name, rec.Commit))
+		return
+	}
+	if rec.PullRequest == nil && !f.pushedAlreadyIn(r, branch) && f.baseHolds(r, head) {
+		f.printf("%s: nothing to merge into %s%s", tk.ID, f.baseOf(r), r.where())
+		f.landIn(ctx, tk, r, head)
+		return
+	}
+	pushed, why := f.push(ctx, r, remote, branch, head)
+	if why != "" {
+		f.cantPushYet(ctx, tk, fmt.Sprintf("in %s, %s", r.name, why))
+		return
+	}
+	if pushed {
+		f.printf("%s: pushed %s to %s%s", tk.ID, branch, remote, r.where())
+	}
+	f.reportPushed(ctx, tk, policies, r, branch, f.remoteTip(r, remote, branch, head))
 }
 
 // landMergedIn lands tk in r, whose pull request there is reported
@@ -138,14 +127,15 @@ func (f *factory) pushedAlreadyIn(r *repository, branch string) bool {
 }
 
 // detectMergedPullRequestsIn lands an In Review Ticket whose work spans
-// Repositories in each Repository whose pull request is merged, as
+// Repositories in each Repository under Pull Request, its base not
+// broken (held) under policies, whose pull request is merged, as
 // detectMergedPullRequests does for one in the Home Repository alone.
-func (f *factory) detectMergedPullRequestsIn(ctx context.Context, tk core.TicketView) {
+func (f *factory) detectMergedPullRequestsIn(ctx context.Context, tk core.TicketView, policies core.LandingPolicies) {
 	for _, rec := range tk.Repositories {
-		if rec.Landed != nil || rec.PullRequest == nil || rec.PullRequest.State != store.PRMerged {
+		if rec.Landed != nil || !hasMerged(rec.PullRequest) {
 			continue
 		}
-		if r := f.repositoryNamed(rec.Name); r != nil {
+		if r := f.repositoryNamed(rec.Name); r != nil && r.policy(policies).LandsByPullRequest() && f.held(r, policies) == "" {
 			f.landMergedIn(ctx, tk, r, rec.PullRequest)
 		}
 	}

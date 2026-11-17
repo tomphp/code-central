@@ -4,7 +4,7 @@ This guide takes one Requirement through every Stage with `code-central-factory`
 
 The run started from a freshly set up `acme-shop`, so its IDs start at `acme-shop-1` again. If you've already worked the Requirement by hand, yours will be higher.
 
-The Factory is a program you leave running in a terminal. It claims the Project's Ready Tickets, runs one `claude -p` session per Claim, and resumes a session when you answer its Round. Once you accept an implementation Ticket, it lands it by the Project's Landing Method: under **Merge**, the default, it merges the branch into the base and lands it; under **Branch** it leaves the branch for you to merge, and lands the Ticket once you have (see [How accepted work lands](#how-accepted-work-lands)). What's left to you is what a Factory never does:
+The Factory is a program you leave running in a terminal. It claims the Project's Ready Tickets, runs one `claude -p` session per Claim, and resumes a session when you answer its Round. Once you accept an implementation Ticket, it lands it by each of its Repositories' Landing, the Project's Landing Method unless a Repository has its own: under **Merge**, the default, it merges the branch into the base and lands it; under **Branch** it leaves the branch for you to merge, and lands the Ticket once you have (see [How accepted work lands](#how-accepted-work-lands)). What's left to you is what a Factory never does:
 
 | The Factory | You |
 | --- | --- |
@@ -484,7 +484,7 @@ When a Map's Ticket asks you a Round or finishes into In Review, it waits on you
 
 ## How accepted work lands
 
-Each Project has a **Landing Method**, which you set on its **Project Options** page, from the three-dots menu on the Project. The Factory reads it again on every poll, before it lands anything, so a change applies from its next poll to every Ticket still waiting to land, with no restart.
+Each Project has a **Landing Method**, its **Default Landing**, which you set on its **Project Options** page, from the three-dots menu on the Project. Each Repository follows it or has its **Own Landing**, and lands by that (see **Mixed Landings** below). The Factory reads them again on every poll, before it lands anything, so a change applies from its next poll to every Ticket still waiting to land, with no restart.
 
 - **Merge**, the default, is what step 7 shows. The Factory merges an accepted Ticket's branch into the base and lands it. When the branch conflicts with the base it sends the Ticket back to Ready; when it can't move the base it leaves the Ticket Accepted with a comment and tries again on every poll. It keeps an Accepted Ticket's worktree until the Ticket lands, since a Ticket sent back is worked in it again.
 - **Branch** ("Leave as a branch") leaves the merging to you. The Factory never merges an Accepted Ticket and never sends it back for conflicts: a conflict in a branch you merge is yours to resolve. At once on your **Accept**, it says so once and removes the Ticket's worktree, keeping its branch, so you can check the branch out:
@@ -543,7 +543,7 @@ acme-shop-4: every Ticket is finished but spec/acme-shop-4 isn't in main: kept
 
 ### Pull Request
 
-Under **Pull Request**, the Project's Push remote must be on GitHub or Azure Repos, and Push is implied: the Factory pushes each Ticket's branch to the remote once you accept it, and reports the pushed commit and branch to Code Central. The Pull Request Watcher (see [The Pull Request Watcher](running-as-a-service.md#the-pull-request-watcher)) opens a ready-for-review pull request into the base from that branch, with the Ticket's title and finish summary, and reports its state. You merge it on the host, by any of its merge buttons. The Factory never calls the host and never merges the Ticket itself:
+Under **Pull Request**, a Repository's Push remote must be on GitHub or Azure Repos, and Push is implied: the Factory pushes each Ticket's branch to the remote once you accept it, and reports the pushed commit and branch to Code Central. The Pull Request Watcher (see [The Pull Request Watcher](running-as-a-service.md#the-pull-request-watcher)) opens a ready-for-review pull request into the base from that branch, with the Ticket's title and finish summary, and reports its state. You merge it on the host, by any of its merge buttons. The Factory never calls the host and never merges the Ticket itself:
 
 ```text
 acme-shop-5: pushed acme-shop-5 to origin
@@ -652,6 +652,15 @@ acme-shop-17: merged spec/acme-shop-17 into main at 6e7f8a9b0c1d in Repository a
 acme-shop-17: landing its Tickets in Repository api: acme-shop-18
 acme-shop-18: landed on main at 6e7f8a9b0c1d in Repository api
 acme-shop-19: spec/acme-shop-19 conflicts with the base in acme-shop, api: opened acme-shop-22 to merge the base into it
+```
+
+**Mixed Landings.** Each Repository lands by its own Landing, its Own Landing or else the Default Landing, so one Ticket's Changed Repositories can land by different routes. Under Merge the Factory merges the Ticket there, and pushes the base with Push on. Under Branch it waits for you to merge it there. Under Pull Request it pushes the Ticket's branch there for its pull request, and lands it there once that is merged; a Repository under Merge or Branch never gets a pull request. Every Repository is checked before the Ticket lands in any, so a conflict where the Factory merges sends the Ticket back before anything is pushed for a pull request elsewhere, and the Ticket is Partly landed until it has landed in each. With Land per Spec on, a Spec lands in each Repository by that Repository's Landing: its Spec Branch is merged where it is Merge, and pushed for the Spec's pull request where it is Pull Request, every one checked against its base before any is merged or pushed. Under Branch, Land per Spec has no effect there: a Ticket lands there once you merge it, and one that changed only Repositories under Branch doesn't hold its Spec back. Changing a Repository's Own Landing while work is in flight applies from the next landing step in that Repository alone, and what has landed stays. Here the Home lands by Merge and api by Pull Request:
+
+```text
+acme-shop-20: landed on main at 1f2e3d4c5b6a
+acme-shop-20: pushed acme-shop-20 to origin in Repository api
+acme-shop-20: pull request 12 merged in Repository api
+acme-shop-20: landed on main in Repository api at 7a8b9c0d1e2f
 ```
 
 When a base is found for the first time in a run, or changes, the Factory checks that `.mcp.json` is committed on it. At start it refuses to start without the file. Mid-run it cuts no new branches or worktrees, and prints the same message once, until the file is committed; landing carries on.

@@ -33,6 +33,14 @@ func specLanded(r store.Reader, p store.Project, t store.Ticket) bool {
 	return ok && !isMap(spec.Labels) && !slices.Contains(spec.Labels, LongLivedLabel)
 }
 
+// landsWithSpecIn is whether t's work in the Repository name lands with
+// its Spec's, so a commit pushed for it there is the Spec's: t is
+// Spec-landed and Land per Spec is in force there. Under Branch it has no
+// effect, and t's own branch is pushed there (Spec code-central-890).
+func landsWithSpecIn(r store.Reader, p store.Project, t store.Ticket, name string) bool {
+	return specLanded(r, p, t) && landingPolicyIn(p, name).LandPerSpecInForce()
+}
+
 // specMergeCounts is whether t has a Spec merge that counts: one after
 // t's last move back to Ready, the way a pushed commit counts.
 func specMergeCounts(t store.Ticket) bool {
@@ -45,22 +53,25 @@ func specMergeCounts(t store.Ticket) bool {
 // CI Tracking, it has a pushed commit and waits on CI instead. With
 // several Changed Repositories it waits while one it hasn't landed in has
 // nothing pushed for it, as when the Spec's merge there is still to make
-// (Spec code-central-848).
+// (Spec code-central-848). It waits only on its Changed Repositories
+// where Land per Spec is in force: under Branch it lands once the human
+// merges it (Spec code-central-890).
 func waitingForSpec(r store.Reader, p store.Project, t store.Ticket) bool {
 	if t.State != store.Accepted || !specLanded(r, p, t) {
 		return false
 	}
-	if ticketLandingPolicies(p, t).Any(LandingPolicy.LandsByPullRequest) {
-		// The Spec Branch is pushed and waits on its pull request.
+	ps := ticketLandingPolicies(p, t)
+	rs := changedRepositories(p.Key, t)
+	if slices.ContainsFunc(rs, func(cr store.ChangedRepository) bool { return cr.Landed == nil && ps.In(cr.Name).LandsByPullRequest() }) {
+		// The Spec Branch is pushed and waits on its pull request there.
 		return true
 	}
-	rs := changedRepositories(p.Key, t)
 	if len(rs) < 2 {
-		return len(t.PushedCommits) == 0 || !latestPushed(t).Pushed.After(backToReady(t))
+		return ps.LandPerSpecInForce() && (len(t.PushedCommits) == 0 || !latestPushed(t).Pushed.After(backToReady(t)))
 	}
 	return slices.ContainsFunc(rs, func(cr store.ChangedRepository) bool {
 		pc, ok := latestPushedTo(p.Key, t, cr.Name)
-		return cr.Landed == nil && (!ok || !pc.Pushed.After(backToReady(t)))
+		return cr.Landed == nil && ps.In(cr.Name).LandPerSpecInForce() && (!ok || !pc.Pushed.After(backToReady(t)))
 	})
 }
 

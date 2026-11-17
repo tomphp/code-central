@@ -116,12 +116,13 @@ func (f *factory) reportBaseState(ctx context.Context, r *repository, in core.Re
 	f.reportBaseFailing = err != nil
 }
 
-// landPullRequest sees to an Accepted Ticket under Pull Request: one with
-// nothing to merge lands at once, one whose pull request is merged lands
-// at the merge commit, and the rest have their branch pushed for the
-// Watcher to open a pull request on.
+// landPullRequest sees to an Accepted Ticket whose work is in the Home
+// Repository alone, under Pull Request there: one with nothing to merge
+// lands at once, one whose pull request is merged lands at the merge
+// commit, and the rest have their branch pushed for the Watcher to open a
+// pull request on.
 func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p core.ProjectView) {
-	if tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged {
+	if hasMerged(tk.PullRequest) {
 		f.landMerged(ctx, tk)
 		return
 	}
@@ -179,35 +180,31 @@ func (f *factory) landMerged(ctx context.Context, tk core.TicketView) {
 	f.landAt(ctx, tk, f.home, merge)
 }
 
-// detectMergedPullRequests lands In Review Tickets whose pull request is
-// merged, as a branch merged by hand does under Branch. A Ticket in any
-// other State whose pull request is merged gets a warning line and a
-// comment, once.
-func (f *factory) detectMergedPullRequests(ctx context.Context) {
-	for _, tk := range f.landable(ctx, mergeableStates...) {
-		if f.halted(ctx) || f.paused() {
-			return
-		}
-		if tk.State == store.InReview && changedElsewhere(f.home.name, tk) {
-			f.detectMergedPullRequestsIn(ctx, tk)
-			continue
-		}
-		if tk.PullRequest == nil || tk.PullRequest.State != store.PRMerged {
-			continue
-		}
-		if tk.State == store.InReview {
-			f.landMerged(ctx, tk)
-			continue
-		}
-		key := tk.ID + "@" + tk.PullRequest.MergeCommit
-		if f.warnedMerged[key] {
-			continue
-		}
-		f.warnedMerged[key] = true
-		f.printf("warning: %s is %s but its pull request %d is merged: only an In Review or Accepted Ticket lands", tk.ID, tk.State, tk.PullRequest.Number)
-		body := fmt.Sprintf("Its pull request %d was merged on the Code Host, but this Ticket is %s, so it doesn't land: only an In Review or Accepted Ticket lands.", tk.PullRequest.Number, tk.State)
-		if _, err := f.client.Comment(ctx, f.project, core.CommentInput{Ticket: core.Ref(tk.ID), Body: body}); err != nil && ctx.Err() == nil {
-			f.printf("%s: comment: %v", tk.ID, err)
-		}
+// detectMergedPullRequests lands tk, In Review, in each of its Changed
+// Repositories under Pull Request whose pull request there is merged, as
+// a branch merged by hand does under Branch; each is held back only by
+// its own broken base. A Ticket in any other State whose pull request in
+// the Home Repository is merged gets a warning line and a comment, once.
+func (f *factory) detectMergedPullRequests(ctx context.Context, tk core.TicketView, policies core.LandingPolicies) {
+	if tk.State == store.InReview && changedElsewhere(f.home.name, tk) {
+		f.detectMergedPullRequestsIn(ctx, tk, policies)
+		return
+	}
+	if !f.home.policy(policies).LandsByPullRequest() || f.held(f.home, policies) != "" || !hasMerged(tk.PullRequest) {
+		return
+	}
+	if tk.State == store.InReview {
+		f.landMerged(ctx, tk)
+		return
+	}
+	key := tk.ID + "@" + tk.PullRequest.MergeCommit
+	if f.warnedMerged[key] {
+		return
+	}
+	f.warnedMerged[key] = true
+	f.printf("warning: %s is %s but its pull request %d is merged: only an In Review or Accepted Ticket lands", tk.ID, tk.State, tk.PullRequest.Number)
+	body := fmt.Sprintf("Its pull request %d was merged on the Code Host, but this Ticket is %s, so it doesn't land: only an In Review or Accepted Ticket lands.", tk.PullRequest.Number, tk.State)
+	if _, err := f.client.Comment(ctx, f.project, core.CommentInput{Ticket: core.Ref(tk.ID), Body: body}); err != nil && ctx.Err() == nil {
+		f.printf("%s: comment: %v", tk.ID, err)
 	}
 }
