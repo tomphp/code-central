@@ -75,11 +75,7 @@ func workItem(t *testing.T, srv *codecentraltest.Server, spec string, id int) st
 // azure_boards object.
 func workItemWatcher(t *testing.T, project map[string]any, state, message, fix string) {
 	t.Helper()
-	a, _ := project["azure_boards"].(map[string]any)
-	w, _ := a["watcher"].(map[string]any)
-	if w == nil || w["state"] != state || str(w["message"]) != message || str(w["fix"]) != fix {
-		t.Fatalf("azure_boards.watcher = %v, want %s with message %q and fix %q", a["watcher"], state, message, fix)
-	}
+	watcherIn(t, project, "azure_boards", state, message, fix)
 }
 
 // workItemWrites is an item whose work item has writes due, as
@@ -338,9 +334,9 @@ func TestTheTriageNotesFollowTheIncomingIssuesIntegration(t *testing.T) {
 		says   []string
 	}{
 		{gh, "wont_fix", []string{"closes the issue", "not planned"}},
-		{gh, "keep_as_draft", []string{"writes nothing to GitHub"}},
+		{gh, "keep_as_draft", []string{"adds nothing to the issue on GitHub"}},
 		{ab, "wont_fix", []string{"code-central:wont-fix", "State", "Azure DevOps"}},
-		{ab, "keep_as_draft", []string{"writes nothing to Azure Boards"}},
+		{ab, "keep_as_draft", []string{"adds nothing to the work item in Azure Boards"}},
 		{ab, "to_requirement", []string{"work item"}},
 	} {
 		for _, s := range c.says {

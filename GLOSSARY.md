@@ -706,7 +706,7 @@ Whether an Incoming Issue still waits for the human's first triage action. Code 
 _Avoid_: Unread, pending
 
 **Triage action**:
-What the human may do with an Incoming Issue, from either Integration: Keep as Draft, To Requirement or Won't fix. Each is offered on every Incoming Issue, awaiting triage or not, in its Ticket panel, and on a New issue's row and Focus Item.
+What the human may do with an Incoming Issue, from either Integration: Keep as Draft, To Requirement or Won't fix. Each is offered on every Incoming Issue, awaiting triage or not, in its Ticket panel, and on a New issue's row and Focus Item, with a note on what it does that follows the Integration the Incoming Issue came from: Won't fix's says it closes a GitHub issue, or leaves a work item's State for the human to move.
 _Avoid_: Triage option, disposition
 
 **New issues need me**:

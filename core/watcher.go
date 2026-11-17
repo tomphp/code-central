@@ -413,13 +413,14 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 		for i, rp := range next.Repositories {
 			if !slices.Contains(names, rp.Repository) {
 				field := fmt.Sprintf("repositories[%d].repository", i)
-				if k.watched != nil && len(names) == 0 {
+				switch {
+				case k.watched == nil:
+					return notARepository(p, field, rp.Repository)
+				case len(names) == 0:
 					return invalid(field, "the %s watches no repositories: report its problem without naming one", k.name)
-				}
-				if k.watched != nil {
+				default:
 					return invalid(field, "%q is not one of %s's %s repositories, which are %s", rp.Repository, key, k.setting, strings.Join(names, ", "))
 				}
-				return notARepository(p, field, rp.Repository)
 			}
 		}
 		// The store's read lock keeps the setting from being turned off

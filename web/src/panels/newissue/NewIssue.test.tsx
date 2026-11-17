@@ -160,10 +160,10 @@ async function boardsWorld() {
 }
 
 describe("a New issue from Azure Boards", () => {
-  it("names Azure Boards and writes nothing to it on Keep as Draft", async () => {
+  it("names Azure Boards and adds nothing to the work item on Keep as Draft", async () => {
     const p = await renderPanel(await boardsWorld());
     expect(p).toHaveTextContent("came in from Azure Boards");
-    expect(p).toHaveTextContent("writes nothing to Azure Boards");
+    expect(p).toHaveTextContent("adds nothing to the work item in Azure Boards");
     expect(p).not.toHaveTextContent("GitHub");
   });
 

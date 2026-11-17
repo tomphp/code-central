@@ -64,29 +64,25 @@ func ticketTriageActions(r store.Reader, key string, t store.Ticket) []TriageAct
 	return TriageActions
 }
 
-// ticketTriageNotes says what each triage action offered on t does, as
-// the UI shows it before the human confirms: what is written back
+// triageNotes says what each triage action does to t, an Incoming Issue,
+// as the UI shows it before the human confirms: what is written back
 // depends on the Integration t is linked through, and Won't fix never
-// changes a work item's State. None on a Ticket that isn't an Incoming
-// Issue.
-func ticketTriageNotes(r store.Reader, key string, t store.Ticket) map[TriageAction]string {
-	if whyNotIncoming(r, key, t) != "" {
-		return nil
-	}
+// changes a work item's State.
+func triageNotes(t store.Ticket) map[TriageAction]string {
 	leaves := "leaves it here as it is"
 	if t.AwaitingTriage {
 		leaves += ", out of Needs Me,"
 	}
 	if t.Link.Integration == IntegrationAzureBoards {
 		return map[TriageAction]string{
-			OptionKeepAsDraft:   "Keep as Draft " + leaves + " and writes nothing to Azure Boards.",
+			OptionKeepAsDraft:   "Keep as Draft " + leaves + " and adds nothing to the work item in Azure Boards.",
 			OptionToRequirement: "To Requirement makes a Requirement of the work item's title and body, Cancels this Ticket, and from then on only writes the work's progress to the work item.",
 			OptionWontFix: "Won't fix Cancels this Ticket and tags the work item " + LabelWontFix + ", with your reason as a comment. " +
 				"It leaves the work item's State as it is: move it in Azure DevOps yourself.",
 		}
 	}
 	return map[TriageAction]string{
-		OptionKeepAsDraft:   "Keep as Draft " + leaves + " and writes nothing to GitHub.",
+		OptionKeepAsDraft:   "Keep as Draft " + leaves + " and adds nothing to the issue on GitHub.",
 		OptionToRequirement: "To Requirement makes a Requirement of the issue's title and body, Cancels this Ticket, and from then on only writes the work's progress to the issue.",
 		OptionWontFix:       "Won't fix Cancels this Ticket and closes the issue on GitHub as not planned, with your reason as a comment.",
 	}

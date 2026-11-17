@@ -140,7 +140,10 @@ export function projectSettingsContract(driver: () => Driver) {
 
   it("sets a Project's Azure Boards settings, off by default, keeping each mode's, with the Azure Boards Spec made once", async () => {
     await d.createProject("acme", "Acme");
-    const off = { on: false, mode: "saved_query" as const, query_url: "", project_url: "", where: "", pat_env: "ADO_PAT", new_issues_need_me: false };
+    const off = {
+      on: false, mode: "saved_query" as const, query_url: "", project_url: "", where: "", pat_env: "ADO_PAT", new_issues_need_me: false,
+      watcher: { state: "not_reported" as const },
+    };
     expect((await d.api.listProjects())[0].azure_boards).toEqual(off);
 
     const none = await d.api.setAzureBoards("acme", { ...off, on: true }).catch((e) => e);

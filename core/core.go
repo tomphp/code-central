@@ -852,7 +852,10 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = e.reason(t)
-	v.AwaitingTriage, v.TriageActions, v.TriageNotes = t.AwaitingTriage, ticketTriageActions(r, key, t), ticketTriageNotes(r, key, t)
+	v.AwaitingTriage, v.TriageActions = t.AwaitingTriage, ticketTriageActions(r, key, t)
+	if v.TriageActions != nil {
+		v.TriageNotes = triageNotes(t)
+	}
 	v.SpecMergeTicket = t.SpecMergeTicket
 	return v
 }
