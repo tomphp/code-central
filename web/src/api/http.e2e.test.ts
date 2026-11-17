@@ -32,6 +32,8 @@ apiContract("HTTP API against code-central serve", async () => {
       for (const cut of streams) cut.abort();
       streams.clear();
     },
+    // The real service's Azure Boards check needs a PAT and Azure DevOps.
+    canReachAzureDevOps: false,
     // Absolute where the service runs: a Windows path isn't on Unix.
     absolutePath: process.platform === "win32" ? "C:\\Tools\\gh.exe" : "/opt/tools/gh",
     // serve has nothing to settle on (ADR 0044): its contract cases poll.

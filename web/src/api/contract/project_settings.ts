@@ -154,7 +154,15 @@ export function projectSettingsContract(driver: () => Driver) {
     expect(select).toMatchObject({ status: 422, code: "invalid", field: "where" });
 
     const query = "https://dev.azure.com/contoso/web/_queries/query/6b4a0c1e-9f1d-4a51-8f43-2a7d3c1b9e10";
-    const on = await d.api.setAzureBoards("acme", {
+    if (!d.canReachAzureDevOps) {
+      // The check refuses turning it on without a PAT, and the Project is left as it was.
+      const refused = await d.api.setAzureBoards("acme", { ...off, on: true, query_url: query }).catch((e) => e);
+      expect(refused).toMatchObject({ status: 422, code: "invalid", field: "on" });
+      expect(refused.message).toContain("ADO_PAT");
+      expect((await d.api.listProjects())[0].azure_boards).toEqual(off);
+      return;
+    }
+    const on =await d.api.setAzureBoards("acme", {
       ...off, on: true, query_url: ` ${query}/ `, project_url: "https://dev.azure.com/contoso/api/_boards", where: " [System.State] = 'Approved' ",
     });
     expect(on.azure_boards).toEqual({

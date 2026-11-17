@@ -3,6 +3,7 @@ package workitemwatcher_test
 import (
 	"errors"
 	"net/http"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -108,7 +109,8 @@ func TestEachFailedAzureBoardsCheckRefusesWithItsProblemAndFix(t *testing.T) {
 		problem     string
 		reason, fix string
 	}{
-		{"no PAT", nil, func(*checking) {}, "pat_missing", "ADO_PAT is not set", "launchctl setenv ADO_PAT"},
+		{"no PAT", nil, func(*checking) {}, "pat_missing", "ADO_PAT is not set",
+			map[string]string{"darwin": "launchctl setenv ADO_PAT", "linux": "systemctl --user set-environment", "windows": "user environment variable"}[runtime.GOOS]},
 		{"empty PAT", []string{"ADO_PAT="}, func(*checking) {}, "pat_missing", "ADO_PAT is not set", "Work Items: Read & write"},
 		{"rejected PAT", []string{"ADO_PAT=" + pat}, func(c *checking) {
 			c.fake.Script(fakeazdo.JSON("", fakeazdo.ProjectPath+"/_apis/wit/wiql", http.StatusUnauthorized, map[string]string{}))
