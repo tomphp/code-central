@@ -239,13 +239,13 @@ The branch that a Project's work is cut from and lands on, under every Landing M
 _Avoid_: target branch, merge branch
 
 **Base missing**:
-The Needs Me reason of a Repository whose base exists neither locally nor on the Push remote. It is one Focus Item per Repository naming the Repository, the branch and the fix. Until a later poll finds the branch, the Factory starts no new Claims, and lands nothing whose Changed Repositories include that Repository; other work still lands. It sits beside Base diverged.
+The Needs Me reason of a Repository whose base exists neither locally nor on the Push remote; a local-only Repository's is never looked for on a remote, so it is missing when it isn't local. It is one Focus Item per Repository naming the Repository, the branch and the fix. Until a later poll finds the branch, the Factory starts no new Claims, and lands nothing whose Changed Repositories include that Repository; other work still lands. It sits beside Base diverged.
 
 **Repository missing**:
 The Needs Me reason of a Repository the Factory has no usable clone of: it couldn't clone it, or found something other than a clone with a matching Clone URL where the clone should be. It also covers a local-only Repository whose local path holds no clone of its own, and a Repository whose resolved path is another Repository's clone. It is one Focus Item per Repository naming the path, the Clone URL (left out when there is none) and what is wrong. The Factory never touches what it finds there, and starts no new Claims until a later poll finds the clone. It sits beside Base missing.
 
 **Base diverged**:
-The Needs Me reason of a Repository whose local base the Factory can't bring level with the remote base. Under Pull Request it means the local base holds commits the remote's doesn't, so the Factory can't fast-forward it. Under Merge + Push, where a local base that is only ahead is current, it means the local base and the remote's each hold commits the other lacks and the Factory couldn't move the local base onto the remote's: a rebuilt merge or a replayed commit conflicted, or an unpushed merge isn't one of the Factory's. It is one Focus Item per Repository naming the Repository and showing the local and remote commits and the fix. Until the human reconciles the base and the Factory's next poll brings it level cleanly, the Factory starts no new Claims, and lands nothing whose Changed Repositories include that Repository; other work still lands.
+The Needs Me reason of a Repository whose local base the Factory can't bring level with the remote base. Under Pull Request it means the local base holds commits the remote's doesn't, so the Factory can't fast-forward it. Under Merge + Push, where a local base that is only ahead is current, it means the local base and the remote's each hold commits the other lacks and the Factory couldn't move the local base onto the remote's: a rebuilt merge or a replayed commit conflicted, or an unpushed merge isn't one of the Factory's. It is one Focus Item per Repository naming the Repository and showing the local and remote commits and the fix. Until the human reconciles the base and the Factory's next poll brings it level cleanly, the Factory starts no new Claims, and lands nothing whose Changed Repositories include that Repository; other work still lands. A local-only Repository's base is never fetched or levelled, so it is never Base diverged.
 _Avoid_: Out of sync, base conflict
 
 **Land per Spec**:
@@ -357,7 +357,7 @@ A Ticket's running, failed, cancelled or passed. A pushed commit's is worked out
 _Avoid_: Build status
 
 **CI gate**:
-What holds a pushed Ticket back from landing in a Repository until its CI result there is passed, so it holds on running, failed and cancelled. It holds per Repository, and a Not watched Repository is not gated. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own. Under Land per Spec a Spec's waiting Tickets share one pushed commit per Repository, so one CI result in each Repository gates them all.
+What holds a pushed Ticket back from landing in a Repository until its CI result there is passed, so it holds on running, failed and cancelled. It holds per Repository, and neither a Not watched Repository nor a local-only one, where nothing is pushed, is gated. It holds only while Merge, Push and CI Tracking all do, and lifts when any is turned off; the Ticket waits in its State, with no State of its own. Under Land per Spec a Spec's waiting Tickets share one pushed commit per Repository, so one CI result in each Repository gates them all.
 _Avoid_: CI check, CI hold, waiting-on-CI State
 
 **Ignored workflows**:
@@ -514,7 +514,7 @@ The Needs Me reason of a pushed commit whose CI result is failed (a run failed o
 _Avoid_: Build broken, red
 
 **Land anyway**:
-The failure option by which the human accepts a CI failed or CI cancelled item's CI result, stored once on the Project for that pushed commit only, so the Factory lands every Ticket the item lists in that commit's Repository on its next poll. Their other Repositories keep their own CI result. Offered under Merge + Push only: under Branch + Push and under Pull Request the human's merge decides.
+The failure option by which the human accepts a CI failed or CI cancelled item's CI result, stored once on the Project for that pushed commit only, so the Factory lands every Ticket the item lists in that commit's Repository on its next poll. Their other Repositories keep their own CI result. Offered under Merge + Push only: under Branch + Push and under Pull Request the human's merge decides, and a local-only Repository lands once merged.
 _Avoid_: Override, force land
 
 **Re-run failed jobs**:

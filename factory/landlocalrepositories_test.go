@@ -49,10 +49,7 @@ func TestUnderMergeAndPushALocalOnlyRepositorysOwnRemoteIsNeverFetchedPushedOrLe
 	h := factorytest.New(t)
 	h.AddRemote("origin")
 	api := h.AddLocalRepository("api")
-	// api's clone has a remote of the Push remote's name, which isn't
-	// the Repository's: its main shares no history with api's.
-	other := h.MakeRepository("other")
-	h.GitIn(api.Path, "remote", "add", "origin", other.CloneURL)
+	other := addUnrelatedOrigin(h, api)
 	theirs := other.Remote("origin").Git("rev-parse", "main")
 	mergeAndPush(h, "origin")
 	id := inAPI(h, "Add an endpoint")
@@ -81,8 +78,7 @@ func TestALocalOnlyRepositorysMissingBaseIsNotLookedForOnItsOwnRemote(t *testing
 	t.Parallel()
 	h := factorytest.New(t)
 	api := h.AddLocalRepository("api")
-	other := h.MakeRepository("other")
-	h.GitIn(api.Path, "remote", "add", "origin", other.CloneURL)
+	other := addUnrelatedOrigin(h, api)
 	// release is on api's origin, which isn't the Repository's, and not
 	// in api itself.
 	release := "release"
@@ -243,4 +239,37 @@ func TestUnderMergeAndPushAHandMergeInALocalOnlyRepositoryLandsWithNoPush(t *tes
 		t.Fatalf("Changed Repositories %+v, want api landed at its work %s", tk.Repositories, work)
 	}
 	r.WantOutput(id + ": merged into main by hand in Repository api")
+}
+
+func TestARepositoryWhoseCloneURLIsClearedWhileItsBaseHasDivergedNoLongerHoldsBackClaims(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.AddRemote("origin")
+	api := h.AddRepository("api")
+	mergeAndPush(h, "origin")
+	r := h.Start()
+	// api's remote and its clone's main each gain a commit the other
+	// lacks, and they conflict.
+	api.CommitOn("main", "README.md", "ours\n")
+	pushElsewhere(t, h, api, "README.md", "theirs\n")
+	r.Poll()
+	r.WantOutput("warning: the base, main, in Repository api has diverged from the remote's")
+	ready := h.ReadyTicket("Waits for the base")
+	h.Script(ready, factorytest.Wait())
+	r.Poll()
+	if tk := h.Ticket(ready); tk.State != store.Ready {
+		t.Fatalf("%s is %s, want it not claimed while api's base has diverged", ready, tk.State)
+	}
+
+	// The human stops pushing api: local-only, its base is never levelled.
+	path, none := api.Path, ""
+	if _, err := h.Human().EditRepository(context.Background(), h.Project, core.EditRepositoryInput{Name: "api", CloneURL: &none, LocalPath: &path}); err != nil {
+		t.Fatal(err)
+	}
+	r.Poll()
+
+	h.WantState(ready, store.InProgress)
+	if rows := h.NeedsMeItems(core.ReasonBaseDiverged); len(rows) != 0 {
+		t.Errorf("Base diverged items %+v, want none once api is local-only", rows)
+	}
 }

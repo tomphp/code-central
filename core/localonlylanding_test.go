@@ -14,6 +14,16 @@ import (
 // Push no pushed commit is recorded there, its CI neither gates landing
 // nor offers Land anyway, and its base is never Base diverged.
 
+// makeLocalOnly has the human clear the Repository name's Clone URL,
+// keeping its clone at its local path: it is local-only from then on.
+func (f fixture) makeLocalOnly(t *testing.T, name string) {
+	t.Helper()
+	none, path := "", srcPath(name)
+	if _, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: name, CloneURL: &none, LocalPath: &path}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestUnderMergeAndPushNoPushedCommitIsRecordedInALocalOnlyRepository(t *testing.T) {
 	f := itemWorld(t)
 	f.addRepository(t, core.AddRepositoryInput{Name: "api", LocalPath: srcPath("api")})
@@ -39,10 +49,7 @@ func TestARepositoryWhoseCloneURLIsClearedNeitherWaitsOnItsCINorOffersLandAnyway
 		t.Fatalf("api %+v, want it waiting on its CI while it has a Clone URL", api)
 	}
 
-	none, path := "", srcPath("api")
-	if _, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "api", CloneURL: &none, LocalPath: &path}); err != nil {
-		t.Fatal(err)
-	}
+	f.makeLocalOnly(t, "api")
 
 	if api := changedIn(t, f.getTicket(t, "acme-5"), "api"); api.NotLanded != "" || api.CIResult != core.CIRunning {
 		t.Fatalf("api %+v, want its CI result shown and not waited on, as under Merge without Push", api)
@@ -55,7 +62,7 @@ func TestARepositoryWhoseCloneURLIsClearedNeitherWaitsOnItsCINorOffersLandAnyway
 	}
 	_, err := f.core.LandAnyway(human, "acme", core.CIResponseInput{Ticket: "acme-5", Repository: "api"})
 	notAllowed(t, err)
-	if want := "api has no Clone URL"; !strings.Contains(err.Error(), want) {
+	if want := "api is local-only, with no Clone URL"; !strings.Contains(err.Error(), want) {
 		t.Fatalf("refusal %q, want it to say %q", err, want)
 	}
 	if home := changedIn(t, v, "acme"); home.NotLanded != "waiting on CI at abc123" {
@@ -66,10 +73,7 @@ func TestARepositoryWhoseCloneURLIsClearedNeitherWaitsOnItsCINorOffersLandAnyway
 func TestUnderMergeAndPushALocalOnlyRepositorysBaseIsNeverBaseDiverged(t *testing.T) {
 	f := newFixture(t)
 	f.basesProject(t)
-	none, path := "", srcPath("api")
-	if _, err := f.core.EditRepository(human, "acme", core.EditRepositoryInput{Name: "api", CloneURL: &none, LocalPath: &path}); err != nil {
-		t.Fatal(err)
-	}
+	f.makeLocalOnly(t, "api")
 
 	// As a Factory that hadn't yet seen api turn local-only would.
 	f.reportBase(t, core.ReportBaseInput{Repository: "api", State: core.BaseDiverged, Local: "aaa111", Remote: "bbb222"})

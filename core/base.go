@@ -27,7 +27,8 @@ const (
 	BaseCurrent  BaseState = "current"
 	BaseDiverged BaseState = "diverged"
 	// BaseMissing is a base that exists neither locally nor on the Push
-	// remote; it carries no commits.
+	// remote, or in a local-only Repository, never looked for on a
+	// remote, doesn't exist locally; it carries no commits.
 	BaseMissing BaseState = "missing"
 )
 
