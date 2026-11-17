@@ -12,3 +12,5 @@ The Issues Spec's ID is stored on the Project with its GitHub Issues settings. A
 ## Consequences
 
 Incoming Issues are kept together and read as the Project's issue inbox. The Issues Spec stays when GitHub Issues is turned off, as the record of its Tickets, and is never Finished by Code Central.
+
+Amended by [ADR 0053](0053-azure-boards-is-a-second-integration-with-its-own-watcher-and-spec.md): one Spec per Integration for its Incoming Issues, the Issues Spec for GitHub Issues and the Azure Boards Spec for Azure Boards.

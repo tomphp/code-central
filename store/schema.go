@@ -39,6 +39,7 @@ func Schema() string {
 	values(fmt.Sprintf("  options limits_popup (default %s)", DefaultOptions().LimitsPopup), LimitsPopupNames())
 	values("  project landing.method (no landing: merge, push false, remote origin)", landingMethodNames())
 	values("  project ci.provider (no ci: tracking off, github_actions)", ciProviderNames())
+	values("  project azure_boards.mode (optional)", azureBoardsModeNames())
 	values("  project models.kinds[].kind", ModelKinds)
 	values("  project focus_kinds_off[]", NeedsMeReasons)
 	values("  ticket state, moves[].from, moves[].to", states)

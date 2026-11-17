@@ -25,6 +25,7 @@ import (
 	"github.com/tomoram/code-central/usage"
 	"github.com/tomoram/code-central/watchers"
 	"github.com/tomoram/code-central/web"
+	"github.com/tomoram/code-central/workitemwatcher"
 )
 
 // Port is Code Central's fixed port. The local `port` setting changes it
@@ -166,6 +167,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 	c.SetUsage(usage.New(dir, clk, time.Local, e.Stderr))
 	c.SetCICheck(ciwatcher.Checker(self, os.Environ()))
 	c.SetIssuesCheck(issuewatcher.Checker(self, os.Environ()))
+	c.SetAzureBoardsCheck(workitemwatcher.Checker(self, os.Environ()))
 	c.SetPullRequestCheck(pullrequestwatcher.Checker(self, os.Environ()))
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -198,7 +200,7 @@ func runServe(ctx context.Context, e Env, args []string) (err error) {
 			defer close(supervised)
 			ticker := time.NewTicker(time.Minute)
 			defer ticker.Stop()
-			watchers.Supervise(superviseCtx, watchers.Supervision{Projects: c, Kinds: []watchers.Kind{ciwatcher.Kind, issuewatcher.Kind, pullrequestwatcher.Kind}, Program: self, Clock: clk, Tick: ticker.C, Log: e.Stderr,
+			watchers.Supervise(superviseCtx, watchers.Supervision{Projects: c, Kinds: []watchers.Kind{ciwatcher.Kind, issuewatcher.Kind, pullrequestwatcher.Kind, workitemwatcher.Kind}, Program: self, Clock: clk, Tick: ticker.C, Log: e.Stderr,
 				Environ: append(os.Environ(), "CODE_CENTRAL_URL=http://"+bound[0])})
 		}()
 		if e.Notifier != nil && local.Notifications == "on" && !o.noNotify {

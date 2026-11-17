@@ -40,6 +40,8 @@ type projectFile struct {
 	CI *ciFile `yaml:"ci,omitempty"`
 	// GitHubIssues is left out while it is off with nothing set.
 	GitHubIssues *githubIssuesFile `yaml:"github_issues,omitempty"`
+	// AzureBoards is left out while it is off with nothing set.
+	AzureBoards *azureBoardsFile `yaml:"azure_boards,omitempty"`
 	// Models is left out while it sets nothing.
 	Models *modelsFile `yaml:"models,omitempty"`
 	// ReportedModels is left out while it holds nothing.
@@ -126,6 +128,17 @@ type githubIssuesFile struct {
 	Label           string   `yaml:"label,omitempty"`
 	NewIssuesNeedMe bool     `yaml:"new_issues_need_me,omitempty"`
 	Spec            int      `yaml:"spec,omitempty"`
+}
+
+type azureBoardsFile struct {
+	On              bool   `yaml:"on"`
+	Mode            string `yaml:"mode,omitempty"`
+	QueryURL        string `yaml:"query_url,omitempty"`
+	ProjectURL      string `yaml:"project_url,omitempty"`
+	Where           string `yaml:"where,omitempty"`
+	PATEnv          string `yaml:"pat_env,omitempty"`
+	NewIssuesNeedMe bool   `yaml:"new_issues_need_me,omitempty"`
+	Spec            int    `yaml:"spec,omitempty"`
 }
 
 type ciFile struct {
@@ -701,7 +714,7 @@ func encode(record any, project string) (string, []byte, error) {
 	case Project:
 		rel = filepath.Join("projects", r.Key, "project.yaml")
 		data, err = encodeYAML(projectFile{Key: r.Key, DisplayName: r.DisplayName, Created: formatTime(r.Created), Mode: string(r.Mode), Archived: formatOptionalTime(r.Archived), Landing: encodeLanding(r.Landing), CI: encodeCI(r.CI),
-			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), Models: encodeModels(r.Models),
+			GitHubIssues: encodeGitHubIssues(r.GitHubIssues), AzureBoards: encodeAzureBoards(r.AzureBoards), Models: encodeModels(r.Models),
 			ReportedModels: encodeReportedModels(r.ReportedModels), StageGuides: encodeStageGuides(r.StageGuides), FocusKindsOff: r.FocusKindsOff, CIResponses: encodeCIResponses(r.CIResponses), CIFixesSpec: r.CIFixesSpec, SmallChangesSpec: r.SmallChangesSpec, RetrosSpec: r.RetrosSpec, AutoAccept: encodeAutoAccept(r.AutoAccept),
 			Repositories: encodeRepositories(r.Repositories)})
 	case Options:
@@ -873,6 +886,17 @@ func encodeGitHubIssues(g GitHubIssues) *githubIssuesFile {
 		return nil
 	}
 	return &githubIssuesFile{On: g.On, Repositories: g.Repositories, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
+}
+
+// encodeAzureBoards leaves Azure Boards out of project.yaml while it is
+// off with nothing set, so a Project that never had it keeps the file it
+// always had.
+func encodeAzureBoards(a AzureBoards) *azureBoardsFile {
+	if a == (AzureBoards{}) {
+		return nil
+	}
+	return &azureBoardsFile{On: a.On, Mode: string(a.Mode), QueryURL: a.QueryURL, ProjectURL: a.ProjectURL, Where: a.Where,
+		PATEnv: a.PATEnv, NewIssuesNeedMe: a.NewIssuesNeedMe, Spec: a.Spec}
 }
 
 // encodeAutoAccept is the on kinds as project.yaml holds them.

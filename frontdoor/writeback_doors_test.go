@@ -19,7 +19,7 @@ func init() {
 	cases["wont_fix"] = opCase{
 		setup: newIssue,
 		ok:    call{http: wontFix("5", `{"reason":"Works as intended."}`)},
-		check: ticketAcknowledgement("acme-5", "Cancelled", "state", "comments", "moves", "needs_me_reason", "awaiting_triage", "triage_actions"),
+		check: ticketAcknowledgement("acme-5", "Cancelled", "state", "comments", "moves", "needs_me_reason", "awaiting_triage", "triage_actions", "triage_notes"),
 		full: func(t *testing.T, out map[string]any) {
 			field("state", "Cancelled")(t, out)
 			boolField(t, out, "awaiting_triage", false)

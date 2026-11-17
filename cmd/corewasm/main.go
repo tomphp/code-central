@@ -11,7 +11,7 @@
 //	now(id) -> ISO time
 //	advance(id, ms)
 //	setCICheck(id, resultJSON), setIssuesCheck(id, resultJSON),
-//	setPullRequestCheck(id, resultJSON)
+//	setAzureBoardsCheck(id, resultJSON), setPullRequestCheck(id, resultJSON)
 //	reportWatcherCrash(id, kind, key, restarts, lastLine, restartAtISO)
 //	dropStreams(id)
 //	transcriptStreams(id) -> count
@@ -66,6 +66,7 @@ func main() {
 	})
 	set("setCICheck", func(a []js.Value) any { of(a[0]).SetCICheck(checkResult(a[1])); return nil })
 	set("setIssuesCheck", func(a []js.Value) any { of(a[0]).SetIssuesCheck(checkResult(a[1])); return nil })
+	set("setAzureBoardsCheck", func(a []js.Value) any { of(a[0]).SetAzureBoardsCheck(checkResult(a[1])); return nil })
 	set("setPullRequestCheck", func(a []js.Value) any { of(a[0]).SetPullRequestCheck(checkResult(a[1])); return nil })
 	set("reportWatcherCrash", func(a []js.Value) any {
 		of(a[0]).ReportWatcherCrash(core.WatcherKind(a[1].String()), a[2].String(), core.WatcherCrash{

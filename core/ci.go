@@ -126,6 +126,15 @@ var workflowPattern = regexp.MustCompile(`^[^/\\\s*?\[\]]+\.ya?ml$`)
 // patEnvPattern is an environment variable's name.
 var patEnvPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
+// checkPATEnv refuses a PAT environment variable that isn't a name, on
+// pat_env; empty, which reads as the default, passes.
+func checkPATEnv(name string) error {
+	if name != "" && !patEnvPattern.MatchString(name) {
+		return invalid("pat_env", "%q isn't an environment variable name: a letter or underscore, then letters, digits and underscores, such as %s", name, store.DefaultPATEnv)
+	}
+	return nil
+}
+
 // checkWorkflow reports whether name is a workflow name for provider, with
 // an example of one for messages. GitHub Actions names workflow files. A pipeline's name is any
 // non-empty name without a folder separator or a glob, spaces allowed.
@@ -197,8 +206,8 @@ func checkCITarget(ci *store.CI) error {
 			}
 			ci.ProjectURL = u
 		}
-		if ci.PATEnv != "" && !patEnvPattern.MatchString(ci.PATEnv) {
-			return invalid("pat_env", "%q isn't an environment variable name: a letter or underscore, then letters, digits and underscores, such as %s", ci.PATEnv, store.DefaultPATEnv)
+		if err := checkPATEnv(ci.PATEnv); err != nil {
+			return err
 		}
 	default:
 		switch {

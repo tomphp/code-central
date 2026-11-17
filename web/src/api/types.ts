@@ -10,6 +10,7 @@ import {
   FOCUS_POPUPS,
   LIMITS_POPUPS,
   type Acknowledgement,
+  type AzureBoardsMode,
   type BaseDivergedView,
   type BaseMissingView,
   type ChatMessageView,
@@ -188,6 +189,26 @@ export interface GitHubIssuesChange {
   // label is the filter label: only issues carrying it come in; "" lets
   // every issue in.
   label: string;
+  new_issues_need_me: boolean;
+}
+
+// ---- Azure Boards ----
+
+// The Azure Boards settings the human sets with setAzureBoards (Spec
+// code-central-894). Each mode's settings are kept whichever mode is
+// chosen; on needs the chosen mode's.
+export interface AzureBoardsChange {
+  on: boolean;
+  mode: AzureBoardsMode;
+  // query_url is the Saved query's URL, as the browser shows it.
+  query_url: string;
+  // project_url is the Azure DevOps project a WIQL filter runs in, and
+  // where its WHERE clause, without the keyword.
+  project_url: string;
+  where: string;
+  // pat_env names the environment variable holding the PAT; "" takes the
+  // Project's CI PAT variable.
+  pat_env: string;
   new_issues_need_me: boolean;
 }
 

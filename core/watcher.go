@@ -15,7 +15,8 @@ import (
 
 // Every kind of Watcher's status: the separate processes the service runs
 // per Project, each watching one external system, and what they and the
-// service report about them: the CI Watcher, and the Issue Watcher.
+// service report about them: the CI Watcher, the Issue Watcher, the Pull
+// Request Watcher and the Work Item Watcher.
 //
 // The status lives in memory only, like pings: a Watcher is the service's
 // child, so a restarted service has no status until its Watcher reports
@@ -33,6 +34,9 @@ const (
 	// WatcherPullRequests is the Pull Request Watcher, run while the
 	// Landing Method is Pull Request.
 	WatcherPullRequests WatcherKind = "pull_requests"
+	// WatcherWorkItems is the Work Item Watcher, run while Azure Boards is
+	// on.
+	WatcherWorkItems WatcherKind = "work_items"
 )
 
 // watcherKind is how one kind of Watcher is configured; a new kind of
@@ -52,7 +56,8 @@ type watcherKind struct {
 	// watched are the names of what it watches, one by one, that a
 	// per-Repository problem may name: the Project's Repository Names
 	// unless set, as the Issue Watcher's repositories are GitHub's
-	// owner/name.
+	// owner/name, and the Work Item Watcher, which runs one query, has
+	// none.
 	watched func(store.Project) []string
 }
 
@@ -67,6 +72,9 @@ var watcherKinds = map[WatcherKind]watcherKind{
 	WatcherPullRequests: {name: "Pull Request Watcher", setting: "Pull Request", on: func(p store.Project) bool { return landingPolicyOf(p).RunsPullRequestWatcher() },
 		problems: []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
 			ProblemPATScope, ProblemCheckFailed}, watches: "pull requests"},
+	WatcherWorkItems: {name: "Work Item Watcher", setting: "Azure Boards", on: func(p store.Project) bool { return p.AzureBoards.On },
+		problems: []WatcherProblem{ProblemPATMissing, ProblemPATRejected, ProblemProjectUnreadable, ProblemPATScope, ProblemQueryUnusable,
+			ProblemTooManyWorkItems, ProblemCheckFailed}, watches: "Azure Boards", watched: func(store.Project) []string { return nil }},
 }
 
 // Name is the kind's glossary name, such as CI Watcher.
@@ -105,8 +113,17 @@ const (
 	// ProblemProjectUnreadable is an Azure DevOps project the PAT can't
 	// read, or that wasn't found.
 	ProblemProjectUnreadable WatcherProblem = "project_unreadable"
-	// ProblemPATScope is an Azure DevOps PAT without the Build scope.
+	// ProblemPATScope is an Azure DevOps PAT without a scope its Watcher
+	// needs: Build for the CI Watcher, Work Items Read & Write for the
+	// Work Item Watcher.
 	ProblemPATScope WatcherProblem = "pat_scope"
+	// ProblemQueryUnusable is an Azure Boards query that can't be run: a
+	// Saved query not found, or a tree or links one, or a WIQL filter
+	// Azure DevOps refuses.
+	ProblemQueryUnusable WatcherProblem = "query_unusable"
+	// ProblemTooManyWorkItems is an Azure Boards query matching more work
+	// items than the Work Item Watcher takes in.
+	ProblemTooManyWorkItems WatcherProblem = "too_many_work_items"
 	// ProblemCheckFailed is a check that didn't run to an answer.
 	ProblemCheckFailed WatcherProblem = "check_failed"
 	// ProblemCrashed is a Watcher that exited without being stopped. The
@@ -117,7 +134,7 @@ const (
 // WatcherProblems are the problems.
 var WatcherProblems = []WatcherProblem{ProblemGHMissing, ProblemLoggedOut, ProblemRepositoryUnreadable,
 	ProblemIssuesDisabled, ProblemNoTriage, ProblemNoWrite, ProblemPATMissing, ProblemPATRejected,
-	ProblemProjectUnreadable, ProblemPATScope, ProblemCheckFailed, ProblemCrashed}
+	ProblemProjectUnreadable, ProblemPATScope, ProblemQueryUnusable, ProblemTooManyWorkItems, ProblemCheckFailed, ProblemCrashed}
 
 // WatcherCheckResult is a Watcher's check mode's answer: no Problem when
 // it can watch, else what is wrong and its fix.
@@ -396,10 +413,14 @@ func (c *Core) reportWatcherStatus(kind WatcherKind, key string, in ReportWatche
 		for i, rp := range next.Repositories {
 			if !slices.Contains(names, rp.Repository) {
 				field := fmt.Sprintf("repositories[%d].repository", i)
-				if k.watched != nil {
+				switch {
+				case k.watched == nil:
+					return notARepository(p, field, rp.Repository)
+				case len(names) == 0:
+					return invalid(field, "the %s watches no repositories: report its problem without naming one", k.name)
+				default:
 					return invalid(field, "%q is not one of %s's %s repositories, which are %s", rp.Repository, key, k.setting, strings.Join(names, ", "))
 				}
-				return notARepository(p, field, rp.Repository)
 			}
 		}
 		// The store's read lock keeps the setting from being turned off

@@ -254,7 +254,7 @@ With CI Tracking on, each Repository has its own CI: adding one fills in its CI 
 
 Each Project has a **Landing Method**: what the Factory does with an implementation Ticket's branch once you accept it. A new Project starts on **Merge** with **Push** off: the Factory merges the branch into the base locally and lands the Ticket, and nothing leaves the machine. Leave it there unless you want something else.
 
-To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=project-options&project=acme-api`, so you can bookmark it. On a wide screen a menu on the left lists the page's sections (Repositories, Landing Method, CI, GitHub Issues, Models, Stage Guides, Auto-accept and Focus) and stays in view as you scroll; choosing an entry jumps to that section. On a narrow screen the menu is hidden. Its **Landing Method** section starts with the **Base branch**, a text field showing the branch the Project's work is cut from and lands on (`main` until you change it; it is saved with the rest of the section, and Save refuses a name git would not accept). Below it are the three methods:
+To change it, open the UI, click **⋯** beside the Project in the left pane, and choose **Options**. The Project Options page has its own address, `/?view=project-options&project=acme-api`, so you can bookmark it. On a wide screen a menu on the left lists the page's sections (Repositories, Landing Method, CI, GitHub Issues, Azure Boards, Models, Stage Guides, Auto-accept and Focus) and stays in view as you scroll; choosing an entry jumps to that section. On a narrow screen the menu is hidden. Its **Landing Method** section starts with the **Base branch**, a text field showing the branch the Project's work is cut from and lands on (`main` until you change it; it is saved with the rest of the section, and Save refuses a name git would not accept). Below it are the three methods:
 
 - **Merge**: the Factory merges the accepted branch into the base and lands the Ticket. The default.
 - **Leave as a branch**: the Factory leaves the branch for you to merge, and lands the Ticket when it sees the merge in the base.
@@ -508,6 +508,38 @@ github acme/acme-api#7 came in 5m ago
 ```
 
 Its action panel, in the Inbox and as its Focus Item in Focus Mode, links to the issue and offers the triage actions, so you can triage new issues one at a time. Choosing one moves Focus Mode on to the next item. An issue that comes in while New issues need me is off isn't a New issue, even after you turn it on: triage it from its Ticket panel. An issue closed on GitHub before you triage it shows as **Closed externally** instead, and once you unlink it, it is no longer an Incoming Issue.
+
+## Linking Azure Boards work items
+
+**Azure Boards** brings Azure DevOps work items into Code Central as Incoming Issues on the Project's **Azure Boards Spec**, and writes the work's progress back as tags and comments. It is off until you turn it on in the **Azure Boards** section of Project Options, below GitHub Issues:
+
+- **Azure Boards**: on or off.
+- **Mode**: **Saved query** shows a **Query URL** field (a flat-list query, as the browser shows its URL); **WIQL filter** shows an **Azure DevOps project URL** field and a multi-line **WHERE clause** field. The project URL is filled in from an Azure Repos Repository's Clone URL or the Azure Pipelines CI setting, with a note saying so.
+- **PAT environment variable**: the variable holding an Azure DevOps PAT with Work Items: Read & write. Code Central keeps the name, never the PAT.
+- **New issues need me**: as for GitHub Issues.
+
+Turning it on, or changing a setting while it is on, runs a check first; a refused Save shows what is wrong and how to fix it in the section, and Azure Boards stays as it was. While it is on, the section shows the **Work Item Watcher**'s status. **Won't fix** on an Azure Boards Incoming Issue leaves the work item's State for you to move.
+
+### Choosing a mode
+
+- **Saved query**: make a flat-list query in Azure DevOps (**Boards**, **Queries**) and paste the URL the browser shows. The query is the filter; edit it in Azure DevOps and the next check follows.
+- **WIQL filter**: give the project URL, such as `https://dev.azure.com/acme/web`, and a WHERE clause; Code Central supplies the SELECT and FROM. For example:
+
+  ```
+  [System.TeamProject] = @Project AND [System.State] <> 'Closed' AND [System.AssignedTo] = @Me AND [System.Tags] CONTAINS 'code-central'
+  ```
+
+  `@Me` is the PAT's owner, so it follows whoever made the token.
+
+A query matching more than 1,000 work items is an error that changes nothing until you narrow it.
+
+### The PAT
+
+Make a PAT in Azure DevOps (**User settings**, **Personal access tokens**) with the scope **Work Items: Read & write** (`vso.work_write`; read-only isn't enough, because of write-back). Put it in the variable in the *service's* environment, as for [Azure Pipelines](#azure-pipelines), then restart the service. The variable may be the CI settings' `ADO_PAT` if that token has the scope too. The check reads the PAT, the query and, without creating anything, write access (a `validateOnly` update), and refuses naming the missing scope.
+
+### What write-back does and doesn't do
+
+Code Central writes to a work item only in two ways: a **comment** in its Discussion for each milestone (posted once, however often the Work Item Watcher or the service restarts, found again by a hidden marker in the comment), and one **`code-central:` tag** for where its work stands, which replaces any other `code-central:` tag and leaves the work item's other tags alone. It never changes the work item's State, assignee or fields, and **Won't fix** only comments and tags. [The Work Item Watcher](running-as-a-service.md) in Running as a service describes the process.
 
 ## Choosing models for each kind of work
 
