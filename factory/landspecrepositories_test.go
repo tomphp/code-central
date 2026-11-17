@@ -300,3 +300,65 @@ func TestUnderPullRequestATwoRepositorySpecBranchIsPushedInEachAndLandsAsEachMer
 		t.Fatalf("Changed Repositories %+v, want the Home Repository landed at its merge %s", tk.Repositories, homeTip)
 	}
 }
+
+func TestADivergedBaseInOneRepositoryHoldsBackASpecTouchingIt(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	h.AddRemote("origin")
+	api, id := specInTwo(h)
+	mergeAndPush(h, "origin")
+	release := holdTicketsStage(t, h)
+	r := h.Start()
+	h.WantState(id, store.InReview)
+	h.Accept(id)
+	r.Poll()
+	r.WantOutput(id + ": merged into spec/" + h.SpecID() + " at ")
+	homeMain := h.Git("rev-parse", "main")
+	// api's remote and its clone's main each gain a commit the other
+	// lacks, and they conflict.
+	api.CommitOn("main", "README.md", "ours\n")
+	pushElsewhere(t, h, api, "README.md", "theirs\n")
+
+	release()
+	r.Poll()
+
+	tk := h.WantState(id, store.Accepted)
+	if got := h.Git("rev-parse", "main"); got != homeMain || tk.PartlyLanded {
+		t.Fatalf("the Home Repository's main is at %s, partly landed %v: a Spec touching a diverged base lands nowhere", got, tk.PartlyLanded)
+	}
+	if rows := h.NeedsMeItems(core.ReasonBaseDiverged); len(rows) != 1 || rows[0].BaseDiverged.Repository != "api" {
+		t.Fatalf("Base diverged items %+v, want one naming api", rows)
+	}
+}
+
+func TestUnderPullRequestASpecConflictInOneRepositoryPushesNoSpecBranch(t *testing.T) {
+	t.Parallel()
+	h := factorytest.New(t)
+	home := h.AddRemote("origin")
+	api, id := specInTwo(h)
+	pullRequestOn(h, "origin")
+	release := holdTicketsStage(t, h)
+	fix := "acme-5"
+	h.Script(fix, factorytest.Wait())
+	r := h.Start()
+	h.WantState(id, store.InReview)
+	h.Accept(id)
+	r.Poll()
+	r.WantOutput(id + ": merged into spec/" + h.SpecID() + " at ")
+	// api's base moves on, on its host, conflicting with its Spec Branch.
+	pushElsewhere(t, h, api, "endpoint.go", "package other\n")
+
+	release()
+	r.Poll()
+
+	branch := "spec/" + h.SpecID()
+	if got := home.Git("branch", "--list", branch); got != "" {
+		t.Errorf("the Home Repository's remote has %q: no Spec Branch is pushed while one conflicts", got)
+	}
+	if got := api.Remote("origin").Git("branch", "--list", branch); got != "" {
+		t.Errorf("api's remote has %q", got)
+	}
+	if tk := h.Ticket(fix); !tk.SpecMergeTicket || !strings.Contains(tk.Description, "- api: merging "+branch) {
+		t.Fatalf("%s %+v, want the Spec merge Ticket naming api's conflict", fix, tk)
+	}
+}

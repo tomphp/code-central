@@ -27,9 +27,11 @@ func changedElsewhere(home string, tk core.TicketView) bool {
 // pullRequestMerged reports whether a pull request of tk's has merged, in
 // any of its Changed Repositories.
 func pullRequestMerged(tk core.TicketView) bool {
-	merged := func(pr *core.PullRequestView) bool { return pr != nil && pr.State == store.PRMerged }
-	return merged(tk.PullRequest) || slices.ContainsFunc(tk.Repositories, func(v core.ChangedRepositoryView) bool { return merged(v.PullRequest) })
+	return hasMerged(tk.PullRequest) || slices.ContainsFunc(tk.Repositories, func(v core.ChangedRepositoryView) bool { return hasMerged(v.PullRequest) })
 }
+
+// hasMerged reports whether pr is a pull request that has merged.
+func hasMerged(pr *core.PullRequestView) bool { return pr != nil && pr.State == store.PRMerged }
 
 // repositoryNamed is the Repository name with a clone, or nil.
 func (f *factory) repositoryNamed(name string) *repository {

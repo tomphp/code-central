@@ -75,7 +75,7 @@ func SpecMergeTitle(spec string) string {
 func (c *Core) OpenSpecMerge(ctx context.Context, key string, in OpenSpecMergeInput) (OpenSpecMergeResult, error) {
 	// The Home Repository's conflict above may be left out, given in
 	// repositories instead.
-	if len(in.Repositories) == 0 || len(in.Conflicts) > 0 || in.BaseTip != "" || in.SpecBranchTip != "" {
+	if len(in.Repositories) == 0 || in.homeGiven() {
 		if err := checkSpecMergeConflict("", in.Conflicts, in.BaseTip, in.SpecBranchTip); err != nil {
 			return OpenSpecMergeResult{}, err
 		}
@@ -95,13 +95,15 @@ func (c *Core) OpenSpecMerge(ctx context.Context, key string, in OpenSpecMergeIn
 		if why := whyNoSpecMerge(sp, tickets); why != "" {
 			return &Error{Code: ActionNotAllowed, Message: fmt.Sprintf("%s %s, so it takes no Spec merge Ticket", id, why)}
 		}
-		title, body := SpecMergeTitle(id), specMergeBody(id, p.Base(), in)
-		if len(in.Repositories) > 0 {
+		title, body := SpecMergeTitle(id), ""
+		if len(in.Repositories) == 0 {
+			body = specMergeBody(id, p.Base(), in)
+		} else {
 			cs, err := specMergeConflicts(p, in)
 			if err != nil {
 				return err
 			}
-			body = specMergeBodyIn(p, id, cs)
+			body = specMergeBodyPerRepository(p, id, cs)
 		}
 		now := c.now()
 		if t, ok := openSpecMergeTicket(tickets, title); ok {
@@ -202,7 +204,7 @@ func checkSpecMergeConflict(at string, conflicts []string, baseTip, specTip stri
 // Home Repository given in both forms.
 func specMergeConflicts(p store.Project, in OpenSpecMergeInput) ([]SpecMergeConflict, error) {
 	var out []SpecMergeConflict
-	if len(in.Conflicts) > 0 {
+	if in.homeGiven() {
 		out = append(out, SpecMergeConflict{Name: p.Key, Conflicts: in.Conflicts, BaseTip: in.BaseTip, SpecBranchTip: in.SpecBranchTip})
 	}
 	names := repositoryNames(p.RepositoryList())
@@ -212,7 +214,7 @@ func specMergeConflicts(p store.Project, in OpenSpecMergeInput) ([]SpecMergeConf
 		switch {
 		case !slices.Contains(names, c.Name):
 			return nil, notARepository(p, at+".name", c.Name)
-		case c.Name == p.Key && len(in.Conflicts) > 0:
+		case c.Name == p.Key && in.homeGiven():
 			return nil, invalid("repositories", "%s is the Home Repository, given both in conflicts and in repositories: give it in one form or the other", p.Key)
 		case slices.ContainsFunc(out, func(o SpecMergeConflict) bool { return o.Name == c.Name }):
 			return nil, invalid(at+".name", "%s is listed twice: give each Repository's conflict once", c.Name)
@@ -226,10 +228,17 @@ func specMergeConflicts(p store.Project, in OpenSpecMergeInput) ([]SpecMergeConf
 	return out, nil
 }
 
-// specMergeBodyIn is specMergeBody for a Spec Branch conflicting in each
-// of cs's Repositories, p's: one Spec merge Ticket names each, with its
-// base, both tips and its files (ADR 0049).
-func specMergeBodyIn(p store.Project, spec string, cs []SpecMergeConflict) string {
+// homeGiven reports whether in gives the Home Repository's conflict in
+// its top-level fields, rather than in repositories.
+func (in OpenSpecMergeInput) homeGiven() bool {
+	return len(in.Conflicts) > 0 || in.BaseTip != "" || in.SpecBranchTip != ""
+}
+
+// specMergeBodyPerRepository is specMergeBody for a Spec Branch
+// conflicting in each of cs's Repositories, p's: one Spec merge Ticket
+// names each, with its base, both tips and its files (ADR 0049). Each of
+// cs names one of p's Repositories, as specMergeConflicts checked.
+func specMergeBodyPerRepository(p store.Project, spec string, cs []SpecMergeConflict) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "The Spec Branch spec/%s conflicts with the base in these Repositories:\n\n", spec)
 	for _, c := range cs {

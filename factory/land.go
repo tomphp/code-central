@@ -180,7 +180,8 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 			f.landAccepted(ctx, tk, p, ws)
 		}
 	}
-	// A Spec lands, or a hand merge, held per Repository.
+	// Ready Specs land, and hand merges are detected, each held back only
+	// by the broken bases of the Repositories it touches.
 	switch {
 	case policy.LandsByPullRequest():
 		// A Spec Branch goes to the base through its own pull request,
@@ -247,10 +248,7 @@ func (f *factory) pushBranch(ctx context.Context, tk core.TicketView, policy cor
 	}
 	pushed, why := f.push(ctx, r, remote, branch, commit)
 	if why != "" {
-		if !r.home {
-			why = fmt.Sprintf("in %s, %s", r.name, why)
-		}
-		f.cantPushYet(ctx, tk, why)
+		f.cantPushIn(ctx, tk, r, why)
 		return
 	}
 	if pushed {
@@ -794,6 +792,15 @@ func (f *factory) cantLandIn(ctx context.Context, tk core.TicketView, r *reposit
 // once.
 func (f *factory) cantPushYet(ctx context.Context, tk core.TicketView, why string) {
 	f.commentOnce(ctx, tk, "can't push yet", "The Factory can't push this Ticket's branch yet", why)
+}
+
+// cantPushIn is cantPushYet for a push in r, which the comment names
+// unless it is the Home Repository.
+func (f *factory) cantPushIn(ctx context.Context, tk core.TicketView, r *repository, why string) {
+	if !r.home {
+		why = fmt.Sprintf("in %s, %s", r.name, why)
+	}
+	f.cantPushYet(ctx, tk, why)
 }
 
 // commentOnce comments on tk that the Factory can't do something yet,

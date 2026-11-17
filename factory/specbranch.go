@@ -56,7 +56,8 @@ func specBranchFailed(wt string, err error) *failure {
 
 // specBranchMerge is a Ticket's merge into its Spec Branch in r: its work
 // there, head, into the Spec Branch at tip, making tree; merged when the
-// Spec Branch holds head already, and then tip is its tip.
+// Spec Branch holds head already. Once the merge is made, tip is the
+// merge commit, the Spec Branch's new tip.
 type specBranchMerge struct {
 	r               *repository
 	head, tip, tree string
@@ -187,9 +188,10 @@ func (f *factory) cutBranchWorktree(r *repository, tk core.TicketView, branch, w
 }
 
 // landSpecs merges the Spec Branch of every Spec ready to land into the
-// base and lands the Spec's waiting Tickets as a group, by the Push and
-// CI gate path. A Spec's Tickets are the Accepted ones the Factory has
-// merged into its Spec Branch and not yet landed.
+// base, in each Repository its Tickets changed, and lands the Spec's
+// waiting Tickets as a group, by the Push and CI gate path. A Spec's
+// Tickets are the Accepted ones the Factory has merged into its Spec
+// Branch and not yet landed.
 func (f *factory) landSpecs(ctx context.Context, p core.ProjectView) {
 	if !p.LandingPolicy().MergesSpecBranches() {
 		return
@@ -241,7 +243,7 @@ func (f *factory) pushSpecs(ctx context.Context, accepted []core.TicketView, p c
 // pull request has merged, or that is in its base, is left to landing.
 func (f *factory) pushSpec(ctx context.Context, id string, p core.ProjectView) {
 	spec, tickets, ok := f.readySpec(ctx, id)
-	if !ok {
+	if !ok || f.anyUncloned(tickets) {
 		return
 	}
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
@@ -281,11 +283,8 @@ func (f *factory) pushSpec(ctx context.Context, id string, p core.ProjectView) {
 	for _, pl := range plans {
 		pushed, why := f.push(ctx, pl.r, p.Landing.Remote, branch, pl.tip)
 		if why != "" {
-			if !pl.r.home {
-				why = fmt.Sprintf("in %s, %s", pl.r.name, why)
-			}
 			for _, tk := range pl.tickets {
-				f.cantPushYet(ctx, tk, why)
+				f.cantPushIn(ctx, tk, pl.r, why)
 			}
 			continue
 		}
@@ -301,7 +300,7 @@ func (f *factory) pushSpec(ctx context.Context, id string, p core.ProjectView) {
 // pullRequestMergedIn reports whether tk's pull request in r has merged.
 func pullRequestMergedIn(tk core.TicketView, r *repository) bool {
 	v, _ := viewIn(tk, r)
-	return v.PullRequest != nil && v.PullRequest.State == store.PRMerged
+	return hasMerged(v.PullRequest)
 }
 
 // readySpec is the Spec id with its waiting Tickets, when Code Central
@@ -347,6 +346,16 @@ func (f *factory) landSpec(ctx context.Context, id string, p core.ProjectView) {
 	f.mergeSpec(ctx, spec, tickets, p)
 }
 
+// anyUncloned reports whether one of tickets has a Changed Repository it
+// hasn't landed in with no clone, whose Spec Branch can't be checked: its
+// Spec waits, as the Ticket's own line says.
+func (f *factory) anyUncloned(tickets []core.TicketView) bool {
+	return slices.ContainsFunc(tickets, func(tk core.TicketView) bool {
+		_, why := f.changedWorkOf(tk)
+		return why != ""
+	})
+}
+
 // ticketsIn is those of tickets that changed r and haven't landed there.
 func ticketsIn(tickets []core.TicketView, r *repository) []core.TicketView {
 	var out []core.TicketView
@@ -376,22 +385,21 @@ type specPlan struct {
 // mergeSpec merges the Spec Branch of spec into the base of each
 // Repository its waiting Tickets changed, and lands them there as a
 // group. It works out every Repository's merge first: a conflict in any
-// lands nothing and opens the one Spec merge Ticket, naming each (ADR
-// 0049). Then, in landing order, it makes the same "Merge spec" commit in
-// each, advances the base, pushes and lands, and stops at a Repository it
-// can't land in yet, to go on from there next poll. It reports whether
+// merges it nowhere and opens the one Spec merge Ticket, naming each (ADR
+// 0049), though a merge made on an earlier poll still goes on to its push
+// and land. Then, in landing order, it makes the same "Merge spec" commit
+// in each, advances the base, pushes and lands, and stops at a Repository
+// it can't land in yet, to go on from there next poll. With several
+// Repositories, one with a broken base or no clone holds the whole Spec
+// back, as it can't be checked. It reports whether
 // the Tickets are handled this poll: false means every Spec Branch is
 // already in its base or one can't be read, and the Tickets land through
 // the plain path, as their work is in the base.
 func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []core.TicketView, p core.ProjectView) (handled bool) {
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
 	policy := p.LandingPolicy()
-	for _, tk := range tickets {
-		if _, why := f.changedWorkOf(tk); why != "" {
-			// A Repository with no clone can't be checked: the Ticket says
-			// it waits.
-			return true
-		}
+	if f.anyUncloned(tickets) {
+		return true
 	}
 	var plans, conflicts []specPlan
 	for _, r := range f.readyRepositories() {
@@ -402,9 +410,9 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 		if f.several() && f.held(r, policy) != "" {
 			return true // its Tickets say why they wait
 		}
-		pl, handled, ok := f.planSpec(spec.ID, r, in)
+		pl, readable, ok := f.planSpec(spec.ID, r, in)
 		if !ok {
-			return handled
+			return readable
 		}
 		if len(pl.conflicts) > 0 {
 			conflicts = append(conflicts, pl)
@@ -418,9 +426,13 @@ func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets [
 	}
 	if len(conflicts) > 0 {
 		f.openSpecConflict(ctx, spec, conflicts)
-		return true
 	}
 	for _, pl := range plans {
+		if len(conflicts) > 0 && pl.old == nil && !pl.inBase {
+			// Nothing is merged while a Spec Branch conflicts, but a merge
+			// made already goes on to its push and land.
+			continue
+		}
 		if !f.landSpecIn(ctx, spec, p, pl) {
 			break
 		}
@@ -570,9 +582,10 @@ func joinIDs(tickets []core.TicketView) string {
 // open one already there. With several Repositories it names each of
 // conflicts' Repositories, with its files and both tips.
 func (f *factory) openSpecConflict(ctx context.Context, spec core.SpecDetail, conflicts []specPlan) {
+	several := f.several()
 	in := core.OpenSpecMergeInput{Spec: core.Ref(spec.ID)}
 	var names []string
-	if f.several() {
+	if several {
 		for _, pl := range conflicts {
 			in.Repositories = append(in.Repositories, core.SpecMergeConflict{Name: pl.r.name, Conflicts: pl.conflicts, BaseTip: pl.baseTip, SpecBranchTip: pl.tip})
 			names = append(names, pl.r.name)
@@ -587,16 +600,18 @@ func (f *factory) openSpecConflict(ctx context.Context, spec core.SpecDetail, co
 		}
 		return
 	}
-	branch := specBranch(spec.ID)
-	switch {
-	case names != nil && res.Outcome == core.SpecMergeOpened:
-		f.printf("%s: %s conflicts with the base in %s: opened %s to merge the base into it", spec.ID, branch, strings.Join(names, ", "), res.Ticket)
-	case names != nil && res.Outcome == core.SpecMergeCommented:
-		f.printf("%s: %s conflicts with the base in %s again: commented on %s", spec.ID, branch, strings.Join(names, ", "), res.Ticket)
-	case res.Outcome == core.SpecMergeOpened:
-		f.printf("%s: %s conflicts with %s in %s: opened %s to merge the base into it", spec.ID, branch, f.baseBranch(), strings.Join(in.Conflicts, ", "), res.Ticket)
-	case res.Outcome == core.SpecMergeCommented:
-		f.printf("%s: %s conflicts with %s again: commented on %s", spec.ID, branch, f.baseBranch(), res.Ticket)
+	// Where the Spec Branch conflicts: in each named Repository, or with
+	// the Home Repository alone, with the base in these files.
+	branch, with, again := specBranch(spec.ID), f.baseBranch()+" in "+strings.Join(in.Conflicts, ", "), f.baseBranch()+" again"
+	if several {
+		with = "the base in " + strings.Join(names, ", ")
+		again = with + " again"
+	}
+	switch res.Outcome {
+	case core.SpecMergeOpened:
+		f.printf("%s: %s conflicts with %s: opened %s to merge the base into it", spec.ID, branch, with, res.Ticket)
+	case core.SpecMergeCommented:
+		f.printf("%s: %s conflicts with %s: commented on %s", spec.ID, branch, again, res.Ticket)
 	}
 }
 
