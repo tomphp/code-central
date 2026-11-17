@@ -14,8 +14,8 @@ import (
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/frontdoor"
 	"github.com/tomoram/code-central/ids"
+	"github.com/tomoram/code-central/server"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/usage"
 	"github.com/tomoram/code-central/web"
@@ -116,7 +116,7 @@ func NewServer(t testing.TB, opts ...Option) *Server {
 	c.SetIssuesCheck(o.issuesCheck)
 	c.SetAzureBoardsCheck(o.azureBoardsCheck)
 	c.SetPullRequestCheck(o.pullRequestCheck)
-	hs := httptest.NewUnstartedServer(frontdoor.Versioned(frontdoor.Handler(c, web.Handler(), o.log), o.version))
+	hs := httptest.NewUnstartedServer(server.Versioned(server.Handler(c, web.Handler(), o.log), o.version))
 	// Before serving, so a comment written to an issue links back here.
 	c.SetUIURL("http://" + hs.Listener.Addr().String())
 	hs.Start()

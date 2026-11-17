@@ -14,7 +14,7 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// asHuman makes the request as the human, as frontdoor.Guard would from
+// asHuman makes the request as the human, as server.Guard would from
 // the Actor header.
 func asHuman(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

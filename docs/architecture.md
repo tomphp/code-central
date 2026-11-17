@@ -23,7 +23,7 @@ flowchart TB
   end
 
   subgraph Service["Service process (code-central serve)"]
-    FD["frontdoor<br/>mux + Guard + UI"]
+    FD["server<br/>mux + Guard + UI"]
     API["httpapi<br/>REST /api"]
     MCP["mcp<br/>/p/key/mcp (agents)"]
     CORE["core<br/>*Core: workflow, landing, CI, chat, views<br/>core.Operations = the one op list"]
@@ -62,7 +62,7 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 | factory | `factory`, `cmd/code-central-factory` | A separate-process HTTP client. |
 | ci watcher | `ciwatcher` (+ `gh`, `azdo`, `azdourl`) | Provider split: GitHub Actions, Azure Pipelines. |
 | issue tracker | **Specs/Tickets live in `core`**; GitHub Issues inbound is `issuewatcher` | There is no separate tracker module. Say which you mean. |
-| web api | `httpapi` (+ `mcp` sibling, assembled by `frontdoor`) | MCP is not layered on httpapi; both call `*core.Core`. |
+| web api | `httpapi` (+ `mcp` sibling, assembled by `server`) | MCP is not layered on httpapi; both call `*core.Core`. |
 | frontend | `web/` | Embedded via `web/web.go`. |
 | storage | `store` | Persistence and the stored domain records in one package. |
 
@@ -70,7 +70,7 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 
 - **`pullrequestwatcher`**: the third Landing Method (ADR 0029).
 - **`mcp`**: the agents' transport.
-- **`frontdoor`**: assembly and the Host/Origin/Actor Guard.
+- **`server`** (formerly `frontdoor`): builds the service's one handler (MCP, HTTP API, UI) behind the Host/Origin/Actor Guard.
 - **`client`**: the Go HTTP client used by CLI, Factory and watchers.
 - **`cli` and `cmd/*`**: the command surface, and also (wrongly, see below) the server's composition root.
 - **`watchers`**: generic supervision (restart with backoff).
@@ -91,14 +91,14 @@ Your list: core logic, factory, ci watcher, issue tracker, web api, frontend, st
 
 ## Dependency rules (as intended and as found)
 
-Intended: `clients → client → HTTP → frontdoor → httpapi/mcp → core → store → leaves`. Mostly held. No import cycles. `core` never imports a transport, `factory`, or `gh`/`azdo`. Watchers and the Factory never touch the store directly.
+Intended: `clients → client → HTTP → server → httpapi/mcp → core → store → leaves`. Mostly held. No import cycles. `core` never imports a transport, `factory`, or `gh`/`azdo`. Watchers and the Factory never touch the store directly.
 
 ## 2. Are the interfaces clearly defined?
 
 Good:
 
 - The HTTP/MCP boundary is sharp. The Factory and watchers hold a `Client` interface and talk only over HTTP.
-- `core.Operations` is a real contract, checked by the cross-door suite in `frontdoor/*_test.go` and the UI/Go contract cases.
+- `core.Operations` is a real contract, checked by the cross-door suite in `server/*_test.go` and the UI/Go contract cases.
 - `notify` depends on a four-method `Source` interface, not on `*Core`. A pattern worth copying.
 - `store.Store{View, Update}` is small, with a shared contract suite (`storetest`).
 - UI wire types are generated from Go (ADR 0042), and the UI's only `fetch` is in `web/src/api/http.ts`.
@@ -108,15 +108,15 @@ Anti-patterns and leaks found:
 
 1. **`factory` imports `cli`** (`factory/factory.go:18`) for `ResolveProject` and `ServiceURL`. The Factory depends on the whole command shell.
 2. **`httpapi` and `client` import `store`** for domain enums (`httpapi/httpapi.go`, `httpapi/rounds.go`, `client/rounds.go`), though they should be HTTP-only (ADR 0002/0004). Root cause: `store` holds the domain model (`Ticket`, `State`, `Landing`…) as well as persistence, and 69 `core` files import it.
-3. **`cli` is a god package** (~16 internal imports): commands, `serve` composition (store, core, frontdoor, supervisor), service install, `init` scaffolding.
+3. **`cli` is a god package** (~16 internal imports): commands, `serve` composition (store, core, server, supervisor), service install, `init` scaffolding.
 4. **Per-operation wiring is duplicated** across `httpapi` (routes + handlers), `mcp` (tools), `client` and `cli`. Only tests catch drift. Ack-versus-full and `get_ticket` parts are handled per door.
 5. **`*core.Core` is a god object** and a concrete dependency of both transports, so they can't be tested against a fake.
-6. **Transport policy is split**: `mcp` records usage and forces the Actor; `frontdoor.Guard` sets the Actor for HTTP.
+6. **Transport policy is split**: `mcp` records usage and forces the Actor; `server.Guard` sets the Actor for HTTP.
 7. **Provider knowledge in core**: `core/ci.go` imports `azdourl` and holds provider validators.
 8. **Watcher plumbing**: each watcher has its own check/config/poll trio; `issuewatcher` is hard-wired to `gh`. (Done: `RateLimitError` and `FirstLine` now live in the leaf package `ratelimit`, so `gh` and `azdo` no longer import `watchers`, and the shared test harness is `watchers/watchertest`.)
 9. **Landing rules straddle packages**: `store.Landing.Normalized` versus `core.LandingPolicy`. The UI's `LandingMethodSection.tsx` also branches on the method, though ADR 0039 says no caller should.
 10. **Frontend duplicates some derived rules** (`edit/editable.ts`, `requirement/progress.ts`, `inbox/describeSpec.ts`). Mild.
-11. **Naming**: `frontdoor` is ~150 lines of production code plus an 11k-line contract suite, and `httpapi`/`mcp` both call themselves "front doors".
+11. **Naming** (done: the package was `frontdoor`, now `server`): it is ~150 lines of production code plus an 11k-line contract suite, and `httpapi`/`mcp` both call themselves "front doors", so the old name said nothing about what it does.
 
 ## 3. Suggested improvements
 
@@ -132,6 +132,6 @@ Roughly in order of value for effort. Each would be its own Ticket.
 8. Extract a `codehost` abstraction shared by `ciwatcher` and `pullrequestwatcher`, and decide whether `issuewatcher` needs a `Tracker` interface before a second tracker arrives. *(only if a second host/tracker is planned)*
 9. Move provider URL parsing out of `core`. *(small)*
 10. Split `factory/land.go`, `run.go` and `specbranch.go` into `landing` and `session`. Make `core`'s mutable enum slices functions. *(medium)*
-11. Hygiene: CI check that `make wiretypes` leaves no diff, finish ADR 0044's migration off `waitFor`, split the biggest UI files and tests, rename `frontdoor` to `server`, and renumber the duplicate ADRs (0010, 0016, 0032, 0034, 0039, 0040, 0047).
+11. Hygiene: CI check that `make wiretypes` leaves no diff, finish ADR 0044's migration off `waitFor`, split the biggest UI files and tests, and renumber the duplicate ADRs (0010, 0016, 0032, 0034, 0039, 0040, 0047).
 
 Splitting `core` itself is the hardest item, because every file is a method on `*Core`. Items 5 and 6 shrink what depends on it and make a later split cheaper, so do them first.
