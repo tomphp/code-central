@@ -1,6 +1,7 @@
 package core_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/tomoram/code-central/core"
@@ -146,6 +147,54 @@ func TestASpecLandedTicketWaitsForItsSpecOnlyInRepositoriesWhereLandPerSpecIsInF
 	}
 	if tk := f.getTicket(t, "acme-6"); !tk.PartlyLanded || tk.WaitingForSpec {
 		t.Fatalf("acme-6 partly landed %v, waiting for its Spec %v; want it landed in the Home, waiting for the human's merge in api alone", tk.PartlyLanded, tk.WaitingForSpec)
+	}
+}
+
+func TestASpecLandedTicketLandedInItsRepositoryUnderPullRequestNoLongerWaitsForItsSpec(t *testing.T) {
+	f := landWorld(t, true)
+	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	f.addRepository(t, core.AddRepositoryInput{Name: "web", CloneURL: "git@github.com:acme/web.git"})
+	f.editLanding(t, "api", core.RepositoryLandingPullRequest)
+	f.editLanding(t, "web", core.RepositoryLandingBranch)
+	f.changes(t, 5, "api", "web")
+	f.moveTo(t, 5, store.Accepted)
+	if !f.getTicket(t, "acme-5").WaitingForSpec {
+		t.Fatal("acme-5 isn't waiting for its Spec, though it is to land with the Spec's pull request in api")
+	}
+
+	if _, err := f.core.Land(ctx, "acme", core.LandInput{Ticket: "acme-5", Commit: "abc123", Repository: "api"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if tk := f.getTicket(t, "acme-5"); !tk.PartlyLanded || tk.WaitingForSpec {
+		t.Fatalf("acme-5 partly landed %v, waiting for its Spec %v; want it landed in api, waiting for the human's merge in web alone", tk.PartlyLanded, tk.WaitingForSpec)
+	}
+}
+
+func TestASpecLandedTicketPushedInARepositoryUnderBranchCanBeSentBackToFixItsCI(t *testing.T) {
+	f := landWorld(t, true)
+	f.addRepository(t, core.AddRepositoryInput{Name: "api", CloneURL: "git@github.com:acme/api.git"})
+	f.editLanding(t, "api", core.RepositoryLandingBranchPush)
+	err := f.store.Update(func(w store.Writer) error {
+		p, _ := w.Project("acme")
+		p.CI.Tracking = true
+		return w.PutProject(p)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.changes(t, 5, "api")
+	f.moveTo(t, 5, store.Accepted)
+	// Its own branch in api, pushed: under Branch Land per Spec has no
+	// effect there, so its work isn't shared with its Spec's.
+	f.pushedFor(t, "api", "acme-5", "abc123")
+	f.ciRunIn(t, "api", 7, "abc123", "acme-5", store.CICompleted, store.CIFailure)
+
+	if tk := f.getTicket(t, "acme-5"); !tk.SpecLanded || !slices.Contains(tk.CIFailureOptions, core.OptionSendBack) {
+		t.Fatalf("acme-5 Spec-landed %v with CI failure options %v; want Send back to fix offered", tk.SpecLanded, tk.CIFailureOptions)
+	}
+	if _, err := f.core.SendBack(human, "acme", core.SendBackInput{Ticket: "acme-5", Note: "Fix the build."}); err != nil {
+		t.Fatalf("send_back: %v", err)
 	}
 }
 

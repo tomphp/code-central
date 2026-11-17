@@ -152,10 +152,7 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 	}
 	// Ready Specs land in each Repository by its Landing, and hand merges
 	// are detected, each held back only by the broken bases of the
-	// Repositories it touches. Under Pull Request a Spec Branch goes to
-	// the base through its own pull request, not by a merge here: it is
-	// pushed instead.
-	f.pushSpecs(ctx, accepted, p)
+	// Repositories it touches.
 	f.landSpecs(ctx, p)
 	f.detectHandMerges(ctx, p)
 }
@@ -167,79 +164,86 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 // Spec Branch there; by Pull Request it pushes its branch there for its
 // pull request, and lands it there once that is merged; by Branch it
 // leaves it for the human to merge there, and lands it there once
-// merged. Every merge the Factory makes is worked out before it lands in
+// merged. Every merge the Factory makes is worked out before tk lands in
 // any Repository: one that conflicts, or can't be worked out this poll,
-// moves nothing of tk anywhere (ADR 0049). tk is Partly landed until it
-// has landed in each.
+// moves nothing of tk anywhere (ADR 0049). Then it goes through them in
+// the landing order, and stops at a merge it can't land yet, to go on
+// from there next poll. tk is Partly landed until it has landed in each.
 func (f *factory) landEach(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
 	policies := p.LandingPolicies()
 	onSpec := f.waitsOnSpecBranch(tk)
-	routes := map[core.LandingRoute][]changedWork{}
-	for _, w := range ws {
-		route := w.r.policy(policies).Route(onSpec, pullRequestMergedIn(tk, w.r))
-		routes[route] = append(routes[route], w)
+	routes := make([]core.LandingRoute, len(ws))
+	var merges, specs []changedWork
+	for i, w := range ws {
+		routes[i] = w.r.policy(policies).Route(onSpec, pullRequestMergedIn(tk, w.r))
+		switch routes[i] {
+		case core.RouteMerge:
+			merges = append(merges, w)
+		case core.RouteSpecBranch:
+			specs = append(specs, w)
+		}
 	}
-	plans, ok := f.planMerges(ctx, tk, routes[core.RouteMerge])
+	plans, ok := f.planMerges(ctx, tk, merges)
 	if !ok {
 		return
 	}
-	if spec := routes[core.RouteSpecBranch]; len(spec) > 0 && (tk.SpecMerge == nil || !tk.SpecMerge.Counts) {
-		if !f.mergeIntoSpecBranch(ctx, tk, spec) {
-			return
+	if len(specs) > 0 && !f.mergeIntoSpecBranch(ctx, tk, specs) {
+		return
+	}
+	for i, w := range ws {
+		switch routes[i] {
+		case core.RouteMerge:
+			if pl, ok := plans[w.r]; ok && !f.mergeAndLand(ctx, tk, p, pl) {
+				return
+			}
+		case core.RoutePullRequest:
+			if changedElsewhere(f.home.name, tk) {
+				f.landPullRequestIn(ctx, tk, policies, w.r, onSpec)
+			} else {
+				// Its work is in the Home Repository alone, which lands
+				// by the Ticket's own pull request.
+				f.landPullRequest(ctx, tk, p)
+			}
+		case core.RouteBranch:
+			f.landMergedBranch(ctx, tk, policies, w)
 		}
 	}
-	switch prs := routes[core.RoutePullRequest]; {
-	case len(prs) == 0:
-	case changedElsewhere(f.home.name, tk):
-		f.landPullRequests(ctx, tk, p, prs)
-	default:
-		// Its work is in the Home Repository alone, which lands by the
-		// Ticket's own pull request.
-		f.landPullRequest(ctx, tk, p)
-	}
-	if branches := routes[core.RouteBranch]; len(branches) > 0 {
-		f.landMergedBranch(ctx, tk, p, branches)
-	}
-	f.landMerges(ctx, tk, p, plans)
 }
 
-// landMergedBranch lands an Accepted Ticket under the Branch Landing
-// Method in each of ws, its Changed Repositories, once its work is in
-// that Repository's base: the human merged it there. It is Done once
-// merged in every one (ADR 0049). Until then each Repository it isn't
-// merged in is left as it is, with a line saying so once: never merged,
-// never sent back. With Push on there, as it is in every Repository but a
-// local-only one, its branch there is pushed to the remote meanwhile.
-func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView, p core.ProjectView, ws []changedWork) {
-	policies := p.LandingPolicies()
-	for _, w := range ws {
-		r := w.r
-		head, what, err := f.workIn(r, tk)
-		switch {
-		case err == nil && w.landed != "" && r.git.isAncestor(head, w.landed):
-			continue
-		case err == nil && f.inBaseOf(r, head):
-			f.printf("%s: merged into %s by hand%s", tk.ID, f.baseOf(r), r.where())
-			f.landAt(ctx, tk, r, head)
-			continue
-		case err == nil && r.policy(policies).PushesAcceptedBranch():
-			f.pushBranch(ctx, tk, policies, r, head)
-		}
-		key := tk.ID + "@" + head + r.where()
-		if f.leftOnBranch[key] {
-			continue
-		}
-		f.leftOnBranch[key] = true
-		if err != nil {
-			f.printf("warning: %s is Accepted under the Branch Landing Method, but %s isn't in this repository", tk.ID, what)
-			continue
-		}
-		merge := branchIn(tk, r)
-		if merge == "" {
-			merge = short(head)
-		}
-		f.printf("%s: Accepted under the Branch Landing Method: merge %s into %s%s and the Factory lands it", tk.ID, merge, f.baseOf(r), r.where())
+// landMergedBranch lands an Accepted Ticket in w, one of its Changed
+// Repositories under the Branch Landing Method, once its work is in that
+// Repository's base: the human merged it there. It is Done once landed in
+// every one (ADR 0049). Until then the Repository is left as it is, with
+// a line saying so once: never merged, never sent back. With Push on
+// there, as it is in every Repository but a local-only one, its branch
+// there is pushed to the remote meanwhile.
+func (f *factory) landMergedBranch(ctx context.Context, tk core.TicketView, policies core.LandingPolicies, w changedWork) {
+	r := w.r
+	head, what, err := f.workIn(r, tk)
+	switch {
+	case err == nil && w.landed != "" && r.git.isAncestor(head, w.landed):
+		return
+	case err == nil && f.inBaseOf(r, head):
+		f.printf("%s: merged into %s by hand%s", tk.ID, f.baseOf(r), r.where())
+		f.landAt(ctx, tk, r, head)
+		return
+	case err == nil && r.policy(policies).PushesAcceptedBranch():
+		f.pushBranch(ctx, tk, policies, r, head)
 	}
+	key := tk.ID + "@" + head + r.where()
+	if f.leftOnBranch[key] {
+		return
+	}
+	f.leftOnBranch[key] = true
+	if err != nil {
+		f.printf("warning: %s is Accepted under the Branch Landing Method, but %s isn't in this repository", tk.ID, what)
+		return
+	}
+	merge := branchIn(tk, r)
+	if merge == "" {
+		merge = short(head)
+	}
+	f.printf("%s: Accepted under the Branch Landing Method: merge %s into %s%s and the Factory lands it", tk.ID, merge, f.baseOf(r), r.where())
 }
 
 // branchIn is tk's branch in r: the one its finish named there.
@@ -463,21 +467,22 @@ type mergePlan struct {
 
 // planMerges works out how an Accepted Ticket's work is merged into the
 // base of each of ws, the Changed Repositories it lands in by Merge, that
-// it hasn't landed in (ADR 0049). ok is false when it lands in none this
-// poll: a merge can't be worked out yet, or one conflicts, which sends
-// the Ticket back.
-func (f *factory) planMerges(ctx context.Context, tk core.TicketView, ws []changedWork) (plans []mergePlan, ok bool) {
+// it hasn't landed in (ADR 0049), by Repository. ok is false when it
+// lands in none this poll: a merge can't be worked out yet, or one
+// conflicts, which sends the Ticket back.
+func (f *factory) planMerges(ctx context.Context, tk core.TicketView, ws []changedWork) (plans map[*repository]mergePlan, ok bool) {
+	plans = map[*repository]mergePlan{}
 	var conflicts []landConflict
 	for _, w := range ws {
-		pl, landed, ok := f.planMerge(ctx, tk, w)
+		pl, landed, planned := f.planMerge(ctx, tk, w)
 		switch {
-		case !ok:
+		case !planned:
 			return nil, false
 		case landed:
 		case len(pl.conflicts) > 0:
 			conflicts = append(conflicts, landConflict{r: pl.r, head: pl.head, into: f.baseOf(pl.r), tip: pl.baseTip, files: pl.conflicts})
 		default:
-			plans = append(plans, pl)
+			plans[w.r] = pl
 		}
 	}
 	if len(conflicts) > 0 {
@@ -485,17 +490,6 @@ func (f *factory) planMerges(ctx context.Context, tk core.TicketView, ws []chang
 		return nil, false
 	}
 	return plans, true
-}
-
-// landMerges lands tk by plans, in landing order: it merges, advances the
-// base, pushes and lands in each Repository in turn, and stops at one it
-// can't land in yet, to go on from there next poll.
-func (f *factory) landMerges(ctx context.Context, tk core.TicketView, p core.ProjectView, plans []mergePlan) {
-	for _, pl := range plans {
-		if !f.mergeAndLand(ctx, tk, p, pl) {
-			return
-		}
-	}
 }
 
 // planMerge works out how tk lands in w's Repository, or that it has

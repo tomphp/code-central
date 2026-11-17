@@ -116,12 +116,13 @@ func (f *factory) reportBaseState(ctx context.Context, r *repository, in core.Re
 	f.reportBaseFailing = err != nil
 }
 
-// landPullRequest sees to an Accepted Ticket under Pull Request: one with
-// nothing to merge lands at once, one whose pull request is merged lands
-// at the merge commit, and the rest have their branch pushed for the
-// Watcher to open a pull request on.
+// landPullRequest sees to an Accepted Ticket whose work is in the Home
+// Repository alone, under Pull Request there: one with nothing to merge
+// lands at once, one whose pull request is merged lands at the merge
+// commit, and the rest have their branch pushed for the Watcher to open a
+// pull request on.
 func (f *factory) landPullRequest(ctx context.Context, tk core.TicketView, p core.ProjectView) {
-	if tk.PullRequest != nil && tk.PullRequest.State == store.PRMerged {
+	if hasMerged(tk.PullRequest) {
 		f.landMerged(ctx, tk)
 		return
 	}

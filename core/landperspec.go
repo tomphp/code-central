@@ -33,6 +33,14 @@ func specLanded(r store.Reader, p store.Project, t store.Ticket) bool {
 	return ok && !isMap(spec.Labels) && !slices.Contains(spec.Labels, LongLivedLabel)
 }
 
+// landsWithSpecIn is whether t's work in the Repository name lands with
+// its Spec's, so a commit pushed for it there is the Spec's: t is
+// Spec-landed and Land per Spec is in force there. Under Branch it has no
+// effect, and t's own branch is pushed there (Spec code-central-890).
+func landsWithSpecIn(r store.Reader, p store.Project, t store.Ticket, name string) bool {
+	return specLanded(r, p, t) && landingPolicyIn(p, name).LandPerSpecInForce()
+}
+
 // specMergeCounts is whether t has a Spec merge that counts: one after
 // t's last move back to Ready, the way a pushed commit counts.
 func specMergeCounts(t store.Ticket) bool {
@@ -53,11 +61,11 @@ func waitingForSpec(r store.Reader, p store.Project, t store.Ticket) bool {
 		return false
 	}
 	ps := ticketLandingPolicies(p, t)
-	if ps.Any(LandingPolicy.LandsByPullRequest) {
-		// The Spec Branch is pushed and waits on its pull request.
+	rs := changedRepositories(p.Key, t)
+	if slices.ContainsFunc(rs, func(cr store.ChangedRepository) bool { return cr.Landed == nil && ps.In(cr.Name).LandsByPullRequest() }) {
+		// The Spec Branch is pushed and waits on its pull request there.
 		return true
 	}
-	rs := changedRepositories(p.Key, t)
 	if len(rs) < 2 {
 		return ps.LandPerSpecInForce() && (len(t.PushedCommits) == 0 || !latestPushed(t).Pushed.After(backToReady(t)))
 	}

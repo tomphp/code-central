@@ -235,7 +235,7 @@ The Pull Request setting naming the environment variable that holds the Azure Re
 _Avoid_: Token setting, secret
 
 **Pull Request Watcher**:
-The kind of Watcher that opens and watches the pull requests of one Project under the Pull Request Landing Method and reports each one's link, state (open, conflicting, closed or merged) and, once merged, the host's merge commit over the HTTP API. The service runs one per Project under Pull Request that isn't Archived, whether or not a Factory runs, and it watches every Repository's pull requests; a failing Repository is named in its error, and it carries on with the others. Turning Pull Request on runs it once in its check mode against every Repository, and adding a Repository while Pull Request is on needs that Repository to pass the check too.
+The kind of Watcher that opens and watches the pull requests of one Project's Repositories under the Pull Request Landing Method and reports each one's link, state (open, conflicting, closed or merged) and, once merged, the host's merge commit over the HTTP API. The service runs one per Project that isn't Archived while any of its Repositories is under Pull Request, whether or not a Factory runs, and it watches the pull requests of every Repository under Pull Request and of no other; a failing Repository is named in its error, and it carries on with the others. Turning Pull Request on runs it once in its check mode against every Repository it brings under Pull Request, and adding a Repository that would be under Pull Request needs that Repository to pass the check too.
 _Avoid_: PR bot, merge poller
 
 **Pull request closed**:
@@ -269,7 +269,7 @@ The Ready Ticket, "Merge the base into the Spec Branch of <spec id>", that Code 
 _Avoid_: Conflict Ticket, merge Ticket
 
 **Waiting for the Spec**:
-The status shown on an Accepted Ticket under Land per Spec whose work isn't yet in the base, because the rest of its Spec isn't done. It is not a State, and the Ticket isn't flagged in Needs Me as Accepted but not landed.
+The status shown on an Accepted Ticket under Land per Spec whose work isn't yet in the base, because the rest of its Spec isn't done. Only its Changed Repositories where Land per Spec applies count, so one that changed only Repositories under Branch never waits for its Spec. It is not a State, and the Ticket isn't flagged in Needs Me as Accepted but not landed.
 _Avoid_: Held, queued, staged
 
 **Partly landed**:
