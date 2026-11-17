@@ -36,7 +36,7 @@
 .board-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; row-gap: 3px; min-width: 0; }
 .board-card .tid { flex: none; }
 .board-spacer { flex: 1; }
-.board-blocked { font-size: 11px; color: var(--r-blocked); white-space: nowrap; flex: none; }
+.board-blocked { font-size: 11px; color: color-mix(in srgb, var(--r-blocked) 55%, var(--text)); white-space: nowrap; flex: none; }
 .board-card-title { font-weight: 500; min-width: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
 .board-card-spec { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .board-card-spec .kind-badge { font-size: 9.5px; padding: 0 4px; }
