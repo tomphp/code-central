@@ -20,7 +20,7 @@ func init() {
 	cases["keep_as_draft"] = opCase{
 		setup: newIssue,
 		ok:    call{http: keepAsDraft("5")},
-		check: ticketAcknowledgement("acme-5", "Draft", "needs_me_reason", "awaiting_triage"),
+		check: ticketAcknowledgement("acme-5", "Draft", "needs_me_reason", "awaiting_triage", "triage_notes"),
 		full: func(t *testing.T, out map[string]any) {
 			boolField(t, out, "awaiting_triage", false)
 			field("id", "acme-5")(t, out)

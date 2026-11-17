@@ -327,6 +327,10 @@ type TicketView struct {
 	// human may take on an Incoming Issue; left out on any other Ticket.
 	// Computed on read.
 	TriageActions []TriageAction `json:"triage_actions,omitzero"`
+	// TriageNotes say what each of TriageActions does to the linked issue
+	// or work item, as the UI shows it before the human confirms; left out
+	// on any other Ticket. Computed on read.
+	TriageNotes map[TriageAction]string `json:"triage_notes,omitzero"`
 	// ModelChoice is the model and effort the Ticket's next turn runs
 	// with, each with its source; only the UI's read carries it.
 	ModelChoice *ModelChoice `json:"model_choice,omitempty"`
@@ -766,7 +770,7 @@ func finished(s store.State) bool { return s == store.Done || s == store.Cancell
 func (c *Core) projectView(p store.Project) ProjectView {
 	v := ProjectView{Key: p.Key, DisplayName: p.DisplayName, Created: p.Created, Mode: p.Mode,
 		Landing: landingViewWith(p, c.watchers.view(watcherKey{WatcherPullRequests, p.Key})), CI: ciView(p, c.watchers.view(watcherKey{WatcherCI, p.Key})),
-		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), AzureBoards: azureBoardsView(p), Models: modelsView(p.Models),
+		GitHubIssues: githubIssuesView(p.Key, p.GitHubIssues, c.watchers.view(watcherKey{WatcherIssues, p.Key})), AzureBoards: azureBoardsView(p, c.watchers.view(watcherKey{WatcherWorkItems, p.Key})), Models: modelsView(p.Models),
 		ReportedModels: reportedModelsView(p.ReportedModels), StageGuides: stageGuidesView(p.StageGuides), AutoAccept: autoAcceptView(p),
 		FocusKinds: focusKindsView(p.FocusKindsOff), FactoryStatus: c.heartbeats.view(p.Key, c.clock.Now()), Repositories: repositoriesView(p)}
 	c.fillClones(p.Key, v.Repositories)
@@ -848,7 +852,7 @@ func (c *Core) ticketViewIn(r store.Reader, e *evaluation, t store.Ticket) Ticke
 	v.Claimable = t.State == store.Ready && !v.Blocked
 	v.SilentSince = c.silentSince(t)
 	v.NeedsMeReason, _ = e.reason(t)
-	v.AwaitingTriage, v.TriageActions = t.AwaitingTriage, ticketTriageActions(r, key, t)
+	v.AwaitingTriage, v.TriageActions, v.TriageNotes = t.AwaitingTriage, ticketTriageActions(r, key, t), ticketTriageNotes(r, key, t)
 	v.SpecMergeTicket = t.SpecMergeTicket
 	return v
 }

@@ -20,7 +20,7 @@ func init() {
 	cases["to_requirement"] = opCase{
 		setup: newIssue,
 		ok:    call{http: toRequirement("5", `{"context":"Seen on every login."}`)},
-		check: ticketAcknowledgement("acme-5", "Cancelled", "state", "replacements", "comments", "moves", "needs_me_reason", "link", "awaiting_triage", "triage_actions"),
+		check: ticketAcknowledgement("acme-5", "Cancelled", "state", "replacements", "comments", "moves", "needs_me_reason", "link", "awaiting_triage", "triage_actions", "triage_notes"),
 		full: func(t *testing.T, out map[string]any) {
 			field("state", "Cancelled")(t, out)
 			if got := strs(out["replacements"]); !slices.Equal(got, []string{"acme-7"}) {

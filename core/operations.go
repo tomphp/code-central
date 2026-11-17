@@ -181,6 +181,10 @@ var Operations = []Op{
 	{Name: "to_requirement", Audience: HumanOnly, Write: true},
 	// Azure Boards (Spec code-central-894).
 	{Name: "set_azure_boards", Audience: HumanOnly, Write: true},
+	// The Work Item Watcher's own; it reports each comment written with
+	// report_issue_written.
+	{Name: "get_work_item_watch", Audience: IntegrationOnly},
+	{Name: "report_work_item_watcher_status", Audience: IntegrationOnly, Write: true},
 	// The Model Choice (Spec code-central-301).
 	{Name: "get_model_choice", Audience: FactoryOnly},
 	{Name: "report_model_choice", Audience: FactoryOnly, Write: true},
