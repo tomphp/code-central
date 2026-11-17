@@ -1,6 +1,6 @@
 // The service's supervision of its Watchers, as a test runs it.
 
-package ciwatchertest
+package watchertest
 
 import (
 	"context"

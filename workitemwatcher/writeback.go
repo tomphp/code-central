@@ -14,7 +14,7 @@ import (
 
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/core"
-	"github.com/tomoram/code-central/watchers"
+	"github.com/tomoram/code-central/ratelimit"
 )
 
 // writeBack carries out each of watch's due writes. It returns Azure
@@ -29,7 +29,7 @@ func (cfg Config) writeBack(ctx context.Context, q queryRun, watch core.WorkItem
 			continue
 		}
 		err := cfg.writeItem(ctx, q.c, id, w)
-		var limit *watchers.RateLimitError
+		var limit *ratelimit.Error
 		switch {
 		case ctx.Err() != nil:
 			return nil

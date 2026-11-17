@@ -1,6 +1,6 @@
 // Package fakegh is a fake gh, the GitHub CLI, for tests. It follows a
 // Script of Answers kept in its folder and records each call there, so
-// a test sees what the CI Watcher asked GitHub. ciwatchertest runs the
+// a test sees what the CI Watcher asked GitHub. watchertest runs the
 // test binary as it; `make e2e` builds it as a program (./gh) for the
 // UI's end-to-end tests, which put it on the service's PATH.
 package fakegh

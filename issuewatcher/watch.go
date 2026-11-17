@@ -14,6 +14,7 @@ import (
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/watchers"
 )
 
@@ -99,7 +100,7 @@ type polled struct {
 // finds an error reports it itself. Each listed repository is checked on
 // its own: one that fails is reported with its own problem and the others
 // are still watched (Spec code-central-848).
-func (cfg Config) poll(ctx context.Context) (reachable bool, limit *watchers.RateLimitError) {
+func (cfg Config) poll(ctx context.Context) (reachable bool, limit *ratelimit.Error) {
 	watch, err := cfg.Client.GetIssueWatch(ctx, cfg.Project)
 	if err != nil {
 		if ctx.Err() == nil {

@@ -11,7 +11,7 @@ import (
 
 	"github.com/tomoram/code-central/azdo"
 	"github.com/tomoram/code-central/internal/fakeazdo"
-	"github.com/tomoram/code-central/watchers"
+	"github.com/tomoram/code-central/ratelimit"
 )
 
 const pat = "s3cr3t-pat-value"
@@ -155,7 +155,7 @@ func TestThrottlingIsTheSharedRateLimitError(t *testing.T) {
 	for _, status := range []int{429, 503} {
 		a := fakeazdo.Answer{Status: status, Path: "/"}.WithHeader("Retry-After", "30").WithHeader("X-RateLimit-Reset", "1900000000")
 		_, err := client(t, fakeazdo.New(t, a)).Builds(context.Background(), azdo.BuildQuery{})
-		var rl *watchers.RateLimitError
+		var rl *ratelimit.Error
 		if !errors.As(err, &rl) {
 			t.Fatalf("status %d: err = %v, want a rate limit", status, err)
 		}
@@ -167,7 +167,7 @@ func TestThrottlingIsTheSharedRateLimitError(t *testing.T) {
 
 func TestA503WithoutRetryAfterIsNotARateLimit(t *testing.T) {
 	_, err := client(t, fakeazdo.New(t, fakeazdo.Answer{Status: 503, Path: "/"})).Builds(context.Background(), azdo.BuildQuery{})
-	var rl *watchers.RateLimitError
+	var rl *ratelimit.Error
 	if err == nil || errors.As(err, &rl) {
 		t.Fatalf("err = %v", err)
 	}

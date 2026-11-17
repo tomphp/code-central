@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
@@ -19,10 +18,11 @@ import (
 	"github.com/tomoram/code-central/internal/fakeazdo"
 	"github.com/tomoram/code-central/store"
 	"github.com/tomoram/code-central/watchers"
+	"github.com/tomoram/code-central/watchers/watchertest"
 	"github.com/tomoram/code-central/workitemwatcher"
 )
 
-func TestMain(m *testing.M) { ciwatchertest.Main(m) }
+func TestMain(m *testing.M) { watchertest.Main(m) }
 
 var human = core.WithActor(context.Background(), core.Human)
 
@@ -390,7 +390,7 @@ func TestTheWorkItemWatcherExitsWhenItsStdinCloses(t *testing.T) {
 // accepted.
 func TestTheWorkItemWatcherSubcommandWatchesAndExitsWhenItsStdinCloses(t *testing.T) {
 	w := newWatching(t)
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	cmd := exec.Command(h.CodeCentral, workitemwatcher.WatchArgs("acme")...)
 	cmd.Env = append(h.Environ(), "CODE_CENTRAL_URL="+w.srv.URL, "ADO_PAT="+pat)
 	stdin, err := cmd.StdinPipe()
