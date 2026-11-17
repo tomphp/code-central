@@ -46,7 +46,7 @@ func (s *supervising) project(key string, on bool) {
 // issues turns key's GitHub Issues on or off, as the human does.
 func (s *supervising) issues(key string, on bool) {
 	s.t.Helper()
-	if _, err := s.srv.Core.SetGitHubIssues(human, key, core.SetGitHubIssuesInput{On: on, Repository: "acme/web"}); err != nil {
+	if _, err := s.srv.Core.SetGitHubIssues(human, key, core.SetGitHubIssuesInput{On: on, Repositories: []string{"acme/web"}}); err != nil {
 		s.t.Fatal(err)
 	}
 }

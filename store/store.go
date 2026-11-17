@@ -473,13 +473,14 @@ func (c CI) orDefault() CI {
 }
 
 // GitHubIssues is a Project's GitHub Issues settings (Spec
-// code-central-279): whether it is on, the repository (owner/name) its
-// issues come from, the filter label (empty for every issue), whether New
-// issues need me, and the number of its Issues Spec, 0 until GitHub
+// code-central-279): whether it is on, the repositories (owner/name) its
+// issues come from, the filter label (empty for every issue) and whether
+// New issues need me, both applying to every repository (Spec
+// code-central-848), and the number of its Issues Spec, 0 until GitHub
 // Issues is first turned on.
 type GitHubIssues struct {
 	On              bool
-	Repository      string
+	Repositories    []string
 	Label           string
 	NewIssuesNeedMe bool
 	Spec            int

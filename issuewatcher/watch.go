@@ -86,9 +86,19 @@ func Watch(ctx context.Context, cfg Config) error {
 	}
 }
 
+// polled is a repository whose check passed this poll: the access it
+// found and its open issues, which stay nil until they are listed.
+type polled struct {
+	repository string
+	a          access
+	issues     []ghIssue
+}
+
 // poll is one poll: whether GitHub could be reached, so the loop reports
 // Watching, and its rate limit, if it refused a call for it. A poll that
-// finds an error reports it itself.
+// finds an error reports it itself. Each listed repository is checked on
+// its own: one that fails is reported with its own problem and the others
+// are still watched (Spec code-central-848).
 func (cfg Config) poll(ctx context.Context) (reachable bool, limit *watchers.RateLimitError) {
 	watch, err := cfg.Client.GetIssueWatch(ctx, cfg.Project)
 	if err != nil {
@@ -100,36 +110,79 @@ func (cfg Config) poll(ctx context.Context) (reachable bool, limit *watchers.Rat
 	if !watch.On {
 		return false, nil
 	}
-	a, r, err := checkAccess(ctx, core.IssuesCheckInput{Repository: watch.Repository, GHPath: watch.GHPath}, cfg.Env)
-	if ctx.Err() != nil {
-		// Stopped mid-poll: what failed is the stop, not GitHub.
-		return false, nil
-	}
-	if r.Problem != "" {
-		cfg.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
-		return false, nil
-	}
-	if errors.As(err, &limit) {
-		return true, limit
-	}
-	if watch.Spec == "" {
-		return true, nil
-	}
-	issues, err := openIssues(ctx, cfg.Env, a.prog, watch.Repository, watch.Label)
-	if err != nil {
-		if errors.As(err, &limit) {
-			return true, limit
+	var passed []polled
+	var problems []core.RepositoryProblem
+	for _, repository := range watch.Repositories {
+		a, r, err := checkAccess(ctx, repository, watch.GHPath, cfg.Env)
+		if ctx.Err() != nil {
+			// Stopped mid-poll: what failed is the stop, not GitHub.
+			return false, nil
 		}
-		if ctx.Err() == nil {
-			cfg.logf("%v", err)
+		switch {
+		case r.Problem == core.ProblemGHMissing || r.Problem == core.ProblemLoggedOut:
+			// gh itself is the problem, for every repository alike.
+			cfg.report(ctx, core.ReportWatcherStatusInput{State: core.WatcherError, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+			return false, nil
+		case r.Problem != "":
+			problems = append(problems, core.RepositoryProblem{Repository: repository, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+		case errors.As(err, &limit):
+			// A repository that already failed is still reported.
+			if len(problems) > 0 {
+				cfg.reportProblems(ctx, problems, len(watch.Repositories) > 1)
+			}
+			return len(problems) == 0, limit
+		default:
+			passed = append(passed, polled{repository: repository, a: a})
 		}
-		return true, nil
 	}
-	cfg.arrive(ctx, watch, issues)
-	if limit := cfg.follow(ctx, watch, a, issues); limit != nil {
-		return true, limit
+	if len(problems) > 0 {
+		cfg.reportProblems(ctx, problems, len(watch.Repositories) > 1)
 	}
-	return true, cfg.writeBack(ctx, watch, a.prog, issues)
+	reachable = len(problems) == 0
+	if watch.Spec == "" || len(passed) == 0 {
+		return reachable, nil
+	}
+	open := map[string]ghIssue{}
+	var skipped []string
+	for i := range passed {
+		p := &passed[i]
+		p.issues, err = openIssues(ctx, cfg.Env, p.a.prog, p.repository, watch.Label)
+		if err != nil {
+			if errors.As(err, &limit) {
+				return reachable, limit
+			}
+			if ctx.Err() == nil {
+				cfg.logf("%v", err)
+			}
+			skipped = append(skipped, p.repository)
+			continue
+		}
+		cfg.arrive(ctx, watch, p.repository, p.issues)
+		if limit := cfg.follow(ctx, watch, p.repository, p.a, p.issues); limit != nil {
+			return reachable, limit
+		}
+		for _, i := range p.issues {
+			open[LinkID(p.repository, i.Number)] = i
+		}
+	}
+	// Writes on an issue of a repository that failed its check or its
+	// listing wait for the next poll.
+	for _, p := range problems {
+		skipped = append(skipped, p.Repository)
+	}
+	return reachable, cfg.writeBack(ctx, watch, passed[0].a.prog, open, skipped)
+}
+
+// reportProblems reports an error for problems, the repositories that
+// failed their checks. One repository alone is reported as it always
+// was; several are named, each with its own fix.
+func (cfg Config) reportProblems(ctx context.Context, problems []core.RepositoryProblem, several bool) {
+	in := core.ReportWatcherStatusInput{State: core.WatcherError, Problem: problems[0].Problem, Message: problems[0].Message, Fix: problems[0].Fix}
+	if several {
+		sum := core.SumRepositoryProblems(problems)
+		in.Message, in.Fix, in.Repositories = sum.Reason, sum.Fix, problems
+	}
+	cfg.report(ctx, in)
 }
 
 // report reports the Issue Watcher's status.

@@ -180,8 +180,9 @@ export interface CIOverviewFilter {
 // code-central-279).
 export interface GitHubIssuesChange {
   on: boolean;
-  // repository is the GitHub repository as owner/name; on needs one.
-  repository: string;
+  // repositories are the GitHub repositories as owner/name, in the order
+  // listed; on needs at least one.
+  repositories: string[];
   // label is the filter label: only issues carrying it come in; "" lets
   // every issue in.
   label: string;

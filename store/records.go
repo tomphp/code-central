@@ -121,11 +121,11 @@ type kindModelFile struct {
 }
 
 type githubIssuesFile struct {
-	On              bool   `yaml:"on"`
-	Repository      string `yaml:"repository,omitempty"`
-	Label           string `yaml:"label,omitempty"`
-	NewIssuesNeedMe bool   `yaml:"new_issues_need_me,omitempty"`
-	Spec            int    `yaml:"spec,omitempty"`
+	On              bool     `yaml:"on"`
+	Repositories    []string `yaml:"repositories,omitempty"`
+	Label           string   `yaml:"label,omitempty"`
+	NewIssuesNeedMe bool     `yaml:"new_issues_need_me,omitempty"`
+	Spec            int      `yaml:"spec,omitempty"`
 }
 
 type ciFile struct {
@@ -869,10 +869,10 @@ func decodeCIRepositories(fs []ciRepositoryFile) ([]CIRepository, string, error)
 // off with nothing set, so a Project that never had it keeps the file it
 // always had.
 func encodeGitHubIssues(g GitHubIssues) *githubIssuesFile {
-	if g == (GitHubIssues{}) {
+	if !g.On && len(g.Repositories) == 0 && g.Label == "" && !g.NewIssuesNeedMe && g.Spec == 0 {
 		return nil
 	}
-	return &githubIssuesFile{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
+	return &githubIssuesFile{On: g.On, Repositories: g.Repositories, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
 }
 
 // encodeAutoAccept is the on kinds as project.yaml holds them.

@@ -255,7 +255,7 @@ func (s *FileStore) loadProject(key string) error {
 		}
 	}
 	if g := pf.GitHubIssues; g != nil {
-		p.GitHubIssues = GitHubIssues{On: g.On, Repository: g.Repository, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
+		p.GitHubIssues = GitHubIssues{On: g.On, Repositories: g.Repositories, Label: g.Label, NewIssuesNeedMe: g.NewIssuesNeedMe, Spec: g.Spec}
 	}
 	if m := pf.Models; m != nil {
 		var field string

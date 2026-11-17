@@ -865,7 +865,9 @@ export interface CIView {
 // read returns them.
 export interface GitHubIssuesView {
   on: boolean;
-  repository: string;
+  // Repositories are the GitHub repositories (owner/name) its issues
+  // come from, in the order the human listed them.
+  repositories: string[];
   // Label is the filter label: only issues carrying it come in; empty
   // lets every issue in.
   label: string;

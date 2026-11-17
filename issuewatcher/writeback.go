@@ -39,17 +39,17 @@ func splitLinkID(id string) (repository string, n int, err error) {
 	return repository, n, nil
 }
 
-// writeBack carries out each of watch's due writes. listed are the open
-// issues this poll listed, so an open issue isn't read again. It
-// returns GitHub's rate limit, if it refused a call for it; anything else
-// that goes wrong for an issue is logged, and its writes are tried again
-// on the next poll.
-func (cfg Config) writeBack(ctx context.Context, watch core.IssueWatch, prog string, listed []ghIssue) *watchers.RateLimitError {
-	open := map[string]ghIssue{}
-	for _, i := range listed {
-		open[LinkID(watch.Repository, i.Number)] = i
-	}
+// writeBack carries out each of watch's due writes, but those on an issue
+// of one of the skipped repositories, which failed this poll. open are the
+// open issues this poll listed, by Link ID, so an open issue isn't read
+// again. It returns GitHub's rate limit, if it refused a call for it;
+// anything else that goes wrong for an issue is logged, and its writes are
+// tried again on the next poll.
+func (cfg Config) writeBack(ctx context.Context, watch core.IssueWatch, prog string, open map[string]ghIssue, skipped []string) *watchers.RateLimitError {
 	for _, w := range watch.Writes {
+		if repository, _, err := splitLinkID(w.Link.ID); err == nil && slices.ContainsFunc(skipped, func(s string) bool { return strings.EqualFold(s, repository) }) {
+			continue
+		}
 		err := cfg.writeIssue(ctx, prog, w, open)
 		var limit *watchers.RateLimitError
 		switch {

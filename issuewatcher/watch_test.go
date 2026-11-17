@@ -41,7 +41,7 @@ func newWatching(t *testing.T) *watching {
 	if _, err := srv.Core.CreateProject(human, core.CreateProjectInput{Key: "acme"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repository: "acme/web"}); err != nil {
+	if _, err := srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}}); err != nil {
 		t.Fatal(err)
 	}
 	h := ciwatchertest.New(t)
@@ -271,7 +271,7 @@ func TestWithoutAResetTimeTheIssueWatchersIntervalDoublesUpTo10Minutes(t *testin
 // loop reports nothing until it is stopped.
 func TestTheIssueWatcherReportsNothingWithGitHubIssuesOff(t *testing.T) {
 	w := newWatching(t)
-	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: false, Repository: "acme/web"}); err != nil {
+	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: false, Repositories: []string{"acme/web"}}); err != nil {
 		t.Fatal(err)
 	}
 	w.start(w.h.Bin)

@@ -48,7 +48,7 @@ func TestTheServiceSupervisesItsWatchers(t *testing.T) {
 		svc.human(t, "/api/p/acme/set_ci_tracking", `{"tracking":`+strconv.FormatBool(on)+`,"repository":"acme/web"}`)
 	}
 	issues := func(on bool) {
-		svc.human(t, "/api/p/acme/set_github_issues", `{"on":`+strconv.FormatBool(on)+`,"repository":"acme/web"}`)
+		svc.human(t, "/api/p/acme/set_github_issues", `{"on":`+strconv.FormatBool(on)+`,"repositories":["acme/web"]}`)
 	}
 
 	// Turning each on starts its Watcher, which reports Watching.

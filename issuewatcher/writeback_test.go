@@ -198,7 +198,7 @@ func TestARestartedIssueWatcherPostsNothingTwice(t *testing.T) {
 func TestWritesDueWhileGitHubIssuesWasOffAreMadeWhenItIsBackOn(t *testing.T) {
 	w := newWatching(t)
 	ticket := w.arrivedFirst(labelled(1, "code-central:draft"))
-	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: false, Repository: "acme/web"}); err != nil {
+	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: false, Repositories: []string{"acme/web"}}); err != nil {
 		t.Fatal(err)
 	}
 	w.wontFix(ticket, "")
@@ -206,7 +206,7 @@ func TestWritesDueWhileGitHubIssuesWasOffAreMadeWhenItIsBackOn(t *testing.T) {
 	w.polled()
 	w.wantWrites(from)
 
-	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repository: "acme/web"}); err != nil {
+	if _, err := w.srv.Core.SetGitHubIssues(human, "acme", core.SetGitHubIssuesInput{On: true, Repositories: []string{"acme/web"}}); err != nil {
 		t.Fatal(err)
 	}
 	w.polled()

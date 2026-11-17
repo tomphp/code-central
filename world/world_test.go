@@ -170,7 +170,7 @@ var checkCases = []struct {
 	field string
 }{
 	{"CI", (*world.World).SetCICheck, "/api/p/acme/set_ci_tracking", `{"tracking":true,"repository":"acme/app"}`, "repository"},
-	{"Issues", (*world.World).SetIssuesCheck, "/api/p/acme/set_github_issues", `{"on":true,"repository":"acme/app"}`, "repository"},
+	{"Issues", (*world.World).SetIssuesCheck, "/api/p/acme/set_github_issues", `{"on":true,"repositories":["acme/app"]}`, "repositories"},
 	{"Pull Request", (*world.World).SetPullRequestCheck, "/api/p/acme/set_landing_method", `{"method":"pull_request"}`, "method"},
 }
 

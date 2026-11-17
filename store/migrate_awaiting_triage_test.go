@@ -28,7 +28,8 @@ func TestTheRealChainMigratesAFormat15StoreToTheAwaitingTriageFormat(t *testing.
 	}
 	after := snapshot(t, dir)
 	for rel, content := range before {
-		if rel != "store.yaml" && after[rel] != content {
+		// project.yaml's github_issues.repository became a list at format 47.
+		if rel != "store.yaml" && rel != "projects/acme/project.yaml" && after[rel] != content {
 			t.Errorf("%s changed:\n%s", rel, after[rel])
 		}
 	}
