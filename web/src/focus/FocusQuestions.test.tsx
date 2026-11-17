@@ -7,6 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { World } from "../api/core/core";
 import type { Scenario } from "../api/scenario";
+import { shortOf } from "../inbox/ShortId";
 import { acme, focus, renderApp, settle } from "./worldTesting";
 
 const HOUR = 3_600_000;
@@ -52,7 +53,7 @@ describe("a Question Focus Item", () => {
     const it = item();
     expect(within(it).getByText("Acme")).toBeInTheDocument();
     expect(within(it).getByText("acme")).toBeInTheDocument();
-    expect(within(it).getByText(colour)).toBeInTheDocument();
+    expect(within(it).getByText(shortOf(colour))).toBeInTheDocument();
     expect(within(it).getByText("Pick a colour")).toBeInTheDocument();
     expect(within(it).getByText("Focus: Questions")).toBeInTheDocument();
     expect(within(it).getByText("waiting 2h")).toBeInTheDocument();

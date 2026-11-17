@@ -118,3 +118,40 @@ describe("Focus Mode's body loading", () => {
     expect(within(header()).getByText("2 left")).toBeInTheDocument();
   });
 });
+
+describe("Focus Mode's body's Short IDs", () => {
+  const short = (id: string) => `#${id.slice(id.lastIndexOf("-") + 1)}`;
+  // listed is a session whose item is a CI item listing these Tickets.
+  const listed = (ids: string[]) => {
+    const item = f.item!;
+    return {
+      item: { ...item, row: { ...item.row, id: "", ci_item: { ...item.row.ci_item, tickets: ids.map((id) => ({ id, title: id })) } } },
+    } as unknown as Partial<FocusBodySession>;
+  };
+
+  it("shows a Ticket Focus Item's ID short in one Project, and a click copies the full ID", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    await renderBody({ loc: { view: "focus", project: "acme" } });
+    const id = f.item!.row.id;
+    await userEvent.click(within(focus()).getByText(short(id)));
+    expect(writeText).toHaveBeenCalledWith(id);
+  });
+
+  it("keeps a Ticket Focus Item's ID in full in All Projects", async () => {
+    await renderBody();
+    expect(within(focus()).getByText(f.item!.row.id)).toBeInTheDocument();
+  });
+
+  it("shows each Ticket a CI Focus Item lists short in one Project", async () => {
+    await renderBody({ loc: { view: "focus", project: "acme" } }, listed(["acme-12", "acme-13"]));
+    expect(within(focus()).getByText("#12")).toBeInTheDocument();
+    expect(within(focus()).getByText("#13")).toBeInTheDocument();
+  });
+
+  it("keeps each listed Ticket in full in All Projects", async () => {
+    await renderBody({}, listed(["acme-12", "acme-13"]));
+    expect(within(focus()).getByText("acme-12")).toBeInTheDocument();
+    expect(within(focus()).getByText("acme-13")).toBeInTheDocument();
+  });
+});

@@ -13,6 +13,7 @@
 // list holds only runs that count, so it has neither. The row and card
 // pulse when the run changes, and once on mounting if it joined the list.
 import type { CIProvider, CIRunRow, CIRunView } from "../api/types";
+import { ShortId } from "../inbox/ShortId";
 import { usePulse } from "../focus/pulse";
 import { runDuration, shortCommit } from "../format";
 import { clickTo, hrefFor, type UiLocation } from "../url";
@@ -141,7 +142,7 @@ function RunCard({ run, provider, now, joined = false, projectName, to, navigate
     <li aria-label={runName(run)} {...pulse}>
       <a href={hrefFor(to)} onClick={clickTo(navigate, to)}>
         <span className="dashboard-entry-top">
-          <span className="tid">{run.ticket}</span>
+          <ShortId id={run.ticket!} />
           <span className="dashboard-entry-title">{runName(run)}</span>
           {projectName !== undefined && <span className="muted">{projectName}</span>}
         </span>
