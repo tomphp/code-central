@@ -193,7 +193,7 @@ func (f *factory) cutBranchWorktree(r *repository, tk core.TicketView, branch, w
 // Tickets are the Accepted ones the Factory has merged into its Spec
 // Branch and not yet landed.
 func (f *factory) landSpecs(ctx context.Context, p core.ProjectView) {
-	if !p.LandingPolicy().MergesSpecBranches() {
+	if !f.home.policy(p.LandingPolicies()).MergesSpecBranches() {
 		return
 	}
 	waiting := map[string]bool{}
@@ -220,7 +220,7 @@ func (f *factory) landSpecs(ctx context.Context, p core.ProjectView) {
 // pull request. With several Repositories each base is checked by
 // pushSpec, for the Repositories the Spec changed.
 func (f *factory) pushSpecs(ctx context.Context, accepted []core.TicketView, p core.ProjectView) {
-	if !p.LandingPolicy().PushesSpecBranches() || !f.several() && !f.stateOf(f.home).current {
+	if !f.home.policy(p.LandingPolicies()).PushesSpecBranches() ||!f.several() && !f.stateOf(f.home).current {
 		return
 	}
 	seen := map[string]bool{}
@@ -247,7 +247,7 @@ func (f *factory) pushSpec(ctx context.Context, id string, p core.ProjectView) {
 		return
 	}
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
-	policy := p.LandingPolicy()
+	policy := p.LandingPolicies()
 	branch := specBranch(id)
 	var plans, conflicts []specPlan
 	for _, r := range f.readyRepositories() {
@@ -397,7 +397,7 @@ type specPlan struct {
 // the plain path, as their work is in the base.
 func (f *factory) mergeSpec(ctx context.Context, spec core.SpecDetail, tickets []core.TicketView, p core.ProjectView) (handled bool) {
 	sort.SliceStable(tickets, func(i, j int) bool { return acceptedAt(tickets[i]).Before(acceptedAt(tickets[j])) })
-	policy := p.LandingPolicy()
+	policy := p.LandingPolicies()
 	if f.anyUncloned(tickets) {
 		return true
 	}
@@ -526,7 +526,7 @@ func (f *factory) landEachAt(ctx context.Context, tickets []core.TicketView, p c
 // leaves alone this poll.
 func (f *factory) landSpecsOff(ctx context.Context, accepted []core.TicketView, p core.ProjectView) map[string]bool {
 	handled := map[string]bool{}
-	if !p.LandingPolicy().MergesLeftoverSpecBranches() {
+	if !f.home.policy(p.LandingPolicies()).MergesLeftoverSpecBranches() {
 		return handled
 	}
 	groups := map[string][]core.TicketView{}
@@ -535,7 +535,7 @@ func (f *factory) landSpecsOff(ctx context.Context, accepted []core.TicketView, 
 		if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
 			continue
 		}
-		if tk.SpecLanded && p.LandingPolicy().LandPerSpecInForce() {
+		if tk.SpecLanded && p.LandingPolicies().LandPerSpecInForce() {
 			continue
 		}
 		if f.workInEveryBase(tk) {
@@ -631,7 +631,7 @@ func (f *factory) specLanded(spec core.SpecDetail) bool {
 // Branch that is in that Repository's base once every Ticket on its Spec
 // is Done or Cancelled. One not in the base, as when the whole Spec is
 // cancelled, is kept, with a line printed once.
-func (f *factory) sweepSpecBranches(ctx context.Context, policy core.LandingPolicy) {
+func (f *factory) sweepSpecBranches(ctx context.Context, policy core.LandingPolicies) {
 	specs := map[string]*core.SpecDetail{}
 	for _, r := range f.readyRepositories() {
 		branches, err := r.git.specBranches()
@@ -672,7 +672,8 @@ func (f *factory) finishedSpec(ctx context.Context, id string) *core.SpecDetail 
 
 // sweepSpecBranch deletes branch, the Spec Branch of the finished spec in
 // r, when it is in r's base, and otherwise says once that it is kept.
-func (f *factory) sweepSpecBranch(r *repository, branch string, spec core.SpecDetail, policy core.LandingPolicy) {
+func (f *factory) sweepSpecBranch(r *repository, branch string, spec core.SpecDetail, policies core.LandingPolicies) {
+	policy := r.policy(policies)
 	id, base := strings.TrimPrefix(branch, "spec/"), f.baseOf(r)
 	ref := "refs/heads/" + branch
 	tip, err := r.git.commit(ref)

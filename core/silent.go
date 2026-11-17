@@ -139,10 +139,10 @@ func (c *Core) longSince(t store.Ticket) *time.Time {
 
 // notLandedSince is when t moved to Accepted, when it has been Accepted
 // for more than NotLandedAfter in Project p under the Merge Landing
-// Method, else nil. It needs no Claim or Factory: only the time since the
+// Method in any of its Changed Repositories, else nil. It needs no Claim or Factory: only the time since the
 // accept counts. Under Branch, Accepted work is To merge at once instead.
 func (c *Core) notLandedSince(p store.Project, t store.Ticket) *time.Time {
-	if t.State != store.Accepted || !landingPolicyOf(p).FlagsNotLanded() {
+	if t.State != store.Accepted || !ticketLandingPolicies(p, t).Any(LandingPolicy.FlagsNotLanded) {
 		return nil
 	}
 	accepted := entered(t)

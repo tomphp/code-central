@@ -383,14 +383,20 @@ export function projectSettingsContract(driver: () => Driver) {
     const names = (p: { repositories: { name: string }[] }) => p.repositories.map((r) => r.name);
     // A local path is absolute where Core runs, as d.absolutePath is.
     const local = (name: string) => d.absolutePath.replace(/[^\\/]+$/, name);
+    // A Repository follows the Default Landing with the Project's Push
+    // remote until it has its own.
+    const following = { landing: "merge", own_landing: false, push_remote: "origin", own_push_remote: false, local_only_under_pull_request: false };
     expect((await d.api.listProjects())[0].repositories).toEqual([
-      { name: "acme", home: true, clone_url: "", base: "main", local_path: "", code_host: "", changed_by: [] },
+      { name: "acme", home: true, clone_url: "", base: "main", local_path: "", code_host: "", changed_by: [], ...following },
     ]);
 
     const added = await d.api.addRepository("acme", { name: "web", clone_url: " git@github.com:acme/web.git " });
     expect(added.repositories[1]).toEqual({
-      name: "web", home: false, clone_url: "git@github.com:acme/web.git", base: "main", local_path: "", code_host: "github", changed_by: [],
+      name: "web", home: false, clone_url: "git@github.com:acme/web.git", base: "main", local_path: "", code_host: "github", changed_by: [], ...following,
     });
+    const own = await d.api.editRepository("acme", "web", { landing: "branch_push", push_remote: "upstream" });
+    expect(own.repositories[1]).toMatchObject({ landing: "branch_push", own_landing: true, push_remote: "upstream", own_push_remote: true });
+    await d.api.editRepository("acme", "web", { landing: "default", push_remote: "" });
     await d.api.addRepository("acme", { name: "api", clone_url: "https://github.com/acme/api", base: "develop", local_path: local("api") });
     expect(names((await d.api.listProjects())[0])).toEqual(["acme", "web", "api"]);
 

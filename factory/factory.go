@@ -505,7 +505,7 @@ func start(e Env, o options) (*factory, error) {
 		f.mcpBase = f.base
 	}
 	if readErr == nil {
-		if why := f.missingRemote(p.Landing.Remote, p.LandingPolicy()); why != "" {
+		if why := f.missingRemote(p.Landing.Remote, p.LandingPolicies()); why != "" {
 			return nil, errors.New(why)
 		}
 	}

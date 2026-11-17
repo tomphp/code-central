@@ -237,7 +237,7 @@ function CloneStatus({ clone }: { clone?: CloneView }) {
 }
 
 // RepositoryFields are a Repository's fields as its form edits them.
-type RepositoryFields = Required<Omit<RepositoryAdd, "ci">>;
+type RepositoryFields = Required<Omit<RepositoryAdd, "ci" | "landing" | "push_remote">>;
 
 // RepositoryForm is a Repository's fields: adding one, with its name, or
 // editing one in place, whose name never changes. With ciChoice, while CI

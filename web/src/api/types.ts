@@ -31,6 +31,7 @@ import {
   type ProjectView,
   type PullRequestState,
   type ReportedModelsView,
+  type RepositoryLanding,
   type SPEC_FIELDS,
   type SpecRow,
   type State,
@@ -76,7 +77,7 @@ export type ChatItem = HeldSessionEvent;
 
 // What setLandingMethod takes: the Code Host and repository are derived, and
 // leaving land_per_spec, pat_env or base out keeps the stored value.
-export type LandingInput = Omit<Landing, "land_per_spec" | "code_host" | "repository" | "pat_env" | "base" | "watcher" | "open_pull_requests"> & {
+export type LandingInput = Omit<Landing, "land_per_spec" | "code_host" | "repository" | "pat_env" | "uses_azure_repos_pat" | "base" | "watcher" | "open_pull_requests"> & {
   land_per_spec?: boolean;
   pat_env?: string;
   base?: string;
@@ -143,6 +144,11 @@ export interface RepositoryAdd {
   local_path?: string;
   // ci is its CI entry; left out, it is filled in from the Clone URL.
   ci?: RepositoryCIChange;
+  // landing is its Own Landing; left out or default, it follows the
+  // Project's Default Landing.
+  landing?: RepositoryLanding;
+  // push_remote names its Push remote; left out, the Project's.
+  push_remote?: string;
 }
 
 // A Repository's CI entry as the human sets it: Not watched, or a CI
@@ -158,11 +164,15 @@ export interface RepositoryCIChange {
 
 // A change to a Repository: each field left out keeps its value, an empty
 // local_path puts the clone back beside the Home Repository and an empty
-// clone_url clears it, making the Repository local-only.
+// clone_url clears it, making the Repository local-only. landing default
+// has it follow the Default Landing, and an empty push_remote the
+// Project's; the Home Repository takes these two alone.
 export interface RepositoryChange {
   clone_url?: string;
   base?: string;
   local_path?: string;
+  landing?: RepositoryLanding;
+  push_remote?: string;
 }
 
 // CI_VIEW_DAYS is how far back the CI view lists finished runs.

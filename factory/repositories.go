@@ -55,12 +55,12 @@ func (r *repository) view() core.RepositoryView {
 	return core.RepositoryView{Name: r.name, Home: r.home, CloneURL: r.cloneURL, Base: r.base}
 }
 
-// policy is r's Landing Policy, which every landing step in r asks: the
-// Project's, projectPolicy, with Push off in a local-only Repository (ADR
-// 0039, Spec code-central-879). Project-wide rules ask the Project's, so
-// a function given a policy with r is given the Project's and asks this.
-func (r *repository) policy(projectPolicy core.LandingPolicy) core.LandingPolicy {
-	return projectPolicy.ForRepository(r.view())
+// policy is r's Landing Policy among the Project's, policies, which every
+// landing step in r asks: its Own Landing, else the Default Landing, with
+// Push off in a local-only Repository (ADR 0039, Spec code-central-890).
+// A function given the policies with r asks this.
+func (r *repository) policy(policies core.LandingPolicies) core.LandingPolicy {
+	return policies.In(r.name)
 }
 
 // baseOf is r's Base: the Project's for the Home Repository.

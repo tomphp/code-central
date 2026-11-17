@@ -471,8 +471,9 @@ func TestTurningPullRequestOnIsRefusedNamingEachLocalOnlyRepositoryBeforeTheChec
 			wantFix(t, err, core.Invalid, "method")
 			var e *core.Error
 			errors.As(err, &e)
-			message := "2 Repositories fail: notes: Pull Request needs a Clone URL in every Repository; docs: Pull Request needs a Clone URL in every Repository"
-			fix := "notes: give its Clone URL, or land by Merge or Branch; docs: give its Clone URL, or land by Merge or Branch"
+			message := "2 Repositories fail: notes: local-only, with no Clone URL, and following the Default Landing, so it can't land by Pull Request; " +
+				"docs: local-only, with no Clone URL, and following the Default Landing, so it can't land by Pull Request"
+			fix := "notes: give it an Own Landing such as Merge, or a Clone URL; docs: give it an Own Landing such as Merge, or a Clone URL"
 			if e.Message != message || e.Fix != fix {
 				t.Fatalf("refusal = %q, fix %q, want %q, fix %q", e.Message, e.Fix, message, fix)
 			}
@@ -508,7 +509,7 @@ func TestTurningPullRequestOnNamesALoneLocalOnlyRepository(t *testing.T) {
 	_, err := f.core.SetLandingMethod(human, "acme", core.SetLandingMethodInput{Method: store.LandingPullRequest})
 	wantFix(t, err, core.Invalid, "method")
 	var e *core.Error
-	if errors.As(err, &e); e.Message != "notes: Pull Request needs a Clone URL in every Repository" || e.Fix != "notes: give its Clone URL, or land by Merge or Branch" {
+	if errors.As(err, &e); e.Message != "notes: local-only, with no Clone URL, and following the Default Landing, so it can't land by Pull Request" || e.Fix != "notes: give it an Own Landing such as Merge, or a Clone URL" {
 		t.Fatalf("refusal = %q, fix %q, want notes named", e.Message, e.Fix)
 	}
 }

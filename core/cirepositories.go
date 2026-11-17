@@ -229,7 +229,7 @@ func (c *Core) SetRepositoryCI(ctx context.Context, key string, in SetRepository
 	if err != nil {
 		return Written[ProjectView]{}, err
 	}
-	if was, _ := ciEntryOf(p, name); landingPolicyOf(p).RunsCIWatcher() && (was.NotWatched || !sameCITarget(was, e)) {
+	if was, _ := ciEntryOf(p, name); landingPolicies(p).RunsCIWatcher() && (was.NotWatched || !sameCITarget(was, e)) {
 		if err := c.checkCIEntry(ctx, p, opts, e, ""); err != nil {
 			return Written[ProjectView]{}, err
 		}
