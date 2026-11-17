@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/tomoram/code-central/store"
 )
@@ -10,15 +12,29 @@ import (
 
 // PullRequestCheckInput is what the Pull Request Watcher's check mode
 // checks: that it can open and follow pull requests on the Code Host's
-// repository. On GitHub it goes through gh, found with the gh path Option.
+// repository, or with Repositories, on each of theirs. On GitHub it goes
+// through gh, found with the gh path Option.
 type PullRequestCheckInput struct {
 	CodeHost   CodeHost `json:"code_host"`
 	Repository string   `json:"repository"`
-	GHPath     string   `json:"gh_path,omitempty"`
-	PATEnv     string   `json:"pat_env,omitempty"`
+	// Repositories, when given, are the Repositories to check in place
+	// of CodeHost and Repository, each answered on its own (Spec
+	// code-central-848).
+	Repositories []PullRequestCheckRepository `json:"repositories,omitempty"`
+	GHPath       string                       `json:"gh_path,omitempty"`
+	PATEnv       string                       `json:"pat_env,omitempty"`
 	// ProjectURL, when set, is the Azure DevOps project URL to call instead
 	// of the one worked out from Repository, for tests.
 	ProjectURL string `json:"project_url,omitempty"`
+}
+
+// PullRequestCheckRepository is one Repository for the check: its
+// Repository Name, and the Code Host and repository there its Clone URL
+// names.
+type PullRequestCheckRepository struct {
+	Name       string   `json:"name"`
+	CodeHost   CodeHost `json:"code_host"`
+	Repository string   `json:"repository"`
 }
 
 // PullRequestCheck runs the Pull Request Watcher once in its check mode.
@@ -31,14 +47,17 @@ type PullRequestCheck func(ctx context.Context, in PullRequestCheckInput) Watche
 func (c *Core) SetPullRequestCheck(check PullRequestCheck) { c.pullRequestCheck = check }
 
 // checkPullRequest runs the Pull Request check when l turns Pull Request
-// on (not when it already is), and refuses with the reason and fix when it fails. It runs outside
-// the store's lock, as the check calls the Code Host. GitHub is checked
-// through gh, and Azure Repos with the PAT variable.
+// on (not when it already is), and refuses with the reason and fix when it
+// fails. It runs outside the store's lock, as the check calls the Code
+// Host. GitHub is checked through gh, and Azure Repos with the PAT
+// variable. With several Repositories every one of them is checked, and
+// the refusal names each failing Repository with its reason and fix.
 func (c *Core) checkPullRequest(ctx context.Context, key string, l store.Landing) error {
 	if !landingPolicyOf(store.Project{Landing: l}).RunsPullRequestWatcher() || c.pullRequestCheck == nil {
 		return nil
 	}
 	var url, ghPath string
+	var repositories []RepositoryView
 	var already bool
 	err := c.store.View(func(r store.Reader) error {
 		if err := writable(r, key); err != nil {
@@ -46,6 +65,7 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, l store.Landing
 		}
 		p, _ := r.Project(key)
 		url, ghPath, already = p.CI.PushRemoteURL, r.Options().GHPath, landingPolicyOf(p).RunsPullRequestWatcher()
+		repositories = repositoriesView(p)
 		return nil
 	})
 	if err != nil || already {
@@ -55,12 +75,62 @@ func (c *Core) checkPullRequest(ctx context.Context, key string, l store.Landing
 	if err := checkPullRequestHost(url); err != nil {
 		return err
 	}
-	host, repository := codeHostOf(url)
-	res := c.pullRequestCheck(ctx, PullRequestCheckInput{CodeHost: host, Repository: repository, GHPath: ghPath, PATEnv: patEnvOf(store.CI{PATEnv: l.PATEnv})})
+	in := PullRequestCheckInput{GHPath: ghPath, PATEnv: patEnvOf(store.CI{PATEnv: l.PATEnv})}
+	if len(repositories) == 1 {
+		in.CodeHost, in.Repository = codeHostOf(url)
+		return checkRefusal(c.pullRequestCheck(ctx, in), "method")
+	}
+	var unsupported []RepositoryProblem
+	for _, rv := range repositories {
+		host, repository := codeHostOf(rv.CloneURL)
+		if host == CodeHostNone {
+			unsupported = append(unsupported, RepositoryProblem{Repository: rv.Name, Problem: ProblemCheckFailed,
+				Message: rv.CloneURL + " is on a host Pull Request doesn't support; it supports GitHub and Azure Repos", Fix: "point " + rv.Name + "'s Clone URL at GitHub or Azure Repos, or use Merge or Branch"})
+			continue
+		}
+		in.Repositories = append(in.Repositories, PullRequestCheckRepository{Name: rv.Name, CodeHost: host, Repository: repository})
+	}
+	res := c.pullRequestCheck(ctx, in)
+	if res.Problem != "" && len(res.Repositories) == 0 {
+		// A problem with no Repository named, such as gh missing, is
+		// every Repository's.
+		return checkRefusal(res, "method")
+	}
+	ps := append(unsupported, res.Repositories...)
+	if len(ps) == 0 {
+		return nil
+	}
+	return checkRefusal(SumRepositoryProblems(ps), "method")
+}
+
+// SumRepositoryProblems is one check result naming each of ps, the
+// failing Repositories, with its reason and its fix: its Problem is the
+// first one's.
+func SumRepositoryProblems(ps []RepositoryProblem) WatcherCheckResult {
+	var reasons, fixes []string
+	for _, p := range ps {
+		reasons = append(reasons, p.Repository+": "+p.Message)
+		if p.Fix != "" {
+			fixes = append(fixes, p.Repository+": "+p.Fix)
+		}
+	}
+	r := WatcherCheckResult{Reason: strings.Join(reasons, "; "), Fix: strings.Join(fixes, "; "), Repositories: ps}
+	if len(ps) > 0 {
+		r.Problem = ps[0].Problem
+	}
+	if len(ps) > 1 {
+		r.Reason = fmt.Sprintf("%d Repositories fail: %s", len(ps), r.Reason)
+	}
+	return r
+}
+
+// checkRefusal is a failed check's refusal, with its reason and fix, on
+// field, or on pat_env for a problem with the PAT; nil for a check that
+// passed.
+func checkRefusal(res WatcherCheckResult, field string) error {
 	if res.Problem == "" {
 		return nil
 	}
-	field := "method"
 	switch res.Problem {
 	case ProblemPATMissing, ProblemPATRejected, ProblemPATScope:
 		field = "pat_env"

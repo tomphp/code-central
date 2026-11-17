@@ -29,14 +29,18 @@ export const Error: Story = {
     },
   },
 };
-export const ErrorInARepository: Story = {
+export const ErrorInSomeRepositories: Story = {
   args: {
+    name: "Pull Request Watcher",
+    repository: "its 3 Repositories",
     watcher: {
       state: "error",
-      problem: "repository_unreadable",
-      message: "api: gh can't read acme/api.",
-      fix: "Grant gh access to acme/api.",
-      repositories: [{ repository: "api", problem: "repository_unreadable", message: "gh can't read acme/api.", fix: "Grant gh access to acme/api." }],
+      problem: "pat_missing",
+      message: "2 Repositories fail: api: ADO_PAT isn't set; docs: gh can't read acme/docs",
+      repositories: [
+        { repository: "api", problem: "pat_missing", message: "ADO_PAT isn't set.", fix: "Set ADO_PAT for the service, then restart it." },
+        { repository: "docs", problem: "repository_unreadable", message: "gh can't read acme/docs.", fix: "Check gh's account can see acme/docs." },
+      ],
     },
   },
 };

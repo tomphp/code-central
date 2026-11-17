@@ -118,7 +118,7 @@ func (s *ciState) ticket(t store.Ticket) *ticketCI {
 	if len(t.PushedCommits) == 0 || !landingPolicyOf(s.p).TracksCIResults() {
 		return a
 	}
-	for _, name := range pushedRepositories(s.p, t) {
+	for _, name := range namesInLandingOrder(s.p, pushedRepositories(s.p.Key, t)) {
 		if watchesCI(s.p, name) {
 			a.repos = append(a.repos, s.repo(t, name))
 		}

@@ -120,6 +120,10 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 	if policy.CIGateHolds() {
 		f.reportTip(ctx, p.Landing.Remote, policy)
 	}
+	f.landingRemote, f.fetchedElsewhere = p.Landing.Remote, nil
+	if policy.LandsByPullRequest() && f.several() {
+		f.fetchElsewhere(ctx, p.Landing.Remote)
+	}
 	for _, tk := range accepted {
 		if f.halted(ctx) || f.paused() {
 			return
@@ -140,7 +144,11 @@ func (f *factory) land(ctx context.Context, p core.ProjectView) {
 		case core.RouteBranch:
 			f.landMergedBranch(ctx, tk, p)
 		case core.RoutePullRequest:
-			f.landPullRequest(ctx, tk, p)
+			if changedElsewhere(f.home.name, tk) {
+				f.landPullRequests(ctx, tk, p)
+			} else {
+				f.landPullRequest(ctx, tk, p)
+			}
 		case core.RouteSpecBranch:
 			if tk.SpecMerge == nil || !tk.SpecMerge.Counts {
 				f.mergeIntoSpecBranch(ctx, tk)
@@ -444,7 +452,12 @@ func (f *factory) homeCI(tk core.TicketView) (result core.CIResult, commit strin
 // remoteTip is the commit branch's remote-tracking ref on remote holds,
 // or, without one to read, pushed.
 func (f *factory) remoteTip(remote, branch, pushed string) string {
-	commit, err := f.home.git.commit("refs/remotes/" + remote + "/" + branch)
+	return f.remoteTipIn(f.home, remote, branch, pushed)
+}
+
+// remoteTipIn is remoteTip in r.
+func (f *factory) remoteTipIn(r *repository, remote, branch, pushed string) string {
+	commit, err := r.git.commit("refs/remotes/" + remote + "/" + branch)
 	if err != nil {
 		return pushed
 	}
@@ -506,12 +519,17 @@ func (f *factory) reportTip(ctx context.Context, remote string, policy core.Land
 // ahead is left as it is. It returns whether it pushed, or why the push
 // failed.
 func (f *factory) push(ctx context.Context, remote, branch, commit string) (pushed bool, why string) {
-	if f.home.git.isAncestor(commit, "refs/remotes/"+remote+"/"+branch) {
+	return f.pushIn(ctx, f.home, remote, branch, commit)
+}
+
+// pushIn is push in r.
+func (f *factory) pushIn(ctx context.Context, r *repository, remote, branch, commit string) (pushed bool, why string) {
+	if r.git.isAncestor(commit, "refs/remotes/"+remote+"/"+branch) {
 		return false, ""
 	}
 	defer f.work.busy("pushing ", branch)()
 	// A stop kills it, so a push that hangs doesn't hold up the Factory.
-	if out, err := f.home.git.push(ctx, remote, branch); err != nil {
+	if out, err := r.git.push(ctx, remote, branch); err != nil {
 		return false, fmt.Sprintf("couldn't push %s to %s:\n\n```\n%s\n```", branch, remote, out)
 	}
 	return true, ""

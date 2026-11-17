@@ -159,14 +159,23 @@ func checkRepositoryWork(p store.Project, field string, ws []RepositoryWork) ([]
 }
 
 // setChangedRepositories stores rs as t's Changed Repositories, in p's
-// landing order, each keeping the landed commit t had for it. They are
-// stored as none while they are just what t's branch and commit read as,
-// so a single-repository Ticket's file is as it always was.
+// landing order, each keeping the landed commit t had for it while its
+// commit is the same: new work in a Repository needs landing again. A
+// Repository t's work has landed in stays one of them though rs leaves it
+// out, as when t is sent back after a sibling pull request merged and its
+// branch there holds nothing new (ADR 0050). They are stored as none
+// while they are just what t's branch and commit read as, so a
+// single-repository Ticket's file is as it always was.
 func setChangedRepositories(p store.Project, t *store.Ticket, rs []store.ChangedRepository) {
 	was := changedRepositories(p.Key, *t)
 	for i := range rs {
-		if j := slices.IndexFunc(was, func(w store.ChangedRepository) bool { return w.Name == rs[i].Name }); j >= 0 && rs[i].Landed == nil {
+		if j := slices.IndexFunc(was, func(w store.ChangedRepository) bool { return w.Name == rs[i].Name }); j >= 0 && rs[i].Landed == nil && rs[i].Commit == was[j].Commit {
 			rs[i].Landed = was[j].Landed
+		}
+	}
+	for _, w := range was {
+		if w.Landed != nil && !slices.ContainsFunc(rs, func(r store.ChangedRepository) bool { return r.Name == w.Name }) {
+			rs = append(rs, w)
 		}
 	}
 	inLandingOrder(p, rs, repositoryName)
@@ -241,9 +250,7 @@ func changedRepositoryViews(p store.Project, t store.Ticket, s *ciState) []Chang
 				rv.Landed = landedByMove(t)
 			}
 		}
-		if t.PullRequest != nil && recordRepository(p.Key, t.PullRequest.Repository) == r.Name {
-			rv.PullRequest = pullRequestView(t.PullRequest)
-		}
+		rv.PullRequest = pullRequestView(pullRequestIn(p.Key, t, r.Name))
 		out = append(out, rv)
 	}
 	return out

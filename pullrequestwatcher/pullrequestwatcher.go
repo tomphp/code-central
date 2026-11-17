@@ -28,6 +28,10 @@ const Command = "pull-request-watcher"
 // its check mode for in, after the program itself.
 func CheckArgs(in core.PullRequestCheckInput) []string {
 	args := []string{Command, "--check", "--code-host", string(in.CodeHost), "--repository", in.Repository}
+	if len(in.Repositories) > 0 {
+		list, _ := json.Marshal(in.Repositories)
+		args = append(args, "--repositories", string(list))
+	}
 	if in.GHPath != "" {
 		args = append(args, "--gh-path", in.GHPath)
 	}
@@ -51,8 +55,29 @@ func Checker(program string, environ []string) core.PullRequestCheck {
 // found, is logged in, can read the repository and its login has write
 // permission there. On Azure Repos it passes when the PAT variable is set,
 // the repository can be read and the PAT can contribute to pull requests.
-// Being rate-limited fails the check, as there is no knowing yet.
+// Being rate-limited fails the check, as there is no knowing yet. Given a
+// list of Repositories it checks each of them in place of in's one, and
+// answers with each failing Repository's problem.
 func Check(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) core.WatcherCheckResult {
+	if len(in.Repositories) == 0 {
+		return checkOne(ctx, in, env)
+	}
+	var ps []core.RepositoryProblem
+	for _, rv := range in.Repositories {
+		one := in
+		one.Repositories, one.CodeHost, one.Repository = nil, rv.CodeHost, rv.Repository
+		if r := checkOne(ctx, one, env); r.Problem != "" {
+			ps = append(ps, core.RepositoryProblem{Repository: rv.Name, Problem: r.Problem, Message: r.Reason, Fix: r.Fix})
+		}
+	}
+	if len(ps) == 0 {
+		return core.WatcherCheckResult{}
+	}
+	return core.SumRepositoryProblems(ps)
+}
+
+// checkOne is Check for in's one repository.
+func checkOne(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) core.WatcherCheckResult {
 	_, r, err := Config{Env: env}.access(ctx, in, true)
 	var limit *watchers.RateLimitError
 	if errors.As(err, &limit) {

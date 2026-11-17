@@ -269,7 +269,7 @@ func (c *Core) ReportPushedCommit(_ context.Context, key string, in ReportPushed
 		if !landingPolicyOf(p).RecordsPushedCommit() {
 			return false, nil
 		}
-		if pushed := pushedIn(key, *t, name); len(pushed) > 0 && pushed[len(pushed)-1].Commit == commit {
+		if pc, ok := latestPushedTo(key, *t, name); ok && pc.Commit == commit {
 			return false, nil
 		}
 		t.PushedCommits = append(t.PushedCommits, store.PushedCommit{Repository: recordName(key, name), Commit: commit, Branch: strings.TrimSpace(in.Branch), Pushed: c.now()})
@@ -512,7 +512,7 @@ func ciWaiting(ci *ciState, name string) []CIWaitingCommit {
 				continue
 			}
 			w := CIWaitingCommit{Ticket: DisplayID(key, t.Number), Commit: pc.Commit, Pushed: pc.Pushed}
-			if pr := t.PullRequest; pr != nil && recordRepository(key, pr.Repository) == name {
+			if pr := pullRequestIn(key, t, name); pr != nil {
 				w.PullRequest = pr.Number
 			}
 			out = append(out, w)

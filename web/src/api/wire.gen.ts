@@ -1039,6 +1039,9 @@ export interface PushedCommitView {
 // PullRequestView is a pull request as reads show it: on a Ticket, on the
 // Spec page and in the Pull Request Watcher's list.
 export interface PullRequestView {
+  // Repository is the Repository Name the pull request is in; left out
+  // while the Project has one Repository.
+  repository?: string;
   number: number;
   link: string;
   state: PullRequestState;
@@ -1393,16 +1396,16 @@ export interface WatcherView {
   problem?: WatcherProblem;
   message?: string;
   fix?: string;
+  // Repositories are the Repositories it can't watch, each with its
+  // problem and fix, while in error about some of them only: it carries
+  // on watching the rest.
+  repositories?: RepositoryProblem[];
   // RateLimitedUntil is when GitHub lets a rate-limited Watcher call it
   // again; until then it is still Watching, not in error.
   rate_limited_until?: string;
   // Since is when the Watcher went into this state; nil until it
   // reports.
   since?: string;
-  // Repositories are the Repositories it can't watch, each with its
-  // problem and fix, while in error about some of them only: it carries
-  // on watching the rest.
-  repositories?: RepositoryProblem[];
 }
 
 // OpenPullRequest is a pull request left open for an Accepted Ticket.
@@ -1610,6 +1613,10 @@ export interface NeedsMeRow {
   // PullRequest is the Ticket's pull request, for its item's link; left
   // out until the Pull Request Watcher reports one.
   pull_request?: PullRequestView;
+  // ClosedPullRequests are the Ticket's pull requests closed without
+  // merging, each naming its Repository while the Project has several,
+  // in landing order (Pull request closed).
+  closed_pull_requests?: PullRequestView[];
   // BaseDiverged is the local and remote base commits (Base diverged,
   // whose row has no Ticket: its ID is empty).
   base_diverged?: BaseDivergedView;
@@ -1647,8 +1654,9 @@ export interface Tokens {
   output_tokens: number;
 }
 
-// RepositoryProblem is why a Watcher can't watch one Repository, and its
-// fix.
+// RepositoryProblem is one Repository a Watcher can't watch, by
+// Repository Name, with what is wrong and its fix (Spec
+// code-central-848): the Watcher carries on with the others.
 export interface RepositoryProblem {
   repository: string;
   problem?: WatcherProblem;

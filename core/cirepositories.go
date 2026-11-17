@@ -90,18 +90,6 @@ func recordName(key, name string) string {
 	return name
 }
 
-// pushedRepositories are the Names of the Repositories t pushed in, in
-// p's landing order.
-func pushedRepositories(p store.Project, t store.Ticket) []string {
-	var names []string
-	for _, pc := range t.PushedCommits {
-		if name := recordRepository(p.Key, pc.Repository); !slices.Contains(names, name) {
-			names = append(names, name)
-		}
-	}
-	return namesInLandingOrder(p, names)
-}
-
 // pushedIn are the commits t pushed in the Repository name, oldest first.
 func pushedIn(key string, t store.Ticket, name string) []store.PushedCommit {
 	var out []store.PushedCommit

@@ -10,14 +10,14 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Format 45 (code-central-857) added each Repository's CI entry and the
+// Format 46 (code-central-857) added each Repository's CI entry and the
 // Repository Name of CI Runs and CI responses. The real chain migrates a
-// format-44 store copying every file unchanged: a Project from before has
+// format-45 store copying every file unchanged: a Project from before has
 // no entries, and its runs and responses name no Repository, so all read
 // as the Home Repository's.
-func TestTheRealChainMigratesAFormat44StoreToTheCIRepositoriesFormat(t *testing.T) {
+func TestTheRealChainMigratesAFormat45StoreToTheCIRepositoriesFormat(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "code-central")
-	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 44\n")
+	writeFile(t, filepath.Join(dir, "store.yaml"), "format: 45\n")
 	writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 		"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\n"+
 			"ci:\n  tracking: true\n  provider: github_actions\n  repository: acme/web\n"+
@@ -27,8 +27,8 @@ func TestTheRealChainMigratesAFormat44StoreToTheCIRepositoriesFormat(t *testing.
 	before := snapshot(t, dir)
 
 	s := openFile(t, dir)
-	if m := s.Migrated(); m == nil || m.From != 44 || m.To != store.Format {
-		t.Fatalf("migrated = %+v, want a migration from format 44", m)
+	if m := s.Migrated(); m == nil || m.From != 45 || m.To != store.Format {
+		t.Fatalf("migrated = %+v, want a migration from format 45", m)
 	}
 	after := snapshot(t, dir)
 	for rel, content := range before {
@@ -98,7 +98,7 @@ func TestCIEntriesAreCheckedOnLoad(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "code-central")
-			writeFile(t, filepath.Join(dir, "store.yaml"), "format: 45\n")
+			writeFile(t, filepath.Join(dir, "store.yaml"), "format: 46\n")
 			writeFile(t, filepath.Join(dir, "projects/acme/project.yaml"),
 				"key: acme\ndisplay_name: Acme\ncreated: 2026-01-02T03:04:05Z\nmode: committed\n"+
 					"ci:\n  tracking: false\n  provider: github_actions\n  repositories:\n"+list)

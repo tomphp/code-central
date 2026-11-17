@@ -141,7 +141,7 @@ func (e *evaluation) chain(t store.Ticket) (NeedsMeReason, time.Time) {
 			return "", time.Time{}
 		}
 		lp := landingPolicyOf(p)
-		if t.State == store.Accepted && lp.LandsByPullRequest() && t.PullRequest != nil && t.PullRequest.State == store.PRClosed {
+		if t.State == store.Accepted && lp.LandsByPullRequest() && anyPullRequest(t, store.PRClosed) {
 			return ReasonPullRequestClosed, entered(t)
 		}
 		if t.State == store.Accepted && lp.LandsOnHumanMerge() {

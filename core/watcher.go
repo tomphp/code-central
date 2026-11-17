@@ -120,6 +120,20 @@ type WatcherCheckResult struct {
 	Problem WatcherProblem `json:"problem,omitempty"`
 	Reason  string         `json:"reason,omitempty"`
 	Fix     string         `json:"fix,omitempty"`
+	// Repositories are the failing Repositories of a check that was given
+	// a list of them, each with its own problem; Problem, Reason and Fix
+	// then sum them up.
+	Repositories []RepositoryProblem `json:"repositories,omitempty"`
+}
+
+// RepositoryProblem is one Repository a Watcher can't watch, by
+// Repository Name, with what is wrong and its fix (Spec
+// code-central-848): the Watcher carries on with the others.
+type RepositoryProblem struct {
+	Repository string         `json:"repository"`
+	Problem    WatcherProblem `json:"problem,omitempty"`
+	Message    string         `json:"message"`
+	Fix        string         `json:"fix,omitempty"`
 }
 
 // WatcherState is how a Project's Watcher last said it was.
@@ -145,16 +159,16 @@ type WatcherView struct {
 	Problem WatcherProblem `json:"problem,omitempty"`
 	Message string         `json:"message,omitempty"`
 	Fix     string         `json:"fix,omitempty"`
+	// Repositories are the Repositories it can't watch, each with its
+	// problem and fix, while in error about some of them only: it carries
+	// on watching the rest.
+	Repositories []RepositoryProblem `json:"repositories,omitempty"`
 	// RateLimitedUntil is when GitHub lets a rate-limited Watcher call it
 	// again; until then it is still Watching, not in error.
 	RateLimitedUntil time.Time `json:"rate_limited_until,omitzero"`
 	// Since is when the Watcher went into this state; nil until it
 	// reports.
 	Since *time.Time `json:"since,omitempty"`
-	// Repositories are the Repositories it can't watch, each with its
-	// problem and fix, while in error about some of them only: it carries
-	// on watching the rest.
-	Repositories []RepositoryProblem `json:"repositories,omitempty"`
 }
 
 // equal reports whether v and w say the same, Since aside.
@@ -298,15 +312,6 @@ type ReportWatcherStatusInput struct {
 	Repositories []RepositoryProblem `json:"repositories,omitempty"`
 	// Full asks for the Project in place of the Acknowledgement.
 	Full bool `json:"full,omitempty"`
-}
-
-// RepositoryProblem is why a Watcher can't watch one Repository, and its
-// fix.
-type RepositoryProblem struct {
-	Repository string         `json:"repository"`
-	Problem    WatcherProblem `json:"problem,omitempty"`
-	Message    string         `json:"message"`
-	Fix        string         `json:"fix,omitempty"`
 }
 
 // repositoryProblems is ps checked as a k Watcher's: each names a

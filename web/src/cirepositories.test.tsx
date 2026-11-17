@@ -110,9 +110,10 @@ describe("the CI section with several Repositories", () => {
       repositories: [{ repository: "api", problem: "repository_unreadable", message: "gh can't read acme/api", fix: "Grant gh access to acme/api." }],
     });
     await renderApp(w, OPTIONS);
-    const errors = screen.getByRole("list", { name: "CI Watcher's errors" });
+    const watcher = screen.getByRole("region", { name: "CI Watcher" });
+    const errors = within(watcher).getByRole("list", { name: "Failing Repositories" });
     expect(within(errors).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["api: gh can't read acme/apiGrant gh access to acme/api."]);
-    expect(screen.getByText(/It carries on watching the others/)).toBeInTheDocument();
+    expect(watcher).toHaveTextContent("It carries on watching the others");
   });
 
   it("offers a CI choice when adding a Repository while CI Tracking is on", async () => {
