@@ -6,7 +6,7 @@ So the list is a Project setting in Code Central's store. The Home Repository is
 
 ## Considered Options
 
-- **A committed file in the Home Repository.** Rejected: it differs per branch, needs a commit to change, and the service never reads git, so the UI, Needs Me and the watchers couldn't see it. It would also be the only Project setting kept outside the store; ADR 0032 moved the Base into the store for the same reason.
+- **A committed file in the Home Repository.** Rejected: it differs per branch, needs a commit to change, and the service never reads git, so the UI, Needs Me and the watchers couldn't see it. It would also be the only Project setting kept outside the store; ADR 0058 moved the Base into the store for the same reason.
 - **A pointer from the store to the file.** Rejected for the same reasons: the list itself would still live in git.
 
 ## Consequences

@@ -8,7 +8,7 @@ import (
 	"github.com/tomoram/code-central/store"
 )
 
-// Wayfinder Labels (Spec 213, ADR 0016). A Map is a Spec labelled
+// Wayfinder Labels (Spec 213, ADR 0057). A Map is a Spec labelled
 // wayfinder:map, and its Tickets carry a Wayfinder Label for their type;
 // a Prototype is a Ticket labelled prototype. Like stage:, Code Central
 // reads them on the read side only: they choose a Ticket's Guide and
@@ -23,7 +23,7 @@ const MapLabel = WayfinderPrefix + "map"
 // PrototypeLabel marks a Ticket as a Prototype.
 const PrototypeLabel = "prototype"
 
-// RetroLabel marks a Ticket as a Retro (ADR 0040).
+// RetroLabel marks a Ticket as a Retro (ADR 0061).
 const RetroLabel = "retro"
 
 // LongLivedLabel marks a Spec as a Long-lived Spec, one that never

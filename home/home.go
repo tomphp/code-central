@@ -1,5 +1,5 @@
 // Package home finds the folders Code Central's files live in. They use
-// the XDG layout on every OS (ADR 0010): each folder is its XDG_*
+// the XDG layout on every OS (ADR 0056): each folder is its XDG_*
 // variable, else under HOME, else under the account's profile folder
 // (%USERPROFILE% on Windows, which usually has no HOME).
 package home

@@ -8,7 +8,7 @@ Under Branch, a Ticket lands once its branch is merged in every Changed Reposito
 
 Base missing and Base diverged are per Repository, and only work touching that Repository waits to land. No landing setting becomes per Repository; only the landing order is new. Pull Request and the CI gate follow the "every Changed Repository" rule; their per-Repository mechanics are the next ADR's.
 
-[ADR 0032](0032-the-base-is-a-project-setting-not-the-factorys.md)'s "No per-Ticket base is stored" still holds: a landed commit per Repository records where the work landed, not a base.
+[ADR 0058](0058-the-base-is-a-project-setting-not-the-factorys.md)'s "No per-Ticket base is stored" still holds: a landed commit per Repository records where the work landed, not a base.
 
 ## Considered Options
 

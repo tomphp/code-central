@@ -1,4 +1,4 @@
-// Guided progression (Spec code-central-213; ADR 0016, Wayfinder Labels):
+// Guided progression (Spec code-central-213; ADR 0057, Wayfinder Labels):
 // on each poll, the Factory starts the next decision of every guided Map
 // that is idle. It lives here, in the poll, because nothing in Code
 // Central schedules (ADR 0005).
