@@ -134,3 +134,47 @@ describe("the Activity Dashboard body's CI Running", () => {
     expect(within(dashboard()).getByRole("alert")).toHaveTextContent("CI is down");
   });
 });
+
+describe("the Activity Dashboard body's Short IDs", () => {
+  const clipboard = () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    return writeText;
+  };
+  const short = (id: string) => `#${id.slice(id.lastIndexOf("-") + 1)}`;
+  const runs = () => within(screen.getByRole("list", { name: "CI Running" })).getAllByRole("listitem");
+
+  it("shows Short IDs in one Project, on an In Progress entry and a CI Running card", () => {
+    renderBody({ ciRuns: { data: d.ciRuns }, loc: { view: "activity", project: "acme" } });
+    expect(within(inProgress()[0]).getByText(short(d.ids.signup))).toBeInTheDocument();
+    expect(within(runs()[0]).getByText(short(d.ids.theme))).toBeInTheDocument();
+  });
+
+  it("shows Short IDs for the Sole Project, which arrives as project", () => {
+    renderBody({ ciRuns: { data: d.ciRuns }, project: "acme" });
+    expect(within(inProgress()[0]).getByText(short(d.ids.signup))).toBeInTheDocument();
+    expect(within(runs()[0]).getByText(short(d.ids.theme))).toBeInTheDocument();
+  });
+
+  it("keeps full IDs in All Projects", () => {
+    renderBody({ ciRuns: { data: d.ciRuns } });
+    expect(within(inProgress()[0]).getByText(d.ids.signup)).toBeInTheDocument();
+    expect(within(runs()[0]).getByText(d.ids.theme)).toBeInTheDocument();
+  });
+
+  it("copies the full ID on a click on a Short ID without opening the Ticket", async () => {
+    const writeText = clipboard();
+    const { navigate } = renderBody({ ciRuns: { data: d.ciRuns }, loc: { view: "activity", project: "acme" } });
+    await userEvent.click(within(inProgress()[0]).getByText(short(d.ids.signup)));
+    expect(writeText).toHaveBeenCalledWith(d.ids.signup);
+    await userEvent.click(within(runs()[0]).getByText(short(d.ids.theme)));
+    expect(writeText).toHaveBeenCalledWith(d.ids.theme);
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("still opens the Ticket on a click elsewhere on the entry", async () => {
+    const { navigate } = renderBody({ loc: { view: "activity", project: "acme" } });
+    await userEvent.click(within(inProgress()[0]).getByText("Sign-up page"));
+    expect(navigate).toHaveBeenCalledWith({ view: "inbox", project: "acme", requirement: undefined, ticket: d.ids.signup });
+  });
+});

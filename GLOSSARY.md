@@ -554,7 +554,7 @@ A view showing the human one Focus Item at a time from Needs Me, moving to the n
 _Avoid_: Zen mode, queue view
 
 **Focus Item**:
-One thing in Needs Me, of a reason its Project's Focus Kinds leave on, that the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, a Project's Base diverged or Base missing, or a Repository missing. It opens with a Focus badge naming its reason.
+One thing in Needs Me, of a reason its Project's Focus Kinds leave on, that the human can decide alone: one open Question, one waiting Ticket, one pushed commit's CI failed, CI cancelled or CI unavailable, a Project's Base diverged or Base missing, or a Repository missing. It opens with a Focus badge naming its reason. Its Ticket IDs show as Short IDs.
 _Avoid_: Action, card, task
 
 **Reason badge**:
@@ -574,7 +574,7 @@ The Project setting naming which Needs Me reasons are Focus Items for that Proje
 _Avoid_: focus filter, muted kinds
 
 **Activity Dashboard**:
-What Focus Mode shows when nothing needs the human, unless the human has chosen All clear. The Inbox's Activity link, in its Admin section, also opens it in a view of its own, whatever needs the human, for the Project the Inbox has chosen (All Projects when none) and with a Project selector and a Back button. It shows how many Tickets are Ready and In Progress, and lists the In Progress Tickets. When a Project in its scope that isn't Archived has CI Tracking on, a CI Running block also counts the CI Runs still going that count towards a Ticket's CI result, and a CI Running list below the In Progress Tickets lists them, or says "No CI Runs running.". Each entry shows the run's workflow, Ticket, branch, short commit, its status as a badge, as every CI Run display does, and how long it has been going, opens its Ticket in the Inbox and carries the run's GitHub link. A count pulses when it changes, and an entry pulses when its Ticket changes.
+What Focus Mode shows when nothing needs the human, unless the human has chosen All clear. The Inbox's Activity link, in its Admin section, also opens it in a view of its own, whatever needs the human, for the Project the Inbox has chosen (All Projects when none) and with a Project selector and a Back button. It shows how many Tickets are Ready and In Progress, and lists the In Progress Tickets, each entry showing its Ticket's Short ID. When a Project in its scope that isn't Archived has CI Tracking on, a CI Running block also counts the CI Runs still going that count towards a Ticket's CI result, and a CI Running list below the In Progress Tickets lists them, or says "No CI Runs running.". Each entry shows the run's workflow, Ticket (as its Short ID), branch, short commit, its status as a badge, as every CI Run display does, and how long it has been going, opens its Ticket in the Inbox and carries the run's GitHub link. A count pulses when it changes, and an entry pulses when its Ticket changes.
 _Avoid_: Status board, overview, monitor
 
 **Option**:
