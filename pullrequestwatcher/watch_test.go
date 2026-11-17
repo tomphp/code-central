@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
@@ -17,9 +16,10 @@ import (
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/pullrequestwatcher"
 	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
-func TestMain(m *testing.M) { ciwatchertest.Main(m) }
+func TestMain(m *testing.M) { watchertest.Main(m) }
 
 var (
 	ctx   = context.Background()
@@ -39,7 +39,7 @@ const (
 // until the test ends or its stdin closes.
 type watching struct {
 	t     *testing.T
-	h     *ciwatchertest.Harness
+	h     *watchertest.Harness
 	srv   *codecentraltest.Server
 	stdin *io.PipeWriter
 	done  chan error
@@ -84,7 +84,7 @@ func newWatchingOn(t *testing.T, remote string) *watching {
 		_, err := srv.Client.ReportPushedCommit(ctx, "acme", core.ReportPushedCommitInput{Ticket: "acme-2", Commit: "abc123", Branch: "acme-2"})
 		return err
 	})
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: write})
 	return &watching{t: t, h: h, srv: srv}
 }
@@ -378,20 +378,20 @@ func TestARateLimitedWatcherMakesNoCallsUntilTheResetThenResumesAndIsNeverAnErro
 func TestEachErrorIsReportedWithItsFixOnceAndClearsWhenFixed(t *testing.T) {
 	for _, c := range []struct {
 		name       string
-		cause, fix func(h *ciwatchertest.Harness)
+		cause, fix func(h *watchertest.Harness)
 		problem    core.WatcherProblem
 		fixText    string
 	}{
-		{"logged out", func(h *ciwatchertest.Harness) { h.LoggedOut() }, func(h *ciwatchertest.Harness) { h.Answer(fakegh.Answer{Args: []string{"auth", "status"}}) },
+		{"logged out", func(h *watchertest.Harness) { h.LoggedOut() }, func(h *watchertest.Harness) { h.Answer(fakegh.Answer{Args: []string{"auth", "status"}}) },
 			core.ProblemLoggedOut, "gh auth login"},
-		{"unreadable", func(h *ciwatchertest.Harness) { h.Unreadable("acme/web") }, func(h *ciwatchertest.Harness) {
+		{"unreadable", func(h *watchertest.Harness) { h.Unreadable("acme/web") }, func(h *watchertest.Harness) {
 			h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: write})
 		},
 			core.ProblemRepositoryUnreadable, "owner/name"},
-		{"no write access", func(h *ciwatchertest.Harness) {
+		{"no write access", func(h *watchertest.Harness) {
 			h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: readOnly})
 		},
-			func(h *ciwatchertest.Harness) {
+			func(h *watchertest.Harness) {
 				h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: write})
 			}, core.ProblemNoWrite, "write access"},
 	} {

@@ -18,6 +18,7 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/watchers"
 )
 
@@ -79,7 +80,7 @@ func Check(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) core.
 // checkOne is Check for in's one repository.
 func checkOne(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) core.WatcherCheckResult {
 	_, r, err := Config{Env: env}.access(ctx, in, true)
-	var limit *watchers.RateLimitError
+	var limit *ratelimit.Error
 	if errors.As(err, &limit) {
 		r = limit.CheckResult(time.Now())
 	}
@@ -88,7 +89,7 @@ func checkOne(ctx context.Context, in core.PullRequestCheckInput, env gh.Env) co
 
 // access is Check, as each poll runs it too, with the Code Host's pull
 // requests it can reach, for a base: the Code Host's rate-limiting a call
-// is a *watchers.RateLimitError, not a problem. Only a full check asks
+// is a *ratelimit.Error, not a problem. Only a full check asks
 // whether an Azure Repos PAT can contribute to pull requests, which costs a
 // refused write; each poll reads the repository only.
 func (cfg Config) access(ctx context.Context, in core.PullRequestCheckInput, full bool) (func(base string) host, core.WatcherCheckResult, error) {
@@ -123,7 +124,7 @@ func checkGHAccess(ctx context.Context, in core.PullRequestCheckInput, env gh.En
 	}
 	body, msg, err := gh.API(ctx, env, prog, "repos/"+in.Repository)
 	if err != nil {
-		var limit *watchers.RateLimitError
+		var limit *ratelimit.Error
 		if errors.As(err, &limit) {
 			return prog, core.WatcherCheckResult{}, limit
 		}

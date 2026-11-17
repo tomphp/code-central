@@ -1,18 +1,18 @@
-// Package ciwatchertest is the test harness for the CI Watcher, modelled
-// on factorytest's fake claude: the test binary, linked or copied into
-// the harness's folders as gh, runs as a fake gh (internal/fakegh) when
-// the harness's environment names its data folder. It follows a Script
-// of API answers and records its calls; nothing is built and there is no
-// shell, so it runs the same on every OS. The test binary also runs as
-// code-central, the CLI, so a test can run the CI Watcher subcommand as
-// the service does, in its own process, and as a CI Watcher that crashes,
-// so a test can watch the service restart it. The Issue Watcher's tests
-// use it too, as both kinds reach GitHub through the same gh.
+// Package watchertest is the test harness for every kind of Watcher (CI,
+// Issue, Pull Request and Work Item), modelled on factorytest's fake
+// claude: the test binary, linked or copied into the harness's folders as
+// gh, runs as a fake gh (internal/fakegh) when the harness's environment
+// names its data folder. It follows a Script of API answers and records
+// its calls; nothing is built and there is no shell, so it runs the same
+// on every OS. The test binary also runs as code-central, the CLI, so a
+// test can run a Watcher subcommand as the service does, in its own
+// process, and as a Watcher that crashes, so a test can watch the service
+// restart it. The Azure DevOps side has its own fake, internal/fakeazdo.
 //
 // A test package that uses it calls Main from its TestMain:
 //
-//	func TestMain(m *testing.M) { ciwatchertest.Main(m) }
-package ciwatchertest
+//	func TestMain(m *testing.M) { watchertest.Main(m) }
+package watchertest
 
 import (
 	"context"
@@ -55,7 +55,7 @@ func runFake(data string, args []string) int {
 			time.Sleep(time.Hour)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "ciwatchertest: %s=%s but run as %q, not a fake\n", fakeEnv, data, name)
+		fmt.Fprintf(os.Stderr, "watchertest: %s=%s but run as %q, not a fake\n", fakeEnv, data, name)
 		return 70
 	}
 }

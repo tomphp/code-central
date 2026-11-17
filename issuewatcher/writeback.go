@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/tomoram/code-central/watchers"
 	"net/http"
 	"net/url"
 	"slices"
@@ -18,6 +17,7 @@ import (
 
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/store"
 )
 
@@ -45,13 +45,13 @@ func splitLinkID(id string) (repository string, n int, err error) {
 // again. It returns GitHub's rate limit, if it refused a call for it;
 // anything else that goes wrong for an issue is logged, and its writes are
 // tried again on the next poll.
-func (cfg Config) writeBack(ctx context.Context, watch core.IssueWatch, prog string, open map[string]ghIssue, skipped []string) *watchers.RateLimitError {
+func (cfg Config) writeBack(ctx context.Context, watch core.IssueWatch, prog string, open map[string]ghIssue, skipped []string) *ratelimit.Error {
 	for _, w := range watch.Writes {
 		if repository, _, err := splitLinkID(w.Link.ID); err == nil && slices.ContainsFunc(skipped, func(s string) bool { return strings.EqualFold(s, repository) }) {
 			continue
 		}
 		err := cfg.writeIssue(ctx, prog, w, open)
-		var limit *watchers.RateLimitError
+		var limit *ratelimit.Error
 		switch {
 		case errors.As(err, &limit):
 			return limit

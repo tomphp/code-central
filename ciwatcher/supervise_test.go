@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/tomoram/code-central/ciwatcher"
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/watchers"
+	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
 // supervising is a real Code Central and the service's supervision of
@@ -19,15 +19,15 @@ import (
 // or as a CI Watcher that crashes, with the fake gh on PATH.
 type supervising struct {
 	t   *testing.T
-	h   *ciwatchertest.Harness
+	h   *watchertest.Harness
 	srv *codecentraltest.Server
 	// Supervising is the supervision, once started.
-	*ciwatchertest.Supervising
+	*watchertest.Supervising
 }
 
 func newSupervising(t *testing.T) *supervising {
 	t.Helper()
-	return &supervising{t: t, h: ciwatchertest.New(t), srv: codecentraltest.NewServer(t)}
+	return &supervising{t: t, h: watchertest.New(t), srv: codecentraltest.NewServer(t)}
 }
 
 var human = core.WithActor(context.Background(), core.Human)

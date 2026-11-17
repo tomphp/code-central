@@ -20,6 +20,7 @@ import (
 	"github.com/tomoram/code-central/clock"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/watchers"
 )
 
@@ -98,7 +99,7 @@ func Watch(ctx context.Context, cfg Config) error {
 // poll is one poll: whether Azure DevOps ran the query, or rate-limited
 // it, so the loop reports Watching, and the rate limit, if it refused a
 // call for it. A poll that finds an error reports it itself.
-func (cfg Config) poll(ctx context.Context) (reachable bool, limit *watchers.RateLimitError) {
+func (cfg Config) poll(ctx context.Context) (reachable bool, limit *ratelimit.Error) {
 	watch, err := cfg.Client.GetWorkItemWatch(ctx, cfg.Project)
 	if err != nil {
 		if ctx.Err() == nil {

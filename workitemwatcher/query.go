@@ -15,8 +15,8 @@ import (
 	"github.com/tomoram/code-central/azdourl"
 	"github.com/tomoram/code-central/core"
 	"github.com/tomoram/code-central/gh"
+	"github.com/tomoram/code-central/ratelimit"
 	"github.com/tomoram/code-central/store"
-	"github.com/tomoram/code-central/watchers"
 )
 
 // MaxWorkItems is the most work items a query may match: more is an
@@ -42,7 +42,7 @@ type queryRun struct {
 // runQuery runs in's query with the PAT in its variable. A query that
 // can't run, or matches more than MaxWorkItems work items, is a problem
 // with its fix; Azure DevOps rate-limiting it is the error, a
-// *watchers.RateLimitError, and not a problem.
+// *ratelimit.Error, and not a problem.
 func runQuery(ctx context.Context, env gh.Env, in core.AzureBoardsCheckInput) (queryRun, core.WatcherCheckResult, error) {
 	projectURL, id := in.ProjectURL, ""
 	if in.Mode != store.AzureBoardsWIQL {
@@ -67,7 +67,7 @@ func runQuery(ctx context.Context, env gh.Env, in core.AzureBoardsCheckInput) (q
 	} else {
 		res, err = c.WIQL(ctx, wiqlQuery(in.Where))
 	}
-	var limit *watchers.RateLimitError
+	var limit *ratelimit.Error
 	switch {
 	case errors.As(err, &limit):
 		return queryRun{}, core.WatcherCheckResult{}, limit

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tomoram/code-central/ciwatcher/ciwatchertest"
 	"github.com/tomoram/code-central/client"
 	"github.com/tomoram/code-central/codecentraltest"
 	"github.com/tomoram/code-central/core"
@@ -16,6 +15,7 @@ import (
 	"github.com/tomoram/code-central/internal/fakegh"
 	"github.com/tomoram/code-central/pullrequestwatcher"
 	"github.com/tomoram/code-central/store"
+	"github.com/tomoram/code-central/watchers/watchertest"
 )
 
 // Pull requests per Repository (Spec code-central-848, ADR 0050): one
@@ -37,7 +37,7 @@ const (
 // the fake Azure DevOps.
 type severalWatching struct {
 	t     *testing.T
-	h     *ciwatchertest.Harness
+	h     *watchertest.Harness
 	azure *fakeazdo.Server
 	srv   *codecentraltest.Server
 }
@@ -81,7 +81,7 @@ func newSeveralWatching(t *testing.T, azure ...fakeazdo.Answer) *severalWatching
 	for _, in := range []core.ReportPushedCommitInput{{Ticket: "acme-2", Commit: "abc123", Branch: "acme-2"}, {Ticket: "acme-2", Commit: "def456", Branch: "acme-2", Repository: "api"}} {
 		must(t, func() error { _, err := srv.Client.ReportPushedCommit(ctx, "acme", in); return err })
 	}
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: write})
 	return &severalWatching{t: t, h: h, azure: fakeazdo.New(t, azure...), srv: srv}
 }
@@ -265,7 +265,7 @@ func TestAFailingRepositoryIsNamedAndTheOthersAreStillWatched(t *testing.T) {
 }
 
 func TestTurningPullRequestOnChecksEachRepositoryNamingTheOneThatFails(t *testing.T) {
-	h := ciwatchertest.New(t)
+	h := watchertest.New(t)
 	h.Answer(fakegh.Answer{Args: []string{"api", repoPath}, Stdout: write})
 	h.Answer(fakegh.Answer{Args: []string{"api", "repos/acme/api"}, Stdout: readOnly})
 	srv := checking(t, h, h.Bin)
