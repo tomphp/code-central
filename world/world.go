@@ -42,8 +42,8 @@ type World struct {
 	mu       sync.Mutex
 	requests map[*request]struct{}
 	dropped  bool
-	// The answers the stand-in gh checks give; the zero one passes.
-	ciCheck, issuesCheck, pullRequestCheck core.WatcherCheckResult
+	// The answers the stand-in checks give; the zero one passes.
+	ciCheck, issuesCheck, azureBoardsCheck, pullRequestCheck core.WatcherCheckResult
 }
 
 // request is one request being served, for ending it.
@@ -79,6 +79,9 @@ func New(start time.Time) *World {
 	}
 	c.SetCICheck(func(context.Context, core.CICheckInput) core.WatcherCheckResult { return w.answer(&w.ciCheck) })
 	c.SetIssuesCheck(func(context.Context, core.IssuesCheckInput) core.WatcherCheckResult { return w.answer(&w.issuesCheck) })
+	c.SetAzureBoardsCheck(func(context.Context, core.AzureBoardsCheckInput) core.WatcherCheckResult {
+		return w.answer(&w.azureBoardsCheck)
+	})
 	c.SetPullRequestCheck(func(context.Context, core.PullRequestCheckInput) core.WatcherCheckResult {
 		return w.answer(&w.pullRequestCheck)
 	})
@@ -99,6 +102,12 @@ func (w *World) SetCICheck(res core.WatcherCheckResult) { w.setAnswer(&w.ciCheck
 // SetIssuesCheck makes the Issue Watcher's check mode answer res, as
 // SetCICheck does the CI Watcher's.
 func (w *World) SetIssuesCheck(res core.WatcherCheckResult) { w.setAnswer(&w.issuesCheck, res) }
+
+// SetAzureBoardsCheck makes the Azure Boards check, which calls Azure
+// DevOps in serve, answer res, as SetCICheck does the CI Watcher's.
+func (w *World) SetAzureBoardsCheck(res core.WatcherCheckResult) {
+	w.setAnswer(&w.azureBoardsCheck, res)
+}
 
 // SetPullRequestCheck makes the Pull Request Watcher's check mode answer
 // res, as SetCICheck does the CI Watcher's.

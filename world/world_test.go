@@ -161,7 +161,7 @@ func TestAdvanceMovesCoresClock(t *testing.T) {
 	}
 }
 
-// checkCases turn on each setting whose gh check the world stands in for.
+// checkCases turn on each setting whose check the world stands in for.
 var checkCases = []struct {
 	name  string
 	set   func(*world.World, core.WatcherCheckResult)
@@ -171,6 +171,8 @@ var checkCases = []struct {
 }{
 	{"CI", (*world.World).SetCICheck, "/api/p/acme/set_ci_tracking", `{"tracking":true,"repository":"acme/app"}`, "repository"},
 	{"Issues", (*world.World).SetIssuesCheck, "/api/p/acme/set_github_issues", `{"on":true,"repositories":["acme/app"]}`, "repositories"},
+	{"Azure Boards", (*world.World).SetAzureBoardsCheck, "/api/p/acme/set_azure_boards",
+		`{"on":true,"query_url":"https://dev.azure.com/acme/app/_queries/query/6b4a0c1e-9f1d-4a51-8f43-2a7d3c1b9e10"}`, "on"},
 	{"Pull Request", (*world.World).SetPullRequestCheck, "/api/p/acme/set_landing_method", `{"method":"pull_request"}`, "method"},
 }
 

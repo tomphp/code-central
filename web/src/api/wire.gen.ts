@@ -90,6 +90,13 @@ export const CI_PROVIDERS = [
 ] as const;
 export type CIProvider = (typeof CI_PROVIDERS)[number];
 
+// AzureBoardsMode is how Azure Boards picks its work items.
+export const AZURE_BOARDS_MODES = [
+  "saved_query",
+  "wiql",
+] as const;
+export type AzureBoardsMode = (typeof AZURE_BOARDS_MODES)[number];
+
 // WatcherState is how a Project's Watcher last said it was.
 export const WATCHER_STATES = [
   "not_reported",
@@ -416,6 +423,9 @@ export interface ProjectView {
   // GitHubIssues is the Project's GitHub Issues settings, always filled
   // in: GitHub Issues off by default.
   github_issues: GitHubIssuesView;
+  // AzureBoards is the Project's Azure Boards settings, always filled
+  // in: Azure Boards off by default.
+  azure_boards: AzureBoardsView;
   // Models is the Project's Models rows, always filled in: every row at
   // Default to begin with.
   models: ModelsView;
@@ -880,6 +890,29 @@ export interface GitHubIssuesView {
   spec?: string;
   // Watcher is the Issue Watcher's status, as it last reported it.
   watcher: WatcherView;
+}
+
+// AzureBoardsView is a Project's Azure Boards settings as every Project
+// read returns them.
+export interface AzureBoardsView {
+  on: boolean;
+  // Mode is how it picks its work items: saved_query or wiql.
+  mode: AzureBoardsMode;
+  // QueryURL is the Saved query's URL.
+  query_url: string;
+  // ProjectURL is the Azure DevOps project a WIQL filter runs in, and
+  // Where its WHERE clause.
+  project_url: string;
+  where: string;
+  // PATEnv is the name of the environment variable holding the Azure
+  // DevOps PAT: the Project's CI PAT variable, ADO_PAT unless it names
+  // another, unless Azure Boards names its own. The PAT itself is never
+  // kept.
+  pat_env: string;
+  new_issues_need_me: boolean;
+  // Spec is the Azure Boards Spec's ID, left out until Azure Boards is
+  // first turned on.
+  spec?: string;
 }
 
 // ModelsView is a Project's Models as every Project read returns them:
