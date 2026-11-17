@@ -223,7 +223,7 @@ web              git@github.com:acme/web.git       main  -
 acme-api (home)  git@github.com:acme/acme-api.git  main  -
 ```
 
-A repository you never push, with no remote or none you want the Factory to use, needs no Clone URL: give only the local path of its clone. A Repository with no Clone URL is **local-only**. The Factory never clones it and adopts the git repository at its local path as it is; Push skips it, so work lands there once merged into its Base; the Pull Request Landing Method refuses it; and CI Tracking starts it Not watched:
+A repository you never push, with no remote or none you want the Factory to use, needs no Clone URL: give only the local path of its clone. In the Repositories section the add form's button enables once it has a name and a Clone URL or a local path, a hint under the Clone URL field says to leave it empty for a local-only repository, and **Watch its CI** shows only while a Clone URL is entered; emptying the Clone URL in a Repository's **Edit** form clears it. A local-only Repository's row shows **None: local only, never pushed** for its Clone URL. A Repository with no Clone URL is **local-only**. The Factory never clones it and adopts the git repository at its local path as it is; Push skips it, so work lands there once merged into its Base; the Pull Request Landing Method refuses it; and CI Tracking starts it Not watched:
 
 ```console
 $ code-central repository add notes --local-path /home/you/src/notes
